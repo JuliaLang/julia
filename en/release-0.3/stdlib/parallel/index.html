@@ -763,8 +763,8 @@ no longer be true. It is recommended that this function only be used on a
 <p>If the argument <tt class="docutils literal"><span class="pre">RemoteRef</span></tt> is owned by a different node, this call will block to
 wait for the answer. It is recommended to wait for <tt class="docutils literal"><span class="pre">r</span></tt> in a separate task instead,
 or to use a local <tt class="docutils literal"><span class="pre">RemoteRef</span></tt> as a proxy:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">rr</span> <span class="o">=</span> <span class="n">RemoteRef</span><span class="p">()</span>
-<span class="p">@</span><span class="n">async</span> <span class="n">put!</span><span class="p">(</span><span class="n">rr</span><span class="p">,</span> <span class="n">remotecall_fetch</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">long_computation</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">rr</span> <span class="o">=</span> <span class="kt">RemoteRef</span><span class="p">()</span>
+<span class="nd">@async</span> <span class="n">put!</span><span class="p">(</span><span class="n">rr</span><span class="p">,</span> <span class="n">remotecall_fetch</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">long_computation</span><span class="p">))</span>
 <span class="n">isready</span><span class="p">(</span><span class="n">rr</span><span class="p">)</span>  <span class="c"># will not block</span>
 </pre></div>
 </div>
@@ -833,7 +833,7 @@ set of items that the nearest enclosing <tt class="docutils literal"><span class
 <dt id="Base.&#64;parallel">
 <tt class="descname">&#64;parallel</tt><big>(</big><big>)</big><a class="headerlink" href="#Base.@parallel" title="Permalink to this definition">¶</a></dt>
 <dd><p>A parallel for loop of the form</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">parallel</span> <span class="p">[</span><span class="n">reducer</span><span class="p">]</span> <span class="k">for</span> <span class="n">var</span> <span class="o">=</span> <span class="n">range</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@parallel</span> <span class="p">[</span><span class="n">reducer</span><span class="p">]</span> <span class="k">for</span> <span class="n">var</span> <span class="o">=</span> <span class="n">range</span>
     <span class="n">body</span>
 <span class="k">end</span>
 </pre></div>
@@ -845,7 +845,7 @@ reductions on each worker with a final reduction on the calling process.</p>
 i.e. it spawns independent tasks on all available workers and returns
 immediately without waiting for completion. To wait for completion, prefix
 the call with <tt class="docutils literal"><span class="pre">&#64;sync</span></tt>, like</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">sync</span> <span class="p">@</span><span class="n">parallel</span> <span class="k">for</span> <span class="n">var</span> <span class="o">=</span> <span class="n">range</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@sync</span> <span class="nd">@parallel</span> <span class="k">for</span> <span class="n">var</span> <span class="o">=</span> <span class="n">range</span>
     <span class="n">body</span>
 <span class="k">end</span>
 </pre></div>

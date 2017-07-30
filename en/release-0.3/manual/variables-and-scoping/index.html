@@ -529,11 +529,11 @@ scope, but from the scope in which the function was defined.
 For example, in the following code the <tt class="docutils literal"><span class="pre">x</span></tt> inside <tt class="docutils literal"><span class="pre">foo</span></tt> is found
 in the global scope (and if no global variable <tt class="docutils literal"><span class="pre">x</span></tt> existed, an
 undefined variable error would be raised):</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> foo</span><span class="p">()</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">foo</span><span class="p">()</span>
   <span class="n">x</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> bar</span><span class="p">()</span>
+<span class="k">function</span> <span class="n">bar</span><span class="p">()</span>
   <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span>
   <span class="n">foo</span><span class="p">()</span>
 <span class="k">end</span>
@@ -546,8 +546,8 @@ undefined variable error would be raised):</p>
 </div>
 <p>If <tt class="docutils literal"><span class="pre">foo</span></tt> is instead defined inside <tt class="docutils literal"><span class="pre">bar</span></tt>, then it accesses
 the local <tt class="docutils literal"><span class="pre">x</span></tt> present in that function:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> bar</span><span class="p">()</span>
-  <span class="k">function</span><span class="nf"> foo</span><span class="p">()</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">bar</span><span class="p">()</span>
+  <span class="k">function</span> <span class="n">foo</span><span class="p">()</span>
     <span class="n">x</span>
   <span class="k">end</span>
   <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span>
@@ -574,9 +574,9 @@ by any enclosing scope before <em>or after</em> the current line of code.</li>
 </ul>
 <p>In the following example, there is only one <tt class="docutils literal"><span class="pre">x</span></tt> assigned both inside
 and outside the <tt class="docutils literal"><span class="pre">for</span></tt> loop:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> foo</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">foo</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
   <span class="n">x</span> <span class="o">=</span> <span class="mi">0</span>
-  <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">n</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">n</span>
     <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">1</span>
   <span class="k">end</span>
   <span class="n">x</span>
@@ -588,9 +588,9 @@ and outside the <tt class="docutils literal"><span class="pre">for</span></tt> l
 </div>
 <p>In the next example, the loop has a separate <tt class="docutils literal"><span class="pre">x</span></tt> and the function
 always returns zero:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> foo</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">foo</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
   <span class="n">x</span> <span class="o">=</span> <span class="mi">0</span>
-  <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">n</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">n</span>
     <span class="kd">local</span> <span class="n">x</span>
     <span class="n">x</span> <span class="o">=</span> <span class="n">i</span>
   <span class="k">end</span>
@@ -604,15 +604,15 @@ always returns zero:</p>
 <p>In this example, an <tt class="docutils literal"><span class="pre">x</span></tt> exists only inside the loop, and the function
 encounters an undefined variable error on its last line (unless there is
 a global variable <tt class="docutils literal"><span class="pre">x</span></tt>):</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> foo</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
-  <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">n</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">foo</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+  <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">n</span>
     <span class="n">x</span> <span class="o">=</span> <span class="n">i</span>
   <span class="k">end</span>
   <span class="n">x</span>
 <span class="k">end</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
-<span class="k">in</span> <span class="n">foo</span><span class="p">:</span> <span class="n">x</span> <span class="n">not</span> <span class="n">defined</span>
+<span class="kp">in</span> <span class="n">foo</span><span class="o">:</span> <span class="n">x</span> <span class="n">not</span> <span class="n">defined</span>
 </pre></div>
 </div>
 <p>A variable that is not assigned to or otherwise introduced locally
@@ -628,7 +628,7 @@ global variables should be the exception rather than the rule,
 and assigning new values to them even more so.</p>
 <p>One last example shows that an outer assignment introducing <tt class="docutils literal"><span class="pre">x</span></tt> need
 not come before an inner usage:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> foo</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">foo</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
   <span class="n">f</span> <span class="o">=</span> <span class="n">y</span> <span class="o">-&gt;</span> <span class="n">n</span> <span class="o">+</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
   <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span>
   <span class="n">f</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
@@ -646,14 +646,14 @@ forcing bottom up ordering or requiring forward declarations, both of
 which one typically sees in C programs. As an example, here is an
 inefficient, mutually recursive way to test if positive integers are
 even or odd:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">even</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">=</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">?</span> <span class="n">true</span>  <span class="p">:</span>  <span class="n">odd</span><span class="p">(</span><span class="n">n</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">odd</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>  <span class="o">=</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">?</span> <span class="n">false</span> <span class="p">:</span> <span class="n">even</span><span class="p">(</span><span class="n">n</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">even</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">=</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">?</span> <span class="kc">true</span>  <span class="o">:</span>  <span class="n">odd</span><span class="p">(</span><span class="n">n</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">odd</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>  <span class="o">=</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">?</span> <span class="kc">false</span> <span class="o">:</span> <span class="n">even</span><span class="p">(</span><span class="n">n</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">even</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">odd</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>Julia provides built-in, efficient functions to test for oddness and evenness
@@ -666,15 +666,15 @@ declarations is necessary, and definitions can be ordered arbitrarily.</p>
 else. The prompt behaves as if there is scope block wrapped around
 everything you type, except that this scope block is identified with the
 global scope. This is especially evident in the case of assignments:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">1</span><span class="p">;</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span> <span class="k">end</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">1</span><span class="p">;</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span> <span class="k">end</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">y</span> <span class="n">not</span> <span class="n">defined</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">y</span> <span class="n">not</span> <span class="n">defined</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">0</span>
 <span class="mi">0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">1</span><span class="p">;</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span> <span class="k">end</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">1</span><span class="p">;</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span> <span class="k">end</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span>
 <span class="mi">10</span>
@@ -688,7 +688,7 @@ inside the loop. However, in code not entered into the interactive
 prompt this declaration would be necessary in order to modify a global
 variable.</p>
 <p>Multiple variables can be declared global using the following syntax:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> foo</span><span class="p">()</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">foo</span><span class="p">()</span>
     <span class="kd">global</span> <span class="n">x</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s">&quot;bar&quot;</span><span class="p">,</span> <span class="n">z</span><span class="o">=</span><span class="mi">3</span>
 <span class="k">end</span>
 
@@ -766,7 +766,7 @@ block without creating any new bindings:</p>
          <span class="k">end</span>
          <span class="n">x</span>
        <span class="k">end</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">syntax</span><span class="p">:</span> <span class="kd">local</span> <span class="s">&quot;x&quot;</span> <span class="n">declared</span> <span class="n">twice</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">syntax</span><span class="o">:</span> <span class="kd">local</span> <span class="s">&quot;x&quot;</span> <span class="n">declared</span> <span class="n">twice</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="k">begin</span>
          <span class="kd">local</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span>
@@ -789,7 +789,7 @@ additional behavior: any new variables introduced in their body scopes are
 freshly allocated for each loop iteration. Therefore these constructs are
 similar to <tt class="docutils literal"><span class="pre">while</span></tt> loops with <tt class="docutils literal"><span class="pre">let</span></tt> blocks inside:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Fs</span> <span class="o">=</span> <span class="n">cell</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">2</span>
+<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">2</span>
     <span class="n">Fs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span><span class="o">-&gt;</span><span class="n">i</span>
 <span class="k">end</span>
 
@@ -802,7 +802,7 @@ similar to <tt class="docutils literal"><span class="pre">while</span></tt> loop
 </div>
 <p><tt class="docutils literal"><span class="pre">for</span></tt> loops will reuse existing variables for iteration:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
-<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">3</span>
+<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">3</span>
 <span class="k">end</span>
 <span class="n">i</span>  <span class="c"># here equal to 3</span>
 </pre></div>
@@ -810,7 +810,7 @@ similar to <tt class="docutils literal"><span class="pre">while</span></tt> loop
 <p>However, comprehensions do not do this, and always freshly allocate their
 iteration variables:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="mi">0</span>
-<span class="p">[</span> <span class="n">x</span> <span class="k">for</span> <span class="n">x</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">3</span> <span class="p">]</span>
+<span class="p">[</span> <span class="n">x</span> <span class="k">for</span> <span class="n">x</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="mi">3</span> <span class="p">]</span>
 <span class="n">x</span>  <span class="c"># here still equal to 0</span>
 </pre></div>
 </div>
@@ -820,7 +820,7 @@ iteration variables:</p>
 <p>A common use of variables is giving names to specific, unchanging
 values. Such variables are only assigned once. This intent can be
 conveyed to the compiler using the <tt class="docutils literal"><span class="pre">const</span></tt> keyword:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kd">const</span> <span class="n">e</span>  <span class="o">=</span> <span class="mf">2.71828182845904523536</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kd">const</span> <span class="nb">e</span>  <span class="o">=</span> <span class="mf">2.71828182845904523536</span>
 <span class="kd">const</span> <span class="nb">pi</span> <span class="o">=</span> <span class="mf">3.14159265358979323846</span>
 </pre></div>
 </div>

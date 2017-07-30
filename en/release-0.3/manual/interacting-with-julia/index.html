@@ -495,17 +495,17 @@
   <div class="section" id="interacting-with-julia">
 <span id="man-interacting-with-julia"></span><h1>Interacting With Julia<a class="headerlink" href="#interacting-with-julia" title="Permalink to this headline">¶</a></h1>
 <p>Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into the <tt class="docutils literal"><span class="pre">julia</span></tt> executable.  In addition to allowing quick and easy evaluation of Julia statements, it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and shell modes.  The REPL can be started by simply calling julia with no arguments or double-clicking on the executable:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span>$ julia
-               _
-   _       _ _(_)_     |  A fresh approach to technical computing
-  (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
-   _ _   _| |_  __ _   |  Type &quot;help()&quot; to list help topics
-  | | | | | | |/ _` |  |
-  | | |_| | | | (_| |  |  Version 0.3.0-prerelease+2834 (2014-04-30 03:13 UTC)
- _/ |\__&#39;_|_|_|\__&#39;_|  |  Commit 64f437b (0 days old master)
-|__/                   |  x86_64-apple-darwin13.1.0
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">$</span> <span class="n">julia</span>
+               <span class="n">_</span>
+   <span class="n">_</span>       <span class="n">_</span> <span class="n">_</span><span class="p">(</span><span class="n">_</span><span class="p">)</span><span class="n">_</span>     <span class="o">|</span>  <span class="n">A</span> <span class="n">fresh</span> <span class="n">approach</span> <span class="n">to</span> <span class="n">technical</span> <span class="n">computing</span>
+  <span class="p">(</span><span class="n">_</span><span class="p">)</span>     <span class="o">|</span> <span class="p">(</span><span class="n">_</span><span class="p">)</span> <span class="p">(</span><span class="n">_</span><span class="p">)</span>    <span class="o">|</span>  <span class="n">Documentation</span><span class="o">:</span> <span class="n">http</span><span class="o">://</span><span class="n">docs</span><span class="o">.</span><span class="n">julialang</span><span class="o">.</span><span class="n">org</span>
+   <span class="n">_</span> <span class="n">_</span>   <span class="n">_</span><span class="o">|</span> <span class="o">|</span><span class="n">_</span>  <span class="n">__</span> <span class="n">_</span>   <span class="o">|</span>  <span class="kt">Type</span> <span class="s">&quot;help()&quot;</span> <span class="n">to</span> <span class="n">list</span> <span class="n">help</span> <span class="n">topics</span>
+  <span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|/</span> <span class="n">_</span><span class="sb">` |  |</span>
+<span class="sb">  | | |_| | | | (_| |  |  Version 0.3.0-prerelease+2834 (2014-04-30 03:13 UTC)</span>
+<span class="sb"> _/ |\__&#39;_|_|_|\__&#39;_|  |  Commit 64f437b (0 days old master)</span>
+<span class="sb">|__/                   |  x86_64-apple-darwin13.1.0</span>
 
-julia&gt;
+<span class="sb">julia&gt;</span>
 </pre></div>
 </div>
 <p>To exit the interactive session, type <tt class="docutils literal"><span class="pre">^D</span></tt> — the control key together with the <tt class="docutils literal"><span class="pre">d</span></tt> key on a blank line — or type <tt class="docutils literal"><span class="pre">quit()</span></tt> followed by the return or enter key. The REPL greets you with a banner and a <tt class="docutils literal"><span class="pre">julia&gt;</span></tt> prompt.</p>
@@ -534,24 +534,24 @@ julia&gt;
 <span class="n">help</span><span class="o">&gt;</span> <span class="n">string</span>
 <span class="n">Base</span><span class="o">.</span><span class="n">string</span><span class="p">(</span><span class="n">xs</span><span class="o">...</span><span class="p">)</span>
 
-   <span class="n">Create</span> <span class="n">a</span> <span class="n">string</span> <span class="n">from</span> <span class="n">any</span> <span class="n">values</span> <span class="k">using</span> <span class="n">the</span> <span class="s">&quot;print&quot;</span> <span class="n">function</span><span class="o">.</span>
+   <span class="n">Create</span> <span class="n">a</span> <span class="n">string</span> <span class="n">from</span> <span class="n">any</span> <span class="n">values</span> <span class="k">using</span> <span class="n">the</span> <span class="s">&quot;print&quot;</span> <span class="k">function</span><span class="o">.</span>
 </pre></div>
 </div>
 <p>In addition to function names, complete function calls may be entered to see which method is called for the given argument(s).  Macros, types and variables can also be queried:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">help</span><span class="o">&gt;</span> <span class="n">string</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">string</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Union</span><span class="p">(</span><span class="kt">Int16</span><span class="p">,</span><span class="n">Int128</span><span class="p">,</span><span class="kt">Int8</span><span class="p">,</span><span class="kt">Int32</span><span class="p">,</span><span class="kt">Int64</span><span class="p">))</span> <span class="n">at</span> <span class="n">string</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">1553</span>
+<span class="n">string</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Union</span><span class="p">(</span><span class="kt">Int16</span><span class="p">,</span><span class="kt">Int128</span><span class="p">,</span><span class="kt">Int8</span><span class="p">,</span><span class="kt">Int32</span><span class="p">,</span><span class="kt">Int64</span><span class="p">))</span> <span class="n">at</span> <span class="n">string</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">1553</span>
 
-<span class="n">help</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">printf</span>
-<span class="n">Base</span><span class="o">.</span><span class="p">@</span><span class="n">printf</span><span class="p">([</span><span class="n">io</span><span class="p">::</span><span class="n">IOStream</span><span class="p">],</span> <span class="s">&quot;</span><span class="si">%F</span><span class="s">mt&quot;</span><span class="p">,</span> <span class="n">args</span><span class="o">...</span><span class="p">)</span>
+<span class="n">help</span><span class="o">&gt;</span> <span class="nd">@printf</span>
+<span class="n">Base</span><span class="o">.</span><span class="nd">@printf</span><span class="p">([</span><span class="n">io</span><span class="o">::</span><span class="kt">IOStream</span><span class="p">],</span> <span class="s">&quot;</span><span class="si">%F</span><span class="s">mt&quot;</span><span class="p">,</span> <span class="n">args</span><span class="o">...</span><span class="p">)</span>
 
    <span class="n">Print</span> <span class="n">arg</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">using</span> <span class="n">C</span> <span class="s">&quot;printf()&quot;</span> <span class="n">style</span> <span class="n">format</span> <span class="n">specification</span>
-   <span class="n">string</span><span class="o">.</span> <span class="n">Optionally</span><span class="p">,</span> <span class="n">an</span> <span class="n">IOStream</span> <span class="n">may</span> <span class="n">be</span> <span class="n">passed</span> <span class="n">as</span> <span class="n">the</span> <span class="n">first</span> <span class="n">argument</span>
+   <span class="n">string</span><span class="o">.</span> <span class="n">Optionally</span><span class="p">,</span> <span class="n">an</span> <span class="kt">IOStream</span> <span class="n">may</span> <span class="n">be</span> <span class="n">passed</span> <span class="n">as</span> <span class="n">the</span> <span class="n">first</span> <span class="n">argument</span>
    <span class="n">to</span> <span class="n">redirect</span> <span class="n">output</span><span class="o">.</span>
 
 <span class="n">help</span><span class="o">&gt;</span> <span class="n">String</span>
-<span class="n">DataType</span>   <span class="p">:</span> <span class="n">String</span>
-  <span class="n">supertype</span><span class="p">:</span> <span class="kt">Any</span>
-  <span class="n">subtypes</span> <span class="p">:</span> <span class="p">{</span><span class="n">DirectIndexString</span><span class="p">,</span><span class="n">GenericString</span><span class="p">,</span><span class="n">RepString</span><span class="p">,</span><span class="n">RevString</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">String</span><span class="p">},</span><span class="n">RopeString</span><span class="p">,</span><span class="n">SubString</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">String</span><span class="p">},</span><span class="n">UTF16String</span><span class="p">,</span><span class="n">UTF8String</span><span class="p">}</span>
+<span class="kt">DataType</span>   <span class="o">:</span> <span class="n">String</span>
+  <span class="n">supertype</span><span class="o">:</span> <span class="kt">Any</span>
+  <span class="n">subtypes</span> <span class="o">:</span> <span class="p">{</span><span class="kt">DirectIndexString</span><span class="p">,</span><span class="n">GenericString</span><span class="p">,</span><span class="kt">RepString</span><span class="p">,</span><span class="kt">RevString</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">String</span><span class="p">},</span><span class="kt">RopeString</span><span class="p">,</span><span class="kt">SubString</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">String</span><span class="p">},</span><span class="kt">UTF16String</span><span class="p">,</span><span class="kt">UTF8String</span><span class="p">}</span>
 </pre></div>
 </div>
 <p>Help mode can be exited by pressing backspace at the beginning of the line.</p>
@@ -680,38 +680,38 @@ text before the cursor</td>
 <span class="n">stride</span>     <span class="n">strides</span>     <span class="n">string</span>      <span class="n">stringmime</span>  <span class="n">strip</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">Stri</span>
-<span class="n">StridedArray</span>    <span class="n">StridedVecOrMat</span>  <span class="n">String</span>
-<span class="n">StridedMatrix</span>   <span class="n">StridedVector</span>
+<span class="kt">StridedArray</span>    <span class="kt">StridedVecOrMat</span>  <span class="n">String</span>
+<span class="kt">StridedMatrix</span>   <span class="kt">StridedVector</span>
 </pre></div>
 </div>
 <p>The tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents,
 and get a list of LaTeX matches as well:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> \<span class="nb">pi</span><span class="p">[</span><span class="n">TAB</span><span class="p">]</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">π</span>
-<span class="n">π</span> <span class="o">=</span> <span class="mf">3.1415926535897</span><span class="o">...</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="o">\</span><span class="nb">pi</span><span class="p">[</span><span class="n">TAB</span><span class="p">]</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">π</span>
+<span class="nb">π</span> <span class="o">=</span> <span class="mf">3.1415926535897</span><span class="o">...</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">e</span>\<span class="n">_1</span><span class="p">[</span><span class="n">TAB</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">e</span><span class="o">\</span><span class="n">_1</span><span class="p">[</span><span class="n">TAB</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">e₁</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
-<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">e</span>\<span class="o">^</span><span class="mi">1</span><span class="p">[</span><span class="n">TAB</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">0</span><span class="p">]</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">e</span><span class="o">\^</span><span class="mi">1</span><span class="p">[</span><span class="n">TAB</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">0</span><span class="p">]</span>
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">e¹</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">0</span><span class="p">]</span>
-<span class="mi">1</span><span class="n">x2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">1</span><span class="n">x2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> \<span class="n">sqrt</span><span class="p">[</span><span class="n">TAB</span><span class="p">]</span><span class="mi">2</span>     <span class="c"># √ is equivalent to the sqrt() function</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">√2</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="o">\</span><span class="n">sqrt</span><span class="p">[</span><span class="n">TAB</span><span class="p">]</span><span class="mi">2</span>     <span class="c"># √ is equivalent to the sqrt() function</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="o">√</span><span class="mi">2</span>
 <span class="mf">1.4142135623730951</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> \<span class="n">hbar</span><span class="p">[</span><span class="n">TAB</span><span class="p">](</span><span class="n">h</span><span class="p">)</span> <span class="o">=</span> <span class="n">h</span> <span class="o">/</span> <span class="mi">2</span>\<span class="nb">pi</span><span class="p">[</span><span class="n">TAB</span><span class="p">]</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ħ</span><span class="p">(</span><span class="n">h</span><span class="p">)</span> <span class="o">=</span> <span class="n">h</span> <span class="o">/</span> <span class="mi">2</span><span class="n">π</span>
-<span class="n">ħ</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="o">\</span><span class="n">hbar</span><span class="p">[</span><span class="n">TAB</span><span class="p">](</span><span class="n">h</span><span class="p">)</span> <span class="o">=</span> <span class="n">h</span> <span class="o">/</span> <span class="mi">2</span><span class="o">\</span><span class="nb">pi</span><span class="p">[</span><span class="n">TAB</span><span class="p">]</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ħ</span><span class="p">(</span><span class="n">h</span><span class="p">)</span> <span class="o">=</span> <span class="n">h</span> <span class="o">/</span> <span class="mi">2</span><span class="nb">π</span>
+<span class="n">ħ</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> \<span class="n">h</span><span class="p">[</span><span class="n">TAB</span><span class="p">]</span>
-\<span class="n">hat</span>              \<span class="n">heartsuit</span>         \<span class="n">hksearow</span>          \<span class="n">hookleftarrow</span>     \<span class="n">hslash</span>
-\<span class="n">hbar</span>             \<span class="n">hermitconjmatrix</span>  \<span class="n">hkswarow</span>          \<span class="n">hookrightarrow</span>    \<span class="n">hspace</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="o">\</span><span class="n">h</span><span class="p">[</span><span class="n">TAB</span><span class="p">]</span>
+<span class="o">\</span><span class="n">hat</span>              <span class="o">\</span><span class="n">heartsuit</span>         <span class="o">\</span><span class="n">hksearow</span>          <span class="o">\</span><span class="n">hookleftarrow</span>     <span class="o">\</span><span class="n">hslash</span>
+<span class="o">\</span><span class="n">hbar</span>             <span class="o">\</span><span class="n">hermitconjmatrix</span>  <span class="o">\</span><span class="n">hkswarow</span>          <span class="o">\</span><span class="n">hookrightarrow</span>    <span class="o">\</span><span class="n">hspace</span>
 </pre></div>
 </div>
 <p>A full list of tab-completions can be found in the <a class="reference internal" href="../unicode-input/#man-unicode-input"><em>Unicode Input</em></a> section of the manual.</p>

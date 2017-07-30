@@ -893,7 +893,7 @@ result in <em>Y</em>, overwriting the existing value of <em>Y</em>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span><span class="o">=</span><span class="p">[</span><span class="mf">1.0</span> <span class="mf">2.0</span><span class="p">;</span> <span class="mf">3.0</span> <span class="mf">4.0</span><span class="p">];</span> <span class="n">B</span><span class="o">=</span><span class="p">[</span><span class="mf">1.0</span> <span class="mf">1.0</span><span class="p">;</span> <span class="mf">1.0</span> <span class="mf">1.0</span><span class="p">];</span> <span class="n">A_mul_B!</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">);</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">B</span>
-<span class="mi">2</span><span class="n">x2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">x2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mf">3.0</span>  <span class="mf">3.0</span>
  <span class="mf">7.0</span>  <span class="mf">7.0</span>
 </pre></div>
@@ -1594,7 +1594,7 @@ defined by <span class="math">\(\operatorname{erfc}(\operatorname{erfcinv}(x)) =
 <tt class="descname">factor</tt><big>(</big><em>n</em><big>)</big> &rarr; Dict<a class="headerlink" href="#Base.factor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Compute the prime factorization of an integer <tt class="docutils literal"><span class="pre">n</span></tt>. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as <tt class="docutils literal"><span class="pre">n</span></tt>. The value associated with each key indicates the number of times the factor appears in the factorization.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">factor</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span> <span class="c"># == 2*2*5*5</span>
-<span class="n">Dict</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">2</span> <span class="n">entries</span><span class="p">:</span>
+<span class="kt">Dict</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">2</span> <span class="n">entries</span><span class="o">:</span>
   <span class="mi">2</span> <span class="o">=&gt;</span> <span class="mi">2</span>
   <span class="mi">5</span> <span class="o">=&gt;</span> <span class="mi">2</span>
 </pre></div>

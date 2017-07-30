@@ -503,10 +503,10 @@ functionality.</p>
 <div class="section" id="basic-stream-i-o">
 <h2>Basic Stream I/O<a class="headerlink" href="#basic-stream-i-o" title="Permalink to this headline">¶</a></h2>
 <p>All Julia streams expose at least a <a class="reference internal" href="../../stdlib/io-network/#Base.read" title="Base.read"><tt class="xref jl jl-func docutils literal"><span class="pre">read()</span></tt></a> and a <a class="reference internal" href="../../stdlib/io-network/#Base.write" title="Base.write"><tt class="xref jl jl-func docutils literal"><span class="pre">write()</span></tt></a> method, taking the stream as their first argument, e.g.:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">write</span><span class="p">(</span><span class="n">STDOUT</span><span class="p">,</span><span class="s">&quot;Hello World&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">write</span><span class="p">(</span><span class="nb">STDOUT</span><span class="p">,</span><span class="s">&quot;Hello World&quot;</span><span class="p">)</span>
 <span class="n">Hello</span> <span class="n">World</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">read</span><span class="p">(</span><span class="n">STDIN</span><span class="p">,</span><span class="n">Char</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">read</span><span class="p">(</span><span class="nb">STDIN</span><span class="p">,</span><span class="kt">Char</span><span class="p">)</span>
 
 <span class="sc">&#39;\n&#39;</span>
 </pre></div>
@@ -514,16 +514,16 @@ functionality.</p>
 <p>Note that I pressed enter again so that Julia would read the newline. Now, as you can see from this example,
 <a class="reference internal" href="../../stdlib/io-network/#Base.write" title="Base.write"><tt class="xref jl jl-func docutils literal"><span class="pre">write()</span></tt></a> takes the data to write as its second argument, while <a class="reference internal" href="../../stdlib/io-network/#Base.read" title="Base.read"><tt class="xref jl jl-func docutils literal"><span class="pre">read()</span></tt></a> takes the type of the
 data to be read as the second argument. For example, to read a simple byte array, we could do:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="kt">Uint8</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
-<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="n">Uint8</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
+<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="n">Uint8</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mh">0x00</span>
  <span class="mh">0x00</span>
  <span class="mh">0x00</span>
  <span class="mh">0x00</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">read!</span><span class="p">(</span><span class="n">STDIN</span><span class="p">,</span><span class="n">x</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">read!</span><span class="p">(</span><span class="nb">STDIN</span><span class="p">,</span><span class="n">x</span><span class="p">)</span>
 <span class="n">abcd</span>
-<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="n">Uint8</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mh">0x61</span>
  <span class="mh">0x62</span>
  <span class="mh">0x63</span>
@@ -532,9 +532,9 @@ data to be read as the second argument. For example, to read a simple byte array
 </div>
 <p>However, since this is slightly cumbersome, there are several convenience methods provided. For example, we could have written the
 above as:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">readbytes</span><span class="p">(</span><span class="n">STDIN</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">readbytes</span><span class="p">(</span><span class="nb">STDIN</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
 <span class="n">abcd</span>
-<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="n">Uint8</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mh">0x61</span>
  <span class="mh">0x62</span>
  <span class="mh">0x63</span>
@@ -542,7 +542,7 @@ above as:</p>
 </pre></div>
 </div>
 <p>or if we had wanted to read the entire line instead:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">readline</span><span class="p">(</span><span class="n">STDIN</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">readline</span><span class="p">(</span><span class="nb">STDIN</span><span class="p">)</span>
 <span class="n">abcd</span>
 <span class="s">&quot;abcd</span><span class="se">\n</span><span class="s">&quot;</span>
 </pre></div>
@@ -550,14 +550,14 @@ above as:</p>
 <p>Note that depending on your terminal settings, your TTY may be line buffered and might thus require an additional enter before the data
 is sent to Julia.</p>
 <p>To read every line from <a class="reference internal" href="../../stdlib/io-network/#Base.STDIN" title="Base.STDIN"><tt class="xref jl jl-const docutils literal"><span class="pre">STDIN</span></tt></a> you can use <a class="reference internal" href="../../stdlib/io-network/#Base.eachline" title="Base.eachline"><tt class="xref jl jl-func docutils literal"><span class="pre">eachline()</span></tt></a>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">line</span> <span class="k">in</span> <span class="n">eachline</span><span class="p">(</span><span class="n">STDIN</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">line</span> <span class="kp">in</span> <span class="n">eachline</span><span class="p">(</span><span class="nb">STDIN</span><span class="p">)</span>
     <span class="n">print</span><span class="p">(</span><span class="s">&quot;Found </span><span class="si">$line</span><span class="s">&quot;</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>or <a class="reference internal" href="../../stdlib/io-network/#Base.read" title="Base.read"><tt class="xref jl jl-func docutils literal"><span class="pre">read()</span></tt></a> if you wanted to read by character instead:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="o">!</span><span class="n">eof</span><span class="p">(</span><span class="n">STDIN</span><span class="p">)</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="n">STDIN</span><span class="p">,</span> <span class="n">Char</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="o">!</span><span class="n">eof</span><span class="p">(</span><span class="nb">STDIN</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="nb">STDIN</span><span class="p">,</span> <span class="kt">Char</span><span class="p">)</span>
     <span class="n">println</span><span class="p">(</span><span class="s">&quot;Found: </span><span class="si">$x</span><span class="s">&quot;</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
@@ -567,13 +567,13 @@ is sent to Julia.</p>
 <h2>Text I/O<a class="headerlink" href="#text-i-o" title="Permalink to this headline">¶</a></h2>
 <p>Note that the write method mentioned above operates on binary streams. In particular, values do not get converted to any canonical text
 representation but are written out as is:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">write</span><span class="p">(</span><span class="n">STDOUT</span><span class="p">,</span><span class="mh">0x61</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">write</span><span class="p">(</span><span class="nb">STDOUT</span><span class="p">,</span><span class="mh">0x61</span><span class="p">)</span>
 <span class="n">a</span>
 </pre></div>
 </div>
 <p>For text I/O, use the <a class="reference internal" href="../../stdlib/io-network/#Base.print" title="Base.print"><tt class="xref jl jl-func docutils literal"><span class="pre">print()</span></tt></a> or <a class="reference internal" href="../../stdlib/io-network/#Base.show" title="Base.show"><tt class="xref jl jl-func docutils literal"><span class="pre">show()</span></tt></a> methods, depending on your needs (see the standard library reference for a detailed discussion of
 the difference between the two):</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">print</span><span class="p">(</span><span class="n">STDOUT</span><span class="p">,</span><span class="mh">0x61</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">print</span><span class="p">(</span><span class="nb">STDOUT</span><span class="p">,</span><span class="mh">0x61</span><span class="p">)</span>
 <span class="mi">97</span>
 </pre></div>
 </div>
@@ -584,16 +584,16 @@ the difference between the two):</p>
 that you can use to read and write things from the file. For example if we have a file, <tt class="docutils literal"><span class="pre">hello.txt</span></tt>, whose contents
 are <tt class="docutils literal"><span class="pre">Hello,</span> <span class="pre">World!</span></tt>:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="s">&quot;hello.txt&quot;</span><span class="p">)</span>
-<span class="n">IOStream</span><span class="p">(</span><span class="o">&lt;</span><span class="n">file</span> <span class="n">hello</span><span class="o">.</span><span class="n">txt</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="kt">IOStream</span><span class="p">(</span><span class="o">&lt;</span><span class="n">file</span> <span class="n">hello</span><span class="o">.</span><span class="n">txt</span><span class="o">&gt;</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">readlines</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
-<span class="mi">1</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">Union</span><span class="p">(</span><span class="n">ASCIIString</span><span class="p">,</span><span class="n">UTF8String</span><span class="p">),</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">1</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Union</span><span class="p">(</span><span class="kt">ASCIIString</span><span class="p">,</span><span class="kt">UTF8String</span><span class="p">),</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="s">&quot;Hello, World!</span><span class="se">\n</span><span class="s">&quot;</span>
 </pre></div>
 </div>
 <p>If you want to write to a file, you can open it with the write (<tt class="docutils literal"><span class="pre">&quot;w&quot;</span></tt>) flag:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="s">&quot;hello.txt&quot;</span><span class="p">,</span><span class="s">&quot;w&quot;</span><span class="p">)</span>
-<span class="n">IOStream</span><span class="p">(</span><span class="o">&lt;</span><span class="n">file</span> <span class="n">hello</span><span class="o">.</span><span class="n">txt</span><span class="o">&gt;</span><span class="p">)</span>
+<span class="kt">IOStream</span><span class="p">(</span><span class="o">&lt;</span><span class="n">file</span> <span class="n">hello</span><span class="o">.</span><span class="n">txt</span><span class="o">&gt;</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">write</span><span class="p">(</span><span class="n">f</span><span class="p">,</span><span class="s">&quot;Hello again.&quot;</span><span class="p">)</span>
 <span class="mi">12</span>
@@ -609,7 +609,7 @@ been written to disk yet. This is because the <tt class="xref jl jl-class docuti
 To make this easier, there exists another invocation of <a class="reference internal" href="../../stdlib/io-network/#Base.open" title="Base.open"><tt class="xref jl jl-func docutils literal"><span class="pre">open()</span></tt></a> which takes a function
 as its first argument and filename as its second, opens the file, calls the function with the file as
 an argument, and then closes it again. For example, given a function:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> read_and_capitalize</span><span class="p">(</span><span class="n">f</span><span class="p">::</span><span class="n">IOStream</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">read_and_capitalize</span><span class="p">(</span><span class="n">f</span><span class="o">::</span><span class="kt">IOStream</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">uppercase</span><span class="p">(</span><span class="n">readall</span><span class="p">(</span><span class="n">f</span><span class="p">))</span>
 <span class="k">end</span>
 </pre></div>
@@ -632,14 +632,14 @@ function on the fly:</p>
 <div class="section" id="a-simple-tcp-example">
 <h2>A simple TCP example<a class="headerlink" href="#a-simple-tcp-example" title="Permalink to this headline">¶</a></h2>
 <p>Let&#8217;s jump right in with a simple example involving TCP sockets. Let&#8217;s first create a simple server:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">async</span> <span class="k">begin</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@async</span> <span class="k">begin</span>
          <span class="n">server</span> <span class="o">=</span> <span class="n">listen</span><span class="p">(</span><span class="mi">2000</span><span class="p">)</span>
-         <span class="k">while</span> <span class="n">true</span>
+         <span class="k">while</span> <span class="kc">true</span>
            <span class="n">sock</span> <span class="o">=</span> <span class="n">accept</span><span class="p">(</span><span class="n">server</span><span class="p">)</span>
            <span class="n">println</span><span class="p">(</span><span class="s">&quot;Hello World</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
          <span class="k">end</span>
        <span class="k">end</span>
-<span class="n">Task</span>
+<span class="kt">Task</span>
 
 <span class="n">julia</span><span class="o">&gt;</span>
 </pre></div>
@@ -658,10 +658,10 @@ create various other kinds of servers:</p>
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">listen</span><span class="p">(</span><span class="n">ip</span><span class="s">&quot;::1&quot;</span><span class="p">,</span><span class="mi">2000</span><span class="p">)</span> <span class="c"># Listens on localhost:2000 (IPv6)</span>
 <span class="n">TcpServer</span><span class="p">(</span><span class="n">active</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">listen</span><span class="p">(</span><span class="n">IPv4</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span><span class="mi">2001</span><span class="p">)</span> <span class="c"># Listens on port 2001 on all IPv4 interfaces</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">listen</span><span class="p">(</span><span class="kt">IPv4</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span><span class="mi">2001</span><span class="p">)</span> <span class="c"># Listens on port 2001 on all IPv4 interfaces</span>
 <span class="n">TcpServer</span><span class="p">(</span><span class="n">active</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">listen</span><span class="p">(</span><span class="n">IPv6</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span><span class="mi">2001</span><span class="p">)</span> <span class="c"># Listens on port 2001 on all IPv6 interfaces</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">listen</span><span class="p">(</span><span class="kt">IPv6</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span><span class="mi">2001</span><span class="p">)</span> <span class="c"># Listens on port 2001 on all IPv6 interfaces</span>
 <span class="n">TcpServer</span><span class="p">(</span><span class="n">active</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">listen</span><span class="p">(</span><span class="s">&quot;testsocket&quot;</span><span class="p">)</span> <span class="c"># Listens on a domain socket/named pipe</span>
@@ -686,22 +686,22 @@ establish the connection. So let&#8217;s try that out (after having created the 
 </div>
 <p>As expected we saw &#8220;Hello World&#8221; printed. So, let&#8217;s actually analyze what happened behind the scenes. When we called <a class="reference internal" href="../../stdlib/io-network/#Base.connect" title="Base.connect"><tt class="xref jl jl-func docutils literal"><span class="pre">connect()</span></tt></a>, we connect to the server we had just created. Meanwhile, the accept function returns a server-side connection to the newly created socket and prints &#8220;Hello World&#8221; to indicate that the connection was successful.</p>
 <p>A great strength of Julia is that since the API is exposed synchronously even though the I/O is actually happening asynchronously, we didn&#8217;t have to worry callbacks or even making sure that the server gets to run. When we called <a class="reference internal" href="../../stdlib/io-network/#Base.connect" title="Base.connect"><tt class="xref jl jl-func docutils literal"><span class="pre">connect()</span></tt></a> the current task waited for the connection to be established and only continued executing after that was done. In this pause, the server task resumed execution (because a connection request was now available), accepted the connection, printed the message and waited for the next client. Reading and writing works in the same way. To see this, consider the following simple echo server:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">async</span> <span class="k">begin</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@async</span> <span class="k">begin</span>
          <span class="n">server</span> <span class="o">=</span> <span class="n">listen</span><span class="p">(</span><span class="mi">2001</span><span class="p">)</span>
-         <span class="k">while</span> <span class="n">true</span>
+         <span class="k">while</span> <span class="kc">true</span>
            <span class="n">sock</span> <span class="o">=</span> <span class="n">accept</span><span class="p">(</span><span class="n">server</span><span class="p">)</span>
-           <span class="p">@</span><span class="n">async</span> <span class="k">while</span> <span class="n">isopen</span><span class="p">(</span><span class="n">sock</span><span class="p">)</span>
+           <span class="nd">@async</span> <span class="k">while</span> <span class="n">isopen</span><span class="p">(</span><span class="n">sock</span><span class="p">)</span>
              <span class="n">write</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span><span class="n">readline</span><span class="p">(</span><span class="n">sock</span><span class="p">))</span>
            <span class="k">end</span>
          <span class="k">end</span>
        <span class="k">end</span>
-<span class="n">Task</span>
+<span class="kt">Task</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">clientside</span><span class="o">=</span><span class="n">connect</span><span class="p">(</span><span class="mi">2001</span><span class="p">)</span>
 <span class="n">TcpSocket</span><span class="p">(</span><span class="n">open</span><span class="p">,</span> <span class="mi">0</span> <span class="n">bytes</span> <span class="n">waiting</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">async</span> <span class="k">while</span> <span class="n">true</span>
-          <span class="n">write</span><span class="p">(</span><span class="n">STDOUT</span><span class="p">,</span><span class="n">readline</span><span class="p">(</span><span class="n">clientside</span><span class="p">))</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@async</span> <span class="k">while</span> <span class="kc">true</span>
+          <span class="n">write</span><span class="p">(</span><span class="nb">STDOUT</span><span class="p">,</span><span class="n">readline</span><span class="p">(</span><span class="n">clientside</span><span class="p">))</span>
        <span class="k">end</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">println</span><span class="p">(</span><span class="n">clientside</span><span class="p">,</span><span class="s">&quot;Hello World from the Echo Server&quot;</span><span class="p">)</span>
@@ -725,7 +725,7 @@ allows you to do things like:</p>
 </div>
 <p>At the base of this functionality is <a class="reference internal" href="../../stdlib/io-network/#Base.getaddrinfo" title="Base.getaddrinfo"><tt class="xref jl jl-func docutils literal"><span class="pre">getaddrinfo()</span></tt></a>, which will do the appropriate address resolution:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">getaddrinfo</span><span class="p">(</span><span class="s">&quot;google.com&quot;</span><span class="p">)</span>
-<span class="n">IPv4</span><span class="p">(</span><span class="mf">74.125</span><span class="o">.</span><span class="mf">226.225</span><span class="p">)</span>
+<span class="kt">IPv4</span><span class="p">(</span><span class="mf">74.125</span><span class="o">.</span><span class="mf">226.225</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>

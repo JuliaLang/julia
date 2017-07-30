@@ -546,10 +546,10 @@ entered by typing <tt class="docutils literal"><span class="pre">\delta</span></
 <tt class="docutils literal"><span class="pre">\alpha</span></tt>-<em>tab</em>-<tt class="docutils literal"><span class="pre">\hat</span></tt>-<em>tab</em>-<tt class="docutils literal"><span class="pre">\_2</span></tt>-<em>tab</em>.</p>
 <p>Julia will even let you redefine built-in constants and functions if needed:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">pi</span>
-<span class="n">π</span> <span class="o">=</span> <span class="mf">3.1415926535897</span><span class="o">...</span>
+<span class="nb">π</span> <span class="o">=</span> <span class="mf">3.1415926535897</span><span class="o">...</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="nb">pi</span> <span class="o">=</span> <span class="mi">3</span>
-<span class="n">Warning</span><span class="p">:</span> <span class="n">imported</span> <span class="n">binding</span> <span class="k">for</span> <span class="nb">pi</span> <span class="n">overwritten</span> <span class="k">in</span> <span class="k">module</span> <span class="n">Main</span>
+<span class="n">Warning</span><span class="o">:</span> <span class="n">imported</span> <span class="n">binding</span> <span class="k">for</span> <span class="nb">pi</span> <span class="n">overwritten</span> <span class="kp">in</span> <span class="k">module</span> <span class="n">Main</span>
 <span class="mi">3</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="nb">pi</span>
@@ -559,7 +559,7 @@ entered by typing <tt class="docutils literal"><span class="pre">\delta</span></
 <span class="mf">10.0</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt</span> <span class="o">=</span> <span class="mi">4</span>
-<span class="n">Warning</span><span class="p">:</span> <span class="n">imported</span> <span class="n">binding</span> <span class="k">for</span> <span class="n">sqrt</span> <span class="n">overwritten</span> <span class="k">in</span> <span class="k">module</span> <span class="n">Main</span>
+<span class="n">Warning</span><span class="o">:</span> <span class="n">imported</span> <span class="n">binding</span> <span class="k">for</span> <span class="n">sqrt</span> <span class="n">overwritten</span> <span class="kp">in</span> <span class="k">module</span> <span class="n">Main</span>
 <span class="mi">4</span>
 </pre></div>
 </div>
@@ -583,11 +583,11 @@ user-defined methods (e.g. you can use <tt class="docutils literal"><span class=
 <tt class="docutils literal"><span class="pre">⊗</span></tt> as an infix Kronecker product).</p>
 <p>The only explicitly disallowed names for variables are the names of built-in
 statements:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">else</span> <span class="o">=</span> <span class="n">false</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">syntax</span><span class="p">:</span> <span class="n">unexpected</span> <span class="s">&quot;else&quot;</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">else</span> <span class="o">=</span> <span class="kc">false</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">syntax</span><span class="o">:</span> <span class="n">unexpected</span> <span class="s">&quot;else&quot;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="k">try</span> <span class="o">=</span> <span class="s">&quot;No&quot;</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">syntax</span><span class="p">:</span> <span class="n">unexpected</span> <span class="s">&quot;=&quot;</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">syntax</span><span class="o">:</span> <span class="n">unexpected</span> <span class="s">&quot;=&quot;</span>
 </pre></div>
 </div>
 </div>

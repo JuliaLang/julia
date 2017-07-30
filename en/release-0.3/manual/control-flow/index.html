@@ -568,7 +568,7 @@ anatomy of the <tt class="docutils literal"><span class="pre">if</span></tt>-<tt
 is evaluated; otherwise the condition expression <tt class="docutils literal"><span class="pre">x</span> <span class="pre">&gt;</span> <span class="pre">y</span></tt> is evaluated, and if
 it is <tt class="docutils literal"><span class="pre">true</span></tt>, the corresponding block is evaluated; if neither expression is
 true, the <tt class="docutils literal"><span class="pre">else</span></tt> block is evaluated. Here it is in action:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> test</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">test</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
          <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span>
            <span class="n">println</span><span class="p">(</span><span class="s">&quot;x is less than y&quot;</span><span class="p">)</span>
          <span class="k">elseif</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="n">y</span>
@@ -577,16 +577,16 @@ true, the <tt class="docutils literal"><span class="pre">else</span></tt> block 
            <span class="n">println</span><span class="p">(</span><span class="s">&quot;x is equal to y&quot;</span><span class="p">)</span>
          <span class="k">end</span>
        <span class="k">end</span>
-<span class="n">test</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">test</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="n">x</span> <span class="nb">is</span> <span class="n">less</span> <span class="n">than</span> <span class="n">y</span>
+<span class="n">x</span> <span class="n">is</span> <span class="n">less</span> <span class="n">than</span> <span class="n">y</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">x</span> <span class="nb">is</span> <span class="n">greater</span> <span class="n">than</span> <span class="n">y</span>
+<span class="n">x</span> <span class="n">is</span> <span class="n">greater</span> <span class="n">than</span> <span class="n">y</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">x</span> <span class="nb">is</span> <span class="n">equal</span> <span class="n">to</span> <span class="n">y</span>
+<span class="n">x</span> <span class="n">is</span> <span class="n">equal</span> <span class="n">to</span> <span class="n">y</span>
 </pre></div>
 </div>
 <p>The <tt class="docutils literal"><span class="pre">elseif</span></tt> and <tt class="docutils literal"><span class="pre">else</span></tt> blocks are optional, and as many <tt class="docutils literal"><span class="pre">elseif</span></tt>
@@ -598,7 +598,7 @@ and no further condition expressions or blocks are evaluated.</p>
 This means that new variables defined inside the <tt class="docutils literal"><span class="pre">ìf</span></tt> clauses can
 be used after the <tt class="docutils literal"><span class="pre">if</span></tt> block, even if they weren&#8217;t defined before.
 So, we could have defined the <tt class="docutils literal"><span class="pre">test</span></tt> function above as</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> test</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">test</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
          <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span>
            <span class="n">relation</span> <span class="o">=</span> <span class="s">&quot;less than&quot;</span>
          <span class="k">elseif</span> <span class="n">x</span> <span class="o">==</span> <span class="n">y</span>
@@ -632,7 +632,7 @@ conditional expression is anything but <tt class="docutils literal"><span class=
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">if</span> <span class="mi">1</span>
          <span class="n">println</span><span class="p">(</span><span class="s">&quot;true&quot;</span><span class="p">)</span>
        <span class="k">end</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">type</span><span class="p">:</span> <span class="n">non</span><span class="o">-</span><span class="n">boolean</span> <span class="p">(</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">used</span> <span class="k">in</span> <span class="n">boolean</span> <span class="n">context</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="k">type</span><span class="o">:</span> <span class="n">non</span><span class="o">-</span><span class="n">boolean</span> <span class="p">(</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">used</span> <span class="kp">in</span> <span class="n">boolean</span> <span class="n">context</span>
 </pre></div>
 </div>
 <p>This error indicates that the conditional was of the wrong type:
@@ -642,7 +642,7 @@ conditional expression is anything but <tt class="docutils literal"><span class=
 choice between single expression values is required, as opposed to
 conditional execution of longer blocks of code. It gets its name from
 being the only operator in most languages taking three operands:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">?</span> <span class="n">b</span> <span class="p">:</span> <span class="n">c</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">?</span> <span class="n">b</span> <span class="o">:</span> <span class="n">c</span>
 </pre></div>
 </div>
 <p>The expression <tt class="docutils literal"><span class="pre">a</span></tt>, before the <tt class="docutils literal"><span class="pre">?</span></tt>, is a condition expression, and
@@ -656,12 +656,12 @@ written more concisely using the ternary operator. For the sake of
 clarity, let&#8217;s try a two-way version first:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">println</span><span class="p">(</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span> <span class="o">?</span> <span class="s">&quot;less than&quot;</span> <span class="p">:</span> <span class="s">&quot;not less than&quot;</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">println</span><span class="p">(</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span> <span class="o">?</span> <span class="s">&quot;less than&quot;</span> <span class="o">:</span> <span class="s">&quot;not less than&quot;</span><span class="p">)</span>
 <span class="n">less</span> <span class="n">than</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">println</span><span class="p">(</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span> <span class="o">?</span> <span class="s">&quot;less than&quot;</span> <span class="p">:</span> <span class="s">&quot;not less than&quot;</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">println</span><span class="p">(</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span> <span class="o">?</span> <span class="s">&quot;less than&quot;</span> <span class="o">:</span> <span class="s">&quot;not less than&quot;</span><span class="p">)</span>
 <span class="n">not</span> <span class="n">less</span> <span class="n">than</span>
 </pre></div>
 </div>
@@ -670,18 +670,18 @@ expression evaluates to the string <tt class="docutils literal"><span class="pre
 evaluates to the string <tt class="docutils literal"><span class="pre">&quot;not</span> <span class="pre">less</span> <span class="pre">than&quot;</span></tt>. The original three-way
 example requires chaining multiple uses of the ternary operator
 together:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> <span class="n">println</span><span class="p">(</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span> <span class="o">?</span> <span class="s">&quot;x is less than y&quot;</span>    <span class="p">:</span>
-                            <span class="n">x</span> <span class="o">&gt;</span> <span class="n">y</span> <span class="o">?</span> <span class="s">&quot;x is greater than y&quot;</span> <span class="p">:</span> <span class="s">&quot;x is equal to y&quot;</span><span class="p">)</span>
-<span class="n">test</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> <span class="n">println</span><span class="p">(</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span> <span class="o">?</span> <span class="s">&quot;x is less than y&quot;</span>    <span class="o">:</span>
+                            <span class="n">x</span> <span class="o">&gt;</span> <span class="n">y</span> <span class="o">?</span> <span class="s">&quot;x is greater than y&quot;</span> <span class="o">:</span> <span class="s">&quot;x is equal to y&quot;</span><span class="p">)</span>
+<span class="n">test</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="n">x</span> <span class="nb">is</span> <span class="n">less</span> <span class="n">than</span> <span class="n">y</span>
+<span class="n">x</span> <span class="n">is</span> <span class="n">less</span> <span class="n">than</span> <span class="n">y</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">x</span> <span class="nb">is</span> <span class="n">greater</span> <span class="n">than</span> <span class="n">y</span>
+<span class="n">x</span> <span class="n">is</span> <span class="n">greater</span> <span class="n">than</span> <span class="n">y</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">x</span> <span class="nb">is</span> <span class="n">equal</span> <span class="n">to</span> <span class="n">y</span>
+<span class="n">x</span> <span class="n">is</span> <span class="n">equal</span> <span class="n">to</span> <span class="n">y</span>
 </pre></div>
 </div>
 <p>To facilitate chaining, the operator associates from right to left.</p>
@@ -689,14 +689,14 @@ together:</p>
 before and after the <tt class="docutils literal"><span class="pre">:</span></tt> are only evaluated if the condition
 expression evaluates to <tt class="docutils literal"><span class="pre">true</span></tt> or <tt class="docutils literal"><span class="pre">false</span></tt>, respectively:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">v</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="n">x</span><span class="p">);</span> <span class="n">x</span><span class="p">)</span>
-<span class="n">v</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">v</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="mi">2</span> <span class="o">?</span> <span class="n">v</span><span class="p">(</span><span class="s">&quot;yes&quot;</span><span class="p">)</span> <span class="p">:</span> <span class="n">v</span><span class="p">(</span><span class="s">&quot;no&quot;</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="mi">2</span> <span class="o">?</span> <span class="n">v</span><span class="p">(</span><span class="s">&quot;yes&quot;</span><span class="p">)</span> <span class="o">:</span> <span class="n">v</span><span class="p">(</span><span class="s">&quot;no&quot;</span><span class="p">)</span>
 <span class="n">yes</span>
 <span class="s">&quot;yes&quot;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="o">?</span> <span class="n">v</span><span class="p">(</span><span class="s">&quot;yes&quot;</span><span class="p">)</span> <span class="p">:</span> <span class="n">v</span><span class="p">(</span><span class="s">&quot;no&quot;</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="o">?</span> <span class="n">v</span><span class="p">(</span><span class="s">&quot;yes&quot;</span><span class="p">)</span> <span class="o">:</span> <span class="n">v</span><span class="p">(</span><span class="s">&quot;no&quot;</span><span class="p">)</span>
 <span class="n">no</span>
 <span class="s">&quot;no&quot;</span>
 </pre></div>
@@ -722,47 +722,47 @@ evaluated if <tt class="docutils literal"><span class="pre">a</span></tt> evalua
 <tt class="docutils literal"><span class="pre">b</span></tt>. Both <tt class="docutils literal"><span class="pre">&amp;&amp;</span></tt> and <tt class="docutils literal"><span class="pre">||</span></tt> associate to the right, but <tt class="docutils literal"><span class="pre">&amp;&amp;</span></tt> has
 higher precedence than <tt class="docutils literal"><span class="pre">||</span></tt> does. It&#8217;s easy to experiment with
 this behavior:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="n">x</span><span class="p">);</span> <span class="n">true</span><span class="p">)</span>
-<span class="n">t</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="n">x</span><span class="p">);</span> <span class="kc">true</span><span class="p">)</span>
+<span class="n">t</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="n">x</span><span class="p">);</span> <span class="n">false</span><span class="p">)</span>
-<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="n">x</span><span class="p">);</span> <span class="kc">false</span><span class="p">)</span>
+<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 <span class="mi">1</span>
 <span class="mi">2</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="n">f</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 <span class="mi">1</span>
 <span class="mi">2</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 <span class="mi">1</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="n">f</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 <span class="mi">1</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">||</span> <span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 <span class="mi">1</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">||</span> <span class="n">f</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 <span class="mi">1</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">||</span> <span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 <span class="mi">1</span>
 <span class="mi">2</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">||</span> <span class="n">f</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 <span class="mi">1</span>
 <span class="mi">2</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>You can easily experiment in the same way with the associativity and
@@ -773,12 +773,12 @@ precedence of various combinations of <tt class="docutils literal"><span class="
 Similarly, instead of <tt class="docutils literal"><span class="pre">if</span> <span class="pre">!</span> <span class="pre">&lt;cond&gt;</span> <span class="pre">&lt;statement&gt;</span> <span class="pre">end</span></tt>, one can write
 <tt class="docutils literal"><span class="pre">&lt;cond&gt;</span> <span class="pre">||</span> <span class="pre">&lt;statement&gt;</span></tt> (which could be read as: &lt;cond&gt; <em>or else</em> &lt;statement&gt;).</p>
 <p>For example, a recursive factorial routine could be defined like this:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> factorial</span><span class="p">(</span><span class="n">n</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span>
-           <span class="n">n</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">||</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;n must be non-negative&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">factorial</span><span class="p">(</span><span class="n">n</span><span class="o">::</span><span class="kt">Int</span><span class="p">)</span>
+           <span class="n">n</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">||</span> <span class="n">error</span><span class="p">(</span><span class="s">&quot;n must be non-negative&quot;</span><span class="p">)</span>
            <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="k">return</span> <span class="mi">1</span>
            <span class="n">n</span> <span class="o">*</span> <span class="n">factorial</span><span class="p">(</span><span class="n">n</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
        <span class="k">end</span>
-<span class="n">factorial</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">factorial</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">factorial</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
 <span class="mi">120</span>
@@ -787,8 +787,8 @@ Similarly, instead of <tt class="docutils literal"><span class="pre">if</span> <
 <span class="mi">1</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">factorial</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">n</span> <span class="n">must</span> <span class="n">be</span> <span class="n">non</span><span class="o">-</span><span class="n">negative</span>
- <span class="k">in</span> <span class="n">factorial</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">2</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">n</span> <span class="n">must</span> <span class="n">be</span> <span class="n">non</span><span class="o">-</span><span class="n">negative</span>
+ <span class="kp">in</span> <span class="n">factorial</span> <span class="n">at</span> <span class="n">none</span><span class="o">:</span><span class="mi">2</span>
 </pre></div>
 </div>
 <p>Boolean operations <em>without</em> short-circuit evaluation can be done with the
@@ -798,31 +798,31 @@ infix operator syntax, but always evaluate their arguments:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 <span class="mi">1</span>
 <span class="mi">2</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">|</span> <span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 <span class="mi">1</span>
 <span class="mi">2</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>Just like condition expressions used in <tt class="docutils literal"><span class="pre">if</span></tt>, <tt class="docutils literal"><span class="pre">elseif</span></tt> or the
 ternary operator, the operands of <tt class="docutils literal"><span class="pre">&amp;&amp;</span></tt> or <tt class="docutils literal"><span class="pre">||</span></tt> must be boolean
 values (<tt class="docutils literal"><span class="pre">true</span></tt> or <tt class="docutils literal"><span class="pre">false</span></tt>). Using a non-boolean value anywhere
 except for the last entry in a conditional chain is an error:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&amp;&amp;</span> <span class="n">true</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">type</span><span class="p">:</span> <span class="n">non</span><span class="o">-</span><span class="n">boolean</span> <span class="p">(</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">used</span> <span class="k">in</span> <span class="n">boolean</span> <span class="n">context</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&amp;&amp;</span> <span class="kc">true</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="k">type</span><span class="o">:</span> <span class="n">non</span><span class="o">-</span><span class="n">boolean</span> <span class="p">(</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">used</span> <span class="kp">in</span> <span class="n">boolean</span> <span class="n">context</span>
 </pre></div>
 </div>
 <p>On the other hand, any type of expression can be used at the end of a conditional chain.
 It will be evaluated and returned depending on the preceding conditionals:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">true</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
-<span class="mi">2</span><span class="n">x2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kc">true</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
+<span class="mi">2</span><span class="n">x2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mf">0.768448</span>  <span class="mf">0.673959</span>
  <span class="mf">0.940515</span>  <span class="mf">0.395453</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">false</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kc">false</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 </div>
@@ -851,7 +851,7 @@ of the <tt class="docutils literal"><span class="pre">while</span></tt> loop. If
 <p>The <tt class="docutils literal"><span class="pre">for</span></tt> loop makes common repeated evaluation idioms easier to
 write. Since counting up and down like the above <tt class="docutils literal"><span class="pre">while</span></tt> loop does is
 so common, it can be expressed more concisely with a <tt class="docutils literal"><span class="pre">for</span></tt> loop:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">5</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">5</span>
          <span class="n">println</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
        <span class="k">end</span>
 <span class="mi">1</span>
@@ -870,7 +870,7 @@ variable <tt class="docutils literal"><span class="pre">i</span></tt> has not be
 loop form, it is visible only inside of the <tt class="docutils literal"><span class="pre">for</span></tt> loop, and not
 afterwards. You&#8217;ll either need a new interactive session instance or a
 different variable name to test this:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">j</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">5</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">j</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">5</span>
          <span class="n">println</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
        <span class="k">end</span>
 <span class="mi">1</span>
@@ -880,7 +880,7 @@ different variable name to test this:</p>
 <span class="mi">5</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">j</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">j</span> <span class="n">not</span> <span class="n">defined</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">j</span> <span class="n">not</span> <span class="n">defined</span>
 </pre></div>
 </div>
 <p>See <a class="reference internal" href="../variables-and-scoping/#man-variables-and-scoping"><em>Scope of Variables</em></a> for a detailed
@@ -889,14 +889,14 @@ explanation of variable scope and how it works in Julia.</p>
 In these cases, the alternative (but fully equivalent) keyword <tt class="docutils literal"><span class="pre">in</span></tt> is
 typically used instead of <tt class="docutils literal"><span class="pre">=</span></tt>, since it makes the code read more
 clearly:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="kp">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
          <span class="n">println</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
        <span class="k">end</span>
 <span class="mi">1</span>
 <span class="mi">4</span>
 <span class="mi">0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">s</span> <span class="k">in</span> <span class="p">[</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="s">&quot;bar&quot;</span><span class="p">,</span><span class="s">&quot;baz&quot;</span><span class="p">]</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">s</span> <span class="kp">in</span> <span class="p">[</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="s">&quot;bar&quot;</span><span class="p">,</span><span class="s">&quot;baz&quot;</span><span class="p">]</span>
          <span class="n">println</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
        <span class="k">end</span>
 <span class="n">foo</span>
@@ -912,7 +912,7 @@ loop before the end of the iterable object is reached. This can be
 accomplished with the <tt class="docutils literal"><span class="pre">break</span></tt> keyword:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="k">while</span> <span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">while</span> <span class="kc">true</span>
          <span class="n">println</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
          <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="mi">5</span>
            <span class="k">break</span>
@@ -925,7 +925,7 @@ accomplished with the <tt class="docutils literal"><span class="pre">break</span
 <span class="mi">4</span>
 <span class="mi">5</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">1000</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">1000</span>
          <span class="n">println</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
          <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="mi">5</span>
            <span class="k">break</span>
@@ -944,7 +944,7 @@ by using the <tt class="docutils literal"><span class="pre">break</span></tt> ke
 <p>In other circumstances, it is handy to be able to stop an iteration and
 move on to the next one immediately. The <tt class="docutils literal"><span class="pre">continue</span></tt> keyword
 accomplishes this:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">10</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">10</span>
          <span class="k">if</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">3</span> <span class="o">!=</span> <span class="mi">0</span>
            <span class="k">continue</span>
          <span class="k">end</span>
@@ -962,7 +962,7 @@ more code to be evaluated after the <tt class="docutils literal"><span class="pr
 multiple points from which one calls <tt class="docutils literal"><span class="pre">continue</span></tt>.</p>
 <p>Multiple nested <tt class="docutils literal"><span class="pre">for</span></tt> loops can be combined into a single outer loop,
 forming the cartesian product of its iterables:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span> <span class="n">j</span> <span class="o">=</span> <span class="mi">3</span><span class="p">:</span><span class="mi">4</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">2</span><span class="p">,</span> <span class="n">j</span> <span class="o">=</span> <span class="mi">3</span><span class="o">:</span><span class="mi">4</span>
          <span class="n">println</span><span class="p">((</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">))</span>
        <span class="k">end</span>
 <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
@@ -1036,14 +1036,14 @@ built-in <tt class="xref jl jl-exc docutils literal"><span class="pre">Exception
 <p>For example, the <a class="reference internal" href="../../stdlib/math/#Base.sqrt" title="Base.sqrt"><tt class="xref jl jl-func docutils literal"><span class="pre">sqrt()</span></tt></a> function throws a <tt class="xref jl jl-exc docutils literal"><span class="pre">DomainError</span></tt> if applied to a
 negative real value:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">DomainError</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">DomainError</span>
 <span class="n">sqrt</span> <span class="n">will</span> <span class="n">only</span> <span class="k">return</span> <span class="n">a</span> <span class="n">complex</span> <span class="n">result</span> <span class="k">if</span> <span class="n">called</span> <span class="n">with</span> <span class="n">a</span> <span class="n">complex</span> <span class="n">argument</span><span class="o">.</span>
 <span class="k">try</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">complex</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
- <span class="k">in</span> <span class="n">sqrt</span> <span class="n">at</span> <span class="n">math</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">133</span>
+ <span class="kp">in</span> <span class="n">sqrt</span> <span class="n">at</span> <span class="n">math</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">133</span>
 </pre></div>
 </div>
 <p>You may define your own exceptions in the following way:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span><span class="nc"> MyCustomException</span> <span class="o">&lt;:</span> <span class="n">Exception</span> <span class="k">end</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span> <span class="n">MyCustomException</span> <span class="o">&lt;:</span> <span class="kt">Exception</span> <span class="k">end</span>
 </pre></div>
 </div>
 </div>
@@ -1052,38 +1052,38 @@ negative real value:</p>
 <p>Exceptions can be created explicitly with <a class="reference internal" href="../../stdlib/base/#Base.throw" title="Base.throw"><tt class="xref jl jl-func docutils literal"><span class="pre">throw()</span></tt></a>. For example, a function
 defined only for nonnegative numbers could be written to <a class="reference internal" href="../../stdlib/base/#Base.throw" title="Base.throw"><tt class="xref jl jl-func docutils literal"><span class="pre">throw()</span></tt></a> a <tt class="xref jl jl-exc docutils literal"><span class="pre">DomainError</span></tt>
 if the argument is negative:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span><span class="o">&gt;=</span><span class="mi">0</span> <span class="o">?</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">x</span><span class="p">)</span> <span class="p">:</span> <span class="nb">throw</span><span class="p">(</span><span class="n">DomainError</span><span class="p">())</span>
-<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span><span class="o">&gt;=</span><span class="mi">0</span> <span class="o">?</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">x</span><span class="p">)</span> <span class="o">:</span> <span class="n">throw</span><span class="p">(</span><span class="kt">DomainError</span><span class="p">())</span>
+<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 <span class="mf">0.36787944117144233</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">DomainError</span>
- <span class="k">in</span> <span class="n">f</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">1</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">DomainError</span>
+ <span class="kp">in</span> <span class="n">f</span> <span class="n">at</span> <span class="n">none</span><span class="o">:</span><span class="mi">1</span>
 </pre></div>
 </div>
 <p>Note that <tt class="xref jl jl-exc docutils literal"><span class="pre">DomainError</span></tt> without parentheses is not an exception, but a type of
 exception. It needs to be called to obtain an <tt class="xref jl jl-exc docutils literal"><span class="pre">Exception</span></tt> object:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">DomainError</span><span class="p">())</span> <span class="o">&lt;:</span> <span class="n">Exception</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="kt">DomainError</span><span class="p">())</span> <span class="o">&lt;:</span> <span class="kt">Exception</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">DomainError</span><span class="p">)</span> <span class="o">&lt;:</span> <span class="n">Exception</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="kt">DomainError</span><span class="p">)</span> <span class="o">&lt;:</span> <span class="kt">Exception</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>Additionally, some exception types take one or more arguments that are used for
 error reporting:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">throw</span><span class="p">(</span><span class="n">UndefVarError</span><span class="p">(:</span><span class="n">x</span><span class="p">))</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">x</span> <span class="n">not</span> <span class="n">defined</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">throw</span><span class="p">(</span><span class="kt">UndefVarError</span><span class="p">(</span><span class="o">:</span><span class="n">x</span><span class="p">))</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">x</span> <span class="n">not</span> <span class="n">defined</span>
 </pre></div>
 </div>
 <p>This mechanism can be implemented easily by custom exception types following
 the way <tt class="xref jl jl-exc docutils literal"><span class="pre">UndefVarError</span></tt> is written:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span><span class="nc"> MyUndefVarError</span> <span class="o">&lt;:</span> <span class="n">Exception</span>
-           <span class="n">var</span><span class="p">::</span><span class="n">Symbol</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span> <span class="n">MyUndefVarError</span> <span class="o">&lt;:</span> <span class="kt">Exception</span>
+           <span class="n">var</span><span class="o">::</span><span class="kt">Symbol</span>
        <span class="k">end</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Base</span><span class="o">.</span><span class="n">showerror</span><span class="p">(</span><span class="n">io</span><span class="p">::</span><span class="n">IO</span><span class="p">,</span> <span class="n">e</span><span class="p">::</span><span class="n">MyUndefVarError</span><span class="p">)</span> <span class="o">=</span> <span class="n">print</span><span class="p">(</span><span class="n">io</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">var</span><span class="p">,</span> <span class="s">&quot; not defined&quot;</span><span class="p">);</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Base</span><span class="o">.</span><span class="n">showerror</span><span class="p">(</span><span class="n">io</span><span class="o">::</span><span class="kt">IO</span><span class="p">,</span> <span class="nb">e</span><span class="o">::</span><span class="n">MyUndefVarError</span><span class="p">)</span> <span class="o">=</span> <span class="n">print</span><span class="p">(</span><span class="n">io</span><span class="p">,</span> <span class="nb">e</span><span class="o">.</span><span class="n">var</span><span class="p">,</span> <span class="s">&quot; not defined&quot;</span><span class="p">);</span>
 </pre></div>
 </div>
 </div>
@@ -1094,28 +1094,28 @@ interrupts the normal flow of control.</p>
 <p>Suppose we want to stop execution immediately if the square root of a
 negative number is taken. To do this, we can define a fussy version of
 the <a class="reference internal" href="../../stdlib/math/#Base.sqrt" title="Base.sqrt"><tt class="xref jl jl-func docutils literal"><span class="pre">sqrt()</span></tt></a> function that raises an error if its argument is negative:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">fussy_sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">?</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="p">:</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;negative x not allowed&quot;</span><span class="p">)</span>
-<span class="n">fussy_sqrt</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">fussy_sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">?</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">:</span> <span class="n">error</span><span class="p">(</span><span class="s">&quot;negative x not allowed&quot;</span><span class="p">)</span>
+<span class="n">fussy_sqrt</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">fussy_sqrt</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 <span class="mf">1.4142135623730951</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">fussy_sqrt</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">negative</span> <span class="n">x</span> <span class="n">not</span> <span class="n">allowed</span>
- <span class="k">in</span> <span class="n">fussy_sqrt</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">1</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">negative</span> <span class="n">x</span> <span class="n">not</span> <span class="n">allowed</span>
+ <span class="kp">in</span> <span class="n">fussy_sqrt</span> <span class="n">at</span> <span class="n">none</span><span class="o">:</span><span class="mi">1</span>
 </pre></div>
 </div>
 <p>If <tt class="docutils literal"><span class="pre">fussy_sqrt</span></tt> is called with a negative value from another function,
 instead of trying to continue execution of the calling function, it
 returns immediately, displaying the error message in the interactive
 session:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> verbose_fussy_sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">verbose_fussy_sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
          <span class="n">println</span><span class="p">(</span><span class="s">&quot;before fussy_sqrt&quot;</span><span class="p">)</span>
          <span class="n">r</span> <span class="o">=</span> <span class="n">fussy_sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
          <span class="n">println</span><span class="p">(</span><span class="s">&quot;after fussy_sqrt&quot;</span><span class="p">)</span>
          <span class="k">return</span> <span class="n">r</span>
        <span class="k">end</span>
-<span class="n">verbose_fussy_sqrt</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">verbose_fussy_sqrt</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">verbose_fussy_sqrt</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 <span class="n">before</span> <span class="n">fussy_sqrt</span>
@@ -1124,8 +1124,8 @@ session:</p>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">verbose_fussy_sqrt</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 <span class="n">before</span> <span class="n">fussy_sqrt</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">negative</span> <span class="n">x</span> <span class="n">not</span> <span class="n">allowed</span>
- <span class="k">in</span> <span class="n">verbose_fussy_sqrt</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">3</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">negative</span> <span class="n">x</span> <span class="n">not</span> <span class="n">allowed</span>
+ <span class="kp">in</span> <span class="n">verbose_fussy_sqrt</span> <span class="n">at</span> <span class="n">none</span><span class="o">:</span><span class="mi">3</span>
 </pre></div>
 </div>
 </div>
@@ -1135,16 +1135,16 @@ session:</p>
 I/O, but do not throw any <tt class="xref jl jl-exc docutils literal"><span class="pre">Exception</span></tt>s and hence do not interrupt
 execution.:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">info</span><span class="p">(</span><span class="s">&quot;Hi&quot;</span><span class="p">);</span> <span class="mi">1</span><span class="o">+</span><span class="mi">1</span>
-<span class="n">INFO</span><span class="p">:</span> <span class="n">Hi</span>
+<span class="n">INFO</span><span class="o">:</span> <span class="n">Hi</span>
 <span class="mi">2</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">warn</span><span class="p">(</span><span class="s">&quot;Hi&quot;</span><span class="p">);</span> <span class="mi">1</span><span class="o">+</span><span class="mi">1</span>
-<span class="n">WARNING</span><span class="p">:</span> <span class="n">Hi</span>
+<span class="n">WARNING</span><span class="o">:</span> <span class="n">Hi</span>
 <span class="mi">2</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;Hi&quot;</span><span class="p">);</span> <span class="mi">1</span><span class="o">+</span><span class="mi">1</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">Hi</span>
- <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">error</span><span class="p">(</span><span class="s">&quot;Hi&quot;</span><span class="p">);</span> <span class="mi">1</span><span class="o">+</span><span class="mi">1</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">Hi</span>
+ <span class="kp">in</span> <span class="n">error</span> <span class="n">at</span> <span class="n">error</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">21</span>
 </pre></div>
 </div>
 </div>
@@ -1159,7 +1159,7 @@ call either the real or complex square root method on demand using
        <span class="k">catch</span>
          <span class="n">sqrt</span><span class="p">(</span><span class="n">complex</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
        <span class="k">end</span>
-<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 <span class="mf">1.0</span>
@@ -1178,13 +1178,13 @@ assumes <tt class="docutils literal"><span class="pre">x</span></tt> is a real n
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt_second</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="k">try</span>
          <span class="n">sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
        <span class="k">catch</span> <span class="n">y</span>
-         <span class="k">if</span> <span class="nb">isa</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">DomainError</span><span class="p">)</span>
+         <span class="k">if</span> <span class="n">isa</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="kt">DomainError</span><span class="p">)</span>
            <span class="n">sqrt</span><span class="p">(</span><span class="n">complex</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="mi">0</span><span class="p">))</span>
-         <span class="k">elseif</span> <span class="nb">isa</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">BoundsError</span><span class="p">)</span>
+         <span class="k">elseif</span> <span class="n">isa</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="kt">BoundsError</span><span class="p">)</span>
            <span class="n">sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
          <span class="k">end</span>
        <span class="k">end</span>
-<span class="n">sqrt_second</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">sqrt_second</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt_second</span><span class="p">([</span><span class="mi">1</span> <span class="mi">4</span><span class="p">])</span>
 <span class="mf">2.0</span>
@@ -1196,8 +1196,8 @@ assumes <tt class="docutils literal"><span class="pre">x</span></tt> is a real n
 <span class="mf">3.0</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt_second</span><span class="p">(</span><span class="o">-</span><span class="mi">9</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">DomainError</span>
- <span class="k">in</span> <span class="n">sqrt_second</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">7</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">DomainError</span>
+ <span class="kp">in</span> <span class="n">sqrt_second</span> <span class="n">at</span> <span class="n">none</span><span class="o">:</span><span class="mi">7</span>
 </pre></div>
 </div>
 <p>Note that the symbol following <tt class="docutils literal"><span class="pre">catch</span></tt> will always be interpreted as a
@@ -1219,8 +1219,8 @@ in case of an error:</p>
 <p>The <tt class="docutils literal"><span class="pre">catch</span></tt> clause is not strictly necessary; when omitted, the default
 return value is <tt class="docutils literal"><span class="pre">false</span></tt>. Note that this behavior will change in Julia
 version 0.4, where the return value will instead be <tt class="docutils literal"><span class="pre">nothing</span></tt>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">try</span> <span class="nb">error</span><span class="p">()</span> <span class="k">end</span>
-<span class="n">false</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">try</span> <span class="n">error</span><span class="p">()</span> <span class="k">end</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>The power of the <tt class="docutils literal"><span class="pre">try/catch</span></tt> construct lies in the ability to unwind a deeply
@@ -1242,7 +1242,7 @@ regardless of how it exits.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">f</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="s">&quot;file&quot;</span><span class="p">)</span>
 <span class="k">try</span>
     <span class="c"># operate on file f</span>
-<span class="n">finally</span>
+<span class="k">finally</span>
     <span class="n">close</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
@@ -1284,9 +1284,9 @@ they need to, passing values back and forth as necessary.</p>
 <p>Julia provides the functions <a class="reference internal" href="../../stdlib/parallel/#Base.produce" title="Base.produce"><tt class="xref jl jl-func docutils literal"><span class="pre">produce()</span></tt></a> and <a class="reference internal" href="../../stdlib/parallel/#Base.consume" title="Base.consume"><tt class="xref jl jl-func docutils literal"><span class="pre">consume()</span></tt></a> for solving
 this problem. A producer is a function that calls <a class="reference internal" href="../../stdlib/parallel/#Base.produce" title="Base.produce"><tt class="xref jl jl-func docutils literal"><span class="pre">produce()</span></tt></a> on each
 value it needs to produce:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> producer</span><span class="p">()</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">producer</span><span class="p">()</span>
          <span class="n">produce</span><span class="p">(</span><span class="s">&quot;start&quot;</span><span class="p">)</span>
-         <span class="k">for</span> <span class="n">n</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">4</span>
+         <span class="k">for</span> <span class="n">n</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="mi">4</span>
            <span class="n">produce</span><span class="p">(</span><span class="mi">2</span><span class="n">n</span><span class="p">)</span>
          <span class="k">end</span>
          <span class="n">produce</span><span class="p">(</span><span class="s">&quot;stop&quot;</span><span class="p">)</span>
@@ -1295,7 +1295,7 @@ value it needs to produce:</p>
 </div>
 <p>To consume values, first the producer is wrapped in a <a class="reference internal" href="../../stdlib/parallel/#Base.Task" title="Base.Task"><tt class="xref jl jl-class docutils literal"><span class="pre">Task</span></tt></a>,
 then <a class="reference internal" href="../../stdlib/parallel/#Base.consume" title="Base.consume"><tt class="xref jl jl-func docutils literal"><span class="pre">consume()</span></tt></a> is called repeatedly on that object:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">p</span> <span class="o">=</span> <span class="n">Task</span><span class="p">(</span><span class="n">producer</span><span class="p">);</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">p</span> <span class="o">=</span> <span class="kt">Task</span><span class="p">(</span><span class="n">producer</span><span class="p">);</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">consume</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
 <span class="s">&quot;start&quot;</span>
@@ -1321,7 +1321,7 @@ return multiple times. Between calls to <a class="reference internal" href="../.
 execution is suspended and the consumer has control.</p>
 <p>A Task can be used as an iterable object in a <tt class="docutils literal"><span class="pre">for</span></tt> loop, in which
 case the loop variable takes on all the produced values:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">x</span> <span class="k">in</span> <span class="n">Task</span><span class="p">(</span><span class="n">producer</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">x</span> <span class="kp">in</span> <span class="kt">Task</span><span class="p">(</span><span class="n">producer</span><span class="p">)</span>
          <span class="n">println</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
        <span class="k">end</span>
 <span class="n">start</span>
@@ -1337,13 +1337,13 @@ common pattern is for the producer to be parameterized, in which case a
 partial function application is needed to create a 0-argument <a class="reference internal" href="../functions/#man-anonymous-functions"><em>anonymous
 function</em></a>. This can be done either
 directly or by use of a convenience macro:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> mytask</span><span class="p">(</span><span class="n">myarg</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">mytask</span><span class="p">(</span><span class="n">myarg</span><span class="p">)</span>
     <span class="o">...</span>
 <span class="k">end</span>
 
-<span class="n">taskHdl</span> <span class="o">=</span> <span class="n">Task</span><span class="p">(()</span> <span class="o">-&gt;</span> <span class="n">mytask</span><span class="p">(</span><span class="mi">7</span><span class="p">))</span>
+<span class="n">taskHdl</span> <span class="o">=</span> <span class="kt">Task</span><span class="p">(()</span> <span class="o">-&gt;</span> <span class="n">mytask</span><span class="p">(</span><span class="mi">7</span><span class="p">))</span>
 <span class="c"># or, equivalently</span>
-<span class="n">taskHdl</span> <span class="o">=</span> <span class="p">@</span><span class="n">task</span> <span class="n">mytask</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span>
+<span class="n">taskHdl</span> <span class="o">=</span> <span class="nd">@task</span> <span class="n">mytask</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span>
 </pre></div>
 </div>
 <p><a class="reference internal" href="../../stdlib/parallel/#Base.produce" title="Base.produce"><tt class="xref jl jl-func docutils literal"><span class="pre">produce()</span></tt></a> and <a class="reference internal" href="../../stdlib/parallel/#Base.consume" title="Base.consume"><tt class="xref jl jl-func docutils literal"><span class="pre">consume()</span></tt></a> do not launch threads that can run on separate CPUs.

@@ -498,15 +498,15 @@
 <h2>Iteration<a class="headerlink" href="#iteration" title="Permalink to this headline">¶</a></h2>
 <p>Sequential iteration is implemented by the methods <tt class="docutils literal"><span class="pre">start</span></tt>, <tt class="docutils literal"><span class="pre">done</span></tt>, and
 <tt class="docutils literal"><span class="pre">next</span></tt>. The general <tt class="docutils literal"><span class="pre">for</span></tt> loop:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="n">I</span>   <span class="c"># or  &quot;for i in I&quot;</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="nb">I</span>   <span class="c"># or  &quot;for i in I&quot;</span>
   <span class="c"># body</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>is translated to:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">state</span> <span class="o">=</span> <span class="n">start</span><span class="p">(</span><span class="n">I</span><span class="p">)</span>
-<span class="k">while</span> <span class="o">!</span><span class="n">done</span><span class="p">(</span><span class="n">I</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
-  <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span> <span class="o">=</span> <span class="n">next</span><span class="p">(</span><span class="n">I</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">state</span> <span class="o">=</span> <span class="n">start</span><span class="p">(</span><span class="nb">I</span><span class="p">)</span>
+<span class="k">while</span> <span class="o">!</span><span class="n">done</span><span class="p">(</span><span class="nb">I</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+  <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span> <span class="o">=</span> <span class="n">next</span><span class="p">(</span><span class="nb">I</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
   <span class="c"># body</span>
 <span class="k">end</span>
 </pre></div>
@@ -543,7 +543,7 @@
 <dd><p>Return an iterator that yields <tt class="docutils literal"><span class="pre">(i,</span> <span class="pre">x)</span></tt> where <tt class="docutils literal"><span class="pre">i</span></tt> is an index starting at 1, and <tt class="docutils literal"><span class="pre">x</span></tt> is the <tt class="docutils literal"><span class="pre">i</span></tt>th value from the given iterator. It&#8217;s useful when you need not only the values <tt class="docutils literal"><span class="pre">x</span></tt> over which you are iterating, but also the index <tt class="docutils literal"><span class="pre">i</span></tt> of the iterations.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="s">&quot;a&quot;</span><span class="p">,</span> <span class="s">&quot;b&quot;</span><span class="p">,</span> <span class="s">&quot;c&quot;</span><span class="p">];</span>
 
- <span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="k">in</span> <span class="n">enumerate</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+ <span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="kp">in</span> <span class="n">enumerate</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
             <span class="n">println</span><span class="p">(</span><span class="s">&quot;</span><span class="si">$index</span><span class="s"> </span><span class="si">$value</span><span class="s">&quot;</span><span class="p">)</span>
         <span class="k">end</span>
  <span class="mi">1</span> <span class="n">a</span>
@@ -562,10 +562,10 @@
 <tt class="descname">isempty</tt><big>(</big><em>collection</em><big>)</big> &rarr; Bool<a class="headerlink" href="#Base.isempty" title="Permalink to this definition">¶</a></dt>
 <dd><p>Determine whether a collection is empty (has no elements).</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isempty</span><span class="p">([])</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">isempty</span><span class="p">([</span><span class="mi">1</span> <span class="mi">2</span> <span class="mi">3</span><span class="p">])</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -968,7 +968,7 @@ and write results to <tt class="docutils literal"><span class="pre">r</span></tt
 <tt class="descname">all</tt><big>(</big><em>p</em>, <em>itr</em><big>)</big> &rarr; Bool</dt>
 <dd><p>Determine whether predicate <tt class="docutils literal"><span class="pre">p</span></tt> returns true for all elements of <tt class="docutils literal"><span class="pre">itr</span></tt>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">all</span><span class="p">(</span><span class="n">i</span><span class="o">-&gt;</span><span class="p">(</span><span class="mi">4</span><span class="o">&lt;=</span><span class="n">i</span><span class="o">&lt;=</span><span class="mi">6</span><span class="p">),</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">6</span><span class="p">])</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -979,13 +979,13 @@ and write results to <tt class="docutils literal"><span class="pre">r</span></tt
 <dd><p>Transform collection <tt class="docutils literal"><span class="pre">c</span></tt> by applying <tt class="docutils literal"><span class="pre">f</span></tt> to each element.
 For multiple collection arguments, apply <tt class="docutils literal"><span class="pre">f</span></tt> elementwise.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">map</span><span class="p">((</span><span class="n">x</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">x</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>
  <span class="mi">4</span>
  <span class="mi">6</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">map</span><span class="p">(</span><span class="o">+</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="p">[</span><span class="mi">10</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">30</span><span class="p">])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">11</span>
  <span class="mi">22</span>
  <span class="mi">33</span>
@@ -1019,7 +1019,7 @@ collections.</p>
 <span class="pre">v0,</span> <span class="pre">map(f,</span> <span class="pre">itr))</span></tt>, but will in general execute faster since no
 intermediate collection needs to be created. See documentation for
 <tt class="docutils literal"><span class="pre">reduce</span></tt> and <tt class="docutils literal"><span class="pre">map</span></tt>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">mapreduce</span><span class="p">(</span><span class="n">x</span><span class="o">-&gt;</span><span class="n">x</span><span class="o">^</span><span class="mi">2</span><span class="p">,</span> <span class="o">+</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">3</span><span class="p">])</span> <span class="c"># == 1 + 4 + 9</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">mapreduce</span><span class="p">(</span><span class="n">x</span><span class="o">-&gt;</span><span class="n">x</span><span class="o">^</span><span class="mi">2</span><span class="p">,</span> <span class="o">+</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="o">:</span><span class="mi">3</span><span class="p">])</span> <span class="c"># == 1 + 4 + 9</span>
 <span class="mi">14</span>
 </pre></div>
 </div>
@@ -1438,7 +1438,7 @@ of the removed items.</p>
 <tt class="descname">append!</tt><big>(</big><em>collection</em>, <em>items</em><big>)</big> &rarr; collection.<a class="headerlink" href="#Base.append!" title="Permalink to this definition">¶</a></dt>
 <dd><p>Add the elements of <tt class="docutils literal"><span class="pre">items</span></tt> to the end of a collection.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">append!</span><span class="p">([</span><span class="mi">1</span><span class="p">],[</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
@@ -1451,7 +1451,7 @@ of the removed items.</p>
 <tt class="descname">prepend!</tt><big>(</big><em>collection</em>, <em>items</em><big>)</big> &rarr; collection<a class="headerlink" href="#Base.prepend!" title="Permalink to this definition">¶</a></dt>
 <dd><p>Insert the elements of <tt class="docutils literal"><span class="pre">items</span></tt> to the beginning of a collection.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">prepend!</span><span class="p">([</span><span class="mi">3</span><span class="p">],[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>

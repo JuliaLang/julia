@@ -953,20 +953,20 @@ calls <tt class="docutils literal"><span class="pre">setfield!(a,</span> <span c
 in the following manner to summarize information about a struct type:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">structinfo</span><span class="p">(</span><span class="n">T</span><span class="p">)</span> <span class="o">=</span> <span class="p">[</span><span class="n">zip</span><span class="p">(</span><span class="n">fieldoffsets</span><span class="p">(</span><span class="n">T</span><span class="p">),</span><span class="n">names</span><span class="p">(</span><span class="n">T</span><span class="p">),</span><span class="n">T</span><span class="o">.</span><span class="n">types</span><span class="p">)</span><span class="o">...</span><span class="p">];</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">structinfo</span><span class="p">(</span><span class="n">StatStruct</span><span class="p">)</span>
-<span class="mi">12</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{(</span><span class="kt">Int64</span><span class="p">,</span><span class="n">Symbol</span><span class="p">,</span><span class="n">DataType</span><span class="p">),</span><span class="mi">1</span><span class="p">}:</span>
- <span class="p">(</span><span class="mi">0</span><span class="p">,:</span><span class="n">device</span><span class="p">,</span><span class="kt">Uint64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">8</span><span class="p">,:</span><span class="n">inode</span><span class="p">,</span><span class="kt">Uint64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">16</span><span class="p">,:</span><span class="n">mode</span><span class="p">,</span><span class="kt">Uint64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">24</span><span class="p">,:</span><span class="n">nlink</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">32</span><span class="p">,:</span><span class="nb">uid</span><span class="p">,</span><span class="kt">Uint64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">40</span><span class="p">,:</span><span class="n">gid</span><span class="p">,</span><span class="kt">Uint64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">48</span><span class="p">,:</span><span class="n">rdev</span><span class="p">,</span><span class="kt">Uint64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">56</span><span class="p">,:</span><span class="n">size</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">64</span><span class="p">,:</span><span class="n">blksize</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">72</span><span class="p">,:</span><span class="n">blocks</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">80</span><span class="p">,:</span><span class="n">mtime</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">88</span><span class="p">,:</span><span class="n">ctime</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">structinfo</span><span class="p">(</span><span class="kt">StatStruct</span><span class="p">)</span>
+<span class="mi">12</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{(</span><span class="kt">Int64</span><span class="p">,</span><span class="kt">Symbol</span><span class="p">,</span><span class="kt">DataType</span><span class="p">),</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+ <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="o">:</span><span class="n">device</span><span class="p">,</span><span class="n">Uint64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="o">:</span><span class="n">inode</span><span class="p">,</span><span class="n">Uint64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">16</span><span class="p">,</span><span class="o">:</span><span class="n">mode</span><span class="p">,</span><span class="n">Uint64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">24</span><span class="p">,</span><span class="o">:</span><span class="n">nlink</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">32</span><span class="p">,</span><span class="o">:</span><span class="n">uid</span><span class="p">,</span><span class="n">Uint64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">40</span><span class="p">,</span><span class="o">:</span><span class="n">gid</span><span class="p">,</span><span class="n">Uint64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">48</span><span class="p">,</span><span class="o">:</span><span class="n">rdev</span><span class="p">,</span><span class="n">Uint64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">56</span><span class="p">,</span><span class="o">:</span><span class="n">size</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">64</span><span class="p">,</span><span class="o">:</span><span class="n">blksize</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">72</span><span class="p">,</span><span class="o">:</span><span class="n">blocks</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">80</span><span class="p">,</span><span class="o">:</span><span class="n">mtime</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">88</span><span class="p">,</span><span class="o">:</span><span class="n">ctime</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -988,11 +988,11 @@ Note that this function works on values, so if you give it a type, it will tell 
 <dt id="Base.isbits">
 <tt class="descname">isbits</tt><big>(</big><em>T</em><big>)</big><a class="headerlink" href="#Base.isbits" title="Permalink to this definition">¶</a></dt>
 <dd><p>True if <tt class="docutils literal"><span class="pre">T</span></tt> is a &#8220;plain data&#8221; type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as <tt class="docutils literal"><span class="pre">Uint8</span></tt>, <tt class="docutils literal"><span class="pre">Float64</span></tt>, and <tt class="docutils literal"><span class="pre">Complex{Float64}</span></tt>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isbits</span><span class="p">(</span><span class="n">Complex</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isbits</span><span class="p">(</span><span class="kt">Complex</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isbits</span><span class="p">(</span><span class="n">Complex</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isbits</span><span class="p">(</span><span class="kt">Complex</span><span class="p">)</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1026,7 +1026,7 @@ its only subtypes are itself and <tt class="docutils literal"><span class="pre">
 <dd><p>Accepts a function and several arguments, each of which must be iterable.
 The elements generated by all the arguments are appended into a single
 list, which is then passed to <tt class="docutils literal"><span class="pre">f</span></tt> as its argument list.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="c"># Define a function f</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="c"># Define a function f</span>
          <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
        <span class="k">end</span><span class="p">;</span>
 
@@ -1042,8 +1042,8 @@ and is usually not called directly: <tt class="docutils literal"><span class="pr
 <dt id="Base.method_exists">
 <tt class="descname">method_exists</tt><big>(</big><em>f</em>, <em>tuple</em><big>)</big> &rarr; Bool<a class="headerlink" href="#Base.method_exists" title="Permalink to this definition">¶</a></dt>
 <dd><p>Determine whether the given generic function has a method matching the given tuple of argument types.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">method_exists</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="p">(</span><span class="n">Array</span><span class="p">,))</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">method_exists</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="p">(</span><span class="kt">Array</span><span class="p">,))</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1052,15 +1052,15 @@ and is usually not called directly: <tt class="docutils literal"><span class="pr
 <dt id="Base.applicable">
 <tt class="descname">applicable</tt><big>(</big><em>f</em>, <em>args...</em><big>)</big> &rarr; Bool<a class="headerlink" href="#Base.applicable" title="Permalink to this definition">¶</a></dt>
 <dd><p>Determine whether the given generic function has a method applicable to the given arguments.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
          <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
        <span class="k">end</span><span class="p">;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">applicable</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">applicable</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="kc">false</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">applicable</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">applicable</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1075,7 +1075,7 @@ and is usually not called directly: <tt class="docutils literal"><span class="pr
 <dt id="Base.|&gt;">
 <tt class="descname">|&gt;</tt><big>(</big><em>x</em>, <em>f</em><big>)</big><a class="headerlink" href="#Base.|>" title="Permalink to this definition">¶</a></dt>
 <dd><p>Applies a function to the preceding argument. This allows for easy function chaining.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">5</span><span class="p">]</span> <span class="o">|&gt;</span> <span class="n">x</span><span class="o">-&gt;</span><span class="n">x</span><span class="o">.^</span><span class="mi">2</span> <span class="o">|&gt;</span> <span class="n">sum</span> <span class="o">|&gt;</span> <span class="n">inv</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="mi">1</span><span class="o">:</span><span class="mi">5</span><span class="p">]</span> <span class="o">|&gt;</span> <span class="n">x</span><span class="o">-&gt;</span><span class="n">x</span><span class="o">.^</span><span class="mi">2</span> <span class="o">|&gt;</span> <span class="n">sum</span> <span class="o">|&gt;</span> <span class="n">inv</span>
 <span class="mf">0.01818181818181818</span>
 </pre></div>
 </div>

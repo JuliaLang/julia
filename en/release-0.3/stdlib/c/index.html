@@ -514,10 +514,10 @@ Note that the argument type tuple must be a literal tuple, and not a tuple-value
 <dd><p>Generate C-callable function pointer from Julia function. Type annotation of the return value in the
 callback function is a must for situations where Julia cannot infer the return type automatically.</p>
 <p>For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> foo</span><span class="p">()</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">foo</span><span class="p">()</span>
     <span class="c"># body</span>
 
-    <span class="n">retval</span><span class="p">::</span><span class="kt">Float64</span>
+    <span class="n">retval</span><span class="o">::</span><span class="kt">Float64</span>
 <span class="k">end</span>
 
 <span class="n">bar</span> <span class="o">=</span> <span class="n">cfunction</span><span class="p">(</span><span class="n">foo</span><span class="p">,</span> <span class="kt">Float64</span><span class="p">,</span> <span class="p">())</span>

@@ -500,111 +500,87 @@
 Julia is in no way a MATLAB clone. There are major syntactic and
 functional differences. The following are some noteworthy
 differences that may trip up Julia users accustomed to MATLAB:</p>
-<ul>
-<li><p class="first">Arrays are indexed with square brackets, <tt class="docutils literal"><span class="pre">A[i,j]</span></tt>.</p>
-</li>
-<li><p class="first">Arrays are assigned by reference. After <tt class="docutils literal"><span class="pre">A=B</span></tt>, assigning into <tt class="docutils literal"><span class="pre">B</span></tt>
-will modify <tt class="docutils literal"><span class="pre">A</span></tt> as well.</p>
-</li>
-<li><p class="first">Values are passed and assigned by reference. If a function modifies
-an array, the changes will be visible in the caller.</p>
-</li>
-<li><p class="first">Matlab combines allocation and assignment into single statements,
+<ul class="simple">
+<li>Arrays are indexed with square brackets, <tt class="docutils literal"><span class="pre">A[i,j]</span></tt>.</li>
+<li>Arrays are assigned by reference. After <tt class="docutils literal"><span class="pre">A=B</span></tt>, assigning into <tt class="docutils literal"><span class="pre">B</span></tt>
+will modify <tt class="docutils literal"><span class="pre">A</span></tt> as well.</li>
+<li>Values are passed and assigned by reference. If a function modifies
+an array, the changes will be visible in the caller.</li>
+<li>Matlab combines allocation and assignment into single statements,
 e.g., <tt class="docutils literal"><span class="pre">a(4)</span> <span class="pre">=</span> <span class="pre">3.2</span></tt> creates the array <tt class="docutils literal"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">[0</span> <span class="pre">0</span> <span class="pre">0</span> <span class="pre">3.2]</span></tt> and <tt class="docutils literal"><span class="pre">a(5)</span> <span class="pre">=</span> <span class="pre">7</span></tt>
 grows it. Julia separates allocation and assignment:
 if <tt class="docutils literal"><span class="pre">a</span></tt> is of length 4, <tt class="docutils literal"><span class="pre">a[5]</span> <span class="pre">=</span> <span class="pre">7</span></tt> yields an error. Julia has a <tt class="docutils literal"><span class="pre">push!</span></tt>
 function which grows <tt class="docutils literal"><span class="pre">Vectors</span></tt> much more efficiently than Matlab&#8217;s
-<tt class="docutils literal"><span class="pre">a(end+1)</span> <span class="pre">=</span> <span class="pre">val</span></tt>.</p>
-</li>
-<li><p class="first">The imaginary unit <tt class="docutils literal"><span class="pre">sqrt(-1)</span></tt> is represented in julia with <tt class="docutils literal"><span class="pre">im</span></tt>.</p>
-</li>
-<li><p class="first">Literal numbers without a decimal point (such as <tt class="docutils literal"><span class="pre">42</span></tt>) create integers
+<tt class="docutils literal"><span class="pre">a(end+1)</span> <span class="pre">=</span> <span class="pre">val</span></tt>.</li>
+<li>The imaginary unit <tt class="docutils literal"><span class="pre">sqrt(-1)</span></tt> is represented in julia with <tt class="docutils literal"><span class="pre">im</span></tt>.</li>
+<li>Literal numbers without a decimal point (such as <tt class="docutils literal"><span class="pre">42</span></tt>) create integers
 instead of floating point numbers. Arbitrarily large integer
 literals are supported. But this means that some operations such as
 <tt class="docutils literal"><span class="pre">2^-1</span></tt> will throw a domain error as the result is not an integer (see
-<a class="reference internal" href="../faq/#man-domain-error"><em>the FAQ entry on domain errors</em></a> for details).</p>
-</li>
+<a class="reference internal" href="../faq/#man-domain-error"><em>the FAQ entry on domain errors</em></a> for details).</li>
 <li><dl class="first docutils">
 <dt>Multiple values are returned and assigned with parentheses, e.g.</dt>
-<dd><p class="first last"><tt class="docutils literal"><span class="pre">return</span> <span class="pre">(a,</span> <span class="pre">b)</span></tt> and <tt class="docutils literal"><span class="pre">(a,</span> <span class="pre">b)</span> <span class="pre">=</span> <span class="pre">f(x)</span></tt>. The equivalent of <tt class="docutils literal"><span class="pre">nargout</span></tt>,
+<dd><tt class="docutils literal"><span class="pre">return</span> <span class="pre">(a,</span> <span class="pre">b)</span></tt> and <tt class="docutils literal"><span class="pre">(a,</span> <span class="pre">b)</span> <span class="pre">=</span> <span class="pre">f(x)</span></tt>. The equivalent of <tt class="docutils literal"><span class="pre">nargout</span></tt>,
 which is often used in Matlab to do optional work based on the
 number of returned values does not exist in Julia. Instead, users
 can use optional and keyword arguments to achieve similar
-capabilities.</p>
-</dd>
+capabilities.</dd>
 </dl>
 </li>
-<li><p class="first">Julia has 1-dimensional arrays. Column vectors are of size <tt class="docutils literal"><span class="pre">N</span></tt>, not
-<tt class="docutils literal"><span class="pre">Nx1</span></tt>. For example, <tt class="docutils literal"><span class="pre">rand(N)</span></tt> makes a 1-dimensional array.</p>
-</li>
-<li><p class="first">Concatenating scalars and arrays with the syntax <tt class="docutils literal"><span class="pre">[x,y,z]</span></tt>
+<li>Julia has 1-dimensional arrays. Column vectors are of size <tt class="docutils literal"><span class="pre">N</span></tt>, not
+<tt class="docutils literal"><span class="pre">Nx1</span></tt>. For example, <tt class="docutils literal"><span class="pre">rand(N)</span></tt> makes a 1-dimensional array.</li>
+<li>Concatenating scalars and arrays with the syntax <tt class="docutils literal"><span class="pre">[x,y,z]</span></tt>
 concatenates in the first dimension (&#8220;vertically&#8221;). For the second
 dimension (&#8220;horizontally&#8221;), use spaces as in <tt class="docutils literal"><span class="pre">[x</span> <span class="pre">y</span> <span class="pre">z]</span></tt>. To
 construct block matrices (concatenating in the first two dimensions),
-the syntax <tt class="docutils literal"><span class="pre">[a</span> <span class="pre">b;</span> <span class="pre">c</span> <span class="pre">d]</span></tt> is used to avoid confusion.</p>
-</li>
-<li><p class="first">Colons <tt class="docutils literal"><span class="pre">a:b</span></tt> and <tt class="docutils literal"><span class="pre">a:b:c</span></tt> construct <tt class="docutils literal"><span class="pre">Range</span></tt> objects. To
+the syntax <tt class="docutils literal"><span class="pre">[a</span> <span class="pre">b;</span> <span class="pre">c</span> <span class="pre">d]</span></tt> is used to avoid confusion.</li>
+<li>Colons <tt class="docutils literal"><span class="pre">a:b</span></tt> and <tt class="docutils literal"><span class="pre">a:b:c</span></tt> construct <tt class="docutils literal"><span class="pre">Range</span></tt> objects. To
 construct a full vector, use <tt class="docutils literal"><span class="pre">linspace</span></tt>, or &#8220;concatenate&#8221; the range
-by enclosing it in brackets, <tt class="docutils literal"><span class="pre">[a:b]</span></tt>.</p>
-</li>
-<li><p class="first">Functions return values using the <tt class="docutils literal"><span class="pre">return</span></tt> keyword, instead of by
+by enclosing it in brackets, <tt class="docutils literal"><span class="pre">[a:b]</span></tt>.</li>
+<li>Functions return values using the <tt class="docutils literal"><span class="pre">return</span></tt> keyword, instead of by
 listing their names in the function definition (see
-<a class="reference internal" href="../functions/#man-return-keyword"><em>The return Keyword</em></a> for details).</p>
-</li>
-<li><p class="first">A file may contain any number of functions, and all definitions will
-be externally visible when the file is loaded.</p>
-</li>
-<li><p class="first">Reductions such as <tt class="docutils literal"><span class="pre">sum</span></tt>, <tt class="docutils literal"><span class="pre">prod</span></tt>, and <tt class="docutils literal"><span class="pre">max</span></tt> are performed over
+<a class="reference internal" href="../functions/#man-return-keyword"><em>The return Keyword</em></a> for details).</li>
+<li>A file may contain any number of functions, and all definitions will
+be externally visible when the file is loaded.</li>
+<li>Reductions such as <tt class="docutils literal"><span class="pre">sum</span></tt>, <tt class="docutils literal"><span class="pre">prod</span></tt>, and <tt class="docutils literal"><span class="pre">max</span></tt> are performed over
 every element of an array when called with a single argument as in
-<tt class="docutils literal"><span class="pre">sum(A)</span></tt>.</p>
-</li>
-<li><p class="first">Functions such as <tt class="docutils literal"><span class="pre">sort</span></tt> that operate column-wise by default
+<tt class="docutils literal"><span class="pre">sum(A)</span></tt>.</li>
+<li>Functions such as <tt class="docutils literal"><span class="pre">sort</span></tt> that operate column-wise by default
 (<tt class="docutils literal"><span class="pre">sort(A)</span></tt> is equivalent to <tt class="docutils literal"><span class="pre">sort(A,1)</span></tt>) do not have special
 behavior for 1xN arrays; the argument is returned unmodified since it
 still performs <tt class="docutils literal"><span class="pre">sort(A,1)</span></tt>. To sort a 1xN matrix like a vector, use
-<tt class="docutils literal"><span class="pre">sort(A,2)</span></tt>.</p>
-</li>
-<li><p class="first">If <tt class="docutils literal"><span class="pre">A</span></tt> is a 2-dimensional array <tt class="docutils literal"><span class="pre">fft(A)</span></tt> computes a 2D FFT. In particular,
-it is not equivalent to <tt class="docutils literal"><span class="pre">fft(A,1)</span></tt>, which computes a 1D FFT acting column-wise.</p>
-</li>
-<li><p class="first">Parentheses must be used to call a function with zero arguments, as
-in <tt class="docutils literal"><span class="pre">tic()</span></tt> and <tt class="docutils literal"><span class="pre">toc()</span></tt>.</p>
-</li>
-<li><p class="first">Do not use semicolons to end statements. The results of statements are
+<tt class="docutils literal"><span class="pre">sort(A,2)</span></tt>.</li>
+<li>If <tt class="docutils literal"><span class="pre">A</span></tt> is a 2-dimensional array <tt class="docutils literal"><span class="pre">fft(A)</span></tt> computes a 2D FFT. In particular,
+it is not equivalent to <tt class="docutils literal"><span class="pre">fft(A,1)</span></tt>, which computes a 1D FFT acting column-wise.</li>
+<li>Parentheses must be used to call a function with zero arguments, as
+in <tt class="docutils literal"><span class="pre">tic()</span></tt> and <tt class="docutils literal"><span class="pre">toc()</span></tt>.</li>
+<li>Do not use semicolons to end statements. The results of statements are
 not automatically printed (except at the interactive prompt), and
 lines of code do not need to end with semicolons. The function
-<tt class="docutils literal"><span class="pre">println</span></tt> can be used to print a value followed by a newline.</p>
-</li>
-<li><p class="first">If <tt class="docutils literal"><span class="pre">A</span></tt> and <tt class="docutils literal"><span class="pre">B</span></tt> are arrays, <tt class="docutils literal"><span class="pre">A</span> <span class="pre">==</span> <span class="pre">B</span></tt> doesn&#8217;t return an array of
+<tt class="docutils literal"><span class="pre">println</span></tt> can be used to print a value followed by a newline.</li>
+<li>If <tt class="docutils literal"><span class="pre">A</span></tt> and <tt class="docutils literal"><span class="pre">B</span></tt> are arrays, <tt class="docutils literal"><span class="pre">A</span> <span class="pre">==</span> <span class="pre">B</span></tt> doesn&#8217;t return an array of
 booleans. Use <tt class="docutils literal"><span class="pre">A</span> <span class="pre">.==</span> <span class="pre">B</span></tt> instead. Likewise for the other boolean
-operators, <tt class="docutils literal"><span class="pre">&lt;</span></tt>, <tt class="docutils literal"><span class="pre">&gt;</span></tt>, <tt class="docutils literal"><span class="pre">!=</span></tt>, etc.</p>
-</li>
-<li><p class="first">The operators <tt class="docutils literal"><span class="pre">&amp;</span></tt>, <tt class="docutils literal"><span class="pre">|</span></tt>, and <tt class="docutils literal"><span class="pre">$</span></tt> perform the bitwise operations and,
+operators, <tt class="docutils literal"><span class="pre">&lt;</span></tt>, <tt class="docutils literal"><span class="pre">&gt;</span></tt>, <tt class="docutils literal"><span class="pre">!=</span></tt>, etc.</li>
+<li>The operators <tt class="docutils literal"><span class="pre">&amp;</span></tt>, <tt class="docutils literal"><span class="pre">|</span></tt>, and <tt class="docutils literal"><span class="pre">$</span></tt> perform the bitwise operations and,
 or, and xor, respectively, and have precedence similar to Python&#8217;s bitwise
 operators (not like C). They can operate on scalars or elementwise
 across arrays and can be used to combine logical arrays, but note the
 difference in order of operations—parentheses may be required (e.g.,
-to select elements of <tt class="docutils literal"><span class="pre">A</span></tt> equal to 1 or 2 use <tt class="docutils literal"><span class="pre">(A</span> <span class="pre">.==</span> <span class="pre">1)</span> <span class="pre">|</span> <span class="pre">(A</span> <span class="pre">.==</span> <span class="pre">2)</span></tt>).</p>
-</li>
-<li><p class="first">The elements of a collection can be passed as arguments to a function
-using <tt class="docutils literal"><span class="pre">...</span></tt>, as in <tt class="docutils literal"><span class="pre">xs=[1,2];</span> <span class="pre">f(xs...)</span></tt>.</p>
-</li>
-<li><p class="first">Julia&#8217;s <tt class="docutils literal"><span class="pre">svd</span></tt> returns singular values as a vector instead of as a
-full diagonal matrix.</p>
-</li>
-<li><p class="first">In Julia, <tt class="docutils literal"><span class="pre">...</span></tt> is not used to continue lines of code. Instead, incomplete
-expressions automatically continue onto the next line.</p>
-</li>
-<li><p class="first">The variable <tt class="docutils literal"><span class="pre">ans</span></tt> is set to the value of the last expression issued
+to select elements of <tt class="docutils literal"><span class="pre">A</span></tt> equal to 1 or 2 use <tt class="docutils literal"><span class="pre">(A</span> <span class="pre">.==</span> <span class="pre">1)</span> <span class="pre">|</span> <span class="pre">(A</span> <span class="pre">.==</span> <span class="pre">2)</span></tt>).</li>
+<li>The elements of a collection can be passed as arguments to a function
+using <tt class="docutils literal"><span class="pre">...</span></tt>, as in <tt class="docutils literal"><span class="pre">xs=[1,2];</span> <span class="pre">f(xs...)</span></tt>.</li>
+<li>Julia&#8217;s <tt class="docutils literal"><span class="pre">svd</span></tt> returns singular values as a vector instead of as a
+full diagonal matrix.</li>
+<li>In Julia, <tt class="docutils literal"><span class="pre">...</span></tt> is not used to continue lines of code. Instead, incomplete
+expressions automatically continue onto the next line.</li>
+<li>The variable <tt class="docutils literal"><span class="pre">ans</span></tt> is set to the value of the last expression issued
 in an interactive session, but not set when Julia code is run in other
-ways.</p>
-</li>
-<li><p class="first">The closest analog to Julia&#8217;s <tt class="docutils literal"><span class="pre">types</span></tt> are Matlab&#8217;s
+ways.</li>
+<li>The closest analog to Julia&#8217;s <tt class="docutils literal"><span class="pre">types</span></tt> are Matlab&#8217;s
 <tt class="docutils literal"><span class="pre">classes</span></tt>. Matlab&#8217;s <tt class="docutils literal"><span class="pre">structs</span></tt> behave somewhere between Julia&#8217;s
 <tt class="docutils literal"><span class="pre">types</span></tt> and <tt class="docutils literal"><span class="pre">Dicts</span></tt>; in particular, if you need to be able to add
 fields to a <tt class="docutils literal"><span class="pre">struct</span></tt> on-the-fly, use a <tt class="docutils literal"><span class="pre">Dict</span></tt> rather than a
-<tt class="docutils literal"><span class="pre">type</span></tt>.</p>
-</li>
+<tt class="docutils literal"><span class="pre">type</span></tt>.</li>
 </ul>
 </div>
 <div class="section" id="noteworthy-differences-from-r">

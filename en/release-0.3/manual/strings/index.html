@@ -555,8 +555,8 @@ values are input and shown:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="sc">&#39;x&#39;</span>
 <span class="sc">&#39;x&#39;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
-<span class="n">Char</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="kt">Char</span>
 </pre></div>
 </div>
 <p>You can convert a <tt class="xref jl jl-obj docutils literal"><span class="pre">Char</span></tt> to its integer value, i.e. code point,
@@ -564,7 +564,7 @@ easily:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">int</span><span class="p">(</span><span class="sc">&#39;x&#39;</span><span class="p">)</span>
 <span class="mi">120</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
 <span class="kt">Int64</span>
 </pre></div>
 </div>
@@ -582,7 +582,7 @@ valid code point, use the <a class="reference internal" href="../../stdlib/strin
 <span class="sc">&#39;\U110000&#39;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">is_valid_char</span><span class="p">(</span><span class="mh">0x110000</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>As of this writing, the valid Unicode code points are <tt class="docutils literal"><span class="pre">U+00</span></tt> through
@@ -637,13 +637,13 @@ also be used:</p>
 <p>You can do comparisons and a limited amount of arithmetic with
 <tt class="xref jl jl-obj docutils literal"><span class="pre">Char</span></tt> values:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="sc">&#39;A&#39;</span> <span class="o">&lt;</span> <span class="sc">&#39;a&#39;</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="sc">&#39;A&#39;</span> <span class="o">&lt;=</span> <span class="sc">&#39;a&#39;</span> <span class="o">&lt;=</span> <span class="sc">&#39;Z&#39;</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="sc">&#39;A&#39;</span> <span class="o">&lt;=</span> <span class="sc">&#39;X&#39;</span> <span class="o">&lt;=</span> <span class="sc">&#39;Z&#39;</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="sc">&#39;x&#39;</span> <span class="o">-</span> <span class="sc">&#39;a&#39;</span>
 <span class="mi">23</span>
@@ -659,7 +659,7 @@ also be used:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">str</span> <span class="o">=</span> <span class="s">&quot;Hello, world.</span><span class="se">\n</span><span class="s">&quot;</span>
 <span class="s">&quot;Hello, world.</span><span class="se">\n</span><span class="s">&quot;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="s">&quot;&quot;&quot;Contains &quot;</span><span class="k">quote</span><span class="s">&quot; characters&quot;&quot;&quot;</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="s">&quot;&quot;&quot;Contains &quot;quote&quot; characters&quot;&quot;&quot;</span>
 <span class="s">&quot;Contains </span><span class="se">\&quot;</span><span class="s">quote</span><span class="se">\&quot;</span><span class="s"> characters&quot;</span>
 </pre></div>
 </div>
@@ -689,26 +689,26 @@ a normal value:</p>
 <span class="sc">&#39; &#39;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">str</span><span class="p">[</span><span class="k">end</span><span class="o">/</span><span class="mi">3</span><span class="p">]</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
- <span class="k">in</span> <span class="n">getindex</span> <span class="n">at</span> <span class="n">string</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">59</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">InexactError</span><span class="p">()</span>
+ <span class="kp">in</span> <span class="n">getindex</span> <span class="n">at</span> <span class="n">string</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">59</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">str</span><span class="p">[</span><span class="k">end</span><span class="o">/</span><span class="mi">4</span><span class="p">]</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
- <span class="k">in</span> <span class="n">getindex</span> <span class="n">at</span> <span class="n">string</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">59</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">InexactError</span><span class="p">()</span>
+ <span class="kp">in</span> <span class="n">getindex</span> <span class="n">at</span> <span class="n">string</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">59</span>
 </pre></div>
 </div>
 <p>Using an index less than 1 or greater than <tt class="docutils literal"><span class="pre">end</span></tt> raises an error:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">str</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">BoundsError</span><span class="p">()</span>
- <span class="k">in</span> <span class="n">getindex</span> <span class="n">at</span> <span class="o">&lt;</span><span class="n">julia</span> <span class="n">root</span><span class="o">&gt;/</span><span class="n">usr</span><span class="o">/</span><span class="n">lib</span><span class="o">/</span><span class="n">julia</span><span class="o">/</span><span class="n">sys</span><span class="o">.</span><span class="n">dylib</span> <span class="p">(</span><span class="n">repeats</span> <span class="mi">2</span> <span class="n">times</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">BoundsError</span><span class="p">()</span>
+ <span class="kp">in</span> <span class="n">getindex</span> <span class="n">at</span> <span class="o">&lt;</span><span class="n">julia</span> <span class="n">root</span><span class="o">&gt;/</span><span class="n">usr</span><span class="o">/</span><span class="n">lib</span><span class="o">/</span><span class="n">julia</span><span class="o">/</span><span class="n">sys</span><span class="o">.</span><span class="n">dylib</span> <span class="p">(</span><span class="n">repeats</span> <span class="mi">2</span> <span class="n">times</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">str</span><span class="p">[</span><span class="k">end</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">BoundsError</span><span class="p">()</span>
- <span class="k">in</span> <span class="n">getindex</span> <span class="n">at</span> <span class="o">&lt;</span><span class="n">julia</span> <span class="n">root</span><span class="o">&gt;/</span><span class="n">usr</span><span class="o">/</span><span class="n">lib</span><span class="o">/</span><span class="n">julia</span><span class="o">/</span><span class="n">sys</span><span class="o">.</span><span class="n">dylib</span> <span class="p">(</span><span class="n">repeats</span> <span class="mi">2</span> <span class="n">times</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">BoundsError</span><span class="p">()</span>
+ <span class="kp">in</span> <span class="n">getindex</span> <span class="n">at</span> <span class="o">&lt;</span><span class="n">julia</span> <span class="n">root</span><span class="o">&gt;/</span><span class="n">usr</span><span class="o">/</span><span class="n">lib</span><span class="o">/</span><span class="n">julia</span><span class="o">/</span><span class="n">sys</span><span class="o">.</span><span class="n">dylib</span> <span class="p">(</span><span class="n">repeats</span> <span class="mi">2</span> <span class="n">times</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>You can also extract a substring using range indexing:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">str</span><span class="p">[</span><span class="mi">4</span><span class="p">:</span><span class="mi">9</span><span class="p">]</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">str</span><span class="p">[</span><span class="mi">4</span><span class="o">:</span><span class="mi">9</span><span class="p">]</span>
 <span class="s">&quot;lo, wo&quot;</span>
 </pre></div>
 </div>
@@ -716,7 +716,7 @@ a normal value:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">str</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span>
 <span class="sc">&#39;,&#39;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">str</span><span class="p">[</span><span class="mi">6</span><span class="p">:</span><span class="mi">6</span><span class="p">]</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">str</span><span class="p">[</span><span class="mi">6</span><span class="o">:</span><span class="mi">6</span><span class="p">]</span>
 <span class="s">&quot;,&quot;</span>
 </pre></div>
 </div>
@@ -750,14 +750,14 @@ such an invalid byte index, an error is thrown:</p>
 <span class="sc">&#39;∀&#39;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">invalid</span> <span class="n">UTF</span><span class="o">-</span><span class="mi">8</span> <span class="n">character</span> <span class="n">index</span>
- <span class="k">in</span> <span class="n">next</span> <span class="n">at</span> <span class="o">./</span><span class="n">utf8</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">69</span>
- <span class="k">in</span> <span class="n">getindex</span> <span class="n">at</span> <span class="n">string</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">57</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">invalid</span> <span class="n">UTF</span><span class="o">-</span><span class="mi">8</span> <span class="n">character</span> <span class="n">index</span>
+ <span class="kp">in</span> <span class="n">next</span> <span class="n">at</span> <span class="o">./</span><span class="n">utf8</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">69</span>
+ <span class="kp">in</span> <span class="n">getindex</span> <span class="n">at</span> <span class="n">string</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">57</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">invalid</span> <span class="n">UTF</span><span class="o">-</span><span class="mi">8</span> <span class="n">character</span> <span class="n">index</span>
- <span class="k">in</span> <span class="n">next</span> <span class="n">at</span> <span class="o">./</span><span class="n">utf8</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">69</span>
- <span class="k">in</span> <span class="n">getindex</span> <span class="n">at</span> <span class="n">string</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">57</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">invalid</span> <span class="n">UTF</span><span class="o">-</span><span class="mi">8</span> <span class="n">character</span> <span class="n">index</span>
+ <span class="kp">in</span> <span class="n">next</span> <span class="n">at</span> <span class="o">./</span><span class="n">utf8</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">69</span>
+ <span class="kp">in</span> <span class="n">getindex</span> <span class="n">at</span> <span class="n">string</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">57</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span>
 <span class="sc">&#39; &#39;</span>
@@ -773,7 +773,7 @@ thrown is the sequence of characters comprising the string <tt class="docutils l
 Thus we have the identity that <tt class="docutils literal"><span class="pre">length(s)</span> <span class="pre">&lt;=</span> <span class="pre">endof(s)</span></tt>, since each
 character in a string must have its own index. The following is an
 inefficient and verbose way to iterate through the characters of <tt class="docutils literal"><span class="pre">s</span></tt>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">endof</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">endof</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
          <span class="k">try</span>
            <span class="n">println</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
          <span class="k">catch</span>
@@ -793,7 +793,7 @@ inefficient and verbose way to iterate through the characters of <tt class="docu
 awkward idiom is unnecessary for iterating through the characters in a
 string, since you can just use the string as an iterable object, no
 exception handling required:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">c</span> <span class="k">in</span> <span class="n">s</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">c</span> <span class="kp">in</span> <span class="n">s</span>
          <span class="n">println</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
        <span class="k">end</span>
 <span class="n">∀</span>
@@ -843,7 +843,7 @@ into a concatenation of string literals with variables.</p>
 <p>The shortest complete expression after the <tt class="docutils literal"><span class="pre">$</span></tt> is taken as the
 expression whose value is to be interpolated into the string. Thus, you
 can interpolate any expression into a string using parentheses:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="s">&quot;1 + 2 = </span><span class="si">$(1 + 2)</span><span class="s">&quot;</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="s">&quot;1 + 2 = </span><span class="si">$</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="p">)</span><span class="s">&quot;</span>
 <span class="s">&quot;1 + 2 = 3&quot;</span>
 </pre></div>
 </div>
@@ -852,7 +852,7 @@ can interpolate any expression into a string using parentheses:</p>
 non-<tt class="xref jl jl-obj docutils literal"><span class="pre">String</span></tt> objects are converted to strings closely
 corresponding to how they are entered as literal expressions:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">v</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">]</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
@@ -873,8 +873,8 @@ and unescaped:</p>
 </div>
 <p>To include a literal <tt class="docutils literal"><span class="pre">$</span></tt> in a string literal, escape it with a
 backslash:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">print</span><span class="p">(</span><span class="s">&quot;I have \$100 in my account.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
-<span class="n">I</span> <span class="n">have</span> <span class="o">$</span><span class="mi">100</span> <span class="k">in</span> <span class="n">my</span> <span class="n">account</span><span class="o">.</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">print</span><span class="p">(</span><span class="s">&quot;I have </span><span class="se">\$</span><span class="s">100 in my account.</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="nb">I</span> <span class="n">have</span> <span class="o">$</span><span class="mi">100</span> <span class="kp">in</span> <span class="n">my</span> <span class="n">account</span><span class="o">.</span>
 </pre></div>
 </div>
 </div>
@@ -883,16 +883,16 @@ backslash:</p>
 <p>You can lexicographically compare strings using the standard comparison
 operators:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="s">&quot;abracadabra&quot;</span> <span class="o">&lt;</span> <span class="s">&quot;xylophone&quot;</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="s">&quot;abracadabra&quot;</span> <span class="o">==</span> <span class="s">&quot;xylophone&quot;</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="s">&quot;Hello, world.&quot;</span> <span class="o">!=</span> <span class="s">&quot;Goodbye, world.&quot;</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="s">&quot;1 + 2 = 3&quot;</span> <span class="o">==</span> <span class="s">&quot;1 + 2 = </span><span class="si">$(1 + 2)</span><span class="s">&quot;</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="s">&quot;1 + 2 = 3&quot;</span> <span class="o">==</span> <span class="s">&quot;1 + 2 = </span><span class="si">$</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="p">)</span><span class="s">&quot;</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>You can search for the index of a particular character using the
@@ -922,16 +922,16 @@ a third argument:</p>
 <p>You can use the <a class="reference internal" href="../../stdlib/strings/#contains" title="contains"><tt class="xref jl jl-func docutils literal"><span class="pre">contains()</span></tt></a> function to check if a substring is
 contained in a string:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">contains</span><span class="p">(</span><span class="s">&quot;Hello, world.&quot;</span><span class="p">,</span> <span class="s">&quot;world&quot;</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">contains</span><span class="p">(</span><span class="s">&quot;Xylophon&quot;</span><span class="p">,</span> <span class="s">&quot;o&quot;</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">contains</span><span class="p">(</span><span class="s">&quot;Xylophon&quot;</span><span class="p">,</span> <span class="s">&quot;a&quot;</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">contains</span><span class="p">(</span><span class="s">&quot;Xylophon&quot;</span><span class="p">,</span> <span class="sc">&#39;o&#39;</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="sb">`contains`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">contains</span><span class="p">(::</span><span class="n">ASCIIString</span><span class="p">,</span> <span class="p">::</span><span class="n">Char</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="sb">`contains`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">contains</span><span class="p">(</span><span class="o">::</span><span class="kt">ASCIIString</span><span class="p">,</span> <span class="o">::</span><span class="kt">Char</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>The last error is because <tt class="docutils literal"><span class="pre">'o'</span></tt> is a character literal, and <a class="reference internal" href="../../stdlib/strings/#contains" title="contains"><tt class="xref jl jl-func docutils literal"><span class="pre">contains()</span></tt></a>
@@ -988,19 +988,19 @@ search for patterns in strings. In Julia, regular expressions are input
 using non-standard string literals prefixed with various identifiers
 beginning with <tt class="docutils literal"><span class="pre">r</span></tt>. The most basic regular expression literal without
 any options turned on just uses <tt class="docutils literal"><span class="pre">r&quot;...&quot;</span></tt>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">r</span><span class="s">&quot;^\s*(?:#|$)&quot;</span>
-<span class="n">r</span><span class="s">&quot;^\s*(?:#|$)&quot;</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="sr">r&quot;^\s*(?:#|$)&quot;</span>
+<span class="sr">r&quot;^\s*(?:#|$)&quot;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
-<span class="n">Regex</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">3</span> <span class="n">methods</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="kt">Regex</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">3</span> <span class="n">methods</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>To check if a regex matches a string, use <a class="reference internal" href="../../stdlib/strings/#ismatch" title="ismatch"><tt class="xref jl jl-func docutils literal"><span class="pre">ismatch()</span></tt></a>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ismatch</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;^\s*(?:#|$)&quot;</span><span class="p">,</span> <span class="s">&quot;not a comment&quot;</span><span class="p">)</span>
-<span class="n">false</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ismatch</span><span class="p">(</span><span class="sr">r&quot;^\s*(?:#|$)&quot;</span><span class="p">,</span> <span class="s">&quot;not a comment&quot;</span><span class="p">)</span>
+<span class="kc">false</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ismatch</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;^\s*(?:#|$)&quot;</span><span class="p">,</span> <span class="s">&quot;# a comment&quot;</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ismatch</span><span class="p">(</span><span class="sr">r&quot;^\s*(?:#|$)&quot;</span><span class="p">,</span> <span class="s">&quot;# a comment&quot;</span><span class="p">)</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>As one can see here, <a class="reference internal" href="../../stdlib/strings/#ismatch" title="ismatch"><tt class="xref jl jl-func docutils literal"><span class="pre">ismatch()</span></tt></a> simply returns true or false,
@@ -1008,18 +1008,18 @@ indicating whether the given regex matches the string or not. Commonly,
 however, one wants to know not just whether a string matched, but also
 <em>how</em> it matched. To capture this information about a match, use the
 <a class="reference internal" href="../../stdlib/strings/#match" title="match"><tt class="xref jl jl-func docutils literal"><span class="pre">match()</span></tt></a> function instead:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;^\s*(?:#|$)&quot;</span><span class="p">,</span> <span class="s">&quot;not a comment&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">match</span><span class="p">(</span><span class="sr">r&quot;^\s*(?:#|$)&quot;</span><span class="p">,</span> <span class="s">&quot;not a comment&quot;</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;^\s*(?:#|$)&quot;</span><span class="p">,</span> <span class="s">&quot;# a comment&quot;</span><span class="p">)</span>
-<span class="n">RegexMatch</span><span class="p">(</span><span class="s">&quot;#&quot;</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">match</span><span class="p">(</span><span class="sr">r&quot;^\s*(?:#|$)&quot;</span><span class="p">,</span> <span class="s">&quot;# a comment&quot;</span><span class="p">)</span>
+<span class="kt">RegexMatch</span><span class="p">(</span><span class="s">&quot;#&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>If the regular expression does not match the given string, <a class="reference internal" href="../../stdlib/strings/#match" title="match"><tt class="xref jl jl-func docutils literal"><span class="pre">match()</span></tt></a>
 returns <tt class="docutils literal"><span class="pre">nothing</span></tt> — a special value that does not print anything at
 the interactive prompt. Other than not printing, it is a completely
 normal value and you can test for it programmatically:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;^\s*(?:#|$)&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
-<span class="k">if</span> <span class="n">m</span> <span class="o">==</span> <span class="n">nothing</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="sr">r&quot;^\s*(?:#|$)&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">m</span> <span class="o">==</span> <span class="nb">nothing</span>
   <span class="n">println</span><span class="p">(</span><span class="s">&quot;not a comment&quot;</span><span class="p">)</span>
 <span class="k">else</span>
   <span class="n">println</span><span class="p">(</span><span class="s">&quot;blank or comment&quot;</span><span class="p">)</span>
@@ -1032,20 +1032,20 @@ including the substring that the pattern matches and any captured
 substrings, if there are any. This example only captures the portion of
 the substring that matches, but perhaps we want to capture any non-blank
 text after the comment character. We could do the following:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;^\s*(?:#\s*(.*?)\s*$|$)&quot;</span><span class="p">,</span> <span class="s">&quot;# a comment &quot;</span><span class="p">)</span>
-<span class="n">RegexMatch</span><span class="p">(</span><span class="s">&quot;# a comment &quot;</span><span class="p">,</span> <span class="mi">1</span><span class="o">=</span><span class="s">&quot;a comment&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="sr">r&quot;^\s*(?:#\s*(.*?)\s*$|$)&quot;</span><span class="p">,</span> <span class="s">&quot;# a comment &quot;</span><span class="p">)</span>
+<span class="kt">RegexMatch</span><span class="p">(</span><span class="s">&quot;# a comment &quot;</span><span class="p">,</span> <span class="mi">1</span><span class="o">=</span><span class="s">&quot;a comment&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>When calling <a class="reference internal" href="../../stdlib/strings/#match" title="match"><tt class="xref jl jl-func docutils literal"><span class="pre">match()</span></tt></a>, you have the option to specify an index at
 which to start the search. For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;[0-9]&quot;</span><span class="p">,</span><span class="s">&quot;aaaa1aaaa2aaaa3&quot;</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">RegexMatch</span><span class="p">(</span><span class="s">&quot;1&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="sr">r&quot;[0-9]&quot;</span><span class="p">,</span><span class="s">&quot;aaaa1aaaa2aaaa3&quot;</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<span class="kt">RegexMatch</span><span class="p">(</span><span class="s">&quot;1&quot;</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;[0-9]&quot;</span><span class="p">,</span><span class="s">&quot;aaaa1aaaa2aaaa3&quot;</span><span class="p">,</span><span class="mi">6</span><span class="p">)</span>
-<span class="n">RegexMatch</span><span class="p">(</span><span class="s">&quot;2&quot;</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="sr">r&quot;[0-9]&quot;</span><span class="p">,</span><span class="s">&quot;aaaa1aaaa2aaaa3&quot;</span><span class="p">,</span><span class="mi">6</span><span class="p">)</span>
+<span class="kt">RegexMatch</span><span class="p">(</span><span class="s">&quot;2&quot;</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;[0-9]&quot;</span><span class="p">,</span><span class="s">&quot;aaaa1aaaa2aaaa3&quot;</span><span class="p">,</span><span class="mi">11</span><span class="p">)</span>
-<span class="n">RegexMatch</span><span class="p">(</span><span class="s">&quot;3&quot;</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="sr">r&quot;[0-9]&quot;</span><span class="p">,</span><span class="s">&quot;aaaa1aaaa2aaaa3&quot;</span><span class="p">,</span><span class="mi">11</span><span class="p">)</span>
+<span class="kt">RegexMatch</span><span class="p">(</span><span class="s">&quot;3&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>You can extract the following info from a <tt class="xref jl jl-obj docutils literal"><span class="pre">RegexMatch</span></tt> object:</p>
@@ -1059,14 +1059,14 @@ which to start the search. For example:</p>
 contains <tt class="docutils literal"><span class="pre">nothing</span></tt> in that position, and <tt class="docutils literal"><span class="pre">m.offsets</span></tt> has a zero
 offset (recall that indices in Julia are 1-based, so a zero offset into
 a string is invalid). Here&#8217;s is a pair of somewhat contrived examples:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;(a|b)(c)?(d)&quot;</span><span class="p">,</span> <span class="s">&quot;acd&quot;</span><span class="p">)</span>
-<span class="n">RegexMatch</span><span class="p">(</span><span class="s">&quot;acd&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="o">=</span><span class="s">&quot;a&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="o">=</span><span class="s">&quot;c&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="o">=</span><span class="s">&quot;d&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="sr">r&quot;(a|b)(c)?(d)&quot;</span><span class="p">,</span> <span class="s">&quot;acd&quot;</span><span class="p">)</span>
+<span class="kt">RegexMatch</span><span class="p">(</span><span class="s">&quot;acd&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="o">=</span><span class="s">&quot;a&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="o">=</span><span class="s">&quot;c&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="o">=</span><span class="s">&quot;d&quot;</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">match</span>
 <span class="s">&quot;acd&quot;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">captures</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">Union</span><span class="p">(</span><span class="n">SubString</span><span class="p">{</span><span class="n">UTF8String</span><span class="p">},</span><span class="kt">Nothing</span><span class="p">),</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Union</span><span class="p">(</span><span class="kt">SubString</span><span class="p">{</span><span class="kt">UTF8String</span><span class="p">},</span><span class="n">Nothing</span><span class="p">),</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="s">&quot;a&quot;</span>
  <span class="s">&quot;c&quot;</span>
  <span class="s">&quot;d&quot;</span>
@@ -1075,28 +1075,28 @@ a string is invalid). Here&#8217;s is a pair of somewhat contrived examples:</p>
 <span class="mi">1</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">offsets</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;(a|b)(c)?(d)&quot;</span><span class="p">,</span> <span class="s">&quot;ad&quot;</span><span class="p">)</span>
-<span class="n">RegexMatch</span><span class="p">(</span><span class="s">&quot;ad&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="o">=</span><span class="s">&quot;a&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="o">=</span><span class="n">nothing</span><span class="p">,</span> <span class="mi">3</span><span class="o">=</span><span class="s">&quot;d&quot;</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="sr">r&quot;(a|b)(c)?(d)&quot;</span><span class="p">,</span> <span class="s">&quot;ad&quot;</span><span class="p">)</span>
+<span class="kt">RegexMatch</span><span class="p">(</span><span class="s">&quot;ad&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="o">=</span><span class="s">&quot;a&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="o">=</span><span class="nb">nothing</span><span class="p">,</span> <span class="mi">3</span><span class="o">=</span><span class="s">&quot;d&quot;</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">match</span>
 <span class="s">&quot;ad&quot;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">captures</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">Union</span><span class="p">(</span><span class="n">SubString</span><span class="p">{</span><span class="n">UTF8String</span><span class="p">},</span><span class="kt">Nothing</span><span class="p">),</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Union</span><span class="p">(</span><span class="kt">SubString</span><span class="p">{</span><span class="kt">UTF8String</span><span class="p">},</span><span class="n">Nothing</span><span class="p">),</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="s">&quot;a&quot;</span>
- <span class="n">nothing</span>
+ <span class="nb">nothing</span>
  <span class="s">&quot;d&quot;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">offset</span>
 <span class="mi">1</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">m</span><span class="o">.</span><span class="n">offsets</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">0</span>
  <span class="mi">2</span>
@@ -1115,39 +1115,39 @@ explained in this excerpt from the <a class="reference external" href="http://pe
 manpage</a>:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">i</span>   <span class="n">Do</span> <span class="n">case</span><span class="o">-</span><span class="n">insensitive</span> <span class="n">pattern</span> <span class="n">matching</span><span class="o">.</span>
 
-    <span class="n">If</span> <span class="n">locale</span> <span class="n">matching</span> <span class="n">rules</span> <span class="n">are</span> <span class="k">in</span> <span class="n">effect</span><span class="p">,</span> <span class="n">the</span> <span class="n">case</span> <span class="n">map</span> <span class="nb">is</span> <span class="n">taken</span>
+    <span class="n">If</span> <span class="n">locale</span> <span class="n">matching</span> <span class="n">rules</span> <span class="n">are</span> <span class="kp">in</span> <span class="n">effect</span><span class="p">,</span> <span class="n">the</span> <span class="n">case</span> <span class="n">map</span> <span class="n">is</span> <span class="n">taken</span>
     <span class="n">from</span> <span class="n">the</span> <span class="n">current</span> <span class="n">locale</span> <span class="k">for</span> <span class="n">code</span> <span class="n">points</span> <span class="n">less</span> <span class="n">than</span> <span class="mi">255</span><span class="p">,</span> <span class="n">and</span>
     <span class="n">from</span> <span class="n">Unicode</span> <span class="n">rules</span> <span class="k">for</span> <span class="n">larger</span> <span class="n">code</span> <span class="n">points</span><span class="o">.</span> <span class="n">However</span><span class="p">,</span> <span class="n">matches</span>
     <span class="n">that</span> <span class="n">would</span> <span class="n">cross</span> <span class="n">the</span> <span class="n">Unicode</span> <span class="n">rules</span><span class="o">/</span><span class="n">non</span><span class="o">-</span><span class="n">Unicode</span> <span class="n">rules</span> <span class="n">boundary</span>
     <span class="p">(</span><span class="n">ords</span> <span class="mi">255</span><span class="o">/</span><span class="mi">256</span><span class="p">)</span> <span class="n">will</span> <span class="n">not</span> <span class="n">succeed</span><span class="o">.</span>
 
-<span class="n">m</span>   <span class="n">Treat</span> <span class="n">string</span> <span class="n">as</span> <span class="n">multiple</span> <span class="n">lines</span><span class="o">.</span>  <span class="n">That</span> <span class="nb">is</span><span class="p">,</span> <span class="n">change</span> <span class="s">&quot;^&quot;</span> <span class="n">and</span> <span class="s">&quot;$&quot;</span>
+<span class="n">m</span>   <span class="n">Treat</span> <span class="n">string</span> <span class="n">as</span> <span class="n">multiple</span> <span class="n">lines</span><span class="o">.</span>  <span class="n">That</span> <span class="n">is</span><span class="p">,</span> <span class="n">change</span> <span class="s">&quot;^&quot;</span> <span class="n">and</span> <span class="s">&quot;$&quot;</span>
     <span class="n">from</span> <span class="n">matching</span> <span class="n">the</span> <span class="n">start</span> <span class="n">or</span> <span class="k">end</span> <span class="n">of</span> <span class="n">the</span> <span class="n">string</span> <span class="n">to</span> <span class="n">matching</span> <span class="n">the</span>
     <span class="n">start</span> <span class="n">or</span> <span class="k">end</span> <span class="n">of</span> <span class="n">any</span> <span class="n">line</span> <span class="n">anywhere</span> <span class="n">within</span> <span class="n">the</span> <span class="n">string</span><span class="o">.</span>
 
-<span class="n">s</span>   <span class="n">Treat</span> <span class="n">string</span> <span class="n">as</span> <span class="n">single</span> <span class="n">line</span><span class="o">.</span>  <span class="n">That</span> <span class="nb">is</span><span class="p">,</span> <span class="n">change</span> <span class="s">&quot;.&quot;</span> <span class="n">to</span> <span class="n">match</span> <span class="n">any</span>
+<span class="n">s</span>   <span class="n">Treat</span> <span class="n">string</span> <span class="n">as</span> <span class="n">single</span> <span class="n">line</span><span class="o">.</span>  <span class="n">That</span> <span class="n">is</span><span class="p">,</span> <span class="n">change</span> <span class="s">&quot;.&quot;</span> <span class="n">to</span> <span class="n">match</span> <span class="n">any</span>
     <span class="n">character</span> <span class="n">whatsoever</span><span class="p">,</span> <span class="n">even</span> <span class="n">a</span> <span class="n">newline</span><span class="p">,</span> <span class="n">which</span> <span class="n">normally</span> <span class="n">it</span> <span class="n">would</span>
     <span class="n">not</span> <span class="n">match</span><span class="o">.</span>
 
-    <span class="n">Used</span> <span class="n">together</span><span class="p">,</span> <span class="n">as</span> <span class="n">r</span><span class="s">&quot;&quot;</span><span class="n">ms</span><span class="p">,</span> <span class="n">they</span> <span class="k">let</span> <span class="n">the</span> <span class="s">&quot;.&quot;</span> <span class="n">match</span> <span class="n">any</span> <span class="n">character</span>
+    <span class="n">Used</span> <span class="n">together</span><span class="p">,</span> <span class="n">as</span> <span class="sr">r&quot;&quot;</span><span class="n">ms</span><span class="p">,</span> <span class="n">they</span> <span class="k">let</span> <span class="n">the</span> <span class="s">&quot;.&quot;</span> <span class="n">match</span> <span class="n">any</span> <span class="n">character</span>
     <span class="n">whatsoever</span><span class="p">,</span> <span class="k">while</span> <span class="n">still</span> <span class="n">allowing</span> <span class="s">&quot;^&quot;</span> <span class="n">and</span> <span class="s">&quot;$&quot;</span> <span class="n">to</span> <span class="n">match</span><span class="p">,</span>
     <span class="n">respectively</span><span class="p">,</span> <span class="n">just</span> <span class="n">after</span> <span class="n">and</span> <span class="n">just</span> <span class="n">before</span> <span class="n">newlines</span> <span class="n">within</span> <span class="n">the</span>
     <span class="n">string</span><span class="o">.</span>
 
 <span class="n">x</span>   <span class="n">Tells</span> <span class="n">the</span> <span class="n">regular</span> <span class="n">expression</span> <span class="n">parser</span> <span class="n">to</span> <span class="n">ignore</span> <span class="n">most</span> <span class="n">whitespace</span>
-    <span class="n">that</span> <span class="nb">is</span> <span class="n">neither</span> <span class="n">backslashed</span> <span class="n">nor</span> <span class="n">within</span> <span class="n">a</span> <span class="n">character</span> <span class="n">class</span><span class="o">.</span> <span class="n">You</span>
+    <span class="n">that</span> <span class="n">is</span> <span class="n">neither</span> <span class="n">backslashed</span> <span class="n">nor</span> <span class="n">within</span> <span class="n">a</span> <span class="n">character</span> <span class="n">class</span><span class="o">.</span> <span class="n">You</span>
     <span class="n">can</span> <span class="n">use</span> <span class="n">this</span> <span class="n">to</span> <span class="k">break</span> <span class="n">up</span> <span class="n">your</span> <span class="n">regular</span> <span class="n">expression</span> <span class="n">into</span>
-    <span class="p">(</span><span class="n">slightly</span><span class="p">)</span> <span class="n">more</span> <span class="n">readable</span> <span class="n">parts</span><span class="o">.</span> <span class="n">The</span> <span class="sc">&#39;#&#39;</span> <span class="n">character</span> <span class="nb">is</span> <span class="n">also</span>
-    <span class="n">treated</span> <span class="n">as</span> <span class="n">a</span> <span class="n">metacharacter</span> <span class="n">introducing</span> <span class="n">a</span> <span class="n">comment</span><span class="p">,</span> <span class="n">just</span> <span class="n">as</span> <span class="k">in</span>
+    <span class="p">(</span><span class="n">slightly</span><span class="p">)</span> <span class="n">more</span> <span class="n">readable</span> <span class="n">parts</span><span class="o">.</span> <span class="n">The</span> <span class="sc">&#39;#&#39;</span> <span class="n">character</span> <span class="n">is</span> <span class="n">also</span>
+    <span class="n">treated</span> <span class="n">as</span> <span class="n">a</span> <span class="n">metacharacter</span> <span class="n">introducing</span> <span class="n">a</span> <span class="n">comment</span><span class="p">,</span> <span class="n">just</span> <span class="n">as</span> <span class="kp">in</span>
     <span class="n">ordinary</span> <span class="n">code</span><span class="o">.</span>
 </pre></div>
 </div>
 <p>For example, the following regex has all three flags turned on:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">r</span><span class="s">&quot;a+.*b+.*?d$&quot;</span><span class="n">ism</span>
-<span class="n">r</span><span class="s">&quot;a+.*b+.*?d$&quot;</span><span class="n">ims</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="sr">r&quot;a+.*b+.*?d$&quot;</span><span class="n">ism</span>
+<span class="sr">r&quot;a+.*b+.*?d$&quot;</span><span class="n">ims</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;a+.*b+.*?d$&quot;</span><span class="n">ism</span><span class="p">,</span> <span class="s">&quot;Goodbye,</span><span class="se">\n</span><span class="s">Oh, angry,</span><span class="se">\n</span><span class="s">Bad world</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
-<span class="n">RegexMatch</span><span class="p">(</span><span class="s">&quot;angry,</span><span class="se">\n</span><span class="s">Bad world&quot;</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">match</span><span class="p">(</span><span class="sr">r&quot;a+.*b+.*?d$&quot;</span><span class="n">ism</span><span class="p">,</span> <span class="s">&quot;Goodbye,</span><span class="se">\n</span><span class="s">Oh, angry,</span><span class="se">\n</span><span class="s">Bad world</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="kt">RegexMatch</span><span class="p">(</span><span class="s">&quot;angry,</span><span class="se">\n</span><span class="s">Bad world&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Triple-quoted regex strings, of the form <tt class="docutils literal"><span class="pre">r&quot;&quot;&quot;...&quot;&quot;&quot;</span></tt>, are also
@@ -1177,7 +1177,7 @@ to easily use ASCII characters, arbitrary byte values, and UTF-8
 sequences to produce arrays of bytes. Here is an example using all
 three:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">b</span><span class="s">&quot;DATA</span><span class="se">\xff\u2200</span><span class="s">&quot;</span>
-<span class="mi">8</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">8</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="n">Uint8</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mh">0x44</span>
  <span class="mh">0x41</span>
  <span class="mh">0x54</span>
@@ -1195,7 +1195,7 @@ resulting byte array does not correspond to a valid UTF-8 string — if
 you try to use this as a regular string literal, you will get a syntax
 error:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="s">&quot;DATA</span><span class="se">\xff\u2200</span><span class="s">&quot;</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">syntax</span><span class="p">:</span> <span class="n">invalid</span> <span class="n">UTF</span><span class="o">-</span><span class="mi">8</span> <span class="n">sequence</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">syntax</span><span class="o">:</span> <span class="n">invalid</span> <span class="n">UTF</span><span class="o">-</span><span class="mi">8</span> <span class="n">sequence</span>
 </pre></div>
 </div>
 <p>Also observe the significant distinction between <tt class="docutils literal"><span class="pre">\xff</span></tt> and <tt class="docutils literal"><span class="pre">\uff</span></tt>:
@@ -1203,11 +1203,11 @@ the former escape sequence encodes the <em>byte 255</em>, whereas the latter
 escape sequence represents the <em>code point 255</em>, which is encoded as two
 bytes in UTF-8:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">b</span><span class="s">&quot;</span><span class="se">\xff</span><span class="s">&quot;</span>
-<span class="mi">1</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">1</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="n">Uint8</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mh">0xff</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">b</span><span class="s">&quot;\uff&quot;</span>
-<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">b</span><span class="s">&quot;</span><span class="se">\uff</span><span class="s">&quot;</span>
+<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="n">Uint8</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mh">0xc3</span>
  <span class="mh">0xbf</span>
 </pre></div>
@@ -1250,7 +1250,7 @@ on.</p>
 (or more) versions. For example, the constant <tt class="docutils literal"><span class="pre">VERSION</span></tt> holds Julia version
 number as a <tt class="xref jl jl-obj docutils literal"><span class="pre">VersionNumber</span></tt> object, and therefore one can define some
 version-specific behavior using simple statements as:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">v</span><span class="s">&quot;0.2&quot;</span> <span class="o">&lt;=</span> <span class="n">VERSION</span> <span class="o">&lt;</span> <span class="n">v</span><span class="s">&quot;0.3-&quot;</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">v</span><span class="s">&quot;0.2&quot;</span> <span class="o">&lt;=</span> <span class="nb">VERSION</span> <span class="o">&lt;</span> <span class="n">v</span><span class="s">&quot;0.3-&quot;</span>
     <span class="c"># do something specific to 0.2 release series</span>
 <span class="k">end</span>
 </pre></div>

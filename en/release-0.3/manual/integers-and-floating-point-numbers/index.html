@@ -651,22 +651,22 @@ naturally without explicit casting, thanks to a flexible, user-extensible
 <p>The default type for an integer literal depends on whether the target
 system has a 32-bit architecture or a 64-bit architecture:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># 32-bit system:</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 <span class="kt">Int32</span>
 
 <span class="c"># 64-bit system:</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 <span class="kt">Int64</span>
 </pre></div>
 </div>
 <p>The Julia internal variable <a class="reference internal" href="../../stdlib/constants/#Base.WORD_SIZE" title="Base.WORD_SIZE"><tt class="xref jl jl-const docutils literal"><span class="pre">WORD_SIZE</span></tt></a> indicates whether the target system
 is 32-bit or 64-bit.:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># 32-bit system:</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">WORD_SIZE</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">WORD_SIZE</span>
 <span class="mi">32</span>
 
 <span class="c"># 64-bit system:</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">WORD_SIZE</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">WORD_SIZE</span>
 <span class="mi">64</span>
 </pre></div>
 </div>
@@ -675,22 +675,22 @@ system&#8217;s signed and unsigned native integer types respectively.:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># 32-bit system:</span>
 <span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Int</span>
 <span class="kt">Int32</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Uint</span>
-<span class="kt">Uint32</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Uint</span>
+<span class="n">Uint32</span>
 
 
 <span class="c"># 64-bit system:</span>
 <span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Int</span>
 <span class="kt">Int64</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Uint</span>
-<span class="kt">Uint64</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Uint</span>
+<span class="n">Uint64</span>
 </pre></div>
 </div>
 <p>Larger integer literals that cannot be represented using only 32 bits
 but can be represented in 64 bits always create 64-bit integers,
 regardless of the system type:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># 32-bit or 64-bit system:</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="mi">3000000000</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="mi">3000000000</span><span class="p">)</span>
 <span class="kt">Int64</span>
 </pre></div>
 </div>
@@ -700,26 +700,26 @@ The size of the unsigned value is determined by the number of hex digits used:</
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mh">0x1</span>
 <span class="mh">0x01</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
-<span class="kt">Uint8</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">Uint8</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mh">0x123</span>
 <span class="mh">0x0123</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
-<span class="kt">Uint16</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">Uint16</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mh">0x1234567</span>
 <span class="mh">0x01234567</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
-<span class="kt">Uint32</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">Uint32</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mh">0x123456789abcdef</span>
 <span class="mh">0x0123456789abcdef</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
-<span class="kt">Uint64</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">Uint64</span>
 </pre></div>
 </div>
 <p>This behavior is based on the observation that when one uses unsigned
@@ -733,34 +733,34 @@ run in other ways.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mb">0b10</span>
 <span class="mh">0x02</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
-<span class="kt">Uint8</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">Uint8</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mo">0o10</span>
 <span class="mh">0x08</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
-<span class="kt">Uint8</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">Uint8</span>
 </pre></div>
 </div>
 <p>The minimum and maximum representable values of primitive numeric types
 such as integers are given by the <a class="reference internal" href="../../stdlib/base/#Base.typemin" title="Base.typemin"><tt class="xref jl jl-func docutils literal"><span class="pre">typemin()</span></tt></a> and <a class="reference internal" href="../../stdlib/base/#Base.typemax" title="Base.typemax"><tt class="xref jl jl-func docutils literal"><span class="pre">typemax()</span></tt></a> functions:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="nb">typemin</span><span class="p">(</span><span class="kt">Int32</span><span class="p">),</span> <span class="nb">typemax</span><span class="p">(</span><span class="kt">Int32</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">typemin</span><span class="p">(</span><span class="kt">Int32</span><span class="p">),</span> <span class="n">typemax</span><span class="p">(</span><span class="kt">Int32</span><span class="p">))</span>
 <span class="p">(</span><span class="o">-</span><span class="mi">2147483648</span><span class="p">,</span><span class="mi">2147483647</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">T</span> <span class="o">=</span> <span class="p">{</span><span class="kt">Int8</span><span class="p">,</span><span class="kt">Int16</span><span class="p">,</span><span class="kt">Int32</span><span class="p">,</span><span class="kt">Int64</span><span class="p">,</span><span class="n">Int128</span><span class="p">,</span><span class="kt">Uint8</span><span class="p">,</span><span class="kt">Uint16</span><span class="p">,</span><span class="kt">Uint32</span><span class="p">,</span><span class="kt">Uint64</span><span class="p">,</span><span class="n">Uint128</span><span class="p">}</span>
-         <span class="n">println</span><span class="p">(</span><span class="s">&quot;</span><span class="si">$(lpad(T,7))</span><span class="s">: [</span><span class="si">$(typemin(T))</span><span class="s">,</span><span class="si">$(typemax(T))</span><span class="s">]&quot;</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">T</span> <span class="o">=</span> <span class="p">{</span><span class="kt">Int8</span><span class="p">,</span><span class="kt">Int16</span><span class="p">,</span><span class="kt">Int32</span><span class="p">,</span><span class="kt">Int64</span><span class="p">,</span><span class="kt">Int128</span><span class="p">,</span><span class="n">Uint8</span><span class="p">,</span><span class="n">Uint16</span><span class="p">,</span><span class="n">Uint32</span><span class="p">,</span><span class="n">Uint64</span><span class="p">,</span><span class="n">Uint128</span><span class="p">}</span>
+         <span class="n">println</span><span class="p">(</span><span class="s">&quot;</span><span class="si">$</span><span class="p">(</span><span class="n">lpad</span><span class="p">(</span><span class="n">T</span><span class="p">,</span><span class="mi">7</span><span class="p">))</span><span class="s">: [</span><span class="si">$</span><span class="p">(</span><span class="n">typemin</span><span class="p">(</span><span class="n">T</span><span class="p">))</span><span class="s">,</span><span class="si">$</span><span class="p">(</span><span class="n">typemax</span><span class="p">(</span><span class="n">T</span><span class="p">))</span><span class="s">]&quot;</span><span class="p">)</span>
        <span class="k">end</span>
-   <span class="kt">Int8</span><span class="p">:</span> <span class="p">[</span><span class="o">-</span><span class="mi">128</span><span class="p">,</span><span class="mi">127</span><span class="p">]</span>
-  <span class="kt">Int16</span><span class="p">:</span> <span class="p">[</span><span class="o">-</span><span class="mi">32768</span><span class="p">,</span><span class="mi">32767</span><span class="p">]</span>
-  <span class="kt">Int32</span><span class="p">:</span> <span class="p">[</span><span class="o">-</span><span class="mi">2147483648</span><span class="p">,</span><span class="mi">2147483647</span><span class="p">]</span>
-  <span class="kt">Int64</span><span class="p">:</span> <span class="p">[</span><span class="o">-</span><span class="mi">9223372036854775808</span><span class="p">,</span><span class="mi">9223372036854775807</span><span class="p">]</span>
- <span class="n">Int128</span><span class="p">:</span> <span class="p">[</span><span class="o">-</span><span class="mi">170141183460469231731687303715884105728</span><span class="p">,</span><span class="mi">170141183460469231731687303715884105727</span><span class="p">]</span>
-  <span class="kt">Uint8</span><span class="p">:</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">255</span><span class="p">]</span>
- <span class="kt">Uint16</span><span class="p">:</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">65535</span><span class="p">]</span>
- <span class="kt">Uint32</span><span class="p">:</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">4294967295</span><span class="p">]</span>
- <span class="kt">Uint64</span><span class="p">:</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">18446744073709551615</span><span class="p">]</span>
-<span class="n">Uint128</span><span class="p">:</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">340282366920938463463374607431768211455</span><span class="p">]</span>
+   <span class="kt">Int8</span><span class="o">:</span> <span class="p">[</span><span class="o">-</span><span class="mi">128</span><span class="p">,</span><span class="mi">127</span><span class="p">]</span>
+  <span class="kt">Int16</span><span class="o">:</span> <span class="p">[</span><span class="o">-</span><span class="mi">32768</span><span class="p">,</span><span class="mi">32767</span><span class="p">]</span>
+  <span class="kt">Int32</span><span class="o">:</span> <span class="p">[</span><span class="o">-</span><span class="mi">2147483648</span><span class="p">,</span><span class="mi">2147483647</span><span class="p">]</span>
+  <span class="kt">Int64</span><span class="o">:</span> <span class="p">[</span><span class="o">-</span><span class="mi">9223372036854775808</span><span class="p">,</span><span class="mi">9223372036854775807</span><span class="p">]</span>
+ <span class="kt">Int128</span><span class="o">:</span> <span class="p">[</span><span class="o">-</span><span class="mi">170141183460469231731687303715884105728</span><span class="p">,</span><span class="mi">170141183460469231731687303715884105727</span><span class="p">]</span>
+  <span class="n">Uint8</span><span class="o">:</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">255</span><span class="p">]</span>
+ <span class="n">Uint16</span><span class="o">:</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">65535</span><span class="p">]</span>
+ <span class="n">Uint32</span><span class="o">:</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">4294967295</span><span class="p">]</span>
+ <span class="n">Uint64</span><span class="o">:</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">18446744073709551615</span><span class="p">]</span>
+<span class="n">Uint128</span><span class="o">:</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">340282366920938463463374607431768211455</span><span class="p">]</span>
 </pre></div>
 </div>
 <p>The values returned by <a class="reference internal" href="../../stdlib/base/#Base.typemin" title="Base.typemin"><tt class="xref jl jl-func docutils literal"><span class="pre">typemin()</span></tt></a> and <a class="reference internal" href="../../stdlib/base/#Base.typemax" title="Base.typemax"><tt class="xref jl jl-func docutils literal"><span class="pre">typemax()</span></tt></a> are always of the
@@ -773,14 +773,14 @@ programming experience.)</p>
 <h3>Overflow behavior<a class="headerlink" href="#overflow-behavior" title="Permalink to this headline">¶</a></h3>
 <p>In Julia, exceeding the maximum representable value of a given type results in
 a wraparound behavior:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="nb">typemax</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="n">typemax</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span>
 <span class="mi">9223372036854775807</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">1</span>
 <span class="o">-</span><span class="mi">9223372036854775808</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">==</span> <span class="nb">typemin</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">==</span> <span class="n">typemin</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>Thus, arithmetic with Julia integers is actually a form of <a class="reference external" href="http://en.wikipedia.org/wiki/Modular_arithmetic">modular arithmetic</a>. This reflects the
@@ -833,7 +833,7 @@ be entered by writing an <tt class="docutils literal"><span class="pre">f</span>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mf">0.5f0</span>
 <span class="mf">0.5f0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
 <span class="kt">Float32</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mf">2.5f-4</span>
@@ -844,7 +844,7 @@ be entered by writing an <tt class="docutils literal"><span class="pre">f</span>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">float32</span><span class="p">(</span><span class="o">-</span><span class="mf">1.5</span><span class="p">)</span>
 <span class="o">-</span><span class="mf">1.5f0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
 <span class="kt">Float32</span>
 </pre></div>
 </div>
@@ -858,13 +858,13 @@ be entered by writing an <tt class="docutils literal"><span class="pre">f</span>
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">0</span><span class="n">x</span><span class="o">.</span><span class="mi">4</span><span class="n">p</span><span class="o">-</span><span class="mi">1</span>
 <span class="mf">0.125</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
 <span class="kt">Float64</span>
 </pre></div>
 </div>
 <p>Half-precision floating-point numbers are also supported (<tt class="docutils literal"><span class="pre">Float16</span></tt>), but
 only as a storage format. In calculations they&#8217;ll be converted to <tt class="docutils literal"><span class="pre">Float32</span></tt>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">sizeof</span><span class="p">(</span><span class="n">float16</span><span class="p">(</span><span class="mf">4.</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sizeof</span><span class="p">(</span><span class="n">float16</span><span class="p">(</span><span class="mf">4.</span><span class="p">))</span>
 <span class="mi">2</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">2</span><span class="o">*</span><span class="n">float16</span><span class="p">(</span><span class="mf">4.</span><span class="p">)</span>
@@ -877,7 +877,7 @@ only as a storage format. In calculations they&#8217;ll be converted to <tt clas
 They are equal to each other but have different binary representations, as can
 be seen using the <tt class="docutils literal"><span class="pre">bits</span></tt> function: :</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mf">0.0</span> <span class="o">==</span> <span class="o">-</span><span class="mf">0.0</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">bits</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
 <span class="s">&quot;0000000000000000000000000000000000000000000000000000000000000000&quot;</span>
@@ -950,7 +950,7 @@ floating-point values are the results of certain arithmetic operations:</p>
 <span class="nb">Inf</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">0</span><span class="o">/</span><span class="mi">0</span>
-<span class="n">NaN</span>
+<span class="nb">NaN</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">500</span> <span class="o">+</span> <span class="nb">Inf</span>
 <span class="nb">Inf</span>
@@ -962,27 +962,27 @@ floating-point values are the results of certain arithmetic operations:</p>
 <span class="nb">Inf</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="nb">Inf</span> <span class="o">-</span> <span class="nb">Inf</span>
-<span class="n">NaN</span>
+<span class="nb">NaN</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="nb">Inf</span> <span class="o">*</span> <span class="nb">Inf</span>
 <span class="nb">Inf</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="nb">Inf</span> <span class="o">/</span> <span class="nb">Inf</span>
-<span class="n">NaN</span>
+<span class="nb">NaN</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">0</span> <span class="o">*</span> <span class="nb">Inf</span>
-<span class="n">NaN</span>
+<span class="nb">NaN</span>
 </pre></div>
 </div>
 <p>The <a class="reference internal" href="../../stdlib/base/#Base.typemin" title="Base.typemin"><tt class="xref jl jl-func docutils literal"><span class="pre">typemin()</span></tt></a> and <a class="reference internal" href="../../stdlib/base/#Base.typemax" title="Base.typemax"><tt class="xref jl jl-func docutils literal"><span class="pre">typemax()</span></tt></a> functions also apply to floating-point
 types:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="nb">typemin</span><span class="p">(</span><span class="n">Float16</span><span class="p">),</span><span class="nb">typemax</span><span class="p">(</span><span class="n">Float16</span><span class="p">))</span>
-<span class="p">(</span><span class="o">-</span><span class="n">Inf16</span><span class="p">,</span><span class="n">Inf16</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">typemin</span><span class="p">(</span><span class="kt">Float16</span><span class="p">),</span><span class="n">typemax</span><span class="p">(</span><span class="kt">Float16</span><span class="p">))</span>
+<span class="p">(</span><span class="o">-</span><span class="nb">Inf16</span><span class="p">,</span><span class="nb">Inf16</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="nb">typemin</span><span class="p">(</span><span class="kt">Float32</span><span class="p">),</span><span class="nb">typemax</span><span class="p">(</span><span class="kt">Float32</span><span class="p">))</span>
-<span class="p">(</span><span class="o">-</span><span class="n">Inf32</span><span class="p">,</span><span class="n">Inf32</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">typemin</span><span class="p">(</span><span class="kt">Float32</span><span class="p">),</span><span class="n">typemax</span><span class="p">(</span><span class="kt">Float32</span><span class="p">))</span>
+<span class="p">(</span><span class="o">-</span><span class="nb">Inf32</span><span class="p">,</span><span class="nb">Inf32</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="nb">typemin</span><span class="p">(</span><span class="kt">Float64</span><span class="p">),</span><span class="nb">typemax</span><span class="p">(</span><span class="kt">Float64</span><span class="p">))</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">typemin</span><span class="p">(</span><span class="kt">Float64</span><span class="p">),</span><span class="n">typemax</span><span class="p">(</span><span class="kt">Float64</span><span class="p">))</span>
 <span class="p">(</span><span class="o">-</span><span class="nb">Inf</span><span class="p">,</span><span class="nb">Inf</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -995,13 +995,13 @@ adjacent representable floating-point numbers, which is often known as
 <a class="reference external" href="http://en.wikipedia.org/wiki/Machine_epsilon">machine epsilon</a>.</p>
 <p>Julia provides <a class="reference internal" href="../../stdlib/base/#Base.eps" title="Base.eps"><tt class="xref jl jl-func docutils literal"><span class="pre">eps()</span></tt></a>, which gives the distance between <tt class="docutils literal"><span class="pre">1.0</span></tt>
 and the next larger representable floating-point value:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">eps</span><span class="p">(</span><span class="kt">Float32</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">eps</span><span class="p">(</span><span class="kt">Float32</span><span class="p">)</span>
 <span class="mf">1.1920929f-7</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">eps</span><span class="p">(</span><span class="kt">Float64</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">eps</span><span class="p">(</span><span class="kt">Float64</span><span class="p">)</span>
 <span class="mf">2.220446049250313e-16</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">eps</span><span class="p">()</span> <span class="c"># same as eps(Float64)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">eps</span><span class="p">()</span> <span class="c"># same as eps(Float64)</span>
 <span class="mf">2.220446049250313e-16</span>
 </pre></div>
 </div>
@@ -1012,16 +1012,16 @@ between that value and the next representable floating point value. That
 is, <tt class="docutils literal"><span class="pre">eps(x)</span></tt> yields a value of the same type as <tt class="docutils literal"><span class="pre">x</span></tt> such that
 <tt class="docutils literal"><span class="pre">x</span> <span class="pre">+</span> <span class="pre">eps(x)</span></tt> is the next representable floating-point value larger
 than <tt class="docutils literal"><span class="pre">x</span></tt>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">eps</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">eps</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
 <span class="mf">2.220446049250313e-16</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">eps</span><span class="p">(</span><span class="mf">1000.</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">eps</span><span class="p">(</span><span class="mf">1000.</span><span class="p">)</span>
 <span class="mf">1.1368683772161603e-13</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">eps</span><span class="p">(</span><span class="mf">1e-27</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">eps</span><span class="p">(</span><span class="mf">1e-27</span><span class="p">)</span>
 <span class="mf">1.793662034335766e-43</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">eps</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">eps</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
 <span class="mf">5.0e-324</span>
 </pre></div>
 </div>
@@ -1065,7 +1065,7 @@ presented in the <a class="reference external" href="http://en.wikipedia.org/wik
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mf">1.1</span> <span class="o">+</span> <span class="mf">0.1</span>
 <span class="mf">1.2000000000000002</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">with_rounding</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="n">RoundDown</span><span class="p">)</span> <span class="k">do</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">with_rounding</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="nb">RoundDown</span><span class="p">)</span> <span class="k">do</span>
        <span class="mf">1.1</span> <span class="o">+</span> <span class="mf">0.1</span>
        <span class="k">end</span>
 <span class="mf">1.2</span>
@@ -1113,58 +1113,58 @@ integer and floating point numbers respectively.</p>
 <p>Constructors exist to create these types from primitive numerical types, or from <tt class="xref jl jl-class docutils literal"><span class="pre">String</span></tt>.
 Once created, they participate in arithmetic with all other numeric types thanks to Julia&#8217;s
 <a class="reference internal" href="../conversion-and-promotion/#man-conversion-and-promotion"><em>type promotion and conversion mechanism</em></a>. :</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">BigInt</span><span class="p">(</span><span class="nb">typemax</span><span class="p">(</span><span class="kt">Int64</span><span class="p">))</span> <span class="o">+</span> <span class="mi">1</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">BigInt</span><span class="p">(</span><span class="n">typemax</span><span class="p">(</span><span class="kt">Int64</span><span class="p">))</span> <span class="o">+</span> <span class="mi">1</span>
 <span class="mi">9223372036854775808</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">BigInt</span><span class="p">(</span><span class="s">&quot;123456789012345678901234567890&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">BigInt</span><span class="p">(</span><span class="s">&quot;123456789012345678901234567890&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
 <span class="mi">123456789012345678901234567891</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">BigFloat</span><span class="p">(</span><span class="s">&quot;1.23456789012345678901&quot;</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">BigFloat</span><span class="p">(</span><span class="s">&quot;1.23456789012345678901&quot;</span><span class="p">)</span>
 <span class="mf">1.234567890123456789010000000000000000000000000000000000000000000000000000000004e+00</span> <span class="n">with</span> <span class="mi">256</span> <span class="n">bits</span> <span class="n">of</span> <span class="n">precision</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">BigFloat</span><span class="p">(</span><span class="mf">2.0</span><span class="o">^</span><span class="mi">66</span><span class="p">)</span> <span class="o">/</span> <span class="mi">3</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">BigFloat</span><span class="p">(</span><span class="mf">2.0</span><span class="o">^</span><span class="mi">66</span><span class="p">)</span> <span class="o">/</span> <span class="mi">3</span>
 <span class="mf">2.459565876494606882133333333333333333333333333333333333333333333333333333333344e+19</span> <span class="n">with</span> <span class="mi">256</span> <span class="n">bits</span> <span class="n">of</span> <span class="n">precision</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">factorial</span><span class="p">(</span><span class="n">BigInt</span><span class="p">(</span><span class="mi">40</span><span class="p">))</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">factorial</span><span class="p">(</span><span class="kt">BigInt</span><span class="p">(</span><span class="mi">40</span><span class="p">))</span>
 <span class="mi">815915283247897734345611269596115894272000000000</span>
 </pre></div>
 </div>
 <p>However, type promotion between the primitive types above and
 <a class="reference internal" href="../../stdlib/numbers/#Base.BigInt" title="Base.BigInt"><tt class="xref jl jl-class docutils literal"><span class="pre">BigInt</span></tt></a>/<a class="reference internal" href="../../stdlib/numbers/#Base.BigFloat" title="Base.BigFloat"><tt class="xref jl jl-class docutils literal"><span class="pre">BigFloat</span></tt></a> is not automatic and must be explicitly stated.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="nb">typemin</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="n">typemin</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span>
 <span class="o">-</span><span class="mi">9223372036854775808</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">-</span> <span class="mi">1</span>
 <span class="mi">9223372036854775807</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 <span class="kt">Int64</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span> <span class="o">=</span> <span class="n">BigInt</span><span class="p">(</span><span class="nb">typemin</span><span class="p">(</span><span class="kt">Int64</span><span class="p">))</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span> <span class="o">=</span> <span class="kt">BigInt</span><span class="p">(</span><span class="n">typemin</span><span class="p">(</span><span class="kt">Int64</span><span class="p">))</span>
 <span class="o">-</span><span class="mi">9223372036854775808</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span> <span class="o">=</span> <span class="n">y</span> <span class="o">-</span> <span class="mi">1</span>
 <span class="o">-</span><span class="mi">9223372036854775809</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
-<span class="n">BigInt</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">10</span> <span class="n">methods</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+<span class="kt">BigInt</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">10</span> <span class="n">methods</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>The default precision (in number of bits of the significand) and rounding
 mode of <a class="reference internal" href="../../stdlib/numbers/#Base.BigFloat" title="Base.BigFloat"><tt class="xref jl jl-class docutils literal"><span class="pre">BigFloat</span></tt></a> operations can be changed, and all further calculations
 will take these changes in account:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">with_rounding</span><span class="p">(</span><span class="n">BigFloat</span><span class="p">,</span><span class="n">RoundUp</span><span class="p">)</span> <span class="k">do</span>
-       <span class="n">BigFloat</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">BigFloat</span><span class="p">(</span><span class="s">&quot;0.1&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">with_rounding</span><span class="p">(</span><span class="kt">BigFloat</span><span class="p">,</span><span class="nb">RoundUp</span><span class="p">)</span> <span class="k">do</span>
+       <span class="kt">BigFloat</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="kt">BigFloat</span><span class="p">(</span><span class="s">&quot;0.1&quot;</span><span class="p">)</span>
        <span class="k">end</span>
 <span class="mf">1.100000000000000000000000000000000000000000000000000000000000000000000000000003e+00</span> <span class="n">with</span> <span class="mi">256</span> <span class="n">bits</span> <span class="n">of</span> <span class="n">precision</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">with_rounding</span><span class="p">(</span><span class="n">BigFloat</span><span class="p">,</span><span class="n">RoundDown</span><span class="p">)</span> <span class="k">do</span>
-       <span class="n">BigFloat</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">BigFloat</span><span class="p">(</span><span class="s">&quot;0.1&quot;</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">with_rounding</span><span class="p">(</span><span class="kt">BigFloat</span><span class="p">,</span><span class="nb">RoundDown</span><span class="p">)</span> <span class="k">do</span>
+       <span class="kt">BigFloat</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="kt">BigFloat</span><span class="p">(</span><span class="s">&quot;0.1&quot;</span><span class="p">)</span>
        <span class="k">end</span>
 <span class="mf">1.099999999999999999999999999999999999999999999999999999999999999999999999999986e+00</span> <span class="n">with</span> <span class="mi">256</span> <span class="n">bits</span> <span class="n">of</span> <span class="n">precision</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">with_bigfloat_precision</span><span class="p">(</span><span class="mi">40</span><span class="p">)</span> <span class="k">do</span>
-       <span class="n">BigFloat</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">BigFloat</span><span class="p">(</span><span class="s">&quot;0.1&quot;</span><span class="p">)</span>
+       <span class="kt">BigFloat</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="kt">BigFloat</span><span class="p">(</span><span class="s">&quot;0.1&quot;</span><span class="p">)</span>
        <span class="k">end</span>
 <span class="mf">1.1000000000004e+00</span> <span class="n">with</span> <span class="mi">40</span> <span class="n">bits</span> <span class="n">of</span> <span class="n">precision</span>
 </pre></div>
@@ -1209,10 +1209,10 @@ variables, implying multiplication of the expression by the variable:</p>
 variable before a parenthesized expression, however, can be used to
 imply multiplication:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">x</span><span class="o">-</span><span class="mi">1</span><span class="p">)(</span><span class="n">x</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">type</span><span class="p">:</span> <span class="n">apply</span><span class="p">:</span> <span class="n">expected</span> <span class="n">Function</span><span class="p">,</span> <span class="n">got</span> <span class="kt">Int64</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="k">type</span><span class="o">:</span> <span class="n">apply</span><span class="o">:</span> <span class="n">expected</span> <span class="kt">Function</span><span class="p">,</span> <span class="n">got</span> <span class="kt">Int64</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span><span class="p">(</span><span class="n">x</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">type</span><span class="p">:</span> <span class="n">apply</span><span class="p">:</span> <span class="n">expected</span> <span class="n">Function</span><span class="p">,</span> <span class="n">got</span> <span class="kt">Int64</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="k">type</span><span class="o">:</span> <span class="n">apply</span><span class="o">:</span> <span class="n">expected</span> <span class="kt">Function</span><span class="p">,</span> <span class="n">got</span> <span class="kt">Int64</span>
 </pre></div>
 </div>
 <p>Both of these expressions are interpreted as function application: any
@@ -1281,7 +1281,7 @@ from unnecessary <a class="reference internal" href="../conversion-and-promotion
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">one</span><span class="p">(</span><span class="kt">Int32</span><span class="p">)</span>
 <span class="mi">1</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">one</span><span class="p">(</span><span class="n">BigFloat</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">one</span><span class="p">(</span><span class="kt">BigFloat</span><span class="p">)</span>
 <span class="mf">1e+00</span> <span class="n">with</span> <span class="mi">256</span> <span class="n">bits</span> <span class="n">of</span> <span class="n">precision</span>
 </pre></div>
 </div>

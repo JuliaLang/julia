@@ -502,62 +502,62 @@ provided by the user by using the <tt class="xref jl jl-func docutils literal"><
 <p>To use the default handler, the macro <a class="reference internal" href="#Base.Test.&#64;test" title="Base.Test.&#64;test"><tt class="xref jl jl-func docutils literal"><span class="pre">&#64;test()</span></tt></a> can be used directly:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">using</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">1</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">1</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">0</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">test</span> <span class="n">failed</span><span class="p">:</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">0</span>
- <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
- <span class="k">in</span> <span class="n">default_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">19</span>
- <span class="k">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">39</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">0</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">test</span> <span class="n">failed</span><span class="o">:</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">0</span>
+ <span class="kp">in</span> <span class="n">error</span> <span class="n">at</span> <span class="n">error</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">21</span>
+ <span class="kp">in</span> <span class="n">default_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">19</span>
+ <span class="kp">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">39</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;This is what happens when a test fails&quot;</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">test</span> <span class="nb">error</span> <span class="n">during</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;This is what happens when a test fails&quot;</span><span class="p">)</span>
-<span class="n">This</span> <span class="nb">is</span> <span class="n">what</span> <span class="n">happens</span> <span class="n">when</span> <span class="n">a</span> <span class="n">test</span> <span class="n">fails</span>
- <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
- <span class="k">in</span> <span class="n">anonymous</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">62</span>
- <span class="k">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">37</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test</span> <span class="n">error</span><span class="p">(</span><span class="s">&quot;This is what happens when a test fails&quot;</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">test</span> <span class="n">error</span> <span class="n">during</span> <span class="n">error</span><span class="p">(</span><span class="s">&quot;This is what happens when a test fails&quot;</span><span class="p">)</span>
+<span class="n">This</span> <span class="n">is</span> <span class="n">what</span> <span class="n">happens</span> <span class="n">when</span> <span class="n">a</span> <span class="n">test</span> <span class="n">fails</span>
+ <span class="kp">in</span> <span class="n">error</span> <span class="n">at</span> <span class="n">error</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">21</span>
+ <span class="kp">in</span> <span class="n">anonymous</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">62</span>
+ <span class="kp">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">37</span>
 </pre></div>
 </div>
 <p>As seen in the examples above, failures or errors will print the abstract
 syntax tree of the expression in question.</p>
 <p>Another macro is provided to check if the given expression throws an exception of type <tt class="docutils literal"><span class="pre">extype</span></tt>,
 <a class="reference internal" href="#Base.Test.&#64;test_throws" title="Base.Test.&#64;test_throws"><tt class="xref jl jl-func docutils literal"><span class="pre">&#64;test_throws()</span></tt></a>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_throws</span> <span class="n">ErrorException</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;An error&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test_throws</span> <span class="kt">ErrorException</span> <span class="n">error</span><span class="p">(</span><span class="s">&quot;An error&quot;</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_throws</span> <span class="n">BoundsError</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;An error&quot;</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">test</span> <span class="n">failed</span><span class="p">:</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;An error&quot;</span><span class="p">)</span>
- <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
- <span class="k">in</span> <span class="n">default_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">19</span>
- <span class="k">in</span> <span class="n">do_test_throws</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">55</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test_throws</span> <span class="kt">BoundsError</span> <span class="n">error</span><span class="p">(</span><span class="s">&quot;An error&quot;</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">test</span> <span class="n">failed</span><span class="o">:</span> <span class="n">error</span><span class="p">(</span><span class="s">&quot;An error&quot;</span><span class="p">)</span>
+ <span class="kp">in</span> <span class="n">error</span> <span class="n">at</span> <span class="n">error</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">21</span>
+ <span class="kp">in</span> <span class="n">default_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">19</span>
+ <span class="kp">in</span> <span class="n">do_test_throws</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">55</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_throws</span> <span class="n">DomainError</span> <span class="nb">throw</span><span class="p">(</span><span class="n">DomainError</span><span class="p">())</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test_throws</span> <span class="kt">DomainError</span> <span class="n">throw</span><span class="p">(</span><span class="kt">DomainError</span><span class="p">())</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_throws</span> <span class="n">DomainError</span> <span class="nb">throw</span><span class="p">(</span><span class="n">EOFError</span><span class="p">())</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">test</span> <span class="n">failed</span><span class="p">:</span> <span class="nb">throw</span><span class="p">(</span><span class="n">EOFError</span><span class="p">())</span>
- <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
- <span class="k">in</span> <span class="n">default_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">19</span>
- <span class="k">in</span> <span class="n">do_test_throws</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">55</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test_throws</span> <span class="kt">DomainError</span> <span class="n">throw</span><span class="p">(</span><span class="kt">EOFError</span><span class="p">())</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">test</span> <span class="n">failed</span><span class="o">:</span> <span class="n">throw</span><span class="p">(</span><span class="kt">EOFError</span><span class="p">())</span>
+ <span class="kp">in</span> <span class="n">error</span> <span class="n">at</span> <span class="n">error</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">21</span>
+ <span class="kp">in</span> <span class="n">default_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">19</span>
+ <span class="kp">in</span> <span class="n">do_test_throws</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">55</span>
 </pre></div>
 </div>
 <p>As floating point comparisons can be imprecise, two additional macros exist taking in account small numerical errors:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_approx_eq</span> <span class="mf">1.</span> <span class="mf">0.999999999</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">assertion</span> <span class="n">failed</span><span class="p">:</span> <span class="o">|</span><span class="mf">1.0</span> <span class="o">-</span> <span class="mf">0.999999999</span><span class="o">|</span> <span class="o">&lt;</span> <span class="mf">2.220446049250313e-12</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test_approx_eq</span> <span class="mf">1.</span> <span class="mf">0.999999999</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">assertion</span> <span class="n">failed</span><span class="o">:</span> <span class="o">|</span><span class="mf">1.0</span> <span class="o">-</span> <span class="mf">0.999999999</span><span class="o">|</span> <span class="o">&lt;</span> <span class="mf">2.220446049250313e-12</span>
   <span class="mf">1.0</span> <span class="o">=</span> <span class="mf">1.0</span>
   <span class="mf">0.999999999</span> <span class="o">=</span> <span class="mf">0.999999999</span>
- <span class="k">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">75</span>
- <span class="k">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">80</span>
+ <span class="kp">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">75</span>
+ <span class="kp">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">80</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_approx_eq</span> <span class="mf">1.</span> <span class="mf">0.9999999999999</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test_approx_eq</span> <span class="mf">1.</span> <span class="mf">0.9999999999999</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_approx_eq_eps</span> <span class="mf">1.</span> <span class="mf">0.999</span> <span class="mf">1e-2</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test_approx_eq_eps</span> <span class="mf">1.</span> <span class="mf">0.999</span> <span class="mf">1e-2</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_approx_eq_eps</span> <span class="mf">1.</span> <span class="mf">0.999</span> <span class="mf">1e-3</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">assertion</span> <span class="n">failed</span><span class="p">:</span> <span class="o">|</span><span class="mf">1.0</span> <span class="o">-</span> <span class="mf">0.999</span><span class="o">|</span> <span class="o">&lt;=</span> <span class="mf">0.001</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test_approx_eq_eps</span> <span class="mf">1.</span> <span class="mf">0.999</span> <span class="mf">1e-3</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">assertion</span> <span class="n">failed</span><span class="o">:</span> <span class="o">|</span><span class="mf">1.0</span> <span class="o">-</span> <span class="mf">0.999</span><span class="o">|</span> <span class="o">&lt;=</span> <span class="mf">0.001</span>
   <span class="mf">1.0</span> <span class="o">=</span> <span class="mf">1.0</span>
   <span class="mf">0.999</span> <span class="o">=</span> <span class="mf">0.999</span>
   <span class="n">difference</span> <span class="o">=</span> <span class="mf">0.0010000000000000009</span> <span class="o">&gt;</span> <span class="mf">0.001</span>
- <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">22</span>
- <span class="k">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">68</span>
+ <span class="kp">in</span> <span class="n">error</span> <span class="n">at</span> <span class="n">error</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">22</span>
+ <span class="kp">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">68</span>
 </pre></div>
 </div>
 </div>
@@ -565,35 +565,35 @@ syntax tree of the expression in question.</p>
 <h2>Handlers<a class="headerlink" href="#handlers" title="Permalink to this headline">¶</a></h2>
 <p>A handler is a function defined for three kinds of arguments: <tt class="docutils literal"><span class="pre">Success</span></tt>, <tt class="docutils literal"><span class="pre">Failure</span></tt>, <tt class="docutils literal"><span class="pre">Error</span></tt>:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># The definition of the default handler</span>
-<span class="n">default_handler</span><span class="p">(</span><span class="n">r</span><span class="p">::</span><span class="n">Success</span><span class="p">)</span> <span class="o">=</span> <span class="n">nothing</span>
-<span class="n">default_handler</span><span class="p">(</span><span class="n">r</span><span class="p">::</span><span class="n">Failure</span><span class="p">)</span> <span class="o">=</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;test failed: </span><span class="si">$(r.expr)</span><span class="s">&quot;</span><span class="p">)</span>
-<span class="n">default_handler</span><span class="p">(</span><span class="n">r</span><span class="p">::</span><span class="n">Error</span><span class="p">)</span>   <span class="o">=</span> <span class="n">rethrow</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+<span class="n">default_handler</span><span class="p">(</span><span class="n">r</span><span class="o">::</span><span class="n">Success</span><span class="p">)</span> <span class="o">=</span> <span class="nb">nothing</span>
+<span class="n">default_handler</span><span class="p">(</span><span class="n">r</span><span class="o">::</span><span class="n">Failure</span><span class="p">)</span> <span class="o">=</span> <span class="n">error</span><span class="p">(</span><span class="s">&quot;test failed: </span><span class="si">$</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="n">default_handler</span><span class="p">(</span><span class="n">r</span><span class="o">::</span><span class="n">Error</span><span class="p">)</span>   <span class="o">=</span> <span class="n">rethrow</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>A different handler can be used for a block (with <a class="reference internal" href="#Base.Test.with_handler" title="Base.Test.with_handler"><tt class="xref jl jl-func docutils literal"><span class="pre">with_handler()</span></tt></a>):</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">using</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">custom_handler</span><span class="p">(</span><span class="n">r</span><span class="p">::</span><span class="n">Test</span><span class="o">.</span><span class="n">Success</span><span class="p">)</span> <span class="o">=</span> <span class="n">println</span><span class="p">(</span><span class="s">&quot;Success on </span><span class="si">$(r.expr)</span><span class="s">&quot;</span><span class="p">)</span>
-<span class="n">custom_handler</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">custom_handler</span><span class="p">(</span><span class="n">r</span><span class="o">::</span><span class="n">Test</span><span class="o">.</span><span class="n">Success</span><span class="p">)</span> <span class="o">=</span> <span class="n">println</span><span class="p">(</span><span class="s">&quot;Success on </span><span class="si">$</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="n">custom_handler</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">custom_handler</span><span class="p">(</span><span class="n">r</span><span class="p">::</span><span class="n">Test</span><span class="o">.</span><span class="n">Failure</span><span class="p">)</span> <span class="o">=</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;Error on custom handler: </span><span class="si">$(r.expr)</span><span class="s">&quot;</span><span class="p">)</span>
-<span class="n">custom_handler</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">2</span> <span class="n">methods</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">custom_handler</span><span class="p">(</span><span class="n">r</span><span class="o">::</span><span class="n">Test</span><span class="o">.</span><span class="n">Failure</span><span class="p">)</span> <span class="o">=</span> <span class="n">error</span><span class="p">(</span><span class="s">&quot;Error on custom handler: </span><span class="si">$</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="n">custom_handler</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">2</span> <span class="n">methods</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">custom_handler</span><span class="p">(</span><span class="n">r</span><span class="p">::</span><span class="n">Test</span><span class="o">.</span><span class="n">Error</span><span class="p">)</span> <span class="o">=</span> <span class="n">rethrow</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
-<span class="n">custom_handler</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">3</span> <span class="n">methods</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">custom_handler</span><span class="p">(</span><span class="n">r</span><span class="o">::</span><span class="n">Test</span><span class="o">.</span><span class="n">Error</span><span class="p">)</span> <span class="o">=</span> <span class="n">rethrow</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+<span class="n">custom_handler</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">3</span> <span class="n">methods</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">Test</span><span class="o">.</span><span class="n">with_handler</span><span class="p">(</span><span class="n">custom_handler</span><span class="p">)</span> <span class="k">do</span>
-         <span class="p">@</span><span class="n">test</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">1</span>
-         <span class="p">@</span><span class="n">test</span> <span class="mi">1</span> <span class="o">!=</span> <span class="mi">1</span>
+         <span class="nd">@test</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">1</span>
+         <span class="nd">@test</span> <span class="mi">1</span> <span class="o">!=</span> <span class="mi">1</span>
        <span class="k">end</span>
-<span class="n">Success</span> <span class="n">on</span> <span class="p">:((</span><span class="mi">1</span><span class="o">==</span><span class="mi">1</span><span class="p">))</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">Error</span> <span class="n">on</span> <span class="n">custom</span> <span class="n">handler</span><span class="p">:</span> <span class="p">:((</span><span class="mi">1</span><span class="o">!=</span><span class="mi">1</span><span class="p">))</span>
- <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
- <span class="k">in</span> <span class="n">custom_handler</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">1</span>
- <span class="k">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">39</span>
- <span class="k">in</span> <span class="n">anonymous</span> <span class="n">at</span> <span class="n">no</span> <span class="n">file</span><span class="p">:</span><span class="mi">3</span>
- <span class="k">in</span> <span class="n">task_local_storage</span> <span class="n">at</span> <span class="n">task</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">28</span>
- <span class="k">in</span> <span class="n">with_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">24</span>
+<span class="n">Success</span> <span class="n">on</span> <span class="o">:</span><span class="p">((</span><span class="mi">1</span><span class="o">==</span><span class="mi">1</span><span class="p">))</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">Error</span> <span class="n">on</span> <span class="n">custom</span> <span class="n">handler</span><span class="o">:</span> <span class="o">:</span><span class="p">((</span><span class="mi">1</span><span class="o">!=</span><span class="mi">1</span><span class="p">))</span>
+ <span class="kp">in</span> <span class="n">error</span> <span class="n">at</span> <span class="n">error</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">21</span>
+ <span class="kp">in</span> <span class="n">custom_handler</span> <span class="n">at</span> <span class="n">none</span><span class="o">:</span><span class="mi">1</span>
+ <span class="kp">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">39</span>
+ <span class="kp">in</span> <span class="n">anonymous</span> <span class="n">at</span> <span class="n">no</span> <span class="n">file</span><span class="o">:</span><span class="mi">3</span>
+ <span class="kp">in</span> <span class="n">task_local_storage</span> <span class="n">at</span> <span class="n">task</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">28</span>
+ <span class="kp">in</span> <span class="n">with_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">24</span>
 </pre></div>
 </div>
 </div>

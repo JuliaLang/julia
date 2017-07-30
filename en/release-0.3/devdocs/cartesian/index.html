@@ -504,15 +504,15 @@ the few ways to write compact and performant multidimensional code.</p>
 <div class="section" id="principles-of-usage">
 <h2>Principles of usage<a class="headerlink" href="#principles-of-usage" title="Permalink to this headline">¶</a></h2>
 <p>A simple example of usage is:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">nloops</span> <span class="mi">3</span> <span class="n">i</span> <span class="n">A</span> <span class="k">begin</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="p">@</span><span class="n">nref</span> <span class="mi">3</span> <span class="n">A</span> <span class="n">i</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@nloops</span> <span class="mi">3</span> <span class="n">i</span> <span class="n">A</span> <span class="k">begin</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nd">@nref</span> <span class="mi">3</span> <span class="n">A</span> <span class="n">i</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>which generates the following code:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i_3</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i_2</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i_3</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i_2</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
             <span class="n">s</span> <span class="o">+=</span> <span class="n">A</span><span class="p">[</span><span class="n">i_1</span><span class="p">,</span><span class="n">i_2</span><span class="p">,</span><span class="n">i_3</span><span class="p">]</span>
         <span class="k">end</span>
     <span class="k">end</span>
@@ -551,8 +551,8 @@ to the right) whereas <tt class="docutils literal"><span class="pre">&#64;nref</
 <tt class="docutils literal"><span class="pre">A[i_1,i_2,i_3]</span></tt>, where the array comes first).</p>
 <p>If you&#8217;re developing code with Cartesian, you may find that debugging is
 easier when you examine the generated code, using <tt class="docutils literal"><span class="pre">macroexpand</span></tt>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">macroexpand</span><span class="p">(:(@</span><span class="n">nref</span> <span class="mi">2</span> <span class="n">A</span> <span class="n">i</span><span class="p">))</span>
-<span class="p">:(</span><span class="n">A</span><span class="p">[</span><span class="n">i_1</span><span class="p">,</span><span class="n">i_2</span><span class="p">])</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">macroexpand</span><span class="p">(</span><span class="o">:</span><span class="p">(</span><span class="nd">@nref</span> <span class="mi">2</span> <span class="n">A</span> <span class="n">i</span><span class="p">))</span>
+<span class="o">:</span><span class="p">(</span><span class="n">A</span><span class="p">[</span><span class="n">i_1</span><span class="p">,</span><span class="n">i_2</span><span class="p">])</span>
 </pre></div>
 </div>
 <div class="section" id="supplying-the-number-of-expressions">
@@ -564,52 +564,52 @@ something you want to hard-code.  Perhaps the most straightforward
 approach is to use the <tt class="docutils literal"><span class="pre">&#64;ngenerate</span></tt> macro.</p>
 <p>Perhaps the easiest way to understand <tt class="docutils literal"><span class="pre">&#64;ngenerate</span></tt> is to see it in
 action.  Here&#8217;s a slightly cleaned up example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">macroexpand</span><span class="p">(:(@</span><span class="n">ngenerate</span> <span class="n">N</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">A</span><span class="p">)</span> <span class="k">function</span><span class="nf"> mysum</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">})</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">macroexpand</span><span class="p">(</span><span class="o">:</span><span class="p">(</span><span class="nd">@ngenerate</span> <span class="n">N</span> <span class="n">typeof</span><span class="p">(</span><span class="n">A</span><span class="p">)</span> <span class="k">function</span> <span class="n">mysum</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}(</span><span class="n">A</span><span class="o">::</span><span class="kt">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">})</span>
         <span class="n">s</span> <span class="o">=</span> <span class="n">zero</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
-        <span class="p">@</span><span class="n">nloops</span> <span class="n">N</span> <span class="n">i</span> <span class="n">A</span> <span class="k">begin</span>
-            <span class="n">s</span> <span class="o">+=</span> <span class="p">@</span><span class="n">nref</span> <span class="n">N</span> <span class="n">A</span> <span class="n">i</span>
+        <span class="nd">@nloops</span> <span class="n">N</span> <span class="n">i</span> <span class="n">A</span> <span class="k">begin</span>
+            <span class="n">s</span> <span class="o">+=</span> <span class="nd">@nref</span> <span class="n">N</span> <span class="n">A</span> <span class="n">i</span>
         <span class="k">end</span>
         <span class="n">s</span>
     <span class="k">end</span><span class="p">))</span>
-<span class="p">:(</span><span class="k">begin</span>
-    <span class="k">function</span><span class="nf"> mysum</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">1</span><span class="p">})</span> <span class="c"># none, line 2:</span>
+<span class="o">:</span><span class="p">(</span><span class="k">begin</span>
+    <span class="k">function</span> <span class="n">mysum</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="o">::</span><span class="kt">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">1</span><span class="p">})</span> <span class="c"># none, line 2:</span>
         <span class="n">s</span> <span class="o">=</span> <span class="n">zero</span><span class="p">(</span><span class="n">T</span><span class="p">)</span> <span class="c"># line 3:</span>
-        <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span> <span class="c"># line 293:</span>
+        <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span> <span class="c"># line 293:</span>
             <span class="n">s</span> <span class="o">+=</span> <span class="n">A</span><span class="p">[</span><span class="n">i_1</span><span class="p">]</span>
         <span class="k">end</span> <span class="c"># line 295:</span>
         <span class="n">s</span>
     <span class="k">end</span>
-    <span class="k">function</span><span class="nf"> mysum</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">2</span><span class="p">})</span> <span class="c"># none, line 2:</span>
+    <span class="k">function</span> <span class="n">mysum</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="o">::</span><span class="kt">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">2</span><span class="p">})</span> <span class="c"># none, line 2:</span>
         <span class="n">s</span> <span class="o">=</span> <span class="n">zero</span><span class="p">(</span><span class="n">T</span><span class="p">)</span> <span class="c"># line 3:</span>
-        <span class="k">for</span> <span class="n">i_2</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span> <span class="c"># line 293:</span>
-            <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span> <span class="c"># line 293:</span>
+        <span class="k">for</span> <span class="n">i_2</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span> <span class="c"># line 293:</span>
+            <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span> <span class="c"># line 293:</span>
                 <span class="n">s</span> <span class="o">+=</span> <span class="n">A</span><span class="p">[</span><span class="n">i_1</span><span class="p">,</span><span class="n">i_2</span><span class="p">]</span>
             <span class="k">end</span> <span class="c"># line 295:</span>
         <span class="k">end</span> <span class="c"># line 295:</span>
         <span class="n">s</span>
     <span class="k">end</span>
-    <span class="k">function</span><span class="nf"> mysum</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">3</span><span class="p">})</span> <span class="c"># none, line 2:</span>
+    <span class="k">function</span> <span class="n">mysum</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="o">::</span><span class="kt">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">3</span><span class="p">})</span> <span class="c"># none, line 2:</span>
         <span class="n">s</span> <span class="o">=</span> <span class="n">zero</span><span class="p">(</span><span class="n">T</span><span class="p">)</span> <span class="c"># line 3:</span>
-        <span class="k">for</span> <span class="n">i_3</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span> <span class="c"># line 293:</span>
-            <span class="k">for</span> <span class="n">i_2</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span> <span class="c"># line 293:</span>
-                <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span> <span class="c"># line 293:</span>
+        <span class="k">for</span> <span class="n">i_3</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span> <span class="c"># line 293:</span>
+            <span class="k">for</span> <span class="n">i_2</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span> <span class="c"># line 293:</span>
+                <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span> <span class="c"># line 293:</span>
                     <span class="n">s</span> <span class="o">+=</span> <span class="n">A</span><span class="p">[</span><span class="n">i_1</span><span class="p">,</span><span class="n">i_2</span><span class="p">,</span><span class="n">i_3</span><span class="p">]</span>
                 <span class="k">end</span> <span class="c"># line 295:</span>
             <span class="k">end</span> <span class="c"># line 295:</span>
         <span class="k">end</span> <span class="c"># line 295:</span>
         <span class="n">s</span>
     <span class="k">end</span>
-    <span class="k">function</span><span class="nf"> mysum</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">4</span><span class="p">})</span> <span class="c"># none, line 2:</span>
+    <span class="k">function</span> <span class="n">mysum</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="o">::</span><span class="kt">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">4</span><span class="p">})</span> <span class="c"># none, line 2:</span>
         <span class="o">...</span>
     <span class="k">end</span>
-    <span class="k">let</span> <span class="n">mysum_cache</span> <span class="o">=</span> <span class="n">Dict</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="n">Function</span><span class="p">}()</span> <span class="c"># line 113:</span>
-        <span class="k">function</span><span class="nf"> mysum</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">})</span> <span class="c"># cartesian.jl, line 100:</span>
+    <span class="k">let</span> <span class="n">mysum_cache</span> <span class="o">=</span> <span class="kt">Dict</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="kt">Function</span><span class="p">}()</span> <span class="c"># line 113:</span>
+        <span class="k">function</span> <span class="n">mysum</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}(</span><span class="n">A</span><span class="o">::</span><span class="kt">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">})</span> <span class="c"># cartesian.jl, line 100:</span>
             <span class="k">if</span> <span class="o">!</span><span class="p">(</span><span class="n">haskey</span><span class="p">(</span><span class="n">mysum_cache</span><span class="p">,</span><span class="n">N</span><span class="p">))</span> <span class="c"># line 102:</span>
                 <span class="n">localfunc</span> <span class="o">=</span> <span class="k">quote</span>
-                    <span class="k">function</span><span class="nf"> _F_</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="o">$</span><span class="n">N</span><span class="p">})</span>
+                    <span class="k">function</span> <span class="n">_F_</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="o">::</span><span class="kt">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="o">$</span><span class="n">N</span><span class="p">})</span>
                         <span class="n">s</span> <span class="o">=</span> <span class="n">zero</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
-                        <span class="p">@</span><span class="n">nloops</span> <span class="o">$</span><span class="n">N</span> <span class="n">i</span> <span class="n">A</span> <span class="k">begin</span>
-                            <span class="n">s</span> <span class="o">+=</span> <span class="p">@</span><span class="n">nref</span> <span class="o">$</span><span class="n">N</span> <span class="n">A</span> <span class="n">i</span>
+                        <span class="nd">@nloops</span> <span class="o">$</span><span class="n">N</span> <span class="n">i</span> <span class="n">A</span> <span class="k">begin</span>
+                            <span class="n">s</span> <span class="o">+=</span> <span class="nd">@nref</span> <span class="o">$</span><span class="n">N</span> <span class="n">A</span> <span class="n">i</span>
                         <span class="k">end</span>
                         <span class="n">s</span>
                     <span class="k">end</span>
@@ -620,7 +620,7 @@ action.  Here&#8217;s a slightly cleaned up example:</p>
                     <span class="n">_F_</span>
                 <span class="k">end</span><span class="p">)</span>
             <span class="k">end</span>
-            <span class="n">mysum_cache</span><span class="p">[</span><span class="n">N</span><span class="p">](</span><span class="n">A</span><span class="p">)::</span><span class="nb">typeof</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+            <span class="n">mysum_cache</span><span class="p">[</span><span class="n">N</span><span class="p">](</span><span class="n">A</span><span class="p">)</span><span class="o">::</span><span class="n">typeof</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
         <span class="k">end</span>
     <span class="k">end</span>
 <span class="k">end</span><span class="p">)</span>
@@ -655,7 +655,7 @@ parameter.</li>
 <p>Perhaps the single most powerful feature in <tt class="docutils literal"><span class="pre">Cartesian</span></tt> is the
 ability to supply anonymous-function expressions that get evaluated at
 parsing time.  Let&#8217;s consider a simple example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">nexprs</span> <span class="mi">2</span> <span class="n">j</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">i_j</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@nexprs</span> <span class="mi">2</span> <span class="n">j</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">i_j</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p><tt class="docutils literal"><span class="pre">&#64;nexprs</span></tt> generates <tt class="docutils literal"><span class="pre">n</span></tt> expressions that follow a pattern. This
@@ -670,7 +670,7 @@ Generally speaking, Cartesian employs a LaTeX-like syntax.  This
 allows you to do math on the index <tt class="docutils literal"><span class="pre">j</span></tt>.  Here&#8217;s an example computing
 the strides of an array:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">s_1</span> <span class="o">=</span> <span class="mi">1</span>
-<span class="p">@</span><span class="n">nexprs</span> <span class="mi">3</span> <span class="n">j</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">s_</span><span class="p">{</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">}</span> <span class="o">=</span> <span class="n">s_j</span> <span class="o">*</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">j</span><span class="p">))</span>
+<span class="nd">@nexprs</span> <span class="mi">3</span> <span class="n">j</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">s_</span><span class="p">{</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">}</span> <span class="o">=</span> <span class="n">s_j</span> <span class="o">*</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">j</span><span class="p">))</span>
 </pre></div>
 </div>
 <p>would generate expressions</p>
@@ -700,12 +700,12 @@ the strides of an array:</p>
 <tt class="descname">&#64;nsplat Nsym dimrange functiondeclexpr</tt></dt>
 <dd><p>Generate explicit versions of a function for different numbers of
 arguments.  For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">nsplat</span> <span class="n">N</span> <span class="mi">2</span><span class="p">:</span><span class="mi">3</span> <span class="n">absgetindex</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">I</span><span class="p">::</span><span class="n">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">,</span><span class="n">Real</span><span class="p">}</span><span class="o">...</span><span class="p">)</span> <span class="o">=</span> <span class="n">abs</span><span class="p">(</span><span class="n">getindex</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">I</span><span class="o">...</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@nsplat</span> <span class="n">N</span> <span class="mi">2</span><span class="o">:</span><span class="mi">3</span> <span class="n">absgetindex</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="nb">I</span><span class="o">::</span><span class="kt">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">,</span><span class="kt">Real</span><span class="p">}</span><span class="o">...</span><span class="p">)</span> <span class="o">=</span> <span class="n">abs</span><span class="p">(</span><span class="n">getindex</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="nb">I</span><span class="o">...</span><span class="p">))</span>
 </pre></div>
 </div>
 <p>generates:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">absgetindex</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">I_1</span><span class="p">::</span><span class="n">Real</span><span class="p">,</span> <span class="n">I_2</span><span class="p">::</span><span class="n">Real</span><span class="p">)</span> <span class="o">=</span> <span class="n">abs</span><span class="p">(</span><span class="n">getindex</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">I_1</span><span class="p">,</span> <span class="n">I_2</span><span class="p">))</span>
-<span class="n">absgetindex</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">I_1</span><span class="p">::</span><span class="n">Real</span><span class="p">,</span> <span class="n">I_2</span><span class="p">::</span><span class="n">Real</span><span class="p">,</span> <span class="n">I_3</span><span class="p">::</span><span class="n">Real</span><span class="p">)</span> <span class="o">=</span> <span class="n">abs</span><span class="p">(</span><span class="n">getindex</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">I_1</span><span class="p">,</span> <span class="n">I_2</span><span class="p">,</span> <span class="n">I_3</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">absgetindex</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">I_1</span><span class="o">::</span><span class="kt">Real</span><span class="p">,</span> <span class="n">I_2</span><span class="o">::</span><span class="kt">Real</span><span class="p">)</span> <span class="o">=</span> <span class="n">abs</span><span class="p">(</span><span class="n">getindex</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">I_1</span><span class="p">,</span> <span class="n">I_2</span><span class="p">))</span>
+<span class="n">absgetindex</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">I_1</span><span class="o">::</span><span class="kt">Real</span><span class="p">,</span> <span class="n">I_2</span><span class="o">::</span><span class="kt">Real</span><span class="p">,</span> <span class="n">I_3</span><span class="o">::</span><span class="kt">Real</span><span class="p">)</span> <span class="o">=</span> <span class="n">abs</span><span class="p">(</span><span class="n">getindex</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">I_1</span><span class="p">,</span> <span class="n">I_2</span><span class="p">,</span> <span class="n">I_3</span><span class="p">))</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -727,15 +727,15 @@ case the range is <tt class="docutils literal"><span class="pre">1:size(var,d)</
 <p>Optionally, you can provide &#8220;pre&#8221; and &#8220;post&#8221; expressions. These
 get executed first and last, respectively, in the body of each
 loop. For example,</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">nloops</span> <span class="mi">2</span> <span class="n">i</span> <span class="n">A</span> <span class="n">d</span><span class="o">-&gt;</span><span class="n">j_d</span><span class="o">=</span><span class="n">min</span><span class="p">(</span><span class="n">i_d</span><span class="p">,</span><span class="mi">5</span><span class="p">)</span> <span class="k">begin</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="p">@</span><span class="n">nref</span> <span class="mi">2</span> <span class="n">A</span> <span class="n">j</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@nloops</span> <span class="mi">2</span> <span class="n">i</span> <span class="n">A</span> <span class="n">d</span><span class="o">-&gt;</span><span class="n">j_d</span><span class="o">=</span><span class="n">min</span><span class="p">(</span><span class="n">i_d</span><span class="p">,</span><span class="mi">5</span><span class="p">)</span> <span class="k">begin</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nd">@nref</span> <span class="mi">2</span> <span class="n">A</span> <span class="n">j</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>would generate</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i_2</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i_2</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
     <span class="n">j_2</span> <span class="o">=</span> <span class="n">min</span><span class="p">(</span><span class="n">i_2</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
         <span class="n">j_1</span> <span class="o">=</span> <span class="n">min</span><span class="p">(</span><span class="n">i_1</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
         <span class="n">s</span> <span class="o">+=</span> <span class="n">A</span><span class="p">[</span><span class="n">j_1</span><span class="p">,</span><span class="n">j_2</span><span class="p">]</span>
     <span class="k">end</span>
@@ -782,14 +782,14 @@ bounds-checking.</p>
 <dt>
 <tt class="descname">&#64;nif N conditionexpr expr elseexpr</tt></dt>
 <dd><p>Generates a sequence of <tt class="docutils literal"><span class="pre">if</span> <span class="pre">...</span> <span class="pre">elseif</span> <span class="pre">...</span> <span class="pre">else</span> <span class="pre">...</span> <span class="pre">end</span></tt> statements. For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">nif</span> <span class="mi">3</span> <span class="n">d</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">i_d</span> <span class="o">&gt;=</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="n">d</span><span class="p">))</span> <span class="n">d</span><span class="o">-&gt;</span><span class="p">(</span><span class="nb">error</span><span class="p">(</span><span class="s">&quot;Dimension &quot;</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="s">&quot; too big&quot;</span><span class="p">))</span> <span class="n">d</span><span class="o">-&gt;</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;All OK&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@nif</span> <span class="mi">3</span> <span class="n">d</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">i_d</span> <span class="o">&gt;=</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="n">d</span><span class="p">))</span> <span class="n">d</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;Dimension &quot;</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="s">&quot; too big&quot;</span><span class="p">))</span> <span class="n">d</span><span class="o">-&gt;</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;All OK&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>would generate:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">i_1</span> <span class="o">&gt;</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="nb">error</span><span class="p">(</span><span class="s">&quot;Dimension &quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="s">&quot; too big&quot;</span><span class="p">)</span>
+    <span class="n">error</span><span class="p">(</span><span class="s">&quot;Dimension &quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="s">&quot; too big&quot;</span><span class="p">)</span>
 <span class="k">elseif</span> <span class="n">i_2</span> <span class="o">&gt;</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-    <span class="nb">error</span><span class="p">(</span><span class="s">&quot;Dimension &quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s">&quot; too big&quot;</span><span class="p">)</span>
+    <span class="n">error</span><span class="p">(</span><span class="s">&quot;Dimension &quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s">&quot; too big&quot;</span><span class="p">)</span>
 <span class="k">else</span>
     <span class="n">println</span><span class="p">(</span><span class="s">&quot;All OK&quot;</span><span class="p">)</span>
 <span class="k">end</span>

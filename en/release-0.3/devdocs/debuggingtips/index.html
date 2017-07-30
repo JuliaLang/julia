@@ -507,7 +507,7 @@ This is a useful way to discover the types and values of objects being
 manipulated by Julia&#8217;s C code.</p>
 <p>Similarly, if you&#8217;re debugging some of julia&#8217;s internals (e.g.,
 <tt class="docutils literal"><span class="pre">inference.jl</span></tt>), you can print <tt class="docutils literal"><span class="pre">obj</span></tt> using</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(:</span><span class="n">jl_</span><span class="p">,</span> <span class="n">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Any</span><span class="p">,),</span> <span class="n">obj</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(</span><span class="o">:</span><span class="n">jl_</span><span class="p">,</span> <span class="kt">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Any</span><span class="p">,),</span> <span class="n">obj</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>This is a good way to circumvent problems that arise from the order in which julia&#8217;s output streams are initialized.</p>
@@ -519,11 +519,11 @@ manipulated by Julia&#8217;s C code.</p>
 </pre></div>
 </div>
 <p>Then within your Julia code, insert a call to <tt class="docutils literal"><span class="pre">jl_breakpoint</span></tt> by adding</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(:</span><span class="n">jl_breakpoint</span><span class="p">,</span> <span class="n">Void</span><span class="p">,</span> <span class="p">())</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(</span><span class="o">:</span><span class="n">jl_breakpoint</span><span class="p">,</span> <span class="kt">Void</span><span class="p">,</span> <span class="p">())</span>
 </pre></div>
 </div>
 <p>or alternatively</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(:</span><span class="n">jl_breakpoint</span><span class="p">,</span> <span class="n">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Any</span><span class="p">,),</span> <span class="n">obj</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(</span><span class="o">:</span><span class="n">jl_breakpoint</span><span class="p">,</span> <span class="kt">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Any</span><span class="p">,),</span> <span class="n">obj</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>if you want to inspect <tt class="docutils literal"><span class="pre">obj</span></tt> from within <tt class="docutils literal"><span class="pre">jl_breakpoint</span></tt>.</p>

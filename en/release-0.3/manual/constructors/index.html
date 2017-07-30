@@ -500,7 +500,7 @@ type objects also serve as constructor functions: they create new
 instances of themselves when applied to an argument tuple as a function.
 This much was already mentioned briefly when composite types were
 introduced. For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Foo</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">Foo</span>
   <span class="n">bar</span>
   <span class="n">baz</span>
 <span class="k">end</span>
@@ -590,11 +590,11 @@ that creates objects of the block&#8217;s type.</li>
 <p>For example, suppose one wants to declare a type that holds a pair of
 real numbers, subject to the constraint that the first number is
 not greater than the second one. One could declare it like this:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> OrderedPair</span>
-  <span class="n">x</span><span class="p">::</span><span class="n">Real</span>
-  <span class="n">y</span><span class="p">::</span><span class="n">Real</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">OrderedPair</span>
+  <span class="n">x</span><span class="o">::</span><span class="kt">Real</span>
+  <span class="n">y</span><span class="o">::</span><span class="kt">Real</span>
 
-  <span class="n">OrderedPair</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="n">y</span> <span class="o">?</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;out of order&quot;</span><span class="p">)</span> <span class="p">:</span> <span class="nb">new</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+  <span class="n">OrderedPair</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="n">y</span> <span class="o">?</span> <span class="n">error</span><span class="p">(</span><span class="s">&quot;out of order&quot;</span><span class="p">)</span> <span class="o">:</span> <span class="n">new</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -604,8 +604,8 @@ not greater than the second one. One could declare it like this:</p>
 <span class="n">OrderedPair</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">OrderedPair</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">out</span> <span class="n">of</span> <span class="n">order</span>
- <span class="k">in</span> <span class="n">OrderedPair</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">5</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">out</span> <span class="n">of</span> <span class="n">order</span>
+ <span class="kp">in</span> <span class="n">OrderedPair</span> <span class="n">at</span> <span class="n">none</span><span class="o">:</span><span class="mi">5</span>
 </pre></div>
 </div>
 <p>You can still reach in and directly change the field values to violate
@@ -629,11 +629,11 @@ equivalent to writing your own inner constructor method that takes all
 of the object&#8217;s fields as parameters (constrained to be of the correct
 type, if the corresponding field has a type), and passes them to
 <tt class="docutils literal"><span class="pre">new</span></tt>, returning the resulting object:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Foo</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">Foo</span>
   <span class="n">bar</span>
   <span class="n">baz</span>
 
-  <span class="n">Foo</span><span class="p">(</span><span class="n">bar</span><span class="p">,</span><span class="n">baz</span><span class="p">)</span> <span class="o">=</span> <span class="nb">new</span><span class="p">(</span><span class="n">bar</span><span class="p">,</span><span class="n">baz</span><span class="p">)</span>
+  <span class="n">Foo</span><span class="p">(</span><span class="n">bar</span><span class="p">,</span><span class="n">baz</span><span class="p">)</span> <span class="o">=</span> <span class="n">new</span><span class="p">(</span><span class="n">bar</span><span class="p">,</span><span class="n">baz</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -641,13 +641,13 @@ type, if the corresponding field has a type), and passes them to
 <tt class="docutils literal"><span class="pre">Foo</span></tt> type without an explicit inner constructor method. The following
 two types are equivalent —&nbsp;one with a default constructor, the other
 with an explicit constructor:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> T1</span>
-  <span class="n">x</span><span class="p">::</span><span class="kt">Int64</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">T1</span>
+  <span class="n">x</span><span class="o">::</span><span class="kt">Int64</span>
 <span class="k">end</span>
 
-<span class="k">type</span><span class="nc"> T2</span>
-  <span class="n">x</span><span class="p">::</span><span class="kt">Int64</span>
-  <span class="n">T2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="nb">new</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="k">type</span> <span class="n">T2</span>
+  <span class="n">x</span><span class="o">::</span><span class="kt">Int64</span>
+  <span class="n">T2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">new</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 <span class="k">end</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">T1</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
@@ -677,8 +677,8 @@ quite natural.</p>
 self-referential objects, or more generally, recursive data structures.
 Since the fundamental difficulty may not be immediately obvious, let us
 briefly explain it. Consider the following recursive type declaration:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> SelfReferential</span>
-  <span class="n">obj</span><span class="p">::</span><span class="n">SelfReferential</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">SelfReferential</span>
+  <span class="n">obj</span><span class="o">::</span><span class="n">SelfReferential</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -702,10 +702,10 @@ incomplete object, finishing its initialization before returning it.
 Here, for example, we take another crack at defining the
 <tt class="docutils literal"><span class="pre">SelfReferential</span></tt> type, with a zero-argument inner constructor
 returning instances having <tt class="docutils literal"><span class="pre">obj</span></tt> fields pointing to themselves:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> SelfReferential</span>
-  <span class="n">obj</span><span class="p">::</span><span class="n">SelfReferential</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">SelfReferential</span>
+  <span class="n">obj</span><span class="o">::</span><span class="n">SelfReferential</span>
 
-  <span class="n">SelfReferential</span><span class="p">()</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="nb">new</span><span class="p">();</span> <span class="n">x</span><span class="o">.</span><span class="n">obj</span> <span class="o">=</span> <span class="n">x</span><span class="p">)</span>
+  <span class="n">SelfReferential</span><span class="p">()</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="n">new</span><span class="p">();</span> <span class="n">x</span><span class="o">.</span><span class="n">obj</span> <span class="o">=</span> <span class="n">x</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -713,22 +713,22 @@ returning instances having <tt class="docutils literal"><span class="pre">obj</s
 are, in fact, self-referential:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="n">SelfReferential</span><span class="p">();</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">is</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">is</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">is</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">obj</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">is</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">obj</span><span class="p">)</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">is</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">obj</span><span class="o">.</span><span class="n">obj</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">is</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">obj</span><span class="o">.</span><span class="n">obj</span><span class="p">)</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>Although it is generally a good idea to return a fully initialized
 object from an inner constructor, incompletely initialized objects can
 be returned:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span><span class="nc"> Incomplete</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span> <span class="n">Incomplete</span>
          <span class="n">xx</span>
-         <span class="n">Incomplete</span><span class="p">()</span> <span class="o">=</span> <span class="nb">new</span><span class="p">()</span>
+         <span class="n">Incomplete</span><span class="p">()</span> <span class="o">=</span> <span class="n">new</span><span class="p">()</span>
        <span class="k">end</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">z</span> <span class="o">=</span> <span class="n">Incomplete</span><span class="p">();</span>
@@ -737,7 +737,7 @@ be returned:</p>
 <p>While you are allowed to create objects with uninitialized fields, any
 access to an uninitialized reference is an immediate error:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">z</span><span class="o">.</span><span class="n">xx</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">access</span> <span class="n">to</span> <span class="n">undefined</span> <span class="n">reference</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">access</span> <span class="n">to</span> <span class="n">undefined</span> <span class="n">reference</span>
 </pre></div>
 </div>
 <p>This avoids the need to continually check for <tt class="docutils literal"><span class="pre">null</span></tt> values.
@@ -746,9 +746,9 @@ types to be &#8220;plain data&#8221;, meaning all of their data is self-containe
 and does not reference other objects. The plain data types consist of bits
 types (e.g. <tt class="docutils literal"><span class="pre">Int</span></tt>) and immutable structs of other plain data types.
 The initial contents of a plain data type are undefined:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span><span class="nc"> HasPlain</span>
-         <span class="n">n</span><span class="p">::</span><span class="kt">Int</span>
-         <span class="n">HasPlain</span><span class="p">()</span> <span class="o">=</span> <span class="nb">new</span><span class="p">()</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span> <span class="n">HasPlain</span>
+         <span class="n">n</span><span class="o">::</span><span class="kt">Int</span>
+         <span class="n">HasPlain</span><span class="p">()</span> <span class="o">=</span> <span class="n">new</span><span class="p">()</span>
        <span class="k">end</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">HasPlain</span><span class="p">()</span>
@@ -758,10 +758,10 @@ The initial contents of a plain data type are undefined:</p>
 <p>Arrays of plain data types exhibit the same behavior.</p>
 <p>You can pass incomplete objects to other functions from inner constructors to
 delegate their completion:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Lazy</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">Lazy</span>
   <span class="n">xx</span>
 
-  <span class="n">Lazy</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">=</span> <span class="n">complete_me</span><span class="p">(</span><span class="nb">new</span><span class="p">(),</span> <span class="n">v</span><span class="p">)</span>
+  <span class="n">Lazy</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">=</span> <span class="n">complete_me</span><span class="p">(</span><span class="n">new</span><span class="p">(),</span> <span class="n">v</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -777,9 +777,9 @@ from <a class="reference internal" href="../types/#man-parametric-types"><em>Par
 instances of parametric composite types can be constructed either with
 explicitly given type parameters or with type parameters implied by the
 types of the arguments given to the constructor. Here are some examples:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span><span class="nc"> Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}</span>
-         <span class="n">x</span><span class="p">::</span><span class="n">T</span>
-         <span class="n">y</span><span class="p">::</span><span class="n">T</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Real</span><span class="p">}</span>
+         <span class="n">x</span><span class="o">::</span><span class="n">T</span>
+         <span class="n">y</span><span class="o">::</span><span class="n">T</span>
        <span class="k">end</span>
 
 <span class="c">## implicit T ##</span>
@@ -791,7 +791,7 @@ types of the arguments given to the constructor. Here are some examples:</p>
 <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="sb">`Point{T&lt;:Real}`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}(::</span><span class="kt">Int64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Float64</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="sb">`Point{T&lt;:Real}`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Real</span><span class="p">}(</span><span class="o">::</span><span class="kt">Int64</span><span class="p">,</span> <span class="o">::</span><span class="kt">Float64</span><span class="p">)</span>
 
 <span class="c">## explicit T ##</span>
 
@@ -799,8 +799,8 @@ types of the arguments given to the constructor. Here are some examples:</p>
 <span class="n">Point</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
- <span class="k">in</span> <span class="n">Point</span> <span class="n">at</span> <span class="n">no</span> <span class="n">file</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">InexactError</span><span class="p">()</span>
+ <span class="kp">in</span> <span class="n">Point</span> <span class="n">at</span> <span class="n">no</span> <span class="n">file</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
 <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
@@ -829,14 +829,14 @@ provides a single general outer <tt class="docutils literal"><span class="pre">P
 of real arguments, which must be of the same type. This automatic
 provision of constructors is equivalent to the following explicit
 declaration:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}</span>
-  <span class="n">x</span><span class="p">::</span><span class="n">T</span>
-  <span class="n">y</span><span class="p">::</span><span class="n">T</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Real</span><span class="p">}</span>
+  <span class="n">x</span><span class="o">::</span><span class="n">T</span>
+  <span class="n">y</span><span class="o">::</span><span class="n">T</span>
 
-  <span class="n">Point</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span> <span class="o">=</span> <span class="nb">new</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+  <span class="n">Point</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span> <span class="o">=</span> <span class="n">new</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
 <span class="k">end</span>
 
-<span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}(</span><span class="n">x</span><span class="p">::</span><span class="n">T</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">T</span><span class="p">)</span> <span class="o">=</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Real</span><span class="p">}(</span><span class="n">x</span><span class="o">::</span><span class="n">T</span><span class="p">,</span> <span class="n">y</span><span class="o">::</span><span class="n">T</span><span class="p">)</span> <span class="o">=</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Some features of parametric constructor definitions at work here deserve
@@ -860,7 +860,7 @@ method&#8221; errors.</p>
 &#8220;promoting&#8221; the integer value <tt class="docutils literal"><span class="pre">1</span></tt> to the floating-point value <tt class="docutils literal"><span class="pre">1.0</span></tt>.
 The simplest way to achieve this is to define the following additional
 outer constructor method:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="kt">Int64</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="kt">Float64</span><span class="p">)</span> <span class="o">=</span> <span class="n">Point</span><span class="p">(</span><span class="nb">convert</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="n">x</span><span class="p">),</span><span class="n">y</span><span class="p">);</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Int64</span><span class="p">,</span> <span class="n">y</span><span class="o">::</span><span class="kt">Float64</span><span class="p">)</span> <span class="o">=</span> <span class="n">Point</span><span class="p">(</span><span class="n">convert</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="n">x</span><span class="p">),</span><span class="n">y</span><span class="p">);</span>
 </pre></div>
 </div>
 <p>This method uses the <a class="reference internal" href="../../stdlib/base/#Base.convert" title="Base.convert"><tt class="xref jl jl-func docutils literal"><span class="pre">convert()</span></tt></a> function to explicitly convert <tt class="docutils literal"><span class="pre">x</span></tt> to
@@ -871,13 +871,13 @@ creates a point of type <tt class="docutils literal"><span class="pre">Point{Flo
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
 <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
 <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>However, other similar calls still don&#8217;t work:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mf">1.5</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="sb">`Point{T&lt;:Real}`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}(::</span><span class="kt">Float64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Int64</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="sb">`Point{T&lt;:Real}`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Real</span><span class="p">}(</span><span class="o">::</span><span class="kt">Float64</span><span class="p">,</span> <span class="o">::</span><span class="kt">Int64</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>For a much more general way of making all such calls work sensibly, see
@@ -885,7 +885,7 @@ creates a point of type <tt class="docutils literal"><span class="pre">Point{Flo
 of spoiling the suspense, we can reveal here that all it takes is
 the following outer method definition to make all calls to the general
 <tt class="docutils literal"><span class="pre">Point</span></tt> constructor work as one would expect:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Real</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">Real</span><span class="p">)</span> <span class="o">=</span> <span class="n">Point</span><span class="p">(</span><span class="nb">promote</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span><span class="o">...</span><span class="p">);</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Real</span><span class="p">,</span> <span class="n">y</span><span class="o">::</span><span class="kt">Real</span><span class="p">)</span> <span class="o">=</span> <span class="n">Point</span><span class="p">(</span><span class="n">promote</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span><span class="o">...</span><span class="p">);</span>
 </pre></div>
 </div>
 <p>The <tt class="docutils literal"><span class="pre">promote</span></tt> function converts all its arguments to a common type
@@ -896,7 +896,7 @@ like <a class="reference internal" href="../../stdlib/math/#Base.+" title="Base.
 <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.5</span><span class="p">,</span><span class="mf">2.0</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">//</span><span class="mi">2</span><span class="p">)</span>
-<span class="n">Point</span><span class="p">{</span><span class="n">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}}(</span><span class="mi">1</span><span class="o">//</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">//</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}}(</span><span class="mi">1</span><span class="o">//</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">//</span><span class="mi">2</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span><span class="mi">1</span><span class="o">//</span><span class="mi">2</span><span class="p">)</span>
 <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">0.5</span><span class="p">)</span>
@@ -915,31 +915,31 @@ real world example of a parametric composite type and its constructor
 methods. To that end, here is beginning of
 <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/base/rational.jl">rational.jl</a>,
 which implements Julia&#8217;s <a class="reference internal" href="../complex-and-rational-numbers/#man-rational-numbers"><em>Rational Numbers</em></a>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="n">Rational</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Integer</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Real</span>
-    <span class="n">num</span><span class="p">::</span><span class="n">T</span>
-    <span class="n">den</span><span class="p">::</span><span class="n">T</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="kt">Rational</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Integer</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">Real</span>
+    <span class="n">num</span><span class="o">::</span><span class="n">T</span>
+    <span class="n">den</span><span class="o">::</span><span class="n">T</span>
 
-    <span class="k">function</span><span class="nf"> Rational</span><span class="p">(</span><span class="n">num</span><span class="p">::</span><span class="n">T</span><span class="p">,</span> <span class="n">den</span><span class="p">::</span><span class="n">T</span><span class="p">)</span>
+    <span class="k">function</span> <span class="kt">Rational</span><span class="p">(</span><span class="n">num</span><span class="o">::</span><span class="n">T</span><span class="p">,</span> <span class="n">den</span><span class="o">::</span><span class="n">T</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">num</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="n">den</span> <span class="o">==</span> <span class="mi">0</span>
-            <span class="nb">error</span><span class="p">(</span><span class="s">&quot;invalid rational: 0//0&quot;</span><span class="p">)</span>
+            <span class="n">error</span><span class="p">(</span><span class="s">&quot;invalid rational: 0//0&quot;</span><span class="p">)</span>
         <span class="k">end</span>
         <span class="n">g</span> <span class="o">=</span> <span class="n">gcd</span><span class="p">(</span><span class="n">den</span><span class="p">,</span> <span class="n">num</span><span class="p">)</span>
         <span class="n">num</span> <span class="o">=</span> <span class="n">div</span><span class="p">(</span><span class="n">num</span><span class="p">,</span> <span class="n">g</span><span class="p">)</span>
         <span class="n">den</span> <span class="o">=</span> <span class="n">div</span><span class="p">(</span><span class="n">den</span><span class="p">,</span> <span class="n">g</span><span class="p">)</span>
-        <span class="nb">new</span><span class="p">(</span><span class="n">num</span><span class="p">,</span> <span class="n">den</span><span class="p">)</span>
+        <span class="n">new</span><span class="p">(</span><span class="n">num</span><span class="p">,</span> <span class="n">den</span><span class="p">)</span>
     <span class="k">end</span>
 <span class="k">end</span>
-<span class="n">Rational</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Integer</span><span class="p">}(</span><span class="n">n</span><span class="p">::</span><span class="n">T</span><span class="p">,</span> <span class="n">d</span><span class="p">::</span><span class="n">T</span><span class="p">)</span> <span class="o">=</span> <span class="n">Rational</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">n</span><span class="p">,</span><span class="n">d</span><span class="p">)</span>
-<span class="n">Rational</span><span class="p">(</span><span class="n">n</span><span class="p">::</span><span class="n">Integer</span><span class="p">,</span> <span class="n">d</span><span class="p">::</span><span class="n">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">Rational</span><span class="p">(</span><span class="nb">promote</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="n">d</span><span class="p">)</span><span class="o">...</span><span class="p">)</span>
-<span class="n">Rational</span><span class="p">(</span><span class="n">n</span><span class="p">::</span><span class="n">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">Rational</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="n">one</span><span class="p">(</span><span class="n">n</span><span class="p">))</span>
+<span class="kt">Rational</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Integer</span><span class="p">}(</span><span class="n">n</span><span class="o">::</span><span class="n">T</span><span class="p">,</span> <span class="n">d</span><span class="o">::</span><span class="n">T</span><span class="p">)</span> <span class="o">=</span> <span class="kt">Rational</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">n</span><span class="p">,</span><span class="n">d</span><span class="p">)</span>
+<span class="kt">Rational</span><span class="p">(</span><span class="n">n</span><span class="o">::</span><span class="kt">Integer</span><span class="p">,</span> <span class="n">d</span><span class="o">::</span><span class="kt">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="kt">Rational</span><span class="p">(</span><span class="n">promote</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="n">d</span><span class="p">)</span><span class="o">...</span><span class="p">)</span>
+<span class="kt">Rational</span><span class="p">(</span><span class="n">n</span><span class="o">::</span><span class="kt">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="kt">Rational</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="n">one</span><span class="p">(</span><span class="n">n</span><span class="p">))</span>
 
-<span class="o">//</span><span class="p">(</span><span class="n">n</span><span class="p">::</span><span class="n">Integer</span><span class="p">,</span> <span class="n">d</span><span class="p">::</span><span class="n">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">Rational</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="n">d</span><span class="p">)</span>
-<span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Rational</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">num</span> <span class="o">//</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">den</span><span class="o">*</span><span class="n">y</span><span class="p">)</span>
-<span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Integer</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">Rational</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span><span class="o">*</span><span class="n">y</span><span class="o">.</span><span class="n">den</span><span class="p">)</span> <span class="o">//</span> <span class="n">y</span><span class="o">.</span><span class="n">num</span>
-<span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Complex</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">Real</span><span class="p">)</span> <span class="o">=</span> <span class="n">complex</span><span class="p">(</span><span class="n">real</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">//</span><span class="n">y</span><span class="p">,</span> <span class="n">imag</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">//</span><span class="n">y</span><span class="p">)</span>
-<span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Real</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">Complex</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span><span class="o">*</span><span class="n">y</span><span class="o">&#39;//</span><span class="n">real</span><span class="p">(</span><span class="n">y</span><span class="o">*</span><span class="n">y</span><span class="o">&#39;</span><span class="p">)</span>
+<span class="o">//</span><span class="p">(</span><span class="n">n</span><span class="o">::</span><span class="kt">Integer</span><span class="p">,</span> <span class="n">d</span><span class="o">::</span><span class="kt">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="kt">Rational</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="n">d</span><span class="p">)</span>
+<span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Rational</span><span class="p">,</span> <span class="n">y</span><span class="o">::</span><span class="kt">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">num</span> <span class="o">//</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">den</span><span class="o">*</span><span class="n">y</span><span class="p">)</span>
+<span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Integer</span><span class="p">,</span> <span class="n">y</span><span class="o">::</span><span class="kt">Rational</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span><span class="o">*</span><span class="n">y</span><span class="o">.</span><span class="n">den</span><span class="p">)</span> <span class="o">//</span> <span class="n">y</span><span class="o">.</span><span class="n">num</span>
+<span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Complex</span><span class="p">,</span> <span class="n">y</span><span class="o">::</span><span class="kt">Real</span><span class="p">)</span> <span class="o">=</span> <span class="n">complex</span><span class="p">(</span><span class="n">real</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">//</span><span class="n">y</span><span class="p">,</span> <span class="n">imag</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">//</span><span class="n">y</span><span class="p">)</span>
+<span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Real</span><span class="p">,</span> <span class="n">y</span><span class="o">::</span><span class="kt">Complex</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span><span class="o">*</span><span class="n">y</span><span class="o">&#39;//</span><span class="n">real</span><span class="p">(</span><span class="n">y</span><span class="o">*</span><span class="n">y</span><span class="o">&#39;</span><span class="p">)</span>
 
-<span class="k">function</span><span class="nf"> </span><span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Complex</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">Complex</span><span class="p">)</span>
+<span class="k">function</span> <span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Complex</span><span class="p">,</span> <span class="n">y</span><span class="o">::</span><span class="kt">Complex</span><span class="p">)</span>
     <span class="n">xy</span> <span class="o">=</span> <span class="n">x</span><span class="o">*</span><span class="n">y</span><span class="o">&#39;</span>
     <span class="n">yy</span> <span class="o">=</span> <span class="n">real</span><span class="p">(</span><span class="n">y</span><span class="o">*</span><span class="n">y</span><span class="o">&#39;</span><span class="p">)</span>
     <span class="n">complex</span><span class="p">(</span><span class="n">real</span><span class="p">(</span><span class="n">xy</span><span class="p">)</span><span class="o">//</span><span class="n">yy</span><span class="p">,</span> <span class="n">imag</span><span class="p">(</span><span class="n">xy</span><span class="p">)</span><span class="o">//</span><span class="n">yy</span><span class="p">)</span>
@@ -989,11 +989,11 @@ whose real and imaginary parts are rationals:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="nb">im</span><span class="p">)</span><span class="o">//</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="mi">2</span><span class="nb">im</span><span class="p">)</span>
 <span class="o">-</span><span class="mi">3</span><span class="o">//</span><span class="mi">5</span> <span class="o">+</span> <span class="mi">4</span><span class="o">//</span><span class="mi">5</span><span class="o">*</span><span class="nb">im</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
-<span class="n">Complex</span><span class="p">{</span><span class="n">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}}</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="kt">Complex</span><span class="p">{</span><span class="kt">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}}</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ans</span> <span class="o">&lt;:</span> <span class="n">Complex</span><span class="p">{</span><span class="n">Rational</span><span class="p">}</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ans</span> <span class="o">&lt;:</span> <span class="kt">Complex</span><span class="p">{</span><span class="kt">Rational</span><span class="p">}</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>Thus, although the <a class="reference internal" href="../../stdlib/math/#Base.//" title="Base.//"><tt class="xref jl jl-obj docutils literal"><span class="pre">//</span></tt></a> operator usually returns an instance of

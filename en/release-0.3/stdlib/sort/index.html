@@ -499,15 +499,15 @@ already-sorted arrays of values. For many users, sorting in standard
 ascending order, letting Julia pick reasonable default algorithms
 will be sufficient:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
 </pre></div>
 </div>
 <p>You can easily sort in reverse order as well:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span> <span class="n">rev</span><span class="o">=</span><span class="n">true</span><span class="p">)</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span> <span class="n">rev</span><span class="o">=</span><span class="kc">true</span><span class="p">)</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">3</span>
  <span class="mi">2</span>
  <span class="mi">1</span>
@@ -519,7 +519,7 @@ will be sufficient:</p>
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort!</span><span class="p">(</span><span class="n">a</span><span class="p">);</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
@@ -527,7 +527,7 @@ will be sufficient:</p>
 </div>
 <p>Instead of directly sorting an array, you can compute a permutation of the array&#8217;s indices that puts the array into sorted order:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">v</span> <span class="o">=</span> <span class="n">randn</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
   <span class="mf">0.297288</span>
   <span class="mf">0.382396</span>
  <span class="o">-</span><span class="mf">0.597634</span>
@@ -535,7 +535,7 @@ will be sufficient:</p>
  <span class="o">-</span><span class="mf">0.839027</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">p</span> <span class="o">=</span> <span class="n">sortperm</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">5</span>
  <span class="mi">3</span>
  <span class="mi">4</span>
@@ -543,7 +543,7 @@ will be sufficient:</p>
  <span class="mi">2</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">v</span><span class="p">[</span><span class="n">p</span><span class="p">]</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="o">-</span><span class="mf">0.839027</span>
  <span class="o">-</span><span class="mf">0.597634</span>
  <span class="o">-</span><span class="mf">0.0104452</span>
@@ -553,7 +553,7 @@ will be sufficient:</p>
 </div>
 <p>Arrays can easily be sorted acording to an arbitrary transformation of their values:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">by</span><span class="o">=</span><span class="n">abs</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="o">-</span><span class="mf">0.0104452</span>
   <span class="mf">0.297288</span>
   <span class="mf">0.382396</span>
@@ -562,8 +562,8 @@ will be sufficient:</p>
 </pre></div>
 </div>
 <p>Or in reverse order by a transformation:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">by</span><span class="o">=</span><span class="n">abs</span><span class="p">,</span> <span class="n">rev</span><span class="o">=</span><span class="n">true</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">by</span><span class="o">=</span><span class="n">abs</span><span class="p">,</span> <span class="n">rev</span><span class="o">=</span><span class="kc">true</span><span class="p">)</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="o">-</span><span class="mf">0.839027</span>
  <span class="o">-</span><span class="mf">0.597634</span>
   <span class="mf">0.382396</span>
@@ -573,8 +573,8 @@ will be sufficient:</p>
 </div>
 <p>Reasonable sorting algorithms are used by default, but you can choose
 other algorithms as well:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">alg</span><span class="o">=</span><span class="n">InsertionSort</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">alg</span><span class="o">=</span><span class="nb">InsertionSort</span><span class="p">)</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="o">-</span><span class="mf">0.839027</span>
  <span class="o">-</span><span class="mf">0.597634</span>
  <span class="o">-</span><span class="mf">0.0104452</span>

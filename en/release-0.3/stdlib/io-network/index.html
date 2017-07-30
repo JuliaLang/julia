@@ -1452,7 +1452,7 @@ as the way an object is printed in the Julia REPL.)</p>
 <p>For example, the following code:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># Create a file for mmapping</span>
 <span class="c"># (you could alternatively use mmap_array to do this step, too)</span>
-<span class="n">A</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">20</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">20</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span>
 <span class="n">s</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="s">&quot;/tmp/mmap.bin&quot;</span><span class="p">,</span> <span class="s">&quot;w+&quot;</span><span class="p">)</span>
 <span class="c"># We&#39;ll write the dimensions of the array as the first two Ints in the file</span>
 <span class="n">write</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span>

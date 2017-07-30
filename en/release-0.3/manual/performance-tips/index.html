@@ -512,7 +512,7 @@ as such greatly improves performance:</p>
 <p>Uses of non-constant globals can be optimized by annotating their types
 at the point of use:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kd">global</span> <span class="n">x</span>
-<span class="n">y</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="kt">Int</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Int</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Writing functions is better style. It leads to more reusable code and
@@ -534,21 +534,21 @@ defined and assigned at toplevel will be a <strong>global</strong> variable.</p>
 <h2>Measure performance with <a class="reference internal" href="../../stdlib/base/#Base.&#64;time" title="Base.&#64;time"><tt class="xref jl jl-obj docutils literal"><span class="pre">&#64;time</span></tt></a> and pay attention to memory allocation<a class="headerlink" href="#measure-performance-with-time-and-pay-attention-to-memory-allocation" title="Permalink to this headline">¶</a></h2>
 <p>The most useful tool for measuring performance is the <a class="reference internal" href="../../stdlib/base/#Base.&#64;time" title="Base.&#64;time"><tt class="xref jl jl-obj docutils literal"><span class="pre">&#64;time</span></tt></a> macro.
 The following example illustrates good working style:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> f</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">f</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
            <span class="n">s</span> <span class="o">=</span> <span class="mi">0</span>
-           <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">n</span>
+           <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">n</span>
                <span class="n">s</span> <span class="o">+=</span> <span class="n">i</span><span class="o">/</span><span class="mi">2</span>
            <span class="k">end</span>
            <span class="n">s</span>
        <span class="k">end</span>
-<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">time</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">elapsed</span> <span class="n">time</span><span class="p">:</span> <span class="mf">0.008217942</span> <span class="n">seconds</span> <span class="p">(</span><span class="mi">93784</span> <span class="n">bytes</span> <span class="n">allocated</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@time</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">elapsed</span> <span class="n">time</span><span class="o">:</span> <span class="mf">0.008217942</span> <span class="n">seconds</span> <span class="p">(</span><span class="mi">93784</span> <span class="n">bytes</span> <span class="n">allocated</span><span class="p">)</span>
 <span class="mf">0.5</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">time</span> <span class="n">f</span><span class="p">(</span><span class="mi">10</span><span class="o">^</span><span class="mi">6</span><span class="p">)</span>
-<span class="n">elapsed</span> <span class="n">time</span><span class="p">:</span> <span class="mf">0.063418472</span> <span class="n">seconds</span> <span class="p">(</span><span class="mi">32002136</span> <span class="n">bytes</span> <span class="n">allocated</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@time</span> <span class="n">f</span><span class="p">(</span><span class="mi">10</span><span class="o">^</span><span class="mi">6</span><span class="p">)</span>
+<span class="n">elapsed</span> <span class="n">time</span><span class="o">:</span> <span class="mf">0.063418472</span> <span class="n">seconds</span> <span class="p">(</span><span class="mi">32002136</span> <span class="n">bytes</span> <span class="n">allocated</span><span class="p">)</span>
 <span class="mf">2.5000025e11</span>
 </pre></div>
 </div>
@@ -567,8 +567,8 @@ seriously and follow the advice below.</p>
 <p>As a teaser, note that an improved version of this function allocates
 no memory (except to pass back the result back to the REPL) and has
 thirty-fold faster execution:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">time</span> <span class="n">f_improved</span><span class="p">(</span><span class="mi">10</span><span class="o">^</span><span class="mi">6</span><span class="p">)</span>
-<span class="n">elapsed</span> <span class="n">time</span><span class="p">:</span> <span class="mf">0.00253829</span> <span class="n">seconds</span> <span class="p">(</span><span class="mi">112</span> <span class="n">bytes</span> <span class="n">allocated</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@time</span> <span class="n">f_improved</span><span class="p">(</span><span class="mi">10</span><span class="o">^</span><span class="mi">6</span><span class="p">)</span>
+<span class="n">elapsed</span> <span class="n">time</span><span class="o">:</span> <span class="mf">0.00253829</span> <span class="n">seconds</span> <span class="p">(</span><span class="mi">112</span> <span class="n">bytes</span> <span class="n">allocated</span><span class="p">)</span>
 <span class="mf">2.5000025e11</span>
 </pre></div>
 </div>
@@ -611,7 +611,7 @@ warn you of certain types of programming errors.</li>
 <p>When working with parameterized types, including arrays, it is best to
 avoid parameterizing with abstract types where possible.</p>
 <p>Consider the following:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">Real</span><span class="p">[]</span>    <span class="c"># typeof(a) = Array{Real,1}</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="kt">Real</span><span class="p">[]</span>    <span class="c"># typeof(a) = Array{Real,1}</span>
 <span class="k">if</span> <span class="p">(</span><span class="n">f</span> <span class="o">=</span> <span class="n">rand</span><span class="p">())</span> <span class="o">&lt;</span> <span class="o">.</span><span class="mi">8</span>
     <span class="n">push!</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
 <span class="k">end</span>
@@ -640,7 +640,7 @@ helpful.</p>
 <div class="section" id="declare-specific-types-for-fields-of-composite-types">
 <h3>Declare specific types for fields of composite types<a class="headerlink" href="#declare-specific-types-for-fields-of-composite-types" title="Permalink to this headline">¶</a></h3>
 <p>Given a user-defined type like the following:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Foo</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">Foo</span>
     <span class="n">field</span>
 <span class="k">end</span>
 </pre></div>
@@ -657,8 +657,8 @@ values of any type, such as the original <tt class="docutils literal"><span clas
 arrays (arrays of type <tt class="docutils literal"><span class="pre">Array{Any}</span></tt>). But, if you&#8217;re using one of
 these structures and happen to know the type of an element, it helps to
 share this knowledge with the compiler:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> foo</span><span class="p">(</span><span class="n">a</span><span class="p">::</span><span class="n">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">,</span><span class="mi">1</span><span class="p">})</span>
-    <span class="n">x</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="mi">1</span><span class="p">]::</span><span class="kt">Int32</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">foo</span><span class="p">(</span><span class="n">a</span><span class="o">::</span><span class="kt">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">,</span><span class="mi">1</span><span class="p">})</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">::</span><span class="kt">Int32</span>
     <span class="n">b</span> <span class="o">=</span> <span class="n">x</span><span class="o">+</span><span class="mi">1</span>
     <span class="o">...</span>
 <span class="k">end</span>
@@ -672,7 +672,7 @@ potentially catching certain bugs earlier.</p>
 <div class="section" id="declare-types-of-keyword-arguments">
 <h3>Declare types of keyword arguments<a class="headerlink" href="#declare-types-of-keyword-arguments" title="Permalink to this headline">¶</a></h3>
 <p>Keyword arguments can have declared types:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> with_keyword</span><span class="p">(</span><span class="n">x</span><span class="p">;</span> <span class="n">name</span><span class="p">::</span><span class="kt">Int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">with_keyword</span><span class="p">(</span><span class="n">x</span><span class="p">;</span> <span class="n">name</span><span class="o">::</span><span class="kt">Int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
     <span class="o">...</span>
 <span class="k">end</span>
 </pre></div>
@@ -693,20 +693,20 @@ can be slow and should be avoided in performance-sensitive code.</p>
 directly call the most applicable code, or even inline it.</p>
 <p>Here is an example of a &#8220;compound function&#8221; that should really be
 written as multiple definitions:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> norm</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
-    <span class="k">if</span> <span class="nb">isa</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">Vector</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">norm</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">isa</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="kt">Vector</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">real</span><span class="p">(</span><span class="n">dot</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="n">A</span><span class="p">)))</span>
-    <span class="k">elseif</span> <span class="nb">isa</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">)</span>
+    <span class="k">elseif</span> <span class="n">isa</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="kt">Matrix</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">max</span><span class="p">(</span><span class="n">svd</span><span class="p">(</span><span class="n">A</span><span class="p">)[</span><span class="mi">2</span><span class="p">])</span>
     <span class="k">else</span>
-        <span class="nb">error</span><span class="p">(</span><span class="s">&quot;norm: invalid argument&quot;</span><span class="p">)</span>
+        <span class="n">error</span><span class="p">(</span><span class="s">&quot;norm: invalid argument&quot;</span><span class="p">)</span>
     <span class="k">end</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>This can be written more concisely and efficiently as:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">norm</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Vector</span><span class="p">)</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">real</span><span class="p">(</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">x</span><span class="p">)))</span>
-<span class="n">norm</span><span class="p">(</span><span class="n">A</span><span class="p">::</span><span class="n">Matrix</span><span class="p">)</span> <span class="o">=</span> <span class="n">max</span><span class="p">(</span><span class="n">svd</span><span class="p">(</span><span class="n">A</span><span class="p">)[</span><span class="mi">2</span><span class="p">])</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">norm</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Vector</span><span class="p">)</span> <span class="o">=</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">real</span><span class="p">(</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">x</span><span class="p">)))</span>
+<span class="n">norm</span><span class="p">(</span><span class="n">A</span><span class="o">::</span><span class="kt">Matrix</span><span class="p">)</span> <span class="o">=</span> <span class="n">max</span><span class="p">(</span><span class="n">svd</span><span class="p">(</span><span class="n">A</span><span class="p">)[</span><span class="mi">2</span><span class="p">])</span>
 </pre></div>
 </div>
 </div>
@@ -714,7 +714,7 @@ written as multiple definitions:</p>
 <h2>Write &#8220;type-stable&#8221; functions<a class="headerlink" href="#write-type-stable-functions" title="Permalink to this headline">¶</a></h2>
 <p>When possible, it helps to ensure that a function always returns a value
 of the same type. Consider the following definition:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">pos</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="o">?</span> <span class="mi">0</span> <span class="p">:</span> <span class="n">x</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">pos</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="o">?</span> <span class="mi">0</span> <span class="o">:</span> <span class="n">x</span>
 </pre></div>
 </div>
 <p>Although this seems innocent enough, the problem is that <tt class="docutils literal"><span class="pre">0</span></tt> is an
@@ -722,7 +722,7 @@ integer (of type <tt class="xref jl jl-class docutils literal"><span class="pre"
 depending on the value of <tt class="docutils literal"><span class="pre">x</span></tt>, this function might return a value of
 either of two types. This behavior is allowed, and may be desirable in
 some cases. But it can easily be fixed as follows:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">pos</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="o">?</span> <span class="n">zero</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="p">:</span> <span class="n">x</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">pos</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="o">?</span> <span class="n">zero</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">:</span> <span class="n">x</span>
 </pre></div>
 </div>
 <p>There is also a <a class="reference internal" href="../../stdlib/numbers/#Base.one" title="Base.one"><tt class="xref jl jl-func docutils literal"><span class="pre">one()</span></tt></a> function, and a more general <a class="reference internal" href="../../stdlib/base/#Base.oftype" title="Base.oftype"><tt class="xref jl jl-func docutils literal"><span class="pre">oftype(x,y)</span></tt></a>
@@ -733,9 +733,9 @@ argument to any of these functions can be either a value or a type.</p>
 <h2>Avoid changing the type of a variable<a class="headerlink" href="#avoid-changing-the-type-of-a-variable" title="Permalink to this headline">¶</a></h2>
 <p>An analogous &#8220;type-stability&#8221; problem exists for variables used
 repeatedly within a function:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> foo</span><span class="p">()</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">foo</span><span class="p">()</span>
     <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">10</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">10</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">/</span><span class="n">bar</span><span class="p">()</span>
     <span class="k">end</span>
     <span class="k">return</span> <span class="n">x</span>
@@ -759,9 +759,9 @@ running many iterations to perform a core computation. Where possible,
 it is a good idea to put these core computations in separate functions.
 For example, the following contrived function returns an array of a
 randomly-chosen type:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> strange_twos</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
-    <span class="n">a</span> <span class="o">=</span> <span class="n">Array</span><span class="p">(</span><span class="n">randbool</span><span class="p">()</span> <span class="o">?</span> <span class="kt">Int64</span> <span class="p">:</span> <span class="kt">Float64</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">n</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">strange_twos</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">(</span><span class="n">randbool</span><span class="p">()</span> <span class="o">?</span> <span class="kt">Int64</span> <span class="o">:</span> <span class="kt">Float64</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">n</span>
         <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>
     <span class="k">end</span>
     <span class="k">return</span> <span class="n">a</span>
@@ -769,14 +769,14 @@ randomly-chosen type:</p>
 </pre></div>
 </div>
 <p>This should be written as:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> fill_twos</span><span class="o">!</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">length</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">fill_twos!</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="n">length</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
         <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>
     <span class="k">end</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> strange_twos</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
-    <span class="n">a</span> <span class="o">=</span> <span class="n">Array</span><span class="p">(</span><span class="n">randbool</span><span class="p">()</span> <span class="o">?</span> <span class="kt">Int64</span> <span class="p">:</span> <span class="kt">Float64</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">strange_twos</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">(</span><span class="n">randbool</span><span class="p">()</span> <span class="o">?</span> <span class="kt">Int64</span> <span class="o">:</span> <span class="kt">Float64</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
     <span class="n">fill_twos!</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">a</span>
 <span class="k">end</span>
@@ -805,12 +805,12 @@ means that arrays are stacked one column at a time. This can be verified
 using the <tt class="docutils literal"><span class="pre">vec</span></tt> function or the syntax <tt class="docutils literal"><span class="pre">[:]</span></tt> as shown below (notice
 that the array is ordered <tt class="docutils literal"><span class="pre">[1</span> <span class="pre">3</span> <span class="pre">2</span> <span class="pre">4]</span></tt>, not <tt class="docutils literal"><span class="pre">[1</span> <span class="pre">2</span> <span class="pre">3</span> <span class="pre">4]</span></tt>):</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span><span class="p">;</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">x2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">x2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span><span class="p">[:]</span>
-<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span><span class="p">[</span><span class="o">:</span><span class="p">]</span>
+<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">3</span>
  <span class="mi">2</span>
@@ -833,37 +833,37 @@ vector. Assume that it is not important whether rows or columns are
 filled with these copies (perhaps the rest of the code can be easily
 adapted accordingly). We could conceivably do this in at least four ways
 (in addition to the recommended call to the built-in <a class="reference internal" href="../../stdlib/linalg/#Base.repmat" title="Base.repmat"><tt class="xref jl jl-func docutils literal"><span class="pre">repmat()</span></tt></a>):</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> copy_cols</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">x</span><span class="p">::</span><span class="n">Vector</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">copy_cols</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">x</span><span class="o">::</span><span class="kt">Vector</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
     <span class="n">n</span> <span class="o">=</span> <span class="n">size</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="n">out</span> <span class="o">=</span> <span class="n">Array</span><span class="p">(</span><span class="n">eltype</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">n</span>
-        <span class="n">out</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">(</span><span class="n">eltype</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="n">n</span>
+        <span class="n">out</span><span class="p">[</span><span class="o">:</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span>
     <span class="k">end</span>
     <span class="n">out</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> copy_rows</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">x</span><span class="p">::</span><span class="n">Vector</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
+<span class="k">function</span> <span class="n">copy_rows</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">x</span><span class="o">::</span><span class="kt">Vector</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
     <span class="n">n</span> <span class="o">=</span> <span class="n">size</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="n">out</span> <span class="o">=</span> <span class="n">Array</span><span class="p">(</span><span class="n">eltype</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">n</span>
-        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">x</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">(</span><span class="n">eltype</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="n">n</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="o">:</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span>
     <span class="k">end</span>
     <span class="n">out</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> copy_col_row</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">x</span><span class="p">::</span><span class="n">Vector</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
+<span class="k">function</span> <span class="n">copy_col_row</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">x</span><span class="o">::</span><span class="kt">Vector</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
     <span class="n">n</span> <span class="o">=</span> <span class="n">size</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="n">out</span> <span class="o">=</span> <span class="n">Array</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">col</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">n</span><span class="p">,</span> <span class="n">row</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">n</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">col</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="n">n</span><span class="p">,</span> <span class="n">row</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="n">n</span>
         <span class="n">out</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">row</span><span class="p">]</span>
     <span class="k">end</span>
     <span class="n">out</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> copy_row_col</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">x</span><span class="p">::</span><span class="n">Vector</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
+<span class="k">function</span> <span class="n">copy_row_col</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">x</span><span class="o">::</span><span class="kt">Vector</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
     <span class="n">n</span> <span class="o">=</span> <span class="n">size</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="n">out</span> <span class="o">=</span> <span class="n">Array</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">row</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">n</span><span class="p">,</span> <span class="n">col</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">n</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">row</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="n">n</span><span class="p">,</span> <span class="n">col</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="n">n</span>
         <span class="n">out</span><span class="p">[</span><span class="n">row</span><span class="p">,</span> <span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">col</span><span class="p">]</span>
     <span class="k">end</span>
     <span class="n">out</span>
@@ -874,13 +874,13 @@ adapted accordingly). We could conceivably do this in at least four ways
 by <tt class="docutils literal"><span class="pre">1</span></tt> input vector:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="n">randn</span><span class="p">(</span><span class="mi">10000</span><span class="p">);</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">fmt</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">=</span> <span class="n">println</span><span class="p">(</span><span class="n">rpad</span><span class="p">(</span><span class="n">string</span><span class="p">(</span><span class="n">f</span><span class="p">)</span><span class="o">*</span><span class="s">&quot;: &quot;</span><span class="p">,</span> <span class="mi">14</span><span class="p">,</span> <span class="sc">&#39; &#39;</span><span class="p">),</span> <span class="p">@</span><span class="n">elapsed</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">fmt</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">=</span> <span class="n">println</span><span class="p">(</span><span class="n">rpad</span><span class="p">(</span><span class="n">string</span><span class="p">(</span><span class="n">f</span><span class="p">)</span><span class="o">*</span><span class="s">&quot;: &quot;</span><span class="p">,</span> <span class="mi">14</span><span class="p">,</span> <span class="sc">&#39; &#39;</span><span class="p">),</span> <span class="nd">@elapsed</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">map</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="p">{</span><span class="n">copy_cols</span><span class="p">,</span> <span class="n">copy_rows</span><span class="p">,</span> <span class="n">copy_col_row</span><span class="p">,</span> <span class="n">copy_row_col</span><span class="p">});</span>
-<span class="n">copy_cols</span><span class="p">:</span>    <span class="mf">0.331706323</span>
-<span class="n">copy_rows</span><span class="p">:</span>    <span class="mf">1.799009911</span>
-<span class="n">copy_col_row</span><span class="p">:</span> <span class="mf">0.415630047</span>
-<span class="n">copy_row_col</span><span class="p">:</span> <span class="mf">1.721531501</span>
+<span class="n">copy_cols</span><span class="o">:</span>    <span class="mf">0.331706323</span>
+<span class="n">copy_rows</span><span class="o">:</span>    <span class="mf">1.799009911</span>
+<span class="n">copy_col_row</span><span class="o">:</span> <span class="mf">0.415630047</span>
+<span class="n">copy_row_col</span><span class="o">:</span> <span class="mf">1.721531501</span>
 </pre></div>
 </div>
 <p>Notice that <tt class="docutils literal"><span class="pre">copy_cols</span></tt> is much faster than <tt class="docutils literal"><span class="pre">copy_rows</span></tt>. This is
@@ -899,13 +899,13 @@ bottlenecks.</p>
 <p>Sometimes you can circumvent the need to allocate memory on each
 function call by preallocating the output.  As a
 trivial example, compare</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> xinc</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">xinc</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
     <span class="k">return</span> <span class="p">[</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="o">+</span><span class="mi">2</span><span class="p">]</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> loopinc</span><span class="p">()</span>
+<span class="k">function</span> <span class="n">loopinc</span><span class="p">()</span>
     <span class="n">y</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">10</span><span class="o">^</span><span class="mi">7</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">10</span><span class="o">^</span><span class="mi">7</span>
         <span class="n">ret</span> <span class="o">=</span> <span class="n">xinc</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
         <span class="n">y</span> <span class="o">+=</span> <span class="n">ret</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
     <span class="k">end</span>
@@ -914,17 +914,17 @@ trivial example, compare</p>
 </pre></div>
 </div>
 <p>with</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> xinc</span><span class="o">!</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">ret</span><span class="p">::</span><span class="n">AbstractVector</span><span class="p">{</span><span class="n">T</span><span class="p">},</span> <span class="n">x</span><span class="p">::</span><span class="n">T</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">xinc!</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">ret</span><span class="o">::</span><span class="kt">AbstractVector</span><span class="p">{</span><span class="n">T</span><span class="p">},</span> <span class="n">x</span><span class="o">::</span><span class="n">T</span><span class="p">)</span>
     <span class="n">ret</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span>
     <span class="n">ret</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="o">+</span><span class="mi">1</span>
     <span class="n">ret</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="o">+</span><span class="mi">2</span>
-    <span class="n">nothing</span>
+    <span class="nb">nothing</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> loopinc_prealloc</span><span class="p">()</span>
-    <span class="n">ret</span> <span class="o">=</span> <span class="n">Array</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">loopinc_prealloc</span><span class="p">()</span>
+    <span class="n">ret</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
     <span class="n">y</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">10</span><span class="o">^</span><span class="mi">7</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">10</span><span class="o">^</span><span class="mi">7</span>
         <span class="n">xinc!</span><span class="p">(</span><span class="n">ret</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
         <span class="n">y</span> <span class="o">+=</span> <span class="n">ret</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
     <span class="k">end</span>
@@ -933,12 +933,12 @@ trivial example, compare</p>
 </pre></div>
 </div>
 <p>Timing results:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">time</span> <span class="n">loopinc</span><span class="p">()</span>
-<span class="n">elapsed</span> <span class="n">time</span><span class="p">:</span> <span class="mf">1.955026528</span> <span class="n">seconds</span> <span class="p">(</span><span class="mi">1279975584</span> <span class="n">bytes</span> <span class="n">allocated</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@time</span> <span class="n">loopinc</span><span class="p">()</span>
+<span class="n">elapsed</span> <span class="n">time</span><span class="o">:</span> <span class="mf">1.955026528</span> <span class="n">seconds</span> <span class="p">(</span><span class="mi">1279975584</span> <span class="n">bytes</span> <span class="n">allocated</span><span class="p">)</span>
 <span class="mi">50000015000000</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">time</span> <span class="n">loopinc_prealloc</span><span class="p">()</span>
-<span class="n">elapsed</span> <span class="n">time</span><span class="p">:</span> <span class="mf">0.078639163</span> <span class="n">seconds</span> <span class="p">(</span><span class="mi">144</span> <span class="n">bytes</span> <span class="n">allocated</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@time</span> <span class="n">loopinc_prealloc</span><span class="p">()</span>
+<span class="n">elapsed</span> <span class="n">time</span><span class="o">:</span> <span class="mf">0.078639163</span> <span class="n">seconds</span> <span class="p">(</span><span class="mi">144</span> <span class="n">bytes</span> <span class="n">allocated</span><span class="p">)</span>
 <span class="mi">50000015000000</span>
 </pre></div>
 </div>
@@ -964,7 +964,7 @@ intermediate strings is a source of overhead. Instead of:</p>
 to the file, while the second version writes values directly
 to the file. Also notice that in some cases string interpolation can
 be harder to read. Consider:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">println</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="s">&quot;</span><span class="si">$(f(a))$(f(b))</span><span class="s">&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">println</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="s">&quot;</span><span class="si">$</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="n">a</span><span class="p">))</span><span class="si">$</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="n">b</span><span class="p">))</span><span class="s">&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>versus:</p>
@@ -976,19 +976,19 @@ be harder to read. Consider:</p>
 <h2>Optimize network I/O during parallel execution<a class="headerlink" href="#optimize-network-i-o-during-parallel-execution" title="Permalink to this headline">¶</a></h2>
 <p>When executing a remote function in parallel:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">responses</span> <span class="o">=</span> <span class="n">cell</span><span class="p">(</span><span class="n">nworkers</span><span class="p">())</span>
-<span class="p">@</span><span class="n">sync</span> <span class="k">begin</span>
-    <span class="k">for</span> <span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="n">pid</span><span class="p">)</span> <span class="k">in</span> <span class="n">enumerate</span><span class="p">(</span><span class="n">workers</span><span class="p">())</span>
-        <span class="p">@</span><span class="n">async</span> <span class="n">responses</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">remotecall_fetch</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="n">foo</span><span class="p">,</span> <span class="n">args</span><span class="o">...</span><span class="p">)</span>
+<span class="nd">@sync</span> <span class="k">begin</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="n">pid</span><span class="p">)</span> <span class="kp">in</span> <span class="n">enumerate</span><span class="p">(</span><span class="n">workers</span><span class="p">())</span>
+        <span class="nd">@async</span> <span class="n">responses</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">remotecall_fetch</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="n">foo</span><span class="p">,</span> <span class="n">args</span><span class="o">...</span><span class="p">)</span>
     <span class="k">end</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>is faster than:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">refs</span> <span class="o">=</span> <span class="n">cell</span><span class="p">(</span><span class="n">nworkers</span><span class="p">())</span>
-<span class="k">for</span> <span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="n">pid</span><span class="p">)</span> <span class="k">in</span> <span class="n">enumerate</span><span class="p">(</span><span class="n">workers</span><span class="p">())</span>
-    <span class="n">refs</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="p">@</span><span class="n">spawnat</span> <span class="n">pid</span> <span class="n">foo</span><span class="p">(</span><span class="n">args</span><span class="o">...</span><span class="p">)</span>
+<span class="k">for</span> <span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="n">pid</span><span class="p">)</span> <span class="kp">in</span> <span class="n">enumerate</span><span class="p">(</span><span class="n">workers</span><span class="p">())</span>
+    <span class="n">refs</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="nd">@spawnat</span> <span class="n">pid</span> <span class="n">foo</span><span class="p">(</span><span class="n">args</span><span class="o">...</span><span class="p">)</span>
 <span class="k">end</span>
-<span class="n">responses</span> <span class="o">=</span> <span class="p">[</span><span class="n">fetch</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="k">in</span> <span class="n">refs</span><span class="p">]</span>
+<span class="n">responses</span> <span class="o">=</span> <span class="p">[</span><span class="n">fetch</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="kp">in</span> <span class="n">refs</span><span class="p">]</span>
 </pre></div>
 </div>
 <p>The former results in a single network round-trip to every worker, while the
@@ -1030,31 +1030,31 @@ you may suffer crashes or silent corruption.</li>
 versions of Julia.</li>
 </ul>
 <p>Here is an example with both forms of markup:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> inner</span><span class="p">(</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">inner</span><span class="p">(</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="p">)</span>
     <span class="n">s</span> <span class="o">=</span> <span class="n">zero</span><span class="p">(</span><span class="n">eltype</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
-    <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">length</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-        <span class="p">@</span><span class="n">inbounds</span> <span class="n">s</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="n">length</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="nd">@inbounds</span> <span class="n">s</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
     <span class="k">end</span>
     <span class="n">s</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> innersimd</span><span class="p">(</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="p">)</span>
+<span class="k">function</span> <span class="n">innersimd</span><span class="p">(</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="p">)</span>
     <span class="n">s</span> <span class="o">=</span> <span class="n">zero</span><span class="p">(</span><span class="n">eltype</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
-    <span class="p">@</span><span class="n">simd</span> <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">length</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-        <span class="p">@</span><span class="n">inbounds</span> <span class="n">s</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="nd">@simd</span> <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="n">length</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="nd">@inbounds</span> <span class="n">s</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
     <span class="k">end</span>
     <span class="n">s</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> timeit</span><span class="p">(</span> <span class="n">n</span><span class="p">,</span> <span class="n">reps</span> <span class="p">)</span>
+<span class="k">function</span> <span class="n">timeit</span><span class="p">(</span> <span class="n">n</span><span class="p">,</span> <span class="n">reps</span> <span class="p">)</span>
     <span class="n">x</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="kt">Float32</span><span class="p">,</span><span class="n">n</span><span class="p">)</span>
     <span class="n">y</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="kt">Float32</span><span class="p">,</span><span class="n">n</span><span class="p">)</span>
     <span class="n">s</span> <span class="o">=</span> <span class="n">zero</span><span class="p">(</span><span class="kt">Float64</span><span class="p">)</span>
-    <span class="n">time</span> <span class="o">=</span> <span class="p">@</span><span class="n">elapsed</span> <span class="k">for</span> <span class="n">j</span> <span class="k">in</span> <span class="mi">1</span><span class="p">:</span><span class="n">reps</span>
+    <span class="n">time</span> <span class="o">=</span> <span class="nd">@elapsed</span> <span class="k">for</span> <span class="n">j</span> <span class="kp">in</span> <span class="mi">1</span><span class="o">:</span><span class="n">reps</span>
         <span class="n">s</span><span class="o">+=</span><span class="n">inner</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
     <span class="k">end</span>
     <span class="n">println</span><span class="p">(</span><span class="s">&quot;GFlop        = &quot;</span><span class="p">,</span><span class="mf">2.0</span><span class="o">*</span><span class="n">n</span><span class="o">*</span><span class="n">reps</span><span class="o">/</span><span class="n">time</span><span class="o">*</span><span class="mf">1E-9</span><span class="p">)</span>
-    <span class="n">time</span> <span class="o">=</span> <span class="p">@</span><span class="n">elapsed</span> <span class="k">for</span> <span class="n">j</span> <span class="k">in</span> <span class="mi">1</span><span class="p">:</span><span class="n">reps</span>
+    <span class="n">time</span> <span class="o">=</span> <span class="nd">@elapsed</span> <span class="k">for</span> <span class="n">j</span> <span class="kp">in</span> <span class="mi">1</span><span class="o">:</span><span class="n">reps</span>
         <span class="n">s</span><span class="o">+=</span><span class="n">innersimd</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
     <span class="k">end</span>
     <span class="n">println</span><span class="p">(</span><span class="s">&quot;GFlop (SIMD) = &quot;</span><span class="p">,</span><span class="mf">2.0</span><span class="o">*</span><span class="n">n</span><span class="o">*</span><span class="n">reps</span><span class="o">/</span><span class="n">time</span><span class="o">*</span><span class="mf">1E-9</span><span class="p">)</span>
