@@ -1581,7 +1581,9 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
     }
 
     if (getwrapper || !decls.specFunctionObject) {
-        return Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage, decls.functionObject);
+        auto f = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage, decls.functionObject);
+        f->addFnAttr("thunk");
+        return f;
     }
     else {
         jl_returninfo_t returninfo = get_specsig_function(NULL, decls.specFunctionObject, linfo->specTypes, linfo->rettype);
@@ -2881,7 +2883,9 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, jl_llvm_fu
             retval = update_julia_type(ctx, retval, inferred_retty);
         return retval;
     }
-    Value *theFptr = jl_Module->getOrInsertFunction(decls.functionObject, jl_func_sig);
+    auto theFptr = jl_Module->getOrInsertFunction(decls.functionObject, jl_func_sig);
+    if (auto F = dyn_cast<Function>(theFptr->stripPointerCasts()))
+        F->addFnAttr("thunk");
     Value *ret = emit_jlcall(ctx, theFptr, boxed(ctx, argv[0]), &argv[1], nargs - 1);
     return mark_julia_type(ctx, ret, true, inferred_retty);
 }
@@ -4283,6 +4287,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                 else {
                     assert(theFptr->getFunctionType() == jl_func_sig);
                 }
+                theFptr->addFnAttr("thunk");
             }
         }
         BasicBlock *b_generic, *b_jlcall, *b_after;
@@ -4459,6 +4464,7 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, const jl_returnin
 {
     Function *w = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage,
                                    funcName, M);
+    w->addFnAttr("thunk");
     jl_init_function(w);
     w->addFnAttr("no-frame-pointer-elim", "true");
     Function::arg_iterator AI = w->arg_begin();
@@ -4866,6 +4872,7 @@ static std::unique_ptr<Module> emit_function(
         f = Function::Create(needsparams ? jl_func_sig_sparams : jl_func_sig,
                              GlobalVariable::ExternalLinkage,
                              funcName.str(), M);
+        f->addFnAttr("thunk");
         returninfo.decl = f;
         jl_init_function(f);
         declarations->functionObject = strdup(f->getName().str().c_str());
@@ -5811,6 +5818,7 @@ static GlobalVariable *julia_const_gv(jl_value_t *val)
 static Function *jlcall_func_to_llvm(const std::string &cname, jl_fptr_t addr, Module *m)
 {
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage, cname, m);
+    f->addFnAttr("thunk");
     add_named_global(f, addr);
     return f;
 }
@@ -6138,6 +6146,7 @@ static void init_julia_llvm_env(Module *m)
     jlnew_func =
         Function::Create(jl_func_sig, Function::ExternalLinkage,
                          "jl_new_structv", m);
+    jlnew_func->addFnAttr("thunk");
     add_named_global(jlnew_func, &jl_new_structv);
 
     std::vector<Type*> args2(0);
@@ -6254,6 +6263,7 @@ static void init_julia_llvm_env(Module *m)
     jlapplygeneric_func = Function::Create(FunctionType::get(T_prjlvalue, agargs, false),
                                            Function::ExternalLinkage,
                                            "jl_apply_generic", m);
+    jlapplygeneric_func->addFnAttr("thunk");
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
 
     std::vector<Type *> invokeargs(0);
