@@ -270,10 +270,10 @@ function tempdir()
     return transcode(String, temppath)
 end
 
-tempname(uunique::UInt32=UInt32(0) ; prefix = temp_prefix) =
+tempname(uunique::UInt32=UInt32(0); prefix=temp_prefix) =
     tempname(tempdir(), uunique ; prefix=prefix)
 
-function tempname(temppath::AbstractString,uunique::UInt32 ; prefix = temp_prefix)
+function tempname(temppath::AbstractString,uunique::UInt32; prefix=temp_prefix)
     ctemp_prefix = cwstring(temp_prefix)
     tempp = cwstring(temppath)
     tname = Vector{UInt16}(32767)
@@ -288,18 +288,18 @@ function tempname(temppath::AbstractString,uunique::UInt32 ; prefix = temp_prefi
     return transcode(String, tname)
 end
 
-function mktemp(parent=tempdir() ; prefix = temp_prefix)
-    filename = tempname(parent, UInt32(0) ; prefix = prefix)
+function mktemp(parent=tempdir(); prefix = temp_prefix)
+    filename = tempname(parent, UInt32(0); prefix = prefix)
     return (filename, Base.open(filename, "r+"))
 end
 
-function mktempdir(parent=tempdir() ; prefix = temp_prefix)
+function mktempdir(parent=tempdir(); prefix = temp_prefix)
     seed::UInt32 = rand(UInt32)
     while true
         if (seed & typemax(UInt16)) == 0
             seed += 1
         end
-        filename = tempname(parent, seed ; prefix = prefix)
+        filename = tempname(parent, seed; prefix = prefix)
         ret = ccall(:_wmkdir, Int32, (Ptr{UInt16},), cwstring(filename))
         if ret == 0
             return filename
@@ -312,7 +312,7 @@ end
 else # !windows
 # Obtain a temporary filename.
 
-function tempname(;prefix = temp_prefix)
+function tempname(; prefix=temp_prefix)
     d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
     p = ccall(:tempnam, Cstring, (Cstring,Cstring), d, Symbol(prefix))
     systemerror(:tempnam, p == C_NULL)
@@ -325,7 +325,7 @@ end
 tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
-function mktemp(parent=tempdir() ; prefix = temp_prefix)
+function mktemp(parent=tempdir(); prefix = temp_prefix)
     format = prefix*"XXXXXX"
     b = joinpath(parent, format)
     p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
@@ -334,7 +334,7 @@ function mktemp(parent=tempdir() ; prefix = temp_prefix)
 end
 
 # Create and return the name of a temporary directory
-function mktempdir(parent=tempdir() ; prefix = temp_prefix)
+function mktempdir(parent=tempdir(); prefix = temp_prefix)
     format = prefix*"XXXXXX"
     b = joinpath(parent, format)
     p = ccall(:mkdtemp, Cstring, (Cstring,), b)
@@ -353,47 +353,47 @@ Obtain the path of a temporary directory (possibly shared with other processes).
 tempdir()
 
 """
-    tempname(;prefix="jl_")
+    tempname(; prefix="$temp_prefix")
 
 Generate a unique temporary file path. A `prefix` can be provided in addition, which
-otherwise defaults to `jl_`.
+otherwise defaults to "$temp_prefix".
 
 *Note: The `prefix` may be truncated based on the limitations of the OS.*
 """
-tempname(;prefix="jl_")
+tempname(; prefix=temp_prefix)
 
 """
-    mktemp(parent=tempdir() ; prefix="jl_")
+    mktemp(parent=tempdir(); prefix="$temp_prefix")
 
 Returns `(path, io)`, where `path` is the path of a new temporary file in `parent` and `io`
 is an open file object for this path. A `prefix` can be provided in addition, which
-otherwise defaults to `jl_`.
+otherwise defaults to "$temp_prefix".
 
 *Note: The `prefix` may be truncated based on the limitations of the OS.*
 """
-mktemp(parent ; prefix = temp_prefix)
+mktemp(parent; prefix=temp_prefix)
 
 """
-    mktempdir(parent=tempdir() ; prefix = "jl_")
+    mktempdir(parent=tempdir(); prefix="$temp_prefix")
 
 Create a temporary directory in the `parent` directory and return its path.
 If `parent` does not exist, throw an error. A `prefix` can be provided in addition, which
-otherwise defaults to `jl_`.
+otherwise defaults to "$temp_prefix".
 
 *Note: The `prefix` may be truncated based on the limitations of the OS.*
 """
-mktempdir(parent ; prefix = temp_prefix)
+mktempdir(parent; prefix=temp_prefix)
 
 
 """
-    mktemp(f::Function, parent=tempdir() ; prefix="jl_")
+    mktemp(f::Function, parent=tempdir(); prefix="$temp_prefix")
 
-Apply the function `f` to the result of [`mktemp(parent ; prefix)`](@ref) and remove the
+Apply the function `f` to the result of [`mktemp(parent; prefix)`](@ref) and remove the
 temporary file upon completion. A `prefix` can be provided in addition, which otherwise
-defaults to `jl_`.
+defaults to "$temp_prefix".
 """
-function mktemp(fn::Function, parent=tempdir() ; prefix = temp_prefix)
-    (tmp_path, tmp_io) = mktemp(parent ; prefix=prefix)
+function mktemp(fn::Function, parent=tempdir(); prefix=temp_prefix)
+    (tmp_path, tmp_io) = mktemp(parent; prefix=prefix)
     try
         fn(tmp_path, tmp_io)
     finally
@@ -403,14 +403,14 @@ function mktemp(fn::Function, parent=tempdir() ; prefix = temp_prefix)
 end
 
 """
-    mktempdir(f::Function, parent=tempdir() ; prefix="jl_")
+    mktempdir(f::Function, parent=tempdir(); prefix="$temp_prefix")
 
-Apply the function `f` to the result of [`mktempdir(parent ; prefix)`](@ref) and remove the
+Apply the function `f` to the result of [`mktempdir(parent; prefix)`](@ref) and remove the
 temporary directory upon completion. A `prefix` can be provided in addition which, otherwise defaults
- to `jl_`.
+ to "$temp_prefix".
 """
-function mktempdir(fn::Function, parent=tempdir() ; prefix = temp_prefix)
-    tmpdir = mktempdir(parent ; prefix = prefix)
+function mktempdir(fn::Function, parent=tempdir(); prefix=temp_prefix)
+    tmpdir = mktempdir(parent; prefix = prefix)
     try
         fn(tmpdir)
     finally
