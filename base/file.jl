@@ -273,8 +273,9 @@ end
 tempname(uunique::UInt32=UInt32(0); prefix=temp_prefix) =
     tempname(tempdir(), uunique ; prefix=prefix)
 
+
 function tempname(temppath::AbstractString,uunique::UInt32; prefix=temp_prefix)
-    ctemp_prefix = cwstring(temp_prefix)
+    ctemp_prefix = cwstring(prefix)
     tempp = cwstring(temppath)
     tname = Vector{UInt16}(32767)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,
