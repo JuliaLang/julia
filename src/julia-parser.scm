@@ -1296,31 +1296,33 @@
           `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
                 ,body)))
 
-       ((if)
+       ((if elseif)
         (if (newline? (peek-token s))
             (error (string "missing condition in \"if\" at " current-filename
                            ":" (- (input-port-line (ts:port s)) 1))))
-        (let* ((test (parse-cond s))
+        (let* ((lno (line-number-node s))  ;; line number for elseif condition
+               (test (parse-cond s))
+               (test (if (eq? word 'elseif)
+                         `(block ,lno ,test)
+                         test))
                (then (if (memq (require-token s) '(else elseif))
                          '(block)
                          (parse-block s)))
                (nxt  (require-token s)))
           (take-token s)
           (case nxt
-            ((end)     (list 'if test then))
+            ((end)     (list word test then))
             ((elseif)
              (if (newline? (peek-token s))
                  (error (string "missing condition in \"elseif\" at " current-filename
                                 ":" (- (input-port-line (ts:port s)) 1))))
-             `(if ,test ,then
-                  ;; line number for elseif condition
-                  (block ,(line-number-node s)
-                         ,(parse-resword s 'if))))
+             `(,word ,test ,then
+                     ,(parse-resword s 'elseif)))
             ((else)
              (if (eq? (peek-token s) 'if)
                  (error "use \"elseif\" instead of \"else if\""))
-             (begin0 (list 'if test then (parse-block s))
-                     (expect-end s word)))
+             (begin0 (list word test then (parse-block s))
+                     (expect-end s 'if)))
             (else      (error (string "unexpected \"" nxt "\""))))))
        ((let)
         (let ((binds (if (memv (peek-token s) '(#\newline #\;))

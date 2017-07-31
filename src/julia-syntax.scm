@@ -1656,15 +1656,6 @@
                             (if ,g ,g
                                 ,(loop (cdr tail)))))))))))
 
-(define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta)))
-      e
-      (let ((ex (get expand-table (car e) #f)))
-        (if ex
-            (ex e)
-            (cons (car e)
-                  (map expand-forms (cdr e)))))))
-
 (define (expand-for while lhs X body)
   ;; (for (= lhs X) body)
   (let ((coll  (make-ssavalue))
@@ -1870,6 +1861,15 @@
                 (extract (cdr params) (cons T newparams) (cons (list (car p) T (cadr p)) whereparams)))
               (extract (cdr params) (cons p newparams) whereparams)))))
   (extract (cddr e) '() '()))
+
+(define (expand-forms e)
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta)))
+      e
+      (let ((ex (get expand-table (car e) #f)))
+        (if ex
+            (ex e)
+            (cons (car e)
+                  (map expand-forms (cdr e)))))))
 
 ;; table mapping expression head to a function expanding that form
 (define expand-table
@@ -3493,7 +3493,7 @@ f(x) = yt(x)
              (if value
                  (compile (cadr e) break-labels value tail)
                  #f))
-            ((if)
+            ((if elseif)
              (let ((test `(gotoifnot ,(compile-cond (cadr e) break-labels) _))
                    (end-jump `(goto _))
                    (val (if (and value (not tail)) (new-mutable-var) #f)))

@@ -32,6 +32,9 @@ Language changes
   * `{ }` expressions now use `braces` and `bracescat` as expression heads instead
     of `cell1d` and `cell2d`, and parse similarly to `vect` and `vcat` ([#8470]).
 
+  * Nested `if` expressions that arise from the keyword `elseif` now use `elseif`
+    as their expression head instead of `if` ([#21774]).
+
 Breaking changes
 ----------------
 
