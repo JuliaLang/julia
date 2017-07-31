@@ -10,11 +10,15 @@ const URL_REGEX = r"""
 )?
 (?<host>[A-Za-z0-9\-\.]+)
 (?(<scheme>)
-    (?:\:(?<port>\d+))?  # only parse port when not using SCP-like syntax
+    (?:\:(?<port>\d+))?  # only parse port when not using scp-like syntax
     |
     :?
 )
-(?<path>.*?)$
+(?<path>
+    (?(<scheme>)/|(?<=:))  # scp-like syntax must be preceeded by a colon
+    .*
+)?
+$
 """x
 
 function version()

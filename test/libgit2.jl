@@ -183,7 +183,7 @@ end
 
     @testset "HTTPS URL, no path" begin
         m = match(LibGit2.URL_REGEX, "https://user:pass@server.com:80")
-        @test m[:path] == ""
+        @test m[:path] === nothing
     end
 
     @testset "scp-like syntax, no path" begin
@@ -191,7 +191,13 @@ end
         @test m[:path] == ""
 
         m = match(LibGit2.URL_REGEX, "user@server")
-        @test m[:path] == ""
+        @test m[:path] === nothing
+    end
+
+    # scp-like syntax should have a colon separating the hostname from the path
+    @testset "scp-like syntax, invalid path" begin
+        m = match(LibGit2.URL_REGEX, "git@server/repo")
+        @test m === nothing
     end
 end
 
@@ -1575,7 +1581,7 @@ mktempdir() do dir
     # systems.
     if Sys.isunix()
         @testset "SSH credential prompt" begin
-            url = "git@github.com/test/package.jl"
+            url = "git@github.com:test/package.jl"
 
             key_dir = joinpath(dirname(@__FILE__), "libgit2")
             valid_key = joinpath(key_dir, "valid")
