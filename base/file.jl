@@ -289,12 +289,12 @@ function tempname(temppath::AbstractString,uunique::UInt32; prefix=temp_prefix)
     return transcode(String, tname)
 end
 
-function mktemp(parent=tempdir(); prefix = temp_prefix)
+function mktemp(parent=tempdir(); prefix=temp_prefix)
     filename = tempname(parent, UInt32(0); prefix = prefix)
     return (filename, Base.open(filename, "r+"))
 end
 
-function mktempdir(parent=tempdir(); prefix = temp_prefix)
+function mktempdir(parent=tempdir(); prefix=temp_prefix)
     seed::UInt32 = rand(UInt32)
     while true
         if (seed & typemax(UInt16)) == 0
@@ -326,7 +326,7 @@ end
 tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
-function mktemp(parent=tempdir(); prefix = temp_prefix)
+function mktemp(parent=tempdir(); prefix=temp_prefix)
     format = prefix*"XXXXXX"
     b = joinpath(parent, format)
     p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
@@ -335,7 +335,7 @@ function mktemp(parent=tempdir(); prefix = temp_prefix)
 end
 
 # Create and return the name of a temporary directory
-function mktempdir(parent=tempdir(); prefix = temp_prefix)
+function mktempdir(parent=tempdir(); prefix=temp_prefix)
     format = prefix*"XXXXXX"
     b = joinpath(parent, format)
     p = ccall(:mkdtemp, Cstring, (Cstring,), b)
