@@ -499,7 +499,8 @@ isfile(joinpath(repo_path, our_file)) # will be false
 # fastforward merge the changes
 LibGit2.merge!(repo, fastforward=true)
 
-# because there was not any file we need to reset the branch
+# because there was not any file locally, but there is
+# a file remotely, we need to reset the branch
 head_oid = LibGit2.head_oid(repo)
 new_head = LibGit2.reset!(repo, head_oid, LibGit2.Consts.RESET_HARD)
 ```
