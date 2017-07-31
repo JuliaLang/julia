@@ -1157,20 +1157,15 @@ if !Sys.iswindows()
     end
 end  # !Sys.iswindows
 
-function file_prefix_test(path, prefix, pfxlen=length(prefix), fails=false)
+function file_prefix_test(path, prefix, pfxlen=length(prefix))
     if Sys.iswindows() && (pfxlen > 3)
         pfxlen = 3
     end
 
     filename = basename(path)
-    filepart = filename[1:pfxlen]
     prefixpart = prefix[1:pfxlen]
 
-    if !fails
-        @test filepart == prefixpart
-    else
-        @test filepart != prefixpart
-    end
+    @test startswith(filename, prefixpart)
 end
 
 function test_22922()
@@ -1189,10 +1184,10 @@ function test_22922()
         file_prefix_test(tmp, tst_prefix)
     end
     file_prefix_test(tempname(), def_prefix)
-    #Unix like OS have prefix size limit of 5 bytes
+    # Unix like OS have prefix size limit of 5 bytes
     file_prefix_test(tempname(; prefix=tst_prefix), tst_prefix, 5)
 
-    #Special character prefix tests
+    # Special character prefix tests
     tst_prefix="#!@%^&*()"
     mktempdir(; prefix=tst_prefix) do tmpdir
         file_prefix_test(tmpdir, tst_prefix)
@@ -1201,7 +1196,7 @@ function test_22922()
         file_prefix_test(tmp, tst_prefix)
     end
 
-    #Unicode test
+    # Unicode test
     tst_prefix="\u2200x\u2203y"
     mktempdir(; prefix=tst_prefix) do tmpdir
         file_prefix_test(tmpdir, tst_prefix)
@@ -1209,15 +1204,17 @@ function test_22922()
     mktemp(; prefix=tst_prefix) do tmp,io
         file_prefix_test(tmp, tst_prefix)
     end
-    #In unix the prefix is computed upto 5 bytes and not chars so will
-    #fail on unicode test. But extracting first 5 bytes and creating an
-    #invalid 5-byte character array and converting to a string will pass
+    #=
+    In unix the prefix is computed up to 5 bytes and not chars so will
+    fail on unicode test. But extracting first 5 bytes and creating an
+    invalid 5-byte character array and converting to a string will pass
+    =#
     if !Sys.iswindows()
         bytepfx=transcode(UInt8, tst_prefix)
         pfxstr=String(bytepfx[1:5])
         file_prefix_test(tempname(; prefix=tst_prefix), pfxstr)
     else
-        #It will pass in windows upto 3 chars
+        # It will pass in windows up to 3 chars
         file_prefix_test(tempname(; prefix=tst_prefix), tst_prefix)
     end
 end

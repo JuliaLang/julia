@@ -273,7 +273,6 @@ end
 tempname(uunique::UInt32=UInt32(0); prefix=temp_prefix) =
     tempname(tempdir(), uunique ; prefix=prefix)
 
-
 function tempname(temppath::AbstractString,uunique::UInt32; prefix=temp_prefix)
     ctemp_prefix = cwstring(prefix)
     tempp = cwstring(temppath)
@@ -290,7 +289,7 @@ function tempname(temppath::AbstractString,uunique::UInt32; prefix=temp_prefix)
 end
 
 function mktemp(parent=tempdir(); prefix=temp_prefix)
-    filename = tempname(parent, UInt32(0); prefix = prefix)
+    filename = tempname(parent, UInt32(0); prefix=prefix)
     return (filename, Base.open(filename, "r+"))
 end
 
@@ -384,7 +383,6 @@ otherwise defaults to "$temp_prefix".
 *Note: The `prefix` may be truncated based on the limitations of the OS.*
 """
 mktempdir(parent; prefix=temp_prefix)
-
 
 """
     mktemp(f::Function, parent=tempdir(); prefix="$temp_prefix")
