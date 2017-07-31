@@ -224,6 +224,8 @@ end
     @test tokens[16].val==tokens[17].val=="'"
     @test tok("'a'").val == "'a'"
     @test tok("'a'").kind == Tokens.CHAR
+    @test tok("''").val == "''"
+    @test tok("''").kind == Tokens.CHAR
     @test tok("'''").val == "'''"
     @test tok("'''").kind == Tokens.CHAR
     @test tok("''''", 1).kind == Tokens.CHAR

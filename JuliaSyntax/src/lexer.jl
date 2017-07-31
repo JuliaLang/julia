@@ -635,7 +635,11 @@ function lex_prime(l)
             if accept(l, '\'')
                 return emit(l, Tokens.CHAR)
             else
-                return emit_error(l, Tokens.EOF_CHAR)
+                # Empty char literal
+                # Arguably this should be an error here, but we generally
+                # look at the contents of the char literal in the parser,
+                # so we defer erroring until there.
+                return emit(l, Tokens.CHAR)
             end
         end
         while true
