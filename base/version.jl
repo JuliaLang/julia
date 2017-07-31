@@ -87,6 +87,7 @@ function split_idents(s::AbstractString)
 end
 
 function VersionNumber(v::AbstractString)
+    v == "∞" && return typemax(VersionNumber)
     m = match(VERSION_REGEX, v)
     m === nothing && throw(ArgumentError("invalid version string: $v"))
     major, minor, patch, minus, prerl, plus, build = m.captures
@@ -98,7 +99,7 @@ function VersionNumber(v::AbstractString)
     end
     prerl = prerl !== nothing ? split_idents(prerl) : minus !== nothing ? ("",) : ()
     build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
-    VersionNumber(major, minor, patch, prerl, build)
+    return VersionNumber(major, minor, patch, prerl, build)
 end
 
 convert(::Type{VersionNumber}, v::AbstractString) = VersionNumber(v)
