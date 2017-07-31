@@ -4678,33 +4678,37 @@ end
 @test f14893() == 14893
 @test M14893.f14893() == 14893
 
-let exename = `$(Base.julia_cmd()) --startup-file=no -i`
-    str = """
-    using Base.Test
-    try
-        # issue #18725
-        @test_nowarn @eval Main begin
-            f18725(x) = 1
-            f18725(x) = 2
-        end
-        @test Main.f18725(0) == 2
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    mac, flag, pfix, msg, str = 0, 0, 0, 0, 0
+    for (mac, flag, pfix, msg) in [("@test_nowarn", `-i`, "_1", ""),
+                                   ("@test_warn",   `  `, "_2", "\"WARNING: Method definition\"")]
+        str = """
+        using Base.Test
+        try
+            # issue #18725
+            $mac $msg @eval Main begin
+                f18725$(pfix)(x) = 1
+                f18725$(pfix)(x) = 2
+            end
+            @test Main.f18725$(pfix)(0) == 2
 
-        # PR #23030
-        @test_nowarn @eval Main module Module23030
-            f23030(x) = 1
-            f23030(x) = 2
+            # PR #23030
+            $mac $msg @eval Main module Module23030$(pfix)
+                f23030$(pfix)(x) = 1
+                f23030$(pfix)(x) = 2
+            end
+            @test_warn "WARNING: Method definition f23030$(pfix)(Any) in module Module23030$(pfix)" @eval Main begin
+                using Module23030$(pfix)
+                Module23030$(pfix).f23030$(pfix)(x) = 2
+            end
+        catch
+            exit(-1)
         end
-        @test_warn "WARNING: Method definition f23030(Any) in module Module23030" @eval Main begin
-            using Module23030
-            Module23030.f23030(x) = 2
-        end
-    catch
-        exit(-1)
+
+        exit(0)
+        """
+        run(`$exename $flag -e $str`)
     end
-
-    exit(0)
-    """
-    @test success(`$exename -e $str`)
 end
 
 # issue #19599
