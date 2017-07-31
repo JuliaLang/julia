@@ -29,15 +29,15 @@ LLVM_LIB_FILE := libLLVMCodeGen.a
 LLVM_TAR_EXT:=$(LLVM_VER).src.tar.xz
 
 ifneq ($(LLVM_VER),svn)
-LLVM_TAR:=$(SRCDIR)/srccache/llvm-$(LLVM_TAR_EXT)
+LLVM_TAR:=$(SRCCACHE)/llvm-$(LLVM_TAR_EXT)
 
 ifeq ($(BUILD_LLDB),1)
-LLVM_LLDB_TAR:=$(SRCDIR)/srccache/lldb-$(LLVM_TAR_EXT)
+LLVM_LLDB_TAR:=$(SRCCACHE)/lldb-$(LLVM_TAR_EXT)
 endif # BUILD_LLDB
 
 ifeq ($(BUILD_LLVM_CLANG),1)
-LLVM_CLANG_TAR:=$(SRCDIR)/srccache/cfe-$(LLVM_TAR_EXT)
-LLVM_COMPILER_RT_TAR:=$(SRCDIR)/srccache/compiler-rt-$(LLVM_TAR_EXT)
+LLVM_CLANG_TAR:=$(SRCCACHE)/cfe-$(LLVM_TAR_EXT)
+LLVM_COMPILER_RT_TAR:=$(SRCCACHE)/compiler-rt-$(LLVM_TAR_EXT)
 else
 LLVM_CLANG_TAR:=
 LLVM_COMPILER_RT_TAR:=
@@ -45,7 +45,7 @@ LLVM_LIBCXX_TAR:=
 endif # BUILD_LLVM_CLANG
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
-LLVM_LIBCXX_TAR:=$(SRCDIR)/srccache/libcxx-$(LLVM_TAR_EXT)
+LLVM_LIBCXX_TAR:=$(SRCCACHE)/libcxx-$(LLVM_TAR_EXT)
 endif
 endif # LLVM_VER != svn
 
@@ -210,25 +210,25 @@ endif
 LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
 
 ifneq ($(LLVM_CLANG_TAR),)
-$(LLVM_CLANG_TAR): | $(SRCDIR)/srccache
+$(LLVM_CLANG_TAR): | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 ifneq ($(LLVM_COMPILER_RT_TAR),)
-$(LLVM_COMPILER_RT_TAR): | $(SRCDIR)/srccache
+$(LLVM_COMPILER_RT_TAR): | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 
 ifneq ($(LLVM_LIBCXX_TAR),)
-$(LLVM_LIBCXX_TAR): | $(SRCDIR)/srccache
+$(LLVM_LIBCXX_TAR): | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 ifneq ($(LLVM_VER),svn)
-$(LLVM_TAR): | $(SRCDIR)/srccache
+$(LLVM_TAR): | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 
 ifneq ($(LLVM_LLDB_TAR),)
-$(LLVM_LLDB_TAR): | $(SRCDIR)/srccache
+$(LLVM_LLDB_TAR): | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 ifeq ($(BUILD_LLDB),1)
@@ -238,7 +238,7 @@ endif
 
 # LLDB still relies on plenty of python 2.x infrastructure, without checking
 llvm_python_location=$(shell /usr/bin/env python2 -c 'import sys; print(sys.executable)')
-llvm_python_workaround=$(SRCDIR)/srccache/python2_path
+llvm_python_workaround=$(SRCCACHE)/python2_path
 $(llvm_python_workaround):
 	mkdir -p $@
 	-python -c 'import sys; sys.exit(not sys.version_info > (3, 0))' && \

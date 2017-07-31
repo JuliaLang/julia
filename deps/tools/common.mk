@@ -101,7 +101,7 @@ DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_inclu
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
 $(build_prefix): | $(DIRS)
-$(eval $(call dir_target,$(SRCDIR)/srccache))
+$(eval $(call dir_target,$(SRCCACHE)))
 
 
 upper = $(shell echo $1 | tr a-z A-Z)

@@ -1,6 +1,7 @@
 ## high-level setup ##
 default: install
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+SRCCACHE := $(abspath $(SRCDIR)/srccache)
 JULIAHOME := $(abspath $(SRCDIR)/..)
 ifeq ($(abspath .),$(abspath $(SRCDIR)))
 BUILDDIR := scratch
