@@ -51,7 +51,7 @@ immutable Token
     endpos::Tuple{Int, Int}
     startbyte::Int # The byte where the token start in the buffer
     endbyte::Int # The byte where the token ended in the buffer
-    val::Compat.UTF8String # The actual string of the token
+    val::String # The actual string of the token
     token_error::TokenError
 end
 
