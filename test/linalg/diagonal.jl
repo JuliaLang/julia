@@ -18,6 +18,16 @@ srand(1)
     end
     D = Diagonal(d)
     DM = diagm(d)
+
+    @testset "constructor" begin
+        for x in (d, GenericArray(d))
+            @test Diagonal(x)::Diagonal{elty,typeof(x)} == DM
+            @test Diagonal(x).diag === x
+            @test Diagonal{elty}(x)::Diagonal{elty,typeof(x)} == DM
+            @test Diagonal{elty}(x).diag === x
+        end
+    end
+
     @testset "Basic properties" begin
         @test eye(Diagonal{elty},n) == Diagonal(ones(elty,n))
         @test_throws ArgumentError size(D,0)
