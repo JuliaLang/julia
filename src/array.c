@@ -97,7 +97,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         // No allocation or safepoint allowed after this
         a->flags.how = 0;
         data = (char*)a + doffs;
-        if (tot > 0)
+        if (tot > 0 && !isunboxed)
             memset(data, 0, tot);
     }
     else {
