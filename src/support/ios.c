@@ -874,19 +874,30 @@ static void _ios_init(ios_t *s)
 /* stream object initializers. we do no allocation. */
 
 #if !defined(_OS_WINDOWS_)
+/*
+ * NOTE: we do not handle system call restart in this function,
+ * please do it manually:
+ *
+ *  do
+ *      open_cloexec(...)
+ *  while (-1 == fd && _enonfatal(errno))
+ */
 static int open_cloexec(const char *path, int flags, mode_t mode)
 {
 #ifdef O_CLOEXEC
-    static int no_cloexec=0;
+    static int no_cloexec = 0;
 
     if (!no_cloexec) {
         set_io_wait_begin(1);
         int fd = open(path, flags | O_CLOEXEC, mode);
         set_io_wait_begin(0);
+
         if (fd != -1)
             return fd;
         if (errno != EINVAL)
             return -1;
+
+        /* O_CLOEXEC not supported. */
         no_cloexec = 1;
     }
 #endif
@@ -918,12 +929,15 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
 #else
     // The mode of the created file is (mode & ~umask), which resolves with
     // default umask to u=rw,g=r,o=r
-    fd = open_cloexec(fname, flags,
-                      S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+    do
+        fd = open_cloexec(fname, flags,
+                          S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+    while (-1 == fd && _enonfatal(errno));
 #endif
-    s = ios_fd(s, fd, 1, 1);
     if (fd == -1)
         goto open_file_err;
+
+    s = ios_fd(s, fd, 1, 1);
     if (!rd)
         s->readable = 0;
     if (!wr)

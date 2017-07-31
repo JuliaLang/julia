@@ -24,8 +24,7 @@ be obtained from the `Schur` object `F` with either `F[:Schur]` or `F[:T]` and t
 orthogonal/unitary Schur vectors can be obtained with `F[:vectors]` or `F[:Z]` such that
 `A = F[:vectors]*F[:Schur]*F[:vectors]'`. The eigenvalues of `A` can be obtained with `F[:values]`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]
 3×3 Array{Float64,2}:
@@ -84,8 +83,7 @@ triangular Schur factor `T` and the orthogonal/unitary Schur vectors `Z` such th
 
 See [`schurfact`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]
 3×3 Array{Float64,2}:

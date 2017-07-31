@@ -14,7 +14,7 @@ end
 Quaternion(s::Real, v1::Real, v2::Real, v3::Real) = Quaternion(promote(s, v1, v2, v3)...)
 Base.abs2(q::Quaternion) = q.s*q.s + q.v1*q.v1 + q.v2*q.v2 + q.v3*q.v3
 Base.abs(q::Quaternion) = sqrt(abs2(q))
-Base.real{T}(::Type{Quaternion{T}}) = T
+Base.real(::Type{Quaternion{T}}) where {T} = T
 Base.conj(q::Quaternion) = Quaternion(q.s, -q.v1, -q.v2, -q.v3)
 Base.isfinite(q::Quaternion) = isfinite(q.s) & isfinite(q.v1) & isfinite(q.v2) & isfinite(q.v3)
 
@@ -48,6 +48,7 @@ for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, Complex{Float32}
 
     debug && println("element type: $elty")
 
+    @test logdet(A[1,1]) == log(det(A[1,1]))
     @test logdet(A) ≈ log(det(A))
     @test logabsdet(A)[1] ≈ log(abs(det(A)))
     @test logabsdet(convert(Matrix{elty}, -eye(n)))[2] == -1
@@ -141,7 +142,7 @@ y = ['a','b','c','d','e']
 @test !ishermitian(ones(5,3))
 @test cross(ones(3),ones(3)) == zeros(3)
 
-@test trace(Bidiagonal(ones(5),zeros(4),true)) == 5
+@test trace(Bidiagonal(ones(5),zeros(4),:U)) == 5
 
 
 # array and subarray tests
@@ -335,13 +336,13 @@ Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
 b = [ModInt{2}(1), ModInt{2}(0)]
 
-@test A*(lufact(A, Val{false})\b) == b
+@test A*(lufact(A, Val(false))\b) == b
 
 # Needed for pivoting:
 Base.abs(a::ModInt{n}) where {n} = a
 Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
-@test A*(lufact(A, Val{true})\b) == b
+@test A*(lufact(A, Val(true))\b) == b
 
 # test that the fallback throws properly for AbstractArrays with dimension > 2
 @test_throws ErrorException ctranspose(rand(2,2,2,2))

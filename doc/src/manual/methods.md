@@ -547,6 +547,9 @@ function getindex(A::AbstractArray{T,N}, indexes::Vararg{Number,N}) where {T,N}
 
 would be called only when the number of `indexes` matches the dimensionality of the array.
 
+When only the type of supplied arguments needs to be constrained `Vararg{T}` can be equivalently
+written as `T...`. For instance `f(x::Int...) = x` is a shorthand for `f(x::Vararg{Int}) = x`.
+
 ## Note on Optional and keyword Arguments
 
 As mentioned briefly in [Functions](@ref man-functions), optional arguments are implemented as syntax for multiple

@@ -3,9 +3,11 @@
 ## Basic functions ##
 
 """
-    AbstractArray{T, N}
+    AbstractArray{T,N}
 
-Abstract array supertype which arrays inherit from.
+Supertype for `N`-dimensional arrays (or array-like types) with elements of type `T`.
+[`Array`](@ref) and other types are subtypes of this. See the manual section on the
+[`AbstractArray` interface](@ref man-interface-array).
 """
 AbstractArray
 
@@ -16,6 +18,7 @@ Returns a tuple containing the dimensions of `A`. Optionally you can specify the
 dimension(s) you want the length of, and get the length of that dimension, or a tuple of the
 lengths of dimensions you asked for.
 
+# Examples
 ```jldoctest
 julia> A = ones(2,3,4);
 
@@ -28,13 +31,14 @@ julia> size(A,3,2)
 """
 size(t::AbstractArray{T,N}, d) where {T,N} = d <= N ? size(t)[d] : 1
 size(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) where {N} =
-    (size(x, d1), size(x, d2), ntuple(k->size(x, dx[k]), Val{N})...)
+    (size(x, d1), size(x, d2), ntuple(k->size(x, dx[k]), Val(N))...)
 
 """
     indices(A, d)
 
 Returns the valid range of indices for array `A` along dimension `d`.
 
+# Examples
 ```jldoctest
 julia> A = ones(5,6,7);
 
@@ -52,6 +56,7 @@ end
 
 Returns the tuple of valid indices for array `A`.
 
+# Examples
 ```jldoctest
 julia> A = ones(5,6,7);
 
@@ -86,6 +91,7 @@ is `indices(A, 1)`.
 Calling this function is the "safe" way to write algorithms that
 exploit linear indexing.
 
+# Examples
 ```jldoctest
 julia> A = ones(5,6,7);
 
@@ -105,6 +111,7 @@ elsize(::AbstractArray{T}) where {T} = sizeof(T)
 
 Returns the number of dimensions of `A`.
 
+# Examples
 ```jldoctest
 julia> A = ones(3,4,5);
 
@@ -121,6 +128,7 @@ ndims(::Type{T}) where {T<:AbstractArray} = ndims(supertype(T))
 
 Returns the number of elements in `A`.
 
+# Examples
 ```jldoctest
 julia> A = ones(3,4,5);
 
@@ -140,6 +148,7 @@ first(a::AbstractArray) = a[first(eachindex(a))]
 Get the first element of an iterable collection. Returns the start point of a
 `Range` even if it is empty.
 
+# Examples
 ```jldoctest
 julia> first(2:2:10)
 2
@@ -161,6 +170,7 @@ Get the last element of an ordered collection, if it can be computed in O(1) tim
 accomplished by calling [`endof`](@ref) to get the last index. Returns the end
 point of a `Range` even if it is empty.
 
+# Examples
 ```jldoctest
 julia> last(1:2:10)
 9
@@ -176,6 +186,7 @@ last(a) = a[end]
 
 Returns the distance in memory (in number of elements) between adjacent elements in dimension `k`.
 
+# Examples
 ```jldoctest
 julia> A = ones(3,4,5);
 
@@ -202,6 +213,7 @@ end
 
 Returns a tuple of the memory strides in each dimension.
 
+# Examples
 ```jldoctest
 julia> A = ones(3,4,5);
 
@@ -319,6 +331,7 @@ many cases one can rely on `A`'s indices and [`checkindex`](@ref).
 
 See also [`checkindex`](@ref).
 
+# Examples
 ```jldoctest
 julia> A = rand(3, 3);
 
@@ -439,11 +452,12 @@ Return `true` if the given `index` is within the bounds of
 arrays can extend this method in order to provide a specialized bounds
 checking implementation.
 
+# Examples
 ```jldoctest
-julia> checkindex(Bool,1:20,8)
+julia> checkindex(Bool, 1:20, 8)
 true
 
-julia> checkindex(Bool,1:20,21)
+julia> checkindex(Bool, 1:20, 21)
 false
 ```
 """
@@ -728,6 +742,7 @@ this is equivalent to `copy(a)`, but for other array types it may
 differ depending on the type of `similar(a)`.  For generic iterables
 this is equivalent to `collect(a)`.
 
+# Examples
 ```jldoctest
 julia> tup = (1, 2, 3)
 (1, 2, 3)
@@ -842,6 +857,12 @@ Represents the array `y` as an array having the same indices type as `x`.
 """
 of_indices(x, y) = similar(dims->y, oftype(indices(x), indices(y)))
 
+
+"""
+    full(F)
+
+Reconstruct the matrix `A` from the factorization `F=factorize(A)`.
+"""
 full(x::AbstractArray) = x
 
 ## range conversions ##
@@ -873,7 +894,35 @@ end
 #       getindex(::A{T,N}, ::Vararg{Int, N}) where {T,N} # if IndexCartesian()
 # If the subtype hasn't defined the required method, it falls back to the
 # _getindex function again where an error is thrown to prevent stack overflows.
+"""
+    getindex(A, inds...)
 
+Return a subset of array `A` as specified by `inds`, where each `ind` may be an
+`Int`, a `Range`, or a [`Vector`](@ref). See the manual section on
+[array indexing](@ref man-array-indexing) for details.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> getindex(A, 1)
+1
+
+julia> getindex(A, [2, 1])
+2-element Array{Int64,1}:
+ 3
+ 1
+
+julia> getindex(A, 2:4)
+3-element Array{Int64,1}:
+ 3
+ 2
+ 4
+```
+"""
 function getindex(A::AbstractArray, I...)
     @_propagate_inbounds_meta
     error_if_canonical_indexing(IndexStyle(A), A, I...)
@@ -898,7 +947,7 @@ _getindex(::IndexStyle, A::AbstractArray, I...) =
 ## IndexLinear Scalar indexing: canonical method is one Int
 _getindex(::IndexLinear, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
 _getindex(::IndexLinear, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_linear_index(A)))
-function _getindex(::IndexLinear, A::AbstractArray, I::Int...)
+function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
     @_inline_meta
     @boundscheck checkbounds(A, I...) # generally _to_linear_index requires bounds checking
     @inbounds r = getindex(A, _to_linear_index(A, I...))
@@ -915,7 +964,7 @@ function _getindex(::IndexCartesian, A::AbstractArray)
     @_propagate_inbounds_meta
     getindex(A, _to_subscript_indices(A)...)
 end
-function _getindex(::IndexCartesian, A::AbstractArray, I::Int...)
+function _getindex(::IndexCartesian, A::AbstractArray, I::Vararg{Int,M}) where M
     @_inline_meta
     @boundscheck checkbounds(A, I...) # generally _to_subscript_indices requires bounds checking
     @inbounds r = getindex(A, _to_subscript_indices(A, I...)...)
@@ -926,13 +975,13 @@ function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) w
     getindex(A, I...)
 end
 _to_subscript_indices(A::AbstractArray, i::Int) = (@_inline_meta; _unsafe_ind2sub(A, i))
-_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@_inline_meta; fill_to_length((), 1, Val{N})) # TODO: DEPRECATE FOR #14770
+_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@_inline_meta; fill_to_length((), 1, Val(N))) # TODO: DEPRECATE FOR #14770
 _to_subscript_indices(A::AbstractArray{T,0}) where {T} = () # TODO: REMOVE FOR #14770
 _to_subscript_indices(A::AbstractArray{T,0}, i::Int) where {T} = () # TODO: REMOVE FOR #14770
 _to_subscript_indices(A::AbstractArray{T,0}, I::Int...) where {T} = () # TODO: DEPRECATE FOR #14770
 function _to_subscript_indices(A::AbstractArray{T,N}, I::Int...) where {T,N} # TODO: DEPRECATE FOR #14770
     @_inline_meta
-    J, Jrem = IteratorsMD.split(I, Val{N})
+    J, Jrem = IteratorsMD.split(I, Val(N))
     _to_subscript_indices(A, J, Jrem)
 end
 _to_subscript_indices(A::AbstractArray, J::Tuple, Jrem::Tuple{}) =
@@ -959,6 +1008,12 @@ _unsafe_ind2sub(sz, i) = (@_inline_meta; ind2sub(sz, i))
 
 ## Setindex! is defined similarly. We first dispatch to an internal _setindex!
 # function that allows dispatch on array storage
+
+"""
+    setindex!(A, X, inds...)
+
+Store values from array `X` within some subset of `A` as specified by `inds`.
+"""
 function setindex!(A::AbstractArray, v, I...)
     @_propagate_inbounds_meta
     error_if_canonical_indexing(IndexStyle(A), A, I...)
@@ -976,7 +1031,7 @@ _setindex!(::IndexStyle, A::AbstractArray, v, I...) =
 ## IndexLinear Scalar indexing
 _setindex!(::IndexLinear, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
 _setindex!(::IndexLinear, A::AbstractArray, v) = (@_propagate_inbounds_meta; setindex!(A, v, _to_linear_index(A)))
-function _setindex!(::IndexLinear, A::AbstractArray, v, I::Int...)
+function _setindex!(::IndexLinear, A::AbstractArray, v, I::Vararg{Int,M}) where M
     @_inline_meta
     @boundscheck checkbounds(A, I...)
     @inbounds r = setindex!(A, v, _to_linear_index(A, I...))
@@ -992,7 +1047,7 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v)
     @_propagate_inbounds_meta
     setindex!(A, v, _to_subscript_indices(A)...)
 end
-function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Int...)
+function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) where M
     @_inline_meta
     @boundscheck checkbounds(A, I...)
     @inbounds r = setindex!(A, v, _to_subscript_indices(A, I...)...)
@@ -1169,7 +1224,7 @@ cat_shape(dims, shape::Tuple) = shape
 
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, nshape) = nshape
-_cshp(ndim::Int, dims, ::Tuple{}, ::Tuple{}) = ntuple(b -> 1, Val{length(dims)})
+_cshp(ndim::Int, dims, ::Tuple{}, ::Tuple{}) = ntuple(b -> 1, Val(length(dims)))
 @inline _cshp(ndim::Int, dims, shape, ::Tuple{}) =
     (shape[1] + dims[1], _cshp(ndim + 1, tail(dims), tail(shape), ())...)
 @inline _cshp(ndim::Int, dims, ::Tuple{}, nshape) =
@@ -1192,7 +1247,7 @@ end
 _cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
     "mismatch in dimension $d (expected $a got $b)")))
 
-dims2cat(::Type{Val{n}}) where {n} = ntuple(i -> (i == n), Val{n})
+dims2cat(::Val{n}) where {n} = ntuple(i -> (i == n), Val(n))
 dims2cat(dims) = ntuple(i -> (i in dims), maximum(dims))
 
 cat(dims, X...) = cat_t(dims, promote_eltypeof(X...), X...)
@@ -1231,6 +1286,7 @@ end
 
 Concatenate along dimension 1.
 
+# Examples
 ```jldoctest
 julia> a = [1 2 3 4 5]
 1×5 Array{Int64,2}:
@@ -1256,12 +1312,13 @@ julia> vcat(c...)
  4  5  6
 ```
 """
-vcat(X...) = cat(Val{1}, X...)
+vcat(X...) = cat(Val(1), X...)
 """
     hcat(A...)
 
 Concatenate along dimension 2.
 
+# Examples
 ```jldoctest
 julia> a = [1; 2; 3; 4; 5]
 5-element Array{Int64,1}:
@@ -1297,28 +1354,28 @@ julia> hcat(c...)
  3  6
 ```
 """
-hcat(X...) = cat(Val{2}, X...)
+hcat(X...) = cat(Val(2), X...)
 
-typed_vcat(T::Type, X...) = cat_t(Val{1}, T, X...)
-typed_hcat(T::Type, X...) = cat_t(Val{2}, T, X...)
+typed_vcat(T::Type, X...) = cat_t(Val(1), T, X...)
+typed_hcat(T::Type, X...) = cat_t(Val(2), T, X...)
 
 cat(catdims, A::AbstractArray{T}...) where {T} = cat_t(catdims, T, A...)
 
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158
-vcat(A::AbstractArray) = cat(Val{1}, A)
-vcat(A::AbstractArray, B::AbstractArray) = cat(Val{1}, A, B)
-vcat(A::AbstractArray...) = cat(Val{1}, A...)
-hcat(A::AbstractArray) = cat(Val{2}, A)
-hcat(A::AbstractArray, B::AbstractArray) = cat(Val{2}, A, B)
-hcat(A::AbstractArray...) = cat(Val{2}, A...)
+vcat(A::AbstractArray) = cat(Val(1), A)
+vcat(A::AbstractArray, B::AbstractArray) = cat(Val(1), A, B)
+vcat(A::AbstractArray...) = cat(Val(1), A...)
+hcat(A::AbstractArray) = cat(Val(2), A)
+hcat(A::AbstractArray, B::AbstractArray) = cat(Val(2), A, B)
+hcat(A::AbstractArray...) = cat(Val(2), A...)
 
-typed_vcat(T::Type, A::AbstractArray) = cat_t(Val{1}, T, A)
-typed_vcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(Val{1}, T, A, B)
-typed_vcat(T::Type, A::AbstractArray...) = cat_t(Val{1}, T, A...)
-typed_hcat(T::Type, A::AbstractArray) = cat_t(Val{2}, T, A)
-typed_hcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(Val{2}, T, A, B)
-typed_hcat(T::Type, A::AbstractArray...) = cat_t(Val{2}, T, A...)
+typed_vcat(T::Type, A::AbstractArray) = cat_t(Val(1), T, A)
+typed_vcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(Val(1), T, A, B)
+typed_vcat(T::Type, A::AbstractArray...) = cat_t(Val(1), T, A...)
+typed_hcat(T::Type, A::AbstractArray) = cat_t(Val(2), T, A)
+typed_hcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(Val(2), T, A, B)
+typed_hcat(T::Type, A::AbstractArray...) = cat_t(Val(2), T, A...)
 
 # 2d horizontal and vertical concatenation
 
@@ -1338,6 +1395,7 @@ Horizontal and vertical concatenation in one call. This function is called for b
 syntax. The first argument specifies the number of arguments to concatenate in each block
 row.
 
+# Examples
 ```jldoctest
 julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
 (1, 2, 3, 4, 5, 6)
@@ -1543,6 +1601,7 @@ end
 
 Returns a tuple of subscripts into array `a` corresponding to the linear index `index`.
 
+# Examples
 ```jldoctest
 julia> A = ones(5,6,7);
 
@@ -1570,6 +1629,7 @@ sub2ind(::Tuple{}, I::Integer...) = (@_inline_meta; _sub2ind((), 1, 1, I...))
 
 The inverse of [`ind2sub`](@ref), returns the linear index corresponding to the provided subscripts.
 
+# Examples
 ```jldoctest
 julia> sub2ind((5,6,7),1,2,3)
 66
@@ -1611,14 +1671,14 @@ ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsE
 Returns a tuple of subscripts into an array with dimensions `dims`,
 corresponding to the linear index `index`.
 
-**Example**:
-
+# Examples
 ```
 i, j, ... = ind2sub(size(A), indmax(A))
 ```
 
 provides the indices of the maximum element.
 
+# Examples
 ```jldoctest
 julia> ind2sub((3,4),2)
 (2, 1)
@@ -1687,7 +1747,7 @@ _sub2ind_vec(i) = ()
 
 function ind2sub(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{<:Integer}) where N
     M = length(ind)
-    t = ntuple(n->similar(ind),Val{N})
+    t = ntuple(n->similar(ind),Val(N))
     for (i,idx) in enumerate(IndexLinear(), ind)
         sub = ind2sub(inds, idx)
         for j = 1:N
@@ -1718,7 +1778,7 @@ For multiple iterable arguments, `f` is called elementwise.
 `foreach` should be used instead of `map` when the results of `f` are not
 needed, for example in `foreach(println, array)`.
 
-# Example
+# Examples
 ```jldoctest
 julia> a = 1:3:7;
 
@@ -1924,7 +1984,7 @@ end
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the first collection.
 
-# Example
+# Examples
 ```jldoctest
 julia> x = zeros(3);
 

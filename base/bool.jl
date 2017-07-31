@@ -3,8 +3,8 @@
 ## boolean conversions ##
 
 convert(::Type{Bool}, x::Bool) = x
-convert(::Type{Bool}, x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError())
-convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
+convert(::Type{Bool}, x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError(:convert, Bool, x))
+convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:convert, Bool, x))
 
 # promote Bool to any other numeric type
 promote_rule(::Type{Bool}, ::Type{T}) where {T<:Number} = T
@@ -19,6 +19,7 @@ typemax(::Type{Bool}) = true
 
 Boolean not.
 
+# Examples
 ```jldoctest
 julia> !true
 false
@@ -50,6 +51,7 @@ Bitwise exclusive or of `x` and `y`.  The infix operation
 `⊻` can be typed by tab-completing `\\xor`
 or `\\veebar` in the Julia REPL.
 
+# Examples
 ```jldoctest
 julia> [true; true; false] .⊻ [true; false; false]
 3-element BitArray{1}:
@@ -77,6 +79,7 @@ sign(x::Bool) = x
 abs(x::Bool) = x
 abs2(x::Bool) = x
 iszero(x::Bool) = !x
+isone(x::Bool) = x
 
 <(x::Bool, y::Bool) = y&!x
 <=(x::Bool, y::Bool) = y|!x

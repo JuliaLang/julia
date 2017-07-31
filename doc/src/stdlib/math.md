@@ -12,6 +12,7 @@ Base.:\(::Any, ::Any)
 Base.:^(::Number, ::Number)
 Base.fma
 Base.muladd
+Base.inv(::Number)
 Base.div
 Base.fld
 Base.cld

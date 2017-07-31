@@ -8,6 +8,16 @@
 @test eltype(GenericString) == Char
 @test start("abc") == 1
 @test cmp("ab","abc") == -1
+@test "abc" === "abc"
+@test "ab"  !== "abc"
+@test string("ab", 'c') === "abc"
+codegen_egal_of_strings(x, y) = (x===y, x!==y)
+@test codegen_egal_of_strings(string("ab", 'c'), "abc") === (true, false)
+let strs = ["", "a", "a b c", "до свидания"]
+    for x in strs, y in strs
+        @test (x === y) == (object_id(x) == object_id(y))
+    end
+end
 
 # {starts,ends}with
 @test startswith("abcd", 'a')
@@ -69,11 +79,13 @@ end
 @test_throws ArgumentError gensym("ab\0")
 
 # issue #6949
-let f =IOBuffer(),
+let f = IOBuffer(),
     x = split("1 2 3")
-    @test write(f, x) == 3
-    @test String(take!(f)) == "123"
-    @test invoke(write, Tuple{IO, AbstractArray}, f, x) == 3
+    local nb = 0
+    for c in x
+        nb += write(f, c)
+    end
+    @test nb == 3
     @test String(take!(f)) == "123"
 end
 
@@ -258,7 +270,7 @@ let s = normalize_string("tést",:NFKC)
 end
 @test_throws ArgumentError Base.unsafe_convert(Cstring, Base.cconvert(Cstring, "ba\0d"))
 
-cstrdup(s) = @static is_windows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
+cstrdup(s) = @static Sys.iswindows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
     @test unsafe_string(p) == "hello"
     Libc.free(p)
@@ -478,9 +490,23 @@ Base.endof(x::CharStr) = endof(x.chars)
 @test cmp(CharStr("\U1f596"), "\U1f596\U1f596") == -1
 
 # repeat function
-@test repeat("xx",3) == repeat("x",6) == "xxxxxx"
-@test repeat("αα",3) == repeat("α",6) == "αααααα"
+@inferred repeat(GenericString("x"), 1)
+@test repeat("xx",3) == repeat("x",6) == repeat('x',6) == repeat(GenericString("x"), 6) == "xxxxxx"
+@test repeat("αα",3) == repeat("α",6) == repeat('α',6) == repeat(GenericString("α"), 6) == "αααααα"
+@test repeat("x",1) == repeat('x',1) == "x"^1 == 'x'^1 == GenericString("x")^1 == "x"
+@test repeat("x",0) == repeat('x',0) == "x"^0 == 'x'^0 == GenericString("x")^0 == ""
 
 # issue #12495: check that logical indexing attempt raises ArgumentError
 @test_throws ArgumentError "abc"[[true, false, true]]
 @test_throws ArgumentError "abc"[BitArray([true, false, true])]
+
+@test "ab" * "cd" == "abcd"
+@test 'a' * "bc" == "abc"
+@test "ab" * 'c' == "abc"
+@test 'a' * 'b' == "ab"
+@test 'a' * "b" * 'c' == "abc"
+@test "a" * 'b' * 'c' == "abc"
+
+# unrecognized escapes in string/char literals
+@test_throws ParseError parse("\"\\.\"")
+@test_throws ParseError parse("\'\\.\'")

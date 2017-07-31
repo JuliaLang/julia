@@ -270,7 +270,12 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     return h
 end
 
-function sizehint!(d::Dict, newsz)
+max_values(::Type) = typemax(Int)
+max_values(T::Type{<:Union{Void,BitIntegerSmall}}) = 1 << (8*sizeof(T))
+max_values(T::Union) = max(max_values(T.a), max_values(T.b))
+max_values(::Type{Bool}) = 2
+
+function sizehint!(d::Dict{T}, newsz) where T
     oldsz = length(d.slots)
     if newsz <= oldsz
         # todo: shrink
@@ -279,7 +284,8 @@ function sizehint!(d::Dict, newsz)
         return d
     end
     # grow at least 25%
-    newsz = max(newsz, (oldsz*5)>>2)
+    newsz = min(max(newsz, (oldsz*5)>>2),
+                max_values(T))
     rehash!(d, newsz)
 end
 

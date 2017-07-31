@@ -75,7 +75,23 @@ julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
  -4.0  -3.0   5.0
 
 julia> factorize(B)
-Base.LinAlg.BunchKaufman{Float64,Array{Float64,2}}([-1.64286 0.142857 -0.8; 2.0 -2.8 -0.6; -4.0 -3.0 5.0], [1, 2, 3], 'U', true, false, 0)
+Base.LinAlg.BunchKaufman{Float64,Array{Float64,2}}
+D factor:
+3×3 Tridiagonal{Float64}:
+ -1.64286   0.0   ⋅
+  0.0      -2.8  0.0
+   ⋅        0.0  5.0
+U factor:
+3×3 Base.LinAlg.UnitUpperTriangular{Float64,Array{Float64,2}}:
+ 1.0  0.142857  -0.8
+ 0.0  1.0       -0.6
+ 0.0  0.0        1.0
+permutation:
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+successful: true
 ```
 
 Here, Julia was able to detect that `B` is in fact symmetric, and used a more appropriate factorization.

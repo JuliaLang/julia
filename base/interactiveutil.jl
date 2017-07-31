@@ -10,7 +10,7 @@ for use within backticks. You can change the editor by setting `JULIA_EDITOR`, `
 `EDITOR` as an environment variable.
 """
 function editor()
-    if is_windows() || is_apple()
+    if Sys.iswindows() || Sys.isapple()
         default_editor = "open"
     elseif isfile("/etc/alternatives/editor")
         default_editor = "/etc/alternatives/editor"
@@ -40,20 +40,23 @@ function edit(path::AbstractString, line::Integer=0)
     end
     background = true
     line_unsupported = false
-    if startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
-        cmd = line != 0 ? `$command +$line $path` : `$command $path`
-    elseif startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
+    if startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" ||
+            name == "mvim" || name == "nano" ||
+            name == "emacs" && contains(in, command, ["-nw", "--no-window-system" ]) ||
+            name == "emacsclient" && contains(in, command, ["-nw", "-t", "-tty"])
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
         background = false
+    elseif startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
+        cmd = line != 0 ? `$command +$line $path` : `$command $path`
     elseif name == "textmate" || name == "mate" || name == "kate"
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
-    elseif name == "code" || (is_windows() && uppercase(name) == "CODE.EXE")
+    elseif name == "code" || (Sys.iswindows() && uppercase(name) == "CODE.EXE")
         cmd = line != 0 ? `$command -g $path:$line` : `$command -g $path`
     elseif startswith(name, "notepad++")
         cmd = line != 0 ? `$command $path -n$line` : `$command $path`
-    elseif is_apple() && name == "open"
+    elseif Sys.isapple() && name == "open"
         cmd = `open -t $path`
         line_unsupported = true
     else
@@ -62,8 +65,8 @@ function edit(path::AbstractString, line::Integer=0)
         line_unsupported = true
     end
 
-    if is_windows() && name == "open"
-        @static is_windows() && # don't emit this ccall on other platforms
+    if Sys.iswindows() && name == "open"
+        @static Sys.iswindows() && # don't emit this ccall on other platforms
             systemerror(:edit, ccall((:ShellExecuteW, "shell32"), stdcall, Int,
                                      (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
                                      C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
@@ -84,21 +87,21 @@ Edit the definition of a function, optionally specifying a tuple of types to
 indicate which method to edit. The editor can be changed by setting `JULIA_EDITOR`,
 `VISUAL` or `EDITOR` as an environment variable.
 """
-edit(f)          = edit(functionloc(f)...)
-edit(f, t::ANY)  = edit(functionloc(f,t)...)
+edit(f)                   = edit(functionloc(f)...)
+edit(f, @nospecialize t)  = edit(functionloc(f,t)...)
 edit(file, line::Integer) = error("could not find source file for function")
 
 # terminal pager
 
-if is_windows()
+if Sys.iswindows()
     function less(file::AbstractString, line::Integer)
-        pager = get(ENV, "PAGER", "more")
-        g = pager == "more" ? "" : "g"
+        pager = shell_split(get(ENV, "PAGER", "more"))
+        g = pager[1] == "more" ? "" : "g"
         run(Cmd(`$pager +$(line)$(g) \"$file\"`, windows_verbatim = true))
     end
 else
     function less(file::AbstractString, line::Integer)
-        pager = get(ENV, "PAGER", "less")
+        pager = shell_split(get(ENV, "PAGER", "less"))
         run(`$pager +$(line)g $file`)
     end
 end
@@ -117,21 +120,21 @@ less(file::AbstractString) = less(file, 1)
 Show the definition of a function using the default pager, optionally specifying a tuple of
 types to indicate which method to see.
 """
-less(f)          = less(functionloc(f)...)
-less(f, t::ANY)  = less(functionloc(f,t)...)
+less(f)                   = less(functionloc(f)...)
+less(f, @nospecialize t)  = less(functionloc(f,t)...)
 less(file, line::Integer) = error("could not find source file for function")
 
 # clipboard copy and paste
 
-if is_apple()
+if Sys.isapple()
     function clipboard(x)
         open(pipeline(`pbcopy`, stderr=STDERR), "w") do io
             print(io, x)
         end
     end
-    clipboard() = readstring(`pbpaste`)
+    clipboard() = read(`pbpaste`, String)
 
-elseif is_linux()
+elseif Sys.islinux()
     _clipboardcmd = nothing
     function clipboardcmd()
         global _clipboardcmd
@@ -155,10 +158,10 @@ elseif is_linux()
         cmd = c == :xsel  ? `xsel --nodetach --output --clipboard` :
               c == :xclip ? `xclip -quiet -out -selection clipboard` :
             error("unexpected clipboard command: $c")
-        readstring(pipeline(cmd, stderr=STDERR))
+        read(pipeline(cmd, stderr=STDERR), String)
     end
 
-elseif is_windows()
+elseif Sys.iswindows()
     # TODO: these functions leak memory and memory locks if they throw an error
     function clipboard(x::AbstractString)
         if containsnul(x)
@@ -262,21 +265,21 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
         println(io, "DEBUG build")
     end
     println(io, "Platform Info:")
-    println(io, "  OS: ", is_windows() ? "Windows" : is_apple() ?
+    println(io, "  OS: ", Sys.iswindows() ? "Windows" : Sys.isapple() ?
         "macOS" : Sys.KERNEL, " (", Sys.MACHINE, ")")
 
     if verbose
         lsb = ""
-        if is_linux()
+        if Sys.islinux()
             try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=DevNull)) end
         end
-        if is_windows()
-            try lsb = strip(readstring(`$(ENV["COMSPEC"]) /c ver`)) end
+        if Sys.iswindows()
+            try lsb = strip(read(`$(ENV["COMSPEC"]) /c ver`, String)) end
         end
         if !isempty(lsb)
             println(io, "      ", lsb)
         end
-        if is_unix()
+        if Sys.isunix()
             println(io, "  uname: ", readchomp(`uname -mprsv`))
         end
     end
@@ -343,7 +346,7 @@ This serves as a warning of potential type instability. Not all non-leaf types a
 problematic for performance, so the results need to be used judiciously.
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
-function code_warntype(io::IO, f, t::ANY)
+function code_warntype(io::IO, f, @nospecialize(t))
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
     for (src, rettype) in code_typed(f, t)
         println(emph_io, "Variables:")
@@ -367,7 +370,7 @@ function code_warntype(io::IO, f, t::ANY)
     end
     nothing
 end
-code_warntype(f, t::ANY) = code_warntype(STDOUT, f, t)
+code_warntype(f, @nospecialize(t)) = code_warntype(STDOUT, f, t)
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
 
@@ -525,7 +528,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
 """
 :@code_native
 
-function type_close_enough(x::ANY, t::ANY)
+function type_close_enough(@nospecialize(x), @nospecialize(t))
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
             !isleaftype(t) && x <: t) ||
@@ -551,7 +554,7 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
                        (type_close_enough(x, t) ||
                         (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                          (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
-                        x != Any && x != ANY)
+                        x != Any)
                    end
                end,
                unwrap_unionall(d.sig).parameters)
@@ -592,7 +595,7 @@ end
 # file downloading
 
 downloadcmd = nothing
-if is_windows()
+if Sys.iswindows()
     function download(url::AbstractString, filename::AbstractString)
         res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
                     (Ptr{Void},Cwstring,Cwstring,Cuint,Ptr{Void}),C_NULL,url,filename,0,C_NULL)
@@ -691,7 +694,7 @@ function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2))
         buf = PipeBuffer()
         versioninfo(buf)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
-              "including error messages above and the output of versioninfo():\n$(readstring(buf))")
+              "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end
 end
 

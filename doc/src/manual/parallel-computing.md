@@ -344,7 +344,7 @@ The function `count_heads` simply adds together `n` random bits. Here is how we 
 trials on two machines, and add together the results:
 
 ```julia-repl
-julia> @everywhere include("count_heads.jl")
+julia> @everywhere include_string(Main, $(read("count_heads.jl", String)), "count_heads.jl")
 
 julia> a = @spawn count_heads(100000000)
 Future(2, 1, 6, Nullable{Any}())
@@ -781,14 +781,16 @@ julia> @elapsed while n > 0 # print out results
 
 ## Remote References and Distributed Garbage Collection
 
-Objects referred to by remote references can be freed only when *all* held references in the cluster
-are deleted.
+Objects referred to by remote references can be freed only when *all* held references
+in the cluster are deleted.
 
 The node where the value is stored keeps track of which of the workers have a reference to it.
 Every time a [`RemoteChannel`](@ref) or a (unfetched) [`Future`](@ref) is serialized to a worker,
 the node pointed to by the reference is notified. And every time a [`RemoteChannel`](@ref) or
 a (unfetched) [`Future`](@ref) is garbage collected locally, the node owning the value is again
-notified.
+notified. This is implemented in an internal cluster aware serializer. Remote references are only
+valid in the context of a running cluster. Serializing and deserializing references to and from
+regular `IO` objects is not supported.
 
 The notifications are done via sending of "tracking" messages--an "add reference" message when
 a reference is serialized to a different process and a "delete reference" message when a reference
@@ -1103,11 +1105,18 @@ The [`launch()`](@ref) method is called asynchronously in a separate task. The t
 this task signals that all requested workers have been launched. Hence the [`launch()`](@ref)
 function MUST exit as soon as all the requested workers have been launched.
 
-Newly launched workers are connected to each other, and the master process, in an all-to-all manner.
-Specifying the command argument `--worker <cookie>` results in the launched processes initializing
-themselves as workers and connections being set up via TCP/IP sockets. Optionally, `--bind-to bind_addr[:port]`
-may also be specified to enable other workers to connect to it at the specified `bind_addr` and
-`port`. This is useful for multi-homed hosts.
+Newly launched workers are connected to each other and the master process in an all-to-all manner.
+Specifying the command line argument `--worker[=<cookie>]` results in the launched processes
+initializing themselves as workers and connections being set up via TCP/IP sockets.
+
+All workers in a cluster share the same [cookie](#cluster-cookie) as the master. When the cookie is
+unspecified, i.e, with the `--worker` option, the worker tries to read it from its standard input.
+ `LocalManager` and `SSHManager` both pass the cookie to newly launched workers via their
+ standard inputs.
+
+By default a worker will listen on a free port at the address returned by a call to `getipaddr()`.
+A specific address to listen on may be specified by optional argument `--bind-to bind_addr[:port]`.
+This is useful for multi-homed hosts.
 
 As an example of a non-TCP/IP transport, an implementation may choose to use MPI, in which case
 `--worker` must NOT be specified. Instead, newly launched workers should call `init_worker(cookie)`
@@ -1270,10 +1279,12 @@ on the master process:
     it and returns the new cookie.
   * All connections are authenticated on both sides to ensure that only workers started by the master
     are allowed to connect to each other.
-  * The cookie must be passed to the workers at startup via argument `--worker <cookie>`. Custom ClusterManagers
-    can retrieve the cookie on the master by calling [`Base.cluster_cookie()`](@ref). Cluster managers
-    not using the default TCP/IP transport (and hence not specifying `--worker`) must call `init_worker(cookie, manager)`
-    with the same cookie as on the master.
+  * The cookie may be passed to the workers at startup via argument `--worker=<cookie>`. If argument
+    `--worker` is specified without the cookie, the worker tries to read the cookie from its
+    standard input (STDIN). The STDIN is closed immediately after the cookie is retrieved.
+  * ClusterManagers can retrieve the cookie on the master by calling [`Base.cluster_cookie()`](@ref).
+    Cluster managers not using the default TCP/IP transport (and hence not specifying `--worker`)
+    must call `init_worker(cookie, manager)` with the same cookie as on the master.
 
 Note that environments requiring higher levels of security can implement this via a custom `ClusterManager`.
 For example, cookies can be pre-shared and hence not specified as a startup argument.
@@ -1288,6 +1299,12 @@ connected to each other:
   * `:custom`: the `launch` method of the cluster manager specifies the connection topology via the
     fields `ident` and `connect_idents` in `WorkerConfig`. A worker with a cluster-manager-provided
     identity `ident` will connect to all workers specified in `connect_idents`.
+
+Keyword argument `lazy=true|false` only affects `topology` option `:all_to_all`. If `true`, the cluster
+starts off with the master connected to all workers. Specific worker-worker connections are established
+at the first remote invocation between two workers. This helps in reducing initial resources allocated for
+intra-cluster communication. Connections are setup depending on the runtime requirements of a parallel
+program. Default value for `lazy` is `true`.
 
 Currently, sending a message between unconnected workers results in an error. This behaviour,
 as with the functionality and interface, should be considered experimental in nature and may change

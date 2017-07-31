@@ -19,8 +19,14 @@ Complex(x::Real) = Complex(x, zero(x))
     im
 
 The imaginary unit.
+
+# Examples
+```jldoctest
+julia> im * im
+-1 + 0im
+```
 """
-const im = Complex(false,true)
+const im = Complex(false, true)
 
 const Complex128 = Complex{Float64}
 const Complex64  = Complex{Float32}
@@ -29,7 +35,7 @@ const Complex32  = Complex{Float16}
 convert(::Type{Complex{T}}, x::Real) where {T<:Real} = Complex{T}(x,0)
 convert(::Type{Complex{T}}, z::Complex) where {T<:Real} = Complex{T}(real(z),imag(z))
 convert(::Type{T}, z::Complex) where {T<:Real} =
-    isreal(z) ? convert(T,real(z)) : throw(InexactError())
+    isreal(z) ? convert(T,real(z)) : throw(InexactError(:convert, T, z))
 
 convert(::Type{Complex}, z::Complex) = z
 convert(::Type{Complex}, x::Real) = Complex(x)
@@ -49,6 +55,7 @@ float(::Type{Complex{T}}) where {T} = Complex{float(T)}
 
 Return the real part of the complex number `z`.
 
+# Examples
 ```jldoctest
 julia> real(1 + 3im)
 1
@@ -61,6 +68,7 @@ real(z::Complex) = z.re
 
 Return the imaginary part of the complex number `z`.
 
+# Examples
 ```jldoctest
 julia> imag(1 + 3im)
 3
@@ -75,6 +83,7 @@ imag(x::Real) = zero(x)
 
 Return both the real and imaginary parts of the complex number `z`.
 
+# Examples
 ```jldoctest
 julia> reim(1 + 3im)
 (1, 3)
@@ -106,6 +115,7 @@ real(::Type{Complex{T}}) where {T<:Real} = T
 
 Test whether `x` or all its elements are numerically equal to some real number.
 
+# Examples
 ```jldoctest
 julia> isreal(5.)
 true
@@ -121,6 +131,7 @@ isfinite(z::Complex) = isfinite(real(z)) & isfinite(imag(z))
 isnan(z::Complex) = isnan(real(z)) | isnan(imag(z))
 isinf(z::Complex) = isinf(real(z)) | isinf(imag(z))
 iszero(z::Complex) = iszero(real(z)) & iszero(imag(z))
+isone(z::Complex) = isone(real(z)) & iszero(imag(z))
 
 """
     complex(r, [i])
@@ -137,6 +148,7 @@ complex(x::Real, y::Real) = Complex(x, y)
 Returns an appropriate type which can represent a value of type `T` as a complex number.
 Equivalent to `typeof(complex(zero(T)))`.
 
+# Examples
 ```jldoctest
 julia> complex(Complex{Int})
 Complex{Int64}
@@ -169,6 +181,16 @@ end
 show(io::IO, z::Complex{Bool}) =
     print(io, z == im ? "im" : "Complex($(z.re),$(z.im))")
 
+function show_unquoted(io::IO, z::Complex, ::Int, prec::Int)
+    if operator_precedence(:+) <= prec
+        print(io, "(")
+        show(io, z)
+        print(io, ")")
+    else
+        show(io, z)
+    end
+end
+
 function read(s::IO, ::Type{Complex{T}}) where T<:Real
     r = read(s,T)
     i = read(s,T)
@@ -188,6 +210,8 @@ bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
 ==(x::Real, z::Complex) = isreal(z) && real(z) == x
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
+
+in(x::Complex, r::Range{<:Real}) = isreal(x) && real(x) in r
 
 if UInt === UInt64
     const h_imag = 0x32a7a07f3e7cd1f9
@@ -209,6 +233,7 @@ end
 
 Compute the complex conjugate of a complex number `z`.
 
+# Examples
 ```jldoctest
 julia> conj(1 + 3im)
 1 - 3im
@@ -441,6 +466,12 @@ end
     cis(z)
 
 Return ``\\exp(iz)``.
+
+# Examples
+```jldoctest
+julia> cis(π) ≈ -1
+true
+```
 """
 function cis(z::Complex)
     v = exp(-imag(z))
@@ -452,6 +483,18 @@ end
     angle(z)
 
 Compute the phase angle in radians of a complex number `z`.
+
+# Examples
+```jldoctest
+julia> rad2deg(angle(1 + im))
+45.0
+
+julia> rad2deg(angle(1 - im))
+-45.0
+
+julia> rad2deg(angle(-1 - im))
+-135.0
+```
 """
 angle(z::Complex) = atan2(imag(z), real(z))
 

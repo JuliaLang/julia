@@ -875,9 +875,9 @@ function _sockname(sock, self=true)
     uv_error("cannot obtain socket name", r)
     if r == 0
         port = ntoh(rport[])
-        af_inet6 = @static if is_windows() # AF_INET6 in <sys/socket.h>
+        af_inet6 = @static if Sys.iswindows() # AF_INET6 in <sys/socket.h>
             23
-        elseif is_apple()
+        elseif Sys.isapple()
             30
         elseif Sys.KERNEL ∈ (:FreeBSD, :DragonFly)
             28

@@ -5,7 +5,8 @@
 """
     <:(T1, T2)
 
-Subtype operator, equivalent to `issubtype(T1, T2)`.
+Subtype operator: returns `true` if and only if all values of type `T1` are
+also of type `T2`.
 
 ```jldoctest
 julia> Float64 <: AbstractFloat
@@ -18,14 +19,14 @@ julia> Matrix{Float64} <: Matrix{AbstractFloat}
 false
 ```
 """
-const (<:) = issubtype
+(<:)
 
 """
     >:(T1, T2)
 
-Supertype operator, equivalent to `issubtype(T2, T1)`.
+Supertype operator, equivalent to `T2 <: T1`.
 """
-const (>:)(a::ANY, b::ANY) = issubtype(b, a)
+const (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 
 """
     supertype(T::DataType)
@@ -70,6 +71,7 @@ Scalar types generally do not need to implement `isequal` separate from `==`, un
 represent floating-point numbers amenable to a more efficient implementation than that
 provided as a generic fallback (based on `isnan`, `signbit`, and `==`).
 
+# Examples
 ```jldoctest
 julia> isequal([1., NaN], [1., NaN])
 true
@@ -118,6 +120,7 @@ end
 Not-equals comparison operator. Always gives the opposite answer as `==`. New types should
 generally not implement this, and rely on the fallback definition `!=(x,y) = !(x==y)` instead.
 
+# Examples
 ```jldoctest
 julia> 3 != 2
 true
@@ -137,6 +140,7 @@ Determine whether `x` and `y` are identical, in the sense that no program could 
 them. Compares mutable objects by address in memory, and compares immutable objects (such as
 numbers) by contents at the bit level. This function is sometimes called `egal`.
 
+# Examples
 ```jldoctest
 julia> a = [1, 2]; b = [1, 2];
 
@@ -159,6 +163,7 @@ const ≡ = ===
 
 Equivalent to `!(x === y)`.
 
+# Examples
 ```jldoctest
 julia> a = [1, 2]; b = [1, 2];
 
@@ -180,6 +185,7 @@ arguments of the new type. Because of the behavior of floating-point NaN values,
 implements a partial order. Types with a canonical partial order should implement `<`, and
 types with a canonical total order should implement `isless`.
 
+# Examples
 ```jldoctest
 julia> 'a' < 'b'
 true
@@ -199,6 +205,7 @@ false
 Greater-than comparison operator. Generally, new types should implement `<` instead of this
 function, and rely on the fallback definition `>(x, y) = y < x`.
 
+# Examples
 ```jldoctest
 julia> 'a' > 'b'
 false
@@ -221,6 +228,7 @@ true
 
 Less-than-or-equals comparison operator.
 
+# Examples
 ```jldoctest
 julia> 'a' <= 'b'
 true
@@ -244,6 +252,7 @@ const ≤ = <=
 
 Greater-than-or-equals comparison operator.
 
+# Examples
 ```jldoctest
 julia> 'a' >= 'b'
 false
@@ -274,6 +283,7 @@ that it is an ordinary function, so all the arguments are evaluated first. In so
 using `ifelse` instead of an `if` statement can eliminate the branch in generated code and
 provide higher performance in tight loops.
 
+# Examples
 ```jldoctest
 julia> ifelse(1 > 2, 1, 2)
 2
@@ -288,6 +298,7 @@ Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater t
 respectively. Uses the total order implemented by `isless`. For floating-point numbers, uses `<`
 but throws an error for unordered arguments.
 
+# Examples
 ```jldoctest
 julia> cmp(1, 2)
 -1
@@ -309,6 +320,7 @@ Compare `x` and `y` lexicographically and return -1, 0, or 1 depending on whethe
 less than, equal to, or greater than `y`, respectively. This function should be defined for
 lexicographically comparable types, and `lexless` will call `lexcmp` by default.
 
+# Examples
 ```jldoctest
 julia> lexcmp("abc", "abd")
 -1
@@ -324,6 +336,7 @@ lexcmp(x, y) = cmp(x, y)
 
 Determine whether `x` is lexicographically less than `y`.
 
+# Examples
 ```jldoctest
 julia> lexless("abc", "abd")
 true
@@ -340,6 +353,7 @@ cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0
 Return the maximum of the arguments. See also the [`maximum`](@ref) function
 to take the maximum element from a collection.
 
+# Examples
 ```jldoctest
 julia> max(2, 5, 1)
 5
@@ -353,6 +367,7 @@ max(x, y) = ifelse(y < x, x, y)
 Return the minimum of the arguments. See also the [`minimum`](@ref) function
 to take the minimum element from a collection.
 
+# Examples
 ```jldoctest
 julia> min(2, 5, 1)
 1
@@ -365,6 +380,7 @@ min(x,y) = ifelse(y < x, y, x)
 
 Return `(min(x,y), max(x,y))`. See also: [`extrema`](@ref) that returns `(minimum(x), maximum(x))`.
 
+# Examples
 ```jldoctest
 julia> minmax('c','b')
 ('b', 'c')
@@ -389,6 +405,7 @@ scalarmin(x::AbstractArray, y               ) = throw(ArgumentError("ordering is
 
 The identity function. Returns its argument.
 
+# Examples
 ```jldoctest
 julia> identity("Well, what did you expect?")
 "Well, what did you expect?"
@@ -434,6 +451,7 @@ end
 Left division operator: multiplication of `y` by the inverse of `x` on the left. Gives
 floating-point results for integer arguments.
 
+# Examples
 ```jldoctest
 julia> 3 \\ 6
 2.0
@@ -467,6 +485,7 @@ Left bit shift operator, `x << n`. For `n >= 0`, the result is `x` shifted left
 by `n` bits, filling with `0`s. This is equivalent to `x * 2^n`. For `n < 0`,
 this is equivalent to `x >> -n`.
 
+# Examples
 ```jldoctest
 julia> Int8(3) << 2
 12
@@ -496,7 +515,7 @@ right by `n` bits, where `n >= 0`, filling with `0`s if `x >= 0`, `1`s if `x <
 0`, preserving the sign of `x`. This is equivalent to `fld(x, 2^n)`. For `n <
 0`, this is equivalent to `x << -n`.
 
-
+# Examples
 ```jldoctest
 julia> Int8(13) >> 2
 3
@@ -537,6 +556,7 @@ is equivalent to `x << -n`.
 For [`Unsigned`](@ref) integer types, this is equivalent to [`>>`](@ref). For
 [`Signed`](@ref) integer types, this is equivalent to `signed(unsigned(x) >> n)`.
 
+# Examples
 ```jldoctest
 julia> Int8(-14) >>> 2
 60
@@ -570,6 +590,7 @@ div(x::T, y::T) where {T<:Real} = convert(T,round((x-rem(x,y))/y))
 
 Largest integer less than or equal to `x/y`.
 
+# Examples
 ```jldoctest
 julia> fld(7.3,5.5)
 1.0
@@ -581,6 +602,8 @@ fld(x::T, y::T) where {T<:Real} = convert(T,round((x-mod(x,y))/y))
     cld(x, y)
 
 Smallest integer larger than or equal to `x/y`.
+
+# Examples
 ```jldoctest
 julia> cld(5.5,2.2)
 3.0
@@ -600,6 +623,7 @@ modCeil(x::T, y::T) where {T<:Real} = convert(T,x-y*ceil(x/y))
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
 magnitude than `y`. This value is always exact.
 
+# Examples
 ```jldoctest
 julia> x = 15; y = 4;
 
@@ -619,6 +643,7 @@ const % = rem
 
 The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
 
+# Examples
 ```jldoctest
 julia> 9 ÷ 4
 2
@@ -636,6 +661,7 @@ const ÷ = div
 Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
 in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
 
+# Examples
 ```jldoctest
 julia> mod1(4, 2)
 2
@@ -656,6 +682,7 @@ Flooring division, returning a value consistent with `mod1(x,y)`
 
 See also: [`mod1`](@ref).
 
+# Examples
 ```jldoctest
 julia> x = 15; y = 4;
 
@@ -691,8 +718,7 @@ fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 
 The conjugate transposition operator (`'`).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A =  [3+2im 9+2im; 8+7im  4+6im]
 2×2 Array{Complex{Int64},2}:
@@ -845,6 +871,22 @@ For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᵀ``.
 """
 Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 
+"""
+    widen(x)
+
+If `x` is a type, return a "larger" type (for numeric types, this will be
+a type with at least as much range and precision as the argument, and usually more).
+Otherwise `x` is converted to `widen(typeof(x))`.
+
+# Examples
+```jldoctest
+julia> widen(Int32)
+Int64
+
+julia> widen(1.5f0)
+1.5
+```
+"""
 widen(x::T) where {T<:Number} = convert(widen(T), x)
 
 # function pipelining
@@ -854,6 +896,7 @@ widen(x::T) where {T<:Number} = convert(widen(T), x)
 
 Applies a function to the preceding argument. This allows for easy function chaining.
 
+# Examples
 ```jldoctest
 julia> [1:5;] |> x->x.^2 |> sum |> inv
 0.01818181818181818
@@ -868,8 +911,8 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 
 Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
 entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
-Example:
 
+# Examples
 ```jldoctest
 julia> map(uppercase∘hex, 250:255)
 6-element Array{String,1}:
@@ -888,8 +931,9 @@ julia> map(uppercase∘hex, 250:255)
     !f::Function
 
 Predicate function negation: when the argument of `!` is a function, it returns a
-function which computes the boolean negation of `f`. Example:
+function which computes the boolean negation of `f`.
 
+# Examples
 ```jldoctest
 julia> str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"

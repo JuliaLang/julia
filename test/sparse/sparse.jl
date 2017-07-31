@@ -1031,7 +1031,7 @@ end
     @test size(rotl90(a)) == (5,3)
 end
 
-function test_getindex_algs{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector, alg::Int)
+function test_getindex_algs(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector, alg::Int) where {Tv,Ti}
     # Sorted vectors for indexing rows.
     # Similar to getindex_general but without the transpose trick.
     (m, n) = size(A)
@@ -1192,10 +1192,10 @@ end
     T = SymTridiagonal(randn(5),rand(4))
     S = sparse(T)
     @test norm(Array(T) - Array(S)) == 0.0
-    B = Bidiagonal(randn(5),randn(4),true)
+    B = Bidiagonal(randn(5),randn(4),:U)
     S = sparse(B)
     @test norm(Array(B) - Array(S)) == 0.0
-    B = Bidiagonal(randn(5),randn(4),false)
+    B = Bidiagonal(randn(5),randn(4),:L)
     S = sparse(B)
     @test norm(Array(B) - Array(S)) == 0.0
 end
@@ -1773,13 +1773,28 @@ end
     show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
     @test String(take!(io)) == "2×2 SparseMatrixCSC{Float32,Int64} with 0 stored entries"
 
-    ioc = IOContext(IOContext(io, :displaysize => (5, 80)), :limit => true)
+    ioc = IOContext(io, displaysize = (5, 80), limit = true)
     show(ioc, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
     @test String(take!(io)) == "1×1 SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
     show(ioc, MIME"text/plain"(), sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0]))
     @test String(take!(io)) == "1×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  ⋮"
 
-    ioc = IOContext(IOContext(io, :displaysize => (9, 80)), :limit => true)
+    # even number of rows
+    ioc = IOContext(io, displaysize = (8, 80), limit = true)
+    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4], Int64[1,1,2,2], [1.0,2.0,3.0,4.0]))
+    @test String(take!(io)) == string("4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]",
+                                      "  =  1.0\n  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0")
+
+    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
+    @test String(take!(io)) ==  string("5×3 SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
+                                       "  =  1.0\n  ⋮\n  [5, 3]  =  5.0")
+
+    show(ioc, MIME"text/plain"(), sparse(ones(5,3)))
+    @test String(take!(io)) ==  string("5×3 SparseMatrixCSC{Float64,$Int} with 15 stored entries:\n  [1, 1]",
+                                       "  =  1.0\n  ⋮\n  [5, 3]  =  1.0")
+
+    # odd number of rows
+    ioc = IOContext(io, displaysize = (9, 80), limit = true)
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
     @test String(take!(io)) == string("5×3 SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
                                       "  =  1.0\n  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0")
@@ -1788,7 +1803,11 @@ end
     @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]",
                                        "  =  1.0\n  [2, 1]  =  2.0\n  ⋮\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
 
-    ioc = IOContext(io, :displaysize => (9, 80))
+    show(ioc, MIME"text/plain"(), sparse(ones(6,3)))
+    @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,$Int} with 18 stored entries:\n  [1, 1]",
+                                       "  =  1.0\n  [2, 1]  =  1.0\n  ⋮\n  [5, 3]  =  1.0\n  [6, 3]  =  1.0")
+
+    ioc = IOContext(io, displaysize = (9, 80))
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5,6], Int64[1,1,2,2,3,3], [1.0,2.0,3.0,4.0,5.0,6.0]))
     @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]  =  1.0\n",
         "  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")

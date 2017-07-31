@@ -228,6 +228,7 @@ julia> @time begin
            1+1
        end
   0.301395 seconds (8 allocations: 336 bytes)
+2
 ```
 """
 macro time(ex)
@@ -508,6 +509,7 @@ Argument `msg` is a string describing the information to be displayed.
 The `prefix` keyword argument can be used to override the default
 prepending of `msg`.
 
+# Examples
 ```jldoctest
 julia> info("hello world")
 INFO: hello world
@@ -572,6 +574,7 @@ end
 
 Display a warning. Argument `msg` is a string describing the warning to be displayed.
 
+# Examples
 ```jldoctest
 julia> warn("Beep Beep")
 WARNING: Beep Beep
@@ -616,9 +619,9 @@ end
 
 function julia_exename()
     if ccall(:jl_is_debugbuild, Cint, ()) == 0
-        return @static is_windows() ? "julia.exe" : "julia"
+        return @static Sys.iswindows() ? "julia.exe" : "julia"
     else
-        return @static is_windows() ? "julia-debug.exe" : "julia-debug"
+        return @static Sys.iswindows() ? "julia-debug.exe" : "julia-debug"
     end
 end
 
@@ -637,7 +640,7 @@ securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Void}, len::Integer=1) = Ptr{Void}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
-if is_windows()
+if Sys.iswindows()
 function getpass(prompt::AbstractString)
     print(prompt)
     flush(STDOUT)
@@ -670,7 +673,7 @@ getpass(prompt::AbstractString) = unsafe_string(ccall(:getpass, Cstring, (Cstrin
 end
 
 # Windows authentication prompt
-if is_windows()
+if Sys.iswindows()
     struct CREDUI_INFO
         cbSize::UInt32
         parent::Ptr{Void}
@@ -819,13 +822,20 @@ expression. The default argument is supplied by declaring fields of the form `fi
 default`. If no default is provided then the default is provided by the `kwdef_val(T)`
 function.
 
-```julia
-@kwdef struct Foo
-    a::Cint            # implied default Cint(0)
-    b::Cint = 1        # specified default
-    z::Cstring         # implied default Cstring(C_NULL)
-    y::Bar             # implied default Bar()
-end
+# Examples
+```jldoctest
+julia> struct Bar end
+
+julia> Base.@kwdef struct Foo
+           a::Cint            # implied default Cint(0)
+           b::Cint = 1        # specified default
+           z::Cstring         # implied default Cstring(C_NULL)
+           y::Bar             # implied default Bar()
+       end
+Foo
+
+julia> Foo()
+Foo(0, 1, Cstring(0x0000000000000000), Bar())
 ```
 """
 macro kwdef(expr)
@@ -878,6 +888,23 @@ The default value for a type for use with the `@kwdef` macro. Returns:
  - null pointer for pointer types (`Ptr{T}`, `Cstring`, `Cwstring`)
  - zero for integer types
  - no-argument constructor calls (e.g. `T()`) for all other types
+
+# Examples
+```jldoctest
+julia> struct Foo
+           i::Int
+       end
+
+julia> Base.kwdef_val(::Type{Foo}) = Foo(42)
+
+julia> Base.@kwdef struct Bar
+           y::Foo
+       end
+Bar
+
+julia> Bar()
+Bar(Foo(42))
+```
 """
 function kwdef_val end
 

@@ -21,8 +21,8 @@ srand(1)
     @testset "Basic properties" begin
         @test eye(Diagonal{elty},n) == Diagonal(ones(elty,n))
         @test_throws ArgumentError size(D,0)
-        @test typeof(convert(Diagonal{Complex64},D)) == Diagonal{Complex64}
-        @test typeof(convert(AbstractMatrix{Complex64},D))   == Diagonal{Complex64}
+        @test typeof(convert(Diagonal{Complex64},D)) <: Diagonal{Complex64}
+        @test typeof(convert(AbstractMatrix{Complex64},D)) <: Diagonal{Complex64}
 
         @test Array(real(D)) == real(DM)
         @test Array(abs.(D)) == abs.(DM)
@@ -312,7 +312,7 @@ end
 end
 
 # allow construct from range
-@test Diagonal(linspace(1,3,3)) == Diagonal([1.,2.,3.])
+@test all(Diagonal(linspace(1,3,3)) .== Diagonal([1.0,2.0,3.0]))
 
 # Issue 12803
 for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})
@@ -344,7 +344,7 @@ end
     D = Diagonal(randn(5))
     Q = qrfact(randn(5, 5))[:Q]
     @test D * Q' == Array(D) * Q'
-    Q = qrfact(randn(5, 5), Val{true})[:Q]
+    Q = qrfact(randn(5, 5), Val(true))[:Q]
     @test_throws MethodError A_mul_B!(Q, D)
 end
 

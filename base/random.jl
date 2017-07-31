@@ -4,7 +4,7 @@ module Random
 
 using Base.dSFMT
 using Base.GMP: Limb, MPZ
-import Base: copymutable, copy, copy!, ==
+import Base: copymutable, copy, copy!, ==, hash
 
 export srand,
        rand, rand!,
@@ -12,9 +12,10 @@ export srand,
        randexp, randexp!,
        bitrand,
        randstring,
-       randsubseq,randsubseq!,
-       shuffle,shuffle!,
-       randperm, randcycle,
+       randsubseq, randsubseq!,
+       shuffle, shuffle!,
+       randperm, randperm!,
+       randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice,
        GLOBAL_RNG, randjump
 
@@ -28,20 +29,22 @@ mutable struct Close1Open2 <: FloatInterval end
 
 ## RandomDevice
 
-if is_windows()
+const BoolBitIntegerType = Union{Type{Bool},Base.BitIntegerType}
+const BoolBitIntegerArray = Union{Array{Bool},Base.BitIntegerArray}
 
+if Sys.iswindows()
     struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
         RandomDevice() = new(Vector{UInt128}(1))
     end
 
-    function rand(rd::RandomDevice, ::Type{T}) where T<:Union{Bool,Base.BitInteger}
+    function rand(rd::RandomDevice, T::BoolBitIntegerType)
         win32_SystemFunction036!(rd.buffer)
         @inbounds return rd.buffer[1] % T
     end
 
-    rand!(rd::RandomDevice, A::Array{<:Union{Bool,Base.BitInteger}}) = (win32_SystemFunction036!(A); A)
+    rand!(rd::RandomDevice, A::BoolBitIntegerArray) = (win32_SystemFunction036!(A); A)
 else # !windows
     struct RandomDevice <: AbstractRNG
         file::IOStream
@@ -50,10 +53,9 @@ else # !windows
         RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
     end
 
-    rand(rd::RandomDevice, ::Type{T}) where {T<:Union{Bool,Base.BitInteger}} = read( rd.file, T)
-    rand!(rd::RandomDevice, A::Array{<:Union{Bool,Base.BitInteger}})         = read!(rd.file, A)
+    rand(rd::RandomDevice, T::BoolBitIntegerType)   = read( rd.file, T)
+    rand!(rd::RandomDevice, A::BoolBitIntegerArray) = read!(rd.file, A)
 end # os-test
-
 
 """
     RandomDevice()
@@ -80,7 +82,9 @@ mutable struct MersenneTwister <: AbstractRNG
     idx::Int
 
     function MersenneTwister(seed, state, vals, idx)
-        length(vals) == MTCacheLength &&  0 <= idx <= MTCacheLength || throw(DomainError())
+        if !(length(vals) == MTCacheLength &&  0 <= idx <= MTCacheLength)
+            throw(DomainError(idx, "`length(vals)` and `idx` must be consistent with $MTCacheLength"))
+        end
         new(seed, state, vals, idx)
     end
 end
@@ -94,9 +98,24 @@ MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
 Create a `MersenneTwister` RNG object. Different RNG objects can have their own seeds, which
 may be useful for generating different streams of random numbers.
 
-# Example
+# Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
+
+julia> x1 = rand(rng, 2)
+2-element Array{Float64,1}:
+ 0.590845
+ 0.766797
+
+julia> rng = MersenneTwister(1234);
+
+julia> x2 = rand(rng, 2)
+2-element Array{Float64,1}:
+ 0.590845
+ 0.766797
+
+julia> x1 == x2
+true
 ```
 """
 MersenneTwister(seed) = srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
@@ -115,6 +134,7 @@ copy(src::MersenneTwister) =
 ==(r1::MersenneTwister, r2::MersenneTwister) =
     r1.seed == r2.seed && r1.state == r2.state && isequal(r1.vals, r2.vals) && r1.idx == r2.idx
 
+hash(r::MersenneTwister, h::UInt) = foldr(hash, h, (r.seed, r.state, r.vals, r.idx))
 
 ## Low level API for MersenneTwister
 
@@ -200,14 +220,14 @@ function make_seed()
         seed = reinterpret(UInt64, time())
         seed = hash(seed, UInt64(getpid()))
         try
-        seed = hash(seed, parse(UInt64, readstring(pipeline(`ifconfig`, `sha1sum`))[1:40], 16))
+        seed = hash(seed, parse(UInt64, read(pipeline(`ifconfig`, `sha1sum`), String)[1:40], 16))
         end
         return make_seed(seed)
     end
 end
 
 function make_seed(n::Integer)
-    n < 0 && throw(DomainError())
+    n < 0 && throw(DomainError(n, "`n` must be non-negative."))
     seed = UInt32[]
     while true
         push!(seed, n & 0xffffffff)
@@ -228,6 +248,26 @@ Reseed the random number generator. If a `seed` is provided, the RNG will give a
 reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
 `MersenneTwister`, the `seed` may be a non-negative integer or a vector of [`UInt32`](@ref)
 integers. `RandomDevice` does not support seeding.
+
+# Examples
+```jldoctest
+julia> srand(1234);
+
+julia> x1 = rand(2)
+2-element Array{Float64,1}:
+ 0.590845
+ 0.766797
+
+julia> srand(1234);
+
+julia> x2 = rand(2)
+2-element Array{Float64,1}:
+ 0.590845
+ 0.766797
+
+julia> x1 == x2
+true
+```
 """
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
@@ -271,7 +311,6 @@ Pick a random element or array of random elements from the set of values specifi
 `S` defaults to [`Float64`](@ref).
 
 # Examples
-
 ```julia-repl
 julia> rand(Int, 2)
 2-element Array{Int64,1}:
@@ -309,8 +348,7 @@ the values are picked randomly from `S`.
 This is equivalent to `copy!(A, rand(rng, S, size(A)))`
 but without allocating a new array.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -518,7 +556,8 @@ end
 @inline mask128(u::UInt128, ::Type{Float16}) = (u & 0x03ff03ff03ff03ff03ff03ff03ff03ff) | 0x3c003c003c003c003c003c003c003c00
 @inline mask128(u::UInt128, ::Type{Float32}) = (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
 
-function rand!(r::MersenneTwister, A::Array{T}, ::Type{Close1Open2}) where T<:Union{Float16,Float32}
+function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}}, ::Type{Close1Open2})
+    T = eltype(A)
     n = length(A)
     n128 = n * sizeof(T) ÷ 16
     rand!(r, unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2*n128), 2*n128, Close1Open2)
@@ -542,17 +581,16 @@ function rand!(r::MersenneTwister, A::Array{T}, ::Type{Close1Open2}) where T<:Un
     A
 end
 
-function rand!(r::MersenneTwister, A::Array{T}, ::Type{CloseOpen}) where T<:Union{Float16,Float32}
+function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}}, ::Type{CloseOpen})
     rand!(r, A, Close1Open2)
     I32 = one(Float32)
     for i in eachindex(A)
-        @inbounds A[i] = T(Float32(A[i])-I32) # faster than "A[i] -= one(T)" for T==Float16
+        @inbounds A[i] = Float32(A[i])-I32 # faster than "A[i] -= one(T)" for T==Float16
     end
     A
 end
 
-rand!(r::MersenneTwister, A::Array{<:Union{Float16,Float32}}) = rand!(r, A, CloseOpen)
-
+rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}}) = rand!(r, A, CloseOpen)
 
 function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
     if n > length(A)
@@ -576,14 +614,16 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
     if n > 0
         u = rand_ui2x52_raw(r)
         for i = 1:n
-            @inbounds A[i] ⊻= u << 12*i
+            @inbounds A[i] ⊻= u << (12*i)
         end
     end
     A
 end
 
-function rand!(r::MersenneTwister, A::Array{T}) where T<:Union{Base.BitInteger64,Int128}
-    n=length(A)
+# A::Array{UInt128} will match the specialized method above
+function rand!(r::MersenneTwister, A::Base.BitIntegerArray)
+    n = length(A)
+    T = eltype(A)
     n128 = n * sizeof(T) ÷ 16
     rand!(r, unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128))
     for i = 16*n128÷sizeof(T)+1:n
@@ -771,8 +811,7 @@ end
 
 Generate a `BitArray` of random boolean values.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1301,7 +1340,6 @@ The `Base` module currently provides an implementation for the types
 from the circularly symmetric complex normal distribution.
 
 # Examples
-
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1349,7 +1387,6 @@ The `Base` module currently provides an implementation for the types
 [`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default).
 
 # Examples
-
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1389,8 +1426,7 @@ end
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
 Also see the [`rand`](@ref) function.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1410,8 +1446,7 @@ function randn! end
 
 Fill the array `A` with random numbers following the exponential distribution (with scale 1).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1426,35 +1461,34 @@ julia> randexp!(rng, zeros(5))
 """
 function randexp! end
 
-let Floats = Union{Float16,Float32,Float64}
-    for randfun in [:randn, :randexp]
-        randfun! = Symbol(randfun, :!)
-        @eval begin
-            # scalars
-            $randfun(rng::AbstractRNG, ::Type{T}) where {T<:$Floats} = convert(T, $randfun(rng))
-            $randfun(::Type{T}) where {T} = $randfun(GLOBAL_RNG, T)
+for randfun in [:randn, :randexp]
+    randfun! = Symbol(randfun, :!)
+    @eval begin
+        # scalars
+        $randfun(rng::AbstractRNG, T::Union{Type{Float16},Type{Float32},Type{Float64}}) =
+            convert(T, $randfun(rng))
+        $randfun(::Type{T}) where {T} = $randfun(GLOBAL_RNG, T)
 
-            # filling arrays
-            function $randfun!(rng::AbstractRNG, A::AbstractArray{T}) where T
-                for i in eachindex(A)
-                    @inbounds A[i] = $randfun(rng, T)
-                end
-                A
+        # filling arrays
+        function $randfun!(rng::AbstractRNG, A::AbstractArray{T}) where T
+            for i in eachindex(A)
+                @inbounds A[i] = $randfun(rng, T)
             end
-
-            $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
-
-            # generating arrays
-            $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(dims))
-            # Note that this method explicitly does not define $randfun(rng, T), in order to prevent an infinite recursion.
-            $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(dim1, dims...))
-            $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(GLOBAL_RNG, T, dims)
-            $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(GLOBAL_RNG, T, dims...)
-            $randfun(rng::AbstractRNG,            dims::Dims                     )           = $randfun(rng, Float64, dims)
-            $randfun(rng::AbstractRNG,            dims::Integer...               )           = $randfun(rng, Float64, dims...)
-            $randfun(                             dims::Dims                     )           = $randfun(GLOBAL_RNG, Float64, dims)
-            $randfun(                             dims::Integer...               )           = $randfun(GLOBAL_RNG, Float64, dims...)
+            A
         end
+
+        $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
+
+        # generating arrays
+        $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(dims))
+        # Note that this method explicitly does not define $randfun(rng, T), in order to prevent an infinite recursion.
+        $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(dim1, dims...))
+        $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(GLOBAL_RNG, T, dims)
+        $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(GLOBAL_RNG, T, dims...)
+        $randfun(rng::AbstractRNG,            dims::Dims                     )           = $randfun(rng, Float64, dims)
+        $randfun(rng::AbstractRNG,            dims::Integer...               )           = $randfun(rng, Float64, dims...)
+        $randfun(                             dims::Dims                     )           = $randfun(GLOBAL_RNG, Float64, dims)
+        $randfun(                             dims::Integer...               )           = $randfun(GLOBAL_RNG, Float64, dims...)
     end
 end
 
@@ -1478,8 +1512,7 @@ Generates a version 1 (time-based) universally unique identifier (UUID), as spec
 by RFC 4122. Note that the Node ID is randomly generated (does not identify the host)
 according to section 4.5 of the RFC.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1516,7 +1549,7 @@ end
 Generates a version 4 (random or pseudo-random) universally unique identifier (UUID),
 as specified by RFC 4122.
 
-# Example
+# Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1536,8 +1569,7 @@ end
 
 Inspects the given UUID and returns its version (see RFC 4122).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1583,14 +1615,41 @@ end
 Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
 
 # return a random string (often useful for temporary filenames/dirnames)
+
+"""
+    randstring([rng=GLOBAL_RNG], [chars], [len=8])
+
+Create a random string of length `len`, consisting of characters from
+`chars`, which defaults to the set of upper- and lower-case letters
+and the digits 0-9. The optional `rng` argument specifies a random
+number generator, see [Random Numbers](@ref).
+
+# Examples
+```jldoctest
+julia> srand(0); randstring()
+"c03rgKi1"
+
+julia> randstring(MersenneTwister(0), 'a':'z', 6)
+"wijzek"
+
+julia> randstring("ACGT")
+"TATCGGTC"
+```
+
+!!! note
+    `chars` can be any collection of characters, of type `Char` or
+    `UInt8` (more efficient), provided [`rand`](@ref) can randomly
+    pick characters from it.
+"""
+function randstring end
+
 let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
-    randstring(r::AbstractRNG, n::Int) = String(b[rand(r, 1:length(b), n)])
-    randstring(r::AbstractRNG) = randstring(r,8)
-    randstring(n::Int) = randstring(GLOBAL_RNG, n)
-    randstring() = randstring(GLOBAL_RNG)
+    randstring(r::AbstractRNG, chars=b, n::Integer=8) = String(rand(r, chars, n))
+    randstring(r::AbstractRNG, n::Integer) = randstring(r, b, n)
+    randstring(chars=b, n::Integer=8) = randstring(GLOBAL_RNG, chars, n)
+    randstring(n::Integer) = randstring(GLOBAL_RNG, b, n)
 end
-
 
 # Fill S (resized as needed) with a random subsequence of A, where
 # each element of A is included in S with independent probability p.
@@ -1660,8 +1719,7 @@ end
 In-place version of [`shuffle`](@ref): randomly permute `v` in-place,
 optionally supplying the random-number generator `rng`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1707,8 +1765,7 @@ number generator (see [Random Numbers](@ref)).
 To permute `v` in-place, see [`shuffle!`](@ref). To obtain randomly permuted
 indices, see [`randperm`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1734,15 +1791,12 @@ shuffle(a::AbstractArray) = shuffle(GLOBAL_RNG, a)
 
 Construct a random permutation of length `n`. The optional `rng` argument specifies a random
 number generator (see [Random Numbers](@ref)).
-To randomly permute a arbitrary vector, see [`shuffle`](@ref)
+To randomly permute an arbitrary vector, see [`shuffle`](@ref)
 or [`shuffle!`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> randperm(rng, 4)
+julia> randperm(MersenneTwister(1234), 4)
 4-element Array{Int64,1}:
  2
  1
@@ -1750,15 +1804,34 @@ julia> randperm(rng, 4)
  3
 ```
 """
-function randperm(r::AbstractRNG, n::Integer)
-    a = Vector{typeof(n)}(n)
+randperm(r::AbstractRNG, n::Integer) = randperm!(r, Vector{Int}(n))
+randperm(n::Integer) = randperm(GLOBAL_RNG, n)
+
+"""
+    randperm!([rng=GLOBAL_RNG,] A::Array{<:Integer})
+
+Construct in `A` a random permutation of length `length(A)`. The
+optional `rng` argument specifies a random number generator (see
+[Random Numbers](@ref)). To randomly permute an arbitrary vector, see
+[`shuffle`](@ref) or [`shuffle!`](@ref).
+
+# Examples
+```jldoctest
+julia> randperm!(MersenneTwister(1234), Vector{Int}(4))
+4-element Array{Int64,1}:
+ 2
+ 1
+ 4
+ 3
+```
+"""
+function randperm!(r::AbstractRNG, a::Array{<:Integer})
+    n = length(a)
     @assert n <= Int64(2)^52
-    if n == 0
-       return a
-    end
+    n == 0 && return a
     a[1] = 1
     mask = 3
-    @inbounds for i = 2:Int(n)
+    @inbounds for i = 2:n
         j = 1 + rand_lt(r, i, mask)
         if i != j # a[i] is uninitialized (and could be #undef)
             a[i] = a[j]
@@ -1768,7 +1841,9 @@ function randperm(r::AbstractRNG, n::Integer)
     end
     return a
 end
-randperm(n::Integer) = randperm(GLOBAL_RNG, n)
+
+randperm!(a::Array{<:Integer}) = randperm!(GLOBAL_RNG, a)
+
 
 """
     randcycle([rng=GLOBAL_RNG,] n::Integer)
@@ -1776,12 +1851,9 @@ randperm(n::Integer) = randperm(GLOBAL_RNG, n)
 Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> randcycle(rng, 6)
+julia> randcycle(MersenneTwister(1234), 6)
 6-element Array{Int64,1}:
  3
  5
@@ -1791,13 +1863,35 @@ julia> randcycle(rng, 6)
  2
 ```
 """
-function randcycle(r::AbstractRNG, n::Integer)
-    a = Vector{typeof(n)}(n)
+randcycle(r::AbstractRNG, n::Integer) = randcycle!(r, Vector{Int}(n))
+randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
+
+"""
+    randcycle!([rng=GLOBAL_RNG,] A::Array{<:Integer})
+
+Construct in `A` a random cyclic permutation of length `length(A)`.
+The optional `rng` argument specifies a random number generator, see
+[Random Numbers](@ref).
+
+# Examples
+```jldoctest
+julia> randcycle!(MersenneTwister(1234), Vector{Int}(6))
+6-element Array{Int64,1}:
+ 3
+ 5
+ 4
+ 6
+ 1
+ 2
+```
+"""
+function randcycle!(r::AbstractRNG, a::Array{<:Integer})
+    n = length(a)
     n == 0 && return a
     @assert n <= Int64(2)^52
     a[1] = 1
     mask = 3
-    @inbounds for i = 2:Int(n)
+    @inbounds for i = 2:n
         j = 1 + rand_lt(r, i-1, mask)
         a[i] = a[j]
         a[j] = i
@@ -1805,6 +1899,7 @@ function randcycle(r::AbstractRNG, n::Integer)
     end
     return a
 end
-randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
+
+randcycle!(a::Array{<:Integer}) = randcycle!(GLOBAL_RNG, a)
 
 end # module

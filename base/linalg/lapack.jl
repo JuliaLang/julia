@@ -867,7 +867,7 @@ for (gels, gesv, getrs, getri, elty) in
                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &(btrn?'T':'N'), &m, &n, &size(B,2), A, &max(1,stride(A,2)),
+                      &(btrn ? 'T' : 'N'), &m, &n, &size(B,2), A, &max(1,stride(A,2)),
                       B, &max(1,stride(B,2)), work, &lwork, info)
                 chklapackerror(info[])
                 if i == 1
@@ -1610,8 +1610,8 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             m, n   = size(A)
             minmn  = min(m, n)
             S      = similar(A, $relty, minmn)
-            U      = similar(A, $elty, jobu  == 'A'? (m, m):(jobu  == 'S'? (m, minmn) : (m, 0)))
-            VT     = similar(A, $elty, jobvt == 'A'? (n, n):(jobvt == 'S'? (minmn, n) : (n, 0)))
+            U      = similar(A, $elty, jobu  == 'A' ? (m, m) : (jobu  == 'S' ? (m, minmn) : (m, 0)))
+            VT     = similar(A, $elty, jobvt == 'A' ? (n, n) : (jobvt == 'S' ? (minmn, n) : (n, 0)))
             work   = Vector{$elty}(1)
             cmplx  = eltype(A) <: Complex
             if cmplx
@@ -3990,9 +3990,9 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
 end
 
 # Rook-pivoting variants of symmetric-matrix algorithms
-for (sysv, sytrf, sytri, sytrs, elty) in
-    ((:dsysv_rook_,:dsytrf_rook_,:dsytri_rook_,:dsytrs_rook_,:Float64),
-     (:ssysv_rook_,:ssytrf_rook_,:ssytri_rook_,:ssytrs_rook_,:Float32))
+for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
+    ((:dsysv_rook_,:dsytrf_rook_,:dsytri_rook_,:dsytrs_rook_,:dsyconvf_rook_,:Float64),
+     (:ssysv_rook_,:ssytrf_rook_,:ssytri_rook_,:ssytrs_rook_,:ssyconvf_rook_,:Float32))
     @eval begin
         #       SUBROUTINE DSYSV_ROOK(UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
         #                             LWORK, INFO )
@@ -4106,6 +4106,45 @@ for (sysv, sytrf, sytri, sytrs, elty) in
                   &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
             chklapackerror(info[])
             B
+        end
+
+        # SUBROUTINE DSYCONVF_ROOK( UPLO, WAY, N, A, LDA, IPIV, E, INFO )
+        #
+        # .. Scalar Arguments ..
+        # CHARACTER          UPLO, WAY
+        # INTEGER            INFO, LDA, N
+        # ..
+        # .. Array Arguments ..
+        # INTEGER            IPIV( * )
+        # DOUBLE PRECISION   A( LDA, * ), E( * )
+        function syconvf_rook!(uplo::Char, way::Char, A::StridedMatrix{$elty},
+                               ipiv::StridedVector{BlasInt}, e::StridedVector{$elty})
+            # extract
+            n = checksquare(A)
+
+            # check
+            chkuplo(uplo)
+            if way != :C && way != :R
+                throw(ArgumentError("way must be :C or :R"))
+            end
+            if length(ipiv) != n
+                throw(ArgumentError("length of pivot vector was $(length(ipiv)) but should have been $n"))
+            end
+            if length(e) != n
+                throw(ArgumentError("length of e vector was $(length(ipiv)) but should have been $n"))
+            end
+
+            # allocate
+            info = Ref{BlasInt}()
+
+            ccall((@blasfunc($syconvf), liblapack), Void,
+                (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty},
+                 Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                &uplo, &way, &n, A,
+                &lda, ipiv, e, info)
+
+            chklapackerror(info[])
+            return A, e
         end
     end
 end
@@ -4548,9 +4587,9 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
     end
 end
 
-for (sysv, sytrf, sytri, sytrs, elty, relty) in
-    ((:zsysv_rook_,:zsytrf_rook_,:zsytri_rook_,:zsytrs_rook_,:Complex128, :Float64),
-     (:csysv_rook_,:csytrf_rook_,:csytri_rook_,:csytrs_rook_,:Complex64, :Float32))
+for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
+    ((:zsysv_rook_,:zsytrf_rook_,:zsytri_rook_,:zsytrs_rook_,:zsyconvf_rook_,:Complex128, :Float64),
+     (:csysv_rook_,:csytrf_rook_,:csytri_rook_,:csytrs_rook_,:csyconvf_rook_,:Complex64, :Float32))
     @eval begin
         #       SUBROUTINE ZSYSV_ROOK(UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
         #      $                      LWORK, INFO )
@@ -4666,6 +4705,46 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
                   &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
             chklapackerror(info[])
             B
+        end
+
+        # SUBROUTINE ZSYCONVF_ROOK( UPLO, WAY, N, A, LDA, IPIV, E, INFO )
+        #
+        # .. Scalar Arguments ..
+        # CHARACTER          UPLO, WAY
+        # INTEGER            INFO, LDA, N
+        # ..
+        # .. Array Arguments ..
+        # INTEGER            IPIV( * )
+        # COMPLEX*16         A( LDA, * ), E( * )
+        function syconvf_rook!(uplo::Char, way::Char, A::StridedMatrix{$elty},
+                               ipiv::StridedVector{BlasInt}, e::StridedVector{$elty} = Vector{$elty}(length(ipiv)))
+            # extract
+            n   = checksquare(A)
+            lda = stride(A, 2)
+
+            # check
+            chkuplo(uplo)
+            if way != 'C' && way != 'R'
+                throw(ArgumentError("way must be 'C' or 'R'"))
+            end
+            if length(ipiv) != n
+                throw(ArgumentError("length of pivot vector was $(length(ipiv)) but should have been $n"))
+            end
+            if length(e) != n
+                throw(ArgumentError("length of e vector was $(length(ipiv)) but should have been $n"))
+            end
+
+            # allocate
+            info = Ref{BlasInt}()
+
+            ccall((@blasfunc($syconvf), liblapack), Void,
+                (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty},
+                 Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                &uplo, &way, &n, A,
+                &max(1, lda), ipiv, e, info)
+
+            chklapackerror(info[])
+            return A, e
         end
     end
 end

@@ -307,7 +307,7 @@ higher-level, Julia-friendly API.
 
 ## Be careful with type equality
 
-You generally want to use [`isa()`](@ref) and `<:` ([`issubtype()`](@ref)) for testing types,
+You generally want to use [`isa()`](@ref) and [`<:`](@ref) for testing types,
 not `==`. Checking types for exact equality typically only makes sense when comparing to a known
 concrete type (e.g. `T == Float64`), or if you *really, really* know what you're doing.
 

@@ -194,7 +194,7 @@ function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
 end
 
 ## solvers
-function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
+function fwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
 # forward substitution for CSC matrices
     nrowB, ncolB  = size(B, 1), size(B, 2)
     ncol = LinAlg.checksquare(A)
@@ -202,9 +202,9 @@ function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
         throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
     end
 
-    aa = A.nzval
-    ja = A.rowval
-    ia = A.colptr
+    aa = getnzval(A)
+    ja = getrowval(A)
+    ia = getcolptr(A)
 
     joff = 0
     for k = 1:ncolB
@@ -239,7 +239,7 @@ function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
     B
 end
 
-function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
+function bwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
 # backward substitution for CSC matrices
     nrowB, ncolB = size(B, 1), size(B, 2)
     ncol = LinAlg.checksquare(A)
@@ -247,9 +247,9 @@ function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
         throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
     end
 
-    aa = A.nzval
-    ja = A.rowval
-    ia = A.colptr
+    aa = getnzval(A)
+    ja = getrowval(A)
+    ia = getcolptr(A)
 
     joff = 0
     for k = 1:ncolB
@@ -284,11 +284,11 @@ function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
     B
 end
 
-A_ldiv_B!(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) where {T} = fwdTriSolve!(L.data, B)
-A_ldiv_B!(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) where {T} = bwdTriSolve!(U.data, B)
+A_ldiv_B!(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = fwdTriSolve!(L.data, B)
+A_ldiv_B!(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = bwdTriSolve!(U.data, B)
 
-(\)(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(L, Array(B))
-(\)(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(U, Array(B))
+(\)(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(L, Array(B))
+(\)(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(U, Array(B))
 
 function A_rdiv_B!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
     dd = D.diag
@@ -308,8 +308,8 @@ function A_rdiv_B!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
     A
 end
 
-A_rdiv_Bc!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T = A_rdiv_B!(A, conj(D))
-A_rdiv_Bt!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T = A_rdiv_B!(A, D)
+A_rdiv_Bc!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, conj(D))
+A_rdiv_Bt!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, D)
 
 ## triu, tril
 
@@ -586,7 +586,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
 
     function _rand_pm1!(v)
         for i in eachindex(v)
-            v[i] = rand()<0.5?1:-1
+            v[i] = rand()<0.5 ? 1 : -1
         end
     end
 
@@ -643,7 +643,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
         S_old = copy(S)
         for j = 1:t
             for i = 1:n
-                S[i,j] = Y[i,j]==0?one(Y[i,j]):sign(Y[i,j])
+                S[i,j] = Y[i,j]==0 ? one(Y[i,j]) : sign(Y[i,j])
             end
         end
 

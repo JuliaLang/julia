@@ -133,13 +133,6 @@ LLVM_CMAKE += -DLLDB_DISABLE_PYTHON=ON
 endif # LLDB_DISABLE_PYTHON
 endif # BUILD_LLDB
 
-# Part of the FreeBSD libgcc_s kludge
-ifeq ($(OS),FreeBSD)
-ifneq ($(GCCPATH),)
-LLVM_LDFLAGS += -Wl,-rpath,'\$$ORIGIN',-rpath,$(GCCPATH)
-endif
-endif
-
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 LLVM_CXXFLAGS += -mminimal-toc
 endif
@@ -493,14 +486,14 @@ $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_PATCH_PREV)
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-		export PATH=$(llvm_python_workaround):$$PATH && \
+		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		$(CMAKE) $(LLVM_SRC_DIR) $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LLVM_CMAKE) \
 		|| { echo '*** To install a newer version of cmake, run contrib/download_cmake.sh ***' && false; }
 	echo 1 > $@
 
 $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured | $(llvm_python_workaround)
 	cd $(LLVM_BUILDDIR_withtype) && \
-		export PATH=$(llvm_python_workaround):$$PATH && \
+		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		$(if $(filter $(CMAKE_GENERATOR),make), \
 		  $(MAKE), \
 		  $(CMAKE) --build .)
@@ -509,7 +502,7 @@ $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-config
 $(LLVM_BUILDDIR_withtype)/build-checked: $(LLVM_BUILDDIR_withtype)/build-compiled | $(llvm_python_workaround)
 ifeq ($(OS),$(BUILD_OS))
 	cd $(LLVM_BUILDDIR_withtype) && \
-		export PATH=$(llvm_python_workaround):$$PATH && \
+		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		  $(CMAKE) --build . --target check
 endif
 	echo 1 > $@

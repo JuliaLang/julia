@@ -24,8 +24,11 @@ void jl_precompile(int all);
 
 void jl_write_compiler_output(void)
 {
-    if (!jl_generating_output())
+    if (!jl_generating_output()) {
+        if (jl_options.outputjitbc)
+            jl_dump_native(NULL, jl_options.outputjitbc, NULL, NULL, 0);
         return;
+    }
 
     if (!jl_options.incremental)
         jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
@@ -33,6 +36,10 @@ void jl_write_compiler_output(void)
     if (!jl_module_init_order) {
         jl_printf(JL_STDERR, "WARNING: --output requested, but no modules defined during run\n");
         return;
+    }
+
+    if (jl_options.outputjitbc) {
+        jl_printf(JL_STDERR, "WARNING: --output-jit-bc is meaningless with options for dumping sysimage data\n");
     }
 
     jl_array_t *worklist = jl_module_init_order;
@@ -82,14 +89,23 @@ void jl_write_compiler_output(void)
     JL_GC_POP();
 }
 
-static int tupletype_any_bottom(jl_value_t *sig)
+static int any_bottom_field(jl_value_t *typ)
 {
-    sig = jl_unwrap_unionall(sig);
-    assert(jl_is_tuple_type(sig));
-    jl_svec_t *types = ((jl_tupletype_t*)sig)->types;
-    size_t i, l = jl_svec_len(types);
+    if (typ == jl_bottom_type)
+        return 1;
+    typ = jl_unwrap_unionall(typ);
+    if (jl_is_vararg_type(typ))
+        typ = jl_unwrap_vararg(typ);
+    if (!jl_is_datatype(typ))
+        return 0;
+    jl_svec_t *fields = ((jl_datatype_t*)typ)->types;
+    size_t i, l = jl_svec_len(fields);
+    if (l != ((jl_datatype_t*)typ)->ninitialized)
+        if (((jl_datatype_t*)typ)->name != jl_tuple_typename)
+            return 0;
     for (i = 0; i < l; i++) {
-        if (jl_svecref(types, i) == jl_bottom_type)
+        jl_value_t *ft = jl_svecref(fields, i);
+        if (any_bottom_field(ft))
             return 1;
     }
     return 0;
@@ -130,8 +146,7 @@ static void _compile_all_tvar_union(jl_value_t *methsig)
         JL_CATCH {
             goto getnext; // sigh, we found an invalid type signature. should we warn the user?
         }
-        assert(jl_is_tuple_type(sig));
-        if (sig == jl_bottom_type || tupletype_any_bottom(sig))
+        if (any_bottom_field(sig))
             goto getnext; // signature wouldn't be callable / is invalid -- skip it
         if (jl_is_leaf_type(sig)) {
             if (jl_compile_hint((jl_tupletype_t*)sig))
@@ -181,9 +196,11 @@ static void _compile_all_union(jl_value_t *sig)
             ++count_unions;
         else if (ty == jl_bottom_type)
             return; // why does this method exist?
+        else if (!jl_is_leaf_type(ty) && !jl_has_free_typevars(ty))
+            return; // no amount of union splitting will make this a leaftype signature
     }
 
-    if (count_unions == 0) {
+    if (count_unions == 0 || count_unions >= 6) {
         _compile_all_tvar_union(sig);
         return;
     }
@@ -239,7 +256,7 @@ static void _compile_all_deq(jl_array_t *found)
             jl_printf(JL_STDERR, " %d / %d\r", found_i + 1, found_l);
         jl_typemap_entry_t *ml = (jl_typemap_entry_t*)jl_array_ptr_ref(found, found_i);
         jl_method_t *m = ml->func.method;
-        if (m->isstaged)  // TODO: generic implementations of generated functions
+        if (m->source == NULL)  // TODO: generic implementations of generated functions
             continue;
         linfo = m->unspecialized;
         if (!linfo) {
@@ -274,7 +291,7 @@ static int compile_all_enq__(jl_typemap_entry_t *ml, void *env)
     jl_array_t *found = (jl_array_t*)env;
     // method definition -- compile template field
     jl_method_t *m = ml->func.method;
-    if (!m->isstaged &&
+    if (m->source &&
         (!m->unspecialized ||
          (m->unspecialized->functionObjectsDecls.functionObject == NULL &&
           m->unspecialized->jlcall_api != 2 &&

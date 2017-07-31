@@ -187,7 +187,9 @@ a ? b : c
 
 The expression `a`, before the `?`, is a condition expression, and the ternary operation evaluates
 the expression `b`, before the `:`, if the condition `a` is `true` or the expression `c`, after
-the `:`, if it is `false`.
+the `:`, if it is `false`. Note that the spaces around `?` and `:` are mandatory: an expression
+like `a?b:c` is not a valid ternary expression (but a newline is acceptable after both the `?` and
+the `:`).
 
 The easiest way to understand this behavior is to see an example. In the previous example, the
 `println` call is shared by all three branches: the only real choice is which literal string to

@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef ARRAYLIST_H
-#define ARRAYLIST_H
+#ifndef JL_ARRAYLIST_H
+#define JL_ARRAYLIST_H
 
 #define AL_N_INLINE 29
 

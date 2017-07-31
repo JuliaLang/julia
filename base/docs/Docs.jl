@@ -146,7 +146,7 @@ mutable struct DocStr
     data   :: Dict{Symbol, Any}
 end
 
-function docstr(binding::Binding, typesig::ANY = Union{})
+function docstr(binding::Binding, @nospecialize typesig = Union{})
     for m in modules
         dict = meta(m)
         if haskey(dict, binding)
@@ -229,7 +229,7 @@ end
 
 Adds a new docstring `str` to the docsystem of `__module__` for `binding` and signature `sig`.
 """
-function doc!(__module__::Module, b::Binding, str::DocStr, sig::ANY = Union{})
+function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = Union{})
     initmeta(__module__)
     m = get!(meta(__module__), b, MultiDoc())
     if haskey(m.docs, sig)
@@ -379,7 +379,7 @@ function summarize(io::IO, λ::Function, binding)
 end
 
 function summarize(io::IO, T::DataType, binding)
-    println(io, "**Summary:**")
+    println(io, "# Summary")
     println(io, "```")
     println(io,
             T.abstract ? "abstract type" :
@@ -388,8 +388,8 @@ function summarize(io::IO, T::DataType, binding)
             " ", T, " <: ", supertype(T)
             )
     println(io, "```")
-    if !isempty(fieldnames(T))
-        println(io, "**Fields:**")
+    if !T.abstract && T.name !== Tuple.name && !isempty(fieldnames(T))
+        println(io, "# Fields")
         println(io, "```")
         pad = maximum(length(string(f)) for f in fieldnames(T))
         for (f, t) in zip(fieldnames(T), T.types)
@@ -398,7 +398,7 @@ function summarize(io::IO, T::DataType, binding)
         println(io, "```")
     end
     if !isempty(subtypes(T))
-        println(io, "**Subtypes:**")
+        println(io, "# Subtypes")
         println(io, "```")
         for t in subtypes(T)
             println(io, t)
@@ -406,7 +406,7 @@ function summarize(io::IO, T::DataType, binding)
         println(io, "```")
     end
     if supertype(T) != Any
-        println(io, "**Supertype Hierarchy:**")
+        println(io, "# Supertype Hierarchy")
         println(io, "```")
         Base.show_supertypes(io, T)
         println(io)
@@ -419,7 +419,7 @@ function summarize(io::IO, m::Module, binding)
     if isfile(readme)
         println(io, "Displaying the `README.md` for the module instead.\n")
         println(io, "---\n")
-        println(io, readstring(readme))
+        println(io, read(readme, String))
     else
         println(io, "No docstring or `README.md` found for module `", m, "`.\n")
     end

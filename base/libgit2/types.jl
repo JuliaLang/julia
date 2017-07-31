@@ -193,6 +193,33 @@ end
 Options for connecting through a proxy.
 
 Matches the [`git_proxy_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `proxytype`: an `enum` for the type of proxy to use.
+     Defined in [`git_proxy_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_t).
+     The corresponding Julia enum is `GIT_PROXY` and has values:
+     - `PROXY_NONE`: do not attempt the connection through a proxy.
+     - `PROXY_AUTO`: attempt to figure out the proxy configuration from the git configuration.
+     - `PROXY_SPECIFIED`: connect using the URL given in the `url` field of this struct.
+     Default is to auto-detect the proxy type.
+  * `url`: the URL of the proxy.
+  * `credential_cb`: a pointer to a callback function which will be called if the remote
+    requires authentication to connect.
+  * `certificate_cb`: a pointer to a callback function which will be called if certificate
+    verification fails. This lets the user decide whether or not to keep connecting. If
+    the function returns `1`, connecting will be allowed. If it returns `0`, the connection
+    will not be allowed. A negative value can be used to return errors.
+  * `payload`: the payload to be provided to the two callback functions.
+
+# Examples
+```julia-repl
+julia> fo = LibGit2.FetchOptions();
+
+julia> fo.proxy_opts = LibGit2.ProxyOptions(url=Cstring("https://my_proxy_url.com"))
+
+julia> fetch(remote, "master", options=fo)
+```
 """
 @kwdef struct ProxyOptions
     version::Cuint               = 1
@@ -287,6 +314,12 @@ end
     LibGit2.DescribeFormatOptions
 
 Matches the [`git_describe_format_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_describe_format_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `abbreviated_size`: lower bound on the size of the abbreviated `GitHash` to use, defaulting to `7`.
+  * `always_use_long_format`: set to `1` to use the long format for strings even if a short format can be used.
+  * `dirty_suffix`: if set, this will be appended to the end of the description string if the [`workdir`](@ref) is dirty.
 """
 @kwdef struct DescribeFormatOptions
     version::Cuint          = 1
@@ -300,6 +333,18 @@ end
 
 Description of one side of a delta.
 Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
+
+The fields represent:
+  * `id`: the [`GitHash`](@ref) of the item in the diff. If the item is empty on this
+     side of the diff (for instance, if the diff is of the removal of a file), this will
+     be `GitHash(0)`.
+  * `path`: a `NULL` terminated path to the item relative to the working directory of the repository.
+  * `size`: the size of the item in bytes.
+  * `flags`: a combination of the [`git_diff_flag_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_flag_t)
+     flags. The `i`th bit of this integer sets the `i`th flag.
+  * `mode`: the [`stat`](@ref) mode for the item.
+  * `id_abbrev`: only present in LibGit2 versions newer than or equal to `0.25.0`.
+     The length of the `id` field when converted using [`hex`](@ref). Usually equal to `OID_HEXSZ` ($OID_HEXSZ).
 """
 struct DiffFile
     id::GitHash
@@ -393,6 +438,18 @@ end
     LibGit2.PushOptions
 
 Matches the [`git_push_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_push_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `parallelism`: if a pack file must be created, this variable sets the number of worker
+     threads which will be spawned by the packbuilder. If `0`, the packbuilder will auto-set
+     the number of threads to use. The default is `1`.
+  * `callbacks`: the callbacks (e.g. for authentication with the remote) to use for the push.
+  * `proxy_opts`: only relevant if the LibGit2 version is greater than or equal to `0.25.0`.
+     Sets options for using a proxy to communicate with a remote. See [`ProxyOptions`](@ref)
+     for more information.
+  * `custom_headers`: only relevant if the LibGit2 version is greater than or equal to `0.24.0`.
+     Extra headers needed for the push operation.
 """
 @kwdef struct PushOptions
     version::Cuint                     = 1

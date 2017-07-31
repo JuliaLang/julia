@@ -43,8 +43,7 @@ for indexing `iter`; it's also possible that `x != iter[i]`, if `iter`
 has indices that do not start at 1. See the `enumerate(IndexLinear(),
 iter)` method if you want to ensure that `i` is an index.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = ["a", "b", "c"];
 
@@ -93,7 +92,6 @@ specifying `IndexCartesian()` ensures that `i` will be a
 been defined as the native indexing style for array `A`.
 
 # Examples
-
 ```jldoctest
 julia> A = ["a" "d"; "b" "e"; "c" "f"];
 
@@ -206,8 +204,7 @@ the `i`th component of each input iterable.
 
 Note that [`zip`](@ref) is its own inverse: `collect(zip(zip(a...)...)) == collect(a)`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = 1:5
 1:5
@@ -267,6 +264,17 @@ returned iterable object. These calls are not cached and repeated calls will be
 made when reiterating.
 
 See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
+
+# Examples
+```jldoctest
+julia> f = Iterators.filter(isodd, [1, 2, 3, 4, 5])
+Base.Iterators.Filter{Base.#isodd,Array{Int64,1}}(isodd, [1, 2, 3, 4, 5])
+
+julia> foreach(println, f)
+1
+3
+5
+```
 """
 filter(flt, itr) = Filter(flt, itr)
 
@@ -313,6 +321,15 @@ end
     rest(iter, state)
 
 An iterator that yields the same elements as `iter`, but starting at the given `state`.
+
+# Examples
+```jldoctest
+julia> collect(Iterators.rest([1,2,3,4], 2))
+3-element Array{Any,1}:
+ 2
+ 3
+ 4
+```
 """
 rest(itr,state) = Rest(itr,state)
 
@@ -338,6 +355,17 @@ end
     countfrom(start=1, step=1)
 
 An iterator that counts forever, starting at `start` and incrementing by `step`.
+
+# Examples
+```jldoctest
+julia> for v in Iterators.countfrom(5, 2)
+           v > 10 && break
+           println(v)
+       end
+5
+7
+9
+```
 """
 countfrom(start::Number, step::Number) = Count(promote(start, step)...)
 countfrom(start::Number)               = Count(start, oneunit(start))
@@ -363,8 +391,7 @@ end
 
 An iterator that generates at most the first `n` elements of `iter`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = 1:2:11
 1:2:11
@@ -420,8 +447,7 @@ end
 
 An iterator that generates all but the first `n` elements of `iter`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = 1:2:11
 1:2:11
@@ -478,6 +504,15 @@ end
     cycle(iter)
 
 An iterator that cycles through `iter` forever.
+
+# Examples
+```jldoctest
+julia> for (i, v) in enumerate(Iterators.cycle("hello"))
+           print(v)
+           i > 10 && break
+       end
+hellohelloh
+```
 """
 cycle(xs) = Cycle(xs)
 
@@ -515,8 +550,7 @@ repeated(x) = Repeated(x)
 An iterator that generates the value `x` forever. If `n` is specified, generates `x` that
 many times (equivalent to `take(repeated(x), n)`).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = Iterators.repeated([1 2], 4);
 
@@ -604,10 +638,9 @@ end
 
 Returns an iterator over the product of several iterators. Each generated element is
 a tuple whose `i`th element comes from the `i`th argument iterator. The first iterator
-changes the fastest. Example:
+changes the fastest.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> collect(Iterators.product(1:2,3:5))
 2×3 Array{Tuple{Int64,Int64},2}:
@@ -685,8 +718,7 @@ Given an iterator that yields iterators, return an iterator that yields the
 elements of those iterators.
 Put differently, the elements of the argument iterator are concatenated.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> collect(Iterators.flatten((1:2, 8:9)))
 4-element Array{Int64,1}:
@@ -740,8 +772,7 @@ end
 
 Iterate over a collection `n` elements at a time.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> collect(Iterators.partition([1,2,3,4,5], 2))
 3-element Array{Array{Int64,1},1}:
@@ -759,6 +790,11 @@ mutable struct PartitionIterator{T}
 end
 
 eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
+partition_iteratorsize(::HasShape) = HasLength()
+partition_iteratorsize(isz) = isz
+function iteratorsize(::Type{PartitionIterator{T}}) where {T}
+    partition_iteratorsize(iteratorsize(T))
+end
 
 function length(itr::PartitionIterator)
     l = length(itr.c)

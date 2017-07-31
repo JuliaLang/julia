@@ -2,10 +2,10 @@
 
 using Base: findprevnot, findnextnot
 
-tc{N}(r1::NTuple{N,Any}, r2::NTuple{N,Any}) = all(x->tc(x...), [zip(r1,r2)...])
-tc{N}(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) = true
+tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
+tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
 tc(r1::RowVector{Bool,BitVector}, r2::Union{RowVector{Bool,BitVector},RowVector{Bool,Vector{Bool}}}) = true
-tc{T}(r1::T, r2::T) = true
+tc(r1::T, r2::T) where {T} = true
 tc(r1,r2) = false
 
 bitcheck(b::BitArray) = Base._check_bitarray_consistency(b)
@@ -140,9 +140,9 @@ timesofar("conversions")
         @check_bit_operation reshape(b1, (n2,n1)) BitMatrix
         @test_throws DimensionMismatch reshape(b1, (1,n1))
 
-        @test @inferred(reshape(b1, n1*n2)) == @inferred(reshape(b1, (n1*n2,))) == @inferred(reshape(b1, Val{1})) == @inferred(reshape(b1, :))
-        @test @inferred(reshape(b1, n1, n2)) === @inferred(reshape(b1, Val{2})) === b1
-        @test @inferred(reshape(b1, n2, :)) == @inferred(reshape(b1, (n2, n1))) != @inferred(reshape(b1, Val{2}))
+        @test @inferred(reshape(b1, n1*n2)) == @inferred(reshape(b1, (n1*n2,))) == @inferred(reshape(b1, Val(1))) == @inferred(reshape(b1, :))
+        @test @inferred(reshape(b1, n1, n2)) === @inferred(reshape(b1, Val(2))) === b1
+        @test @inferred(reshape(b1, n2, :)) == @inferred(reshape(b1, (n2, n1))) != @inferred(reshape(b1, Val(2)))
 
         b1 = bitrand(s1, s2, s3, s4)
         @check_bit_operation reshape(b1, (s3,s1,s2,s4)) BitArray{4}

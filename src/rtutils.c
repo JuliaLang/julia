@@ -559,7 +559,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
         int globfunc = 0;
         if (globname && !strchr(jl_symbol_name(globname), '#') &&
-            !strchr(jl_symbol_name(globname), '@') &&
+            !strchr(jl_symbol_name(globname), '@') && dv->name->module &&
             jl_binding_resolved_p(dv->name->module, globname)) {
             jl_binding_t *b = jl_get_binding(dv->name->module, globname);
             if (b && jl_typeof(b->value) == v)
@@ -762,9 +762,15 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         if (!jl_is_symbol(qv)) {
             n += jl_printf(out, "quote ");
         }
+        else {
+            n += jl_printf(out, ":(");
+        }
         n += jl_static_show_x(out, qv, depth);
         if (!jl_is_symbol(qv)) {
             n += jl_printf(out, " end");
+        }
+        else {
+            n += jl_printf(out, ")");
         }
     }
     else if (vt == jl_newvarnode_type) {
@@ -868,7 +874,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 i = 1;
             for (; i < tlen; i++) {
                 if (!istuple) {
-                    n += jl_printf(out, "%s", jl_symbol_name((jl_sym_t*)jl_svecref(vt->name->names, i)));
+                    n += jl_printf(out, "%s", jl_symbol_name(jl_field_name(vt, i)));
                     n += jl_printf(out, "=");
                 }
                 size_t offs = jl_field_offset(vt, i);
@@ -1010,7 +1016,7 @@ void jl_depwarn(const char *msg, jl_value_t *sym)
     JL_GC_POP();
 }
 
-void jl_depwarn_partial_indexing(size_t n)
+JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n)
 {
     static jl_value_t *depwarn_func = NULL;
     if (!depwarn_func && jl_base_module) {
@@ -1018,7 +1024,7 @@ void jl_depwarn_partial_indexing(size_t n)
     }
     if (!depwarn_func) {
         jl_safe_printf("WARNING: Partial linear indexing is deprecated. Use "
-            "`reshape(A, Val{%zd})` to make the dimensionality of the array match "
+            "`reshape(A, Val(%zd))` to make the dimensionality of the array match "
             "the number of indices\n", n);
         return;
     }

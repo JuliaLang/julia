@@ -100,6 +100,10 @@ Keyword arguments:
       A worker with a cluster manager identity `ident` will connect to all workers specified
       in `connect_idents`.
 
+* `lazy`: Applicable only with `topology=:all_to_all`. If `true`, worker-worker connections
+  are setup lazily, i.e. they are setup at the first instance of a remote call between
+  workers. Default is true.
+
 
 Environment variables :
 
@@ -155,7 +159,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     if length(machine_bind) > 1
         exeflags = `--bind-to $(machine_bind[2]) $exeflags`
     end
-    exeflags = `$exeflags --worker $(cluster_cookie())`
+    exeflags = `$exeflags --worker`
 
     machine_def = split(machine_bind[1], ':')
     # if this machine def has a port number, add the port information to the ssh flags
@@ -192,16 +196,15 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     # -x → disable X11 forwarding
     # -o ClearAllForwardings → option if forwarding connections and
     #                          forwarded connections are causing collisions
-    # -n → Redirects stdin from /dev/null (actually, prevents reading from stdin).
-    #      Used when running ssh in the background.
-    cmd = `ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host $(Base.shell_escape(cmd))`
+    cmd = `ssh -T -a -x -o ClearAllForwardings=yes $sshflags $host $(Base.shell_escape(cmd))`
 
     # launch the remote Julia process
 
     # detach launches the command in a new process group, allowing it to outlive
     # the initial julia process (Ctrl-C and teardown methods are handled through messages)
     # for the launched processes.
-    io = open(detach(cmd))
+    io = open(detach(cmd), "r+")
+    write_cookie(io)
 
     wconfig = WorkerConfig()
     wconfig.io = io.out
@@ -303,7 +306,7 @@ addprocs(; kwargs...) = addprocs(Sys.CPU_CORES; kwargs...)
 Launches workers using the in-built `LocalManager` which only launches workers on the
 local host. This can be used to take advantage of multiple cores. `addprocs(4)` will add 4
 processes on the local machine. If `restrict` is `true`, binding is restricted to
-`127.0.0.1`. Keyword args `dir`, `exename`, `exeflags`, `topology`, and
+`127.0.0.1`. Keyword args `dir`, `exename`, `exeflags`, `topology`, `lazy` and
 `enable_threaded_blas` have the same effect as documented for `addprocs(machines)`.
 """
 function addprocs(np::Integer; restrict=true, kwargs...)
@@ -320,8 +323,10 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
     bind_to = manager.restrict ? `127.0.0.1` : `$(LPROC.bind_addr)`
 
     for i in 1:manager.np
-        cmd = `$(julia_cmd(exename)) $exeflags --bind-to $bind_to --worker $(cluster_cookie())`
-        io = open(detach(setenv(cmd, dir=dir)))
+        cmd = `$(julia_cmd(exename)) $exeflags --bind-to $bind_to --worker`
+        io = open(detach(setenv(cmd, dir=dir)), "r+")
+        write_cookie(io)
+
         wconfig = WorkerConfig()
         wconfig.process = io
         wconfig.io = io.out
@@ -459,7 +464,7 @@ function socket_reuse_port()
         s = TCPSocket(delay = false)
 
         # Some systems (e.g. Linux) require the port to be bound before setting REUSEPORT
-        bind_early = is_linux()
+        bind_early = Sys.islinux()
 
         bind_early && bind_client_port(s)
         rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)

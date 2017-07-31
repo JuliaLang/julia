@@ -645,7 +645,7 @@ loaded from an input file that might contain either integers, floats, strings, o
 
 ## Types with values-as-parameters
 
-Let's say you want to create an `N`-dimensional array that has size 3 along each axis.  Such arrays
+Let's say you want to create an `N`-dimensional array that has size 3 along each axis. Such arrays
 can be created like this:
 
 ```jldoctest
@@ -685,37 +685,37 @@ slow.
 
 Now, one very good way to solve such problems is by using the [function-barrier technique](@ref kernal-functions).
 However, in some cases you might want to eliminate the type-instability altogether.  In such cases,
-one approach is to pass the dimensionality as a parameter, for example through `Val{T}` (see
+one approach is to pass the dimensionality as a parameter, for example through `Val{T}()` (see
 ["Value types"](@ref)):
 
 ```jldoctest
-julia> function array3(fillval, ::Type{Val{N}}) where N
-           fill(fillval, ntuple(d->3, Val{N}))
+julia> function array3(fillval, ::Val{N}) where N
+           fill(fillval, ntuple(d->3, Val(N)))
        end
 array3 (generic function with 1 method)
 
-julia> array3(5.0, Val{2})
+julia> array3(5.0, Val(2))
 3×3 Array{Float64,2}:
  5.0  5.0  5.0
  5.0  5.0  5.0
  5.0  5.0  5.0
 ```
 
-Julia has a specialized version of `ntuple` that accepts a `Val{::Int}` as the second parameter;
-by passing `N` as a type-parameter, you make its "value" known to the compiler. Consequently,
-this version of `array3` allows the compiler to predict the return type.
+Julia has a specialized version of `ntuple` that accepts a `Val{::Int}` instance as the second
+parameter; by passing `N` as a type-parameter, you make its "value" known to the compiler.
+Consequently, this version of `array3` allows the compiler to predict the return type.
 
 However, making use of such techniques can be surprisingly subtle. For example, it would be of
 no help if you called `array3` from a function like this:
 
 ```julia
 function call_array3(fillval, n)
-    A = array3(fillval, Val{n})
+    A = array3(fillval, Val(n))
 end
 ```
 
-Here, you've created the same problem all over again: the compiler can't guess the type of `n`,
-so it doesn't know the type of `Val{n}`.  Attempting to use `Val`, but doing so incorrectly, can
+Here, you've created the same problem all over again: the compiler can't guess what `n` is,
+so it doesn't know the *type* of `Val(n)`.  Attempting to use `Val`, but doing so incorrectly, can
 easily make performance *worse* in many situations.  (Only in situations where you're effectively
 combining `Val` with the function-barrier trick, to make the kernel function more efficient, should
 code like the above be used.)
@@ -724,13 +724,14 @@ An example of correct usage of `Val` would be:
 
 ```julia
 function filter3(A::AbstractArray{T,N}) where {T,N}
-    kernel = array3(1, Val{N})
+    kernel = array3(1, Val(N))
     filter(A, kernel)
 end
 ```
 
 In this example, `N` is passed as a parameter, so its "value" is known to the compiler.  Essentially,
-`Val{T}` works only when `T` is either hard-coded (`Val{3}`) or already specified in the type-domain.
+`Val(T)` works only when `T` is either hard-coded/literal (`Val(3)`) or already specified in the
+type-domain.
 
 ## The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)
 
@@ -806,7 +807,7 @@ is that with column-major arrays, the first index changes most rapidly. Essentia
 that looping will be faster if the inner-most loop index is the first to appear in a slice expression.
 
 Consider the following contrived example. Imagine we wanted to write a function that accepts a
-`Vector` and returns a square `Matrix` with either the rows or the columns filled with copies
+[`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
 of the input vector. Assume that it is not important whether rows or columns are filled with these
 copies (perhaps the rest of the code can be easily adapted accordingly). We could conceivably
 do this in at least four ways (in addition to the recommended call to the built-in [`repmat()`](@ref)):
@@ -1016,6 +1017,44 @@ julia> @time fview(x);
 
 Notice both the 3× speedup and the decreased memory allocation
 of the `fview` version of the function.
+
+## Copying data is not always bad
+
+Arrays are stored contiguously in memory, lending themselves to CPU vectorization
+and fewer memory accesses due to caching. These are the same reasons that it is recommended
+to access arrays in column-major order (see above). Irregular access patterns and non-contiguous views
+can drastically slow down computations on arrays because of non-sequential memory access.
+
+Copying irregularly-accessed data into a contiguous array before operating on it can result
+in a large speedup, such as in the example below. Here, a matrix and a vector are being accessed at
+800,000 of their randomly-shuffled indices before being multiplied. Copying the views into
+plain arrays speeds the multiplication by more than a factor of 2 even with the cost of the copying operation.
+
+```julia-repl
+julia> x = randn(1_000_000);
+
+julia> inds = shuffle(1:1_000_000)[1:800000];
+
+julia> A = randn(50, 1_000_000);
+
+julia> xtmp = zeros(800_000);
+
+julia> Atmp = zeros(50, 800_000);
+
+julia> @time sum(view(A, :, inds) * view(x, inds))
+  0.640320 seconds (41 allocations: 1.391 KiB)
+7253.242699002263
+
+julia> @time begin
+           copy!(xtmp, view(x, inds))
+           copy!(Atmp, view(A, :, inds))
+           sum(Atmp * xtmp)
+       end
+  0.261294 seconds (41 allocations: 1.391 KiB)
+7253.242699002323
+```
+Provided there is enough memory for the copies, the cost of copying the view to an array is
+far outweighed by the speed boost from doing the matrix multiplication on a contiguous array.
 
 ## Avoid string interpolation for I/O
 

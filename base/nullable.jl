@@ -14,7 +14,6 @@ wrapper that might contain a value of type `T`.
 field.
 
 # Examples
-
 ```jldoctest
 julia> Nullable(1)
 Nullable{Int64}(1)
@@ -80,6 +79,17 @@ end
 
 Attempt to access the value of `x`. Returns the value if it is present;
 otherwise, returns `y` if provided, or throws a `NullException` if not.
+
+# Examples
+```jldoctest
+julia> get(Nullable(5))
+5
+
+julia> get(Nullable())
+ERROR: NullException()
+Stacktrace:
+ [1] get(::Nullable{Union{}}) at ./nullable.jl:102
+```
 """
 @inline function get(x::Nullable{T}, y) where T
     if isbits(T)
@@ -100,6 +110,7 @@ all other `x`.
 This method does not check whether or not `x` is null before attempting to
 access the value of `x` for `x::Nullable` (hence "unsafe").
 
+# Examples
 ```jldoctest
 julia> x = Nullable(1)
 Nullable{Int64}(1)
@@ -113,7 +124,7 @@ Nullable{String}()
 julia> unsafe_get(x)
 ERROR: UndefRefError: access to undefined reference
 Stacktrace:
- [1] unsafe_get(::Nullable{String}) at ./nullable.jl:125
+ [1] unsafe_get(::Nullable{String}) at ./nullable.jl:136
 
 julia> x = 1
 1
@@ -132,7 +143,6 @@ Return whether or not `x` is null for [`Nullable`](@ref) `x`; return
 `false` for all other `x`.
 
 # Examples
-
 ```jldoctest
 julia> x = Nullable(1, false)
 Nullable{Int64}()
@@ -201,6 +211,21 @@ null_safe_op(::typeof(isequal), ::Type{Complex{S}}, ::Type{T}) where {S,T} =
 If neither `x` nor `y` is null, compare them according to their values
 (i.e. `isequal(get(x), get(y))`). Else, return `true` if both arguments are null,
 and `false` if one is null but not the other: nulls are considered equal.
+
+# Examples
+```jldoctest
+julia> isequal(Nullable(5), Nullable(5))
+true
+
+julia> isequal(Nullable(5), Nullable(4))
+false
+
+julia> isequal(Nullable(5), Nullable())
+false
+
+julia> isequal(Nullable(), Nullable())
+true
+```
 """
 @inline function isequal(x::Nullable{S}, y::Nullable{T}) where {S,T}
     if null_safe_op(isequal, S, T)
@@ -221,6 +246,27 @@ If neither `x` nor `y` is null, compare them according to their values
 (i.e. `isless(get(x), get(y))`). Else, return `true` if only `y` is null, and `false`
 otherwise: nulls are always considered greater than non-nulls, but not greater than
 another null.
+
+# Examples
+```jldoctest
+julia> isless(Nullable(6), Nullable(5))
+false
+
+julia> isless(Nullable(5), Nullable(6))
+true
+
+julia> isless(Nullable(5), Nullable(4))
+false
+
+julia> isless(Nullable(5), Nullable())
+true
+
+julia> isless(Nullable(), Nullable())
+false
+
+julia> isless(Nullable(), Nullable(5))
+false
+```
 """
 @inline function isless(x::Nullable{S}, y::Nullable{T}) where {S,T}
     # NULL values are sorted last
@@ -252,6 +298,18 @@ end
     filter(p, x::Nullable)
 
 Return null if either `x` is null or `p(get(x))` is false, and `x` otherwise.
+
+# Examples
+```jldoctest
+julia> filter(isodd, Nullable(5))
+Nullable{Int64}(5)
+
+julia> filter(isodd, Nullable(4))
+Nullable{Int64}()
+
+julia> filter(isodd, Nullable{Int}())
+Nullable{Int64}()
+```
 """
 function filter(p, x::Nullable{T}) where T
     if isbits(T)
@@ -276,6 +334,18 @@ be either `Union{}` or a concrete type. Whichever of these is chosen is an
 implementation detail, but typically the choice that maximizes performance
 would be used. If `x` has a value, then the return type is guaranteed to be of
 type `Nullable{typeof(f(x))}`.
+
+# Examples
+```jldoctest
+julia> map(isodd, Nullable(1))
+Nullable{Bool}(true)
+
+julia> map(isodd, Nullable(2))
+Nullable{Bool}(false)
+
+julia> map(isodd, Nullable{Int}())
+Nullable{Bool}()
+```
 """
 function map(f, x::Nullable{T}) where T
     S = promote_op(f, T)

@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef HASHING_H
-#define HASHING_H
+#ifndef JL_HASHING_H
+#define JL_HASHING_H
 
 #include "utils.h"
 #include "dtypes.h"
