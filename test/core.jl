@@ -6,7 +6,7 @@ const Bottom = Union{}
 # For curmod_*
 include("testenv.jl")
 
-f47{T}(x::Vector{Vector{T}}) = 0
+f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws MethodError f47(Array{Vector}(0))
 @test f47(Array{Vector{Int}}(0)) == 0
 
@@ -26,11 +26,11 @@ abstract type Abs; end
 struct Foo <: Abs; end
 struct Bar; val::Int64; end
 struct Baz; val::Int64; end
-f{T}(::Type{T}, x::T) = T(3)
-f{T <: Abs}(::Type{Bar}, x::T) = Bar(2)
+f(::Type{T}, x::T) where {T} = T(3)
+f(::Type{Bar}, x::T) where {T <: Abs} = Bar(2)
 f(::Type{Bar}, x) = Bar(1)
 f(::Type{Baz}, x) = Baz(1)
-f{T <: Abs}(::Type{Baz}, x::T) = Baz(2)
+f(::Type{Baz}, x::T) where {T <: Abs} = Baz(2)
 end
 
 @test Issue12939.f(Issue12939.Baz,Issue12939.Foo()) === Issue12939.Baz(2)
@@ -41,7 +41,7 @@ TT11840{T} = Tuple{T,T}
 f11840(::Type) = "Type"
 f11840(::DataType) = "DataType"
 f11840(::UnionAll) = "UnionAll"
-f11840{T<:Tuple}(::Type{T}) = "Tuple"
+f11840(::Type{T}) where {T<:Tuple} = "Tuple"
 @test f11840(Type) == "UnionAll"
 @test f11840(Type.body) == "DataType"
 @test f11840(Union{Int,Int8}) == "Type"
@@ -50,7 +50,7 @@ f11840{T<:Tuple}(::Type{T}) = "Tuple"
 
 g11840(::DataType) = 1
 g11840(::Type) = 2
-g11840{T<:Tuple}(sig::Type{T}) = 3
+g11840(sig::Type{T}) where {T<:Tuple} = 3
 @test g11840(Vector.body) == 1
 @test g11840(Vector) == 2
 @test g11840(Vector.body) == 1
@@ -63,7 +63,7 @@ g11840b(::Type) = 2
 # FIXME (needs a test): how to compute that the guard entry is still required,
 # even though Type{Vector} ∩ DataType = Bottom and this method would set
 # cache_with_orig = true
-g11840b{T<:Tuple}(sig::Type{T}) = 3
+g11840b(sig::Type{T}) where {T<:Tuple} = 3
 @test g11840b(Vector) == 2
 @test g11840b(Vector.body) == 1
 @test g11840b(Vector) == 2
@@ -74,7 +74,7 @@ g11840b{T<:Tuple}(sig::Type{T}) = 3
 h11840(::DataType) = '1'
 h11840(::Type) = '2'
 h11840(::UnionAll) = '3'
-h11840{T<:Tuple}(::Type{T}) = '4'
+h11840(::Type{T}) where {T<:Tuple} = '4'
 @test h11840(Vector) == '3'
 @test h11840(Vector.body) == '1'
 @test h11840(Vector) == '3'
@@ -125,7 +125,7 @@ end
 @test promote_type(Bool,Bottom) === Bool
 
 # ntuples
-nttest1{n}(x::NTuple{n,Int}) = n
+nttest1(x::NTuple{n,Int}) where {n} = n
 @test nttest1(()) == 0
 @test nttest1((1,2)) == 2
 @test NTuple <: Tuple
@@ -251,7 +251,7 @@ let
     @test foo() === convert(Int8,100)
 end
 
-function bar{T}(x::T)
+function bar(x::T) where T
     local z::Complex{T}
     z = x
     z
@@ -280,21 +280,21 @@ fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 @test fib(20) == 6765
 
 # static parameters
-sptest1{T}(x::T, y::T) = 42
-sptest1{T,S}(x::T, y::S) = 43
+sptest1(x::T, y::T) where {T} = 42
+sptest1(x::T, y::S) where {T,S} = 43
 @test sptest1(1,2) == 42
 @test sptest1(1,"b") == 43
 
-sptest2{T}(x::T) = T
+sptest2(x::T) where {T} = T
 @test ===(sptest2(:a),Symbol)
 
-sptest3{T}(x::T) = y->T
+sptest3(x::T) where {T} = y->T
 let m = sptest3(:a)
     @test ===(m(0),Symbol)
 end
 
-sptest4{T}(x::T, y::T) = 42
-sptest4{T}(x::T, y) = 44
+sptest4(x::T, y::T) where {T} = 42
+sptest4(x::T, y) where {T} = 44
 @test sptest4(1,2) == 42
 @test sptest4(1, "cat") == 44
 
@@ -604,21 +604,21 @@ let
     @test_throws MethodError foo2(1)
     @test_throws MethodError foo2(1,2,3)
 
-    fooN{T,N}(A::Array{T,N}, x::Vararg{Any,N}) = -1
+    fooN(A::Array{T,N}, x::Vararg{Any,N}) where {T,N} = -1
     @test fooN([1,2], 1) == -1
     @test_throws MethodError fooN([1,2], 1, 2) == -1
     @test fooN([1 2; 3 4], 1, 2) == -1
     @test_throws MethodError fooN([1 2; 3 4], 1)
     @test_throws MethodError fooN([1 2; 3 4], 1, 2, 3)
 
-    bar{T}(x::Tuple{T,T,T,T})=1
+    bar(x::Tuple{T,T,T,T}) where {T} = 1
     bar(x::Tuple{Any,Any,Any,Any})=2
     @test bar((1,1,1,1)) == 1
     @test bar((1,1,1,"a")) == 2
     @test bar((:a,:a,:a,:a)) == 1
 
     baz(::Type{Rational}) = 1
-    baz{T}(::Type{Rational{T}}) = 2
+    baz(::Type{Rational{T}}) where {T} = 2
     @test baz(Rational) == 1
     @test baz(Rational{Int}) == 2
 end
@@ -637,15 +637,15 @@ end
 let
     local x
     x = MyArray{1}()
-    foob(x::AbstractArray)=0
-    foob{T}(x::AbstractVector{T})=1
+    foob(x::AbstractArray) = 0
+    foob(x::AbstractVector{T}) where {T} = 1
     @test foob(x) == 1
 end
 
 let
     local f, g, a
-    f{T}(a::Vector{Vector{T}}) = a
-    g{T}(a::Vector{Vector{T}}) = a
+    f(a::Vector{Vector{T}}) where {T} = a
+    g(a::Vector{Vector{T}}) where {T} = a
     a = Vector{Int}[]
     @test ===(f(a), a)
     @test ===(g(a), a)
@@ -655,7 +655,7 @@ mutable struct _AA{T}; a::T; end
 _AoA{T} = _AA{_AA{T}}
 let
     local g, a
-    g{T}(a::_AA{_AA{T}}) = a
+    g(a::_AA{_AA{T}}) where {T} = a
     a = _AA(_AA(1))
     @test ===(g(a),a)
 end
@@ -855,16 +855,16 @@ end
 let
     local MatOrNot, my_func, M
     MatOrNot{T} = Union{AbstractMatrix{T}, Vector{Union{}}}
-    my_func{T<:Real}(A::MatOrNot{T}, B::MatOrNot{T}, C::MatOrNot{T}) = 0
+    my_func(A::MatOrNot{T}, B::MatOrNot{T}, C::MatOrNot{T}) where {T<:Real} = 0
     M = [ 2. 1. ; 1. 1. ]
     @test my_func(Union{}[], M, M) == 0
 end
 
 let
     local my_func, a, c
-    my_func{T}(P::Vector{T}, Q::Vector{T}) = 0
-    my_func{T}(x::T, P::Vector{T}) = 1
-    my_func{T}(P::Vector{T}, x::T) = 2
+    my_func(P::Vector{T}, Q::Vector{T}) where {T} = 0
+    my_func(x::T, P::Vector{T}) where {T} = 1
+    my_func(P::Vector{T}, x::T) where {T} = 2
     a = Int[3]
     c = Vector[a]
 
@@ -902,7 +902,7 @@ end
 
 import Base.*
 
-*{m1, m2, s1, s2, kg1, kg2}(x::SI{m1, s1, kg1}, y::SI{m2, s2, kg2}) = SI{m1 + m2, s1 + s2, kg1 + kg2}(x.value * y.value)
+*(x::SI{m1, s1, kg1}, y::SI{m2, s2, kg2}) where {m1, m2, s1, s2, kg1, kg2} = SI{m1 + m2, s1 + s2, kg1 + kg2}(x.value * y.value)
 
 let
     local a,b
@@ -1018,7 +1018,7 @@ end
 let
     local f1442
     f1442(::DataType) = 1
-    f1442{T}(::Type{S1442{T}}) = 2
+    f1442(::Type{S1442{T}}) where {T} = 2
 
     @test f1442(S1442{Int}) == 2
     @test f1442(DataType) == 1
@@ -1042,7 +1042,7 @@ mutable struct Body <: Component
     Body() = new(0, 0)
 end
 
-function NewEntity{T<:Component}(components::Type{T}...)
+function NewEntity(components::Type{T}...) where T<:Component
     map((c)->c(), components)
 end
 
@@ -1079,12 +1079,12 @@ end
 
 # issue #1632
 let
-    f1632{R,S}(::R, ::S) = 1
-    f1632{T}(  ::T, ::T) = 2
+    f1632(::R, ::S) where {R,S} = 1
+    f1632(::T, ::T) where {T} = 2
     @test f1632(1, 2) == 2
     @test f1632(:a, 2) == 1
-    g1632{T}(  ::T, ::T) = 2
-    g1632{R,S}(::R, ::S) = 1
+    g1632(::T, ::T) where {T} = 2
+    g1632(::R, ::S) where {R,S} = 1
     @test g1632(1, 2) == 2
     @test g1632(:a, 2) == 1
 end
@@ -1107,7 +1107,7 @@ end
 
 # issue #2169
 let
-    i2169{T}(a::Array{T}) = typemin(T)
+    i2169(a::Array{T}) where {T} = typemin(T)
     @test invoke(i2169, Tuple{Array} ,Int8[1]) === Int8(-128)
 end
 
@@ -1142,8 +1142,8 @@ struct Foo2517; end
 mutable struct X1474{a,b} end
 let
     local Y
-    Y{A,B}(::Type{X1474{A,B}}) = 1
-    Y{A}(::Type{X1474{A}}) = 2
+    Y(::Type{X1474{A,B}}) where {A,B} = 1
+    Y(::Type{X1474{A}}) where {A} = 2
     Y(::Type{X1474}) = 3
     @test Y(X1474) == 3
     @test Y(X1474{Int}) == 2
@@ -1155,7 +1155,7 @@ mutable struct Node2562{T}
     value::T
     Node2562{T}(value::T) where T = new(value)
 end
-Node2562{T}(value::T, args...) = Node2562{T}(value, args...)
+Node2562(value::T, args...) where {T} = Node2562{T}(value, args...)
 makenode2562(value) = Node2562(value)
 @test isa(Node2562(0), Node2562)
 @test isa(makenode2562(0), Node2562)
@@ -1302,7 +1302,7 @@ mutable struct Baz4129
     b::Bar4129
 end
 
-foo4129(a::Baz4129,c::Foo4129,b::Bar4129,x::ANY,y) = (a,b,c,x,y)
+foo4129(a::Baz4129,c::Foo4129,b::Bar4129,@nospecialize(x),y) = (a,b,c,x,y)
 foo4129(a::Baz4129,b::Bar41291,args...) = foo4129(a,b.f,b,args...)
 foo4129(a::Baz4129,b::Bar41292,args...) = foo4129(a,b.f,b,args...)
 foo4129(a::Baz4129,args...)         = foo4129(a,a.b,args...)
@@ -1356,7 +1356,7 @@ end
 @test isa(Foo4376{Float32}(Foo4376{Int}(2)), Foo4376{Float32})
 
 mutable struct _0_test_ctor_syntax_
-    _0_test_ctor_syntax_{T<:AbstractString}(files::Vector{T},step) = 0
+    _0_test_ctor_syntax_(files::Vector{T},step) where {T<:AbstractString} = 0
 end
 
 # issue #4413
@@ -1375,7 +1375,7 @@ g4413(::Union{A4413, B4413, C4413}) = "ABC"
 # what happens here: the method cache logic wants to widen the type of a
 # tuple argument, but it shouldn't do that for an argument that a static
 # parameter depends on.
-f4482{T}(x::T) = T
+f4482(x::T) where {T} = T
 @test f4482((Ptr,Ptr)) === Tuple{UnionAll,UnionAll}
 @test f4482((Ptr,))    === Tuple{UnionAll,}
 
@@ -1421,7 +1421,7 @@ end
 
 # issue #4505
 let
-    g4505{X}(::X) = 0
+    g4505(::X) where {X} = 0
     @test g4505(0) == 0
 end
 @test !@isdefined g4505
@@ -1458,9 +1458,9 @@ mutable struct SIQ{A,B} <: Number
     x::A
 end
 import Base: promote_rule
-promote_rule{T,T2,S,S2}(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) = SIQ{promote_type(T,S)}
+promote_rule(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) where {T,T2,S,S2} = SIQ{promote_type(T,S)}
 @test_throws ErrorException promote_type(SIQ{Int},SIQ{Float64})
-f4731{T}(x::T...) = 0
+f4731(x::T...) where {T} = 0
 f4731(x...) = ""
 g4731() = f4731()
 @test f4731() == ""
@@ -1468,9 +1468,9 @@ g4731() = f4731()
 
 # issue #4675
 f4675(x::StridedArray...) = 1
-f4675{T}(x::StridedArray{T}...) = 2
+f4675(x::StridedArray{T}...) where {T} = 2
 @test f4675(zeros(50,50), zeros(50,50)) == 2
-g4675{T}(x::StridedArray{T}...) = 2
+g4675(x::StridedArray{T}...) where {T} = 2
 g4675(x::StridedArray...) = 1
 @test g4675(zeros(50,50), zeros(50,50)) == 2
 
@@ -1489,7 +1489,7 @@ end # module
 abstract type IT4805{N, T} end
 
 let
-    test0{T <: Int64}(::Type{IT4805{1, T}}, x) = x
+    test0(::Type{IT4805{1, T}}, x) where {T <: Int64} = x
     test1() = test0(IT4805{1, Int64}, 1)
     test2() = test0(IT4805{1+0, Int64}, 1)
     test3(n) = test0(IT4805{n, Int64}, 1)
@@ -1556,7 +1556,7 @@ let
 end
 
 # issue #5254
-f5254{T}(::Type{T}, b::T) = 0
+f5254(::Type{T}, b::T) where {T} = 0
 f5254(a, b) = 1
 @test f5254(Bottom, 1) == 1
 
@@ -1579,7 +1579,7 @@ end
 
 # issue #5319
 cnvt(T, x) = convert_default(T, x, cnvt)
-cnvt{S, T, N}(::Type{Array{S, N}}, x::Array{T, N}) = convert(Array{S}, x)
+cnvt(::Type{Array{S, N}}, x::Array{T, N}) where {S, T, N} = convert(Array{S}, x)
 
 function tighttypes!(adf)
     T = Bottom
@@ -1652,7 +1652,7 @@ end
 
 # issue #5584
 # this is an intermittent memory bug, but this code is very likely to trigger it
-mapshape_5584{N}(s1::NTuple{N,Int}, s2::NTuple{N,Int}) =
+mapshape_5584(s1::NTuple{N,Int}, s2::NTuple{N,Int}) where {N} =
     (s1 == s2 || error("Argument dimensions are not map-compatible."); s1)
 function f5584()
     for i = 1:1000000
@@ -1736,7 +1736,7 @@ test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
 # issue #6142
 import Base: +
 mutable struct A6142 <: AbstractMatrix{Float64}; end
-+{TJ}(x::A6142, y::UniformScaling{TJ}) = "UniformScaling method called"
++(x::A6142, y::UniformScaling{TJ}) where {TJ} = "UniformScaling method called"
 +(x::A6142, y::AbstractArray) = "AbstractArray method called"
 @test A6142() + I == "UniformScaling method called"
 +(x::A6142, y::Range) = "Range method called" #16324 ambiguity
@@ -1748,7 +1748,7 @@ g6175(i, I...) = tuple(length(i), g6175(I...)...)
 @test g6175(1:5) === (5,)
 
 # issue #6242
-f6242{N}(x::NTuple{N,Int})=(N==0 ? 1 : ntuple(n->x[n],N))
+f6242(x::NTuple{N,Int}) where {N} = (N==0 ? 1 : ntuple(n->x[n],N))
 @test f6242(()) === 1
 
 # issue #6292
@@ -1767,10 +1767,10 @@ mutable struct type_1{T <: Number} <: Number
     x::Vector{T}
     type_1{T}(x::Vector{T}) where T<:Number = new(x)
 end
-type_1{T <: Number}(x::Vector{T}) = type_1{T}(x)
-type_1{T <: Number}(c::T) = type_1{T}([c])
-Base.convert{T<:Number, S<:Number}(::Type{type_1{T}}, x::S) = type_1(convert(T, x))
-+{T <: Number}(a::type_1{T}, b::type_1{T}) = a
+type_1(x::Vector{T}) where {T <: Number} = type_1{T}(x)
+type_1(c::T) where {T <: Number} = type_1{T}([c])
+Base.convert(::Type{type_1{T}}, x::S) where {T<:Number, S<:Number} = type_1(convert(T, x))
++(a::type_1{T}, b::type_1{T}) where {T <: Number} = a
 
 function func1_6404(v1::Integer)
     e1 = type_1([type_2{Int,v1}(0)])
@@ -1822,7 +1822,7 @@ end
 module A5876
 macro x()
     quote
-        function $(esc(:f5876)){T}(::Type{T})
+        function $(esc(:f5876))(::Type{T}) where T
             T
         end
         42
@@ -1861,7 +1861,7 @@ end
 
 obj6387 = ObjMember(DateRange6387{Int64}())
 
-function v6387{T}(r::Range{T})
+function v6387(r::Range{T}) where T
     a = Array{T}(1)
     a[1] = Core.Intrinsics.bitcast(Date6387{Int64}, Int64(1))
     return a
@@ -1934,14 +1934,14 @@ end
 @test ttt7049(init="a") == "init=a"
 
 # issue #7074
-let z{T<:Union{Float64,Complex{Float64},Float32,Complex{Float32}}}(A::StridedMatrix{T}) = T,
+let z(A::StridedMatrix{T}) where {T<:Union{Float64,Complex{Float64},Float32,Complex{Float32}}} = T,
     S = zeros(Complex,2,2)
     @test_throws MethodError z(S)
 end
 
 # issue #7062
-f7062{t,n}(::Type{Array{t}}  , ::Array{t,n}) = (t,n,1)
-f7062{t,n}(::Type{Array{t,n}}, ::Array{t,n}) = (t,n,2)
+f7062(::Type{Array{t}}  , ::Array{t,n}) where {t,n} = (t,n,1)
+f7062(::Type{Array{t,n}}, ::Array{t,n}) where {t,n} = (t,n,2)
 @test f7062(Array{Int,1}, [1,2,3]) === (Int,1,2)
 @test f7062(Array{Int}  , [1,2,3]) === (Int,1,1)
 
@@ -1983,8 +1983,8 @@ mutable struct A7652
 end
 a7652 = A7652(0)
 t_a7652 = A7652
-f7652() = issubtype(fieldtype(t_a7652, :a), Int)
-@test f7652() == issubtype(fieldtype(A7652, :a), Int) == true
+f7652() = fieldtype(t_a7652, :a) <: Int
+@test f7652() == (fieldtype(A7652, :a) <: Int) == true
 g7652() = fieldtype(DataType, :types)
 @test g7652() == fieldtype(DataType, :types) == SimpleVector
 @test fieldtype(t_a7652, 1) == Int
@@ -2149,7 +2149,7 @@ let x = [1,2,3]
 end
 
 # sig 2 is SIGINT per the POSIX.1-1990 standard
-if !is_windows()
+if !Sys.iswindows()
     ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
     @test_throws InterruptException begin
         ccall(:kill, Void, (Cint, Cint,), getpid(), 2)
@@ -2266,7 +2266,7 @@ end
 # issue caused by commit 189b00aef0376d1a998d36115cd11b17464d26ce and worked around
 # by commit 24c64b86bd4e793dbfe9d85c067dc0579b320d14
 let
-    g{T}(x::T...) = T
+    g(x::T...) where {T} = T
     g(x...) = 0
     @test g((),Int) == 0
     @test g((),()) == Tuple{}
@@ -2335,7 +2335,7 @@ for m in methods(g10373)
 end
 
 # issue #7221
-f7221{T<:Number}(::T) = 1
+f7221(::T) where {T<:Number} = 1
 f7221(::BitArray) = 2
 f7221(::AbstractVecOrMat) = 3
 @test f7221(trues(1)) == 2
@@ -2887,7 +2887,7 @@ end
 @test f11357() === 1
 
 # issue #11355
-function f11355{T<:Tuple}(sig::Type{T})
+function f11355(sig::Type{T}) where T<:Tuple
     f11355(sig.parameters[1])
 end
 function f11355(arg::DataType)
@@ -3021,7 +3021,7 @@ f11858(Any[Type{Foo11858}, Type{Bar11858}, typeof(g11858)])
 # issue 11904
 @noinline throw_error() = error()
 foo11904(x::Int) = x
-@inline function foo11904{S}(x::Nullable{S})
+@inline function foo11904(x::Nullable{S}) where S
     if isbits(S)
         Nullable(foo11904(x.value), x.hasvalue)
     else
@@ -3115,7 +3115,7 @@ f12092(x::Int, y::Int...) = 2
 
 # issue #12063
 # NOTE: should have > MAX_TUPLETYPE_LEN arguments
-f12063{T}(tt, g, p, c, b, v, cu::T, d::AbstractArray{T, 2}, ve) = 1
+f12063(tt, g, p, c, b, v, cu::T, d::AbstractArray{T, 2}, ve) where {T} = 1
 f12063(args...) = 2
 g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, spzeros(0,0), Int[])
 @test g12063() == 1
@@ -3137,7 +3137,7 @@ struct Vec8010{T}
     y::T
 end
 Vec8010(a::AbstractVector) = Vec8010(ntuple(x->a[x],2)...)
-Base.convert{T}(::Type{Vec8010{T}},x::AbstractVector) = Vec8010(x)
+Base.convert(::Type{Vec8010{T}},x::AbstractVector) where {T} = Vec8010(x)
 Base.convert(::Type{Void},x::AbstractVector) = Vec8010(x)
 struct MyType8010
      m::Vec8010{Float32}
@@ -3217,17 +3217,17 @@ PossiblyInvalidUnion{T} = Union{T,Int}
 @test split(string(gensym("abc")),'#')[3] == "abc"
 
 # issue #13007
-call13007{T,N}(::Type{Array{T,N}}) = 0
+call13007(::Type{Array{T,N}}) where {T,N} = 0
 call13007(::Type{Array}) = 1
 @test length(Base._methods(call13007, Tuple{Type{x} where x<:Array}, 4, typemax(UInt))) == 2
 
 # detecting cycles during type intersection, e.g. #1631
-cycle_in_solve_tvar_constraints{S}(::Type{Nullable{S}}, x::S) = 0
-cycle_in_solve_tvar_constraints{T}(::Type{T}, x::Val{T}) = 1
+cycle_in_solve_tvar_constraints(::Type{Nullable{S}}, x::S) where {S} = 0
+cycle_in_solve_tvar_constraints(::Type{T}, x::Val{T}) where {T} = 1
 @test length(methods(cycle_in_solve_tvar_constraints)) == 2
 
 # issue #12967
-foo12967(x, ::ANY) = 1
+foo12967(x, @nospecialize y) = 1
 TupleType12967{T<:Tuple} = Type{T}
 foo12967(x, ::TupleType12967) = 2
 @test foo12967(1, Int) == 1
@@ -3265,7 +3265,7 @@ end
 @test EmptyIIOtherField13175(EmptyImmutable13175(), 1.0) != EmptyIIOtherField13175(EmptyImmutable13175(), 2.0)
 
 # issue #13183
-gg13183{X}(x::X...) = 1==0 ? gg13183(x, x) : 0
+gg13183(x::X...) where {X} = 1==0 ? gg13183(x, x) : 0
 @test gg13183(5) == 0
 
 # issue 8932 (llvm return type legalizer error)
@@ -3334,7 +3334,7 @@ end
 @test_throws MethodError Array{Type{Int64}}([Float32])
 abstract type A11327 end
 abstract type B11327 <: A11327 end
-f11327{T}(::Type{T},x::T) = x
+f11327(::Type{T},x::T) where {T} = x
 @test_throws MethodError f11327(Type{A11327},B11327)
 
 # issue #8487
@@ -3393,7 +3393,7 @@ end
 @test_throws ErrorException eval(Expr(:body, :(1)))
 
 # issue #14339
-f14339{T<:Union{}}(x::T, y::T) = 0
+f14339(x::T, y::T) where {T<:Union{}} = 0
 @test_throws MethodError f14339(1, 2)
 
 # Make sure jlcall objects are rooted
@@ -3458,7 +3458,7 @@ end
 @test_throws MethodError @eval @m8846(a,b,c)
 
 # a simple case of parametric dispatch with unions
-let foo{T}(x::Union{T,Void},y::Union{T,Void}) = 1
+let foo(x::Union{T,Void},y::Union{T,Void}) where {T} = 1
     @test foo(1, nothing) === 1
     @test_throws MethodError foo(nothing, nothing)  # can't determine T
 end
@@ -3502,7 +3502,7 @@ f14245() = (v = []; push!(v, length(v)); v)
 @test f14245()[1] == 0
 
 # issue #9677
-@generated function foo9677{T,N}(x::AbstractArray{T,N})
+@generated function foo9677(x::AbstractArray{T,N}) where {T,N}
     quote
         x=$N
         y=x+1
@@ -3633,11 +3633,11 @@ let ex = quote
 end
 
 # issue #15180
-function f15180{T}(x::T)
+function f15180(x::T) where T
     X = Array{T}(1)
     X[1] = x
-    @noinline ef{J}(::J) = (J,X[1]) # Use T
-    ef{J}(::J, ::Int) = (T,J)
+    @noinline ef(::J) where {J} = (J,X[1]) # Use T
+    ef(::J, ::Int) where {J} = (T,J)
     return ef
 end
 @test map(f15180(1), [1,2]) == [(Int,1),(Int,1)]
@@ -3756,12 +3756,12 @@ end
 
 # issue #15264
 module Test15264
-    mod1{T}(x::T) = x < 1 ? x : mod1(x-1)
+    mod1(x::T) where {T} = x < 1 ? x : mod1(x-1)
 end
 @test Test15264.mod1 !== Base.mod1
 
 module M15455
-function rpm_provides{T}(r::T)
+function rpm_provides(r::T) where T
     push!([], select(r,T))
 end
 select(a,b) = 0
@@ -3775,7 +3775,7 @@ end
 # Make sure arrayset can handle `Array{T}` (where `T` is a type and not a
 # `TypeVar`) without crashing
 let
-    function arrayset_unknown_dim{T}(::Type{T}, n)
+    function arrayset_unknown_dim(::Type{T}, n) where T
         Base.arrayset(reshape(Vector{T}(1), ones(Int, n)...), 2, 1)
     end
     arrayset_unknown_dim(Any, 1)
@@ -3790,7 +3790,7 @@ module TestSharedArrayResize
 using Base.Test
 # Attempting to change the shape of a shared array should unshare it and
 # not modify the original data
-function test_shared_array_resize{T}(::Type{T})
+function test_shared_array_resize(::Type{T}) where T
     len = 100
     a = Vector{T}(len)
     function test_unshare(f)
@@ -3873,7 +3873,7 @@ end
 
 # Copy of `#undef`
 copy!(Vector{Any}(10), Vector{Any}(10))
-function test_copy_alias{T}(::Type{T})
+function test_copy_alias(::Type{T}) where T
     ary = T[1:100;]
     unsafe_copy!(ary, 1, ary, 11, 90)
     @test ary == [11:100; 91:100]
@@ -3926,7 +3926,7 @@ end
 # issue #15809 --- TODO: this code should be disallowed
 function f15809()
     global g15809
-    g15809{T}(x::T) = T
+    g15809(x::T) where {T} = T
 end
 f15809()
 @test g15809(2) === Int
@@ -3980,7 +3980,7 @@ function metadata_matches(ast::CodeInfo)
     @test boundscheck_cnt[] == 0
 end
 
-function test_metadata_matches(f::ANY, tt::ANY)
+function test_metadata_matches(@nospecialize(f), @nospecialize(tt))
     metadata_matches(code_typed(f, tt)[1][1])
 end
 
@@ -4188,16 +4188,16 @@ end
 
 # issue #16153
 f16153(x) = 1
-f16153(x::ANY, y...) = 2
+f16153(@nospecialize(x), y...) = 2
 @test f16153("") == 1
-ff16153(x::ANY, y...) = 2
+ff16153(@nospecialize(x), y...) = 2
 ff16153(x) = 1
 @test ff16153("") == 1
-g16153(x::ANY, y...) = 1
-g16153(x::ANY, y::ANY) = 2
+g16153(@nospecialize(x), y...) = 1
+g16153(@nospecialize(x), @nospecialize(y)) = 2
 @test g16153(1, 1) == 2
-gg16153(x::ANY, y::ANY) = 2
-gg16153(x::ANY, y...) = 1
+gg16153(@nospecialize(x), @nospecialize(y)) = 2
+gg16153(@nospecialize(x), y...) = 1
 @test gg16153(1, 1) == 2
 
 # don't remove global variable accesses even if we "know" their type
@@ -4270,7 +4270,7 @@ function f1090(x)::Int
 end
 @test f1090(1) === 1
 @test f1090(2) === 2
-g1090{T}(x::T)::T = x+1.0
+(g1090(x::T)::T) where {T} = x+1.0
 @test g1090(1) === 2
 @test g1090(Float32(3)) === Float32(4)
 
@@ -4321,8 +4321,8 @@ end
 @test C16767.body.types[1].types[1].parameters[1].types[1] === A16767{C16767{:a}}
 
 # issue #16340
-function f16340{T}(x::T)
-    function g{T}(y::T)
+function f16340(x::T) where T
+    function g(y::T) where T
         return (T,T)
     end
     return g
@@ -4341,7 +4341,7 @@ end
 
 # issue #17147
 f17147(::Tuple) = 1
-f17147{N}(::Vararg{Tuple,N}) = 2
+f17147(::Vararg{Tuple,N}) where {N} = 2
 @test f17147((), ()) == 2
 
 # issue #17449, argument evaluation order
@@ -4362,7 +4362,7 @@ end
 @test h17449(true) === :k
 
 # make sure lowering agrees on sp order
-function captsp{T, S}(x::T, y::S)
+function captsp(x::T, y::S) where {T, S}
     subf(x2::Int) = T
     subf(x2::UInt) = S
     return subf(Int(1)), subf(UInt(1))
@@ -4370,7 +4370,7 @@ end
 @test captsp(1, 2.0) == (Int, Float64)
 
 # issue #15068
-function sp_innersig{T}(x::T)
+function sp_innersig(x::T) where {T}
    subf(x2::T) = (x, x2, :a)
    subf(x2) = (x, x2, :b)
    return (subf(one(T)), subf(unsigned(one(T))))
@@ -4549,13 +4549,13 @@ end
 gc_enable(true)
 
 # issue #18710
-bad_tvars{T}() = 1
+bad_tvars() where {T} = 1
 @test_throws ErrorException @which(bad_tvars())
 @test_throws MethodError bad_tvars()
 
 # issue #19059 - test for lowering of `let` with assignment not adding Box in simple cases
 contains_Box(e::GlobalRef) = (e.name === :Box)
-contains_Box(e::ANY) = false
+contains_Box(@nospecialize(e)) = false
 contains_Box(e::Expr) = any(contains_Box, e.args)
 
 function let_noBox()
@@ -4690,7 +4690,7 @@ end
 end
 
 # issue #19599
-f19599{T}(x::((S)->Vector{S})(T)...) = 1
+f19599(x::((S)->Vector{S})(T)...) where {T} = 1
 @test f19599([1],[1]) == 1
 @test_throws MethodError f19599([1],[1.0])
 
@@ -4906,7 +4906,7 @@ f21568() = 0
 function foo21568()
     y = 1
     global f21568
-    f21568{T<:Real}(x::AbstractArray{T,1}) = y
+    f21568(x::AbstractArray{T,1}) where {T<:Real} = y
 end
 foo21568()
 @test f21568([0]) == 1
@@ -5075,3 +5075,17 @@ f_isdefined_cl_6() = (local x; () -> @isdefined x)
 @test !f_isdefined_cl_4()
 @test f_isdefined_cl_5()()
 @test !f_isdefined_cl_6()()
+
+mutable struct MyStruct22929
+    x::MyStruct22929
+    MyStruct22929() = new()
+end
+isdefined_22929_1(x) = isdefined(x, 1)
+isdefined_22929_x(x) = isdefined(x, :x)
+m22929_1 = MyStruct22929()
+m22929_2 = MyStruct22929()
+m22929_2.x = m22929_1
+@test !isdefined_22929_1(m22929_1)
+@test !isdefined_22929_x(m22929_1)
+@test isdefined_22929_1(m22929_2)
+@test isdefined_22929_x(m22929_2)

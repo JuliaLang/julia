@@ -112,9 +112,9 @@ try
                   pool::NominalPool{T, R, NominalValue{T, R}}
               end
               (::Union{Type{NominalValue}, Type{OrdinalValue}})() = 1
-              (::Union{Type{NominalValue{T}}, Type{OrdinalValue{T}}}){T}() = 2
-              (::Type{Vector{NominalValue{T, R}}}){T, R}() = 3
-              (::Type{Vector{NominalValue{T, T}}}){T}() = 4
+              (::Union{Type{NominalValue{T}}, Type{OrdinalValue{T}}})() where {T} = 2
+              (::Type{Vector{NominalValue{T, R}}})() where {T, R} = 3
+              (::Type{Vector{NominalValue{T, T}}})() where {T} = 4
               (::Type{Vector{NominalValue{Int, Int}}})() = 5
 
               # more tests for method signature involving a complicated type
@@ -125,9 +125,9 @@ try
               struct Value18343{T, R}
                   pool::Pool18343{R, Value18343{T, R}}
               end
-              Base.convert{S}(::Type{Nullable{S}}, ::Value18343{Nullable}) = 2
+              Base.convert(::Type{Nullable{S}}, ::Value18343{Nullable}) where {S} = 2
               Base.convert(::Type{Nullable{Value18343}}, ::Value18343{Nullable}) = 2
-              Base.convert{T}(::Type{Ref}, ::Value18343{T}) = 3
+              Base.convert(::Type{Ref}, ::Value18343{T}) where {T} = 3
 
 
               let some_method = @which Base.include("string")
@@ -172,7 +172,7 @@ try
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
     @test_warn "WARNING: replacing module $Foo_module." begin
-        @test isa(Base._require_from_serialized(myid(), Foo_module, cachefile, #=broadcast-load=#false), Array{Any,1})
+        @test isa(Base._require_from_serialized(Foo_module, cachefile), Array{Any,1})
     end
 
     let Foo = getfield(Main, Foo_module)
@@ -286,7 +286,7 @@ try
     @test !isdefined(Main, :FooBar1)
 
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) == !is_windows() # `..` is not a symlink on Windows
+    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) == !Sys.iswindows() # `..` is not a symlink on Windows
     mkdir(joinpath(dir, "subfolder"))
     @test !Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji"))
 
@@ -460,7 +460,7 @@ let dir = mktempdir()
         let fname = tempname()
             try
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                @test Test.ismatch_warn("WARNING: replacing module $Test_module.\n", readstring(fname))
+                @test Test.ismatch_warn("WARNING: replacing module $Test_module.\n", read(fname, String))
             finally
                 rm(fname, force=true)
             end
@@ -472,7 +472,7 @@ let dir = mktempdir()
             try
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
                 # e.g `@test_nowarn`
-                @test Test.ismatch_warn(r"^(?!.)"s, readstring(fname))
+                @test Test.ismatch_warn(r"^(?!.)"s, read(fname, String))
             finally
                 rm(fname, force=true)
             end
@@ -535,7 +535,8 @@ end
 let module_name = string("a",randstring())
     insert!(LOAD_PATH, 1, pwd())
     file_name = string(module_name, ".jl")
-    sleep(2); touch(file_name)
+    sleep(2)
+    touch(file_name)
     code = """module $(module_name)\nend\n"""
     write(file_name, code)
     reload(module_name)
@@ -546,51 +547,60 @@ end
 
 # Issue #19960
 let
-    # ideally this would test with workers on a remote host that does not have access to the master node filesystem for loading
-    # can simulate this for local workers by using relative load paths on master node that are not valid on workers
-    # so addprocs before changing directory to temp directory, otherwise workers will inherit temp working directory
-
     test_workers = addprocs(1)
-    temp_path = mktempdir()
+    push!(test_workers, myid())
     save_cwd = pwd()
-    cd(temp_path)
-    load_path = mktempdir(temp_path)
-    load_cache_path = mktempdir(temp_path)
-    unshift!(LOAD_PATH, basename(load_path))
-    unshift!(Base.LOAD_CACHE_PATH, basename(load_cache_path))
-
-    ModuleA = :Issue19960A
-    ModuleB = :Issue19960B
-
-    write(joinpath(load_path, "$ModuleA.jl"),
-        """
-        __precompile__(true)
-        module $ModuleA
-            export f
-            f() = myid()
-        end
-        """)
-
-    write(joinpath(load_path, "$ModuleB.jl"),
-        """
-        __precompile__(true)
-        module $ModuleB
-            using $ModuleA
-            export g
-            g() = f()
-        end
-        """)
-
+    temp_path = mktempdir()
     try
-        @eval using $ModuleB
-        for wid in test_workers
-            @test remotecall_fetch(g, wid) == wid
+        cd(temp_path)
+        load_path = mktempdir(temp_path)
+        load_cache_path = mktempdir(temp_path)
+
+        ModuleA = :Issue19960A
+        ModuleB = :Issue19960B
+
+        write(joinpath(load_path, "$ModuleA.jl"),
+            """
+            __precompile__(true)
+            module $ModuleA
+                export f
+                f() = myid()
+            end
+            """)
+
+        write(joinpath(load_path, "$ModuleB.jl"),
+            """
+            __precompile__(true)
+            module $ModuleB
+                using $ModuleA
+                export g
+                g() = f()
+            end
+            """)
+
+        @everywhere test_workers begin
+            unshift!(LOAD_PATH, $load_path)
+            unshift!(Base.LOAD_CACHE_PATH, $load_cache_path)
+        end
+        try
+            @eval using $ModuleB
+            uuid = Base.module_uuid(getfield(Main, ModuleB))
+            for wid in test_workers
+                @test Base.Distributed.remotecall_eval(Main, wid, :( Base.module_uuid($ModuleB) )) == uuid
+                if wid != myid() # avoid world-age errors on the local proc
+                    @test remotecall_fetch(g, wid) == wid
+                end
+            end
+        finally
+            @everywhere test_workers begin
+                shift!(LOAD_PATH)
+                shift!(Base.LOAD_CACHE_PATH)
+            end
         end
     finally
-        shift!(LOAD_PATH)
-        shift!(Base.LOAD_CACHE_PATH)
         cd(save_cwd)
         rm(temp_path, recursive=true)
+        pop!(test_workers) # remove myid
         rmprocs(test_workers)
     end
 end

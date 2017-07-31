@@ -112,7 +112,7 @@ dayofyear(y, m, d) = MONTHDAYS[m] + d + (m > 2 && isleapyear(y))
 
 Returns the day of the week as an [`Int64`](@ref) with `1 = Monday, 2 = Tuesday, etc.`.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.dayofweek(Date("2000-01-01"))
 6
@@ -129,12 +129,12 @@ dayname(day::Integer; locale::AbstractString="english") = dayname(day, LOCALES[l
 dayabbr(day::Integer; locale::AbstractString="english") = dayabbr(day, LOCALES[locale])
 
 """
-    dayname(dt::TimeType; locale="english") -> AbstractString
+    dayname(dt::TimeType; locale="english") -> String
 
 Return the full day name corresponding to the day of the week of the `Date` or `DateTime` in
 the given `locale`.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.dayname(Date("2000-01-01"))
 "Saturday"
@@ -145,12 +145,12 @@ function dayname(dt::TimeType;locale::AbstractString="english")
 end
 
 """
-    dayabbr(dt::TimeType; locale="english") -> AbstractString
+    dayabbr(dt::TimeType; locale="english") -> String
 
 Return the abbreviated name corresponding to the day of the week of the `Date` or `DateTime`
 in the given `locale`.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.dayabbr(Date("2000-01-01"))
 "Sat"
@@ -236,11 +236,11 @@ monthname(month::Integer; locale::AbstractString="english") = monthname(month, L
 monthabbr(month::Integer; locale::AbstractString="english") = monthabbr(month, LOCALES[locale])
 
 """
-    monthname(dt::TimeType; locale="english") -> AbstractString
+    monthname(dt::TimeType; locale="english") -> String
 
 Return the full name of the month of the `Date` or `DateTime` in the given `locale`.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.monthname(Date("2005-01-04"))
 "January"
@@ -251,11 +251,11 @@ function monthname(dt::TimeType; locale::AbstractString="english")
 end
 
 """
-    monthabbr(dt::TimeType; locale="english") -> AbstractString
+    monthabbr(dt::TimeType; locale="english") -> String
 
 Return the abbreviated month name of the `Date` or `DateTime` in the given `locale`.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.monthabbr(Date("2005-01-04"))
 "Jan"

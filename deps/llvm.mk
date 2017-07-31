@@ -29,15 +29,15 @@ LLVM_LIB_FILE := libLLVMCodeGen.a
 LLVM_TAR_EXT:=$(LLVM_VER).src.tar.xz
 
 ifneq ($(LLVM_VER),svn)
-LLVM_TAR:=$(SRCDIR)/srccache/llvm-$(LLVM_TAR_EXT)
+LLVM_TAR:=$(SRCCACHE)/llvm-$(LLVM_TAR_EXT)
 
 ifeq ($(BUILD_LLDB),1)
-LLVM_LLDB_TAR:=$(SRCDIR)/srccache/lldb-$(LLVM_TAR_EXT)
+LLVM_LLDB_TAR:=$(SRCCACHE)/lldb-$(LLVM_TAR_EXT)
 endif # BUILD_LLDB
 
 ifeq ($(BUILD_LLVM_CLANG),1)
-LLVM_CLANG_TAR:=$(SRCDIR)/srccache/cfe-$(LLVM_TAR_EXT)
-LLVM_COMPILER_RT_TAR:=$(SRCDIR)/srccache/compiler-rt-$(LLVM_TAR_EXT)
+LLVM_CLANG_TAR:=$(SRCCACHE)/cfe-$(LLVM_TAR_EXT)
+LLVM_COMPILER_RT_TAR:=$(SRCCACHE)/compiler-rt-$(LLVM_TAR_EXT)
 else
 LLVM_CLANG_TAR:=
 LLVM_COMPILER_RT_TAR:=
@@ -45,7 +45,7 @@ LLVM_LIBCXX_TAR:=
 endif # BUILD_LLVM_CLANG
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
-LLVM_LIBCXX_TAR:=$(SRCDIR)/srccache/libcxx-$(LLVM_TAR_EXT)
+LLVM_LIBCXX_TAR:=$(SRCCACHE)/libcxx-$(LLVM_TAR_EXT)
 endif
 endif # LLVM_VER != svn
 
@@ -133,13 +133,6 @@ LLVM_CMAKE += -DLLDB_DISABLE_PYTHON=ON
 endif # LLDB_DISABLE_PYTHON
 endif # BUILD_LLDB
 
-# Part of the FreeBSD libgcc_s kludge
-ifeq ($(OS),FreeBSD)
-ifneq ($(GCCPATH),)
-LLVM_LDFLAGS += -Wl,-rpath,'\$$ORIGIN',-rpath,$(GCCPATH)
-endif
-endif
-
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 LLVM_CXXFLAGS += -mminimal-toc
 endif
@@ -217,25 +210,25 @@ endif
 LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
 
 ifneq ($(LLVM_CLANG_TAR),)
-$(LLVM_CLANG_TAR): | $(SRCDIR)/srccache
+$(LLVM_CLANG_TAR): | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 ifneq ($(LLVM_COMPILER_RT_TAR),)
-$(LLVM_COMPILER_RT_TAR): | $(SRCDIR)/srccache
+$(LLVM_COMPILER_RT_TAR): | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 
 ifneq ($(LLVM_LIBCXX_TAR),)
-$(LLVM_LIBCXX_TAR): | $(SRCDIR)/srccache
+$(LLVM_LIBCXX_TAR): | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 ifneq ($(LLVM_VER),svn)
-$(LLVM_TAR): | $(SRCDIR)/srccache
+$(LLVM_TAR): | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 
 ifneq ($(LLVM_LLDB_TAR),)
-$(LLVM_LLDB_TAR): | $(SRCDIR)/srccache
+$(LLVM_LLDB_TAR): | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ $(LLVM_SRC_URL)/$(notdir $@)
 endif
 ifeq ($(BUILD_LLDB),1)
@@ -245,7 +238,7 @@ endif
 
 # LLDB still relies on plenty of python 2.x infrastructure, without checking
 llvm_python_location=$(shell /usr/bin/env python2 -c 'import sys; print(sys.executable)')
-llvm_python_workaround=$(SRCDIR)/srccache/python2_path
+llvm_python_workaround=$(SRCCACHE)/python2_path
 $(llvm_python_workaround):
 	mkdir -p $@
 	-python -c 'import sys; sys.exit(not sys.version_info > (3, 0))' && \
@@ -493,14 +486,14 @@ $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_PATCH_PREV)
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-		export PATH=$(llvm_python_workaround):$$PATH && \
+		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		$(CMAKE) $(LLVM_SRC_DIR) $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LLVM_CMAKE) \
 		|| { echo '*** To install a newer version of cmake, run contrib/download_cmake.sh ***' && false; }
 	echo 1 > $@
 
 $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured | $(llvm_python_workaround)
 	cd $(LLVM_BUILDDIR_withtype) && \
-		export PATH=$(llvm_python_workaround):$$PATH && \
+		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		$(if $(filter $(CMAKE_GENERATOR),make), \
 		  $(MAKE), \
 		  $(CMAKE) --build .)
@@ -509,7 +502,7 @@ $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-config
 $(LLVM_BUILDDIR_withtype)/build-checked: $(LLVM_BUILDDIR_withtype)/build-compiled | $(llvm_python_workaround)
 ifeq ($(OS),$(BUILD_OS))
 	cd $(LLVM_BUILDDIR_withtype) && \
-		export PATH=$(llvm_python_workaround):$$PATH && \
+		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		  $(CMAKE) --build . --target check
 endif
 	echo 1 > $@

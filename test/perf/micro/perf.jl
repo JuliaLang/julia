@@ -138,7 +138,7 @@ end
 
 ## printfd ##
 
-if is_unix()
+if Sys.isunix()
     function printfd(n)
         open("/dev/null", "w") do io
             for i = 1:n

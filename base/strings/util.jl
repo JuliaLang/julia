@@ -10,6 +10,7 @@ of characters, tests whether the first character of `s` belongs to that set.
 
 See also [`endswith`](@ref).
 
+# Examples
 ```jldoctest
 julia> startswith("JuliaLang", "Julia")
 true
@@ -35,6 +36,7 @@ characters, tests whether the last character of `s` belongs to that set.
 
 See also [`startswith`](@ref).
 
+# Examples
 ```jldoctest
 julia> endswith("Sunday", "day")
 true
@@ -68,6 +70,7 @@ startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
 
 Remove the last character from `s`.
 
+# Examples
 ```jldoctest
 julia> a = "March"
 "March"
@@ -83,6 +86,7 @@ chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
 
 Remove a single trailing newline from a string.
 
+# Examples
 ```jldoctest
 julia> chomp("Hello\\n")
 "Hello"
@@ -128,6 +132,7 @@ The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
 If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
 
+# Examples
 ```jldoctest
 julia> a = lpad("March", 20)
 "               March"
@@ -158,6 +163,7 @@ The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
 If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
 
+# Examples
 ```jldoctest
 julia> a = rpad("March", 20)
 "March               "
@@ -186,6 +192,7 @@ Return `s` with any leading and trailing whitespace removed.
 If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
 
+# Examples
 ```jldoctest
 julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
 "3, 5"
@@ -228,6 +235,7 @@ end
 Make a string at least `n` columns wide when printed by padding `s` on the left
 with copies of `p`.
 
+# Examples
 ```jldoctest
 julia> lpad("March",10)
 "     March"
@@ -241,6 +249,7 @@ lpad(s, n::Integer, p=" ") = lpad(string(s),n,string(p))
 Make a string at least `n` columns wide when printed by padding `s` on the right
 with copies of `p`.
 
+# Examples
 ```jldoctest
 julia> rpad("March",20)
 "March               "
@@ -265,6 +274,7 @@ expression). If `chars` is omitted, it defaults to the set of all space characte
 maximum size for the result and a flag determining whether empty fields should be kept in
 the result.
 
+# Examples
 ```jldoctest
 julia> a = "Ma.rch"
 "Ma.rch"
@@ -310,6 +320,7 @@ rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:SubString}
 
 Similar to [`split`](@ref), but starting from the end of the string.
 
+# Examples
 ```jldoctest
 julia> a = "M.a.r.c.h"
 "M.a.r.c.h"
@@ -362,7 +373,7 @@ _replace(io, repl::Function, str, r, pattern) =
 # TODO: rename to `replace` when `replace` is removed from deprecated.jl
 function replace_new(str::String, pattern, repl, count::Integer)
     count == 0 && return str
-    count < 0 && throw(DomainError())
+    count < 0 && throw(DomainError(count, "`count` must be non-negative."))
     n = 1
     e = endof(str)
     i = a = start(str)
@@ -419,6 +430,7 @@ replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int)
 Convert an arbitrarily long hexadecimal string to its binary representation. Returns an
 `Array{UInt8,1}`, i.e. an array of bytes.
 
+# Examples
 ```jldoctest
 julia> a = hex(12345)
 "3039"
@@ -457,6 +469,7 @@ end
 Convert an array of bytes to its hexadecimal representation.
 All characters are in lower-case.
 
+# Examples
 ```jldoctest
 julia> a = hex(12345)
 "3039"
@@ -495,6 +508,7 @@ end
 Convert a string to `String` type and check that it contains only ASCII data, otherwise
 throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 
+# Examples
 ```jldoctest
 julia> ascii("abcdeγfgh")
 ERROR: ArgumentError: invalid ASCII at index 6 in "abcdeγfgh"

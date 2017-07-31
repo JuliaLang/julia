@@ -44,7 +44,7 @@ import Base:
     skip, stat, unsafe_read, unsafe_write, transcode, uv_error, uvhandle,
     uvtype, write
 
-if is_windows()
+if Sys.iswindows()
     import Base: cwstring
 end
 

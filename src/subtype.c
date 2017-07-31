@@ -790,8 +790,6 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
 // diagonal rule (record_var_occurrence).
 static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
 {
-    if (x == jl_ANY_flag) x = (jl_value_t*)jl_any_type;
-    if (y == jl_ANY_flag) y = (jl_value_t*)jl_any_type;
     if (jl_is_uniontype(x)) {
         if (x == y) return 1;
         x = pick_union_element(x, e, 0);
@@ -1814,8 +1812,6 @@ static jl_value_t *intersect_type_type(jl_value_t *x, jl_value_t *y, jl_stenv_t 
 static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
 {
     if (x == y) return y;
-    if (x == jl_ANY_flag) x = (jl_value_t*)jl_any_type;
-    if (y == jl_ANY_flag) y = (jl_value_t*)jl_any_type;
     if (jl_is_typevar(x)) {
         if (jl_is_typevar(y)) {
             jl_varbinding_t *xx = lookup(e, (jl_tvar_t*)x);
@@ -2207,10 +2203,6 @@ JL_DLLEXPORT jl_svec_t *jl_env_from_type_intersection(jl_value_t *a, jl_value_t 
 
 static int eq_msp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env)
 {
-    // equate ANY and Any for specificity purposes, #16153
-    if ((a == (jl_value_t*)jl_any_type && b == jl_ANY_flag) ||
-        (b == (jl_value_t*)jl_any_type && a == jl_ANY_flag))
-        return 1;
     if (!(jl_is_type(a) || jl_is_typevar(a)) ||
         !(jl_is_type(b) || jl_is_typevar(b)))
         return jl_egal(a, b);
@@ -2496,8 +2488,8 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
     }
 
     if (!invariant) {
-        if ((jl_datatype_t*)a == jl_any_type || a == jl_ANY_flag) return 0;
-        if ((jl_datatype_t*)b == jl_any_type || b == jl_ANY_flag) return 1;
+        if ((jl_datatype_t*)a == jl_any_type) return 0;
+        if ((jl_datatype_t*)b == jl_any_type) return 1;
     }
 
     if (jl_is_datatype(a) && jl_is_datatype(b)) {

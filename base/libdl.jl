@@ -13,7 +13,7 @@ When calling [`dlopen`](@ref), the paths in this list will be searched first, in
 order, before searching the system locations for a valid library handle.
 """
 const DL_LOAD_PATH = String[]
-if is_apple()
+if Sys.isapple()
     push!(DL_LOAD_PATH, "@loader_path/julia")
     push!(DL_LOAD_PATH, "@loader_path")
 end
@@ -152,7 +152,7 @@ find_library(libname::Union{Symbol,AbstractString}, extrapaths=String[]) =
 function dlpath(handle::Ptr{Void})
     p = ccall(:jl_pathname_for_handle, Cstring, (Ptr{Void},), handle)
     s = unsafe_string(p)
-    is_windows() && Libc.free(p)
+    Sys.iswindows() && Libc.free(p)
     return s
 end
 
@@ -163,12 +163,12 @@ function dlpath(libname::Union{AbstractString, Symbol})
     return path
 end
 
-if is_apple()
+if Sys.isapple()
     const dlext = "dylib"
-elseif is_windows()
+elseif Sys.iswindows()
     const dlext = "dll"
 else
-    #assume is_linux, or similar
+    #assume Sys.islinux, or similar
     const dlext = "so"
 end
 
@@ -179,7 +179,7 @@ File extension for dynamic libraries (e.g. dll, dylib, so) on the current platfo
 """
 dlext
 
-if is_linux()
+if Sys.islinux()
     struct dl_phdr_info
         # Base address of object
         addr::Cuint
@@ -205,7 +205,7 @@ if is_linux()
     end
 end # linux-only
 
-if is_bsd() && !is_apple()
+if Sys.isbsd() && !Sys.isapple()
     # DL_ITERATE_PHDR(3) on freebsd
     struct dl_phdr_info
         # Base address of object
@@ -233,13 +233,13 @@ end # bsd family
 function dllist()
     dynamic_libraries = Vector{AbstractString}(0)
 
-    @static if is_linux()
+    @static if Sys.islinux()
         const callback = cfunction(dl_phdr_info_callback, Cint,
                                    (Ref{dl_phdr_info}, Csize_t, Ref{Array{AbstractString,1}} ))
         ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Array{AbstractString,1}}), callback, dynamic_libraries)
     end
 
-    @static if is_apple()
+    @static if Sys.isapple()
         numImages = ccall(:_dyld_image_count, Cint, ())
 
         # start at 1 instead of 0 to skip self
@@ -249,11 +249,11 @@ function dllist()
         end
     end
 
-    @static if is_windows()
+    @static if Sys.iswindows()
         ccall(:jl_dllist, Cint, (Any,), dynamic_libraries)
     end
 
-    @static if is_bsd() && !is_apple()
+    @static if Sys.isbsd() && !Sys.isapple()
         const callback = cfunction(dl_phdr_info_callback, Cint,
                                    (Ref{dl_phdr_info}, Csize_t, Ref{Array{AbstractString,1}} ))
         ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Array{AbstractString,1}}), callback, dynamic_libraries)

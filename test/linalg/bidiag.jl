@@ -27,7 +27,7 @@ srand(1)
         @test Bidiagonal(dv,ev,:U) != Bidiagonal(dv,ev,:L)
         @test_throws ArgumentError Bidiagonal(dv,ev,:R)
         @test_throws DimensionMismatch Bidiagonal(dv,ones(elty,n),:U)
-        @test_throws ArgumentError Bidiagonal(dv,ev)
+        @test_throws MethodError Bidiagonal(dv,ev)
     end
 
     @testset "getindex, setindex!, size, and similar" begin
@@ -183,6 +183,10 @@ srand(1)
                         @test T/b' ≈ Tfull/b'
                     end
                 end
+                # test DimensionMismatch for RowVectors
+                @test_throws DimensionMismatch T \ b'
+                @test_throws DimensionMismatch T.' \ b'
+                @test_throws DimensionMismatch T' \ b'
             end
         end
 
@@ -239,6 +243,12 @@ srand(1)
                     @test Array(op(T, T2)) ≈ op(Tfull, Tfull2)
                 end
             end
+            # test pass-through of A_mul_B! for SymTridiagonal*Bidiagonal
+            TriSym = SymTridiagonal(T.dv, T.ev)
+            @test Array(TriSym*T) ≈ Array(TriSym)*Array(T)
+            # test pass-through of A_mul_B! for AbstractTriangular*Bidiagonal
+            Tri = UpperTriangular(diagm(T.ev, 1))
+            @test Array(Tri*T) ≈ Array(Tri)*Array(T)
         end
 
         @test inv(T)*Tfull ≈ eye(elty,n)

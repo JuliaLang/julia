@@ -7,7 +7,7 @@ const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().mallo
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 
 # `_dump_function` might be more efficient but it doesn't really matter here...
-get_llvm(f::ANY, t::ANY, strip_ir_metadata=true, dump_module=false) =
+get_llvm(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
     sprint(code_llvm, f, t, strip_ir_metadata, dump_module)
 
 if opt_level > 0
@@ -128,10 +128,106 @@ function compare_large_struct(a)
     end
 end
 
+mutable struct MutableStruct
+    a::Int
+    MutableStruct() = new()
+end
+
+breakpoint_mutable(a::MutableStruct) = ccall(:jl_breakpoint, Void, (Ref{MutableStruct},), a)
+
+# Allocation with uninitialized field as gcroot
+mutable struct BadRef
+    x::MutableStruct
+    y::MutableStruct
+    BadRef(x) = new(x)
+end
+Base.cconvert(::Type{Ptr{BadRef}}, a::MutableStruct) = BadRef(a)
+Base.unsafe_convert(::Type{Ptr{BadRef}}, ar::BadRef) = Ptr{BadRef}(pointer_from_objref(ar.x))
+
+breakpoint_badref(a::MutableStruct) = ccall(:jl_breakpoint, Void, (Ptr{BadRef},), a)
+
+struct PtrStruct
+    a::Ptr{Void}
+    b::Int
+end
+
+mutable struct RealStruct
+    a::Float64
+    b::Int
+end
+
+function Base.cconvert(::Type{Ref{PtrStruct}}, a::RealStruct)
+    (a, Ref(PtrStruct(pointer_from_objref(a), a.b)))
+end
+Base.unsafe_convert(::Type{Ref{PtrStruct}}, at::Tuple) =
+    Base.unsafe_convert(Ref{PtrStruct}, at[2])
+
+breakpoint_ptrstruct(a::RealStruct) =
+    ccall(:jl_breakpoint, Void, (Ref{PtrStruct},), a)
+
 if opt_level > 0
     @test !contains(get_llvm(isequal, Tuple{Nullable{BigFloat}, Nullable{BigFloat}}), "%gcframe")
     @test !contains(get_llvm(pointer_not_safepoint, Tuple{}), "%gcframe")
     compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})
     @test contains(compare_large_struct_ir, "call i32 @memcmp")
     @test !contains(compare_large_struct_ir, "%gcframe")
+
+    @test contains(get_llvm(MutableStruct, Tuple{}), "jl_gc_pool_alloc")
+    breakpoint_mutable_ir = get_llvm(breakpoint_mutable, Tuple{MutableStruct})
+    @test !contains(breakpoint_mutable_ir, "%gcframe")
+    @test !contains(breakpoint_mutable_ir, "jl_gc_pool_alloc")
+
+    breakpoint_badref_ir = get_llvm(breakpoint_badref, Tuple{MutableStruct})
+    @test !contains(breakpoint_badref_ir, "%gcframe")
+    @test !contains(breakpoint_badref_ir, "jl_gc_pool_alloc")
+
+    breakpoint_ptrstruct_ir = get_llvm(breakpoint_ptrstruct, Tuple{RealStruct})
+    @test !contains(breakpoint_ptrstruct_ir, "%gcframe")
+    @test !contains(breakpoint_ptrstruct_ir, "jl_gc_pool_alloc")
 end
+
+function two_breakpoint(a::Float64)
+    ccall(:jl_breakpoint, Void, (Ref{Float64},), a)
+    ccall(:jl_breakpoint, Void, (Ref{Float64},), a)
+end
+
+if opt_level > 0
+    breakpoint_f64_ir = get_llvm((a)->ccall(:jl_breakpoint, Void, (Ref{Float64},), a),
+                                 Tuple{Float64})
+    @test !contains(breakpoint_f64_ir, "jl_gc_pool_alloc")
+    breakpoint_any_ir = get_llvm((a)->ccall(:jl_breakpoint, Void, (Ref{Any},), a),
+                                 Tuple{Float64})
+    @test contains(breakpoint_any_ir, "jl_gc_pool_alloc")
+    two_breakpoint_ir = get_llvm(two_breakpoint, Tuple{Float64})
+    @test !contains(two_breakpoint_ir, "jl_gc_pool_alloc")
+    @test contains(two_breakpoint_ir, "llvm.lifetime.end")
+end
+
+# Issue 22770
+let was_gced = false
+    @noinline make_tuple(x) = tuple(x)
+    @noinline use(x) = ccall(:jl_breakpoint, Void, ())
+    @noinline assert_not_gced() = @assert !was_gced
+
+    function foo22770()
+        b = Ref(2)
+        finalizer(b, x->(global was_gced; was_gced=true))
+        y = make_tuple(b)
+        x = y[1]
+        a = Ref(1)
+        use(x); use(a); use(y)
+        c = Ref(3)
+        gc(); assert_not_gced();
+        use(x)
+        use(c)
+    end
+    foo22770()
+end
+
+function egal_svecs()
+    a = Core.svec(:a, :b)
+    b = Core.svec(:a, :b)
+    a === b
+end
+@test egal_svecs()
+@test Core.svec(:a, :b) === Core.svec(:a, :b)

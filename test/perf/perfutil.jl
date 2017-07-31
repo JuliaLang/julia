@@ -21,7 +21,7 @@ if codespeed
     csdata["project"] = "Julia"
     csdata["branch"] = Base.GIT_VERSION_INFO.branch
     csdata["executable"] = ENV["JULIA_FLAVOR"]
-    csdata["environment"] = chomp(readstring(`hostname`))
+    csdata["environment"] = chomp(read(`hostname`, String))
     csdata["result_date"] = join( split(Base.GIT_VERSION_INFO.date_string)[1:2], " " )    #Cut the timezone out
 end
 
@@ -102,7 +102,7 @@ end
 
 function maxrss(name)
     # FIXME: call uv_getrusage instead here
-    @static if is_linux()
+    @static if Sys.islinux()
         rus = Array{Int64}(div(144,8))
         fill!(rus, 0x0)
         res = ccall(:getrusage, Int32, (Int32, Ptr{Void}), 0, rus)

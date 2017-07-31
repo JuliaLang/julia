@@ -6,8 +6,8 @@
   . pool-allocates small objects, keeps big objects on a simple list
 */
 
-#ifndef JULIA_GC_H
-#define JULIA_GC_H
+#ifndef JL_GC_H
+#define JL_GC_H
 
 #include <stdlib.h>
 #include <string.h>

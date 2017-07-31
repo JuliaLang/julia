@@ -27,6 +27,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Discussion forum:** <https://discourse.julialang.org>
 - **Mailing lists:** <https://julialang.org/community/>
+- **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
 - **Gitter:** <https://gitter.im/JuliaLang/julia>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
@@ -48,13 +49,13 @@ Julia is built and tested regularly on the following platforms:
 |:----------------:|:----------------:|:--:|:--------:|:-------------:|
 | Linux 2.6.18+    | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 |                  | i686 (32-bit)    | ✓  | ✓        | Official      |
-|                  | PowerPC (64-bit) |    | ✓        | Official      |
 |                  | ARM v7 (32-bit)  |    | ✓        | Official      |
 |                  | ARM v8 (64-bit)  |    | ✓        | Official      |
+|                  | PowerPC (64-bit) |    |          | Community     |
 | macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 | Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 |                  | i686 (32-bit)    | ✓  | ✓        | Official      |
-| FreeBSD 11.0+    | x86-64 (64-bit)  |    |          | Community     |
+| FreeBSD 11.0+    | x86-64 (64-bit)  | ✓  |          | Community     |
 
 All systems marked with ✓ for CI are tested using continuous integration for every commit.
 Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly.

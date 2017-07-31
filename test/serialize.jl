@@ -251,7 +251,7 @@ module ArrayWrappers
 struct ArrayWrapper{T,N,A<:AbstractArray} <: AbstractArray{T,N}
     data::A
 end
-ArrayWrapper{T,N}(data::AbstractArray{T,N}) = ArrayWrapper{T,N,typeof(data)}(data)
+ArrayWrapper(data::AbstractArray{T,N}) where {T,N} = ArrayWrapper{T,N,typeof(data)}(data)
 Base.size(A::ArrayWrapper) = size(A.data)
 Base.size(A::ArrayWrapper, d) = size(A.data, d)
 Base.getindex(A::ArrayWrapper, i::Real...) = getindex(A.data, i...)

@@ -21,7 +21,7 @@ end
 
 function remove_workers_and_test()
     while nworkers() > 0
-        rmprocs(workers()[1]; waitfor=2.0)
+        rmprocs(workers()[1])
         test_worker_counts()
         if nworkers() == nprocs()
             break
@@ -90,3 +90,48 @@ for p1 in workers()
 end
 
 remove_workers_and_test()
+
+# test `lazy` connection setup
+function def_count_conn()
+    @everywhere function count_connected_workers()
+        count(x -> isa(x, Base.Distributed.Worker) && isdefined(x, :r_stream) && isopen(x.r_stream),
+                Base.Distributed.PGRP.workers)
+    end
+end
+
+addprocs_with_testenv(8)
+def_count_conn()
+
+# Test for 10 random combinations
+wl = workers()
+combinations = []
+while length(combinations) < 10
+    from = rand(wl)
+    to = rand(wl)
+    if from == to || ((from,to) in combinations) || ((to,from) in combinations)
+        continue
+    else
+        push!(combinations, (from,to))
+    end
+end
+
+# Initially only master-slave connections ought to be setup
+expected_num_conns = 8
+num_conns = sum(asyncmap(p->remotecall_fetch(count_connected_workers,p), workers()))
+@test num_conns == expected_num_conns
+
+for (i, (from,to)) in enumerate(combinations)
+    remotecall_wait(topid->remotecall_fetch(myid, topid), from, to)
+    expected_num_conns += 2    # one connection endpoint on both from and to
+    num_conns = sum(asyncmap(p->remotecall_fetch(count_connected_workers,p), workers()))
+    @test num_conns == expected_num_conns
+end
+
+# With lazy=false, all connections ought to be setup during `addprocs`
+rmprocs(workers())
+addprocs_with_testenv(8; lazy=false)
+def_count_conn()
+@test sum(asyncmap(p->remotecall_fetch(count_connected_workers,p), workers())) == 64
+
+# Cannot add more workers with a different `lazy` value
+@test_throws ArgumentError addprocs_with_testenv(1; lazy=true)

@@ -356,6 +356,13 @@ let v = collect(partition([1,2,3,4,5], 1))
     @test all(i->v[i][1] == i, v)
 end
 
+let v1 = collect(partition([1,2,3,4,5], 2)),
+    v2 = collect(partition(flatten([[1,2],[3,4],5]), 2)) # collecting partition with SizeUnkown
+    @test v1[1] == v2[1] == [1,2]
+    @test v1[2] == v2[2] == [3,4]
+    @test v1[3] == v2[3] == [5]
+end
+
 let v = collect(partition([1,2,3,4,5], 2))
     @test v[1] == [1,2]
     @test v[2] == [3,4]

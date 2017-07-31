@@ -246,8 +246,7 @@ Multiplication with respect to either thin or full `Q` is allowed, i.e. both `F[
 and `F[:Q]*A` are supported. A `Q` matrix can be converted into a regular matrix with
 [`full`](@ref) which has a named argument `thin`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
 3×2 Array{Float64,2}:
@@ -311,8 +310,7 @@ Returns `w`, a unit vector in the direction of `v`, and
 See also [`normalize`](@ref), [`normalize!`](@ref),
 and [`LinAlg.qr!`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> v = [1; 2]
 2-element Array{Int64,1}:
@@ -704,9 +702,13 @@ function A_ldiv_B!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:B
     mA, nA = size(A.factors)
     nr = min(mA,nA)
     nrhs = size(B, 2)
-    if nr == 0 return zeros(T, 0, nrhs), 0 end
+    if nr == 0
+        return zeros(T, 0, nrhs), 0
+    end
     ar = abs(A.factors[1])
-    if ar == 0 return zeros(T, nr, nrhs), 0 end
+    if ar == 0
+        return zeros(T, nA, nrhs), 0
+    end
     rnk = 1
     xmin = ones(T, 1)
     xmax = ones(T, 1)

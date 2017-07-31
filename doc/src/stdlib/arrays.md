@@ -143,6 +143,7 @@ Base.cumsum_kbn
 Base.crc32c
 Base.LinAlg.diff
 Base.LinAlg.gradient
+Base.repeat(::AbstractArray)
 Base.rot180
 Base.rotl90
 Base.rotr90
@@ -156,11 +157,13 @@ Base.sum_kbn
 
 ```@docs
 Base.Random.randperm
+Base.Random.randperm!
 Base.invperm
 Base.isperm
 Base.permute!(::Any, ::AbstractVector)
 Base.ipermute!
 Base.Random.randcycle
+Base.Random.randcycle!
 Base.Random.shuffle
 Base.Random.shuffle!
 Base.reverse

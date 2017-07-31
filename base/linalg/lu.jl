@@ -122,8 +122,7 @@ The relationship between `F` and `A` is
 | [`logabsdet`](@ref)              | ✓    | ✓                      |
 | [`size`](@ref)                   | ✓    | ✓                      |
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [4 3; 6 3]
 2×2 Array{Int64,2}:
@@ -174,8 +173,7 @@ By default, pivoting is used. This can be overridden by passing
 
 See also [`lufact`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [4. 3.; 6. 3.]
 2×2 Array{Float64,2}:
@@ -202,6 +200,7 @@ convert(::Type{LU{T,S}}, F::LU) where {T,S} = LU{T,S}(convert(S, F.factors), F.i
 convert(::Type{Factorization{T}}, F::LU{T}) where {T} = F
 convert(::Type{Factorization{T}}, F::LU) where {T} = convert(LU{T}, F)
 
+copy(A::LU{T,S}) where {T,S} = LU{T,S}(copy(A.factors), copy(A.ipiv), A.info)
 
 size(A::LU) = size(A.factors)
 size(A::LU,n) = size(A.factors,n)
@@ -313,8 +312,9 @@ end
 
 inv!(A::LU{<:BlasFloat,<:StridedMatrix}) =
     @assertnonsingular LAPACK.getri!(A.factors, A.ipiv) A.info
-inv(A::LU{<:BlasFloat,<:StridedMatrix}) =
-    inv!(LU(copy(A.factors), copy(A.ipiv), copy(A.info)))
+inv!(A::LU{T,<:StridedMatrix}) where {T} =
+    @assertnonsingular A_ldiv_B!(A.factors, copy(A), eye(T, size(A, 1))) A.info
+inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 
 function _cond1Inf(A::LU{<:BlasFloat,<:StridedMatrix}, p::Number, normA::Real)
     if p != 1 && p != Inf

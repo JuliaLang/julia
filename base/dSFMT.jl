@@ -2,7 +2,7 @@
 
 module dSFMT
 
-import Base: copy, copy!, ==
+import Base: copy, copy!, ==, hash
 
 export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_init_gen_rand, dsfmt_init_by_array, dsfmt_gv_init_by_array,
@@ -25,13 +25,15 @@ mutable struct DSFMT_state
     val::Vector{Int32}
 
     DSFMT_state(val::Vector{Int32} = zeros(Int32, JN32)) =
-        new(length(val) == JN32 ? val : throw(DomainError()))
+        new(length(val) == JN32 ? val : throw(DomainError(length(val), string("Expected length ", JN32, '.'))))
 end
 
 copy!(dst::DSFMT_state, src::DSFMT_state) = (copy!(dst.val, src.val); dst)
 copy(src::DSFMT_state) = DSFMT_state(copy(src.val))
 
 ==(s1::DSFMT_state, s2::DSFMT_state) = s1.val == s2.val
+
+hash(s::DSFMT_state, h::UInt) = hash(s.val, h)
 
 function dsfmt_get_idstring()
     idstring = ccall((:dsfmt_get_idstring,:libdSFMT),
@@ -163,7 +165,7 @@ end
 
 ## Windows entropy
 
-if is_windows()
+if Sys.iswindows()
     function win32_SystemFunction036!(a::Array)
         ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Void}, UInt32), a, sizeof(a))
     end

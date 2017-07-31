@@ -92,7 +92,7 @@ The `unsafe` prefix on this function indicates that no validation is performed o
 pointer `p` to ensure that it is valid. Incorrect usage may corrupt or segfault your
 program, in the same manner as C.
 """
-unsafe_store!(p::Ptr{Any}, x::ANY, i::Integer=1) = pointerset(p, x, Int(i), 1)
+unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, Int(i), 1)
 unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
 
 # convert a raw Ptr to an object reference, and vice-versa
@@ -112,8 +112,8 @@ Get the memory address of a Julia object as a `Ptr`. The existence of the result
 will not protect the object from garbage collection, so you must ensure that the object
 remains referenced for the whole time that the `Ptr` will be used.
 """
-pointer_from_objref(x::ANY) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
-data_pointer_from_objref(x::ANY) = pointer_from_objref(x)::Ptr{Void}
+pointer_from_objref(@nospecialize(x)) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
+data_pointer_from_objref(@nospecialize(x)) = pointer_from_objref(x)::Ptr{Void}
 
 eltype(::Type{Ptr{T}}) where {T} = T
 

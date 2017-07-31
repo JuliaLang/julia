@@ -29,6 +29,11 @@ const BitIntegerSmall  = Union{BitIntegerSmall_types...}
 const BitSigned64T     = Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
 const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
 
+const BitIntegerType = Union{map(T->Type{T}, BitInteger_types)...}
+
+throw_inexacterror(f::Symbol, ::Type{T}, val) where T =
+    (@_noinline_meta; throw(InexactError(f, T, val)))
+
 ## integer comparisons ##
 
 (<)(x::T, y::T) where {T<:BitSigned}  = slt_int(x, y)
@@ -401,33 +406,33 @@ function is_top_bit_set(x::BitInteger)
 end
 function check_top_bit(x::BitInteger)
     @_inline_meta
-    is_top_bit_set(x) && throw(InexactError())
+    is_top_bit_set(x) && throw_inexacterror(:check_top_bit, typeof(x), x)
     x
 end
 
 ## integer conversions ##
 
-function checked_trunc_sint{To,From}(::Type{To}, x::From)
+function checked_trunc_sint(::Type{To}, x::From) where {To,From}
     @_inline_meta
     y = trunc_int(To, x)
     back = sext_int(From, y)
-    x == back || throw(InexactError())
+    x == back || throw_inexacterror(:trunc, To, x)
     y
 end
 
-function checked_trunc_uint{To,From}(::Type{To}, x::From)
+function checked_trunc_uint(::Type{To}, x::From) where {To,From}
     @_inline_meta
     y = trunc_int(To, x)
     back = zext_int(From, y)
-    x == back || throw(InexactError())
+    x == back || throw_inexacterror(:trunc, To, x)
     y
 end
 
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
         if to.size < from.size
-            if issubtype(to, Signed)
-                if issubtype(from, Unsigned)
+            if to <: Signed
+                if from <: Unsigned
                     @eval convert(::Type{$to}, x::($from)) =
                         checked_trunc_sint($to, check_top_bit(x))
                 else
@@ -444,8 +449,8 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
             @eval convert(::Type{$to}, x::($from)) = zext_int($to, x) & $to(1)
             @eval rem(x::($from), ::Type{$to}) = convert($to, x)
         elseif from.size < to.size
-            if issubtype(from, Signed)
-                if issubtype(to, Unsigned)
+            if from <: Signed
+                if to <: Unsigned
                     @eval convert(::Type{$to}, x::($from)) =
                         sext_int($to, check_top_bit(x))
                 else
@@ -458,7 +463,7 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
                 @eval rem(x::($from), ::Type{$to}) = convert($to, x)
             end
         else
-            if !(issubtype(from, Signed) === issubtype(to, Signed))
+            if !((from <: Signed) === (to <: Signed))
                 # raise InexactError if x's top bit is set
                 @eval convert(::Type{$to}, x::($from)) = bitcast($to, check_top_bit(x))
             else

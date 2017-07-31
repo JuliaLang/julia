@@ -239,7 +239,7 @@ let
     redir_err = "redirect_stderr(STDOUT)"
     exename = Base.julia_cmd()
     script = "$redir_err; module A; f() = 1; end; A.f() = 1"
-    warning_str = readstring(`$exename --startup-file=no -e $script`)
+    warning_str = read(`$exename --startup-file=no -e $script`, String)
     @test contains(warning_str, "f()")
 end
 
@@ -264,6 +264,29 @@ let l = ReentrantLock()
     unlock(l)
     @test_throws ErrorException unlock(l)
 end
+
+# task switching
+
+@noinline function f6597(c)
+    t = @schedule nothing
+    finalizer(t, t -> c[] += 1)
+    wait(t)
+    @test c[] == 0
+    wait(t)
+    nothing
+end
+let c = Ref(0),
+    t2 = @schedule (wait(); c[] += 99)
+    @test c[] == 0
+    f6597(c)
+    gc() # this should run the finalizer for t
+    @test c[] == 1
+    yield()
+    @test c[] == 1
+    yield(t2)
+    @test c[] == 100
+end
+
 
 # timing macros
 
@@ -507,7 +530,7 @@ let s = "abcα🐨\0x\0"
 end
 
 # clipboard functionality
-if is_windows()
+if Sys.iswindows()
     for str in ("Hello, world.", "∀ x ∃ y", "")
         clipboard(str)
         @test clipboard() == str
@@ -546,7 +569,7 @@ let creds = Base.LibGit2.CachedCredentials()
 end
 
 # Test that we can VirtualProtect jitted code to writable
-if is_windows()
+if Sys.iswindows()
     @noinline function WeVirtualProtectThisToRWX(x, y)
         x+y
     end
@@ -681,7 +704,7 @@ let
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
-Base.convert{S,T,N}(::Type{Array{S, N}}, ::DA_19281{T, N}) = error()
+Base.convert(::Type{Array{S, N}}, ::DA_19281{T, N}) where {S,T,N} = error()
 x_19281 = [(), (1,)]
 mutable struct Foo_19281
     f::Vector{Tuple}
@@ -722,13 +745,42 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
     end
 end
 
-# invokelatest function for issue #19774
-issue19774(x) = 1
+# Test issue #19774 invokelatest fix.
+
+# we define this in a module to allow rewriting
+# rather than needing an extra eval.
+module Issue19774
+f(x) = 1
+end
+
+# First test the world issue condition.
 let foo() = begin
-        eval(:(issue19774(x::Int) = 2))
-        return Base.invokelatest(issue19774, 0)
+        Issue19774.f(x::Int) = 2
+        return Issue19774.f(0)
     end
-    @test foo() == 2
+    @test foo() == 1    # We should be using the original function.
+end
+
+# Now check that invokelatest fixes that issue.
+let foo() = begin
+        Issue19774.f(x::Int) = 3
+        return Base.invokelatest(Issue19774.f, 0)
+    end
+    @test foo() == 3
+end
+
+# Check that the kwargs conditions also works
+module Kwargs19774
+f(x, y; z=0) = x * y + z
+end
+
+@test Kwargs19774.f(2, 3; z=1) == 7
+
+let foo() = begin
+        Kwargs19774.f(x::Int, y::Int; z=3) = z
+        return Base.invokelatest(Kwargs19774.f, 2, 3; z=1)
+    end
+    @test foo() == 1
 end
 
 # Endian tests
@@ -754,49 +806,18 @@ end
 @test ltoh(0x102030405060708) == 0x102030405060708
 @test htol(0x102030405060708) == 0x102030405060708
 
-module DeprecationTests # to test @deprecate
-    f() = true
-
-    # test the Symbol path of @deprecate
-    @deprecate f1 f
-    @deprecate f2 f false # test that f2 is not exported
-
-    # test the Expr path of @deprecate
-    @deprecate f3() f()
-    @deprecate f4() f() false # test that f4 is not exported
-    @deprecate f5(x::T) where T f()
-
-    # test deprecation of a constructor
-    struct A{T} end
-    @deprecate A{T}(x::S) where {T, S} f()
-end # module
-
-@testset "@deprecate" begin
-    using .DeprecationTests
-    # enable when issue #22043 is fixed
-    # @test @test_warn "f1 is deprecated, use f instead." f1()
-    # @test @test_nowarn f1()
-
-    # @test_throws UndefVarError f2() # not exported
-    # @test @test_warn "f2 is deprecated, use f instead." DeprecationTests.f2()
-    # @test @test_nowarn DeprecationTests.f2()
-
-    # @test @test_warn "f3() is deprecated, use f() instead." f3()
-    # @test @test_nowarn f3()
-
-    # @test_throws UndefVarError f4() # not exported
-    # @test @test_warn "f4() is deprecated, use f() instead." DeprecationTests.f4()
-    # @test @test_nowarn DeprecationTests.f4()
-
-    # @test @test_warn "f5(x::T) where T is deprecated, use f() instead." f5(1)
-    # @test @test_nowarn f5(1)
-
-    # @test @test_warn "A{T}(x::S) where {T, S} is deprecated, use f() instead." A{Int}(1.)
-    # @test @test_nowarn A{Int}(1.)
-end
-
 @testset "inline bug #18735" begin
     @noinline f(n) = n ? error() : Int
     g() = Union{f(true)}
     @test_throws ErrorException g()
+end
+
+include("testenv.jl")
+
+let flags = Cmd(filter(a->!contains(a, "depwarn"), collect(test_exeflags)))
+    local cmd = `$test_exename $flags deprecation_exec.jl`
+
+    if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR))
+        error("Deprecation test failed, cmd : $cmd")
+    end
 end

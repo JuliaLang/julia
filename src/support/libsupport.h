@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef LIBSUPPORT_H
-#define LIBSUPPORT_H
+#ifndef JL_LIBSUPPORT_H
+#define JL_LIBSUPPORT_H
 
 #include "platform.h"
 

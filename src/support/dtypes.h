@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef DTYPES_H
-#define DTYPES_H
+#ifndef JL_DTYPES_H
+#define JL_DTYPES_H
 
 #include <stddef.h>
 #include <stddef.h> // double include of stddef.h fixes #3421

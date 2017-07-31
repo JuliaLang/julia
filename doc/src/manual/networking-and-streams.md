@@ -156,7 +156,7 @@ file as an argument, and then closes it again. For example, given a function:
 
 ```julia
 function read_and_capitalize(f::IOStream)
-    return uppercase(readstring(f))
+    return uppercase(read(f, String))
 end
 ```
 
@@ -175,7 +175,7 @@ anonymous function on the fly:
 
 ```julia-repl
 julia> open("hello.txt") do f
-           uppercase(readstring(f))
+           uppercase(read(f, String))
        end
 "HELLO AGAIN."
 ```
@@ -202,33 +202,39 @@ same function may also be used to create various other kinds of servers:
 
 ```julia-repl
 julia> listen(2000) # Listens on localhost:2000 (IPv4)
-TCPServer(active)
+Base.TCPServer(active)
 
 julia> listen(ip"127.0.0.1",2000) # Equivalent to the first
-TCPServer(active)
+Base.TCPServer(active)
 
 julia> listen(ip"::1",2000) # Listens on localhost:2000 (IPv6)
-TCPServer(active)
+Base.TCPServer(active)
 
 julia> listen(IPv4(0),2001) # Listens on port 2001 on all IPv4 interfaces
-TCPServer(active)
+Base.TCPServer(active)
 
 julia> listen(IPv6(0),2001) # Listens on port 2001 on all IPv6 interfaces
-TCPServer(active)
+Base.TCPServer(active)
 
-julia> listen("testsocket") # Listens on a UNIX domain socket/named pipe
-PipeServer(active)
+julia> listen("testsocket") # Listens on a UNIX domain socket
+Base.PipeServer(active)
+
+julia> listen("\\\\.\\pipe\\testsocket") # Listens on a Windows named pipe
+Base.PipeServer(active)
 ```
 
-Note that the return type of the last invocation is different. This is because this server does
-not listen on TCP, but rather on a named pipe (Windows) or UNIX domain socket. The difference
-is subtle and has to do with the [`accept()`](@ref) and [`connect()`](@ref) methods. The [`accept()`](@ref)
-method retrieves a connection to the client that is connecting on the server we just created,
-while the [`connect()`](@ref) function connects to a server using the specified method. The [`connect()`](@ref)
-function takes the same arguments as [`listen()`](@ref), so, assuming the environment (i.e. host,
-cwd, etc.) is the same you should be able to pass the same arguments to [`connect()`](@ref) as
-you did to listen to establish the connection. So let's try that out (after having created the
-server above):
+Note that the return type of the last invocation is different. This is because this server does not
+listen on TCP, but rather on a named pipe (Windows) or UNIX domain socket. Also note that Windows
+named pipe format has to be a specific pattern such that the name prefix (`\\.\pipe\`) uniquely
+identifies the [file type](https://msdn.microsoft.com/en-
+us/library/windows/desktop/aa365783(v=vs.85).aspx). The difference between TCP and named pipes or
+UNIX domain sockets is subtle and has to do with the [`accept()`](@ref) and [`connect()`](@ref)
+methods. The [`accept()`](@ref) method retrieves a connection to the client that is connecting on
+the server we just created, while the [`connect()`](@ref) function connects to a server using the
+specified method. The [`connect()`](@ref) function takes the same arguments as [`listen()`](@ref),
+so, assuming the environment (i.e. host, cwd, etc.) is the same you should be able to pass the same
+arguments to [`connect()`](@ref) as you did to listen to establish the connection. So let's try that
+out (after having created the server above):
 
 ```julia-repl
 julia> connect(2000)

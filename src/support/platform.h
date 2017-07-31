@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef PLATFORM_H
-#define PLATFORM_H
+#ifndef JL_PLATFORM_H
+#define JL_PLATFORM_H
 
 /*
  * This file provides convenient macros to be used to identify the platform

@@ -147,6 +147,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     // effectiveness of the optimization, but should retain correctness.
 #if JL_LLVM_VERSION < 50000
     PM->add(createLowerExcHandlersPass());
+    PM->add(createAllocOptPass());
     PM->add(createLateLowerGCFramePass());
     // Remove dead use of ptls
     PM->add(createDeadCodeEliminationPass());
@@ -161,6 +162,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     PM->add(createAlwaysInlinerPass()); // Respect always_inline
 #endif
 
+#if JL_LLVM_VERSION >= 50000
+    // Running `memcpyopt` between this and `sroa` seems to give `sroa` a hard time
+    // merging the `alloca` for the unboxed data and the `alloca` created by the `alloc_opt`
+    // pass.
+    PM->add(createAllocOptPass());
+#endif
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     PM->add(createSROAPass());                 // Break up aggregate allocas
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
@@ -316,12 +323,17 @@ void NotifyDebugger(jit_code_entry *JITCodeEntry)
 }
 // ------------------------ END OF TEMPORARY COPY FROM LLVM -----------------
 
-#if defined(_OS_LINUX_)
+#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_)
 // Resolve non-lock free atomic functions in the libatomic library.
 // This is the library that provides support for c11/c++11 atomic operations.
 static uint64_t resolve_atomic(const char *name)
 {
-    static void *atomic_hdl = jl_load_dynamic_library_e("libatomic",
+#if defined(_OS_LINUX_)
+    static const char *const libatomic = "libatomic";
+#elif defined(_OS_WINDOWS_)
+    static const char *const libatomic = "libatomic-1";
+#endif
+    static void *atomic_hdl = jl_load_dynamic_library_e(libatomic,
                                                         JL_RTLD_LOCAL);
     static const char *const atomic_prefix = "__atomic_";
     if (!atomic_hdl)
@@ -534,7 +546,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                         // Step 2: Search the program symbols
                         if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name))
                             return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
-#if defined(_OS_LINUX_)
+#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_)
                         if (uint64_t addr = resolve_atomic(Name.c_str()))
                             return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
 #endif
@@ -761,9 +773,9 @@ static void jl_add_to_ee(std::unique_ptr<Module> m)
     jl_ExecutionEngine->addModule(std::move(m));
 }
 
-void jl_finalize_function(Function *F)
+void jl_finalize_function(StringRef F)
 {
-    std::unique_ptr<Module> m(module_for_fname.lookup(F->getName()));
+    std::unique_ptr<Module> m(module_for_fname.lookup(F));
     if (m) {
         jl_merge_recursive(m.get(), m.get());
         jl_add_to_ee(std::move(m));
@@ -802,27 +814,26 @@ static void jl_merge_recursive(Module *m, Module *collector)
 
 // see if any of the functions needed by F are still WIP
 static StringSet<> incomplete_fname;
-static bool jl_can_finalize_function(StringRef F, SmallSet<Module*, 16> &known)
+static bool can_finalize_function(StringRef F, SmallSet<Module*, 16> &known)
 {
     if (incomplete_fname.find(F) != incomplete_fname.end())
         return false;
     Module *M = module_for_fname.lookup(F);
-    if (M && known.insert(M).second)
-    {
+    if (M && known.insert(M).second) {
         for (Module::iterator I = M->begin(), E = M->end(); I != E; ++I) {
             Function *F = &*I;
             if (F->isDeclaration() && !isIntrinsicFunction(F)) {
-                if (!jl_can_finalize_function(F->getName(), known))
+                if (!can_finalize_function(F->getName(), known))
                     return false;
             }
         }
     }
     return true;
 }
-bool jl_can_finalize_function(Function *F)
+bool jl_can_finalize_function(StringRef F)
 {
     SmallSet<Module*, 16> known;
-    return jl_can_finalize_function(F->getName(), known);
+    return can_finalize_function(F, known);
 }
 
 // let the JIT know this function is a WIP
@@ -943,7 +954,7 @@ void* jl_get_globalvar(GlobalVariable *gv)
 void jl_add_to_shadow(Module *m)
 {
 #ifndef KEEP_BODIES
-    if (!imaging_mode)
+    if (!imaging_mode && !jl_options.outputjitbc)
         return;
 #endif
     ValueToValueMapTy VMap;
@@ -1060,7 +1071,6 @@ extern "C"
 void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len)
 {
     JL_TIMING(NATIVE_DUMP);
-    assert(imaging_mode);
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
@@ -1070,6 +1080,7 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     TheTriple.setObjectFormat(Triple::COFF);
 #elif defined(_OS_DARWIN_)
     TheTriple.setObjectFormat(Triple::MachO);
+    TheTriple.setOS(llvm::Triple::MacOSX);
 #endif
     std::unique_ptr<TargetMachine>
     TM(jl_TargetMachine->getTarget().createTargetMachine(
@@ -1156,20 +1167,21 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
 #endif
 
     // add metadata information
-    jl_gen_llvm_globaldata(shadow_output, sysimg_data, sysimg_len);
+    if (imaging_mode)
+        jl_gen_llvm_globaldata(shadow_output, sysimg_data, sysimg_len);
 
     // do the actual work
     PM.run(*shadow_output);
     imaging_mode = false;
 }
 
-extern "C" int32_t jl_assign_functionID(void *function)
+extern "C" int32_t jl_assign_functionID(const char *fname)
 {
     // give the function an index in the constant lookup table
     assert(imaging_mode);
-    if (function == NULL)
+    if (fname == NULL)
         return 0;
-    jl_sysimg_fvars.push_back(shadow_output->getNamedValue(((Function*)function)->getName()));
+    jl_sysimg_fvars.push_back(shadow_output->getNamedValue(fname));
     return jl_sysimg_fvars.size();
 }
 

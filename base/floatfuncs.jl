@@ -16,10 +16,23 @@ signbit(x::Float64) = signbit(bitcast(Int64, x))
 signbit(x::Float32) = signbit(bitcast(Int32, x))
 signbit(x::Float16) = signbit(bitcast(Int16, x))
 
+"""
+    maxintfloat(T)
+
+The largest integer losslessly representable by the given floating-point DataType `T`.
+"""
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
 maxintfloat(::Type{Float16}) = Float16(2048f0)
 maxintfloat(x::T) where {T<:AbstractFloat} = maxintfloat(T)
+
+"""
+    maxintfloat(T, S)
+
+The largest integer losslessly representable by the given floating-point DataType `T` that
+also does not exceed the maximum integer representable by the integer DataType `S`.
+"""
+maxintfloat(::Type{S}, ::Type{T}) where {S<:AbstractFloat, T<:Integer} = min(maxintfloat(S), S(typemax(T)))
 maxintfloat() = maxintfloat(Float64)
 
 isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
@@ -48,6 +61,7 @@ specifying a rounding mode the global mode will be used
 ([`RoundNearest`](@ref) mode), with ties (fractional values of 0.5) being
 rounded to the nearest even integer.
 
+# Examples
 ```jldoctest
 julia> round(1.7)
 2.0
@@ -68,6 +82,7 @@ rounded.
 `round(x, digits)` rounds to the specified number of digits after the decimal place (or
 before if negative). `round(x, digits, base)` rounds using a base other than 10.
 
+# Examples
 ```jldoctest
 julia> round(pi, 2)
 3.14
@@ -82,6 +97,7 @@ julia> round(pi, 3, 2)
     value represented by `1.15` is actually *less* than 1.15, yet will be
     rounded to 1.2.
 
+    # Examples
     ```jldoctest
     julia> x = 1.15
     1.15
@@ -131,8 +147,23 @@ function _signif_og(x, digits, base)
     return og, e
 end
 
+"""
+    signif(x, digits, [base])
+
+Rounds (in the sense of [`round`](@ref)) `x` so that there are `digits` significant digits, under a
+base `base` representation, default 10.
+
+# Examples
+```jldoctest
+julia> signif(123.456, 2)
+120.0
+
+julia> signif(357.913, 4, 2)
+352.0
+```
+"""
 function signif(x::Real, digits::Integer, base::Integer=10)
-    digits < 1 && throw(DomainError())
+    digits < 1 && throw(DomainError(digits, "`digits` cannot be less than 1."))
 
     x = float(x)
     (x == 0 || !isfinite(x)) && return x
@@ -189,6 +220,7 @@ approximately equal component-wise.
 The binary operator `≈` is equivalent to `isapprox` with the default arguments, and `x ≉ y`
 is equivalent to `!isapprox(x,y)`.
 
+# Examples
 ```jldoctest
 julia> 0.1 ≈ (0.1 - 1e-10)
 true

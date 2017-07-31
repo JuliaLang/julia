@@ -10,7 +10,7 @@ import Base.LinAlg: SingularException
 Generically sized uniform scaling operator defined as a scalar times the
 identity operator, `λ*I`. See also [`I`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> J = UniformScaling(2.)
 UniformScaling{Float64}
@@ -36,8 +36,7 @@ end
 
 An object of type [`UniformScaling`](@ref), representing an identity matrix of any size.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> ones(5, 6) * I == ones(5, 6)
 true
@@ -313,3 +312,27 @@ function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScalin
     end
     return hvcat(rows, promote_to_arrays(n,1, promote_to_array_type(A), A...)...)
 end
+
+
+## Cholesky
+function _chol!(J::UniformScaling, uplo)
+    c, info = _chol!(J.λ, uplo)
+    UniformScaling(c), info
+end
+
+chol!(J::UniformScaling, uplo) = ((J, info) = _chol!(J, uplo); @assertposdef J info)
+
+"""
+    chol(J::UniformScaling) -> C
+
+Compute the square root of a non-negative UniformScaling `J`.
+
+# Examples
+```jldoctest
+julia> chol(16I)
+UniformScaling{Float64}
+4.0*I
+```
+"""
+chol(J::UniformScaling, args...) = ((C, info) = _chol!(J, nothing); @assertposdef C info)
+

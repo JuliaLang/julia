@@ -16,6 +16,13 @@
 #     rethrow(val)
 # end
 
+"""
+    throw(e)
+
+Throw an object as an exception.
+"""
+throw
+
 ## native julia error handling ##
 
 error(s::AbstractString) = throw(ErrorException(s))
@@ -71,7 +78,29 @@ systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(str
 
 ## assertion functions and macros ##
 
+
+"""
+    assert(cond)
+
+Throw an [`AssertionError`](@ref) if `cond` is `false`.
+Also available as the macro [`@assert`](@ref).
+"""
 assert(x) = x ? nothing : throw(Main.Base.AssertionError())
+
+"""
+    @assert cond [text]
+
+Throw an [`AssertionError`](@ref) if `cond` is `false`. Preferred syntax for writing assertions.
+Message `text` is optionally displayed upon assertion failure.
+
+# Examples
+```jldoctest
+julia> @assert iseven(3) "3 is an odd number!"
+ERROR: AssertionError: 3 is an odd number!
+
+julia> @assert isodd(3) "What even are numbers?"
+```
+"""
 macro assert(ex, msgs...)
     msg = isempty(msgs) ? ex : msgs[1]
     if isa(msg, AbstractString)

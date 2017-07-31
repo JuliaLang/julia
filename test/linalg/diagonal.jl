@@ -18,11 +18,21 @@ srand(1)
     end
     D = Diagonal(d)
     DM = diagm(d)
+
+    @testset "constructor" begin
+        for x in (d, GenericArray(d))
+            @test Diagonal(x)::Diagonal{elty,typeof(x)} == DM
+            @test Diagonal(x).diag === x
+            @test Diagonal{elty}(x)::Diagonal{elty,typeof(x)} == DM
+            @test Diagonal{elty}(x).diag === x
+        end
+    end
+
     @testset "Basic properties" begin
         @test eye(Diagonal{elty},n) == Diagonal(ones(elty,n))
         @test_throws ArgumentError size(D,0)
-        @test typeof(convert(Diagonal{Complex64},D)) == Diagonal{Complex64}
-        @test typeof(convert(AbstractMatrix{Complex64},D))   == Diagonal{Complex64}
+        @test typeof(convert(Diagonal{Complex64},D)) <: Diagonal{Complex64}
+        @test typeof(convert(AbstractMatrix{Complex64},D)) <: Diagonal{Complex64}
 
         @test Array(real(D)) == real(DM)
         @test Array(abs.(D)) == abs.(DM)
@@ -312,7 +322,7 @@ end
 end
 
 # allow construct from range
-@test Diagonal(linspace(1,3,3)) == Diagonal([1.,2.,3.])
+@test all(Diagonal(linspace(1,3,3)) .== Diagonal([1.0,2.0,3.0]))
 
 # Issue 12803
 for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})

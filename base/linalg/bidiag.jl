@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Bidiagonal matrices
-mutable struct Bidiagonal{T} <: AbstractMatrix{T}
+struct Bidiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T} # diagonal
     ev::Vector{T} # sub/super diagonal
     uplo::Char    # upper bidiagonal ('U') or lower ('L')
@@ -58,7 +58,6 @@ julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
 function Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{T}, uplo::Symbol) where T
     Bidiagonal{T}(collect(dv), collect(ev), char_uplo(uplo))
 end
-Bidiagonal(dv::AbstractVector, ev::AbstractVector) = throw(ArgumentError("did you want an upper or lower Bidiagonal? Try again with an additional true (upper) or false (lower) argument."))
 
 function Bidiagonal(dv::AbstractVector{Td}, ev::AbstractVector{Te}, uplo::Symbol) where {Td,Te}
     T = promote_type(Td,Te)

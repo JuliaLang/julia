@@ -147,20 +147,10 @@ function Base.LinAlg.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where
         C_NULL, C_NULL, C_NULL, C_NULL,
         R, E, H, HPinv, HTau)
 
-    # convert to Julia managed memory and free memory from SuiteSparse
-    tmpH = Sparse(H[])
-    HCSC = SparseMatrixCSC(tmpH)
-    free!(tmpH)
-
-    tmpHTau    = CHOLMOD.Dense(HTau[])
-    HTauVector = vec(Array(tmpHTau))
-    free!(tmpHTau)
-
-    tmpR = Sparse(R[])
-    RCSC = SparseMatrixCSC(tmpR)
-    free!(tmpR)
-
-    return QRSparse(HCSC, HTauVector, RCSC, p, hpinv)
+    return QRSparse(SparseMatrixCSC(Sparse(H[])),
+                    vec(Array(CHOLMOD.Dense(HTau[]))),
+                    SparseMatrixCSC(Sparse(R[])),
+                    p, hpinv)
 end
 
 """
@@ -400,9 +390,9 @@ end
 
 (\)(F::QRSparse{T}, B::StridedVecOrMat{T}) where {T} = _ldiv_basic(F, B)
 """
-    (\)(F::QRSparse, B::StridedVecOrMat)
+    (\\)(F::QRSparse, B::StridedVecOrMat)
 
-Solve the least squares problem ``\min\|Ax - b\|^2`` or the linear system of equations
+Solve the least squares problem ``\\min\\|Ax - b\\|^2`` or the linear system of equations
 ``Ax=b`` when `F` is the sparse QR factorization of ``A``. A basic solution is returned
 when the problem is underdetermined.
 
@@ -414,7 +404,7 @@ julia> A = sparse([1,2,4], [1,1,1], ones(3), 4, 2)
   [2, 1]  =  1.0
   [4, 1]  =  1.0
 
-julia> qrfact(A)\ones(4)
+julia> qrfact(A)\\ones(4)
 2-element Array{Float64,1}:
  1.0
  0.0

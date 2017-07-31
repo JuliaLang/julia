@@ -60,7 +60,9 @@
 
 typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
 
-#include <julia_threads.h>
+#include "atomics.h"
+#include "tls.h"
+#include "julia_threads.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -206,8 +208,8 @@ JL_EXTENSION typedef struct {
 } jl_generic_fptr_t;
 
 typedef struct _jl_llvm_functions_t {
-    void *functionObject;     // jlcall llvm Function
-    void *specFunctionObject; // specialized llvm Function
+    const char *functionObject;     // jlcall llvm Function name
+    const char *specFunctionObject; // specialized llvm Function name
 } jl_llvm_functions_t;
 
 // This type describes a single function body
@@ -245,7 +247,7 @@ typedef struct _jl_method_t {
     jl_svec_t *sparam_syms;  // symbols giving static parameter names
     jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
     struct _jl_method_instance_t *unspecialized;  // unspecialized executable method instance, or null
-    struct _jl_method_instance_t *generator;  // executable code-generating function if isstaged
+    struct _jl_method_instance_t *generator;  // executable code-generating function if available
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
 
     // cache of specializations of this method for invoke(), i.e.
@@ -254,9 +256,9 @@ typedef struct _jl_method_t {
     union jl_typemap_t invokes;
 
     int32_t nargs;
-    int32_t called;  // bit flags: whether each of the first 8 arguments is called
+    int32_t called;        // bit flags: whether each of the first 8 arguments is called
+    int32_t nospecialize;  // bit flags: which arguments should not be specialized
     uint8_t isva;
-    uint8_t isstaged;
     uint8_t pure;
 
 // hidden fields:
@@ -287,10 +289,8 @@ typedef struct _jl_method_instance_t {
     jl_fptr_t fptr; // jlcall entry point with api specified by jlcall_api
     jl_fptr_t unspecialized_ducttape; // if template can't be compiled due to intrinsics, an un-inferred fptr may get stored here, jlcall_api = 1
 
-    // On the old JIT, handles to all Functions generated for this linfo
-    // For the new JITs, handles to declarations in the shadow module
-    // with the same name as the generated functions for this linfo, suitable
-    // for referencing in LLVM IR
+    // names of declarations in the JIT,
+    // suitable for referencing in LLVM IR
     jl_llvm_functions_t functionObjectsDecls;
 } jl_method_instance_t;
 
@@ -402,7 +402,7 @@ typedef struct {
     uint8_t constp:1;
     uint8_t exportp:1;
     uint8_t imported:1;
-    uint8_t deprecated:1;
+    uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
 } jl_binding_t;
 
 typedef struct _jl_module_t {
@@ -776,7 +776,14 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
 
 // struct type info
-#define jl_field_name(st,i)    (jl_sym_t*)jl_svecref(((jl_datatype_t*)st)->name->names, (i))
+STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st)
+{
+    return st->name->names;
+}
+STATIC_INLINE jl_sym_t *jl_field_name(jl_datatype_t *st, size_t i)
+{
+    return (jl_sym_t*)jl_svecref(jl_field_names(st), i);
+}
 #define jl_field_type(st,i)    jl_svecref(((jl_datatype_t*)st)->types, (i))
 #define jl_field_count(st)     jl_svec_len(((jl_datatype_t*)st)->types)
 #define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
@@ -906,9 +913,8 @@ STATIC_INLINE int jl_is_primitivetype(void *v)
 STATIC_INLINE int jl_is_structtype(void *v)
 {
     return (jl_is_datatype(v) &&
-            (jl_field_count(v) > 0 ||
-             jl_datatype_size(v) == 0) &&
-            !((jl_datatype_t*)(v))->abstract);
+            !((jl_datatype_t*)(v))->abstract &&
+            !jl_is_primitivetype(v));
 }
 
 STATIC_INLINE int jl_isbits(void *t)   // corresponding to isbits() in julia
@@ -921,12 +927,6 @@ STATIC_INLINE int jl_isbits(void *t)   // corresponding to isbits() in julia
 STATIC_INLINE int jl_is_datatype_singleton(jl_datatype_t *d)
 {
     return (d->instance != NULL);
-}
-
-STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
-{
-    return (!d->abstract && jl_datatype_size(d) == 0 && d != jl_sym_type && d->name != jl_array_typename &&
-            d->uid != 0 && (d->name->names == jl_emptysvec || !d->mutabl));
 }
 
 STATIC_INLINE int jl_is_abstracttype(void *v)
@@ -1521,45 +1521,13 @@ typedef struct _jl_task_t {
 } jl_task_t;
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
-JL_DLLEXPORT void jl_switchto(jl_task_t *t);
+JL_DLLEXPORT void jl_switchto(jl_task_t **pt);
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e);
 JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e);
 
-#ifdef JULIA_ENABLE_THREADING
-static inline void jl_lock_frame_push(jl_mutex_t *lock)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    // For early bootstrap
-    if (__unlikely(!ptls->current_task))
-        return;
-    arraylist_t *locks = &ptls->current_task->locks;
-    size_t len = locks->len;
-    if (__unlikely(len >= locks->max)) {
-        arraylist_grow(locks, 1);
-    }
-    else {
-        locks->len = len + 1;
-    }
-    locks->items[len] = (void*)lock;
-}
-static inline void jl_lock_frame_pop(void)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (__likely(ptls->current_task)) {
-        ptls->current_task->locks.len--;
-    }
-}
-#else
-static inline void jl_lock_frame_push(jl_mutex_t *lock)
-{
-    (void)lock;
-}
-static inline void jl_lock_frame_pop(void)
-{
-}
-#endif // ifndef JULIA_ENABLE_THREADING
+#include "locks.h"   // requires jl_task_t definition
 
 STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
@@ -1736,6 +1704,7 @@ typedef struct {
     const char *bindto;
     const char *outputbc;
     const char *outputunoptbc;
+    const char *outputjitbc;
     const char *outputo;
     const char *outputji;
     int8_t incremental;
@@ -1743,6 +1712,7 @@ typedef struct {
 } jl_options_t;
 
 extern JL_DLLEXPORT jl_options_t jl_options;
+JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
 
 // Parse an argc/argv pair to extract general julia options, passing back out
 // any arguments that should be passed on to the script.
@@ -1800,7 +1770,7 @@ JL_DLLEXPORT int jl_generating_output(void);
 #define JL_OPTIONS_USE_COMPILECACHE_NO 0
 
 // Version information
-#include <julia_version.h>
+#include "julia_version.h"
 
 JL_DLLEXPORT extern int jl_ver_major(void);
 JL_DLLEXPORT extern int jl_ver_minor(void);

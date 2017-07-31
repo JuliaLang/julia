@@ -28,8 +28,7 @@ module IteratorsMD
     A `CartesianIndex` is sometimes produced by [`eachindex`](@ref), and
     always when iterating with an explicit [`CartesianRange`](@ref).
 
-    # Example
-
+    # Examples
     ```jldoctest
     julia> A = reshape(collect(1:16), (2, 2, 2, 2))
     2×2×2×2 Array{Int64,4}:
@@ -152,7 +151,7 @@ module IteratorsMD
     Consequently these can be useful for writing algorithms that
     work in arbitrary dimensions.
 
-    # Example
+    # Examples
     ```jldoctest
     julia> foreach(println, CartesianRange((2, 2, 2)))
     CartesianIndex{3}((1, 1, 1))
@@ -757,8 +756,9 @@ end
     accumulate(op, v0, A)
 
 Like `accumulate`, but using a starting element `v0`. The first entry of the result will be
-`op(v0, first(A))`. For example:
+`op(v0, first(A))`.
 
+# Examples
 ```jldoctest
 julia> accumulate(+, 100, [1,2,3])
 3-element Array{Int64,1}:
@@ -973,7 +973,7 @@ their indices; any offset results in a (circular) wraparound. If the
 arrays have overlapping indices, then on the domain of the overlap
 `dest` agrees with `src`.
 
-# Example
+# Examples
 ```julia-repl
 julia> src = reshape(collect(1:16), (4,4))
 4×4 Array{Int64,2}:
@@ -1108,12 +1108,13 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArra
 end
 
 # Note: the next two functions rely on the following definition of the conversion to Bool:
-#   convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
+#   convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(...))
 # they're used to pre-emptively check in bulk when possible, which is much faster.
 # Also, the functions can be overloaded for custom types T<:Real :
 #  a) in the unlikely eventuality that they use a different logic for Bool conversion
 #  b) to skip the check if not necessary
-@inline try_bool_conversion(x::Real) = x == 0 || x == 1 || throw(InexactError())
+@inline try_bool_conversion(x::Real) =
+    x == 0 || x == 1 || throw(InexactError(:try_bool_conversion, Bool, x))
 @inline unchecked_bool_convert(x::Real) = x == 1
 
 function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArray{<:Real}, pos_s::Int, numbits::Int)
@@ -1373,7 +1374,6 @@ hash(x::Prehashed) = x.hash
 Return unique regions of `A` along dimension `dim`.
 
 # Examples
-
 ```jldoctest
 julia> A = map(isodd, reshape(collect(1:8), (2,2,2)))
 2×2×2 Array{Bool,3}:
@@ -1483,7 +1483,7 @@ end
 
 Compute the minimum and maximum elements of an array over the given dimensions.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = reshape(collect(1:2:16), (2,2,2))
 2×2×2 Array{Int64,3}:

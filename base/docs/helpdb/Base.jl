@@ -82,7 +82,7 @@ Subtraction operator.
 
 A string giving the literal bit representation of a number.
 
-# Example
+# Examples
 ```jldoctest
 julia> bits(4)
 "0000000000000000000000000000000000000000000000000000000000000100"
@@ -99,7 +99,7 @@ bits
 Retrieve the value(s) stored at the given key or index within a collection. The syntax
 `a[i,j,...]` is converted by the compiler to `getindex(a, i, j, ...)`.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = Dict("a" => 1, "b" => 2)
 Dict{String,Int64} with 2 entries:
@@ -115,23 +115,18 @@ getindex(collection, key...)
 """
     cconvert(T,x)
 
-Convert `x` to a value of type `T`, typically by calling `convert(T,x)`
+Convert `x` to a value to be passed to C code as type `T`, typically by calling `convert(T, x)`.
 
 In cases where `x` cannot be safely converted to `T`, unlike [`convert`](@ref), `cconvert` may
 return an object of a type different from `T`, which however is suitable for
-[`unsafe_convert`](@ref) to handle.
+[`unsafe_convert`](@ref) to handle. The result of this function should be kept valid (for the GC)
+until the result of [`unsafe_convert`](@ref) is not needed anymore.
+This can be used to allocate memory that will be accessed by the `ccall`.
+If multiple objects need to be allocated, a tuple of the objects can be used as return value.
 
 Neither `convert` nor `cconvert` should take a Julia object and turn it into a `Ptr`.
 """
 cconvert
-
-"""
-    assert(cond)
-
-Throw an [`AssertionError`](@ref) if `cond` is `false`.
-Also available as the macro `@assert expr`.
-"""
-assert
 
 """
     unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
@@ -247,7 +242,7 @@ the byte representation is different.
 
 This would create a 25-by-30000 `BitArray`, linked to the file associated with stream `s`.
 """
-Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
+Mmap.mmap(io, ::BitArray, dims, offset)
 
 """
     sizeof(T)
@@ -306,7 +301,7 @@ oftype
 
 Insert one or more `items` at the end of `collection`.
 
-# Example
+# Examples
 ```jldoctest
 julia> push!([1, 2, 3], 4, 5, 6)
 6-element Array{Int64,1}:
@@ -329,7 +324,7 @@ push!
 
 Convert all arguments to their common promotion type (if any), and return them all (as a tuple).
 
-# Example
+# Examples
 ```jldoctest
 julia> promote(Int8(1), Float16(4.5), Float32(4.1))
 (1.0f0, 4.5f0, 4.1f0)
@@ -397,22 +392,6 @@ Like [`randsubseq`](@ref), but the results are stored in `S`
 randsubseq!
 
 """
-    redisplay(x)
-    redisplay(d::Display, x)
-    redisplay(mime, x)
-    redisplay(d::Display, mime, x)
-
-By default, the `redisplay` functions simply call [`display`](@ref).
-However, some display backends may override `redisplay` to modify an existing
-display of `x` (if any).
-Using `redisplay` is also a hint to the backend that `x` may be redisplayed
-several times, and the backend may choose to defer the display until
-(for example) the next interactive prompt.
-"""
-redisplay
-
-
-"""
     /(x, y)
 
 Right division operator: multiplication of `x` by the inverse of `y` on the right. Gives
@@ -428,46 +407,11 @@ Show every part of the representation of a value.
 dump
 
 """
-    isinteractive() -> Bool
-
-Determine whether Julia is running an interactive session.
-"""
-isinteractive
-
-"""
-    display(x)
-    display(d::Display, x)
-    display(mime, x)
-    display(d::Display, mime, x)
-
-Display `x` using the topmost applicable display in the display stack, typically using the
-richest supported multimedia output for `x`, with plain-text [`STDOUT`](@ref) output as a fallback.
-The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
-a `MethodError` if `d` cannot display objects of this type.
-
-There are also two variants with a `mime` argument (a MIME type string, such as
-`"image/png"`), which attempt to display `x` using the requested MIME type *only*, throwing
-a `MethodError` if this type is not supported by either the display(s) or by `x`. With these
-variants, one can also supply the "raw" data in the requested MIME type by passing
-`x::AbstractString` (for MIME types with text-based storage, such as text/html or
-application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
-"""
-display
-
-"""
-    print_shortest(io, x)
-
-Print the shortest possible representation, with the minimum number of consecutive non-zero
-digits, of number `x`, ensuring that it would parse to the exact same number.
-"""
-print_shortest
-
-"""
     tuple(xs...)
 
 Construct a tuple of the given objects.
 
-# Example
+# Examples
 ```jldoctest
 julia> tuple(1, 'a', pi)
 (1, 'a', π = 3.1415926535897...)
@@ -489,7 +433,7 @@ eachmatch
 
 Get a hexadecimal string of the binary representation of a floating point number.
 
-# Example
+# Examples
 ```jldoctest
 julia> num2hex(2.2)
 "400199999999999a"
@@ -675,33 +619,12 @@ julia> copysign(-1, 2)
 copysign
 
 """
-    @show
-
-Show an expression and result, returning the result.
-"""
-:@show
-
-"""
-    showcompact(x)
-
-Show a compact representation of a value.
-
-This is used for printing array elements without repeating type information (which would
-be redundant with that printed once for the whole array), and without line breaks inside
-the representation of an element.
-
-To offer a compact representation different from its standard one, a custom type should
-test `get(io, :compact, false)` in its normal `show` method.
-"""
-showcompact
-
-"""
     getfield(value, name::Symbol)
 
 Extract a named field from a `value` of composite type. The syntax `a.b` calls
 `getfield(a, :b)`.
 
-# Example
+# Examples
 ```jldoctest
 julia> a = 1//2
 1//2
@@ -723,7 +646,6 @@ values at those indices is returned. Note that `select!` does not fully sort the
 array.
 
 # Examples
-
 ```jldoctest
 julia> a = [1, 2, 4, 3, 4]
 5-element Array{Int64,1}:
@@ -881,7 +803,8 @@ trunc
 """
     unsafe_convert(T,x)
 
-Convert `x` to a value of type `T`
+Convert `x` to a C argument of type `T`
+where the input `x` must be the return value of `cconvert(T, ...)`.
 
 In cases where [`convert`](@ref) would need to take a Julia object
 and turn it into a `Ptr`, this function should be used to define and perform
@@ -895,6 +818,8 @@ but `x=[a,b,c]` is not.
 The `unsafe` prefix on this function indicates that using the result of this function after
 the `x` argument to this function is no longer accessible to the program may cause undefined
 behavior, including program corruption or segfaults, at any later time.
+
+See also [`cconvert`](@ref)
 """
 unsafe_convert
 
@@ -904,15 +829,6 @@ unsafe_convert
 Seek a stream to the given position.
 """
 seek
-
-"""
-    popdisplay()
-    popdisplay(d::Display)
-
-Pop the topmost backend off of the display-backend stack, or the topmost copy of `d` in the
-second variant.
-"""
-popdisplay
 
 """
     cglobal((symbol, library) [, type=Void])
@@ -931,7 +847,7 @@ cglobal
 
 Returns the last index of the collection.
 
-# Example
+# Examples
 ```jldoctest
 julia> endof([1,2,4])
 3
@@ -980,7 +896,29 @@ finalize
 """
     BoundsError([a],[i])
 
-An indexing operation into an array, `a`, tried to access an out-of-bounds element, `i`.
+An indexing operation into an array, `a`, tried to access an out-of-bounds element at index `i`.
+
+# Examples
+```jldoctest
+julia> A = ones(7);
+
+julia> A[8]
+ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
+Stacktrace:
+ [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:586
+
+julia> B = ones(2, 3);
+
+julia> B[2, 4]
+ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]
+Stacktrace:
+ [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:587
+
+julia> B[9]
+ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [9]
+Stacktrace:
+ [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:586
+```
 """
 BoundsError
 
@@ -1139,18 +1077,11 @@ julia> bin(bswap(1))
 bswap
 
 """
-    maxintfloat(T)
-
-The largest integer losslessly representable by the given floating-point DataType `T`.
-"""
-maxintfloat
-
-"""
     delete!(collection, key)
 
 Delete the mapping for the given key in a collection, and return the collection.
 
-# Example
+# Examples
 ```jldoctest
 julia> d = Dict("a"=>1, "b"=>2)
 Dict{String,Int64} with 2 entries:
@@ -1164,7 +1095,6 @@ Dict{String,Int64} with 1 entry:
 """
 delete!
 
-
 """
     big(x)
 
@@ -1172,14 +1102,6 @@ Convert a number to a maximum precision representation (typically [`BigInt`](@re
 `BigFloat`). See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
 """
 big
-
-"""
-    quit()
-
-Quit the program indicating that the processes completed successfully. This function calls
-`exit(0)` (see [`exit`](@ref)).
-"""
-quit
 
 """
     typejoin(T, S)
@@ -1264,6 +1186,10 @@ hash
     read(stream::IO, T)
 
 Read a single value of type `T` from `stream`, in canonical binary representation.
+
+    read(stream::IO, String)
+
+Read the entirety of `stream`, as a String.
 """
 read(stream, t)
 
@@ -1272,7 +1198,7 @@ read(stream, t)
 
 Remove the first `item` from `collection`.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5, 6]
 6-element Array{Int64,1}:
@@ -1340,14 +1266,6 @@ proceeding.
 wait
 
 """
-    atexit(f)
-
-Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
-called in last in first out (LIFO) order and run before object finalizers.
-"""
-atexit
-
-"""
     copy(x)
 
 Create a shallow copy of `x`: the outer structure is copied, but not all internal values.
@@ -1380,16 +1298,16 @@ Convert a hexadecimal string to the floating point number it represents.
 hex2num
 
 """
-    InexactError()
+    InexactError(name::Symbol, T, val)
 
-Type conversion cannot be done exactly.
+Cannot exactly convert `val` to type `T` in a method of function `name`.
 
 # Examples
 ```jldoctest
 julia> convert(Float64, 1+2im)
-ERROR: InexactError()
+ERROR: InexactError: convert(Float64, 1 + 2im)
 Stacktrace:
- [1] convert(::Type{Float64}, ::Complex{Int64}) at ./complex.jl:31
+ [1] convert(::Type{Float64}, ::Complex{Int64}) at ./complex.jl:37
 ```
 """
 InexactError
@@ -1402,14 +1320,15 @@ The highest value representable by the given (real) numeric `DataType`.
 typemax
 
 """
-    DomainError()
+    DomainError(val)
+    DomainError(val, msg)
 
-The arguments to a function or constructor are outside the valid domain.
+The argument `val` to a function or constructor is outside the valid domain.
 
 # Examples
 ```jldoctest
 julia> sqrt(-1)
-ERROR: DomainError:
+ERROR: DomainError with -1:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
  [1] sqrt(::Int64) at ./math.jl:443
@@ -1423,7 +1342,7 @@ DomainError
 Create a `Task` (i.e. coroutine) to execute the given function (which must be
 callable with no arguments). The task exits when this function returns.
 
-# Example
+# Examples
 ```jldoctest
 julia> a() = det(rand(1000, 1000));
 
@@ -1433,15 +1352,6 @@ julia> b = Task(a);
 In this example, `b` is a runnable `Task` that hasn't started yet.
 """
 Task
-
-"""
-    pushdisplay(d::Display)
-
-Pushes a new display `d` on top of the global display-backend stack. Calling `display(x)` or
-`display(mime, x)` will display `x` on the topmost compatible backend in the stack (i.e.,
-the topmost backend that does not throw a `MethodError`).
-"""
-pushdisplay
 
 """
     StackOverflowError()
@@ -1476,16 +1386,16 @@ Seek a stream to its beginning.
 seekstart
 
 """
-    nfields(x::DataType) -> Int
+    nfields(x) -> Int
 
-Get the number of fields of a `DataType`.
+Get the number of fields in the given object.
 """
 nfields
 
 """
     show(stream, mime, x)
 
-The `display` functions ultimately call `show` in order to write an object `x` as a
+The [`display`](@ref) functions ultimately call `show` in order to write an object `x` as a
 given `mime` type to a given I/O `stream` (usually a memory buffer), if possible. In order
 to provide a rich multimedia representation of a user-defined type `T`, it is only necessary
 to define a new `show` method for `T`, via: `show(stream, ::MIME"mime", x::T) = ...`,
@@ -1514,13 +1424,6 @@ See [`IOContext`](@ref) for details.
 show(stream, mime, x)
 
 """
-    mean!(r, v)
-
-Compute the mean of `v` over the singleton dimensions of `r`, and write results to `r`.
-"""
-mean!
-
-"""
     isless(x, y)
 
 Test whether `x` is less than `y`, according to a canonical total order. Values that are
@@ -1530,13 +1433,6 @@ should implement this function. Numeric types only need to implement it if they 
 values such as `NaN`.
 """
 isless
-
-"""
-    showerror(io, e)
-
-Show a descriptive representation of an exception object.
-"""
-showerror
 
 """
     error(message::AbstractString)
@@ -1580,6 +1476,24 @@ unsafe_trunc
 
 Returns the "parent array" of an array view type (e.g., `SubArray`), or the array itself if
 it is not a view.
+
+# Examples
+```jldoctest
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> s_a = Symmetric(a)
+2×2 Symmetric{Int64,Array{Int64,2}}:
+ 1  2
+ 2  4
+
+julia> parent(s_a)
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+```
 """
 parent
 
@@ -1631,23 +1545,6 @@ should overload `show(io, x)` where the first argument is a stream. The represen
 by `show` generally includes Julia-specific formatting and type information.
 """
 show(x)
-
-"""
-    issubtype(type1, type2)
-
-Return `true` if and only if all values of `type1` are also of `type2`. Can also be written
-using the `<:` infix operator as `type1 <: type2`.
-
-# Examples
-```jldoctest
-julia> issubtype(Int8, Int32)
-false
-
-julia> Int8 <: Integer
-true
-```
-"""
-issubtype(type1, type2)
 
 """
     finalizer(x, f)
@@ -1744,13 +1641,6 @@ end
 ```
 """
 get!(f::Function,collection,key)
-
-"""
-    @assert cond [text]
-
-Throw an `AssertionError` if `cond` is `false`. Preferred syntax for writing assertions.
-Message `text` is optionally displayed upon assertion failure.
-"""
 :@assert
 
 """
@@ -1826,13 +1716,15 @@ type automatically.
 
 For example:
 
-    function foo()
-        # body
+```julia
+function foo()
+    # body
 
-        retval::Float64
-    end
+    retval::Float64
+end
 
-    bar = cfunction(foo, Float64, ())
+bar = cfunction(foo, Float64, ())
+```
 """
 cfunction
 
@@ -1842,6 +1734,19 @@ cfunction
 
 Construct the intersection of two or more sets.
 Maintains order and multiplicity of the first argument for arrays and ranges.
+
+# Examples
+```jldoctest
+julia> intersect([1, 2, 3], [3, 4, 5])
+1-element Array{Int64,1}:
+ 3
+
+julia> intersect([1, 4, 4, 5, 6], [4, 6, 6, 7, 8])
+3-element Array{Int64,1}:
+ 4
+ 4
+ 6
+```
 """
 intersect
 
@@ -1853,13 +1758,6 @@ Specifies what type should be used by [`promote`](@ref) when given values of typ
 it for new types as appropriate.
 """
 promote_rule
-
-"""
-    showall(x)
-
-Similar to [`show`](@ref), except shows all elements of arrays.
-"""
-showall
 
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
@@ -1932,7 +1830,7 @@ julia> convert(Int, 3.0)
 3
 
 julia> convert(Int, 3.5)
-ERROR: InexactError()
+ERROR: InexactError: convert(Int64, 3.5)
 Stacktrace:
  [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
 ```
@@ -2041,29 +1939,6 @@ x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
 setindex!(collection,value,key...)
 
 """
-    signif(x, digits, [base])
-
-Rounds (in the sense of [`round`](@ref)) `x` so that there are `digits` significant digits, under a
-base `base` representation, default 10. E.g., `signif(123.456, 2)` is `120.0`, and
-`signif(357.913, 4, 2)` is `352.0`.
-"""
-signif
-
-"""
-    full(F)
-
-Reconstruct the matrix `A` from the factorization `F=factorize(A)`.
-"""
-full(F)
-
-"""
-    throw(e)
-
-Throw an object as an exception.
-"""
-throw
-
-"""
     zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
 
 Create an array of all zeros with the same layout as `A`, element type `T` and size `dims`.
@@ -2131,23 +2006,6 @@ Values for `String` can be of that type, or `Vector{UInt8}`.
 isvalid(T,value)
 
 """
-    reverseind(v, i)
-
-Given an index `i` in `reverse(v)`, return the corresponding index in `v` so that
-`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in the case where `v` is a
-Unicode string.)
-"""
-reverseind
-
-"""
-    exit([code])
-
-Quit (or control-D at the prompt). The default exit code is zero, indicating that the
-processes completed successfully.
-"""
-exit
-
-"""
     skipchars(stream, predicate; linecomment::Char)
 
 Advance the stream until before the first character for which `predicate` returns `false`.
@@ -2179,7 +2037,7 @@ julia> pop!(d, "e", 4)
 4
 ```
 """
-pop!(collection,key,?)
+pop!(collection,key,default)
 
 """
     pop!(collection) -> item
@@ -2213,7 +2071,7 @@ julia> S
 Set([1])
 
 julia> pop!(Dict(1=>2))
-1=>2
+1 => 2
 ```
 """
 pop!(collection)

@@ -163,6 +163,10 @@ write(filename::AbstractString, args...) = open(io->write(io, args...), filename
 
 Open a file and read its contents. `args` is passed to `read`: this is equivalent to
 `open(io->read(io, args...), filename)`.
+
+    read(filename::AbstractString, String)
+
+Read the entire contents of a file as a string.
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
 read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
@@ -310,6 +314,9 @@ write(s::IO, x::Bool) = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
 function write(s::IO, A::AbstractArray)
+    if !isbits(eltype(A))
+        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
+    end
     nb = 0
     for a in A
         nb += write(s, a)
@@ -317,19 +324,37 @@ function write(s::IO, A::AbstractArray)
     return nb
 end
 
-@noinline function write(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
-    return unsafe_write(s, pointer(a), sizeof(a))
-end
-
-@noinline function write(s::IO, a::Array{T}) where T # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
-    if isbits(T)
+@noinline function write(s::IO, a::Array)  # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+    if isbits(eltype(a))
         return unsafe_write(s, pointer(a), sizeof(a))
     else
+        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
         nb = 0
         for b in a
             nb += write(s, b)
         end
         return nb
+    end
+end
+
+function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
+    if !isbits(T)
+        return invoke(write, Tuple{IO, AbstractArray}, s, a)
+    end
+    elsz = sizeof(T)
+    colsz = size(a,1) * elsz
+    if stride(a,1) != 1
+        for idxs in CartesianRange(size(a))
+            unsafe_write(s, pointer(a, idxs.I), elsz)
+        end
+        return elsz * length(a)
+    elseif N <= 1
+        return unsafe_write(s, pointer(a, 1), colsz)
+    else
+        for idxs in CartesianRange((1, size(a)[2:end]...))
+            unsafe_write(s, pointer(a, idxs.I), colsz)
+        end
+        return colsz * trailingsize(a,2)
     end
 end
 
@@ -481,9 +506,9 @@ end
     readchomp(x)
 
 Read the entirety of `x` as a string and remove a single trailing newline.
-Equivalent to `chomp!(readstring(x))`.
+Equivalent to `chomp!(read(x, String))`.
 """
-readchomp(x) = chomp!(readstring(x))
+readchomp(x) = chomp!(read(x, String))
 
 # read up to nb bytes into nb, returning # bytes read
 
@@ -525,15 +550,7 @@ function read(s::IO, nb::Integer = typemax(Int))
     return resize!(b, nr)
 end
 
-"""
-    readstring(stream::IO)
-    readstring(filename::AbstractString)
-
-Read the entire contents of an I/O stream or a file as a string.
-The text is assumed to be encoded in UTF-8.
-"""
-readstring(s::IO) = String(read(s))
-readstring(filename::AbstractString) = open(readstring, filename)
+read(s::IO, ::Type{String}) = String(read(s))
 
 ## high-level iterator interfaces ##
 

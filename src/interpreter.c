@@ -102,7 +102,7 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
           dta->mutabl == dtb->mutabl &&
           dta->size == dtb->size &&
           dta->ninitialized == dtb->ninitialized &&
-          jl_egal((jl_value_t*)dta->name->names, (jl_value_t*)dtb->name->names) &&
+          jl_egal((jl_value_t*)jl_field_names(dta), (jl_value_t*)jl_field_names(dtb)) &&
           jl_nparams(dta) == jl_nparams(dtb) &&
           jl_field_count(dta) == jl_field_count(dtb)))
         return 0;
@@ -475,10 +475,6 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             jl_rethrow();
         }
         jl_compute_field_offsets(dt);
-        if (para == (jl_value_t*)jl_emptysvec && jl_is_datatype_make_singleton(dt)) {
-            dt->instance = jl_gc_alloc(ptls, 0, dt);
-            jl_gc_wb(dt, dt->instance);
-        }
 
         b->value = temp;
         if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)jl_unwrap_unionall(temp))) {
@@ -644,13 +640,14 @@ jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint
         return lam->inferred_const;
     jl_code_info_t *src = (jl_code_info_t*)lam->inferred;
     if (!src || (jl_value_t*)src == jl_nothing) {
-        if (lam->def.method->isstaged) {
+        if (lam->def.method->source) {
+            src = (jl_code_info_t*)lam->def.method->source;
+        }
+        else {
+            assert(lam->def.method->generator);
             src = jl_code_for_staged(lam);
             lam->inferred = (jl_value_t*)src;
             jl_gc_wb(lam, src);
-        }
-        else {
-            src = (jl_code_info_t*)lam->def.method->source;
         }
     }
     if (src && (jl_value_t*)src != jl_nothing) {

@@ -83,6 +83,8 @@ bimg  = randn(n,2)/2
                         @test bc1[uplo]*bc1[:D]*bc1[uplo].' ≈ asym[bc1[:p], bc1[:p]]
                         @test bc1[uplo]*bc1[:D]*bc1[uplo].' ≈ bc1[:P]*asym*bc1[:P]'
                     end
+                    @test_throws KeyError bc1[:Z]
+                    @test_throws ArgumentError uplo == :L ? bc1[:U] : bc1[:L]
                 end
 
                 @testset "$uplo Bunch-Kaufman factors of a pos-def matrix" for uplo in (:U, :L)

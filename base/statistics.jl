@@ -35,15 +35,33 @@ mean(iterable) = mean(identity, iterable)
 mean(f::Callable, A::AbstractArray) = sum(f, A) / _length(A)
 mean(A::AbstractArray) = sum(A) / _length(A)
 
+"""
+    mean!(r, v)
+
+Compute the mean of `v` over the singleton dimensions of `r`, and write results to `r`.
+
+# Examples
+```jldoctest
+julia> v = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> mean!([1., 1.], v)
+2-element Array{Float64,1}:
+ 1.5
+ 3.5
+
+julia> mean!([1. 1.], v)
+1×2 Array{Float64,2}:
+ 2.0  3.0
+```
+"""
 function mean!(R::AbstractArray, A::AbstractArray)
     sum!(R, A; init=true)
     scale!(R, _length(R) / _length(A))
     return R
 end
-
-momenttype(::Type{T}) where {T} = typeof((zero(T)*zero(T) + zero(T)*zero(T)) / 2)
-momenttype(::Type{Float32}) = Float32
-momenttype(::Type{<:Union{Float64,Int32,Int64,UInt32,UInt64}}) = Float64
 
 """
     mean(v[, region])
@@ -55,8 +73,7 @@ Compute the mean of whole array `v`, or optionally along the dimensions in `regi
     handling of missing data, the `DataArrays.jl` package is recommended.
 """
 mean(A::AbstractArray{T}, region) where {T} =
-    mean!(reducedim_initarray(A, region, 0, momenttype(T)), A)
-
+    mean!(reducedim_init(t -> t/2, +, A, region), A)
 
 ##### variances #####
 
@@ -149,8 +166,7 @@ end
 
 function varm(A::AbstractArray{T}, m::Number; corrected::Bool=true) where T
     n = _length(A)
-    n == 0 && return convert(real(momenttype(T)), NaN)
-    n == 1 && return convert(real(momenttype(T)), abs2(A[1] - m)/(1 - Int(corrected)))
+    n == 0 && return typeof((abs2(zero(T)) + abs2(zero(T)))/2)(NaN)
     return centralize_sumabs2(A, m) / (n - Int(corrected))
 end
 
@@ -159,7 +175,7 @@ function varm!(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; correcte
         fill!(R, convert(S, NaN))
     else
         rn = div(_length(A), _length(R)) - Int(corrected)
-        scale!(centralize_sumabs2!(R, A, m), convert(S, 1/rn))
+        scale!(centralize_sumabs2!(R, A, m), one(S)/rn)
     end
     return R
 end
@@ -178,12 +194,11 @@ whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x
     `DataArrays.jl` package is recommended.
 """
 varm(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) where {T} =
-    varm!(reducedim_initarray(A, region, 0, real(momenttype(T))), A, m; corrected=corrected)
+    varm!(reducedim_init(t -> abs2(t)/2, +, A, region), A, m; corrected=corrected)
 
 
 var(A::AbstractArray{T}; corrected::Bool=true, mean=nothing) where {T} =
-    convert(real(momenttype(T)),
-            varm(A, mean === nothing ? Base.mean(A) : mean; corrected=corrected))
+    real(varm(A, mean === nothing ? Base.mean(A) : mean; corrected=corrected))
 
 """
     var(v[, region]; corrected::Bool=true, mean=nothing)
@@ -210,22 +225,24 @@ varm(iterable, m::Number; corrected::Bool=true) =
 ## variances over ranges
 
 function varm(v::Range, m::Number)
-    f = first(v) - m
-    s = step(v)
-    l = length(v)
+    f  = first(v) - m
+    s  = step(v)
+    l  = length(v)
+    vv = f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
     if l == 0 || l == 1
-           return NaN
+        return typeof(vv)(NaN)
     end
-    return f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
+    return vv
 end
 
 function var(v::Range)
-    s = step(v)
-    l = length(v)
+    s  = step(v)
+    l  = length(v)
+    vv = abs2(s) * (l + 1) * l / 12
     if l == 0 || l == 1
-        return NaN
+        return typeof(vv)(NaN)
     end
-    return abs2(s) * (l + 1) * l / 12
+    return vv
 end
 
 
@@ -361,7 +378,7 @@ cov(X::AbstractMatrix, vardim::Int=1; corrected::Bool=true) =
 Compute the covariance between the vectors `x` and `y`. If `corrected` is `true` (the
 default), computes ``\\frac{1}{n-1}\\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*`` where
 ``*`` denotes the complex conjugate and `n = length(x) = length(y)`. If `corrected` is
-`false`, computes ``\frac{1}{n}\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*``.
+`false`, computes ``\\frac{1}{n}\\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*``.
 """
 cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
     covm(x, Base.mean(x), y, Base.mean(y); corrected=corrected)
@@ -672,25 +689,25 @@ end
 
 # Core quantile lookup function: assumes `v` sorted
 @inline function _quantile(v::AbstractVector, p::Real)
-    T = float(eltype(v))
-    isnan(p) && return T(NaN)
     0 <= p <= 1 || throw(ArgumentError("input probability out of [0,1] range"))
 
     lv = length(v)
-    f0 = (lv-1)*p # 0-based interpolated index
+    f0 = (lv - 1)*p # 0-based interpolated index
     t0 = trunc(f0)
-    h = f0 - t0
-    i = trunc(Int,t0) + 1
+    h  = f0 - t0
+    i  = trunc(Int,t0) + 1
+
+    T  = promote_type(eltype(v), typeof(v[1]*h))
 
     if h == 0
         return T(v[i])
     else
-        a = T(v[i])
-        b = T(v[i+1])
+        a = v[i]
+        b = v[i+1]
         if isfinite(a) && isfinite(b)
-            return a + h*(b-a)
+            return T(a + h*(b-a))
         else
-            return (1-h)*a + h*b
+            return T((1-h)*a + h*b)
         end
     end
 end

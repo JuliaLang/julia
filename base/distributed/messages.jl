@@ -68,6 +68,7 @@ struct JoinPGRPMsg <: AbstractMsg
     other_workers::Array
     topology::Symbol
     enable_threaded_blas::Bool
+    lazy::Bool
 end
 struct JoinCompleteMsg <: AbstractMsg
     cpu_cores::Int
@@ -95,7 +96,7 @@ let msg_cases = :(assert(false))
     for i = length(msgtypes):-1:1
         mti = msgtypes[i]
         msg_cases = :(if idx == $i
-                          return $(Expr(:call, QuoteNode(mti), fill(:(deserialize(s)), nfields(mti))...))
+                          return $(Expr(:call, QuoteNode(mti), fill(:(deserialize(s)), fieldcount(mti))...))
                       else
                           $msg_cases
                       end)

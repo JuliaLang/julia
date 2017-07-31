@@ -109,7 +109,7 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
         else
             passdef = creds.pass # check if credentials were already used
             if passphrase_required && (isempty(passdef) || isusedcreds)
-                if is_windows()
+                if Sys.iswindows()
                     passdef = Base.winprompt(
                         "Your SSH Key requires a password, please enter it now:",
                         "Passphrase required", privatekey; prompt_username = false)
@@ -144,7 +144,7 @@ function authenticate_userpass(creds::UserPasswordCredentials, libgit2credptr::P
     if creds.prompt_if_incorrect
         username = creds.user
         userpass = creds.pass
-        if is_windows()
+        if Sys.iswindows()
             if isempty(username) || isempty(userpass) || isusedcreds
                 res = Base.winprompt("Please enter your credentials for '$schema$host'", "Credentials required",
                         isempty(username) ? urlusername : username; prompt_username = true)

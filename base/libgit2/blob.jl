@@ -54,8 +54,7 @@ end
 Reads the file at `path` and adds it to the object database of `repo` as a loose blob.
 Returns the [`GitHash`](@ref) of the resulting blob.
 
-# Example
-
+# Examples
 ```julia
 hash_str = hex(commit_oid)
 blob_file = joinpath(repo_path, ".git", "objects", hash_str[1:2], hash_str[3:end])

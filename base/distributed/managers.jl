@@ -100,6 +100,10 @@ Keyword arguments:
       A worker with a cluster manager identity `ident` will connect to all workers specified
       in `connect_idents`.
 
+* `lazy`: Applicable only with `topology=:all_to_all`. If `true`, worker-worker connections
+  are setup lazily, i.e. they are setup at the first instance of a remote call between
+  workers. Default is true.
+
 
 Environment variables :
 
@@ -302,7 +306,7 @@ addprocs(; kwargs...) = addprocs(Sys.CPU_CORES; kwargs...)
 Launches workers using the in-built `LocalManager` which only launches workers on the
 local host. This can be used to take advantage of multiple cores. `addprocs(4)` will add 4
 processes on the local machine. If `restrict` is `true`, binding is restricted to
-`127.0.0.1`. Keyword args `dir`, `exename`, `exeflags`, `topology`, and
+`127.0.0.1`. Keyword args `dir`, `exename`, `exeflags`, `topology`, `lazy` and
 `enable_threaded_blas` have the same effect as documented for `addprocs(machines)`.
 """
 function addprocs(np::Integer; restrict=true, kwargs...)
@@ -460,7 +464,7 @@ function socket_reuse_port()
         s = TCPSocket(delay = false)
 
         # Some systems (e.g. Linux) require the port to be bound before setting REUSEPORT
-        bind_early = is_linux()
+        bind_early = Sys.islinux()
 
         bind_early && bind_client_port(s)
         rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)

@@ -13,47 +13,6 @@ include("testenv.jl")
 addprocs_with_testenv(4)
 @test nprocs() == 5
 
-function reuseport_tests()
-    # Run the test on all processes.
-    results = asyncmap(procs()) do p
-        remotecall_fetch(p) do
-            ports_lower = []        # ports of pids lower than myid()
-            ports_higher = []       # ports of pids higher than myid()
-            for w in Base.Distributed.PGRP.workers
-                w.id == myid() && continue
-                port = Base._sockname(w.r_stream, true)[2]
-                if (w.id == 1)
-                    # master connects to workers
-                    push!(ports_higher, port)
-                elseif w.id < myid()
-                    push!(ports_lower, port)
-                elseif w.id > myid()
-                    push!(ports_higher, port)
-                end
-            end
-            @assert (length(ports_lower) + length(ports_higher)) == nworkers()
-            for portset in [ports_lower, ports_higher]
-                if (length(portset) > 0) && (length(unique(portset)) != 1)
-                    warn("SO_REUSEPORT TESTS FAILED. UNSUPPORTED/OLDER UNIX VERSION?")
-                    return 0
-                end
-            end
-            return myid()
-        end
-    end
-
-    # Ensure that the code has indeed been successfully executed everywhere
-    @test all(p -> p in results, procs())
-end
-
-# Test that the client port is reused. SO_REUSEPORT may not be supported on
-# all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
-if ccall(:jl_has_so_reuseport, Int32, ()) == 1
-    reuseport_tests()
-else
-    info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
-end
-
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 
@@ -268,9 +227,30 @@ test_indexing(Future(id_other))
 test_indexing(RemoteChannel())
 test_indexing(RemoteChannel(id_other))
 
+# Test ser/deser to non-ClusterSerializer objects.
+function test_regular_io_ser(ref::Base.Distributed.AbstractRemoteRef)
+    io = IOBuffer()
+    serialize(io, ref)
+    seekstart(io)
+    ref2 = deserialize(io)
+    for fld in fieldnames(typeof(ref))
+        v = getfield(ref2, fld)
+        if isa(v, Number)
+            @test v === zero(typeof(v))
+        elseif isa(v, Nullable)
+            @test v === Nullable{Any}()
+        else
+            error(string("Add test for field ", fld))
+        end
+    end
+end
+
+test_regular_io_ser(Future())
+test_regular_io_ser(RemoteChannel())
+
 dims = (20,20,20)
 
-if is_linux()
+if Sys.islinux()
     S = SharedArray{Int64,3}(dims)
     @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
@@ -363,12 +343,8 @@ Atrue = reshape(1:30, sz)
 S = @inferred(SharedArray{Int,2}(fn, sz))
 @test S == Atrue
 @test length(procs(S)) > 1
-@sync begin
-    for p in procs(S)
-        @async remotecall_wait(p, S) do D
-            fill!(D.loc_subarr_1d, myid())
-        end
-    end
+@everywhere procs(S) begin
+    $fill!($S.loc_subarr_1d, $myid())
 end
 check_pids_all(S)
 
@@ -456,9 +432,7 @@ remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.
 @test s != d
 copy!(d, s)
 @everywhere setid!(A) = A[localindexes(A)] = myid()
-@sync for p in procs(ds)
-    @async remotecall_wait(setid!, p, ds)
-end
+@everywhere procs(ds) setid!($ds)
 @test d == s
 @test ds != s
 @test first(ds) == first(procs(ds))
@@ -659,9 +633,16 @@ catch ex
     @test length(ex) == 5
     @test typeof(ex.exceptions[1]) == CapturedException
     @test typeof(ex.exceptions[1].ex) == ErrorException
-    errors = map(x->x.ex.msg, ex.exceptions)
-    @test collect(1:5) == sort(map(x->parse(Int, x), errors))
+    # test start, next, and done
+    for (i, i_ex) in enumerate(ex)
+        @test i == parse(Int, i_ex.ex.msg)
+    end
+    # test showerror
+    err_str = sprint(showerror, ex)
+    err_one_str = sprint(showerror, ex.exceptions[1])
+    @test err_str == err_one_str * "\n\n...and 4 more exception(s).\n"
 end
+@test sprint(showerror, CompositeException()) == "CompositeException()\n"
 
 function test_remoteexception_thrown(expr)
     try
@@ -962,7 +943,7 @@ if DoFullTest
     @test workers() == all_w
     @test all([p == remotecall_fetch(myid, p) for p in all_w])
 
-if is_unix() # aka have ssh
+if Sys.isunix() # aka have ssh
     function test_n_remove_pids(new_pids)
         for p in new_pids
             w_in_remote = sort(remotecall_fetch(workers, p))
@@ -1218,6 +1199,50 @@ for p in procs()
     @test p == remotecall_fetch(new_bar, p)
 end
 
+# @everywhere (remotecall_eval) behaviors (#22589)
+let (p, p2) = filter!(p -> p != myid(), procs())
+    @test (myid() + 1) == @everywhere myid() (myid() + 1)
+    @test (p * 2) == @everywhere p (myid() * 2)
+    @test 1 == @everywhere p defined_on_p = 1
+    @test !@isdefined defined_on_p
+    @test !isdefined(Main, :defined_on_p)
+    @test remotecall_fetch(isdefined, p, Main, :defined_on_p)
+    @test !remotecall_fetch(isdefined, p2, Main, :defined_on_p)
+    @test nothing === @everywhere [p, p] defined_on_p += 1
+    @test 3 === @everywhere p defined_on_p
+    let ref = Ref(0)
+        @test nothing ===
+            @everywhere [myid(), p, myid(), myid(), p] begin
+                Test.@test Main === @__MODULE__
+                $ref[] += 1
+            end
+        @test ref[] == 3
+    end
+    function test_throw_on(procs, msg)
+        try
+            @everywhere procs error($msg)
+            error("test failed to throw")
+        catch excpt
+            if procs isa Int
+                ex = Any[excpt]
+            else
+                ex = Any[ (ex::CapturedException).ex for ex in (excpt::CompositeException).exceptions ]
+            end
+            for (p, ex) in zip(procs, ex)
+                if procs isa Int || p != myid()
+                    @test (ex::RemoteException).pid == p
+                    ex = ((ex::RemoteException).captured::CapturedException).ex
+                end
+                @test (ex::ErrorException).msg == msg
+            end
+        end
+    end
+    test_throw_on(p, "everywhere on p")
+    test_throw_on(myid(), "everywhere on myid")
+    test_throw_on([p, myid()], "everywhere on myid and p")
+    test_throw_on([p2, p], "everywhere on p and p2")
+end
+
 # Test addprocs enable_threaded_blas parameter
 
 const get_num_threads = function() # anonymous so it will be serialized when called
@@ -1233,7 +1258,7 @@ const get_num_threads = function() # anonymous so it will be serialized when cal
         end
 
         # OSX BLAS looks at an environment variable
-        if is_apple()
+        if Sys.isapple()
             return ENV["VECLIB_MAXIMUM_THREADS"]
         end
     end
@@ -1677,27 +1702,33 @@ end
     end
 end == true
 
-@test let
+let
     # creates a new worker in a different folder and tries to include file
-    tmp_file, temp_file_stream = mktemp()
-    close(temp_file_stream)
-    tmp_file = relpath(tmp_file)
-    tmp_dir = relpath(mktempdir())
+    tmp_dir = mktempdir()
+    tmp_dir2 = joinpath(tmp_dir, "2")
+    tmp_file = joinpath(tmp_dir2, "testfile")
+    tmp_file2 = joinpath(tmp_dir2, "testfile2")
+    proc = addprocs_with_testenv(1, dir=tmp_dir)
     try
-        proc = addprocs_with_testenv(1, dir=tmp_dir)
-        include(tmp_file)
-        remotecall_fetch(include, proc[1], tmp_file)
+        mkdir(tmp_dir2)
+        write(tmp_file, "23.32 + 32 + myid() + include(\"testfile2\")")
+        write(tmp_file2, "myid() * 2")
+        @test_throws(ErrorException("could not open file $(abspath("testfile"))"),
+                     include("testfile"))
+        @test_throws(ErrorException("could not open file $(abspath("testfile2"))"),
+                     include("testfile2"))
+        @test_throws(ErrorException("could not open file $(abspath("2", "testfile"))"),
+                     include(joinpath("2", "testfile")))
+        @test include(tmp_file) == 58.32
+        @test remotecall_fetch(include, proc[1], joinpath("2", "testfile")) == 55.32 + proc[1] * 3
+    finally
         rmprocs(proc)
-        rm(tmp_dir)
-        rm(tmp_file)
-        return true
-    catch e
-        println(e)
-        rm(tmp_dir, force=true)
         rm(tmp_file, force=true)
-        return false
+        rm(tmp_file2, force=true)
+        rm(tmp_dir2, force=true)
+        rm(tmp_dir, force=true)
     end
-end == true
+end
 # cookie and comand line option `--worker` tests. remove workers, set cookie and test
 struct WorkerArgTester <: ClusterManager
     worker_opt
@@ -1737,6 +1768,56 @@ rmprocs(npids)
 Base.cluster_cookie("foobar") # custom cookie
 npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
+
+# Issue # 22865
+# Must be run on a new cluster, i.e., all workers must be in the same state.
+rmprocs(workers())
+p1,p2 = addprocs_with_testenv(2)
+@everywhere f22865(p) = remotecall_fetch(x->x.*2, p, ones(2))
+@test ones(2).*2 == remotecall_fetch(f22865, p1, p2)
+
+function reuseport_tests()
+    # Run the test on all processes.
+    results = asyncmap(procs()) do p
+        remotecall_fetch(p) do
+            ports_lower = []        # ports of pids lower than myid()
+            ports_higher = []       # ports of pids higher than myid()
+            for w in Base.Distributed.PGRP.workers
+                w.id == myid() && continue
+                port = Base._sockname(w.r_stream, true)[2]
+                if (w.id == 1)
+                    # master connects to workers
+                    push!(ports_higher, port)
+                elseif w.id < myid()
+                    push!(ports_lower, port)
+                elseif w.id > myid()
+                    push!(ports_higher, port)
+                end
+            end
+            @assert (length(ports_lower) + length(ports_higher)) == nworkers()
+            for portset in [ports_lower, ports_higher]
+                if (length(portset) > 0) && (length(unique(portset)) != 1)
+                    warn("SO_REUSEPORT TESTS FAILED. UNSUPPORTED/OLDER UNIX VERSION?")
+                    return 0
+                end
+            end
+            return myid()
+        end
+    end
+
+    # Ensure that the code has indeed been successfully executed everywhere
+    @test all(p -> p in results, procs())
+end
+
+# Test that the client port is reused. SO_REUSEPORT may not be supported on
+# all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
+if ccall(:jl_has_so_reuseport, Int32, ()) == 1
+    rmprocs(workers())
+    addprocs_with_testenv(4; lazy=false)
+    reuseport_tests()
+else
+    info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
+end
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.

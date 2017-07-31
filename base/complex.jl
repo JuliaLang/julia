@@ -35,7 +35,7 @@ const Complex32  = Complex{Float16}
 convert(::Type{Complex{T}}, x::Real) where {T<:Real} = Complex{T}(x,0)
 convert(::Type{Complex{T}}, z::Complex) where {T<:Real} = Complex{T}(real(z),imag(z))
 convert(::Type{T}, z::Complex) where {T<:Real} =
-    isreal(z) ? convert(T,real(z)) : throw(InexactError())
+    isreal(z) ? convert(T,real(z)) : throw(InexactError(:convert, T, z))
 
 convert(::Type{Complex}, z::Complex) = z
 convert(::Type{Complex}, x::Real) = Complex(x)
@@ -131,6 +131,7 @@ isfinite(z::Complex) = isfinite(real(z)) & isfinite(imag(z))
 isnan(z::Complex) = isnan(real(z)) | isnan(imag(z))
 isinf(z::Complex) = isinf(real(z)) | isinf(imag(z))
 iszero(z::Complex) = iszero(real(z)) & iszero(imag(z))
+isone(z::Complex) = isone(real(z)) & iszero(imag(z))
 
 """
     complex(r, [i])
@@ -180,6 +181,16 @@ end
 show(io::IO, z::Complex{Bool}) =
     print(io, z == im ? "im" : "Complex($(z.re),$(z.im))")
 
+function show_unquoted(io::IO, z::Complex, ::Int, prec::Int)
+    if operator_precedence(:+) <= prec
+        print(io, "(")
+        show(io, z)
+        print(io, ")")
+    else
+        show(io, z)
+    end
+end
+
 function read(s::IO, ::Type{Complex{T}}) where T<:Real
     r = read(s,T)
     i = read(s,T)
@@ -199,6 +210,8 @@ bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
 ==(x::Real, z::Complex) = isreal(z) && real(z) == x
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
+
+in(x::Complex, r::Range{<:Real}) = isreal(x) && real(x) in r
 
 if UInt === UInt64
     const h_imag = 0x32a7a07f3e7cd1f9

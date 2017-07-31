@@ -164,8 +164,7 @@ end
 Compute the Cholesky factorization of a positive definite matrix `A`
 and return the [`UpperTriangular`](@ref) matrix `U` such that `A = U'U`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1. 2.; 2. 50.]
 2×2 Array{Float64,2}:
@@ -194,8 +193,7 @@ end
 
 Compute the square root of a non-negative number `x`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> chol(16)
 4.0
@@ -227,8 +225,7 @@ instead of creating a copy. An [`InexactError`](@ref) exception is thrown if
 the factorization produces a number not representable by the element type of
 `A`, e.g. for integer types.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 2; 2 50]
 2×2 Array{Int64,2}:
@@ -236,7 +233,7 @@ julia> A = [1 2; 2 50]
  2  50
 
 julia> cholfact!(A)
-ERROR: InexactError()
+ERROR: InexactError: convert(Int64, 6.782329983125268)
 ```
 """
 function cholfact!(A::StridedMatrix, ::Val{false}=Val(false))
@@ -290,8 +287,7 @@ The triangular Cholesky factor can be obtained from the factorization `F` with: 
 The following functions are available for `Cholesky` objects: [`size`](@ref), [`\\`](@ref),
 [`inv`](@ref), [`det`](@ref), [`logdet`](@ref) and [`isposdef`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
 3×3 Array{Float64,2}:

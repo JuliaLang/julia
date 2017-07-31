@@ -816,6 +816,11 @@ end
     R = repeat(1:2, inner=(3,), outer=(2,))
     @test R == [1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2]
 
+    # Arrays of arrays
+    @test repeat([[1], [2]], inner=2) == [[1], [1], [2], [2]]
+    @test repeat([[1], [2]], outer=2) == [[1], [2], [1], [2]]
+    @test repeat([[1], [2]], inner=2, outer=2) == [[1], [1], [2], [2], [1], [1], [2], [2]]
+
     @test size(repeat([1], inner=(0,))) == (0,)
     @test size(repeat([1], outer=(0,))) == (0,)
     @test size(repeat([1 1], inner=(0, 1))) == (0, 2)
@@ -1701,16 +1706,16 @@ module RetTypeDecl
     struct MeterUnits{T,P} <: Number
         val::T
     end
-    MeterUnits{T}(val::T, pow::Int) = MeterUnits{T,pow}(val)
+    MeterUnits(val::T, pow::Int) where {T} = MeterUnits{T,pow}(val)
 
     m  = MeterUnits(1.0, 1)   # 1.0 meter, i.e. units of length
     m2 = MeterUnits(1.0, 2)   # 1.0 meter^2, i.e. units of area
 
-    (+){T,pow}(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) = MeterUnits{T,pow}(x.val+y.val)
-    (*){T,pow}(x::Int, y::MeterUnits{T,pow}) = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
-    (*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
-    broadcast{T}(::typeof(*), x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
-    convert{T,pow}(::Type{MeterUnits{T,pow}}, y::Real) = MeterUnits{T,pow}(convert(T,y))
+    (+)(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{T,pow}(x.val+y.val)
+    (*)(x::Int, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
+    (*)(x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
+    broadcast(::typeof(*), x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
+    convert(::Type{MeterUnits{T,pow}}, y::Real) where {T,pow} = MeterUnits{T,pow}(convert(T,y))
 
     @test @inferred(m+[m,m]) == [m+m,m+m]
     @test @inferred([m,m]+m) == [m+m,m+m]
@@ -1745,7 +1750,7 @@ struct LinSlowMatrix{T} <: DenseArray{T,2}
 end
 
 # This is the default, but just to be sure
-Base.IndexStyle{A<:LinSlowMatrix}(::Type{A}) = Base.IndexCartesian()
+Base.IndexStyle(::Type{A}) where {A<:LinSlowMatrix} = Base.IndexCartesian()
 
 Base.size(A::LinSlowMatrix) = size(A.data)
 
@@ -2171,4 +2176,11 @@ let TT = Union{UInt8, Int8}
     @test length(a) == length(b) == 1
     @test a[1] == b[1] == 0x0
     @test a == b
+end
+
+let a = Vector{Int}[[1]],
+    b = Vector{Float64}[[2.0]],
+    c = Vector{Char}[['a']]
+    @test eltype([a;b]) == Vector{Float64}
+    @test eltype([a;c]) == Vector
 end

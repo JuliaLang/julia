@@ -31,7 +31,7 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     stdin_write, stdout_read, stderr_read, repl = fake_repl()
 
     repl.specialdisplay = Base.REPL.REPLDisplay(repl)
@@ -100,7 +100,7 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     cd(origpwd)
 
     # issue #20482
-    if !is_windows()
+    if !Sys.iswindows()
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "echo hello >/dev/null\n")
@@ -126,7 +126,7 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 
     # issues #22176 & #20482
     # TODO: figure out how to test this on Windows
-    is_windows() || let tmp = tempname()
+    Sys.iswindows() || let tmp = tempname()
         try
             write(stdin_write, ";")
             readuntil(stdout_read, "shell> ")
@@ -136,7 +136,7 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
                 @test contains(s, "echo \$123 >$tmp") # make sure we echoed the input
             end
             @test readuntil(stdout_read, "\n") == "\e[0m\n"
-            @test readstring(tmp) == "123\n"
+            @test read(tmp, String) == "123\n"
         finally
             rm(tmp, force=true)
         end
@@ -209,14 +209,14 @@ end
 function buffercontents(buf::IOBuffer)
     p = position(buf)
     seek(buf,0)
-    c = readstring(buf)
+    c = read(buf, String)
     seek(buf,p)
     c
 end
 
-function AddCustomMode(repl)
+function AddCustomMode(repl, prompt)
     # Custom REPL mode tests
-    foobar_mode = LineEdit.Prompt("TestΠ";
+    foobar_mode = LineEdit.Prompt(prompt;
         prompt_prefix="\e[38;5;166m",
         prompt_suffix=Base.text_colors[:white],
         on_enter = s->true,
@@ -289,7 +289,7 @@ fakehistory = """
 """
 
 # Test various history related issues
-begin
+for prompt = ["TestΠ", () -> randstring(rand(1:10))]
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
@@ -334,6 +334,26 @@ begin
     @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
     LineEdit.history_next(s, hp)
     @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "wip"
+    @test position(LineEdit.buffer(s)) == 3
+    LineEdit.history_next(s, hp)
+    @test buffercontents(LineEdit.buffer(s)) == "wip"
+    LineEdit.history_prev(s, hp, 2)
+    @test LineEdit.mode(s) == shell_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+    LineEdit.history_prev(s, hp, -2) # equivalent to history_next(s, hp, 2)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
+    LineEdit.history_next(s, hp, -2) # equivalent to history_prev(s, hp, 2)
+    @test LineEdit.mode(s) == shell_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+    LineEdit.history_first(s, hp)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "é"
+    LineEdit.history_next(s, hp, 6)
+    @test LineEdit.mode(s) == shell_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+    LineEdit.history_last(s, hp)
     @test buffercontents(LineEdit.buffer(s)) == "wip"
     @test position(LineEdit.buffer(s)) == 3
     LineEdit.move_line_start(s)
@@ -438,7 +458,7 @@ begin
 
     # Test that new modes can be dynamically added to the REPL and will
     # integrate nicely
-    foobar_mode, custom_histp = AddCustomMode(repl)
+    foobar_mode, custom_histp = AddCustomMode(repl, prompt)
 
     # ^R l, should now find `ls` in foobar mode
     LineEdit.enter_search(s, histp, true)
@@ -534,7 +554,7 @@ begin
 end
 
 # Simple non-standard REPL tests
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
     panel = LineEdit.Prompt("testπ";
         prompt_prefix="\e[38;5;166m",
@@ -579,7 +599,7 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 let exename = Base.julia_cmd()
 
 # Test REPL in dumb mode
-if !is_windows()
+if !Sys.iswindows()
     TestHelpers.with_fake_pty() do slave, master
         nENV = copy(ENV)
         nENV["TERM"] = "dumb"
@@ -600,10 +620,10 @@ if !is_windows()
 end
 
 # Test stream mode
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
     write(ins,"1\nquit()\n")
-    @test readstring(outs) == "1\n"
+    @test read(outs, String) == "1\n"
 end
 end # let exename
 
@@ -677,7 +697,7 @@ function history_move_prefix(s::LineEdit.MIState,
     buf = LineEdit.buffer(s)
     pos = position(buf)
     prefix = REPL.beforecursor(buf)
-    allbuf = String(buf)
+    allbuf = String(take!(copy(buf)))
     cur_idx = hist.cur_idx
     # when searching forward, start at last_idx
     if !backwards && hist.last_idx > 0
@@ -712,15 +732,16 @@ const altkeys = [Dict{Any,Any}("\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || 
                 ]
 
 
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    for keys = [altkeys, merge(altkeys...)]
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+    for keys = [altkeys, merge(altkeys...)],
+            altprompt = ["julia-$(VERSION.major).$(VERSION.minor)> ",
+                         () -> "julia-$(Base.GIT_VERSION_INFO.commit_short)"]
         histfile = tempname()
         try
             stdin_write, stdout_read, stderr_read, repl = fake_repl()
 
             repl.specialdisplay = Base.REPL.REPLDisplay(repl)
             repl.history_file = true
-            altprompt = "julia-$(VERSION.major).$(VERSION.minor)> "
             withenv("JULIA_HISTORY" => histfile) do
                 repl.interface = REPL.setup_interface(repl, extra_repl_keymap = altkeys)
             end
@@ -747,11 +768,11 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 
             # Check that the correct prompt was displayed
             output = readuntil(stdout_read, "1 * 1;")
-            @test !isempty(search(output, altprompt))
+            @test !isempty(search(output, LineEdit.prompt_string(altprompt)))
             @test isempty(search(output, "julia> "))
 
             # Check the history file
-            history = readstring(histfile)
+            history = read(histfile, String)
             @test ismatch(r"""
                           ^\#\ time:\ .*\n
                            \#\ mode:\ julia\n

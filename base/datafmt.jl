@@ -117,10 +117,10 @@ readdlm(input, dlm::Char, T::Type, eol::Char; opts...) =
 readdlm_auto(input::Vector{UInt8}, dlm::Char, T::Type, eol::Char, auto::Bool; opts...) =
     readdlm_string(String(input), dlm, T, eol, auto, val_opts(opts))
 readdlm_auto(input::IO, dlm::Char, T::Type, eol::Char, auto::Bool; opts...) =
-    readdlm_string(readstring(input), dlm, T, eol, auto, val_opts(opts))
+    readdlm_string(read(input, String), dlm, T, eol, auto, val_opts(opts))
 function readdlm_auto(input::AbstractString, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
     optsd = val_opts(opts)
-    use_mmap = get(optsd, :use_mmap, is_windows() ? false : true)
+    use_mmap = get(optsd, :use_mmap, Sys.iswindows() ? false : true)
     fsz = filesize(input)
     if use_mmap && fsz > 0 && fsz < typemax(Int)
         a = open(input, "r") do f
@@ -131,7 +131,7 @@ function readdlm_auto(input::AbstractString, dlm::Char, T::Type, eol::Char, auto
         # jl_try_substrtod to segfault below.
         return readdlm_string(unsafe_string(pointer(a),length(a)), dlm, T, eol, auto, optsd)
     else
-        return readdlm_string(readstring(input), dlm, T, eol, auto, optsd)
+        return readdlm_string(read(input, String), dlm, T, eol, auto, optsd)
     end
 end
 

@@ -15,7 +15,7 @@ for n in 2:34
 end
 
 function factorial_lookup(n::Integer, table, lim)
-    n < 0 && throw(DomainError())
+    n < 0 && throw(DomainError(n, "`n` must not be negative."))
     n > lim && throw(OverflowError())
     n == 0 && return one(n)
     @inbounds f = table[n]
@@ -34,7 +34,7 @@ else
 end
 
 function gamma(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64})
-    n < 0 && throw(DomainError())
+    n < 0 && throw(DomainError(n, "`n` must not be negative."))
     n == 0 && return Inf
     n <= 2 && return 1.0
     n > 20 && return gamma(Float64(n))
@@ -103,7 +103,7 @@ To return a new permutation, use `v[p]`. Note that this is generally faster than
 
 See also [`ipermute!`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> A = [1, 1, 3, 4];
 
@@ -149,7 +149,7 @@ end
 
 Like [`permute!`](@ref), but the inverse of the given permutation is applied.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = [1, 1, 3, 4];
 
@@ -173,7 +173,7 @@ ipermute!(a, p::AbstractVector) = ipermute!!(a, copymutable(p))
 Return the inverse permutation of `v`.
 If `B = A[v]`, then `A == B[invperm(v)]`.
 
-# Example
+# Examples
 ```jldoctest
 julia> v = [2; 4; 3; 1];
 
@@ -225,7 +225,7 @@ invperm(a::Tuple) = (invperm([a...])...,)
 Next integer greater than or equal to `n` that can be written as ``\\prod k_i^{p_i}`` for integers
 ``p_1``, ``p_2``, etc.
 
-# Example
+# Examples
 ```jldoctest
 julia> nextprod([2, 3], 105)
 108

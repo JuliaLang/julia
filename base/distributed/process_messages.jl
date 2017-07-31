@@ -196,11 +196,14 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
         end
     catch e
         # Check again as it may have been set in a message handler but not propagated to the calling block above
-        wpid = worker_id_from_socket(r_stream)
-        if (wpid < 1)
+        if wpid < 1
+            wpid = worker_id_from_socket(r_stream)
+        end
+
+        if wpid < 1
             println(STDERR, e, CapturedException(e, catch_backtrace()))
             println(STDERR, "Process($(myid())) - Unknown remote, closing connection.")
-        else
+        elseif !(wpid in map_del_wrkr)
             werr = worker_from_id(wpid)
             oldstate = werr.state
             set_worker_state(werr, W_TERMINATED)
@@ -307,14 +310,22 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
         disable_threaded_libs()
     end
 
+    lazy = msg.lazy
+    PGRP.lazy = Nullable{Bool}(lazy)
+
     wait_tasks = Task[]
     for (connect_at, rpid) in msg.other_workers
         wconfig = WorkerConfig()
         wconfig.connect_at = connect_at
 
         let rpid=rpid, wconfig=wconfig
-            t = @async connect_to_peer(cluster_manager, rpid, wconfig)
-            push!(wait_tasks, t)
+            if lazy
+                # The constructor registers the object with a global registry.
+                Worker(rpid, Nullable{Function}(()->connect_to_peer(cluster_manager, rpid, wconfig)))
+            else
+                t = @async connect_to_peer(cluster_manager, rpid, wconfig)
+                push!(wait_tasks, t)
+            end
         end
     end
 

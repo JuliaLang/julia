@@ -54,9 +54,16 @@ convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
     if isbits(T)
-        return convert(P, data_pointer_from_objref(b))
+        return convert(P, pointer_from_objref(b))
+    elseif isleaftype(T)
+        return convert(P, pointer_from_objref(b.x))
     else
-        return convert(P, data_pointer_from_objref(b.x))
+        # If the slot is not leaf type, it could be either isbits or not.
+        # If it is actually an isbits type and the type inference can infer that
+        # it can rebox the `b.x` if we simply call `pointer_from_objref(b.x)` on it.
+        # Instead, explicitly load the pointer from the `RefValue` so that the pointer
+        # is the same as the one rooted in the `RefValue` object.
+        return convert(P, pointerref(Ptr{Ptr{Void}}(pointer_from_objref(b)), 1, 0))
     end
 end
 function unsafe_convert(P::Type{Ptr{Any}}, b::RefValue{Any})

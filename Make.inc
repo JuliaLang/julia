@@ -544,9 +544,6 @@ LDFLAGS += -L$(build_libdir) -L$(GCCPATH) -Wl,-rpath,$(build_libdir) -Wl,-rpath,
 # This ensures we get the right RPATH even if we're missing FFLAGS somewhere
 FC += -Wl,-rpath=$(GCCPATH)
 
-# Build our own libc++ and libc++abi because otherwise /usr/lib/libc++.so and /lib/libcxxrt.so will
-# be linked in when building LLVM, and those link to /lib/libgcc_s.so
-BUILD_CUSTOM_LIBCXX ?= 1
 endif # gfortran
 endif # FreeBSD
 
@@ -959,7 +956,16 @@ endif
 
 ifeq ($(OS), FreeBSD)
 JLDFLAGS := -Wl,-Bdynamic
-OSLIBS += -lelf -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
+OSLIBS += -lelf -lkvm -lrt
+
+# Tweak order of libgcc_s in DT_NEEDED,
+# make it loaded first to
+# prevent from linking to outdated system libs.
+# See #21788
+OSLIBS += -lgcc_s
+
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
+	$(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)

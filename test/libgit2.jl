@@ -100,7 +100,7 @@ end
 end
 
 # See #21872 and #21636
-LibGit2.version() >= v"0.26.0" && is_unix() && @testset "Default config with symlink" begin
+LibGit2.version() >= v"0.26.0" && Sys.isunix() && @testset "Default config with symlink" begin
     with_libgit2_temp_home() do tmphome
         write(joinpath(tmphome, "real_gitconfig"), "[fake]\n\tproperty = BBB")
         symlink(joinpath(tmphome, "real_gitconfig"),
@@ -299,7 +299,7 @@ mktempdir() do dir
 
                 # test remote's representation in the repo's config
                 config = joinpath(cache_repo, ".git", "config")
-                lines = split(open(readstring, config, "r"), "\n")
+                lines = split(open(x->read(x, String), config, "r"), "\n")
                 @test any(map(x->x == "[remote \"upstream\"]", lines))
 
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
@@ -1101,7 +1101,7 @@ mktempdir() do dir
 
     @testset "Examine test repository" begin
         @testset "files" begin
-            @test readstring(joinpath(test_repo, test_file)) == readstring(joinpath(cache_repo, test_file))
+            @test read(joinpath(test_repo, test_file), String) == read(joinpath(cache_repo, test_file), String)
         end
 
         @testset "tags & branches" begin
@@ -1432,7 +1432,7 @@ mktempdir() do dir
     end
 
 
-    if is_unix()
+    if Sys.isunix()
         @testset "checkout/proptest" begin
             repo = LibGit2.GitRepo(test_repo)
             try
@@ -1485,7 +1485,7 @@ mktempdir() do dir
     # The following tests require that we can fake a TTY so that we can provide passwords
     # which use the `getpass` function. At the moment we can only fake this on UNIX based
     # systems.
-    if is_unix()
+    if Sys.isunix()
         @testset "SSH credential prompt" begin
             url = "git@github.com/test/package.jl"
 
@@ -1647,10 +1647,10 @@ mktempdir() do dir
     @testset "SSH" begin
         sshd_command = ""
         ssh_repo = joinpath(dir, "Example.SSH")
-        if !is_windows()
+        if !Sys.iswindows()
             try
                 # SSHD needs to be executed by its full absolute path
-                sshd_command = strip(readstring(`which sshd`))
+                sshd_command = strip(read(`which sshd`, String))
             catch
                 warn("Skipping SSH tests (Are `which` and `sshd` installed?)")
             end
@@ -1697,7 +1697,7 @@ mktempdir() do dir
                     sshp = spawn_sshd()
 
                     TIOCSCTTY_str = "ccall(:ioctl, Void, (Cint, Cint, Int64), 0,
-                        (is_bsd() || is_apple()) ? 0x20007461 : is_linux() ? 0x540E :
+                        (Sys.isbsd() || Sys.isapple()) ? 0x20007461 : Sys.islinux() ? 0x540E :
                         error(\"Fill in TIOCSCTTY for this OS here\"), 0)"
 
                     # To fail rather than hang
@@ -1806,7 +1806,7 @@ mktempdir() do dir
                         end
                     catch err
                         println("SSHD logfile contents follows:")
-                        println(readstring(logfile))
+                        println(read(logfile, String))
                         rethrow(err)
                     finally
                         rm(logfile)
@@ -1823,10 +1823,10 @@ mktempdir() do dir
     @testset "Hostname verification" begin
         openssl_installed = false
         common_name = ""
-        if is_linux()
+        if Sys.islinux()
             try
                 # OpenSSL needs to be on the path
-                openssl_installed = !isempty(readstring(`openssl version`))
+                openssl_installed = !isempty(read(`openssl version`, String))
             catch
                 warn("Skipping hostname verification tests. Is `openssl` on the path?")
             end
@@ -1905,7 +1905,8 @@ mktempdir() do dir
                         deserialize(f)
                     end
                     @test err.code == LibGit2.Error.ECERTIFICATE
-                    @test startswith(err.msg, "The SSL certificate is invalid")
+                    @test startswith(lowercase(err.msg),
+                                     lowercase("The SSL certificate is invalid"))
 
                     rm(errfile)
 

@@ -67,7 +67,7 @@ When the cursor is at the beginning of the line, the prompt can be changed to a 
 julia> ? # upon typing ?, the prompt changes (in place) to: help?>
 
 help?> string
-search: string String stringmime Cstring Cwstring RevString readstring randstring bytestring SubString
+search: string String stringmime Cstring Cwstring RevString randstring bytestring SubString
 
   string(xs...)
 
@@ -139,38 +139,40 @@ control-key, there are also meta-key bindings. These vary more by platform, but 
 default to using alt- or option- held down with a key to send the meta-key (or can be configured
 to do so).
 
-| Keybinding          | Description                                                                      |
-|:------------------- |:-------------------------------------------------------------------------------- |
-| **Program control** |                                                                                  |
-| `^D`                | Exit (when buffer is empty)                                                      |
-| `^C`                | Interrupt or cancel                                                              |
-| `^L`                | Clear console screen                                                             |
-| Return/Enter, `^J`  | New line, executing if it is complete                                            |
-| meta-Return/Enter   | Insert new line without executing it                                             |
-| `?` or `;`          | Enter help or shell mode (when at start of a line)                               |
-| `^R`, `^S`          | Incremental history search, described above                                      |
-| **Cursor movement** |                                                                                  |
-| Right arrow, `^F`   | Move right one character                                                         |
-| Left arrow, `^B`    | Move left one character                                                          |
-| Home, `^A`          | Move to beginning of line                                                        |
-| End, `^E`           | Move to end of line                                                              |
-| `^P`                | Change to the previous or next history entry                                     |
-| `^N`                | Change to the next history entry                                                 |
-| Up arrow            | Move up one line (or to the previous history entry)                              |
-| Down arrow          | Move down one line (or to the next history entry)                                |
-| Page-up             | Change to the previous history entry that matches the text before the cursor     |
-| Page-down           | Change to the next history entry that matches the text before the cursor         |
-| `meta-F`            | Move right one word                                                              |
-| `meta-B`            | Move left one word                                                               |
-| **Editing**         |                                                                                  |
-| Backspace, `^H`     | Delete the previous character                                                    |
-| Delete, `^D`        | Forward delete one character (when buffer has text)                              |
-| meta-Backspace      | Delete the previous word                                                         |
-| `meta-D`            | Forward delete the next word                                                     |
-| `^W`                | Delete previous text up to the nearest whitespace                                |
-| `^K`                | "Kill" to end of line, placing the text in a buffer                              |
-| `^Y`                | "Yank" insert the text from the kill buffer                                      |
-| `^T`                | Transpose the characters about the cursor                                        |
+| Keybinding          | Description                                                                                |
+|:------------------- |:------------------------------------------------------------------------------------------ |
+| **Program control** |                                                                                            |
+| `^D`                | Exit (when buffer is empty)                                                                |
+| `^C`                | Interrupt or cancel                                                                        |
+| `^L`                | Clear console screen                                                                       |
+| Return/Enter, `^J`  | New line, executing if it is complete                                                      |
+| meta-Return/Enter   | Insert new line without executing it                                                       |
+| `?` or `;`          | Enter help or shell mode (when at start of a line)                                         |
+| `^R`, `^S`          | Incremental history search, described above                                                |
+| **Cursor movement** |                                                                                            |
+| Right arrow, `^F`   | Move right one character                                                                   |
+| Left arrow, `^B`    | Move left one character                                                                    |
+| Home, `^A`          | Move to beginning of line                                                                  |
+| End, `^E`           | Move to end of line                                                                        |
+| `^P`                | Change to the previous or next history entry                                               |
+| `^N`                | Change to the next history entry                                                           |
+| Up arrow            | Move up one line (or to the previous history entry)                                        |
+| Down arrow          | Move down one line (or to the next history entry)                                          |
+| Page-up             | Change to the previous history entry that matches the text before the cursor               |
+| Page-down           | Change to the next history entry that matches the text before the cursor                   |
+| `meta-F`            | Move right one word                                                                        |
+| `meta-B`            | Move left one word                                                                         |
+| `meta-<`            | Change to the first history entry                                                          |
+| `meta->`            | Change to the last history entry                                                           |
+| **Editing**         |                                                                                            |
+| Backspace, `^H`     | Delete the previous character                                                              |
+| Delete, `^D`        | Forward delete one character (when buffer has text)                                        |
+| meta-Backspace      | Delete the previous word                                                                   |
+| `meta-D`            | Forward delete the next word                                                               |
+| `^W`                | Delete previous text up to the nearest whitespace                                          |
+| `^K`                | "Kill" to end of line, placing the text in a buffer                                        |
+| `^Y`                | "Yank" insert the text from the kill buffer                                                |
+| `^T`                | Transpose the characters about the cursor                                                  |
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method |
 
 

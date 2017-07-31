@@ -70,6 +70,7 @@ the order in which they are returned may vary.
 But `keys(a)` and `values(a)` both iterate `a` and
 return the elements in the same order.
 
+# Examples
 ```jldoctest
 julia> a = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
@@ -95,6 +96,7 @@ the order in which they are returned may vary.
 But `keys(a)` and `values(a)` both iterate `a` and
 return the elements in the same order.
 
+# Examples
 ```jldoctest
 julia> a = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
@@ -123,6 +125,7 @@ end
 Update collection with pairs from the other collections.
 See also [`merge`](@ref).
 
+# Examples
 ```jldoctest
 julia> d1 = Dict(1 => 2, 3 => 4);
 
@@ -153,6 +156,7 @@ Update collection with pairs from the other collections.
 Values with the same key will be combined using the
 combiner function.
 
+# Examples
 ```jldoctest
 julia> d1 = Dict(1 => 2, 3 => 4);
 
@@ -198,6 +202,7 @@ end
 
 Get the key type of an associative collection type. Behaves similarly to [`eltype`](@ref).
 
+# Examples
 ```jldoctest
 julia> keytype(Dict(Int32(1) => "foo"))
 Int32
@@ -212,6 +217,7 @@ keytype(::Type{A}) where {A<:Associative} = keytype(supertype(A))
 
 Get the value type of an associative collection type. Behaves similarly to [`eltype`](@ref).
 
+# Examples
 ```jldoctest
 julia> valtype(Dict(Int32(1) => "foo"))
 String
@@ -229,6 +235,7 @@ types of the resulting collection will be promoted to accommodate the types of
 the merged collections. If the same key is present in another collection, the
 value for that key will be the value it has in the last collection listed.
 
+# Examples
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String,Float64} with 2 entries:
@@ -264,6 +271,7 @@ types of the resulting collection will be promoted to accommodate the types of
 the merged collections. Values with the same key will be combined using the
 combiner function.
 
+# Examples
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String,Float64} with 2 entries:
@@ -461,7 +469,7 @@ function sizehint!(t::ObjectIdDict, newsz)
     rehash!(t, newsz)
 end
 
-function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
+function setindex!(t::ObjectIdDict, @nospecialize(v), @nospecialize(k))
     if t.ndel >= ((3*length(t.ht))>>2)
         rehash!(t, max(length(t.ht)>>1, 32))
         t.ndel = 0
@@ -470,22 +478,22 @@ function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
     return t
 end
 
-get(t::ObjectIdDict, key::ANY, default::ANY) =
+get(t::ObjectIdDict, @nospecialize(key), @nospecialize(default)) =
     ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
 
-function pop!(t::ObjectIdDict, key::ANY, default::ANY)
+function pop!(t::ObjectIdDict, @nospecialize(key), @nospecialize(default))
     val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any), t.ht, key, default)
     # TODO: this can underestimate `ndel`
     val === default || (t.ndel += 1)
     return val
 end
 
-function pop!(t::ObjectIdDict, key::ANY)
+function pop!(t::ObjectIdDict, @nospecialize(key))
     val = pop!(t, key, secret_table_token)
     val !== secret_table_token ? val : throw(KeyError(key))
 end
 
-function delete!(t::ObjectIdDict, key::ANY)
+function delete!(t::ObjectIdDict, @nospecialize(key))
     pop!(t, key, secret_table_token)
     t
 end
