@@ -85,7 +85,12 @@ issorted(itr;
 function partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
     inds = indices(v, 1)
     sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
-    v[k]
+
+    if k isa Integer
+        return v[k]
+    else
+        return view(v, k)
+    end
 end
 
 """
@@ -706,7 +711,12 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
 
     # do partial quicksort
     sort!(ix, PartialQuickSort(k), Perm(ord(lt, by, rev, order), v))
-    return ix[k]
+
+    if k isa Integer
+        return ix[k]
+    else
+        return view(ix, k)
+    end
 end
 
 ## sortperm: the permutation to sort an array ##
