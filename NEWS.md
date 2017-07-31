@@ -5,7 +5,7 @@ New language features
 ---------------------
 
   * Local variables can be tested for being defined
-    using the new `@isdefined variable` macro ([#TBD]).
+    using the new `@isdefined variable` macro ([#22281]).
 
 Language changes
 ----------------

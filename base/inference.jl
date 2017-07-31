@@ -2389,11 +2389,11 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
     elseif e.head === :static_parameter
         n = e.args[1]
         t = Any
-        if n <= length(sv.sp)
+        if 1 <= n <= length(sv.sp)
             val = sv.sp[n]
             if isa(val, TypeVar) && Any <: val.ub
                 # static param bound to typevar
-                # if the tvar does not refer to anything more specific than Any,
+                # if the tvar is not known to refer to anything more specific than Any,
                 # the static param might actually be an integer, symbol, etc.
             elseif has_free_typevars(val)
                 vs = ccall(:jl_find_free_typevars, Any, (Any,), val)
@@ -2429,6 +2429,12 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
             end
         elseif isa(sym, GlobalRef)
             if isdefined(sym.mod, sym.name)
+                t = Const(true)
+            end
+        elseif isa(sym, Expr) && sym.head === :static_parameter
+            n = sym.args[1]
+            if 1 <= n <= length(sv.sp)
+                val = sv.sp[n]
                 t = Const(true)
             end
         end
