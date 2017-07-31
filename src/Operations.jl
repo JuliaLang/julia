@@ -148,7 +148,7 @@ function find_config(::Void)
     return find_default_env()
 end
 
-function find_manifest(env::Union{Void,String}=default_env())
+function find_manifest(env::Union{Void,String} = default_env())
     config_file = find_config(env)
     if isfile(config_file)
         config = parse_toml(config_file)
@@ -164,11 +164,11 @@ function find_manifest(env::Union{Void,String}=default_env())
     return joinpath(dir, names[end])
 end
 
-load_config(env::Union{Void,String}=default_env()) =
-    parse_toml(find_config(env), fakeit=true)
+load_config(config_file::String = find_config()) =
+    parse_toml(config_file, fakeit=true)
 
-function load_manifest(env::Union{Void,String}=default_env())
-    manifest = parse_toml(find_manifest(env), fakeit=true)
+function load_manifest(manifest_file::String = find_manifest())
+    manifest = parse_toml(manifest_file, fakeit=true)
     for (name, infos) in manifest, info in infos
         haskey(info, "deps") || continue
         info["deps"] isa AbstractVector || continue
@@ -181,7 +181,7 @@ function load_manifest(env::Union{Void,String}=default_env())
     return manifest
 end
 
-function write_manifest(manifest_file::String, manifest::Dict)
+function write_manifest(manifest::Dict, manifest_file::String = find_manifest())
     uniques = sort!(collect(keys(manifest)), by=lowercase)
     filter!(p->length(manifest[p]) == 1, uniques)
     for (name, infos) in manifest, info in infos
@@ -284,7 +284,8 @@ function add(pkgs::Dict{String})
 
     # copy manifest versions to pkgs
     # if already in specified version set, leave as installed
-    manifest = load_manifest()
+    manifest_file = find_manifest()
+    manifest = load_manifest(manifest_file)
     for (name, infos) in manifest, info in infos
         info["uuid"] == get(uuids, name, "") || continue
         ver = VersionNumber(info["version"])
@@ -441,10 +442,9 @@ function add(pkgs::Dict{String})
             TOML.print(io, config, sorted=true)
         end
     end
-    manifest_file = find_manifest()
     if !isempty(manifest) || ispath(manifest_file)
         info("Updating manifest file $manifest_file")
-        write_manifest(manifest_file, manifest)
+        write_manifest(manifest, manifest_file)
     end
 end
 
