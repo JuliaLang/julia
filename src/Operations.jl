@@ -184,7 +184,7 @@ end
 function write_manifest(manifest::Dict, manifest_file::String = find_manifest())
     uniques = sort!(collect(keys(manifest)), by=lowercase)
     filter!(p->length(manifest[p]) == 1, uniques)
-    for (name, infos) in manifest, info in infos
+    for (_, infos) in manifest, info in infos
         haskey(info, "deps") || continue
         all(d in uniques for d in keys(info["deps"])) || continue
         info["deps"] = sort!(collect(keys(info["deps"])))
@@ -197,7 +197,8 @@ end
 function package_env_info(
     pkg::String,
     config::Dict = load_config(),
-    manifest::Dict = load_manifest(),
+    manifest::Dict = load_manifest();
+    verb::String = "choose",
 )
     haskey(manifest, pkg) || return nothing
     infos = manifest[pkg]
@@ -264,6 +265,21 @@ end
 
 load_package_data(f::Base.Callable, path::String, version::VersionNumber) =
     get(load_package_data(f, path, [version]), version, nothing)
+
+function update_config(config::Dict, config_file::String = find_config())
+    isempty(config) && !ispath(config_file) && return
+    mkpath(dirname(config_file))
+    info("Updating config file $config_file")
+    open(config_file, "w") do io
+        TOML.print(io, config, sorted=true)
+    end
+end
+
+function update_manifest(manifest::Dict, manifest_file::String = find_manifest())
+    isempty(manifest) && !ispath(manifest_file) && return
+    info("Updating manifest file $manifest_file")
+    write_manifest(manifest, manifest_file)
+end
 
 function add(names...; kwargs...)
     pkgs = Dict{String,Union{VersionNumber,VersionRange}}()
@@ -364,7 +380,7 @@ function add(pkgs::Dict{String})
                     u in first.(ruuids) && continue
                     reg = find_registered(p)
                     haskey(reg, u) ||
-                        error("$p = $u found in $name's dependencies but not in registries.")
+                        error("$p = $u found in $name's dependencies but not in registries")
                     push!(ruuids, u => p)
                     paths[u] = reg[u]
                 end
@@ -479,17 +495,68 @@ function add(pkgs::Dict{String})
         end
     end
 
-    if !isempty(config) || ispath(config_file)
-        mkpath(dirname(config_file))
-        info("Updating config file $config_file")
-        open(config_file, "w") do io
-            TOML.print(io, config, sorted=true)
-        end
-    end
-    if !isempty(manifest) || ispath(manifest_file)
-        info("Updating manifest file $manifest_file")
-        write_manifest(manifest, manifest_file)
-    end
+    update_config(config, config_file)
+    update_manifest(manifest, manifest_file)
 end
+
+function rm(pkgs::Vector{String})
+    config_file = find_config()
+    config = load_config(config_file)
+    manifest_file = find_manifest()
+    manifest = load_manifest(manifest_file)
+    # drop named packages
+    drop = String[]
+    for pkg in pkgs
+        info = package_env_info(pkg, config, manifest, verb = "delete")
+        info == nothing && error("$pkg not found in environment")
+        push!(drop, info["uuid"])
+    end
+    # also drop reverse dependencies
+    while !isempty(drop)
+        clean = true
+        for (pkg, infos) in manifest, info in infos
+            haskey(info, "deps") || continue
+            isempty(drop ∩ values(info["deps"])) && continue
+            haskey(info, "uuid") && info["uuid"] ∉ drop || continue
+            push!(drop, info["uuid"])
+            clean = false
+        end
+        clean && break
+    end
+    # keep forward dependencies
+    keep = setdiff(values(get(config, "deps", Dict())), drop)
+    while !isempty(keep)
+        clean = true
+        for (pkg, infos) in manifest
+            for (pkg, infos) in manifest, info in infos
+                haskey(info, "uuid") && haskey(info, "deps") || continue
+                info["uuid"] in keep || continue
+                for dep in values(info["deps"])
+                    dep in keep && continue
+                    push!(keep, dep)
+                    clean = false
+                end
+            end
+        end
+        clean && break
+    end
+    # filter config & manifest
+    if haskey(config, "deps")
+        filter!(config["deps"]) do _, uuid
+            uuid in keep
+        end
+        isempty(config["deps"]) && delete!(config, "deps")
+    end
+    filter!(manifest) do pkg, infos
+        filter!(infos) do info
+            haskey(info, "uuid") && info["uuid"] in keep
+        end
+        !isempty(infos)
+    end
+    # update config & manifest files
+    update_config(config, config_file)
+    update_manifest(manifest, manifest_file)
+end
+rm(pkgs::String...) = rm(String[pkgs...])
 
 end # module

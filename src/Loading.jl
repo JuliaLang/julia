@@ -13,7 +13,7 @@ end
 function Base.load_hook(loader::LoadInstalled, pkg::String, prev)
     # look for the package name in the current environement
     # prompting the user for a choice if necessary
-    info = package_env_info(pkg)
+    info = package_env_info(pkg, verb = "use")
     # if package not found in env, pass through prev
     info == nothing && return prev
     # compute a path suffix for the package
