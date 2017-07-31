@@ -292,6 +292,45 @@ function add(names...; kwargs...)
     return add(pkgs)
 end
 
+function resolve_names(names::Vector{String}, config::Dict, manifest::Dict, reg::Dict)::Vector{UUID}
+    info("Resolving package UUIDs")
+    regs = find_registered(names)
+    for name in names
+        haskey(uuids, name) && continue
+        if haskey(uuids, name)
+            uuid = uuids[name]
+            if haskey(regs, name)
+                for uuid′ in collect(keys(regs[name]))
+                    uuid′ == uuid || delete!(regs[name], uuid)
+                end
+            end
+            haskey(regs, name) && !isempty(regs[name]) && continue
+            warn("$name/$uuid found in config but not in registries;")
+        elseif !haskey(regs, name) || length(regs[name]) == 0
+            error("No registered package named $(repr(name)) found")
+        elseif length(regs[name]) == 1
+            uuids[name] = first(first(regs[name]))
+        else
+            uuids′ = UUID[]
+            options = String[]
+            for (i, (uuid, paths)) in enumerate(sort!(collect(regs[name]), by=first))
+                option = "$uuid"
+                for path in paths
+                    info = parse_toml(path, "package.toml")
+                    option *= " – $(info["repo"])"
+                    break
+                end
+                push!(uuids′, uuid)
+                push!(options, option)
+            end
+            menu = RadioMenu(options)
+            choice = request("Which $name package do you want to add:", menu)
+            choice == -1 && return warn("Package add aborted")
+            uuids[name] = uuids′[choice]
+        end
+    end
+end
+
 function add(pkgs::Dict{String})
     orig_pkgs = copy(pkgs)
     names = sort!(collect(keys(pkgs)))
@@ -558,5 +597,29 @@ function rm(pkgs::Vector{String})
     update_manifest(manifest, manifest_file)
 end
 rm(pkgs::String...) = rm(String[pkgs...])
+
+@enum UpgradeLevel fixed=0 patch=1 minor=2 major=3
+
+function Base.convert(::Type{UpgradeLevel}, s::Symbol)
+    s == :fixed ? fixed :
+    s == :patch ? patch :
+    s == :minor ? minor :
+    s == :major ? major :
+    throw(ArgumentError("invalid upgrade bound: $s"))
+end
+
+function up(
+    pkgs::Vector{String};
+    direct::UpgradeLevel = patch,
+    indirect::UpgradeLevel = major,
+    registries::Bool = true,
+)
+    
+end
+
+# upgrage:
+#  * upgrade direct deps, default to all top-levels
+#  * upgrade their indirect dependencies
+#  * clean up orphans
 
 end # module
