@@ -1010,3 +1010,10 @@ end
     """
 )
 
+# issue #23011
+@test_nowarn @eval Main begin
+    @doc "first" f23011() = 1
+    @doc "second" f23011() = 2
+end
+@test Main.f23011() == 2
+@test docstrings_equal(@doc(Main.f23011), doc"second")

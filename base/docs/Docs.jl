@@ -232,9 +232,9 @@ function doc!(b::Binding, str::DocStr, sig::ANY = Union{})
     m = get!(meta(), b, MultiDoc())
     if haskey(m.docs, sig)
         # We allow for docstrings to be updated, but print a warning since it is possible
-        # that over-writing a docstring *may* have been accidental.
-        s = "replacing docs for '$b :: $sig' in module '$(current_module())'."
-        isdefined(Base, :STDERR) ? warn(s) : ccall(:jl_, Void, (Any,), "WARNING: $s")
+        # that over-writing a docstring *may* have been accidental.  The warning
+        # is suppressed for symbols in Main, for interactive use (#23011).
+        current_module() == Main || warn("replacing docs for '$b :: $sig' in module '$(current_module())'.")
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
         # are initially added. Replacing a specific docstring does not change it's ordering.
