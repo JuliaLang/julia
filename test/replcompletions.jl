@@ -647,11 +647,11 @@ let #test that it can auto complete with spaces in file/path
                     # in shell commands the shell path completion cannot complete
                     # paths with these characters
                     c,r,res = test_scomplete(test_dir)
-                    @test c[1] == test_dir*(Sys.is_windows() ? "\\\\" : "/")
+                    @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
                     @test res
                 end
                 c,r,res  = test_complete("\""*test_dir)
-                @test c[1] == test_dir*(Sys.is_windows() ? "\\\\" : "/")
+                @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
                 @test res
             finally
                 rm(joinpath(path, test_dir), recursive=true)
