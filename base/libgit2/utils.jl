@@ -3,7 +3,7 @@
 # Parse "GIT URLs" syntax (URLs and a scp-like syntax). For details see:
 # https://git-scm.com/docs/git-clone#_git_urls_a_id_urls_a
 const URL_REGEX = r"""
-^(?:(?<scheme>ssh|git|https?)://)?
+^(?:(?<scheme>ssh|git|https?)://)?+
 (?:
     (?<user>.*?)
     (?:\:(?<password>.*?))?@

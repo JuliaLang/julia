@@ -194,6 +194,11 @@ end
         @test m[:path] === nothing
     end
 
+    @testset "HTTPS URL, invalid path" begin
+        m = match(LibGit2.URL_REGEX, "https://git@server:repo")
+        @test m === nothing
+    end
+
     # scp-like syntax should have a colon separating the hostname from the path
     @testset "scp-like syntax, invalid path" begin
         m = match(LibGit2.URL_REGEX, "git@server/repo")
