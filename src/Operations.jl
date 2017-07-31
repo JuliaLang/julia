@@ -194,6 +194,50 @@ function write_manifest(manifest::Dict, manifest_file::String = find_manifest())
     end
 end
 
+function package_env_info(
+    pkg::String,
+    config::Dict = load_config(),
+    manifest::Dict = load_manifest(),
+)
+    haskey(manifest, pkg) || return nothing
+    infos = manifest[pkg]
+    isempty(infos) && return nothing
+    if haskey(config, "deps") && haskey(config["deps"], pkg)
+        uuid = config["deps"][pkg]
+        filter!(infos) do info
+            haskey(info, "uuid") && info["uuid"] == uuid
+        end
+        length(infos) < 1 &&
+            error("manifest has no stanza for $pkg/$uuid")
+        length(infos) > 1 &&
+            error("manifest has multiple stanzas for $pkg/$uuid")
+        return first(infos)
+    elseif length(infos) == 1
+        return first(infos)
+    else
+        options = String[]
+        paths = convert(Dict{String,Vector{String}}, find_registered(pkg))
+        for info in infos
+            uuid = info["uuid"]
+            option = uuid
+            if haskey(paths, uuid)
+                for path in paths[uuid]
+                    info′ = parse_toml(path, "package.toml")
+                    option *= " – $(info′["repo"])"
+                    break
+                end
+            else
+                option *= " – (unregistred)"
+            end
+            push!(options, option)
+        end
+        menu = RadioMenu(options)
+        choice = request("Which $pkg package do you want to use:", menu)
+        choice == -1 && error("Package load aborted")
+        return infos[choice]
+    end
+end
+
 get_or_make(::Type{T}, d::Dict{K}, k::K) where {T,K} =
     haskey(d, k) ? convert(T, d[k]) : T()
 
