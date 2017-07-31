@@ -314,7 +314,7 @@ end
 @test sort!(UnitRange(1,2)) == UnitRange(1,2)
 @test sort(1:10, rev=true) == collect(10:-1:1)
 @test sort(-3:3, by=abs) == [0,-1,1,-2,2,-3,3]
-@test select(1:10, 4) == 4
+@test partialsort(1:10, 4) == 4
 
 @test 0 in UInt(0):100:typemax(UInt)
 @test last(UInt(0):100:typemax(UInt)) in UInt(0):100:typemax(UInt)

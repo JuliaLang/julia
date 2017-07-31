@@ -1742,6 +1742,12 @@ end
 
 @deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)
 
+# issue #22791
+@deprecate_binding select partialsort
+@deprecate_binding select! partialsort!
+@deprecate_binding selectperm partialsortperm
+@deprecate_binding selectperm! partialsortperm!
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

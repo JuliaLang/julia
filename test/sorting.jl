@@ -17,16 +17,16 @@ end
 @test !issorted([2,3,1])
 @test issorted([1,2,3])
 @test reverse([2,3,1]) == [1,3,2]
-@test select([3,6,30,1,9],3) == 6
-@test select([3,6,30,1,9],3:4) == [6,9]
-@test selectperm([3,6,30,1,9], 3:4) == [2,5]
-@test selectperm!(collect(1:5), [3,6,30,1,9], 3:4) == [2,5]
+@test partialsort([3,6,30,1,9],3) == 6
+@test partialsort([3,6,30,1,9],3:4) == [6,9]
+@test partialsortperm([3,6,30,1,9], 3:4) == [2,5]
+@test partialsortperm!(collect(1:5), [3,6,30,1,9], 3:4) == [2,5]
 let a=[1:10;]
     for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1]
-        @test select(a, r) == [r;]
-        @test selectperm(a, r) == [r;]
-        @test select(a, r, rev=true) == (11 .- [r;])
-        @test selectperm(a, r, rev=true) == (11 .- [r;])
+        @test partialsort(a, r) == [r;]
+        @test partialsortperm(a, r) == [r;]
+        @test partialsort(a, r, rev=true) == (11 .- [r;])
+        @test partialsortperm(a, r, rev=true) == (11 .- [r;])
     end
 end
 @test sum(randperm(6)) == 21
@@ -204,10 +204,10 @@ let alg = PartialQuickSort(div(length(a), 10))
     @test !issorted(d, rev=true)
 end
 
-@test select([3,6,30,1,9], 2, rev=true) == 9
-@test select([3,6,30,1,9], 2, by=x->1/x) == 9
-@test selectperm([3,6,30,1,9], 2, rev=true) == 5
-@test selectperm([3,6,30,1,9], 2, by=x->1/x) == 5
+@test partialsort([3,6,30,1,9], 2, rev=true) == 9
+@test partialsort([3,6,30,1,9], 2, by=x->1/x) == 9
+@test partialsortperm([3,6,30,1,9], 2, rev=true) == 5
+@test partialsortperm([3,6,30,1,9], 2, by=x->1/x) == 5
 
 ## more advanced sorting tests ##
 

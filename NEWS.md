@@ -368,6 +368,9 @@ Deprecated or removed
     respectively. Similarly, `MPFR.get_version()`, has been renamed to `MPFR.version()` ([#23323]). Also,
     `LinAlg.LAPACK.laver()` has been renamed to `LinAlg.LAPACK.version()` and now returns a `VersionNumber`.
 
+  * `select`, `select!`, `selectperm` and `selectperm!` have been renamed respectively to
+    `partialsort`, `partialsort!`, `partialsortperm` and `partialsortperm!` ([#23051]).
+
 Command-line option changes
 ---------------------------
 
