@@ -884,3 +884,12 @@ let isa_tfunc = Core.Inference.t_ffunc_val[
         @test isa_tfunc(c, Type{Complex{T}} where T) === Const(false)
      end
 end
+
+function f23024(::Type{T}, ::Int) where T
+    1 + 1
+end
+v23024 = 0
+g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
+@test Base.return_types(f23024, (DataType, Any)) == Any[Int]
+@test Base.return_types(g23024, (Tuple{DataType},)) == Any[Int]
+@test g23024((UInt8,)) === 2

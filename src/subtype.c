@@ -2146,20 +2146,9 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         else {
             sz = szb;
             // TODO: compute better `env` directly during intersection.
-            // we assume that if the intersection is a leaf type, we have
-            // full information in `env`. however the intersection algorithm
-            // does not yet provide that in all cases so use subtype.
+            // for now, we attempt to compute env by using subtype on the intersection result
             if (szb > 0 && !jl_types_equal(b, (jl_value_t*)jl_type_type)) {
-                if (jl_subtype_env(*ans, b, env, szb)) {
-                    if (jl_is_leaf_type(*ans)) {
-                        for(i=0; i < sz; i++) {
-                            if (jl_is_typevar(env[i])) {
-                                *ans = jl_bottom_type; goto bot;
-                            }
-                        }
-                    }
-                }
-                else {
+                if (!jl_subtype_env(*ans, b, env, szb)) {
                     sz = 0;
                 }
             }
