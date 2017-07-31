@@ -194,17 +194,6 @@ function write_manifest(manifest_file::String, manifest::Dict)
     end
 end
 
-function add(names...; kwargs...)
-    pkgs = Dict{String,Union{VersionNumber,VersionRange}}()
-    for name in names
-        pkgs[string(name)] = vr"*"
-    end
-    for (key, val) in kwargs
-        pkgs[string(key)] = val
-    end
-    return add(pkgs)
-end
-
 get_or_make(::Type{T}, d::Dict{K}, k::K) where {T,K} =
     haskey(d, k) ? convert(T, d[k]) : T()
 
@@ -231,6 +220,17 @@ end
 
 load_package_data(f::Base.Callable, path::String, version::VersionNumber) =
     get(load_package_data(f, path, [version]), version, nothing)
+
+function add(names...; kwargs...)
+    pkgs = Dict{String,Union{VersionNumber,VersionRange}}()
+    for name in names
+        pkgs[string(name)] = vr"*"
+    end
+    for (key, val) in kwargs
+        pkgs[string(key)] = val
+    end
+    return add(pkgs)
+end
 
 function add(pkgs::Dict{String})
     orig_pkgs = copy(pkgs)
