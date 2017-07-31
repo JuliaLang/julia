@@ -11,7 +11,7 @@ Generate C-callable function pointer from Julia function. Type annotation of the
 value in the callback function is a must for situations where Julia cannot infer the return
 type automatically.
 
-#Examples
+# Examples
 ```julia-repl
 julia> function foo(x::Int, y::Int)
            return x + y
