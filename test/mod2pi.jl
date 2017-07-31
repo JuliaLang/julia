@@ -221,7 +221,7 @@ testModPi()
              2.0^80*pi/4] # |x| >= 2.0^20π/2, idx > 0-0.22370138542135648
 
      # ieee754_rem_pio2_return contains the returned value from the ieee754_rem_pio2
-     # function in openlibm https://github.com/JuliaLang/openlibm/blob/master/src/e_rem_pio2.c
+     # function in openlibm: https://github.com/JuliaLang/openlibm/blob/0598080ca09468490a13ae393ba17d8620c1b201/src/e_rem_pio2.c
      ieee754_rem_pio2_return = [1.5707963267948966 1.5707963267948966;
                                 1.0471975511965979 -1.0471975511965979;
                                 0.10000000000000014 -0.10000000000000014;
