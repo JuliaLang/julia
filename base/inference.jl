@@ -409,25 +409,30 @@ end
 add_tfunc(throw, 1, 1, (@nospecialize(x)) -> Bottom, 0)
 
 # the inverse of typeof_tfunc
+# returns (type, isexact)
+# if isexact is false, the actual runtime type may (will) be a subtype of t
 function instanceof_tfunc(@nospecialize(t))
-    # TODO improve
-    if t === Bottom
-        return t
+    if t === Bottom || t === typeof(Bottom)
+        return Bottom, true
     elseif isa(t, Const)
         if isa(t.val, Type)
-            return t.val
+            return t.val, true
         end
     elseif isType(t)
-        return t.parameters[1]
-    elseif isa(t,UnionAll)
+        tp = t.parameters[1]
+        return tp, !has_free_typevars(tp)
+    elseif isa(t, UnionAll)
         t′ = unwrap_unionall(t)
-        return rewrap_unionall(instanceof_tfunc(t′), t)
-    elseif isa(t,Union)
-        return Union{instanceof_tfunc(t.a), instanceof_tfunc(t.b)}
+        t′′, isexact = instanceof_tfunc(t′)
+        return rewrap_unionall(t′′, t), isexact
+    elseif isa(t, Union)
+        ta, isexact_a = instanceof_tfunc(t.a)
+        tb, isexact_b = instanceof_tfunc(t.b)
+        return Union{ta, tb}, false # at runtime, will be exactly one of these
     end
-    return Any
+    return Any, false
 end
-bitcast_tfunc(@nospecialize(t), @nospecialize(x)) = instanceof_tfunc(t)
+bitcast_tfunc(@nospecialize(t), @nospecialize(x)) = instanceof_tfunc(t)[1]
 math_tfunc(@nospecialize(x)) = widenconst(x)
 math_tfunc(@nospecialize(x), @nospecialize(y)) = widenconst(x)
 math_tfunc(@nospecialize(x), @nospecialize(y), @nospecialize(z)) = widenconst(x)
@@ -537,7 +542,7 @@ add_tfunc(checked_smul_int, 2, 2, chk_tfunc, 10)
 add_tfunc(checked_umul_int, 2, 2, chk_tfunc, 10)
     ## other, misc intrinsics ##
 add_tfunc(Core.Intrinsics.llvmcall, 3, IInf,
-    (@nospecialize(fptr), @nospecialize(rt), @nospecialize(at), a...) -> instanceof_tfunc(rt), 10)
+          (@nospecialize(fptr), @nospecialize(rt), @nospecialize(at), a...) -> instanceof_tfunc(rt)[1], 10)
 cglobal_tfunc(@nospecialize(fptr)) = Ptr{Void}
 cglobal_tfunc(@nospecialize(fptr), @nospecialize(t)) = (isType(t) ? Ptr{t.parameters[1]} : Ptr)
 cglobal_tfunc(@nospecialize(fptr), t::Const) = (isa(t.val, Type) ? Ptr{t.val} : Ptr)
@@ -704,7 +709,7 @@ end
 add_tfunc(typeof, 1, 1, typeof_tfunc, 0)
 add_tfunc(typeassert, 2, 2,
           function (@nospecialize(v), @nospecialize(t))
-              t = instanceof_tfunc(t)
+              t, isexact = instanceof_tfunc(t)
               t === Any && return v
               if isa(v, Const)
                   if !has_free_typevars(t) && !isa(v.val, t)
@@ -721,12 +726,20 @@ add_tfunc(typeassert, 2, 2,
           end, 4)
 add_tfunc(isa, 2, 2,
           function (@nospecialize(v), @nospecialize(t))
-              t = instanceof_tfunc(t)
-              if t !== Any && !has_free_typevars(t)
-                  if v ⊑ t
-                      return Const(true)
+              t, isexact = instanceof_tfunc(t)
+              if !has_free_typevars(t)
+                  if t === Bottom
+                      return Const(false)
+                  elseif v ⊑ t
+                      if isexact
+                          return Const(true)
+                      end
                   elseif isa(v, Const) || isa(v, Conditional) || (isleaftype(v) && !iskindtype(v))
                       return Const(false)
+                  elseif isexact && typeintersect(v, t) === Bottom
+                      if !iskindtype(v) #= subtyping currently intentionally answers this query incorrectly for kinds =#
+                          return Const(false)
+                      end
                   end
               end
               # TODO: handle non-leaftype(t) by testing against lower and upper bounds
@@ -734,11 +747,17 @@ add_tfunc(isa, 2, 2,
           end, 0)
 add_tfunc(<:, 2, 2,
           function (@nospecialize(a), @nospecialize(b))
-              if (isa(a,Const) || isType(a)) && (isa(b,Const) || isType(b))
-                  a = instanceof_tfunc(a)
-                  b = instanceof_tfunc(b)
-                  if !has_free_typevars(a) && !has_free_typevars(b)
-                      return Const(a <: b)
+              a, isexact_a = instanceof_tfunc(a)
+              b, isexact_b = instanceof_tfunc(b)
+              if !has_free_typevars(a) && !has_free_typevars(b)
+                  if a <: b
+                      if isexact_b || a === Bottom
+                          return Const(true)
+                      end
+                  else
+                      if isexact_a || (b !== Bottom && typeintersect(a, b) === Union{})
+                          return Const(false)
+                      end
                   end
               end
               return Bool
@@ -1096,7 +1115,6 @@ function const_datatype_getfield_tfunc(sv, fld)
     return nothing
 end
 
-# returns (type, isexact)
 function getfield_tfunc(@nospecialize(s00), name)
     if isa(s00, TypeVar)
         s00 = s00.ub
@@ -1231,7 +1249,7 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
         return Bottom
     end
 
-    s = instanceof_tfunc(s0)
+    s = instanceof_tfunc(s0)[1]
     u = unwrap_unionall(s)
 
     if isa(u,Union)
@@ -2089,14 +2107,9 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
                 a = fargs[2]
                 if isa(a, fieldtype(Conditional, :var))
                     aty = widenconst(argtypes[2])
-                    tty = instanceof_tfunc(argtypes[3])
-                    if tty !== Any && tty !== Bottom
-                        if isa(tty, TypeVar)
-                            tty_ub = tty.ub
-                            tty_lb = tty.lb
-                        else
-                            tty_ub = tty_lb = tty
-                        end
+                    tty_ub, isexact_tty = instanceof_tfunc(argtypes[3])
+                    if isexact_tty && !isa(tty_ub, TypeVar)
+                        tty_lb = tty_ub # TODO: this would be wrong if !isexact_tty, but instanceof_tfunc doesn't preserve this info
                         if !has_free_typevars(tty_lb) && !has_free_typevars(tty_ub)
                             ifty = typeintersect(aty, tty_ub)
                             elsety = typesubtract(aty, tty_lb)
@@ -2131,7 +2144,7 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
     elseif f === Core.kwfunc
         if length(fargs) == 2
             ft = widenconst(argtypes[2])
-            if isa(ft,DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
+            if isa(ft, DataType) && isdefined(ft.name, :mt) && isdefined(ft.name.mt, :kwsorter)
                 return Const(ft.name.mt.kwsorter)
             end
         end
@@ -2340,7 +2353,7 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
     elseif e.head === :null
         t = Void
     elseif e.head === :new
-        t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))
+        t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))[1]
         for i = 2:length(e.args)
             if abstract_eval(e.args[i], vtypes, sv) === Bottom
                 rt = Bottom
