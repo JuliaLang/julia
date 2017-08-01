@@ -330,8 +330,14 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
     if packages || verbose
         println(io, "Packages:")
         println(io, "  Package Directory: ", Pkg.dir())
-        println(io, "  Package Status:")
-        Pkg.status(io)
+        print(io, "  Package Status:")
+
+        if isdir(Pkg.dir())
+            println(io, "")
+            Pkg.status(io)
+        else
+            println(io, " no packages installed")
+        end
     end
 end
 
