@@ -923,13 +923,21 @@ Stacktrace:
 BoundsError
 
 """
-    invoke(f, types <: Tuple, args...)
+    invoke(function, ArgumentTypes::Type, arguments...)
 
 Invoke a method for the given generic function matching the specified types, on
 the specified arguments. The arguments must be compatible with the specified types. This
 allows invoking a method other than the most specific matching method, which is useful when
 the behavior of a more general definition is explicitly needed (often as part of the
 implementation of a more specific method of the same function).
+
+# Examples
+```julia-repl
+julia> f(x) = x
+julia> f(x::Integer) = 2*invoke(f, Tuple{Any}, x)
+julia> f(2)
+4
+```
 """
 invoke
 
