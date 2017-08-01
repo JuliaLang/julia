@@ -974,3 +974,16 @@ end
             " 1.0e-15+2.0im    ",
             "     1.0+2.0e-15im"], "\n")
 end
+
+@testset "corner cases of division, issue #22983" begin
+    # These results abide by ISO/IEC 10967-3:2006(E) and
+    # mathematical definition of division of complex numbers.
+    for T in (Float32, Float64, BigFloat)
+        @test isequal(one(T) / zero(Complex{T}), one(Complex{T}) / zero(Complex{T}))
+        @test isequal(one(T) / zero(Complex{T}), Complex{T}(NaN, NaN))
+        @test isequal(one(Complex{T}) / zero(T), Complex{T}(Inf, NaN))
+        @test isequal(one(Complex{T}) / one(Complex{T}), one(Complex{T}))
+        @test isequal(one(T) / complex(one(T),  zero(T)), Complex(one(T), -zero(T)))
+        @test isequal(one(T) / complex(one(T), -zero(T)), Complex(one(T),  zero(T)))
+    end
+end
