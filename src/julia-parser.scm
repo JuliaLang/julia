@@ -2257,7 +2257,7 @@
         ((valid-modref? e)
          `(|.| ,(cadr e)
                (quote ,(apply macroify-name (cadr (caddr e)) suffixes))))
-        (else (error (string "invalid macro use \"@(" (deparse e) ")\"" )))))
+        (else (error (string "invalid macro usage \"@(" (deparse e) ")\"" )))))
 
 (define (simple-string-literal? e) (string? e))
 
