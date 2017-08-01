@@ -33,7 +33,7 @@ julia> typeof(ex1)
 Expr
 ```
 
-`Expr` objects contain three parts:
+`Expr` objects contain two parts:
 
   * a `Symbol` identifying the kind of expression. A symbol is an [interned string](https://en.wikipedia.org/wiki/String_interning)
     identifier (more discussion below).
@@ -51,14 +51,6 @@ julia> ex1.args
   :+
  1
  1
-```
-
-  * finally, the expression result type, which may be annotated by the user or inferred by the compiler
-    (and may be ignored completely for the purposes of this chapter):
-
-```jldoctest prog
-julia> ex1.typ
-Any
 ```
 
 Expressions may also be constructed directly in [prefix notation](https://en.wikipedia.org/wiki/Polish_notation):
