@@ -933,12 +933,12 @@ implementation of a more specific method of the same function).
 
 # Examples
 ```jldoctest
-julia> f(x) = x;
+julia> f(x::Real) = x^2;
 
 julia> f(x::Integer) = 1 + invoke(f, Tuple{Any}, x);
 
 julia> f(2)
-3
+5
 ```
 """
 invoke
