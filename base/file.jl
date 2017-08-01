@@ -405,7 +405,7 @@ end
     mktempdir(f::Function, parent=tempdir(); prefix="$temp_prefix")
 
 Apply the function `f` to the result of [`mktempdir(parent; prefix)`](@ref) and remove the
-temporary directory upon completion. A `prefix` can be provided in addition which, otherwise defaults
+temporary directory upon completion. A `prefix` can be provided in addition, which otherwise defaults
  to "$temp_prefix".
 """
 function mktempdir(fn::Function, parent=tempdir(); prefix=temp_prefix)
