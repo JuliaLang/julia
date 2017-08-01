@@ -162,3 +162,29 @@ end
 @test collect(methods(_nospec_with_default))[2].nospecialize == 1
 @test _nospec_with_default() == 2
 @test _nospec_with_default(10) == 20
+
+
+let oldout = STDOUT
+    local rdout, wrout, out
+    try
+        rdout, wrout = redirect_stdout()
+        out = @async read(rdout, String)
+
+        @test eval(:(@dump x + y)) === nothing
+
+        redirect_stdout(oldout)
+        close(wrout)
+
+        @test wait(out) == """
+            Expr
+              head: Symbol call
+              args: Array{Any}((3,))
+                1: Symbol +
+                2: Symbol x
+                3: Symbol y
+              typ: Any
+            """
+    finally
+        redirect_stdout(oldout)
+    end
+end

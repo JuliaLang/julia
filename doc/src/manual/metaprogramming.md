@@ -166,7 +166,7 @@ Expr
 ```
 
 (to view the structure of this expression, try `ex.head` and `ex.args`, or use [`dump()`](@ref)
-as above)
+as above or [`Meta.@dump`](@ref))
 
 Note that equivalent expressions may be constructed using [`parse()`](@ref) or the direct `Expr`
 form:

@@ -7,7 +7,8 @@ module Meta
 
 export quot,
        isexpr,
-       show_sexpr
+       show_sexpr,
+       @dump
 
 quot(ex) = Expr(:quote, ex)
 
@@ -43,6 +44,16 @@ function show_sexpr(io::IO, ex::Expr, indent::Int)
     if isempty(ex.args); print(io, ",)")
     else print(io, (ex.head === :block ? "\n"*" "^indent : ""), ')')
     end
+end
+
+"""
+    @dump expr
+
+Show every part of the representation of the given expression. Equivalent to
+`dump(:(expr))`.
+"""
+macro dump(expr)
+    dump(expr)
 end
 
 end # module
