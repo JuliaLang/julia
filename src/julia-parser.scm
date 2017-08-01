@@ -30,7 +30,7 @@
 (define prec-power       (add-dots '(^ ↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓ ⥉ ⥌ ⥍ ⥏ ⥑ ⥔ ⥕ ⥘ ⥙ ⥜ ⥝ ⥠ ⥡ ⥣ ⥥ ⥮ ⥯ ￪ ￬)))
 (define prec-decl        '(|::|))
 ;; `where` occurring after `::`
-(define prec-dot         '(|.|))
+(define prec-dot         '(|.| |.:|))
 
 (define prec-names '(prec-assignment
                      prec-conditional prec-lazy-or prec-lazy-and prec-arrow prec-comparison
@@ -81,7 +81,7 @@
 ; operators that are special forms, not function names
 (define syntactic-operators
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻=))
-           '(:= --> $= && |\|\|| |.| ... ->)))
+           '(:= --> $= && |\|\|| |.| |.:| ... ->)))
 (define syntactic-unary-operators '($ & |::|))
 
 (define syntactic-op? (Set syntactic-operators))
@@ -1165,18 +1165,14 @@
                      ((comprehension)
                       (loop (list* 'typed_comprehension ex (cdr al))))
                      (else (error "unknown parse-cat result (internal error)"))))))
-            ((|.|)
+            ((|.| |.:|)
              (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
              (loop
-              (cond ((eqv? (peek-token s) #\()
+              (cond ((and (eqv? (peek-token s) #\() (eq? t '|.|))
                      (begin
                        (take-token s)
                        `(|.| ,ex (tuple ,@(parse-arglist s #\) )))))
-                    ((eqv? (peek-token s) ':)
-                     (begin
-                       (take-token s)
-                       `(|.| ,ex (quote ,(parse-atom s)))))
                     ((eq? (peek-token s) '$)
                      (take-token s)
                      (let ((dollarex (parse-atom s)))
