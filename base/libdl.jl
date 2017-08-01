@@ -221,7 +221,7 @@ if is_bsd() && !is_apple()
         phnum::Cshort
     end
 
-    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dy_libs::Array{AbstractString,1})
+    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dy_libs::Vector{AbstractString})
         name = unsafe_string(di.name)
         if !isempty(name)
             push!(dy_libs, name)
@@ -235,8 +235,8 @@ function dllist()
 
     @static if is_linux()
         const callback = cfunction(dl_phdr_info_callback, Cint,
-                                   (Ref{dl_phdr_info}, Csize_t, Ref{Array{AbstractString,1}} ))
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Array{AbstractString,1}}), callback, dynamic_libraries)
+                                   Tuple{Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}})
+        ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
     end
 
     @static if is_apple()
@@ -255,8 +255,8 @@ function dllist()
 
     @static if is_bsd() && !is_apple()
         const callback = cfunction(dl_phdr_info_callback, Cint,
-                                   (Ref{dl_phdr_info}, Csize_t, Ref{Array{AbstractString,1}} ))
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Array{AbstractString,1}}), callback, dynamic_libraries)
+                                   Tuple{Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}})
+        ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
         shift!(dynamic_libraries)
     end
 

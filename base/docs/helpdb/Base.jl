@@ -2067,25 +2067,6 @@ An attempted access to a [`Nullable`](@ref) with no defined value.
 NullException
 
 """
-    cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
-
-Generate C-callable function pointer from Julia function. Type annotation of the return
-value in the callback function is a must for situations where Julia cannot infer the return
-type automatically.
-
-For example:
-
-    function foo()
-        # body
-
-        retval::Float64
-    end
-
-    bar = cfunction(foo, Float64, ())
-"""
-cfunction
-
-"""
     intersect(s1,s2...)
     ∩(s1,s2)
 
