@@ -53,6 +53,7 @@ Base.LibGit2.UserPasswordCredentials
 Base.LibGit2.add_fetch!
 Base.LibGit2.add_push!
 Base.LibGit2.addblob!
+Base.LibGit2.author
 Base.LibGit2.authors
 Base.LibGit2.branch
 Base.LibGit2.branch!
@@ -60,6 +61,7 @@ Base.LibGit2.checkout!
 Base.LibGit2.checkused!
 Base.LibGit2.clone
 Base.LibGit2.commit
+Base.LibGit2.committer
 Base.LibGit2.create_branch
 Base.LibGit2.credentials_callback
 Base.LibGit2.credentials_cb
@@ -88,6 +90,7 @@ Base.LibGit2.isorphan
 Base.LibGit2.lookup_branch
 Base.LibGit2.mirror_callback
 Base.LibGit2.mirror_cb
+Base.LibGit2.message
 Base.LibGit2.name
 Base.LibGit2.need_update
 Base.LibGit2.objtype
