@@ -41,12 +41,16 @@ function prompt(msg::AbstractString; default::AbstractString="", password::Bool=
     end
     msg = !isempty(default) ? msg*" [$default]:" : msg*":"
     uinput = if password
-        Base.getpass(msg)
+        Base.getpass(msg)  # Automatically chomps. We cannot tell EOF from '\n'.
     else
         print(msg)
-        readline()
+        readline(chomp=false)
     end
-    isempty(uinput) ? default : uinput
+    if !password
+        isempty(uinput) && return Nullable{String}()  # Encountered EOF
+        uinput = chomp(uinput)
+    end
+    Nullable{String}(isempty(uinput) ? default : uinput)
 end
 
 function features()

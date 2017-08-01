@@ -1609,25 +1609,38 @@ mktempdir() do dir
     # which use the `getpass` function. At the moment we can only fake this on UNIX based
     # systems.
     if Sys.isunix()
+        abort_prompt = LibGit2.GitError(
+            LibGit2.Error.Callback, LibGit2.Error.EAUTH,
+            "Aborting, user cancelled credential request.")
+
         @testset "SSH credential prompt" begin
             url = "git@github.com:test/package.jl"
 
             valid_key = joinpath(KEY_DIR, "valid")
             invalid_key = joinpath(KEY_DIR, "invalid")
             valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
+            username = "git"
             passphrase = "secret"
 
             ssh_cmd = """
             include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.SSHCredentials("git", "", "$valid_key", "$valid_key.pub")
-            err, auth_attempts = credential_loop(valid_cred, "$url", "git")
+            valid_cred = LibGit2.SSHCredentials("$username", "", "$valid_key", "$valid_key.pub")
+            err, auth_attempts = credential_loop(valid_cred, "$url", "$username")
             (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
             """
 
             ssh_p_cmd = """
             include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.SSHCredentials("git", "$passphrase", "$valid_p_key", "$valid_p_key.pub")
-            err, auth_attempts = credential_loop(valid_cred, "$url", "git")
+            valid_cred = LibGit2.SSHCredentials("$username", "$passphrase", "$valid_p_key", "$valid_p_key.pub")
+            err, auth_attempts = credential_loop(valid_cred, "$url", "$username")
+            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
+            """
+
+            # SSH requires username
+            ssh_u_cmd = """
+            include("$LIBGIT2_HELPER_PATH")
+            valid_cred = LibGit2.SSHCredentials("$username", "", "$valid_key", "$valid_key.pub")
+            err, auth_attempts = credential_loop(valid_cred, "$url", "")
             (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
             """
 
@@ -1663,6 +1676,22 @@ mktempdir() do dir
                 err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
                 @test err == 0
                 @test auth_attempts == 5
+
+                # User sends EOF in passphrase prompt which aborts the credential request
+                challenges = [
+                    "Passphrase for $valid_p_key:" => "\x04",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
+                @test err == abort_prompt
+                @test auth_attempts == 1
+
+                # User provides an empty passphrase
+                challenges = [
+                    "Passphrase for $valid_p_key:" => "\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
+                @test err == abort_prompt
+                @test auth_attempts == 1
             end
 
             withenv("SSH_KEY_PATH" => valid_p_key, "SSH_KEY_PASS" => passphrase) do
@@ -1671,19 +1700,63 @@ mktempdir() do dir
                 @test auth_attempts == 1
             end
 
-            # TODO: Tests are currently broken. Credential callback prompts for:
-            # "Passphrase for :"
-            #=
+            # Missing username
+            withenv("SSH_KEY_PATH" => valid_key) do
+                # User provides a valid username
+                challenges = [
+                    "Username for 'github.com':" => "$username\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_u_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 1
+
+                # User sends EOF in username prompt which aborts the credential request
+                challenges = [
+                    "Username for 'github.com':" => "\x04",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_u_cmd, challenges)
+                @test err == abort_prompt
+                @test auth_attempts == 1
+
+                # User provides an empty username
+                challenges = [
+                    "Username for 'github.com':" => "\n",
+                    "Username for 'github.com':" => "\x04",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_u_cmd, challenges)
+                @test err == abort_prompt
+                @test auth_attempts == 5  # Should ideally be <= 2
+
+                # User repeatedly chooses an invalid username
+                challenges = [
+                    "Username for 'github.com':" => "foo\n",
+                    "Username for 'github.com' [foo]:" => "\n",
+                    "Username for 'github.com' [foo]:" => "\x04",  # Need to manually abort
+                ]
+                err, auth_attempts = challenge_prompt(ssh_u_cmd, challenges)
+                @test err == abort_prompt
+                @test auth_attempts == 6
+            end
+
             # Explicitly setting these env variables to be empty means the user will be
             # given a prompt with no defaults set.
-            withenv("SSH_KEY_PATH" => "", "SSH_PUB_KEY_PATH" => "") do
+            withenv("SSH_KEY_PATH" => nothing,
+                    "SSH_PUB_KEY_PATH" => nothing,
+                    "SSH_KEY_PASS" => nothing,
+                    (Sys.iswindows() ? "USERPROFILE" : "HOME") => tempdir()) do
+
+                # Set the USERPROFILE / HOME above to be a directory that does not contain
+                # the "~/.ssh/id_rsa" file. If this file exists the credential callback
+                # will default to use this private key instead of triggering a prompt.
+                @test !isfile(joinpath(homedir(), ".ssh", "id_rsa"))
+
                 # User provides valid credentials
                 challenges = [
                     "Private key location for 'git@github.com':" => "$valid_key\n",
                 ]
                 err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
                 @test err == 0
-                @test auth_attempts == 2
+                @test auth_attempts == 1
 
                 # User provides valid credentials that requires a passphrase
                 challenges = [
@@ -1692,9 +1765,26 @@ mktempdir() do dir
                 ]
                 err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
                 @test err == 0
+                @test auth_attempts == 1
+
+                # User sends EOF in private key prompt which aborts the credential request
+                challenges = [
+                    "Private key location for 'git@github.com':" => "\x04",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
+                @test err == abort_prompt
+                @test auth_attempts == 1
+
+                # User provides an empty private key which triggers a re-prompt
+                challenges = [
+                    "Private key location for 'git@github.com':" => "\n",
+                    "Public key location for 'git@github.com' [.pub]:" => "\n",
+                    "Private key location for 'git@github.com':" => "\x04",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
+                @test err == abort_prompt
                 @test auth_attempts == 2
             end
-            =#
 
             # TODO: Tests are currently broken. Credential callback currently infinite loops
             # and never prompts user to change private keys.
@@ -1749,6 +1839,33 @@ mktempdir() do dir
             ]
             err, auth_attempts = challenge_prompt(https_cmd, challenges)
             @test err == 0
+            @test auth_attempts == 1
+
+            # User sends EOF in username prompt which aborts the credential request
+            challenges = [
+                "Username for 'https://github.com':" => "\x04",
+            ]
+            err, auth_attempts = challenge_prompt(https_cmd, challenges)
+            @test err == abort_prompt
+            @test auth_attempts == 1
+
+            # User sends EOF in password prompt which aborts the credential request
+            challenges = [
+                "Username for 'https://github.com':" => "foo\n",
+                "Password for 'https://foo@github.com':" => "\x04",
+            ]
+            err, auth_attempts = challenge_prompt(https_cmd, challenges)
+            @test err == abort_prompt
+            @test auth_attempts == 1
+
+            # User provides an empty password which aborts the credential request since we
+            # cannot tell it apart from an EOF.
+            challenges = [
+                "Username for 'https://github.com':" => "foo\n",
+                "Password for 'https://foo@github.com':" => "\n",
+            ]
+            err, auth_attempts = challenge_prompt(https_cmd, challenges)
+            @test err == abort_prompt
             @test auth_attempts == 1
 
             # User repeatedly chooses invalid username/password until the prompt limit is
