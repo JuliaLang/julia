@@ -795,6 +795,19 @@ function inv(A::AbstractMatrix{T}) where T
     A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S0, checksquare(A)))
 end
 
+function pinv(v::AbstractVector{T}, tol::Real=real(zero(T))) where T
+    res = similar(v, typeof(zero(T) / (abs2(one(T)) + abs2(one(T)))))'
+    den = sum(abs2, v)
+    # as tol is the threshold relative to the maximum singular value, for a vector with
+    # single singular value σ=√den, σ ≦ tol*σ is equivalent to den=0 ∨ tol≥1
+    if iszero(den) || tol >= one(tol)
+        fill!(res, zero(eltype(res)))
+    else
+        res .= v' ./ den
+    end
+    return res
+end
+
 """
     \\(A, B)
 

@@ -895,7 +895,6 @@ function pinv(A::StridedMatrix{T}) where T
     tol = eps(real(float(one(T))))*maximum(size(A))
     return pinv(A, tol)
 end
-pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
 function pinv(x::Number)
     xi = inv(x)
     return ifelse(isfinite(xi), xi, zero(xi))

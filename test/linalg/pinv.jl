@@ -129,6 +129,12 @@ end
             a = onediag_sparse(eltya, m)
             test_pinv(a, m, m, default_tol, default_tol, default_tol)
         end
+        @testset "Vector" begin
+            a = rand(eltya, m)
+            apinv = @inferred pinv(a)
+            @test pinv(hcat(a)) ≈ apinv
+            @test apinv isa RowVector{eltya}
+        end
     end
 end
 
