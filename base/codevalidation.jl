@@ -58,22 +58,27 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
         push!(errors, InvalidCodeError(4, "slotnames field is empty"))
     end
     if length(c.slotnames) != length(c.slotflags)
-        push!(errors, InvalidCodeError(5, "length(slotflags) != length(slotnames)", (length(c.slotflags), length(c.slotnames))))
+        msg = "length(slotflags) != length(slotnames)"
+        push!(errors, InvalidCodeError(5, msg, (length(c.slotflags), length(c.slotnames))))
     end
     if c.inferred
         if length(c.slottypes) != length(c.slotnames)
-            push!(errors, InvalidCodeError(6, "length(slottypes) != length(slotnames)", (length(c.slottypes), length(c.slotnames))))
+            msg = "length(slottypes) != length(slotnames)"
+            push!(errors, InvalidCodeError(6, msg, (length(c.slottypes), length(c.slotnames))))
         end
         if length(c.ssavaluetypes) < length(ssavals)
             missing = length(ssavals) - length(c.ssavaluetypes)
-            push!(errors, InvalidCodeError(7, "not all SSAValues in AST have a type in ssavaluetypes", missing))
+            msg = "not all SSAValues in AST have a type in ssavaluetypes"
+            push!(errors, InvalidCodeError(7, msg, missing))
         end
     else
-        if c.slottypes != nothing
-            push!(errors, InvalidCodeError(8, "uninferred CodeInfo slottypes field is not `nothing`", c.slottypes))
+        if c.slottypes !== nothing
+            msg = "uninferred CodeInfo slottypes field is not `nothing`"
+            push!(errors, InvalidCodeError(8, msg, c.slottypes))
         end
         if c.ssavaluetypes != length(ssavals)
-            push!(errors, InvalidCodeError(9, "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues", (length(ssavals), c.ssavaluetypes)))
+            msg = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
+            push!(errors, InvalidCodeError(9, msg, (length(ssavals), c.ssavaluetypes)))
         end
     end
     checked_ids = Int[]
@@ -81,7 +86,8 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
         if isa(x, Expr) && x.head == :(=)
             lhs = x.args[1]
             if isa(lhs, SlotNumber) && !is_flag_set(c.slotflags[lhs.id], ASSIGNED_FLAG) && !in(lhs.id, checked_ids)
-                push!(errors, InvalidCodeError(10, "slot has wrong assignment slotflag setting (bit flag 2 should be set)", lhs.id))
+                msg = "slot has wrong assignment slotflag setting (bit flag 2 should be set)"
+                push!(errors, InvalidCodeError(10, msg, lhs.id))
                 push!(checked_ids, lhs.id)
             end
         end
@@ -106,10 +112,12 @@ into `errors` (where `c = uncompress_ast(m)`):
 """
 function validate_code!(errors::Vector{>:InvalidCodeError}, m::Method)
     if length(m.sig.parameters) != m.nargs
-        push!(errors, InvalidCodeError(11, "number of types in method signature does not match number of arguments",  (length(m.sig.parameters), m.nargs)))
+        msg = "number of types in method signature does not match number of arguments"
+        push!(errors, InvalidCodeError(11, msg, (length(m.sig.parameters), m.nargs)))
     end
     if m.isva != (last(m.sig.parameters) <: Vararg{Any})
-        push!(errors, InvalidCodeError(12, "last type in method signature does not match `isva` field setting", (last(m.sig.parameters), m.isva)))
+        msg = "last type in method signature does not match `isva` field setting"
+        push!(errors, InvalidCodeError(12, msg, (last(m.sig.parameters), m.isva)))
     end
     c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, m.source)
     if m.nargs > 0
@@ -120,11 +128,13 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, m::Method)
             end
         end
         if found_bad_method_head
-            push!(errors, InvalidCodeError(13, "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"))
+            msg = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
+            push!(errors, InvalidCodeError(13, msg))
         end
     end
     if m.nargs > length(c.slotnames)
-        push!(errors, InvalidCodeError(14, "CodeInfo for method contains fewer slotnames than the number of method arguments"))
+        msg = "CodeInfo for method contains fewer slotnames than the number of method arguments"
+        push!(errors, InvalidCodeError(14, msg))
     end
     validate_code!(errors, c)
     return errors
