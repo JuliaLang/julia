@@ -935,7 +935,7 @@ implementation of a more specific method of the same function).
 ```jldoctest
 julia> f(x::Real) = x^2;
 
-julia> f(x::Integer) = 1 + invoke(f, Tuple{Any}, x);
+julia> f(x::Integer) = 1 + invoke(f, Tuple{Real}, x);
 
 julia> f(2)
 5
