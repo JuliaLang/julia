@@ -4,6 +4,23 @@
 
 import Core.Intrinsics: cglobal, bitcast
 
+"""
+    cfunction(function::Function, ReturnType::Type, ArgumentTypes::Type)
+
+Generate C-callable function pointer from Julia function. Type annotation of the return
+value in the callback function is a must for situations where Julia cannot infer the return
+type automatically.
+
+# Examples
+```julia-repl
+julia> function foo(x::Int, y::Int)
+           return x + y
+       end
+
+julia> cfunction(foo, Int, Tuple{Int,Int})
+Ptr{Void} @0x000000001b82fcd0
+```
+"""
 cfunction(f, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
