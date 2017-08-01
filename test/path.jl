@@ -28,9 +28,9 @@ for S in (String, GenericString)
     @test joinpath(S(abspath("foo")), S(homedir())) == homedir()
 
     if Sys.iswindows()
-        @test joinpath(S("foo"),S("bar:baz")) == "bar:"
+        @test joinpath(S("foo"),S("bar:baz")) == "bar:baz"
         @test joinpath(S("C:"),S("foo"),S("D:"),S("bar")) == "D:bar"
-        @test joinpath(S("C:"),S("foo"),S("D:"),S("bar"),S("baz")) == "D:bar$(sep)baz"
+        @test joinpath(S("C:"),S("foo"),S("D:bar"),S("baz")) == "D:bar$(sep)baz"
     elseif Sys.isunix()
         @test joinpath(S("foo"),S("bar:baz")) == "foo$(sep)bar:baz"
         @test joinpath(S("C:"),S("foo"),S("D:"),S("bar")) == "C:$(sep)foo$(sep)D:$(sep)bar"

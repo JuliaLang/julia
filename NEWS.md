@@ -150,8 +150,10 @@ This section lists changes that do not have deprecation warnings.
   * Worker-worker connections are setup lazily for an `:all_to_all` topology. Use keyword
     arg `lazy=false` to force all connections to be setup during a `addprocs` call. ([#22814])
 
-  * `joinpath` now returns the second path instead of throwing an `ArgumentError` if the
-    drives of the two arguments do not match. (Windows only) ([#20912]).
+  * In `joinpath(a, b)` on Windows, if the drive specifications of `a` and `b` do not match,
+    `joinpath` now returns `b` instead of throwing an `ArgumentError`. `joinpath(path...)` is
+    defined to be left associative, so if any argument has a drive path which does not match
+    the drive of the join of the preceding paths, the prior ones are dropped. ([#20912])
 
 Library improvements
 --------------------

@@ -200,13 +200,13 @@ joinpath(a::AbstractString) = a
 """
     joinpath(parts...) -> AbstractString
 
-Join path components into a full path. If some argument is an absolute path, then prior
-components are dropped. On Windows, if the drives of the parts don't match, the last path
-is returned.
+Join path components into a full path. If some argument is an absolute path or
+(on Windows) has a drive specification that doesn't match the drive computed for
+the join of the preceding paths, then prior components are dropped.
 
 # Examples
 ```jldoctest
-julia> joinpath("/home/myuser","example.jl")
+julia> joinpath("/home/myuser", "example.jl")
 "/home/myuser/example.jl"
 ```
 """
@@ -216,7 +216,7 @@ function joinpath(a::String, b::String)
     isabspath(b) && return b
     A, a = splitdrive(a)
     B, b = splitdrive(b)
-    !isempty(B) && A != B && return B
+    !isempty(B) && A != B && return string(B,b)
     C = isempty(B) ? A : B
     isempty(a)                             ? string(C,b) :
     ismatch(path_separator_re, a[end:end]) ? string(C,a,b) :
