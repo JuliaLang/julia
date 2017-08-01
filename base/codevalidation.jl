@@ -1,96 +1,117 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const VALID_EXPR_HEADS = Symbol[:call, :invoke, :static_parameter, :line, :gotoifnot, :(=),
-                                :method, :const, :null, :new, :return, :the_exception,
-                                :enter, :leave, :inbounds, :boundscheck, :copyast, :meta]
+# Expr head => argument count bounds
+const VALID_EXPR_HEADS = Pair{Symbol,UnitRange{Int}}[
+    :call => 1:typemax(Int),
+    :invoke => 2:typemax(Int),
+    :static_parameter => 1:1,
+    :line => 1:3,
+    :gotoifnot => 2:2,
+    :(=) => 2:2,
+    :method => 1:4,
+    :const => 1:1,
+    :null => 0:0, # TODO from @vtjnash: remove this + any :null handling code in Base
+    :new => 1:typemax(Int),
+    :return => 1:1,
+    :the_exception => 0:0,
+    :enter => 1:1,
+    :leave => 1:1,
+    :inbounds => 1:1,
+    :boundscheck => 1:1,
+    :copyast => 1:1,
+    :meta => 0:typemax(Int),
+    :global => 1:1,
+    :foreigncall => 5:5,
+    :isdefined => 1:1
+]
+
+function get_expr_narg_bounds(head::Symbol, notfound)
+    for pair in VALID_EXPR_HEADS
+        first(pair) == head && return last(pair)
+    end
+    return notfound
+end
 
 const ASSIGNED_FLAG = 0x02
 
+# @enum isn't defined yet, otherwise I'd use it for this
+const INVALID_EXPR_HEAD = "invalid expression head"
+const INVALID_EXPR_NARGS = "invalid number of expression args"
+const INVALID_LVALUE = "invalid LHS value"
+const INVALID_RVALUE = "invalid RHS value"
+const INVALID_CALL_ARG = "invalid :call argument"
+const EMPTY_SLOTNAMES = "slotnames field is empty"
+const SLOTFLAGS_MISMATCH = "length(slotnames) != length(slotflags)"
+const SLOTTYPES_MISMATCH = "length(slotnames) != length(slottypes)"
+const SLOTTYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo slottypes field is not `nothing`"
+const SSAVALUETYPES_MISMATCH = "not all SSAValues in AST have a type in ssavaluetypes"
+const SSAVALUETYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
+const INVALID_ASSIGNMENT_SLOTFLAG = "slot has wrong assignment slotflag setting (bit flag 2 not set)"
+const SIGNATURE_NARGS_MISMATCH = "number of types in method signature does not match number of arguments"
+const SIGNATURE_VARARG_MISMATCH = "number of types in method signature does not match `isva` field setting"
+const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
+const NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
+
 struct InvalidCodeError <: Exception
-    errno::Int
-    msg::String
+    kind::String
     meta::Any
 end
 
-InvalidCodeError(errno, msg) = InvalidCodeError(errno, msg, nothing)
+InvalidCodeError(kind) = InvalidCodeError(kind, nothing)
 
 """
     validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
 
-Validates `c`, logging any violations in `errors`.
-
-Any violation of the following properties will be logged by pushing a `InvalidCodeError`
-into `errors`:
-
-- `in(h, Base.Core.Inference.VALID_EXPR_HEADS)` for each subexpression head `h`
-- `Base.Core.Inference.is_valid_lhs(lhs)` for each encountered LHS value `lhs`
-- `Base.Core.Inference.is_valid_call_arg(arg)` for each call argument `arg`
-- `!isempty(c.slotnames)`
-- `length(c.slotnames) == length(c.slotflags)`
-- if `c.inferred`:
-    - `length(c.slottypes) == length(c.slotnames)`
-    - all SSAValues in AST have a type in `c.ssavaluetypes`
-- if `!c.inferred`:
-    - `c.slottypes == nothing`
-    - `c.ssavaluetypes` should be set to the number of SSAValues in `c.code`
-- all assigned-to slots have bit flag 2 set in their respective slotflags
+Validates `c`, logging any violation by pushing an `InvalidCodeError` into `errors`.
 """
-function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
-    ssavals = SSAValue[]
+function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_level::Bool = false)
+    ssavals = IntSet()
+    lhs_slotnums = IntSet()
     walkast(c.code) do x
         if isa(x, Expr)
-            if !in(x.head, VALID_EXPR_HEADS)
-                push!(errors, InvalidCodeError(1, "encountered invalid expression head", x.head))
-            elseif x.head == :(=) && !is_valid_lhs(x.args[1])
-                push!(errors, InvalidCodeError(2, "encountered invalid LHS value", x.args[1]))
-            elseif x.head == :call
+            is_top_level && x.head == :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
+            narg_bounds = get_expr_narg_bounds(x.head, -1:-1)
+            if narg_bounds == -1:-1
+                push!(errors, InvalidCodeError(INVALID_EXPR_HEAD, x.head))
+            elseif !in(length(x.args), narg_bounds)
+                push!(errors, InvalidCodeError(INVALID_EXPR_NARGS, x.head))
+            elseif x.head == :(=)
+                lhs, rhs = x.args
+                if !is_valid_lvalue(lhs)
+                    push!(errors, InvalidCodeError(INVALID_LVALUE, lhs))
+                elseif isa(lhs, SlotNumber) && !in(lhs.id, lhs_slotnums)
+                    n = lhs.id
+                    if isassigned(c.slotflags, n) && !is_flag_set(c.slotflags[n], ASSIGNED_FLAG)
+                        push!(errors, InvalidCodeError(INVALID_ASSIGNMENT_SLOTFLAG, lhs))
+                    end
+                    push!(lhs_slotnums, n)
+                end
+                if !is_valid_rvalue(rhs)
+                    push!(errors, InvalidCodeError(INVALID_RVALUE, rhs))
+                end
+            elseif x.head == :call || x.head == :invoke
                 for arg in x.args
-                    if !is_valid_call_arg(arg)
-                        push!(errors, InvalidCodeError(3, "encountered invalid call argument", arg))
+                    if !is_valid_rvalue(arg)
+                        push!(errors, InvalidCodeError(INVALID_CALL_ARG, arg))
                     end
                 end
             end
-        elseif isa(x, SSAValue) && !in(x, ssavals)
-            push!(ssavals, x)
+        elseif isa(x, SSAValue) && !in(x.id, ssavals)
+            push!(ssavals, x.id)
         end
     end
-    if isempty(c.slotnames)
-        push!(errors, InvalidCodeError(4, "slotnames field is empty"))
-    end
-    if length(c.slotnames) != length(c.slotflags)
-        msg = "length(slotflags) != length(slotnames)"
-        push!(errors, InvalidCodeError(5, msg, (length(c.slotflags), length(c.slotnames))))
-    end
+    nslotnames = length(c.slotnames)
+    nssavals = length(ssavals)
+    nslotnames == 0 && push!(errors, InvalidCodeError(EMPTY_SLOTNAMES))
+    nslotnames != nslotflags && push!(errors, InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags)))
     if c.inferred
-        if length(c.slottypes) != length(c.slotnames)
-            msg = "length(slottypes) != length(slotnames)"
-            push!(errors, InvalidCodeError(6, msg, (length(c.slottypes), length(c.slotnames))))
-        end
-        if length(c.ssavaluetypes) < length(ssavals)
-            missing = length(ssavals) - length(c.ssavaluetypes)
-            msg = "not all SSAValues in AST have a type in ssavaluetypes"
-            push!(errors, InvalidCodeError(7, msg, missing))
-        end
+        nslottypes = length(c.slottypes)
+        nssavaluetypes = length(c.ssavaluetypes)
+        nslottypes != nslotnames && push!(errors, InvalidCodeError(SLOTTYPES_MISMATCH, (nslotnames, nslottypes)))
+        nssavaluetypes < nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH, (nssavals, nssavaluetypes)))
     else
-        if c.slottypes !== nothing
-            msg = "uninferred CodeInfo slottypes field is not `nothing`"
-            push!(errors, InvalidCodeError(8, msg, c.slottypes))
-        end
-        if c.ssavaluetypes != length(ssavals)
-            msg = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
-            push!(errors, InvalidCodeError(9, msg, (length(ssavals), c.ssavaluetypes)))
-        end
-    end
-    checked_ids = Int[]
-    walkast(c.code) do x
-        if isa(x, Expr) && x.head == :(=)
-            lhs = x.args[1]
-            if isa(lhs, SlotNumber) && !is_flag_set(c.slotflags[lhs.id], ASSIGNED_FLAG) && !in(lhs.id, checked_ids)
-                msg = "slot has wrong assignment slotflag setting (bit flag 2 should be set)"
-                push!(errors, InvalidCodeError(10, msg, lhs.id))
-                push!(checked_ids, lhs.id)
-            end
-        end
+        c.slottypes !== nothing && push!(errors, InvalidCodeError(SLOTTYPES_MISMATCH_UNINFERRED, c.slottypes))
+        c.ssavaluetypes != nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH_UNINFERRED, (nssavals, c.ssavaluetypes)))
     end
     return errors
 end
@@ -98,45 +119,22 @@ end
 """
     validate_code!(errors::Vector{>:InvalidCodeError}, m::Method)
 
-Validates `m`, logging any violations in `errors`.
+Validates `m`, logging any violation by pushing an `InvalidCodeError` into `errors`.
 
-After all `Method` checks are complete, `validate_code!(errors, uncompress_ast(m))` is called.
-
-Any violation of the following properties will be logged by pushing a `InvalidCodeError`
-into `errors` (where `c = uncompress_ast(m)`):
-
-- `length(m.sig.parameters) == m.nargs`
-- `m.isva == isa(last(m.sig.parameters), Vararg)`
-- `m.nargs <= length(c.slotnames)`
-- `h != :method` for any subexpression head `h` if `m.nargs > 0`
+After all `Method` checks are complete, `validate_code!(errors, c)` is called, where
+`c` is the `CodeInfo` instance retrievable via `m.source`.
 """
 function validate_code!(errors::Vector{>:InvalidCodeError}, m::Method)
-    if length(m.sig.parameters) != m.nargs
-        msg = "number of types in method signature does not match number of arguments"
-        push!(errors, InvalidCodeError(11, msg, (length(m.sig.parameters), m.nargs)))
+    sig_params = unwrap_unionall(m.sig).parameters
+    if length(sig_params) != m.nargs
+        push!(errors, InvalidCodeError(SIGNATURE_NARGS_MISMATCH, (length(sig_params), m.nargs)))
     end
-    if m.isva != (last(m.sig.parameters) <: Vararg{Any})
-        msg = "last type in method signature does not match `isva` field setting"
-        push!(errors, InvalidCodeError(12, msg, (last(m.sig.parameters), m.isva)))
+    if m.isva && length(sig_params) < (m.nargs - 1)
+        push!(errors, InvalidCodeError(SIGNATURE_VARARG_MISMATCH, (last(sig_params), m.isva)))
     end
-    c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, m.source)
-    if m.nargs > 0
-        found_bad_method_head = false
-        walkast(c.code) do x
-            if isa(x, Expr) && x.head == :method
-                found_bad_method_head = true
-            end
-        end
-        if found_bad_method_head
-            msg = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
-            push!(errors, InvalidCodeError(13, msg))
-        end
-    end
-    if m.nargs > length(c.slotnames)
-        msg = "CodeInfo for method contains fewer slotnames than the number of method arguments"
-        push!(errors, InvalidCodeError(14, msg))
-    end
-    validate_code!(errors, c)
+    c = isa(m.source, CodeInfo) ? m.source : ccall(:jl_uncompress_ast, Any, (Any, Any), m, m.source)
+    m.nargs > length(c.slotnames) && push!(errors, InvalidCodeError(NARGS_MISMATCH))
+    validate_code!(errors, c, m.nargs == 0)
     return errors
 end
 
@@ -149,11 +147,11 @@ function walkast(f, stmts::Array)
     end
 end
 
-is_valid_lhs(lhs) = isa(lhs, SlotNumber) || isa(lhs, SSAValue) || isa(lhs, GlobalRef)
+is_valid_lvalue(x) = isa(x, SlotNumber) || isa(x, SSAValue) || isa(x, GlobalRef)
 
-function is_valid_call_arg(arg)
-    isa(arg, Expr) && return !in(arg.head, (:gotoifnot, :new, :line, :const, :meta))
-    return !isa(arg, GotoNode) && !isa(arg, LabelNode) && !isa(arg, LineNumberNode)
+function is_valid_rvalue(x)
+    isa(x, Expr) && return !in(x.head, (:gotoifnot, :line, :const, :meta))
+    return !isa(x, GotoNode) && !isa(x, LabelNode) && !isa(x, LineNumberNode)
 end
 
 is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag
