@@ -741,14 +741,14 @@ The fields represent:
     * `final_start_line_number`: the *one based* line number in the file where the
        hunk starts, in the *final* version of the file.
     * `final_signature`: the signature of the person who last modified this hunk. You will
-       need to pass this to [`Signature`](@ref) to access its fields.
+       need to pass this to `Signature` to access its fields.
     * `orig_commit_id`: the [`GitHash`](@ref) of the commit where this hunk was first found.
     * `orig_path`: the path to the file where the hunk originated. This may be different
        than the current/final path, for instance if the file has been moved.
     * `orig_start_line_number`: the *one based* line number in the file where the
        hunk starts, in the *original* version of the file at `orig_path`.
     * `orig_signature`: the signature of the person who introduced this hunk. You will
-       need to pass this to [`Signature`](@ref) to access its fields.
+       need to pass this to `Signature` to access its fields.
     * `boundary`: `'1'` if the original commit is a "boundary" commit (for instance, if it's
        equal to an oldest commit set in `options`).
 """

@@ -21,7 +21,7 @@ end
 """
     author(c::GitCommit)
 
-Return the [`Signature`](@ref) of the author of the commit `c`. The author is
+Return the `Signature` of the author of the commit `c`. The author is
 the person who made changes to the relevant file(s). See also [`committer`](@ref).
 """
 function author(c::GitCommit)
@@ -33,7 +33,7 @@ end
 """
     committer(c::GitCommit)
 
-Return the [`Signature`](@ref) of the committer of the commit `c`. The committer is
+Return the `Signature` of the committer of the commit `c`. The committer is
 the person who committed the changes originally authored by the [`author`](@ref), but
 need not be the same as the `author`, for example, if the `author` emailed a patch to
 a `committer` who committed it.
