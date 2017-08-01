@@ -227,6 +227,9 @@ Ac_mul_B(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multip
 Ac_mul_B(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch("Cannot multiply two transposed vectors"))
 @inline Ac_mul_B(vec1::AbstractVector, vec2::AbstractVector) = ctranspose(vec1)*vec2
 
+# Pseudo-inverse
+pinv(v::RowVector, tol::Real=0) = pinv(v', tol)'
+
 # Left Division #
 
 \(mat::AbstractMatrix, rowvec::RowVector) = throw(DimensionMismatch("Cannot left-divide transposed vector by matrix"))
