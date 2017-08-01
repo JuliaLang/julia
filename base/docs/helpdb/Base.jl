@@ -932,11 +932,13 @@ the behavior of a more general definition is explicitly needed (often as part of
 implementation of a more specific method of the same function).
 
 # Examples
-```julia-repl
-julia> f(x) = x
-julia> f(x::Integer) = 2*invoke(f, Tuple{Any}, x)
+```jldoctest
+julia> f(x) = x;
+
+julia> f(x::Integer) = 1 + invoke(f, Tuple{Any}, x);
+
 julia> f(2)
-4
+3
 ```
 """
 invoke
