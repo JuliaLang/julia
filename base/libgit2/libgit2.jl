@@ -95,7 +95,7 @@ Checks if there have been any changes to tracked files in the working tree (if
 `cached=false`) or the index (if `cached=true`).
 `pathspecs` are the specifications for options for the diff.
 
-# Example
+# Examples
 ```julia
 repo = LibGit2.GitRepo(repo_path)
 LibGit2.isdirty(repo) # should be false
@@ -118,7 +118,7 @@ Checks if there are any differences between the tree specified by `treeish` and 
 tracked files in the working tree (if `cached=false`) or the index (if `cached=true`).
 `pathspecs` are the specifications for options for the diff.
 
-# Example
+# Examples
 ```julia
 repo = LibGit2.GitRepo(repo_path)
 LibGit2.isdiff(repo, "HEAD") # should be false
@@ -490,7 +490,7 @@ set by `mode`:
   2. `Consts.RESET_MIXED` - default, move HEAD to `id` and reset the index to `id`.
   3. `Consts.RESET_HARD` - move HEAD to `id`, reset the index to `id`, and discard all working changes.
 
-# Example
+# Examples
 ```julia
 # fetch changes
 LibGit2.fetch(repo)
