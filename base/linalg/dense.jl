@@ -357,34 +357,12 @@ kron(a::AbstractMatrix, b::AbstractVector) = kron(a, reshape(b, length(b), 1))
 kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
 
 # Matrix power
-(^)(A::AbstractMatrix{T}, p::Integer) where {T} = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
-function (^)(A::AbstractMatrix{T}, p::Real) where T
-    # For integer powers, use repeated squaring
-    if isinteger(p)
-        TT = Base.promote_op(^, eltype(A), typeof(p))
-        return (TT == eltype(A) ? A : copy!(similar(A, TT), A))^Integer(p)
-    end
-
-    # If possible, use diagonalization
-    if T <: Real && issymmetric(A)
-        return (Symmetric(A)^p)
-    end
-    if ishermitian(A)
-        return (Hermitian(A)^p)
-    end
-
-    n = checksquare(A)
-
-    # Quicker return if A is diagonal
-    if isdiag(A)
-        retmat = copy(A)
-        for i in 1:n
-            retmat[i, i] = retmat[i, i] ^ p
-        end
-        return retmat
-    end
-
-    # Otherwise, use Schur decomposition
+(^)(A::AbstractMatrix, p::Integer) = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
+function integerpow(A::AbstractMatrix{T}, p) where T
+    TT = Base.promote_op(^, T, typeof(p))
+    return (TT == T ? A : copy!(similar(A, TT), A))^Integer(p)
+end
+function schurpow(A::AbstractMatrix, p)
     if istriu(A)
         # Integer part
         retmat = A ^ floor(p)
@@ -415,6 +393,32 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     else
         return retmat
     end
+end
+function (^)(A::AbstractMatrix{T}, p::Real) where T
+    n = checksquare(A)
+
+    # For integer powers, use power_by_squaring
+    isinteger(p) && return integerpow(A, p)
+
+    # If possible, use diagonalization
+    if issymmetric(A)
+        return (Symmetric(A)^p)
+    end
+    if ishermitian(A)
+        return (Hermitian(A)^p)
+    end
+
+    # Quicker return if A is diagonal
+    if isdiag(A)
+        retmat = copy(A)
+        for i in 1:n
+            retmat[i, i] = retmat[i, i] ^ p
+        end
+        return retmat
+    end
+
+    # Otherwise, use Schur decomposition
+    return schurpow(A, p)
 end
 (^)(A::AbstractMatrix, p::Number) = expm(p*logm(A))
 
