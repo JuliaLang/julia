@@ -69,7 +69,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
     lhs_slotnums = IntSet()
     walkast(c.code) do x
         if isa(x, Expr)
-            is_top_level && x.head == :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
+            !is_top_level && x.head == :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
             narg_bounds = get_expr_narg_bounds(x.head, -1:-1)
             if narg_bounds == -1:-1
                 push!(errors, InvalidCodeError(INVALID_EXPR_HEAD, x.head))
@@ -96,11 +96,13 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                     end
                 end
             end
-        elseif isa(x, SSAValue) && !in(x.id, ssavals)
-            push!(ssavals, x.id)
+        elseif isa(x, SSAValue)
+            id = x.id + 1 # ensures that id > 0 for use with IntSet
+            !in(id, ssavals) && push!(ssavals, id)
         end
     end
     nslotnames = length(c.slotnames)
+    nslotflags = length(c.slotflags)
     nssavals = length(ssavals)
     nslotnames == 0 && push!(errors, InvalidCodeError(EMPTY_SLOTNAMES))
     nslotnames != nslotflags && push!(errors, InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags)))
