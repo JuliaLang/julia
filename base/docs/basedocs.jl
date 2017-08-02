@@ -555,20 +555,20 @@ Short-circuiting boolean OR.
 kw"||"
 
 """
-    ccall((symbol, library) or function_pointer, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
+    ccall((symbol, library) or function_pointer, returntype, (argtype1, ...), argvalue1, ...)
 
-Call function in C-exported shared library, specified by `(function name, library)`
+Call function in C-exported shared library, specified by `(function_name, library)`
 tuple, where each component is a string or symbol.
 
 Note that the argument type tuple must be a literal tuple, and not a tuple-valued
 variable or expression. Alternatively, `ccall` may also be used to call a function
 pointer, such as one returned by `dlsym`.
 
-Each `ArgumentValue` to the `ccall` will be converted to the corresponding
-`ArgumentType`, by automatic insertion of calls to `unsafe_convert(ArgumentType,
-cconvert(ArgumentType, ArgumentValue))`. (See also the documentation for each of these
+Each `argvalue` to the `ccall` will be converted to the corresponding
+`argtype`, by automatic insertion of calls to `unsafe_convert(argtype,
+cconvert(argtype, argvalue))`. (See also the documentation for each of these
 functions for further details.) In most cases, this simply results in a call to
-`convert(ArgumentType, ArgumentValue)`.
+`convert(argtype, argvalue)`.
 """
 kw"ccall"
 
