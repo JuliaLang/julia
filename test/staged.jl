@@ -228,3 +228,25 @@ g10178(x) = f10178(x)
 # issue #22135
 @generated f22135(x::T) where T = x
 @test f22135(1) === Int
+
+# PR #22440
+
+f22440kernel(x...) = x[1] + x[1]
+f22440kernel(x::AbstractFloat) = x * x
+f22440kernel(::Type{T}) where {T} = one(T)
+f22440kernel(::Type{T}) where {T<:AbstractFloat} = zero(T)
+
+@generated function f22440(y)
+    sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, typemax(UInt))[1]
+    code_info = Base.uncompressed_ast(method)
+    body = Expr(:block, code_info.code...)
+    Base.Core.Inference.substitute!(body, 0, Any[], sig, Any[spvals...], 0)
+    return code_info
+end
+
+@test f22440(Int) === f22440kernel(Int)
+@test f22440(Float64) === f22440kernel(Float64)
+@test f22440(Float32) === f22440kernel(Float32)
+@test f22440(0.0) === f22440kernel(0.0)
+@test f22440(0.0f0) === f22440kernel(0.0f0)
+@test f22440(0) === f22440kernel(0)
