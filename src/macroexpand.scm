@@ -107,7 +107,7 @@
                              ;; a=b -> add argument
                              (loop (cdr binds)
                                    (cons (decl-var (cadar binds)) vars)))
-                            ((eventually-call (cadar binds))
+                            ((eventually-call? (cadar binds))
                              ;; f()=c
                              (let ((asgn (cadr (julia-expand0 (car binds)))))
                                (loop (cdr binds)
@@ -389,7 +389,7 @@
 (define (function-def? e)
   (and (pair? e) (or (eq? (car e) 'function) (eq? (car e) '->)
                      (and (eq? (car e) '=) (length= e 3)
-                          (eventually-call (cadr e))))))
+                          (eventually-call? (cadr e))))))
 
 (define (find-declared-vars-in-expansion e decl (outer #t))
   (cond ((or (not (pair? e)) (quoted? e)) '())

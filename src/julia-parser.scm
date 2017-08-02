@@ -673,16 +673,14 @@
                             (parse-assignment s parse-cond)))))
         (parse-assignment s parse-cond))))
 
-(define (eventually-call ex)
+(define (eventually-call? ex)
   (and (pair? ex)
        (or (eq? (car ex) 'call)
            (and (or (eq? (car ex) 'where) (eq? (car ex) '|::|))
-                (eventually-call (cadr ex))))))
+                (eventually-call? (cadr ex))))))
 
 (define (short-form-function-loc ex lno)
-  (if (and (pair? ex)
-           (eq? (car ex) '=)
-           (eventually-call (cadr ex)))
+  (if (eventually-call? (cadr ex))
       `(= ,(cadr ex) (block (line ,lno ,current-filename) ,(caddr ex)))
       ex))
 

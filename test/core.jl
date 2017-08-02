@@ -486,6 +486,12 @@ let t = (22,33)
     @test x == 33
 end
 
+# issue #23091
+let (f(), x) = (1, 2)
+    @test f() == 1
+    @test x == 2
+end
+
 # issue #21900
 f21900_cnt = 0
 function f21900()

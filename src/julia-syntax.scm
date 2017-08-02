@@ -1104,7 +1104,7 @@
                    (eq? (caar binds) '=))
               ;; some kind of assignment
               (cond
-               ((eventually-call (cadar binds))
+               ((eventually-call? (cadar binds))
                 ;; f()=c
                 (let ((asgn (butlast (expand-forms (car binds))))
                       (name (assigned-name (cadar binds))))
@@ -1327,7 +1327,7 @@
 (define (assigned-name e)
   (cond ((atom? e) e)
         ((or (memq (car e) '(call curly where))
-             (and (eq? (car e) '|::|) (eventually-call e)))
+             (and (eq? (car e) '|::|) (eventually-call? e)))
          (assigned-name (cadr e)))
         (else e)))
 
@@ -1385,7 +1385,7 @@
                     (cons (make-assignment L R) stmts)
                     after
                     (cons R elts))
-              (let ((temp (make-ssavalue)))
+              (let ((temp (if (eventually-call? L) (gensy) (make-ssavalue))))
                 (loop (cdr lhss)
                       (cons L assigned)
                       (cdr rhss)
@@ -1401,7 +1401,7 @@
       ,@(let loop ((lhs lhss)
                    (i   1))
           (if (null? lhs) '((null))
-              (cons (if (eventually-call (car lhs))
+              (cons (if (eventually-call? (car lhs))
                         ;; if this is a function assignment, avoid putting our ssavalue
                         ;; inside the function and instead create a capture-able variable.
                         ;; issue #22032
@@ -2428,7 +2428,7 @@
         (else '())))
 
 (define (all-decl-vars e)  ;; map decl-var over every level of an assignment LHS
-  (cond ((eventually-call e) e)
+  (cond ((eventually-call? e) e)
         ((decl? e)   (decl-var e))
         ((and (pair? e) (eq? (car e) 'tuple))
          (cons 'tuple (map all-decl-vars (cdr e))))
