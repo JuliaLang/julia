@@ -39,86 +39,85 @@ bimg  = randn(n,2)/2
             @test abs(qrfact(α)[:Q][1,1]) ≈ one(eltyb)
         end
 
-        for i = 1:2
-            let a = i == 1 ? a : view(a, 1:n - 1, 1:n - 1), b = i == 1 ? b : view(b, 1:n - 1), n = i == 1 ? n : n - 1
-                @testset "QR decomposition (without pivoting)" begin
-                    qra   = @inferred qrfact(a)
-                    @inferred qr(a)
-                    q, r  = qra[:Q], qra[:R]
-                    @test_throws KeyError qra[:Z]
-                    @test q'*full(q, thin=false) ≈ eye(n)
-                    @test q*full(q, thin=false)' ≈ eye(n)
-                    @test q'*eye(n)' ≈ full(q, thin=false)'
-                    @test full(q, thin=false)'q ≈ eye(n)
-                    @test eye(n)'q' ≈ full(q, thin=false)'
-                    @test q*r ≈ a
-                    @test a*(qra\b) ≈ b atol=3000ε
-                    @test full(qra) ≈ a
-                    @test A_mul_Bc(eye(eltyb,size(q.factors,2)),q)*full(q,thin=false) ≈ eye(n) atol=5000ε
-                    if eltya != Int
-                        @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
-                        ac = copy(a)
-                        @test qrfact!(a[:, 1:5])\b == qrfact!(view(ac, :, 1:5))\b
-                    end
-                    rstring = sprint(show,r)
-                    qstring = sprint(show,q)
-                    @test sprint(show,qra) == "$(typeof(qra)) with factors Q and R:\n$qstring\n$rstring"
+        for (a, b) in ((a, b),
+               (view(a, 1:n-1, 1:n-1), view(b, 1:n-1, 1:n-1)))
+            @testset "QR decomposition (without pivoting)" begin
+                qra   = @inferred qrfact(a)
+                @inferred qr(a)
+                q, r  = qra[:Q], qra[:R]
+                @test_throws KeyError qra[:Z]
+                @test q'*full(q, thin=false) ≈ eye(n)
+                @test q*full(q, thin=false)' ≈ eye(n)
+                @test q'*eye(n)' ≈ full(q, thin=false)'
+                @test full(q, thin=false)'q ≈ eye(n)
+                @test eye(n)'q' ≈ full(q, thin=false)'
+                @test q*r ≈ a
+                @test a*(qra\b) ≈ b atol=3000ε
+                @test full(qra) ≈ a
+                @test A_mul_Bc(eye(eltyb,size(q.factors,2)),q)*full(q,thin=false) ≈ eye(n) atol=5000ε
+                if eltya != Int
+                    @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
+                    ac = copy(a)
+                    @test qrfact!(a[:, 1:5])\b == qrfact!(view(ac, :, 1:5))\b
                 end
-                @testset "Thin QR decomposition (without pivoting)" begin
-                    qra   = @inferred qrfact(a[:,1:n1], Val(false))
-                    @inferred qr(a[:,1:n1], Val(false))
-                    q,r   = qra[:Q], qra[:R]
-                    @test_throws KeyError qra[:Z]
-                    @test q'*full(q, thin=false) ≈ eye(n)
-                    @test q'*full(q) ≈ eye(n,n1)
-                    @test q*r ≈ a[:,1:n1]
-                    @test q*b[1:n1] ≈ full(q)*b[1:n1] atol=100ε
-                    @test q*b ≈ full(q,thin=false)*b atol=100ε
-                    @test_throws DimensionMismatch q*b[1:n1 + 1]
-                    @test_throws DimensionMismatch b[1:n1 + 1]*q'
-                    @test A_mul_Bc(UpperTriangular(eye(eltyb,size(q.factors,2))),q)*full(q,thin=false) ≈ eye(n1,n) atol=5000ε
-                    if eltya != Int
-                        @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
-                    end
+                rstring = sprint(show,r)
+                qstring = sprint(show,q)
+                @test sprint(show,qra) == "$(typeof(qra)) with factors Q and R:\n$qstring\n$rstring"
+            end
+            @testset "Thin QR decomposition (without pivoting)" begin
+                qra   = @inferred qrfact(a[:,1:n1], Val(false))
+                @inferred qr(a[:,1:n1], Val(false))
+                q,r   = qra[:Q], qra[:R]
+                @test_throws KeyError qra[:Z]
+                @test q'*full(q, thin=false) ≈ eye(n)
+                @test q'*full(q) ≈ eye(n,n1)
+                @test q*r ≈ a[:,1:n1]
+                @test q*b[1:n1] ≈ full(q)*b[1:n1] atol=100ε
+                @test q*b ≈ full(q,thin=false)*b atol=100ε
+                @test_throws DimensionMismatch q*b[1:n1 + 1]
+                @test_throws DimensionMismatch b[1:n1 + 1]*q'
+                @test A_mul_Bc(UpperTriangular(eye(eltyb,size(q.factors,2))),q)*full(q,thin=false) ≈ eye(n1,n) atol=5000ε
+                if eltya != Int
+                    @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                 end
-                @testset "(Automatic) Fat (pivoted) QR decomposition" begin
-                    @inferred qrfact(a, Val(true))
-                    @inferred qr(a, Val(true))
+            end
+            @testset "(Automatic) Fat (pivoted) QR decomposition" begin
+                @inferred qrfact(a, Val(true))
+                @inferred qr(a, Val(true))
 
-                    qrpa  = factorize(a[1:n1,:])
-                    q,r = qrpa[:Q], qrpa[:R]
-                    @test_throws KeyError qrpa[:Z]
-                    p = qrpa[:p]
-                    @test q'*full(q, thin=false) ≈ eye(n1)
-                    @test q*full(q, thin=false)' ≈ eye(n1)
-                    @test (UpperTriangular(eye(eltya,size(q,2)))*q')*full(q, thin=false) ≈ eye(n1)
-                    @test q*r ≈ (isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:])
-                    @test q*r[:,invperm(p)] ≈ a[1:n1,:]
-                    @test q*r*qrpa[:P].' ≈ a[1:n1,:]
-                    @test a[1:n1,:]*(qrpa\b[1:n1]) ≈ b[1:n1] atol=5000ε
-                    @test full(qrpa) ≈ a[1:5,:]
-                    @test_throws DimensionMismatch q*b[1:n1+1]
-                    @test_throws DimensionMismatch b[1:n1+1]*q'
-                    if eltya != Int
-                        @test eye(eltyb,n1)*q ≈ convert(AbstractMatrix{tab},q)
-                    end
+                qrpa  = factorize(a[1:n1,:])
+                q,r = qrpa[:Q], qrpa[:R]
+                @test_throws KeyError qrpa[:Z]
+                p = qrpa[:p]
+                @test q'*full(q, thin=false) ≈ eye(n1)
+                @test q*full(q, thin=false)' ≈ eye(n1)
+                @test (UpperTriangular(eye(eltya,size(q,2)))*q')*full(q, thin=false) ≈ eye(n1)
+                @test q*r ≈ (isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:])
+                @test q*r[:,invperm(p)] ≈ a[1:n1,:]
+                @test q*r*qrpa[:P].' ≈ a[1:n1,:]
+                @test a[1:n1,:]*(qrpa\b[1:n1]) ≈ b[1:n1] atol=5000ε
+                @test full(qrpa) ≈ a[1:5,:]
+                @test_throws DimensionMismatch q*b[1:n1+1]
+                @test_throws DimensionMismatch b[1:n1+1]*q'
+                if eltya != Int
+                    @test eye(eltyb,n1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
-                @testset "(Automatic) Thin (pivoted) QR decomposition" begin
-                    qrpa  = factorize(a[:,1:n1])
-                    q,r = qrpa[:Q], qrpa[:R]
-                    @test_throws KeyError qrpa[:Z]
-                    p = qrpa[:p]
-                    @test q'*full(q, thin=false) ≈ eye(n)
-                    @test q*full(q, thin=false)' ≈ eye(n)
-                    @test q*r ≈ a[:,p]
-                    @test q*r[:,invperm(p)] ≈ a[:,1:n1]
-                    @test full(qrpa) ≈ a[:,1:5]
-                    @test_throws DimensionMismatch q*b[1:n1+1]
-                    @test_throws DimensionMismatch b[1:n1+1]*q'
-                    @test A_mul_Bc(UpperTriangular(eye(eltyb,size(q.factors,2))),q)*full(q,thin=false) ≈ eye(n1,n) atol=5000ε
-                    if eltya != Int
-                        @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
-                    end
+            end
+            @testset "(Automatic) Thin (pivoted) QR decomposition" begin
+                qrpa  = factorize(a[:,1:n1])
+                q,r = qrpa[:Q], qrpa[:R]
+                @test_throws KeyError qrpa[:Z]
+                p = qrpa[:p]
+                @test q'*full(q, thin=false) ≈ eye(n)
+                @test q*full(q, thin=false)' ≈ eye(n)
+                @test q*r ≈ a[:,p]
+                @test q*r[:,invperm(p)] ≈ a[:,1:n1]
+                @test full(qrpa) ≈ a[:,1:5]
+                @test_throws DimensionMismatch q*b[1:n1+1]
+                @test_throws DimensionMismatch b[1:n1+1]*q'
+                @test A_mul_Bc(UpperTriangular(eye(eltyb,size(q.factors,2))),q)*full(q,thin=false) ≈ eye(n1,n) atol=5000ε
+                if eltya != Int
+                    @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                 end
             end
         end
@@ -149,7 +148,6 @@ bimg  = randn(n,2)/2
 end
 
 @testset "transpose errors" begin
-    # Because transpose(x) == x
     @test_throws ErrorException transpose(qrfact(randn(3,3)))
     @test_throws ErrorException ctranspose(qrfact(randn(3,3)))
     @test_throws ErrorException transpose(qrfact(randn(3,3), Val(false)))
