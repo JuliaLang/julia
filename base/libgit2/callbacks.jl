@@ -78,9 +78,9 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
             if !isusedcreds
                 uname
             else
-                res = prompt("Username for '$prompt_url'", default=uname)
-                isnull(res) && return user_abort()
-                unsafe_get(res)
+                response = prompt("Username for '$prompt_url'", default=uname)
+                isnull(response) && return user_abort()
+                unsafe_get(response)
             end
         else
             unsafe_string(username_ptr)
@@ -98,9 +98,10 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
                 if isempty(keydefpath) && isfile(defaultkeydefpath)
                     keydefpath = defaultkeydefpath
                 else
-                    res = prompt("Private key location for '$prompt_url'", default=keydefpath)
-                    isnull(res) && return user_abort()
-                    keydefpath = unsafe_get(res)
+                    response = prompt("Private key location for '$prompt_url'",
+                        default=keydefpath)
+                    isnull(response) && return user_abort()
+                    keydefpath = unsafe_get(response)
                 end
             end
             keydefpath
@@ -122,9 +123,10 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
                     keydefpath = privatekey*".pub"
                 end
                 if !isfile(keydefpath)
-                    res = prompt("Public key location for '$prompt_url'", default=keydefpath)
-                    isnull(res) && return user_abort()
-                    keydefpath = unsafe_get(res)
+                    response = prompt("Public key location for '$prompt_url'",
+                        default=keydefpath)
+                    isnull(response) && return user_abort()
+                    keydefpath = unsafe_get(response)
                 end
             end
             keydefpath
@@ -136,15 +138,15 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
             passdef = creds.pass # check if credentials were already used
             if (isempty(passdef) || isusedcreds) && is_passphrase_required(privatekey)
                 if Sys.iswindows()
-                    res = Base.winprompt(
+                    response = Base.winprompt(
                         "Your SSH Key requires a password, please enter it now:",
                         "Passphrase required", privatekey; prompt_username = false)
-                    isnull(res) && return user_abort()
-                    passdef = unsafe_get(res)[2]
+                    isnull(response) && return user_abort()
+                    passdef = unsafe_get(response)[2]
                 else
-                    res = prompt("Passphrase for $privatekey", password=true)
-                    isnull(res) && return user_abort()
-                    passdef = unsafe_get(res)
+                    response = prompt("Passphrase for $privatekey", password=true)
+                    isnull(response) && return user_abort()
+                    passdef = unsafe_get(response)
                     isempty(passdef) && return user_abort()  # Ambiguous if EOF or newline
                 end
             end
@@ -176,21 +178,21 @@ function authenticate_userpass(creds::UserPasswordCredentials, libgit2credptr::P
         prompt_url = git_url(scheme=schema, host=host)
         if Sys.iswindows()
             if isempty(username) || isempty(userpass) || isusedcreds
-                res = Base.winprompt("Please enter your credentials for '$prompt_url'", "Credentials required",
-                        isempty(username) ? urlusername : username; prompt_username = true)
-                isnull(res) && return user_abort()
-                username, userpass = unsafe_get(res)
+                response = Base.winprompt("Please enter your credentials for '$prompt_url'", "Credentials required",
+                    isempty(username) ? urlusername : username; prompt_username = true)
+                isnull(response) && return user_abort()
+                username, userpass = unsafe_get(response)
             end
         elseif isusedcreds
-            res = prompt("Username for '$prompt_url'",
+            response = prompt("Username for '$prompt_url'",
                 default=isempty(username) ? urlusername : username)
-            isnull(res) && return user_abort()
-            username = unsafe_get(res)
+            isnull(response) && return user_abort()
+            username = unsafe_get(response)
 
             prompt_url = git_url(scheme=schema, host=host, username=username)
-            res = prompt("Password for '$prompt_url'", password=true)
-            isnull(res) && return user_abort()
-            userpass = unsafe_get(res)
+            response = prompt("Password for '$prompt_url'", password=true)
+            isnull(response) && return user_abort()
+            userpass = unsafe_get(response)
             isempty(userpass) && return user_abort()  # Ambiguous if EOF or newline
         end
 
