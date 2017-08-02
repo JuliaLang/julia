@@ -637,6 +637,10 @@ function test_ldiv_pinv_consistency(a, b)
     @test a\(a*b) ≈ (a\a)*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
     @test typeof(a\(a*b)) == typeof((a\a)*b) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
 end
+function test_div_pinv_consistency(a, b)
+    test_rdiv_pinv_consistency(a, b)
+    test_ldiv_pinv_consistency(a, b)
+end
 
 @testset "/ and \\ consistency with pinv for vectors" begin
     @testset "Tests for type $elty" for elty in (Float32, Float64, Complex64, Complex128)
@@ -645,20 +649,15 @@ end
         cm = rand(elty, 5, 1)
         rm = rand(elty, 1, 5)
         @testset "inner prodcuts" begin
-            @test (r*c)/c ≈ (r*c)*pinv(c) ≈ r*(c*pinv(c))
-            @test typeof((r*c)/c) == typeof((r*c)*pinv(c)) == typeof(r*(c*pinv(c)))
-            @test r\(r*c) ≈ (pinv(r)*r)*c ≈ pinv(r)*(r*c)
-            @test typeof(r\(r*c)) == typeof((pinv(r)*r)*c) == typeof(pinv(r)*(r*c))
-            test_ldiv_pinv_consistency(rm, c)
-            test_rdiv_pinv_consistency(r, cm)
-            test_ldiv_pinv_consistency(rm, cm)
-            test_rdiv_pinv_consistency(rm, cm)
+            test_div_pinv_consistency(r, c)
+            test_div_pinv_consistency(rm, c)
+            test_div_pinv_consistency(r, cm)
+            test_div_pinv_consistency(rm, cm)
         end
         @testset "outer prodcuts" begin
             @test (c*r)/r ≈ c*(r/r) ≈ (c*r)*pinv(r) ≈ c*(r*pinv(r))
             @test c\(c*r) ≈ (c\c)*r ≈ (pinv(c)*c)*r ≈ pinv(c)*(c*r)
-            test_ldiv_pinv_consistency(cm, rm)
-            test_rdiv_pinv_consistency(cm, rm)
+            test_div_pinv_consistency(cm, rm)
         end
         @testset "matrix/vector" begin
             m = rand(5, 5)
