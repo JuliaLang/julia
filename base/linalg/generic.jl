@@ -855,7 +855,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
     return qrfact(A,Val(true)) \ B
 end
 
-(\)(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
+(\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
 (/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)
