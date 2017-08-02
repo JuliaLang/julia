@@ -71,19 +71,18 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
     end
 
     if creds.prompt_if_incorrect
-        # if username is not provided, then prompt for it
-        username = if username_ptr == Cstring(C_NULL)
+        # if username is not provided or empty, then prompt for it
+        username = username_ptr != Cstring(C_NULL) ? unsafe_string(username_ptr) : ""
+        if isempty(username)
             uname = creds.user # check if credentials were already used
             prompt_url = git_url(scheme=schema, host=host)
             if !isusedcreds
-                uname
+                username = uname
             else
                 response = prompt("Username for '$prompt_url'", default=uname)
                 isnull(response) && return user_abort()
-                unsafe_get(response)
+                username = unsafe_get(response)
             end
-        else
-            unsafe_string(username_ptr)
         end
 
         prompt_url = git_url(scheme=schema, host=host, username=username)

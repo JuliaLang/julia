@@ -1640,7 +1640,7 @@ mktempdir() do dir
             ssh_u_cmd = """
             include("$LIBGIT2_HELPER_PATH")
             valid_cred = LibGit2.SSHCredentials("$username", "", "$valid_key", "$valid_key.pub")
-            err, auth_attempts = credential_loop(valid_cred, "$url", "")
+            err, auth_attempts = credential_loop(valid_cred, "$url")
             (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
             """
 
@@ -1736,6 +1736,22 @@ mktempdir() do dir
                 err, auth_attempts = challenge_prompt(ssh_u_cmd, challenges)
                 @test err == abort_prompt
                 @test auth_attempts == 6
+
+                # Credential callback is given an empty string in the `username_ptr`
+                # instead of the typical C_NULL.
+                ssh_user_empty_cmd = """
+                include("$LIBGIT2_HELPER_PATH")
+                valid_cred = LibGit2.SSHCredentials("$username", "", "$valid_key", "$valid_key.pub")
+                err, auth_attempts = credential_loop(valid_cred, "$url", "")
+                (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
+                """
+
+                challenges = [
+                    "Username for 'github.com':" => "$username\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_user_empty_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 1
             end
 
             # Explicitly setting these env variables to be empty means the user will be

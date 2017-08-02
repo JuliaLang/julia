@@ -9,7 +9,7 @@ without having to authenticate against a real server.
 function credential_loop(
         valid_credential::AbstractCredentials,
         url::AbstractString,
-        user::AbstractString,
+        user::Nullable{<:AbstractString},
         allowed_types::UInt32,
         cache::CachedCredentials=CachedCredentials())
     cb = Base.LibGit2.credentials_cb()
@@ -25,7 +25,7 @@ function credential_loop(
     err = Cint(0)
     while err == 0
         err = ccall(cb, Cint, (Ptr{Ptr{Void}}, Cstring, Cstring, Cuint, Ptr{Void}),
-            libgitcred_ptr_ptr, url, isempty(user) ? C_NULL : user, allowed_types, pointer_from_objref(payload_ptr))
+            libgitcred_ptr_ptr, url, get(user, C_NULL), allowed_types, pointer_from_objref(payload_ptr))
         num_authentications += 1
 
         # Check if the callback provided us with valid credentials
@@ -44,14 +44,14 @@ end
 function credential_loop(
         valid_credential::UserPasswordCredentials,
         url::AbstractString,
-        user::AbstractString="")
+        user::Nullable{<:AbstractString}=Nullable{String}())
     credential_loop(valid_credential, url, user, 0x000001)
 end
 
 function credential_loop(
         valid_credential::SSHCredentials,
         url::AbstractString,
-        user::AbstractString="";
+        user::Nullable{<:AbstractString}=Nullable{String}();
         use_ssh_agent::Bool=false)
     cache = CachedCredentials()
 
@@ -63,4 +63,19 @@ function credential_loop(
     end
 
     credential_loop(valid_credential, url, user, 0x000046, cache)
+end
+
+function credential_loop(
+        valid_credential::UserPasswordCredentials,
+        url::AbstractString,
+        user::AbstractString)
+    credential_loop(valid_credential, url, Nullable(user))
+end
+
+function credential_loop(
+        valid_credential::SSHCredentials,
+        url::AbstractString,
+        user::AbstractString;
+        use_ssh_agent::Bool=false)
+    credential_loop(valid_credential, url, Nullable(user), use_ssh_agent=use_ssh_agent)
 end
