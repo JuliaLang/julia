@@ -1,4 +1,4 @@
-# Based on FreeBSD lib/msun/src/e_exp.c
+# Based on FDLIBM http://www.netlib.org/fdlibm/e_exp.c
 # which is made available under the following licence
 
 ## Copyright (C) 2004 by Sun Microsystems, Inc. All rights reserved. Permission
