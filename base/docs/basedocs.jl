@@ -555,10 +555,10 @@ Short-circuiting boolean OR.
 kw"||"
 
 """
-    ccall((symbol, library) or function_pointer, returntype, (argtype1, ...), argvalue1, ...)
+    ccall((function_name, library) or function_pointer, returntype, (argtype1, ...), argvalue1, ...)
 
 Call function in C-exported shared library, specified by `(function_name, library)`
-tuple, where each component is a string or symbol.
+tuple, where each component is either a string or symbol.
 
 Note that the argument type tuple must be a literal tuple, and not a tuple-valued
 variable or expression. Alternatively, `ccall` may also be used to call a function
