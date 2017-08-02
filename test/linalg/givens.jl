@@ -2,19 +2,14 @@
 
 using Base.Test
 
-let
-debug = false
-
 # Test givens rotations
-for elty in (Float32, Float64, Complex64, Complex128)
-    debug && println("elty is $elty")
-
+@testset for elty in (Float32, Float64, Complex64, Complex128)
     if elty <: Real
         A = convert(Matrix{elty}, randn(10,10))
     else
         A = convert(Matrix{elty}, complex.(randn(10,10),randn(10,10)))
     end
-    for Atype in ("Array", "SubArray")
+    @testset for Atype in ("Array", "SubArray")
         if Atype == "Array"
             A = A
         else
@@ -31,11 +26,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
 
                 @test A_mul_B!(G,eye(elty,10,10)) == [G[i,j] for i=1:10,j=1:10]
 
-                # test transposes
-                @test ctranspose(G)*G*eye(10) ≈ eye(elty, 10)
-                @test ctranspose(R)*(R*eye(10)) ≈ eye(elty, 10)
-                @test_throws ErrorException transpose(G)
-                @test_throws ErrorException transpose(R)
+                @testset "transposes" begin
+                    @test ctranspose(G)*G*eye(10) ≈ eye(elty, 10)
+                    @test ctranspose(R)*(R*eye(10)) ≈ eye(elty, 10)
+                    @test_throws ErrorException transpose(G)
+                    @test_throws ErrorException transpose(R)
+                end
             end
         end
         @test_throws ArgumentError givens(A, 3, 3, 2)
@@ -51,25 +47,25 @@ for elty in (Float32, Float64, Complex64, Complex128)
         K, _ = givens(zero(elty),one(elty),9,10)
         @test ctranspose(K*eye(elty,10))*(K*eye(elty,10)) ≈ eye(elty, 10)
 
-        # test that Givens * work for vectors
-        if Atype == "Array"
-            x = A[:, 1]
-        else
-            x = view(A, 1:10, 1)
+        @testset "Givens * vectors" begin
+            if Atype == "Array"
+                x = A[:, 1]
+            else
+                x = view(A, 1:10, 1)
+            end
+            G, r = givens(x[2], x[4], 2, 4)
+            @test (G*x)[2] ≈ r
+            @test abs((G*x)[4]) < eps(real(elty))
+            @inferred givens(x[2], x[4], 2, 4)
+
+            G, r = givens(x, 2, 4)
+            @test (G*x)[2] ≈ r
+            @test abs((G*x)[4]) < eps(real(elty))
+            @inferred givens(x, 2, 4)
+
+            G, r = givens(x, 4, 2)
+            @test (G*x)[4] ≈ r
+            @test abs((G*x)[2]) < eps(real(elty))
         end
-        G, r = givens(x[2], x[4], 2, 4)
-        @test (G*x)[2] ≈ r
-        @test abs((G*x)[4]) < eps(real(elty))
-        @inferred givens(x[2], x[4], 2, 4)
-
-        G, r = givens(x, 2, 4)
-        @test (G*x)[2] ≈ r
-        @test abs((G*x)[4]) < eps(real(elty))
-        @inferred givens(x, 2, 4)
-
-        G, r = givens(x, 4, 2)
-        @test (G*x)[4] ≈ r
-        @test abs((G*x)[2]) < eps(real(elty))
     end
 end
-end #let
