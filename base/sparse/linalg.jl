@@ -970,7 +970,7 @@ function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
     # but k1*n = a+b, and k2*n = c+d
     sums = sum(X, vardim)
     @inbounds for j in 1:p, i in 1:p
-        part2 = sums[i] * sums[j] / n
+        part2 = sums[i] * (sums[j] / n)
         out[i,j] -= part2
     end
     return scale!(out, inv(n-Int(corrected)))
