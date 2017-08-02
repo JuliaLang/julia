@@ -27,7 +27,7 @@ function svdfact!(A::StridedMatrix{T}; thin::Bool=true) where T<:BlasFloat
 end
 
 """
-    svdfact(A, thin::Bool=true) -> SVD
+    svdfact(A; thin::Bool=true) -> SVD
 
 Compute the singular value decomposition (SVD) of `A` and return an `SVD` object.
 
@@ -68,7 +68,7 @@ svdfact(x::Number; thin::Bool=true) = SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/a
 svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin=thin)
 
 """
-    svd(A, thin::Bool=true) -> U, S, V
+    svd(A; thin::Bool=true) -> U, S, V
 
 Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
 `A == U*diagm(S)*V'`. The singular values in `S` are sorted in descending order.
