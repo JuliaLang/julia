@@ -294,3 +294,18 @@ let a = 10
     @test f17240(b=3) == (9, 3)
     @test f17240(a=2, b=1) == (2, 1)
 end
+
+# issue #9535 - evaluate all arguments left-to-right
+let counter = 0
+    function get_next()
+        counter += 1
+        return counter
+    end
+    f(args...; kws...) = (args, kws)
+    @test f(get_next(), a=get_next(), get_next(),
+            b=get_next(), get_next(),
+            [get_next(), get_next()]...; c=get_next(),
+            [(:d, get_next()), (:f, get_next())]...) ==
+                ((1,3,5,6,7),
+                 Any[(:a,2), (:b,4), (:c,8), (:d,9), (:f,10)])
+end
