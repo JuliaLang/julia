@@ -923,10 +923,10 @@ Stacktrace:
 BoundsError
 
 """
-    invoke(function, ArgumentTypes::Type, arguments...)
+    invoke(f, argtypes::Type, args...)
 
-Invoke a method for the given generic function matching the specified types, on
-the specified arguments. The arguments must be compatible with the specified types. This
+Invoke a method for the given generic function `f` matching the specified types `argtypes`, on
+the specified arguments `args`. The arguments must be compatible with the specified types. This
 allows invoking a method other than the most specific matching method, which is useful when
 the behavior of a more general definition is explicitly needed (often as part of the
 implementation of a more specific method of the same function).
