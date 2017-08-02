@@ -5075,6 +5075,11 @@ f_isdefined_cl_6() = (local x; () -> @isdefined x)
 @test !f_isdefined_cl_4()
 @test f_isdefined_cl_5()()
 @test !f_isdefined_cl_6()()
+f_isdefined_tv(::T) where {T} = @isdefined T
+@test f_isdefined_tv(1)
+f_isdefined_va(::T...) where {T} = @isdefined T
+@test_throws MethodError f_isdefined_va()
+@test f_isdefined_va(1, 2, 3)
 
 mutable struct MyStruct22929
     x::MyStruct22929

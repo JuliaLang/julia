@@ -3112,6 +3112,12 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
             }
         }
     }
+    else if (jl_is_expr(sym)) {
+        assert(((jl_expr_t*)sym)->head == static_parameter_sym && "malformed isdefined expression");
+        size_t i = jl_unbox_long(jl_exprarg(sym, 0)) - 1;
+        (void)i;
+        return mark_julia_const(jl_true);
+    }
     else {
         jl_module_t *modu;
         jl_sym_t *name;
