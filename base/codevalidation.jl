@@ -117,14 +117,17 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
 end
 
 """
-    validate_code!(errors::Vector{>:InvalidCodeError}, m::Method)
+    validate_code!(errors::Vector{>:InvalidCodeError}, mi::MethodInstance,
+                   c::Union{Void,CodeInfo} = Core.Inference.retrieve_code_info(mi))
 
-Validates `m`, logging any violation by pushing an `InvalidCodeError` into `errors`.
+Validates `mi`, logging any violation by pushing an `InvalidCodeError` into `errors`.
 
-After all `Method` checks are complete, `validate_code!(errors, c)` is called, where
-`c` is the `CodeInfo` instance retrievable via `m.source`.
+If `isa(c, CodeInfo)`, this method also calls `validate_code!(errors, c)`. It is assumed
+that `c` is the `CodeInfo` instance associated with `mi`.
 """
-function validate_code!(errors::Vector{>:InvalidCodeError}, m::Method)
+function validate_code!(errors::Vector{>:InvalidCodeError}, mi::Core.MethodInstance,
+                        c::Union{Void,CodeInfo} = Core.Inference.retrieve_code_info(mi))
+    m = mi.def::Method
     sig_params = unwrap_unionall(m.sig).parameters
     if length(sig_params) != m.nargs
         push!(errors, InvalidCodeError(SIGNATURE_NARGS_MISMATCH, (length(sig_params), m.nargs)))
@@ -132,13 +135,14 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, m::Method)
     if m.isva && length(sig_params) < (m.nargs - 1)
         push!(errors, InvalidCodeError(SIGNATURE_VARARG_MISMATCH, (last(sig_params), m.isva)))
     end
-    c = isa(m.source, CodeInfo) ? m.source : ccall(:jl_uncompress_ast, Any, (Any, Any), m, m.source)
-    m.nargs > length(c.slotnames) && push!(errors, InvalidCodeError(NARGS_MISMATCH))
-    validate_code!(errors, c, m.nargs == 0)
+    if isa(c, CodeInfo)
+        m.nargs > length(c.slotnames) && push!(errors, InvalidCodeError(NARGS_MISMATCH))
+        validate_code!(errors, c, m.nargs == 0)
+    end
     return errors
 end
 
-validate_code(x) = validate_code!(Vector{InvalidCodeError}(), x)
+validate_code(args...) = validate_code!(Vector{InvalidCodeError}(), args...)
 
 function walkast(f, stmts::Array)
     for stmt in stmts

@@ -289,24 +289,15 @@ end
 function InferenceState(linfo::MethodInstance,
                         optimize::Bool, cached::Bool, params::InferenceParams)
     # prepare an InferenceState object for inferring lambda
-    # create copies of the CodeInfo definition, and any fields that type-inference might modify
-    m = linfo.def::Method
-    if isdefined(m, :generator)
-        try
-            # user code might throw errors – ignore them
-            src = get_staged(linfo)
-        catch
-            return nothing
-        end
-    else
-        # TODO: post-inference see if we can swap back to the original arrays?
-        if isa(m.source, Array{UInt8,1})
-            src = ccall(:jl_uncompress_ast, Any, (Any, Any), m, m.source)
-        else
-            src = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), m.source)
-            src.code = copy_exprargs(src.code)
-            src.slotnames = copy(src.slotnames)
-            src.slotflags = copy(src.slotflags)
+    src = retrieve_code_info(linfo)
+    src === nothing && return nothing
+    if JLOptions().debug_level == 2
+        # this is a debug build of julia, so let's validate linfo
+        errors = validate_code(linfo, src)
+        if !isempty(errors)
+            for e in errors
+                warn(e)
+            end
         end
     end
     return InferenceState(linfo, src, optimize, cached, params)
@@ -331,6 +322,35 @@ end
 
 
 #### helper functions ####
+
+# create copies of the CodeInfo definition, and any fields that type-inference might modify
+function copy_code_info(c::CodeInfo)
+    cnew = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), c)
+    cnew.code = copy_exprargs(cnew.code)
+    cnew.slotnames = copy(cnew.slotnames)
+    cnew.slotflags = copy(cnew.slotflags)
+    return cnew
+end
+
+function retrieve_code_info(linfo::MethodInstance)
+    m = linfo.def::Method
+    if isdefined(m, :generator)
+        try
+            # user code might throw errors – ignore them
+            c = get_staged(linfo)
+        catch
+            return nothing
+        end
+    else
+        # TODO: post-inference see if we can swap back to the original arrays?
+        if isa(m.source, Array{UInt8,1})
+            c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, m.source)
+        else
+            c = copy_code_info(m.source)
+        end
+    end
+    return c
+end
 
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id # using a function to ensure we can infer this
 
