@@ -5,16 +5,11 @@ using Base.Test
 # Test givens rotations
 @testset for elty in (Float32, Float64, Complex64, Complex128)
     if elty <: Real
-        A = convert(Matrix{elty}, randn(10,10))
+        raw_A = convert(Matrix{elty}, randn(10,10))
     else
-        A = convert(Matrix{elty}, complex.(randn(10,10),randn(10,10)))
+        raw_A = convert(Matrix{elty}, complex.(randn(10,10),randn(10,10)))
     end
-    @testset for Atype in ("Array", "SubArray")
-        if Atype == "Array"
-            A = A
-        else
-            A = view(A, 1:10, 1:10)
-        end
+    @testset for A in (raw_A, view(raw_A, 1:10, 1:10))
         Ac = copy(A)
         R = Base.LinAlg.Rotation(Base.LinAlg.Givens{elty}[])
         for j = 1:8
@@ -48,7 +43,7 @@ using Base.Test
         @test ctranspose(K*eye(elty,10))*(K*eye(elty,10)) ≈ eye(elty, 10)
 
         @testset "Givens * vectors" begin
-            if Atype == "Array"
+            if isa(A, Array)
                 x = A[:, 1]
             else
                 x = view(A, 1:10, 1)
