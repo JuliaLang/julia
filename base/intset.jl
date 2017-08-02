@@ -2,7 +2,7 @@
 
 struct IntSet <: AbstractSet{Int}
     bits::BitVector
-    IntSet() = new(falses(256))
+    IntSet() = new(sizehint!(falses(0), 256))
 end
 
 """
@@ -24,14 +24,13 @@ function copy!(dest::IntSet, src::IntSet)
     dest
 end
 eltype(s::IntSet) = Int
-sizehint!(s::IntSet, n::Integer) = (_resize0!(s.bits, max(n, length(s.bits))); s)
+sizehint!(s::IntSet, n::Integer) = (n > length(s.bits) && _resize0!(s.bits, n); s)
 
 # An internal function for setting the inclusion bit for a given integer n >= 0
 @inline function _setint!(s::IntSet, idx::Integer, b::Bool)
     if idx > length(s.bits)
         b || return s # setting a bit to zero outside the set's bits is a no-op
-        newlen = idx + idx>>1 # This operation may overflow; we want saturation
-        _resize0!(s.bits, ifelse(newlen<0, typemax(Int), newlen))
+        _resize0!(s.bits, idx)
     end
     @inbounds s.bits[idx] = b
     s
@@ -41,6 +40,7 @@ end
 # elements are zeroed (will become unnecessary if this behavior changes)
 @inline function _resize0!(b::BitVector, newlen::Integer)
     len = length(b)
+    newlen = ((newlen+63) >> 6) << 6 # smallest multiple of 64 >= newlen
     resize!(b, newlen)
     len < newlen && @inbounds b[len+1:newlen] = false # resize! gives dirty memory
     b
@@ -48,24 +48,37 @@ end
 
 # An internal function that takes a pure function `f` and maps across two BitArrays
 # allowing the lengths to be different and altering b1 with the result
+# WARNING: the assumptions written in the else clauses must hold
 function _matched_map!(f, b1::BitArray, b2::BitArray)
     l1, l2 = length(b1), length(b2)
-    if l1 == l2
-        map!(f, b1, b1, b2)
-    elseif l1 < l2
-        _resize0!(b1, l2)
-        map!(f, b1, b1, b2)
+    _bit_map!(f, b1, b2)
+    if l1 < l2
+        if f(false, false) == f(false, true) == false
+            # We don't need to worry about the trailing bits — they're all false
+        else # @assert f(false, x) == x
+            resize!(b1, l2)
+            chk_offs = 1+l1>>6
+            unsafe_copy!(b1.chunks, chk_offs, b2.chunks, chk_offs, 1+l2>>6-chk_offs)
+        end
     elseif l1 > l2
         if f(false, false) == f(true, false) == false
             # We don't need to worry about the trailing bits — they're all false
             resize!(b1, l2)
-            map!(f, b1, b1, b2)
-        else
-            # We transiently extend b2 — as IntSet internal storage this is unobservable
-            _resize0!(b2, l1)
-            map!(f, b1, b1, b2)
-            resize!(b2, l2)
+        else # @assert f(x, false) == x
+            # We don't need to worry about the trailing bits — they already have the
+            # correct value
         end
+    end
+    b1
+end
+
+# similar to bit_map! in bitarray.jl, but lengths are multiple of 64,
+# and may not match
+function _bit_map!(f, b1::BitArray, b2::BitArray)
+    b1c, b2c = b1.chunks, b2.chunks
+    l = min(length(b1c), length(b2c))
+    @inbounds for i = 1:l
+        b1c[i] = f(b1c[i], b2c[i])
     end
     b1
 end
@@ -117,7 +130,7 @@ function intersect(s1::IntSet, ns)
     s
 end
 intersect(s1::IntSet, s2::IntSet) =
-    (length(s1.bits) >= length(s2.bits) ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1))
+    length(s1.bits) < length(s2.bits) ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1)
 """
     intersect!(s1::IntSet, s2::IntSet)
 
@@ -132,7 +145,7 @@ end
 setdiff(s::IntSet, ns) = setdiff!(copy(s), ns)
 setdiff!(s::IntSet, ns) = (for n in ns; _delete!(s, n); end; s)
 function setdiff!(s1::IntSet, s2::IntSet)
-    _matched_map!(>, s1.bits, s2.bits)
+    _matched_map!((p, q) -> p & ~q, s1.bits, s2.bits)
     s1
 end
 
@@ -159,14 +172,7 @@ function symdiff!(s1::IntSet, s2::IntSet)
     s1
 end
 
-@inline function in(n::Integer, s::IntSet)
-    if 1 <= n <= length(s.bits)
-        @inbounds b = s.bits[n]
-    else
-        b = false
-    end
-    b
-end
+@inline in(n::Integer, s::IntSet) = get(s.bits, n, false)
 
 # Use the next-set index as the state to prevent looking it up again in done
 start(s::IntSet) = next(s, 0)[2]
