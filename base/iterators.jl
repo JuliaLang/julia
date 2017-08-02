@@ -4,7 +4,8 @@ module Iterators
 
 import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, indices, ndims
 
-using Base: tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds
+using Base: tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
+            IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds
 
 export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
 
@@ -579,15 +580,6 @@ struct ProductIterator{T<:Tuple}
     iterators::T
 end
 
-struct ProductIteratorState{T,S}
-    done::Bool
-    states::T
-    values::S
-    ProductIteratorState{T,S}(done, states::T, values::S) where {T,S} = new(done, states, values)
-    ProductIteratorState{T,S}(done, states::T) where {T,S} = new(done, states)
-end
-ProductIteratorState(done, states::T, values::S) where {T,S} = ProductIteratorState{T,S}(done, states, values)
-
 """
     product(iters...)
 
@@ -606,7 +598,6 @@ julia> collect(Iterators.product(1:2,3:5))
 product(iters...) = ProductIterator(iters)
 
 iteratorsize(::Type{ProductIterator{Tuple{}}}) = HasShape()
-iteratorsize(::Type{ProductIterator{Tuple{I}}}) where {I} = iteratorsize(I)
 iteratorsize(::Type{ProductIterator{T}}) where {T<:Tuple} =
     prod_iteratorsize( iteratorsize(tuple_type_head(T)), iteratorsize(ProductIterator{tuple_type_tail(T)}) )
 
@@ -645,41 +636,71 @@ function iteratoreltype(::Type{ProductIterator{T}}) where {T<:Tuple}
     iteratoreltype(I) == EltypeUnknown() ? EltypeUnknown() : iteratoreltype(P)
 end
 
-Base.eltype(P::ProductIterator) = _prod_eltype(P.iterators)
+eltype(P::ProductIterator) = _prod_eltype(P.iterators)
 _prod_eltype(::Tuple{}) = Tuple{}
 _prod_eltype(t::Tuple) = Base.tuple_type_cons(eltype(t[1]),_prod_eltype(tail(t)))
 
-function Base.start(P::ProductIterator)
-    iterators = P.iterators
-    states = map(start, iterators)
-    if any(map(done, iterators, states))
-        return ProductIteratorState{typeof(states),eltype(P)}(true, states)
-    else
-        return ProductIteratorState{typeof(states),eltype(P)}(false, _prod_start(iterators, states)...)
-    end
-end
-Base.next(P::ProductIterator, state) = state.values, ProductIteratorState(_prod_next(P.iterators, state.states, state.values)...)
-Base.done(P::ProductIterator, state) = state.done
+start(::ProductIterator{Tuple{}}) = false
+next(::ProductIterator{Tuple{}}, state) = (), true
+done(::ProductIterator{Tuple{}}, state) = state
 
-_prod_start(iterators::Tuple{}, states::Tuple{}) = (), ()
-function _prod_start(iterators, states)
-    val, state = next(iterators[1], states[1])
-    tailstates, tailvals = _prod_start(tail(iterators), tail(states))
-    return (state, tailstates...), (val, tailvals...)
+function start(P::ProductIterator)
+    iterators = P.iterators
+    iter1 = first(iterators)
+    state1 = start(iter1)
+    d, states, nvalues = _prod_start(tail(iterators))
+    d |= done(iter1, state1)
+    return (d, (state1, states...), nvalues)
 end
-_prod_next(iterators::Tuple{}, states::Tuple{}, values::Tuple{}) = true, (), ()
-function _prod_next(iterators, states, values)
-    if !done(iterators[1], states[1])
-        nextval, nextstate = next(iterators[1], states[1])
-        return false, tuple(nextstate, tail(states)...), tuple(nextval, tail(values)...)
-    else
-        d, nextstates, nextvals = _prod_next(tail(iterators), tail(states), tail(values))
-        if d # all iterators are done
-            return true, states, values
-        else
-            nextval, nextstate = next(iterators[1], start(iterators[1]))
-            return false, tuple(nextstate, nextstates...), tuple(nextval, nextvals...)
+function next(P::ProductIterator, state)
+    iterators = P.iterators
+    d, states, nvalues = state
+    iter1 = first(iterators)
+    value1, state1 = next(iter1, states[1])
+    tailstates = tail(states)
+    values = (value1, map(unsafe_get, state[3])...) # safe if not done(P, state)
+    if done(iter1, state1)
+        d, tailstates, nvalues = _prod_next(tail(iterators), tailstates, nvalues)
+        if !d # only restart iter1 if not completely done
+            state1 = start(iter1)
         end
+    end
+    return values, (d, (state1, tailstates...), nvalues)
+end
+done(P::ProductIterator, state) = state[1]
+
+_prod_start(iterators::Tuple{}) = false, (), ()
+function _prod_start(iterators)
+    iter1 = first(iterators)
+    state1 = start(iter1)
+    d, tailstates, tailnvalues = _prod_start(tail(iterators))
+    if done(iter1, state1)
+        d = true
+        nvalue1 = Nullable{eltype(iter1)}()
+    else
+        value1, state1 = next(iter1, state1)
+        nvalue1 = Nullable{eltype(iter1)}(value1)
+    end
+    return (d, (state1, tailstates...), (nvalue1, tailnvalues...))
+end
+
+_prod_next(iterators::Tuple{}, states, nvalues) = true, (), ()
+function _prod_next(iterators, states, nvalues)
+    iter1 = first(iterators)
+    state1 = first(states)
+    if !done(iter1, state1)
+        value1, state1 = next(iter1, state1)
+        nvalue1 = Nullable{eltype(iter1)}(value1)
+        return false, (state1, tail(states)...), (nvalue1, tail(nvalues)...)
+    else
+        d, tailstates, tailnvalues = _prod_next(tail(iterators), tail(states), tail(nvalues))
+        if d # all iterators are done
+            nvalue1 = Nullable{eltype(iter1)}()
+        else
+            value1, state1 = next(iter1, start(iter1)) # iter cannot be done immediately
+            nvalue1 = Nullable{eltype(iter1)}(value1)
+        end
+        return d, (state1, tailstates...), (nvalue1, tailnvalues...)
     end
 end
 
