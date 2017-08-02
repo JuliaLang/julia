@@ -478,26 +478,42 @@ function edit_insert(buf::IOBuffer, c)
     end
 end
 
-function edit_backspace(s::PromptState, multispaces::Bool=false)
-    if edit_backspace(s.input_buffer, multispaces)
+function edit_backspace(s::PromptState, align::Bool=false, adjust=align)
+    if edit_backspace(s.input_buffer, align)
         refresh_line(s)
     else
         beep(terminal(s))
     end
 end
 
-function edit_backspace(buf::IOBuffer, multispaces::Bool=false)
+const _newline =  UInt8('\n')
+const _space = UInt8(' ')
+
+# align: delete up to 4 spaces to align to a multiple of 4 chars
+# adjust: also delete spaces to the right of the cursor to try to keep aligned what is
+# on the right
+function edit_backspace(buf::IOBuffer, align::Bool=false, adjust::Bool=align)
+    !align && adjust &&
+        throw(DomainError((align, adjust),
+                          "if `adjust` is `true`, `align` must be `true`"))
     oldpos = position(buf)
     if oldpos > 0
         c = char_move_left(buf)
         newpos = position(buf)
-        if multispaces && c == ' ' # maybe delete multiple spaces
-            beg = rsearch(buf.data, '\n', newpos)
+        if align && c == ' ' # maybe delete multiple spaces
+            beg = beginofline(buf, newpos)
             align = strwidth(String(buf.data[1+beg:newpos])) % 4
-            nonspace = findprev(c -> c != UInt8(' '), buf.data, newpos)
+            nonspace = findprev(c -> c != _space, buf.data, newpos)
             if newpos-align >= nonspace
-                newpos = newpos-align
+                newpos -= align
                 seek(buf, newpos)
+                if adjust
+                    spaces = findnext(c -> c!= _space,
+                                      buf.data[newpos+2:buf.size], 1)
+                    oldpos = spaces == 0 ? buf.size :
+                        buf.data[newpos+1+spaces] == _newline ? newpos+spaces :
+                        newpos + min(spaces, 4)
+                end
             end
         end
         splice_buffer!(buf, newpos:oldpos-1)
@@ -1348,33 +1364,60 @@ function bracketed_paste(s)
     return replace(input, '\t', " "^tabwidth)
 end
 
-function edit_tab(s)
-    buf = buffer(s)
+beginofline(buf, pos=position(buf)) = findprev(buf.data, '\n' % UInt8, pos)
+
+function endofline(buf, pos=position(buf))
+    eol = findnext(buf.data[pos+1:buf.size], '\n' % UInt8, 1)
+    eol == 0 ? buf.size : pos + eol - 1
+end
+
+# jump_spaces: if cursor is on a ' ', move it to the first non-' ' char on the right
+# if `delete_trailing`, ignore trailing ' ' by deleting them
+function edit_tab(s, jump_spaces=false, delete_trailing=jump_spaces)
     # Yes, we are ignoring the possiblity
     # the we could be in the middle of a multi-byte
     # sequence, here but that's ok, since any
     # whitespace we're interested in is only one byte
+    buf = buffer(s)
     i = position(buf)
-    if i != 0
-        c = buf.data[i]
-        if c == UInt8('\n') || c == UInt8('\t') ||
+    if i != 0 &&
+        let c = buf.data[i]
+            c == UInt8('\n') || c == UInt8('\t') ||
                 # hack to allow path completion in cmds
                 # after a space, e.g., `cd <tab>`, while still
                 # allowing multiple indent levels
                 (c == UInt8(' ') && i > 3 && buf.data[i-1] == UInt8(' '))
-            beg = rsearch(buf.data, '\n', i)
-            align = 4 - strwidth(String(buf.data[1+beg:i])) % 4 # align to multiples of 4
-            return edit_insert(s, " "^align)
         end
+        edit_tab(buf, jump_spaces, delete_trailing)
+    else
+        complete_line(s)
     end
-    complete_line(s)
     refresh_line(s)
 end
+
+function Base.LineEdit.edit_tab(buf::IOBuffer,
+                                jump_spaces=false, delete_trailing=jump_spaces)
+    i = position(buf)
+    if jump_spaces && i < buf.size && buf.data[i+1] == _space
+        spaces = findnext(c -> c != _space,
+                                buf.data[i+1:buf.size], 1)
+        if delete_trailing && (spaces == 0 || buf.data[i+spaces] == _newline)
+            splice_buffer!(buf, i:(spaces == 0 ? buf.size-1 : i+spaces-2))
+        else
+            jump = spaces == 0 ? buf.size : i+spaces-1
+            return seek(buf, jump)
+        end
+    end
+    # align to multiples of 4:
+    align = 4 - strwidth(String(buf.data[1+beginofline(buf,i):i])) % 4
+    return edit_insert(buf, ' '^align)
+end
+
 
 const default_keymap =
 AnyDict(
     # Tab
-    '\t' => (s,o...)->edit_tab(s),
+    '\t' => (s,o...)->edit_tab(s, true),
     # Enter
     '\r' => (s,o...)->begin
         if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)
