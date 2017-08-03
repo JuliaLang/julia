@@ -556,7 +556,6 @@ kw"||"
 
 """
     ccall((function_name, library), returntype, (argtype1, ...), argvalue1, ...)
-
     ccall(function_pointer, returntype, (argtype1, ...), argvalue1, ...)
 
 Call a function in a C-exported shared library, specified by the tuple `(function_name, library)`,
