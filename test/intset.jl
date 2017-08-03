@@ -86,6 +86,10 @@ end
 
     i = IntSet(1:6)
     @test symdiff!(i, IntSet([6, 513])) == IntSet([1:5; 513])
+
+    # issue #23099 : these tests should not segfault
+    @test_throws ArgumentError symdiff!(IntSet(rand(1:100, 30)), 0)
+    @test_throws ArgumentError symdiff!(IntSet(rand(1:100, 30)), [0, 2, 4])
 end
 
 @testset "copy, copy!, similar" begin
