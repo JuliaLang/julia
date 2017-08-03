@@ -559,8 +559,8 @@ kw"||"
 
     ccall(function_pointer, returntype, (argtype1, ...), argvalue1, ...)
 
-Call function in C-exported shared library, specified by `(function_name, library)`
-tuple, where each component is either a string or symbol. Alternatively, `ccall` may
+Call a function in a C-exported shared library, specified by the tuple `(function_name, library)`,
+where each component is either a string or symbol. Alternatively, `ccall` may
 also be used to call a function pointer `function_pointer`, such as one returned by `dlsym`.
 
 Note that the argument type tuple must be a literal tuple, and not a tuple-valued
