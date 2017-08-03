@@ -1578,11 +1578,11 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 print(io, i == first(rowsA) ? pre : presp)
                 print_matrix_row(io, X,A,i,colsA,sep)
                 print(io, i == last(rowsA) ? post : postsp)
-                if i != rowsA[end]; println(io); end
+                if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]
                     print(io, i == first(rowsA) ? pre : presp)
                     print_matrix_vdots(io, vdots,A,sep,vmod,1)
-                    println(io, i == last(rowsA) ? post : postsp)
+                    print(io, i == last(rowsA) ? post : postsp*'\n')
                 end
             end
         else # neither rows nor cols fit, so use all 3 kinds of dots
@@ -1597,15 +1597,21 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
                 print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
                 print(io, i == last(rowsA) ? post : postsp)
-                if i != rowsA[end]; println(io); end
+                if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]
                     print(io, i == first(rowsA) ? pre : presp)
                     print_matrix_vdots(io, vdots,Lalign,sep,vmod,1)
                     print(io, ddots)
                     print_matrix_vdots(io, vdots,Ralign,sep,vmod,r)
-                    println(io, i == last(rowsA) ? post : postsp)
+                    print(io, i == last(rowsA) ? post : postsp*'\n')
                 end
             end
+        end
+        if isempty(rowsA)
+            print(io, pre)
+            print(io, vdots)
+            length(colsA) > 1 && print(io, "    ", ddots)
+            print(io, post)
         end
     end
 end
@@ -1753,7 +1759,14 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
     end
     (!repr && header) && print(io, summary(X))
     if !isempty(X)
-        (!repr && header) && println(io, ":")
+        if !repr && header
+            print(io, ":")
+            if get(io, :limit, false) && displaysize(io)[1]-4 <= 0
+                return print(io, " …")
+            else
+                println(io)
+            end
+        end
         if ndims(X) == 0
             if isassigned(X)
                 return show(io, X[])
