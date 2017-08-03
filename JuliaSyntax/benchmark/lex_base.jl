@@ -28,7 +28,8 @@ function testall(srcdir::AbstractString)
             fname = splitdir(jlpath)[end]
 
             buf = IOBuffer()
-            write(buf, open(readstring, jlpath))
+            print(buf, open(read, jlpath))
+            seek(buf, 0)
             tot_files += 1
             tot_time += @elapsed tokens = collect(Tokenize.tokenize(buf))
             tot_tokens += length(tokens)

@@ -1,7 +1,5 @@
 module Tokens
 
-using Compat
-import Compat.String
 import Base.eof
 
 export Token
@@ -27,24 +25,24 @@ _add_kws()
 
 # TODO: more
 @enum(TokenError,
-  NO_ERR,
-  EOF_MULTICOMMENT,
-  EOF_STRING,
-  EOF_CHAR,
-  EOF_CMD,
-  UNKNOWN,
+    NO_ERR,
+    EOF_MULTICOMMENT,
+    EOF_STRING,
+    EOF_CHAR,
+    EOF_CMD,
+    UNKNOWN,
 )
 
 # Error kind => description
 TOKEN_ERROR_DESCRIPTION = Dict{TokenError, String}(
-  EOF_MULTICOMMENT => "unterminated multi-line comment #= ... =#",
-  EOF_STRING => "unterminated string literal",
-  EOF_CHAR => "unterminated character literal",
-  EOF_CMD => "unterminated cmd literal",
-  UNKNOWN => "unknown",
+    EOF_MULTICOMMENT => "unterminated multi-line comment #= ... =#",
+    EOF_STRING => "unterminated string literal",
+    EOF_CHAR => "unterminated character literal",
+    EOF_CMD => "unterminated cmd literal",
+    UNKNOWN => "unknown",
 )
 
-immutable Token
+struct Token
     kind::Kind
     # Offsets into a string or buffer
     startpos::Tuple{Int, Int} # row, col where token starts /end, col is a string index
@@ -85,12 +83,12 @@ end
 
 
 function Base.show(io::IO, t::Token)
-  start_r, start_c = startpos(t)
-  end_r, end_c = endpos(t)
-  str = kind(t) == ENDMARKER ? "" : escape_string(untokenize(t))
-  print(io, rpad(string(start_r, ",", start_c, "-", end_r, ",", end_c), 17, " "))
-  print(io, rpad(kind(t), 15, " "))
-  print(io, "\"", str, "\"")
+    start_r, start_c = startpos(t)
+    end_r, end_c = endpos(t)
+    str = kind(t) == ENDMARKER ? "" : escape_string(untokenize(t))
+    print(io, rpad(string(start_r, ",", start_c, "-", end_r, ",", end_c), 17, " "))
+    print(io, rpad(kind(t), 15, " "))
+    print(io, "\"", str, "\"")
 end
 
 Base.print(io::IO, t::Token) = print(io, untokenize(t))
