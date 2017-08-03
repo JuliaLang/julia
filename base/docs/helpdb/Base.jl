@@ -972,7 +972,7 @@ julia> parse("x = ")
 julia> parse("1.0.2")
 ERROR: ParseError("invalid numeric constant \\\"1.0.\\\"")
 Stacktrace:
-  [...]
+[...]
 
 julia> parse("1.0.2"; raise = false)
 :($(Expr(:error, "invalid numeric constant \"1.0.\"")))
@@ -1328,10 +1328,12 @@ The argument `val` to a function or constructor is outside the valid domain.
 # Examples
 ```jldoctest
 julia> sqrt(-1)
-ERROR: DomainError with -1:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
+ERROR: DomainError with -1.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:443
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
+ [2] sqrt at ./math.jl:462 [inlined]
+ [3] sqrt(::Int64) at ./math.jl:472
 ```
 """
 DomainError

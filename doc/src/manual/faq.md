@@ -224,18 +224,21 @@ Certain operations make mathematical sense but result in errors:
 
 ```jldoctest
 julia> sqrt(-2.0)
-ERROR: DomainError:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
+ERROR: DomainError with -2.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] sqrt(::Float64) at ./math.jl:438
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
+ [2] sqrt(::Float64) at ./math.jl:462
 
 julia> 2^-5
-ERROR: DomainError:
-Cannot raise an integer x to a negative power -n.
-Make x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.
+ERROR: DomainError with -5:
+Cannot raise an integer x to a negative power -5.
+Make x a float by adding a zero decimal (e.g., 2.0^-5 instead of 2^-5), or write 1/x^5, float(x)^-5, or (x//1)^-5
 Stacktrace:
- [1] power_by_squaring(::Int64, ::Int64) at ./intfuncs.jl:173
- [2] literal_pow(::Base.#^, ::Int64, ::Type{Val{-5}}) at ./intfuncs.jl:208
+ [1] throw_domerr_powbysq(::Int64) at ./intfuncs.jl:163
+ [2] power_by_squaring at ./intfuncs.jl:178 [inlined]
+ [3] ^ at ./intfuncs.jl:202 [inlined]
+ [4] literal_pow(::Base.#^, ::Int64, ::Val{-5}) at ./intfuncs.jl:213
 ```
 
 This behavior is an inconvenient consequence of the requirement for type-stability.  In the case

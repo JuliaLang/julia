@@ -62,6 +62,7 @@ julia> factorize(A)
 Base.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:
 [1.0 0.0 0.0; -0.15 1.0 0.0; -0.3 -0.132196 1.0]
 [-10.0 2.3 4.0; 0.0 2.345 -3.4; 0.0 0.0 -5.24947]
+successful: true
 ```
 
 Since `A` is not Hermitian, symmetric, triangular, tridiagonal, or bidiagonal, an LU factorization may be the
@@ -249,4 +250,3 @@ of the standard library documentation.
 | `Eigen`           | [Spectral decomposition](https://en.wikipedia.org/wiki/Eigendecomposition_(matrix))                            |
 | `SVD`             | [Singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition)                     |
 | `GeneralizedSVD`  | [Generalized SVD](https://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version) |
-

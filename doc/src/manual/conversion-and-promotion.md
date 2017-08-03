@@ -119,9 +119,9 @@ julia> convert(Bool, 0)
 false
 
 julia> convert(Bool, 1im)
-ERROR: InexactError()
+ERROR: InexactError: convert(Bool, 0 + 1im)
 Stacktrace:
- [1] convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:31
+ [1] convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:37
 
 julia> convert(Bool, 0im)
 false

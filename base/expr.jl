@@ -100,7 +100,7 @@ is always recursive. For a non recursive macro version, see [`@macroexpand1`](@r
 * While [`macroexpand`](@ref) has an explicit `module` argument, `@macroexpand` always
 expands with respect to the module in which it is called.
 This is best seen in the following example:
-```jldoctest
+```julia-repl
 julia> module M
            macro m()
                1

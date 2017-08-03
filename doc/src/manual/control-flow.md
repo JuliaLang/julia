@@ -570,10 +570,12 @@ real value:
 
 ```jldoctest
 julia> sqrt(-1)
-ERROR: DomainError:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
+ERROR: DomainError with -1.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:447
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
+ [2] sqrt at ./math.jl:462 [inlined]
+ [3] sqrt(::Int64) at ./math.jl:472
 ```
 
 You may define your own exceptions in the following way:
@@ -589,14 +591,15 @@ for nonnegative numbers could be written to [`throw()`](@ref) a [`DomainError`](
 is negative:
 
 ```jldoctest
-julia> f(x) = x>=0 ? exp(-x) : throw(DomainError())
+julia> f(x) = x>=0 ? exp(-x) : throw(DomainError(x, "argument must be nonnegative"))
 f (generic function with 1 method)
 
 julia> f(1)
 0.36787944117144233
 
 julia> f(-1)
-ERROR: DomainError:
+ERROR: DomainError with -1:
+argument must be nonnegative
 Stacktrace:
  [1] f(::Int64) at ./none:1
 ```
@@ -605,7 +608,7 @@ Note that [`DomainError`](@ref) without parentheses is not an exception, but a t
 It needs to be called to obtain an `Exception` object:
 
 ```jldoctest
-julia> typeof(DomainError()) <: Exception
+julia> typeof(DomainError(nothing)) <: Exception
 true
 
 julia> typeof(DomainError) <: Exception
@@ -759,9 +762,13 @@ julia> sqrt_second(9)
 3.0
 
 julia> sqrt_second(-9)
-ERROR: DomainError:
+ERROR: DomainError with -9.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] sqrt_second(::Int64) at ./none:7
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
+ [2] sqrt at ./math.jl:462 [inlined]
+ [3] sqrt at ./math.jl:472 [inlined]
+ [4] sqrt_second(::Int64) at ./none:7
 ```
 
 Note that the symbol following `catch` will always be interpreted as a name for the exception,
