@@ -1650,6 +1650,34 @@
                                           `(call (top next) ,coll ,state))
                  ,body))))))
 
+(define (expand-for while lhs X body)
+  ;; (for (= lhs X) body)
+  (let* ((coll   (make-ssavalue))
+         (state  (make-ssavalue))
+         (next   (gensy))
+         (outer? (and (pair? lhs) (eq? (car lhs) 'outer)))
+         (lhs    (if outer? (cadr lhs) lhs))
+         (test   `(call (|.| (core Intrinsics) 'not_int) (call (core ===) ,next (null))))
+         (cont   `(block
+                   (= ,state (call (core getfield) ,next 2))
+                   (= ,next (call (top iterate) ,coll ,state))))
+         (body   `(block
+                   ,@(if (and (not outer?) (or *depwarn* *deperror*))
+                         (map (lambda (v) `(warn-if-existing ,v)) (lhs-vars lhs))
+                         '())
+                   (= ,lhs (call (core getfield) ,next 1))
+                   ,body)))
+    `(block (= ,coll ,(expand-forms X))
+            (= ,next (call (top iterate) ,coll))
+            (scope-block
+             (break-block loop-exit
+               (_while
+                 ,(expand-forms test)
+                 (block (break-block loop-cont
+                                     ,(expand-forms body))
+                        ,(expand-forms cont))))))))
+
+
 ;; convert an operator parsed as (op a b) to (call op a b)
 (define (syntactic-op-to-call e)
   `(call ,(car e) ,@(map expand-forms (cdr e))))

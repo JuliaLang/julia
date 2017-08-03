@@ -447,6 +447,30 @@ copy(r::AbstractRange) = r
 
 ## iteration
 
+iterate(r::LinSpace) = length(r) <= 0 ? nothing : (unsafe_getindex(r, 1), 1)
+iterate(r::LinSpace, i::Int) = length(r) <= i ? nothing : (unsafe_getindex(r, i + 1), i + 1)
+
+function iterate(r::StepRange{T}) where T
+    isempty(r) && return nothing
+    i = oftype(r.start + r.step, r.start)
+    return (convert(T, i), i)
+end
+function iterate(r::StepRange{T}, i) where T
+    i += r.step
+    (i < min(r.start, r.stop)) | (i > max(r.start, r.stop)) && return nothing
+    return (convert(T, i), i)
+end
+function iterate(r::StepRange{T}, i::Integer) where T
+    (i == oftype(i, r.stop)) && return nothing
+    i += r.step
+    return (convert(T, i), i)
+end
+
+next(r::StepRange{T}, i) where {T} = (convert(T,i), i+r.step)
+done(r::StepRange, i) = isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.start, r.stop))
+done(r::StepRange, i::Integer) =
+    isempty(r) | (i == oftype(i, r.stop) + r.step)
+
 start(r::LinSpace) = 1
 done(r::LinSpace, i::Int) = length(r) < i
 function next(r::LinSpace, i::Int)
@@ -601,13 +625,14 @@ function ==(r::AbstractRange, s::AbstractRange)
     if lr != length(s)
         return false
     end
-    u, v = start(r), start(s)
-    while !done(r, u)
-        x, u = next(r, u)
-        y, v = next(s, v)
+    u, v = iterate(r), iterate(s)
+    while !(u === nothing)
+        x, y = u[1], v[1]
         if x != y
             return false
         end
+        u = iterate(r, u[2])
+        v = iterate(s, v[2])
     end
     return true
 end

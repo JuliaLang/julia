@@ -2950,7 +2950,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     end
     if (typea <: Tuple) && (typeb <: Tuple)
         if isa(typea, DataType) && isa(typeb, DataType) && length(typea.parameters) == length(typeb.parameters) && !isvatuple(typea) && !isvatuple(typeb)
-            return typejoin(typea, typeb)
+            return Union{typea, typeb}
         end
         if isa(typea, Union) || isa(typeb, Union) || (isa(typea,DataType) && length(typea.parameters)>3) ||
             (isa(typeb,DataType) && length(typeb.parameters)>3)

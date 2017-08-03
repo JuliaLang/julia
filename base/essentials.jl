@@ -143,6 +143,18 @@ function convert end
 convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
 
+# iteration
+
+function start end
+function next end
+function done end
+function iterate(x, state)
+    @_inline_meta
+    done(x, state) && return nothing
+    return next(x, state)
+end
+iterate(x) = (@_inline_meta; iterate(x, start(x)))
+
 """
     @eval [mod,] ex
 
