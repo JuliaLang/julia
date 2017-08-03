@@ -1284,3 +1284,9 @@ end
 @test parse("(::A)") == Expr(Symbol("::"), :A)
 @test_throws ParseError parse("(::, 1)")
 @test_throws ParseError parse("(1, ::)")
+
+# issue #18650
+let ex = parse("maximum(@elapsed sleep(1) for k = 1:10)")
+    @test isa(ex, Expr) && ex.head === :call && ex.args[2].head === :generator &&
+        ex.args[2].args[1].head === :macrocall
+end

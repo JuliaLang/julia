@@ -42,6 +42,16 @@ This section lists changes that do not have deprecation warnings.
 
   * Juxtaposing string literals (e.g. `"x"y`) is now a syntax error ([#20575]).
 
+  * Macro calls with `for` expressions are now parsed as generators inside
+    function argument lists ([#18650]). Examples:
+
+    + `sum(@inbounds a[i] for i = 1:n)` used to give a syntax error, but is now
+      parsed as `sum(@inbounds(a[i]) for i = 1:n)`.
+
+    + `sum(@m x for i = 1:n end)` used to parse the argument to `sum` as a 2-argument
+      call to macro `@m`, but now parses it as a generator plus a syntax error
+      for the dangling `end`.
+
   * `@__DIR__` returns the current working directory rather than `nothing` when not run
     from a file ([#21759]).
 
