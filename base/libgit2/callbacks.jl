@@ -27,7 +27,7 @@ end
 """
     LibGit2.is_passphrase_required(private_key) -> Bool
 
-Returns `true` if the `private_key` file requires a passphrase, `false` otherwise.
+Return `true` if the `private_key` file requires a passphrase, `false` otherwise.
 """
 function is_passphrase_required(private_key::AbstractString)
     !isfile(private_key) && return false
