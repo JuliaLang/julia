@@ -2,9 +2,10 @@
 
 catcmd = `cat`
 if Sys.iswindows()
+    busybox = joinpath(JULIA_HOME, "busybox.exe")
     try # use busybox-w32 on windows
-        success(`busybox`)
-        catcmd = `busybox cat`
+        success(`$busybox`)
+        catcmd = `$busybox cat`
     end
 end
 
