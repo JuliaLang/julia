@@ -296,7 +296,7 @@ function InferenceState(linfo::MethodInstance,
         errors = validate_code(linfo, src)
         if !isempty(errors)
             for e in errors
-                warn(e)
+                println(STDERR, "WARNING: ", e)
             end
         end
     end
