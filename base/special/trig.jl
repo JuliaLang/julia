@@ -11,6 +11,7 @@ end
 
 # sin_kernel and cos_kernel functions are only valid for |x| < pi/4 = 0.7854
 # translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c.
+# acos functions are based on openlibm code: e_acos.c, e_acosf.c.
 # asin functions are based on openlibm code: e_asin.c, e_asinf.c. The above
 # functions are made available under the following licence:
 
@@ -82,7 +83,6 @@ sin_kernel(x::Real) = sin(x)
 cos_kernel(x::Real) = cos(x)
 
 # Inverse trigonometric functions
-
 # asin methods
 ASIN_X_MIN_THRESHOLD(::Type{Float32}) = 2.0f0^-12
 ASIN_X_MIN_THRESHOLD(::Type{Float64}) = sqrt(eps(Float64))
@@ -96,8 +96,8 @@ arc_p(t::Float64) =
     7.91534994289814532176e-04,
     3.47933107596021167570e-05)
 
-arc_q(t::Float64) =
-    @horner(t,
+arc_q(z::Float64) =
+    @horner(z,
     1.0,
     -2.40339491173441421878e+00,
     2.02094576023350569471e+00,
@@ -184,6 +184,74 @@ function asin(x::T) where T<:Union{Float32, Float64}
     # else 1/2 <= |x| < 1
     t = (T(1.0) - absx)/2
     return asin_kernel(t, x)
+end
+
+# acos methods
+ACOS_X_MIN_THRESHOLD(::Type{Float32}) = 2.0f0^-26
+ACOS_X_MIN_THRESHOLD(::Type{Float64}) = 2.0^-57
+PIO2_HI(::Type{Float32}) = 1.5707962513f+00
+PIO2_LO(::Type{Float32}) = 7.5497894159f-08
+PIO2_HI(::Type{Float64}) = 1.57079632679489655800e+00
+PIO2_LO(::Type{Float64}) = 6.12323399573676603587e-17
+ACOS_PI(::Type{Float32}) = 3.1415925026f+00
+ACOS_PI(::Type{Float64}) = 3.14159265358979311600e+00
+ACOS_CORRECT_LOWWORD(::Type{Float32}, x) = reinterpret(Float32, (reinterpret(UInt32, x)&0xfffff000))
+ACOS_CORRECT_LOWWORD(::Type{Float64}, x) = reinterpret(Float64, (reinterpret(UInt64, x) >> 32) << 32)
+
+@noinline acos_domain_error(x) = throw(DomainError(x, "acos(x) not defined for |x|>1"))
+function acos(x::T) where T <: Union{Float32, Float64}
+    # Method :
+    #    acos(x)  = pi/2 - asin(x)
+    #    acos(-x) = pi/2 + asin(x)
+    #    For |x|<=0.5
+    #        acos(x) = pi/2 - (x + x*x^2*R(x^2))    (see asin.c)
+    #    For x>0.5
+    #        acos(x) = pi/2 - (pi/2 - 2asin(sqrt((1-x)/2)))
+    #            = 2asin(sqrt((1-x)/2))
+    #            = 2s + 2s*z*R(z)    ...z=(1-x)/2, s=sqrt(z)
+    #            = 2f + (2c + 2s*z*R(z))
+    #         where f=hi part of s, and c = (z-f*f)/(s+f) is the correction term
+    #         for f so that f+c ~ sqrt(z).
+    #     For x<-0.5
+    #         acos(x) = pi - 2asin(sqrt((1-|x|)/2))
+    #             = pi - 0.5*(s+s*z*R(z)), where z=(1-|x|)/2,s=sqrt(z)
+    #
+    # Special cases:
+    #     if |x|>1, throw DomainError
+
+    absx = abs(x)
+    if absx >= T(1.0)
+        if absx == T(1.0)
+            if x > T(0.0)
+              return T(0.0)
+            else
+              return T(pi)
+            end
+        end
+        acos_domain_error(x)
+    elseif absx < T(1.0)/2
+        if absx < ACOS_X_MIN_THRESHOLD(T)
+            return T(pi)/2
+        end
+        x² = x*x
+        Rx = arc_p(x²)/arc_q(x²)
+        return PIO2_HI(T) - (x - (PIO2_LO(T) - x*Rx))
+    end
+    if x < T(0.0) # x < -0.5
+        z = (T(1.0) + x)*T(0.5)
+        Rx = arc_p(z)/arc_q(z)
+        s = sqrt_llvm(z)
+        w = Rx*s - PIO2_LO(T)
+        return ACOS_PI(T) - T(2.0)*(s + w)
+    else # x > 0.5
+        z = (T(1.0) - x)*T(0.5)
+        s = sqrt_llvm(z)
+        df = ACOS_CORRECT_LOWWORD(T, s)
+        c  = (z - df*df)/(s + df)
+        Rx = arc_p(z)/arc_q(z)
+        w = Rx*s + c
+        return T(2.0)*(df + w)
+    end
 end
 
 # multiply in extended precision

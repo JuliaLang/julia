@@ -270,7 +270,7 @@ sqrt_fast(x::FloatTypes) = sqrt_llvm(x)
 
 const libm = Base.libm_name
 
-for f in (:acos, :acosh, :asinh, :atan, :atanh, :cbrt, :cos,
+for f in (:acosh, :asinh, :atan, :atanh, :cbrt, :cos,
           :cosh, :exp2, :expm1, :lgamma, :log10, :log1p, :log2,
           :log, :sin, :sinh, :tan, :tanh)
     f_fast = fast_op[f]
@@ -293,6 +293,7 @@ atan2_fast(x::Float64, y::Float64) =
     ccall(("atan2",libm), Float64, (Float64,Float64), x, y)
 
 asin_fast(x::FloatTypes) = asin(x)
+acos_fast(x::FloatTypes) = acos(x)
 
 # explicit implementations
 
