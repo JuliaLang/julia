@@ -731,10 +731,27 @@ julia> collect(Iterators.flatten((1:2, 8:9)))
 flatten(itr) = Flatten(itr)
 
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
-iteratorsize(::Type{Flatten{I}}) where {I} = SizeUnknown()
 iteratoreltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, iteratoreltype(I))
 _flatteneltype(I, ::HasEltype) = iteratoreltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()
+
+flatten_iteratorsize(::Union{HasShape, HasLength}, b::Type{<:Tuple}) = isleaftype(b) ? HasLength() : SizeUnknown()
+flatten_iteratorsize(::Union{HasShape, HasLength}, b::Type{<:Number}) = HasLength()
+flatten_iteratorsize(a, b) = SizeUnknown()
+
+iteratorsize(::Type{Flatten{I}}) where {I} = flatten_iteratorsize(iteratorsize(I), eltype(I))
+
+function flatten_length(f, ::Type{T}) where {T<:Tuple}
+    if !isleaftype(T)
+        throw(ArgumentError(
+            "Cannot compute length of a tuple-type which is not a leaf-type"))
+    end
+    fieldcount(T)*length(f.it)
+end
+flatten_length(f, ::Type{<:Number}) = length(f.it)
+flatten_length(f, T) = throw(ArgumentError(
+    "Iterates of the argument to Flatten are not known to have constant length"))
+length(f::Flatten{I}) where {I} = flatten_length(f, eltype(I))
 
 function start(f::Flatten)
     local inner, s2
