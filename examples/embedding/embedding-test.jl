@@ -4,17 +4,19 @@
 using Base.Test
 
 @test length(ARGS) == 1
-let
+@testset "embedding example" begin
     stdout = Pipe()
     stderr = Pipe()
     p = spawn(pipeline(Cmd(ARGS), stdin=DevNull, stdout=stdout, stderr=stderr))
     close(stdout.in)
     close(stderr.in)
-    stderr_task = @async readlines(stderr)
-    lines = readlines(stdout)
-    @test length(lines) == 6
-    @test parse(Float64, lines[1]) ≈ sqrt(2)
-    lines = wait(stderr_task)
-    @test lines == ["UndefVarError(:this_function_does_not_exist)"]
+    stdout_task = @async readlines(stdout)
+    stderr = read(stderr, String)
+    @test stderr == "MethodError: no method matching this_function_has_no_methods()\n"
     @test success(p)
+    lines = wait(stdout_task)
+    @test length(lines) == 9
+    @test parse(Float64, lines[1]) ≈ sqrt(2)
+    @test lines[8] == "called bar"
+    @test lines[9] == "calling new bar"
 end
