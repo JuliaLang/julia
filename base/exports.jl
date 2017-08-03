@@ -1,10 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 export
 # Modules
-    FFTW,
     Meta,
-    Operators,
     Pkg,
     LibGit2,
     StackTraces,
@@ -23,7 +21,7 @@ export
     Markdown,
     Threads,
     Iterators,
-    Parallel,
+    Distributed,
 
 # Types
     AbstractChannel,
@@ -357,6 +355,7 @@ export
     isreal,
     issubnormal,
     iszero,
+    isone,
     lcm,
     ldexp,
     leading_ones,
@@ -405,6 +404,7 @@ export
     significand,
     sin,
     sinc,
+    sincos,
     sind,
     sinh,
     sinpi,
@@ -509,7 +509,9 @@ export
     prod,
     promote_shape,
     randcycle,
+    randcycle!,
     randperm,
+    randperm!,
     randsubseq!,
     randsubseq,
     range,
@@ -719,6 +721,7 @@ export
     symdiff,
     union!,
     union,
+    unique!,
     unique,
     values,
     valtype,
@@ -729,6 +732,9 @@ export
     ⊆,
     ⊈,
     ⊊,
+    ⊇,
+    ⊉,
+    ⊋,
     ∩,
     ∪,
 
@@ -806,7 +812,6 @@ export
     search,
     searchindex,
     show,
-    showall,
     showcompact,
     showerror,
     split,
@@ -858,42 +863,6 @@ export
     stdm,
     var,
     varm,
-
-# signal processing
-    bfft!,
-    bfft,
-    brfft,
-    conv,
-    conv2,
-    dct!,
-    dct,
-    deconv,
-    fft!,
-    fft,
-    fftshift,
-    filt,
-    filt!,
-    idct!,
-    idct,
-    ifft!,
-    ifft,
-    ifftshift,
-    irfft,
-    plan_bfft!,
-    plan_bfft,
-    plan_brfft,
-    plan_dct!,
-    plan_dct,
-    plan_fft!,
-    plan_fft,
-    plan_idct!,
-    plan_idct,
-    plan_ifft!,
-    plan_ifft,
-    plan_irfft,
-    plan_rfft,
-    rfft,
-    xcorr,
 
 # iteration
     done,
@@ -979,6 +948,7 @@ export
     fieldoffset,
     fieldname,
     fieldnames,
+    fieldcount,
     isconcrete,
     oftype,
     promote,
@@ -996,12 +966,12 @@ export
     expand,
     gensym,
     macroexpand,
+    @macroexpand1,
     @macroexpand,
     parse,
 
 # help and reflection
     apropos,
-    current_module,
     edit,
     code_typed,
     code_warntype,
@@ -1023,11 +993,11 @@ export
     which,
     whos,
     workspace,
+    @isdefined,
 
 # loading source files
     __precompile__,
     evalfile,
-    include,
     include_string,
     include_dependency,
     reload,
@@ -1043,6 +1013,7 @@ export
     atexit,
     atreplinit,
     clipboard,
+    crc32c,
     exit,
     ntuple,
     quit,
@@ -1068,6 +1039,7 @@ export
     getaddrinfo,
     gethostname,
     getipaddr,
+    getpeername,
     getsockname,
     htol,
     hton,
@@ -1100,7 +1072,6 @@ export
     readdlm,
     readline,
     readlines,
-    readstring,
     readuntil,
     redirect_stderr,
     redirect_stdin,
@@ -1244,6 +1215,8 @@ export
     # parser internal
     @__FILE__,
     @__DIR__,
+    @__LINE__,
+    @__MODULE__,
     @int128_str,
     @uint128_str,
     @big_str,
@@ -1286,14 +1259,6 @@ export
     @code_llvm,
     @code_native,
 
-    # platform-conditional code
-    @static,
-    is_windows,
-    is_linux,
-    is_apple,
-    is_bsd,
-    is_unix,
-
     # tasks
     @schedule,
     @sync,
@@ -1314,6 +1279,7 @@ export
     @simd,
     @inline,
     @noinline,
+    @nospecialize,
     @polly,
 
     @assert,
@@ -1323,6 +1289,7 @@ export
     @goto,
     @view,
     @views,
+    @static,
 
 # SparseArrays module re-exports
     SparseArrays,
@@ -1344,7 +1311,7 @@ export
     nzrange,
     nnz,
 
-# Parallel module re-exports
+# Distributed module re-exports
     @spawn,
     @spawnat,
     @fetch,

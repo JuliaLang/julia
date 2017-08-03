@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -49,7 +49,12 @@ bimg  = randn(n,2)/2
 
     apd  = ainit'*ainit # symmetric positive-definite
     @testset "Positive definiteness" begin
-        @test isposdef(apd,:U)
+        @test !isposdef(ainit)
+        @test isposdef(apd)
+        if eltya != Int # cannot perform cholfact! for Matrix{Int}
+            @test !isposdef!(copy(ainit))
+            @test isposdef!(copy(apd))
+        end
     end
     @testset "For b containing $eltyb" for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
@@ -145,11 +150,11 @@ bimg  = randn(n,2)/2
         A = diagm(d)
         @test factorize(A) == Diagonal(d)
         A += diagm(e,-1)
-        @test factorize(A) == Bidiagonal(d,e,false)
+        @test factorize(A) == Bidiagonal(d,e,:L)
         A += diagm(f,-2)
         @test factorize(A) == LowerTriangular(A)
         A = diagm(d) + diagm(e,1)
-        @test factorize(A) == Bidiagonal(d,e,true)
+        @test factorize(A) == Bidiagonal(d,e,:U)
         if eltya <: Real
             A = diagm(d) + diagm(e,1) + diagm(e,-1)
             @test full(factorize(A)) ≈ full(factorize(SymTridiagonal(d,e)))
@@ -273,7 +278,7 @@ end
 
                     # Against vectorized versions
                     @test norm(x,-Inf) ≈ minimum(abs.(x))
-                    @test norm(x,-1) ≈ inv(sum(1./abs.(x)))
+                    @test norm(x,-1) ≈ inv(sum(1 ./ abs.(x)))
                     @test norm(x,0) ≈ sum(x .!= 0)
                     @test norm(x,1) ≈ sum(abs.(x))
                     @test norm(x) ≈ sqrt(sum(abs2.(x)))
@@ -357,7 +362,7 @@ end
 
 ## Issue related tests
 @testset "issue #1447" begin
-    A = [1.+0.0im 0; 0 1]
+    A = [1.0+0.0im 0; 0 1]
     B = pinv(A)
     for i = 1:4
         @test A[i] ≈ B[i]
@@ -481,6 +486,32 @@ end
     @test expm(A10) ≈ eA10
 end
 
+@testset "Additional matrix logarithm tests" for elty in (Float64, Complex{Float64})
+    A11 = convert(Matrix{elty}, [3 2; -5 -3])
+    @test expm(logm(A11)) ≈ A11
+
+    A12 = convert(Matrix{elty}, [1 -1; 1 -1])
+    @test typeof(logm(A12)) == Array{Complex{Float64}, 2}
+
+    A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
+    logmA1 = convert(Matrix{elty}, [1.329661349 0.5302876358 -0.06818951543;
+                                    0.2310490602 1.295566591 0.2651438179;
+                                    0.2310490602 0.1969543025 1.363756107])
+    @test logm(A1) ≈ logmA1
+    @test expm(logm(A1)) ≈ A1
+
+    A4  = convert(Matrix{elty}, [1/2 1/3 1/4 1/5+eps();
+                                 1/3 1/4 1/5 1/6;
+                                 1/4 1/5 1/6 1/7;
+                                 1/5 1/6 1/7 1/8])
+    logmA4 = convert(Matrix{elty}, [-1.73297159 1.857349738 0.4462766564 0.2414170219;
+                                    1.857349738 -5.335033737 2.994142974 0.5865285289;
+                                    0.4462766564 2.994142974 -7.351095988 3.318413247;
+                                    0.2414170219 0.5865285289 3.318413247 -5.444632124])
+    @test logm(A4) ≈ logmA4
+    @test expm(logm(A4)) ≈ A4
+end
+
 @testset "issue #7181" begin
     A = [ 1  5  9
           2  6 10
@@ -510,6 +541,61 @@ end
     @test diag(zeros(0,1),1) == []
     @test_throws ArgumentError diag(zeros(0,1),-1)
     @test_throws ArgumentError diag(zeros(0,1),2)
+end
+
+@testset "Matrix to real power" for elty in (Float64, Complex{Float64})
+# Tests proposed at Higham, Deadman: Testing Matrix Function Algorithms Using Identities, March 2014
+    #Aa : only positive real eigenvalues
+    Aa = convert(Matrix{elty}, [5 4 2 1; 0 1 -1 -1; -1 -1 3 0; 1 1 -1 2])
+
+    @test Aa^(1/2) ≈ sqrtm(Aa)
+    @test Aa^(-1/2) ≈ inv(sqrtm(Aa))
+    @test Aa^(3/4) ≈ sqrtm(Aa) * sqrtm(sqrtm(Aa))
+    @test Aa^(-3/4) ≈ inv(Aa) * sqrtm(sqrtm(Aa))
+    @test Aa^(17/8) ≈ Aa^2 * sqrtm(sqrtm(sqrtm(Aa)))
+    @test Aa^(-17/8) ≈ inv(Aa^2 * sqrtm(sqrtm(sqrtm(Aa))))
+    @test (Aa^0.2)^5 ≈ Aa
+    @test (Aa^(2/3))*(Aa^(1/3)) ≈ Aa
+    @test (Aa^im)^(-im) ≈ Aa
+
+    #Ab : both positive and negative real eigenvalues
+    Ab = convert(Matrix{elty}, [1 2 3; 4 7 1; 2 1 4])
+
+    @test Ab^(1/2) ≈ sqrtm(Ab)
+    @test Ab^(-1/2) ≈ inv(sqrtm(Ab))
+    @test Ab^(3/4) ≈ sqrtm(Ab) * sqrtm(sqrtm(Ab))
+    @test Ab^(-3/4) ≈ inv(Ab) * sqrtm(sqrtm(Ab))
+    @test Ab^(17/8) ≈ Ab^2 * sqrtm(sqrtm(sqrtm(Ab)))
+    @test Ab^(-17/8) ≈ inv(Ab^2 * sqrtm(sqrtm(sqrtm(Ab))))
+    @test (Ab^0.2)^5 ≈ Ab
+    @test (Ab^(2/3))*(Ab^(1/3)) ≈ Ab
+    @test (Ab^im)^(-im) ≈ Ab
+
+    #Ac : complex eigenvalues
+    Ac = convert(Matrix{elty}, [5 4 2 1;0 1 -1 -1;-1 -1 3 6;1 1 -1 5])
+
+    @test Ac^(1/2) ≈ sqrtm(Ac)
+    @test Ac^(-1/2) ≈ inv(sqrtm(Ac))
+    @test Ac^(3/4) ≈ sqrtm(Ac) * sqrtm(sqrtm(Ac))
+    @test Ac^(-3/4) ≈ inv(Ac) * sqrtm(sqrtm(Ac))
+    @test Ac^(17/8) ≈ Ac^2 * sqrtm(sqrtm(sqrtm(Ac)))
+    @test Ac^(-17/8) ≈ inv(Ac^2 * sqrtm(sqrtm(sqrtm(Ac))))
+    @test (Ac^0.2)^5 ≈ Ac
+    @test (Ac^(2/3))*(Ac^(1/3)) ≈ Ac
+    @test (Ac^im)^(-im) ≈ Ac
+
+    #Ad : defective Matrix
+    Ad = convert(Matrix{elty}, [3 1; 0 3])
+
+    @test Ad^(1/2) ≈ sqrtm(Ad)
+    @test Ad^(-1/2) ≈ inv(sqrtm(Ad))
+    @test Ad^(3/4) ≈ sqrtm(Ad) * sqrtm(sqrtm(Ad))
+    @test Ad^(-3/4) ≈ inv(Ad) * sqrtm(sqrtm(Ad))
+    @test Ad^(17/8) ≈ Ad^2 * sqrtm(sqrtm(sqrtm(Ad)))
+    @test Ad^(-17/8) ≈ inv(Ad^2 * sqrtm(sqrtm(sqrtm(Ad))))
+    @test (Ad^0.2)^5 ≈ Ad
+    @test (Ad^(2/3))*(Ad^(1/3)) ≈ Ad
+    @test (Ad^im)^(-im) ≈ Ad
 end
 
 @testset "Least squares solutions" begin

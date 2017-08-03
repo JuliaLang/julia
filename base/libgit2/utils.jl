@@ -1,10 +1,19 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Parse "GIT URLs" syntax (URLs and a scp-like syntax). For details see:
+# https://git-scm.com/docs/git-clone#_git_urls_a_id_urls_a
 const URL_REGEX = r"""
-^(?:(?<scheme>https?|git|ssh)\:\/\/)?
-(?:(?<user>.*?)(?:\:(?<password>.*?))?@)?
+^(?:(?<scheme>ssh|git|https?)://)?
+(?:
+    (?<user>.*?)
+    (?:\:(?<password>.*?))?@
+)?
 (?<host>[A-Za-z0-9\-\.]+)
-(?:\:(?<port>\d+)?)?
+(?(<scheme>)
+    (?:\:(?<port>\d+))?  # only parse port when not using SCP-like syntax
+    |
+    :?
+)
 (?<path>.*?)$
 """x
 
@@ -23,7 +32,7 @@ reset(val::Integer, flag::Integer) = (val &= ~flag)
 toggle(val::Integer, flag::Integer) = (val |= flag)
 
 function prompt(msg::AbstractString; default::AbstractString="", password::Bool=false)
-    if is_windows() && password
+    if Sys.iswindows() && password
         error("Command line prompt not supported for password entry on windows. Use winprompt instead")
     end
     msg = !isempty(default) ? msg*" [$default]:" : msg*":"
@@ -51,8 +60,8 @@ end
 Standardise the path string `path` to use POSIX separators.
 """
 function posixpath end
-if is_windows()
+if Sys.iswindows()
     posixpath(path) = replace(path,'\\','/')
-else is_unix()
+else Sys.isunix()
     posixpath(path) = path
 end

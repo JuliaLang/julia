@@ -1,12 +1,13 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm-version.h"
 #include <map>
 #include <string>
 #include <cstdio>
 #include <llvm/Support/Host.h>
+#include "fix_llvm_assert.h"
 #include "julia.h"
 #include "julia_internal.h"
-#include "llvm-version.h"
 using namespace llvm;
 
 // --- library symbol lookup ---
@@ -139,9 +140,9 @@ void *jl_get_library(const char *f_lib)
 {
     void *hnd;
 #ifdef _OS_WINDOWS_
-    if ((intptr_t)f_lib == 1)
+    if (f_lib == JL_EXE_LIBNAME)
         return jl_exe_handle;
-    if ((intptr_t)f_lib == 2)
+    if (f_lib == JL_DL_LIBNAME)
         return jl_dl_handle;
 #endif
     if (f_lib == NULL)
@@ -174,23 +175,13 @@ void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
 extern "C" JL_DLLEXPORT
 jl_value_t *jl_get_cpu_name(void)
 {
-#if JL_LLVM_VERSION >= 30500
     StringRef HostCPUName = llvm::sys::getHostCPUName();
-#else
-    const std::string& HostCPUName = llvm::sys::getHostCPUName();
-#endif
     return jl_pchar_to_string(HostCPUName.data(), HostCPUName.size());
 }
 
 extern "C" JL_DLLEXPORT
 jl_value_t *jl_get_JIT(void)
 {
-#if defined(USE_ORCJIT)
     const std::string& HostJITName = "ORCJIT";
-#elif defined(USE_MCJIT)
-    const std::string& HostJITName = "MCJIT";
-#else
-    const std::string& HostJITName = "Unknown";
-#endif
     return jl_pchar_to_string(HostJITName.data(), HostJITName.size());
 }

@@ -1,8 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Grisu
-
-importall ..Base.Operators
 
 export print_shortest
 export DIGITS, grisu
@@ -11,14 +9,14 @@ const SHORTEST = 1
 const FIXED = 2
 const PRECISION = 3
 
-const DIGITS = Array{UInt8}(309+17)
+const DIGITS = Vector{UInt8}(309+17)
 
-include("grisu/float.jl")
-include("grisu/fastshortest.jl")
-include("grisu/fastprecision.jl")
-include("grisu/fastfixed.jl")
-include("grisu/bignums.jl")
-include("grisu/bignum.jl")
+include(joinpath("grisu", "float.jl"))
+include(joinpath("grisu", "fastshortest.jl"))
+include(joinpath("grisu", "fastprecision.jl"))
+include(joinpath("grisu", "fastfixed.jl"))
+include(joinpath("grisu", "bignums.jl"))
+include(joinpath("grisu", "bignum.jl"))
 
 const BIGNUMS = [Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum()]
 
@@ -184,6 +182,12 @@ function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
     nothing
 end
 
+"""
+    print_shortest(io::IO, x)
+
+Print the shortest possible representation, with the minimum number of consecutive non-zero
+digits, of number `x`, ensuring that it would parse to the exact same number.
+"""
 print_shortest(io::IO, x::AbstractFloat, dot::Bool) = _print_shortest(io, x, dot, SHORTEST, 0)
 print_shortest(io::IO, x::Union{AbstractFloat,Integer}) = print_shortest(io, float(x), false)
 

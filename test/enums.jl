@@ -1,8 +1,7 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+# For curmod_*
+include("testenv.jl")
 
 using Base.Test
 
@@ -79,7 +78,7 @@ end
 @test Integer(_zerobi) == 1
 
 # can't use non-identifiers as enum members
-@test_throws ArgumentError eval(:(@enum(Test2, ?)))
+@test_throws ArgumentError eval(:(@enum Test2  x ? 1 : 2))
 @test_throws ArgumentError eval(:(@enum Test22 1=2))
 
 # other Integer types of enum members

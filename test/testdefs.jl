@@ -1,11 +1,13 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function runtests(name, isolate=true)
     old_print_setting = Base.Test.TESTSET_PRINT_ENABLE[]
     Base.Test.TESTSET_PRINT_ENABLE[] = false
     try
         if isolate
-            mod_name = Symbol("TestMain_", replace(name, '/', '_'))
+            # Simple enough to type and random enough so that no one will hard
+            # code it in the test
+            mod_name = Symbol("Test", rand(1:100), "Main_", replace(name, '/', '_'))
             m = @eval(Main, module $mod_name end)
         else
             m = Main
@@ -36,4 +38,5 @@ end
 
 # looking in . messes things up badly
 filter!(x->x!=".", LOAD_PATH)
-nothing
+
+nothing # File is loaded via a remotecall to "include". Ensure it returns "nothing".

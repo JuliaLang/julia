@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 export
     abspath,
@@ -16,16 +16,15 @@ export
     splitdrive,
     splitext
 
-if is_unix()
+if Sys.isunix()
     const path_separator    = "/"
     const path_separator_re = r"/+"
-    const path_absolute_re  = r"^/"
     const path_directory_re = r"(?:^|/)\.{0,2}$"
     const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::String) = ("",path)
-elseif is_windows()
+elseif Sys.iswindows()
     const path_separator    = "\\"
     const path_separator_re = r"[/\\]+"
     const path_absolute_re  = r"^(?:\w+:)?[/\\]"
@@ -54,6 +53,11 @@ splitdrive(path::AbstractString)
     homedir() -> AbstractString
 
 Return the current user's home directory.
+
+!!! note
+    `homedir` determines the home directory via `libuv`'s `uv_os_homedir`. For details
+    (for example on how to specify the home directory via environment variables), see the
+    [`uv_os_homedir` documentation](http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir).
 """
 function homedir()
     path_max = 1024
@@ -64,7 +68,7 @@ function homedir()
         if rc == 0
             resize!(buf, sz[])
             return String(buf)
-        elseif rc == UV_ENOBUFS
+        elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1)
         else
             error("unable to retrieve home directory")
@@ -72,6 +76,12 @@ function homedir()
     end
 end
 
+
+if Sys.iswindows()
+    isabspath(path::String) = ismatch(path_absolute_re, path)
+else
+    isabspath(path::String) = startswith(path, '/')
+end
 
 """
     isabspath(path::AbstractString) -> Bool
@@ -86,7 +96,7 @@ julia> isabspath("home")
 false
 ```
 """
-isabspath(path::String) = ismatch(path_absolute_re, path)
+isabspath(path::AbstractString)
 
 """
     isdirpath(path::AbstractString) -> Bool
@@ -130,6 +140,8 @@ Get the directory part of a path.
 julia> dirname("/home/myuser")
 "/home"
 ```
+
+See also: [`basename`](@ref)
 """
  dirname(path::AbstractString) = splitdir(path)[1]
 
@@ -142,6 +154,8 @@ Get the file name part of a path.
 julia> basename("/home/myuser/example.jl")
 "example.jl"
 ```
+
+See also: [`dirname`](@ref)
 """
 basename(path::AbstractString) = splitdir(path)[2]
 
@@ -253,9 +267,16 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 Convert a path to an absolute path by adding the current directory if necessary.
 """
 abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
+
+"""
+    abspath(path::AbstractString, paths::AbstractString...) -> AbstractString
+
+Convert a set of paths to an absolute path by joining them together and adding the
+current directory if necessary. Equivalent to `abspath(joinpath(path, paths...))`.
+"""
 abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
-if is_windows()
+if Sys.iswindows()
 function realpath(path::AbstractString)
     p = cwstring(path)
     buf = zeros(UInt16, length(p))
@@ -303,7 +324,7 @@ Canonicalize a path by expanding symbolic links and removing "." and ".." entrie
 realpath(path::AbstractString)
 
 
-if is_windows()
+if Sys.iswindows()
 expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
 else
 function expanduser(path::AbstractString)

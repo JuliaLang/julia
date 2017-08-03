@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
@@ -54,8 +54,7 @@ If `A` is a matrix and `b` is a vector, then `scale!(A,b)` scales each column `i
 thrown if the scaling produces a number not representable by the element type of `A`,
 e.g. for integer types.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -91,8 +90,7 @@ scale!(s::Number, X::AbstractArray) = generic_scale!(s, X)
 
 Compute the cross product of two 3-vectors.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = [0;1;0]
 3-element Array{Int64,1}:
@@ -121,8 +119,7 @@ cross(a::AbstractVector, b::AbstractVector) =
 
 Upper triangle of a matrix.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = ones(4,4)
 4×4 Array{Float64,2}:
@@ -146,8 +143,7 @@ triu(M::AbstractMatrix) = triu!(copy(M))
 
 Lower triangle of a matrix.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = ones(4,4)
 4×4 Array{Float64,2}:
@@ -171,8 +167,7 @@ tril(M::AbstractMatrix) = tril!(copy(M))
 
 Returns the upper triangle of `M` starting from the `k`th superdiagonal.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = ones(4,4)
 4×4 Array{Float64,2}:
@@ -203,8 +198,7 @@ triu(M::AbstractMatrix,k::Integer) = triu!(copy(M),k)
 
 Returns the lower triangle of `M` starting from the `k`th superdiagonal.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = ones(4,4)
 4×4 Array{Float64,2}:
@@ -254,8 +248,7 @@ diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 Finite difference operator of matrix or vector `A`. If `A` is a matrix,
 compute the finite difference over a dimension `dim` (default `1`).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = [2 4; 6 16]
 2×2 Array{Int64,2}:
@@ -287,8 +280,7 @@ gradient(F::AbstractVector) = gradient(F, [1:length(F);])
 Compute differences along vector `F`, using `h` as the spacing between points. The default
 spacing is one.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = [2,4,6,8];
 
@@ -304,7 +296,7 @@ gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F));])
 
 diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to construct a diagonal matrix"))
 
-#diagm{T}(v::AbstractVecOrMat{T})
+#diagm(v::AbstractVecOrMat{T}) where {T}
 
 ###########################################################################################
 # Inner products and norms
@@ -350,7 +342,7 @@ end
 # faster computation of norm(x)^2, avoiding overflow for integers
 norm_sqr(x) = norm(x)^2
 norm_sqr(x::Number) = abs2(x)
-norm_sqr{T<:Integer}(x::Union{T,Complex{T},Rational{T}}) = abs2(float(x))
+norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 
 function generic_vecnorm2(x)
     maxabs = vecnormInf(x)
@@ -412,16 +404,24 @@ vecnorm2(x) = generic_vecnorm2(x)
 vecnormp(x, p) = generic_vecnormp(x, p)
 
 """
-    vecnorm(A, [p::Real=2])
+    vecnorm(A, p::Real=2)
 
 For any iterable container `A` (including arrays of any dimension) of numbers (or any
 element type for which `norm` is defined), compute the `p`-norm (defaulting to `p=2`) as if
 `A` were a vector of the corresponding length.
 
-For example, if `A` is a matrix and `p=2`, then this is equivalent to the Frobenius norm.
+The `p`-norm is defined as:
+```math
+\\|A\\|_p = \\left( \\sum_{i=1}^n | a_i | ^p \\right)^{1/p}
+```
+with ``a_i`` the entries of ``A`` and ``n`` its length.
 
-# Example
+`p` can assume any numeric value (even though not all values produce a
+mathematically valid vector norm). In particular, `vecnorm(A, Inf)` returns the largest value
+in `abs(A)`, whereas `vecnorm(A, -Inf)` returns the smallest. If `A` is a matrix and `p=2`,
+then this is equivalent to the Frobenius norm.
 
+# Examples
 ```jldoctest
 julia> vecnorm([1 2 3; 4 5 6; 7 8 9])
 16.881943016134134
@@ -447,14 +447,18 @@ function vecnorm(itr, p::Real=2)
         vecnormp(itr,p)
     end
 end
+
+"""
+    vecnorm(x::Number, p::Real=2)
+
+For numbers, return ``\\left( |x|^p \\right) ^{1/p}``.
+"""
 @inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : oneunit(abs(x))) : abs(x)
 
-norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
-
-function norm1{T}(A::AbstractMatrix{T})
+function norm1(A::AbstractMatrix{T}) where T
     m, n = size(A)
     Tnorm = typeof(float(real(zero(T))))
-    Tsum = promote_type(Float64,Tnorm)
+    Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
     @inbounds begin
         for j = 1:n
@@ -467,16 +471,16 @@ function norm1{T}(A::AbstractMatrix{T})
     end
     return convert(Tnorm, nrm)
 end
-function norm2{T}(A::AbstractMatrix{T})
+function norm2(A::AbstractMatrix{T}) where T
     m,n = size(A)
     if m == 1 || n == 1 return vecnorm2(A) end
     Tnorm = typeof(float(real(zero(T))))
     (m == 0 || n == 0) ? zero(Tnorm) : convert(Tnorm, svdvals(A)[1])
 end
-function normInf{T}(A::AbstractMatrix{T})
+function normInf(A::AbstractMatrix{T}) where T
     m,n = size(A)
     Tnorm = typeof(float(real(zero(T))))
-    Tsum = promote_type(Float64,Tnorm)
+    Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
     @inbounds begin
         for i = 1:m
@@ -491,18 +495,26 @@ function normInf{T}(A::AbstractMatrix{T})
 end
 
 """
-    norm(A, [p::Real=2])
+    norm(A::AbstractArray, p::Real=2)
 
-Compute the `p`-norm of a vector or the operator norm of a matrix `A`, defaulting to the `p=2`-norm.
+Compute the `p`-norm of a vector or the operator norm of a matrix `A`,
+defaulting to the 2-norm.
 
-For vectors, `p` can assume any numeric value (even though not all values produce a
+    norm(A::AbstractVector, p::Real=2)
+
+For vectors, this is equivalent to [`vecnorm`](@ref) and equal to:
+```math
+\\|A\\|_p = \\left( \\sum_{i=1}^n | a_i | ^p \\right)^{1/p}
+```
+with ``a_i`` the entries of ``A`` and ``n`` its length.
+
+`p` can assume any numeric value (even though not all values produce a
 mathematically valid vector norm). In particular, `norm(A, Inf)` returns the largest value
 in `abs(A)`, whereas `norm(A, -Inf)` returns the smallest.
 
-# Example
-
+# Examples
 ```jldoctest
-julia> v = [3;-2;6]
+julia> v = [3, -2, 6]
 3-element Array{Int64,1}:
   3
  -2
@@ -514,13 +526,31 @@ julia> norm(v)
 julia> norm(v, Inf)
 6.0
 ```
+"""
+norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
+
+"""
+    norm(A::AbstractMatrix, p::Real=2)
 
 For matrices, the matrix norm induced by the vector `p`-norm is used, where valid values of
 `p` are `1`, `2`, or `Inf`. (Note that for sparse matrices, `p=2` is currently not
 implemented.) Use [`vecnorm`](@ref) to compute the Frobenius norm.
 
-# Example
+When `p=1`, the matrix norm is the maximum absolute column sum of `A`:
+```math
+\\|A\\|_1 = \\max_{1 ≤ j ≤ n} \\sum_{i=1}^m | a_{ij} |
+```
+with ``a_{ij}`` the entries of ``A``, and ``m`` and ``n`` its dimensions.
 
+When `p=2`, the matrix norm is the spectral norm, equal to the largest
+singular value of `A`.
+
+When `p=Inf`, the matrix norm is the maximum absolute row sum of `A`:
+```math
+\\|A\\|_\\infty = \\max_{1 ≤ i ≤ m} \\sum _{j=1}^n | a_{ij} |
+```
+
+# Examples
 ```jldoctest
 julia> A = [1 -2 -3; 2 3 -1]
 2×3 Array{Int64,2}:
@@ -543,14 +573,20 @@ function norm(A::AbstractMatrix, p::Real=2)
     end
 end
 
+"""
+    norm(x::Number, p::Real=2)
+
+For numbers, return ``\\left( |x|^p \\right)^{1/p}``.
+This is equivalent to [`vecnorm`](@ref).
+"""
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
 @inline norm(tv::RowVector) = norm(transpose(tv))
 
 """
-    norm(rowvector, [q = 2])
+    norm(A::RowVector, q::Real=2)
 
-Takes the q-norm of a `RowVector`, which is equivalent to the p-norm with
+For row vectors, return the ``q``-norm of `A`, which is equivalent to the p-norm with
 value `p = q/(q-1)`. They coincide at `p = q = 2`.
 
 The difference in norm between a vector space and its dual arises to preserve
@@ -631,10 +667,10 @@ dot(x::Number, y::Number) = vecdot(x, y)
     dot(x, y)
     ⋅(x,y)
 
-Compute the dot product. For complex vectors, the first vector is conjugated.
+Compute the dot product between two vectors. For complex vectors, the first vector is conjugated.
+When the vectors have equal lengths, calling `dot` is semantically equivalent to `sum(vx'vy for (vx,vy) in zip(x, y))`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> dot([1; 1], [2; 3])
 5
@@ -643,7 +679,29 @@ julia> dot([im; im], [1; 1])
 0 - 2im
 ```
 """
-dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
+function dot(x::AbstractVector, y::AbstractVector)
+    if length(x) != length(y)
+        throw(DimensionMismatch("dot product arguments have lengths $(length(x)) and $(length(y))"))
+    end
+    ix = start(x)
+    if done(x, ix)
+        # we only need to check the first vector, since equal lengths have been asserted
+        return zero(eltype(x))'zero(eltype(y))
+    end
+    @inbounds (vx, ix) = next(x, ix)
+    @inbounds (vy, iy) = next(y, start(y))
+    s = vx'vy
+    while !done(x, ix)
+        @inbounds (vx, ix) = next(x, ix)
+        @inbounds (vy, iy) = next(y, iy)
+        s += vx'vy
+    end
+    return s
+end
+
+# Call optimized BLAS methods for vectors of numbers
+dot(x::AbstractVector{<:Number}, y::AbstractVector{<:Number}) = vecdot(x, y)
+
 
 ###########################################################################################
 
@@ -655,6 +713,21 @@ values of `M` have magnitude greater than `tol`.
 By default, the value of `tol` is the largest
 dimension of `M` multiplied by the [`eps`](@ref)
 of the [`eltype`](@ref) of `M`.
+
+# Examples
+```jldoctest
+julia> rank(eye(3))
+3
+
+julia> rank(diagm([1, 0, 2]))
+2
+
+julia> rank(diagm([1, 0.001, 2]), 0.1)
+2
+
+julia> rank(diagm([1, 0.001, 2]), 0.00001)
+3
+```
 """
 rank(A::AbstractMatrix, tol::Real) = mapreduce(x -> x > tol, +, 0, svdvals(A))
 function rank(A::AbstractMatrix)
@@ -670,8 +743,7 @@ rank(x::Number) = x==0 ? 0 : 1
 
 Matrix trace. Sums the diagonal elements of `M`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -689,7 +761,7 @@ end
 trace(x::Number) = x
 
 #kron(a::AbstractVector, b::AbstractVector)
-#kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
+#kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
 
 #det(a::AbstractMatrix)
 
@@ -701,8 +773,7 @@ Matrix inverse. Computes matrix `N` such that
 Computed by solving the left-division
 `N = M \\ I`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> M = [2 5; 1 3]
 2×2 Array{Int64,2}:
@@ -718,7 +789,7 @@ julia> M*N == N*M == eye(2)
 true
 ```
 """
-function inv{T}(A::AbstractMatrix{T})
+function inv(A::AbstractMatrix{T}) where T
     S = typeof(zero(T)/one(T))      # dimensionful
     S0 = typeof(zero(T)/oneunit(T)) # dimensionless
     A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S0, checksquare(A)))
@@ -740,8 +811,7 @@ When `A` is sparse, a similar polyalgorithm is used. For indefinite matrices, th
 factorization does not use pivoting during the numerical factorization and therefore the
 procedure can fail even for invertible matrices.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 0; 1 -2]; B = [32; -4];
 
@@ -769,7 +839,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
         end
         return lufact(A) \ B
     end
-    return qrfact(A,Val{true}) \ B
+    return qrfact(A,Val(true)) \ B
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
@@ -800,13 +870,14 @@ condition number, or componentwise relative condition number.
 """
 condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs.(inv(A))*(abs.(A)*abs.(x)), p)
 
+issymmetric(A::AbstractMatrix{<:Real}) = ishermitian(A)
+
 """
     issymmetric(A) -> Bool
 
 Test whether a matrix is symmetric.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = [1 2; 2 -1]
 2×2 Array{Int64,2}:
@@ -845,8 +916,7 @@ issymmetric(x::Number) = x == x
 
 Test whether a matrix is Hermitian.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = [1 2; 2 -1]
 2×2 Array{Int64,2}:
@@ -885,8 +955,7 @@ ishermitian(x::Number) = (x == conj(x))
 
 Test whether a matrix is upper triangular.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = [1 2; 2 -1]
 2×2 Array{Int64,2}:
@@ -908,7 +977,7 @@ true
 function istriu(A::AbstractMatrix)
     m, n = size(A)
     for j = 1:min(n,m-1), i = j+1:m
-        if A[i,j] != 0
+        if !iszero(A[i,j])
             return false
         end
     end
@@ -920,8 +989,7 @@ end
 
 Test whether a matrix is lower triangular.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = [1 2; 2 -1]
 2×2 Array{Int64,2}:
@@ -943,7 +1011,7 @@ true
 function istril(A::AbstractMatrix)
     m, n = size(A)
     for j = 2:n, i = 1:min(j-1,m)
-        if A[i,j] != 0
+        if !iszero(A[i,j])
             return false
         end
     end
@@ -955,8 +1023,7 @@ end
 
 Test whether a matrix is diagonal.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = [1 2; 2 -1]
 2×2 Array{Int64,2}:
@@ -988,14 +1055,15 @@ Perform simple linear regression using Ordinary Least Squares. Returns `a` and `
 that `a + b*x` is the closest straight line to the given points `(x, y)`, i.e., such that
 the squared error between `y` and `a + b*x` is minimized.
 
-**Examples:**
-
-    using PyPlot
-    x = 1.0:12.0
-    y = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]
-    a, b = linreg(x, y)          # Linear regression
-    plot(x, y, "o")              # Plot (x, y) points
-    plot(x, a + b*x)             # Plot line determined by linear regression
+# Examples
+```julia
+using PyPlot
+x = 1.0:12.0
+y = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]
+a, b = linreg(x, y)          # Linear regression
+plot(x, y, "o")              # Plot (x, y) points
+plot(x, a + b*x)             # Plot line determined by linear regression
+```
 
 See also:
 
@@ -1142,8 +1210,7 @@ end
 
 Matrix determinant.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> M = [1 0; 2 2]
 2×2 Array{Int64,2}:
@@ -1154,7 +1221,7 @@ julia> det(M)
 2.0
 ```
 """
-function det{T}(A::AbstractMatrix{T})
+function det(A::AbstractMatrix{T}) where T
     if istriu(A) || istril(A)
         S = typeof((one(T)*zero(T) + zero(T))/one(T))
         return convert(S, det(UpperTriangular(A)))
@@ -1166,7 +1233,7 @@ det(x::Number) = x
 """
     logabsdet(M)
 
-Log of absolute value of determinant of real matrix. Equivalent to
+Log of absolute value of matrix determinant. Equivalent to
 `(log(abs(det(M))), sign(det(M)))`, but may provide increased accuracy and/or speed.
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
@@ -1177,8 +1244,7 @@ logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
 Log of matrix determinant. Equivalent to `log(det(M))`, but may provide
 increased accuracy and/or speed.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> M = [1 0; 2 2]
 2×2 Array{Int64,2}:
@@ -1197,7 +1263,9 @@ function logdet(A::AbstractMatrix)
     return d + log(s)
 end
 
-NumberArray{T<:Number} = AbstractArray{T}
+logdet(A) = log(det(A))
+
+const NumberArray{T<:Number} = AbstractArray{T}
 
 """
     promote_leaf_eltypes(itr)
@@ -1206,8 +1274,7 @@ For an (possibly nested) iterable object `itr`, promote the types of leaf
 elements.  Equivalent to `promote_type(typeof(leaf1), typeof(leaf2), ...)`.
 Currently supports only numeric leaf elements.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 3-element Array{Any,1}:
@@ -1219,9 +1286,9 @@ julia> promote_leaf_eltypes(a)
 Complex{Float64}
 ```
 """
-promote_leaf_eltypes{T<:Number}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = T
-promote_leaf_eltypes{T<:NumberArray}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = eltype(T)
-promote_leaf_eltypes{T}(x::T) = T
+promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) where {T<:Number} = T
+promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) where {T<:NumberArray} = eltype(T)
+promote_leaf_eltypes(x::T) where {T} = T
 promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_eltypes, promote_type, Bool, x)
 
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
@@ -1240,10 +1307,11 @@ function isapprox(x::AbstractArray, y::AbstractArray;
 end
 
 """
-    normalize!(v, [p::Real=2])
+    normalize!(v::AbstractVector, p::Real=2)
 
-Normalize the vector `v` in-place with respect to the `p`-norm.
-See also [`vecnorm`](@ref) and [`normalize`](@ref).
+Normalize the vector `v` in-place so that its `p`-norm equals unity,
+i.e. `norm(v, p) == 1`.
+See also [`normalize`](@ref) and [`vecnorm`](@ref).
 """
 function normalize!(v::AbstractVector, p::Real=2)
     nrm = norm(v, p)
@@ -1268,27 +1336,33 @@ end
 end
 
 """
-    normalize(v, [p::Real=2])
+    normalize(v::AbstractVector, p::Real=2)
 
-Normalize the vector `v` with respect to the `p`-norm.
+Normalize the vector `v` so that its `p`-norm equals unity,
+i.e. `norm(v, p) == vecnorm(v, p) == 1`.
 See also [`normalize!`](@ref) and [`vecnorm`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> a = [1,2,4];
 
-julia> normalize(a)
+julia> b = normalize(a)
 3-element Array{Float64,1}:
  0.218218
  0.436436
  0.872872
 
-julia> normalize(a,1)
+julia> norm(b)
+1.0
+
+julia> c = normalize(a, 1)
 3-element Array{Float64,1}:
  0.142857
  0.285714
  0.571429
+
+julia> norm(c, 1)
+1.0
 ```
 """
 function normalize(v::AbstractVector, p::Real = 2)

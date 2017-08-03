@@ -46,7 +46,7 @@ const PAGES = [
         "manual/running-external-programs.md",
         "manual/calling-c-and-fortran-code.md",
         "manual/handling-operating-system-variation.md",
-        "manual/interacting-with-julia.md",
+        "manual/environment-variables.md",
         "manual/embedding.md",
         "manual/packages.md",
         "manual/profile.md",
@@ -87,12 +87,13 @@ const PAGES = [
         "devdocs/reflection.md",
         "Documentation of Julia's Internals" => [
             "devdocs/init.md",
-            "devdocs/eval.md",
             "devdocs/ast.md",
             "devdocs/types.md",
             "devdocs/object.md",
-            "devdocs/functions.md",
+            "devdocs/eval.md",
             "devdocs/callconv.md",
+            "devdocs/compiler.md",
+            "devdocs/functions.md",
             "devdocs/cartesian.md",
             "devdocs/meta.md",
             "devdocs/subarrays.md",
@@ -102,6 +103,9 @@ const PAGES = [
             "devdocs/boundscheck.md",
             "devdocs/locks.md",
             "devdocs/offset-arrays.md",
+            "devdocs/libgit2.md",
+            "devdocs/require.md",
+            "devdocs/inference.md",
         ],
         "Developing/debugging Julia's C code" => [
             "devdocs/backtraces.md",
@@ -118,6 +122,7 @@ makedocs(
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
+    linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     strict    = true,
     checkdocs = :none,
     format    = "pdf" in ARGS ? :latex : :html,
@@ -125,6 +130,7 @@ makedocs(
     authors   = "The Julia Project",
     analytics = "UA-28835595-6",
     pages     = PAGES,
+    html_prettyurls = ("deploy" in ARGS),
 )
 
 if "deploy" in ARGS

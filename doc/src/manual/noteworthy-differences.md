@@ -52,8 +52,6 @@ may trip up Julia users accustomed to MATLAB:
   * In Julia, functions such as [`sort()`](@ref) that operate column-wise by default (`sort(A)` is
     equivalent to `sort(A,1)`) do not have special behavior for `1xN` arrays; the argument is returned
     unmodified since it still performs `sort(A,1)`. To sort a `1xN` matrix like a vector, use `sort(A,2)`.
-  * In Julia, if `A` is a 2-dimensional array, `fft(A)` computes a 2D FFT. In particular, it is not
-    equivalent to `fft(A,1)`, which computes a 1D FFT acting column-wise.
   * In Julia, parentheses must be used to call a function with zero arguments, like in [`tic()`](@ref)
     and [`toc()`](@ref).
   * Julia discourages the used of semicolons to end statements. The results of statements are not
@@ -207,8 +205,8 @@ For users coming to Julia from R, these are some noteworthy differences:
     be reversed in Julia relative to NumPy (see relevant section of [Performance Tips](@ref man-performance-tips)).
   * Julia's updating operators (e.g. `+=`, `-=`, ...) are *not in-place* whereas NumPy's are. This
     means `A = ones(4); B = A; B += 3` doesn't change values in `A`, it rather rebinds the name `B`
-    to the result of the right- hand side `B = B + 3`, which is a new array. Use `B[:] += 3`, explicit
-    loops, or `InplaceOps.jl`.
+    to the result of the right-hand side `B = B + 3`, which is a new array. For in-place operation, use `B .+= 3`
+    (see also [dot operators](@ref man-dot-operators)), explicit loops, or `InplaceOps.jl`.
   * Julia evaluates default values of function arguments every time the method is invoked, unlike
     in Python where the default values are evaluated only once when the function is defined. For example,
     the function `f(x=rand()) = x` returns a new random number every time it is invoked without argument.
@@ -239,11 +237,11 @@ For users coming to Julia from R, these are some noteworthy differences:
     unsigned and/or signed vs. unsigned. Decimal literals are always signed, and hexadecimal literals
     (which start with `0x` like C/C++), are unsigned. Hexadecimal literals also, unlike C/C++/Java
     and unlike decimal literals in Julia, have a type based on the *length* of the literal, including
-    leading 0s.  For example, `0x0` and `0x00` have type UInt8, `0x000` and `0x0000` have type `UInt16`,
-    then literals with 5 to 8 hex digits have type `UInt32`, 9 to 16 hex digits type `UInt64` and
-    17 to 32 hex digits type `UInt128`. This needs to be taken into account when defining hexadecimal
-    masks, for example `~0xf == 0xf0` is very different from `~0x000f == 0xfff0`. 64 bit `Float64`
-    and 32 bit `Float32` bit literals are expressed as `1.0` and `1.0f0` respectively. Floating point
+    leading 0s. For example, `0x0` and `0x00` have type [`UInt8`](@ref), `0x000` and `0x0000` have type
+    [`UInt16`](@ref), then literals with 5 to 8 hex digits have type `UInt32`, 9 to 16 hex digits type
+    `UInt64` and 17 to 32 hex digits type `UInt128`. This needs to be taken into account when defining
+    hexadecimal masks, for example `~0xf == 0xf0` is very different from `~0x000f == 0xfff0`. 64 bit `Float64`
+    and 32 bit [`Float32`](@ref) bit literals are expressed as `1.0` and `1.0f0` respectively. Floating point
     literals are rounded (and not promoted to the `BigFloat` type) if they can not be exactly represented.
      Floating point literals are closer in behavior to C/C++. Octal (prefixed with `0o`) and binary
     (prefixed with `0b`) literals are also treated as unsigned.
@@ -251,7 +249,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     `"` characters without quoting it like `"\""` String literals can have values of other variables
     or expressions interpolated into them, indicated by `$variablename` or `$(expression)`, which
     evaluates the variable name or the expression in the context of the function.
-  * `//` indicates a `Rational` number, and not a single-line comment (which is `#` in Julia)
+  * `//` indicates a [`Rational`](@ref) number, and not a single-line comment (which is `#` in Julia)
   * `#=` indicates the start of a multiline comment, and `=#` ends it.
   * Functions in Julia return values from their last expression(s) or the `return` keyword.  Multiple
     values can be returned from functions and assigned as tuples, e.g. `(a, b) = myfunction()` or

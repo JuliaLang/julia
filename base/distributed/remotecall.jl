@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
     client_refs
@@ -20,6 +20,8 @@ mutable struct Future <: AbstractRemoteRef
 
     Future(w::Int, rrid::RRID) = Future(w, rrid, Nullable{Any}())
     Future(w::Int, rrid::RRID, v) = (r = new(w,rrid.whence,rrid.id,v); return test_existing_ref(r))
+
+    Future(t::Tuple) = new(t[1],t[2],t[3],t[4])  # Useful for creating dummy, zeroed-out instances
 end
 
 mutable struct RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
@@ -30,6 +32,10 @@ mutable struct RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
     function RemoteChannel{T}(w::Int, rrid::RRID) where T<:AbstractChannel
         r = new(w, rrid.whence, rrid.id)
         return test_existing_ref(r)
+    end
+
+    function RemoteChannel{T}(t::Tuple) where T<:AbstractChannel
+        return new(t[1],t[2],t[3])
     end
 end
 
@@ -152,7 +158,7 @@ function lookup_ref(pg, rrid, f)
         rv = get(pg.refs, rrid, false)
         if rv === false
             # first we've heard of this ref
-            rv = RemoteValue(eval(Main, Expr(:body, Expr(:return, Expr(:call, f)))))
+            rv = RemoteValue(invokelatest(f))
             pg.refs[rrid] = rv
             push!(rv.clientset, rrid.whence)
         end
@@ -235,7 +241,7 @@ end
 function send_del_client(rr)
     if rr.where == myid()
         del_client(rr)
-    elseif rr.where in procs() # process only if a valid worker
+    elseif id_in_procs(rr.where) # process only if a valid worker
         w = worker_from_id(rr.where)
         push!(w.del_msgs, (remoteref_id(rr), myid()))
         w.gcflag = true
@@ -260,7 +266,7 @@ end
 function send_add_client(rr::AbstractRemoteRef, i)
     if rr.where == myid()
         add_client(remoteref_id(rr), i)
-    elseif (i != rr.where) && (rr.where in procs())
+    elseif (i != rr.where) && id_in_procs(rr.where)
         # don't need to send add_client if the message is already going
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
@@ -271,37 +277,49 @@ function send_add_client(rr::AbstractRemoteRef, i)
     end
 end
 
-channel_type{T}(rr::RemoteChannel{T}) = T
+channel_type(rr::RemoteChannel{T}) where {T} = T
 
-serialize(s::AbstractSerializer, f::Future) = serialize(s, f, isnull(f.v))
-serialize(s::AbstractSerializer, rr::RemoteChannel) = serialize(s, rr, true)
-function serialize(s::AbstractSerializer, rr::AbstractRemoteRef, addclient)
+serialize(s::ClusterSerializer, f::Future) = serialize(s, f, isnull(f.v))
+serialize(s::ClusterSerializer, rr::RemoteChannel) = serialize(s, rr, true)
+function serialize(s::ClusterSerializer, rr::AbstractRemoteRef, addclient)
     if addclient
         p = worker_id_from_socket(s.io)
         (p !== rr.where) && send_add_client(rr, p)
     end
-    invoke(serialize, Tuple{AbstractSerializer, Any}, s, rr)
+    invoke(serialize, Tuple{ClusterSerializer, Any}, s, rr)
 end
 
-function deserialize(s::AbstractSerializer, t::Type{<:Future})
+function deserialize(s::ClusterSerializer, t::Type{<:Future})
     f = deserialize_rr(s,t)
     Future(f.where, RRID(f.whence, f.id), f.v) # ctor adds to client_refs table
 end
 
-function deserialize(s::AbstractSerializer, t::Type{<:RemoteChannel})
+function deserialize(s::ClusterSerializer, t::Type{<:RemoteChannel})
     rr = deserialize_rr(s,t)
     # call ctor to make sure this rr gets added to the client_refs table
     RemoteChannel{channel_type(rr)}(rr.where, RRID(rr.whence, rr.id))
 end
 
 function deserialize_rr(s, t)
-    rr = invoke(deserialize, Tuple{AbstractSerializer, DataType}, s, t)
+    rr = invoke(deserialize, Tuple{ClusterSerializer, DataType}, s, t)
     if rr.where == myid()
         # send_add_client() is not executed when the ref is being
         # serialized to where it exists
         add_client(remoteref_id(rr), myid())
     end
     rr
+end
+
+# Future and RemoteChannel are serializable only in a running cluster.
+# Serialize zeroed-out values to non ClusterSerializer objects
+function serialize(s::AbstractSerializer, ::Future)
+    zero_fut = Future((0,0,0,Nullable{Any}()))
+    invoke(serialize, Tuple{AbstractSerializer, Any}, s, zero_fut)
+end
+
+function serialize(s::AbstractSerializer, ::RemoteChannel)
+    zero_rc = RemoteChannel{Channel{Any}}((0,0,0))
+    invoke(serialize, Tuple{AbstractSerializer, Any}, s, zero_rc)
 end
 
 
@@ -484,7 +502,7 @@ Waits and fetches a value from `x` depending on the type of `x`:
 
 Does not remove the item fetched.
 """
-fetch(x::ANY) = x
+fetch(@nospecialize x) = x
 
 isready(rv::RemoteValue, args...) = isready(rv.c, args...)
 

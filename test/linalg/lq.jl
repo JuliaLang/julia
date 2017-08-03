@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -57,6 +57,9 @@ bimg  = randn(n,2)/2
                     @test l*q ≈ a
                     @test full(lqa) ≈ a
                     @test full(copy(lqa)) ≈ a
+                    lstring = sprint(show,l)
+                    qstring = sprint(show,q)
+                    @test sprint(show,lqa) == "$(typeof(lqa)) with factors L and Q:\n$lstring\n$qstring"
                 end
                 @testset "Binary ops" begin
                     @test a*(lqa\b) ≈ b atol=3000ε
@@ -77,7 +80,7 @@ bimg  = randn(n,2)/2
                     @test_throws DimensionMismatch Ac_mul_B(q,ones(eltya,n+2,n+2))
                     @test_throws DimensionMismatch ones(eltyb,n+2,n+2)*q
                     if isa(a, DenseArray) && isa(b, DenseArray)
-                        #use this to test 2nd branch in mult code
+                        # use this to test 2nd branch in mult code
                         pad_a = vcat(eye(a), a)
                         pad_b = hcat(eye(b), b)
                         @test pad_a*q ≈ pad_a*full(q,thin=false) atol=100ε

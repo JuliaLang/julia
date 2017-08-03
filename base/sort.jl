@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Sort
 
@@ -63,6 +63,7 @@ end
 Test whether a vector is in sorted order. The `lt`, `by` and `rev` keywords modify what
 order is considered to be sorted just as they do for [`sort`](@ref).
 
+# Examples
 ```jldoctest
 julia> issorted([1, 2, 3])
 true
@@ -72,6 +73,9 @@ true
 
 julia> issorted([(1, "b"), (2, "a")], by = x -> x[2])
 false
+
+julia> issorted([(1, "b"), (2, "a")], by = x -> x[2], rev=true)
+true
 ```
 """
 issorted(itr;
@@ -214,6 +218,72 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
         $s(v::AbstractVector, x) = $s(v, x, Forward)
     end
 end
+
+"""
+    searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Return the range of indices of `a` which compare as equal to `x` (using binary search)
+according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
+is already sorted in that order. Return an empty range located at the insertion point
+if `a` does not contain values equal to `x`.
+
+# Examples
+```jldoctest
+julia> a = [4, 3, 2, 1]
+4-element Array{Int64,1}:
+ 4
+ 3
+ 2
+ 1
+
+julia> searchsorted(a, 4)
+5:4
+
+julia> searchsorted(a, 4, rev=true)
+1:1
+```
+""" searchsorted
+
+"""
+    searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Return the index of the first value in `a` greater than or equal to `x`, according to the
+specified order. Return `length(a) + 1` if `x` is greater than all values in `a`.
+`a` is assumed to be sorted.
+
+# Examples
+```jldoctest
+julia> searchsortedfirst([1, 2, 4, 5, 14], 4)
+3
+
+julia> searchsortedfirst([1, 2, 4, 5, 14], 4, rev=true)
+1
+
+julia> searchsortedfirst([1, 2, 4, 5, 14], 15)
+6
+```
+""" searchsortedfirst
+
+"""
+    searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Return the index of the last value in `a` less than or equal to `x`, according to the
+specified order. Return `0` if `x` is less than all values in `a`. `a` is assumed to
+be sorted.
+
+# Examples
+```jldoctest
+julia> searchsortedlast([1, 2, 4, 5, 14], 4)
+3
+
+julia> searchsortedlast([1, 2, 4, 5, 14], 4, rev=true)
+5
+
+julia> searchsortedlast([1, 2, 4, 5, 14], -1)
+0
+```
+""" searchsortedlast
+
 
 ## sorting algorithms ##
 
@@ -444,6 +514,7 @@ options are independent and can be used together in all possible combinations: i
 and `lt` are specified, the `lt` function is applied to the result of the `by` function;
 `rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
 
+# Examples
 ```jldoctest
 julia> v = [3, 1, 2]; sort!(v); v
 3-element Array{Int64,1}:
@@ -519,6 +590,7 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
+# Examples
 ```jldoctest
 julia> v = [3, 1, 2];
 
@@ -575,6 +647,7 @@ specified using the same keywords as `sort!`.
 
 See also [`sortperm!`](@ref).
 
+# Examples
 ```jldoctest
 julia> v = [3, 1, 2];
 
@@ -623,6 +696,7 @@ end
 Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
 (the default), `ix` is initialized to contain the values `1:length(v)`.
 
+# Examples
 ```jldoctest
 julia> v = [3, 1, 2]; p = zeros(Int, 3);
 
@@ -688,6 +762,7 @@ Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
 
+# Examples
 ```jldoctest
 julia> A = [4 3; 1 2]
 2×2 Array{Int64,2}:
@@ -742,6 +817,27 @@ end
 Sort the rows of matrix `A` lexicographically.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
+
+# Examples
+```jldoctest
+julia> sortrows([7 3 5; -1 6 4; 9 -2 8])
+3×3 Array{Int64,2}:
+ -1   6  4
+  7   3  5
+  9  -2  8
+
+julia> sortrows([7 3 5; -1 6 4; 9 -2 8], lt=(x,y)->isless(x[2],y[2]))
+3×3 Array{Int64,2}:
+  9  -2  8
+  7   3  5
+ -1   6  4
+
+julia> sortrows([7 3 5; -1 6 4; 9 -2 8], rev=true)
+3×3 Array{Int64,2}:
+  9  -2  8
+  7   3  5
+ -1   6  4
+```
 """
 function sortrows(A::AbstractMatrix; kws...)
     inds = indices(A,1)
@@ -760,6 +856,27 @@ end
 Sort the columns of matrix `A` lexicographically.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
+
+# Examples
+```jldoctest
+julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8])
+3×3 Array{Int64,2}:
+  3   5  7
+ -1  -4  6
+ -2   8  9
+
+julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], alg=InsertionSort, lt=(x,y)->isless(x[2],y[2]))
+3×3 Array{Int64,2}:
+  5   3  7
+ -4  -1  6
+  8  -2  9
+
+julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], rev=true)
+3×3 Array{Int64,2}:
+ 7   5   3
+ 6  -4  -1
+ 9   8  -2
+```
 """
 function sortcols(A::AbstractMatrix; kws...)
     inds = indices(A,2)
@@ -772,13 +889,13 @@ function sortcols(A::AbstractMatrix; kws...)
     A[:,p]
 end
 
-function slicetypeof{T}(A::AbstractArray{T}, i1, i2)
+function slicetypeof(A::AbstractArray{T}, i1, i2) where T
     I = map(slice_dummy, to_indices(A, (i1, i2)))
     fast = isa(IndexStyle(viewindexing(I), IndexStyle(A)), IndexLinear)
     SubArray{T,1,typeof(A),typeof(I),fast}
 end
 slice_dummy(S::Slice) = S
-slice_dummy{T}(::AbstractUnitRange{T}) = oneunit(T)
+slice_dummy(::AbstractUnitRange{T}) where {T} = oneunit(T)
 
 ## fast clever sorting for floats ##
 
@@ -801,8 +918,8 @@ right(::DirectOrdering) = Right()
 left(o::Perm) = Perm(left(o.order), o.data)
 right(o::Perm) = Perm(right(o.order), o.data)
 
-lt{T<:Floats}(::Left, x::T, y::T) = slt_int(y, x)
-lt{T<:Floats}(::Right, x::T, y::T) = slt_int(x, y)
+lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
+lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
 
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])

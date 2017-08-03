@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # SubString and RevString types
 
@@ -26,7 +26,7 @@ struct SubString{T<:AbstractString} <: AbstractString
         end
     end
 end
-SubString(s::T, i::Int, j::Int) where T<:AbstractString = SubString{T}(s, i, j)
+SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
@@ -73,7 +73,7 @@ chr2ind(s::SubString{<:DirectIndexString}, i::Integer) = begin checkbounds(s,i);
 nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
-convert{T<:AbstractString}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
+convert(::Type{SubString{T}}, s::T) where {T<:AbstractString} = SubString(s, 1, endof(s))
 
 String(p::SubString{String}) =
     unsafe_string(pointer(p.string, p.offset+1), nextind(p, p.endof)-1)
@@ -94,7 +94,7 @@ end
 # don't make unnecessary copies when passing substrings to C functions
 cconvert(::Type{Ptr{UInt8}}, s::SubString{String}) = s
 cconvert(::Type{Ptr{Int8}}, s::SubString{String}) = s
-function unsafe_convert{R<:Union{Int8, UInt8}}(::Type{Ptr{R}}, s::SubString{String})
+function unsafe_convert(::Type{Ptr{R}}, s::SubString{String}) where R<:Union{Int8, UInt8}
     convert(Ptr{R}, pointer(s.string)) + s.offset
 end
 
@@ -117,6 +117,8 @@ end
     reverse(s::AbstractString) -> AbstractString
 
 Reverses a string.
+
+# Examples
 ```jldoctest
 julia> reverse("JuliaLang")
 "gnaLailuJ"
@@ -127,31 +129,56 @@ reverse(s::RevString) = s.string
 
 ## reverse an index i so that reverse(s)[i] == s[reverseind(s,i)]
 
+"""
+    reverseind(v, i)
+
+Given an index `i` in `reverse(v)`, return the corresponding index in `v` so that
+`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in the case where `v` is a
+Unicode string.)
+
+# Examples
+```jldoctest
+julia> r = reverse("Julia")
+"ailuJ"
+
+julia> for i in 1:length(r)
+           print(r[reverseind("Julia", i)])
+       end
+Julia
+```
+"""
 reverseind(s::AbstractString, i) = chr2ind(s, length(s) + 1 - ind2chr(reverse(s), i))
 reverseind(s::Union{DirectIndexString,SubString{DirectIndexString}}, i::Integer) = length(s) + 1 - i
 reverseind(s::RevString, i::Integer) = endof(s) - i + 1
 reverseind(s::SubString{String}, i::Integer) =
     reverseind(s.string, nextind(s.string, endof(s.string))-s.offset-s.endof+i-1) - s.offset
 
-function repeat(s::AbstractString, r::Integer)
-    r <  0 ? throw(ArgumentError("can't repeat a string $r times")) :
-    r == 0 ? "" :
-    r == 1 ? s  :
-    repeat(convert(String, s), r)
-end
+"""
+    repeat(s::AbstractString, r::Integer)
+
+Repeat a string `r` times. This can equivalently be accomplished by calling [`s^r`](@ref ^).
+
+# Examples
+```jldoctest
+julia> repeat("ha", 3)
+"hahaha"
+```
+"""
+repeat(s::AbstractString, r::Integer) = repeat(convert(String, s), r)
 
 """
-    ^(s::AbstractString, n::Integer)
+    ^(s::Union{AbstractString,Char}, n::Integer)
 
-Repeat `n` times the string `s`.
+Repeat a string or character `n` times.
 The [`repeat`](@ref) function is an alias to this operator.
 
+# Examples
 ```jldoctest
 julia> "Test "^3
 "Test Test Test "
 ```
 """
-(^)(s::AbstractString, r::Integer) = repeat(s,r)
+(^)(s::Union{AbstractString,Char}, r::Integer) = repeat(s,r)
 
 pointer(x::SubString{String}) = pointer(x.string) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)

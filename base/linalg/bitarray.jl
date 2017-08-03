@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function dot(x::BitVector, y::BitVector)
     # simplest way to mimic Array dot behavior
@@ -40,7 +40,7 @@ end
     #C
 #end
 
-#aCb{T, S}(A::BitMatrix{T}, B::BitMatrix{S}) = aTb(A, B)
+#aCb(A::BitMatrix{T}, B::BitMatrix{S}) where {T,S} = aTb(A, B)
 
 function triu(B::BitMatrix, k::Integer=0)
     m,n = size(B)
@@ -295,4 +295,4 @@ function transpose(B::BitMatrix)
     return Bt
 end
 
-ctranspose(B::BitArray) = transpose(B)
+ctranspose(B::Union{BitMatrix,BitVector}) = transpose(B)

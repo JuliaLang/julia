@@ -1,17 +1,16 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## Diagonal matrices
 
-struct Diagonal{T} <: AbstractMatrix{T}
-    diag::Vector{T}
+struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+    diag::V
 end
 """
     Diagonal(A::AbstractMatrix)
 
-Constructs a matrix from the diagonal of `A`.
+Construct a matrix from the diagonal of `A`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
 3×3 Array{Int64,2}:
@@ -20,42 +19,44 @@ julia> A = [1 2 3; 4 5 6; 7 8 9]
  7  8  9
 
 julia> Diagonal(A)
-3×3 Diagonal{Int64}:
+3×3 Diagonal{Int64,Array{Int64,1}}:
  1  ⋅  ⋅
  ⋅  5  ⋅
  ⋅  ⋅  9
 ```
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
+
 """
     Diagonal(V::AbstractVector)
 
-Constructs a matrix with `V` as its diagonal.
+Construct a matrix with `V` as its diagonal.
 
-# Example
-
+# Examples
 ```jldoctest
-julia> V = [1; 2]
+julia> V = [1, 2]
 2-element Array{Int64,1}:
  1
  2
 
 julia> Diagonal(V)
-2×2 Diagonal{Int64}:
+2×2 Diagonal{Int64,Array{Int64,1}}:
  1  ⋅
  ⋅  2
 ```
 """
-Diagonal(V::AbstractVector) = Diagonal(collect(V))
+Diagonal(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
+Diagonal{T}(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
+Diagonal{T}(V::AbstractVector) where {T} = Diagonal{T}(convert(AbstractVector{T}, V))
 
-convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
-convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
-convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
+convert(::Type{Diagonal{T}}, D::Diagonal{T}) where {T} = D
+convert(::Type{Diagonal{T}}, D::Diagonal) where {T} = Diagonal{T}(convert(AbstractVector{T}, D.diag))
+convert(::Type{AbstractMatrix{T}}, D::Diagonal) where {T} = convert(Diagonal{T}, D)
 convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
 convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
 full(D::Diagonal) = convert(Array, D)
 
-function similar{T}(D::Diagonal, ::Type{T})
+function similar(D::Diagonal, ::Type{T}) where T
     return Diagonal{T}(similar(D.diag, T))
 end
 
@@ -79,17 +80,17 @@ end
     end
     r
 end
-diagzero{T}(::Diagonal{T},i,j) = zero(T)
-diagzero{T}(D::Diagonal{Matrix{T}},i,j) = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+diagzero(::Diagonal{T},i,j) where {T} = zero(T)
+diagzero(D::Diagonal{Matrix{T}},i,j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
     if i == j
         @inbounds D.diag[i] = v
-    elseif v != 0
-        throw(ArgumentError("cannot set an off-diagonal index ($i, $j) to a nonzero value ($v)"))
+    elseif !iszero(v)
+        throw(ArgumentError("cannot set off-diagonal entry ($i, $j) to a nonzero value ($v)"))
     end
-    D
+    return v
 end
 
 
@@ -101,8 +102,10 @@ end
 parent(D::Diagonal) = D.diag
 
 ishermitian(D::Diagonal{<:Real}) = true
-ishermitian(D::Diagonal) = isreal(D.diag)
-issymmetric(D::Diagonal) = true
+ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
+ishermitian(D::Diagonal) = all(ishermitian, D.diag)
+issymmetric(D::Diagonal{<:Number}) = true
+issymmetric(D::Diagonal) = all(issymmetric, D.diag)
 isposdef(D::Diagonal) = all(x -> x > 0, D.diag)
 
 factorize(D::Diagonal) = D
@@ -133,24 +136,24 @@ function tril!(D::Diagonal,k::Integer=0)
     return D
 end
 
-==(Da::Diagonal, Db::Diagonal) = Da.diag == Db.diag
--(A::Diagonal)=Diagonal(-A.diag)
-+(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
--(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
+(==)(Da::Diagonal, Db::Diagonal) = Da.diag == Db.diag
+(-)(A::Diagonal) = Diagonal(-A.diag)
+(+)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
+(-)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
 
-*(x::Number, D::Diagonal) = Diagonal(x * D.diag)
-*(D::Diagonal, x::Number) = Diagonal(D.diag * x)
-/(D::Diagonal, x::Number) = Diagonal(D.diag / x)
-*(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
-*(D::Diagonal, V::AbstractVector) = D.diag .* V
+(*)(x::Number, D::Diagonal) = Diagonal(x * D.diag)
+(*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
+(/)(D::Diagonal, x::Number) = Diagonal(D.diag / x)
+(*)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
+(*)(D::Diagonal, V::AbstractVector) = D.diag .* V
 
 (*)(A::AbstractTriangular, D::Diagonal) = A_mul_B!(copy(A), D)
 (*)(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, copy(B))
 
 (*)(A::AbstractMatrix, D::Diagonal) =
-    scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D.diag)
+    scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D.diag)
 (*)(D::Diagonal, A::AbstractMatrix) =
-    scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D.diag, A)
+    scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D.diag, A)
 
 A_mul_B!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) =
     typeof(A)(A_mul_B!(A.data, D))
@@ -223,36 +226,75 @@ A_mul_B!(A::AbstractMatrix,B::Diagonal)  = scale!(A,B.diag)
 A_mul_Bt!(A::AbstractMatrix,B::Diagonal) = scale!(A,B.diag)
 A_mul_Bc!(A::AbstractMatrix,B::Diagonal) = scale!(A,conj(B.diag))
 
-/(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
-function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
+# Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
+A_mul_B!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= A.diag .* in
+Ac_mul_B!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= ctranspose.(A.diag) .* in
+At_mul_B!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= transpose.(A.diag) .* in
+
+A_mul_B!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= A.diag .* in
+Ac_mul_B!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= ctranspose.(A.diag) .* in
+At_mul_B!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= transpose.(A.diag) .* in
+
+# ambiguities with Symmetric/Hermitian
+# RealHermSymComplex[Sym]/[Herm] only include Number; invariant to [c]transpose
+A_mul_Bt(A::Diagonal, B::RealHermSymComplexSym) = A*B
+At_mul_B(A::RealHermSymComplexSym, B::Diagonal) = A*B
+A_mul_Bc(A::Diagonal, B::RealHermSymComplexHerm) = A*B
+Ac_mul_B(A::RealHermSymComplexHerm, B::Diagonal) = A*B
+
+(/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
+function A_ldiv_B!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
     if length(v) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
     end
-    for i=1:length(D.diag)
+    for i = 1:length(D.diag)
         d = D.diag[i]
-        if d == zero(T)
+        if iszero(d)
             throw(SingularException(i))
         end
-        v[i] *= inv(d)
+        v[i] = d\v[i]
     end
     v
 end
-function A_ldiv_B!{T}(D::Diagonal{T}, V::AbstractMatrix{T})
+function A_ldiv_B!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
     if size(V,1) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
     end
-    for i=1:length(D.diag)
+    for i = 1:length(D.diag)
         d = D.diag[i]
-        if d == zero(T)
+        if iszero(d)
             throw(SingularException(i))
         end
-        d⁻¹ = inv(d)
-        for j=1:size(V,2)
-            @inbounds V[i,j] *= d⁻¹
+        for j = 1:size(V,2)
+            @inbounds V[i,j] = d\V[i,j]
         end
     end
     V
 end
+
+Ac_ldiv_B!(D::Diagonal{T}, B::AbstractVecOrMat{T}) where {T} = A_ldiv_B!(conj(D), B)
+At_ldiv_B!(D::Diagonal{T}, B::AbstractVecOrMat{T}) where {T} = A_ldiv_B!(D, B)
+
+function A_rdiv_B!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
+    dd = D.diag
+    m, n = size(A)
+    if (k = length(dd)) ≠ n
+        throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
+    end
+    @inbounds for j in 1:n
+        ddj = dd[j]
+        if iszero(ddj)
+            throw(SingularException(j))
+        end
+        for i in 1:m
+            A[i, j] /= ddj
+        end
+    end
+    A
+end
+
+A_rdiv_Bc!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, conj(D))
+A_rdiv_Bt!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, D)
 
 # Methods to resolve ambiguities with `Diagonal`
 @inline *(rowvec::RowVector, D::Diagonal) = transpose(D * transpose(rowvec))
@@ -260,8 +302,10 @@ end
 @inline A_mul_Bc(D::Diagonal, rowvec::RowVector) = D*ctranspose(rowvec)
 
 conj(D::Diagonal) = Diagonal(conj(D.diag))
-transpose(D::Diagonal) = D
-ctranspose(D::Diagonal) = conj(D)
+transpose(D::Diagonal{<:Number}) = D
+transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
+ctranspose(D::Diagonal{<:Number}) = conj(D)
+ctranspose(D::Diagonal) = Diagonal(ctranspose.(D.diag))
 
 diag(D::Diagonal) = D.diag
 trace(D::Diagonal) = sum(D.diag)
@@ -272,11 +316,15 @@ function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
     complex(real(z), rem2pi(imag(z), RoundNearest))
 end
 # identity matrices via eye(Diagonal{type},n)
-eye{T}(::Type{Diagonal{T}}, n::Int) = Diagonal(ones(T,n))
+eye(::Type{Diagonal{T}}, n::Int) where {T} = Diagonal(ones(T,n))
 
+# Matrix functions
 expm(D::Diagonal) = Diagonal(exp.(D.diag))
+expm(D::Diagonal{<:AbstractMatrix}) = Diagonal(expm.(D.diag))
 logm(D::Diagonal) = Diagonal(log.(D.diag))
+logm(D::Diagonal{<:AbstractMatrix}) = Diagonal(logm.(D.diag))
 sqrtm(D::Diagonal) = Diagonal(sqrt.(D.diag))
+sqrtm(D::Diagonal{<:AbstractMatrix}) = Diagonal(sqrtm.(D.diag))
 
 #Linear solver
 function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
@@ -300,7 +348,7 @@ end
 (\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
 (\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
 
-function inv{T}(D::Diagonal{T})
+function inv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
     for i = 1:length(D.diag)
         if D.diag[i] == zero(T)
@@ -311,14 +359,14 @@ function inv{T}(D::Diagonal{T})
     Diagonal(Di)
 end
 
-function pinv{T}(D::Diagonal{T})
+function pinv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
     for i = 1:length(D.diag)
         isfinite(inv(D.diag[i])) ? Di[i]=inv(D.diag[i]) : Di[i]=zero(T)
     end
     Diagonal(Di)
 end
-function pinv{T}(D::Diagonal{T}, tol::Real)
+function pinv(D::Diagonal{T}, tol::Real) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
     if( !isempty(D.diag) ) maxabsD = maximum(abs.(D.diag)) end
     for i = 1:length(D.diag)

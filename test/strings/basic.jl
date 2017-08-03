@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # constructors
 @test String([0x61,0x62,0x63,0x21]) == "abc!"
@@ -8,6 +8,16 @@
 @test eltype(GenericString) == Char
 @test start("abc") == 1
 @test cmp("ab","abc") == -1
+@test "abc" === "abc"
+@test "ab"  !== "abc"
+@test string("ab", 'c') === "abc"
+codegen_egal_of_strings(x, y) = (x===y, x!==y)
+@test codegen_egal_of_strings(string("ab", 'c'), "abc") === (true, false)
+let strs = ["", "a", "a b c", "до свидания"]
+    for x in strs, y in strs
+        @test (x === y) == (object_id(x) == object_id(y))
+    end
+end
 
 # {starts,ends}with
 @test startswith("abcd", 'a')
@@ -53,7 +63,7 @@ let
     sym = Symbol(Char(0xdcdb))
     @test string(sym) == string(Char(0xdcdb))
     @test String(sym) == string(Char(0xdcdb))
-    @test expand(sym) === sym
+    @test expand(Main, sym) === sym
     res = string(parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
     @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
 end
@@ -69,11 +79,13 @@ end
 @test_throws ArgumentError gensym("ab\0")
 
 # issue #6949
-let f =IOBuffer(),
+let f = IOBuffer(),
     x = split("1 2 3")
-    @test write(f, x) == 3
-    @test String(take!(f)) == "123"
-    @test invoke(write, Tuple{IO, AbstractArray}, f, x) == 3
+    local nb = 0
+    for c in x
+        nb += write(f, c)
+    end
+    @test nb == 3
     @test String(take!(f)) == "123"
 end
 
@@ -107,6 +119,21 @@ end
 @test SubString("", 1, 6)[10:9] == ""
 @test SubString("", 1, 0)[10:9] == ""
 
+# issue #22500 (using `get()` to index strings with default returns)
+let
+    utf8_str = "我很喜欢Julia"
+
+    # Test that we can index in at valid locations
+    @test get(utf8_str, 1, 'X') == '我'
+    @test get(utf8_str, 13, 'X') == 'J'
+
+    # Test that obviously incorrect locations return the default
+    @test get(utf8_str, -1, 'X') == 'X'
+    @test get(utf8_str, 1000, 'X') == 'X'
+
+    # Test that indexing into the middle of a character returns the default
+    @test get(utf8_str, 2, 'X') == 'X'
+end
 
 #=
 # issue #7764
@@ -151,6 +178,7 @@ end
 @test ucfirst("hola")=="Hola"
 @test ucfirst("")==""
 @test ucfirst("*")=="*"
+@test ucfirst("Ǆxx") == ucfirst("ǆxx") == "ǅxx"
 
 @test lcfirst("Hola")=="hola"
 @test lcfirst("hola")=="hola"
@@ -193,7 +221,7 @@ gstr = GenericString("12")
 @test ind2chr(gstr,2)==2
 
 # issue #10307
-@test typeof(map(Int16,AbstractString[])) == Vector{Int16}
+@test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Int16}
 
 for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
     for i in [typemax(T), typemin(T)]
@@ -242,7 +270,7 @@ let s = normalize_string("tést",:NFKC)
 end
 @test_throws ArgumentError Base.unsafe_convert(Cstring, Base.cconvert(Cstring, "ba\0d"))
 
-cstrdup(s) = @static is_windows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
+cstrdup(s) = @static Sys.iswindows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
     @test unsafe_string(p) == "hello"
     Libc.free(p)
@@ -461,6 +489,24 @@ Base.endof(x::CharStr) = endof(x.chars)
 @test cmp("\U1f596\U1f596", CharStr("\U1f596")) == 1   # Gives BoundsError with bug
 @test cmp(CharStr("\U1f596"), "\U1f596\U1f596") == -1
 
+# repeat function
+@inferred repeat(GenericString("x"), 1)
+@test repeat("xx",3) == repeat("x",6) == repeat('x',6) == repeat(GenericString("x"), 6) == "xxxxxx"
+@test repeat("αα",3) == repeat("α",6) == repeat('α',6) == repeat(GenericString("α"), 6) == "αααααα"
+@test repeat("x",1) == repeat('x',1) == "x"^1 == 'x'^1 == GenericString("x")^1 == "x"
+@test repeat("x",0) == repeat('x',0) == "x"^0 == 'x'^0 == GenericString("x")^0 == ""
+
 # issue #12495: check that logical indexing attempt raises ArgumentError
 @test_throws ArgumentError "abc"[[true, false, true]]
 @test_throws ArgumentError "abc"[BitArray([true, false, true])]
+
+@test "ab" * "cd" == "abcd"
+@test 'a' * "bc" == "abc"
+@test "ab" * 'c' == "abc"
+@test 'a' * 'b' == "ab"
+@test 'a' * "b" * 'c' == "abc"
+@test "a" * 'b' * 'c' == "abc"
+
+# unrecognized escapes in string/char literals
+@test_throws ParseError parse("\"\\.\"")
+@test_throws ParseError parse("\'\\.\'")

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Base.Iterators
 
 # zip and filter iterators
@@ -215,7 +217,7 @@ let (a, b, c) = (1:2, 1.0:10.0, Int32(1):Int32(0))
     @test length(product(a, b, c)) == 0
 
     # size
-    @test size(product(a))         == (2, )
+    @test size(product(a))         == (2,)
     @test size(product(a, b))      == (2, 10)
     @test size(product(a, b, c))   == (2, 10, 0)
 
@@ -345,13 +347,24 @@ end
 @test collect(flatten(Any[flatten(Any[1:2, 6:5]), flatten(Any[6:7, 8:9])])) == Any[1,2,6,7,8,9]
 @test collect(flatten(Any[2:1])) == Any[]
 @test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) == Int8
+@test length(flatten(zip(1:3, 4:6))) == 6
+@test length(flatten(1:6)) == 6
 @test_throws ArgumentError collect(flatten(Any[]))
+@test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
+@test_throws ArgumentError length(flatten([[1], [1]]))
 
 @test Base.iteratoreltype(Base.Flatten((i for i=1:2) for j=1:1)) == Base.EltypeUnknown()
 
 # partition(c, n)
 let v = collect(partition([1,2,3,4,5], 1))
     @test all(i->v[i][1] == i, v)
+end
+
+let v1 = collect(partition([1,2,3,4,5], 2)),
+    v2 = collect(partition(flatten([[1,2],[3,4],5]), 2)) # collecting partition with SizeUnkown
+    @test v1[1] == v2[1] == [1,2]
+    @test v1[2] == v2[2] == [3,4]
+    @test v1[3] == v2[3] == [5]
 end
 
 let v = collect(partition([1,2,3,4,5], 2))
@@ -403,4 +416,10 @@ end
 
 @testset "product iterator infinite loop" begin
     @test collect(product(1:1, (1, "2"))) == [(1, 1) (1, "2")]
+end
+
+@testset "filter empty iterable #16704" begin
+    arr = filter(n -> true, 1:0)
+    @test length(arr) == 0
+    @test eltype(arr) == Int
 end

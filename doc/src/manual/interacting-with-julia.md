@@ -10,7 +10,7 @@ on the executable:
 $ julia
                _
    _       _ _(_)_     |  A fresh approach to technical computing
-  (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
+  (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
    _ _   _| |_  __ _   |  Type "?help" for help.
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  Version 0.6.0-dev.2493 (2017-01-31 18:53 UTC)
@@ -63,11 +63,11 @@ at detecting when a paste occurs.
 When the cursor is at the beginning of the line, the prompt can be changed to a help mode by typing
 `?`. Julia will attempt to print help or documentation for anything entered in help mode:
 
-```julia
+```julia-repl
 julia> ? # upon typing ?, the prompt changes (in place) to: help?>
 
 help?> string
-search: string String stringmime Cstring Cwstring RevString readstring randstring bytestring SubString
+search: string String stringmime Cstring Cwstring RevString randstring bytestring SubString
 
   string(xs...)
 
@@ -111,7 +111,7 @@ system shell to execute system commands. Just as `?` entered help mode when at t
 of the line, a semicolon (`;`) will enter the shell mode. And it can be exited by pressing backspace
 at the beginning of the line.
 
-```julia
+```julia-repl
 julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 
 shell> echo hello
@@ -139,39 +139,41 @@ control-key, there are also meta-key bindings. These vary more by platform, but 
 default to using alt- or option- held down with a key to send the meta-key (or can be configured
 to do so).
 
-| Keybinding          | Description                                                                      |
-|:------------------- |:-------------------------------------------------------------------------------- |
-| **Program control** |                                                                                  |
-| `^D`                | Exit (when buffer is empty)                                                      |
-| `^C`                | Interrupt or cancel                                                              |
-| `^L`                | Clear console screen                                                             |
-| Return/Enter, `^J`  | New line, executing if it is complete                                            |
-| meta-Return/Enter   | Insert new line without executing it                                             |
-| `?` or `;`          | Enter help or shell mode (when at start of a line)                               |
-| `^R`, `^S`          | Incremental history search, described above                                      |
-| **Cursor movement** |                                                                                  |
-| Right arrow, `^F`   | Move right one character                                                         |
-| Left arrow, `^B`    | Move left one character                                                          |
-| Home, `^A`          | Move to beginning of line                                                        |
-| End, `^E`           | Move to end of line                                                              |
-| `^P`                | Change to the previous or next history entry                                     |
-| `^N`                | Change to the next history entry                                                 |
-| Up arrow            | Move up one line (or to the previous history entry)                              |
-| Down arrow          | Move down one line (or to the next history entry)                                |
-| Page-up             | Change to the previous history entry that matches the text before the cursor     |
-| Page-down           | Change to the next history entry that matches the text before the cursor         |
-| `meta-F`            | Move right one word                                                              |
-| `meta-B`            | Move left one word                                                               |
-| **Editing**         |                                                                                  |
-| Backspace, `^H`     | Delete the previous character                                                    |
-| Delete, `^D`        | Forward delete one character (when buffer has text)                              |
-| meta-Backspace      | Delete the previous word                                                         |
-| `meta-D`            | Forward delete the next word                                                     |
-| `^W`                | Delete previous text up to the nearest whitespace                                |
-| `^K`                | "Kill" to end of line, placing the text in a buffer                              |
-| `^Y`                | "Yank" insert the text from the kill buffer                                      |
-| `^T`                | Transpose the characters about the cursor                                        |
-| `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe |
+| Keybinding          | Description                                                                                |
+|:------------------- |:------------------------------------------------------------------------------------------ |
+| **Program control** |                                                                                            |
+| `^D`                | Exit (when buffer is empty)                                                                |
+| `^C`                | Interrupt or cancel                                                                        |
+| `^L`                | Clear console screen                                                                       |
+| Return/Enter, `^J`  | New line, executing if it is complete                                                      |
+| meta-Return/Enter   | Insert new line without executing it                                                       |
+| `?` or `;`          | Enter help or shell mode (when at start of a line)                                         |
+| `^R`, `^S`          | Incremental history search, described above                                                |
+| **Cursor movement** |                                                                                            |
+| Right arrow, `^F`   | Move right one character                                                                   |
+| Left arrow, `^B`    | Move left one character                                                                    |
+| Home, `^A`          | Move to beginning of line                                                                  |
+| End, `^E`           | Move to end of line                                                                        |
+| `^P`                | Change to the previous or next history entry                                               |
+| `^N`                | Change to the next history entry                                                           |
+| Up arrow            | Move up one line (or to the previous history entry)                                        |
+| Down arrow          | Move down one line (or to the next history entry)                                          |
+| Page-up             | Change to the previous history entry that matches the text before the cursor               |
+| Page-down           | Change to the next history entry that matches the text before the cursor                   |
+| `meta-F`            | Move right one word                                                                        |
+| `meta-B`            | Move left one word                                                                         |
+| `meta-<`            | Change to the first history entry                                                          |
+| `meta->`            | Change to the last history entry                                                           |
+| **Editing**         |                                                                                            |
+| Backspace, `^H`     | Delete the previous character                                                              |
+| Delete, `^D`        | Forward delete one character (when buffer has text)                                        |
+| meta-Backspace      | Delete the previous word                                                                   |
+| `meta-D`            | Forward delete the next word                                                               |
+| `^W`                | Delete previous text up to the nearest whitespace                                          |
+| `^K`                | "Kill" to end of line, placing the text in a buffer                                        |
+| `^Y`                | "Yank" insert the text from the kill buffer                                                |
+| `^T`                | Transpose the characters about the cursor                                                  |
+| `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method |
 
 
 ### Customizing keybindings
@@ -189,27 +191,27 @@ history without prefix search, one could put the following code in `.juliarc.jl`
 import Base: LineEdit, REPL
 
 const mykeys = Dict{Any,Any}(
-  # Up Arrow
-  "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
-  # Down Arrow
-  "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
+    # Up Arrow
+    "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
+    # Down Arrow
+    "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
 )
 
 function customize_keys(repl)
-  repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)
+    repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)
 end
 
 atreplinit(customize_keys)
 ```
 
-Users should refer to `base/LineEdit.jl` to discover the available actions on key input.
+Users should refer to `LineEdit.jl` to discover the available actions on key input.
 
 ## Tab completion
 
 In both the Julian and help modes of the REPL, one can enter the first few characters of a function
 or type and then press the tab key to get a list all matches:
 
-```julia
+```julia-repl
 julia> stri[TAB]
 stride     strides     string      stringmime  strip
 
@@ -220,7 +222,7 @@ StridedArray    StridedMatrix    StridedVecOrMat  StridedVector    String
 The tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents,
 and get a list of LaTeX matches as well:
 
-```julia
+```julia-repl
 julia> \pi[TAB]
 julia> π
 π = 3.1415926535897...
@@ -258,7 +260,7 @@ A full list of tab-completions can be found in the [Unicode Input](@ref) section
 
 Completion of paths works for strings and julia's shell mode:
 
-```julia
+```julia-repl
 julia> path="/[TAB]"
 .dockerenv  .juliabox/   boot/        etc/         lib/         media/       opt/         root/        sbin/        sys/         usr/
 .dockerinit bin/         dev/         home/        lib64/       mnt/         proc/        run/         srv/         tmp/         var/
@@ -269,7 +271,7 @@ shell> /[TAB]
 
 Tab completion can help with investigation of the available methods matching the input arguments:
 
-```julia
+```julia-repl
 julia> max([TAB] # All methods are displayed, not shown here due to size of the list
 
 julia> max([1, 2], [TAB] # All methods where `Vector{Int}` matches as first argument
@@ -284,10 +286,10 @@ max(a, b, c, xs...) in Base at operators.jl:281
 Keywords are also displayed in the suggested methods, see second line after `;` where `limit`
 and `keep` are keyword arguments:
 
-```julia
+```julia-repl
 julia> split("1 1 1", [TAB]
-split(str::AbstractString) in Base at strings/util.jl:278
-split{T<:AbstractString}(str::T, splitter; limit, keep) in Base at strings/util.jl:254
+split(str::AbstractString) in Base at strings/util.jl:302
+split(str::T, splitter; limit, keep) where T<:AbstractString in Base at strings/util.jl:277
 ```
 
 The completion of the methods uses type inference and can therefore see if the arguments match
@@ -296,14 +298,14 @@ completion to be able to remove non-matching methods.
 
 Tab completion can also help completing fields:
 
-```julia
+```julia-repl
 julia> Pkg.a[TAB]
 add       available
 ```
 
 Fields for output from functions can also be completed:
 
-```julia
+```julia-repl
 julia> split("","")[1].[TAB]
 endof  offset  string
 ```
@@ -313,8 +315,9 @@ fields if the function is type stable.
 
 ## Customizing Colors
 
-The colors used by Julia and the REPL can be customized, as well. To change the color of the Julia
-prompt you can add something like the following to your `juliarc.jl` file:
+The colors used by Julia and the REPL can be customized, as well. To change the
+color of the Julia prompt you can add something like the following to your
+`.juliarc.jl` file, which is to be placed inside your home directory:
 
 ```julia
 function customize_colors(repl)
@@ -333,9 +336,22 @@ input and answer text by setting the appropriate field of `repl` in the `customi
 above (respectively, `help_color`, `shell_color`, `input_color`, and `answer_color`). For the
 latter two, be sure that the `envcolors` field is also set to false.
 
+It is also possible to apply boldface formatting by using
+`Base.text_colors[:bold]` as a color. For instance, to print answers in
+boldface font, one can use the following as a `.juliarc.jl`:
+
+```julia
+function customize_colors(repl)
+    repl.envcolors = false
+    repl.answer_color = Base.text_colors[:bold]
+end
+
+atreplinit(customize_colors)
+```
+
 You can also customize the color used to render warning and informational messages by
 setting the appropriate environment variables. For instance, to render error, warning, and informational
-messages respectively in magenta, yellow, and cyan you can add the following to your `juliarc.jl` file:
+messages respectively in magenta, yellow, and cyan you can add the following to your `.juliarc.jl` file:
 
 ```julia
 ENV["JULIA_ERROR_COLOR"] = :magenta

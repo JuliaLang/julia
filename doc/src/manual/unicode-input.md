@@ -20,6 +20,8 @@ the symbol).
 # Generate a table containing all LaTeX and Emoji tab completions available in the REPL.
 #
 
+const NBSP = '\u00A0'
+
 function tab_completions(symbols...)
     completions = Dict{String, Vector{String}}()
     for each in symbols, (k, v) in each
@@ -41,6 +43,15 @@ function unicode_data()
     return names
 end
 
+# Surround combining characters with no-break spaces (i.e '\u00A0'). Follows the same format
+# for how unicode is displayed on the unicode.org website:
+# http://unicode.org/cldr/utility/character.jsp?a=0300
+function fix_combining_chars(char)
+    cat = Base.UTF8proc.category_code(char)
+    return cat == 6 || cat == 8 ? "$NBSP$char$NBSP" : "$char"
+end
+
+
 function table_entries(completions, unicode_dict)
     entries = [[
         "Code point(s)", "Character(s)",
@@ -51,10 +62,10 @@ function table_entries(completions, unicode_dict)
         for char in chars
             push!(code_points, "U+$(uppercase(hex(char, 5)))")
             push!(unicode_names, get(unicode_dict, UInt32(char), "(No Unicode name)"))
-            push!(characters, Base.UTF8proc.category_code(char) == 6 ? "◌$char" : "$char")
+            push!(characters, isempty(characters) ? fix_combining_chars(char) : "$char")
         end
         push!(entries, [
-            join(code_points, " + "), join(chars),
+            join(code_points, " + "), join(characters),
             join(inputs, ", "), join(unicode_names, " + ")
         ])
     end

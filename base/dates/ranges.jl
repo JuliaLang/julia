@@ -1,11 +1,11 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Date/DateTime Ranges
 
 # Override default step; otherwise it would be Millisecond(1)
-Base.colon{T<:DateTime}(start::T, stop::T) = StepRange(start, Day(1), stop)
-Base.colon{T<:Date}(start::T, stop::T)     = StepRange(start, Day(1), stop)
-Base.colon{T<:Time}(start::T, stop::T)     = StepRange(start, Second(1), stop)
+Base.colon(start::T, stop::T) where {T<:DateTime} = StepRange(start, Day(1), stop)
+Base.colon(start::T, stop::T) where {T<:Date}     = StepRange(start, Day(1), stop)
+Base.colon(start::T, stop::T) where {T<:Time}     = StepRange(start, Second(1), stop)
 
 Base.range(start::DateTime, len::Integer)  = range(start, Day(1), len)
 Base.range(start::Date, len::Integer)      = range(start, Day(1), len)
@@ -25,16 +25,16 @@ function len(a, b, c)
     end
     return i - 1
 end
-Base.length(r::StepRange{<:TimeType}) = isempty(r) ? 0 : len(r.start, r.stop, r.step) + 1
+Base.length(r::StepRange{<:TimeType}) = isempty(r) ? Int64(0) : len(r.start, r.stop, r.step) + 1
 # Period ranges hook into Int64 overflow detection
 Base.length(r::StepRange{<:Period}) = length(StepRange(value(r.start), value(r.step), value(r.stop)))
 
 # Used to calculate the last valid date in the range given the start, stop, and step
 # last = stop - steprem(start, stop, step)
-Base.steprem{T<:TimeType}(a::T, b::T, c) = b - (a + c * len(a, b, c))
+Base.steprem(a::T, b::T, c) where {T<:TimeType} = b - (a + c * len(a, b, c))
 
 import Base.in
-function in{T<:TimeType}(x::T, r::StepRange{T})
+function in(x::T, r::StepRange{T}) where T<:TimeType
     n = len(first(r), x, step(r)) + 1
     n >= 1 && n <= length(r) && r[n] == x
 end

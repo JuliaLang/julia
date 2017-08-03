@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Operations with the file system (paths) ##
 
@@ -24,6 +24,7 @@ export
     tempdir,
     tempname,
     touch,
+    unlink,
     walkdir
 
 # get and set current directory
@@ -34,7 +35,7 @@ export
 Get the current working directory.
 """
 function pwd()
-    b = Array{UInt8}(1024)
+    b = Vector{UInt8}(1024)
     len = Ref{Csize_t}(length(b))
     uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
     String(b[1:len[]])
@@ -50,7 +51,7 @@ function cd(dir::AbstractString)
 end
 cd() = cd(homedir())
 
-if is_windows()
+if Sys.iswindows()
     function cd(f::Function, dir::AbstractString)
         old = pwd()
         try
@@ -84,10 +85,13 @@ cd(f::Function) = cd(f, homedir())
     mkdir(path::AbstractString, mode::Unsigned=0o777)
 
 Make a new directory with name `path` and permissions `mode`. `mode` defaults to `0o777`,
-modified by the current file creation mask.
+modified by the current file creation mask. This function never creates more than one
+directory. If the directory already exists, or some intermediate directories do not exist,
+this function throws an error. See [`mkpath`](@ref) for a function which creates all
+required intermediate directories.
 """
 function mkdir(path::AbstractString, mode::Unsigned=0o777)
-    @static if is_windows()
+    @static if Sys.iswindows()
         ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
     else
         ret = ccall(:mkdir, Int32, (Cstring, UInt32), path, mode)
@@ -132,7 +136,7 @@ directory, then all contents are removed recursively.
 function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
     if islink(path) || !isdir(path)
         try
-            @static if is_windows()
+            @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
                 if (filemode(path) & 0o222) == 0
                     chmod(path, 0o777)
@@ -151,7 +155,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
                 rm(joinpath(path, p), force=force, recursive=true)
             end
         end
-        @static if is_windows()
+        @static if Sys.iswindows()
             ret = ccall(:_wrmdir, Int32, (Cwstring,), path)
         else
             ret = ccall(:rmdir, Int32, (Cstring,), path)
@@ -250,10 +254,10 @@ function touch(path::AbstractString)
     end
 end
 
-if is_windows()
+if Sys.iswindows()
 
 function tempdir()
-    temppath = Array{UInt16}(32767)
+    temppath = Vector{UInt16}(32767)
     lentemppath = ccall(:GetTempPathW,stdcall,UInt32,(UInt32,Ptr{UInt16}),length(temppath),temppath)
     if lentemppath >= length(temppath) || lentemppath == 0
         error("GetTempPath failed: $(Libc.FormatMessage())")
@@ -265,7 +269,7 @@ tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
 const temp_prefix = cwstring("jl_")
 function tempname(temppath::AbstractString,uunique::UInt32)
     tempp = cwstring(temppath)
-    tname = Array{UInt16}(32767)
+    tname = Vector{UInt16}(32767)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}), tempp,temp_prefix,uunique,tname)
     lentname = findfirst(tname,0)-1
     if uunique == 0 || lentname <= 0
@@ -355,6 +359,7 @@ mktemp(parent)
     mktempdir(parent=tempdir())
 
 Create a temporary directory in the `parent` directory and return its path.
+If `parent` does not exist, throw an error.
 """
 mktempdir(parent)
 
@@ -362,7 +367,8 @@ mktempdir(parent)
 """
     mktemp(f::Function, parent=tempdir())
 
-Apply the function `f` to the result of `mktemp(parent)` and remove the temporary file upon completion.
+Apply the function `f` to the result of [`mktemp(parent)`](@ref) and remove the
+temporary file upon completion.
 """
 function mktemp(fn::Function, parent=tempdir())
     (tmp_path, tmp_io) = mktemp(parent)
@@ -377,8 +383,8 @@ end
 """
     mktempdir(f::Function, parent=tempdir())
 
-Apply the function `f` to the result of `mktempdir(parent)` and remove the temporary
-directory upon completion.
+Apply the function `f` to the result of [`mktempdir(parent)`](@ref) and remove the
+temporary directory upon completion.
 """
 function mktempdir(fn::Function, parent=tempdir())
     tmpdir = mktempdir(parent)
@@ -459,8 +465,8 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
         close(chnl)
         return chnl
     end
-    dirs = Array{eltype(content)}(0)
-    files = Array{eltype(content)}(0)
+    dirs = Vector{eltype(content)}(0)
+    files = Vector{eltype(content)}(0)
     for name in content
         if isdir(joinpath(root, name))
             push!(dirs, name)
@@ -530,7 +536,7 @@ function sendfile(src::AbstractString, dst::AbstractString)
     end
 end
 
-if is_windows()
+if Sys.iswindows()
     const UV_FS_SYMLINK_JUNCTION = 0x0002
 end
 
@@ -544,20 +550,20 @@ Creates a symbolic link to `target` with the name `link`.
     soft symbolic links, such as Windows XP.
 """
 function symlink(p::AbstractString, np::AbstractString)
-    @static if is_windows()
+    @static if Sys.iswindows()
         if Sys.windows_version() < Sys.WINDOWS_VISTA_VER
             error("Windows XP does not support soft symlinks")
         end
     end
     flags = 0
-    @static if is_windows()
+    @static if Sys.iswindows()
         if isdir(p)
             flags |= UV_FS_SYMLINK_JUNCTION
             p = abspath(p)
         end
     end
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
-    @static if is_windows()
+    @static if Sys.iswindows()
         if err < 0 && !isdir(p)
             Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
         end
@@ -577,12 +583,12 @@ function readlink(path::AbstractString)
             (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}),
             eventloop(), req, path, C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
+            ccall(:uv_fs_req_cleanup, Void, (Ptr{Void},), req)
             uv_error("readlink", ret)
             assert(false)
         end
-        tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void}, ), req))
-        ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
+        tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void},), req))
+        ccall(:uv_fs_req_cleanup, Void, (Ptr{Void},), req)
         return tgt
     finally
         Libc.free(req)

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # starts with and ends with predicates
 
@@ -10,6 +10,7 @@ of characters, tests whether the first character of `s` belongs to that set.
 
 See also [`endswith`](@ref).
 
+# Examples
 ```jldoctest
 julia> startswith("JuliaLang", "Julia")
 true
@@ -21,7 +22,7 @@ function startswith(a::AbstractString, b::AbstractString)
     while !done(a,i) && !done(b,i)
         c, i = next(a,i)
         d, j = next(b,j)
-        if c != d return false end
+        (c != d) && (return false)
     end
     done(b,i)
 end
@@ -35,6 +36,7 @@ characters, tests whether the last character of `s` belongs to that set.
 
 See also [`startswith`](@ref).
 
+# Examples
 ```jldoctest
 julia> endswith("Sunday", "day")
 true
@@ -48,7 +50,7 @@ function endswith(a::AbstractString, b::AbstractString)
     while a1 <= i && b1 <= j
         c = a[i]
         d = b[j]
-        if c != d return false end
+        (c != d) && (return false)
         i = prevind(a,i)
         j = prevind(b,j)
     end
@@ -57,7 +59,7 @@ end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
 startswith(a::String, b::String) =
-    (a.len >= b.len && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, b.len) == 0)
+    (sizeof(a) >= sizeof(b) && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, sizeof(b)) == 0)
 startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
     (length(a) >= length(b) && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
 
@@ -68,6 +70,7 @@ startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
 
 Remove the last character from `s`.
 
+# Examples
 ```jldoctest
 julia> a = "March"
 "March"
@@ -83,6 +86,7 @@ chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
 
 Remove a single trailing newline from a string.
 
+# Examples
 ```jldoctest
 julia> chomp("Hello\\n")
 "Hello"
@@ -90,9 +94,9 @@ julia> chomp("Hello\\n")
 """
 function chomp(s::AbstractString)
     i = endof(s)
-    if (i < 1 || s[i] != '\n') return SubString(s, 1, i) end
+    (i < 1 || s[i] != '\n') && (return SubString(s, 1, i))
     j = prevind(s,i)
-    if (j < 1 || s[j] != '\r') return SubString(s, 1, i-1) end
+    (j < 1 || s[j] != '\r') && (return SubString(s, 1, i-1))
     return SubString(s, 1, j-1)
 end
 function chomp(s::String)
@@ -109,7 +113,7 @@ end
 # NOTE: use with caution -- breaks the immutable string convention!
 # TODO: this is hard to provide with the new representation
 #function chomp!(s::String)
-#    if !isempty(s) && codeunit(s,s.len) == 0x0a
+#    if !isempty(s) && codeunit(s,sizeof(s)) == 0x0a
 #        n = (endof(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
 #        ccall(:jl_array_del_end, Void, (Any, UInt), s.data, n)
 #    end
@@ -128,6 +132,7 @@ The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
 If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
 
+# Examples
 ```jldoctest
 julia> a = lpad("March", 20)
 "               March"
@@ -137,15 +142,16 @@ julia> lstrip(a)
 ```
 """
 function lstrip(s::AbstractString, chars::Chars=_default_delims)
+    e = endof(s)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
         if !(c in chars)
-            return s[i:end]
+            return SubString(s, i, e)
         end
         i = j
     end
-    s[end+1:end]
+    SubString(s, e+1, e)
 end
 
 """
@@ -157,6 +163,7 @@ The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
 If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
 
+# Examples
 ```jldoctest
 julia> a = rpad("March", 20)
 "March               "
@@ -171,11 +178,11 @@ function rstrip(s::AbstractString, chars::Chars=_default_delims)
     while !done(r,i)
         c, j = next(r,i)
         if !(c in chars)
-            return s[1:end-i+1]
+            return SubString(s, 1, endof(s)-i+1)
         end
         i = j
     end
-    s[1:0]
+    SubString(s, 1, 0)
 end
 
 """
@@ -185,6 +192,7 @@ Return `s` with any leading and trailing whitespace removed.
 If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
 
+# Examples
 ```jldoctest
 julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
 "3, 5"
@@ -197,7 +205,7 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     m = n - strwidth(s)
-    if m <= 0; return s; end
+    (m <= 0) && (return s)
     l = strwidth(p)
     if l==1
         return string(p^m, s)
@@ -210,7 +218,7 @@ end
 
 function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     m = n - strwidth(s)
-    if m <= 0; return s; end
+    (m <= 0) && (return s)
     l = strwidth(p)
     if l==1
         return string(s, p^m)
@@ -227,6 +235,7 @@ end
 Make a string at least `n` columns wide when printed by padding `s` on the left
 with copies of `p`.
 
+# Examples
 ```jldoctest
 julia> lpad("March",10)
 "     March"
@@ -240,6 +249,7 @@ lpad(s, n::Integer, p=" ") = lpad(string(s),n,string(p))
 Make a string at least `n` columns wide when printed by padding `s` on the right
 with copies of `p`.
 
+# Examples
 ```jldoctest
 julia> rpad("March",20)
 "March               "
@@ -250,7 +260,8 @@ cpad(s, n::Integer, p=" ") = rpad(lpad(s,div(n+strwidth(s),2),p),n,p)
 
 # splitter can be a Char, Vector{Char}, AbstractString, Regex, ...
 # any splitter that provides search(s::AbstractString, splitter)
-split{T<:SubString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _split(str, splitter, limit, keep, T[])
+split(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:SubString} =
+    _split(str, splitter, limit, keep, T[])
 
 """
     split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
@@ -263,6 +274,7 @@ expression). If `chars` is omitted, it defaults to the set of all space characte
 maximum size for the result and a flag determining whether empty fields should be kept in
 the result.
 
+# Examples
 ```jldoctest
 julia> a = "Ma.rch"
 "Ma.rch"
@@ -273,7 +285,8 @@ julia> split(a,".")
  "rch"
 ```
 """
-split{T<:AbstractString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _split(str, splitter, limit, keep, SubString{T}[])
+split(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+    _split(str, splitter, limit, keep, SubString{T}[])
 function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
@@ -286,7 +299,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
             end
             i = k
         end
-        if k <= j; k = nextind(str,j) end
+        (k <= j) && (k = nextind(str,j))
         r = search(str,splitter,k)
         j, k = first(r), nextind(str,last(r))
     end
@@ -299,13 +312,15 @@ end
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::AbstractString) = split(str, _default_delims; limit=0, keep=false)
 
-rsplit{T<:SubString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _rsplit(str, splitter, limit, keep, T[])
+rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:SubString} =
+    _rsplit(str, splitter, limit, keep, T[])
 
 """
     rsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
 
 Similar to [`split`](@ref), but starting from the end of the string.
 
+# Examples
 ```jldoctest
 julia> a = "M.a.r.c.h"
 "M.a.r.c.h"
@@ -328,7 +343,8 @@ julia> rsplit(a,".";limit=2)
  "h"
 ```
 """
-rsplit{T<:AbstractString}(str::T, splitter   ; limit::Integer=0, keep::Bool=true) = _rsplit(str, splitter, limit, keep, SubString{T}[])
+rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+    _rsplit(str, splitter, limit, keep, SubString{T}[])
 function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
@@ -354,7 +370,10 @@ _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
-function replace(str::String, pattern, repl, limit::Integer)
+# TODO: rename to `replace` when `replace` is removed from deprecated.jl
+function replace_new(str::String, pattern, repl, count::Integer)
+    count == 0 && return str
+    count < 0 && throw(DomainError(count, "`count` must be non-negative."))
     n = 1
     e = endof(str)
     i = a = start(str)
@@ -379,7 +398,7 @@ function replace(str::String, pattern, repl, limit::Integer)
         end
         r = search(str,pattern,k)
         j, k = first(r), last(r)
-        n == limit && break
+        n == count && break
         n += 1
     end
     write(out, SubString(str,i))
@@ -387,17 +406,21 @@ function replace(str::String, pattern, repl, limit::Integer)
 end
 
 """
-    replace(string::AbstractString, pat, r[, n::Integer=0])
+    replace(s::AbstractString, pat, r, [count::Integer])
 
-Search for the given pattern `pat`, and replace each occurrence with `r`. If `n` is
-provided, replace at most `n` occurrences. As with search, the second argument may be a
+Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
+If `count` is provided, replace at most `count` occurrences.
+As with [`search`](@ref), the second argument may be a
 single character, a vector or a set of characters, a string, or a regular expression. If `r`
 is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.
 """
-replace(s::AbstractString, pat, f, n::Integer) = replace(String(s), pat, f, n)
-replace(s::AbstractString, pat, r) = replace(s, pat, r, 0)
+replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int))
+# TODO: change this to the following when `replace` is removed from deprecated.jl:
+# replace(s::AbstractString, pat, f, count::Integer=typemax(Int)) =
+#     replace(String(s), pat, f, count)
+
 
 # hex <-> bytes conversion
 
@@ -407,6 +430,7 @@ replace(s::AbstractString, pat, r) = replace(s, pat, r, 0)
 Convert an arbitrarily long hexadecimal string to its binary representation. Returns an
 `Array{UInt8,1}`, i.e. an array of bytes.
 
+# Examples
 ```jldoctest
 julia> a = hex(12345)
 "3039"
@@ -445,6 +469,7 @@ end
 Convert an array of bytes to its hexadecimal representation.
 All characters are in lower-case.
 
+# Examples
 ```jldoctest
 julia> a = hex(12345)
 "3039"
@@ -483,11 +508,12 @@ end
 Convert a string to `String` type and check that it contains only ASCII data, otherwise
 throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 
+# Examples
 ```jldoctest
 julia> ascii("abcdeγfgh")
 ERROR: ArgumentError: invalid ASCII at index 6 in "abcdeγfgh"
 Stacktrace:
- [1] ascii(::String) at ./strings/util.jl:475
+ [1] ascii(::String) at ./strings/util.jl:479
 
 julia> ascii("abcdefgh")
 "abcdefgh"

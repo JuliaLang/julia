@@ -1,6 +1,9 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Base.Test
 include("choosetests.jl")
+include("testenv.jl")
+
 tests, net_on = choosetests(ARGS)
 tests = unique(tests)
 
@@ -8,18 +11,6 @@ const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
     parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
 else
     typemax(Csize_t)
-end
-
-if haskey(ENV, "JULIA_TEST_EXEFLAGS")
-    const test_exeflags = `$(Base.shell_split(ENV["JULIA_TEST_EXEFLAGS"]))`
-else
-    const test_exeflags = `--check-bounds=yes --startup-file=no --depwarn=error`
-end
-
-if haskey(ENV, "JULIA_TEST_EXENAME")
-    const test_exename = `$(Base.shell_split(ENV["JULIA_TEST_EXENAME"]))`
-else
-    const test_exename = `$(joinpath(JULIA_HOME, Base.julia_exename()))`
 end
 
 const node1_tests = String[]
@@ -39,7 +30,7 @@ cd(dirname(@__FILE__)) do
     n = 1
     if net_on
         n = min(Sys.CPU_CORES, length(tests))
-        n > 1 && addprocs(n; exename=test_exename, exeflags=test_exeflags)
+        n > 1 && addprocs_with_testenv(n)
         BLAS.set_num_threads(1)
     end
 
@@ -71,8 +62,8 @@ cd(dirname(@__FILE__)) do
                     if (isa(resp[end], Integer) && (resp[end] > max_worker_rss)) || isa(resp, Exception)
                         if n > 1
                             rmprocs(wrkr, waitfor=30)
-                            p = addprocs(1; exename=test_exename, exeflags=test_exeflags)[1]
-                            remotecall_fetch(()->include("testdefs.jl"), p)
+                            p = addprocs_with_testenv(1)[1]
+                            remotecall_fetch(include, p, "testdefs.jl")
                         else
                             # single process testing, bail if mem limit reached, or, on an exception.
                             isa(resp, Exception) ? rethrow(resp) : error("Halting tests. Memory limit reached : $resp > $max_worker_rss")

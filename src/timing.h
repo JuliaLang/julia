@@ -1,4 +1,7 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
+#ifndef JL_TIMING_H
+#define JL_TIMING_H
 
 #ifndef ENABLE_TIMINGS
 #define JL_TIMING(owner)
@@ -150,4 +153,6 @@ struct jl_timing_block_cpp_t {
 #endif
 
 #endif
+#endif
+
 #endif

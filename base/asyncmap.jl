@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Iterators.Enumerate
 
@@ -206,7 +206,7 @@ function setup_chnl_and_tasks(exec_func, ntasks, batch_size=nothing)
     chnl = Channel(0)
     worker_tasks = []
     foreach(_ -> start_worker_task!(worker_tasks, exec_func, chnl, batch_size), 1:nt)
-
+    yield()
     return (chnl, worker_tasks)
 end
 

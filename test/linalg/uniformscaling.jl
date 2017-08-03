@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -18,6 +18,7 @@ srand(123)
     @test -one(UniformScaling(2)) == UniformScaling(-1)
     @test sparse(3I,4,5) == spdiagm(fill(3,4),0,4,5)
     @test sparse(3I,5,4) == spdiagm(fill(3,4),0,5,4)
+    @test norm(UniformScaling(1+im)) ≈ sqrt(2)
 end
 
 @testset "istriu, istril, issymmetric, ishermitian, isapprox" begin
@@ -29,6 +30,11 @@ end
     @test !ishermitian(UniformScaling(complex(1.0,1.0)))
     @test UniformScaling(4.00000000000001) ≈ UniformScaling(4.0)
     @test UniformScaling(4.32) ≈ UniformScaling(4.3) rtol=0.1 atol=0.01
+    @test UniformScaling(4.32) ≈ 4.3*eye(2) rtol=0.1 atol=0.01
+    @test UniformScaling(4.32) ≈ 4.3*eye(2) rtol=0.1 atol=0.01 norm=norm
+    @test 4.3*eye(2) ≈ UniformScaling(4.32) rtol=0.1 atol=0.01
+    @test [4.3201 0.002;0.001 4.32009] ≈ UniformScaling(4.32) rtol=0.1 atol=0.
+    @test UniformScaling(4.32) ≉ 4.3*ones(2,2) rtol=0.1 atol=0.01
 end
 
 @testset "* and / with number" begin
@@ -38,6 +44,7 @@ end
 end
 
 @test copy(UniformScaling(one(Float64))) == UniformScaling(one(Float64))
+@test sprint(show,UniformScaling(one(Complex128))) == "UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
 @test sprint(show,UniformScaling(one(Float32))) == "UniformScaling{Float32}\n1.0*I"
 
 λ = complex(randn(),randn())
@@ -164,5 +171,13 @@ end
         @test (vcat(I,3I,A,2I))::T == vcat(eye(4,4),3eye(4,4),A,2eye(4,4))
         @test (hvcat((2,1,2),B,2I,I,3I,4I))::T ==
             hvcat((2,1,2),B,2eye(3,3),eye(6,6),3eye(3,3),4eye(3,3))
+    end
+end
+
+@testset "chol" begin
+    for T in (Float64, Complex64, BigFloat, Int)
+        λ = T(4)
+        @test chol(λ*I) ≈ √λ*I
+        @test_throws LinAlg.PosDefException chol(-λ*I)
     end
 end

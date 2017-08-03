@@ -1,7 +1,7 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef PTRHASH_H
-#define PTRHASH_H
+#ifndef JL_PTRHASH_H
+#define JL_PTRHASH_H
 
 #include "htable.h"
 

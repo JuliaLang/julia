@@ -1,6 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if is_windows()
+if Sys.iswindows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
     _getenvlen(var::Vector{UInt16}) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,C_NULL,0)
@@ -84,7 +84,7 @@ delete!(::EnvHash, k::AbstractString) = (_unsetenv(k); ENV)
 setindex!(::EnvHash, v, k::AbstractString) = _setenv(k,string(v))
 push!(::EnvHash, k::AbstractString, v) = setindex!(ENV, v, k)
 
-if is_windows()
+if Sys.iswindows()
     start(hash::EnvHash) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
     function done(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
         if unsafe_load(block[1]) == 0
@@ -97,7 +97,7 @@ if is_windows()
         pos = block[1]
         blk = block[2]
         len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
-        buf = Array{UInt16}(len)
+        buf = Vector{UInt16}(len)
         unsafe_copy!(pointer(buf), pos, len)
         env = transcode(String, buf)
         m = match(r"^(=?[^=]+)=(.*)$"s, env)
@@ -148,7 +148,7 @@ by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
 environment variable (if it is set). When `withenv` returns, the original environment has
 been restored.
 """
-function withenv{T<:AbstractString}(f::Function, keyvals::Pair{T}...)
+function withenv(f::Function, keyvals::Pair{T}...) where T<:AbstractString
     old = Dict{T,Any}()
     for (key,val) in keyvals
         old[key] = get(ENV,key,nothing)

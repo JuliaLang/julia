@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const mintrials = 5
 const mintime = 2000.0
@@ -21,7 +21,7 @@ if codespeed
     csdata["project"] = "Julia"
     csdata["branch"] = Base.GIT_VERSION_INFO.branch
     csdata["executable"] = ENV["JULIA_FLAVOR"]
-    csdata["environment"] = chomp(readstring(`hostname`))
+    csdata["environment"] = chomp(read(`hostname`, String))
     csdata["result_date"] = join( split(Base.GIT_VERSION_INFO.date_string)[1:2], " " )    #Cut the timezone out
 end
 
@@ -51,6 +51,10 @@ function submit_to_codespeed(vals,name,desc,unit,test_group,lessisbetter=true)
 end
 
 macro output_timings(t,name,desc,group)
+    t = esc(t)
+    name = esc(name)
+    desc = esc(desc)
+    group = esc(group)
     quote
         # If we weren't given anything for the test group, infer off of file path!
         test_group = length($group) == 0 ? basename(dirname(Base.source_path())) : $group[1]
@@ -77,7 +81,7 @@ macro timeit(ex,name,desc,group...)
             end
             i += 1
         end
-        @output_timings t $name $desc $group
+        @output_timings t $(esc(name)) $(esc(desc)) $(esc(group))
     end
 end
 
@@ -92,13 +96,13 @@ macro timeit_init(ex,init,name,desc,group...)
                 t[i] = e
             end
         end
-        @output_timings t $name $desc $group
+        @output_timings t $(esc(name)) $(esc(desc)) $(esc(group))
     end
 end
 
 function maxrss(name)
     # FIXME: call uv_getrusage instead here
-    @static if is_linux()
+    @static if Sys.islinux()
         rus = Array{Int64}(div(144,8))
         fill!(rus, 0x0)
         res = ccall(:getrusage, Int32, (Int32, Ptr{Void}), 0, rus)

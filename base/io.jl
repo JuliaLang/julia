@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Generic IO stubs -- all subtypes should implement these (if meaningful)
 
@@ -31,6 +31,13 @@ function wait_readnb end
 function wait_readbyte end
 function wait_close end
 function nb_available end
+
+"""
+    readavailable(stream)
+
+Read all available data on the stream, blocking the task only if no data is available. The
+result is a `Vector{UInt8,1}`.
+"""
 function readavailable end
 
 """
@@ -156,6 +163,10 @@ write(filename::AbstractString, args...) = open(io->write(io, args...), filename
 
 Open a file and read its contents. `args` is passed to `read`: this is equivalent to
 `open(io->read(io, args...), filename)`.
+
+    read(filename::AbstractString, String)
+
+Read the entire contents of a file as a string.
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
 read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
@@ -215,6 +226,25 @@ readlines(s=STDIN; chomp::Bool=true) = collect(eachline(s, chomp=chomp))
 
 ## byte-order mark, ntoh & hton ##
 
+let endian_boms = reinterpret(UInt8, UInt32[0x01020304])
+    global ntoh, hton, ltoh, htol
+    if endian_boms == UInt8[1:4;]
+        ntoh(x) = x
+        hton(x) = x
+        ltoh(x) = bswap(x)
+        htol(x) = bswap(x)
+        const global ENDIAN_BOM = 0x01020304
+    elseif endian_boms == UInt8[4:-1:1;]
+        ntoh(x) = bswap(x)
+        hton(x) = bswap(x)
+        ltoh(x) = x
+        htol(x) = x
+        const global ENDIAN_BOM = 0x04030201
+    else
+        error("seriously? what is this machine?")
+    end
+end
+
 """
     ENDIAN_BOM
 
@@ -222,22 +252,7 @@ The 32-bit byte-order-mark indicates the native byte order of the host machine.
 Little-endian machines will contain the value `0x04030201`. Big-endian machines will contain
 the value `0x01020304`.
 """
-const ENDIAN_BOM = reinterpret(UInt32,UInt8[1:4;])[1]
-
-if ENDIAN_BOM == 0x01020304
-    ntoh(x) = x
-    hton(x) = x
-    ltoh(x) = bswap(x)
-    htol(x) = bswap(x)
-elseif ENDIAN_BOM == 0x04030201
-    ntoh(x) = bswap(x)
-    hton(x) = bswap(x)
-    ltoh(x) = x
-    htol(x) = x
-else
-    error("seriously? what is this machine?")
-end
-
+ENDIAN_BOM
 
 """
     ntoh(x)
@@ -286,9 +301,10 @@ function write(io::IO, xs...)
     return written
 end
 
-@noinline unsafe_write{T}(s::IO, p::Ref{T}, n::Integer) = unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
+@noinline unsafe_write(s::IO, p::Ref{T}, n::Integer) where {T} =
+    unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
 unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
-write{T}(s::IO, x::Ref{T}) = unsafe_write(s, x, Core.sizeof(T))
+write(s::IO, x::Ref{T}) where {T} = unsafe_write(s, x, Core.sizeof(T))
 write(s::IO, x::Int8) = write(s, reinterpret(UInt8, x))
 function write(s::IO, x::Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64})
     return write(s, Ref(x))
@@ -298,6 +314,9 @@ write(s::IO, x::Bool) = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
 function write(s::IO, A::AbstractArray)
+    if !isbits(eltype(A))
+        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
+    end
     nb = 0
     for a in A
         nb += write(s, a)
@@ -305,19 +324,37 @@ function write(s::IO, A::AbstractArray)
     return nb
 end
 
-@noinline function write(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
-    return unsafe_write(s, pointer(a), sizeof(a))
-end
-
-@noinline function write{T}(s::IO, a::Array{T}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
-    if isbits(T)
+@noinline function write(s::IO, a::Array)  # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+    if isbits(eltype(a))
         return unsafe_write(s, pointer(a), sizeof(a))
     else
+        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
         nb = 0
         for b in a
             nb += write(s, b)
         end
         return nb
+    end
+end
+
+function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
+    if !isbits(T)
+        return invoke(write, Tuple{IO, AbstractArray}, s, a)
+    end
+    elsz = sizeof(T)
+    colsz = size(a,1) * elsz
+    if stride(a,1) != 1
+        for idxs in CartesianRange(size(a))
+            unsafe_write(s, pointer(a, idxs.I), elsz)
+        end
+        return elsz * length(a)
+    elseif N <= 1
+        return unsafe_write(s, pointer(a, 1), colsz)
+    else
+        for idxs in CartesianRange((1, size(a)[2:end]...))
+            unsafe_write(s, pointer(a, idxs.I), colsz)
+        end
+        return colsz * trailingsize(a,2)
     end
 end
 
@@ -354,37 +391,24 @@ function write(to::IO, from::IO)
     end
 end
 
-@noinline unsafe_read{T}(s::IO, p::Ref{T}, n::Integer) = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
+@noinline unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T} = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
 unsafe_read(s::IO, p::Ptr, n::Integer) = unsafe_read(s, convert(Ptr{UInt8}, p), convert(UInt, n))
-read{T}(s::IO, x::Ref{T}) = (unsafe_read(s, x, Core.sizeof(T)); x)
+read!(s::IO, x::Ref{T}) where {T} = (unsafe_read(s, x, Core.sizeof(T)); x)
 
 read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s, UInt8))
 function read(s::IO, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
-    return read(s, Ref{T}(0))[]::T
+    return read!(s, Ref{T}(0))[]::T
 end
 
-read(s::IO, ::Type{Bool})    = (read(s,UInt8)!=0)
-read{T}(s::IO, ::Type{Ptr{T}}) = convert(Ptr{T}, read(s, UInt))
-
-read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) = read(s, t, tuple(d1,dims...))
-read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
-    read(s, t, convert(Tuple{Vararg{Int}},tuple(d1,dims...)))
-
-"""
-    read(stream::IO, T, dims)
-
-Read a series of values of type `T` from `stream`, in canonical binary representation.
-`dims` is either a tuple or a series of integer arguments specifying the size of the `Array{T}`
-to return.
-"""
-read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array{T}(dims))
+read(s::IO, ::Type{Bool}) = (read(s, UInt8) != 0)
+read(s::IO, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(s, UInt))
 
 @noinline function read!(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
     unsafe_read(s, pointer(a), sizeof(a))
     return a
 end
 
-@noinline function read!{T}(s::IO, a::Array{T}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+@noinline function read!(s::IO, a::Array{T}) where T # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
     if isbits(T)
         unsafe_read(s, pointer(a), sizeof(a))
     else
@@ -433,7 +457,7 @@ function readuntil(s::IO, delim::Char)
     return String(take!(out))
 end
 
-function readuntil{T}(s::IO, delim::T)
+function readuntil(s::IO, delim::T) where T
     out = T[]
     while !eof(s)
         c = read(s, T)
@@ -455,7 +479,7 @@ function readuntil(s::IO, t::AbstractString)
         warn("readuntil(IO,AbstractString) will perform poorly with a long string")
     end
     out = IOBuffer()
-    m = Array{Char}(l)  # last part of stream to match
+    m = Vector{Char}(l)  # last part of stream to match
     t = collect(t)
     i = 0
     while !eof(s)
@@ -482,9 +506,9 @@ end
     readchomp(x)
 
 Read the entirety of `x` as a string and remove a single trailing newline.
-Equivalent to `chomp!(readstring(x))`.
+Equivalent to `chomp!(read(x, String))`.
 """
-readchomp(x) = chomp!(readstring(x))
+readchomp(x) = chomp!(read(x, String))
 
 # read up to nb bytes into nb, returning # bytes read
 
@@ -518,23 +542,15 @@ end
 
 Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
 """
-function read(s::IO, nb=typemax(Int))
+function read(s::IO, nb::Integer = typemax(Int))
     # Let readbytes! grow the array progressively by default
     # instead of taking of risk of over-allocating
-    b = Array{UInt8}(nb == typemax(Int) ? 1024 : nb)
+    b = Vector{UInt8}(nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
     return resize!(b, nr)
 end
 
-"""
-    readstring(stream::IO)
-    readstring(filename::AbstractString)
-
-Read the entire contents of an I/O stream or a file as a string.
-The text is assumed to be encoded in UTF-8.
-"""
-readstring(s::IO) = String(read(s))
-readstring(filename::AbstractString) = open(readstring, filename)
+read(s::IO, ::Type{String}) = String(read(s))
 
 ## high-level iterator interfaces ##
 
@@ -614,7 +630,7 @@ previously marked position. Throws an error if the stream is not marked.
 
 See also [`mark`](@ref), [`unmark`](@ref), [`ismarked`](@ref).
 """
-function reset{T<:IO}(io::T)
+function reset(io::T) where T<:IO
     ismarked(io) || throw(ArgumentError("$(T) not marked"))
     m = io.mark
     seek(io, m)
@@ -640,3 +656,34 @@ ismarked(io::IO) = io.mark >= 0
 Commit all currently buffered writes to the given stream.
 """
 flush(io::IO) = nothing
+
+"""
+    skipchars(io::IO, predicate; linecomment=nothing)
+
+Skip forward in `io` until `predicate` returns `false`. If `linecomment`
+is defined, all characters after the `linecomment` character are ignored
+until the next line.
+
+```jldoctext
+julia> buf = IOBuffer("    text")
+IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=1, mark=-1)
+
+julia> skipchars(buf, isspace)
+IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=5, mark=-1)
+
+julia> String(readavailable(buf))
+"text"
+```
+"""
+function skipchars(io::IO, pred; linecomment=nothing)
+    while !eof(io)
+        c = read(io, Char)
+        if c === linecomment
+            readline(io)
+        elseif !pred(c)
+            skip(io, -codelen(c))
+            break
+        end
+    end
+    return io
+end

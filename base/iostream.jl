@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## IOStream
 
@@ -144,7 +144,10 @@ end
 Apply the function `f` to the result of `open(args...)` and close the resulting file
 descriptor upon completion.
 
-**Example**: `open(readstring, "file.txt")`
+# Examples
+```julia-repl
+open(f->read(f, String), "file.txt")
+```
 """
 function open(f::Function, args...)
     io = open(args...)
@@ -164,21 +167,6 @@ function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
         throw(ArgumentError("write failed, IOStream is not writeable"))
     end
     return Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, p, nb))
-end
-
-function write{T,N}(s::IOStream, a::SubArray{T,N,<:Array})
-    if !isbits(T) || stride(a,1)!=1
-        return invoke(write, Tuple{Any, AbstractArray}, s, a)
-    end
-    colsz = size(a,1)*sizeof(T)
-    if N<=1
-        return unsafe_write(s, pointer(a, 1), colsz)
-    else
-        for idxs in CartesianRange((1, size(a)[2:end]...))
-            unsafe_write(s, pointer(a, idxs.I), colsz)
-        end
-        return colsz*trailingsize(a,2)
-    end
 end
 
 # num bytes available without blocking
@@ -287,7 +275,7 @@ function read(s::IOStream)
             sz -= pos
         end
     end
-    b = Array{UInt8,1}(sz<=0 ? 1024 : sz)
+    b = StringVector(sz<=0 ? 1024 : sz)
     nr = readbytes_all!(s, b, typemax(Int))
     resize!(b, nr)
 end
@@ -309,27 +297,14 @@ function read(s::IOStream, nb::Integer; all::Bool=true)
 end
 
 ## Character streams ##
-const _chtmp = Array{Char}(1)
+const _chtmp = Ref{Char}()
 function peekchar(s::IOStream)
     if ccall(:ios_peekutf8, Cint, (Ptr{Void}, Ptr{Char}), s, _chtmp) < 0
-        return Char(-1)
+        return typemax(Char)
     end
-    return _chtmp[1]
+    return _chtmp[]
 end
 
 function peek(s::IOStream)
     ccall(:ios_peekc, Cint, (Ptr{Void},), s)
-end
-
-function skipchars(s::IOStream, pred; linecomment::Char=Char(0xffffffff))
-    ch = peekchar(s); status = Int(ch)
-    while status >= 0 && (pred(ch) || ch == linecomment)
-        if ch == linecomment
-            readline(s)
-        else
-            read(s, Char)  # advance one character
-        end
-        ch = peekchar(s); status = Int(ch)
-    end
-    return s
 end

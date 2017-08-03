@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 let nextidx = 0
     global nextproc
@@ -16,11 +16,52 @@ spawnat(p, thunk) = sync_add(remotecall(thunk, p))
 
 spawn_somewhere(thunk) = spawnat(nextproc(),thunk)
 
+"""
+    @spawn
+
+Create a closure around an expression and run it on an automatically-chosen process,
+returning a [`Future`](@ref) to the result.
+
+# Examples
+```julia-repl
+julia> addprocs(3);
+
+julia> f = @spawn myid()
+Future(2, 1, 5, Nullable{Any}())
+
+julia> fetch(f)
+2
+
+julia> f = @spawn myid()
+Future(3, 1, 7, Nullable{Any}())
+
+julia> fetch(f)
+3
+```
+"""
 macro spawn(expr)
     thunk = esc(:(()->($expr)))
     :(spawn_somewhere($thunk))
 end
 
+"""
+    @spawnat
+
+Create a closure around an expression and run the closure
+asynchronously on process `p`. Returns a [`Future`](@ref) to the result.
+Accepts two arguments, `p` and an expression.
+
+# Examples
+```julia-repl
+julia> addprocs(1);
+
+julia> f = @spawnat 2 myid()
+Future(2, 1, 3, Nullable{Any}())
+
+julia> fetch(f)
+2
+```
+"""
 macro spawnat(p, expr)
     thunk = esc(:(()->($expr)))
     :(spawnat($(esc(p)), $thunk))
@@ -31,6 +72,23 @@ end
 
 Equivalent to `fetch(@spawn expr)`.
 See [`fetch`](@ref) and [`@spawn`](@ref).
+
+# Examples
+```julia-repl
+julia> addprocs(3);
+
+julia> @fetch myid()
+2
+
+julia> @fetch myid()
+3
+
+julia> @fetch myid()
+4
+
+julia> @fetch myid()
+2
+```
 """
 macro fetch(expr)
     thunk = esc(:(()->($expr)))
@@ -42,67 +100,120 @@ end
 
 Equivalent to `fetch(@spawnat p expr)`.
 See [`fetch`](@ref) and [`@spawnat`](@ref).
+
+# Examples
+```julia-repl
+julia> addprocs(3);
+
+julia> @fetchfrom 2 myid()
+2
+
+julia> @fetchfrom 4 myid()
+4
+```
 """
 macro fetchfrom(p, expr)
     thunk = esc(:(()->($expr)))
     :(remotecall_fetch($thunk, $(esc(p))))
 end
 
+# extract a list of modules to import from an expression
+extract_imports!(imports, x) = imports
+function extract_imports!(imports, ex::Expr)
+    if Meta.isexpr(ex, (:import, :using))
+        return push!(imports, ex.args[1])
+    elseif Meta.isexpr(ex, :let)
+        return extract_imports!(imports, ex.args[1])
+    elseif Meta.isexpr(ex, (:toplevel, :block))
+        for i in eachindex(ex.args)
+            extract_imports!(imports, ex.args[i])
+        end
+    end
+    return imports
+end
+extract_imports(x) = extract_imports!(Symbol[], x)
+
 """
-    @everywhere expr
+    @everywhere [procs()] expr
 
-Execute an expression under `Main` everywhere. Equivalent to calling
-`eval(Main, expr)` on all processes. Errors on any of the processes are collected into a
-`CompositeException` and thrown. For example :
+Execute an expression under `Main` on all `procs`.
+Errors on any of the processes are collected into a
+`CompositeException` and thrown. For example:
 
-    @everywhere bar=1
+    @everywhere bar = 1
 
 will define `Main.bar` on all processes.
 
 Unlike [`@spawn`](@ref) and [`@spawnat`](@ref),
-`@everywhere` does not capture any local variables. Prefixing
-`@everywhere` with [`@eval`](@ref) allows us to broadcast
-local variables using interpolation :
+`@everywhere` does not capture any local variables.
+Instead, local variables can be broadcast using interpolation:
 
     foo = 1
-    @eval @everywhere bar=\$foo
+    @everywhere bar = \$foo
 
-The expression is evaluated under `Main` irrespective of where `@everywhere` is called from.
-For example :
+The optional argument `procs` allows specifying a subset of all
+processes to have execute the expression.
 
-    module FooBar
-        foo() = @everywhere bar()=myid()
-    end
-    FooBar.foo()
-
-will result in `Main.bar` being defined on all processes and not `FooBar.bar`.
+Equivalent to calling `remotecall_eval(Main, procs, expr)`.
 """
 macro everywhere(ex)
-    quote
-        sync_begin()
-        for pid in workers()
-            async_run_thunk(()->remotecall_fetch(eval_ew_expr, pid, $(Expr(:quote,ex))))
-            yield() # ensure that the remotecall_fetch has been started
-        end
+    return :(@everywhere procs() $ex)
+end
 
-        # execute locally last as we do not want local execution to block serialization
-        # of the request to remote nodes.
-        if nprocs() > 1
-            async_run_thunk(()->eval_ew_expr($(Expr(:quote,ex))))
+macro everywhere(procs, ex)
+    imps = [Expr(:import, m) for m in extract_imports(ex)]
+    return quote
+        $(isempty(imps) ? nothing : Expr(:toplevel, imps...)) # run imports locally first
+        let ex = $(Expr(:quote, ex)), procs = $(esc(procs))
+            remotecall_eval(Main, procs, ex)
         end
-
-        sync_end()
     end
 end
 
-eval_ew_expr(ex) = (eval(Main, ex); nothing)
+"""
+    remotecall_eval(m::Module, procs, expression)
+
+Execute an expression under module `m` on the processes
+specified in `procs`.
+Errors on any of the processes are collected into a
+`CompositeException` and thrown.
+
+See also `@everywhere`.
+"""
+function remotecall_eval(m::Module, procs, ex)
+    @sync begin
+        run_locally = 0
+        for pid in procs
+            if pid == myid()
+                run_locally += 1
+            else
+                @async remotecall_wait(Core.eval, pid, m, ex)
+            end
+        end
+        yield() # ensure that the remotecall_fetch have had a chance to start
+
+        # execute locally last as we do not want local execution to block serialization
+        # of the request to remote nodes.
+        for _ in 1:run_locally
+            @async Core.eval(m, ex)
+        end
+    end
+    nothing
+end
+
+# optimized version of remotecall_eval for a single pid
+# and which also fetches the return value
+function remotecall_eval(m::Module, pid::Int, ex)
+    return remotecall_fetch(Core.eval, pid, m, ex)
+end
+
 
 # Statically split range [1,N] into equal sized chunks for np processors
 function splitrange(N::Int, np::Int)
     each = div(N,np)
     extras = rem(N,np)
     nchunks = each > 0 ? np : extras
-    chunks = Array{UnitRange{Int}}(nchunks)
+    chunks = Vector{UnitRange{Int}}(nchunks)
     lo = 1
     for i in 1:nchunks
         hi = lo + each - 1
@@ -203,4 +314,3 @@ macro parallel(args...)
     end
     thecall
 end
-

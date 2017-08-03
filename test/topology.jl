@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-include("testdefs.jl")
-addprocs(4; topology="master_slave")
-using Base.Test
+pids = addprocs_with_testenv(4; topology="master_slave")
+p1 = pids[1]
+p2 = pids[2]
 
-@test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, 3), 2)
+@test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, p2), p1)
 
 function test_worker_counts()
     # check if the nprocs/nworkers/workers are the same on the remaining workers
@@ -21,7 +21,7 @@ end
 
 function remove_workers_and_test()
     while nworkers() > 0
-        rmprocs(workers()[1]; waitfor=2.0)
+        rmprocs(workers()[1])
         test_worker_counts()
         if nworkers() == nprocs()
             break
@@ -41,12 +41,15 @@ function Base.launch(manager::TopoTestManager, params::Dict, launched::Array, c:
     exename = params[:exename]
     exeflags = params[:exeflags]
 
+    cmd = `$exename $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) --worker`
+    cmd = pipeline(detach(setenv(cmd, dir=dir)))
     for i in 1:manager.np
-        io, pobj = open(pipeline(detach(
-            setenv(`$(Base.julia_cmd(exename)) $exeflags --bind-to $(Base.LPROC.bind_addr) --worker $(Base.cluster_cookie())`, dir=dir)); stderr=STDERR), "r")
+        io = open(cmd, "r+")
+        Base.Distributed.write_cookie(io)
+
         wconfig = WorkerConfig()
-        wconfig.process = pobj
-        wconfig.io = io
+        wconfig.process = io
+        wconfig.io = io.out
         wconfig.ident = i
         wconfig.connect_idents = collect(i+2:2:manager.np)
         push!(launched, wconfig)
@@ -64,7 +67,7 @@ function Base.manage(manager::TopoTestManager, id::Integer, config::WorkerConfig
     end
 end
 
-addprocs(TopoTestManager(8); topology="custom")
+addprocs_with_testenv(TopoTestManager(8); topology="custom")
 
 while true
     if any(x->get(map_pid_ident, x, 0)==0, workers())
@@ -87,3 +90,48 @@ for p1 in workers()
 end
 
 remove_workers_and_test()
+
+# test `lazy` connection setup
+function def_count_conn()
+    @everywhere function count_connected_workers()
+        count(x -> isa(x, Base.Distributed.Worker) && isdefined(x, :r_stream) && isopen(x.r_stream),
+                Base.Distributed.PGRP.workers)
+    end
+end
+
+addprocs_with_testenv(8)
+def_count_conn()
+
+# Test for 10 random combinations
+wl = workers()
+combinations = []
+while length(combinations) < 10
+    from = rand(wl)
+    to = rand(wl)
+    if from == to || ((from,to) in combinations) || ((to,from) in combinations)
+        continue
+    else
+        push!(combinations, (from,to))
+    end
+end
+
+# Initially only master-slave connections ought to be setup
+expected_num_conns = 8
+num_conns = sum(asyncmap(p->remotecall_fetch(count_connected_workers,p), workers()))
+@test num_conns == expected_num_conns
+
+for (i, (from,to)) in enumerate(combinations)
+    remotecall_wait(topid->remotecall_fetch(myid, topid), from, to)
+    expected_num_conns += 2    # one connection endpoint on both from and to
+    num_conns = sum(asyncmap(p->remotecall_fetch(count_connected_workers,p), workers()))
+    @test num_conns == expected_num_conns
+end
+
+# With lazy=false, all connections ought to be setup during `addprocs`
+rmprocs(workers())
+addprocs_with_testenv(8; lazy=false)
+def_count_conn()
+@test sum(asyncmap(p->remotecall_fetch(count_connected_workers,p), workers())) == 64
+
+# Cannot add more workers with a different `lazy` value
+@test_throws ArgumentError addprocs_with_testenv(1; lazy=true)

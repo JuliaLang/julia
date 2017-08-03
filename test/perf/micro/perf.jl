@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -101,7 +101,7 @@ function pisumvec()
     s = 0.0
     a = [1:10000]
     for j = 1:500
-        s = sum(1./(a.^2))
+        s = sum(1 ./ (a.^2))
     end
     s
 end
@@ -138,7 +138,7 @@ end
 
 ## printfd ##
 
-if is_unix()
+if Sys.isunix()
     function printfd(n)
         open("/dev/null", "w") do io
             for i = 1:n

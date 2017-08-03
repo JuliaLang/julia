@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test functionality of IntSet
 
@@ -86,6 +86,10 @@ end
 
     i = IntSet(1:6)
     @test symdiff!(i, IntSet([6, 513])) == IntSet([1:5; 513])
+
+    # issue #23099 : these tests should not segfault
+    @test_throws ArgumentError symdiff!(IntSet(rand(1:100, 30)), 0)
+    @test_throws ArgumentError symdiff!(IntSet(rand(1:100, 30)), [0, 2, 4])
 end
 
 @testset "copy, copy!, similar" begin
@@ -280,4 +284,13 @@ end
     @test_throws KeyError pop!(s, 0)
     @test pop!(s, 100, 0) === 0
     @test pop!(s, 99, 0) === 99
+end
+
+@testset "order" begin
+    a = rand(1:1000, 100)
+    s = IntSet(a)
+    m, M = extrema(s)
+    @test m == first(s) == minimum(s) == minimum(a)
+    @test M == last(s)  == maximum(s) == maximum(a)
+    @test issorted(s)
 end

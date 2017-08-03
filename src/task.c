@@ -1,9 +1,19 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   task.c
   lightweight processes (symmetric coroutines)
 */
+
+//// enable this for ifndef COPY_STACKS to work on linux
+//#ifdef _FORTIFY_SOURCE
+//// disable __longjmp_chk validation so that we can jump between stacks
+//#pragma push_macro("_FORTIFY_SOURCE")
+//#undef _FORTIFY_SOURCE
+//#include <setjmp.h>
+//#pragma pop_macro("_FORTIFY_SOURCE")
+//#endif
+
 #include "platform.h"
 
 #include <stdlib.h>
@@ -200,10 +210,16 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
 #ifdef COPY_STACKS
     t->stkbuf = (void*)(intptr_t)-1;
 #endif
+    // ensure that state is cleared
+    ptls->in_finalizer = 0;
+    ptls->in_pure_callback = 0;
+    jl_get_ptls_states()->world_age = jl_world_counter;
     if (ptls->tid != 0) {
         // For now, only thread 0 runs the task scheduler.
         // The others return to the thread loop
-        jl_switchto(ptls->root_task, jl_nothing);
+        ptls->root_task->result = jl_nothing;
+        jl_task_t *task = ptls->root_task;
+        jl_switchto(&task);
         gc_debug_critical_error();
         abort();
     }
@@ -224,15 +240,6 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
     abort();
 }
 
-static void throw_if_exception_set(jl_task_t *t)
-{
-    if (t->exception != NULL && t->exception != jl_nothing) {
-        jl_value_t *exc = t->exception;
-        t->exception = jl_nothing;
-        jl_throw(exc);
-    }
-}
-
 static void record_backtrace(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -246,7 +253,7 @@ static void NOINLINE JL_NORETURN start_task(void)
     jl_task_t *t = ptls->current_task;
     jl_value_t *res;
     t->started = 1;
-    if (t->exception != NULL && t->exception != jl_nothing) {
+    if (t->exception != jl_nothing) {
         record_backtrace();
         res = t->exception;
     }
@@ -266,7 +273,6 @@ static void NOINLINE JL_NORETURN start_task(void)
             jl_gc_wb(t, res);
         }
     }
-    jl_get_ptls_states()->world_age = jl_world_counter; // TODO
     finish_task(t, res);
     gc_debug_critical_error();
     abort();
@@ -298,8 +304,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
 static void ctx_switch(jl_ptls_t ptls, jl_task_t *t, jl_jmp_buf *where)
 {
-    if (t == ptls->current_task)
-        return;
+    assert(t != ptls->current_task);
 #ifdef ENABLE_TIMINGS
     jl_timing_block_t *blk = ptls->current_task->timing_stack;
     if (blk)
@@ -390,18 +395,18 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t *t, jl_jmp_buf *where)
 #endif
 }
 
-JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
+JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *t = *pt;
     if (t == ptls->current_task) {
-        throw_if_exception_set(t);
-        return arg;
+        return;
     }
     if (t->state == done_sym || t->state == failed_sym ||
         (t->stkbuf == (void*)(intptr_t)-1)) {
-        if (t->exception != jl_nothing)
-            jl_throw(t->exception);
-        return t->result;
+        ptls->current_task->exception = t->exception;
+        ptls->current_task->result = t->result;
+        return;
     }
     if (ptls->in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
@@ -409,17 +414,13 @@ JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
         jl_error("task switch not allowed from inside staged nor pure functions");
     sig_atomic_t defer_signal = ptls->defer_signal;
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
-    ptls->task_arg_in_transit = arg;
+    *pt = ptls->current_task; // clear the gc-root for the target task
     ctx_switch(ptls, t, &t->ctx);
-    jl_value_t *val = ptls->task_arg_in_transit;
-    ptls->task_arg_in_transit = jl_nothing;
-    throw_if_exception_set(ptls->current_task);
     jl_gc_unsafe_leave(ptls, gc_state);
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
     if (other_defer_signal && !defer_signal)
         jl_sigint_safepoint(ptls);
-    return val;
 }
 
 #ifndef COPY_STACKS
@@ -625,7 +626,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     stk += pagesz;
 
     init_task(t, stk);
-    //jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
+    jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
     JL_GC_POP();
 #endif
 
@@ -635,17 +636,15 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     return t;
 }
 
-JL_CALLABLE(jl_unprotect_stack)
-{
 #ifndef COPY_STACKS
-    jl_task_t *t = (jl_task_t*)args[0];
+static void jl_unprotect_stack(jl_task_t *t)
+{
     size_t pagesz = jl_page_size;
     char *stk = (char*)LLT_ALIGN((uintptr_t)t->stkbuf, pagesz);
     // unprotect stack so it can be reallocated for something else
     mprotect(stk, pagesz - 1, PROT_READ|PROT_WRITE);
-#endif
-    return jl_nothing;
 }
+#endif
 
 JL_DLLEXPORT jl_value_t *jl_get_current_task(void)
 {
@@ -661,18 +660,19 @@ void jl_init_tasks(void)
     _probe_arch();
     jl_task_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("Task"),
+                        NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_svec(9,
-                                jl_symbol("parent"),
-                                jl_symbol("storage"),
-                                jl_symbol("state"),
-                                jl_symbol("consumers"),
-                                jl_symbol("donenotify"),
-                                jl_symbol("result"),
-                                jl_symbol("exception"),
-                                jl_symbol("backtrace"),
-                                jl_symbol("code")),
+                        jl_perm_symsvec(9,
+                                        "parent",
+                                        "storage",
+                                        "state",
+                                        "consumers",
+                                        "donenotify",
+                                        "result",
+                                        "exception",
+                                        "backtrace",
+                                        "code"),
                         jl_svec(9,
                                 jl_any_type,
                                 jl_any_type,
@@ -690,7 +690,9 @@ void jl_init_tasks(void)
     failed_sym = jl_symbol("failed");
     runnable_sym = jl_symbol("runnable");
 
-    //jl_unprotect_stack_func = jl_new_closure(jl_unprotect_stack, (jl_value_t*)jl_emptysvec, NULL);
+#ifndef COPY_STACKS
+    jl_unprotect_stack_func = jl_box_voidpointer(&jl_unprotect_stack);
+#endif
 }
 
 // Initialize a root task using the given stack.
@@ -728,7 +730,6 @@ void jl_init_root_task(void *stack, size_t ssize)
     ptls->root_task = ptls->current_task;
 
     ptls->exception_in_transit = (jl_value_t*)jl_nothing;
-    ptls->task_arg_in_transit = (jl_value_t*)jl_nothing;
 }
 
 JL_DLLEXPORT int jl_is_task_started(jl_task_t *t)

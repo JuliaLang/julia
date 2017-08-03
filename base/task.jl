@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## basic task functions and TLS
 
@@ -209,7 +209,7 @@ function task_done_hook(t::Task)
 
     if isa(t.donenotify, Condition) && !isempty(t.donenotify.waitq)
         handled = true
-        notify(t.donenotify, result, error=err)
+        notify(t.donenotify, result, true, err)
     end
 
     # Execute any other hooks registered in the TLS
@@ -238,7 +238,7 @@ function task_done_hook(t::Task)
         if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
             active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
-            throwto(active_repl_backend.backend_task, result)
+            throwto(active_repl_backend.backend_task, result) # this terminates the task
         end
         if !suppress_excp_printing(t)
             let bt = t.backtrace
@@ -253,7 +253,7 @@ function task_done_hook(t::Task)
     end
     # Clear sigatomic before waiting
     sigatomic_end()
-    wait()
+    wait() # this will not return
 end
 
 

@@ -1,8 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Mmap
 
-const PAGESIZE = Int(is_unix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
+const PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
 
 # for mmaps not backed by files
 mutable struct Anonymous <: IO
@@ -21,13 +21,13 @@ const INVALID_HANDLE_VALUE = -1
 gethandle(io::Anonymous) = INVALID_HANDLE_VALUE
 
 # platform-specific mmap utilities
-if is_unix()
+if Sys.isunix()
 
 const PROT_READ     = Cint(1)
 const PROT_WRITE    = Cint(2)
 const MAP_SHARED    = Cint(1)
 const MAP_PRIVATE   = Cint(2)
-const MAP_ANONYMOUS = Cint(is_apple() ? 0x1000 : 0x20)
+const MAP_ANONYMOUS = Cint(Sys.isbsd() ? 0x1000 : 0x20)
 const F_GETFL       = Cint(3)
 
 gethandle(io::IO) = fd(io)
@@ -65,7 +65,7 @@ function grow!(io::IO, offset::Integer, len::Integer)
     return
 end
 
-elseif is_windows()
+elseif Sys.iswindows()
 
 const DWORD = Culong
 
@@ -94,17 +94,17 @@ else
 end # os-test
 
 # core implementation of mmap
-function mmap{T,N}(io::IO,
-                   ::Type{Array{T,N}}=Vector{UInt8},
-                   dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
-                   offset::Integer=position(io); grow::Bool=true, shared::Bool=true)
+function mmap(io::IO,
+              ::Type{Array{T,N}}=Vector{UInt8},
+              dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
+              offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T,N}
     # check inputs
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
     isbits(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbits(T) == true"))
 
     len = prod(dims) * sizeof(T)
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
-    len == 0 && return Array{T}(ntuple(x->0,Val{N}))
+    len == 0 && return Array{T}(ntuple(x->0,Val(N)))
     len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
 
     offset >= 0 || throw(ArgumentError("requested offset must be ≥ 0, got $offset"))
@@ -116,7 +116,7 @@ function mmap{T,N}(io::IO,
 
     file_desc = gethandle(io)
     # platform-specific mmapping
-    @static if is_unix()
+    @static if Sys.isunix()
         prot, flags, iswrite = settings(file_desc, shared)
         iswrite && grow && grow!(io, offset, len)
         # mmap the file
@@ -138,7 +138,7 @@ function mmap{T,N}(io::IO,
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
     finalizer(A, function(x)
-        @static if is_unix()
+        @static if Sys.isunix()
             systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Void}, Int), ptr, mmaplen) != 0)
         else
             status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), ptr)!=0
@@ -149,24 +149,24 @@ function mmap{T,N}(io::IO,
     return A
 end
 
-mmap{T<:Array,N}(file::AbstractString,
-                 ::Type{T}=Vector{UInt8},
-                 dims::NTuple{N,Integer}=(div(filesize(file),sizeof(eltype(T))),),
-                 offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) =
+mmap(file::AbstractString,
+     ::Type{T}=Vector{UInt8},
+     dims::NTuple{N,Integer}=(div(filesize(file),sizeof(eltype(T))),),
+     offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array,N} =
     open(io->mmap(io, T, dims, offset; grow=grow, shared=shared), file, isfile(file) ? "r+" : "w+")::Array{eltype(T),N}
 
 # using a length argument instead of dims
-mmap{T<:Array}(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) =
+mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T<:Array} =
     mmap(io, T, (len,), offset; grow=grow, shared=shared)
-mmap{T<:Array}(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) =
+mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array} =
     open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, isfile(file) ? "r+" : "w+")::Vector{eltype(T)}
 
 # constructors for non-file-backed (anonymous) mmaps
-mmap{T<:Array,N}(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
-mmap{T<:Array}(::Type{T}, i::Integer...; shared::Bool=true) = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
+mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:Array,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
+mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:Array} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
 
-function mmap{N}(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
-                 offset::Int64=position(io); grow::Bool=true, shared::Bool=true)
+function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
+              offset::Int64=position(io); grow::Bool=true, shared::Bool=true) where N
     n = prod(dims)
     nc = Base.num_bit_chunks(n)
     chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared)
@@ -177,7 +177,7 @@ function mmap{N}(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
             throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
         end
     end
-    B = BitArray{N}(ntuple(i->0,Val{N})...)
+    B = BitArray{N}(ntuple(i->0,Val(N))...)
     B.chunks = chunks
     B.len = n
     if N != 1
@@ -186,28 +186,28 @@ function mmap{N}(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
     return B
 end
 
-mmap{T<:BitArray,N}(file::AbstractString, ::Type{T}, dims::NTuple{N,Integer}, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) =
+mmap(file::AbstractString, ::Type{T}, dims::NTuple{N,Integer}, offset::Integer=Int64(0);grow::Bool=true, shared::Bool=true) where {T<:BitArray,N} =
     open(io->mmap(io, T, dims, offset; grow=grow, shared=shared), file, isfile(file) ? "r+" : "w+")::BitArray{N}
 
 # using a length argument instead of dims
-mmap{T<:BitArray}(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) =
+mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T<:BitArray} =
     mmap(io, T, (len,), offset; grow=grow, shared=shared)
-mmap{T<:BitArray}(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) =
+mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:BitArray} =
     open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, isfile(file) ? "r+" : "w+")::BitVector
 
 # constructors for non-file-backed (anonymous) mmaps
-mmap{T<:BitArray,N}(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
-mmap{T<:BitArray}(::Type{T}, i::Integer...; shared::Bool=true) = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
+mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:BitArray,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
+mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:BitArray} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
 
 # msync flags for unix
 const MS_ASYNC = 1
 const MS_INVALIDATE = 2
 const MS_SYNC = 4
 
-function sync!{T}(m::Array{T}, flags::Integer=MS_SYNC)
+function sync!(m::Array{T}, flags::Integer=MS_SYNC) where T
     offset = rem(UInt(pointer(m)), PAGESIZE)
     ptr = pointer(m) - offset
-    @static if is_unix()
+    @static if Sys.isunix()
         systemerror("msync",
                     ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), ptr, length(m) * sizeof(T), flags) != 0)
     else

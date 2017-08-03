@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -14,11 +14,15 @@ end
 
 # maxintfloat
 
-@test maxintfloat(Float16) == Float16(2048f0)
+@test maxintfloat(Float16) === Float16(2048f0)
 for elty in (Float16,Float32,Float64)
-    @test maxintfloat(rand(elty)) == maxintfloat(elty)
+    @test maxintfloat(rand(elty)) === maxintfloat(elty)
 end
-@test maxintfloat() == maxintfloat(Float64)
+@test maxintfloat() === maxintfloat(Float64)
+@test maxintfloat(Float64, Int32) === 2147483647.0
+@test maxintfloat(Float32, Int32) === maxintfloat(Float32)
+@test maxintfloat(Float64, Int16) === 32767.0
+@test maxintfloat(Float64, Int64) === maxintfloat(Float64)
 
 # isinteger
 for elty in (Float16,Float32,Float64)
@@ -66,5 +70,12 @@ for elty in (Float32,Float64)
         @test round.(elty2,A,RoundUp) == fill(ceil(elty2,x),(10,10,10))
         @test round.(elty2,A,RoundDown) == fill(floor(elty2,x),(10,10,10))
         @test round.(elty2,A) == fill(round(elty2,x),(10,10,10))
+    end
+end
+
+@testset "Types" begin
+    for x in (Int16(0), 1, 2f0, pi, 3//4, big(5//6), 7.8, big(9), big(e))
+        @test float(typeof(x)) == typeof(float(x))
+        @test float(typeof(complex(x, x))) == typeof(float(complex(x, x)))
     end
 end

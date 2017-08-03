@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const max_ccall_threads = parse(Int, get(ENV, "UV_THREADPOOL_SIZE", "4"))
 const thread_notifiers = [Nullable{Condition}() for i in 1:max_ccall_threads]
@@ -11,7 +11,7 @@ function notify_fun(idx)
 end
 
 function init_threadcall()
-    global c_notify_fun = cfunction(notify_fun, Void, (Cint,))
+    global c_notify_fun = cfunction(notify_fun, Void, Tuple{Cint})
 end
 
 """
@@ -64,12 +64,12 @@ end
 
 function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argvals::Vector)
     # generate function pointer
-    fun_ptr = cfunction(wrapper, Int, (Ptr{Void}, Ptr{Void}))
+    fun_ptr = cfunction(wrapper, Int, Tuple{Ptr{Void}, Ptr{Void}})
 
     # cconvert, root and unsafe_convert arguments
     roots = Any[]
     args_size = isempty(argtypes) ? 0 : sum(sizeof, argtypes)
-    args_arr = Array{UInt8}(args_size)
+    args_arr = Vector{UInt8}(args_size)
     ptr = pointer(args_arr)
     for (T, x) in zip(argtypes, argvals)
         y = cconvert(T, x)
@@ -79,7 +79,7 @@ function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argva
     end
 
     # create return buffer
-    ret_arr = Array{UInt8}(sizeof(rettype))
+    ret_arr = Vector{UInt8}(sizeof(rettype))
 
     # wait for a worker thread to be available
     acquire(threadcall_restrictor)

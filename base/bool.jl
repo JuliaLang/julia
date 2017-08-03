@@ -1,13 +1,13 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## boolean conversions ##
 
 convert(::Type{Bool}, x::Bool) = x
-convert(::Type{Bool}, x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError())
-convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
+convert(::Type{Bool}, x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError(:convert, Bool, x))
+convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:convert, Bool, x))
 
 # promote Bool to any other numeric type
-promote_rule{T<:Number}(::Type{Bool}, ::Type{T}) = T
+promote_rule(::Type{Bool}, ::Type{T}) where {T<:Number} = T
 
 typemin(::Type{Bool}) = false
 typemax(::Type{Bool}) = true
@@ -19,6 +19,7 @@ typemax(::Type{Bool}) = true
 
 Boolean not.
 
+# Examples
 ```jldoctest
 julia> !true
 false
@@ -50,6 +51,7 @@ Bitwise exclusive or of `x` and `y`.  The infix operation
 `⊻` can be typed by tab-completing `\\xor`
 or `\\veebar` in the Julia REPL.
 
+# Examples
 ```jldoctest
 julia> [true; true; false] .⊻ [true; false; false]
 3-element BitArray{1}:
@@ -77,6 +79,7 @@ sign(x::Bool) = x
 abs(x::Bool) = x
 abs2(x::Bool) = x
 iszero(x::Bool) = !x
+isone(x::Bool) = x
 
 <(x::Bool, y::Bool) = y&!x
 <=(x::Bool, y::Bool) = y|!x
@@ -92,15 +95,15 @@ iszero(x::Bool) = !x
 ^(x::Bool, y::Bool) = x | !y
 ^(x::Integer, y::Bool) = ifelse(y, x, one(x))
 
-function +{T<:AbstractFloat}(x::Bool, y::T)::promote_type(Bool,T)
+function +(x::Bool, y::T)::promote_type(Bool,T) where T<:AbstractFloat
     return ifelse(x, oneunit(y) + y, y)
 end
 +(y::AbstractFloat, x::Bool) = x + y
 
-function *{T<:Number}(x::Bool, y::T)::promote_type(Bool,T)
+function *(x::Bool, y::T)::promote_type(Bool,T) where T<:Number
     return ifelse(x, y, copysign(zero(y), y))
 end
-function *{T<:Unsigned}(x::Bool, y::T)::promote_type(Bool,T)
+function *(x::Bool, y::T)::promote_type(Bool,T) where T<:Unsigned
     return ifelse(x, y, zero(y))
 end
 *(y::Number, x::Bool) = x * y

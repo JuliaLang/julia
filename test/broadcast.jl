@@ -1,23 +1,23 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module TestBroadcastInternals
 
 using Base.Broadcast: broadcast_indices, check_broadcast_indices,
-                      check_broadcast_shape, newindex, _bcs, _bcsm
+                      check_broadcast_shape, newindex, _bcs
 using Base: Test, OneTo
 
-@test @inferred(_bcs((), (3,5), (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,1), (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,),  (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,5), (3,)))  == (3,5)
-@test_throws DimensionMismatch _bcs((), (3,5), (4,5))
-@test_throws DimensionMismatch _bcs((), (3,5), (3,4))
-@test @inferred(_bcs((), (-1:1, 2:5), (-1:1, 2:5))) == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1, 2:5), (1, 2:5)))    == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1, 1),   (1, 2:5)))    == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1,),     (-1:1, 2:5))) == (-1:1, 2:5)
-@test_throws DimensionMismatch _bcs((), (-1:1, 2:6), (-1:1, 2:5))
-@test_throws DimensionMismatch _bcs((), (-1:1, 2:5), (2, 2:5))
+@test @inferred(_bcs((3,5), (3,5))) == (3,5)
+@test @inferred(_bcs((3,1), (3,5))) == (3,5)
+@test @inferred(_bcs((3,),  (3,5))) == (3,5)
+@test @inferred(_bcs((3,5), (3,)))  == (3,5)
+@test_throws DimensionMismatch _bcs((3,5), (4,5))
+@test_throws DimensionMismatch _bcs((3,5), (3,4))
+@test @inferred(_bcs((-1:1, 2:5), (-1:1, 2:5))) == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1, 2:5), (1, 2:5)))    == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1, 1),   (1, 2:5)))    == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1,),     (-1:1, 2:5))) == (-1:1, 2:5)
+@test_throws DimensionMismatch _bcs((-1:1, 2:6), (-1:1, 2:5))
+@test_throws DimensionMismatch _bcs((-1:1, 2:5), (2, 2:5))
 
 @test @inferred(broadcast_indices(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
 @test @inferred(broadcast_indices(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
@@ -70,7 +70,7 @@ function as_sub(x::AbstractMatrix)
     end
     y
 end
-function as_sub{T}(x::AbstractArray{T,3})
+function as_sub(x::AbstractArray{T,3}) where T
     y = similar(x, eltype(x), tuple(([size(x)...]*2)...))
     y = view(y, 2:2:size(y,1), 2:2:size(y,2), 2:2:size(y,3))
     for k=1:size(x,3)
@@ -200,7 +200,7 @@ end
 
 # issue #4883
 @test isa(broadcast(tuple, [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Int,String}})
-@test isa(broadcast((x,y)->(x==1?1.0:x,y), [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Real,String}})
+@test isa(broadcast((x,y)->(x==1 ? 1.0 : x, y), [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Real,String}})
 let a = length.(["foo", "bar"])
     @test isa(a, Vector{Int})
     @test a == [3, 3]
@@ -312,12 +312,12 @@ end
 
 # make sure scalars are inlined, which causes f.(x,scalar) to lower to a "thunk"
 import Base.Meta: isexpr
-@test isexpr(expand(:(f.(x,y))), :call)
-@test isexpr(expand(:(f.(x,1))), :thunk)
-@test isexpr(expand(:(f.(x,1.0))), :thunk)
-@test isexpr(expand(:(f.(x,$π))), :thunk)
-@test isexpr(expand(:(f.(x,"hello"))), :thunk)
-@test isexpr(expand(:(f.(x,$("hello")))), :thunk)
+@test isexpr(expand(Main, :(f.(x,y))), :call)
+@test isexpr(expand(Main, :(f.(x,1))), :thunk)
+@test isexpr(expand(Main, :(f.(x,1.0))), :thunk)
+@test isexpr(expand(Main, :(f.(x,$π))), :thunk)
+@test isexpr(expand(Main, :(f.(x,"hello"))), :thunk)
+@test isexpr(expand(Main, :(f.(x,$("hello")))), :thunk)
 
 # PR #17623: Fused binary operators
 @test [true] .* [true] == [true]
@@ -346,7 +346,7 @@ end
 let f17314 = x -> x < 0 ? false : x
     @test eltype(broadcast(f17314, 1:3)) === Int
     @test eltype(broadcast(f17314, -1:1)) === Integer
-    @test eltype(broadcast(f17314, Int[])) === Union{Bool,Int}
+    @test eltype(broadcast(f17314, Int[])) == Union{Bool,Int}
 end
 let io = IOBuffer()
     broadcast(x->print(io,x), 1:5) # broadcast with side effects
@@ -419,9 +419,10 @@ struct Array19745{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
 Base.getindex(A::Array19745, i::Integer...) = A.data[i...]
+Base.setindex!(A::Array19745, v::Any, i::Integer...) = setindex!(A.data, v, i...)
 Base.size(A::Array19745) = size(A.data)
 
-Base.Broadcast._containertype{T<:Array19745}(::Type{T}) = Array19745
+Base.Broadcast._containertype(::Type{T}) where {T<:Array19745} = Array19745
 
 Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array19745}) = Array19745
 Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array})      = Array19745
@@ -435,8 +436,12 @@ Base.Broadcast.broadcast_indices(::Type{Array19745}, A::Ref) = ()
 getfield19745(x::Array19745) = x.data
 getfield19745(x)             = x
 
-Base.Broadcast.broadcast_c(f, ::Type{Array19745}, A, Bs...) =
-    Array19745(Base.Broadcast.broadcast_c(f, Array, getfield19745(A), map(getfield19745, Bs)...))
+function Base.Broadcast.broadcast_c(f, ::Type{Array19745}, A, Bs...)
+    T     = Base.Broadcast._broadcast_eltype(f, A, Bs...)
+    shape = Base.Broadcast.broadcast_indices(A, Bs...)
+    dest = Array19745(Array{T}(Base.index_lengths(shape...)))
+    return broadcast!(f, dest, A, Bs...)
+end
 
 @testset "broadcasting for custom AbstractArray" begin
     a  = randn(10)
@@ -493,4 +498,25 @@ end
     A = fill(zeros(2,2), 4, 4)
     A[1:3,1:3] .= [ones(2,2)]
     @test all(A[1:3,1:3] .== [ones(2,2)])
+end
+
+# Test that broadcast does not confuse eltypes. See also
+# https://github.com/JuliaLang/julia/issues/21325
+@testset "eltype confusion (#21325)" begin
+    foo(x::Char, y::Int) = 0
+    foo(x::String, y::Int) = "hello"
+    @test broadcast(foo, "x", [1, 2, 3]) == ["hello", "hello", "hello"]
+
+    @test isequal(
+        [Set([1]), Set([2])] .∪ Set([3]),
+        [Set([1, 3]), Set([2, 3])])
+
+    @test isequal(@inferred(broadcast(foo, "world", Nullable(1))),
+                  Nullable("hello"))
+end
+
+# Issue #21291
+let t = (0, 1, 2)
+    o = 1
+    @test @inferred(broadcast(+, t, o)) == (1, 2, 3)
 end

@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   repl.c
@@ -21,38 +21,24 @@
 #include <inttypes.h>
 
 #include "uv.h"
-#define WHOLE_ARCHIVE
 #include "../src/julia.h"
+JULIA_DEFINE_FAST_TLS()
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_static(void)
-{
-    static __attribute__((tls_model("local-exec"))) __thread jl_tls_states_t tls_states;
-    return &tls_states;
-}
-__attribute__((constructor)) void jl_register_ptls_states_getter(void)
-{
-    // We need to make sure this function is called before any reference to
-    // TLS variables.
-    jl_set_ptls_states_getter(jl_get_ptls_states_static);
-}
 #endif
 
 static int exec_program(char *program)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
-        jl_load(program);
+        jl_load(jl_main_module, program);
     }
     JL_CATCH {
         jl_value_t *errs = jl_stderr_obj();
         jl_value_t *e = ptls->exception_in_transit;
         // Manually save and restore the backtrace so that we print the original
-        // one instead of the one caused by `jl_show`.
+        // one instead of the one caused by `show`.
         // We can't use safe_restore since that will cause any error
         // (including the ones that would have been caught) to abort.
         uintptr_t *volatile bt_data = NULL;
@@ -61,7 +47,7 @@ static int exec_program(char *program)
             if (errs) {
                 bt_data = (uintptr_t*)malloc(bt_size * sizeof(void*));
                 memcpy(bt_data, ptls->bt_data, bt_size * sizeof(void*));
-                jl_show(errs, e);
+                jl_call2(jl_get_function(jl_base_module, "show"), errs, e);
                 jl_printf(JL_STDERR, "\n");
                 free(bt_data);
             }
@@ -87,7 +73,7 @@ static int exec_program(char *program)
 void jl_lisp_prompt();
 
 #ifndef _WIN32
-int jl_repl_raise_sigtstp(void)
+JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
 {
     return raise(SIGTSTP);
 }

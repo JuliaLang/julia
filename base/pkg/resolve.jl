@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Resolve
 
-include("resolve/versionweight.jl")
-include("resolve/interface.jl")
-include("resolve/maxsum.jl")
+include(joinpath("resolve", "versionweight.jl"))
+include(joinpath("resolve", "interface.jl"))
+include(joinpath("resolve", "maxsum.jl"))
 
 using ..Types, ..Query, .PkgToMaxSumInterface, .MaxSum
 import ...Pkg.PkgError
@@ -26,7 +26,7 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
         try
             sol = maxsum(graph, msgs)
         catch err
-            isa(err, UnsatError) || retrhow(err)
+            isa(err, UnsatError) || rethrow(err)
             p = interface.pkgs[err.info]
             # TODO: build tools to analyze the problem, and suggest to use them here.
             msg =
@@ -35,7 +35,7 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
                   The problem was detected when trying to find a feasible version
                   for package $p.
                   However, this only means that package $p is involved in an
-                  unsatifiable or difficult dependency relation, and the root of
+                  unsatisfiable or difficult dependency relation, and the root of
                   the problem may be elsewhere.
                 """
             if msgs.num_nondecimated != graph.np
@@ -74,7 +74,7 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
         end
     end
 
-    vers = Array{Tuple{String,VersionNumber,VersionNumber}}(0)
+    vers = Vector{Tuple{String,VersionNumber,VersionNumber}}(0)
     for (p,d) in deps, vn in keys(d)
         lvns = VersionNumber[Iterators.filter(vn2->(vn2>vn), keys(d))...]
         nvn = isempty(lvns) ? typemax(VersionNumber) : minimum(lvns)
@@ -88,7 +88,7 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
 
     checked = falses(nv)
 
-    problematic = Array{Tuple{String,VersionNumber,String}}(0)
+    problematic = Vector{Tuple{String,VersionNumber,String}}(0)
     i = 1
     psl = 0
     for (p,vn,nvn) in vers

@@ -1,16 +1,16 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Distributed
 
 # imports for extension
 import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
-             hash, ==, connect, kill, serialize, deserialize, close
+             hash, ==, connect, kill, serialize, deserialize, close, showerror
 
 # imports for use
 using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connected,
             VERSION_STRING, sync_begin, sync_add, sync_end, async_run_thunk,
             binding_module, notify_error, atexit, julia_exename, julia_cmd,
-            AsyncGenerator, display_error
+            AsyncGenerator, display_error, acquire, release, invokelatest
 
 # NOTE: clusterserialize.jl imports additional symbols from Base.Serializer for use
 

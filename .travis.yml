@@ -1,38 +1,33 @@
 language: cpp
 sudo: false
+dist: trusty
 matrix:
   include:
     - os: linux
       env: ARCH="i686"
-      compiler: "g++-5 -m32"
+      compiler: "g++ -m32"
       addons:
         apt:
-          sources:
-            - ubuntu-toolchain-r-test
           packages:
+            - libssl1.0.0
             - bar
             - time
-            - binutils
-            - gcc-5
-            - g++-5
-            - gcc-5-multilib
-            - g++-5-multilib
+            - gcc-multilib
+            - g++-multilib
             - make:i386
             - libssl-dev:i386
-            - gfortran-5
-            - gfortran-5-multilib
+            - gfortran
+            - gfortran-multilib
     - os: linux
       env: ARCH="x86_64"
-      compiler: "g++-5 -m64"
+      compiler: "g++ -m64"
       addons:
         apt:
-          sources:
-            - ubuntu-toolchain-r-test
           packages:
+            - libssl1.0.0
             - bar
             - time
-            - g++-5
-            - gfortran-5
+            - gfortran
     - os: osx
       env: ARCH="x86_64"
       osx_image: xcode8
@@ -44,7 +39,8 @@ cache:
 branches:
   only:
     - master
-    - /release-.*/
+    - /^release-.*/
+    - /^v\d+\.\d+\.\d+$/
 notifications:
     email: false
     irc:
@@ -60,12 +56,6 @@ before_install:
     - make check-whitespace
     - if [ `uname` = "Linux" ]; then
         contrib/travis_fastfail.sh || exit 1;
-        mkdir -p $HOME/bin;
-        ln -s /usr/bin/gcc-5 $HOME/bin/gcc;
-        ln -s /usr/bin/g++-5 $HOME/bin/g++;
-        ln -s /usr/bin/gfortran-5 $HOME/bin/gfortran;
-        ln -s /usr/bin/gcc-5 $HOME/bin/x86_64-linux-gnu-gcc;
-        ln -s /usr/bin/g++-5 $HOME/bin/x86_64-linux-gnu-g++;
         gcc --version;
         BAR="bar -i 30";
         BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1";
@@ -83,7 +73,7 @@ before_install:
         BUILDOPTS="-j3 USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm39-julia)/bin/llvm-config LLVM_SIZE=$(brew --prefix llvm39-julia)/bin/llvm-size";
         BUILDOPTS="$BUILDOPTS VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
-        for lib in LLVM SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND; do
+        for lib in LLVM SUITESPARSE ARPACK BLAS LAPACK GMP MPFR PCRE LIBUNWIND; do
             BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
@@ -96,6 +86,7 @@ before_install:
 script:
     - echo BUILDOPTS=$BUILDOPTS
     - export BUILDOPTS
+    # compile / install dependencies
     - contrib/download_cmake.sh
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
@@ -113,6 +104,7 @@ script:
           cat deps.log;
           echo "-- end of deps build log -----------------------------------------------";
           false; }
+    # compile / install Julia
     - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia install | moreutils/ts -s "%.s"
     - make $BUILDOPTS NO_GIT=1 build-stats
     - du -sk /tmp/julia/*
@@ -122,14 +114,25 @@ script:
         done;
       fi
     - cd .. && mv julia julia2
+    # run tests
     - /tmp/julia/bin/julia --precompiled=no -e 'true' &&
         /tmp/julia/bin/julia-debug --precompiled=no -e 'true'
     - /tmp/julia/bin/julia -e 'versioninfo()'
+    - pushd /tmp/julia/share/julia/test
     - export JULIA_CPU_CORES=2 && export JULIA_TEST_MAXRSS_MB=600 &&
-        cd /tmp/julia/share/julia/test &&
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
-        /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
-    - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia &&
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online download pkg
+    - popd
+    # test that the embedding code works on our installation
+    - mkdir /tmp/embedding-test &&
+        make check -C /tmp/julia/share/doc/julia/examples/embedding \
+             JULIA="DYLD_FALLBACK_LIBRARY_PATH='$DYLD_FALLBACK_LIBRARY_PATH' /tmp/julia/bin/julia" \
+             BIN=/tmp/embedding-test \
+             "$(cd julia2 && make print-CC)"
+    # restore initial state and prepare for travis caching
+    - mv julia2 julia &&
         rm -f julia/deps/scratch/libgit2-*/CMakeFiles/CMakeOutput.log
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
+after_success:
+    - cd julia && make -C doc deploy

@@ -1,5 +1,12 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    GitConfig(path::AbstractString, level::Consts.GIT_CONFIG=Consts.CONFIG_LEVEL_APP, force::Bool=false)
+
+Create a new `GitConfig` by loading configuration information from the file at
+`path`. See [`addfile`](@ref) for more information about the `level` and `force`
+options.
+"""
 function GitConfig(path::AbstractString,
                    level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP,
                    force::Bool=false)
@@ -16,6 +23,13 @@ function GitConfig(path::AbstractString,
     return cfg
 end
 
+"""
+    GitConfig(repo::GitRepo)
+
+Get the stored configuration for the git repository `repo`. If `repo` does not
+have a specific configuration file set, the default git configuration will be
+used.
+"""
 function GitConfig(repo::GitRepo)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_config, :libgit2), Cint,
@@ -23,10 +37,17 @@ function GitConfig(repo::GitRepo)
     return GitConfig(repo, cfg_ptr_ptr[])
 end
 
+"""
+    GitConfig(level::Consts.GIT_CONFIG=Consts.CONFIG_LEVEL_DEFAULT)
+
+Get the default git configuration by loading the global and system configuration
+files into a prioritized configuration. This can be used to access default configuration
+options outside a specific git repository.
+"""
 function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_config_open_default, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, ), cfg_ptr_ptr)
+                  (Ptr{Ptr{Void}},), cfg_ptr_ptr)
     cfg = GitConfig(cfg_ptr_ptr[])
     if level != Consts.CONFIG_LEVEL_DEFAULT
         glb_cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -43,6 +64,17 @@ function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
     return cfg
 end
 
+"""
+    addfile(cfg::GitConfig, path::AbstractString, level::Consts.GIT_CONFIG=Consts.CONFIG_LEVEL_APP, force::Bool=false)
+
+Add an existing git configuration file located at `path` to the current
+[`GitConfig`](@ref) `cfg`. If the file does not exist, it will be created.
+`level` sets the git configuration priority level and is determined by
+[`Consts.GIT_CONFIG`](@ref). If `force` is `false` and a configuration for
+the given priority level already exists, `addfile` will error. If `force` is
+`true`, the existing configuration will be replaced by the one in the file at
+`path`.
+"""
 function addfile(cfg::GitConfig, path::AbstractString,
                  level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP,
                  force::Bool=false)
@@ -82,7 +114,7 @@ function get(::Type{Int64}, c::GitConfig, name::AbstractString)
     return val_ptr[]
 end
 
-function get{T}(c::GitConfig, name::AbstractString, default::T)
+function get(c::GitConfig, name::AbstractString, default::T) where T
     res = default
     try res = get(T,c,name) end
     return res
@@ -128,3 +160,67 @@ function set!(c::GitConfig, name::AbstractString, value::Int64)
     @check ccall((:git_config_set_int64, :libgit2), Cint,
                   (Ptr{Void}, Cstring, Cintmax_t), c.ptr, name, value)
 end
+
+function GitConfigIter(cfg::GitConfig)
+    ci_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_config_iterator_new, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ptr{Void}), ci_ptr, cfg.ptr)
+    return GitConfigIter(ci_ptr[])
+end
+
+function GitConfigIter(cfg::GitConfig, name::AbstractString)
+    ci_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_config_multivar_iterator_new, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring),
+                  ci_ptr, cfg.ptr, name, C_NULL)
+    return GitConfigIter(ci_ptr[])
+end
+
+function GitConfigIter(cfg::GitConfig, name::AbstractString, value::Regex)
+    ci_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_config_multivar_iterator_new, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring),
+                  ci_ptr, cfg.ptr, name, value.pattern)
+    return GitConfigIter(ci_ptr[])
+end
+
+function GitConfigIter(cfg::GitConfig, name::Regex)
+    ci_ptr = Ref{Ptr{Void}}(C_NULL)
+    @check ccall((:git_config_iterator_glob_new, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring),
+                  ci_ptr, cfg.ptr, name.pattern)
+    return GitConfigIter(ci_ptr[])
+end
+
+function Base.start(ci::GitConfigIter)
+    entry_ptr_ptr = Ref{Ptr{ConfigEntry}}(C_NULL)
+    err = ccall((:git_config_next, :libgit2), Cint,
+                 (Ptr{Ptr{ConfigEntry}}, Ptr{Void}), entry_ptr_ptr, ci.ptr)
+    if err == Cint(Error.GIT_OK)
+        state = Nullable{ConfigEntry}(unsafe_load(entry_ptr_ptr[]))
+    elseif err == Cint(Error.ITEROVER)
+        state = Nullable{ConfigEntry}()
+    else
+        throw(GitError(err))
+    end
+    return state
+end
+
+Base.done(ci::GitConfigIter, state) = isnull(state)
+
+function Base.next(ci::GitConfigIter, state)
+    entry = Base.get(state)
+    entry_ptr_ptr = Ref{Ptr{ConfigEntry}}(C_NULL)
+    err = ccall((:git_config_next, :libgit2), Cint,
+                 (Ptr{Ptr{ConfigEntry}}, Ptr{Void}), entry_ptr_ptr, ci.ptr)
+    if err == Cint(Error.GIT_OK)
+        state = Nullable{ConfigEntry}(unsafe_load(entry_ptr_ptr[]))
+    elseif err == Cint(Error.ITEROVER)
+        state = Nullable{ConfigEntry}()
+    else
+        throw(GitError(err))
+    end
+    return (entry, state)
+end
+
+Base.iteratorsize(::Type{GitConfigIter}) = Base.SizeUnknown()

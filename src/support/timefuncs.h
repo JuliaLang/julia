@@ -1,7 +1,7 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef TIMEFUNCS_H
-#define TIMEFUNCS_H
+#ifndef JL_TIMEFUNCS_H
+#define JL_TIMEFUNCS_H
 
 #ifdef __cplusplus
 extern "C" {

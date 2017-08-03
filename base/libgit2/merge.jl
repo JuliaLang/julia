@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function GitAnnotated(repo::GitRepo, commit_id::GitHash)
     ann_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -45,7 +45,11 @@ function merge_analysis(repo::GitRepo, anns::Vector{GitAnnotated})
     return analysis[], preference[]
 end
 
-"""Fastforward merge changes into current head """
+"""
+    ffmerge!(repo::GitRepo, ann::GitAnnotated)
+
+Fastforward merge changes into current head
+"""
 function ffmerge!(repo::GitRepo, ann::GitAnnotated)
     cmt = GitCommit(repo, GitHash(ann))
 
@@ -63,7 +67,7 @@ function ffmerge!(repo::GitRepo, ann::GitAnnotated)
     return true
 end
 
-""" Merge changes into current head """
+# Merge changes into current head
 function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
                 merge_opts::MergeOptions = MergeOptions(),
                 checkout_opts::CheckoutOptions = CheckoutOptions())
@@ -71,15 +75,14 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
     @check ccall((:git_merge, :libgit2), Cint,
                   (Ptr{Void}, Ptr{Ptr{Void}}, Csize_t,
                    Ptr{MergeOptions}, Ptr{CheckoutOptions}),
-                   repo.ptr, anns, anns_size,
+                   repo.ptr, map(x->x.ptr, anns), anns_size,
                    Ref(merge_opts), Ref(checkout_opts))
     info("Review and commit merged changes.")
     return true
 end
 
-"""Internal implementation of merge.
-Returns `true` if merge was successful, otherwise `false`
-"""
+# Internal implementation of merge.
+# Returns `true` if merge was successful, otherwise `false`
 function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
                 merge_opts::MergeOptions = MergeOptions(),
                 checkout_opts::CheckoutOptions = CheckoutOptions())

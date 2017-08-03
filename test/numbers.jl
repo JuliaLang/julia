@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const ≣ = isequal # convenient for comparing NaNs
 
@@ -53,6 +53,7 @@ const ≣ = isequal # convenient for comparing NaNs
 @test_throws InexactError Bool(1//2)
 
 @test iszero(false) && !iszero(true)
+@test isone(true) && !isone(false)
 
 # basic arithmetic
 @test 2 + 3 == 5
@@ -2491,6 +2492,13 @@ end
 @test reinterpret(Float32,bswap(0x0000c03f)) === 1.5f0
 @test bswap(reinterpret(Float64,0x000000000000f03f)) === 1.0
 @test bswap(reinterpret(Float32,0x0000c03f)) === 1.5f0
+zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
+                 0x40, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                 0xc0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+z1 = read(zbuf, Complex64)
+z2 = read(zbuf, Complex128)
+@test bswap(z1) === -1.5f0 + 2.5f0im
+@test bswap(z2) ===  3.5 - 4.5im
 
 #isreal(x::Real) = true
 for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
@@ -2801,6 +2809,7 @@ testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
 @test indices(1,1) == 1:1
 @test_throws BoundsError indices(1,-1)
 @test isinteger(Integer(2)) == true
+@test !isinteger(π)
 @test size(1) == ()
 @test length(1) == 1
 @test endof(1) == 1
@@ -2903,34 +2912,80 @@ end
 end
 
 import Base.^
-immutable PR20530; end
+struct PR20530; end
+struct PR20889; x; end
 ^(::PR20530, p::Int) = 1
-^{p}(::PR20530, ::Type{Val{p}}) = 2
+^(t::PR20889, b) = t.x + b
+^(t::PR20889, b::Integer) = t.x + b
+Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
 @testset "literal powers" begin
     x = PR20530()
     p = 2
     @test x^p == 1
     @test x^2 == 2
     @test [x,x,x].^2 == [2,2,2]
+    for T in (Float16, Float32, Float64, BigFloat, Int8, Int, BigInt, Complex{Int}, Complex{Float64})
+        for p in -4:4
+            if p < 0 && real(T) <: Integer
+                @test_throws DomainError eval(:($T(2)^$p))
+            else
+                v = eval(:($T(2)^$p))
+                @test 2.0^p == T(2)^p == v
+                @test v isa T
+            end
+        end
+    end
+    @test PR20889(2)^3 == 5
+end
+module M20889 # do we get the expected behavior without importing Base.^?
+    struct PR20889; x; end
+    ^(t::PR20889, b) = t.x + b
+    Base.Test.@test PR20889(2)^3 == 5
 end
 
-@testset "iszero" begin
+@testset "iszero & isone" begin
     # Numeric scalars
     for T in [Float16, Float32, Float64, BigFloat,
               Int8, Int16, Int32, Int64, Int128, BigInt,
               UInt8, UInt16, UInt32, UInt64, UInt128]
         @test iszero(T(0))
+        @test isone(T(1))
         @test iszero(Complex{T}(0))
+        @test isone(Complex{T}(1))
         if T <: Integer
             @test iszero(Rational{T}(0))
+            @test isone(Rational{T}(1))
         elseif T <: AbstractFloat
             @test iszero(T(-0.0))
             @test iszero(Complex{T}(-0.0))
         end
     end
     @test !iszero(nextfloat(BigFloat(0)))
+    @test !isone(nextfloat(BigFloat(1)))
+    for x in (π, e, γ, catalan, φ)
+        @test !iszero(x)
+        @test !isone(x)
+    end
 
     # Array reduction
     @test !iszero([0, 1, 2, 3])
     @test iszero(zeros(Int, 5))
+    @test !isone(tril(ones(Int, 5, 5)))
+    @test !isone(triu(ones(Int, 5, 5)))
+    @test !isone(zeros(Int, 5, 5))
+    @test isone(eye(Int, 5, 5))
+    @test isone(eye(Int, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
 end
+
+f20065(B, i) = UInt8(B[i])
+@testset "issue 20065" begin
+    # f20065 must be called from global scope to exhibit the buggy behavior
+    for B in (Array{Bool}(10), Array{Bool}(10,10), reinterpret(Bool, rand(UInt8, 10)))
+        @test all(x-> x <= 1, (f20065(B, i) for i in eachindex(B)))
+        for i in 1:length(B)
+            @test (@eval f20065($B, $i) <= 1)
+        end
+    end
+end
+
+@test inv(3//4) === 4//3 === 1 / (3//4) === 1 // (3//4)

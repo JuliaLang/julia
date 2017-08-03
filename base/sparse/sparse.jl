@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module SparseArrays
 
@@ -10,7 +10,7 @@ import Base: +, -, *, \, /, &, |, xor, ==
 import Base: A_mul_B!, Ac_mul_B, Ac_mul_B!, At_mul_B, At_mul_B!
 import Base: A_mul_Bc, A_mul_Bt, Ac_mul_Bc, At_mul_Bt
 import Base: At_ldiv_B, Ac_ldiv_B, A_ldiv_B!
-import Base.LinAlg: At_ldiv_B!, Ac_ldiv_B!
+import Base.LinAlg: At_ldiv_B!, Ac_ldiv_B!, A_rdiv_B!, A_rdiv_Bc!
 
 import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     atan, atand, atanh, broadcast!, chol, conj!, cos, cosc, cosd, cosh, cospi, cot,
@@ -26,10 +26,8 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     rotl90, rotr90, round, scale!, setindex!, similar, size, transpose, tril,
     triu, vec, permute!, map, map!
 
-import Base.Broadcast: broadcast_indices
-
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
-    SparseMatrixCSC, SparseVector, blkdiag, dense, droptol!, dropzeros!, dropzeros,
+    SparseMatrixCSC, SparseVector, blkdiag, droptol!, dropzeros!, dropzeros,
     issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm, speye, spones,
     sprand, sprandn, spzeros, nnz, permute
 

@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   modules and top-level bindings
@@ -29,7 +29,9 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     m->istopmod = 0;
     static unsigned int mcounter; // simple counter backup, in case hrtime is not incrementing
     m->uuid = jl_hrtime() + (++mcounter);
-    if (!m->uuid) m->uuid++; // uuid 0 is invalid
+    if (!m->uuid)
+        m->uuid++; // uuid 0 is invalid
+    m->primary_world = 0;
     m->counter = 0;
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
@@ -59,12 +61,11 @@ JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
     return (jl_value_t*)m;
 }
 
-JL_DLLEXPORT void jl_set_istopmod(uint8_t isprimary)
+JL_DLLEXPORT void jl_set_istopmod(jl_module_t *self, uint8_t isprimary)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    ptls->current_module->istopmod = 1;
+    self->istopmod = 1;
     if (isprimary) {
-        jl_top_module = ptls->current_module;
+        jl_top_module = self;
         jl_append_any_func = NULL;
     }
 }
@@ -190,6 +191,7 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
                     // couldn't resolve; try next using (see issue #6105)
                     continue;
                 if (owner != NULL && tempb->owner != b->owner &&
+                    !tempb->deprecated && !b->deprecated &&
                     !(tempb->constp && tempb->value && b->constp && b->value == tempb->value)) {
                     jl_printf(JL_STDERR,
                               "WARNING: both %s and %s export \"%s\"; uses of it in module %s must be qualified\n",
@@ -261,9 +263,8 @@ static int eq_bindings(jl_binding_t *a, jl_binding_t *b)
 // does module m explicitly import s?
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s)
 {
-    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, s);
-    jl_binding_t *bto = *bp;
-    return (bto != HT_NOTFOUND && bto->imported);
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, s);
+    return (b != HT_NOTFOUND && b->imported);
 }
 
 // NOTE: we use explici since explicit is a C++ keyword
@@ -280,6 +281,17 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                   jl_symbol_name(to->name));
     }
     else {
+        if (b->deprecated && to != jl_main_module && to != jl_base_module &&
+            jl_options.depwarn != JL_OPTIONS_DEPWARN_OFF) {
+            /* with #22763, external packages wanting to replace
+               deprecated Base bindings should simply export the new
+               binding */
+            jl_printf(JL_STDERR,
+                      "WARNING: importing deprecated binding %s.%s into %s.\n",
+                      jl_symbol_name(from->name), jl_symbol_name(s),
+                      jl_symbol_name(to->name));
+        }
+
         jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&to->bindings, s);
         jl_binding_t *bto = *bp;
         if (bto != HT_NOTFOUND) {
@@ -387,6 +399,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
     }
 
     arraylist_push(&to->usings, from);
+    jl_gc_wb(to, from);
 }
 
 JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s)
@@ -411,23 +424,20 @@ JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
-    if (*bp == HT_NOTFOUND) return 0;
-    return (*bp)->exportp || (*bp)->owner==m;
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    return b != HT_NOTFOUND && (b->exportp || b->owner==m);
 }
 
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
-    if (*bp == HT_NOTFOUND) return 0;
-    return (*bp)->exportp;
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    return b != HT_NOTFOUND && b->exportp;
 }
 
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
-    if (*bp == HT_NOTFOUND) return 0;
-    return (*bp)->owner != NULL;
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    return b != HT_NOTFOUND && b->owner != NULL;
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
@@ -459,16 +469,16 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (m == NULL) m = ptls->current_module;
     jl_binding_t *b = jl_get_binding(m, var);
     return b && b->constp;
 }
 
-JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var)
+// set the deprecated flag for a binding:
+//   0=not deprecated, 1=renamed, 2=moved to another package
+JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag)
 {
     jl_binding_t *b = jl_get_binding(m, var);
-    if (b) b->deprecated = 1;
+    if (b) b->deprecated = flag;
 }
 
 JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
@@ -482,7 +492,10 @@ extern int jl_lineno;
 
 void jl_binding_deprecation_warning(jl_binding_t *b)
 {
-    if (b->deprecated && jl_options.depwarn) {
+    // Only print a warning for deprecated == 1 (renamed).
+    // For deprecated == 2 (moved to a package) the binding is to a function
+    // that throws an error, so we don't want to print a warning too.
+    if (b->deprecated == 1 && jl_options.depwarn) {
         if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR)
             jl_printf(JL_STDERR, "WARNING: ");
         if (b->owner)
@@ -491,10 +504,25 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
         else
             jl_printf(JL_STDERR, "%s is deprecated", jl_symbol_name(b->name));
         jl_value_t *v = b->value;
-        if (v && (jl_is_type(v) || jl_is_module(v)/* || (jl_is_function(v) && jl_is_gf(v))*/)) {
-            jl_printf(JL_STDERR, ", use ");
-            jl_static_show(JL_STDERR, v);
-            jl_printf(JL_STDERR, " instead");
+        if (v) {
+            if (jl_is_type(v) || jl_is_module(v)) {
+                jl_printf(JL_STDERR, ", use ");
+                jl_static_show(JL_STDERR, v);
+                jl_printf(JL_STDERR, " instead");
+            }
+            else {
+                jl_methtable_t *mt = jl_gf_mtable(v);
+                if (mt != NULL && (mt->defs.unknown != jl_nothing ||
+                                   jl_isa(v, (jl_value_t*)jl_builtin_type))) {
+                    jl_printf(JL_STDERR, ", use ");
+                    if (mt->module != jl_core_module) {
+                        jl_static_show(JL_STDERR, (jl_value_t*)mt->module);
+                        jl_printf(JL_STDERR, ".");
+                    }
+                    jl_printf(JL_STDERR, "%s", jl_symbol_name(mt->name));
+                    jl_printf(JL_STDERR, " instead");
+                }
+            }
         }
         jl_printf(JL_STDERR, ".\n");
 

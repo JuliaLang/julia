@@ -1,7 +1,9 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 """
     RowVector(vector)
 
-A lazy-view wrapper of an `AbstractVector`, which turns a length-`n` vector into a `1×n`
+A lazy-view wrapper of an [`AbstractVector`](@ref), which turns a length-`n` vector into a `1×n`
 shaped row vector and represents the transpose of a vector (the elements are also transposed
 recursively). This type is usually constructed (and unwrapped) via the [`transpose`](@ref)
 function or `.'` operator (or related [`ctranspose`](@ref) or `'` operator).
@@ -19,14 +21,14 @@ struct RowVector{T,V<:AbstractVector} <: AbstractMatrix{T}
     end
 end
 
-@inline check_types{T1,T2}(::Type{T1},::AbstractVector{T2}) = check_types(T1, T2)
-@pure check_types{T1,T2}(::Type{T1},::Type{T2}) = T1 === transpose_type(T2) ? nothing :
+@inline check_types(::Type{T1}, ::AbstractVector{T2}) where {T1,T2} = check_types(T1, T2)
+@pure check_types(::Type{T1}, ::Type{T2}) where {T1,T2} = T1 === transpose_type(T2) ? nothing :
     error("Element type mismatch. Tried to create a `RowVector{$T1}` from an `AbstractVector{$T2}`")
 
-ConjRowVector{T, CV <: ConjVector} = RowVector{T, CV}
+const ConjRowVector{T,CV<:ConjVector} = RowVector{T,CV}
 
 # The element type may be transformed as transpose is recursive
-@inline transpose_type{T}(::Type{T}) = promote_op(transpose, T)
+@inline transpose_type(::Type{T}) where {T} = promote_op(transpose, T)
 
 # Constructors that take a vector
 @inline RowVector(vec::AbstractVector{T}) where {T} = RowVector{transpose_type(T),typeof(vec)}(vec)
@@ -43,15 +45,15 @@ ConjRowVector{T, CV <: ConjVector} = RowVector{T, CV}
     error("RowVector expects 1×N size, got $n")
 
 # Conversion of underlying storage
-convert{T,V<:AbstractVector}(::Type{RowVector{T,V}}, rowvec::RowVector) =
+convert(::Type{RowVector{T,V}}, rowvec::RowVector) where {T,V<:AbstractVector} =
     RowVector{T,V}(convert(V,rowvec.vec))
 
 # similar tries to maintain the RowVector wrapper and the parent type
 @inline similar(rowvec::RowVector) = RowVector(similar(parent(rowvec)))
-@inline similar{T}(rowvec::RowVector, ::Type{T}) = RowVector(similar(parent(rowvec), transpose_type(T)))
+@inline similar(rowvec::RowVector, ::Type{T}) where {T} = RowVector(similar(parent(rowvec), transpose_type(T)))
 
 # Resizing similar currently loses its RowVector property.
-@inline similar{T,N}(rowvec::RowVector, ::Type{T}, dims::Dims{N}) = similar(parent(rowvec), T, dims)
+@inline similar(rowvec::RowVector, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(rowvec), T, dims)
 
 # Basic methods
 """
@@ -59,8 +61,7 @@ convert{T,V<:AbstractVector}(::Type{RowVector{T,V}}, rowvec::RowVector) =
 
 The transposition operator (`.'`).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> v = [1,2,3]
 3-element Array{Int64,1}:
@@ -75,7 +76,6 @@ julia> transpose(v)
 """
 @inline transpose(vec::AbstractVector) = RowVector(vec)
 @inline ctranspose(vec::AbstractVector) = RowVector(_conj(vec))
-@inline ctranspose(vec::AbstractVector{<:Real}) = RowVector(vec)
 
 @inline transpose(rowvec::RowVector) = rowvec.vec
 @inline transpose(rowvec::ConjRowVector) = copy(rowvec.vec) # remove the ConjArray wrapper from any raw vector
@@ -89,8 +89,7 @@ parent(rowvec::RowVector) = rowvec.vec
 
 Returns a [`ConjArray`](@ref) lazy view of the input, where each element is conjugated.
 
-### Example
-
+# Examples
 ```jldoctest
 julia> v = [1+im, 1-im].'
 1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:
@@ -141,31 +140,33 @@ end
 @inline check_tail_indices(i1, i2, i3, is...) = i3 == 1 ? check_tail_indices(i1, i2, is...) : false
 
 # helper function for below
-@inline to_vec(rowvec::RowVector) = transpose(rowvec)
+@inline to_vec(rowvec::RowVector) = map(transpose, transpose(rowvec))
 @inline to_vec(x::Number) = x
 @inline to_vecs(rowvecs...) = (map(to_vec, rowvecs)...)
 
-# map
-@inline map(f, rowvecs::RowVector...) = RowVector(map(f, to_vecs(rowvecs...)...))
+# map: Preserve the RowVector by un-wrapping and re-wrapping, but note that `f`
+# expects to operate within the transposed domain, so to_vec transposes the elements
+@inline map(f, rowvecs::RowVector...) = RowVector(map(transpose∘f, to_vecs(rowvecs...)...))
 
 # broacast (other combinations default to higher-dimensional array)
 @inline broadcast(f, rowvecs::Union{Number,RowVector}...) =
-    RowVector(broadcast(f, to_vecs(rowvecs...)...))
+    RowVector(broadcast(transpose∘f, to_vecs(rowvecs...)...))
 
 # Horizontal concatenation #
 
 @inline hcat(X::RowVector...) = transpose(vcat(map(transpose, X)...))
 @inline hcat(X::Union{RowVector,Number}...) = transpose(vcat(map(transpose, X)...))
 
-@inline typed_hcat{T}(::Type{T}, X::RowVector...) =
+@inline typed_hcat(::Type{T}, X::RowVector...) where {T} =
     transpose(typed_vcat(T, map(transpose, X)...))
-@inline typed_hcat{T}(::Type{T}, X::Union{RowVector,Number}...) =
+@inline typed_hcat(::Type{T}, X::Union{RowVector,Number}...) where {T} =
     transpose(typed_vcat(T, map(transpose, X)...))
 
 # Multiplication #
 
 # inner product -> dot product specializations
-@inline *{T<:Real}(rowvec::RowVector{T}, vec::AbstractVector{T}) = dot(parent(rowvec), vec)
+@inline *(rowvec::RowVector{T}, vec::AbstractVector{T}) where {T<:Real} = dot(parent(rowvec), vec)
+@inline *(rowvec::ConjRowVector{T}, vec::AbstractVector{T}) where {T<:Real} = dot(rowvec', vec)
 @inline *(rowvec::ConjRowVector, vec::AbstractVector) = dot(rowvec', vec)
 
 # Generic behavior
@@ -201,7 +202,7 @@ At_mul_B(::RowVector, ::AbstractVector) = throw(DimensionMismatch("Cannot multip
 @inline At_mul_B(rowvec1::RowVector, rowvec2::RowVector) = transpose(rowvec1) * rowvec2
 At_mul_B(vec::AbstractVector, rowvec::RowVector) = throw(DimensionMismatch(
     "Cannot multiply two transposed vectors"))
-@inline At_mul_B{T<:Real}(vec1::AbstractVector{T}, vec2::AbstractVector{T}) =
+@inline At_mul_B(vec1::AbstractVector{T}, vec2::AbstractVector{T}) where {T<:Real} =
     reduce(+, map(At_mul_B, vec1, vec2)) # Seems to be overloaded...
 @inline At_mul_B(vec1::AbstractVector, vec2::AbstractVector) = transpose(vec1) * vec2
 

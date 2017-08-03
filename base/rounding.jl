@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Rounding
 
@@ -37,7 +37,7 @@ Currently supported rounding modes are:
 - [`RoundNearestTiesAway`](@ref)
 - [`RoundNearestTiesUp`](@ref)
 - [`RoundToZero`](@ref)
-- `RoundFromZero` (`BigFloat` only)
+- `RoundFromZero` ([`BigFloat`](@ref) only)
 - [`RoundUp`](@ref)
 - [`RoundDown`](@ref)
 """
@@ -118,9 +118,9 @@ arithmetic functions ([`+`](@ref), [`-`](@ref), [`*`](@ref),
 functions may give incorrect or invalid values when using rounding modes other than the
 default `RoundNearest`.
 
-Note that this may affect other types, for instance changing the rounding mode of `Float64`
-will change the rounding mode of `Float32`. See [`RoundingMode`](@ref) for
-available modes.
+Note that this may affect other types, for instance changing the rounding mode of
+[`Float64`](@ref) will change the rounding mode of [`Float32`](@ref).
+See [`RoundingMode`](@ref) for available modes.
 
 !!! warning
 
@@ -139,11 +139,11 @@ See [`RoundingMode`](@ref) for available modes.
 """
 :rounding
 
-setrounding_raw(::Type{<:Union{Float32,Float64}},i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
+setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
 rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall(:fegetround, Int32, ())
 
-setrounding{T<:Union{Float32,Float64}}(::Type{T},r::RoundingMode) = setrounding_raw(T,to_fenv(r))
-rounding{T<:Union{Float32,Float64}}(::Type{T}) = from_fenv(rounding_raw(T))
+setrounding(::Type{T}, r::RoundingMode) where {T<:Union{Float32,Float64}} = setrounding_raw(T,to_fenv(r))
+rounding(::Type{T}) where {T<:Union{Float32,Float64}} = from_fenv(rounding_raw(T))
 
 """
     setrounding(f::Function, T, mode)
@@ -180,7 +180,7 @@ See [`RoundingMode`](@ref) for available rounding modes.
                end
         1.2
 """
-function setrounding{T}(f::Function, ::Type{T}, rounding::RoundingMode)
+function setrounding(f::Function, ::Type{T}, rounding::RoundingMode) where T
     old_rounding_raw = rounding_raw(T)
     setrounding(T,rounding)
     try
@@ -199,18 +199,18 @@ end
 # Assumes conversion is performed by rounding to nearest value.
 
 # To avoid ambiguous dispatch with methods in mpfr.jl:
-(::Type{T}){T<:AbstractFloat}(x::Real,r::RoundingMode) = _convert_rounding(T,x,r)
+(::Type{T})(x::Real, r::RoundingMode) where {T<:AbstractFloat} = _convert_rounding(T,x,r)
 
-_convert_rounding{T<:AbstractFloat}(::Type{T},x::Real,r::RoundingMode{:Nearest}) = convert(T,x)
-function _convert_rounding{T<:AbstractFloat}(::Type{T},x::Real,r::RoundingMode{:Down})
+_convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Nearest}) where {T<:AbstractFloat} = convert(T,x)
+function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Down}) where T<:AbstractFloat
     y = convert(T,x)
     y > x ? prevfloat(y) : y
 end
-function _convert_rounding{T<:AbstractFloat}(::Type{T},x::Real,r::RoundingMode{:Up})
+function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Up}) where T<:AbstractFloat
     y = convert(T,x)
     y < x ? nextfloat(y) : y
 end
-function _convert_rounding{T<:AbstractFloat}(::Type{T},x::Real,r::RoundingMode{:ToZero})
+function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:ToZero}) where T<:AbstractFloat
     y = convert(T,x)
     if x > 0.0
         y > x ? prevfloat(y) : y

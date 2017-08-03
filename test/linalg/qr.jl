@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 debug = false
 using Base.Test
@@ -60,10 +60,13 @@ debug && println("QR decomposition (without pivoting)")
                     ac = copy(a)
                     @test qrfact!(a[:, 1:5])\b == qrfact!(view(ac, :, 1:5))\b
                 end
+                rstring = sprint(show,r)
+                qstring = sprint(show,q)
+                @test sprint(show,qra) == "$(typeof(qra)) with factors Q and R:\n$qstring\n$rstring"
 
 debug && println("Thin QR decomposition (without pivoting)")
-                qra   = @inferred qrfact(a[:,1:n1], Val{false})
-                @inferred qr(a[:,1:n1], Val{false})
+                qra   = @inferred qrfact(a[:,1:n1], Val(false))
+                @inferred qr(a[:,1:n1], Val(false))
                 q,r   = qra[:Q], qra[:R]
                 @test_throws KeyError qra[:Z]
                 @test q'*full(q, thin=false) ≈ eye(n)
@@ -79,8 +82,8 @@ debug && println("Thin QR decomposition (without pivoting)")
                 end
 
 debug && println("(Automatic) Fat (pivoted) QR decomposition")
-                @inferred qrfact(a, Val{true})
-                @inferred qr(a, Val{true})
+                @inferred qrfact(a, Val(true))
+                @inferred qr(a, Val(true))
 
                 qrpa  = factorize(a[1:n1,:])
                 q,r = qrpa[:Q], qrpa[:R]
@@ -131,7 +134,7 @@ debug && println("Matmul with QR factorizations")
             @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(q,zeros(eltya,n1+1))
             @test_throws DimensionMismatch Base.LinAlg.Ac_mul_B!(q,zeros(eltya,n1+1))
 
-            qra = qrfact(a[:,1:n1], Val{false})
+            qra = qrfact(a[:,1:n1], Val(false))
             q, r = qra[:Q], qra[:R]
             @test A_mul_B!(full(q, thin=false)',q) ≈ eye(n)
             @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
@@ -146,8 +149,8 @@ end
 # Because transpose(x) == x
 @test_throws ErrorException transpose(qrfact(randn(3,3)))
 @test_throws ErrorException ctranspose(qrfact(randn(3,3)))
-@test_throws ErrorException transpose(qrfact(randn(3,3), Val{false}))
-@test_throws ErrorException ctranspose(qrfact(randn(3,3), Val{false}))
+@test_throws ErrorException transpose(qrfact(randn(3,3), Val(false)))
+@test_throws ErrorException ctranspose(qrfact(randn(3,3), Val(false)))
 @test_throws ErrorException transpose(qrfact(big.(randn(3,3))))
 @test_throws ErrorException ctranspose(qrfact(big.(randn(3,3))))
 
@@ -180,3 +183,11 @@ B = rand(7,2)
 
 # Issue 16520
 @test_throws DimensionMismatch ones(3,2)\(1:5)
+
+# Issue 22810
+let
+    A = zeros(1, 2)
+    B = zeros(1, 1)
+    @test A \ B == zeros(2, 1)
+    @test qrfact(A, Val(true)) \ B == zeros(2, 1)
+end

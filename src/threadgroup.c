@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   threading infrastructure
@@ -116,7 +116,7 @@ int ti_threadgroup_size(ti_threadgroup_t *tg, int16_t *tgsize)
     return 0;
 }
 
-int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val)
+int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val, int init)
 {
     uint8_t *group_sense = &tg->group_sense;
     int16_t tid = tg->tid_map[ext_tid];
@@ -147,13 +147,14 @@ int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val)
                 }
                 spin_ns = uv_hrtime() - spin_start;
                 // In case uv_hrtime is not monotonic, we'll sleep earlier
-                if (spin_ns >= tg->sleep_threshold) {
+                if (init || spin_ns >= tg->sleep_threshold) {
                     uv_mutex_lock(&tg->alarm_lock);
                     if (jl_atomic_load_acquire(group_sense) != thread_sense) {
                         uv_cond_wait(&tg->alarm, &tg->alarm_lock);
                     }
                     uv_mutex_unlock(&tg->alarm_lock);
                     spin_start = 0;
+                    init = 0;
                     continue;
                 }
             }

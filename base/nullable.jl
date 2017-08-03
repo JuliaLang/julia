@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 struct NullException <: Exception
 end
@@ -14,7 +14,6 @@ wrapper that might contain a value of type `T`.
 field.
 
 # Examples
-
 ```jldoctest
 julia> Nullable(1)
 Nullable{Int64}(1)
@@ -31,31 +30,31 @@ Nullable{Int64}
   value: Int64 1
 ```
 """
-Nullable{T}(value::T, hasvalue::Bool=true) = Nullable{T}(value, hasvalue)
+Nullable(value::T, hasvalue::Bool=true) where {T} = Nullable{T}(value, hasvalue)
 Nullable() = Nullable{Union{}}()
 
-eltype{T}(::Type{Nullable{T}}) = T
+eltype(::Type{Nullable{T}}) where {T} = T
 
-convert{T}(::Type{Nullable{T}}, x::Nullable{T}) = x
-convert(   ::Type{Nullable   }, x::Nullable   ) = x
+convert(::Type{Nullable{T}}, x::Nullable{T}) where {T} = x
+convert(::Type{Nullable   }, x::Nullable   ) = x
 
-convert{T}(t::Type{Nullable{T}}, x::Any) = convert(t, convert(T, x))
+convert(t::Type{Nullable{T}}, x::Any) where {T} = convert(t, convert(T, x))
 
-function convert{T}(::Type{Nullable{T}}, x::Nullable)
+function convert(::Type{Nullable{T}}, x::Nullable) where T
     return isnull(x) ? Nullable{T}() : Nullable{T}(convert(T, get(x)))
 end
 
-convert{T<:Nullable}(::Type{Nullable{T}}, x::T) = Nullable{T}(x)
-convert{T}(::Type{Nullable{T}}, x::T) = Nullable{T}(x)
-convert{T}(::Type{Nullable   }, x::T) = Nullable{T}(x)
+convert(::Type{Nullable{T}}, x::T) where {T<:Nullable} = Nullable{T}(x)
+convert(::Type{Nullable{T}}, x::T) where {T} = Nullable{T}(x)
+convert(::Type{Nullable   }, x::T) where {T} = Nullable{T}(x)
 
-convert{T}(::Type{Nullable{T}}, ::Void) = Nullable{T}()
-convert(   ::Type{Nullable   }, ::Void) = Nullable{Union{}}()
+convert(::Type{Nullable{T}}, ::Void) where {T} = Nullable{T}()
+convert(::Type{Nullable   }, ::Void) = Nullable{Union{}}()
 
-promote_rule{S,T}(::Type{Nullable{S}}, ::Type{T}) = Nullable{promote_type(S, T)}
-promote_rule{S,T}(::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_type(S, T)}
-promote_op{S,T}(op::Any, ::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_op(op, S, T)}
-promote_op{S,T}(op::Type, ::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_op(op, S, T)}
+promote_rule(::Type{Nullable{S}}, ::Type{T}) where {S,T} = Nullable{promote_type(S, T)}
+promote_rule(::Type{Nullable{S}}, ::Type{Nullable{T}}) where {S,T} = Nullable{promote_type(S, T)}
+promote_op(op::Any, ::Type{Nullable{S}}, ::Type{Nullable{T}}) where {S,T} = Nullable{promote_op(op, S, T)}
+promote_op(op::Type, ::Type{Nullable{S}}, ::Type{Nullable{T}}) where {S,T} = Nullable{promote_op(op, S, T)}
 
 function show(io::IO, x::Nullable)
     if get(io, :compact, false)
@@ -80,8 +79,19 @@ end
 
 Attempt to access the value of `x`. Returns the value if it is present;
 otherwise, returns `y` if provided, or throws a `NullException` if not.
+
+# Examples
+```jldoctest
+julia> get(Nullable(5))
+5
+
+julia> get(Nullable())
+ERROR: NullException()
+Stacktrace:
+ [1] get(::Nullable{Union{}}) at ./nullable.jl:102
+```
 """
-@inline function get{T}(x::Nullable{T}, y)
+@inline function get(x::Nullable{T}, y) where T
     if isbits(T)
         ifelse(isnull(x), y, x.value)
     else
@@ -100,6 +110,7 @@ all other `x`.
 This method does not check whether or not `x` is null before attempting to
 access the value of `x` for `x::Nullable` (hence "unsafe").
 
+# Examples
 ```jldoctest
 julia> x = Nullable(1)
 Nullable{Int64}(1)
@@ -113,7 +124,7 @@ Nullable{String}()
 julia> unsafe_get(x)
 ERROR: UndefRefError: access to undefined reference
 Stacktrace:
- [1] unsafe_get(::Nullable{String}) at ./nullable.jl:125
+ [1] unsafe_get(::Nullable{String}) at ./nullable.jl:136
 
 julia> x = 1
 1
@@ -132,7 +143,6 @@ Return whether or not `x` is null for [`Nullable`](@ref) `x`; return
 `false` for all other `x`.
 
 # Examples
-
 ```jldoctest
 julia> x = Nullable(1, false)
 Nullable{Int64}()
@@ -186,19 +196,13 @@ const NullSafeFloats = Union{Type{Float16}, Type{Float32}, Type{Float64}}
 const NullSafeTypes = Union{NullSafeInts, NullSafeFloats}
 const EqualOrLess = Union{typeof(isequal), typeof(isless)}
 
-null_safe_op{T}(::typeof(identity), ::Type{T}) = isbits(T)
-
-eltypes() = Tuple{}
-eltypes(x, xs...) = Tuple{eltype(x), eltypes(xs...).parameters...}
-
-@pure null_safe_eltype_op(op, xs...) =
-    null_safe_op(op, eltypes(xs...).parameters...)
+null_safe_op(::typeof(identity), ::Type{T}) where {T} = isbits(T)
 
 null_safe_op(f::EqualOrLess, ::NullSafeTypes, ::NullSafeTypes) = true
-null_safe_op{S,T}(f::EqualOrLess, ::Type{Rational{S}}, ::Type{T}) =
+null_safe_op(f::EqualOrLess, ::Type{Rational{S}}, ::Type{T}) where {S,T} =
     null_safe_op(f, T, S)
 # complex numbers can be compared for equality but not in general ordered
-null_safe_op{S,T}(::typeof(isequal), ::Type{Complex{S}}, ::Type{T}) =
+null_safe_op(::typeof(isequal), ::Type{Complex{S}}, ::Type{T}) where {S,T} =
     null_safe_op(isequal, T, S)
 
 """
@@ -207,8 +211,23 @@ null_safe_op{S,T}(::typeof(isequal), ::Type{Complex{S}}, ::Type{T}) =
 If neither `x` nor `y` is null, compare them according to their values
 (i.e. `isequal(get(x), get(y))`). Else, return `true` if both arguments are null,
 and `false` if one is null but not the other: nulls are considered equal.
+
+# Examples
+```jldoctest
+julia> isequal(Nullable(5), Nullable(5))
+true
+
+julia> isequal(Nullable(5), Nullable(4))
+false
+
+julia> isequal(Nullable(5), Nullable())
+false
+
+julia> isequal(Nullable(), Nullable())
+true
+```
 """
-@inline function isequal{S,T}(x::Nullable{S}, y::Nullable{T})
+@inline function isequal(x::Nullable{S}, y::Nullable{T}) where {S,T}
     if null_safe_op(isequal, S, T)
         (isnull(x) & isnull(y)) | (!isnull(x) & !isnull(y) & isequal(x.value, y.value))
     else
@@ -227,8 +246,29 @@ If neither `x` nor `y` is null, compare them according to their values
 (i.e. `isless(get(x), get(y))`). Else, return `true` if only `y` is null, and `false`
 otherwise: nulls are always considered greater than non-nulls, but not greater than
 another null.
+
+# Examples
+```jldoctest
+julia> isless(Nullable(6), Nullable(5))
+false
+
+julia> isless(Nullable(5), Nullable(6))
+true
+
+julia> isless(Nullable(5), Nullable(4))
+false
+
+julia> isless(Nullable(5), Nullable())
+true
+
+julia> isless(Nullable(), Nullable())
+false
+
+julia> isless(Nullable(), Nullable(5))
+false
+```
 """
-@inline function isless{S,T}(x::Nullable{S}, y::Nullable{T})
+@inline function isless(x::Nullable{S}, y::Nullable{T}) where {S,T}
     # NULL values are sorted last
     if null_safe_op(isless, S, T)
         (!isnull(x) & isnull(y)) | (!isnull(x) & !isnull(y) & isless(x.value, y.value))
@@ -258,8 +298,20 @@ end
     filter(p, x::Nullable)
 
 Return null if either `x` is null or `p(get(x))` is false, and `x` otherwise.
+
+# Examples
+```jldoctest
+julia> filter(isodd, Nullable(5))
+Nullable{Int64}(5)
+
+julia> filter(isodd, Nullable(4))
+Nullable{Int64}()
+
+julia> filter(isodd, Nullable{Int}())
+Nullable{Int64}()
+```
 """
-function filter{T}(p, x::Nullable{T})
+function filter(p, x::Nullable{T}) where T
     if isbits(T)
         val = unsafe_get(x)
         Nullable{T}(val, !isnull(x) && p(val))
@@ -271,7 +323,7 @@ end
 """
 Return the given type if it is concrete, and `Union{}` otherwise.
 """
-nullable_returntype{T}(::Type{T}) = isconcrete(T) ? T : Union{}
+nullable_returntype(::Type{T}) where {T} = isconcrete(T) ? T : Union{}
 
 """
     map(f, x::Nullable)
@@ -282,8 +334,20 @@ be either `Union{}` or a concrete type. Whichever of these is chosen is an
 implementation detail, but typically the choice that maximizes performance
 would be used. If `x` has a value, then the return type is guaranteed to be of
 type `Nullable{typeof(f(x))}`.
+
+# Examples
+```jldoctest
+julia> map(isodd, Nullable(1))
+Nullable{Bool}(true)
+
+julia> map(isodd, Nullable(2))
+Nullable{Bool}(false)
+
+julia> map(isodd, Nullable{Int}())
+Nullable{Bool}()
+```
 """
-function map{T}(f, x::Nullable{T})
+function map(f, x::Nullable{T}) where T
     S = promote_op(f, T)
     if isconcrete(S) && null_safe_op(f, T)
         Nullable(f(unsafe_get(x)), !isnull(x))
@@ -309,8 +373,8 @@ all(f::typeof(hasvalue), t::Tuple{}) = true
 # Note this list does not include sqrt since it can raise a DomainError
 for op in (+, -, abs, abs2)
     null_safe_op(::typeof(op), ::NullSafeTypes) = true
-    null_safe_op{S}(::typeof(op), ::Type{Complex{S}}) = null_safe_op(op, S)
-    null_safe_op{S}(::typeof(op), ::Type{Rational{S}}) = null_safe_op(op, S)
+    null_safe_op(::typeof(op), ::Type{Complex{S}}) where {S} = null_safe_op(op, S)
+    null_safe_op(::typeof(op), ::Type{Rational{S}}) where {S} = null_safe_op(op, S)
 end
 
 null_safe_op(::typeof(~), ::NullSafeInts) = true
@@ -329,8 +393,8 @@ for op in (+, -, *, /, &, |, <<, >>, >>>,
     null_safe_op(::typeof(op), ::NullSafeUnsignedInts, ::NullSafeUnsignedInts) = true
 end
 for op in (+, -, *, /)
-    null_safe_op{S,T}(::typeof(op), ::Type{Complex{S}}, ::Type{T}) =
+    null_safe_op(::typeof(op), ::Type{Complex{S}}, ::Type{T}) where {S,T} =
         null_safe_op(op, T, S)
-    null_safe_op{S,T}(::typeof(op), ::Type{Rational{S}}, ::Type{T}) =
+    null_safe_op(::typeof(op), ::Type{Rational{S}}, ::Type{T}) where {S,T} =
         null_safe_op(op, T, S)
 end

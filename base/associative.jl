@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # generic operations on associative collections
 
@@ -32,17 +32,17 @@ struct ValueIterator{T<:Associative}
     dict::T
 end
 
-summary{T<:Union{KeyIterator,ValueIterator}}(iter::T) =
+summary(iter::T) where {T<:Union{KeyIterator,ValueIterator}} =
     string(T.name, " for a ", summary(iter.dict))
 
 show(io::IO, iter::Union{KeyIterator,ValueIterator}) = show(io, collect(iter))
 
 length(v::Union{KeyIterator,ValueIterator}) = length(v.dict)
 isempty(v::Union{KeyIterator,ValueIterator}) = isempty(v.dict)
-_tt1{A,B}(::Type{Pair{A,B}}) = A
-_tt2{A,B}(::Type{Pair{A,B}}) = B
-eltype{D}(::Type{KeyIterator{D}}) = _tt1(eltype(D))
-eltype{D}(::Type{ValueIterator{D}}) = _tt2(eltype(D))
+_tt1(::Type{Pair{A,B}}) where {A,B} = A
+_tt2(::Type{Pair{A,B}}) where {A,B} = B
+eltype(::Type{KeyIterator{D}}) where {D} = _tt1(eltype(D))
+eltype(::Type{ValueIterator{D}}) where {D} = _tt2(eltype(D))
 
 start(v::Union{KeyIterator,ValueIterator}) = start(v.dict)
 done(v::Union{KeyIterator,ValueIterator}, state) = done(v.dict, state)
@@ -70,6 +70,7 @@ the order in which they are returned may vary.
 But `keys(a)` and `values(a)` both iterate `a` and
 return the elements in the same order.
 
+# Examples
 ```jldoctest
 julia> a = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
@@ -95,6 +96,7 @@ the order in which they are returned may vary.
 But `keys(a)` and `values(a)` both iterate `a` and
 return the elements in the same order.
 
+# Examples
 ```jldoctest
 julia> a = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
@@ -123,6 +125,7 @@ end
 Update collection with pairs from the other collections.
 See also [`merge`](@ref).
 
+# Examples
 ```jldoctest
 julia> d1 = Dict(1 => 2, 3 => 4);
 
@@ -146,6 +149,45 @@ function merge!(d::Associative, others::Associative...)
     return d
 end
 
+"""
+    merge!(combine, d::Associative, others::Associative...)
+
+Update collection with pairs from the other collections.
+Values with the same key will be combined using the
+combiner function.
+
+# Examples
+```jldoctest
+julia> d1 = Dict(1 => 2, 3 => 4);
+
+julia> d2 = Dict(1 => 4, 4 => 5);
+
+julia> merge!(+, d1, d2);
+
+julia> d1
+Dict{Int64,Int64} with 3 entries:
+  4 => 5
+  3 => 4
+  1 => 6
+
+julia> merge!(-, d1, d1);
+
+julia> d1
+Dict{Int64,Int64} with 3 entries:
+  4 => 0
+  3 => 0
+  1 => 0
+```
+"""
+function merge!(combine::Function, d::Associative, others::Associative...)
+    for other in others
+        for (k,v) in other
+            d[k] = haskey(d, k) ? combine(d[k], v) : v
+        end
+    end
+    return d
+end
+
 # very similar to `merge!`, but accepts any iterable and extends code
 # that would otherwise only use `copy!` with arrays.
 function copy!(dest::Union{Associative,AbstractSet}, src)
@@ -160,27 +202,29 @@ end
 
 Get the key type of an associative collection type. Behaves similarly to [`eltype`](@ref).
 
+# Examples
 ```jldoctest
 julia> keytype(Dict(Int32(1) => "foo"))
 Int32
 ```
 """
-keytype{K,V}(::Type{Associative{K,V}}) = K
+keytype(::Type{Associative{K,V}}) where {K,V} = K
 keytype(a::Associative) = keytype(typeof(a))
-keytype{A<:Associative}(::Type{A}) = keytype(supertype(A))
+keytype(::Type{A}) where {A<:Associative} = keytype(supertype(A))
 
 """
     valtype(type)
 
 Get the value type of an associative collection type. Behaves similarly to [`eltype`](@ref).
 
+# Examples
 ```jldoctest
 julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
-valtype{K,V}(::Type{Associative{K,V}}) = V
-valtype{A<:Associative}(::Type{A}) = valtype(supertype(A))
+valtype(::Type{Associative{K,V}}) where {K,V} = V
+valtype(::Type{A}) where {A<:Associative} = valtype(supertype(A))
 valtype(a::Associative) = valtype(typeof(a))
 
 """
@@ -191,6 +235,7 @@ types of the resulting collection will be promoted to accommodate the types of
 the merged collections. If the same key is present in another collection, the
 value for that key will be the value it has in the last collection listed.
 
+# Examples
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String,Float64} with 2 entries:
@@ -215,17 +260,71 @@ Dict{String,Float64} with 3 entries:
   "foo" => 0.0
 ```
 """
-function merge(d::Associative, others::Associative...)
-    K, V = keytype(d), valtype(d)
-    for other in others
-        K = promote_type(K, keytype(other))
-        V = promote_type(V, valtype(other))
-    end
-    merge!(Dict{K,V}(), d, others...)
+merge(d::Associative, others::Associative...) =
+    merge!(emptymergedict(d, others...), d, others...)
+
+"""
+    merge(combine, d::Associative, others::Associative...)
+
+Construct a merged collection from the given collections. If necessary, the
+types of the resulting collection will be promoted to accommodate the types of
+the merged collections. Values with the same key will be combined using the
+combiner function.
+
+# Examples
+```jldoctest
+julia> a = Dict("foo" => 0.0, "bar" => 42.0)
+Dict{String,Float64} with 2 entries:
+  "bar" => 42.0
+  "foo" => 0.0
+
+julia> b = Dict("baz" => 17, "bar" => 4711)
+Dict{String,Int64} with 2 entries:
+  "bar" => 4711
+  "baz" => 17
+
+julia> merge(+, a, b)
+Dict{String,Float64} with 3 entries:
+  "bar" => 4753.0
+  "baz" => 17.0
+  "foo" => 0.0
+```
+"""
+merge(combine::Function, d::Associative, others::Associative...) =
+    merge!(combine, emptymergedict(d, others...), d, others...)
+
+promoteK(K) = K
+promoteV(V) = V
+promoteK(K, d, ds...) = promoteK(promote_type(K, keytype(d)), ds...)
+promoteV(V, d, ds...) = promoteV(promote_type(V, valtype(d)), ds...)
+function emptymergedict(d::Associative, others::Associative...)
+    K = promoteK(keytype(d), others...)
+    V = promoteV(valtype(d), others...)
+    Dict{K,V}()
 end
 
+"""
+    filter!(f, d::Associative)
+
+Update `d`, removing elements for which `f` is `false`.
+The function `f` is passed two arguments (key and value).
+
+# Example
+```jldoctest
+julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
+Dict{Int64,String} with 3 entries:
+  2 => "b"
+  3 => "c"
+  1 => "a"
+
+julia> filter!((x,y)->isodd(x), d)
+Dict{Int64,String} with 2 entries:
+  3 => "c"
+  1 => "a"
+```
+"""
 function filter!(f, d::Associative)
-    badkeys = Array{keytype(d)}(0)
+    badkeys = Vector{keytype(d)}(0)
     for (k,v) in d
         # don't delete!(d, k) here, since associative types
         # may not support mutation during iteration
@@ -236,6 +335,25 @@ function filter!(f, d::Associative)
     end
     return d
 end
+
+"""
+    filter(f, d::Associative)
+
+Return a copy of `d`, removing elements for which `f` is `false`.
+The function `f` is passed two arguments (key and value).
+
+# Examples
+```jldoctest
+julia> d = Dict(1=>"a", 2=>"b")
+Dict{Int64,String} with 2 entries:
+  2 => "b"
+  1 => "a"
+
+julia> filter((x,y)->isodd(x), d)
+Dict{Int64,String} with 1 entry:
+  1 => "a"
+```
+"""
 function filter(f, d::Associative)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
     df = similar(d)
@@ -247,7 +365,7 @@ function filter(f, d::Associative)
     return df
 end
 
-eltype{K,V}(::Type{Associative{K,V}}) = Pair{K,V}
+eltype(::Type{Associative{K,V}}) where {K,V} = Pair{K,V}
 
 function isequal(l::Associative, r::Associative)
     l === r && return true
@@ -341,7 +459,17 @@ function rehash!(t::ObjectIdDict, newsz = length(t.ht))
     t
 end
 
-function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
+function sizehint!(t::ObjectIdDict, newsz)
+    newsz = _tablesz(newsz*2)  # *2 for keys and values in same array
+    oldsz = length(t.ht)
+    # grow at least 25%
+    if newsz < (oldsz*5)>>2
+        return t
+    end
+    rehash!(t, newsz)
+end
+
+function setindex!(t::ObjectIdDict, @nospecialize(v), @nospecialize(k))
     if t.ndel >= ((3*length(t.ht))>>2)
         rehash!(t, max(length(t.ht)>>1, 32))
         t.ndel = 0
@@ -350,27 +478,32 @@ function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
     return t
 end
 
-get(t::ObjectIdDict, key::ANY, default::ANY) =
+get(t::ObjectIdDict, @nospecialize(key), @nospecialize(default)) =
     ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
 
-function pop!(t::ObjectIdDict, key::ANY, default::ANY)
+function pop!(t::ObjectIdDict, @nospecialize(key), @nospecialize(default))
     val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any), t.ht, key, default)
     # TODO: this can underestimate `ndel`
     val === default || (t.ndel += 1)
     return val
 end
 
-function pop!(t::ObjectIdDict, key::ANY)
+function pop!(t::ObjectIdDict, @nospecialize(key))
     val = pop!(t, key, secret_table_token)
     val !== secret_table_token ? val : throw(KeyError(key))
 end
 
-function delete!(t::ObjectIdDict, key::ANY)
+function delete!(t::ObjectIdDict, @nospecialize(key))
     pop!(t, key, secret_table_token)
     t
 end
 
-empty!(t::ObjectIdDict) = (t.ht = Vector{Any}(length(t.ht)); t.ndel = 0; t)
+function empty!(t::ObjectIdDict)
+    resize!(t.ht, 32)
+    ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), t.ht, 0, sizeof(t.ht))
+    t.ndel = 0
+    return t
+end
 
 _oidd_nextind(a, i) = reinterpret(Int,ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
 

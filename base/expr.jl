@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## symbols ##
 
@@ -39,42 +39,77 @@ copy(e::Expr) = (n = Expr(e.head);
 
 # copy parts of an AST that the compiler mutates
 copy_exprs(x::Expr) = copy(x)
-copy_exprs(x::ANY) = x
+copy_exprs(@nospecialize(x)) = x
 copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
 
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
 
 """
-    expand(x)
+    expand(m, x)
 
-Takes the expression `x` and returns an equivalent expression in lowered form.
+Takes the expression `x` and returns an equivalent expression in lowered form
+for executing in module `m`.
 See also [`code_lowered`](@ref).
 """
-expand(x::ANY) = ccall(:jl_expand, Any, (Any,), x)
+expand(m::Module, @nospecialize(x)) = ccall(:jl_expand, Any, (Any, Any), x, m)
 
 """
-    macroexpand(x)
+    macroexpand(m::Module, x; recursive=true)
 
-Takes the expression `x` and returns an equivalent expression with all macros removed (expanded).
+Takes the expression `x` and returns an equivalent expression with all macros removed (expanded)
+for executing in module `m`.
+The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
+This is demonstrated in the example below:
+```julia-repl
+julia> module M
+           macro m1()
+               42
+           end
+           macro m2()
+               :(@m1())
+           end
+       end
+M
+
+julia> macroexpand(M, :(@m2()), recursive=true)
+42
+
+julia> macroexpand(M, :(@m2()), recursive=false)
+:(#= REPL[16]:6 =# M.@m1)
+```
 """
-macroexpand(x::ANY) = ccall(:jl_macroexpand, Any, (Any,), x)
+function macroexpand(m::Module, @nospecialize(x); recursive=true)
+    if recursive
+        ccall(:jl_macroexpand, Any, (Any, Any), x, m)
+    else
+        ccall(:jl_macroexpand1, Any, (Any, Any), x, m)
+    end
+end
 
 """
     @macroexpand
 
 Return equivalent expression with all macros removed (expanded).
 
-There is a subtle difference between `@macroexpand` and `macroexpand` in that expansion takes place in
-different contexts. This is best seen in the following example:
+There are differences between `@macroexpand` and [`macroexpand`](@ref).
 
-```jldoctest
+* While [`macroexpand`](@ref) takes a keyword argument `recursive`, `@macroexpand`
+is always recursive. For a non recursive macro version, see [`@macroexpand1`](@ref).
+
+* While [`macroexpand`](@ref) has an explicit `module` argument, `@macroexpand` always
+expands with respect to the module in which it is called.
+This is best seen in the following example:
+```julia-repl
 julia> module M
            macro m()
                1
            end
            function f()
-               (@macroexpand(@m), macroexpand(:(@m)))
+               (@macroexpand(@m),
+                macroexpand(M, :(@m)),
+                macroexpand(Main, :(@m))
+               )
            end
        end
 M
@@ -85,16 +120,23 @@ julia> macro m()
 @m (macro with 1 method)
 
 julia> M.f()
-(1, 2)
+(1, 1, 2)
 ```
-With `@macroexpand` the expression expands where `@macroexpand` appears in the code (module
-`M` in the example). With `macroexpand` the expression expands in the current module where
-the code was finally called (REPL in the example).
-Note that when calling `macroexpand` or `@macroexpand` directly from the REPL, both of these contexts coincide, hence there is no difference.
+With `@macroexpand` the expression expands where `@macroexpand` appears in the code (module `M` in the example).
+With `macroexpand` the expression expands in the module given as the first argument.
 """
 macro macroexpand(code)
-    code_expanded = macroexpand(code)
-    QuoteNode(code_expanded)
+    return :(macroexpand($__module__, $(QuoteNode(code)), recursive=true))
+end
+
+
+"""
+    @macroexpand1
+
+Non recursive version of [`@macroexpand`](@ref).
+"""
+macro macroexpand1(code)
+    return :(macroexpand($__module__, $(QuoteNode(code)), recursive=false))
 end
 
 ## misc syntax ##
@@ -240,7 +282,7 @@ function is_short_function_def(ex)
     ex.head == :(=) || return false
     while length(ex.args) >= 1 && isa(ex.args[1], Expr)
         (ex.args[1].head == :call) && return true
-        (ex.args[1].head == :where) || return false
+        (ex.args[1].head == :where || ex.args[1].head == :(::)) || return false
         ex = ex.args[1]
     end
     return false
@@ -276,9 +318,25 @@ end
 
 remove_linenums!(ex) = ex
 function remove_linenums!(ex::Expr)
-    filter!(x->!((isa(x,Expr) && x.head === :line) || isa(x,LineNumberNode)), ex.args)
+    if ex.head === :body || ex.head === :block || ex.head === :quote
+        # remove line number expressions from metadata (not argument literal or inert) position
+        filter!(ex.args) do x
+            isa(x, Expr) && x.head === :line && return false
+            isa(x, LineNumberNode) && return false
+            return true
+        end
+    end
     for subex in ex.args
         remove_linenums!(subex)
     end
-    ex
+    return ex
+end
+
+macro generated(f)
+     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
+        f.head = :stagedfunction
+        return Expr(:escape, f)
+    else
+        error("invalid syntax; @generated must be used with a function definition")
+    end
 end
