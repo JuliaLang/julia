@@ -20,10 +20,6 @@
                 (fill-missing-argname a unused))))
        l))
 
-;; identify some expressions that are safe to repeat
-(define (effect-free? e)
-  (or (not (pair? e)) (ssavalue? e) (sym-dot? e) (quoted? e) (equal? e '(null))))
-
 ;; expanding comparison chains: (comparison a op b op c ...)
 
 ;; accumulate a series of comparisons, with the given "and" constructor,
@@ -1447,30 +1443,52 @@
 ;; retuns a pair (expr . assignments)
 ;; where 'assignments' is a list of needed assignment statements
 (define (remove-argument-side-effects e)
-  (let ((a '()))
-    (cond
-     ((not (pair? e))
-      (cons e '()))
-     (else
-      (cons (map (lambda (x)
-                   (cond
-                    ((not (effect-free? x))
-                     (let ((g (make-ssavalue)))
-                       (if (or (eq? (car x) '...) (eq? (car x) '&))
-                           (if (and (pair? (cadr x))
-                                    (not (quoted? (cadr x))))
-                               (begin (set! a (cons `(= ,g ,(cadr x)) a))
-                                      `(,(car x) ,g))
-                               x)
-                           (begin (set! a (cons `(= ,g ,x) a))
-                                  g))))
+  (if
+   (not (pair? e))
+   (cons e '())
+   (let ((a '()))
+     (cons
+      (cons
+       (car e)
+       (map (lambda (x)
+              (cond ((effect-free? x)  x)
+                    ((or (eq? (car x) '...) (eq? (car x) '&))
+                     (if (effect-free? (cadr x))
+                         x
+                         (let ((g (make-ssavalue)))
+                           (begin (set! a (cons `(= ,g ,(cadr x)) a))
+                                  `(,(car x) ,g)))))
+                    ((eq? (car x) 'kw)
+                     (if (effect-free? (caddr x))
+                         x
+                         (let ((g (make-ssavalue)))
+                           (begin (set! a (cons `(= ,g ,(caddr x)) a))
+                                  `(kw ,(cadr x) ,g)))))
                     (else
-                     x)))
-                 e)
-            (reverse a))))))
+                     (let ((g (make-ssavalue)))
+                       (begin (set! a (cons `(= ,g ,x) a))
+                              g)))))
+            (cdr e)))
+      (reverse a)))))
+
+(define (lower-kw-call f args)
+  (let* ((p    (if (has-parameters? args) (car args) '(parameters)))
+         (args (if (has-parameters? args) (cdr args) args)))
+    (let* ((parg-stmts (remove-argument-side-effects `(call ,f ,@args)))
+           (call-ex    (car parg-stmts))
+           (fexpr      (cadr call-ex))
+           (cargs      (cddr call-ex))
+           (para-stmts (remove-argument-side-effects p))
+           (pkws       (cdr (car para-stmts))))
+      `(block
+        ,.(cdr parg-stmts)
+        ,.(cdr para-stmts)
+        ,(receive
+          (kws pargs) (separate kwarg? cargs)
+          (lower-kw-call- fexpr (append! kws pkws) pargs))))))
 
 ;; lower function call containing keyword arguments
-(define (lower-kw-call fexpr kw0 pa)
+(define (lower-kw-call- fexpr kw0 pa)
 
   ;; check for keyword arguments syntactically passed more than once
   (let ((dups (has-dups (map cadr (filter kwarg? kw0)))))
@@ -1478,14 +1496,9 @@
         (error (string "keyword argument \"" (car dups) "\" repeated in call to \"" (deparse fexpr) "\""))))
 
   (define (kwcall-unless-empty f pa kw-container-test kw-container)
-    (let* ((expr_stmts (remove-argument-side-effects `(call ,f ,@pa)))
-           (pa         (cddr (car expr_stmts)))
-           (stmts      (cdr expr_stmts)))
-      `(block
-        ,@stmts
-        (if (call (top isempty) ,kw-container-test)
-            (call ,f ,@pa)
-            (call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))))
+    `(if (call (top isempty) ,kw-container-test)
+         (call ,f ,@pa)
+         (call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))
 
   (let ((f (if (sym-ref? fexpr) fexpr (make-ssavalue))))
     `(block
@@ -2121,23 +2134,14 @@
                           (expand-forms
                            (lower-ccall name RT (cdr argtypes) args
                                         (if have-cconv cconv 'ccall))))))
-                 ((and (pair? (caddr e))
-                       (eq? (car (caddr e)) 'parameters))
-                  ;; (call f (parameters . kwargs) ...)
+                 ((any kwarg? (cddr e))       ;; f(..., a=b, ...)
+                  (expand-forms (lower-kw-call f (cddr e))))
+                 ((has-parameters? (cddr e))  ;; f(...; ...)
                   (expand-forms
-                   (receive
-                    (kws args) (separate kwarg? (cdddr e))
-                    (let ((kws (append kws (cdr (caddr e)))))
-                      (if (null? kws)
-                          ;; empty parameters block; issue #18845
-                          `(call ,f ,@args)
-                          (lower-kw-call f kws args))))))
-                 ((any kwarg? (cddr e))
-                  ;; (call f ... (kw a b) ...)
-                  (expand-forms
-                   (receive
-                    (kws args) (separate kwarg? (cddr e))
-                    (lower-kw-call f kws args))))
+                   (if (null? (cdr (car (cddr e))))
+                       ;; empty parameters block; issue #18845
+                       `(call ,f ,@(cdddr e))
+                       (lower-kw-call f (cddr e)))))
                  ((any vararg? (cddr e))
                   ;; call with splat
                   (let ((argl (cddr e)))
