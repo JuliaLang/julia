@@ -1387,7 +1387,10 @@ end
 function alignment(io::IO, x::Pair)
     s = sprint(0, show, x, env=io)
     if has_tight_type(x) # i.e. use "=>" for display
-        left = length(sprint(0, show, x.first, env=io)) + 2isa(x.first, Pair) # 2 for parens
+        iocompact = IOContext(io, :compact => get(io, :compact, true))
+        left = length(sprint(0, show, x.first, env=iocompact))
+        left += 2 * !isdelimited(iocompact, x.first) # for parens around p.first
+        left += !get(io, :compact, false) # spaces are added around "=>"
         (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
     else
         (0, length(s)) # as for x::Any
@@ -1741,7 +1744,7 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
     if repr && ndims(X) == 1
         return show_vector(io, X, "[", "]")
     end
-    if !haskey(io, :compact)
+    if !haskey(io, :compact) && length(indices(X, 2)) > 1
         io = IOContext(io, :compact => true)
     end
     if !repr && get(io, :limit, false) && eltype(X) === Method
