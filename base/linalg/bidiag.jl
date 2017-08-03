@@ -1,23 +1,23 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Bidiagonal matrices
-struct Bidiagonal{T} <: AbstractMatrix{T}
-    dv::Vector{T} # diagonal
-    ev::Vector{T} # sub/super diagonal
-    uplo::Char    # upper bidiagonal ('U') or lower ('L')
-    function Bidiagonal{T}(dv::Vector{T}, ev::Vector{T}, uplo::Char) where T
+struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+    dv::V      # diagonal
+    ev::V      # sub/super diagonal
+    uplo::Char # upper bidiagonal ('U') or lower ('L')
+    function Bidiagonal{T}(dv::V, ev::V, uplo::Char) where {T,V<:AbstractVector{T}}
         if length(ev) != length(dv)-1
             throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
-        new(dv, ev, uplo)
+        new{T,V}(dv, ev, uplo)
     end
-    function Bidiagonal(dv::Vector{T}, ev::Vector{T}, uplo::Char) where T
+    function Bidiagonal(dv::V, ev::V, uplo::Char) where {T,V<:AbstractVector{T}}
         Bidiagonal{T}(dv, ev, uplo)
     end
 end
 
 """
-    Bidiagonal(dv, ev, uplo::Symbol)
+    Bidiagonal(dv::V, ev::V, uplo::Symbol) where V <: AbstractVector
 
 Constructs an upper (`uplo=:U`) or lower (`uplo=:L`) bidiagonal matrix using the
 given diagonal (`dv`) and off-diagonal (`ev`) vectors. The result is of type `Bidiagonal`
@@ -41,27 +41,22 @@ julia> ev = [7, 8, 9]
  9
 
 julia> Bu = Bidiagonal(dv, ev, :U) # ev is on the first superdiagonal
-4×4 Bidiagonal{Int64}:
+4×4 Bidiagonal{Int64,Array{Int64,1}}:
  1  7  ⋅  ⋅
  ⋅  2  8  ⋅
  ⋅  ⋅  3  9
  ⋅  ⋅  ⋅  4
 
 julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
-4×4 Bidiagonal{Int64}:
+4×4 Bidiagonal{Int64,Array{Int64,1}}:
  1  ⋅  ⋅  ⋅
  7  2  ⋅  ⋅
  ⋅  8  3  ⋅
  ⋅  ⋅  9  4
 ```
 """
-function Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{T}, uplo::Symbol) where T
-    Bidiagonal{T}(collect(dv), collect(ev), char_uplo(uplo))
-end
-
-function Bidiagonal(dv::AbstractVector{Td}, ev::AbstractVector{Te}, uplo::Symbol) where {Td,Te}
-    T = promote_type(Td,Te)
-    Bidiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev), uplo)
+function Bidiagonal(dv::V, ev::V, uplo::Symbol) where {T,V<:AbstractVector{T}}
+    Bidiagonal{T}(dv, ev, char_uplo(uplo))
 end
 
 """
@@ -79,22 +74,24 @@ julia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]
  3  3  3  3
  4  4  4  4
 
-julia> Bidiagonal(A, :U) #contains the main diagonal and first superdiagonal of A
-4×4 Bidiagonal{Int64}:
+julia> Bidiagonal(A, :U) # contains the main diagonal and first superdiagonal of A
+4×4 Bidiagonal{Int64,Array{Int64,1}}:
  1  1  ⋅  ⋅
  ⋅  2  2  ⋅
  ⋅  ⋅  3  3
  ⋅  ⋅  ⋅  4
 
-julia> Bidiagonal(A, :L) #contains the main diagonal and first subdiagonal of A
-4×4 Bidiagonal{Int64}:
+julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
+4×4 Bidiagonal{Int64,Array{Int64,1}}:
  1  ⋅  ⋅  ⋅
  2  2  ⋅  ⋅
  ⋅  3  3  ⋅
  ⋅  ⋅  4  4
 ```
 """
-Bidiagonal(A::AbstractMatrix, uplo::Symbol) = Bidiagonal(diag(A), diag(A, uplo == :U ? 1 : -1), uplo)
+function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
+    Bidiagonal(diag(A, 0), diag(A, uplo == :U ? 1 : -1), uplo)
+end
 
 function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
@@ -164,7 +161,8 @@ promote_rule(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}}) where {T,S} = Tridia
 # No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
 convert(::Type{Bidiagonal{T}}, A::Bidiagonal{T}) where {T} = A
 # Convert Bidiagonal to Bidiagonal{T} by constructing a new instance with converted elements
-convert(::Type{Bidiagonal{T}}, A::Bidiagonal) where {T} = Bidiagonal(convert(Vector{T}, A.dv), convert(Vector{T}, A.ev), A.uplo)
+convert(::Type{Bidiagonal{T}}, A::Bidiagonal) where {T} =
+    Bidiagonal(convert(AbstractVector{T}, A.dv), convert(AbstractVector{T}, A.ev), A.uplo)
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
 convert(::Type{AbstractMatrix{T}}, A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 
