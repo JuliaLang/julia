@@ -555,7 +555,9 @@ Short-circuiting boolean OR.
 kw"||"
 
 """
-    ccall((function_name, library) or function_pointer, returntype, (argtype1, ...), argvalue1, ...)
+    ccall((function_name, library), returntype, (argtype1, ...), argvalue1, ...)
+
+    ccall(function_pointer, returntype, (argtype1, ...), argvalue1, ...)
 
 Call function in C-exported shared library, specified by `(function_name, library)`
 tuple, where each component is either a string or symbol.
