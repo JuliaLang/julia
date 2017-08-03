@@ -3022,8 +3022,8 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
             ctx.f->getBasicBlockList().push_back(not_found);
             ctx.builder.SetInsertPoint(not_found);
             Value *bval = ctx.builder.CreateCall(prepare_call(jlgetbindingorerror_func),
-                                              {maybe_decay_untracked(literal_pointer_val(ctx, (jl_value_t*)m)),
-                                              literal_pointer_val(ctx, (jl_value_t*)s)});
+                    { literal_pointer_val(ctx, (jl_value_t*)m),
+                      literal_pointer_val(ctx, (jl_value_t*)s) });
             ctx.builder.CreateStore(bval, bindinggv);
             ctx.builder.CreateBr(have_val);
             ctx.f->getBasicBlockList().push_back(have_val);
@@ -3135,9 +3135,9 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
             if (bnd->value != NULL)
                 return mark_julia_const(jl_true);
             Value *bp = julia_binding_gv(ctx, bnd);
-            Instruction *v = ctx.builder.CreateLoad(bp);
+            Instruction *v = ctx.builder.CreateLoad(T_prjlvalue, bp);
             tbaa_decorate(tbaa_binding, v);
-            isnull = ctx.builder.CreateICmpNE(v, V_null);
+            isnull = ctx.builder.CreateICmpNE(v, maybe_decay_untracked(V_null));
         }
         else {
             Value *v = ctx.builder.CreateCall(prepare_call(jlboundp_func), {
@@ -3726,10 +3726,22 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
                 mod = jl_globalref_mod(mn);
                 mn = (jl_value_t*)jl_globalref_name(mn);
             }
-            if (jl_symbol_name((jl_sym_t*)mn)[0] == '@')
-                jl_errorf("macro definition not allowed inside a local scope");
-            name = literal_pointer_val(ctx, mn);
-            bnd = jl_get_binding_for_method_def(mod, (jl_sym_t*)mn);
+            JL_TRY {
+                if (jl_symbol_name((jl_sym_t*)mn)[0] == '@')
+                    jl_errorf("macro definition not allowed inside a local scope");
+                name = literal_pointer_val(ctx, mn);
+                bnd = jl_get_binding_for_method_def(mod, (jl_sym_t*)mn);
+            }
+            JL_CATCH {
+                jl_ptls_t ptls = jl_get_ptls_states();
+                jl_value_t *e = ptls->exception_in_transit;
+                // errors. boo. root it somehow :(
+                bnd = jl_get_binding_wr(ctx.module, (jl_sym_t*)jl_gensym());
+                bnd->value = e;
+                bnd->constp = 1;
+                raise_exception(ctx, literal_pointer_val(ctx, e));
+                return ghostValue(jl_void_type);
+            }
             bp = julia_binding_gv(ctx, bnd);
             bp_owner = literal_pointer_val(ctx, (jl_value_t*)mod);
         }
@@ -3741,7 +3753,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
         }
         if (bp) {
             Value *mdargs[5] = { name, literal_pointer_val(ctx, (jl_value_t*)mod), bp,
-                                 maybe_decay_untracked(bp_owner), literal_pointer_val(ctx, bnd) };
+                                 bp_owner, literal_pointer_val(ctx, bnd) };
             jl_cgval_t gf = mark_julia_type(
                     ctx,
                     ctx.builder.CreateCall(prepare_call(jlgenericfunction_func), makeArrayRef(mdargs)),
@@ -3750,8 +3762,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
             if (jl_expr_nargs(ex) == 1)
                 return gf;
         }
-        Value *a1 = maybe_decay_untracked(boxed(ctx, emit_expr(ctx, args[1])));
-        Value *a2 = maybe_decay_untracked(boxed(ctx, emit_expr(ctx, args[2])));
+        Value *a1 = boxed(ctx, emit_expr(ctx, args[1]));
+        Value *a2 = boxed(ctx, emit_expr(ctx, args[2]));
         Value *mdargs[4] = {
             /*argdata*/a1,
             /*code*/a2,
@@ -5651,8 +5663,8 @@ static std::unique_ptr<Module> emit_function(
             ctx.builder.CreateCondBr(isz, tryblk, cond_resetstkoflw_blk);
             ctx.builder.SetInsertPoint(cond_resetstkoflw_blk);
             ctx.builder.CreateCondBr(ctx.builder.CreateICmpEQ(
-                                     literal_pointer_val(ctx, jl_stackovf_exception),
-                                     ctx.builder.CreateLoad(emit_exc_in_transit(ctx), true)),
+                                     maybe_decay_untracked(literal_pointer_val(ctx, jl_stackovf_exception)),
+                                     ctx.builder.CreateLoad(emit_exc_in_transit(ctx), /*isvolatile*/true)),
                                  resetstkoflw_blk, handlr);
             ctx.builder.SetInsertPoint(resetstkoflw_blk);
             ctx.builder.CreateCall(prepare_call(resetstkoflw_func), {});
@@ -6102,7 +6114,7 @@ static void init_julia_llvm_env(Module *m)
 
     std::vector<Type*> args3_uboundserror(0);
     args3_uboundserror.push_back(T_pint8_derived);
-    args3_uboundserror.push_back(T_prjlvalue);
+    args3_uboundserror.push_back(T_pjlvalue);
     args3_uboundserror.push_back(T_size);
     jluboundserror_func =
         Function::Create(FunctionType::get(T_void, args3_uboundserror, false),
@@ -6166,8 +6178,8 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jldeclareconst_func, &jl_declare_constant);
 
     std::vector<Type *> args_2ptrs_(0);
-    args_2ptrs_.push_back(T_prjlvalue);
-    args_2ptrs_.push_back(T_prjlvalue);
+    args_2ptrs_.push_back(T_pjlvalue);
+    args_2ptrs_.push_back(T_pjlvalue);
     jlgetbindingorerror_func =
         Function::Create(FunctionType::get(T_pjlvalue, args_2ptrs_, false),
                          Function::ExternalLinkage,
@@ -6246,8 +6258,8 @@ static void init_julia_llvm_env(Module *m)
     expect_func = Intrinsic::getDeclaration(m, Intrinsic::expect, exp_args);
 
     std::vector<Type*> args_topeval(0);
-    args_topeval.push_back(T_prjlvalue);
-    args_topeval.push_back(T_prjlvalue);
+    args_topeval.push_back(T_pjlvalue);
+    args_topeval.push_back(T_pjlvalue);
     jltopeval_func =
         Function::Create(FunctionType::get(T_pjlvalue, args_topeval, false),
                          Function::ExternalLinkage,
@@ -6273,8 +6285,8 @@ static void init_julia_llvm_env(Module *m)
     std::vector<Type*> mdargs(0);
     mdargs.push_back(T_prjlvalue);
     mdargs.push_back(T_prjlvalue);
-    mdargs.push_back(T_prjlvalue);
-    mdargs.push_back(T_prjlvalue);
+    mdargs.push_back(T_pjlvalue);
+    mdargs.push_back(T_pjlvalue);
     jlmethod_func =
         Function::Create(FunctionType::get(T_void, mdargs, false),
                          Function::ExternalLinkage,
@@ -6282,10 +6294,10 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jlmethod_func, &jl_method_def);
 
     std::vector<Type*> funcdefargs(0);
-    funcdefargs.push_back(T_prjlvalue);
-    funcdefargs.push_back(T_prjlvalue);
+    funcdefargs.push_back(T_pjlvalue);
+    funcdefargs.push_back(T_pjlvalue);
     funcdefargs.push_back(T_pprjlvalue);
-    funcdefargs.push_back(T_prjlvalue);
+    funcdefargs.push_back(T_pjlvalue);
     funcdefargs.push_back(T_pjlvalue);
     jlgenericfunction_func =
         Function::Create(FunctionType::get(T_prjlvalue, funcdefargs, false),
@@ -6373,8 +6385,8 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jltypeassert_func, &jl_typeassert);
 
     std::vector<Type *> applytype_args(0);
-    applytype_args.push_back(T_prjlvalue);
-    applytype_args.push_back(T_prjlvalue);
+    applytype_args.push_back(T_pjlvalue);
+    applytype_args.push_back(T_pjlvalue);
     applytype_args.push_back(T_pprjlvalue);
     jlapplytype_func =
         Function::Create(FunctionType::get(T_prjlvalue, applytype_args, false),
