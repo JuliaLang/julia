@@ -68,6 +68,9 @@ ex = quote
     test_repl_comp_dict = CompletionFoo.test_dict
     test_repl_comp_customdict = CompletionFoo.test_customdict
     test_dict_ℂ = Dict(1=>2)
+
+    macro colorant_str(s)
+    end
 end
 ex.head = :toplevel
 eval(Main, ex)
@@ -752,3 +755,10 @@ test_dict_completion("test_repl_comp_customdict")
 
 # Issue #23004: this should not throw:
 @test REPLCompletions.dict_identifier_key("test_dict_ℂ[\\", :other) isa Tuple
+
+# Test for #22577
+c, r, res = test_complete("ra")
+@test "raw\"" in c
+
+c, r, res = test_complete("CompletionFoo.colora")
+@test "colorant\"" in c

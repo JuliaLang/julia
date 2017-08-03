@@ -14,7 +14,10 @@ function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, 
     ssyms = names(mod, all, imported)
     filter!(ffunc, ssyms)
     syms = String[string(s) for s in ssyms]
+    str_macros = [s[2:end-4]*"\"" for s in filter(x->startswith(x, "@" * name) && endswith(x, "_str"), syms)]
     filter!(x->completes_global(x, name), syms)
+    append!(syms, str_macros)
+    return syms
 end
 
 # REPL Symbol Completions
