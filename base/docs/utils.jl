@@ -195,7 +195,7 @@ end
 isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isempty(x.args[3])
 repl(io::IO, ex::Expr) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex)
 repl(io::IO, str::AbstractString) = :(apropos($io, $str))
-repl(io::IO, other) = :(@doc $(esc(other)))
+repl(io::IO, other) = :(@doc $other)
 
 repl(x) = repl(STDOUT, x)
 
@@ -203,7 +203,7 @@ function _repl(x)
     if (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args))
         x.args[2:end] = [:(::typeof($arg)) for arg in x.args[2:end]]
     end
-    docs = :(@doc $(esc(x)))
+    docs = :(@doc $x)
     if isfield(x)
         quote
             if isa($(esc(x.args[1])), DataType)

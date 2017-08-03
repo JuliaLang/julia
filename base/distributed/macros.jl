@@ -157,7 +157,7 @@ processes to have execute the expression.
 Equivalent to calling `remotecall_eval(Main, procs, expr)`.
 """
 macro everywhere(ex)
-    return :(@everywhere $procs() $(esc(ex))) # interpolation needs to work around hygiene bugs (#22307)
+    return :(@everywhere procs() $ex)
 end
 
 macro everywhere(procs, ex)

@@ -754,18 +754,26 @@ end
 module M16096
 macro iter()
     return quote
-        @inline function foo(sub)
+        @inline function foo16096(sub)
             it = 1
         end
     end
 end
 end
-let ex = expand(@__MODULE__, :(@M16096.iter))
-    @test isa(ex, Expr) && ex.head === :thunk
+let ex = expand(M16096, :(@iter))
+    @test isa(ex, Expr) && ex.head === :body
 end
 let ex = expand(Main, :($M16096.@iter))
-    @test isa(ex, Expr) && ex.head === :thunk
+    @test isa(ex, Expr) && ex.head === :body
 end
+let ex = expand(@__MODULE__, :(@M16096.iter))
+    @test isa(ex, Expr) && ex.head === :body
+    @test !isdefined(M16096, :foo16096)
+    @test eval(@__MODULE__, ex) === nothing
+    @test !@isdefined foo16096
+    @test isdefined(M16096, :foo16096)
+end
+@test M16096.foo16096(2.0) == 1
 macro f16096()
     quote
         g16096($(esc(:x))) = 2x

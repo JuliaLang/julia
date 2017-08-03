@@ -173,17 +173,16 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     JL_TIMING(MACRO_INVOCATION);
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
-    if (nargs < 2) // macro name and location
-        argcount(fl_ctx, "invoke-julia-macro", nargs, 2);
-    nargs++; // add __module__ argument
+    if (nargs < 3) // macro name and location
+        argcount(fl_ctx, "invoke-julia-macro", nargs, 3);
     jl_method_instance_t *mfunc = NULL;
     jl_value_t **margs;
     // Reserve one more slot for the result
     JL_GC_PUSHARGS(margs, nargs + 1);
     int i;
-    margs[0] = scm_to_julia(fl_ctx, args[0], 1);
+    margs[0] = scm_to_julia(fl_ctx, args[1], 1);
     // __source__ argument
-    jl_value_t *lno = scm_to_julia(fl_ctx, args[1], 1);
+    jl_value_t *lno = scm_to_julia(fl_ctx, args[2], 1);
     margs[1] = lno;
     if (jl_is_expr(lno) && ((jl_expr_t*)lno)->head == line_sym) {
         jl_value_t *file = jl_nothing;
@@ -206,12 +205,16 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     }
     margs[2] = (jl_value_t*)ctx->module;
     for (i = 3; i < nargs; i++)
-        margs[i] = scm_to_julia(fl_ctx, args[i - 1], 1);
+        margs[i] = scm_to_julia(fl_ctx, args[i], 1);
+    margs[nargs] = scm_to_julia(fl_ctx, args[0], 1); // module context for @macrocall argument
     jl_value_t *result = NULL;
     size_t world = jl_get_ptls_states()->world_age;
 
     JL_TRY {
-        margs[0] = jl_toplevel_eval(ctx->module, margs[0]);
+        jl_module_t *m = (jl_module_t*)margs[nargs];
+        if (!jl_is_module(m))
+            m = ctx->module;
+        margs[0] = jl_toplevel_eval(m, margs[0]);
         mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1, world);
         if (mfunc == NULL) {
             jl_method_error((jl_function_t*)margs[0], margs, nargs, world);
