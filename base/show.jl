@@ -187,8 +187,7 @@ show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 
 function show(io::IO, x::Union)
     print(io, "Union")
-    sorted_types = sort!(uniontypes(x); by=string)
-    show_comma_array(io, sorted_types, '{', '}')
+    show_comma_array(io, uniontypes(x), '{', '}')
 end
 
 function print_without_params(@nospecialize(x))

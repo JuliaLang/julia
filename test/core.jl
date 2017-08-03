@@ -5114,3 +5114,41 @@ m22929_2.x = m22929_1
 @test !isdefined_22929_x(m22929_1)
 @test isdefined_22929_1(m22929_2)
 @test isdefined_22929_x(m22929_2)
+
+# Union type sorting
+for T in (
+        (Void, Int8),
+        (Void, Int64),
+        (Void, Tuple{Int64, String}),
+        (Void, Array),
+        (Float64, Int64),
+        (Float64, String),
+        (Float64, Array),
+        (String, Array),
+        (Int64, Tuple{Int64, Float64}),
+        (Tuple{Int64, Float64}, Array)
+    )
+    @test Base.uniontypes(Union{T...}) == collect(T)
+    @test Base.uniontypes(Union{reverse(T)...}) == collect(T)
+end
+@test Base.uniontypes(Union{Void, Union{Int64, Float64}}) == Any[Void, Float64, Int64]
+module AlternativeIntModule
+    struct Int64
+        val::UInt64
+    end
+end
+@test Base.uniontypes(Union{Int64, AlternativeIntModule.Int64}) == Any[AlternativeIntModule.Int64, Int64]
+@test Base.uniontypes(Union{AlternativeIntModule.Int64, Int64}) == Any[AlternativeIntModule.Int64, Int64]
+# because DAlternativeIntModule is alphabetically after Core.Int64
+module DAlternativeIntModule
+    struct Int64
+        val::UInt64
+    end
+end
+@test Base.uniontypes(Union{Int64, DAlternativeIntModule.Int64}) == Any[Int64, DAlternativeIntModule.Int64]
+@test Base.uniontypes(Union{DAlternativeIntModule.Int64, Int64}) == Any[Int64, DAlternativeIntModule.Int64]
+@test Base.uniontypes(Union{Vector{Int8}, Vector{Int16}}) == Base.uniontypes(Union{Vector{Int16}, Vector{Int8}})
+mutable struct ANonIsBitsType
+    v::Int64
+end
+@test Base.uniontypes(Union{Int64, ANonIsBitsType}) == Base.uniontypes(Union{ANonIsBitsType, Int64})
