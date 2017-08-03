@@ -1,10 +1,7 @@
 module Lexers
 
 include("utilities.jl")
-global const charstore = IOBuffer()
-
-using Compat
-import Compat.String
+global const charstore = IOBuffer() # TODO thread safety?
 
 import ..Tokens
 import ..Tokens: Token, Kind, TokenError, UNICODE_OPS, EMPTY_TOKEN, isliteral
@@ -23,7 +20,7 @@ isbinary(c::Char) = c == '0' || c == '1' || c == '_'
 isoctal(c::Char) =  '0' ≤ c ≤ '7' || c == '_'
 iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
 
-type Lexer{IO_t <: IO}
+mutable struct Lexer{IO_t <: IO}
     io::IO_t
     io_startpos::Int
 
@@ -52,9 +49,9 @@ Returns an `Iterable` containing the tokenized input. Can be reverted by e.g.
 tokenize(x) = Lexer(x)
 
 # Iterator interface
-Base.iteratorsize{IO_t}(::Type{Lexer{IO_t}}) = Base.SizeUnknown()
-Base.iteratoreltype{IO_t}(::Type{Lexer{IO_t}}) = Base.HasEltype()
-Base.eltype{IO_t}(::Type{Lexer{IO_t}}) = Token
+Base.iteratorsize(::Type{Lexer{IO_t}}) where {IO_t} = Base.SizeUnknown()
+Base.iteratoreltype(::Type{Lexer{IO_t}}) where {IO_t} = Base.HasEltype()
+Base.eltype(::Type{Lexer{IO_t}}) where {IO_t} = Token
 
 function Base.start(l::Lexer)
     seekstart(l)
@@ -168,7 +165,7 @@ Returns the next character and increments the current position.
 """
 function readchar end
 
-function readchar{I <: IO}(l::Lexer{I})
+function readchar(l::Lexer{I}) where {I <: IO}
     prevpos!(l, position(l))
     c = readchar(l.io)
     return c
