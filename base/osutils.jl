@@ -13,13 +13,13 @@ such as a `ccall` to a non-existent function.
 """
 macro static(ex)
     if isa(ex, Expr)
-        if ex.head === :if || ex.head === :&& || ex.head === :||
+        if ex.head === :if || ex.head === :&& || ex.head === :|| || ex.head === :?
             cond = eval(__module__, ex.args[1])
             if xor(cond, ex.head === :||)
                 return esc(ex.args[2])
             elseif length(ex.args) == 3
                 return esc(ex.args[3])
-            elseif ex.head === :if
+            elseif ex.head === :if || ex.head === :?
                 return nothing
             else
                 return cond

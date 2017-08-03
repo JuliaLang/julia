@@ -236,6 +236,45 @@ end"""
     return
 end"""
 
+@test_repr """if a
+# line meta
+b
+end
+"""
+
+@test_repr """if a
+# line meta
+b
+elseif c
+# line meta
+d
+end
+"""
+
+@test_repr """if a
+# line meta
+b
+elseif c
+# line meta
+d
+else
+# line meta
+e
+end
+"""
+
+@test_repr """if a
+# line meta
+b
+elseif c
+# line meta
+d
+elseif e
+# line meta
+f
+end
+"""
+
 # issue #7188
 @test sprint(show, :foo) == ":foo"
 @test sprint(show, Symbol("foo bar")) == "Symbol(\"foo bar\")"

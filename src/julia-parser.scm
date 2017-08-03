@@ -755,7 +755,7 @@
                     (let ((t (with-whitespace-newline (peek-token s))))
                       (if (not (ts:space? s))
                           (syntax-deprecation s (string (deparse ex) " ? " (deparse then) " :" t) (string (deparse ex) " ? " (deparse then) " : " t))))
-                    (list 'if ex then (parse-eq* s)))))
+                    (list '? ex then (parse-eq* s)))))
           (else ex))))
 
 (define (parse-arrow s) (parse-RtoL s parse-or         is-prec-arrow? (eq? t '-->) parse-arrow))
@@ -1133,7 +1133,7 @@
                          (if (eq? (peek-token s) 'do)
                              (begin
                                (take-token s)
-                               `(call ,ex ,@params ,(parse-do s) ,@args))
+                               `(do (call ,ex ,@params ,@args) ,(parse-do s)))
                              `(call ,ex ,@al))))))
                (if macrocall?
                    (map (lambda (x)  ;; parse `a=b` as `=` instead of `kw` in macrocall
@@ -1291,31 +1291,33 @@
           `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
                 ,body)))
 
-       ((if)
+       ((if elseif)
         (if (newline? (peek-token s))
             (error (string "missing condition in \"if\" at " current-filename
                            ":" (- (input-port-line (ts:port s)) 1))))
-        (let* ((test (parse-cond s))
+        (let* ((lno (line-number-node s))  ;; line number for elseif condition
+               (test (parse-cond s))
+               (test (if (eq? word 'elseif)
+                         `(block ,lno ,test)
+                         test))
                (then (if (memq (require-token s) '(else elseif))
                          '(block)
                          (parse-block s)))
                (nxt  (require-token s)))
           (take-token s)
           (case nxt
-            ((end)     (list 'if test then))
+            ((end)     (list word test then))
             ((elseif)
              (if (newline? (peek-token s))
                  (error (string "missing condition in \"elseif\" at " current-filename
                                 ":" (- (input-port-line (ts:port s)) 1))))
-             `(if ,test ,then
-                  ;; line number for elseif condition
-                  (block ,(line-number-node s)
-                         ,(parse-resword s 'if))))
+             `(,word ,test ,then
+                     ,(parse-resword s 'elseif)))
             ((else)
              (if (eq? (peek-token s) 'if)
                  (error "use \"elseif\" instead of \"else if\""))
-             (begin0 (list 'if test then (parse-block s))
-                     (expect-end s word)))
+             (begin0 (list word test then (parse-block s))
+                     (expect-end s 'if)))
             (else      (error (string "unexpected \"" nxt "\""))))))
        ((let)
         (let ((binds (if (memv (peek-token s) '(#\newline #\;))
