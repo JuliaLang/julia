@@ -1595,7 +1595,7 @@ end
 # issue #6466
 # `write` on non-isbits arrays is deprecated in io.jl.
 
-@deprecate isconcrete isconcrete
+@deprecate isleaftype isconcrete
 
 # PR #22925
 # also uncomment constructor tests in test/linalg/bidiag.jl
