@@ -62,7 +62,7 @@ InvalidCodeError(kind) = InvalidCodeError(kind, nothing)
 """
     validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
 
-Validates `c`, logging any violation by pushing an `InvalidCodeError` into `errors`.
+Validate `c`, logging any violation by pushing an `InvalidCodeError` into `errors`.
 """
 function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_level::Bool = false)
     ssavals = IntSet()
@@ -122,10 +122,10 @@ end
     validate_code!(errors::Vector{>:InvalidCodeError}, mi::MethodInstance,
                    c::Union{Void,CodeInfo} = Core.Inference.retrieve_code_info(mi))
 
-Validates `mi`, logging any violation by pushing an `InvalidCodeError` into `errors`.
+Validate `mi`, logging any violation by pushing an `InvalidCodeError` into `errors`.
 
-If `isa(c, CodeInfo)`, this method also calls `validate_code!(errors, c)`. It is assumed
-that `c` is the `CodeInfo` instance associated with `mi`.
+If `isa(c, CodeInfo)`, also call `validate_code!(errors, c)`. It is assumed that `c` is
+the `CodeInfo` instance associated with `mi`.
 """
 function validate_code!(errors::Vector{>:InvalidCodeError}, mi::Core.MethodInstance,
                         c::Union{Void,CodeInfo} = Core.Inference.retrieve_code_info(mi))
