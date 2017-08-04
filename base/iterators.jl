@@ -610,7 +610,7 @@ prod_iteratorsize(a, b) = SizeUnknown()
 
 size(P::ProductIterator) = _prod_size(P.iterators)
 _prod_size(::Tuple{}) = ()
-_prod_size(t::Tuple) = tuple(_prod_size1(t[1], iteratorsize(t[1]))..., _prod_size(tail(t))...)
+_prod_size(t::Tuple) = (_prod_size1(t[1], iteratorsize(t[1]))..., _prod_size(tail(t))...)
 _prod_size1(a, ::HasShape)  = size(a)
 _prod_size1(a, ::HasLength) = (length(a),)
 _prod_size1(a, A) =
@@ -618,7 +618,7 @@ _prod_size1(a, A) =
 
 indices(P::ProductIterator) = _prod_indices(P.iterators)
 _prod_indices(::Tuple{}) = ()
-_prod_indices(t::Tuple) = tuple(_prod_indices1(t[1], iteratorsize(t[1]))..., _prod_indices(tail(t))...)
+_prod_indices(t::Tuple) = (_prod_indices1(t[1], iteratorsize(t[1]))..., _prod_indices(tail(t))...)
 _prod_indices1(a, ::HasShape)  = indices(a)
 _prod_indices1(a, ::HasLength) = (OneTo(length(a)),)
 _prod_indices1(a, A) =
@@ -658,7 +658,7 @@ function next(P::ProductIterator, state)
     iter1 = first(iterators)
     value1, state1 = next(iter1, states[1])
     tailstates = tail(states)
-    values = (value1, map(unsafe_get, state[3])...) # safe if not done(P, state)
+    values = (value1, map(unsafe_get, nvalues)...) # safe if not done(P, state)
     if done(iter1, state1)
         d, tailstates, nvalues = _prod_next(tail(iterators), tailstates, nvalues)
         if !d # only restart iter1 if not completely done
