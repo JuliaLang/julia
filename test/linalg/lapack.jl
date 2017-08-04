@@ -448,40 +448,42 @@ end
 
 @testset "ptsv" begin
     @testset for elty in (Float32, Float64, Complex64, Complex128)
-        dv = real(ones(elty,10))
+        dv = ones(elty,10)
         ev = zeros(elty,9)
+        rdv = real(dv)
         A = SymTridiagonal(dv,ev)
         if elty <: Complex
             A = Tridiagonal(conj(ev),dv,ev)
         end
         B = rand(elty,10,10)
         C = copy(B)
-        @test A\B ≈ LAPACK.ptsv!(dv,ev,C)
-        @test_throws DimensionMismatch LAPACK.ptsv!(dv,ones(elty,10),C)
-        @test_throws DimensionMismatch LAPACK.ptsv!(dv,ev,ones(elty,11,11))
+        @test A\B ≈ LAPACK.ptsv!(rdv,ev,C)
+        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,ones(elty,10),C)
+        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,ev,ones(elty,11,11))
     end
 end
 
 @testset "pttrf and pttrs" begin
     @testset for elty in (Float32, Float64, Complex64, Complex128)
-        dv = real(ones(elty,10))
+        dv = ones(elty,10)
         ev = zeros(elty,9)
+        rdv = real(dv)
         A = SymTridiagonal(dv,ev)
         if elty <: Complex
             A = Tridiagonal(conj(ev),dv,ev)
         end
-        dv,ev = LAPACK.pttrf!(dv,ev)
-        @test_throws DimensionMismatch LAPACK.pttrf!(dv,ones(elty,10))
+        rdv,ev = LAPACK.pttrf!(rdv,ev)
+        @test_throws DimensionMismatch LAPACK.pttrf!(rdv,dv)
         B = rand(elty,10,10)
         C = copy(B)
         if elty <: Complex
-            @test A\B ≈ LAPACK.pttrs!('U',dv,ev,C)
-            @test_throws DimensionMismatch LAPACK.pttrs!('U',dv,ones(elty,10),C)
-            @test_throws DimensionMismatch LAPACK.pttrs!('U',dv,ev,rand(elty,11,11))
+            @test A\B ≈ LAPACK.pttrs!('U',rdv,ev,C)
+            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,ones(elty,10),C)
+            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,ev,rand(elty,11,11))
         else
-            @test A\B ≈ LAPACK.pttrs!(dv,ev,C)
-            @test_throws DimensionMismatch LAPACK.pttrs!(dv,ones(elty,10),C)
-            @test_throws DimensionMismatch LAPACK.pttrs!(dv,ev,rand(elty,11,11))
+            @test A\B ≈ LAPACK.pttrs!(rdv,ev,C)
+            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,ones(elty,10),C)
+            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,ev,rand(elty,11,11))
         end
     end
 end

@@ -132,7 +132,8 @@ B = randn(n,2)
             @test_throws DimensionMismatch Tldlt\rand(elty,n+1)
             @test size(Tldlt) == size(Ts)
             if elty <: AbstractFloat
-                @test typeof(convert(Base.LinAlg.LDLt{Float32},Tldlt)) == Base.LinAlg.LDLt{Float32,SymTridiagonal{elty}}
+                @test typeof(convert(Base.LinAlg.LDLt{Float32},Tldlt)) ==
+                    Base.LinAlg.LDLt{Float32,SymTridiagonal{elty,Vector{elty}}}
             end
             for vv in (vs, view(vs, 1:n))
                 invFsv = Fs\vv
