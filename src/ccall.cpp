@@ -475,13 +475,14 @@ static Value *llvm_type_rewrite(
 static Value *runtime_apply_type(jl_codectx_t &ctx, jl_value_t *ty, jl_unionall_t *unionall)
 {
     // box if concrete type was not statically known
-    Value *args[3];
-    args[0] = literal_pointer_val(ctx, ty);
-    args[1] = literal_pointer_val(ctx, (jl_value_t*)ctx.linfo->def.method->sig);
-    args[2] = ctx.builder.CreateInBoundsGEP(
-            T_prjlvalue,
-            ctx.spvals_ptr,
-            ConstantInt::get(T_size, sizeof(jl_svec_t) / sizeof(jl_value_t*)));
+    Value *args[] = {
+        literal_pointer_val(ctx, ty),
+        literal_pointer_val(ctx, (jl_value_t*)ctx.linfo->def.method->sig),
+        ctx.builder.CreateInBoundsGEP(
+                T_prjlvalue,
+                ctx.spvals_ptr,
+                ConstantInt::get(T_size, sizeof(jl_svec_t) / sizeof(jl_value_t*)))
+    };
     return ctx.builder.CreateCall(prepare_call(jlapplytype_func), makeArrayRef(args));
 }
 
@@ -1499,7 +1500,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                         else {
                             Value *notany = ctx.builder.CreateICmpNE(
                                     boxed(ctx, runtime_sp, false),
-                                    literal_pointer_val(ctx, (jl_value_t*)jl_any_type));
+                                    maybe_decay_untracked(literal_pointer_val(ctx, (jl_value_t*)jl_any_type)));
                             error_unless(ctx, notany, "ccall: return type Ref{Any} is invalid. use Ptr{Any} instead.");
                             always_error = false;
                         }

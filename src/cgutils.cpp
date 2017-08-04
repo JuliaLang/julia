@@ -247,15 +247,15 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
 
 // --- emitting pointers directly into code ---
 
-static Constant *literal_static_pointer_val(jl_codectx_t &ctx, const void *p, Type *t)
+static Constant *literal_static_pointer_val(jl_codectx_t &ctx, const void *p, Type *T = T_pjlvalue)
 {
     // this function will emit a static pointer into the generated code
     // the generated code will only be valid during the current session,
     // and thus, this should typically be avoided in new API's
 #if defined(_P64)
-    return ConstantExpr::getPointerBitCastOrAddrSpaceCast(ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)p), T_pjlvalue), t);
+    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)p), T);
 #else
-    return ConstantExpr::getPointerBitCastOrAddrSpaceCast(ConstantExpr::getIntToPtr(ConstantInt::get(T_int32, (uint32_t)p), T_pjlvalue), t);
+    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int32, (uint32_t)p), T);
 #endif
 }
 
@@ -304,37 +304,37 @@ static Value *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
         Module *M = jl_Module;
         GlobalVariable *gv = new GlobalVariable(
                 *M, T_pjlvalue, true, GlobalVariable::PrivateLinkage,
-                literal_static_pointer_val(ctx, p, T_pjlvalue));
+                literal_static_pointer_val(ctx, p));
         gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
         return gv;
     }
     if (GlobalVariable *gv = julia_const_gv(p)) {
         // if this is a known object, use the existing GlobalValue
-        return maybe_decay_untracked(prepare_global(gv));
+        return prepare_global(gv);
     }
     if (jl_is_datatype(p)) {
         jl_datatype_t *addr = (jl_datatype_t*)p;
         // DataTypes are prefixed with a +
-        return maybe_decay_untracked(julia_pgv(ctx, "+", addr->name->name, addr->name->module, p));
+        return julia_pgv(ctx, "+", addr->name->name, addr->name->module, p);
     }
     if (jl_is_method(p)) {
         jl_method_t *m = (jl_method_t*)p;
         // functions are prefixed with a -
-        return maybe_decay_untracked(julia_pgv(ctx, "-", m->name, m->module, p));
+        return julia_pgv(ctx, "-", m->name, m->module, p);
     }
     if (jl_is_method_instance(p)) {
         jl_method_instance_t *linfo = (jl_method_instance_t*)p;
         // Type-inferred functions are also prefixed with a -
         if (jl_is_method(linfo->def.method))
-            return maybe_decay_untracked(julia_pgv(ctx, "-", linfo->def.method->name, linfo->def.method->module, p));
+            return julia_pgv(ctx, "-", linfo->def.method->name, linfo->def.method->module, p);
     }
     if (jl_is_symbol(p)) {
         jl_sym_t *addr = (jl_sym_t*)p;
         // Symbols are prefixed with jl_sym#
-        return maybe_decay_untracked(julia_pgv(ctx, "jl_sym#", addr, NULL, p));
+        return julia_pgv(ctx, "jl_sym#", addr, NULL, p);
     }
     // something else gets just a generic name
-    return maybe_decay_untracked(julia_pgv(ctx, "jl_global#", p));
+    return julia_pgv(ctx, "jl_global#", p);
 }
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
@@ -342,9 +342,9 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
     if (p == NULL)
         return V_null;
     if (!imaging_mode)
-        return literal_static_pointer_val(ctx, p, T_prjlvalue);
+        return literal_static_pointer_val(ctx, p);
     Value *pgv = literal_pointer_val_slot(ctx, p);
-    return tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(pgv));
+    return tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(T_pjlvalue, pgv));
 }
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
@@ -353,10 +353,10 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
     if (p == NULL)
         return V_null;
     if (!imaging_mode)
-        return literal_static_pointer_val(ctx, p, T_pjlvalue);
+        return literal_static_pointer_val(ctx, p);
     // bindings are prefixed with jl_bnd#
     Value *pgv = julia_pgv(ctx, "jl_bnd#", p->name, p->owner, p);
-    return tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(pgv));
+    return tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(T_pjlvalue, pgv));
 }
 
 // bitcast a value, but preserve its address space when dealing with pointer types
@@ -389,10 +389,10 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
     if (imaging_mode)
         bv = emit_bitcast(ctx,
                 tbaa_decorate(tbaa_const,
-                              ctx.builder.CreateLoad(julia_pgv(ctx, "*", b->name, b->owner, b))),
+                              ctx.builder.CreateLoad(T_pjlvalue, julia_pgv(ctx, "*", b->name, b->owner, b))),
                 T_pprjlvalue);
     else
-        bv = literal_static_pointer_val(ctx, b, T_pprjlvalue);
+        bv = ConstantExpr::getBitCast(literal_static_pointer_val(ctx, b), T_pprjlvalue);
     return julia_binding_gv(ctx, bv);
 }
 
@@ -659,21 +659,21 @@ static Value *emit_nthptr(jl_codectx_t &ctx, Value *v, ssize_t n, MDNode *tbaa)
 {
     // p = (jl_value_t**)v; p[n]
     Value *vptr = emit_nthptr_addr(ctx, v, n);
-    return tbaa_decorate(tbaa, ctx.builder.CreateLoad(vptr, false));
+    return tbaa_decorate(tbaa, ctx.builder.CreateLoad(T_prjlvalue, vptr));
 }
 
 static Value *emit_nthptr_recast(jl_codectx_t &ctx, Value *v, Value *idx, MDNode *tbaa, Type *ptype, bool gctracked = true)
 {
     // p = (jl_value_t**)v; *(ptype)&p[n]
     Value *vptr = emit_nthptr_addr(ctx, v, idx, gctracked);
-    return tbaa_decorate(tbaa, ctx.builder.CreateLoad(emit_bitcast(ctx, vptr, ptype), false));
+    return tbaa_decorate(tbaa, ctx.builder.CreateLoad(emit_bitcast(ctx, vptr, ptype)));
 }
 
 static Value *emit_nthptr_recast(jl_codectx_t &ctx, Value *v, ssize_t n, MDNode *tbaa, Type *ptype, bool gctracked = true)
 {
     // p = (jl_value_t**)v; *(ptype)&p[n]
     Value *vptr = emit_nthptr_addr(ctx, v, n, gctracked);
-    return tbaa_decorate(tbaa, ctx.builder.CreateLoad(emit_bitcast(ctx, vptr, ptype), false));
+    return tbaa_decorate(tbaa, ctx.builder.CreateLoad(emit_bitcast(ctx, vptr, ptype)));
 }
 
 static Value *emit_typeptr_addr(jl_codectx_t &ctx, Value *p)
@@ -703,7 +703,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, Value *tt)
     // is fine however, since leaf types are not GCed at the moment. Should
     // that ever change, this may have to go through a special intrinsic.
     Value *addr = emit_bitcast(ctx, emit_typeptr_addr(ctx, tt), T_ppjlvalue);
-    tt = tbaa_decorate(tbaa_tag, ctx.builder.CreateLoad(addr));
+    tt = tbaa_decorate(tbaa_tag, ctx.builder.CreateLoad(T_pjlvalue, addr));
     return maybe_decay_untracked(mask_gc_bits(ctx, tt));
 }
 
@@ -725,7 +725,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
                 p.typ,
                 counter);
         if (allunboxed)
-            pdatatype = Constant::getNullValue(T_ppjlvalue);
+            pdatatype = decay_derived(Constant::getNullValue(T_ppjlvalue));
         else {
             // See note above in emit_typeof(Value*), we can't tell the system
             // about this until we've cleared the GC bits.
@@ -736,18 +736,16 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
                 [&](unsigned idx, jl_datatype_t *jt) {
                     Value *cmp = ctx.builder.CreateICmpEQ(tindex, ConstantInt::get(T_int8, idx));
                     pdatatype = ctx.builder.CreateSelect(cmp,
-                        decay_derived(emit_bitcast(ctx, literal_pointer_val_slot(ctx, (jl_value_t*)jt), T_ppjlvalue)),
-                        decay_derived(pdatatype));
+                            decay_derived(literal_pointer_val_slot(ctx, (jl_value_t*)jt)),
+                            pdatatype);
                 },
                 p.typ,
                 counter);
-        Value *datatype;
-        if (allunboxed) {
-            datatype = tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(maybe_decay_untracked(pdatatype)));
-        }
-        else {
-            datatype = maybe_decay_untracked(mask_gc_bits(ctx, tbaa_decorate(tbaa_tag, ctx.builder.CreateLoad(pdatatype))));
-        }
+        Value *datatype = tbaa_decorate(allunboxed ? tbaa_const : tbaa_tag,
+                ctx.builder.CreateLoad(T_pjlvalue, pdatatype));
+        if (!allunboxed)
+            datatype = mask_gc_bits(ctx, datatype);
+        datatype = maybe_decay_untracked(datatype);
         return mark_julia_type(ctx, datatype, true, jl_datatype_type, /*needsroot*/false);
     }
     jl_value_t *aty = p.typ;
@@ -988,7 +986,7 @@ static void emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type,
     Value *msg_val = stringConstPtr(ctx.builder, msg);
     ctx.builder.CreateCall(prepare_call(jltypeerror_func),
                        { fname_val, msg_val,
-                         type, mark_callee_rooted(boxed(ctx, x, false))});
+                         maybe_decay_untracked(type), mark_callee_rooted(boxed(ctx, x, false))});
 }
 
 static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type, const std::string *msg)
@@ -1013,7 +1011,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
     // intersection with Type needs to be handled specially
     if (jl_has_intersect_type_not_kind(type)) {
         Value *vx = maybe_decay_untracked(boxed(ctx, x));
-        Value *vtyp = literal_pointer_val(ctx, type);
+        Value *vtyp = maybe_decay_untracked(literal_pointer_val(ctx, type));
         if (msg && *msg == "typeassert") {
             ctx.builder.CreateCall(prepare_call(jltypeassert_func), { vx, vtyp });
             return std::make_pair(ConstantInt::get(T_int1, 1), true);
@@ -1053,11 +1051,10 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
             maybe_decay_untracked(literal_pointer_val(ctx, type))), false);
     }
     // everything else can be handled via subtype tests
-    Value *vxt = maybe_decay_untracked(emit_typeof_boxed(ctx, x));
     return std::make_pair(ctx.builder.CreateICmpNE(
             ctx.builder.CreateCall(prepare_call(jlsubtype_func),
-              { vxt,
-                literal_pointer_val(ctx, type) }),
+              { maybe_decay_untracked(emit_typeof_boxed(ctx, x)),
+                maybe_decay_untracked(literal_pointer_val(ctx, type)) }),
             ConstantInt::get(T_int32, 0)), false);
 }
 
@@ -1130,9 +1127,9 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
                 a = tempSpace;
             }
             ctx.builder.CreateCall(prepare_call(jluboundserror_func), {
-                                emit_bitcast(ctx, decay_derived(a), T_pint8),
-                                literal_pointer_val(ctx, ty),
-                                i });
+                    emit_bitcast(ctx, decay_derived(a), T_pint8),
+                    literal_pointer_val(ctx, ty),
+                    i });
         }
         ctx.builder.CreateUnreachable();
         ctx.f->getBasicBlockList().push_back(passBB);
@@ -1241,7 +1238,7 @@ static void typed_store(jl_codectx_t &ctx,
 static Value *julia_bool(jl_codectx_t &ctx, Value *cond)
 {
     return ctx.builder.CreateSelect(cond, literal_pointer_val(ctx, jl_true),
-                                      literal_pointer_val(ctx, jl_false));
+                                          literal_pointer_val(ctx, jl_false));
 }
 
 // --- accessing the representations of built-in data types ---
@@ -1964,7 +1961,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool gcrooted)
         // We have an undef value on a (hopefully) dead branch
         return UndefValue::get(T_prjlvalue);
     if (vinfo.constant)
-        return literal_pointer_val(ctx, vinfo.constant);
+        return maybe_decay_untracked(literal_pointer_val(ctx, vinfo.constant));
     if (vinfo.isboxed) {
         assert(vinfo.V && "Missing value for box.");
         // We're guaranteed here that Load(.gcroot) == .V, because we have determined
@@ -1986,6 +1983,9 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool gcrooted)
         if (!box) {
             box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
             init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? tbaa_mutab : tbaa_immut);
+        }
+        else {
+            box = maybe_decay_untracked(box);
         }
     }
     if (gcrooted) {
