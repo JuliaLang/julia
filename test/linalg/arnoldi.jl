@@ -157,7 +157,10 @@ let
     @test numiter2 < numiter
     @test v ≈ v2
 
-    @test eigs(speye(50), nev=10)[1] ≈ ones(10) #Issue 4246
+    # Adjust the tolerance a bit since matrices with repeated eigenvalues
+    # can be very stressful to ARPACK and this may therefore fail with
+    # info = 3 if the tolerance is too small
+    @test eigs(speye(50), nev=10, tol = 5e-16)[1] ≈ ones(10) #Issue 4246
 end
 
 @testset "real svds" begin
