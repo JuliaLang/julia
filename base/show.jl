@@ -556,7 +556,11 @@ function show_block(io::IO, head, args::Vector, body, indent::Int)
     print(io, head)
     if !isempty(args)
         print(io, ' ')
-        show_list(io, args, ", ", indent)
+        if head === :elseif
+            show_list(io, args, " ", indent)
+        else
+            show_list(io, args, ", ", indent)
+        end
     end
 
     ind = head === :module || head === :baremodule ? indent : indent + indent_width
@@ -879,9 +883,18 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "function ", args[1], " end")
 
     # block with argument
-    elseif head in (:for,:while,:function,:if) && nargs==2
+    elseif head in (:for,:while,:function,:if,:elseif) && nargs==2
         show_block(io, head, args[1], args[2], indent)
         print(io, "end")
+
+    elseif (head === :if || head === :elseif) && nargs == 3
+        show_block(io, head, args[1], args[2], indent)
+        if isa(args[3],Expr) && args[3].head == :elseif
+            show_unquoted(io, args[3], indent, prec)
+        else
+            show_block(io, "else", args[3], indent)
+            print(io, "end")
+        end
 
     elseif head === :module && nargs==3 && isa(args[1],Bool)
         show_block(io, args[1] ? :module : :baremodule, args[2], args[3], indent)
@@ -943,11 +956,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     elseif head === :line && 1 <= nargs <= 2
         show_linenumber(io, args...)
-
-    elseif head === :if && nargs == 3     # if/else
-        show_block(io, "if",   args[1], args[2], indent)
-        show_block(io, "else", args[3], indent)
-        print(io, "end")
 
     elseif head === :try && 3 <= nargs <= 4
         show_block(io, "try", args[1], indent)
