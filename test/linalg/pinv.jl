@@ -4,9 +4,9 @@
 #  Test the pseudo-inverse
 #
 
-debug = false
-
 using Base.Test
+
+srand(12345)
 
 function hilb(T::Type, n::Integer)
     a=Array{T}(n,n)
@@ -89,239 +89,85 @@ end
 
 
 function test_pinv(a,m,n,tol1,tol2,tol3)
-    debug && println("=== julia/matlab pinv, default tol=eps(1.0)*max(size(a)) ===")
     apinv = @inferred pinv(a)
 
     @test vecnorm(a*apinv*a-a)/vecnorm(a) ≈ 0 atol=tol1
     x0 = randn(n); b = a*x0; x = apinv*b
     @test vecnorm(a*x-b)/vecnorm(b) ≈ 0 atol=tol1
-    debug && println(vecnorm(a*apinv*a - a)/vecnorm(a))
-    debug && println(vecnorm(a*x-b)/vecnorm(b))
-
-
-    debug && println("=== julia pinv, tol=sqrt(eps(1.0)) ===")
     apinv = pinv(a,sqrt(eps(real(one(eltype(a))))))
 
     @test vecnorm(a*apinv*a-a)/vecnorm(a) ≈ 0 atol=tol2
     x0 = randn(n); b = a*x0; x = apinv*b
     @test vecnorm(a*x-b)/vecnorm(b) ≈ 0 atol=tol2
-    debug && println(vecnorm(a*apinv*a - a)/vecnorm(a))
-    debug && println(vecnorm(a*x-b)/vecnorm(b))
 end
 
-
-srand(12345)
-
-let
-    for eltya in (Float64, Complex128)
-
-        debug && println("\n\n<<<<<", eltya, ">>>>>")
-
-        m = 1000
-        n = 100
-        debug && println("\n\n n = ", n, ", m = ",m)
-
+@testset for eltya in (Float32, Float64, Complex64, Complex128)
+    @testset for (m, n) in [(1000, 100), (100, 100), (100, 1000)]
         default_tol = (real(one(eltya))) * max(m,n) * 10
-
-        debug && println("\n--- dense/ill-conditioned matrix ---\n")
+        tol1 = 1e-2
+        tol2 = 1e-5
+        tol3 = 1e-5
+        if real(eltya) == Float32
+            tol1 = 1e0
+            tol2 = 1e-2
+            tol3 = 1e-2
+        end
+        @testset "dense/ill-conditioned matrix" begin
         ###    a = randn_float64(m,n) * hilb(eltya,n)
-        a = hilb(eltya,m,n)
-        test_pinv(a,m,n,1e-2,1e-5,1e-5)
-
-        debug && println("\n--- dense/diagonal matrix ---\n")
-        a = onediag(eltya,m,n)
-        test_pinv(a,m,n,default_tol,default_tol,default_tol)
-
-        debug && println("\n--- dense/tri-diagonal matrix ---\n")
-        a = tridiag(eltya,m,n)
-        test_pinv(a,m,n,default_tol,1e-5,default_tol)
-
-        debug && println("\n--- Diagonal matrix ---\n")
-        a = onediag_sparse(eltya,m)
-        test_pinv(a,m,m,default_tol,default_tol,default_tol)
-
-        m = 100
-        n = 100
-        debug && println("\n\n n = ", n, ", m = ",m)
-
-        default_tol = (real(one(eltya))) * max(m,n) * 10
-
-        debug && println("\n--- dense/ill-conditioned matrix ---\n")
-        ###    a = randn_float64(m,n) * hilb(eltya,n)
-        a = hilb(eltya,m,n)
-        test_pinv(a,m,n,1e-2,1e-5,1e-5)
-
-        debug && println("\n--- dense/diagonal matrix ---\n")
-        a = onediag(eltya,m,n)
-        test_pinv(a,m,n,default_tol,default_tol,default_tol)
-
-        debug && println("\n--- dense/tri-diagonal matrix ---\n")
-        a = tridiag(eltya,m,n)
-        test_pinv(a,m,n,default_tol,1e-5,default_tol)
-
-        debug && println("\n--- Diagonal matrix ---\n")
-        a = onediag_sparse(eltya,m)
-        test_pinv(a,m,m,default_tol,default_tol,default_tol)
-
-        m = 100
-        n = 1000
-        debug && println("\n\n n = ", n, ", m = ",m)
-
-        default_tol = (real(one(eltya))) * max(m,n) * 10
-
-        debug && println("\n--- dense/ill-conditioned matrix ---\n")
-    ###    a = randn_float64(m,n) * hilb(eltya,n)
-        a = hilb(eltya,m,n)
-        test_pinv(a,m,n,1e-2,1e-5,1e-5)
-
-        debug && println("\n--- dense/diagonal matrix ---\n")
-        a = onediag(eltya,m,n)
-        test_pinv(a,m,n,default_tol,default_tol,default_tol)
-
-        debug && println("\n--- dense/tri-diagonal matrix ---\n")
-        a = tridiag(eltya,m,n)
-        test_pinv(a,m,n,default_tol,1e-5,default_tol)
-
-        debug && println("\n--- Diagonal matrix ---\n")
-        a = onediag_sparse(eltya,m)
-        test_pinv(a,m,m,default_tol,default_tol,default_tol)
+            a = hilb(eltya, m, n)
+            test_pinv(a, m, n, tol1, tol2, tol3)
+        end
+        @testset "dense/diagonal matrix" begin
+            a = onediag(eltya, m, n)
+            test_pinv(a, m, n, default_tol, default_tol, default_tol)
+        end
+        @testset "dense/tri-diagonal matrix" begin
+            a = tridiag(eltya, m, n)
+            test_pinv(a, m, n, default_tol, tol2, default_tol)
+        end
+        @testset "Diagonal matrix" begin
+            a = onediag_sparse(eltya, m)
+            test_pinv(a, m, m, default_tol, default_tol, default_tol)
+        end
     end
 end
 
+@testset "zero valued numbers/vectors/matrices" begin
+    @testset for eltya in (Float32, Float64, Complex64, Complex128)
+        a = pinv(zero(eltya))
+        @test a ≈ 0.0
 
-for eltya in (Float32, Complex64)
+        a = pinv([zero(eltya); zero(eltya)])
+        @test a[1] ≈ 0.0
+        @test a[2] ≈ 0.0
 
-    debug && println("\n\n<<<<<", eltya, ">>>>>")
-
-    m = 1000
-    n = 100
-    debug && println("\n\n n = ", n, ", m = ",m)
-
-    default_tol = (real(one(eltya))) * max(m,n) * 10
-
-    debug && println("\n--- dense/ill-conditioned matrix ---\n")
-###    a = randn_float32(m,n) * hilb(eltya,n)
-    a = hilb(eltya,m,n)
-    test_pinv(a,m,n,1e0,1e-2,1e-2)
-
-    debug && println("\n--- dense/diagonal matrix ---\n")
-    a = onediag(eltya,m,n)
-    test_pinv(a,m,n,default_tol,default_tol,default_tol)
-
-    debug && println("\n--- dense/tri-diagonal matrix ---\n")
-    a = tridiag(eltya,m,n)
-    test_pinv(a,m,n,default_tol,1e-2,default_tol)
-
-    debug && println("\n--- Diagonal matrix ---\n")
-    a = onediag_sparse(eltya,m)
-    test_pinv(a,m,m,default_tol,default_tol,default_tol)
-
-    m = 100
-    n = 100
-    debug && println("\n\n n = ", n, ", m = ",m)
-
-    default_tol = (real(one(eltya))) * max(m,n) * 10
-
-    debug && println("\n--- dense/ill-conditioned matrix ---\n")
-###    a = randn_float32(m,n) * hilb(eltya,n)
-    a = hilb(eltya,m,n)
-    test_pinv(a,m,n,1e0,1e-2,1e-2)
-
-    debug && println("\n--- dense/diagonal matrix ---\n")
-    a = onediag(eltya,m,n)
-    test_pinv(a,m,n,default_tol,default_tol,default_tol)
-
-    debug && println("\n--- dense/tri-diagonal matrix ---\n")
-    a = tridiag(eltya,m,n)
-    test_pinv(a,m,n,default_tol,1e-2,default_tol)
-
-    debug && println("\n--- Diagonal matrix ---\n")
-    a = onediag_sparse(eltya,m)
-    test_pinv(a,m,m,default_tol,default_tol,default_tol)
-
-    m = 100
-    n = 1000
-    debug && println("\n\n n = ", n, ", m = ",m)
-
-    default_tol = (real(one(eltya))) * max(m,n) * 10
-
-    debug && println("\n--- dense/ill-conditioned matrix ---\n")
-###    a = randn_float32(m,n) * hilb(eltya,n)
-    a = hilb(eltya,m,n)
-    test_pinv(a,m,n,1e0,1e-2,1e-2)
-
-    debug && println("\n--- dense/diagonal matrix ---\n")
-    a = onediag(eltya,m,n)
-    test_pinv(a,m,n,default_tol,default_tol,default_tol)
-
-    debug && println("\n--- dense/tri-diagonal matrix ---\n")
-    a = tridiag(eltya,m,n)
-    test_pinv(a,m,n,default_tol,1e-2,default_tol)
-
-    debug && println("\n--- Diagonal matrix ---\n")
-    a = onediag_sparse(eltya,m)
-    test_pinv(a,m,m,default_tol,default_tol,default_tol)
-
+        a = pinv(Diagonal([zero(eltya); zero(eltya)]))
+        @test a.diag[1] ≈ 0.0
+        @test a.diag[2] ≈ 0.0
+    end
 end
 
-# test zero matrices
-for eltya in (Float32, Float64, Complex64, Complex128)
-    debug && println("\n\n<<<<<", eltya, ">>>>>")
-    debug && println("\n--- zero constant ---")
-    a = pinv(zero(eltya))
-    @test a ≈ 0.0
-end
+@testset "sub-normal numbers/vectors/matrices" begin
+    @testset for eltya in (Float32, Float64)
+        a = pinv(realmin(eltya)/100)
+        @test a ≈ 0.0
+        # Complex subnormal
+        a = pinv(realmin(eltya)/100*(1+1im))
+        @test a ≈ 0.0
 
-for eltya in (Float32, Float64, Complex64, Complex128)
-    debug && println("\n\n<<<<<", eltya, ">>>>>")
-    debug && println("\n--- zero vector ---")
-    a = pinv([zero(eltya); zero(eltya)])
-    @test a[1] ≈ 0.0
-    @test a[2] ≈ 0.0
-end
-
-for eltya in (Float32, Float64, Complex64, Complex128)
-    debug && println("\n\n<<<<<", eltya, ">>>>>")
-    debug && println("\n--- zero Diagonal matrix ---")
-    a = pinv(Diagonal([zero(eltya); zero(eltya)]))
-    @test a.diag[1] ≈ 0.0
-    @test a.diag[2] ≈ 0.0
-end
-
-# test sub-normal matrices
-for eltya in (Float32, Float64)
-    debug && println("\n\n<<<<<", eltya, ">>>>>")
-    debug && println("\n--- sub-normal constant ---")
-    a = pinv(realmin(eltya)/100)
-    @test a ≈ 0.0
-    debug && println("\n\n<<<<<Complex{", eltya, "}>>>>>")
-    debug && println("\n--- sub-normal constant ---")
-    a = pinv(realmin(eltya)/100*(1+1im))
-    @test a ≈ 0.0
-end
-
-for eltya in (Float32, Float64)
-    debug && println("\n\n<<<<<", eltya, ">>>>>")
-    debug && println("\n--- sub-normal vector ---")
-    a = pinv([realmin(eltya); realmin(eltya)]/100)
-    @test a[1] ≈ 0.0
-    @test a[2] ≈ 0.0
-    debug && println("\n\n<<<<<Complex{", eltya, "}>>>>>")
-    debug && println("\n--- sub-normal vector ---")
-    a = pinv([realmin(eltya); realmin(eltya)]/100*(1+1im))
-    @test a[1] ≈ 0.0
-    @test a[2] ≈ 0.0
-end
-
-for eltya in (Float32, Float64)
-    debug && println("\n\n<<<<<", eltya, ">>>>>")
-    debug && println("\n--- sub-normal Diagonal matrix ---")
-    a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100))
-    @test a.diag[1] ≈ 0.0
-    @test a.diag[2] ≈ 0.0
-    debug && println("\n\n<<<<<Complex{", eltya, "}>>>>>")
-    debug && println("\n--- sub-normal Diagonal matrix ---")
-    a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100*(1+1im)))
-    @test a.diag[1] ≈ 0.0
-    @test a.diag[2] ≈ 0.0
+        a = pinv([realmin(eltya); realmin(eltya)]/100)
+        @test a[1] ≈ 0.0
+        @test a[2] ≈ 0.0
+        # Complex subnormal
+        a = pinv([realmin(eltya); realmin(eltya)]/100*(1+1im))
+        @test a[1] ≈ 0.0
+        @test a[2] ≈ 0.0
+        a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100))
+        @test a.diag[1] ≈ 0.0
+        @test a.diag[2] ≈ 0.0
+        # Complex subnormal
+        a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100*(1+1im)))
+        @test a.diag[1] ≈ 0.0
+        @test a.diag[2] ≈ 0.0
+    end
 end

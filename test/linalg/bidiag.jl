@@ -24,10 +24,23 @@ srand(1)
     end
 
     @testset "Constructors" begin
-        @test Bidiagonal(dv,ev,:U) != Bidiagonal(dv,ev,:L)
-        @test_throws ArgumentError Bidiagonal(dv,ev,:R)
-        @test_throws DimensionMismatch Bidiagonal(dv,ones(elty,n),:U)
-        @test_throws MethodError Bidiagonal(dv,ev)
+        for (x, y) in ((dv, ev), (GenericArray(dv), GenericArray(ev)))
+            # from vectors
+            ubd = Bidiagonal(x, y, :U)
+            lbd = Bidiagonal(x, y, :L)
+            @test ubd != lbd
+            @test ubd.dv === x
+            @test lbd.ev === y
+            @test_throws ArgumentError Bidiagonal(x, y, :R)
+            @test_throws DimensionMismatch Bidiagonal(x, x, :U)
+            @test_throws MethodError Bidiagonal(x, y)
+            # from matrix
+            @test Bidiagonal(ubd, :U) == Bidiagonal(Matrix(ubd), :U) == ubd
+            @test Bidiagonal(lbd, :L) == Bidiagonal(Matrix(lbd), :L) == lbd
+        end
+        # enable when deprecations for 0.7 are dropped
+        # @test_throws MethodError Bidiagonal(dv, GenericArray(ev), :U)
+        # @test_throws MethodError Bidiagonal(GenericArray(dv), ev, :U)
     end
 
     @testset "getindex, setindex!, size, and similar" begin
@@ -97,29 +110,30 @@ srand(1)
         end
 
         @testset "triu and tril" begin
+            bidiagcopy(dv, ev, uplo) = Bidiagonal(copy(dv), copy(ev), uplo)
             @test istril(Bidiagonal(dv,ev,:L))
             @test !istril(Bidiagonal(dv,ev,:U))
-            @test tril!(Bidiagonal(dv,ev,:U),-1) == Bidiagonal(zeros(dv),zeros(ev),:U)
-            @test tril!(Bidiagonal(dv,ev,:L),-1) == Bidiagonal(zeros(dv),ev,:L)
-            @test tril!(Bidiagonal(dv,ev,:U),-2) == Bidiagonal(zeros(dv),zeros(ev),:U)
-            @test tril!(Bidiagonal(dv,ev,:L),-2) == Bidiagonal(zeros(dv),zeros(ev),:L)
-            @test tril!(Bidiagonal(dv,ev,:U),1)  == Bidiagonal(dv,ev,:U)
-            @test tril!(Bidiagonal(dv,ev,:L),1)  == Bidiagonal(dv,ev,:L)
-            @test tril!(Bidiagonal(dv,ev,:U))    == Bidiagonal(dv,zeros(ev),:U)
-            @test tril!(Bidiagonal(dv,ev,:L))    == Bidiagonal(dv,ev,:L)
-            @test_throws ArgumentError tril!(Bidiagonal(dv,ev,:U),n+1)
+            @test tril!(bidiagcopy(dv,ev,:U),-1) == Bidiagonal(zeros(dv),zeros(ev),:U)
+            @test tril!(bidiagcopy(dv,ev,:L),-1) == Bidiagonal(zeros(dv),ev,:L)
+            @test tril!(bidiagcopy(dv,ev,:U),-2) == Bidiagonal(zeros(dv),zeros(ev),:U)
+            @test tril!(bidiagcopy(dv,ev,:L),-2) == Bidiagonal(zeros(dv),zeros(ev),:L)
+            @test tril!(bidiagcopy(dv,ev,:U),1)  == Bidiagonal(dv,ev,:U)
+            @test tril!(bidiagcopy(dv,ev,:L),1)  == Bidiagonal(dv,ev,:L)
+            @test tril!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,zeros(ev),:U)
+            @test tril!(bidiagcopy(dv,ev,:L))    == Bidiagonal(dv,ev,:L)
+            @test_throws ArgumentError tril!(bidiagcopy(dv,ev,:U),n+1)
 
             @test istriu(Bidiagonal(dv,ev,:U))
             @test !istriu(Bidiagonal(dv,ev,:L))
-            @test triu!(Bidiagonal(dv,ev,:L),1)  == Bidiagonal(zeros(dv),zeros(ev),:L)
-            @test triu!(Bidiagonal(dv,ev,:U),1)  == Bidiagonal(zeros(dv),ev,:U)
-            @test triu!(Bidiagonal(dv,ev,:U),2)  == Bidiagonal(zeros(dv),zeros(ev),:U)
-            @test triu!(Bidiagonal(dv,ev,:L),2)  == Bidiagonal(zeros(dv),zeros(ev),:L)
-            @test triu!(Bidiagonal(dv,ev,:U),-1) == Bidiagonal(dv,ev,:U)
-            @test triu!(Bidiagonal(dv,ev,:L),-1) == Bidiagonal(dv,ev,:L)
-            @test triu!(Bidiagonal(dv,ev,:L))    == Bidiagonal(dv,zeros(ev),:L)
-            @test triu!(Bidiagonal(dv,ev,:U))    == Bidiagonal(dv,ev,:U)
-            @test_throws ArgumentError triu!(Bidiagonal(dv,ev,:U),n+1)
+            @test triu!(bidiagcopy(dv,ev,:L),1)  == Bidiagonal(zeros(dv),zeros(ev),:L)
+            @test triu!(bidiagcopy(dv,ev,:U),1)  == Bidiagonal(zeros(dv),ev,:U)
+            @test triu!(bidiagcopy(dv,ev,:U),2)  == Bidiagonal(zeros(dv),zeros(ev),:U)
+            @test triu!(bidiagcopy(dv,ev,:L),2)  == Bidiagonal(zeros(dv),zeros(ev),:L)
+            @test triu!(bidiagcopy(dv,ev,:U),-1) == Bidiagonal(dv,ev,:U)
+            @test triu!(bidiagcopy(dv,ev,:L),-1) == Bidiagonal(dv,ev,:L)
+            @test triu!(bidiagcopy(dv,ev,:L))    == Bidiagonal(dv,zeros(ev),:L)
+            @test triu!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,ev,:U)
+            @test_throws ArgumentError triu!(bidiagcopy(dv,ev,:U),n+1)
         end
 
         Tfull = Array(T)
@@ -255,7 +269,6 @@ srand(1)
     end
     BD = Bidiagonal(dv, ev, :U)
     @test Matrix{Complex{Float64}}(BD) == BD
-
 end
 
 # Issue 10742 and similar

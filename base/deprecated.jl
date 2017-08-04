@@ -1597,6 +1597,15 @@ end
 
 @deprecate isconcrete isconcrete
 
+# PR #22925
+# also uncomment constructor tests in test/linalg/bidiag.jl
+function Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}, uplo::Symbol) where {T,S}
+    depwarn(string("Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}, uplo::Symbol) where {T,S}",
+        " is deprecated; manually convert both vectors to the same type instead."), :Bidiagonal)
+    R = promote_type(T, S)
+    Bidiagonal(convert(Vector{R}, dv), convert(Vector{R}, ev), uplo)
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

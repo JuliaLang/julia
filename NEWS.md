@@ -42,6 +42,16 @@ This section lists changes that do not have deprecation warnings.
 
   * Juxtaposing string literals (e.g. `"x"y`) is now a syntax error ([#20575]).
 
+  * Macro calls with `for` expressions are now parsed as generators inside
+    function argument lists ([#18650]). Examples:
+
+    + `sum(@inbounds a[i] for i = 1:n)` used to give a syntax error, but is now
+      parsed as `sum(@inbounds(a[i]) for i = 1:n)`.
+
+    + `sum(@m x for i = 1:n end)` used to parse the argument to `sum` as a 2-argument
+      call to macro `@m`, but now parses it as a generator plus a syntax error
+      for the dangling `end`.
+
   * `@__DIR__` returns the current working directory rather than `nothing` when not run
     from a file ([#21759]).
 
@@ -73,8 +83,9 @@ This section lists changes that do not have deprecation warnings.
     longer present. Use `first(R)` and `last(R)` to obtain
     start/stop. ([#20974])
 
-  * The `Diagonal` type definition has changed from `Diagonal{T}` to
-    `Diagonal{T,V<:AbstractVector{T}}` ([#22718]).
+  * The `Diagonal` and `Bidiagonal` type definitions have changed from `Diagonal{T}` and
+    `Bidiagonal{T}` to `Diagonal{T,V<:AbstractVector{T}}` and
+    `Bidiagonal{T,V<:AbstractVector{T}}` respectively ([#22718], [#22925]).
 
   * Spaces are no longer allowed between `@` and the name of a macro in a macro call ([#22868]).
 
@@ -142,8 +153,9 @@ Library improvements
 
   * `Char`s can now be concatenated with `String`s and/or other `Char`s using `*` ([#22532]).
 
-  * `Diagonal` is now parameterized on the type of the wrapped vector. This allows
-    for `Diagonal` matrices with arbitrary `AbstractVector`s ([#22718]).
+  * `Diagonal` and `Bidiagonal` are now parameterized on the type of the wrapped vectors,
+    allowing `Diagonal` and `Bidiagonal` matrices with arbitrary
+    `AbstractVector`s ([#22718], [#22925]).
 
   * Mutating versions of `randperm` and `randcycle` have been added:
     `randperm!` and `randcycle!` ([#22723]).
@@ -206,6 +218,9 @@ Deprecated or removed
   * `Bidiagonal` constructors now use a `Symbol` (`:U` or `:L`) for the upper/lower
     argument, instead of a `Bool` or a `Char` ([#22703]).
 
+  * `Bidiagonal` constructors that automatically converted the input vectors to
+    the same type are deprecated in favor of explicit conversion ([#22925]).
+
   * Calling `nfields` on a type to find out how many fields its instances have is deprecated.
     Use `fieldcount` instead. Use `nfields` only to get the number of fields in a specific object ([#22350]).
 
@@ -241,6 +256,9 @@ Deprecated or removed
 
   * The function `isleaftype` is deprecated in favor of `isconcrete` ([#20709]).
 
+  * The default `juliarc.jl` file on Windows has been removed. Now must explicitly include the
+    full path if you need access to executables or libraries in the `JULIA_HOME` directory, e.g.
+    `joinpath(JULIA_HOME, "7z.exe")` for `7z.exe` ([#21540]).
 
 Julia v0.6.0 Release Notes
 ==========================

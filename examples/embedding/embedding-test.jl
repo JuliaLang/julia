@@ -3,6 +3,11 @@
 # tests the output of the embedding example is correct
 using Base.Test
 
+if Sys.iswindows()
+    # libjulia needs to be in the same directory as the embedding executable or in path
+    ENV["PATH"] = string(JULIA_HOME, ";", ENV["PATH"])
+end
+
 @test length(ARGS) == 1
 @testset "embedding example" begin
     stdout = Pipe()
