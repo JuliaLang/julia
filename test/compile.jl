@@ -533,16 +533,18 @@ let dir = mktempdir()
 end
 
 let module_name = string("a",randstring())
-    insert!(LOAD_PATH, 1, pwd())
-    file_name = string(module_name, ".jl")
-    sleep(2)
-    touch(file_name)
-    code = """module $(module_name)\nend\n"""
-    write(file_name, code)
-    reload(module_name)
-    @test isa(eval(Main, Symbol(module_name)), Module)
-    deleteat!(LOAD_PATH,1)
-    rm(file_name)
+    mktempdir() do path
+        unshift!(LOAD_PATH, path)
+        file_name = joinpath(path, string(module_name, ".jl"))
+        sleep(2)
+        touch(file_name)
+        code = """module $(module_name)\nend\n"""
+        write(file_name, code)
+        reload(module_name)
+        @test isa(getfield(Main, Symbol(module_name)), Module)
+        @test shift!(LOAD_PATH) == path
+        rm(file_name)
+    end
 end
 
 # Issue #19960
