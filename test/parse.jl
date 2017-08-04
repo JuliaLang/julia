@@ -629,6 +629,16 @@ end
 @test parse("{:a=>1, :b=>2}") == Expr(:braces, Expr(:call, :(=>), QuoteNode(:a), 1),
                                       Expr(:call, :(=>), QuoteNode(:b), 2))
 
+@test parse("[a,b;c]")  == Expr(:vect, Expr(:parameters, :c), :a, :b)
+@test parse("[a,;c]")   == Expr(:vect, Expr(:parameters, :c), :a)
+@test parse("a[b,c;d]") == Expr(:ref, :a, Expr(:parameters, :d), :b, :c)
+@test parse("a[b,;d]")  == Expr(:ref, :a, Expr(:parameters, :d), :b)
+@test_throws ParseError parse("[a,;,b]")
+@test parse("{a,b;c}")  == Expr(:braces, Expr(:parameters, :c), :a, :b)
+@test parse("{a,;c}")   == Expr(:braces, Expr(:parameters, :c), :a)
+@test parse("a{b,c;d}") == Expr(:curly, :a, Expr(:parameters, :d), :b, :c)
+@test parse("a{b,;d}")  == Expr(:curly, :a, Expr(:parameters, :d), :b)
+
 # this now is parsed as getindex(Pair{Any,Any}, ...)
 @test_throws MethodError eval(parse("(Any=>Any)[]"))
 @test_throws MethodError eval(parse("(Any=>Any)[:a=>1,:b=>2]"))
