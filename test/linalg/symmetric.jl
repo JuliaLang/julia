@@ -176,6 +176,17 @@ end
                 end
             end
 
+            @testset "inversion" begin
+                for uplo in (:U, :L)
+                    @test inv(Symmetric(asym, uplo))::Symmetric ≈ inv(asym)
+                    @test inv(Hermitian(aherm, uplo))::Hermitian ≈ inv(aherm)
+                    @test inv(Symmetric(a, uplo))::Symmetric ≈ inv(Matrix(Symmetric(a, uplo)))
+                    if eltya <: Real
+                        @test inv(Hermitian(a, uplo))::Hermitian ≈ inv(Matrix(Hermitian(a, uplo)))
+                    end
+                end
+            end
+
             # Revisit when implemented in julia
             if eltya != BigFloat
                 @testset "cond" begin
@@ -183,19 +194,6 @@ end
                         @test cond(Symmetric(asym)) ≈ cond(asym)
                     end
                     @test cond(Hermitian(aherm)) ≈ cond(aherm)
-                end
-
-                @testset "inversion" begin
-                    @test inv(Symmetric(asym)) ≈ inv(asym)
-                    @test inv(Hermitian(aherm)) ≈ inv(aherm)
-                    for uplo in (:U, :L)
-                        @test inv(Symmetric(asym, uplo)) ≈ inv(full(Symmetric(asym, uplo)))
-                        @test inv(Hermitian(aherm, uplo)) ≈ inv(full(Hermitian(aherm, uplo)))
-                        @test inv(Symmetric(a, uplo)) ≈ inv(full(Symmetric(a, uplo)))
-                        if eltya <: Real
-                            @test inv(Hermitian(a, uplo)) ≈ inv(full(Hermitian(a, uplo)))
-                        end
-                    end
                 end
 
                 @testset "symmetric eigendecomposition" begin
