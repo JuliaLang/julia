@@ -10,13 +10,18 @@ function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
 end
 
+function appendmacro!(syms, macros, needle, endchar)
+    append!(syms, s[2:end-sizeof(needle)]*endchar for s in filter(x -> endswith(x, needle), macros))
+end
+
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
     ssyms = names(mod, all, imported)
     filter!(ffunc, ssyms)
     syms = String[string(s) for s in ssyms]
-    str_macros = [s[2:end-4]*"\"" for s in filter(x->startswith(x, "@" * name) && endswith(x, "_str"), syms)]
+    macros =  filter(x -> startswith(x, "@" * name), syms)
+    appendmacro!(syms, macros, "_str", "\"")
+    appendmacro!(syms, macros, "_cmd", "`")
     filter!(x->completes_global(x, name), syms)
-    append!(syms, str_macros)
     return syms
 end
 

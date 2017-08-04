@@ -64,13 +64,17 @@ ex = quote
                      contains=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
                      "α"=>12, :α=>13)
     test_customdict = CustomDict(test_dict)
+
+    macro colorant_str(s)
+    end
+
+    macro testcmd_cmd(s)
+    end
+
     end
     test_repl_comp_dict = CompletionFoo.test_dict
     test_repl_comp_customdict = CompletionFoo.test_customdict
     test_dict_ℂ = Dict(1=>2)
-
-    macro colorant_str(s)
-    end
 end
 ex.head = :toplevel
 eval(Main, ex)
@@ -762,3 +766,6 @@ c, r, res = test_complete("ra")
 
 c, r, res = test_complete("CompletionFoo.colora")
 @test "colorant\"" in c
+
+c, r, res = test_complete("CompletionFoo.testc")
+@test "testcmd`" in c
