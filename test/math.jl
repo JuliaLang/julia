@@ -678,3 +678,23 @@ let x = 2.0
     @test exp2(Float22716(x)) === 2^x
     @test exp10(Float22716(x)) === 10^x
 end
+
+@testset "asin #23088" begin
+    for T in (Float32, Float64)
+        @test asin(zero(T)) === zero(T)
+        @test asin(-zero(T)) === -zero(T)
+        @test asin(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test asin(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test asin(one(T)) === T(pi)/2
+        @test asin(-one(T)) === -T(pi)/2
+        for x in (0.45, 0.6, 0.98)
+            by = T(asin(big(x)))
+            @test abs(asin(T(x)) - by)/eps(by) <= one(T)
+            bym = T(asin(big(-x)))
+            @test abs(asin(T(-x)) - bym)/eps(bym) <= one(T)
+        end
+        @test_throws DomainError asin(-T(Inf))
+        @test_throws DomainError asin(T(Inf))
+        @test asin(T(NaN)) === T(NaN)
+    end
+end
