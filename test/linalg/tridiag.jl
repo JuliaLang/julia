@@ -34,6 +34,19 @@ B = randn(n,2)
         F[i,i+1] = du[i]
         F[i+1,i] = dl[i]
     end
+
+    @testset "constructor" begin
+        for (x, y) in ((d, dl), (GenericArray(d), GenericArray(dl)))
+            ST = (SymTridiagonal(x, y))::SymTridiagonal{elty, typeof(x)}
+            @test ST == Matrix(ST)
+            @test ST.dv === x
+            @test ST.ev === y
+        end
+        # enable when deprecations for 0.7 are dropped
+        # @test_throws MethodError SymTridiagonal(dv, GenericArray(ev))
+        # @test_throws MethodError SymTridiagonal(GenericArray(dv), ev)
+    end
+
     @testset "size and Array" begin
         @test_throws ArgumentError size(Ts,0)
         @test size(Ts,3) == 1
@@ -216,7 +229,7 @@ let n = 12 #Size of matrix problem to test
                 b += im*convert(Vector{elty}, randn(n-1))
             end
 
-            @test_throws DimensionMismatch SymTridiagonal(a, ones(n+1))
+            @test_throws DimensionMismatch SymTridiagonal(a, ones(elty, n+1))
             @test_throws ArgumentError SymTridiagonal(rand(n,n))
 
             A = SymTridiagonal(a, b)

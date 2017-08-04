@@ -3,68 +3,84 @@
 #### Specialized matrix types ####
 
 ## (complex) symmetric tridiagonal matrices
-struct SymTridiagonal{T} <: AbstractMatrix{T}
-    dv::Vector{T}                        # diagonal
-    ev::Vector{T}                        # subdiagonal
-    function SymTridiagonal{T}(dv::Vector{T}, ev::Vector{T}) where T
+struct SymTridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+    dv::V                        # diagonal
+    ev::V                        # subdiagonal
+    function SymTridiagonal{T}(dv::V, ev::V) where {T,V<:AbstractVector{T}}
         if !(length(dv) - 1 <= length(ev) <= length(dv))
             throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
         end
-        new(dv,ev)
+        new{T,V}(dv,ev)
     end
 end
 
 """
-    SymTridiagonal(dv, ev)
+    SymTridiagonal(dv::V, ev::V) where V <: AbstractVector
 
-Construct a symmetric tridiagonal matrix from the diagonal and first sub/super-diagonal,
-respectively. The result is of type `SymTridiagonal` and provides efficient specialized
-eigensolvers, but may be converted into a regular matrix with
-[`convert(Array, _)`](@ref) (or `Array(_)` for short).
+Construct a symmetric tridiagonal matrix from the diagonal (`dv`) and first
+sub/super-diagonal (`ev`), respectively. The result is of type `SymTridiagonal`
+and provides efficient specialized eigensolvers, but may be converted into a
+regular matrix with [`convert(Array, _)`](@ref) (or `Array(_)` for short).
 
 # Examples
 ```jldoctest
-julia> dv = [1; 2; 3; 4]
+julia> dv = [1, 2, 3, 4]
 4-element Array{Int64,1}:
  1
  2
  3
  4
 
-julia> ev = [7; 8; 9]
+julia> ev = [7, 8, 9]
 3-element Array{Int64,1}:
  7
  8
  9
 
 julia> SymTridiagonal(dv, ev)
-4×4 SymTridiagonal{Int64}:
+4×4 SymTridiagonal{Int64,Array{Int64,1}}:
  1  7  ⋅  ⋅
  7  2  8  ⋅
  ⋅  8  3  9
  ⋅  ⋅  9  4
 ```
 """
-SymTridiagonal(dv::Vector{T}, ev::Vector{T}) where {T} = SymTridiagonal{T}(dv, ev)
+SymTridiagonal(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
 
-function SymTridiagonal(dv::AbstractVector{Td}, ev::AbstractVector{Te}) where {Td,Te}
-    T = promote_type(Td,Te)
-    SymTridiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev))
-end
+"""
+    SymTridiagonal(A::AbstractMatrix)
 
+Construct a symmetric tridiagonal matrix from the diagonal and
+first sub/super-diagonal, of the symmetric matrix `A`.
+
+# Examples
+```jldoctest
+julia> A = [1 2 3; 2 4 5; 3 5 6]
+3×3 Array{Int64,2}:
+ 1  2  3
+ 2  4  5
+ 3  5  6
+
+julia> SymTridiagonal(A)
+3×3 SymTridiagonal{Int64,Array{Int64,1}}:
+ 1  2  ⋅
+ 2  4  5
+ ⋅  5  6
+```
+"""
 function SymTridiagonal(A::AbstractMatrix)
     if diag(A,1) == diag(A,-1)
-        SymTridiagonal(diag(A), diag(A,1))
+        SymTridiagonal(diag(A,0), diag(A,1))
     else
         throw(ArgumentError("matrix is not symmetric; cannot convert to SymTridiagonal"))
     end
 end
 
 convert(::Type{SymTridiagonal{T}}, S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
+    SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
 convert(::Type{AbstractMatrix{T}}, S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
-function convert(::Type{Matrix{T}}, M::SymTridiagonal{T}) where T
+    SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
+function convert(::Type{Matrix{T}}, M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = zeros(T, n, n)
     @inbounds begin
@@ -311,7 +327,7 @@ end
 #    R. Usmani, "Inversion of a tridiagonal Jacobi matrix",
 #    Linear Algebra and its Applications 212-213 (1994), pp.413-414
 #    doi:10.1016/0024-3795(94)90414-6
-function inv_usmani(a::Vector{T}, b::Vector{T}, c::Vector{T}) where T
+function inv_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
     n = length(b)
     θ = ZeroOffsetVector(zeros(T, n+1)) #principal minors of A
     θ[0] = 1
@@ -341,7 +357,7 @@ end
 
 #Implements the determinant using principal minors
 #Inputs and reference are as above for inv_usmani()
-function det_usmani(a::Vector{T}, b::Vector{T}, c::Vector{T}) where T
+function det_usmani(a::V, b::V, c::V) where {T,V<:AbstractVector{T}}
     n = length(b)
     θa = one(T)
     if n == 0
@@ -635,7 +651,7 @@ convert(::Type{AbstractMatrix{T}},M::Tridiagonal) where {T} = convert(Tridiagona
 convert(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
 function convert(::Type{SymTridiagonal{T}}, M::Tridiagonal) where T
     if M.dl == M.du
-        return SymTridiagonal(convert(Vector{T},M.d), convert(Vector{T},M.dl))
+        return SymTridiagonal{T}(convert(AbstractVector{T},M.d), convert(AbstractVector{T},M.dl))
     else
         throw(ArgumentError("Tridiagonal is not symmetric, cannot convert to SymTridiagonal"))
     end
