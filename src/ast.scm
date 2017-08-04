@@ -5,6 +5,7 @@
 (define (deparse-arglist l (sep ", "))
   (if (has-parameters? l)
       (string (string.join (map deparse (cdr l)) sep)
+              (if (length= (cdr l) 1) "," "")
               "; "
               (string.join (map deparse (cdar l)) ", "))
       (string.join (map deparse l) sep)))
@@ -66,26 +67,16 @@
                           (not (= (string.char (string (cadr e)) 0) #\=)))
                      (string ":" (deparse (cadr e)))
                      (string ":(" (deparse (cadr e)) ")")))
-                ((vect)   (string #\[ (deparse-arglist (cdr e)) #\]))
-                ((vcat)
-                 (string #\[
-                         ;; note: this is a parser quasi-bug; arguably `[a,b;c]` should
-                         ;; be a `vect` expression with parameters, not `vcat`
-                         (deparse-arglist (cdr e) (if (has-parameters? (cdr e))
-                                                      ", " "; "))
-                         #\]))
+                ((vect)  (string #\[ (deparse-arglist (cdr e) ", ") #\]))
+                ((vcat)  (string #\[ (deparse-arglist (cdr e) "; ") #\]))
                 ((typed_vcat)  (string (deparse (cadr e))
                                        (deparse (cons 'vcat (cddr e)))))
                 ((hcat)        (string #\[ (deparse-arglist (cdr e) " ") #\]))
                 ((typed_hcat)  (string (deparse (cadr e))
                                        (deparse (cons 'hcat (cddr e)))))
                 ((row)        (deparse-arglist (cdr e) " "))
-                ((braces)     (string #\{ (deparse-arglist (cdr e)) #\}))
-                ((bracescat)
-                 (string #\{
-                         (deparse-arglist (cdr e) (if (has-parameters? (cdr e))
-                                                      ", " "; "))
-                         #\}))
+                ((braces)     (string #\{ (deparse-arglist (cdr e) ", ") #\}))
+                ((bracescat)  (string #\{ (deparse-arglist (cdr e) "; ") #\}))
                 ((const)  (string "const " (deparse (cadr e))))
                 ((global local)
                  (string (car e) " " (string.join (map deparse (cdr e)) ", ")))

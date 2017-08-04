@@ -2102,6 +2102,8 @@
 
    'curly
    (lambda (e)
+     (if (has-parameters? (cddr e))
+         (error (string "unexpected semicolon in \"" (deparse e) "\"")))
      (let* ((p (extract-implicit-whereparams e))
             (curlyparams (car p))
             (whereparams (cdr p)))
@@ -2293,7 +2295,10 @@
      `(call colon ,.(map expand-forms (cdr e))))
 
    'vect
-   (lambda (e) (expand-forms `(call (top vect) ,@(cdr e))))
+   (lambda (e)
+     (if (has-parameters? (cdr e))
+         (error "unexpected semicolon in array expression"))
+     (expand-forms `(call (top vect) ,@(cdr e))))
 
    'hcat
    (lambda (e) (expand-forms `(call hcat ,.(map expand-forms (cdr e)))))
