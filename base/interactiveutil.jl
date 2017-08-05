@@ -33,7 +33,7 @@ by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 function edit(path::AbstractString, line::Integer=0)
     command = editor()
     name = basename(first(command))
-    issrc = length(path)>2 && path[end-2:end] == ".jl"
+    issrc = endswith(path, ".jl")
     if issrc
         f = find_source_file(path)
         f !== nothing && (path = f)
