@@ -143,7 +143,6 @@ If `full` is `false` only O(1) checks are done, otherwise full
 O(nnz) checks are performed.
 
 # Examples
-
 ```jldoctest
 julia> Base.SparseArrays.checkvalid(Bool, sprand(5,5,0.5))
 true
@@ -177,7 +176,7 @@ function checkvalid(S::SparseMatrixCSC; full = true)
     elseif validity == SparseArrayValidity.COLPTR_SORTED
         err_str = "`S.colptr` must be sorted"
     elseif validity == SparseArrayValidity.ROWVAL_RANGE
-        err_str = "each element in `S.rowval` must be > 0 and ⩽ `size(S,1)`"
+        err_str = "each element in `S.rowval` must be > 0 and ≤ `size(S,1)`"
     elseif validity == SparseArrayValidity.ROWVAL_SORTED_COLUMN
         err_str = "`S.rowval` must be sorted for all column ranges"
     else # Should not happen
