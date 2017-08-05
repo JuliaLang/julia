@@ -1334,6 +1334,8 @@ end
 
 @deprecate issubtype (<:)
 
+@deprecate union() Set()
+
 # 12807
 start(::Union{Process, ProcessChain}) = 1
 done(::Union{Process, ProcessChain}, i::Int) = (i == 3)

@@ -262,6 +262,9 @@ Deprecated or removed
     full path if you need access to executables or libraries in the `JULIA_HOME` directory, e.g.
     `joinpath(JULIA_HOME, "7z.exe")` for `7z.exe` ([#21540]).
 
+  * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
+    element type using `Set{T}()` instead ([#23144]).
+
 Julia v0.6.0 Release Notes
 ==========================
 
