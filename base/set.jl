@@ -65,7 +65,6 @@ done(s::Set, state) = done(s.dict, state)
 # NOTE: manually optimized to take advantage of Dict representation
 next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict, i+1))
 
-union() = Set()
 union(s::Set) = copy(s)
 function union(s::Set, sets::Set...)
     u = Set{join_eltype(s, sets...)}()

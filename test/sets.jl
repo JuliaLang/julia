@@ -138,7 +138,6 @@ for data_in in ((7,8,4,5),
 end
 
 # union
-@test isequal(union(),Set())
 @test isequal(union(Set([1])),Set([1]))
 s = ∪(Set([1,2]), Set([3,4]))
 @test isequal(s, Set([1,2,3,4]))
