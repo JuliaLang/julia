@@ -7,6 +7,7 @@ const VALID_EXPR_HEADS = Pair{Symbol,UnitRange{Int}}[
     :static_parameter => 1:1,
     :line => 1:3,
     :gotoifnot => 2:2,
+    :(&) => 1:1,
     :(=) => 2:2,
     :method => 1:4,
     :const => 1:1,
@@ -21,8 +22,9 @@ const VALID_EXPR_HEADS = Pair{Symbol,UnitRange{Int}}[
     :copyast => 1:1,
     :meta => 0:typemax(Int),
     :global => 1:1,
-    :foreigncall => 5:5,
-    :isdefined => 1:1
+    :foreigncall => 3:typemax(Int),
+    :isdefined => 1:1,
+    :simdloop => 0:0
 ]
 
 function get_expr_narg_bounds(head::Symbol, notfound)
@@ -71,10 +73,11 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
         if isa(x, Expr)
             !is_top_level && x.head == :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
             narg_bounds = get_expr_narg_bounds(x.head, -1:-1)
+            nargs = length(x.args)
             if narg_bounds == -1:-1
-                push!(errors, InvalidCodeError(INVALID_EXPR_HEAD, x.head))
-            elseif !in(length(x.args), narg_bounds)
-                push!(errors, InvalidCodeError(INVALID_EXPR_NARGS, x.head))
+                push!(errors, InvalidCodeError(INVALID_EXPR_HEAD, (x.head, x)))
+            elseif !in(nargs, narg_bounds)
+                push!(errors, InvalidCodeError(INVALID_EXPR_NARGS, (x.head, nargs, x)))
             elseif x.head == :(=)
                 lhs, rhs = x.args
                 if !is_valid_lvalue(lhs)
