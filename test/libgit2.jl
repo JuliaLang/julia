@@ -1,10 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath(@__DIR__, "TestHelpers.jl"))
 import TestHelpers: challenge_prompt
 
 const LIBGIT2_MIN_VER = v"0.23.0"
-const LIBGIT2_HELPER_PATH = joinpath(dirname(@__FILE__), "libgit2-helpers.jl")
+const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
+
+const KEY_DIR = joinpath(@__DIR__, "libgit2")
 
 function get_global_dir()
     buf = Ref(LibGit2.Buffer())
@@ -192,6 +194,28 @@ end
 
         m = match(LibGit2.URL_REGEX, "user@server")
         @test m[:path] == ""
+    end
+end
+
+@testset "Passphrase Required" begin
+    @testset "missing file" begin
+        @test !LibGit2.is_passphrase_required("")
+
+        file = joinpath(KEY_DIR, "foobar")
+        @test !isfile(file)
+        @test !LibGit2.is_passphrase_required(file)
+    end
+
+    @testset "not private key" begin
+        @test !LibGit2.is_passphrase_required(joinpath(KEY_DIR, "invalid.pub"))
+    end
+
+    @testset "private key, with passphrase" begin
+        @test LibGit2.is_passphrase_required(joinpath(KEY_DIR, "valid-passphrase"))
+    end
+
+    @testset "private key, no passphrase" begin
+        @test !LibGit2.is_passphrase_required(joinpath(KEY_DIR, "valid"))
     end
 end
 
@@ -1489,10 +1513,9 @@ mktempdir() do dir
         @testset "SSH credential prompt" begin
             url = "git@github.com/test/package.jl"
 
-            key_dir = joinpath(dirname(@__FILE__), "libgit2")
-            valid_key = joinpath(key_dir, "valid")
-            invalid_key = joinpath(key_dir, "invalid")
-            valid_p_key = joinpath(key_dir, "valid-passphrase")
+            valid_key = joinpath(KEY_DIR, "valid")
+            invalid_key = joinpath(KEY_DIR, "invalid")
+            valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
             passphrase = "secret"
 
             ssh_cmd = """
