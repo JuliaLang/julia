@@ -1604,6 +1604,15 @@ function Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}, uplo::Symbol) 
     Bidiagonal(convert(Vector{R}, dv), convert(Vector{R}, ev), uplo)
 end
 
+# PR #23035
+# also uncomment constructor tests in test/linalg/tridiag.jl
+function SymTridiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}) where {T,S}
+    depwarn(string("SymTridiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}) ",
+        "where {T,S} is deprecated; convert both vectors to the same type instead."), :SymTridiagonal)
+    R = promote_type(T, S)
+    SymTridiagonal(convert(Vector{R}, dv), convert(Vector{R}, ev))
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

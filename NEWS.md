@@ -86,9 +86,10 @@ This section lists changes that do not have deprecation warnings.
     longer present. Use `first(R)` and `last(R)` to obtain
     start/stop. ([#20974])
 
-  * The `Diagonal` and `Bidiagonal` type definitions have changed from `Diagonal{T}` and
-    `Bidiagonal{T}` to `Diagonal{T,V<:AbstractVector{T}}` and
-    `Bidiagonal{T,V<:AbstractVector{T}}` respectively ([#22718], [#22925]).
+  * The `Diagonal`, `Bidiagonal` and `SymTridiagonal` type definitions have changed from
+    `Diagonal{T}`, `Bidiagonal{T}` and `SymTridiagonal{T}` to `Diagonal{T,V<:AbstractVector{T}}`,
+    `Bidiagonal{T,V<:AbstractVector{T}}` and `SymTridiagonal{T,V<:AbstractVector{T}}`
+    respectively ([#22718], [#22925], [#23035]).
 
   * Spaces are no longer allowed between `@` and the name of a macro in a macro call ([#22868]).
 
@@ -156,9 +157,9 @@ Library improvements
 
   * `Char`s can now be concatenated with `String`s and/or other `Char`s using `*` ([#22532]).
 
-  * `Diagonal` and `Bidiagonal` are now parameterized on the type of the wrapped vectors,
-    allowing `Diagonal` and `Bidiagonal` matrices with arbitrary
-    `AbstractVector`s ([#22718], [#22925]).
+  * `Diagonal`, `Bidiagonal` and `SymTridiagonal` are now parameterized on the type of the
+    wrapped vectors, allowing `Diagonal`, `Bidiagonal` and `SymTridiagonal` matrices with
+    arbitrary `AbstractVector`s ([#22718], [#22925], [#23035]).
 
   * Mutating versions of `randperm` and `randcycle` have been added:
     `randperm!` and `randcycle!` ([#22723]).
@@ -221,8 +222,8 @@ Deprecated or removed
   * `Bidiagonal` constructors now use a `Symbol` (`:U` or `:L`) for the upper/lower
     argument, instead of a `Bool` or a `Char` ([#22703]).
 
-  * `Bidiagonal` constructors that automatically converted the input vectors to
-    the same type are deprecated in favor of explicit conversion ([#22925]).
+  * `Bidiagonal` and `SymTridiagonal` constructors that automatically converted the input
+    vectors to the same type are deprecated in favor of explicit conversion ([#22925], [#23035]).
 
   * Calling `nfields` on a type to find out how many fields its instances have is deprecated.
     Use `fieldcount` instead. Use `nfields` only to get the number of fields in a specific object ([#22350]).
