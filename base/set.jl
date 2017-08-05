@@ -67,7 +67,7 @@ next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict, i+1))
 
 union() = Set()
 union(s::Set) = copy(s)
-function union(s::Set, sets::Set...)
+function union(s::Set, sets...)
     u = Set{join_eltype(s, sets...)}()
     union!(u, s)
     for t in sets
@@ -105,7 +105,7 @@ join_eltype() = Bottom
 join_eltype(v1, vs...) = typejoin(eltype(v1), join_eltype(vs...))
 
 intersect(s::Set) = copy(s)
-function intersect(s::Set, sets::Set...)
+function intersect(s::Set, sets...)
     i = similar(s)
     for x in s
         inall = true
@@ -121,7 +121,7 @@ function intersect(s::Set, sets::Set...)
 end
 const ∩ = intersect
 
-function setdiff(a::Set, b::Set)
+function setdiff(a::Set, b)
     d = similar(a)
     for x in a
         if !(x in b)
