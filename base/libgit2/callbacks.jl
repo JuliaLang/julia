@@ -238,6 +238,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
                               username_ptr::Cstring,
                               allowed_types::Cuint, payload_ptr::Ptr{Void})
     err = Cint(0)
+    explicit = false
 
     # get `CredentialPayload` object from payload pointer
     @assert payload_ptr != C_NULL
@@ -252,39 +253,49 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
         p.username = url[:user] === nothing ? "" : url[:user]
         p.host = url[:host]
         p.path = url[:path]
-    end
 
-    if !isnull(p.credential)
-        creds = unsafe_get(p.credential)
-        explicit = true
-    else
-        creds = Base.get(p.cache, nothing)
-        explicit = false
+        # When an explicit credential is supplied we will make sure to use the given
+        # credential during the first callback by modifying the allowed types. The
+        # modification only is in effect for the first callback since `allowed_types` cannot
+        # be mutated.
+        if !isnull(p.credential)
+            explicit = true
+            cred = unsafe_get(p.credential)
+            if isa(cred, SSHCredentials)
+                allowed_types &= Cuint(Consts.CREDTYPE_SSH_KEY)
+            elseif isa(cred, UserPasswordCredentials)
+                allowed_types &= Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT)
+            else
+                allowed_types &= Cuint(0)  # Unhandled credential type
+            end
+        end
     end
 
     # use ssh key or ssh-agent
     if isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY))
-        sshcreds = get_creds!(creds, "ssh://$(p.host)", reset!(SSHCredentials(p.username, "", true), -1))
-        if isa(sshcreds, SSHCredentials)
-            p.credential = Nullable(sshcreds)
-            err = authenticate_ssh(libgit2credptr, p, username_ptr)
-            err == 0 && return err
+        if isnull(p.credential) || !isa(unsafe_get(p.credential), SSHCredentials)
+            creds = reset!(SSHCredentials(p.username, "", true), -1)
+            if !isnull(p.cache)
+                credid = "ssh://$(p.host)"
+                creds = get_creds!(unsafe_get(p.cache), credid, creds)
+            end
+            p.credential = Nullable(creds)
         end
+        err = authenticate_ssh(libgit2credptr, p, username_ptr)
+        err == 0 && return err
     end
 
     if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
-        defaultcreds = reset!(UserPasswordCredentials(p.username, "", true), -1)
-        credid = "$(isempty(p.scheme) ? "ssh" : p.scheme)://$(p.host)"
-        upcreds = get_creds!(creds, credid, defaultcreds)
-        # If there were stored SSH credentials, but we ended up here that must
-        # mean that something went wrong. Replace the SSH credentials by user/pass
-        # credentials
-        if !isa(upcreds, UserPasswordCredentials)
-            upcreds = defaultcreds
-            isa(creds, CachedCredentials) && (creds.creds[credid] = upcreds)
+        if isnull(p.credential) || !isa(unsafe_get(p.credential), UserPasswordCredentials)
+            creds = reset!(UserPasswordCredentials(p.username, "", true), -1)
+            if !isnull(p.cache)
+                credid = "$(isempty(p.scheme) ? "ssh" : p.scheme)://$(p.host)"
+                creds = get_creds!(unsafe_get(p.cache), credid, creds)
+            end
+            p.credential = Nullable(creds)
         end
-        p.credential = Nullable(upcreds)
-        return authenticate_userpass(libgit2credptr, p)
+        err = authenticate_userpass(libgit2credptr, p)
+        err == 0 && return err
     end
 
     # No authentication method we support succeeded. The most likely cause is

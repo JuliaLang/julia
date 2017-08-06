@@ -2074,13 +2074,8 @@ mktempdir() do dir
             @test err == incompatible_error
             @test auth_attempts == 1
 
-            # TODO: Providing an explicit SSH credential which is incompatible with the
-            # authentication method triggers a prompt...
-            challenges = [
-                "Username for 'https://github.com':" => "\x04",
-            ]
-            err, auth_attempts = challenge_prompt(expect_https_cmd, challenges)
-            @test err == abort_prompt
+            err, auth_attempts = challenge_prompt(expect_https_cmd, [])
+            @test err == incompatible_error
             @test auth_attempts == 1
         end
 
