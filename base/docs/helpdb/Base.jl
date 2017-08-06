@@ -927,10 +927,10 @@ BoundsError
 
 Invoke a method for the given generic function `f` matching the specified types `argtypes` on the
 specified arguments `args` and passing the keyword arguments `kwargs`. The arguments `args` must
-conform with the specified types in `argtypes`, i.e. no conversions are insterted. This method
-allows invoking a method other than the most specific matching method, which is useful when the
-behavior of a more general definition is explicitly needed (often as part of the implementation of
-a more specific method of the same function).
+conform with the specified types in `argtypes`, i.e. conversion is not automatically performed.
+This method allows invoking a method other than the most specific matching method, which is useful
+when the behavior of a more general definition is explicitly needed (often as part of the
+implementation of a more specific method of the same function).
 
 # Examples
 ```jldoctest
