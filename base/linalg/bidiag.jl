@@ -153,8 +153,10 @@ promote_rule(::Type{Matrix{T}}, ::Type{Bidiagonal{S}}) where {T,S} = Matrix{prom
 #Converting from Bidiagonal to Tridiagonal
 Tridiagonal(M::Bidiagonal{T}) where {T} = convert(Tridiagonal{T}, M)
 function convert(::Type{Tridiagonal{T}}, A::Bidiagonal) where T
-    z = zeros(T, size(A)[1]-1)
-    A.uplo == 'U' ? Tridiagonal(z, convert(Vector{T},A.dv), convert(Vector{T},A.ev)) : Tridiagonal(convert(Vector{T},A.ev), convert(Vector{T},A.dv), z)
+    dv = convert(AbstractVector{T}, A.dv)
+    ev = convert(AbstractVector{T}, A.ev)
+    z = fill!(similar(ev), zero(T))
+    A.uplo == 'U' ? Tridiagonal(z, dv, ev) : Tridiagonal(ev, dv, z)
 end
 promote_rule(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}}) where {T,S} = Tridiagonal{promote_type(T,S)}
 
