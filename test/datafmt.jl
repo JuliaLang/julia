@@ -204,7 +204,7 @@ let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name 
         "Russia", "Mikhail Gorbachev", "Россия", "Михаил Горбачёв",
         "Russia", "Boris Grebenshchikov", "Россия", "Борис Гребенщиков",
         "Slovenia", "\"Frane \"\"Jezek\"\" Milcinski", "Slovenija", "Frane Milčinski - Ježek",
-        "Syracuse (Sicily)", "Archimedes", "Συρακούσα", "Ἀρχιμήδης",
+        "Syracuse (Sicily)", "Archimedes", "Συρακούσα", "Ἀρχιμήδης",
         "Thailand", "Thongchai McIntai", "ประเทศไทย", "ธงไชย แม็คอินไตย์",
         "U.S.A.", "Brad Pitt", "U.S.A.", "Brad Pitt",
         "Yugoslavia (Cyrillic)", "Djordje Balasevic", "Југославија", "Ђорђе Балашевић",
@@ -282,3 +282,6 @@ end
 let data = "\"1\",\"灣\"\"灣灣灣灣\",\"3\""
     @test readcsv(IOBuffer(data)) == Any[1 "灣\"灣灣灣灣" 3]
 end
+
+# issue #11484: useful error message for invalid readdlm filepath arguments
+@test_throws ArgumentError readdlm(tempdir())
