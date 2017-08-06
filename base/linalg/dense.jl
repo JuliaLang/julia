@@ -397,6 +397,15 @@ end
 function (^)(A::AbstractMatrix{T}, p::Real) where T
     n = checksquare(A)
 
+    # Quicker return if A is diagonal
+    if isdiag(A)
+        retmat = copy(A)
+        for i in 1:n
+            retmat[i, i] = retmat[i, i] ^ p
+        end
+        return retmat
+    end
+
     # For integer powers, use power_by_squaring
     isinteger(p) && return integerpow(A, p)
 
@@ -406,15 +415,6 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     end
     if ishermitian(A)
         return (Hermitian(A)^p)
-    end
-
-    # Quicker return if A is diagonal
-    if isdiag(A)
-        retmat = copy(A)
-        for i in 1:n
-            retmat[i, i] = retmat[i, i] ^ p
-        end
-        return retmat
     end
 
     # Otherwise, use Schur decomposition
