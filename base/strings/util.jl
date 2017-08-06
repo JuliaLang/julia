@@ -415,6 +415,7 @@ single character, a vector or a set of characters, a string, or a regular expres
 is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.
+To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
 """
 replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int))
 # TODO: change this to the following when `replace` is removed from deprecated.jl:
