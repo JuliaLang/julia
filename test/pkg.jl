@@ -65,21 +65,6 @@ temp_pkg_dir() do
     @test_throws PkgError Pkg.installed("MyFakePackage")
     @test Pkg.installed("Example") === nothing
 
-    # check that versioninfo(io; verbose=true) doesn't error, produces some output
-    # and doesn't invoke Pkg.status which will error if JULIA_PKGDIR is set
-    mktempdir() do dir
-        withenv("JULIA_PKGDIR" => dir) do
-            buf = PipeBuffer()
-            versioninfo(buf, verbose=true)
-            ver = read(buf, String)
-            @test startswith(ver, "Julia Version $VERSION")
-            @test contains(ver, "Environment:")
-            @test contains(ver, "Package Status:")
-            @test contains(ver, "no packages installed")
-            @test isempty(readdir(dir))
-        end
-    end
-
     # Check that setprotocol! works.
     begin
         try
