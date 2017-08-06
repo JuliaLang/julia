@@ -134,30 +134,60 @@ if Sys.isapple()
     end
     clipboard() = read(`pbpaste`, String)
 
-elseif Sys.islinux()
+elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
     _clipboardcmd = nothing
+    const _clipboardcmds = if Sys.islinux()
+        Dict(
+            :copy => Dict(
+                :xsel  => `xsel --nodetach --input --clipboard`,
+                :xclip => `xclip -silent -in -selection clipboard`,
+            ),
+            :paste => Dict(
+                :xsel  => `xsel --nodetach --output --clipboard`,
+                :xclip => `xclip -quiet -out -selection clipboard`,
+            )
+        )
+    elseif Sys.KERNEL === :FreeBSD
+        Dict(
+            :copy => Dict(
+                :xsel  => `xsel -c`,
+                :xclip => `xclip -silent -in -selection clipboard`,
+            ),
+            :paste => Dict(
+                :xsel  => `xsel -p`,
+                :xclip => `xclip -quiet -out -selection clipboard`,
+            )
+        )
+    end
     function clipboardcmd()
         global _clipboardcmd
         _clipboardcmd !== nothing && return _clipboardcmd
         for cmd in (:xclip, :xsel)
             success(pipeline(`which $cmd`, DevNull)) && return _clipboardcmd = cmd
         end
-        error("no clipboard command found, please install xsel or xclip")
+        pkgs = @static if Sys.islinux()
+            "xsel or xclip"
+        elseif Sys.KERNEL === :FreeBSD
+            "x11/xsel or x11/xclip"
+        end
+        error("no clipboard command found, please install $pkgs")
     end
     function clipboard(x)
         c = clipboardcmd()
-        cmd = c == :xsel  ? `xsel --nodetach --input --clipboard` :
-              c == :xclip ? `xclip -silent -in -selection clipboard` :
+        cmd = get(_clipboardcmds[:copy], c, nothing)
+        if cmd === nothing
             error("unexpected clipboard command: $c")
+        end
         open(pipeline(cmd, stderr=STDERR), "w") do io
             print(io, x)
         end
     end
     function clipboard()
         c = clipboardcmd()
-        cmd = c == :xsel  ? `xsel --nodetach --output --clipboard` :
-              c == :xclip ? `xclip -quiet -out -selection clipboard` :
+        cmd = get(_clipboardcmds[:paste], c, nothing)
+        if cmd === nothing
             error("unexpected clipboard command: $c")
+        end
         read(pipeline(cmd, stderr=STDERR), String)
     end
 
