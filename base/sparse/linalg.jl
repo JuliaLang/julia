@@ -941,3 +941,22 @@ end
 chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
 lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")
 eig(A::SparseMatrixCSC) = error("Use eigs() instead of eig() for sparse matrices.")
+
+function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
+    a, b = size(X)
+    n, p = vardim == 1 ? (a, b) : (b, a)
+
+    # Cov(X) = E[(X-μ)'(X-μ)]
+    # = X'X - X'μ
+
+    # Compute X'X using sparse matrix operations
+    out = Matrix(Base.unscaled_covzm(X, vardim))
+
+    # Compute X'μ
+    sums = sum(X, vardim)
+    @inbounds for j in 1:p, i in 1:p
+        part2 = sums[i] * (sums[j] / n)
+        out[i,j] -= part2
+    end
+    return scale!(out, inv(n-Int(corrected)))
+end
