@@ -58,6 +58,25 @@ p = 1=>:foo
 @test_throws ArgumentError Base.scalarmax('a',['c','d'])
 @test_throws ArgumentError Base.scalarmax(['a','b'],'c')
 
+s1 = Set([1])
+s2 = Set([2])
+@test_throws MethodError min(s1, s2)
+@test_throws MethodError max(s1, s2)
+@test_throws MethodError minmax(s1, s2)
+
+struct TO
+  x
+end
+Base.isless(a::TO, b::TO) = isless(a.x, b.x)
+Base.isequal(a::TO, b::TO) = isequal(a.x, b.x)
+
+@test min(TO(1), TO(2)) == TO(1)
+@test min(TO(2), TO(1)) == TO(1)
+@test max(TO(1), TO(2)) == TO(2)
+@test max(TO(2), TO(1)) == TO(2)
+@test minmax(TO(1), TO(2)) == (TO(1), TO(2))
+@test minmax(TO(2), TO(1)) == (TO(1), TO(2))
+
 @test lexless('a','b')
 
 @test 1 .!= 2
