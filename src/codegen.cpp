@@ -85,6 +85,7 @@
 #include <polly/RegisterPasses.h>
 #include <polly/ScopDetection.h>
 #endif
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include "fix_llvm_assert.h"
 
 using namespace llvm;
@@ -1288,8 +1289,15 @@ uint64_t jl_get_llvm_fptr(void *function)
 {
     Function *F = (Function*)function;
     uint64_t addr = getAddressForFunction(F->getName());
-    if (!addr)
+    if (!addr) {
+#if JL_LLVM_VERSION >= 50000
+        if (auto exp_addr = jl_ExecutionEngine->findUnmangledSymbol(F->getName()).getAddress()) {
+            addr = exp_addr.get();
+        }
+#else
         addr = jl_ExecutionEngine->findUnmangledSymbol(F->getName()).getAddress();
+#endif
+    }
     return addr;
 }
 
@@ -1573,7 +1581,9 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
     }
 
     if (getwrapper || !decls.specFunctionObject) {
-        return Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage, decls.functionObject);
+        auto f = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage, decls.functionObject);
+        f->addFnAttr("thunk");
+        return f;
     }
     else {
         jl_returninfo_t returninfo = get_specsig_function(NULL, decls.specFunctionObject, linfo->specTypes, linfo->rettype);
@@ -2873,7 +2883,9 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, jl_llvm_fu
             retval = update_julia_type(ctx, retval, inferred_retty);
         return retval;
     }
-    Value *theFptr = jl_Module->getOrInsertFunction(decls.functionObject, jl_func_sig);
+    auto theFptr = jl_Module->getOrInsertFunction(decls.functionObject, jl_func_sig);
+    if (auto F = dyn_cast<Function>(theFptr->stripPointerCasts()))
+        F->addFnAttr("thunk");
     Value *ret = emit_jlcall(ctx, theFptr, boxed(ctx, argv[0]), &argv[1], nargs - 1);
     return mark_julia_type(ctx, ret, true, inferred_retty);
 }
@@ -4275,6 +4287,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                 else {
                     assert(theFptr->getFunctionType() == jl_func_sig);
                 }
+                theFptr->addFnAttr("thunk");
             }
         }
         BasicBlock *b_generic, *b_jlcall, *b_after;
@@ -4451,6 +4464,7 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, const jl_returnin
 {
     Function *w = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage,
                                    funcName, M);
+    w->addFnAttr("thunk");
     jl_init_function(w);
     w->addFnAttr("no-frame-pointer-elim", "true");
     Function::arg_iterator AI = w->arg_begin();
@@ -4858,6 +4872,7 @@ static std::unique_ptr<Module> emit_function(
         f = Function::Create(needsparams ? jl_func_sig_sparams : jl_func_sig,
                              GlobalVariable::ExternalLinkage,
                              funcName.str(), M);
+        f->addFnAttr("thunk");
         returninfo.decl = f;
         jl_init_function(f);
         declarations->functionObject = strdup(f->getName().str().c_str());
@@ -5182,7 +5197,11 @@ static std::unique_ptr<Module> emit_function(
                     if (ctx.debug_enabled && vi.dinfo && !vi.boxroot && !vi.value.V) {
                         SmallVector<uint64_t, 8> addr;
                         addr.push_back(llvm::dwarf::DW_OP_deref);
+#if JL_LLVM_VERSION >= 50000
+                        addr.push_back(llvm::dwarf::DW_OP_plus_uconst);
+#else
                         addr.push_back(llvm::dwarf::DW_OP_plus);
+#endif
                         addr.push_back((i - 1) * sizeof(void*));
                         if ((Metadata*)vi.dinfo->getType() != jl_pvalue_dillvmt)
                             addr.push_back(llvm::dwarf::DW_OP_deref);
@@ -5799,6 +5818,7 @@ static GlobalVariable *julia_const_gv(jl_value_t *val)
 static Function *jlcall_func_to_llvm(const std::string &cname, jl_fptr_t addr, Module *m)
 {
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage, cname, m);
+    f->addFnAttr("thunk");
     add_named_global(f, addr);
     return f;
 }
@@ -6126,6 +6146,7 @@ static void init_julia_llvm_env(Module *m)
     jlnew_func =
         Function::Create(jl_func_sig, Function::ExternalLinkage,
                          "jl_new_structv", m);
+    jlnew_func->addFnAttr("thunk");
     add_named_global(jlnew_func, &jl_new_structv);
 
     std::vector<Type*> args2(0);
@@ -6242,6 +6263,7 @@ static void init_julia_llvm_env(Module *m)
     jlapplygeneric_func = Function::Create(FunctionType::get(T_prjlvalue, agargs, false),
                                            Function::ExternalLinkage,
                                            "jl_apply_generic", m);
+    jlapplygeneric_func->addFnAttr("thunk");
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
 
     std::vector<Type *> invokeargs(0);
@@ -6795,28 +6817,28 @@ extern "C" void jl_init_codegen(void)
 // for debugging from gdb
 extern "C" void jl_dump_llvm_value(void *v)
 {
-#if JL_LLVM_VERSION >= 50000
-    ((Value*)v)->print(llvm::dbgs(), true);
-#else
-    ((Value*)v)->dump();
-#endif
+    llvm_dump((Value*)v);
 }
+
 extern "C" void jl_dump_llvm_inst_function(void *v)
 {
-#if JL_LLVM_VERSION >= 50000
-    cast<Instruction>(((Value*)v))->getParent()->getParent()->print(llvm::dbgs(), nullptr, true);
-#else
-    cast<Instruction>(((Value*)v))->getParent()->getParent()->dump();
-#endif
+    llvm_dump(cast<Instruction>(((Value*)v))->getParent()->getParent());
 }
+
 extern "C" void jl_dump_llvm_type(void *v)
 {
-#if JL_LLVM_VERSION >= 50000
-    ((Type*)v)->print(llvm::dbgs(), true);
-#else
-    ((Type*)v)->dump();
-#endif
+    llvm_dump((Type*)v);
     putchar('\n');
+}
+
+extern "C" void jl_dump_llvm_module(void *v)
+{
+    llvm_dump((Module*)v);
+}
+
+extern "C" void jl_dump_llvm_metadata(void *v)
+{
+    llvm_dump((Metadata*)v);
 }
 
 extern void jl_write_bitcode_func(void *F, char *fname) {

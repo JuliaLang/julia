@@ -653,8 +653,8 @@ void RecursivelyVisit(callback f, Value *V) {
             RecursivelyVisit<VisitInst, callback>(f, TheUser);
             continue;
         }
-        V->dump();
-        TheUser->dump();
+        llvm_dump(V);
+        llvm_dump(TheUser);
         assert(false && "Unexpected instruction");
     }
 }
@@ -1122,11 +1122,11 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
     AllocaInst *Frame = nullptr;
     if (T_prjlvalue) {
         T_pprjlvalue = T_prjlvalue->getPointerTo();
-        Frame = new AllocaInst(T_prjlvalue, ConstantInt::get(T_int32, maxframeargs),
+        Frame = new AllocaInst(T_prjlvalue,
 #if JL_LLVM_VERSION >= 50000
         0,
 #endif
-        "", StartOff);
+        ConstantInt::get(T_int32, maxframeargs), "", StartOff);
     }
     for (BasicBlock &BB : F) {
         for (auto it = BB.begin(); it != BB.end();) {
@@ -1177,7 +1177,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
             } else if (CC == JLCALL_CC ||
                        CC == JLCALL_F_CC) {
                 assert(T_prjlvalue);
-                size_t nframeargs = CI->getNumArgOperands() - (CC == JLCALL_F_CC);
+                size_t nargs = CI->getNumArgOperands();
+                size_t nframeargs = nargs - (CC == JLCALL_F_CC);
                 SmallVector<Value *, 3> ReplacementArgs;
                 auto it = CI->arg_begin();
                 if (CC == JLCALL_F_CC)
@@ -1201,7 +1202,19 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                 Value *newFptr = Builder.CreateBitCast(callee, FTy->getPointerTo());
                 CallInst *NewCall = CallInst::Create(newFptr, ReplacementArgs, "", CI);
                 NewCall->setTailCallKind(CI->getTailCallKind());
-                NewCall->setAttributes(CI->getAttributes());
+                auto old_attrs = CI->getAttributes();
+#if JL_LLVM_VERSION >= 50000
+                NewCall->setAttributes(AttributeList::get(CI->getContext(),
+                                                          old_attrs.getFnAttributes(),
+                                                          old_attrs.getRetAttributes(), {}));
+#else
+                AttributeSet attr;
+                attr = attr.addAttributes(CI->getContext(), AttributeSet::ReturnIndex,
+                                          old_attrs.getRetAttributes())
+                    .addAttributes(CI->getContext(), AttributeSet::FunctionIndex,
+                                   old_attrs.getFnAttributes());
+                NewCall->setAttributes(attr);
+#endif
                 NewCall->setDebugLoc(CI->getDebugLoc());
                 CI->replaceAllUsesWith(NewCall);
             } else if (CI->getNumArgOperands() == CI->getNumOperands()) {
