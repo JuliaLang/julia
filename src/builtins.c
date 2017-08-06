@@ -600,7 +600,7 @@ JL_CALLABLE(jl_f_svec)
     return (jl_value_t*)t;
 }
 
-// composite types ------------------------------------------------------------
+// struct operations ------------------------------------------------------------
 
 JL_CALLABLE(jl_f_getfield)
 {

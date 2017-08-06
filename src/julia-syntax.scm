@@ -887,9 +887,9 @@
          (global ,name) (const ,name)
          ,@(map (lambda (v) `(local ,v)) params)
          ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v))) params bounds)
-         (composite_type ,name (call (core svec) ,@params)
-                         (call (core svec) ,@(map (lambda (x) `',x) field-names))
-                         ,super (call (core svec) ,@field-types) ,mut ,min-initialized)))
+         (struct_type ,name (call (core svec) ,@params)
+                      (call (core svec) ,@(map (lambda (x) `',x) field-names))
+                      ,super (call (core svec) ,@field-types) ,mut ,min-initialized)))
        ;; "inner" constructors
        (scope-block
         (block
@@ -925,7 +925,7 @@
        ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v))) params bounds)
        (abstract_type ,name (call (core svec) ,@params) ,super))))))
 
-(define (bits-def-expr n name params super)
+(define (primitive-type-def-expr n name params super)
   (receive
    (params bounds) (sparam-name-bounds params)
    `(block
@@ -934,7 +934,7 @@
       (block
        ,@(map (lambda (v) `(local ,v)) params)
        ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v))) params bounds)
-       (bits_type ,name (call (core svec) ,@params) ,n ,super))))))
+       (primitive_type ,name (call (core svec) ,@params) ,n ,super))))))
 
 ;; take apart a type signature, e.g. T{X} <: S{Y}
 (define (analyze-type-sig ex)
@@ -1188,7 +1188,7 @@
         (else
          (error "invalid macro definition"))))
 
-(define (expand-type-def e)
+(define (expand-struct-def e)
   (let ((mut (cadr e))
         (sig (caddr e))
         (fields (cdr (cadddr e))))
@@ -1892,7 +1892,11 @@
    '->             expand-arrow
    'let            expand-let
    'macro          expand-macro-def
-   'type           expand-type-def
+   'struct         expand-struct-def
+   'type
+   (lambda (e)
+     (syntax-deprecation #f ":type expression head" ":struct")
+     (expand-struct-def e))
    'try            expand-try
    ;; deprecated in 0.6
    'typealias      (lambda (e) (expand-typealias (cadr e) (caddr e)))
@@ -2084,11 +2088,15 @@
 
    'bitstype
    (lambda (e)
-     (let ((n (cadr e))
-           (sig (caddr e)))
+     (syntax-deprecation #f "Expr(:bitstype, nbits, name)" "Expr(:primitive, name, nbits)")
+     (expand-forms `(primitive ,(caddr e) ,(cadr e))))
+   'primitive
+   (lambda (e)
+     (let ((sig (cadr e))
+           (n   (caddr e)))
        (expand-forms
         (receive (name params super) (analyze-type-sig sig)
-                 (bits-def-expr n name params super)))))
+                 (primitive-type-def-expr n name params super)))))
 
    'comparison
    (lambda (e) (expand-forms (expand-compare-chain (cdr e))))
@@ -2781,21 +2789,21 @@ f(x) = yt(x)
         (() () 0 ())
         (body (global ,name) (const ,name)
               ,@(map (lambda (p n) `(= ,p (call (core TypeVar) ',n (core Any)))) P names)
-              (composite_type ,name (call (core svec) ,@P)
-                              (call (core svec) ,@(map (lambda (v) `',v) fields))
-                              ,super
-                              (call (core svec) ,@types) false ,(length fields))
+              (struct_type ,name (call (core svec) ,@P)
+                           (call (core svec) ,@(map (lambda (v) `',v) fields))
+                           ,super
+                           (call (core svec) ,@types) false ,(length fields))
               (return (null))))))))
 
 (define (type-for-closure name fields super)
   `((thunk (lambda ()
             (() () 0 ())
             (body (global ,name) (const ,name)
-                  (composite_type ,name (call (core svec))
-                                  (call (core svec) ,@(map (lambda (v) `',v) fields))
-                                  ,super
-                                  (call (core svec) ,@(map (lambda (v) '(core Any)) fields))
-                                  false ,(length fields))
+                  (struct_type ,name (call (core svec))
+                               (call (core svec) ,@(map (lambda (v) `',v) fields))
+                               ,super
+                               (call (core svec) ,@(map (lambda (v) '(core Any)) fields))
+                               false ,(length fields))
                   (return (null)))))))
 
 
@@ -2808,20 +2816,20 @@ f(x) = yt(x)
 ;        `((global ,name)
 ;          (const ,name)
 ;          ,@(map (lambda (p n) `(= ,p (call (core TypeVar) ',n (core Any)))) P names)
-;          (composite_type ,name (call (core svec) ,@P)
-;                          (call (core svec) ,@(map (lambda (v) `',v) fields))
-;                          ,super
-;                          (call (core svec) ,@types) false ,(length fields)))))
+;          (struct_type ,name (call (core svec) ,@P)
+;                       (call (core svec) ,@(map (lambda (v) `',v) fields))
+;                       ,super
+;                       (call (core svec) ,@types) false ,(length fields)))))
 
 ;; ... and without parameters
 ;(define (type-for-closure name fields super)
 ;  `((global ,name)
 ;    (const ,name)
-;    (composite_type ,name (call (core svec))
-;                    (call (core svec) ,@(map (lambda (v) `',v) fields))
-;                    ,super
-;                    (call (core svec) ,@(map (lambda (v) 'Any) fields))
-;                    false ,(length fields))))
+;    (struct_type ,name (call (core svec))
+;                 (call (core svec) ,@(map (lambda (v) `',v) fields))
+;                 ,super
+;                 (call (core svec) ,@(map (lambda (v) 'Any) fields))
+;                 false ,(length fields))))
 
 
 (define (vinfo:not-capt vi)
@@ -3634,25 +3642,25 @@ f(x) = yt(x)
             ((isdefined) (if tail (emit-return e) e))
 
             ;; top level expressions returning values
-            ((abstract_type bits_type composite_type thunk toplevel module)
+            ((abstract_type primitive_type struct_type thunk toplevel module)
              (case (car e)
                ((abstract_type)
                 (let* ((para (compile (caddr e) break-labels #t #f))
                        (supe (compile (cadddr e) break-labels #t #f)))
                   (emit `(abstract_type ,(cadr e) ,para ,supe))))
-               ((bits_type)
+               ((primitive_type)
                 (let* ((para (compile (caddr e) break-labels #t #f))
                        (supe (compile (list-ref e 4) break-labels #t #f)))
-                  (emit `(bits_type ,(cadr e) ,para ,(cadddr e) ,supe))))
-               ((composite_type)
+                  (emit `(primitive_type ,(cadr e) ,para ,(cadddr e) ,supe))))
+               ((struct_type)
                 (let* ((para (compile (caddr e) break-labels #t #f))
                        (supe (compile (list-ref e 4) break-labels #t #f))
-                       ;; composite_type has an unconventional evaluation rule that
+                       ;; struct_type has an unconventional evaluation rule that
                        ;; needs to do work around the evaluation of the field types,
                        ;; so the field type expressions need to be kept in place as
                        ;; much as possible. (part of issue #21923)
                        (ftys (compile (list-ref e 5) break-labels #t #f #f)))
-                  (emit `(composite_type ,(cadr e) ,para ,(cadddr e) ,supe ,ftys ,@(list-tail e 6)))))
+                  (emit `(struct_type ,(cadr e) ,para ,(cadddr e) ,supe ,ftys ,@(list-tail e 6)))))
                (else
                 (emit e)))
              (if tail (emit-return '(null)))

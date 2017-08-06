@@ -40,13 +40,13 @@ type description objects for the [built-in types defined in `julia.h`](https://g
 e.g.
 
 ```c
-jl_any_type = jl_new_abstracttype(jl_symbol("Any"), NULL, jl_null);
+jl_any_type = jl_new_abstracttype(jl_symbol("Any"), core, NULL, jl_emptysvec);
 jl_any_type->super = jl_any_type;
 
-jl_type_type = jl_new_abstracttype(jl_symbol("Type"), jl_any_type, jl_null);
+jl_type_type = jl_new_abstracttype(jl_symbol("Type"), core, jl_any_type, jl_emptysvec);
 
-jl_int32_type = jl_new_bitstype(jl_symbol("Int32"),
-                                jl_any_type, jl_null, 32);
+jl_int32_type = jl_new_primitivetype(jl_symbol("Int32"), core,
+                                     jl_any_type, jl_emptysvec, 32);
 ```
 
 [`jl_init_tasks()`](https://github.com/JuliaLang/julia/blob/master/src/task.c) creates the `jl_datatype_t* jl_task_type`

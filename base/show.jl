@@ -901,13 +901,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "end")
 
     # type declaration
-    elseif head === :type && nargs==3
+    elseif head === :struct && nargs==3
         show_block(io, args[1] ? Symbol("mutable struct") : Symbol("struct"), args[2], args[3], indent)
         print(io, "end")
 
-    elseif head === :bitstype && nargs == 2
+    elseif head === :primitive && nargs == 2
         print(io, "primitive type ")
-        show_list(io, reverse(args), ' ', indent)
+        show_list(io, args, ' ', indent)
         print(io, " end")
 
     elseif head === :abstract && nargs == 1

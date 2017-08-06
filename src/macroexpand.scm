@@ -133,15 +133,15 @@
                    (if var (list 'varlist var) '()))
 
    ;; type definition
-   (pattern-lambda (type mut (<: (curly tn . tvars) super) body)
+   (pattern-lambda (struct mut (<: (curly tn . tvars) super) body)
                    (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
                           (typevar-names tvars)))
-   (pattern-lambda (type mut (curly tn . tvars) body)
+   (pattern-lambda (struct mut (curly tn . tvars) body)
                    (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
                           (typevar-names tvars)))
-   (pattern-lambda (type mut (<: tn super) body)
+   (pattern-lambda (struct mut (<: tn super) body)
                    (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
-   (pattern-lambda (type mut tn body)
+   (pattern-lambda (struct mut tn body)
                    (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
 
    )) ; vars-introduced-by-patterns
@@ -315,18 +315,18 @@
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)
-           ((type)
-            `(type ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg)
-                   ;; type has special behavior: identifiers inside are
-                   ;; field names, not expressions.
-                   ,(map (lambda (x)
-                           (cond ((atom? x) x)
-                                 ((and (pair? x) (eq? (car x) '|::|))
-                                  `(|::| ,(cadr x)
-                                    ,(resolve-expansion-vars- (caddr x) env m parent-scope inarg)))
-                                 (else
-                                  (resolve-expansion-vars-with-new-env x env m parent-scope inarg))))
-                         (cadddr e))))
+           ((struct)
+            `(struct ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg)
+                     ;; type has special behavior: identifiers inside are
+                     ;; field names, not expressions.
+                     ,(map (lambda (x)
+                             (cond ((atom? x) x)
+                                   ((and (pair? x) (eq? (car x) '|::|))
+                                    `(|::| ,(cadr x)
+                                      ,(resolve-expansion-vars- (caddr x) env m parent-scope inarg)))
+                                   (else
+                                    (resolve-expansion-vars-with-new-env x env m parent-scope inarg))))
+                           (cadddr e))))
 
            ((parameters)
             (cons 'parameters

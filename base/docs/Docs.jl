@@ -463,7 +463,7 @@ function nameof(x::Expr, ismacro)
     if isexpr(x, :.)
         ismacro ? macroname(x) : x
     else
-        n = isexpr(x, (:module, :type, :bitstype)) ? 2 : 1
+        n = isexpr(x, (:module, :struct)) ? 2 : 1
         nameof(x.args[n], ismacro)
     end
 end
@@ -505,7 +505,7 @@ function metadata(__source__, __module__, expr, ismodule)
     else
         push!(args, Pair(:module, __module__))
     end
-    if isexpr(expr, :type)
+    if isexpr(expr, :struct)
         # Field docs for concrete types.
         fields = []
         tmp = nothing
@@ -685,11 +685,11 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define = true)
 
     # Type definitions.
     #
-    #   type T ... end
-    #   abstract T
-    #   bitstype N T
+    #   struct T ... end
+    #   abstract type T end
+    #   primitive type T N end
     #
-    isexpr(x, [:type, :abstract, :bitstype]) ? objectdoc(source, mod, meta, def, x) :
+    isexpr(x, [:struct, :abstract, :primitive]) ? objectdoc(source, mod, meta, def, x) :
 
     # "Bindings". Names that resolve to objects with different names, ie.
     #
