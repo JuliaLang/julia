@@ -937,6 +937,14 @@ instances will be used when the URL has changed.
 mutable struct CredentialPayload <: Payload
     credential::Nullable{AbstractCredentials}
     cache::Nullable{CachedCredentials}
+    scheme::String
+    username::String
+    host::String
+    path::String
+
+    function CredentialPayload(credential::Nullable{<:AbstractCredentials}, cache::Nullable{CachedCredentials})
+        new(credential, cache, "", "", "", "")
+    end
 end
 
 function CredentialPayload(credential::Nullable{<:AbstractCredentials})
