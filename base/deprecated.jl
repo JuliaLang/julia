@@ -1279,11 +1279,9 @@ end
 # #19635
 for fname in (:ones, :zeros)
     @eval @deprecate ($fname)(T::Type, arr) ($fname)(T, size(arr))
-    @eval ($fname)(T::Type, i::Integer) = ($fname)(T, (i,))
+    @eval ($fname)(::Type{T}, i::Integer) where {T} = ($fname)(T, (i,)) # provides disambiguation with method in Base
     @eval function ($fname)(::Type{T}, arr::Array{T}) where T
-        msg = string("`", $fname, "{T}(::Type{T}, arr::Array{T})` is deprecated, use ",
-                            "`", $fname , "(T, size(arr))` instead. ",
-                           )
+        msg = $("`$fname{T}(::Type{T}, arr::Array{T})` is deprecated, use `$fname(T, size(arr))` instead.")
         error(msg)
     end
 end
