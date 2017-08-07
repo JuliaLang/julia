@@ -65,7 +65,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
     walkast(c.code) do x
         if isa(x, Expr)
             !is_top_level && x.head == :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
-            narg_bounds = get(x.head, -1:-1)
+            narg_bounds = get(VALID_EXPR_HEADS, x.head, -1:-1)
             nargs = length(x.args)
             if narg_bounds == -1:-1
                 push!(errors, InvalidCodeError(INVALID_EXPR_HEAD, (x.head, x)))
