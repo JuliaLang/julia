@@ -116,15 +116,6 @@ function free(buf_ref::Base.Ref{Buffer})
     ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ref)
 end
 
-"Abstract credentials payload"
-abstract type AbstractCredentials end
-
-"Checks if credentials were used"
-checkused!(p::AbstractCredentials) = true
-checkused!(p::Void) = false
-"Resets credentials for another use"
-reset!(p::AbstractCredentials, cnt::Int=3) = nothing
-
 """
     LibGit2.CheckoutOptions
 
@@ -836,6 +827,15 @@ function objtype(obj_type::Consts.OBJECT)
 end
 
 import Base.securezero!
+
+"Abstract credentials payload"
+abstract type AbstractCredentials end
+
+"Checks if credentials were used"
+checkused!(p::AbstractCredentials) = true
+checkused!(p::Void) = false
+"Resets credentials for another use"
+reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 
 "Credentials that support only `user` and `password` parameters"
 mutable struct UserPasswordCredentials <: AbstractCredentials
