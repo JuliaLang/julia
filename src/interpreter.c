@@ -302,20 +302,15 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         assert(jl_expr_nargs(ex) != 1 || jl_is_symbol(fname));
 
         if (jl_is_symbol(fname)) {
-            jl_value_t **bp=NULL;
-            jl_value_t *bp_owner=NULL;
-            jl_binding_t *b=NULL;
-            if (bp == NULL) {
-                b = jl_get_binding_for_method_def(modu, fname);
-                bp = &b->value;
-                bp_owner = (jl_value_t*)modu;
-            }
-            jl_value_t *gf = jl_generic_function_def(fname, modu, bp, bp_owner, b);
+            jl_value_t *bp_owner = (jl_value_t*)modu;
+            jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
+            jl_value_t **bp = &b->value;
+            jl_value_t *gf = jl_generic_function_def(b->name, b->owner, bp, bp_owner, b);
             if (jl_expr_nargs(ex) == 1)
                 return gf;
         }
 
-        jl_value_t *atypes=NULL, *meth=NULL;
+        jl_value_t *atypes = NULL, *meth = NULL;
         JL_GC_PUSH2(&atypes, &meth);
         atypes = eval(args[1], s);
         meth = eval(args[2], s);
@@ -330,24 +325,8 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             sym = jl_globalref_name(sym);
         }
         assert(jl_is_symbol(sym));
-        jl_binding_t *b = jl_get_binding_wr(modu, sym);
+        jl_binding_t *b = jl_get_binding_wr(modu, sym, 1);
         jl_declare_constant(b);
-        return (jl_value_t*)jl_nothing;
-    }
-    else if (ex->head == global_sym) {
-        // create uninitialized mutable binding for "global x" decl
-        // TODO: handle type decls
-        size_t i, l = jl_array_len(ex->args);
-        for (i = 0; i < l; i++) {
-            jl_sym_t *gsym = (jl_sym_t*)args[i];
-            jl_module_t *gmodu = modu;
-            if (jl_is_globalref(gsym)) {
-                gmodu = jl_globalref_mod(gsym);
-                gsym = jl_globalref_name(gsym);
-            }
-            assert(jl_is_symbol(gsym));
-            jl_get_binding_wr(gmodu, gsym);
-        }
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == abstracttype_sym) {
@@ -368,7 +347,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         assert(jl_is_symbol(name));
         dt = jl_new_abstracttype(name, modu, NULL, (jl_svec_t*)para);
         w = dt->name->wrapper;
-        jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
+        jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name, 1);
         temp = b->value;
         check_can_assign_type(b, w);
         b->value = w;
@@ -416,7 +395,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
                       jl_symbol_name((jl_sym_t*)name));
         dt = jl_new_primitivetype(name, modu, NULL, (jl_svec_t*)para, nb);
         w = dt->name->wrapper;
-        jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
+        jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name, 1);
         temp = b->value;
         check_can_assign_type(b, w);
         b->value = w;
@@ -461,7 +440,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
                              0, args[5]==jl_true ? 1 : 0, jl_unbox_long(args[6]));
         w = dt->name->wrapper;
 
-        jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
+        jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name, 1);
         temp = b->value;  // save old value
         // temporarily assign so binding is available for field types
         check_can_assign_type(b, w);
@@ -573,17 +552,14 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
                     s->locals[n-1] = rhs;
                 }
                 else {
-                    jl_module_t *m;
+                    jl_module_t *modu = s->module;
                     if (jl_is_globalref(sym)) {
-                        m = jl_globalref_mod(sym);
+                        modu = jl_globalref_mod(sym);
                         sym = (jl_value_t*)jl_globalref_name(sym);
-                    }
-                    else {
-                        m = s->module;
                     }
                     assert(jl_is_symbol(sym));
                     JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr(m, (jl_sym_t*)sym);
+                    jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)sym, 1);
                     jl_checked_assignment(b, rhs);
                     JL_GC_POP();
                 }

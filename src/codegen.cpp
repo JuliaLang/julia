@@ -3012,8 +3012,15 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
 {
     jl_binding_t *b = NULL;
     if (assign) {
-        b = jl_get_binding_wr(m, s);
+        b = jl_get_binding_wr(m, s, 0);
         assert(b != NULL);
+        if (b->owner != m) {
+            char *msg;
+            asprintf(&msg, "cannot assign variable %s.%s from module %s",
+                     jl_symbol_name(b->owner->name), jl_symbol_name(s), jl_symbol_name(m->name));
+            emit_error(ctx, msg);
+            free(msg);
+        }
     }
     else {
         b = jl_get_binding(m, s);
@@ -3748,7 +3755,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
                 jl_ptls_t ptls = jl_get_ptls_states();
                 jl_value_t *e = ptls->exception_in_transit;
                 // errors. boo. root it somehow :(
-                bnd = jl_get_binding_wr(ctx.module, (jl_sym_t*)jl_gensym());
+                bnd = jl_get_binding_wr(ctx.module, (jl_sym_t*)jl_gensym(), 1);
                 bnd->value = e;
                 bnd->constp = 1;
                 raise_exception(ctx, literal_pointer_val(ctx, e));

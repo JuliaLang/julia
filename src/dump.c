@@ -1515,7 +1515,7 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s)
         jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s, NULL);
         if (name == NULL)
             break;
-        jl_binding_t *b = jl_get_binding_wr(m, name);
+        jl_binding_t *b = jl_get_binding_wr(m, name, 1);
         b->value = jl_deserialize_value(s, &b->value);
         jl_gc_wb_buf(m, b, sizeof(jl_binding_t));
         if (b->value != NULL) jl_gc_wb(m, b->value);
@@ -1981,7 +1981,7 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
             }
             case 2: { // reinsert module v into parent (const)
                 jl_module_t *mod = (jl_module_t*)v;
-                jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name);
+                jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name, 1);
                 jl_declare_constant(b); // this can throw
                 if (b->value != NULL) {
                     if (!jl_is_module(b->value)) {

@@ -174,19 +174,6 @@ julia> x
 12
 ```
 
-Within soft scopes, the *global* keyword is never necessary, although allowed. The only case
-when it would change the semantics is (currently) a syntax error:
-
-```jldoctest
-julia> let
-           local j = 2
-           let
-               global j = 3
-           end
-       end
-ERROR: syntax: `global j`: j is local variable in the enclosing scope
-```
-
 ### Hard Local Scope
 
 Hard local scopes are introduced by function definitions (in all their forms), struct type definition blocks,
@@ -336,8 +323,7 @@ constructing [closures](https://en.wikipedia.org/wiki/Closure_%28computer_progra
 have a private state, for instance the `state` variable in the following example:
 
 ```jldoctest
-julia> let
-           state = 0
+julia> let state = 0
            global counter
            counter() = state += 1
        end;
@@ -483,13 +469,13 @@ julia> const e  = 2.71828182845904523536;
 julia> const pi = 3.14159265358979323846;
 ```
 
-The `const` declaration is allowed on both global and local variables, but is especially useful
-for globals. It is difficult for the compiler to optimize code involving global variables, since
+The `const` declaration should only be used in global scope on globals.
+It is difficult for the compiler to optimize code involving global variables, since
 their values (or even their types) might change at almost any time. If a global variable will
 not change, adding a `const` declaration solves this performance problem.
 
 Local constants are quite different. The compiler is able to determine automatically when a local
-variable is constant, so local constant declarations are not necessary for performance purposes.
+variable is constant, so local constant declarations are not necessary, and are currently just ignored.
 
 Special top-level assignments, such as those performed by the `function` and `struct` keywords,
 are constant by default.

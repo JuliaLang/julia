@@ -1055,7 +1055,7 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
             case 2: { // reinsert module v into parent (const)
                 jl_module_t *mod = (jl_module_t*)v;
                 assert(jl_is_module(mod));
-                jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name);
+                jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name, 1);
                 jl_declare_constant(b); // this can throw
                 if (b->value != NULL) {
                     if (!jl_is_module(b->value)) {
