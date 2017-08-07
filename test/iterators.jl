@@ -314,7 +314,7 @@ end
 @test Base.iteratorsize(product(1:2))                        == Base.HasShape()
 @test Base.iteratorsize(product(1:2, 1:2))                   == Base.HasShape()
 @test Base.iteratorsize(product(take(1:2, 1), take(1:2, 1))) == Base.HasShape()
-@test Base.iteratorsize(product(take(1:2, 2)))               == Base.HasLength()
+@test Base.iteratorsize(product(take(1:2, 2)))               == Base.HasShape()
 @test Base.iteratorsize(product([1 2; 3 4]))                 == Base.HasShape()
 
 # iteratoreltype trait business
