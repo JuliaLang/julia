@@ -127,11 +127,12 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, mi::Core.MethodInsta
                         c::Union{Void,CodeInfo} = Core.Inference.retrieve_code_info(mi))
     m = mi.def::Method
     sig_params = unwrap_unionall(m.sig).parameters
-    if length(sig_params) != m.nargs
+    if m.isva
+        if length(sig_params) < (m.nargs - 1)
+            push!(errors, InvalidCodeError(SIGNATURE_VARARG_MISMATCH, (last(sig_params), m.isva)))
+        end
+    elseif length(sig_params) != m.nargs
         push!(errors, InvalidCodeError(SIGNATURE_NARGS_MISMATCH, (length(sig_params), m.nargs)))
-    end
-    if m.isva && length(sig_params) < (m.nargs - 1)
-        push!(errors, InvalidCodeError(SIGNATURE_VARARG_MISMATCH, (last(sig_params), m.isva)))
     end
     if isa(c, CodeInfo)
         m.nargs > length(c.slotnames) && push!(errors, InvalidCodeError(NARGS_MISMATCH))
