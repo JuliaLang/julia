@@ -10,13 +10,17 @@ requirejs.config({
         'jquery': 'https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min',
         'jqueryui': 'https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.0/jquery-ui.min',
         'headroom': 'https://cdnjs.cloudflare.com/ajax/libs/headroom/0.9.3/headroom.min',
-        'mathjax': 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS_HTML',
-        'highlight': 'highlightjs/highlight',
+        'mathjax': 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS_HTML',
+        'highlight': 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min',
+        'highlight-julia': 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/languages/julia.min',
+        'highlight-julia-repl': 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/languages/julia-repl.min',
     },
     shim: {
         'mathjax' : {
             exports: "MathJax"
-        }
+        },
+        'highlight-julia': ['highlight'],
+        'highlight-julia-repl': ['highlight'],
     }
 });
 
@@ -49,7 +53,7 @@ require(['mathjax'], function(MathJax) {
     });
 })
 
-require(['jquery', 'highlight'], function($, hljs) {
+require(['jquery', 'highlight', 'highlight-julia', 'highlight-julia-repl'], function($, hljs) {
     $(document).ready(function() {
         hljs.initHighlighting();
     })
