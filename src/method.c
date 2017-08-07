@@ -247,24 +247,23 @@ jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast)
 }
 
 // invoke (compiling if necessary) the jlcall function pointer for a method template
-STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_method_instance_t *generator,
+STATIC_INLINE jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator, jl_svec_t *sparam_vals,
                                          jl_value_t **args, uint32_t nargs)
 {
-    jl_generic_fptr_t fptr;
-    fptr.fptr = generator->fptr;
-    fptr.jlcall_api = generator->jlcall_api;
-    if (__unlikely(fptr.fptr == NULL || fptr.jlcall_api == 0)) {
-        size_t world = generator->def.method->min_world;
-        const char *F = jl_compile_linfo(&generator, (jl_code_info_t*)generator->inferred, world, &jl_default_cgparams).functionObject;
-        fptr = jl_generate_fptr(generator, F, world);
+    size_t n_sparams = jl_svec_len(sparam_vals);
+    jl_value_t **gargs;
+    size_t totargs = 1 + n_sparams + nargs + def->isva;
+    JL_GC_PUSHARGS(gargs, totargs);
+    gargs[0] = generator;
+    memcpy(&gargs[1], jl_svec_data(sparam_vals), n_sparams * sizeof(void*));
+    memcpy(&gargs[1 + n_sparams], args, nargs * sizeof(void*));
+    if (def->isva) {
+        gargs[totargs-1] = jl_f_tuple(NULL, &gargs[1 + n_sparams + def->nargs - 1], nargs - (def->nargs - 1));
+        gargs[1 + n_sparams + def->nargs - 1] = gargs[totargs - 1];
     }
-    assert(jl_svec_len(generator->def.method->sparam_syms) == jl_svec_len(sparam_vals));
-    if (fptr.jlcall_api == 1)
-        return fptr.fptr1(args[0], &args[1], nargs-1);
-    else if (fptr.jlcall_api == 3)
-        return fptr.fptr3(sparam_vals, args[0], &args[1], nargs-1);
-    else
-        abort(); // shouldn't have inferred any other calling convention
+    jl_value_t *code = jl_apply(gargs, 1 + n_sparams + def->nargs);
+    JL_GC_POP();
+    return code;
 }
 
 // return a newly allocated CodeInfo for the function signature
@@ -273,71 +272,34 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 {
     JL_TIMING(STAGED_FUNCTION);
     jl_tupletype_t *tt = (jl_tupletype_t*)linfo->specTypes;
-    jl_svec_t *env = linfo->sparam_vals;
-    jl_expr_t *ex = NULL;
-    jl_value_t *linenum = NULL;
-    jl_svec_t *sparam_vals = env;
-    jl_method_instance_t *generator = linfo->def.method->generator;
+    jl_method_t *def = linfo->def.method;
+    jl_value_t *generator = def->generator;
     assert(generator != NULL);
-    assert(linfo != generator);
+    assert(jl_is_method(def));
     jl_code_info_t *func = NULL;
-    JL_GC_PUSH4(&ex, &linenum, &sparam_vals, &func);
+    jl_value_t *ex = NULL;
+    JL_GC_PUSH2(&ex, &func);
     jl_ptls_t ptls = jl_get_ptls_states();
     int last_lineno = jl_lineno;
     int last_in = ptls->in_pure_callback;
     jl_module_t *last_m = ptls->current_module;
     jl_module_t *task_last_m = ptls->current_task->current_module;
     size_t last_age = jl_get_ptls_states()->world_age;
-    assert(jl_svec_len(linfo->def.method->sparam_syms) == jl_svec_len(sparam_vals));
+
     JL_TRY {
         ptls->in_pure_callback = 1;
         // need to eval macros in the right module
         ptls->current_task->current_module = ptls->current_module = linfo->def.method->module;
         // and the right world
-        ptls->world_age = generator->def.method->min_world;
-
-        ex = jl_exprn(lambda_sym, 2);
-
-        jl_array_t *argnames = jl_alloc_vec_any(linfo->def.method->nargs);
-        jl_array_ptr_set(ex->args, 0, argnames);
-        jl_fill_argnames((jl_array_t*)generator->inferred, argnames);
-
-        // build the rest of the body to pass to expand
-        jl_expr_t *scopeblock = jl_exprn(jl_symbol("scope-block"), 1);
-        jl_array_ptr_set(ex->args, 1, scopeblock);
-        jl_expr_t *body = jl_exprn(jl_symbol("block"), 3);
-        jl_array_ptr_set(((jl_expr_t*)jl_exprarg(ex, 1))->args, 0, body);
-
-        // add location meta
-        linenum = jl_box_long(linfo->def.method->line);
-        jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, linenum, linfo->def.method->file);
-        jl_array_ptr_set(body->args, 0, linenode);
-        jl_expr_t *pushloc = jl_exprn(meta_sym, 3);
-        jl_array_ptr_set(body->args, 1, pushloc);
-        jl_array_ptr_set(pushloc->args, 0, jl_symbol("push_loc"));
-        jl_array_ptr_set(pushloc->args, 1, linfo->def.method->file); // file
-        jl_array_ptr_set(pushloc->args, 2, jl_symbol("@generated body")); // function
+        ptls->world_age = def->min_world;
 
         // invoke code generator
-        assert(jl_nparams(tt) == jl_array_len(argnames) ||
-               (linfo->def.method->isva && (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
-        jl_value_t *generated_body = jl_call_staged(sparam_vals, generator, jl_svec_data(tt->parameters), jl_nparams(tt));
-        jl_array_ptr_set(body->args, 2, generated_body);
+        jl_value_t *ex = jl_call_staged(linfo->def.method, generator, linfo->sparam_vals, jl_svec_data(tt->parameters), jl_nparams(tt));
 
-        if (jl_is_code_info(generated_body)) {
-            func = (jl_code_info_t*)generated_body;
-        } else {
-            if (linfo->def.method->sparam_syms != jl_emptysvec) {
-                // mark this function as having the same static parameters as the generator
-                size_t i, nsp = jl_svec_len(linfo->def.method->sparam_syms);
-                jl_expr_t *newast = jl_exprn(jl_symbol("with-static-parameters"), nsp + 1);
-                jl_exprarg(newast, 0) = (jl_value_t*)ex;
-                // (with-static-parameters func_expr sp_1 sp_2 ...)
-                for (i = 0; i < nsp; i++)
-                    jl_exprarg(newast, i+1) = jl_svecref(linfo->def.method->sparam_syms, i);
-                ex = newast;
-            }
-
+        if (jl_is_code_info(ex)) {
+            func = (jl_code_info_t*)ex;
+        }
+        else {
             func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, linfo->def.method->module);
             if (!jl_is_code_info(func)) {
                 if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym)
@@ -349,15 +311,9 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             size_t i, l;
             for (i = 0, l = jl_array_len(stmts); i < l; i++) {
                 jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-                stmt = jl_resolve_globals(stmt, linfo->def.method->module, env);
+                stmt = jl_resolve_globals(stmt, linfo->def.method->module, linfo->sparam_vals);
                 jl_array_ptr_set(stmts, i, stmt);
             }
-
-            // add pop_loc meta
-            jl_array_ptr_1d_push(stmts, jl_nothing);
-            jl_expr_t *poploc = jl_exprn(meta_sym, 1);
-            jl_array_ptr_set(stmts, jl_array_len(stmts) - 1, poploc);
-            jl_array_ptr_set(poploc->args, 0, jl_symbol("pop_loc"));
         }
 
         ptls->in_pure_callback = last_in;
@@ -404,6 +360,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
 {
     uint8_t j;
     uint8_t called = 0;
+    int gen_only = 0;
     for (j = 1; j < m->nargs && j <= 8; j++) {
         jl_value_t *ai = jl_array_ptr_ref(src->slotnames, j);
         if (ai == (jl_value_t*)unused_sym)
@@ -434,28 +391,50 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 set_lineno = 1;
             }
         }
-        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == meta_sym &&
-                 jl_expr_nargs(st) > 1 && jl_exprarg(st, 0) == (jl_value_t*)nospecialize_sym) {
-            for (size_t j=1; j < jl_expr_nargs(st); j++) {
-                jl_value_t *aj = jl_exprarg(st, j);
-                if (jl_is_slot(aj)) {
-                    int sn = (int)jl_slot_number(aj) - 2;
-                    if (sn >= 0) {  // @nospecialize on self is valid but currently ignored
-                        if (sn > (m->nargs - 2)) {
-                            jl_error("@nospecialize annotation applied to a non-argument");
-                        }
-                        else if (sn >= sizeof(m->nospecialize) * 8) {
-                            jl_printf(JL_STDERR,
-                                      "WARNING: @nospecialize annotation only supported on the first %d arguments.\n",
-                                      (int)(sizeof(m->nospecialize) * 8));
-                        }
-                        else {
-                            m->nospecialize |= (1 << sn);
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == meta_sym) {
+            if (jl_expr_nargs(st) > 1 && jl_exprarg(st, 0) == (jl_value_t*)nospecialize_sym) {
+                for (size_t j=1; j < jl_expr_nargs(st); j++) {
+                    jl_value_t *aj = jl_exprarg(st, j);
+                    if (jl_is_slot(aj)) {
+                        int sn = (int)jl_slot_number(aj) - 2;
+                        if (sn >= 0) {  // @nospecialize on self is valid but currently ignored
+                            if (sn > (m->nargs - 2)) {
+                                jl_error("@nospecialize annotation applied to a non-argument");
+                            }
+                            else if (sn >= sizeof(m->nospecialize) * 8) {
+                                jl_printf(JL_STDERR,
+                                          "WARNING: @nospecialize annotation only supported on the first %d arguments.\n",
+                                          (int)(sizeof(m->nospecialize) * 8));
+                            }
+                            else {
+                                m->nospecialize |= (1 << sn);
+                            }
                         }
                     }
                 }
+                st = jl_nothing;
             }
-            st = jl_nothing;
+            else if (jl_expr_nargs(st) == 2 && jl_exprarg(st, 0) == (jl_value_t*)generated_sym) {
+                m->generator = NULL;
+                jl_value_t *gexpr = jl_exprarg(st, 1);
+                if (jl_expr_nargs(gexpr) == 6) {
+                    // expects (new (core GeneratedFunctionStub) funcname argnames sp line file)
+                    jl_value_t *funcname = jl_exprarg(gexpr, 1);
+                    assert(jl_is_symbol(funcname));
+                    if (jl_get_global(m->module, (jl_sym_t*)funcname) != NULL) {
+                        m->generator = jl_toplevel_eval(m->module, gexpr);
+                        jl_gc_wb(m, m->generator);
+                    }
+                }
+                if (m->generator == NULL) {
+                    jl_error("invalid @generated function; try placing it in global scope");
+                }
+                st = jl_nothing;
+            }
+            else if (jl_expr_nargs(st) == 1 && jl_exprarg(st, 0) == (jl_value_t*)generated_only_sym) {
+                gen_only = 1;
+                st = jl_nothing;
+            }
         }
         else {
             st = jl_resolve_globals(st, m->module, sparam_vars);
@@ -465,7 +444,10 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     src = jl_copy_code_info(src);
     src->code = copy;
     jl_gc_wb(src, copy);
-    m->source = (jl_value_t*)jl_compress_ast(m, src);
+    if (gen_only)
+        m->source = NULL;
+    else
+        m->source = (jl_value_t*)jl_compress_ast(m, src);
     jl_gc_wb(m, m->source);
     JL_GC_POP();
 }
@@ -506,8 +488,7 @@ static jl_method_t *jl_new_method(
         jl_tupletype_t *sig,
         size_t nargs,
         int isva,
-        jl_svec_t *tvars,
-        int isstaged)
+        jl_svec_t *tvars)
 {
     size_t i, l = jl_svec_len(tvars);
     jl_svec_t *sparam_syms = jl_alloc_svec_uninit(l);
@@ -527,13 +508,6 @@ static jl_method_t *jl_new_method(
     m->isva = isva;
     m->nargs = nargs;
     jl_method_set_source(m, definition);
-    if (isstaged) {
-        // create and store generator for generated functions
-        m->generator = jl_get_specialized(m, (jl_value_t*)jl_anytuple_type, jl_emptysvec);
-        jl_gc_wb(m, m->generator);
-        m->generator->inferred = (jl_value_t*)m->source;
-        m->source = NULL;
-    }
 
 #ifdef RECORD_METHOD_ORDER
     if (jl_all_methods == NULL)
@@ -653,8 +627,7 @@ extern tracer_cb jl_newmeth_tracer;
 
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                                 jl_code_info_t *f,
-                                jl_module_t *module,
-                                jl_value_t *isstaged)
+                                jl_module_t *module)
 {
     // argdata is svec(svec(types...), svec(typevars...))
     jl_svec_t *atypes = (jl_svec_t*)jl_svecref(argdata, 0);
@@ -711,7 +684,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
         // the result is that the closure variables get interpolated directly into the AST
         f = jl_new_code_info_from_ast((jl_expr_t*)f);
     }
-    m = jl_new_method(f, name, module, (jl_tupletype_t*)argtype, nargs, isva, tvars, isstaged == jl_true);
+    m = jl_new_method(f, name, module, (jl_tupletype_t*)argtype, nargs, isva, tvars);
     m->nospecialize |= nospec;
 
     if (jl_has_free_typevars(argtype)) {

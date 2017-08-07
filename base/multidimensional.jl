@@ -549,14 +549,11 @@ end
 @noinline throw_checksize_error(A, sz) = throw(DimensionMismatch("output array is the wrong size; expected $sz, got $(size(A))"))
 
 ## setindex! ##
-@generated function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractArray}...)
-    N = length(I)
-    quote
-        @_inline_meta
-        @boundscheck checkbounds(A, I...)
-        _unsafe_setindex!(l, _maybe_reshape(l, A, I...), x, I...)
-        A
-    end
+function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractArray}...)
+    @_inline_meta
+    @boundscheck checkbounds(A, I...)
+    _unsafe_setindex!(l, _maybe_reshape(l, A, I...), x, I...)
+    A
 end
 
 _iterable(v::AbstractArray) = v
@@ -916,28 +913,29 @@ function copy!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
     dest
 end
 
-@generated function copy!(dest::AbstractArray{T1,N},
-                          Rdest::CartesianRange{N},
-                          src::AbstractArray{T2,N},
-                          Rsrc::CartesianRange{N}) where {T1,T2,N}
-    quote
-        isempty(Rdest) && return dest
-        if size(Rdest) != size(Rsrc)
-            throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
-        end
-        @boundscheck checkbounds(dest, first(Rdest))
-        @boundscheck checkbounds(dest, last(Rdest))
-        @boundscheck checkbounds(src, first(Rsrc))
-        @boundscheck checkbounds(src, last(Rsrc))
-        ΔI = first(Rdest) - first(Rsrc)
-        # TODO: restore when #9080 is fixed
-        # for I in Rsrc
-        #     @inbounds dest[I+ΔI] = src[I]
-        @nloops $N i (n->Rsrc.indices[n]) begin
-            @inbounds @nref($N,dest,n->i_n+ΔI[n]) = @nref($N,src,i)
-        end
-        dest
+function copy!(dest::AbstractArray{T1,N}, Rdest::CartesianRange{N},
+               src::AbstractArray{T2,N}, Rsrc::CartesianRange{N}) where {T1,T2,N}
+    isempty(Rdest) && return dest
+    if size(Rdest) != size(Rsrc)
+        throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
     end
+    @boundscheck checkbounds(dest, first(Rdest))
+    @boundscheck checkbounds(dest, last(Rdest))
+    @boundscheck checkbounds(src, first(Rsrc))
+    @boundscheck checkbounds(src, last(Rsrc))
+    ΔI = first(Rdest) - first(Rsrc)
+    if @generated
+        quote
+            @nloops $N i (n->Rsrc.indices[n]) begin
+                @inbounds @nref($N,dest,n->i_n+ΔI[n]) = @nref($N,src,i)
+            end
+        end
+    else
+        for I in Rsrc
+            @inbounds dest[I + ΔI] = src[I]
+        end
+    end
+    dest
 end
 
 """

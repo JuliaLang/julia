@@ -55,7 +55,8 @@ jl_sym_t *meta_sym; jl_sym_t *compiler_temp_sym;
 jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
 jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
 jl_sym_t *polly_sym; jl_sym_t *inline_sym;
-jl_sym_t *propagate_inbounds_sym;
+jl_sym_t *propagate_inbounds_sym; jl_sym_t *generated_sym;
+jl_sym_t *generated_only_sym;
 jl_sym_t *isdefined_sym; jl_sym_t *nospecialize_sym;
 jl_sym_t *macrocall_sym;
 jl_sym_t *hygienicscope_sym;
@@ -343,6 +344,8 @@ void jl_init_frontend(void)
     hygienicscope_sym = jl_symbol("hygienic-scope");
     gc_preserve_begin_sym = jl_symbol("gc_preserve_begin");
     gc_preserve_end_sym = jl_symbol("gc_preserve_end");
+    generated_sym = jl_symbol("generated");
+    generated_only_sym = jl_symbol("generated_only");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)

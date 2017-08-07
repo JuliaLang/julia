@@ -2061,7 +2061,7 @@ void jl_init_types(void)
                             jl_simplevector_type,
                             jl_any_type,
                             jl_any_type, // jl_method_instance_type
-                            jl_any_type, // jl_method_instance_type
+                            jl_any_type,
                             jl_array_any_type,
                             jl_any_type,
                             jl_int32_type,
@@ -2174,7 +2174,6 @@ void jl_init_types(void)
 #endif
     jl_svecset(jl_methtable_type->types, 8, jl_int32_type); // uint32_t
     jl_svecset(jl_method_type->types, 10, jl_method_instance_type);
-    jl_svecset(jl_method_type->types, 11, jl_method_instance_type);
     jl_svecset(jl_method_instance_type->types, 12, jl_voidpointer_type);
     jl_svecset(jl_method_instance_type->types, 13, jl_voidpointer_type);
     jl_svecset(jl_method_instance_type->types, 14, jl_voidpointer_type);

@@ -332,10 +332,23 @@ function remove_linenums!(ex::Expr)
     return ex
 end
 
+macro generated()
+    return Expr(:generated)
+end
+
 macro generated(f)
-     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
-        f.head = :stagedfunction
-        return Expr(:escape, f)
+    if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
+        body = f.args[2]
+        lno = body.args[1]
+        return Expr(:escape,
+                    Expr(f.head, f.args[1],
+                         Expr(:block,
+                              lno,
+                              Expr(:if, Expr(:generated),
+                                   body,
+                                   Expr(:block,
+                                        Expr(:meta, :generated_only),
+                                        Expr(:return, nothing))))))
     else
         error("invalid syntax; @generated must be used with a function definition")
     end

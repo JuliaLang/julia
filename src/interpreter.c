@@ -322,7 +322,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSH2(&atypes, &meth);
         atypes = eval(args[1], s);
         meth = eval(args[2], s);
-        jl_method_def((jl_svec_t*)atypes, (jl_code_info_t*)meth, s->module, args[3]);
+        jl_method_def((jl_svec_t*)atypes, (jl_code_info_t*)meth, s->module);
         JL_GC_POP();
         return jl_nothing;
     }

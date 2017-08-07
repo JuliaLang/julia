@@ -577,12 +577,18 @@ _valuefields(::Type{<:AbstractTriangular}) = [:data]
 
 const SpecialArrays = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal,AbstractTriangular}
 
-@generated function fillslots!(A::SpecialArrays, x)
-    ex = :(xT = convert(eltype(A), x))
-    for field in _valuefields(A)
-        ex = :($ex; fill!(A.$field, xT))
+function fillslots!(A::SpecialArrays, x)
+    xT = convert(eltype(A), x)
+    if @generated
+        quote
+            $([ :(fill!(A.$field, xT)) for field in _valuefields(A) ]...)
+        end
+    else
+        for field in _valuefields(A)
+            fill!(getfield(A, field), xT)
+        end
     end
-    :($ex;return A)
+    return A
 end
 
 # for historical reasons:

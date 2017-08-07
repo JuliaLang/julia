@@ -1000,6 +1000,8 @@ extern jl_sym_t *isdefined_sym;
 extern jl_sym_t *nospecialize_sym;
 extern jl_sym_t *boundscheck_sym;
 extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
+extern jl_sym_t *generated_sym;
+extern jl_sym_t *generated_only_sym;
 
 struct _jl_sysimg_fptrs_t;
 
