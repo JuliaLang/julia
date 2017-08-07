@@ -2,7 +2,7 @@
 
 module Sort
 
-using Base: Order, Checked, copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length
+using Base: Order, Checked, copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length, WritableRandomAccess
 
 import
     Base.sort,
@@ -311,7 +311,7 @@ const DEFAULT_STABLE   = MergeSort
 const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, ::InsertionSortAlg, o::Ordering)
+function sort!(v, lo::Int, hi::Int, ::InsertionSortAlg, o::Ordering)
     @inbounds for i = lo+1:hi
         j = i
         x = v[i]
@@ -336,7 +336,7 @@ end
 # Upon return, the pivot is in v[lo], and v[hi] is guaranteed to be
 # greater than the pivot
 
-@inline function selectpivot!(v::AbstractVector, lo::Int, hi::Int, o::Ordering)
+@inline function selectpivot!(v, lo::Int, hi::Int, o::Ordering)
     @inbounds begin
         mi = (lo+hi)>>>1
 
@@ -366,7 +366,7 @@ end
 #
 # select a pivot, and partition v according to the pivot
 
-function partition!(v::AbstractVector, lo::Int, hi::Int, o::Ordering)
+function partition!(v, lo::Int, hi::Int, o::Ordering)
     pivot = selectpivot!(v, lo, hi, o)
     # pivot == v[lo], v[hi] > pivot
     i, j = lo, hi
@@ -385,7 +385,7 @@ function partition!(v::AbstractVector, lo::Int, hi::Int, o::Ordering)
     return j
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering)
+function sort!(v, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         j = partition!(v, lo, hi, o)
@@ -403,7 +403,7 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
     return v
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering, t=similar(v,0))
+function sort!(v, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering, t=similar(v,0))
     @inbounds if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
@@ -468,7 +468,7 @@ end
 # end
 
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort,
+function sort!(v, lo::Int, hi::Int, a::PartialQuickSort,
                o::Ordering)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
@@ -494,11 +494,16 @@ end
 
 ## generic sorting methods ##
 
-defalg(v::AbstractArray) = DEFAULT_STABLE
-defalg(v::AbstractArray{<:Number}) = DEFAULT_UNSTABLE
+defalg(v) = defalg(eltype(v))
+defalg(::Type) = DEFAULT_STABLE
+defalg(::Type{<:Number}) = DEFAULT_UNSTABLE
 
-function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
-    inds = indices(v,1)
+sort!(v, alg::Algorithm, order::Ordering) = sort!(v, Base.iteratoraccess(v), alg, order)
+
+sort!(v, access, alg::Algorithm, order::Ordering) = throw(ArgumentError("the collection must have setindex! defined"))
+
+function sort!(v, ::WritableRandomAccess, alg::Algorithm, order::Ordering)
+    inds = linearindices(v)
     sort!(v,first(inds),last(inds),alg,order)
 end
 
@@ -541,7 +546,7 @@ julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
  (1, "c")
 ```
 """
-function sort!(v::AbstractVector;
+function sort!(v;
                alg::Algorithm=defalg(v),
                lt=isless,
                by=identity,
@@ -607,7 +612,7 @@ julia> v
  2
 ```
 """
-sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
+sort(v; kws...) = sort!(copymutable(v); kws...)
 
 ## selectperm: the permutation to sort the first k elements of an array ##
 

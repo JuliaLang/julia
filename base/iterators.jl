@@ -2,9 +2,10 @@
 
 module Iterators
 
-import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, indices, ndims
+import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, iteratoraccess, indices, ndims, getindex, setindex!
 
-using Base: tuple_type_cons, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds
+using Base: tuple_type_cons, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype,
+    ForwardAccess, RandomAccess, WritableRandomAccess, removewritable, OneTo, @propagate_inbounds
 
 export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
 
@@ -25,6 +26,12 @@ and_iteratorsize(a, b) = SizeUnknown()
 
 and_iteratoreltype(iel::T, ::T) where {T} = iel
 and_iteratoreltype(a, b) = EltypeUnknown()
+
+and_iteratoraccess(::ForwardAccess, b) = ForwardAccess()
+and_iteratoraccess(a, ::ForwardAccess) = ForwardAccess()
+and_iteratoraccess(::RandomAccess, b) = RandomAccess()
+and_iteratoraccess(a, ::RandomAccess) = RandomAccess()
+and_iteratoraccess(::WritableRandomAccess, ::WritableRandomAccess) = WritableRandomAccess()
 
 # enumerate
 
@@ -68,8 +75,11 @@ end
 
 eltype(::Type{Enumerate{I}}) where {I} = Tuple{Int, eltype(I)}
 
+getindex(e::Enumerate, key...) = getindex(zip(1:length(e), e.itr), key...)
+
 iteratorsize(::Type{Enumerate{I}}) where {I} = iteratorsize(I)
 iteratoreltype(::Type{Enumerate{I}}) where {I} = iteratoreltype(I)
+iteratoraccess(::Type{Enumerate{I}}) where {I} = removewritable(iteratoreltype(I))
 
 struct IndexValue{I,A<:AbstractArray}
     data::A
@@ -168,8 +178,12 @@ eltype(::Type{Zip1{I}}) where {I} = Tuple{eltype(I)}
 end
 @inline done(z::Zip1, st) = done(z.a,st)
 
+getindex(z::Zip1, key...) = (z.a[key...],)
+setindex!(z::Zip1, value::Tuple{I}, key...) where {I} = z.a[key...] = value[1]
+
 iteratorsize(::Type{Zip1{I}}) where {I} = iteratorsize(I)
 iteratoreltype(::Type{Zip1{I}}) where {I} = iteratoreltype(I)
+iteratoraccess(::Type{Zip1{I}}) where {I} = iteratoreltype(I)
 
 struct Zip2{I1, I2} <: AbstractZipIterator
     a::I1
@@ -188,8 +202,13 @@ eltype(::Type{Zip2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
 end
 @inline done(z::Zip2, st) = done(z.a,st[1]) | done(z.b,st[2])
 
+getindex(z::Zip2, key...) = (z.a[key...], z.b[key...])
+setindex!(z::Zip2, value::Tuple{I1,I2}, key...) where {I1,I2} = (z.a[key...] = value[1];
+                                                                z.b[key...] = value[2])
+
 iteratorsize(::Type{Zip2{I1,I2}}) where {I1,I2} = zip_iteratorsize(iteratorsize(I1),iteratorsize(I2))
 iteratoreltype(::Type{Zip2{I1,I2}}) where {I1,I2} = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
+iteratoraccess(::Type{Zip2{I1,I2}}) where {I1,I2} = and_iteratoraccess(iteratoraccess(I1),iteratoraccess(I2))
 
 struct Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
     a::I
@@ -240,8 +259,17 @@ eltype(::Type{Zip{I,Z}}) where {I,Z} = tuple_type_cons(eltype(I), eltype(Z))
 end
 @inline done(z::Zip, st) = done(z.a,st[1]) | done(z.z,st[2])
 
+getindex(z::Zip, key...) = tuple(z.a[key...], z.z[key...]...)
+setindex!(z::Zip, value::Tuple, key...) = _setindex!(z, value, 1, key)
+_setindex!(z::Zip, value, n::Int, key) = (z.a[key...] = value[n];
+                                          _setindex!(z.z, value, n+1, key))
+_setindex!(z::Zip2, value, n::Int, key) = (z.a[key...] = value[n];
+                                           z.b[key...] = value[n+1])
+
 iteratorsize(::Type{Zip{I1,I2}}) where {I1,I2} = zip_iteratorsize(iteratorsize(I1),iteratorsize(I2))
 iteratoreltype(::Type{Zip{I1,I2}}) where {I1,I2} = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
+iteratoraccess(::Type{Zip{I1,I2}}) where {I1,I2} = and_iteratoraccess(iteratoraccess(I1),iteratoraccess(I2))
+
 
 # filter
 
@@ -377,7 +405,10 @@ start(it::Count) = it.start
 next(it::Count, state) = (state, state + it.step)
 done(it::Count, state) = false
 
+getindex(it::Count, key::Integer) = it.start + (key-1)*it.step
+
 iteratorsize(::Type{<:Count}) = IsInfinite()
+iteratoraccess(::Type{<:Count}) = RandomAccess()
 
 # Take -- iterate through the first n elements
 
@@ -422,6 +453,8 @@ take_iteratorsize(::SizeUnknown) = SizeUnknown()
 iteratorsize(::Type{Take{I}}) where {I} = take_iteratorsize(iteratorsize(I))
 length(t::Take) = _min_length(t.xs, 1:t.n, iteratorsize(t.xs), HasLength())
 
+iteratoraccess(::Type{Take{I}}) where {I} = iteratoraccess(I)
+
 start(it::Take) = (it.n, start(it.xs))
 
 function next(it::Take, state)
@@ -434,6 +467,10 @@ function done(it::Take, state)
     n, xs_state = state
     return n <= 0 || done(it.xs, xs_state)
 end
+
+getindex(it::Take, key::Integer) = key > it.n ? throw(BoundsError(it, key)) : it.xs[key]
+setindex!(it::Take, value, key::Integer) =
+    key > it.n ? throw(BoundsError(it, key)) : it.xs[key] = value
 
 # Drop -- iterator through all but the first n elements
 
@@ -479,6 +516,8 @@ drop_iteratorsize(::IsInfinite) = IsInfinite()
 iteratorsize(::Type{Drop{I}}) where {I} = drop_iteratorsize(iteratorsize(I))
 length(d::Drop) = _diff_length(d.xs, 1:d.n, iteratorsize(d.xs), HasLength())
 
+iteratoraccess(::Type{Drop{I}}) where {I} = iteratoraccess(I)
+
 function start(it::Drop)
     xs_state = start(it.xs)
     for i in 1:it.n
@@ -493,6 +532,9 @@ end
 
 next(it::Drop, state) = next(it.xs, state)
 done(it::Drop, state) = done(it.xs, state)
+
+getindex(it::Drop, key::Integer) = it.xs[key+it.n]
+setindex!(it::Drop, value, key::Integer) = it.xs[key+it.n] = value
 
 # Cycle an iterator forever
 
@@ -519,6 +561,10 @@ cycle(xs) = Cycle(xs)
 eltype(::Type{Cycle{I}}) where {I} = eltype(I)
 iteratoreltype(::Type{Cycle{I}}) where {I} = iteratoreltype(I)
 iteratorsize(::Type{Cycle{I}}) where {I} = IsInfinite()
+iteratoraccess(::Type{Cycle{I}}) where {I} = cycle_iteratoraccess(I, iteratorsize(I))
+
+cycle_iteratoraccess(I, _) = iteratoraccess(I)
+cycle_iteratoraccess(I, ::SizeUnknown) = ForwardAccess()
 
 function start(it::Cycle)
     s = start(it.xs)
@@ -535,6 +581,16 @@ function next(it::Cycle, state)
 end
 
 done(it::Cycle, state) = state[2]
+
+getindex(it::Cycle, key::Integer) = _getindex(it, key, iteratorsize(I))
+_getindex(it::Cycle, key::Integer, ::Union{HasLength,HasShape}) =
+    it.xs[mod1(key, length(it.xs))]
+_getindex(it::Cycle, key::Integer, ::IsInfinite) = it.xs[key]
+
+setindex!(it::Cycle, value, key::Integer) = _setindex!(it, value, key, iteratorsize(I))
+_setindex!(it::Cycle, value, key::Integer, ::Union{HasLength,HasShape}) =
+    it.xs[mod1(key, length(it.xs))] = value
+_setindex!(it::Cycle, value, key::Integer, ::IsInfinite) = it.xs[key] = value
 
 
 # Repeated - repeat an object infinitely many times
@@ -570,9 +626,11 @@ start(it::Repeated) = nothing
 next(it::Repeated, state) = (it.x, nothing)
 done(it::Repeated, state) = false
 
+getindex(it::Repeated, key::Integer) = it.x
+
 iteratorsize(::Type{<:Repeated}) = IsInfinite()
 iteratoreltype(::Type{<:Repeated}) = HasEltype()
-
+iteratoraccess(::Type{<:Repeated}) = RandomAccess()
 
 # Product -- cartesian product of iterators
 
@@ -624,8 +682,12 @@ indices(p::Prod1) = _prod_indices(p.a, iteratorsize(p.a))
 end
 @inline done(p::Prod1, st) = done(p.a, st)
 
+getindex(p::Prod1, key...) = (p.a[key...],)
+setindex!(p::Prod1, value::Tuple{T}, key...) where {T} = p.a[key...] = value[1]
+
 iteratoreltype(::Type{Prod1{I}}) where {I} = iteratoreltype(I)
 iteratorsize(::Type{Prod1{I}}) where {I} = iteratorsize(I)
+iteratoraccess(::Type{Prod1{I}}) where {I} = iteratoraccess(I)
 
 # two iterators
 struct Prod2{I1, I2} <: AbstractProdIterator
@@ -654,6 +716,7 @@ eltype(::Type{Prod2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
 
 iteratoreltype(::Type{Prod2{I1,I2}}) where {I1,I2} = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
 iteratorsize(::Type{Prod2{I1,I2}}) where {I1,I2} = prod_iteratorsize(iteratorsize(I1),iteratorsize(I2))
+iteratoraccess(::Type{Prod2{I1,I2}}) where {I1,I2} = and_iteratoraccess(iteratoraccess(I1), iteratoraccess(I2))
 
 function start(p::AbstractProdIterator)
     s1, s2 = start(p.a), start(p.b)
@@ -679,6 +742,8 @@ end
 
 @inline next(p::Prod2, st) = prod_next(p, st)
 @inline done(p::AbstractProdIterator, st) = st[4]
+
+# TODO: write getindex/setindex! for Prod2 & Prod
 
 # n iterators
 struct Prod{I1, I2<:AbstractProdIterator} <: AbstractProdIterator
