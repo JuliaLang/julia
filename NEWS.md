@@ -35,6 +35,17 @@ Language changes
   * Nested `if` expressions that arise from the keyword `elseif` now use `elseif`
     as their expression head instead of `if` ([#21774]).
 
+  * Parsed and lowered forms of type definitions have been synchronized with their
+    new keywords ([#23157]). Expression heads are renamed as follows:
+
+    + `type`           => `struct`
+
+    + `bitstype`       => `primitive` (order of arguments is also reversed, to match syntax)
+
+    + `composite_type` => `struct_type`
+
+    + `bits_type`      => `primitive_type`
+
 Breaking changes
 ----------------
 

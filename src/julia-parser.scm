@@ -1252,7 +1252,7 @@
   (if (reserved-word? (peek-token s))
       (error (string "invalid type name \"" (take-token s) "\"")))
   (let ((sig (parse-subtype-spec s)))
-    (begin0 (list 'type (if mut? 'true 'false) sig (parse-block s))
+    (begin0 (list 'struct (if mut? 'true 'false) sig (parse-block s))
             (expect-end s word))))
 
 ;; consume any number of line endings from a token stream
@@ -1400,7 +1400,7 @@
             (begin (take-token s)
                    (let* ((spec (with-space-sensitive (parse-subtype-spec s)))
                           (nb   (with-space-sensitive (parse-cond s))))
-                     (begin0 (list 'bitstype nb spec)
+                     (begin0 (list 'primitive spec nb)
                              (expect-end (take-lineendings s) "primitive type"))))))
        ;; deprecated type keywords
        ((type)
@@ -1414,7 +1414,7 @@
                (spec (parse-subtype-spec s)))
           (syntax-deprecation s (string "bitstype " (deparse nb) " " (deparse spec))
                               (string "primitive type " (deparse spec) " " (deparse nb) " end"))
-          (list 'bitstype nb spec)))
+          (list 'primitive spec nb)))
        ((typealias)
         (let ((lhs (with-space-sensitive (parse-call s)))
               (rhs (parse-where s parse-call)))

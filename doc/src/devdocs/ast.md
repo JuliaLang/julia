@@ -516,8 +516,8 @@ end
 parses as:
 
 ```
-(type true (curly Foo (<: T S))
-      (block (line 2) (:: x T)))
+(struct true (curly Foo (<: T S))
+        (block (line 2) (:: x T)))
 ```
 
 The first argument is a boolean telling whether the type is mutable.

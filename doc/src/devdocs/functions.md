@@ -243,7 +243,7 @@ The front end generates type declarations for all closures. Initially, this was 
 generating normal type declarations. However, this produced an extremely large number of constructors,
 all of which were trivial (simply passing all arguments through to `new`). Since methods are partially
 ordered, inserting all of these methods is O(n^2), plus there are just too many of them to keep
-around. This was optimized by generating `composite_type` expressions directly (bypassing default
+around. This was optimized by generating `struct_type` expressions directly (bypassing default
 constructor generation), and using `new` directly to create closure instances. Not the prettiest
 thing ever, but you do what you gotta do.
 

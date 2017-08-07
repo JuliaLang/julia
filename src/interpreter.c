@@ -391,7 +391,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
     }
-    else if (ex->head == bitstype_sym) {
+    else if (ex->head == primtype_sym) {
         if (inside_typedef)
             jl_error("cannot eval a new bits type definition while defining another type");
         jl_value_t *name = args[0];
@@ -439,7 +439,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
     }
-    else if (ex->head == compositetype_sym) {
+    else if (ex->head == structtype_sym) {
         if (inside_typedef)
             jl_error("cannot eval a new data type definition while defining another type");
         jl_value_t *name = args[0];

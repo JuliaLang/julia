@@ -3871,8 +3871,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
             ctx.builder.CreateCall(prepare_call(jltopeval_func), args);
             return ghostValue(jl_void_type);
         }
-        if (head == abstracttype_sym || head == compositetype_sym ||
-            head == bitstype_sym) {
+        if (head == abstracttype_sym || head == structtype_sym ||
+            head == primtype_sym) {
             jl_errorf("type definition not allowed inside a local scope");
         }
         else {
