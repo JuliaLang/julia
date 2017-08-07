@@ -1063,17 +1063,6 @@ conj(x::SparseVector{<:Complex}) = SparseVector(length(x), copy(nonzeroinds(x)),
 imag(x::AbstractSparseVector{Tv,Ti}) where {Tv<:Real,Ti<:Integer} = SparseVector(length(x), Ti[], Tv[])
 @unarymap_nz2z_z2z imag Complex
 
-for op in [:floor, :ceil, :trunc, :round]
-    @eval @unarymap_nz2z_z2z $(op) Real
-end
-
-for op in [:log1p, :expm1,
-           :sin, :tan, :sinpi, :sind, :tand,
-           :asin, :atan, :asind, :atand,
-           :sinh, :tanh, :asinh, :atanh]
-    @eval @unarymap_nz2z_z2z $(op) Number
-end
-
 # function that does not preserve zeros
 
 macro unarymap_z2nz(op, TF)
@@ -1093,16 +1082,6 @@ macro unarymap_z2nz(op, TF)
         end
     end)
 end
-
-for op in [:exp, :exp2, :exp10, :log, :log2, :log10,
-           :cos, :csc, :cot, :sec, :cospi,
-           :cosd, :cscd, :cotd, :secd,
-           :acos, :acot, :acosd, :acotd,
-           :cosh, :csch, :coth, :sech,
-           :acsch, :asech]
-    @eval @unarymap_z2nz $(op) Number
-end
-
 
 ### Binary Map
 

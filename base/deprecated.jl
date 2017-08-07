@@ -1567,6 +1567,23 @@ end
 #     remove parse-with-chains-warn and bitshift-warn
 # update precedence table in doc/src/manual/mathematical-operations.md
 
+# deprecate remaining vectorized methods over SparseVectors (zero-preserving)
+for op in (:floor, :ceil, :trunc, :round,
+        :log1p, :expm1,  :sinpi,
+        :sin,   :tan,    :sind,   :tand,
+        :asin,  :atan,   :asind,  :atand,
+        :sinh,  :tanh,   :asinh,  :atanh)
+    @eval @deprecate ($op)(x::AbstractSparseVector{<:Number,<:Integer}) ($op).(x)
+end
+# deprecate remaining vectorized methods over SparseVectors (not-zero-preserving)
+for op in (:exp, :exp2, :exp10, :log, :log2, :log10,
+        :cos, :cosd, :acos, :cosh, :cospi,
+        :csc, :cscd, :acot, :csch, :acsch,
+        :cot, :cotd, :acosd, :coth,
+        :sec, :secd, :acotd, :sech, :asech)
+    @eval @deprecate ($op)(x::AbstractSparseVector{<:Number,<:Integer}) ($op).(x)
+end
+
 # PR #22182
 @deprecate is_apple   Sys.isapple
 @deprecate is_bsd     Sys.isbsd

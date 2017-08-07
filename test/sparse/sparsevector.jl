@@ -656,42 +656,39 @@ end
 
 ### Zero-preserving math functions: sparse -> sparse
 
-function check_nz2z_z2z(f::Function, x::SparseVector{T}, xf::Vector{T}) where T
-    R = typeof(f(zero(T)))
-    r = f(x)
-    isa(r, AbstractSparseVector) || error("$f(x) is not a sparse vector.")
-    eltype(r) == R || error("$f(x) results in eltype = $(eltype(r)), expect $R")
-    all(r.nzval .!= 0) || error("$f(x) contains zeros in nzval.")
-    Array(r) == f.(xf) || error("Incorrect results found in $f(x).")
-end
+x1operations = (floor, ceil, trunc, round)
+x0operations = (log1p,  expm1,  sinpi,
+                sin,    tan,    sind,   tand,
+                asin,   atan,   asind,  atand,
+                sinh,   tanh,   asinh,  atanh)
 
-for f in [floor, ceil, trunc, round]
-    check_nz2z_z2z(f, rnd_x1, rnd_x1f)
-end
-
-for f in [log1p, expm1,
-          sin, tan, sinpi, sind, tand,
-          asin, atan, asind, atand,
-          sinh, tanh, asinh, atanh]
-    check_nz2z_z2z(f, rnd_x0, rnd_x0f)
+for (spvec, densevec, operations) in (
+        (rnd_x0, rnd_x0f, x0operations),
+        (rnd_x1, rnd_x1f, x1operations) )
+    for op in operations
+        spresvec = op.(spvec)
+        @test spresvec == op.(densevec)
+        @test all(!iszero, spresvec.nzval)
+        resvaltype = typeof(op(zero(eltype(spvec))))
+        resindtype = Base.SparseArrays.indtype(spvec)
+        @test isa(spresvec, SparseVector{resvaltype,resindtype})
+    end
 end
 
 ### Non-zero-preserving math functions: sparse -> dense
 
-function check_z2nz(f::Function, x::SparseVector{T}, xf::Vector{T}) where T
-    R = typeof(f(zero(T)))
-    r = f(x)
-    isa(r, Vector) || error("$f(x) is not a dense vector.")
-    eltype(r) == R || error("$f(x) results in eltype = $(eltype(r)), expect $R")
-    r == f.(xf) || error("Incorrect results found in $f(x).")
-end
-
-for f in [exp, exp2, exp10, log, log2, log10,
-          cos, csc, cot, sec, cospi,
-          cosd, cscd, cotd, secd,
-          acos, acot, acosd, acotd,
-          cosh, csch, coth, sech, acsch, asech]
-    check_z2nz(f, rnd_x0, rnd_x0f)
+for op in (exp, exp2, exp10, log, log2, log10,
+        cos, cosd, acos, cosh, cospi,
+        csc, cscd, acot, csch, acsch,
+        cot, cotd, acosd, coth,
+        sec, secd, acotd, sech, asech)
+    spvec = rnd_x0
+    densevec = rnd_x0f
+    spresvec = op.(spvec)
+    @test spresvec == op.(densevec)
+    resvaltype = typeof(op(zero(eltype(spvec))))
+    resindtype = Base.SparseArrays.indtype(spvec)
+    @test isa(spresvec, SparseVector{resvaltype,resindtype})
 end
 
 
