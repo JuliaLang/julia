@@ -28,8 +28,7 @@ macro deprecate(old, new, ex=true)
             ex ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...)
                   $meta
-                  depwarn(string($oldname, " is deprecated, use ", $newname, " instead."),
-                          $oldmtname)
+                  depwarn($"$old is deprecated, use $new instead.", $oldmtname)
                   $(esc(new))(args...)
               end),
             :(const $oldmtname = Core.Typeof($(esc(old))).name.mt.name))
@@ -54,8 +53,7 @@ macro deprecate(old, new, ex=true)
             ex ? Expr(:export, esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
-                  depwarn(string($oldcall, " is deprecated, use ", $newcall, " instead."),
-                          $oldmtname)
+                  depwarn($"$oldcall is deprecated, use $newcall instead.", $oldmtname)
                   $(esc(new))
               end),
             :(const $oldmtname = Core.Typeof($(esc(oldsym))).name.mt.name))
@@ -232,20 +230,16 @@ end
 
 # For deprecating vectorized functions in favor of compact broadcast syntax
 macro dep_vectorize_1arg(S, f)
-    x = esc(:x) # work around macro hygiene bug
-    T = esc(:T) # work around macro hygiene bug
-    return :( @deprecate $f($x::AbstractArray{$T}) where {$T<:$S} $f.($x) )
+    AbstractArray = GlobalRef(Base, :AbstractArray)
+    return esc(:( @deprecate $f(x::$AbstractArray{T}) where {T<:$S} $f.(x) ))
 end
 macro dep_vectorize_2arg(S, f)
-    x = esc(:x) # work around macro hygiene bug
-    y = esc(:y) # work around macro hygiene bug
-    T1 = esc(:T1) # work around macro hygiene bug
-    T2 = esc(:T2) # work around macro hygiene bug
-    return quote
-        @deprecate $f($x::$S, $y::AbstractArray{$T1}) where {$T1<:$S} $f.($x, $y)
-        @deprecate $f($x::AbstractArray{$T1}, $y::$S) where {$T1<:$S} $f.($x, $y)
-        @deprecate $f($x::AbstractArray{$T1}, $y::AbstractArray{$T2}) where {$T1<:$S, $T2<:$S} $f.($x, $y)
-    end
+    AbstractArray = GlobalRef(Base, :AbstractArray)
+    return esc(quote
+        @deprecate $f(x::$S, y::$AbstractArray{T1}) where {T1<:$S} $f.(x, y)
+        @deprecate $f(x::$AbstractArray{T1}, y::$S) where {T1<:$S} $f.(x, y)
+        @deprecate $f(x::$AbstractArray{T1}, y::$AbstractArray{T2}) where {T1<:$S, T2<:$S} $f.(x, y)
+    end)
 end
 
 # Deprecate @vectorize_1arg-vectorized functions from...
