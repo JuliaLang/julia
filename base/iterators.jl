@@ -202,8 +202,6 @@ end
 For a set of iterable objects, returns an iterable of tuples, where the `i`th tuple contains
 the `i`th component of each input iterable.
 
-Note that [`zip`](@ref) is its own inverse: `collect(zip(zip(a...)...)) == collect(a)`.
-
 # Examples
 ```jldoctest
 julia> a = 1:5
