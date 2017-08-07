@@ -58,24 +58,28 @@ p = 1=>:foo
 @test_throws ArgumentError Base.scalarmax('a',['c','d'])
 @test_throws ArgumentError Base.scalarmax(['a','b'],'c')
 
-s1 = Set([1])
-s2 = Set([2])
-@test_throws MethodError min(s1, s2)
-@test_throws MethodError max(s1, s2)
-@test_throws MethodError minmax(s1, s2)
+@test_throws MethodError min(Set([1]), Set([2]))
+@test_throws MethodError max(Set([1]), Set([2]))
+@test_throws MethodError minmax(Set([1]), Set([2]))
 
-struct TO
-  x
+# Test if isless (not <) is used by min, max, minmax
+# and commutativity.
+struct TO23094
+    x::Int
 end
-Base.isless(a::TO, b::TO) = isless(a.x, b.x)
-Base.isequal(a::TO, b::TO) = isequal(a.x, b.x)
+Base.isless(a::TO23094, b::TO23094) = isless(a.x, b.x)
+Base.isequal(a::TO23094, b::TO23094) = isequal(a.x, b.x)
+import Base.<
+<(a::TO23094, b::TO23094) = error("< should not be called")
 
-@test min(TO(1), TO(2)) == TO(1)
-@test min(TO(2), TO(1)) == TO(1)
-@test max(TO(1), TO(2)) == TO(2)
-@test max(TO(2), TO(1)) == TO(2)
-@test minmax(TO(1), TO(2)) == (TO(1), TO(2))
-@test minmax(TO(2), TO(1)) == (TO(1), TO(2))
+@test isequal(min(TO23094(1), TO23094(2)), TO23094(1))
+@test isequal(min(TO23094(2), TO23094(1)), TO23094(1))
+@test isequal(max(TO23094(1), TO23094(2)), TO23094(2))
+@test isequal(max(TO23094(2), TO23094(1)), TO23094(2))
+@test isequal(minmax(TO23094(1), TO23094(2))[1], TO23094(1))
+@test isequal(minmax(TO23094(1), TO23094(2))[2], TO23094(2))
+@test isequal(minmax(TO23094(2), TO23094(1))[1], TO23094(1))
+@test isequal(minmax(TO23094(2), TO23094(1))[2], TO23094(2))
 
 @test lexless('a','b')
 
