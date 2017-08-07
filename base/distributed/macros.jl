@@ -157,7 +157,8 @@ processes to have execute the expression.
 Equivalent to calling `remotecall_eval(Main, procs, expr)`.
 """
 macro everywhere(ex)
-    return :(@everywhere procs() $ex)
+    procs = GlobalRef(@__MODULE__, :procs)
+    return esc(:(@everywhere $procs() $ex))
 end
 
 macro everywhere(procs, ex)
