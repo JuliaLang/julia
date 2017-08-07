@@ -296,7 +296,8 @@ function InferenceState(linfo::MethodInstance,
         errors = validate_code(linfo, src)
         if !isempty(errors)
             for e in errors
-                println(STDERR, "WARNING: ", e)
+                println(STDERR, "WARNING: Encountered invalid lowered code for method ",
+                        linfo.def, ": ", e)
             end
         end
     end
