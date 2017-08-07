@@ -911,16 +911,6 @@ reset!(p::CachedCredentials) = (foreach(reset!, values(p.cred)); p)
 
 "Obtain the cached credentials for the given host+protocol (credid), or return and store the default if not found"
 get_creds!(collection::CachedCredentials, credid, default) = get!(collection.cred, credid, default)
-get_creds!(creds::AbstractCredentials, credid, default) = creds
-get_creds!(creds::Void, credid, default) = default
-function get_creds!(creds::Ref{Nullable{AbstractCredentials}}, credid, default)
-    if isnull(creds[])
-        creds[] = Nullable{AbstractCredentials}(default)
-        return default
-    else
-        get_creds!(Base.get(creds[]), credid, default)
-    end
-end
 
 function securezero!(p::CachedCredentials)
     foreach(securezero!, values(p.cred))
