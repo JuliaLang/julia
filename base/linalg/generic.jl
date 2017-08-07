@@ -431,7 +431,7 @@ julia> vecnorm([1 2 3 4 5 6 7 8 9])
 ```
 """
 function vecnorm(itr, p::Real=2)
-    isempty(itr) && return float(real(zero(eltype(itr))))
+    isempty(itr) && return float(norm(zero(eltype(itr))))
     if p == 2
         return vecnorm2(itr)
     elseif p == 1
@@ -439,8 +439,7 @@ function vecnorm(itr, p::Real=2)
     elseif p == Inf
         return vecnormInf(itr)
     elseif p == 0
-        return convert(typeof(float(real(zero(eltype(itr))))),
-               countnz(itr))
+        return typeof(float(norm(first(itr))))(count(!iszero, itr))
     elseif p == -Inf
         return vecnormMinusInf(itr)
     else

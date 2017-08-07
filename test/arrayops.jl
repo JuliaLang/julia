@@ -457,8 +457,8 @@ end
     # @test find(s) == [1,2,3,4,5]
     @test find(c -> c == 'l', s) == [3]
     g = graphemes("日本語")
-    @test find(g) == [1,2,3]
     @test find(isascii, g) == Int[]
+    @test find((i % 2 for i in 1:10)) == collect(1:2:9)
 end
 @testset "findn" begin
     b = findn(ones(2,2,2,2))
