@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Expr head => argument count bounds
-const VALID_EXPR_HEADS = Pair{Symbol,UnitRange{Int}}[
+const VALID_EXPR_HEADS = ObjectIdDict(
     :call => 1:typemax(Int),
     :invoke => 2:typemax(Int),
     :static_parameter => 1:1,
@@ -25,14 +25,7 @@ const VALID_EXPR_HEADS = Pair{Symbol,UnitRange{Int}}[
     :foreigncall => 3:typemax(Int),
     :isdefined => 1:1,
     :simdloop => 0:0
-]
-
-function get_expr_narg_bounds(head::Symbol, notfound)
-    for pair in VALID_EXPR_HEADS
-        first(pair) == head && return last(pair)
-    end
-    return notfound
-end
+)
 
 const ASSIGNED_FLAG = 0x02
 
@@ -72,7 +65,7 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
     walkast(c.code) do x
         if isa(x, Expr)
             !is_top_level && x.head == :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
-            narg_bounds = get_expr_narg_bounds(x.head, -1:-1)
+            narg_bounds = get(x.head, -1:-1)
             nargs = length(x.args)
             if narg_bounds == -1:-1
                 push!(errors, InvalidCodeError(INVALID_EXPR_HEAD, (x.head, x)))
