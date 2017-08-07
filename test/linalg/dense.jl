@@ -596,6 +596,36 @@ end
     @test (Ad^0.2)^5 ≈ Ad
     @test (Ad^(2/3))*(Ad^(1/3)) ≈ Ad
     @test (Ad^im)^(-im) ≈ Ad
+
+    #Ah : Hermitian Matrix
+    Ah = convert(Matrix{elty}, [3 1; 1 3])
+    if elty <: Base.LinAlg.BlasComplex
+        Ah += [0 im; -im 0]
+    end
+    @test Ah^(1/2) ≈ sqrtm(Ah)
+    @test Ah^(-1/2) ≈ inv(sqrtm(Ah))
+    @test Ah^(3/4) ≈ sqrtm(Ah) * sqrtm(sqrtm(Ah))
+    @test Ah^(-3/4) ≈ inv(Ah) * sqrtm(sqrtm(Ah))
+    @test Ah^(17/8) ≈ Ah^2 * sqrtm(sqrtm(sqrtm(Ah)))
+    @test Ah^(-17/8) ≈ inv(Ah^2 * sqrtm(sqrtm(sqrtm(Ah))))
+    @test (Ah^0.2)^5 ≈ Ah
+    @test (Ah^(2/3))*(Ah^(1/3)) ≈ Ah
+    @test (Ah^im)^(-im) ≈ Ah
+
+    #ADi : Diagonal Matrix
+    ADi = convert(Matrix{elty}, [3 0; 0 3])
+    if elty <: Base.LinAlg.BlasComplex
+        ADi += [im 0; 0 im]
+    end
+    @test ADi^(1/2) ≈ sqrtm(ADi)
+    @test ADi^(-1/2) ≈ inv(sqrtm(ADi))
+    @test ADi^(3/4) ≈ sqrtm(ADi) * sqrtm(sqrtm(ADi))
+    @test ADi^(-3/4) ≈ inv(ADi) * sqrtm(sqrtm(ADi))
+    @test ADi^(17/8) ≈ ADi^2 * sqrtm(sqrtm(sqrtm(ADi)))
+    @test ADi^(-17/8) ≈ inv(ADi^2 * sqrtm(sqrtm(sqrtm(ADi))))
+    @test (ADi^0.2)^5 ≈ ADi
+    @test (ADi^(2/3))*(ADi^(1/3)) ≈ ADi
+    @test (ADi^im)^(-im) ≈ ADi
 end
 
 @testset "Least squares solutions" begin
