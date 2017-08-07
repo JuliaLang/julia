@@ -812,8 +812,8 @@ function replace_line(s::PromptState, l::IOBuffer)
     s.input_buffer = copy(l)
 end
 
-function replace_line(s::PromptState, l)
-    empty_undo(s)
+function replace_line(s::PromptState, l, keep_undo=false)
+    keep_undo || empty_undo(s)
     s.input_buffer.ptr = 1
     s.input_buffer.size = 0
     write(s.input_buffer, l)
