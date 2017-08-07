@@ -5,9 +5,9 @@
 import Core.Intrinsics: cglobal, bitcast
 
 """
-    cfunction(function::Function, ReturnType::Type, ArgumentTypes::Type)
+    cfunction(f::Function, returntype::Type, argtypes::Type) -> Ptr{Void}
 
-Generate C-callable function pointer from Julia function. Type annotation of the return
+Generate C-callable function pointer from the Julia function `f`. Type annotation of the return
 value in the callback function is a must for situations where Julia cannot infer the return
 type automatically.
 
