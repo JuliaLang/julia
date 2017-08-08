@@ -42,10 +42,9 @@ const SLOTTYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo slottypes field is no
 const SSAVALUETYPES_MISMATCH = "not all SSAValues in AST have a type in ssavaluetypes"
 const SSAVALUETYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
 const INVALID_ASSIGNMENT_SLOTFLAG = "slot has wrong assignment slotflag setting (bit flag 2 not set)"
-const SIGNATURE_NARGS_MISMATCH = "number of types in method signature does not match number of arguments"
-const SIGNATURE_VARARG_MISMATCH = "number of types in method signature does not match `isva` field setting"
 const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
-const NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
+const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of method arguments"
+const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
 
 struct InvalidCodeError <: Exception
     kind::String
@@ -126,16 +125,12 @@ the `CodeInfo` instance associated with `mi`.
 function validate_code!(errors::Vector{>:InvalidCodeError}, mi::Core.MethodInstance,
                         c::Union{Void,CodeInfo} = Core.Inference.retrieve_code_info(mi))
     m = mi.def::Method
-    sig_params = unwrap_unionall(m.sig).parameters
-    if m.isva
-        if length(sig_params) < (m.nargs - 1)
-            push!(errors, InvalidCodeError(SIGNATURE_VARARG_MISMATCH, (last(sig_params), m.isva)))
-        end
-    elseif length(sig_params) != m.nargs
-        push!(errors, InvalidCodeError(SIGNATURE_NARGS_MISMATCH, (length(sig_params), m.nargs)))
+    n_sig_params = length(Core.Inference.unwrap_unionall(m.sig).parameters)
+    if (m.isva ? (n_sig_params < (m.nargs - 1)) : (n_sig_params != m.nargs))
+        push!(errors, InvalidCodeError(SIGNATURE_NARGS_MISMATCH, (m.isva, n_sig_params, m.nargs)))
     end
     if isa(c, CodeInfo)
-        m.nargs > length(c.slotnames) && push!(errors, InvalidCodeError(NARGS_MISMATCH))
+        m.nargs > length(c.slotnames) && push!(errors, InvalidCodeError(SLOTNAMES_NARGS_MISMATCH))
         validate_code!(errors, c, m.nargs == 0)
     end
     return errors
