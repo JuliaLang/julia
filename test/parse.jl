@@ -1297,3 +1297,6 @@ let ex = parse("maximum(@elapsed sleep(1) for k = 1:10)")
     @test isa(ex, Expr) && ex.head === :call && ex.args[2].head === :generator &&
         ex.args[2].args[1].head === :macrocall
 end
+
+# issue #23173
+@test_throws ErrorException("invalid module path") eval(:(import $(:.)))
