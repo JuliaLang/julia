@@ -946,17 +946,21 @@ function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
     a, b = size(X)
     n, p = vardim == 1 ? (a, b) : (b, a)
 
-    # Cov(X) = E[(X-μ)'(X-μ)]
-    # = X'X - X'μ
+    # The covariance can be decomposed into two terms
+    # 1/(n - 1) ∑ (x_i - x̄)*(x_i - x̄)' = 1/(n - 1) (∑ x_i*x_i' - n*x̄*x̄')
+    # which can be evaluated via a sparse matrix-matrix product
 
-    # Compute X'X using sparse matrix operations
+    # Compute ∑ x_i*x_i' = X'X using sparse matrix-matrix product
     out = Matrix(Base.unscaled_covzm(X, vardim))
 
-    # Compute X'μ
-    sums = sum(X, vardim)
+    # Compute x̄
+    x̄ᵀ = mean(X, vardim)
+
+    # Subtract n*x̄*x̄' from X'X
     @inbounds for j in 1:p, i in 1:p
-        part2 = sums[i] * (sums[j] / n)
-        out[i,j] -= part2
+        out[i,j] -= x̄ᵀ[i] * x̄ᵀ[j]' * n
     end
-    return scale!(out, inv(n-Int(corrected)))
+
+    # scale with the sample size n or the corrected sample size n - 1
+    return scale!(out, inv(n - corrected))
 end

@@ -1853,120 +1853,49 @@ end
 # https://github.com/JuliaLang/julia/issues/22921
 # The issue will be resolved in
 # https://github.com/JuliaLang/julia/issues/22733
-@testset "optimizing sparse covariance" begin
+@testset "optimizing sparse $elty covariance" for elty in (Float64, Complex{Float64})
     n = 10
     p = 5
+    np2 = div(n*p, 2)
     srand(1)
-    x_sparse = sprand(n, p, .50)
-    x_dense = convert(Matrix{Float64}, x_sparse)
-    @test cov(x_sparse, 1, corrected=true)  ≈ cov(x_dense, 1, corrected=true)
-    @test cov(x_sparse, 1, corrected=false) ≈ cov(x_dense, 1, corrected=false)
-    @test cov(x_sparse, 2, corrected=true)  ≈ cov(x_dense, 2, corrected=true)
-    @test cov(x_sparse, 2, corrected=false) ≈ cov(x_dense, 2, corrected=false)
+    if elty <: Real
+        nzvals = randn(np2)
+    else
+        nzvals = complex.(randn(np2), randn(np2))
+    end
+    x_sparse = sparse(rand(1:n, np2), rand(1:p, np2), nzvals, n, p)
+    x_dense  = convert(Matrix{elty}, x_sparse)
+    @testset "Test with no Infs and NaNs, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
+                                                                                 corrected in (true, false)
+        @test cov(x_sparse, vardim, corrected=corrected) ≈
+              cov(x_dense , vardim, corrected=corrected)
+    end
 
-    # Test with NaN
-    x_sparse[1,1] = NaN
-    x_dense[1,1]  = NaN
+    @testset "Test with $x11, vardim=$vardim, corrected=$corrected" for x11 in (NaN, Inf),
+                                                                     vardim in (1, 2),
+                                                                  corrected in (true, false)
+        x_sparse[1,1] = x11
+        x_dense[1 ,1] = x11
 
-    cov_sparse = cov(x_sparse, 1, corrected=true)
-    cov_dense = cov(x_dense, 1, corrected=true)
-    @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-    @test isequal(cov_sparse[1:end, 1], cov_dense[1:end, 1])
-    @test isequal(cov_sparse[1, 1:end], cov_dense[1, 1:end])
+        cov_sparse = cov(x_sparse, vardim, corrected=corrected)
+        cov_dense  = cov(x_dense , vardim, corrected=corrected)
+        @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+    end
 
-    cov_sparse = cov(x_sparse, 2, corrected=true)
-    cov_dense = cov(x_dense, 2, corrected=true)
-    @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-    @test isequal(cov_sparse[1:end, 1], cov_dense[1:end, 1])
-    @test isequal(cov_sparse[1, 1:end], cov_dense[1, 1:end])
+    @testset "Test with NaN and Inf, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
+                                                                            corrected in (true, false)
+        x_sparse[1,1] = Inf
+        x_dense[1 ,1] = Inf
+        x_sparse[2,1] = NaN
+        x_dense[2 ,1] = NaN
 
-    cov_sparse = cov(x_sparse, 1, corrected=false)
-    cov_dense = cov(x_dense, 1, corrected=false)
-    @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-    @test isequal(cov_sparse[1:end, 1], cov_dense[1:end, 1])
-    @test isequal(cov_sparse[1, 1:end], cov_dense[1, 1:end])
-
-    cov_sparse = cov(x_sparse, 2, corrected=false)
-    cov_dense = cov(x_dense, 2, corrected=false)
-    @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-    @test isequal(cov_sparse[1:end, 1], cov_dense[1:end, 1])
-    @test isequal(cov_sparse[1, 1:end], cov_dense[1, 1:end])
-
-    # Test with Inf
-    x_sparse[1,1] = Inf
-    x_dense[1,1]  = Inf
-
-    cov_sparse = cov(x_sparse, 1, corrected=true)
-
-    # Sparse matrix algebra generates Inf, but
-    # dense matrix algebra generates NaN
-    # NaN  NaN           -Inf           -Inf          NaN
-    # NaN    0.124035       0.00830252    -0.0430049    0.021373
-    # -Inf    0.00830252     0.111628      -0.0149783    0.00773125
-    # -Inf   -0.0430049     -0.0149783      0.099782    -0.0496011
-    # NaN    0.021373       0.00773125    -0.0496011    0.126186
-
-    cov_sparse[isinf.(cov_sparse)] = NaN
-    cov_dense = cov(x_dense, 1, corrected=true)
-
-    # NaN  NaN           NaN           NaN          NaN
-    # NaN    0.124035      0.00830252   -0.0430049    0.021373
-    # NaN    0.00830252    0.111628     -0.0149783    0.00773125
-    # NaN   -0.0430049    -0.0149783     0.099782    -0.0496011
-    # NaN    0.021373      0.00773125   -0.0496011    0.126186
-
-    @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-    @test isequal(cov_sparse[1:end, 1], cov_dense[1:end, 1])
-    @test isequal(cov_sparse[1, 1:end], cov_dense[1, 1:end])
-
-    cov_sparse = cov(x_sparse, 2, corrected=true)
-    cov_sparse[isinf.(cov_sparse)] = NaN
-    cov_dense = cov(x_dense, 2, corrected=true)
-    @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-    @test isequal(cov_sparse[1:end, 1], cov_dense[1:end, 1])
-    @test isequal(cov_sparse[1, 1:end], cov_dense[1, 1:end])
-
-    cov_sparse = cov(x_sparse, 1, corrected=false)
-    cov_sparse[isinf.(cov_sparse)] = NaN
-    cov_dense = cov(x_dense, 1, corrected=false)
-    @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-    @test isequal(cov_sparse[1:end, 1], cov_dense[1:end, 1])
-    @test isequal(cov_sparse[1, 1:end], cov_dense[1, 1:end])
-
-    cov_sparse = cov(x_sparse, 2, corrected=false)
-    cov_sparse[isinf.(cov_sparse)] = NaN
-    cov_dense = cov(x_dense, 2, corrected=false)
-    @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-    @test isequal(cov_sparse[1:end, 1], cov_dense[1:end, 1])
-    @test isequal(cov_sparse[1, 1:end], cov_dense[1, 1:end])
-
-    # Test with NaN and Inf
-    x_sparse[2,1] = NaN
-    x_dense[2,1]  = NaN
-
-    cov_sparse = cov(x_sparse, 1, corrected=true)
-    cov_dense = cov(x_dense, 1, corrected=true)
-    @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-    @test isequal(cov_sparse[1:end, 1], cov_dense[1:end, 1])
-    @test isequal(cov_sparse[1, 1:end], cov_dense[1, 1:end])
-
-    cov_sparse = cov(x_sparse, 2, corrected=true)
-    cov_sparse[isinf.(cov_sparse)] = NaN
-    cov_dense = cov(x_dense, 2, corrected=true)
-    @test cov_sparse[3:end, 3:end] ≈ cov_dense[3:end, 3:end]
-    @test isequal(cov_sparse[1:end, 1:2], cov_dense[1:end, 1:2])
-    @test isequal(cov_sparse[1:2, 1:end], cov_dense[1:2, 1:end])
-
-    cov_sparse = cov(x_sparse, 1, corrected=false)
-    cov_dense = cov(x_dense, 1, corrected=false)
-    @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-    @test isequal(cov_sparse[1:end, 1], cov_dense[1:end, 1])
-    @test isequal(cov_sparse[1, 1:end], cov_dense[1, 1:end])
-
-    cov_sparse = cov(x_sparse, 2, corrected=false)
-    cov_sparse[isinf.(cov_sparse)] = NaN
-    cov_dense = cov(x_dense, 2, corrected=false)
-    @test cov_sparse[3:end, 3:end] ≈ cov_dense[3:end, 3:end]
-    @test isequal(cov_sparse[1:end, 1:2], cov_dense[1:end, 1:2])
-    @test isequal(cov_sparse[1:2, 1:end], cov_dense[1:2, 1:end])
+        cov_sparse = cov(x_sparse, vardim, corrected=corrected)
+        cov_dense  = cov(x_dense , vardim, corrected=corrected)
+        @test cov_sparse[(1 + vardim):end, (1 + vardim):end] ≈
+              cov_dense[ (1 + vardim):end, (1 + vardim):end]
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+    end
 end
