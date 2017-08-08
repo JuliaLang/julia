@@ -28,6 +28,7 @@ end
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
 function gcd(a::T, b::T) where T<:Union{Int64,UInt64,Int128,UInt128}
+    @noinline throw1(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
     a == 0 && return abs(b)
     b == 0 && return abs(a)
     za = trailing_zeros(a)
@@ -44,7 +45,7 @@ function gcd(a::T, b::T) where T<:Union{Int64,UInt64,Int128,UInt128}
     end
     r = u << k
     # T(r) would throw InexactError; we want OverflowError instead
-    r > typemax(T) && throw(OverflowError())
+    r > typemax(T) && throw1(a, b)
     r % T
 end
 
@@ -841,6 +842,7 @@ julia> factorial(5) ÷ (factorial(5-3) * factorial(3))
 ```
 """
 function binomial(n::T, k::T) where T<:Integer
+    n0, k0 = n, k
     k < 0 && return zero(T)
     sgn = one(T)
     if n < 0
@@ -861,7 +863,7 @@ function binomial(n::T, k::T) where T<:Integer
     while rr <= k
         xt = div(widemul(x, nn), rr)
         x = xt
-        x == xt || throw(OverflowError())
+        x == xt || throw(OverflowError("binomial($n0, $k0) overflows"))
         rr += 1
         nn += 1
     end

@@ -1509,7 +1509,7 @@ used only with extreme caution, as it can cause memory use to grow without bound
 gc_enable
 
 """
-    OverflowError()
+    OverflowError(msg)
 
 The result of an expression is too large for the specified type and will cause a wraparound.
 """

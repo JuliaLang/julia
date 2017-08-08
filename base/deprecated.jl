@@ -1549,6 +1549,12 @@ function DomainError()
     DomainError(nothing)
 end
 
+# PR #22761
+function OverflowError()
+    depwarn("OverflowError now supports a message string, use `OverflowError(msg)` instead.", :OverflowError)
+    OverflowError("")
+end
+
 # PR #22703
 @deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, isupper::Bool) Bidiagonal(dv, ev, ifelse(isupper, :U, :L))
 @deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) Bidiagonal(dv, ev, ifelse(uplo == 'U', :U, :L))
