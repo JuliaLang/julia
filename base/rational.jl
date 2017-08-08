@@ -11,7 +11,7 @@ struct Rational{T<:Integer} <: Real
 
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
-        num2, den2 = (den < 0) ? divgcd(-num, -den) : divgcd(num, den)
+        num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
         new(num2, den2)
     end
 end
