@@ -2253,22 +2253,6 @@ function union(vs...)
 end
 # setdiff only accepts two args
 
-"""
-    setdiff(a, b)
-
-Construct the set of elements in `a` but not `b`. Maintains order with arrays. Note that
-both arguments must be collections, and both will be iterated over. In particular,
-`setdiff(set,element)` where `element` is a potential member of `set`, will not work in
-general.
-
-# Examples
-```jldoctest
-julia> setdiff([1,2,3],[3,4,5])
-2-element Array{Int64,1}:
- 1
- 2
-```
-"""
 function setdiff(a, b)
     args_type = promote_type(eltype(a), eltype(b))
     bset = Set(b)
@@ -2287,21 +2271,5 @@ end
 # recursing. Has the advantage of keeping order, too, but
 # not as fast as other methods that make a single pass and
 # store counts with a Dict.
-symdiff(a) = a
 symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
-"""
-    symdiff(a, b, rest...)
-
-Construct the symmetric difference of elements in the passed in sets or arrays.
-Maintains order with arrays.
-
-# Examples
-```jldoctest
-julia> symdiff([1,2,3],[3,4,5],[4,5,6])
-3-element Array{Int64,1}:
- 1
- 2
- 6
-```
-"""
 symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))

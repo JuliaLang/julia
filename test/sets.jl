@@ -157,42 +157,64 @@ end
 end
 
 @testset "union" begin
-    @test isequal(union(Set([1])),Set([1]))
-    s = ∪(Set([1,2]), Set([3,4]))
-    @test isequal(s, Set([1,2,3,4]))
-    s = union(Set([5,6,7,8]), Set([7,8,9]))
-    @test isequal(s, Set([5,6,7,8,9]))
-    s = Set([1,3,5,7])
-    union!(s,(2,3,4,5))
-    @test isequal(s,Set([1,2,3,4,5,7]))
-    @test ===(typeof(union(Set([1]), BitSet())), Set{Int})
-    @test isequal(union(Set([1,2,3]), 2:4), Set([1,2,3,4]))
-    @test isequal(union(Set([1,2,3]), [2,3,4]), Set([1,2,3,4]))
-    @test isequal(union(Set([1,2,3]), [2,3,4], Set([5])), Set([1,2,3,4,5]))
+    for S in (Set, BitSet)
+        s = ∪(S([1,2]), S([3,4]))
+        @test isequal(s, S([1,2,3,4]))
+        s = union(S([5,6,7,8]), S([7,8,9]))
+        @test isequal(s, S([5,6,7,8,9]))
+        s = S([1,3,5,7])
+        union!(s,(2,3,4,5))
+        @test isequal(s,S([1,2,3,4,5,7]))
+        let s1 = S([1, 2, 3])
+            @test s1 !== union(s1) == s1
+            @test s1 !== union(s1, 2:4) == S([1,2,3,4])
+            @test s1 !== union(s1, [2,3,4]) == S([1,2,3,4])
+            @test s1 !== union(s1, [2,3,4], S([5])) == S([1,2,3,4,5])
+            @test s1 === union!(s1, [2,3,4], S([5])) == S([1,2,3,4,5])
+        end
+    end
+    @test typeof(union(Set([1]), BitSet())) === Set{Int}
+    @test typeof(union(BitSet([1]), Set())) === BitSet
 end
+
 @testset "intersect" begin
-    @test isequal(intersect(Set([1])),Set([1]))
-    s = ∩(Set([1,2]), Set([3,4]))
-    @test isequal(s, Set())
-    s = intersect(Set([5,6,7,8]), Set([7,8,9]))
-    @test isequal(s, Set([7,8]))
-    @test isequal(intersect(Set([2,3,1]), Set([4,2,3]), Set([5,4,3,2])), Set([2,3]))
-    @test ===(typeof(intersect(Set([1]), BitSet())), Set{Int})
-    @test isequal(intersect(Set([1,2,3]), 2:10), Set([2,3]))
-    @test isequal(intersect(Set([1,2,3]), [2,3,4]), Set([2,3]))
-    @test isequal(intersect(Set([1,2,3]), [2,3,4], 3:4), Set([3]))
+    for S in (Set, BitSet)
+        s = ∩(S([1,2]), S([3,4]))
+        @test isequal(s, S())
+        s = intersect(S([5,6,7,8]), S([7,8,9]))
+        @test isequal(s, S([7,8]))
+        @test isequal(intersect(S([2,3,1]), S([4,2,3]), S([5,4,3,2])), S([2,3]))
+        let s1 = S([1,2,3])
+            @test s1 !== intersect(s1) == s1
+            @test s1 !== intersect(s1, 2:10) == S([2,3])
+            @test s1 !== intersect(s1, [2,3,4]) == S([2,3])
+            @test s1 !== intersect(s1, [2,3,4], 3:4) == S([3])
+            @test s1 === intersect!(s1, [2,3,4], 3:4) == S([3])
+        end
+    end
+    @test typeof(intersect(Set([1]), BitSet())) === Set{Int}
+    @test typeof(intersect(BitSet([1]), Set())) === BitSet
 end
+
 @testset "setdiff" begin
-    @test isequal(setdiff(Set([1,2,3]), Set()),        Set([1,2,3]))
-    @test isequal(setdiff(Set([1,2,3]), Set([1])),     Set([2,3]))
-    @test isequal(setdiff(Set([1,2,3]), Set([1,2])),   Set([3]))
-    @test isequal(setdiff(Set([1,2,3]), Set([1,2,3])), Set())
-    @test isequal(setdiff(Set([1,2,3]), Set([4])),     Set([1,2,3]))
-    @test isequal(setdiff(Set([1,2,3]), Set([4,1])),   Set([2,3]))
-    @test ===(typeof(setdiff(Set([1]), BitSet())), Set{Int})
-    @test isequal(setdiff(Set([1,2,3]), 2:10), Set([1]))
-    @test isequal(setdiff(Set([1,2,3]), [2,3,4]), Set([1]))
-    @test_throws MethodError setdiff(Set([1,2,3]), Set([2,3,4]), Set([1]))
+    for S in (Set, BitSet)
+        @test isequal(setdiff(S([1,2,3]), S()),        S([1,2,3]))
+        @test isequal(setdiff(S([1,2,3]), S([1])),     S([2,3]))
+        @test isequal(setdiff(S([1,2,3]), S([1,2])),   S([3]))
+        @test isequal(setdiff(S([1,2,3]), S([1,2,3])), S())
+        @test isequal(setdiff(S([1,2,3]), S([4])),     S([1,2,3]))
+        @test isequal(setdiff(S([1,2,3]), S([4,1])),   S([2,3]))
+        let s1 = S([1, 2, 3])
+            @test s1 !== setdiff(s1) == s1
+            @test s1 !== setdiff(s1, 2:10) == S([1])
+            @test s1 !== setdiff(s1, [2,3,4]) == S([1])
+            @test s1 !== setdiff(s1, S([2,3,4]), S([1])) == S()
+            @test s1 === setdiff!(s1, S([2,3,4]), S([1])) == S()
+        end
+    end
+    @test typeof(setdiff(Set([1]), BitSet())) === Set{Int}
+    @test typeof(setdiff(BitSet([1]), Set())) === BitSet
+
     s = Set([1,3,5,7])
     setdiff!(s,(3,5))
     @test isequal(s,Set([1,7]))
@@ -200,6 +222,7 @@ end
     setdiff!(s, Set([2,4,5,6]))
     @test isequal(s,Set([1,3]))
 end
+
 @testset "ordering" begin
     @test Set() < Set([1])
     @test Set([1]) < Set([1,2])
@@ -215,33 +238,42 @@ end
     @test !(Set([1,2,3]) >= Set([1,2,4]))
     @test !(Set([1,2,3]) <= Set([1,2,4]))
 end
+
 @testset "issubset, symdiff" begin
-    for (l,r) in ((Set([1,2]),     Set([3,4])),
-                  (Set([5,6,7,8]), Set([7,8,9])),
-                  (Set([1,2]),     Set([3,4])),
-                  (Set([5,6,7,8]), Set([7,8,9])),
-                  (Set([1,2,3]),   Set()),
-                  (Set([1,2,3]),   Set([1])),
-                  (Set([1,2,3]),   Set([1,2])),
-                  (Set([1,2,3]),   Set([1,2,3])),
-                  (Set([1,2,3]),   Set([4])),
-                  (Set([1,2,3]),   Set([4,1])))
-        @test issubset(intersect(l,r), l)
-        @test issubset(intersect(l,r), r)
-        @test issubset(l, union(l,r))
-        @test issubset(r, union(l,r))
-        @test isequal(union(intersect(l,r),symdiff(l,r)), union(l,r))
+    for S in (Set, BitSet)
+        for (l,r) in ((S([1,2]),     S([3,4])),
+                      (S([5,6,7,8]), S([7,8,9])),
+                      (S([1,2]),     S([3,4])),
+                      (S([5,6,7,8]), S([7,8,9])),
+                      (S([1,2,3]),   S()),
+                      (S([1,2,3]),   S([1])),
+                      (S([1,2,3]),   S([1,2])),
+                      (S([1,2,3]),   S([1,2,3])),
+                      (S([1,2,3]),   S([4])),
+                      (S([1,2,3]),   S([4,1])))
+            @test issubset(intersect(l,r), l)
+            @test issubset(intersect(l,r), r)
+            @test issubset(l, union(l,r))
+            @test issubset(r, union(l,r))
+            @test isequal(union(intersect(l,r),symdiff(l,r)), union(l,r))
+        end
+        @test ⊆(S([1]), S([1,2]))
+        @test ⊊(S([1]), S([1,2]))
+        @test !⊊(S([1]), S([1]))
+        @test ⊈(S([1]), S([2]))
+        @test ⊇(S([1,2]), S([1]))
+        @test ⊋(S([1,2]), S([1]))
+        @test !⊋(S([1]), S([1]))
+        @test ⊉(S([1]), S([2]))
+        let s1 = S([1,2,3,4])
+            @test s1 !== symdiff(s1) == s1
+            @test s1 !== symdiff(s1, S([2,4,5,6])) == S([1,3,5,6])
+            @test s1 !== symdiff(s1, S([2,4,5,6]), [1,6,7]) == S([3,5,7])
+            @test s1 === symdiff!(s1, S([2,4,5,6]), [1,6,7]) == S([3,5,7])
+        end
     end
-    @test ⊆(Set([1]), Set([1,2]))
-    @test ⊊(Set([1]), Set([1,2]))
-    @test !⊊(Set([1]), Set([1]))
-    @test ⊈(Set([1]), Set([2]))
-    @test ⊇(Set([1,2]), Set([1]))
-    @test ⊋(Set([1,2]), Set([1]))
-    @test !⊋(Set([1]), Set([1]))
-    @test ⊉(Set([1]), Set([2]))
-    @test symdiff(Set([1,2,3,4]), Set([2,4,5,6])) == Set([1,3,5,6])
 end
+
 @testset "unique" begin
     u = unique([1, 1, 2])
     @test in(1, u)
@@ -307,11 +339,10 @@ end
     @test allunique(4:-1:5)       # empty range
     @test allunique(7:-1:1)       # negative step
 end
-@testset "filter" begin
-    s = Set([1,2,3,4])
-    @test isequal(filter(isodd,s), Set([1,3]))
-    filter!(isodd, s)
-    @test isequal(s, Set([1,3]))
+@testset "filter(f, ::$S)" for S = (Set, BitSet)
+    s = S([1,2,3,4])
+    @test s !== filter( isodd, s) == S([1,3])
+    @test s === filter!(isodd, s) == S([1,3])
 end
 @testset "first" begin
     @test_throws ArgumentError first(Set())

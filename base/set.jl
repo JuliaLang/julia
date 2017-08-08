@@ -7,9 +7,11 @@ mutable struct Set{T} <: AbstractSet{T}
 
     Set{T}() where {T} = new(Dict{T,Void}())
     Set{T}(s::Set{T}) where {T} = new(Dict{T,Void}(s.dict))
-    Set{T}(itr) where {T} = union!(new(Dict{T,Void}()), itr)
 end
+
+Set{T}(itr) where {T} = union!(Set{T}(), itr)
 Set() = Set{Any}()
+
 
 """
     Set([itr])
@@ -51,7 +53,10 @@ end
 
 delete!(s::Set, x) = (delete!(s.dict, x); s)
 
-copy(s::Set{T}) where T = Set{T}(s)
+copy(s::Set) = copymutable(s)
+
+# Set is the default mutable fall-back
+copymutable(s::AbstractSet{T}) where {T} = Set{T}(s)
 
 sizehint!(s::Set, newsz) = (sizehint!(s.dict, newsz); s)
 empty!(s::Set) = (empty!(s.dict); s)
@@ -63,10 +68,10 @@ done(s::Set, state) = done(s.dict, state)
 next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict, i+1))
 
 """
-    union(s1,s2...)
-    ∪(s1,s2...)
+    union(s, itrs...)
+    ∪(s, itrs...)
 
-Construct the union of two or more sets. Maintains order with arrays.
+Construct the union of sets. Maintain order with arrays.
 
 # Examples
 ```jldoctest
@@ -92,21 +97,14 @@ julia> union([4, 2], [1, 2])
 """
 function union end
 
-union(s::Set) = copy(s)
-function union(s::Set, sets...)
-    u = Set{join_eltype(s, sets...)}()
-    union!(u, s)
-    for t in sets
-        union!(u, t)
-    end
-    return u
-end
+union(s::Set, sets...) = union!(Set{join_eltype(s, sets...)}(), s, sets...)
+
 const ∪ = union
 
 """
-    union!(s, iterable)
+    union!(s::AbstractSet, itrs...)
 
-Union each element of `iterable` into set `s` in-place.
+Construct the union of passed in sets and overwrite `s` with the result.
 
 # Examples
 ```jldoctest
@@ -118,24 +116,26 @@ julia> a
 Set([7, 4, 3, 5, 1])
 ```
 """
-function union!(s::Set{T}, xs) where T
-    haslength(xs) && sizehint!(s, length(xs))
-    for x=xs
+function union!(s::Set{T}, itr) where T
+    haslength(itr) && sizehint!(s, length(itr))
+    for x=itr
         push!(s, x)
         length(s) == max_values(T) && break
     end
     s
 end
 
+union!(s::AbstractSet, sets...) = foldl(union!, s, sets)
+
 join_eltype() = Bottom
 join_eltype(v1, vs...) = typejoin(eltype(v1), join_eltype(vs...))
 
 """
-    intersect(s1,s2...)
-    ∩(s1,s2)
+    intersect(s, itrs...)
+    ∩(s, itrs...)
 
-Construct the intersection of two or more sets.
-Maintains order and multiplicity of the first argument for arrays and ranges.
+Construct the intersection of sets.
+Maintain order and multiplicity of the first argument for arrays and ranges.
 
 # Examples
 ```jldoctest
@@ -152,37 +152,52 @@ julia> intersect([1, 4, 4, 5, 6], [4, 6, 6, 7, 8])
 """
 function intersect end
 
-intersect(s::Set) = copy(s)
-function intersect(s::Set, sets...)
-    i = similar(s)
-    for x in s
-        inall = true
-        for t in sets
-            if !in(x, t)
-                inall = false
-                break
-            end
-        end
-        inall && push!(i, x)
+intersect(s) = copymutable(s)
+
+# enable when as fast as the loop:
+# intersect(s::AbstractSet, itr) = IntSet(x for x in itr if x in s)
+function intersect(s::AbstractSet, itr)
+    t = similar(s)
+    for x in itr
+        x in s && push!(t, x)
     end
-    return i
+    t
 end
+
+intersect(s::AbstractSet, itr, itrs...) = intersect!(intersect(s, itr), itrs...)
+
 const ∩ = intersect
 
-function setdiff(a::Set, b)
-    d = similar(a)
-    for x in a
-        if !(x in b)
-            push!(d, x)
-        end
-    end
-    d
-end
+"""
+    intersect!(s::AbstractSet, itrs...)
+
+Intersect all passed in sets and overwrite `s` with the result.
+"""
+intersect!(s::AbstractSet, s2::AbstractSet) = filter!(x -> x in s2, s)
+intersect!(s::AbstractSet, itr) = intersect!(s, union!(similar(s), itr))
+intersect!(s::AbstractSet, itrs...) = foldl(intersect!, s, itrs)
 
 """
-    setdiff!(s, iterable)
+    setdiff(s, itrs...)
 
-Remove each element of `iterable` from set `s` in-place.
+Construct the set of elements in `s` but not in any of the iterables in `itrs`.
+Maintain order with arrays.
+
+# Examples
+```jldoctest
+julia> setdiff([1,2,3], [3,4,5])
+2-element Array{Int64,1}:
+ 1
+ 2
+```
+"""
+setdiff(s::AbstractSet, itrs...) = setdiff!(copymutable(s), itrs...)
+setdiff(s) = copymutable(s)
+
+"""
+    setdiff!(s, itrs...)
+
+Remove from set `s` (in-place) each element of each iterable from `itrs`.
 
 # Examples
 ```jldoctest
@@ -194,7 +209,41 @@ julia> a
 Set([4])
 ```
 """
-setdiff!(s::Set, xs) = (for x=xs; delete!(s, x); end; s)
+setdiff!(s::AbstractSet, itrs...) = foldl(setdiff!, s, itrs)
+setdiff!(s::AbstractSet, itr) = foldl(delete!, s, itr)
+
+
+"""
+    symdiff(s, itrs...)
+
+Construct the symmetric difference of elements in the passed in sets.
+Maintains order with arrays.
+
+# Examples
+```jldoctest
+julia> symdiff([1,2,3], [3,4,5], [4,5,6])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 6
+```
+"""
+symdiff(s::AbstractSet, sets...) = symdiff!(copymutable(s), sets...)
+symdiff(s) = copymutable(s) # remove when method above becomes as efficient
+
+"""
+    symdiff!(s::AbstractSet, itrs...)
+
+Construct the symmetric difference of the passed in sets, and overwrite `s` with the result.
+"""
+symdiff!(s::AbstractSet, itrs...) = foldl(symdiff!, s, itrs)
+
+function symdiff!(s::AbstractSet, itr)
+    for x in itr
+        x in s ? delete!(s, x) : push!(s, x)
+    end
+    s
+end
 
 ==(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
 <( l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
@@ -217,20 +266,18 @@ julia> issubset([1, 2, 3], [1, 2])
 false
 ```
 """
-function issubset(l, r)
-    for elt in l
-        if !in(elt, r)
-            return false
-        end
-    end
-    return true
-end
+issubset(l, r) = all(x -> x in r, l)
 const ⊆ = issubset
 ⊊(l::Set, r::Set) = <(l, r)
 ⊈(l::Set, r::Set) = !⊆(l, r)
 ⊇(l, r) = issubset(r, l)
 ⊉(l::Set, r::Set) = !⊇(l, r)
 ⊋(l::Set, r::Set) = <(r, l)
+
+⊊(l::T, r::T) where {T<:AbstractSet} = <(l, r)
+⊈(l::T, r::T) where {T<:AbstractSet} = !⊆(l, r)
+⊉(l::T, r::T) where {T<:AbstractSet} = !⊇(l, r)
+⊋(l::T, r::T) where {T<:AbstractSet} = <(r, l)
 
 """
     unique(itr)
@@ -445,23 +492,11 @@ allunique(::Set) = true
 
 allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
 
-function filter(f, s::Set)
-    u = similar(s)
-    for x in s
-        if f(x)
-            push!(u, x)
-        end
-    end
-    return u
-end
-function filter!(f, s::Set)
-    for x in s
-        if !f(x)
-            delete!(s, x)
-        end
-    end
-    return s
-end
+filter(f, s::AbstractSet) = foldl(push!, similar(s), Iterators.filter(f, s))
+
+# it must be safe to delete the current element while iterating over s
+unsafe_filter!(f, s::AbstractSet) = foldl(delete!, s, Iterators.filter(!f, s))
+filter!(f, s::Set) = unsafe_filter!(f, s)
 
 const hashs_seed = UInt === UInt64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
 function hash(s::Set, h::UInt)
