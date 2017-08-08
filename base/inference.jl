@@ -3354,7 +3354,7 @@ function optimize(me::InferenceState)
         gotoifnot_elim_pass!(me)
         inlining_pass!(me)
         # probably not an ideal location for most of these steps,
-        # but boundscheck elimination is not indempotent and needs to run as part of inlining
+        # but boundscheck elimination is not idempotent and needs to run as part of inlining
         code = me.src.code::Array{Any,1}
         meta_elim_pass!(code, me.src.propagate_inbounds, coverage_enabled())
         # Clean up after inlining
