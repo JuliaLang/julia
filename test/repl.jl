@@ -8,19 +8,28 @@ isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__),
 using TestHelpers
 import Base: REPL, LineEdit
 
-function fake_repl()
+function fake_repl(f)
     # Use pipes so we can easily do blocking reads
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
-    stdin_read,stdin_write = (Base.PipeEndpoint(), Base.PipeEndpoint())
-    stdout_read,stdout_write = (Base.PipeEndpoint(), Base.PipeEndpoint())
-    stderr_read,stderr_write = (Base.PipeEndpoint(), Base.PipeEndpoint())
-    Base.link_pipe(stdin_read,true,stdin_write,true)
-    Base.link_pipe(stdout_read,true,stdout_write,true)
-    Base.link_pipe(stderr_read,true,stderr_write,true)
+    stdin = Pipe()
+    stdout = Pipe()
+    stderr = Pipe()
+    Base.link_pipe(stdin, julia_only_read=true, julia_only_write=true)
+    Base.link_pipe(stdout, julia_only_read=true, julia_only_write=true)
+    Base.link_pipe(stderr, julia_only_read=true, julia_only_write=true)
 
-    repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin_read, stdout_write, stderr_write))
-    stdin_write, stdout_read, stderr_read, repl
+    repl = Base.REPL.LineEditREPL(TestHelpers.FakeTerminal(stdin.out, stdout.in, stderr.in))
+    f(stdin.in, stdout.out, repl)
+    t = @async begin
+        close(stdin.in)
+        close(stdout.in)
+        close(stderr.in)
+    end
+    @test read(stderr.out, String) == ""
+    #display(read(stdout.out, String))
+    wait(t)
+    nothing
 end
 
 # Writing ^C to the repl will cause sigint, so let's not die on that
@@ -31,9 +40,7 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    stdin_write, stdout_read, stderr_read, repl = fake_repl()
-
+fake_repl() do stdin_write, stdout_read, repl
     repl.specialdisplay = Base.REPL.REPLDisplay(repl)
     repl.history_file = false
 
@@ -41,20 +48,16 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         Base.REPL.run_repl(repl)
     end
 
-    sendrepl(cmd) = begin
-        write(stdin_write,"$(curmod_prefix)inc || wait($(curmod_prefix)b); r = $cmd; notify($(curmod_prefix)c); r\r")
+    global inc = false
+    global b = Condition()
+    global c = Condition()
+    let cmd = "\"Hello REPL\""
+        write(stdin_write, "$(curmod_prefix)inc || wait($(curmod_prefix)b); r = $cmd; notify($(curmod_prefix)c); r\r")
     end
+    inc = true
+    notify(b)
+    wait(c)
 
-    inc = false
-    b = Condition()
-    c = Condition()
-    sendrepl("\"Hello REPL\"")
-
-    inc=true
-    begin
-        notify(b)
-        wait(c)
-    end
     # Latex completions
     write(stdin_write, "\x32\\alpha\t")
     readuntil(stdout_read, "α")
@@ -290,215 +293,214 @@ fakehistory = """
 
 # Test various history related issues
 for prompt = ["TestΠ", () -> randstring(rand(1:10))]
-    stdin_write, stdout_read, stdout_read, repl = fake_repl()
-    # In the future if we want we can add a test that the right object
-    # gets displayed by intercepting the display
-    repl.specialdisplay = Base.REPL.REPLDisplay(repl)
+    fake_repl() do stdin_write, stdout_read, repl
+        # In the future if we want we can add a test that the right object
+        # gets displayed by intercepting the display
+        repl.specialdisplay = Base.REPL.REPLDisplay(repl)
 
-    repl.interface = REPL.setup_interface(repl)
-    repl_mode = repl.interface.modes[1]
-    shell_mode = repl.interface.modes[2]
-    help_mode = repl.interface.modes[3]
-    histp = repl.interface.modes[4]
-    prefix_mode = repl.interface.modes[5]
+        repl.interface = REPL.setup_interface(repl)
+        repl_mode = repl.interface.modes[1]
+        shell_mode = repl.interface.modes[2]
+        help_mode = repl.interface.modes[3]
+        histp = repl.interface.modes[4]
+        prefix_mode = repl.interface.modes[5]
 
-    hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
-                                                   :shell => shell_mode,
-                                                   :help  => help_mode))
+        hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
+                                                       :shell => shell_mode,
+                                                       :help  => help_mode))
 
-    REPL.hist_from_file(hp, IOBuffer(fakehistory), "fakehistorypath")
-    REPL.history_reset_state(hp)
+        REPL.hist_from_file(hp, IOBuffer(fakehistory), "fakehistorypath")
+        REPL.history_reset_state(hp)
 
-    histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
+        histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
 
-    # Some manual setup
-    s = LineEdit.init_state(repl.t, repl.interface)
-    LineEdit.edit_insert(s, "wip")
+        # Some manual setup
+        s = LineEdit.init_state(repl.t, repl.interface)
+        LineEdit.edit_insert(s, "wip")
 
-    # Test that navigating history skips invalid modes
-    # (in both directions)
-    LineEdit.history_prev(s, hp)
-    @test LineEdit.mode(s) == repl_mode
-    @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
-    LineEdit.history_prev(s, hp)
-    @test LineEdit.mode(s) == shell_mode
-    @test buffercontents(LineEdit.buffer(s)) == "ls"
-    LineEdit.history_prev(s, hp)
-    @test LineEdit.mode(s) == repl_mode
-    @test buffercontents(LineEdit.buffer(s)) == "1 + 1"
-    LineEdit.history_next(s, hp)
-    @test LineEdit.mode(s) == shell_mode
-    @test buffercontents(LineEdit.buffer(s)) == "ls"
-    LineEdit.history_next(s, hp)
-    @test LineEdit.mode(s) == repl_mode
-    @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
-    LineEdit.history_next(s, hp)
-    @test LineEdit.mode(s) == repl_mode
-    @test buffercontents(LineEdit.buffer(s)) == "wip"
-    @test position(LineEdit.buffer(s)) == 3
-    LineEdit.history_next(s, hp)
-    @test buffercontents(LineEdit.buffer(s)) == "wip"
-    LineEdit.history_prev(s, hp, 2)
-    @test LineEdit.mode(s) == shell_mode
-    @test buffercontents(LineEdit.buffer(s)) == "ls"
-    LineEdit.history_prev(s, hp, -2) # equivalent to history_next(s, hp, 2)
-    @test LineEdit.mode(s) == repl_mode
-    @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
-    LineEdit.history_next(s, hp, -2) # equivalent to history_prev(s, hp, 2)
-    @test LineEdit.mode(s) == shell_mode
-    @test buffercontents(LineEdit.buffer(s)) == "ls"
-    LineEdit.history_first(s, hp)
-    @test LineEdit.mode(s) == repl_mode
-    @test buffercontents(LineEdit.buffer(s)) == "é"
-    LineEdit.history_next(s, hp, 6)
-    @test LineEdit.mode(s) == shell_mode
-    @test buffercontents(LineEdit.buffer(s)) == "ls"
-    LineEdit.history_last(s, hp)
-    @test buffercontents(LineEdit.buffer(s)) == "wip"
-    @test position(LineEdit.buffer(s)) == 3
-    LineEdit.move_line_start(s)
-    @test position(LineEdit.buffer(s)) == 0
+        # Test that navigating history skips invalid modes
+        # (in both directions)
+        LineEdit.history_prev(s, hp)
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
+        LineEdit.history_prev(s, hp)
+        @test LineEdit.mode(s) == shell_mode
+        @test buffercontents(LineEdit.buffer(s)) == "ls"
+        LineEdit.history_prev(s, hp)
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "1 + 1"
+        LineEdit.history_next(s, hp)
+        @test LineEdit.mode(s) == shell_mode
+        @test buffercontents(LineEdit.buffer(s)) == "ls"
+        LineEdit.history_next(s, hp)
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
+        LineEdit.history_next(s, hp)
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "wip"
+        @test position(LineEdit.buffer(s)) == 3
+        LineEdit.history_next(s, hp)
+        @test buffercontents(LineEdit.buffer(s)) == "wip"
+        LineEdit.history_prev(s, hp, 2)
+        @test LineEdit.mode(s) == shell_mode
+        @test buffercontents(LineEdit.buffer(s)) == "ls"
+        LineEdit.history_prev(s, hp, -2) # equivalent to history_next(s, hp, 2)
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
+        LineEdit.history_next(s, hp, -2) # equivalent to history_prev(s, hp, 2)
+        @test LineEdit.mode(s) == shell_mode
+        @test buffercontents(LineEdit.buffer(s)) == "ls"
+        LineEdit.history_first(s, hp)
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "é"
+        LineEdit.history_next(s, hp, 6)
+        @test LineEdit.mode(s) == shell_mode
+        @test buffercontents(LineEdit.buffer(s)) == "ls"
+        LineEdit.history_last(s, hp)
+        @test buffercontents(LineEdit.buffer(s)) == "wip"
+        @test position(LineEdit.buffer(s)) == 3
+        LineEdit.move_line_start(s)
+        @test position(LineEdit.buffer(s)) == 0
 
-    # Test that the same holds for prefix search
-    ps = LineEdit.state(s, prefix_mode)::LineEdit.PrefixSearchState
-    @test LineEdit.input_string(ps) == ""
-    LineEdit.enter_prefix_search(s, prefix_mode, true)
-    LineEdit.history_prev_prefix(ps, hp, "")
-    @test ps.prefix == ""
-    @test ps.parent == repl_mode
-    @test LineEdit.input_string(ps) == "2 + 2"
-    @test position(LineEdit.buffer(s)) == 5
-    LineEdit.history_prev_prefix(ps, hp, "")
-    @test ps.parent == shell_mode
-    @test LineEdit.input_string(ps) == "ls"
-    @test position(LineEdit.buffer(s)) == 2
-    LineEdit.history_prev_prefix(ps, hp, "sh")
-    @test ps.parent == repl_mode
-    @test LineEdit.input_string(ps) == "shell"
-    @test position(LineEdit.buffer(s)) == 2
-    LineEdit.history_next_prefix(ps, hp, "sh")
-    @test ps.parent == repl_mode
-    @test LineEdit.input_string(ps) == "wip"
-    @test position(LineEdit.buffer(s)) == 0
-    LineEdit.move_input_end(s)
-    LineEdit.history_prev_prefix(ps, hp, "é")
-    @test ps.parent == repl_mode
-    @test LineEdit.input_string(ps) == "éé"
-    @test position(LineEdit.buffer(s)) == sizeof("é") > 1
-    LineEdit.history_prev_prefix(ps, hp, "é")
-    @test ps.parent == repl_mode
-    @test LineEdit.input_string(ps) == "é"
-    @test position(LineEdit.buffer(s)) == sizeof("é")
-    LineEdit.history_next_prefix(ps, hp, "zzz")
-    @test ps.parent == repl_mode
-    @test LineEdit.input_string(ps) == "wip"
-    @test position(LineEdit.buffer(s)) == 3
-    LineEdit.accept_result(s, prefix_mode)
+        # Test that the same holds for prefix search
+        ps = LineEdit.state(s, prefix_mode)::LineEdit.PrefixSearchState
+        @test LineEdit.input_string(ps) == ""
+        LineEdit.enter_prefix_search(s, prefix_mode, true)
+        LineEdit.history_prev_prefix(ps, hp, "")
+        @test ps.prefix == ""
+        @test ps.parent == repl_mode
+        @test LineEdit.input_string(ps) == "2 + 2"
+        @test position(LineEdit.buffer(s)) == 5
+        LineEdit.history_prev_prefix(ps, hp, "")
+        @test ps.parent == shell_mode
+        @test LineEdit.input_string(ps) == "ls"
+        @test position(LineEdit.buffer(s)) == 2
+        LineEdit.history_prev_prefix(ps, hp, "sh")
+        @test ps.parent == repl_mode
+        @test LineEdit.input_string(ps) == "shell"
+        @test position(LineEdit.buffer(s)) == 2
+        LineEdit.history_next_prefix(ps, hp, "sh")
+        @test ps.parent == repl_mode
+        @test LineEdit.input_string(ps) == "wip"
+        @test position(LineEdit.buffer(s)) == 0
+        LineEdit.move_input_end(s)
+        LineEdit.history_prev_prefix(ps, hp, "é")
+        @test ps.parent == repl_mode
+        @test LineEdit.input_string(ps) == "éé"
+        @test position(LineEdit.buffer(s)) == sizeof("é") > 1
+        LineEdit.history_prev_prefix(ps, hp, "é")
+        @test ps.parent == repl_mode
+        @test LineEdit.input_string(ps) == "é"
+        @test position(LineEdit.buffer(s)) == sizeof("é")
+        LineEdit.history_next_prefix(ps, hp, "zzz")
+        @test ps.parent == repl_mode
+        @test LineEdit.input_string(ps) == "wip"
+        @test position(LineEdit.buffer(s)) == 3
+        LineEdit.accept_result(s, prefix_mode)
 
-    # Test that searching backwards puts you into the correct mode and
-    # skips invalid modes.
-    LineEdit.enter_search(s, histp, true)
-    ss = LineEdit.state(s, histp)
-    write(ss.query_buffer, "l")
-    LineEdit.update_display_buffer(ss, ss)
-    LineEdit.accept_result(s, histp)
-    @test LineEdit.mode(s) == shell_mode
-    @test buffercontents(LineEdit.buffer(s)) == "ls"
-    @test position(LineEdit.buffer(s)) == 0
+        # Test that searching backwards puts you into the correct mode and
+        # skips invalid modes.
+        LineEdit.enter_search(s, histp, true)
+        ss = LineEdit.state(s, histp)
+        write(ss.query_buffer, "l")
+        LineEdit.update_display_buffer(ss, ss)
+        LineEdit.accept_result(s, histp)
+        @test LineEdit.mode(s) == shell_mode
+        @test buffercontents(LineEdit.buffer(s)) == "ls"
+        @test position(LineEdit.buffer(s)) == 0
 
-    # Test that searching for `ll` actually matches `ll` after
-    # both letters are types rather than jumping to `shell`
-    LineEdit.history_prev(s, hp)
-    LineEdit.enter_search(s, histp, true)
-    write(ss.query_buffer, "l")
-    LineEdit.update_display_buffer(ss, ss)
-    @test buffercontents(ss.response_buffer) == "ll"
-    @test position(ss.response_buffer) == 1
-    write(ss.query_buffer, "l")
-    LineEdit.update_display_buffer(ss, ss)
-    LineEdit.accept_result(s, histp)
-    @test LineEdit.mode(s) == shell_mode
-    @test buffercontents(LineEdit.buffer(s)) == "ll"
-    @test position(LineEdit.buffer(s)) == 0
+        # Test that searching for `ll` actually matches `ll` after
+        # both letters are types rather than jumping to `shell`
+        LineEdit.history_prev(s, hp)
+        LineEdit.enter_search(s, histp, true)
+        write(ss.query_buffer, "l")
+        LineEdit.update_display_buffer(ss, ss)
+        @test buffercontents(ss.response_buffer) == "ll"
+        @test position(ss.response_buffer) == 1
+        write(ss.query_buffer, "l")
+        LineEdit.update_display_buffer(ss, ss)
+        LineEdit.accept_result(s, histp)
+        @test LineEdit.mode(s) == shell_mode
+        @test buffercontents(LineEdit.buffer(s)) == "ll"
+        @test position(LineEdit.buffer(s)) == 0
 
-    # Test that searching backwards with a one-letter query doesn't
-    # return indefinitely the same match (#9352)
-    LineEdit.enter_search(s, histp, true)
-    write(ss.query_buffer, "l")
-    LineEdit.update_display_buffer(ss, ss)
-    LineEdit.history_next_result(s, ss)
-    LineEdit.update_display_buffer(ss, ss)
-    LineEdit.accept_result(s, histp)
-    @test LineEdit.mode(s) == repl_mode
-    @test buffercontents(LineEdit.buffer(s)) == "shell"
-    @test position(LineEdit.buffer(s)) == 4
+        # Test that searching backwards with a one-letter query doesn't
+        # return indefinitely the same match (#9352)
+        LineEdit.enter_search(s, histp, true)
+        write(ss.query_buffer, "l")
+        LineEdit.update_display_buffer(ss, ss)
+        LineEdit.history_next_result(s, ss)
+        LineEdit.update_display_buffer(ss, ss)
+        LineEdit.accept_result(s, histp)
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "shell"
+        @test position(LineEdit.buffer(s)) == 4
 
-    # Test that searching backwards doesn't skip matches (#9352)
-    # (for a search with multiple one-byte characters, or UTF-8 characters)
-    LineEdit.enter_search(s, histp, true)
-    write(ss.query_buffer, "é") # matches right-most "é" in "éé"
-    LineEdit.update_display_buffer(ss, ss)
-    @test position(ss.query_buffer) == sizeof("é")
-    LineEdit.history_next_result(s, ss) # matches left-most "é" in "éé"
-    LineEdit.update_display_buffer(ss, ss)
-    LineEdit.accept_result(s, histp)
-    @test buffercontents(LineEdit.buffer(s)) == "éé"
-    @test position(LineEdit.buffer(s)) == 0
+        # Test that searching backwards doesn't skip matches (#9352)
+        # (for a search with multiple one-byte characters, or UTF-8 characters)
+        LineEdit.enter_search(s, histp, true)
+        write(ss.query_buffer, "é") # matches right-most "é" in "éé"
+        LineEdit.update_display_buffer(ss, ss)
+        @test position(ss.query_buffer) == sizeof("é")
+        LineEdit.history_next_result(s, ss) # matches left-most "é" in "éé"
+        LineEdit.update_display_buffer(ss, ss)
+        LineEdit.accept_result(s, histp)
+        @test buffercontents(LineEdit.buffer(s)) == "éé"
+        @test position(LineEdit.buffer(s)) == 0
 
-    # Issue #7551
-    # Enter search mode and try accepting an empty result
-    REPL.history_reset_state(hp)
-    LineEdit.edit_clear(s)
-    cur_mode = LineEdit.mode(s)
-    LineEdit.enter_search(s, histp, true)
-    LineEdit.accept_result(s, histp)
-    @test LineEdit.mode(s) == cur_mode
-    @test buffercontents(LineEdit.buffer(s)) == ""
-    @test position(LineEdit.buffer(s)) == 0
+        # Issue #7551
+        # Enter search mode and try accepting an empty result
+        REPL.history_reset_state(hp)
+        LineEdit.edit_clear(s)
+        cur_mode = LineEdit.mode(s)
+        LineEdit.enter_search(s, histp, true)
+        LineEdit.accept_result(s, histp)
+        @test LineEdit.mode(s) == cur_mode
+        @test buffercontents(LineEdit.buffer(s)) == ""
+        @test position(LineEdit.buffer(s)) == 0
 
-    # Test that new modes can be dynamically added to the REPL and will
-    # integrate nicely
-    foobar_mode, custom_histp = AddCustomMode(repl, prompt)
+        # Test that new modes can be dynamically added to the REPL and will
+        # integrate nicely
+        foobar_mode, custom_histp = AddCustomMode(repl, prompt)
 
-    # ^R l, should now find `ls` in foobar mode
-    LineEdit.enter_search(s, histp, true)
-    ss = LineEdit.state(s, histp)
-    write(ss.query_buffer, "l")
-    LineEdit.update_display_buffer(ss, ss)
-    LineEdit.accept_result(s, histp)
-    @test LineEdit.mode(s) == foobar_mode
-    @test buffercontents(LineEdit.buffer(s)) == "ls"
-    @test position(LineEdit.buffer(s)) == 0
+        # ^R l, should now find `ls` in foobar mode
+        LineEdit.enter_search(s, histp, true)
+        ss = LineEdit.state(s, histp)
+        write(ss.query_buffer, "l")
+        LineEdit.update_display_buffer(ss, ss)
+        LineEdit.accept_result(s, histp)
+        @test LineEdit.mode(s) == foobar_mode
+        @test buffercontents(LineEdit.buffer(s)) == "ls"
+        @test position(LineEdit.buffer(s)) == 0
 
-    # Try the same for prefix search
-    LineEdit.history_next(s, hp)
-    LineEdit.history_prev_prefix(ps, hp, "l")
-    @test ps.parent == foobar_mode
-    @test LineEdit.input_string(ps) == "ls"
-    @test position(LineEdit.buffer(s)) == 1
+        # Try the same for prefix search
+        LineEdit.history_next(s, hp)
+        LineEdit.history_prev_prefix(ps, hp, "l")
+        @test ps.parent == foobar_mode
+        @test LineEdit.input_string(ps) == "ls"
+        @test position(LineEdit.buffer(s)) == 1
 
-    # Some Unicode handling testing
-    LineEdit.history_prev(s, hp)
-    LineEdit.enter_search(s, histp, true)
-    write(ss.query_buffer, "x")
-    LineEdit.update_display_buffer(ss, ss)
-    @test buffercontents(ss.response_buffer) == "x ΔxΔ"
-    @test position(ss.response_buffer) == 4
-    write(ss.query_buffer, " ")
-    LineEdit.update_display_buffer(ss, ss)
-    LineEdit.accept_result(s, histp)
-    @test LineEdit.mode(s) == repl_mode
-    @test buffercontents(LineEdit.buffer(s)) == "x ΔxΔ"
-    @test position(LineEdit.buffer(s)) == 0
+        # Some Unicode handling testing
+        LineEdit.history_prev(s, hp)
+        LineEdit.enter_search(s, histp, true)
+        write(ss.query_buffer, "x")
+        LineEdit.update_display_buffer(ss, ss)
+        @test buffercontents(ss.response_buffer) == "x ΔxΔ"
+        @test position(ss.response_buffer) == 4
+        write(ss.query_buffer, " ")
+        LineEdit.update_display_buffer(ss, ss)
+        LineEdit.accept_result(s, histp)
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "x ΔxΔ"
+        @test position(LineEdit.buffer(s)) == 0
 
-    # Try entering search mode while in custom repl mode
-    LineEdit.enter_search(s, custom_histp, true)
+        # Try entering search mode while in custom repl mode
+        LineEdit.enter_search(s, custom_histp, true)
+    end
 end
 
 # Test removal of prompt in bracket pasting
-begin
-    stdin_write, stdout_read, stderr_read, repl = fake_repl()
-
+fake_repl() do stdin_write, stdout_read, repl
     repl.interface = REPL.setup_interface(repl)
     repl_mode = repl.interface.modes[1]
     shell_mode = repl.interface.modes[2]
@@ -508,8 +510,8 @@ begin
         Base.REPL.run_repl(repl)
     end
 
-    c = Condition()
-    sendrepl2(cmd) = write(stdin_write,"$cmd\n notify($(curmod_prefix)c)\n")
+    global c = Condition()
+    sendrepl2(cmd) = write(stdin_write, "$cmd\n notify($(curmod_prefix)c)\n")
 
     # Test removal of prefix in single statement paste
     sendrepl2("\e[200~julia> A = 2\e[201~\n")
@@ -528,9 +530,9 @@ begin
              """)
     wait(c)
     @test Main.A == 3
-    @test Main.foo(4)
-    @test Main.T17599(3).a == 3
-    @test !Main.foo(2)
+    @test Base.invokelatest(Main.foo, 4)
+    @test Base.invokelatest(Main.T17599, 3).a == 3
+    @test !Base.invokelatest(Main.foo, 2)
 
     sendrepl2("""\e[200~
             julia> goo(x) = x + 1
@@ -541,7 +543,7 @@ begin
              """)
     wait(c)
     @test Main.A == 4
-    @test Main.goo(4) == 5
+    @test Base.invokelatest(Main.goo, 4) == 5
 
     # Test prefix removal only active in bracket paste mode
     sendrepl2("julia = 4\n julia> 3 && (A = 1)\n")
@@ -554,8 +556,7 @@ begin
 end
 
 # Simple non-standard REPL tests
-if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    stdin_write, stdout_read, stdout_read, repl = fake_repl()
+fake_repl() do stdin_write, stdout_read, repl
     panel = LineEdit.Prompt("testπ";
         prompt_prefix="\e[38;5;166m",
         prompt_suffix=Base.text_colors[:white],
@@ -597,34 +598,31 @@ end
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 
 let exename = Base.julia_cmd()
+    # Test REPL in dumb mode
+    if !Sys.iswindows()
+        TestHelpers.with_fake_pty() do slave, master
+            nENV = copy(ENV)
+            nENV["TERM"] = "dumb"
+            p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
+            output = readuntil(master,"julia> ")
+            if ccall(:jl_running_on_valgrind,Cint,()) == 0
+                # If --trace-children=yes is passed to valgrind, we will get a
+                # valgrind banner here, not just the prompt.
+                @test output == "julia> "
+            end
+            write(master,"1\nquit()\n")
 
-# Test REPL in dumb mode
-if !Sys.iswindows()
-    TestHelpers.with_fake_pty() do slave, master
-        nENV = copy(ENV)
-        nENV["TERM"] = "dumb"
-        p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
-        output = readuntil(master,"julia> ")
-        if ccall(:jl_running_on_valgrind,Cint,()) == 0
-            # If --trace-children=yes is passed to valgrind, we will get a
-            # valgrind banner here, not just the prompt.
-            @test output == "julia> "
+            wait(p)
+            output = readuntil(master,' ')
+            @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
+            @test nb_available(master) == 0
         end
-        write(master,"1\nquit()\n")
-
-        wait(p)
-        output = readuntil(master,' ')
-        @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
-        @test nb_available(master) == 0
     end
-end
 
-# Test stream mode
-if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+    # Test stream mode
     outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
     write(ins,"1\nquit()\n")
     @test read(outs, String) == "1\n"
-end
 end # let exename
 
 # issue #19864:
@@ -648,21 +646,20 @@ let io = IOBuffer()
     @test length(String(take!(io))) < 1500
 end
 
-function test_replinit()
-    stdin_write, stdout_read, stdout_read, repl = fake_repl()
+fake_repl() do stdin_write, stdout_read, repl
     # Relies on implementation detail to make sure we only have the single
     # replinit callback we want to test.
     saved_replinit = copy(Base.repl_hooks)
     slot = Ref(false)
     # Create a closure from a newer world to check if `_atreplinit`
     # can run it correctly
-    atreplinit(@eval(repl::Base.REPL.LineEditREPL->($slot[] = true)))
+    atreplinit(@eval(repl::Base.REPL.LineEditREPL -> ($slot[] = true)))
     Base._atreplinit(repl)
     @test slot[]
     @test_throws MethodError Base.repl_hooks[1](repl)
     copy!(Base.repl_hooks, saved_replinit)
+    nothing
 end
-test_replinit()
 
 let ends_with_semicolon = Base.REPL.ends_with_semicolon
     @test !ends_with_semicolon("")
@@ -732,14 +729,12 @@ const altkeys = [Dict{Any,Any}("\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || 
                 ]
 
 
-if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    for keys = [altkeys, merge(altkeys...)],
-            altprompt = ["julia-$(VERSION.major).$(VERSION.minor)> ",
-                         () -> "julia-$(Base.GIT_VERSION_INFO.commit_short)"]
-        histfile = tempname()
-        try
-            stdin_write, stdout_read, stderr_read, repl = fake_repl()
-
+for keys = [altkeys, merge(altkeys...)],
+        altprompt = ["julia-$(VERSION.major).$(VERSION.minor)> ",
+                     () -> "julia-$(Base.GIT_VERSION_INFO.commit_short)"]
+    histfile = tempname()
+    try
+        fake_repl() do stdin_write, stdout_read, repl
             repl.specialdisplay = Base.REPL.REPLDisplay(repl)
             repl.history_file = true
             withenv("JULIA_HISTORY" => histfile) do
@@ -789,8 +784,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
                            \#\ mode:\ julia\n
                            \t1\ \*\ 1;\n$
                           """xm, history)
-        finally
-            rm(histfile, force=true)
         end
+    finally
+        rm(histfile, force=true)
     end
 end
