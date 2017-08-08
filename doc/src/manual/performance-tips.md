@@ -485,6 +485,26 @@ annotation in this context in order to achieve type stability. This is because t
 cannot deduce the type of the return value of a function, even `convert`, unless the types of
 all the function's arguments are known.
 
+Type annotation will not enhance (and can actually hinder) performance if the type is constructed
+at run-time.  This is because the compiler cannot use the annotation to specialize the subsequent
+code, and the type-check itself takes time.  For example, in the code:
+
+```julia
+function nr(a, prec)
+    ctype = prec == 32? Float32 : Float64
+    b = Complex{ctype}(a)
+    c = (b + 1.0f0)::Complex{ctype}
+    abs(c)
+end
+```
+
+the annotation of `c` harms performance.  To write performant code involving types constructed at
+run-time, use the [function-barrier technique](@ref kernal-functions) discussed below, and ensure
+that the constructed type is a type-parameter of the kernel function so that the kernel operations
+are properly specialized by the compiler.  For example, in the above snippet, as soon as `b` is
+constructed, it can be passed to another function with an formal argument of the form `b::T` or
+`b::Complex{T}` in which `T` is a type parameter.
+
 ### Declare types of keyword arguments
 
 Keyword arguments can have declared types:
