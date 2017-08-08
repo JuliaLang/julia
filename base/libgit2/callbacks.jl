@@ -65,11 +65,14 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
         # if username is not provided, then prompt for it
         username = if username_ptr == Cstring(C_NULL)
             uname = creds.user # check if credentials were already used
-            !isusedcreds ? uname : prompt("Username for '$schema$host'", default=uname)
+            prompt_url = git_url(scheme=schema, host=host)
+            !isusedcreds ? uname : prompt("Username for '$prompt_url'", default=uname)
         else
             unsafe_string(username_ptr)
         end
         isempty(username) && return Cint(Error.EAUTH)
+
+        prompt_url = git_url(scheme=schema, host=host, username=username)
 
         # For SSH we need a private key location
         privatekey = if haskey(ENV,"SSH_KEY_PATH")
@@ -82,7 +85,7 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
                     keydefpath = defaultkeydefpath
                 else
                     keydefpath =
-                        prompt("Private key location for '$schema$username@$host'", default=keydefpath)
+                        prompt("Private key location for '$prompt_url'", default=keydefpath)
                 end
             end
             keydefpath
@@ -104,7 +107,7 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
                     keydefpath = privatekey*".pub"
                 end
                 if !isfile(keydefpath)
-                    prompt("Public key location for '$schema$username@$host'", default=keydefpath)
+                    prompt("Public key location for '$prompt_url'", default=keydefpath)
                 end
             end
             keydefpath
@@ -150,17 +153,19 @@ function authenticate_userpass(creds::UserPasswordCredentials, libgit2credptr::P
     if creds.prompt_if_incorrect
         username = creds.user
         userpass = creds.pass
+        prompt_url = git_url(scheme=schema, host=host)
         if Sys.iswindows()
             if isempty(username) || isempty(userpass) || isusedcreds
-                res = Base.winprompt("Please enter your credentials for '$schema$host'", "Credentials required",
+                res = Base.winprompt("Please enter your credentials for '$prompt_url'", "Credentials required",
                         isempty(username) ? urlusername : username; prompt_username = true)
                 isnull(res) && return Cint(Error.EAUTH)
                 username, userpass = Base.get(res)
             end
         elseif isusedcreds
-            username = prompt("Username for '$schema$host'",
+            username = prompt("Username for '$prompt_url'",
                 default=isempty(username) ? urlusername : username)
-            userpass = prompt("Password for '$schema$username@$host'", password=true)
+            prompt_url = git_url(scheme=schema, host=host, username=username)
+            userpass = prompt("Password for '$prompt_url'", password=true)
         end
         ((creds.user != username) || (creds.pass != userpass)) && reset!(creds)
         creds.user = username # save credentials
@@ -211,7 +216,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     # parse url for schema and host
     urlparts = match(URL_REGEX, url)
-    schema = urlparts[:scheme] === nothing ? "" : urlparts[:scheme] * "://"
+    schema = urlparts[:scheme] === nothing ? "" : urlparts[:scheme]
     urlusername = urlparts[:user] === nothing ? "" : urlparts[:user]
     host = urlparts[:host]
 
@@ -230,7 +235,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
         defaultcreds = reset!(UserPasswordCredentials(true), -1)
-        credid = "$schema$host"
+        credid = "$(isempty(schema) ? "ssh" : schema)://$host"
         upcreds = get_creds!(creds, credid, defaultcreds)
         # If there were stored SSH credentials, but we ended up here that must
         # mean that something went wrong. Replace the SSH credentials by user/pass

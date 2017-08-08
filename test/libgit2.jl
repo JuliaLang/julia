@@ -185,7 +185,7 @@ end
 
     @testset "HTTPS URL, no path" begin
         m = match(LibGit2.URL_REGEX, "https://user:pass@server.com:80")
-        @test m[:path] == ""
+        @test m[:path] === nothing
     end
 
     @testset "scp-like syntax, no path" begin
@@ -193,7 +193,106 @@ end
         @test m[:path] == ""
 
         m = match(LibGit2.URL_REGEX, "user@server")
-        @test m[:path] == ""
+        @test m[:path] === nothing
+    end
+
+    @testset "HTTPS URL, invalid path" begin
+        m = match(LibGit2.URL_REGEX, "https://git@server:repo")
+        @test m === nothing
+    end
+
+    # scp-like syntax should have a colon separating the hostname from the path
+    @testset "scp-like syntax, invalid path" begin
+        m = match(LibGit2.URL_REGEX, "git@server/repo")
+        @test m === nothing
+    end
+end
+
+@testset "Git URL formatting" begin
+    @testset "HTTPS URL" begin
+        url = LibGit2.git_url(
+            scheme="https",
+            username="user",
+            password="pass",
+            host="server.com",
+            port=80,
+            path="/org/project.git")
+        @test url == "https://user:pass@server.com:80/org/project.git"
+    end
+
+    @testset "SSH URL" begin
+        url = LibGit2.git_url(
+            scheme="ssh",
+            username="user",
+            password="pass",
+            host="server",
+            port="22",
+            path="/project.git")
+        @test url == "ssh://user:pass@server:22/project.git"
+    end
+
+    @testset "SSH URL, scp-like syntax" begin
+        url = LibGit2.git_url(
+            scheme="",
+            username="user",
+            host="server",
+            path="project.git")
+        @test url == "user@server:project.git"
+    end
+
+    @testset "HTTPS URL, realistic" begin
+        url = LibGit2.git_url(
+            scheme="https",
+            host="github.com",
+            path="/JuliaLang/Example.jl.git")
+        @test url == "https://github.com/JuliaLang/Example.jl.git"
+    end
+
+    @testset "SSH URL, realistic" begin
+        url = LibGit2.git_url(
+            username="git",
+            host="github.com",
+            path="JuliaLang/Example.jl.git")
+        @test url == "git@github.com:JuliaLang/Example.jl.git"
+    end
+
+    @testset "HTTPS URL, no path" begin
+        url = LibGit2.git_url(
+            scheme="https",
+            username="user",
+            password="pass",
+            host="server.com",
+            port="80")
+        @test url == "https://user:pass@server.com:80"
+    end
+
+    @testset "scp-like syntax, no path" begin
+        url = LibGit2.git_url(
+            username="user",
+            host="server.com")
+        @test url == "user@server.com"
+    end
+
+    @testset "HTTP URL, path missing slash prefix" begin
+        url = LibGit2.git_url(
+            scheme="http",
+            host="server.com",
+            path="path")
+        @test url == "http://server.com/path"
+    end
+
+    @testset "empty" begin
+        @test_throws ArgumentError LibGit2.git_url()
+
+        @test LibGit2.git_url(host="server.com") == "server.com"
+        url = LibGit2.git_url(
+            scheme="",
+            username="",
+            password="",
+            host="server.com",
+            port="",
+            path="")
+        @test url == "server.com"
     end
 end
 
@@ -1511,7 +1610,7 @@ mktempdir() do dir
     # systems.
     if Sys.isunix()
         @testset "SSH credential prompt" begin
-            url = "git@github.com/test/package.jl"
+            url = "git@github.com:test/package.jl"
 
             valid_key = joinpath(KEY_DIR, "valid")
             invalid_key = joinpath(KEY_DIR, "invalid")
