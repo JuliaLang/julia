@@ -139,6 +139,12 @@ end
 
 @testset "pop!, delete!" begin
     s = IntSet(1:2:10)
+    # deleting non-positive values should be no-op
+    # (Issue #23179 : delete!(s, 0) should not crash)
+    len = length(s)
+    for n in -20:0
+        @test length(delete!(s, n)) == len
+    end
     @test pop!(s, 1) === 1
     @test !(1 in s)
     @test_throws KeyError pop!(s, 1)

@@ -102,7 +102,7 @@ end
     n in s ? (_delete!(s, n); n) : default
 end
 @inline _delete!(s::IntSet, n::Integer) = _setint!(s, n, false)
-@inline delete!(s::IntSet, n::Integer) = n < 0 ? s : _delete!(s, n)
+@inline delete!(s::IntSet, n::Integer) = n > 0 ? _delete!(s, n) : s
 shift!(s::IntSet) = pop!(s, first(s))
 
 empty!(s::IntSet) = (fill!(s.bits, false); s)
