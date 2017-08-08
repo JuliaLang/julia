@@ -68,7 +68,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         end
     end
 
-    if creds.prompt_if_incorrect
+    if p.allow_prompt
         # if username is not provided or empty, then prompt for it
         username = username_ptr != Cstring(C_NULL) ? unsafe_string(username_ptr) : ""
         if isempty(username)
@@ -166,7 +166,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayl
         creds.pass = ""
     end
 
-    if creds.prompt_if_incorrect
+    if p.allow_prompt
         username = creds.user
         userpass = creds.pass
         if isempty(username) || isempty(userpass)
@@ -266,7 +266,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
     # use ssh key or ssh-agent
     if isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY))
         if isnull(p.credential) || !isa(unsafe_get(p.credential), SSHCredentials)
-            creds = SSHCredentials(p.username, "", true)
+            creds = SSHCredentials(p.username)
             if !isnull(p.cache)
                 credid = "ssh://$(p.host)"
                 creds = get_creds!(unsafe_get(p.cache), credid, creds)
@@ -279,7 +279,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
         if isnull(p.credential) || !isa(unsafe_get(p.credential), UserPasswordCredentials)
-            creds = UserPasswordCredentials(p.username, "", true)
+            creds = UserPasswordCredentials(p.username)
             if !isnull(p.cache)
                 credid = "$(isempty(p.scheme) ? "ssh" : p.scheme)://$(p.host)"
                 creds = get_creds!(unsafe_get(p.cache), credid, creds)

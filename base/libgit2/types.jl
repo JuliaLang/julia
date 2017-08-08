@@ -1066,13 +1066,21 @@ abstract type AbstractCredentials end
 mutable struct UserPasswordCredentials <: AbstractCredentials
     user::String
     pass::String
-    prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
-    function UserPasswordCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,prompt_if_incorrect)
+    function UserPasswordCredentials(u::AbstractString="", p::AbstractString="")
+        c = new(u, p)
         finalizer(c, securezero!)
         return c
     end
-    UserPasswordCredentials(prompt_if_incorrect::Bool=false) = UserPasswordCredentials("","",prompt_if_incorrect)
+
+    # Deprecated constructors
+    function UserPasswordCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool)
+        Base.depwarn(string(
+            "`UserPasswordCredentials` no longer supports the `prompt_if_incorrect` parameter. ",
+            "Use the `allow_prompt` keyword in supported by `LibGit2.CredentialPayload` ",
+            "instead."), :UserPasswordCredentials)
+        UserPasswordCredentials(u, p)
+    end
+    UserPasswordCredentials(prompt_if_incorrect::Bool) = UserPasswordCredentials("","",prompt_if_incorrect)
 end
 
 function securezero!(cred::UserPasswordCredentials)
@@ -1091,14 +1099,22 @@ mutable struct SSHCredentials <: AbstractCredentials
     pass::String
     prvkey::String
     pubkey::String
-    prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
-    function SSHCredentials(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,prvkey,pubkey,prompt_if_incorrect)
+    function SSHCredentials(u::AbstractString="", p::AbstractString="", prvkey::AbstractString="", pubkey::AbstractString="")
+        c = new(u, p, prvkey, pubkey)
         finalizer(c, securezero!)
         return c
     end
-    SSHCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false) = SSHCredentials(u,p,"","",prompt_if_incorrect)
-    SSHCredentials(prompt_if_incorrect::Bool=false) = SSHCredentials("","","","",prompt_if_incorrect)
+
+    # Deprecated constructors
+    function SSHCredentials(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool)
+        Base.depwarn(string(
+            "`SSHCredentials` no longer supports the `prompt_if_incorrect` parameter. ",
+            "Use the `allow_prompt` keyword in supported by `LibGit2.CredentialPayload` ",
+            "instead."), :SSHCredentials)
+        SSHCredentials(u, p, prvkey, pubkey)
+    end
+    SSHCredentials(u::AbstractString, p::AbstractString, prompt_if_incorrect::Bool) = SSHCredentials(u,p,"","",prompt_if_incorrect)
+    SSHCredentials(prompt_if_incorrect::Bool) = SSHCredentials("","","","",prompt_if_incorrect)
 end
 
 function securezero!(cred::SSHCredentials)
@@ -1137,6 +1153,7 @@ instances will be used when the URL has changed.
 mutable struct CredentialPayload <: Payload
     explicit::Nullable{AbstractCredentials}
     cache::Nullable{CachedCredentials}
+    allow_prompt::Bool
 
     # Ephemeral state fields
     credential::Nullable{AbstractCredentials}
@@ -1147,22 +1164,21 @@ mutable struct CredentialPayload <: Payload
     host::String
     path::String
 
-    function CredentialPayload(credential::Nullable{<:AbstractCredentials}, cache::Nullable{CachedCredentials})
-        payload = new(credential, cache)
+    function CredentialPayload(
+            credential::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}(),
+            cache::Nullable{CachedCredentials}=Nullable{CachedCredentials}();
+            allow_prompt::Bool=true)
+        payload = new(credential, cache, allow_prompt)
         return reset!(payload)
     end
 end
 
-function CredentialPayload(credential::AbstractCredentials)
-    CredentialPayload(Nullable(credential), Nullable{CachedCredentials}())
+function CredentialPayload(credential::AbstractCredentials; kwargs...)
+    CredentialPayload(Nullable(credential), Nullable{CachedCredentials}(); kwargs...)
 end
 
-function CredentialPayload(cache::CachedCredentials)
-    CredentialPayload(Nullable{AbstractCredentials}(), Nullable(cache))
-end
-
-function CredentialPayload()
-    CredentialPayload(Nullable{AbstractCredentials}(), Nullable{CachedCredentials}())
+function CredentialPayload(cache::CachedCredentials; kwargs...)
+    CredentialPayload(Nullable{AbstractCredentials}(), Nullable(cache); kwargs...)
 end
 
 """

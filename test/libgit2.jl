@@ -1949,22 +1949,22 @@ mktempdir() do dir
             invalid_key = joinpath(KEY_DIR, "invalid")
             invalid_cred = LibGit2.SSHCredentials(username, "", invalid_key, invalid_key * ".pub")
 
-            function gen_ex(cred)
+            function gen_ex(cred; allow_prompt=true)
                 quote
                     include($LIBGIT2_HELPER_PATH)
-                    payload = CredentialPayload($cred)
+                    payload = CredentialPayload($cred, allow_prompt=$allow_prompt)
                     credential_loop($valid_cred, $url, $username, payload, use_ssh_agent=false)
                 end
             end
 
             # Explicitly provided credential is correct
-            ex = gen_ex(valid_cred)
+            ex = gen_ex(valid_cred, allow_prompt=true)
             err, auth_attempts = challenge_prompt(ex, [])
             @test err == git_ok
             @test auth_attempts == 1
 
             # Explicitly provided credential is incorrect
-            ex = gen_ex(invalid_cred)
+            ex = gen_ex(invalid_cred, allow_prompt=false)
             err, auth_attempts = challenge_prompt(ex, [])
             @test err == eauth_error
             @test auth_attempts == 2
@@ -1976,22 +1976,22 @@ mktempdir() do dir
             valid_cred = LibGit2.UserPasswordCredentials("julia", randstring(16))
             invalid_cred = LibGit2.UserPasswordCredentials("alice", randstring(15))
 
-            function gen_ex(cred)
+            function gen_ex(cred; allow_prompt=true)
                 quote
                     include($LIBGIT2_HELPER_PATH)
-                    payload = CredentialPayload($cred)
+                    payload = CredentialPayload($cred, allow_prompt=$allow_prompt)
                     credential_loop($valid_cred, $url, "", payload)
                 end
             end
 
             # Explicitly provided credential is correct
-            ex = gen_ex(valid_cred)
+            ex = gen_ex(valid_cred, allow_prompt=true)
             err, auth_attempts = challenge_prompt(ex, [])
             @test err == git_ok
             @test auth_attempts == 1
 
             # Explicitly provided credential is incorrect
-            ex = gen_ex(invalid_cred)
+            ex = gen_ex(invalid_cred, allow_prompt=false)
             err, auth_attempts = challenge_prompt(ex, [])
             @test err == eauth_error
             @test auth_attempts == 2
@@ -2003,11 +2003,11 @@ mktempdir() do dir
 
             valid_username = "julia"
             valid_password = randstring(16)
-            valid_cred = LibGit2.UserPasswordCredentials(valid_username, valid_password, true)
+            valid_cred = LibGit2.UserPasswordCredentials(valid_username, valid_password)
 
             invalid_username = "alice"
             invalid_password = randstring(15)
-            invalid_cred = LibGit2.UserPasswordCredentials(invalid_username, invalid_password, true)
+            invalid_cred = LibGit2.UserPasswordCredentials(invalid_username, invalid_password)
 
             function gen_ex(; cached_cred=nothing)
                 quote
