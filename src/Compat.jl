@@ -499,7 +499,7 @@ if VERSION < v"0.7.0-DEV.924"
     Base.DomainError(val, msg) = DomainError()
 end
 
-# https://github.com/JuliaLang/julia/pull/222761
+# https://github.com/JuliaLang/julia/pull/22761
 if VERSION < v"0.7.0-DEV.1285"
     Base.OverflowError(msg) = OverflowError()
 end
