@@ -233,11 +233,11 @@ isinteger(x::Rational) = x.den == 1
 
 -(x::Rational) = (-x.num) // x.den
 function -(x::Rational{T}) where T<:Signed
-    x.num == typemin(T) && throw(OverflowError())
+    x.num == typemin(T) && throw(OverflowError("rational numerator is typemin(T)"))
     (-x.num) // x.den
 end
 function -(x::Rational{T}) where T<:Unsigned
-    x.num != zero(T) && throw(OverflowError())
+    x.num != zero(T) && throw(OverflowError("cannot negate unsigned number"))
     x
 end
 

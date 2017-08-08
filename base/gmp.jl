@@ -494,6 +494,8 @@ isqrt(x::BigInt) = MPZ.sqrt(x)
 
 function bigint_pow(x::BigInt, y::Integer)
     if y<0; throw(DomainError(y, "`y` cannot be negative.")); end
+    @noinline throw1(y) =
+        throw(OverflowError("exponent $y is too large and computation will overflow"))
     if x== 1; return x; end
     if x==-1; return isodd(y) ? x : -x; end
     if y>typemax(Culong)
@@ -507,7 +509,7 @@ function bigint_pow(x::BigInt, y::Integer)
        #
        #Assume that the answer will definitely overflow.
 
-       throw(OverflowError())
+       throw1(y)
     end
     return x^convert(Culong, y)
 end

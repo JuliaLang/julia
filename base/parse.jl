@@ -112,7 +112,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
         n, ov_mul = mul_with_overflow(n, base)
         n, ov_add = add_with_overflow(n, d)
         if ov_mul | ov_add
-            raise && throw(OverflowError())
+            raise && throw(OverflowError("overflow parsing $(repr(SubString(s,startpos,endpos)))"))
             return _n
         end
         (i > endpos) && return Nullable{T}(n)

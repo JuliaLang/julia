@@ -529,7 +529,6 @@ extern JL_DLLEXPORT jl_value_t *jl_stackovf_exception;
 extern JL_DLLEXPORT jl_value_t *jl_memory_exception;
 extern JL_DLLEXPORT jl_value_t *jl_readonlymemory_exception;
 extern JL_DLLEXPORT jl_value_t *jl_diverror_exception;
-extern JL_DLLEXPORT jl_value_t *jl_overflow_exception;
 extern JL_DLLEXPORT jl_value_t *jl_undefref_exception;
 extern JL_DLLEXPORT jl_value_t *jl_interrupt_exception;
 extern JL_DLLEXPORT jl_datatype_t *jl_boundserror_type;
