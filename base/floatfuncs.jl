@@ -111,6 +111,8 @@ julia> round(pi, 3, 2)
     julia> round(x, 1)
     1.2
     ```
+
+See also [`signif`](@ref) for rounding to significant digits.
 """
 round(T::Type, x)
 round(x::Real, ::RoundingMode{:ToZero}) = trunc(x)
