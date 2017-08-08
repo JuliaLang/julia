@@ -149,6 +149,7 @@ function test_futures_dgc(id)
     @test isnull(f.v) == true
     @test fetch(f) == id
     @test isnull(f.v) == false
+    yield(); # flush gc msgs
     @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, fid) == false
 
 
@@ -158,14 +159,14 @@ function test_futures_dgc(id)
     @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, fid) == true
     @test isnull(f.v) == true
     finalize(f)
-    Base.Distributed.flush_gc_msgs()
+    yield(); # flush gc msgs
     @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, fid) == false
 end
 
 test_futures_dgc(id_me)
 test_futures_dgc(id_other)
 
-# if sent to another worker, it should not be deleted till the other worker has fetched.
+# if sent to another worker, it should not be deleted till all references are fetched.
 wid1 = workers()[1]
 wid2 = workers()[2]
 f = remotecall(myid, wid1)
@@ -176,7 +177,8 @@ put!(fstore, f)
 
 @test fetch(f) == wid1
 @test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, fid) == true
-remotecall_fetch(r->fetch(fetch(r)), wid2, fstore)
+remotecall_fetch(r->(fetch(fetch(r)); yield()), wid2, fstore)
+sleep(0.5) # to ensure that wid2 gc messages have been executed on wid1
 @test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, fid) == false
 
 # put! should release remote reference since it would have been cached locally
@@ -228,7 +230,7 @@ function test_remoteref_dgc(id)
     @test fetch(rr) == :OK
     @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, rrid) == true
     finalize(rr)
-    Base.Distributed.flush_gc_msgs()
+    yield(); # flush gc msgs
     @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, rrid) == false
 end
 test_remoteref_dgc(id_me)
@@ -244,11 +246,28 @@ fstore = RemoteChannel(wid2)
 put!(fstore, rr)
 
 @test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == true
-finalize(rr); Base.Distributed.flush_gc_msgs() # finalize locally
+finalize(rr) # finalize locally
+yield(); # flush gc msgs
 @test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == true
-remotecall_fetch(r->(finalize(take!(r)); Base.Distributed.flush_gc_msgs(); nothing), wid2, fstore) # finalize remotely
+remotecall_fetch(r->(finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
 sleep(0.5) # to ensure that wid2 messages have been executed on wid1
 @test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == false
+
+# Tests for issue #23109 - should not hang.
+f = @spawn rand(1,1)
+@sync begin
+    for _ in 1:10
+        @async fetch(f)
+    end
+end
+
+wid1,wid2 = workers()[1:2]
+f = @spawnat wid1 rand(1,1)
+@sync begin
+        @async fetch(f)
+        @async remotecall_fetch(()->fetch(f), wid2)
+end
+
 
 @test fetch(@spawnat id_other myid()) == id_other
 @test (@fetchfrom id_other myid()) == id_other

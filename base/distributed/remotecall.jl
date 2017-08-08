@@ -455,16 +455,11 @@ end
 wait(r::Future) = (!isnull(r.v) && return r; call_on_owner(wait_ref, r, myid()); r)
 wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
 
-function fetch_future(rid, callee)
-    rv = lookup_ref(rid)
-    v = fetch(rv.c)
-    del_client(rid, callee)
-    v
-end
 function fetch(r::Future)
     !isnull(r.v) && return get(r.v)
-    v=call_on_owner(fetch_future, r, myid())
+    v=call_on_owner(fetch_ref, r)
     r.v=v
+    send_del_client(r)
     v
 end
 
