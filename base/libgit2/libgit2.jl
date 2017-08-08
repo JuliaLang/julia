@@ -265,7 +265,8 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
+        p = CredentialPayload(payload)
+        fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), p))
         fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
     finally
         close(rmt)
@@ -299,7 +300,8 @@ function push(repo::GitRepo; remote::AbstractString="origin",
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        push_opts=PushOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
+        p = CredentialPayload(payload)
+        push_opts = PushOptions(callbacks=RemoteCallbacks(credentials_cb(), p))
         push(rmt, refspecs, force=force, options=push_opts)
     finally
         close(rmt)
@@ -504,11 +506,12 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
-    fetch_opts=FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), payload))
+    p = CredentialPayload(payload)
+    fetch_opts = FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), p))
     clone_opts = CloneOptions(
                 bare = Cint(isbare),
                 checkout_branch = isempty(lbranch) ? Cstring(C_NULL) : Base.unsafe_convert(Cstring, lbranch),
-                fetch_opts=fetch_opts,
+                fetch_opts = fetch_opts,
                 remote_cb = remote_cb
             )
     return clone(repo_url, repo_path, clone_opts)

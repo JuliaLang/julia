@@ -218,10 +218,6 @@ function RemoteCallbacks(credentials_cb::Ptr{Void}, payload::Payload)
     RemoteCallbacks(credentials_cb, Ref(payload))
 end
 
-function RemoteCallbacks(credentials_cb::Ptr{Void}, credentials)
-    RemoteCallbacks(credentials_cb, CredentialPayload(credentials))
-end
-
 """
     LibGit2.ProxyOptions
 
