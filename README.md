@@ -159,6 +159,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `fieldcount` is equivalent to `nfields` for Julia versions 0.6 and below and is used to
   determine the number of fields in a data type ([#22350]).
 
+* There are versions of `InexactError`, `DomainError`, and `OverflowError` that take the same arguments as introduced in Julia 0.7-DEV ([#20005], [#22751], [#22761]).
+
 ## Renamed functions
 
 
@@ -311,6 +313,7 @@ includes this fix. Find the minimum version from there.
 [#20974]: https://github.com/JuliaLang/julia/issues/20974
 [#21257]: https://github.com/JuliaLang/julia/issues/21257
 [#21346]: https://github.com/JuliaLang/julia/issues/21346
+[#22005]: https://github.com/JuliaLang/julia/issues/22005
 [#22064]: https://github.com/JuliaLang/julia/issues/22064
 [#22182]: https://github.com/JuliaLang/julia/issues/22182
 [#22350]: https://github.com/JuliaLang/julia/issues/22350
@@ -318,4 +321,6 @@ includes this fix. Find the minimum version from there.
 [#22633]: https://github.com/JuliaLang/julia/issues/22633
 [#22629]: https://github.com/JuliaLang/julia/issues/22629
 [#22666]: https://github.com/JuliaLang/julia/pull/22666
+[#22751]: https://github.com/JuliaLang/julia/pull/22751
+[#22761]: https://github.com/JuliaLang/julia/pull/22761
 [#22864]: https://github.com/JuliaLang/julia/pull/22864

@@ -658,6 +658,16 @@ eval(Expr(:type, false, :TestType, Expr(:block, :(a::Int), :b)))
 @test fieldcount(TestType) == 2
 @test fieldcount(Int) == 0
 
+# PR 20005
+@test_throws InexactError throw(InexactError(:func, Int, 3.2))
+
+# PR 22751
+@test_throws DomainError throw(DomainError(-2))
+@test_throws DomainError throw(DomainError(-2, "negative"))
+
+# PR 22761
+@test_throws OverflowError throw(OverflowError("overflow"))
+
 let x = fill!(StringVector(5), 0x61)
     # 0.7
     @test pointer(x) == pointer(String(x))
