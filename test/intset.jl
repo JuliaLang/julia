@@ -139,7 +139,7 @@ end
 
 @testset "pop!, delete!" begin
     s = IntSet(1:2:10)
-    # deleting non-negative values should be no-op
+    # deleting non-positive values should be no-op
     # (Issue #23179 : delete!(s, 0) should not crash)
     len = length(s)
     for n in -20:0
