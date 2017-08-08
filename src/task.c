@@ -152,45 +152,45 @@ jl_datatype_t *jl_task_type;
 #define ASM_COPY_STACKS
 #endif
 
-static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *t)
+static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt)
 {
-    if (t->state == done_sym || t->state == failed_sym)
+    if (lastt->state == done_sym || lastt->state == failed_sym)
         return;
     char *frame_addr = (char*)jl_get_frame_addr();
     char *stackbase = (char*)ptls->stackbase;
     size_t nb = stackbase > frame_addr ? stackbase - frame_addr : 0;
     char *buf;
-    if (t->stkbuf == NULL || t->bufsz < nb) {
+    if (lastt->stkbuf == NULL || lastt->bufsz < nb) {
         buf = (char*)jl_gc_alloc_buf(ptls, nb);
-        t->stkbuf = buf;
-        t->bufsz = nb;
+        lastt->stkbuf = buf;
+        lastt->bufsz = nb;
     }
     else {
-        buf = (char*)t->stkbuf;
+        buf = (char*)lastt->stkbuf;
     }
-    t->ssize = nb;
+    lastt->ssize = nb;
+    *pt = lastt; // clear the gc-root for the target task before copying the stack for saving
     memcpy(buf, frame_addr, nb);
     // this task's stack could have been modified after
     // it was marked by an incremental collection
     // move the barrier back instead of walking it again here
-    jl_gc_wb_back(t);
+    jl_gc_wb_back(lastt);
 }
 
-static void NOINLINE restore_stack(jl_ptls_t ptls, jl_task_t *t,
-                                   jl_jmp_buf *where, char *p)
+static void NOINLINE restore_stack(jl_ptls_t ptls, char *p)
 {
+    jl_task_t *t = ptls->current_task;
     char *_x = (char*)ptls->stackbase - t->ssize;
     if (!p) {
         p = _x;
         if ((char*)&_x > _x) {
             p = (char*)alloca((char*)&_x - _x);
         }
-        restore_stack(ptls, t, where, p);
+        restore_stack(ptls, p); // pass p to ensure the compiler can't tailcall this
     }
-    ptls->jmp_target = where;
     assert(t->stkbuf != NULL);
-    memcpy(_x, t->stkbuf, t->ssize);
-    jl_longjmp(*ptls->jmp_target, 1);
+    memcpy(_x, t->stkbuf, t->ssize); // destroys all but the current stackframe
+    jl_longjmp(t->ctx, 1);
 }
 #endif
 
@@ -302,8 +302,9 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 #endif
 }
 
-static void ctx_switch(jl_ptls_t ptls, jl_task_t *t, jl_jmp_buf *where)
+static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
 {
+    jl_task_t *t = *pt;
     assert(t != ptls->current_task);
 #ifdef ENABLE_TIMINGS
     jl_timing_block_t *blk = ptls->current_task->timing_stack;
@@ -315,7 +316,9 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t *t, jl_jmp_buf *where)
         ptls->bt_size = 0;
         jl_task_t *lastt = ptls->current_task;
 #ifdef COPY_STACKS
-        save_stack(ptls, lastt);
+        save_stack(ptls, lastt, pt); // allocates (gc-safepoint, and can also fail)
+#else
+        *pt = lastt; // can't fail after here: clear the gc-root for the target task now
 #endif
 
         // set up global state for new task
@@ -347,7 +350,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t *t, jl_jmp_buf *where)
 
 #ifdef COPY_STACKS
         if (t->stkbuf) {
-            restore_stack(ptls, t, where, NULL);
+            restore_stack(ptls, NULL);
         }
         else {
 #ifdef ASM_COPY_STACKS
@@ -385,7 +388,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t *t, jl_jmp_buf *where)
 #endif
         }
 #else
-        jl_longjmp(*where, 1);
+        jl_longjmp(t->ctx, 1);
 #endif
     }
 #ifdef ENABLE_TIMINGS
@@ -414,8 +417,7 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
         jl_error("task switch not allowed from inside staged nor pure functions");
     sig_atomic_t defer_signal = ptls->defer_signal;
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
-    *pt = ptls->current_task; // clear the gc-root for the target task
-    ctx_switch(ptls, t, &t->ctx);
+    ctx_switch(ptls, pt);
     jl_gc_unsafe_leave(ptls, gc_state);
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
