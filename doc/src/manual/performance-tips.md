@@ -491,7 +491,7 @@ code, and the type-check itself takes time.  For example, in the code:
 
 ```julia
 function nr(a, prec)
-    ctype = prec == 32? Float32 : Float64
+    ctype = prec == 32 ? Float32 : Float64
     b = Complex{ctype}(a)
     c = (b + 1.0f0)::Complex{ctype}
     abs(c)
@@ -500,10 +500,18 @@ end
 
 the annotation of `c` harms performance.  To write performant code involving types constructed at
 run-time, use the [function-barrier technique](@ref kernal-functions) discussed below, and ensure
-that the constructed type is a type-parameter of the kernel function so that the kernel operations
-are properly specialized by the compiler.  For example, in the above snippet, as soon as `b` is
-constructed, it can be passed to another function with an formal argument of the form `b::T` or
-`b::Complex{T}` in which `T` is a type parameter.
+that the constructed type appears among the argument types of the kernel function so that the kernel
+operations are properly specialized by the compiler.  For example, in the above snippet, as soon as
+`b` is constructed, it can be passed to another function `k`, the kernel.  If, for example, function 
+`k` declares `b` as an argument of type ``Complex{T}``, where `T` is a type parameter, then a type annotation
+appearing in an assignment statement within `k` of the form:
+
+```julia
+     c = (b + 1.0f0)::Complex{T}
+ ```
+
+does not hinder performance (but does not help either) since the compiler can determine the type of `c`
+at the time `k` is compiled.
 
 ### Declare types of keyword arguments
 
