@@ -404,7 +404,7 @@ end
 
 @testset "function prompt indentation" begin
     term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer(), false)
-    # default prompt: PromptState.indent should not be to a final fixed value
+    # default prompt: PromptState.indent should not be set to a final fixed value
     s = LineEdit.init_state(term, ModalInterface([Prompt("julia> ")]))
     ps::LineEdit.PromptState = s.mode_state[s.current_mode]
     @test ps.indent == -1
