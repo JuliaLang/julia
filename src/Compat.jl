@@ -488,6 +488,22 @@ if VERSION < v"0.7.0-DEV.1053"
     Base.read(obj::Cmd, ::Type{String}) = readstring(obj)
 end
 
+# https://github.com/JuliaLang/julia/pull/20005
+if VERSION < v"0.7.0-DEV.896"
+    Base.InexactError(name::Symbol, T, val) = InexactError()
+end
+
+# https://github.com/JuliaLang/julia/pull/22751
+if VERSION < v"0.7.0-DEV.924"
+    Base.DomainError(val) = DomainError()
+    Base.DomainError(val, msg) = DomainError()
+end
+
+# https://github.com/JuliaLang/julia/pull/22761
+if VERSION < v"0.7.0-DEV.1285"
+    Base.OverflowError(msg) = OverflowError()
+end
+
 include("deprecated.jl")
 
 end # module Compat
