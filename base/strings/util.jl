@@ -256,7 +256,6 @@ julia> rpad("March",20)
 ```
 """
 rpad(s, n::Integer, p=" ") = rpad(string(s),n,string(p))
-cpad(s, n::Integer, p=" ") = rpad(lpad(s,div(n+strwidth(s),2),p),n,p)
 
 # splitter can be a Char, Vector{Char}, AbstractString, Regex, ...
 # any splitter that provides search(s::AbstractString, splitter)
