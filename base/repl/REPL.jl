@@ -137,16 +137,15 @@ function print_response(errio::IO, @nospecialize(val), bt, show_value::Bool, hav
         try
             Base.sigatomic_end()
             if bt !== nothing
-                eval(Main, Expr(:body, Expr(:return, Expr(:call, Base.display_error,
-                                                          errio, QuoteNode(val), bt))))
+                Base.invokelatest(Base.display_error, errio, val, bt)
                 iserr, lasterr = false, ()
             else
                 if val !== nothing && show_value
                     try
                         if specialdisplay === nothing
-                            eval(Main, Expr(:body, Expr(:return, Expr(:call, display, QuoteNode(val)))))
+                            Base.invokelatest(display, val)
                         else
-                            eval(Main, Expr(:body, Expr(:return, Expr(:call, specialdisplay, QuoteNode(val)))))
+                            Base.invokelatest(display, specialdisplay, val)
                         end
                     catch err
                         println(errio, "Error showing value of type ", typeof(val), ":")
@@ -648,8 +647,7 @@ function respond(f, repl, main; pass_empty = false)
             reset(repl)
             local val, bt
             try
-                # note: value wrapped carefully here to ensure it doesn't get passed through expand
-                response = eval(Main, Expr(:body, Expr(:return, Expr(:call, QuoteNode(f), QuoteNode(line)))))
+                response = Base.invokelatest(f, line)
                 val, bt = send_to_backend(response, backend(repl))
             catch err
                 val = err
