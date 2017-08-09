@@ -143,7 +143,7 @@ function intersect!(s1::IntSet, s2::IntSet)
 end
 
 setdiff(s::IntSet, ns) = setdiff!(copy(s), ns)
-setdiff!(s::IntSet, ns) = (for n in ns; _delete!(s, n); end; s)
+setdiff!(s::IntSet, ns) = (for n in ns; delete!(s, n); end; s)
 function setdiff!(s1::IntSet, s2::IntSet)
     _matched_map!((p, q) -> p & ~q, s1.bits, s2.bits)
     s1

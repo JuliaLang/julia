@@ -204,6 +204,10 @@ end
     @test s1 == s2 == IntSet(2:2:100)
     @test collect(s1) == collect(2:2:100)
 
+    # issue #23191 : these tests should not segfault
+    @test setdiff(s1, 0) == s1
+    @test setdiff(s1, -9:0) == s1
+
     @test symdiff(IntSet([1, 2, 3, 4]), IntSet([2, 4, 5, 6])) ==
           symdiff(IntSet([2, 4, 5, 6]), IntSet([1, 2, 3, 4])) ==
           symdiff(IntSet([1, 2, 3, 4]), [2, 4, 5, 6]) ==
