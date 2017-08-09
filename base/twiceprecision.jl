@@ -612,16 +612,13 @@ function linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, de
     tmin = -start_n/(Float64(stop_n) - Float64(start_n))
     imin = round(Int, tmin*(len-1)+1)
     imin = clamp(imin, 1, Int(len))
-    # Compute (1-t)*a and t*b separately in 2x precision (itp = interpolant)...
-    dent = (den, len-1)  # represent products as a tuple to eliminate risk of overflow
-    start_itp = proddiv(T, (len-imin, start_n), dent)
-    stop_itp = proddiv(T, (imin-1, stop_n), dent)
-    # ...and then combine them to make ref
-    ref = start_itp + stop_itp
+    ref_num = Int128(len-imin) * start_n + Int128(imin-1) * stop_n
+    ref_denom = Int128(len-1) * den
+    ref = ratio128(T, ref_num, ref_denom)
     # Compute step to 2x precision without risking overflow...
-    rend = proddiv(T, (stop_n,), dent)
-    rbeg = proddiv(T, (-start_n,), dent)
-    step = twiceprecision(rbeg + rend, nbitslen(T, len, imin)) # ...and truncate hi-bits as needed
+    step_full = ratio128(T, Int128(stop_n) - Int128(start_n), ref_denom)
+    # ...and truncate hi-bits as needed
+    step = twiceprecision(step_full, nbitslen(T, len, imin))
     StepRangeLen(ref, step, Int(len), imin)
 end
 

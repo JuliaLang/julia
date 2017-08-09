@@ -1074,6 +1074,10 @@ for i = 2:4
     @test r[i] == x
 end
 
+r = linspace(Float16(0.1094), Float16(0.9697), 300)
+@test r[1] == Float16(0.1094)
+@test r[end] == Float16(0.9697)
+
 # issue #20382
 r = @inferred(colon(big(1.0),big(2.0),big(5.0)))
 @test eltype(r) == BigFloat
