@@ -17525,7 +17525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.zip",
     "category": "Function",
-    "text": "zip(iters...)\n\nFor a set of iterable objects, returns an iterable of tuples, where the ith tuple contains the ith component of each input iterable.\n\nNote that zip is its own inverse: collect(zip(zip(a...)...)) == collect(a).\n\nExamples\n\njulia> a = 1:5\n1:5\n\njulia> b = [\"e\",\"d\",\"b\",\"c\",\"a\"]\n5-element Array{String,1}:\n \"e\"\n \"d\"\n \"b\"\n \"c\"\n \"a\"\n\njulia> c = zip(a,b)\nBase.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, String[\"e\", \"d\", \"b\", \"c\", \"a\"])\n\njulia> length(c)\n5\n\njulia> first(c)\n(1, \"e\")\n\n\n\n"
+    "text": "zip(iters...)\n\nFor a set of iterable objects, returns an iterable of tuples, where the ith tuple contains the ith component of each input iterable.\n\nExamples\n\njulia> a = 1:5\n1:5\n\njulia> b = [\"e\",\"d\",\"b\",\"c\",\"a\"]\n5-element Array{String,1}:\n \"e\"\n \"d\"\n \"b\"\n \"c\"\n \"a\"\n\njulia> c = zip(a,b)\nBase.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, String[\"e\", \"d\", \"b\", \"c\", \"a\"])\n\njulia> length(c)\n5\n\njulia> first(c)\n(1, \"e\")\n\n\n\n"
 },
 
 {
