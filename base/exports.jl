@@ -949,7 +949,7 @@ export
     fieldname,
     fieldnames,
     fieldcount,
-    isleaftype,
+    isconcrete,
     oftype,
     promote,
     promote_rule,

@@ -327,7 +327,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt)
     int has_instance = (dt->instance != NULL);
     int has_layout = (dt->layout != NULL);
     write_uint8(s->s, dt->abstract | (dt->mutabl<<1) | (has_layout<<2) | (has_instance<<3) |
-                (dt->hasfreetypevars<<4) | (dt->isleaftype<<5));
+                (dt->hasfreetypevars<<4) | (dt->isconcrete<<5));
     write_int32(s->s, dt->depth);
     if (!dt->abstract) {
         write_uint16(s->s, dt->ninitialized);
@@ -1136,7 +1136,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     int has_layout = (flags>>2)&1;
     int has_instance = (flags>>3)&1;
     dt->hasfreetypevars = (flags>>4)&1;
-    dt->isleaftype = (flags>>5)&1;
+    dt->isconcrete = (flags>>5)&1;
     dt->depth = depth;
     dt->types = NULL;
     dt->parameters = NULL;

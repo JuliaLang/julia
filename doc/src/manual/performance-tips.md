@@ -1449,7 +1449,7 @@ is difficult or impossible: for example, currently it's not possible to infer th
 of an anonymous function.  In such cases, the tips above (e.g., adding type annotations and/or
 breaking up functions) are your best tools to contain the "damage" from type instability.
 
-The following examples may help you interpret expressions marked as containing non-leaf types:
+The following examples may help you interpret expressions marked as containing non-concrete types:
 
   * Function body ending in `end::Union{T1,T2})`
 
@@ -1466,7 +1466,7 @@ The following examples may help you interpret expressions marked as containing n
         element accesses
   * `(top(getfield))(A::ArrayContainer{Float64},:data)::Array{Float64,N}`
 
-      * Interpretation: getting a field that is of non-leaf type. In this case, `ArrayContainer` had a
+      * Interpretation: getting a field that is of non-concrete type. In this case, `ArrayContainer` had a
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter
         of `ArrayContainer`

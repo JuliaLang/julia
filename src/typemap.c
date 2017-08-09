@@ -32,7 +32,7 @@ static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_
     for(i=0; i < n; i++) {
         jl_value_t *decl = jl_field_type(sig, i);
         jl_value_t *a = types[i];
-        if (jl_is_type_type(a)) // decl is not Type, because it wouldn't be leafsig
+        if (jl_is_type_type(a)) // decl is not Type, because it wouldn't be concrete sig
             a = jl_typeof(jl_tparam0(a));
         if (!jl_types_equal(a, decl))
             return 0;
@@ -334,7 +334,7 @@ static union jl_typemap_t *mtcache_hash_bp(struct jl_ordereddict_t *pa, jl_value
     if (jl_is_datatype(ty)) {
         uintptr_t uid = ((jl_datatype_t*)ty)->uid;
         if (!uid || jl_is_kind(ty) || jl_has_free_typevars(ty))
-            // be careful not to put non-leaf types or DataType/UnionAll in the cache here,
+            // be careful not to put non-concrete types or DataType/UnionAll in the cache here,
             // since they should have a lower priority and need to go into the sorted list
             return NULL;
         if (pa->values == (void*)jl_nothing) {
@@ -417,7 +417,7 @@ int jl_typemap_visitor(union jl_typemap_t cache, jl_typemap_visitor_fptr fptr, v
     }
 }
 
-// predicate to fast-test if this type is a leaf type that can exist in the cache
+// predicate to fast-test if this type is a concrete type that can exist in the cache
 // and does not need a more expensive linear scan to find all intersections
 int is_cache_leaf(jl_value_t *ty)
 {
@@ -442,10 +442,10 @@ static int jl_typemap_intersection_array_visitor(struct jl_ordereddict_t *a, jl_
             if (tparam)
                 t = jl_tparam0(t);
         }
-        // `t` is a leaftype, so intersection test becomes subtype
+        // `t` is a concrete type, so intersection test becomes subtype
         if (ty == (jl_value_t*)jl_any_type || // easy case: Any always matches
             (tparam
-             ? (jl_typeof(t) == ty || jl_isa(t, ty)) // (Type{t} <: ty), where is_leaf_type(t) => isa(t, ty)
+             ? (jl_typeof(t) == ty || jl_isa(t, ty)) // (Type{t} <: ty), where isconcrete(t) => isa(t, ty)
              : (t == ty || jl_subtype(t, ty)))) {
             if (!jl_typemap_intersection_visitor(ml, offs + 1, closure))
                 return 0;
@@ -513,7 +513,7 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
                 jl_value_t *typetype = jl_is_type_type(ty) ? jl_tparam0(ty) : NULL;
                 if (typetype && !jl_has_free_typevars(typetype)) {
                     if (is_cache_leaf(typetype)) {
-                        // direct lookup of leaf types
+                        // direct lookup of concrete types
                         union jl_typemap_t ml = mtcache_hash_lookup(&cache->targ, typetype, 1, offs);
                         if (ml.unknown != jl_nothing) {
                             if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) return 0;
@@ -529,7 +529,7 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
             }
             if (cache->arg1.values != (void*)jl_nothing) {
                 if (is_cache_leaf(ty)) {
-                    // direct lookup of leaf types
+                    // direct lookup of concrete types
                     union jl_typemap_t ml = mtcache_hash_lookup(&cache->arg1, ty, 0, offs);
                     if (ml.unknown != jl_nothing) {
                         if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) return 0;
@@ -583,7 +583,7 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
 
             if (ismatch == 0)
                 ; // nothing
-            else if (ml->isleafsig && !typesisva)
+            else if (ml->isconcretesig && !typesisva)
                 ismatch = sig_match_by_type_leaf(jl_svec_data(types->parameters),
                                                  ml->sig, lensig);
             else if (ml->issimplesig && !typesisva)
@@ -759,7 +759,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_
 jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_value_t **args, size_t n, size_t world)
 {
     // some manually-unrolled common special cases
-    while (ml->simplesig == (void*)jl_nothing && ml->guardsigs == jl_emptysvec && ml->isleafsig) {
+    while (ml->simplesig == (void*)jl_nothing && ml->guardsigs == jl_emptysvec && ml->isconcretesig) {
         // use a tight loop for a long as possible
         if (world >= ml->min_world && world <= ml->max_world) {
             if (n == jl_field_count(ml->sig) && jl_typeof(args[0]) == jl_tparam(ml->sig, 0)) {
@@ -802,7 +802,7 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
                 }
             }
 
-            if (ml->isleafsig) {
+            if (ml->isconcretesig) {
                 if (!sig_match_leaf(args, jl_svec_data(ml->sig->parameters), n))
                     continue;
             }
@@ -913,7 +913,7 @@ static jl_typemap_level_t *jl_method_convert_list_to_cache(jl_typemap_entry_t *m
 static void jl_typemap_list_insert_(jl_typemap_entry_t **pml, jl_value_t *parent,
                                     jl_typemap_entry_t *newrec, const struct jl_typemap_info *tparams)
 {
-    if (*pml == (void*)jl_nothing || newrec->isleafsig || (tparams && tparams->unsorted)) {
+    if (*pml == (void*)jl_nothing || newrec->isconcretesig || (tparams && tparams->unsorted)) {
         newrec->next = *pml;
         jl_gc_wb(newrec, newrec->next);
         *pml = newrec;
@@ -1036,28 +1036,28 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
     // compute the complexity of this type signature
     newrec->va = jl_is_va_tuple((jl_datatype_t*)ttype);
     newrec->issimplesig = !jl_is_unionall(type); // a TypeVar environment needs a complex matching test
-    newrec->isleafsig = newrec->issimplesig && !newrec->va; // entirely leaf types don't need to be sorted
+    newrec->isconcretesig = newrec->issimplesig && !newrec->va; // entirely concrete types don't need to be sorted
     JL_GC_PUSH1(&newrec);
     assert(jl_is_tuple_type(ttype));
     size_t i, l;
     for (i = 0, l = jl_field_count(ttype); i < l && newrec->issimplesig; i++) {
         jl_value_t *decl = jl_field_type(ttype, i);
         if (decl == (jl_value_t*)jl_datatype_type)
-            newrec->isleafsig = 0; // Type{} may have a higher priority than DataType
+            newrec->isconcretesig = 0; // Type{} may have a higher priority than DataType
         else if (decl == (jl_value_t*)jl_unionall_type)
-            newrec->isleafsig = 0; // Type{} may have a higher priority than UnionAll
+            newrec->isconcretesig = 0; // Type{} may have a higher priority than UnionAll
         else if (decl == (jl_value_t*)jl_uniontype_type)
-            newrec->isleafsig = 0; // Type{} may have a higher priority than Union
+            newrec->isconcretesig = 0; // Type{} may have a higher priority than Union
         else if (jl_is_type_type(decl))
-            newrec->isleafsig = 0; // Type{} may need special processing to compute the match
+            newrec->isconcretesig = 0; // Type{} may need special processing to compute the match
         else if (jl_is_vararg_type(decl))
-            newrec->isleafsig = 0; // makes iteration easier when the endpoints are the same
+            newrec->isconcretesig = 0; // makes iteration easier when the endpoints are the same
         else if (decl == (jl_value_t*)jl_any_type)
-            newrec->isleafsig = 0; // Any needs to go in the general cache
-        else if (!jl_is_leaf_type(decl)) // anything else can go through the general subtyping test
-            newrec->isleafsig = newrec->issimplesig = 0;
+            newrec->isconcretesig = 0; // Any needs to go in the general cache
+        else if (!jl_is_concrete_type(decl)) // anything else can go through the general subtyping test
+            newrec->isconcretesig = newrec->issimplesig = 0;
     }
-    // TODO: assert that guardsigs == jl_emptysvec && simplesig == jl_nothing if isleafsig and optimize with that knowledge?
+    // TODO: assert that guardsigs == jl_emptysvec && simplesig == jl_nothing if isconcretesig and optimize with that knowledge?
     jl_typemap_insert_generic(cache, parent, newrec, NULL, offs, tparams);
     JL_GC_POP();
     return newrec;
@@ -1085,7 +1085,7 @@ static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *
     l = *pml;
     jl_value_t *pa = parent;
     while (l != (void*)jl_nothing) {
-        if (!l->isleafsig) { // quickly ignore all of the leafsig entries (these were handled by caller)
+        if (!l->isconcretesig) { // quickly ignore all of the concrete sig entries (these were handled by caller)
             if (jl_type_morespecific((jl_value_t*)newrec->sig, (jl_value_t*)l->sig)) {
                 if (l->simplesig == (void*)jl_nothing ||
                     newrec->simplesig != (void*)jl_nothing || !jl_types_equal((jl_value_t*)l->sig, (jl_value_t*)newrec->sig)) {

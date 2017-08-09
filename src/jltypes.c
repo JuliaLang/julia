@@ -267,18 +267,18 @@ JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua)
 }
 
 
-JL_DLLEXPORT int (jl_is_leaf_type)(jl_value_t *v)
+JL_DLLEXPORT int (jl_is_concrete_type)(jl_value_t *v)
 {
     if (jl_is_datatype(v)) {
-        int isleaf = ((jl_datatype_t*)v)->isleaftype;
+        int isconcrete = ((jl_datatype_t*)v)->isconcrete;
 #ifdef NDEBUG
-        return isleaf;
+        return isconcrete;
 #else
         if (((jl_datatype_t*)v)->abstract) {
             int x = 0;
             if (jl_is_type_type(v))
                 x = !jl_has_free_typevars(jl_tparam0(v));
-            assert(x == isleaf);
+            assert(x == isconcrete);
             return x;
         }
         jl_svec_t *t = ((jl_datatype_t*)v)->parameters;
@@ -286,8 +286,8 @@ JL_DLLEXPORT int (jl_is_leaf_type)(jl_value_t *v)
         if (((jl_datatype_t*)v)->name == jl_tuple_typename) {
             for(int i=0; i < l; i++) {
                 jl_value_t *p = jl_svecref(t,i);
-                if (!jl_is_leaf_type(p) && p != jl_bottom_type) {
-                    assert(!isleaf);
+                if (!jl_is_concrete_type(p) && p != jl_bottom_type) {
+                    assert(!isconcrete);
                     return 0;
                 }
             }
@@ -295,12 +295,12 @@ JL_DLLEXPORT int (jl_is_leaf_type)(jl_value_t *v)
         else {
             for(int i=0; i < l; i++) {
                 if (jl_has_free_typevars(jl_svecref(t, i))) {
-                    assert(!isleaf);
+                    assert(!isconcrete);
                     return 0;
                 }
             }
         }
-        assert(isleaf);
+        assert(isconcrete);
         return 1;
 #endif
     }
@@ -767,7 +767,7 @@ static int is_cacheable(jl_datatype_t *type)
     if (jl_is_abstracttype(type))
         return !jl_has_free_typevars((jl_value_t*)type);
     // ... or concrete types
-    return jl_is_leaf_type((jl_value_t*)type);
+    return jl_is_concrete_type((jl_value_t*)type);
 }
 
 static void cache_insert_type(jl_value_t *type, ssize_t insert_at, int ordered)
@@ -1019,7 +1019,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt)
 {
     int istuple = dt->name == jl_tuple_typename;
     size_t i, l = jl_nparams(dt);
-    dt->isleaftype = !dt->abstract || (jl_type_type != NULL && dt->name == jl_type_typename);
+    dt->isconcrete = !dt->abstract || (jl_type_type != NULL && dt->name == jl_type_typename);
     for (i = 0; i < l; i++) {
         jl_value_t *p = jl_tparam(dt, i);
         size_t d = jl_type_depth(p) + 1;
@@ -1027,8 +1027,8 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt)
             dt->depth = d;
         if (!dt->hasfreetypevars)
             dt->hasfreetypevars = jl_has_free_typevars(p);
-        if (dt->isleaftype)
-            dt->isleaftype = (istuple ? (jl_is_leaf_type(p) || p == jl_bottom_type) :
+        if (dt->isconcrete)
+            dt->isconcrete = (istuple ? (jl_is_concrete_type(p) || p == jl_bottom_type) :
                                         !dt->hasfreetypevars);
     }
 }
@@ -1121,7 +1121,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             jl_value_t *pi = iparams[i];
             if (pi == jl_bottom_type)
                 continue;
-            if (jl_is_leaf_type(pi)) {
+            if (jl_is_concrete_type(pi)) {
                 assert(jl_is_datatype(pi));
                 if (!((jl_datatype_t*)pi)->abstract)
                     continue;
@@ -1317,7 +1317,7 @@ static jl_tupletype_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec
 {
     int cacheable = 1;
     for(size_t i=0; i < np; i++) {
-        if (!jl_is_leaf_type(p[i]))
+        if (!jl_is_concrete_type(p[i]))
             cacheable = 0;
     }
     jl_datatype_t *ndt = (jl_datatype_t*)inst_datatype(jl_anytuple_type, params, p, np,
@@ -1406,7 +1406,7 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
         iparams[i] = pi;
         if (ip_heap)
             jl_gc_wb(ip_heap, pi);
-        if (cacheable && !jl_is_leaf_type(pi))
+        if (cacheable && !jl_is_concrete_type(pi))
             cacheable = 0;
     }
     jl_value_t *result = inst_datatype((jl_datatype_t*)tt, ip_heap, iparams, ntp, cacheable, stack);
@@ -1683,7 +1683,7 @@ void jl_init_types(void)
                                                     "llvm::DIType",
                                                     "depth",
                                                     "hasfreetypevars",
-                                                    "isleaftype");
+                                                    "isconcrete");
     jl_datatype_type->types = jl_svec(16,
                                       jl_typename_type,
                                       jl_datatype_type,
@@ -1816,7 +1816,7 @@ void jl_init_types(void)
     jl_anytuple_type->layout = NULL;
     jl_anytuple_type->instance = NULL;
     jl_anytuple_type->hasfreetypevars = 0;
-    jl_anytuple_type->isleaftype = 0;
+    jl_anytuple_type->isconcrete = 0;
 
     jl_tvar_t *tttvar = tvar("T");
     ((jl_datatype_t*)jl_type_type)->parameters = jl_svec(1, tttvar);
@@ -1896,7 +1896,7 @@ void jl_init_types(void)
                             "min_world",
                             "max_world",
                             "func",
-                            "isleafsig",
+                            "isconcretesig",
                             "issimplesig",
                             "va"),
                         jl_svec(10,

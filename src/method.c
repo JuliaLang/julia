@@ -709,7 +709,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     if (ftype == NULL ||
         !(jl_is_type_type((jl_value_t*)ftype) ||
           (jl_is_datatype(ftype) &&
-           (!ftype->abstract || jl_is_leaf_type((jl_value_t*)ftype)) &&
+           (!ftype->abstract || jl_is_concrete_type((jl_value_t*)ftype)) &&
            ftype->name->mt != NULL)))
         jl_error("cannot add methods to an abstract type");
     mt = ftype->name->mt;

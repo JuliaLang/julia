@@ -24,7 +24,7 @@ extern "C" {
 
 static inline int store_unboxed(jl_value_t *el_type) // jl_isbits
 {
-    return jl_is_leaf_type(el_type) && jl_is_immutable(el_type) &&
+    return jl_is_concrete_type(el_type) && jl_is_immutable(el_type) &&
         ((jl_datatype_t*)el_type)->layout &&
         ((jl_datatype_t*)el_type)->layout->npointers == 0;
 }

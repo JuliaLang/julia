@@ -319,13 +319,13 @@ promote_op(::Any...) = (@_inline_meta; Any)
 function promote_op(f, ::Type{S}) where S
     @_inline_meta
     T = _return_type(f, Tuple{_default_type(S)})
-    isleaftype(S) && return isleaftype(T) ? T : Any
+    isconcrete(S) && return isconcrete(T) ? T : Any
     return typejoin(S, T)
 end
 function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
     @_inline_meta
     T = _return_type(f, Tuple{_default_type(R), _default_type(S)})
-    isleaftype(R) && isleaftype(S) && return isleaftype(T) ? T : Any
+    isconcrete(R) && isconcrete(S) && return isconcrete(T) ? T : Any
     return typejoin(R, S, T)
 end
 

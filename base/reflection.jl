@@ -283,27 +283,27 @@ isbits(t::Type) = (@_pure_meta; false)
 isbits(x) = (@_pure_meta; isbits(typeof(x)))
 
 """
-    isleaftype(T)
+    isconcrete(T)
 
 Determine whether `T`'s only subtypes are itself and `Union{}`. This means `T` is
 a concrete type that can have instances.
 
 # Examples
 ```jldoctest
-julia> isleaftype(Complex)
+julia> isconcrete(Complex)
 false
 
-julia> isleaftype(Complex{Float32})
+julia> isconcrete(Complex{Float32})
 true
 
-julia> isleaftype(Vector{Complex})
+julia> isconcrete(Vector{Complex})
 true
 
-julia> isleaftype(Vector{Complex{Float32}})
+julia> isconcrete(Vector{Complex{Float32}})
 true
 ```
 """
-isleaftype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
+isconcrete(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isconcrete)
 
 """
     Base.isabstract(T)
@@ -767,8 +767,8 @@ function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::B
                     (Ptr{Void}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)
     end
 
-    # TODO: use jl_is_cacheable_sig instead of isleaftype
-    isleaftype(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" * str)
+    # TODO: use jl_is_cacheable_sig instead of isconcrete
+    isconcrete(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" * str)
     return str
 end
 
@@ -797,9 +797,9 @@ code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple), syntax::Symbol
 code_native(@nospecialize(f), @nospecialize(types=Tuple), syntax::Symbol=:att) = code_native(STDOUT, f, types, syntax)
 code_native(::IO, ::Any, ::Symbol) = error("illegal code_native call") # resolve ambiguous call
 
-# give a decent error message if we try to instantiate a staged function on non-leaf types
+# give a decent error message if we try to instantiate a staged function on non-concrete types
 function func_for_method_checked(m::Method, @nospecialize types)
-    if isdefined(m,:generator) && !isdefined(m,:source) && !isleaftype(types)
+    if isdefined(m,:generator) && !isdefined(m,:source) && !isconcrete(types)
         error("cannot call @generated function `", m, "` ",
               "with abstract argument types: ", types)
     end
@@ -861,7 +861,7 @@ function which(@nospecialize(f), @nospecialize(t))
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)
-    if isleaftype(t)
+    if isconcrete(t)
         ms = methods(f, t)
         isempty(ms) && error("no method found for the specified argument types")
         length(ms)!=1 && error("no unique matching method for the specified argument types")

@@ -537,7 +537,7 @@ function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     elseif ty === Core.IntrinsicFunction
         print(io, "::I")
     else
-        if emph && (!isleaftype(ty) || ty == Core.Box)
+        if emph && (!isconcrete(ty) || ty == Core.Box)
             emphasize(io, "::$ty")
         else
             print(io, "::$ty")
@@ -1098,7 +1098,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
                 isdefined(uw.name.module, uw.name.mt.name) &&
                 ft == typeof(getfield(uw.name.module, uw.name.mt.name))
             print(io, uw.name.mt.name)
-        elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+        elseif isa(ft, DataType) && ft.name === Type.body.name && isconcrete(ft)
             f = ft.parameters[1]
             print(io, f)
         else
@@ -1821,7 +1821,7 @@ function array_eltype_show_how(X)
         str = string(e)
     end
     # Types hard-coded here are those which are created by default for a given syntax
-    isleaftype(e), (!isempty(X) && (e===Float64 || e===Int || e===Char) ? "" : str)
+    isconcrete(e), (!isempty(X) && (e===Float64 || e===Int || e===Char) ? "" : str)
 end
 
 function show_vector(io::IO, v, opn, cls)

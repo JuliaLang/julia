@@ -84,7 +84,7 @@ input and output types were inferred in advance) is assigned a fixed
 cost (currently 20 cycles). In contrast, a `:call` expression, for
 functions other than intrinsics/builtins, indicates that the call will
 require dynamic dispatch, in which case we assign a cost set by
-`InferenceParams.inline_nonleaf_penalty` (currently set at 1000). Note
+`InferenceParams.inline_nonconcrete_penalty` (currently set at 1000). Note
 that this is not a "first-principles" estimate of the raw cost of
 dynamic dispatch, but a mere heuristic indicating that dynamic
 dispatch is extremely expensive.

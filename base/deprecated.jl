@@ -1614,6 +1614,8 @@ end
 # issue #6466
 # `write` on non-isbits arrays is deprecated in io.jl.
 
+@deprecate isleaftype isconcrete
+
 # PR #22925
 # also uncomment constructor tests in test/linalg/bidiag.jl
 function Bidiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}, uplo::Symbol) where {T,S}

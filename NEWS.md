@@ -283,6 +283,8 @@ Deprecated or removed
   * Calling `write` on non-isbits arrays is deprecated in favor of explicit loops or
     `serialize` ([#6466]).
 
+  * The function `isleaftype` is deprecated in favor of `isconcrete` ([#20709]).
+
   * The default `juliarc.jl` file on Windows has been removed. Now must explicitly include the
     full path if you need access to executables or libraries in the `JULIA_HOME` directory, e.g.
     `joinpath(JULIA_HOME, "7z.exe")` for `7z.exe` ([#21540]).

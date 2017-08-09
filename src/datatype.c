@@ -79,7 +79,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc(ptls, sizeof(jl_datatype_t), jl_datatype_type);
     t->depth = 0;
     t->hasfreetypevars = 0;
-    t->isleaftype = 1;
+    t->isconcrete = 1;
     t->layout = NULL;
     return t;
 }
@@ -271,7 +271,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
         return;
     }
-    if (!jl_is_leaf_type((jl_value_t*)st)) {
+    if (!jl_is_concrete_type((jl_value_t*)st)) {
         // compute layout whenever field types have no free variables
         for (size_t i = 0; i < nfields; i++) {
             if (jl_has_free_typevars(jl_field_type(st, i)))
@@ -294,7 +294,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     for (size_t i = 0; i < nfields; i++) {
         jl_value_t *ty = jl_field_type(st, i);
         size_t fsz, al;
-        if (jl_isbits(ty) && jl_is_leaf_type(ty) && ((jl_datatype_t*)ty)->layout) {
+        if (jl_isbits(ty) && jl_is_concrete_type(ty) && ((jl_datatype_t*)ty)->layout) {
             fsz = jl_datatype_size(ty);
             // Should never happen
             if (__unlikely(fsz > max_size))
@@ -777,7 +777,7 @@ JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
 JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
 {
     if (ty->layout == NULL)
-        jl_error("non-leaf type doesn't have an alignment");
+        jl_error("non-concrete type doesn't have an alignment");
     return jl_datatype_align(ty);
 }
 

@@ -466,7 +466,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && isleaftype(at1)
+        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && isconcrete(at1)
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end

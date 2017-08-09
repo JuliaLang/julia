@@ -559,7 +559,7 @@ static Value *julia_to_address(
                 // yes copy
                 Value *nbytes;
                 AllocaInst *ai;
-                if (jl_is_leaf_type(ety) || jl_is_primitivetype(ety)) {
+                if (jl_is_concrete_type(ety) || jl_is_primitivetype(ety)) {
                     int nb = jl_datatype_size(ety);
                     nbytes = ConstantInt::get(T_int32, nb);
                     ai = emit_static_alloca(ctx, T_int8, nb);
@@ -1143,8 +1143,8 @@ static jl_cgval_t mark_or_box_ccall_result(jl_codectx_t &ctx, Value *result, boo
     if (!static_rt) {
         assert(!isboxed && ctx.spvals_ptr && unionall && jl_is_datatype(rt));
         Value *runtime_dt = runtime_apply_type(ctx, rt, unionall);
-        // TODO: is this leaf check actually necessary, or is it structurally guaranteed?
-        emit_leafcheck(ctx, runtime_dt, "ccall: return type must be a leaf DataType");
+        // TODO: is this concrete check actually necessary, or is it structurally guaranteed?
+        emit_concrete_check(ctx, runtime_dt, "ccall: return type must be a concrete DataType");
 #if JL_LLVM_VERSION >= 40000
         const DataLayout &DL = jl_data_layout;
 #else
@@ -1418,11 +1418,11 @@ static const std::string verify_ccall_sig(size_t nccallargs, jl_value_t *&rt, jl
     }
 
     if (!retboxed && static_rt) {
-        if (!jl_is_leaf_type(rt)) {
+        if (!jl_is_concrete_type(rt)) {
             if (jl_is_cpointer_type(rt))
                 return "ccall: return type Ptr should have an element type (not Ptr{_<:T})";
             else if (rt != jl_bottom_type)
-                return "ccall: return type must be a leaf DataType";
+                return "ccall: return type must be a concrete DataType";
         }
     }
 
@@ -1749,17 +1749,17 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         ctx.builder.SetInsertPoint(contBB);
         return ghostValue(jl_void_type);
     }
-    else if (is_libjulia_func(jl_is_leaf_type)) {
+    else if (is_libjulia_func(jl_is_concrete_type)) {
         assert(!isVa && !llvmcall && nargt == 1 && !addressOf.at(0));
         const jl_cgval_t &arg = argv[0];
         jl_value_t *ty = arg.constant;
         if (!ty && jl_is_type_type(arg.typ) && !jl_has_free_typevars(arg.typ))
             ty = jl_tparam0(arg.typ);
         if (ty) {
-            int isleaf = jl_is_leaf_type(ty);
+            int isconcrete = jl_is_concrete_type(ty);
             JL_GC_POP();
             return mark_or_box_ccall_result(ctx,
-                    ConstantInt::get(T_int32, isleaf),
+                    ConstantInt::get(T_int32, isconcrete),
                     false, rt, unionall, static_rt);
         }
     }
@@ -1891,7 +1891,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         jl_cgval_t &arg = argv[ai];
 
         // if we know the function sparams, try to fill those in now
-        // so that the julia_to_native type checks are more likely to be doable (e.g. leaf types) at compile-time
+        // so that the julia_to_native type checks are more likely to be doable (e.g. concrete types) at compile-time
         jl_value_t *jargty_in_env = jargty;
         if (ctx.spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env) &&
             jl_svec_len(ctx.linfo->sparam_vals) > 0) {

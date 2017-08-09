@@ -441,8 +441,8 @@ For example, in the problem `Tuple{Int,String} <: Tuple{T,T} where T`, we derive
 this would be true if `T` were a supertype of `Union{Int,String}`.
 However, `Union{Int,String}` is an abstract type, so the relation does not hold.
 
-This concreteness test is done by the function `is_leaf_bound`.
-Note that this test is slightly different from `jl_is_leaf_type`, since it also returns
+This concreteness test is done by the function `is_concrete_bound`.
+Note that this test is slightly different from `jl_is_concrete_type`, since it also returns
 `true` for `Bottom`.
 Currently this function is heuristic, and does not catch all possible concrete types.
 The difficulty is that whether a lower bound is concrete might depend on the values

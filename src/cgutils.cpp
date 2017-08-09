@@ -407,7 +407,7 @@ JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
     if (isboxed) *isboxed = false;
     if (jt == (jl_value_t*)jl_bottom_type)
         return T_void;
-    if (jl_is_leaf_type(jt)) {
+    if (jl_is_concrete_type(jt)) {
         if ((jl_is_primitivetype(jt) || jl_isbits(jt))) {
             if (jl_datatype_nbits(jt) == 0)
                 return T_void;
@@ -443,7 +443,7 @@ static Type *bitstype_to_llvm(jl_value_t *bt)
     return Type::getIntNTy(jl_LLVMContext, nb * 8);
 }
 
-// compute whether all leaf subtypes of this type have the same layout
+// compute whether all concrete subtypes of this type have the same layout
 // (which is conservatively approximated here by asking whether the types of any of the
 // fields depend on any of the parameters of the containing type)
 static bool julia_struct_has_layout(jl_datatype_t *dt, jl_unionall_t *ua)
@@ -500,7 +500,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                 if (jst->layout)
                     isptr = jl_field_isptr(jst, i);
                 else // compute what jl_compute_field_offsets would say
-                    isptr = jl_isbits(ty) && jl_is_leaf_type(ty) && ((jl_datatype_t*)ty)->layout;
+                    isptr = jl_isbits(ty) && jl_is_concrete_type(ty) && ((jl_datatype_t*)ty)->layout;
                 Type *lty;
                 if (isptr)
                     lty = T_pjlvalue;
@@ -580,9 +580,9 @@ static bool is_tupletype_homogeneous(jl_svec_t *t, bool allow_va = false)
     size_t i, l = jl_svec_len(t);
     if (l > 0) {
         jl_value_t *t0 = jl_svecref(t, 0);
-        if (!jl_is_leaf_type(t0)) {
+        if (!jl_is_concrete_type(t0)) {
             if (allow_va && jl_is_vararg_type(t0) &&
-                  jl_is_leaf_type(jl_unwrap_vararg(t0)))
+                  jl_is_concrete_type(jl_unwrap_vararg(t0)))
                 return true;
             return false;
         }
@@ -700,7 +700,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, Value *tt)
     // given p, a jl_value_t*, compute its type tag
     // The raw address is not GC-safe to load from as it may have mask bits set.
     // Note that this gives the optimizer license to not root this value. That
-    // is fine however, since leaf types are not GCed at the moment. Should
+    // is fine however, since concrete types are not GCed at the moment. Should
     // that ever change, this may have to go through a special intrinsic.
     Value *addr = emit_bitcast(ctx, emit_typeptr_addr(ctx, tt), T_ppjlvalue);
     tt = tbaa_decorate(tbaa_tag, ctx.builder.CreateLoad(T_pjlvalue, addr));
@@ -712,7 +712,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
     // given p, compute its type
     if (p.constant)
         return mark_julia_const(jl_typeof(p.constant));
-    if (p.isboxed && !jl_is_leaf_type(p.typ)) {
+    if (p.isboxed && !jl_is_concrete_type(p.typ)) {
         return mark_julia_type(ctx, emit_typeof(ctx, p.V), true, jl_datatype_type, /*needsroot*/false);
     }
     if (p.TIndex) {
@@ -820,7 +820,7 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
 #endif
         return size;
     }
-    else if (jl_is_leaf_type(p.typ)) {
+    else if (jl_is_concrete_type(p.typ)) {
         return ConstantInt::get(T_int32, jl_datatype_size(p.typ));
     }
     else {
@@ -943,7 +943,7 @@ static size_t dereferenceable_size(jl_value_t *jt) {
 }
 
 static inline void maybe_mark_argument_dereferenceable(Argument *A, jl_value_t *jt) {
-    if (!jl_is_leaf_type(jt)) {
+    if (!jl_is_concrete_type(jt)) {
         return;
     }
     size_t size = dereferenceable_size(jt);
@@ -966,7 +966,7 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
 }
 
 static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null, jl_value_t *jt) {
-    if (!jl_is_leaf_type(jt)) {
+    if (!jl_is_concrete_type(jt)) {
         return LI;
     }
     size_t size = dereferenceable_size(jt);
@@ -1020,8 +1020,8 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 ctx.builder.CreateCall(prepare_call(jlisa_func), { vx, vtyp }),
                 ConstantInt::get(T_int32, 0)), false);
     }
-    // tests for isa leaftype can be handled with pointer comparisons
-    if (jl_is_leaf_type(type)) {
+    // tests for is a concrete type can be handled with pointer comparisons
+    if (jl_is_concrete_type(type)) {
         if (x.TIndex) {
             unsigned tindex = get_box_tindex((jl_datatype_t*)type, x.typ);
             if (tindex > 0) {
@@ -1077,15 +1077,15 @@ static void emit_typecheck(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *t
     }
 }
 
-static void emit_leafcheck(jl_codectx_t &ctx, Value *typ, const std::string &msg)
+static void emit_concrete_check(jl_codectx_t &ctx, Value *typ, const std::string &msg)
 {
     assert(typ->getType() == T_prjlvalue);
     emit_typecheck(ctx, mark_julia_type(ctx, typ, true, jl_any_type, false), (jl_value_t*)jl_datatype_type, msg);
-    Value *isleaf;
-    isleaf = ctx.builder.CreateConstInBoundsGEP1_32(T_int8, emit_bitcast(ctx, decay_derived(typ), T_pint8), offsetof(jl_datatype_t, isleaftype));
-    isleaf = ctx.builder.CreateLoad(isleaf, tbaa_const);
-    isleaf = ctx.builder.CreateTrunc(isleaf, T_int1);
-    error_unless(ctx, isleaf, msg);
+    Value *isconcrete;
+    isconcrete = ctx.builder.CreateConstInBoundsGEP1_32(T_int8, emit_bitcast(ctx, decay_derived(typ), T_pint8), offsetof(jl_datatype_t, isconcrete));
+    isconcrete = ctx.builder.CreateLoad(isconcrete, tbaa_const);
+    isconcrete = ctx.builder.CreateTrunc(isconcrete, T_int1);
+    error_unless(ctx, isconcrete, msg);
 }
 
 #define CHECK_BOUNDS 1
@@ -1429,7 +1429,7 @@ static Value *emit_n_varargs(jl_codectx_t &ctx)
 
 static bool arraytype_constshape(jl_value_t *ty)
 {
-    return (jl_is_array_type(ty) && jl_is_leaf_type(ty) &&
+    return (jl_is_array_type(ty) && jl_is_concrete_type(ty) &&
             jl_is_long(jl_tparam1(ty)) && jl_unbox_long(jl_tparam1(ty)) != 1);
 }
 
@@ -1976,7 +1976,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool gcrooted)
     }
     else {
         assert(vinfo.V && "Missing data for unboxed value.");
-        assert(jl_isbits(jt) && jl_is_leaf_type(jt) && "This type shouldn't have been unboxed.");
+        assert(jl_isbits(jt) && jl_is_concrete_type(jt) && "This type shouldn't have been unboxed.");
         Type *t = julia_type_to_llvm(jt);
         assert(!type_is_ghost(t)); // ghost values should have been handled by vinfo.constant above!
         box = _boxed_special(ctx, vinfo, t);
@@ -2002,7 +2002,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, const jl_cgval_t &src
 {
     if (AllocaInst *ai = dyn_cast<AllocaInst>(dest))
         ctx.builder.CreateStore(UndefValue::get(ai->getAllocatedType()), ai);
-    if (jl_is_leaf_type(src.typ) || src.constant) {
+    if (jl_is_concrete_type(src.typ) || src.constant) {
         jl_value_t *typ = src.constant ? jl_typeof(src.constant) : src.typ;
         Type *store_ty = julia_type_to_llvm(typ);
         assert(skip || jl_isbits(typ));
@@ -2180,7 +2180,7 @@ static void emit_setfield(jl_codectx_t &ctx,
 static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv)
 {
     assert(jl_is_datatype(ty));
-    assert(jl_is_leaf_type(ty));
+    assert(jl_is_concrete_type(ty));
     assert(nargs > 0);
     jl_datatype_t *sty = (jl_datatype_t*)ty;
     size_t nf = jl_datatype_nfields(sty);

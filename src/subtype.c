@@ -206,9 +206,9 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
 {
     if (a == b)
         return 0;
-    if (jl_is_leaf_type(a) && !((jl_datatype_t*)a)->abstract)
+    if (jl_is_concrete_type(a) && !((jl_datatype_t*)a)->abstract)
         return 1;
-    if (jl_is_leaf_type(b) && !((jl_datatype_t*)b)->abstract)
+    if (jl_is_concrete_type(b) && !((jl_datatype_t*)b)->abstract)
         return 1;
     if (jl_is_unionall(a)) a = jl_unwrap_unionall(a);
     if (jl_is_unionall(b)) b = jl_unwrap_unionall(b);
@@ -250,8 +250,8 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
 {
     if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
         return 0;
-    if (jl_is_leaf_type(a) && !((jl_datatype_t*)a)->abstract &&
-        jl_is_leaf_type(b) && !((jl_datatype_t*)b)->abstract &&
+    if (jl_is_concrete_type(a) && !((jl_datatype_t*)a)->abstract &&
+        jl_is_concrete_type(b) && !((jl_datatype_t*)b)->abstract &&
         // TODO: remove these 2 lines if and when Tuple{Union{}} === Union{}
         (((jl_datatype_t*)a)->name != jl_tuple_typename ||
          ((jl_datatype_t*)b)->name != jl_tuple_typename))
@@ -502,11 +502,11 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
 
 // check that a type is concrete. this is used to check concrete typevars;
 // issubtype is false if the lower bound of a concrete type var is not concrete.
-static int is_leaf_bound(jl_value_t *v)
+static int is_concrete_bound(jl_value_t *v)
 {
     if (v == jl_bottom_type) return 1;
     if (jl_is_datatype(v)) {
-        if (((jl_datatype_t*)v)->isleaftype) return 1;
+        if (((jl_datatype_t*)v)->isconcrete) return 1;
         if (((jl_datatype_t*)v)->abstract) {
             if (jl_is_type_type(v))
                 return 1;//!jl_has_free_typevars(jl_tparam0(v));
@@ -516,7 +516,7 @@ static int is_leaf_bound(jl_value_t *v)
         size_t l = jl_svec_len(t);
         if (((jl_datatype_t*)v)->name == jl_tuple_typename) {
             for(int i=0; i < l; i++) {
-                if (!is_leaf_bound(jl_svecref(t,i)))
+                if (!is_concrete_bound(jl_svecref(t,i)))
                     return 0;
             }
         }
@@ -525,11 +525,11 @@ static int is_leaf_bound(jl_value_t *v)
     return !jl_is_type(v) && !jl_is_typevar(v);
 }
 
-static int is_leaf_typevar(jl_value_t *v)
+static int is_concrete_typevar(jl_value_t *v)
 {
     if (jl_is_typevar(v))
-        return is_leaf_typevar(((jl_tvar_t*)v)->lb);
-    return is_leaf_bound(v);
+        return is_concrete_typevar(((jl_tvar_t*)v)->lb);
+    return is_concrete_bound(v);
 }
 
 static jl_value_t *widen_Type(jl_value_t *t)
@@ -576,7 +576,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         if (e->envidx < e->envsz) {
             jl_value_t *val;
             if (!vb.occurs_inv && vb.lb != jl_bottom_type)
-                val = is_leaf_bound(vb.lb) ? vb.lb : (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb);
+                val = is_concrete_bound(vb.lb) ? vb.lb : (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb);
             else if (vb.lb == vb.ub)
                 val = vb.lb;
             else if (vb.lb != jl_bottom_type)
@@ -605,7 +605,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
     if (ans && (vb.concrete || (!vb.occurs_inv && vb.occurs_cov > 1)) &&
-        is_leaf_typevar((jl_value_t*)u->var)) {
+        is_concrete_typevar((jl_value_t*)u->var)) {
         if (jl_is_typevar(vb.lb)) {
             // TODO test case that demonstrates the need for this?
             /*
@@ -617,7 +617,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
                 ans = (v == vb.concretevar);
             */
         }
-        else if (!is_leaf_bound(vb.lb)) {
+        else if (!is_concrete_bound(vb.lb)) {
             ans = 0;
         }
         if (ans) {
@@ -754,7 +754,7 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
         }
         if (xi == lastx &&
             ((yi == lasty && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) ||
-             (yi == lasty && !vx && vy && jl_is_leaf_type(xi)))) {
+             (yi == lasty && !vx && vy && jl_is_concrete_type(xi)))) {
             // fast path for repeated elements
         }
         else if (e->Runions.depth == 0 && e->Lunions.depth == 0 && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) {
@@ -873,7 +873,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
                 // TODO this is not strictly correct, but we don't yet have any other way for
                 // e.g. the argument `Int` to match a `::DataType` slot. Most correct would be:
                 // Int isa DataType, Int isa Type{Int}, Type{Int} more specific than DataType,
-                // !(Type{Int} <: DataType), !isleaftype(Type{Int}), because non-DataTypes can
+                // !(Type{Int} <: DataType), !isconcrete(Type{Int}), because non-DataTypes can
                 // be type-equal to `Int`.
                 return jl_typeof(tp0) == (jl_value_t*)yd;
             }
@@ -1114,7 +1114,7 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
         if (t == (jl_value_t*)jl_type_type)
             return 1;
         if (!jl_has_free_typevars(x)) {
-            if (jl_is_leaf_type(t)) {
+            if (jl_is_concrete_type(t)) {
                 if (jl_is_type_type(t))
                     return jl_types_equal(x, jl_tparam0(t));
                 return 0;
@@ -1146,7 +1146,7 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
             return 0;
         }
     }
-    if (jl_is_leaf_type(t))
+    if (jl_is_concrete_type(t))
         return 0;
     return jl_subtype(jl_typeof(x), t);
 }
@@ -1375,7 +1375,7 @@ static jl_value_t *finish_unionall(jl_value_t *res, jl_varbinding_t *vb, jl_sten
         // given x<:T<:x, substitute x for T
         varval = vb->ub;
     }
-    else if (!var_occurs_inside(res, vb->var, 0, 1) && is_leaf_bound(vb->ub)) {
+    else if (!var_occurs_inside(res, vb->var, 0, 1) && is_concrete_bound(vb->ub)) {
         // replace T<:x with x in covariant position when possible
         varval = vb->ub;
     }
@@ -1475,7 +1475,7 @@ static jl_value_t *finish_unionall(jl_value_t *res, jl_varbinding_t *vb, jl_sten
 
     if (vb->right && e->envidx < e->envsz) {
         jl_value_t *oldval = e->envout[e->envidx];
-        if (!varval || (!is_leaf_bound(varval) && !vb->occurs_inv))
+        if (!varval || (!is_concrete_bound(varval) && !vb->occurs_inv))
             e->envout[e->envidx] = (jl_value_t*)vb->var;
         else if (!(oldval && jl_is_typevar(oldval) && jl_is_long(varval)))
             e->envout[e->envidx] = varval;
@@ -1511,7 +1511,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     else {
         res = intersect(u->body, t, e, param);
     }
-    vb->concrete |= (!vb->occurs_inv && vb->occurs_cov > 1 && is_leaf_typevar((jl_value_t*)u->var));
+    vb->concrete |= (!vb->occurs_inv && vb->occurs_cov > 1 && is_concrete_typevar((jl_value_t*)u->var));
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
     // than once, and only in covariant position, is constrained to concrete types. E.g.
@@ -1521,7 +1521,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     if (res != jl_bottom_type && vb->concrete) {
         if (jl_is_typevar(vb->lb)) {
         }
-        else if (!is_leaf_bound(vb->lb)) {
+        else if (!is_concrete_bound(vb->lb)) {
             res = jl_bottom_type;
         }
     }
@@ -1971,11 +1971,11 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 if (ii == jl_bottom_type) return jl_bottom_type;
                 if (jl_is_typevar(xp1)) {
                     jl_varbinding_t *xb = lookup(e, (jl_tvar_t*)xp1);
-                    if (xb && is_leaf_typevar((jl_value_t*)xb->var)) xb->concrete = 1;
+                    if (xb && is_concrete_typevar((jl_value_t*)xb->var)) xb->concrete = 1;
                 }
                 if (jl_is_typevar(yp1)) {
                     jl_varbinding_t *yb = lookup(e, (jl_tvar_t*)yp1);
-                    if (yb && is_leaf_typevar((jl_value_t*)yb->var)) yb->concrete = 1;
+                    if (yb && is_concrete_typevar((jl_value_t*)yb->var)) yb->concrete = 1;
                 }
                 JL_GC_PUSH2(&ii, &i2);
                 // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
@@ -2122,7 +2122,7 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         *ans = b;
     }
     else {
-        int lta = jl_is_leaf_type(a), ltb = jl_is_leaf_type(b);
+        int lta = jl_is_concrete_type(a), ltb = jl_is_concrete_type(b);
         if (lta && ltb)
             goto bot;
         jl_stenv_t e;

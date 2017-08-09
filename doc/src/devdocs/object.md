@@ -20,7 +20,7 @@ typedef struct {
 } jl_typetag_t;
 ```
 
-The type of any Julia object is an instance of a leaf `jl_datatype_t` object. The `jl_typeof()`
+The type of any Julia object is an instance of a concrete `jl_datatype_t` object. The `jl_typeof()`
 function can be used to query for it:
 
 ```c

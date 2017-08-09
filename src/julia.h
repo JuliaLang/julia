@@ -181,7 +181,7 @@ struct _jl_method_instance_t;
 //   typedef TypeMap Union{TypeMapLevel, TypeMapEntry, Void}
 // it forms a roughly tree-shaped structure, consisting of nodes of TypeMapLevels
 // which split the tree when possible, for example based on the key into the tuple type at `offs`
-// when key is a leaftype, (but only when the tree has enough entries for this to be
+// when key is a concrete type (but only when the tree has enough entries for this to be
 // more efficient than storing them sorted linearly)
 // otherwise the leaf entries are stored sorted, linearly
 union jl_typemap_t {
@@ -385,7 +385,7 @@ typedef struct _jl_datatype_t {
     void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
     int32_t depth;
     int8_t hasfreetypevars;
-    int8_t isleaftype;
+    int8_t isconcrete;
 } jl_datatype_t;
 
 typedef struct {
@@ -432,8 +432,8 @@ typedef struct _jl_typemap_entry_t {
         jl_method_t *method;
     } func;
     // memoized properties of sig:
-    int8_t isleafsig; // isleaftype(sig) & !any(isType, sig) : unsorted and very fast
-    int8_t issimplesig; // all(isleaftype | isAny | isType | isVararg, sig) : sorted and fast
+    int8_t isconcretesig; // isconcrete(sig) & !any(isType, sig) : unsorted and very fast
+    int8_t issimplesig; // all(isconcrete | isAny | isType | isVararg, sig) : sorted and fast
     int8_t va; // isVararg(sig)
 } jl_typemap_entry_t;
 
@@ -980,7 +980,7 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v);
 
 // type predicates and basic operations
-JL_DLLEXPORT int jl_is_leaf_type(jl_value_t *v);
+JL_DLLEXPORT int jl_is_concrete_type(jl_value_t *v);
 JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v);
 JL_DLLEXPORT int jl_has_typevar(jl_value_t *t, jl_tvar_t *v);
 JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua);
@@ -999,11 +999,11 @@ jl_value_t *jl_unwrap_unionall(jl_value_t *v);
 jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
 
 #if defined(NDEBUG) && defined(JL_NDEBUG)
-STATIC_INLINE int jl_is_leaf_type_(jl_value_t *v)
+STATIC_INLINE int jl_is_concrete_type_(jl_value_t *v)
 {
-    return jl_is_datatype(v) && ((jl_datatype_t*)v)->isleaftype;
+    return jl_is_datatype(v) && ((jl_datatype_t*)v)->isconcrete;
 }
-#define jl_is_leaf_type(v) jl_is_leaf_type_(v)
+#define jl_is_concrete_type(v) jl_is_concrete_type_(v)
 #endif
 
 // type constructors
