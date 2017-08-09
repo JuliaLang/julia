@@ -144,7 +144,10 @@ end
 Apply the function `f` to the result of `open(args...)` and close the resulting file
 descriptor upon completion.
 
-**Example**: `open(readstring, "file.txt")`
+# Examples
+```julia-repl
+open(f->read(f, String), "file.txt")
+```
 """
 function open(f::Function, args...)
     io = open(args...)
@@ -164,21 +167,6 @@ function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
         throw(ArgumentError("write failed, IOStream is not writeable"))
     end
     return Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, p, nb))
-end
-
-function write{T,N}(s::IOStream, a::SubArray{T,N,<:Array})
-    if !isbits(T) || stride(a,1)!=1
-        return invoke(write, Tuple{Any, AbstractArray}, s, a)
-    end
-    colsz = size(a,1)*sizeof(T)
-    if N<=1
-        return unsafe_write(s, pointer(a, 1), colsz)
-    else
-        for idxs in CartesianRange((1, size(a)[2:end]...))
-            unsafe_write(s, pointer(a, idxs.I), colsz)
-        end
-        return colsz*trailingsize(a,2)
-    end
 end
 
 # num bytes available without blocking
@@ -319,17 +307,4 @@ end
 
 function peek(s::IOStream)
     ccall(:ios_peekc, Cint, (Ptr{Void},), s)
-end
-
-function skipchars(io::IOStream, pred; linecomment=nothing)
-    while !eof(io)
-        c = read(io, Char)
-        if c === linecomment
-            readline(io)
-        elseif !pred(c)
-            skip(io, -codelen(c))
-            break
-        end
-    end
-    return io
 end

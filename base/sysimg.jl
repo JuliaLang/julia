@@ -3,17 +3,42 @@
 baremodule Base
 
 using Core.Intrinsics
-ccall(:jl_set_istopmod, Void, (Bool,), true)
+ccall(:jl_set_istopmod, Void, (Any, Bool), Base, true)
+function include(mod::Module, path::AbstractString)
+    local result
+    if INCLUDE_STATE === 1
+        result = Core.include(mod, path)
+    elseif INCLUDE_STATE === 2
+        result = _include(mod, path)
+    elseif INCLUDE_STATE === 3
+        result = include_relative(mod, path)
+    end
+    result
+end
 function include(path::AbstractString)
     local result
     if INCLUDE_STATE === 1
-        result = Core.include(path)
+        result = Core.include(Base, path)
     elseif INCLUDE_STATE === 2
-        result = _include(path)
-    elseif INCLUDE_STATE === 3
-        result = include_from_node1(path)
+        result = _include(Base, path)
+    else
+        # to help users avoid error (accidentally evaluating into Base), this is deprecated
+        depwarn("Base.include(string) is deprecated, use `include(fname)` or `Base.include(@__MODULE__, fname)` instead.", :include)
+        result = include_relative(_current_module(), path)
     end
     result
+end
+let SOURCE_PATH = ""
+    # simple, race-y TLS, relative include
+    global _include
+    function _include(mod::Module, path)
+        prev = SOURCE_PATH
+        path = joinpath(dirname(prev), path)
+        SOURCE_PATH = path
+        result = Core.include(mod, path)
+        SOURCE_PATH = prev
+        result
+    end
 end
 INCLUDE_STATE = 1 # include = Core.include
 
@@ -39,9 +64,9 @@ if false
     # goes wrong during bootstrap before printing code is available.
     # otherwise, they just just eventually get (noisily) overwritten later
     global show, print, println
-    show(io::IO, x::ANY) = Core.show(io, x)
-    print(io::IO, a::ANY...) = Core.print(io, a...)
-    println(io::IO, x::ANY...) = Core.println(io, x...)
+    show(io::IO, x) = Core.show(io, x)
+    print(io::IO, a...) = Core.print(io, a...)
+    println(io::IO, x...) = Core.println(io, x...)
 end
 
 ## Load essential files and libraries
@@ -144,7 +169,7 @@ using .Iterators: zip, enumerate
 using .Iterators: Flatten, product  # for generators
 
 # Definition of StridedArray
-StridedReshapedArray{T,N,A<:DenseArray} = ReshapedArray{T,N,A}
+StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}
 StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
     I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
     Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
@@ -162,7 +187,6 @@ include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # 
 
 include("osutils.jl")
 include("c.jl")
-include("sysinfo.jl")
 
 if !isdefined(Core, :Inference)
     include("docs/core.jl")
@@ -195,6 +219,25 @@ include("nullable.jl")
 include("broadcast.jl")
 importall .Broadcast
 
+# define the real ntuple functions
+@generated function ntuple(f::F, ::Val{N}) where {F,N}
+    Core.typeassert(N, Int)
+    (N >= 0) || return :(throw($(ArgumentError(string("tuple length should be ≥0, got ", N)))))
+    return quote
+        $(Expr(:meta, :inline))
+        @nexprs $N i -> t_i = f(i)
+        @ncall $N tuple t
+    end
+end
+@generated function fill_to_length(t::Tuple, val, ::Val{N}) where {N}
+    M = length(t.parameters)
+    M > N  && return :(throw($(ArgumentError("input tuple of length $M, requested $N"))))
+    return quote
+        $(Expr(:meta, :inline))
+        (t..., $(Any[ :val for i = (M + 1):N ]...))
+    end
+end
+
 # base64 conversions (need broadcast)
 include("base64.jl")
 importall .Base64
@@ -203,6 +246,7 @@ importall .Base64
 include("version.jl")
 
 # system & environment
+include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
 include("libdl.jl")
@@ -236,15 +280,6 @@ importall .Math
 const (√)=sqrt
 const (∛)=cbrt
 
-let SOURCE_PATH = ""
-    global function _include(path)
-        prev = SOURCE_PATH
-        path = joinpath(dirname(prev),path)
-        SOURCE_PATH = path
-        Core.include(path)
-        SOURCE_PATH = prev
-    end
-end
 INCLUDE_STATE = 2 # include = _include (from lines above)
 
 # reduction along dims
@@ -258,11 +293,21 @@ importall .Order
 include("sort.jl")
 importall .Sort
 
+# Fast math
+include("fastmath.jl")
+importall .FastMath
+
 function deepcopy_internal end
 
 # BigInts and BigFloats
 include("gmp.jl")
 importall .GMP
+
+for T in [Signed, Integer, BigInt, Float32, Float64, Real, Complex, Rational]
+    @eval flipsign(x::$T, ::Unsigned) = +x
+    @eval copysign(x::$T, ::Unsigned) = +x
+end
+
 include("mpfr.jl")
 importall .MPFR
 big(n::Integer) = convert(BigInt,n)
@@ -273,6 +318,9 @@ include("combinatorics.jl")
 
 # more hashing definitions
 include("hashing2.jl")
+
+# irrational mathematical constants
+include("irrationals.jl")
 
 # random number generation
 include("dSFMT.jl")
@@ -312,10 +360,10 @@ using .I18n
 
 # frontend
 include("initdefs.jl")
-include("Terminals.jl")
-include("LineEdit.jl")
-include("REPLCompletions.jl")
-include("REPL.jl")
+include("repl/Terminals.jl")
+include("repl/LineEdit.jl")
+include("repl/REPLCompletions.jl")
+include("repl/REPL.jl")
 include("client.jl")
 
 # Stack frames and traces
@@ -333,19 +381,6 @@ const × = cross
 
 # statistics
 include("statistics.jl")
-
-# irrational mathematical constants
-include("irrationals.jl")
-
-# signal processing
-include("dft.jl")
-importall .DFT
-include("dsp.jl")
-importall .DSP
-
-# Fast math
-include("fastmath.jl")
-importall .FastMath
 
 # libgit2 support
 include("libgit2/libgit2.jl")
@@ -400,12 +435,11 @@ function __init__()
     init_threadcall()
 end
 
-INCLUDE_STATE = 3 # include = include_from_node1
-include("precompile.jl")
+INCLUDE_STATE = 3 # include = include_relative
+include(Base, "precompile.jl")
 
 end # baremodule Base
 
 using Base
-importall Base.Operators
 
-Base.isfile("userimg.jl") && Base.include("userimg.jl")
+Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")

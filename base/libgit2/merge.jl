@@ -45,7 +45,11 @@ function merge_analysis(repo::GitRepo, anns::Vector{GitAnnotated})
     return analysis[], preference[]
 end
 
-"""Fastforward merge changes into current head """
+"""
+    ffmerge!(repo::GitRepo, ann::GitAnnotated)
+
+Fastforward merge changes into current head
+"""
 function ffmerge!(repo::GitRepo, ann::GitAnnotated)
     cmt = GitCommit(repo, GitHash(ann))
 
@@ -63,7 +67,7 @@ function ffmerge!(repo::GitRepo, ann::GitAnnotated)
     return true
 end
 
-""" Merge changes into current head """
+# Merge changes into current head
 function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
                 merge_opts::MergeOptions = MergeOptions(),
                 checkout_opts::CheckoutOptions = CheckoutOptions())
@@ -77,9 +81,8 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
     return true
 end
 
-"""Internal implementation of merge.
-Returns `true` if merge was successful, otherwise `false`
-"""
+# Internal implementation of merge.
+# Returns `true` if merge was successful, otherwise `false`
 function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
                 merge_opts::MergeOptions = MergeOptions(),
                 checkout_opts::CheckoutOptions = CheckoutOptions())

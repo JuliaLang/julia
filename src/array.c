@@ -193,10 +193,10 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     assert(store_unboxed(el_type) == !data->flags.ptrarray);
     if (!data->flags.ptrarray) {
         a->elsize = jl_datatype_size(el_type);
-        unsigned align = ((jl_datatype_t*)el_type)->layout->alignment;
+        unsigned align = jl_datatype_align(el_type);
         jl_value_t *ownerty = jl_typeof(owner);
         unsigned oldalign = (ownerty == (jl_value_t*)jl_string_type ? 1 :
-                             ((jl_datatype_t*)jl_tparam0(ownerty))->layout->alignment);
+                             jl_datatype_align(jl_tparam0(ownerty)));
         if (oldalign < align)
             jl_exceptionf(jl_argumenterror_type,
                           "reinterpret from alignment %u bytes to alignment %u bytes not allowed",
@@ -283,7 +283,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
     unsigned align;
     if (isunboxed) {
         elsz = jl_datatype_size(el_type);
-        align = ((jl_datatype_t*)el_type)->layout->alignment;
+        align = jl_datatype_align(el_type);
     }
     else {
         align = elsz = sizeof(void*);
@@ -346,7 +346,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     unsigned align;
     if (isunboxed) {
         elsz = jl_datatype_size(el_type);
-        align = ((jl_datatype_t*)el_type)->layout->alignment;
+        align = jl_datatype_align(el_type);
     }
     else {
         align = elsz = sizeof(void*);
@@ -755,14 +755,17 @@ STATIC_INLINE void jl_array_grow_at_end(jl_array_t *a, size_t idx,
     size_t elsz = a->elsize;
     char *data = (char*)a->data;
     int has_gap = n > idx;
-    if (__unlikely((n + inc) > a->maxsize - a->offset)) {
+    size_t reqmaxsize = a->offset + n + inc;
+    if (__unlikely(reqmaxsize > a->maxsize)) {
         size_t nb1 = idx * elsz;
         size_t nbinc = inc * elsz;
-        size_t newlen = a->maxsize == 0 ? (inc < 4 ? 4 : inc) : a->maxsize * 2;
-        while ((n + inc) > newlen - a->offset)
-            newlen *= 2;
-        newlen = limit_overallocation(a, n, newlen, inc);
-        int newbuf = array_resize_buffer(a, newlen);
+        // if the requested size is more than 2x current maxsize, grow exactly
+        // otherwise double the maxsize
+        size_t newmaxsize = reqmaxsize >= a->maxsize * 2
+                          ? (reqmaxsize < 4 ? 4 : reqmaxsize)
+                          : a->maxsize * 2;
+        newmaxsize = limit_overallocation(a, n, newmaxsize, inc);
+        int newbuf = array_resize_buffer(a, newmaxsize);
         char *newdata = (char*)a->data + a->offset * elsz;
         if (newbuf) {
             memcpy(newdata, data, nb1);
@@ -1011,6 +1014,19 @@ JL_DLLEXPORT void jl_array_ptr_1d_push(jl_array_t *a, jl_value_t *item)
     jl_array_grow_end(a, 1);
     size_t n = jl_array_nrows(a);
     jl_array_ptr_set(a, n - 1, item);
+}
+
+JL_DLLEXPORT void jl_array_ptr_1d_append(jl_array_t *a, jl_array_t *a2)
+{
+    assert(jl_typeis(a, jl_array_any_type));
+    assert(jl_typeis(a2, jl_array_any_type));
+    size_t i;
+    size_t n = jl_array_nrows(a);
+    size_t n2 = jl_array_nrows(a2);
+    jl_array_grow_end(a, n2);
+    for (i = 0; i < n2; i++) {
+        jl_array_ptr_set(a, n + i, jl_array_ptr_ref(a2, i));
+    }
 }
 
 JL_DLLEXPORT void jl_array_ptr_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c)

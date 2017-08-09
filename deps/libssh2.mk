@@ -2,7 +2,7 @@
 
 LIBSSH2_GIT_URL := git://github.com/libssh2/libssh2.git
 LIBSSH2_TAR_URL = https://api.github.com/repos/libssh2/libssh2/tarball/$1
-$(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,,$(SRCDIR)/srccache))
+$(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,,$(SRCCACHE)))
 
 ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
@@ -20,25 +20,21 @@ else
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS -DENABLE_ZLIB_COMPRESSION=OFF
 endif
 
-ifeq ($(OS),Linux)
+ifneq (,$(findstring $(OS),Linux FreeBSD))
 LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
-ifeq ($(OS),FreeBSD)
-LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
-endif
-
-$(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/source-extracted
-	cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-encryptedpem.patch
+$(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted
+	cd $(SRCCACHE)/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-encryptedpem.patch
 	echo 1 > $@
 
 # Patch submitted upstream: https://github.com/libssh2/libssh2/pull/148
 # Remove the patch here once we're using a version of libssh2 that includes the upstream patch
-$(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-netinet-in.patch-applied: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied
-	cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libssh2-netinet-in.patch
+$(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-netinet-in.patch-applied: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied
+	cd $(SRCCACHE)/$(LIBSSH2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libssh2-netinet-in.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/source-extracted $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-netinet-in.patch-applied
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-netinet-in.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)
@@ -65,7 +61,7 @@ clean-libssh2:
 
 
 get-libssh2: $(LIBSSH2_SRC_FILE)
-extract-libssh2: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/source-extracted
+extract-libssh2: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted
 configure-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
 compile-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
 fastcheck-libssh2: check-libssh2

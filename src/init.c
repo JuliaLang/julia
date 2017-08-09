@@ -363,6 +363,7 @@ static void *init_stdio_handle(uv_file fd,int readable)
             }
 #endif
             // ...and continue on as in the UV_FILE case
+            JL_FALLTHROUGH;
         case UV_FILE:
             file = (jl_uv_file_t*)malloc(sizeof(jl_uv_file_t));
             file->loop = jl_io_loop;
@@ -663,11 +664,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_internal_main_module = jl_main_module;
 
         ptls->current_module = jl_core_module;
-        for (int t = 0;t < jl_n_threads;t++) {
-            jl_all_tls_states[t]->root_task->current_module = ptls->current_module;
+        for (int t = 0; t < jl_n_threads; t++) {
+            jl_all_tls_states[t]->root_task->current_module = jl_core_module;
         }
 
-        jl_load("boot.jl");
+        jl_load(jl_core_module, "boot.jl");
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();
@@ -712,8 +713,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_add_standard_imports(jl_main_module);
     }
     ptls->current_module = jl_main_module;
-    for (int t = 0;t < jl_n_threads;t++) {
-        jl_all_tls_states[t]->root_task->current_module = ptls->current_module;
+    for (int t = 0; t < jl_n_threads; t++) {
+        jl_all_tls_states[t]->root_task->current_module = jl_main_module;
     }
 
     // This needs to be after jl_start_threads
@@ -774,13 +775,16 @@ void jl_get_builtin_hooks(void)
     jl_floatingpoint_type = (jl_datatype_t*)core("AbstractFloat");
     jl_number_type = (jl_datatype_t*)core("Number");
     jl_signed_type = (jl_datatype_t*)core("Signed");
+    jl_datatype_t *jl_unsigned_type = (jl_datatype_t*)core("Unsigned");
+    jl_datatype_t *jl_integer_type = (jl_datatype_t*)core("Integer");
+    jl_bool_type->super = jl_integer_type;
+    jl_uint8_type->super = jl_unsigned_type;
+    jl_int32_type->super = jl_signed_type;
+    jl_int64_type->super = jl_signed_type;
 
     jl_errorexception_type = (jl_datatype_t*)core("ErrorException");
     jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
     jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
-    jl_domain_exception    = jl_new_struct_uninit((jl_datatype_t*)core("DomainError"));
-    jl_overflow_exception  = jl_new_struct_uninit((jl_datatype_t*)core("OverflowError"));
-    jl_inexact_exception   = jl_new_struct_uninit((jl_datatype_t*)core("InexactError"));
     jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
     jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
@@ -812,7 +816,7 @@ void jl_get_builtins(void)
 {
     jl_builtin_throw = core("throw");           jl_builtin_is = core("===");
     jl_builtin_typeof = core("typeof");         jl_builtin_sizeof = core("sizeof");
-    jl_builtin_issubtype = core("issubtype");   jl_builtin_isa = core("isa");
+    jl_builtin_issubtype = core("<:");          jl_builtin_isa = core("isa");
     jl_builtin_typeassert = core("typeassert"); jl_builtin__apply = core("_apply");
     jl_builtin_isdefined = core("isdefined");   jl_builtin_nfields = core("nfields");
     jl_builtin_tuple = core("tuple");           jl_builtin_svec = core("svec");

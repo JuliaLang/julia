@@ -289,6 +289,9 @@ end
 
 @test Base.ndigits0zpb(big(0), big(rand(2:100))) == 0
 
+# digits with BigInt bases (#16844)
+@test digits(big(2)^256, big(2)^128) == [0, 0, 1]
+
 # conversion from float
 @test BigInt(2.0) == BigInt(2.0f0) == BigInt(big(2.0)) == 2
 @test_throws InexactError convert(BigInt, 2.1)
@@ -338,6 +341,12 @@ let padding = 4, low = big(4), high = big(2^20)
     @test dec(-high, padding) == "-1048576"
     @test hex(-high, padding) == "-100000"
 end
+
+# respect 0-padding on big(0)
+for f in (bin, oct, dec, hex)
+    @test f(big(0), 0) == ""
+end
+@test base(rand(2:62), big(0), 0) == ""
 
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2

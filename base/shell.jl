@@ -75,7 +75,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
             stpos = j
             ex, j = parse(s,j,greedy=false)
             last_parse = stpos:j
-            update_arg(esc(ex)); i = j
+            update_arg(ex); i = j
         else
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes

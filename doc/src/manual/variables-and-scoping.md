@@ -149,6 +149,9 @@ julia> z
 10
 ```
 
+The `local` and `global` keywords can also be applied to destructuring assignments, e.g.
+`local x, y = 1, 2`. In this case the keyword affects all listed variables.
+
 ### Soft Local Scope
 
 > In a soft local scope, all variables are inherited from its parent scope unless a variable is
@@ -169,19 +172,6 @@ julia> for i = 1:10
 
 julia> x
 12
-```
-
-Within soft scopes, the *global* keyword is never necessary, although allowed. The only case
-when it would change the semantics is (currently) a syntax error:
-
-```julia
-julia> let
-           local j = 2
-           let
-               global j = 3
-           end
-       end
-ERROR: syntax: `global j`: j is local variable in the enclosing scope
 ```
 
 ### Hard Local Scope
@@ -332,9 +322,8 @@ The reason to allow *modifying local* variables of parent scopes in nested funct
 constructing [closures](https://en.wikipedia.org/wiki/Closure_%28computer_programming%29) which
 have a private state, for instance the `state` variable in the following example:
 
-```julia
-julia> let
-           state = 0
+```jldoctest
+julia> let state = 0
            global counter
            counter() = state += 1
        end;
@@ -411,7 +400,7 @@ julia> Fs[2]()
 Since the `begin` construct does not introduce a new scope, it can be useful to use a zero-argument
 `let` to just introduce a new scope block without creating any new bindings:
 
-```julia
+```jldoctest
 julia> let
            local x = 1
            let
@@ -480,13 +469,13 @@ julia> const e  = 2.71828182845904523536;
 julia> const pi = 3.14159265358979323846;
 ```
 
-The `const` declaration is allowed on both global and local variables, but is especially useful
-for globals. It is difficult for the compiler to optimize code involving global variables, since
+The `const` declaration should only be used in global scope on globals.
+It is difficult for the compiler to optimize code involving global variables, since
 their values (or even their types) might change at almost any time. If a global variable will
 not change, adding a `const` declaration solves this performance problem.
 
 Local constants are quite different. The compiler is able to determine automatically when a local
-variable is constant, so local constant declarations are not necessary for performance purposes.
+variable is constant, so local constant declarations are not necessary, and are currently just ignored.
 
 Special top-level assignments, such as those performed by the `function` and `struct` keywords,
 are constant by default.

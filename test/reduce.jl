@@ -44,6 +44,13 @@
 @test mapreduce(abs2, +, [-9, -3]) == 81 + 9
 @test mapreduce(-, +, [-9, -3, -4, 8, -2]) == (9 + 3 + 4 - 8 + 2)
 @test mapreduce(-, +, collect(linspace(1.0, 10000.0, 10000))) == -50005000.0
+# empty mr
+@test mapreduce(abs2, +, Float64[]) === 0.0
+@test mapreduce(abs2, Base.scalarmax, Float64[]) === 0.0
+@test mapreduce(abs, max, Float64[]) === 0.0
+@test mapreduce(abs2, &, Float64[]) === true
+@test mapreduce(abs2, |, Float64[]) === false
+
 # mapreduce() type stability
 @test typeof(mapreduce(*, +, Int8[10])) ===
       typeof(mapreduce(*, +, Int8[10, 11])) ===
@@ -362,3 +369,6 @@ end
 test18695(r) = sum( t^2 for t in r )
 @test @inferred(test18695([1.0,2.0,3.0,4.0])) == 30.0
 @test_throws ArgumentError test18695(Any[])
+
+# issue #21107
+@test foldr(-,2:2) == 2

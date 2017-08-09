@@ -1,8 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import .Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
+import .Distributed: RRID
 
 mutable struct SharedArray{T,N} <: DenseArray{T,N}
+    id::RRID
     dims::NTuple{N,Int}
     pids::Vector{Int}
     refs::Vector
@@ -24,9 +26,13 @@ mutable struct SharedArray{T,N} <: DenseArray{T,N}
     loc_subarr_1d::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int}},true}
 
     function SharedArray{T,N}(d,p,r,sn,s) where {T,N}
-        new(d,p,r,sn,s,0,view(Array{T}(ntuple(d->0,N)), 1:0))
+        S = new(RRID(),d,p,r,sn,s,0,view(Array{T}(ntuple(d->0,N)), 1:0))
+        sa_refs[S.id] = WeakRef(S)
+        S
     end
 end
+
+const sa_refs = Dict{RRID, WeakRef}()
 
 """
     SharedArray{T}(dims::NTuple; init=false, pids=Int[])
@@ -44,6 +50,9 @@ computation with the master process acting as a driver.
 
 If an `init` function of the type `initfn(S::SharedArray)` is specified, it is called on all
 the participating workers.
+
+The shared array is valid as long as a reference to the `SharedArray` object exists on the node
+which created the mapping.
 
     SharedArray{T}(filename::AbstractString, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
     SharedArray{T,N}(...)
@@ -246,9 +255,11 @@ function finalize_refs(S::SharedArray{T,N}) where T where N
         empty!(S.refs)
         init_loc_flds(S)
         S.s = Array{T}(ntuple(d->0,N))
+        delete!(sa_refs, S.id)
     end
     S
 end
+
 
 const SharedVector{T} = SharedArray{T,1}
 const SharedMatrix{T} = SharedArray{T,2}
@@ -402,6 +413,17 @@ end
 # pidx, which is relevant to the current process only
 function serialize(s::AbstractSerializer, S::SharedArray)
     serialize_cycle_header(s, S) && return
+
+    destpid = worker_id_from_socket(s.io)
+    if S.id.whence == destpid
+        # The shared array was created from destpid, hence a reference to it
+        # must be available at destpid.
+        serialize(s, true)
+        serialize(s, S.id.whence)
+        serialize(s, S.id.id)
+        return
+    end
+    serialize(s, false)
     for n in fieldnames(SharedArray)
         if n in [:s, :pidx, :loc_subarr_1d]
             writetag(s.io, UNDEFREF_TAG)
@@ -421,9 +443,18 @@ function serialize(s::AbstractSerializer, S::SharedArray)
 end
 
 function deserialize(s::AbstractSerializer, t::Type{<:SharedArray})
+    ref_exists = deserialize(s)
+    if ref_exists
+        sref = sa_refs[RRID(deserialize(s), deserialize(s))]
+        if sref.value !== nothing
+            return sref.value
+        end
+        error("Expected reference to shared array instance not found")
+    end
+
     S = invoke(deserialize, Tuple{AbstractSerializer,DataType}, s, t)
     init_loc_flds(S, true)
-    S
+    return S
 end
 
 function show(io::IO, S::SharedArray)
@@ -548,9 +579,9 @@ end
 
 function print_shmem_limits(slen)
     try
-        if is_linux()
+        if Sys.islinux()
             pfx = "kernel"
-        elseif is_apple()
+        elseif Sys.isapple()
             pfx = "kern.sysv"
         elseif Sys.KERNEL == :FreeBSD || Sys.KERNEL == :DragonFly
             pfx = "kern.ipc"
@@ -561,9 +592,9 @@ function print_shmem_limits(slen)
             return
         end
 
-        shmmax_MB = div(parse(Int, split(readstring(`sysctl $(pfx).shmmax`))[end]), 1024*1024)
-        page_size = parse(Int, split(readstring(`getconf PAGE_SIZE`))[end])
-        shmall_MB = div(parse(Int, split(readstring(`sysctl $(pfx).shmall`))[end]) * page_size, 1024*1024)
+        shmmax_MB = div(parse(Int, split(read(`sysctl $(pfx).shmmax`, String))[end]), 1024*1024)
+        page_size = parse(Int, split(read(`getconf PAGE_SIZE`, String))[end])
+        shmall_MB = div(parse(Int, split(read(`sysctl $(pfx).shmall`, String))[end]) * page_size, 1024*1024)
 
         println("System max size of single shmem segment(MB) : ", shmmax_MB,
             "\nSystem max size of all shmem segments(MB) : ", shmall_MB,
@@ -602,7 +633,7 @@ end
 
 # platform-specific code
 
-if is_windows()
+if Sys.iswindows()
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
     readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
     create = (mode & JL_O_CREAT) == JL_O_CREAT

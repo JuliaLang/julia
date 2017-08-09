@@ -46,22 +46,21 @@ promote_containertype(::Type{T}, ::Type{T}) where {T} = T
 # array inputs
 broadcast_indices() = ()
 broadcast_indices(A) = broadcast_indices(containertype(A), A)
+@inline broadcast_indices(A, B...) = broadcast_shape(broadcast_indices(A), broadcast_indices(B...))
 broadcast_indices(::ScalarType, A) = ()
 broadcast_indices(::Type{Tuple}, A) = (OneTo(length(A)),)
 broadcast_indices(::Type{Array}, A::Ref) = ()
 broadcast_indices(::Type{Array}, A) = indices(A)
-@inline broadcast_indices(A, B...) = broadcast_shape((), broadcast_indices(A), map(broadcast_indices, B)...)
 
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
-@inline broadcast_shape(shape::Tuple, shape1::Tuple, shapes::Tuple...) = broadcast_shape(_bcs((), shape, shape1), shapes...)
+@inline broadcast_shape(shape::Tuple, shape1::Tuple, shapes::Tuple...) = broadcast_shape(_bcs(shape, shape1), shapes...)
 # _bcs consolidates two shapes into a single output shape
-_bcs(out, ::Tuple{}, ::Tuple{}) = out
-@inline _bcs(out, ::Tuple{}, newshape) = _bcs((out..., newshape[1]), (), tail(newshape))
-@inline _bcs(out, shape, ::Tuple{}) = _bcs((out..., shape[1]), tail(shape), ())
-@inline function _bcs(out, shape, newshape)
-    newout = _bcs1(shape[1], newshape[1])
-    _bcs((out..., newout), tail(shape), tail(newshape))
+_bcs(::Tuple{}, ::Tuple{}) = ()
+@inline _bcs(::Tuple{}, newshape::Tuple) = (newshape[1], _bcs((), tail(newshape))...)
+@inline _bcs(shape::Tuple, ::Tuple{}) = (shape[1], _bcs(tail(shape), ())...)
+@inline function _bcs(shape::Tuple, newshape::Tuple)
+    return (_bcs1(shape[1], newshape[1]), _bcs(tail(shape), tail(newshape))...)
 end
 # _bcs1 handles the logic for a single dimension
 _bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size"))))
@@ -135,7 +134,7 @@ Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 ## Broadcasting core
 # nargs encodes the number of As arguments (which matches the number
 # of keeps). The first two type parameters are to ensure specialization.
-@generated function _broadcast!(f, B::AbstractArray, keeps::K, Idefaults::ID, A::AT, Bs::BT, ::Type{Val{N}}, iter) where {K,ID,AT,BT,N}
+@generated function _broadcast!(f, B::AbstractArray, keeps::K, Idefaults::ID, A::AT, Bs::BT, ::Val{N}, iter) where {K,ID,AT,BT,N}
     nargs = N + 1
     quote
         $(Expr(:meta, :inline))
@@ -158,7 +157,7 @@ end
 
 # For BitArray outputs, we cache the result in a "small" Vector{Bool},
 # and then copy in chunks into the output
-@generated function _broadcast!(f, B::BitArray, keeps::K, Idefaults::ID, A::AT, Bs::BT, ::Type{Val{N}}, iter) where {K,ID,AT,BT,N}
+@generated function _broadcast!(f, B::BitArray, keeps::K, Idefaults::ID, A::AT, Bs::BT, ::Val{N}, iter) where {K,ID,AT,BT,N}
     nargs = N + 1
     quote
         $(Expr(:meta, :inline))
@@ -208,12 +207,12 @@ as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
     @boundscheck check_broadcast_indices(shape, A, Bs...)
     keeps, Idefaults = map_newindexer(shape, A, Bs)
     iter = CartesianRange(shape)
-    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val{N}, iter)
+    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val(N), iter)
     return C
 end
 
 # broadcast with computed element type
-@generated function _broadcast!(f, B::AbstractArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter, st, count) where {K,ID,AT,nargs}
+@generated function _broadcast!(f, B::AbstractArray, keeps::K, Idefaults::ID, As::AT, ::Val{nargs}, iter, st, count) where {K,ID,AT,nargs}
     quote
         $(Expr(:meta, :noinline))
         # destructure the keeps and As tuples
@@ -239,7 +238,7 @@ end
                     new[II] = B[II]
                 end
                 new[I] = V
-                return _broadcast!(f, new, keeps, Idefaults, As, Val{nargs}, iter, st, count+1)
+                return _broadcast!(f, new, keeps, Idefaults, As, Val(nargs), iter, st, count+1)
             end
             count += 1
         end
@@ -260,12 +259,12 @@ function broadcast_t(f, ::Type{Any}, shape, iter, As...)
         B = similar(Array{typeof(val)}, shape)
     end
     B[I] = val
-    return _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter, st, 1)
+    return _broadcast!(f, B, keeps, Idefaults, As, Val(nargs), iter, st, 1)
 end
 @inline function broadcast_t(f, T, shape, iter, A, Bs::Vararg{Any,N}) where N
     C = similar(Array{T}, shape)
     keeps, Idefaults = map_newindexer(shape, A, Bs)
-    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val{N}, iter)
+    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val(N), iter)
     return C
 end
 
@@ -276,7 +275,7 @@ end
 @inline function broadcast_t(f, ::Type{Bool}, shape, iter, A, Bs::Vararg{Any,N}) where N
     C = similar(BitArray, shape)
     keeps, Idefaults = map_newindexer(shape, A, Bs)
-    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val{N}, iter)
+    _broadcast!(f, C, keeps, Idefaults, A, Bs, Val(N), iter)
     return C
 end
 
@@ -336,9 +335,9 @@ end
 @inline broadcast_c(f, ::Type{Tuple}, A, Bs...) =
     tuplebroadcast(f, first_tuple(A, Bs...), A, Bs...)
 @inline tuplebroadcast(f, ::NTuple{N,Any}, As...) where {N} =
-    ntuple(k -> f(tuplebroadcast_getargs(As, k)...), Val{N})
+    ntuple(k -> f(tuplebroadcast_getargs(As, k)...), Val(N))
 @inline tuplebroadcast(f, ::NTuple{N,Any}, ::Type{T}, As...) where {N,T} =
-    ntuple(k -> f(T, tuplebroadcast_getargs(As, k)...), Val{N})
+    ntuple(k -> f(T, tuplebroadcast_getargs(As, k)...), Val(N))
 first_tuple(A::Tuple, Bs...) = A
 @inline first_tuple(A, Bs...) = first_tuple(Bs...)
 tuplebroadcast_getargs(::Tuple{}, k) = ()
@@ -368,6 +367,7 @@ A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a
 single broadcast loop.
 
+# Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5]
 5-element Array{Int64,1}:
@@ -440,6 +440,7 @@ Broadcasts the `inds` arrays to a common size like [`broadcast`](@ref)
 and returns an array of the results `A[ks...]`,
 where `ks` goes over the positions in the broadcast result `A`.
 
+# Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5]
 5-element Array{Int64,1}:
@@ -592,6 +593,17 @@ If you want to *avoid* adding dots for selected function calls in
 (no dot for `sort`).
 
 (`@.` is equivalent to a call to `@__dot__`.)
+
+# Examples
+```jldoctest
+julia> x = 1.0:3.0; y = similar(x);
+
+julia> @. y = x + 3 * sin(x)
+3-element Array{Float64,1}:
+ 3.52441
+ 4.72789
+ 3.42336
+```
 """
 macro __dot__(x)
     esc(__dot__(x))

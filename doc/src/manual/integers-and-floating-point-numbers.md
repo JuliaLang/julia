@@ -18,25 +18,25 @@ The following are Julia's primitive numeric types:
 
   * **Integer types:**
 
-| Type      | Signed? | Number of bits | Smallest value | Largest value |
-|:--------- |:------- |:-------------- |:-------------- |:------------- |
-| `Int8`    | ✓       | 8              | -2^7           | 2^7 - 1       |
-| `UInt8`   |         | 8              | 0              | 2^8 - 1       |
-| `Int16`   | ✓       | 16             | -2^15          | 2^15 - 1      |
-| `UInt16`  |         | 16             | 0              | 2^16 - 1      |
-| `Int32`   | ✓       | 32             | -2^31          | 2^31 - 1      |
-| `UInt32`  |         | 32             | 0              | 2^32 - 1      |
-| `Int64`   | ✓       | 64             | -2^63          | 2^63 - 1      |
-| `UInt64`  |         | 64             | 0              | 2^64 - 1      |
-| `Int128`  | ✓       | 128            | -2^127         | 2^127 - 1     |
-| `UInt128` |         | 128            | 0              | 2^128 - 1     |
-| `Bool`    | N/A     | 8              | `false` (0)    | `true` (1)    |
+| Type              | Signed? | Number of bits | Smallest value | Largest value |
+|:----------------- |:------- |:-------------- |:-------------- |:------------- |
+| [`Int8`](@ref)    | ✓       | 8              | -2^7           | 2^7 - 1       |
+| [`UInt8`](@ref)   |         | 8              | 0              | 2^8 - 1       |
+| [`Int16`](@ref)   | ✓       | 16             | -2^15          | 2^15 - 1      |
+| [`UInt16`](@ref)  |         | 16             | 0              | 2^16 - 1      |
+| [`Int32`](@ref)   | ✓       | 32             | -2^31          | 2^31 - 1      |
+| [`UInt32`](@ref)  |         | 32             | 0              | 2^32 - 1      |
+| [`Int64`](@ref)   | ✓       | 64             | -2^63          | 2^63 - 1      |
+| [`UInt64`](@ref)  |         | 64             | 0              | 2^64 - 1      |
+| [`Int128`](@ref)  | ✓       | 128            | -2^127         | 2^127 - 1     |
+| [`UInt128`](@ref) |         | 128            | 0              | 2^128 - 1     |
+| [`Bool`](@ref)    | N/A     | 8              | `false` (0)    | `true` (1)    |
 
   * **Floating-point types:**
 
 | Type              | Precision                                                                      | Number of bits |
 |:----------------- |:------------------------------------------------------------------------------ |:-------------- |
-| `Float16`         | [half](https://en.wikipedia.org/wiki/Half-precision_floating-point_format)     | 16             |
+| [`Float16`](@ref) | [half](https://en.wikipedia.org/wiki/Half-precision_floating-point_format)     | 16             |
 | [`Float32`](@ref) | [single](https://en.wikipedia.org/wiki/Single_precision_floating-point_format) | 32             |
 | [`Float64`](@ref) | [double](https://en.wikipedia.org/wiki/Double_precision_floating-point_format) | 64             |
 
@@ -59,7 +59,7 @@ julia> 1234
 The default type for an integer literal depends on whether the target system has a 32-bit architecture
 or a 64-bit architecture:
 
-```julia
+```julia-repl
 # 32-bit system:
 julia> typeof(1)
 Int32
@@ -72,7 +72,7 @@ Int64
 The Julia internal variable [`Sys.WORD_SIZE`](@ref) indicates whether the target system is 32-bit
 or 64-bit:
 
-```julia
+```julia-repl
 # 32-bit system:
 julia> Sys.WORD_SIZE
 32
@@ -85,7 +85,7 @@ julia> Sys.WORD_SIZE
 Julia also defines the types `Int` and `UInt`, which are aliases for the system's signed and unsigned
 native integer types respectively:
 
-```julia
+```julia-repl
 # 32-bit system:
 julia> Int
 Int32
@@ -206,7 +206,7 @@ true
 Thus, arithmetic with Julia integers is actually a form of [modular arithmetic](https://en.wikipedia.org/wiki/Modular_arithmetic).
 This reflects the characteristics of the underlying arithmetic of integers as implemented on modern
 computers. In applications where overflow is possible, explicit checking for wraparound produced
-by overflow is essential; otherwise, the `BigInt` type in [Arbitrary Precision Arithmetic](@ref)
+by overflow is essential; otherwise, the [`BigInt`](@ref) type in [Arbitrary Precision Arithmetic](@ref)
 is recommended instead.
 
 ### Division errors
@@ -243,8 +243,8 @@ julia> 2.5e-4
 0.00025
 ```
 
-The above results are all `Float64` values. Literal `Float32` values can be entered by writing
-an `f` in place of `e`:
+The above results are all [`Float64`](@ref) values. Literal [`Float32`](@ref) values can be
+entered by writing an `f` in place of `e`:
 
 ```jldoctest
 julia> 0.5f0
@@ -257,7 +257,7 @@ julia> 2.5f-4
 0.00025f0
 ```
 
-Values can be converted to `Float32` easily:
+Values can be converted to [`Float32`](@ref) easily:
 
 ```jldoctest
 julia> Float32(-1.5)
@@ -267,7 +267,7 @@ julia> typeof(ans)
 Float32
 ```
 
-Hexadecimal floating-point literals are also valid, but only as `Float64` values:
+Hexadecimal floating-point literals are also valid, but only as [`Float64`](@ref) values:
 
 ```jldoctest
 julia> 0x1p0
@@ -283,8 +283,8 @@ julia> typeof(ans)
 Float64
 ```
 
-Half-precision floating-point numbers are also supported (`Float16`), but they are
-implemented in software and use `Float32` for calculations.
+Half-precision floating-point numbers are also supported ([`Float16`](@ref)), but they are
+implemented in software and use [`Float32`](@ref) for calculations.
 
 ```jldoctest
 julia> sizeof(Float16(4.))
@@ -404,11 +404,11 @@ julia> eps() # same as eps(Float64)
 2.220446049250313e-16
 ```
 
-These values are `2.0^-23` and `2.0^-52` as `Float32` and `Float64` values, respectively. The
-[`eps()`](@ref) function can also take a floating-point value as an argument, and gives the absolute
-difference between that value and the next representable floating point value. That is, `eps(x)`
-yields a value of the same type as `x` such that `x + eps(x)` is the next representable floating-point
-value larger than `x`:
+These values are `2.0^-23` and `2.0^-52` as [`Float32`](@ref) and [`Float64`](@ref) values,
+respectively. The [`eps()`](@ref) function can also take a floating-point value as an
+argument, and gives the absolute difference between that value and the next representable
+floating point value. That is, `eps(x)` yields a value of the same type as `x` such that
+`x + eps(x)` is the next representable floating-point value larger than `x`:
 
 ```jldoctest
 julia> eps(1.0)
@@ -584,7 +584,7 @@ To make common numeric formulas and expressions clearer, Julia allows variables 
 preceded by a numeric literal, implying multiplication. This makes writing polynomial expressions
 much cleaner:
 
-```jldoctest
+```jldoctest numeric-coefficients
 julia> x = 3
 3
 
@@ -597,7 +597,7 @@ julia> 1.5x^2 - .5x + 1
 
 It also makes writing exponential functions more elegant:
 
-```julia
+```jldoctest numeric-coefficients
 julia> 2^2x
 64
 ```
@@ -607,7 +607,7 @@ negation. So `2^3x` is parsed as `2^(3x)`, and `2x^3` is parsed as `2*(x^3)`.
 
 Numeric literals also work as coefficients to parenthesized expressions:
 
-```julia
+```jldoctest numeric-coefficients
 julia> 2(x-1)^2 - 3(x-1) + 1
 3
 ```
@@ -615,7 +615,7 @@ julia> 2(x-1)^2 - 3(x-1) + 1
 Additionally, parenthesized expressions can be used as coefficients to variables, implying multiplication
 of the expression by the variable:
 
-```julia
+```jldoctest numeric-coefficients
 julia> (x-1)x
 6
 ```
@@ -623,7 +623,7 @@ julia> (x-1)x
 Neither juxtaposition of two parenthesized expressions, nor placing a variable before a parenthesized
 expression, however, can be used to imply multiplication:
 
-```julia
+```jldoctest numeric-coefficients
 julia> (x-1)(x+1)
 ERROR: MethodError: objects of type Int64 are not callable
 

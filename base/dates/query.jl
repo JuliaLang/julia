@@ -90,6 +90,15 @@ dayofweek(days) = mod1(days, 7)
     daysinyear(dt::TimeType) -> Int
 
 Returns 366 if the year of `dt` is a leap year, otherwise returns 365.
+
+# Examples
+```jldoctest
+julia> Dates.daysinyear(1999)
+365
+
+julia> Dates.daysinyear(2000)
+366
+```
 """
 daysinyear(y) = 365 + isleapyear(y)
 
@@ -101,7 +110,13 @@ dayofyear(y, m, d) = MONTHDAYS[m] + d + (m > 2 && isleapyear(y))
 """
     dayofweek(dt::TimeType) -> Int64
 
-Returns the day of the week as an `Int64` with `1 = Monday, 2 = Tuesday, etc.`.
+Returns the day of the week as an [`Int64`](@ref) with `1 = Monday, 2 = Tuesday, etc.`.
+
+# Examples
+```jldoctest
+julia> Dates.dayofweek(Date("2000-01-01"))
+6
+```
 """
 dayofweek(dt::TimeType) = dayofweek(days(dt))
 
@@ -114,20 +129,32 @@ dayname(day::Integer; locale::AbstractString="english") = dayname(day, LOCALES[l
 dayabbr(day::Integer; locale::AbstractString="english") = dayabbr(day, LOCALES[locale])
 
 """
-    dayname(dt::TimeType; locale="english") -> AbstractString
+    dayname(dt::TimeType; locale="english") -> String
 
 Return the full day name corresponding to the day of the week of the `Date` or `DateTime` in
 the given `locale`.
+
+# Examples
+```jldoctest
+julia> Dates.dayname(Date("2000-01-01"))
+"Saturday"
+```
 """
 function dayname(dt::TimeType;locale::AbstractString="english")
     dayname(dayofweek(dt); locale=locale)
 end
 
 """
-    dayabbr(dt::TimeType; locale="english") -> AbstractString
+    dayabbr(dt::TimeType; locale="english") -> String
 
 Return the abbreviated name corresponding to the day of the week of the `Date` or `DateTime`
 in the given `locale`.
+
+# Examples
+```jldoctest
+julia> Dates.dayabbr(Date("2000-01-01"))
+"Sat"
+```
 """
 function dayabbr(dt::TimeType;locale::AbstractString="english")
     dayabbr(dayofweek(dt); locale=locale)
@@ -149,6 +176,18 @@ issunday(dt::TimeType) = dayofweek(dt) == Sun
 For the day of week of `dt`, returns which number it is in `dt`'s month. So if the day of
 the week of `dt` is Monday, then `1 = First Monday of the month, 2 = Second Monday of the
 month, etc.` In the range 1:5.
+
+# Examples
+```jldoctest
+julia> Dates.dayofweekofmonth(Date("2000-02-01"))
+1
+
+julia> Dates.dayofweekofmonth(Date("2000-02-08"))
+2
+
+julia> Dates.dayofweekofmonth(Date("2000-02-15"))
+3
+````
 """
 function dayofweekofmonth(dt::TimeType)
     d = day(dt)
@@ -168,6 +207,15 @@ For the day of week of `dt`, returns the total number of that day of the week in
 month. Returns 4 or 5. Useful in temporal expressions for specifying the last day of a week
 in a month by including `dayofweekofmonth(dt) == daysofweekinmonth(dt)` in the adjuster
 function.
+
+# Examples
+```jldoctest
+julia> Dates.daysofweekinmonth(Date("2005-01-01"))
+5
+
+julia> Dates.daysofweekinmonth(Date("2005-01-04"))
+4
+```
 """
 function daysofweekinmonth(dt::TimeType)
     y, m, d = yearmonthday(dt)
@@ -188,18 +236,30 @@ monthname(month::Integer; locale::AbstractString="english") = monthname(month, L
 monthabbr(month::Integer; locale::AbstractString="english") = monthabbr(month, LOCALES[locale])
 
 """
-    monthname(dt::TimeType; locale="english") -> AbstractString
+    monthname(dt::TimeType; locale="english") -> String
 
 Return the full name of the month of the `Date` or `DateTime` in the given `locale`.
+
+# Examples
+```jldoctest
+julia> Dates.monthname(Date("2005-01-04"))
+"January"
+```
 """
 function monthname(dt::TimeType; locale::AbstractString="english")
     monthname(month(dt); locale=locale)
 end
 
 """
-    monthabbr(dt::TimeType; locale="english") -> AbstractString
+    monthabbr(dt::TimeType; locale="english") -> String
 
 Return the abbreviated month name of the `Date` or `DateTime` in the given `locale`.
+
+# Examples
+```jldoctest
+julia> Dates.monthabbr(Date("2005-01-04"))
+"Jan"
+```
 """
 function monthabbr(dt::TimeType; locale::AbstractString="english")
     monthabbr(month(dt); locale=locale)
@@ -209,6 +269,18 @@ end
     daysinmonth(dt::TimeType) -> Int
 
 Returns the number of days in the month of `dt`. Value will be 28, 29, 30, or 31.
+
+# Examples
+```jldoctest
+julia> Dates.daysinmonth(Date("2000-01"))
+31
+
+julia> Dates.daysinmonth(Date("2001-02"))
+28
+
+julia> Dates.daysinmonth(Date("2000-02"))
+29
+```
 """
 daysinmonth(dt::TimeType) = ((y, m) = yearmonth(dt); return daysinmonth(y, m))
 
@@ -217,6 +289,15 @@ daysinmonth(dt::TimeType) = ((y, m) = yearmonth(dt); return daysinmonth(y, m))
     isleapyear(dt::TimeType) -> Bool
 
 Returns `true` if the year of `dt` is a leap year.
+
+# Examples
+```jldoctest
+julia> Dates.isleapyear(Date("2004"))
+true
+
+julia> Dates.isleapyear(Date("2005"))
+false
+```
 """
 isleapyear(dt::TimeType) = isleapyear(year(dt))
 

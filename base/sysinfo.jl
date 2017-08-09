@@ -14,7 +14,12 @@ export CPU_CORES,
        uptime,
        loadavg,
        free_memory,
-       total_memory
+       total_memory,
+       isapple,
+       isbsd,
+       islinux,
+       isunix,
+       iswindows
 
 import ..Base: show
 
@@ -172,7 +177,7 @@ total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 Get the process title. On some systems, will always return an empty string.
 """
 function get_process_title()
-    buf = zeros(UInt8, 512)
+    buf = Vector{UInt8}(512)
     err = ccall(:uv_get_process_title, Cint, (Ptr{UInt8}, Cint), buf, 512)
     Base.uv_error("get_process_title", err)
     return unsafe_string(pointer(buf))
@@ -188,24 +193,84 @@ function set_process_title(title::AbstractString)
     Base.uv_error("set_process_title", err)
 end
 
+"""
+    Sys.maxrss()
+
+Get the maximum resident set size utilized in bytes.
+See also:
+    - man page of getrusage(2) on Linux and FreeBSD.
+    - windows api `GetProcessMemoryInfo`
+"""
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
 
-if is_windows()
+"""
+    Sys.isunix([os])
+
+Predicate for testing if the OS provides a Unix-like interface.
+See documentation in [Handling Operating System Variation](@ref).
+"""
+function isunix(os::Symbol)
+    if iswindows(os)
+        return false
+    elseif islinux(os) || isbsd(os)
+        return true
+    else
+        throw(ArgumentError("unknown operating system \"$os\""))
+    end
+end
+
+"""
+    Sys.islinux([os])
+
+Predicate for testing if the OS is a derivative of Linux.
+See documentation in [Handling Operating System Variation](@ref).
+"""
+islinux(os::Symbol) = (os == :Linux)
+
+"""
+    Sys.isbsd([os])
+
+Predicate for testing if the OS is a derivative of BSD.
+See documentation in [Handling Operating System Variation](@ref).
+"""
+isbsd(os::Symbol) = (os == :FreeBSD || os == :OpenBSD || os == :NetBSD || os == :DragonFly || os == :Darwin || os == :Apple)
+
+"""
+    Sys.iswindows([os])
+
+Predicate for testing if the OS is a derivative of Microsoft Windows NT.
+See documentation in [Handling Operating System Variation](@ref).
+"""
+iswindows(os::Symbol) = (os == :Windows || os == :NT)
+
+"""
+    Sys.isapple([os])
+
+Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin.
+See documentation in [Handling Operating System Variation](@ref).
+"""
+isapple(os::Symbol) = (os == :Apple || os == :Darwin)
+
+for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows)
+    @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
+end
+
+if iswindows()
     function windows_version()
         verinfo = ccall(:GetVersion, UInt32, ())
-        (Int(verinfo & 0xFF), Int((verinfo >> 8) & 0xFF))
+        VersionNumber(verinfo & 0xFF, (verinfo >> 8) & 0xFF, verinfo >> 16)
     end
 else
-    windows_version() = (0, 0)
+    windows_version() = v"0.0"
 end
 """
     Sys.windows_version()
 
-Returns the version number for the Windows NT Kernel as a (major, minor) pair,
-or `(0, 0)` if this is not running on Windows.
+Returns the version number for the Windows NT Kernel as a `VersionNumber`,
+i.e. `v"major.minor.build"`, or `v"0.0.0"` if this is not running on Windows.
 """
 windows_version
 
-const WINDOWS_VISTA_VER = (6, 0)
+const WINDOWS_VISTA_VER = v"6.0"
 
 end # module Sys

@@ -13,11 +13,9 @@
 
 using namespace llvm;
 
-#if JL_LLVM_VERSION >= 30900
 inline uint64_t RoundUpToAlignment(uint64_t Value, uint64_t Align, uint64_t Skew = 0) {
     return alignTo(Value, Align, Skew);
 }
-#endif
 
 #if JL_LLVM_VERSION >= 50000
 const unsigned int integerPartWidth = llvm::APInt::APINT_BITS_PER_WORD;
@@ -459,38 +457,22 @@ void LLVMTrunc(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPar
 
 extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_8(uint8_t Val) {
-#if JL_LLVM_VERSION >= 30500
     return countTrailingZeros(Val);
-#else
-    return CountTrailingZeros_32(Val);
-#endif
 }
 
 extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_16(uint16_t Val) {
-#if JL_LLVM_VERSION >= 30500
     return countTrailingZeros(Val);
-#else
-    return CountTrailingZeros_32(Val);
-#endif
 }
 
 extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_32(uint32_t Val) {
-#if JL_LLVM_VERSION >= 30500
     return countTrailingZeros(Val);
-#else
-    return CountTrailingZeros_32(Val);
-#endif
 }
 
 extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_64(uint64_t Val) {
-#if JL_LLVM_VERSION >= 30500
     return countTrailingZeros(Val);
-#else
-    return CountTrailingZeros_64(Val);
-#endif
 }
 
 extern "C" JL_DLLEXPORT

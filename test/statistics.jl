@@ -113,6 +113,18 @@ X = [2 3 1 -1; 7 4 5 -4]
 @test isnan(var(1:1))
 @test isnan(var(1:-1))
 
+@test @inferred(var(1.0:8.0)) == 6.
+@test varm(1.0:8.0,1.0) == varm(collect(1.0:8.0),1)
+@test isnan(varm(1.0:1.0,1.0))
+@test isnan(var(1.0:1.0))
+@test isnan(var(1.0:-1.0))
+
+@test @inferred(var(1.0f0:8.0f0)) === 6.f0
+@test varm(1.0f0:8.0f0,1.0f0) == varm(collect(1.0f0:8.0f0),1)
+@test isnan(varm(1.0f0:1.0f0,1.0f0))
+@test isnan(var(1.0f0:1.0f0))
+@test isnan(var(1.0f0:-1.0f0))
+
 @test varm([1,2,3], 2) ≈ 1.
 @test var([1,2,3]) ≈ 1.
 @test var([1,2,3]; corrected=false) ≈ 2.0/3
@@ -186,50 +198,50 @@ for vd in [1, 2], zm in [true, false], cr in [true, false]
         y1 = vec(Y[1,:])
     end
 
-    c = zm ? Base.covm(x1, 0, cr) :
-             cov(x1, cr)
+    c = zm ? Base.covm(x1, 0, corrected=cr) :
+             cov(x1, corrected=cr)
     @test isa(c, Float64)
     @test c ≈ Cxx[1,1]
-    @inferred cov(x1, cr)
+    @inferred cov(x1, corrected=cr)
 
     @test cov(X) == Base.covm(X, mean(X, 1))
-    C = zm ? Base.covm(X, 0, vd, cr) :
-             cov(X, vd, cr)
+    C = zm ? Base.covm(X, 0, vd, corrected=cr) :
+             cov(X, vd, corrected=cr)
     @test size(C) == (k, k)
     @test C ≈ Cxx
-    @inferred cov(X, vd, cr)
+    @inferred cov(X, vd, corrected=cr)
 
     @test cov(x1, y1) == Base.covm(x1, mean(x1), y1, mean(y1))
-    c = zm ? Base.covm(x1, 0, y1, 0, cr) :
-             cov(x1, y1, cr)
+    c = zm ? Base.covm(x1, 0, y1, 0, corrected=cr) :
+             cov(x1, y1, corrected=cr)
     @test isa(c, Float64)
     @test c ≈ Cxy[1,1]
-    @inferred cov(x1, y1, cr)
+    @inferred cov(x1, y1, corrected=cr)
 
     if vd == 1
         @test cov(x1, Y) == Base.covm(x1, mean(x1), Y, mean(Y, 1))
     end
-    C = zm ? Base.covm(x1, 0, Y, 0, vd, cr) :
-             cov(x1, Y, vd, cr)
+    C = zm ? Base.covm(x1, 0, Y, 0, vd, corrected=cr) :
+             cov(x1, Y, vd, corrected=cr)
     @test size(C) == (1, k)
     @test vec(C) ≈ Cxy[1,:]
-    @inferred cov(x1, Y, vd, cr)
+    @inferred cov(x1, Y, vd, corrected=cr)
 
     if vd == 1
         @test cov(X, y1) == Base.covm(X, mean(X, 1), y1, mean(y1))
     end
-    C = zm ? Base.covm(X, 0, y1, 0, vd, cr) :
-             cov(X, y1, vd, cr)
+    C = zm ? Base.covm(X, 0, y1, 0, vd, corrected=cr) :
+             cov(X, y1, vd, corrected=cr)
     @test size(C) == (k, 1)
     @test vec(C) ≈ Cxy[:,1]
-    @inferred cov(X, y1, vd, cr)
+    @inferred cov(X, y1, vd, corrected=cr)
 
     @test cov(X, Y) == Base.covm(X, mean(X, 1), Y, mean(Y, 1))
-    C = zm ? Base.covm(X, 0, Y, 0, vd, cr) :
-             cov(X, Y, vd, cr)
+    C = zm ? Base.covm(X, 0, Y, 0, vd, corrected=cr) :
+             cov(X, Y, vd, corrected=cr)
     @test size(C) == (k, k)
     @test C ≈ Cxy
-    @inferred cov(X, Y, vd, cr)
+    @inferred cov(X, Y, vd, corrected=cr)
 end
 
 # test correlation
@@ -394,10 +406,29 @@ end
 # dimensional correctness
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using TestHelpers.Furlong
-let r = Furlong(1):Furlong(1):Furlong(2), a = collect(r)
+@testset "Unitful elements" begin
+    r = Furlong(1):Furlong(1):Furlong(2)
+    a = collect(r)
     @test sum(r) == sum(a) == Furlong(3)
     @test cumsum(r) == Furlong.([1,3])
     @test mean(r) == mean(a) == median(a) == median(r) == Furlong(1.5)
     @test var(r) == var(a) == Furlong{2}(0.5)
     @test std(r) == std(a) == Furlong{1}(sqrt(0.5))
+
+    # Issue #21786
+    A = [Furlong{1}(rand(-5:5)) for i in 1:2, j in 1:2]
+    @test mean(mean(A, 1), 2)[1] === mean(A)
+    @test var(A, 1)[1] === var(A[:, 1])
+    @test_broken std(A, 1)[1] === std(A[:, 1])
+end
+
+# Issue #22901
+@testset "var and quantile of Any arrays" begin
+    x = Any[1, 2, 4, 10]
+    y = Any[1, 2, 4, 10//1]
+    @test var(x) === 16.25
+    @test var(y) === 65//4
+    @test std(x) === sqrt(16.25)
+    @test quantile(x, 0.5)  === 3.0
+    @test quantile(x, 1//2) === 3//1
 end

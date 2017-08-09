@@ -883,6 +883,7 @@ end
     @test exp2(1.0+0.0im) == 2.0+0.0im
     #wolframalpha
     @test exp2(1.0+3.0im) ≈ -0.9739888359315627962096198412+1.74681016354974281701922im
+    @test exp2(im) ≈ 0.7692389013639721 + 0.6389612763136348im
 end
 
 @testset "exp10" begin
@@ -890,6 +891,7 @@ end
     @test exp10(1.0+0.0im) == 10.0+0.0im
     #wolframalpha
     @test exp10(1.0+2.0im) ≈ -1.0701348355877020772086517528518239460495529361-9.9425756941378968736161937190915602112878340717im
+    @test exp10(im) ≈ -0.6682015101903132 + 0.7439803369574931im
 end
 
 @testset "round and float, PR #8291" begin
@@ -946,9 +948,12 @@ end
 
 @testset "Complex Irrationals, issue #21204" begin
     for x in (pi, e, catalan) # No need to test all of them
-        @test typeof(Complex(x, x)) == Complex{typeof(x)}
-        @test exp(complex(x, x)) ≈ exp(x) * cis(x)
-        @test log1p(complex(x, x)) ≈ log(1 + complex(x, x))
+        z = Complex(x, x)
+        @test typeof(z) == Complex{typeof(x)}
+        @test exp(z) ≈ exp(x) * cis(x)
+        @test log1p(z) ≈ log(1 + z)
+        @test exp2(z) ≈ exp(z * log(2))
+        @test exp10(z) ≈ exp(z * log(10))
     end
 end
 
@@ -957,4 +962,28 @@ end
     @test x isa Complex128
     x = @inferred expm1(0.1f0im)
     @test x isa Complex64
+end
+
+@testset "array printing with exponent format" begin
+    a = [1.0 + 1e-10im, 2.0e-15 - 2.0e-5im, 1.0e-15 + 2im, 1.0 + 2e-15im]
+    @test sprint((io, x) -> show(io, MIME("text/plain"), x), a) ==
+        join([
+            "4-element Array{Complex{Float64},1}:",
+            "     1.0 + 1.0e-10im",
+            " 2.0e-15 - 2.0e-5im ",
+            " 1.0e-15 + 2.0im    ",
+            "     1.0 + 2.0e-15im"], "\n")
+end
+
+@testset "corner cases of division, issue #22983" begin
+    # These results abide by ISO/IEC 10967-3:2006(E) and
+    # mathematical definition of division of complex numbers.
+    for T in (Float32, Float64, BigFloat)
+        @test isequal(one(T) / zero(Complex{T}), one(Complex{T}) / zero(Complex{T}))
+        @test isequal(one(T) / zero(Complex{T}), Complex{T}(NaN, NaN))
+        @test isequal(one(Complex{T}) / zero(T), Complex{T}(Inf, NaN))
+        @test isequal(one(Complex{T}) / one(Complex{T}), one(Complex{T}))
+        @test isequal(one(T) / complex(one(T),  zero(T)), Complex(one(T), -zero(T)))
+        @test isequal(one(T) / complex(one(T), -zero(T)), Complex(one(T),  zero(T)))
+    end
 end

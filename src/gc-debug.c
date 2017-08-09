@@ -350,7 +350,7 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
                     // the following are used by the deserializer to invalidate objects
                     v->header != 0x10 && v->header != 0x20 &&
                     v->header != 0x30 && v->header != 0x40 &&
-                    v->header != 0x50) {
+                    v->header != 0x50 && v->header != 0x60) {
                 assert(jl_typeof(dt) == (jl_value_t*)jl_datatype_type);
             }
         }
@@ -652,7 +652,7 @@ void objprofile_count(void *ty, int old, int sz)
 
 void objprofile_reset(void)
 {
-    for(int g=0; g < 3; g++) {
+    for (int g = 0; g < 3; g++) {
         htable_reset(&obj_counts[g], 0);
         htable_reset(&obj_sizes[g], 0);
     }
@@ -885,6 +885,14 @@ void gc_time_pool_end(int sweep_full)
               sweep_full ? "full" : "quick");
 }
 
+void gc_time_sysimg_end(uint64_t t0)
+{
+    double sweep_pool_sec = (jl_hrtime() - t0) / 1e9;
+    jl_printf(JL_STDOUT,
+              "GC sweep sysimg end %.2f ms\n",
+              sweep_pool_sec * 1000);
+}
+
 static int64_t big_total;
 static int64_t big_freed;
 static int64_t big_reset;
@@ -908,7 +916,7 @@ void gc_time_count_big(int old_bits, int bits)
 void gc_time_big_end(void)
 {
     double t_ms = jl_ns2ms(jl_hrtime() - big_sweep_start);
-    jl_printf(JL_STDOUT, "GC sweep big %.2f "
+    jl_printf(JL_STDOUT, "GC sweep big %.2f ms "
               "(freed %" PRId64 " / %" PRId64 " with %" PRId64 " rst)\n",
               t_ms, big_freed, big_total, big_reset);
 }
@@ -932,8 +940,8 @@ void gc_time_count_mallocd_array(int bits)
 
 void gc_time_mallocd_array_end(void)
 {
-    double t_ms = jl_ns2ms(jl_hrtime() - big_sweep_start);
-    jl_printf(JL_STDOUT, "GC sweep arrays %.2f "
+    double t_ms = jl_ns2ms(jl_hrtime() - mallocd_array_sweep_start);
+    jl_printf(JL_STDOUT, "GC sweep arrays %.2f ms "
               "(freed %" PRId64 " / %" PRId64 ")\n",
               t_ms, mallocd_array_freed, mallocd_array_total);
 }
@@ -1261,7 +1269,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
                 break;
             }
             jl_safe_printf("%p: Root object: %p :: %p (bits: %d)\n        of type ",
-                           data, data->obj, (void*)data->tag, (int)data->bits);
+                           (void*)data, (void*)data->obj, (void*)data->tag, (int)data->bits);
             jl_((void*)data->tag);
             isroot = 1;
         }
@@ -1272,7 +1280,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
                 break;
             }
             jl_safe_printf("%p: Queued root: %p :: %p (bits: %d)\n        of type ",
-                           data, data->obj, (void*)data->tag, (int)data->bits);
+                           (void*)data, (void*)data->obj, (void*)data->tag, (int)data->bits);
             jl_((void*)data->tag);
             isroot = 1;
         }
@@ -1282,7 +1290,8 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
-            jl_safe_printf("%p: Finalizer list from %p to %p\n", data, data->begin, data->end);
+            jl_safe_printf("%p: Finalizer list from %p to %p\n",
+                           (void*)data, (void*)data->begin, (void*)data->end);
             isroot = 1;
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_objarray]) {
@@ -1292,8 +1301,8 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
                 break;
             }
             jl_safe_printf("%p:  %s Array in object %p :: %p -- [%p, %p)\n        of type ",
-                           data, prefix, data->parent, ((void**)data->parent)[-1],
-                           data->begin, data->end);
+                           (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
+                           (void*)data->begin, (void*)data->end);
             jl_(jl_typeof(data->parent));
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_obj8]) {
@@ -1305,7 +1314,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
             jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
             jl_fielddesc8_t *desc = (jl_fielddesc8_t*)jl_dt_layout_fields(vt->layout);
             jl_safe_printf("%p:  %s Object (8bit) %p :: %p -- [%d, %d)\n        of type ",
-                           data, prefix, data->parent, ((void**)data->parent)[-1],
+                           (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
                            (int)(data->begin - desc), (int)(data->end - desc));
             jl_(jl_typeof(data->parent));
         }
@@ -1318,7 +1327,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
             jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
             jl_fielddesc16_t *desc = (jl_fielddesc16_t*)jl_dt_layout_fields(vt->layout);
             jl_safe_printf("%p:  %s Object (16bit) %p :: %p -- [%d, %d)\n        of type ",
-                           data, prefix, data->parent, ((void**)data->parent)[-1],
+                           (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
                            (int)(data->begin - desc), (int)(data->end - desc));
             jl_(jl_typeof(data->parent));
         }
@@ -1331,7 +1340,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
             jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
             jl_fielddesc32_t *desc = (jl_fielddesc32_t*)jl_dt_layout_fields(vt->layout);
             jl_safe_printf("%p:  %s Object (32bit) %p :: %p -- [%d, %d)\n        of type ",
-                           data, prefix, data->parent, ((void**)data->parent)[-1],
+                           (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
                            (int)(data->begin - desc), (int)(data->end - desc));
             jl_(jl_typeof(data->parent));
         }
@@ -1342,7 +1351,8 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
                 break;
             }
             jl_safe_printf("%p:  %s Stack frame %p -- %d of %d (%s)\n",
-                           data, prefix, data->s, (int)data->i, (int)data->nroots >> 1,
+                           (void*)data, prefix, (void*)data->s, (int)data->i,
+                           (int)data->nroots >> 1,
                            (data->nroots & 1) ? "indirect" : "direct");
         }
         else if (pc == gc_mark_label_addrs[GC_MARK_L_module_binding]) {
@@ -1353,7 +1363,8 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset
                 break;
             }
             jl_safe_printf("%p:  %s Module (bindings) %p (bits %d) -- [%p, %p)\n",
-                           data, prefix, data->parent, (int)data->bits, data->begin, data->end);
+                           (void*)data, prefix, (void*)data->parent, (int)data->bits,
+                           (void*)data->begin, (void*)data->end);
         }
         else {
             jl_safe_printf("Unknown pc %p --- ABORTING !!!\n", pc);

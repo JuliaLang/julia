@@ -197,7 +197,6 @@
     <context id="builtin-function" style-ref="builtin-function">
       <keyword>is</keyword>
       <keyword>typeof</keyword>
-      <keyword>issubtype</keyword>
       <keyword>isa</keyword>
       <keyword>typeassert</keyword>
       <keyword>apply</keyword>
@@ -219,7 +218,6 @@
       <keyword>Core</keyword>
       <keyword>Main</keyword>
       <!-- exports.jl -->
-      <keyword>FFTW</keyword>
       <keyword>Collections</keyword>
       <keyword>Test</keyword>
       <keyword>Pkg</keyword>

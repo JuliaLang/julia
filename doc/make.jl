@@ -47,7 +47,6 @@ const PAGES = [
         "manual/calling-c-and-fortran-code.md",
         "manual/handling-operating-system-variation.md",
         "manual/environment-variables.md",
-        "manual/interacting-with-julia.md",
         "manual/embedding.md",
         "manual/packages.md",
         "manual/profile.md",
@@ -106,6 +105,7 @@ const PAGES = [
             "devdocs/offset-arrays.md",
             "devdocs/libgit2.md",
             "devdocs/require.md",
+            "devdocs/inference.md",
         ],
         "Developing/debugging Julia's C code" => [
             "devdocs/backtraces.md",
@@ -130,6 +130,7 @@ makedocs(
     authors   = "The Julia Project",
     analytics = "UA-28835595-6",
     pages     = PAGES,
+    html_prettyurls = ("deploy" in ARGS),
 )
 
 if "deploy" in ARGS

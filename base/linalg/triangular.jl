@@ -50,6 +50,49 @@ LowerTriangular(U::UpperTriangular) = throw(ArgumentError(
 UpperTriangular(U::LowerTriangular) = throw(ArgumentError(
     "cannot create an UpperTriangular matrix from a LowerTriangular input"))
 
+"""
+    LowerTriangular(A::AbstractMatrix)
+
+Construct a `LowerTriangular` view of the the matrix `A`.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+3×3 Array{Float64,2}:
+ 1.0  2.0  3.0
+ 4.0  5.0  6.0
+ 7.0  8.0  9.0
+
+julia> LowerTriangular(A)
+3×3 LowerTriangular{Float64,Array{Float64,2}}:
+ 1.0   ⋅    ⋅
+ 4.0  5.0   ⋅
+ 7.0  8.0  9.0
+```
+"""
+LowerTriangular
+"""
+    UpperTriangular(A::AbstractMatrix)
+
+Construct an `UpperTriangular` view of the the matrix `A`.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+3×3 Array{Float64,2}:
+ 1.0  2.0  3.0
+ 4.0  5.0  6.0
+ 7.0  8.0  9.0
+
+julia> UpperTriangular(A)
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 1.0  2.0  3.0
+  ⋅   5.0  6.0
+  ⋅    ⋅   9.0
+```
+"""
+UpperTriangular
+
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
 imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
@@ -327,7 +370,7 @@ end
 function copy!(A::T, B::T) where T<:Union{UpperTriangular,UnitUpperTriangular}
     n = size(B,1)
     for j = 1:n
-        for i = 1:(isa(B, UnitUpperTriangular)?j-1:j)
+        for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
             @inbounds A[i,j] = B[i,j]
         end
     end
@@ -336,7 +379,7 @@ end
 function copy!(A::T, B::T) where T<:Union{LowerTriangular,UnitLowerTriangular}
     n = size(B,1)
     for j = 1:n
-        for i = (isa(B, UnitLowerTriangular)?j+1:j):n
+        for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
             @inbounds A[i,j] = B[i,j]
         end
     end
@@ -349,7 +392,7 @@ function scale!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular
         if isa(B, UnitUpperTriangular)
             @inbounds A[j,j] = c
         end
-        for i = 1:(isa(B, UnitUpperTriangular)?j-1:j)
+        for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
             @inbounds A[i,j] = c * B[i,j]
         end
     end
@@ -361,7 +404,7 @@ function scale!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular
         if isa(B, UnitLowerTriangular)
             @inbounds A[j,j] = c
         end
-        for i = (isa(B, UnitLowerTriangular)?j+1:j):n
+        for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
             @inbounds A[i,j] = c * B[i,j]
         end
     end
@@ -2081,9 +2124,9 @@ function sqrtm(A::UpperTriangular)
             end
         end
     end
-    sqrtm(A,Val{realmatrix})
+    sqrtm(A,Val(realmatrix))
 end
-function sqrtm(A::UpperTriangular{T},::Type{Val{realmatrix}}) where {T,realmatrix}
+function sqrtm(A::UpperTriangular{T},::Val{realmatrix}) where {T,realmatrix}
     B = A.data
     n = checksquare(B)
     t = realmatrix ? typeof(sqrt(zero(T))) : typeof(sqrt(complex(zero(T))))

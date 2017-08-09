@@ -9,7 +9,6 @@ type is usually constructed (and unwrapped) via the [`conj`](@ref) function (or 
 other arrays, the `ConjArray` constructor can be used directly.
 
 # Examples
-
 ```jldoctest
 julia> [1+im, 1-im]'
 1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:

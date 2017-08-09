@@ -70,7 +70,7 @@ const ser_version = 6 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
-function sertag(v::ANY)
+function sertag(@nospecialize(v))
     ptr = pointer_from_objref(v)
     ptags = convert(Ptr{Ptr{Void}}, pointer(TAGS))
     # note: constant ints & reserved slots never returned here
@@ -130,7 +130,7 @@ end
 
 # cycle handling
 function serialize_cycle(s::AbstractSerializer, x)
-    offs = get(s.table, x, -1)
+    offs = get(s.table, x, -1)::Int
     if offs != -1
         if offs <= typemax(UInt16)
             writetag(s.io, SHORTBACKREF_TAG)
@@ -149,7 +149,7 @@ function serialize_cycle(s::AbstractSerializer, x)
     return false
 end
 
-function serialize_cycle_header(s::AbstractSerializer, x::ANY)
+function serialize_cycle_header(s::AbstractSerializer, @nospecialize(x))
     serialize_cycle(s, x) && return true
     serialize_type(s, typeof(x), true)
     return false
@@ -212,8 +212,8 @@ function serialize(s::AbstractSerializer, x::Symbol)
 end
 
 function serialize_array_data(s::IO, a)
-    elty = eltype(a)
-    if elty === Bool && !isempty(a)
+    isempty(a) && return 0
+    if eltype(a) === Bool
         last = a[1]
         count = 1
         for i = 2:length(a)
@@ -246,7 +246,8 @@ function serialize(s::AbstractSerializer, a::Array)
     if isbits(elty)
         serialize_array_data(s.io, a)
     else
-        for i in eachindex(a)
+        sizehint!(s.table, div(length(a),4))  # prepare for lots of pointers
+        @inbounds for i in eachindex(a)
             if isassigned(a, i)
                 serialize(s, a[i])
             else
@@ -358,7 +359,7 @@ end
 # TODO: make this bidirectional, so objects can be sent back via the same key
 const object_numbers = WeakKeyDict()
 const obj_number_salt = Ref(0)
-function object_number(l::ANY)
+function object_number(@nospecialize(l))
     global obj_number_salt, object_numbers
     if haskey(object_numbers, l)
         return object_numbers[l]
@@ -373,13 +374,13 @@ end
 
 lookup_object_number(s::AbstractSerializer, n::UInt64) = nothing
 
-remember_object(s::AbstractSerializer, o::ANY, n::UInt64) = nothing
+remember_object(s::AbstractSerializer, @nospecialize(o), n::UInt64) = nothing
 
 function lookup_object_number(s::SerializationState, n::UInt64)
     return get(s.known_object_data, n, nothing)
 end
 
-function remember_object(s::SerializationState, o::ANY, n::UInt64)
+function remember_object(s::SerializationState, @nospecialize(o), n::UInt64)
     s.known_object_data[n] = o
     return nothing
 end
@@ -397,14 +398,22 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.ambig)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
-    serialize(s, meth.isstaged)
-    serialize(s, uncompressed_ast(meth, meth.source))
+    if isdefined(meth, :source)
+        serialize(s, uncompressed_ast(meth, meth.source))
+    else
+        serialize(s, nothing)
+    end
+    if isdefined(meth, :generator)
+        serialize(s, uncompressed_ast(meth, meth.generator.inferred))
+    else
+        serialize(s, nothing)
+    end
     nothing
 end
 
 function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
-    isdefined(linfo, :def) && error("can only serialize toplevel MethodInstance objects")
+    isa(linfo.def, Module) || error("can only serialize toplevel MethodInstance objects")
     writetag(s.io, METHODINSTANCE_TAG)
     serialize(s, linfo.inferred)
     if isdefined(linfo, :inferred_const)
@@ -415,6 +424,8 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize(s, linfo.sparam_vals)
     serialize(s, linfo.rettype)
     serialize(s, linfo.specTypes)
+    serialize(s, linfo.def)
+    nothing
 end
 
 function serialize(s::AbstractSerializer, t::Task)
@@ -434,7 +445,9 @@ function serialize(s::AbstractSerializer, t::Task)
 end
 
 function serialize(s::AbstractSerializer, g::GlobalRef)
-    if g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name)
+    if (g.mod === __deserialized_types__ ) ||
+        (g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name))
+
         v = getfield(g.mod, g.name)
         unw = unwrap_unionall(v)
         if isa(unw,DataType) && v === unw.name.wrapper && should_send_whole_type(s, unw)
@@ -595,15 +608,15 @@ function serialize(s::AbstractSerializer, u::UnionAll)
     end
 end
 
-serialize(s::AbstractSerializer, x::ANY) = serialize_any(s, x)
+serialize(s::AbstractSerializer, @nospecialize(x)) = serialize_any(s, x)
 
-function serialize_any(s::AbstractSerializer, x::ANY)
+function serialize_any(s::AbstractSerializer, @nospecialize(x))
     tag = sertag(x)
     if tag > 0
         return write_as_tag(s.io, tag)
     end
     t = typeof(x)::DataType
-    nf = nfields(t)
+    nf = nfields(x)
     if nf == 0 && t.size > 0
         serialize_type(s, t)
         write(s.io, x)
@@ -634,7 +647,7 @@ function deserialize(s::AbstractSerializer)
     handle_deserialize(s, Int32(read(s.io, UInt8)::UInt8))
 end
 
-function deserialize_cycle(s::AbstractSerializer, x::ANY)
+function deserialize_cycle(s::AbstractSerializer, @nospecialize(x))
     slot = pop!(s.pending_refs)
     s.table[slot] = x
     nothing
@@ -645,7 +658,7 @@ end
 #     push!(s.pending_refs, slot)
 #     slot = pop!(s.pending_refs)
 #     s.table[slot] = x
-function resolve_ref_immediately(s::AbstractSerializer, x::ANY)
+function resolve_ref_immediately(s::AbstractSerializer, @nospecialize(x))
     s.table[s.counter] = x
     s.counter += 1
     nothing
@@ -716,7 +729,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
     end
     t = desertag(b)
-    if t.mutable && nfields(t) > 0
+    if t.mutable && length(t.types) > 0  # manual specialization of fieldcount
         slot = s.counter; s.counter += 1
         push!(s.pending_refs, slot)
     end
@@ -765,7 +778,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth = meth::Method
         makenew = false
     else
-        meth = ccall(:jl_new_method_uninit, Ref{Method}, ())
+        meth = ccall(:jl_new_method_uninit, Ref{Method}, (Any,), Main)
         makenew = true
     end
     deserialize_cycle(s, meth)
@@ -778,8 +791,8 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     ambig = deserialize(s)::Union{Array{Any,1}, Void}
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
-    isstaged = deserialize(s)::Bool
-    template = deserialize(s)::CodeInfo
+    template = deserialize(s)
+    generator = deserialize(s)
     if makenew
         meth.module = mod
         meth.name = name
@@ -788,16 +801,18 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.sig = sig
         meth.sparam_syms = sparam_syms
         meth.ambig = ambig
-        meth.isstaged = isstaged
         meth.nargs = nargs
         meth.isva = isva
         # TODO: compress template
-        meth.source = template
-        meth.pure = template.pure
-        if isstaged
+        if template !== nothing
+            meth.source = template
+            meth.pure = template.pure
+        end
+        if generator !== nothing
             linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
             linfo.specTypes = Tuple
-            linfo.inferred = template
+            linfo.inferred = generator
+            linfo.def = meth
             meth.generator = linfo
         end
         ftype = ccall(:jl_first_argument_datatype, Any, (Any,), sig)::DataType
@@ -820,6 +835,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo.sparam_vals = deserialize(s)::SimpleVector
     linfo.rettype = deserialize(s)
     linfo.specTypes = deserialize(s)
+    linfo.def = deserialize(s)::Module
     return linfo
 end
 
@@ -858,17 +874,18 @@ function deserialize_array(s::AbstractSerializer)
                 end
             end
         else
-            A = read(s.io, elty, dims)
+            A = read!(s.io, Array{elty}(dims))
         end
         s.table[slot] = A
         return A
     end
     A = Array{elty, length(dims)}(dims)
     s.table[slot] = A
+    sizehint!(s.table, s.counter + div(length(A),4))
     for i = eachindex(A)
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG
-            A[i] = handle_deserialize(s, tag)
+            @inbounds A[i] = handle_deserialize(s, tag)
         end
     end
     return A
@@ -920,8 +937,8 @@ function deserialize_typename(s::AbstractSerializer, number)
         # TODO: there's an unhanded cycle in the dependency graph at this point:
         # while deserializing super and/or types, we may have encountered
         # tn.wrapper and throw UndefRefException before we get to this point
-        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Cint, Cint, Cint),
-                    tn, super, parameters, names, types,
+        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
+                    tn, tn.module, super, parameters, names, types,
                     abstr, mutabl, ninitialized)
         tn.wrapper = ndt.name.wrapper
         ccall(:jl_set_const, Void, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
@@ -1042,7 +1059,7 @@ end
 
 # default DataType deserializer
 function deserialize(s::AbstractSerializer, t::DataType)
-    nf = nfields(t)
+    nf = length(t.types)
     if nf == 0 && t.size > 0
         # bits type
         return read(s.io, t)
@@ -1102,7 +1119,7 @@ function deserialize(s::AbstractSerializer, t::Type{Regex})
     Regex(pattern, compile_options, match_options)
 end
 
-if !is_windows()
+if !Sys.iswindows()
     function serialize(s::AbstractSerializer, rd::RandomDevice)
         serialize_type(s, typeof(rd))
         serialize(s, rd.unlimited)

@@ -5,7 +5,8 @@
 # This module provides versions of math functions that may violate
 # strict IEEE semantics.
 
-# This allows the following transformations:
+# This allows the following transformations. For more information see
+# http://llvm.org/docs/LangRef.html#fast-math-flags:
 # nnan: No NaNs - Allow optimizations to assume the arguments and
 #       result are not NaN. Such optimizations are required to retain
 #       defined behavior over NaNs, but the value of the result is
@@ -23,7 +24,7 @@ module FastMath
 
 export @fastmath
 
-import Core.Intrinsics: sqrt_llvm_fast, neg_float_fast,
+import Core.Intrinsics: sqrt_llvm, neg_float_fast,
     add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, rem_float_fast,
     eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
 
@@ -76,6 +77,7 @@ const fast_op =
          :min => :min_fast,
          :minmax => :minmax_fast,
          :sin => :sin_fast,
+         :sincos => :sincos_fast,
          :sinh => :sinh_fast,
          :sqrt => :sqrt_fast,
          :tan => :tan_fast,
@@ -123,6 +125,27 @@ function make_fastmath(symb::Symbol)
 end
 make_fastmath(expr) = expr
 
+"""
+    @fastmath expr
+
+Execute a transformed version of the expression, which calls functions that
+may violate strict IEEE semantics. This allows the fastest possible operation,
+but results are undefined -- be careful when doing this, as it may change numerical
+results.
+
+This sets the [LLVM Fast-Math flags](http://llvm.org/docs/LangRef.html#fast-math-flags),
+and corresponds to the `-ffast-math` option in clang. See [the notes on performance
+annotations](@ref man-performance-annotations) for more details.
+
+# Examples
+```jldoctest
+julia> @fastmath 1+2
+3
+
+julia> @fastmath(sin(3))
+0.1411200080598672
+```
+"""
 macro fastmath(expr)
     make_fastmath(esc(expr))
 end
@@ -140,9 +163,9 @@ mul_fast(x::T, y::T) where {T<:FloatTypes} = mul_float_fast(x, y)
 div_fast(x::T, y::T) where {T<:FloatTypes} = div_float_fast(x, y)
 rem_fast(x::T, y::T) where {T<:FloatTypes} = rem_float_fast(x, y)
 
-add_fast{T<:FloatTypes}(x::T, y::T, zs::T...) =
+add_fast(x::T, y::T, zs::T...) where {T<:FloatTypes} =
     add_fast(add_fast(x, y), zs...)
-mul_fast{T<:FloatTypes}(x::T, y::T, zs::T...) =
+mul_fast(x::T, y::T, zs::T...) where {T<:FloatTypes} =
     mul_fast(mul_fast(x, y), zs...)
 
 @fastmath begin
@@ -207,7 +230,7 @@ ComplexTypes = Union{Complex64, Complex128}
     eq_fast(a::T, y::Complex{T}) where {T<:FloatTypes} =
         (a==real(y)) & (T(0)==imag(y))
 
-    ne_fast{T<:ComplexTypes}(x::T, y::T) = !(x==y)
+    ne_fast(x::T, y::T) where {T<:ComplexTypes} = !(x==y)
 end
 
 # fall-back implementations and type promotion
@@ -241,16 +264,14 @@ end
 pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32", llvmcall, Float32, (Float32, Int32), x, y)
 pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Float64, Int32), x, y)
 
-# TODO: Change sqrt_llvm intrinsic to avoid nan checking; add nan
-# checking to sqrt in math.jl; remove sqrt_llvm_fast intrinsic
-sqrt_fast(x::FloatTypes) = sqrt_llvm_fast(x)
+sqrt_fast(x::FloatTypes) = sqrt_llvm(x)
 
 # libm
 
 const libm = Base.libm_name
 
 for f in (:acos, :acosh, :asin, :asinh, :atan, :atanh, :cbrt, :cos,
-          :cosh, :exp2, :exp, :expm1, :lgamma, :log10, :log1p, :log2,
+          :cosh, :exp2, :expm1, :lgamma, :log10, :log1p, :log2,
           :log, :sin, :sinh, :tan, :tanh)
     f_fast = fast_op[f]
     @eval begin
@@ -273,10 +294,46 @@ atan2_fast(x::Float64, y::Float64) =
 
 # explicit implementations
 
-@fastmath begin
-    exp10_fast(x::T) where {T<:FloatTypes} = exp2(log2(T(10))*x)
-    exp10_fast(x::Integer) = exp10(float(x))
+# FIXME: Change to `ccall((:sincos, libm))` when `Ref` calling convention can be
+#        stack allocated.
+@inline function sincos_fast(v::Float64)
+    return Base.llvmcall("""
+    %f = bitcast i8 *%1 to void (double, double *, double *)*
+    %ps = alloca double
+    %pc = alloca double
+    call void %f(double %0, double *%ps, double *%pc)
+    %s = load double, double* %ps
+    %c = load double, double* %pc
+    %res0 = insertvalue [2 x double] undef, double %s, 0
+    %res = insertvalue [2 x double] %res0, double %c, 1
+    ret [2 x double] %res
+    """, Tuple{Float64,Float64}, Tuple{Float64,Ptr{Void}}, v, cglobal((:sincos, libm)))
+end
 
+@inline function sincos_fast(v::Float32)
+    return Base.llvmcall("""
+    %f = bitcast i8 *%1 to void (float, float *, float *)*
+    %ps = alloca float
+    %pc = alloca float
+    call void %f(float %0, float *%ps, float *%pc)
+    %s = load float, float* %ps
+    %c = load float, float* %pc
+    %res0 = insertvalue [2 x float] undef, float %s, 0
+    %res = insertvalue [2 x float] %res0, float %c, 1
+    ret [2 x float] %res
+    """, Tuple{Float32,Float32}, Tuple{Float32,Ptr{Void}}, v, cglobal((:sincosf, libm)))
+end
+
+@inline function sincos_fast(v::Float16)
+    s, c = sincos_fast(Float32(v))
+    return Float16(s), Float16(c)
+end
+
+sincos_fast(v::AbstractFloat) = (sin_fast(v), cos_fast(v))
+sincos_fast(v::Real) = sincos_fast(float(v)::AbstractFloat)
+sincos_fast(v) = (sin_fast(v), cos_fast(v))
+
+@fastmath begin
     hypot_fast(x::T, y::T) where {T<:FloatTypes} = sqrt(x*x + y*y)
 
     # Note: we use the same comparison for min, max, and minmax, so
@@ -287,7 +344,10 @@ atan2_fast(x::Float64, y::Float64) =
 
     # complex numbers
 
-    cis_fast(x::T) where {T<:FloatTypes} = Complex{T}(cos(x), sin(x))
+    function cis_fast(x::T) where {T<:FloatTypes}
+        s, c = sincos_fast(x)
+        Complex{T}(c, s)
+    end
 
     # See <http://en.cppreference.com/w/cpp/numeric/complex>
     pow_fast(x::T, y::T) where {T<:ComplexTypes} = exp(y*log(x))

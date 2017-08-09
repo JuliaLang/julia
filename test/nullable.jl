@@ -521,7 +521,7 @@ end
 @test repr(Nullable()) == "Nullable{Union{}}()"
 
 # issue #19270
-let f19270{S,T}(x::S, y::T) = Base.promote_op(^, S, T)
+let f19270(x::S, y::T) where {S,T} = Base.promote_op(^, S, T)
     @test f19270(Nullable(0.0f0), Nullable(BigInt(0))) == Nullable{Float32}
 end
 

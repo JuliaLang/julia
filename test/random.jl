@@ -13,6 +13,7 @@ srand(0); rand(); x = rand(384)
 @test typeof(rand(false:true)) === Bool
 @test typeof(rand(Char)) === Char
 @test length(randn(4, 5)) == 20
+@test length(randn(Complex128, 4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
 @test rand(MersenneTwister(0)) == 0.8236475079774124
@@ -52,18 +53,17 @@ let mt = MersenneTwister(0)
     rand(coll, 2, 3)
 end
 
-# rand using Dict, Set
-adict = Dict(1=>2, 3=>4, 5=>6)
-@test rand(adict) in adict
-aset = Set(1:10)
-@test rand(aset) in aset
-
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
 A = zeros(2, 2)
 randn!(MersenneTwister(42), A)
 @test A == [-0.5560268761463861  0.027155338009193845;
             -0.444383357109696  -0.29948409035891055]
+
+B = zeros(Complex128, 2)
+randn!(MersenneTwister(42), B)
+@test B == [Complex128(-0.5560268761463861,-0.444383357109696),
+            Complex128(0.027155338009193845,-0.29948409035891055)] * 0.7071067811865475244008
 
 for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt,
           Float16, Float32, Float64, Rational{Int})
@@ -306,8 +306,22 @@ end
 
 # test all rand APIs
 for rng in ([], [MersenneTwister(0)], [RandomDevice()])
-    types = [Base.BitInteger_types..., Bool, Float16, Float32, Float64, Char]
     ftypes = [Float16, Float32, Float64]
+    cftypes = [Complex32, Complex64, Complex128, ftypes...]
+    types = [Bool, Char, Base.BitInteger_types..., ftypes...]
+    randset = Set(rand(Int, 20))
+    randdict = Dict(zip(rand(Int,10), rand(Int, 10)))
+    collections = [IntSet(rand(1:100, 20)) => Int,
+                   randset                 => Int,
+                   GenericSet(randset)     => Int,
+                   randdict                => Pair{Int,Int},
+                   GenericDict(randdict)   => Pair{Int,Int},
+                   1:100                   => Int,
+                   rand(Int, 100)          => Int,
+                   Int                     => Int,
+                   Float64                 => Float64,
+                   "qwèrtï"                => Char,
+                   GenericString("qwèrtï") => Char]
     b2 = big(2)
     u3 = UInt(3)
     for f in [rand, randn, randexp]
@@ -316,7 +330,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         f(rng..., 2, 3)               ::Array{Float64, 2}
         f(rng..., b2, u3)             ::Array{Float64, 2}
         f(rng..., (2, 3))             ::Array{Float64, 2}
-        for T in (f === rand ? types : ftypes)
+        for T in (f === rand ? types : f === randn ? cftypes : ftypes)
             a0 = f(rng..., T)         ::T
             a1 = f(rng..., T, 5)      ::Vector{T}
             a2 = f(rng..., T, 2, 3)   ::Array{T, 2}
@@ -329,14 +343,40 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
             end
         end
     end
+    for (C, T) in collections
+        a0 = rand(rng..., C)                         ::T
+        a1 = rand(rng..., C, 5)                      ::Vector{T}
+        a2 = rand(rng..., C, 2, 3)                   ::Array{T, 2}
+        a3 = rand(rng..., C, (2, 3))                 ::Array{T, 2}
+        a4 = rand(rng..., C, b2, u3)                 ::Array{T, 2}
+        a5 = rand!(rng..., Array{T}(5), C)           ::Vector{T}
+        a6 = rand!(rng..., Array{T}(2, 3), C)        ::Array{T, 2}
+        a7 = rand!(rng..., GenericArray{T}(5), C)    ::GenericArray{T, 1}
+        a8 = rand!(rng..., GenericArray{T}(2, 3), C) ::GenericArray{T, 2}
+        @test size(a1) == (5,)
+        @test size(a2) == size(a3) == (2, 3)
+        for a in [a0, a1..., a2..., a3..., a4..., a5..., a6..., a7..., a8...]
+            if C isa Type
+                @test a isa C
+            else
+                @test a in C
+            end
+        end
+    end
+    for C in [1:0, Dict(), Set(), IntSet(), Int[],
+              GenericDict(Dict()), GenericSet(Set()),
+              "", Base.Test.GenericString("")]
+        @test_throws ArgumentError rand(rng..., C)
+        @test_throws ArgumentError rand(rng..., C, 5)
+    end
     for f! in [rand!, randn!, randexp!]
-        for T in (f! === rand! ? types : ftypes)
+        for T in (f! === rand! ? types : f! === randn! ? cftypes : ftypes)
             X = T == Bool ? T[0,1] : T[0,1,2]
-            for A in (Array{T}(5), Array{T}(2, 3))
+            for A in (Array{T}(5), Array{T}(2, 3), GenericArray{T}(5), GenericArray{T}(2, 3))
                 f!(rng..., A)                    ::typeof(A)
                 if f! === rand!
                     f!(rng..., A, X)             ::typeof(A)
-                    if T !== Char # Char/Integer comparison
+                    if A isa Array && T !== Char # Char/Integer comparison
                         f!(rng..., sparse(A))    ::typeof(sparse(A))
                         f!(rng..., sparse(A), X) ::typeof(sparse(A))
                     end
@@ -347,6 +387,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
 
     bitrand(rng..., 5)             ::BitArray{1}
     bitrand(rng..., 2, 3)          ::BitArray{2}
+    bitrand(rng..., b2, u3)        ::BitArray{2}
     rand!(rng..., BitArray(5))     ::BitArray{1}
     rand!(rng..., BitArray(2, 3))  ::BitArray{2}
 
@@ -411,14 +452,24 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test shuffle(mta,collect(1:10)) == shuffle(mtb,collect(1:10))
     @test shuffle!(mta,collect(1:10)) == shuffle!(mtb,collect(1:10))
     @test shuffle(mta,collect(2:11)) == shuffle(mtb,2:11)
+    @test shuffle!(mta, rand(mta, 2, 3)) == shuffle!(mtb, rand(mtb, 2, 3))
+    @test shuffle(mta, rand(mta, 2, 3)) == shuffle(mtb, rand(mtb, 2, 3))
 
     @test randperm(mta,10) == randperm(mtb,10)
     @test sort!(randperm(10)) == sort!(shuffle(1:10)) == collect(1:10)
     @test randperm(mta,big(10)) == randperm(mtb,big(10)) # cf. #16376
     @test randperm(0) == []
+    @test eltype(randperm(UInt(1))) === Int
     @test_throws ErrorException randperm(-1)
 
+    A, B = Vector{Int}(10), Vector{Int}(10)
+    @test randperm!(mta, A) == randperm!(mtb, B)
+    @test randperm!(A) === A
+
     @test randcycle(mta,10) == randcycle(mtb,10)
+    @test eltype(randcycle(UInt(1))) === Int
+    @test randcycle!(mta, A) == randcycle!(mtb, B)
+    @test randcycle!(A) === A
 
     @test sprand(mta,1,1,0.9) == sprand(mtb,1,1,0.9)
     @test sprand(mta,10,10,0.3) == sprand(mtb,10,10,0.3)
@@ -449,12 +500,14 @@ end
 srand(typemax(UInt))
 srand(typemax(UInt128))
 
-# copy and ==
+# copy, == and hash
 let seed = rand(UInt32, 10)
     r = MersenneTwister(seed)
     @test r == MersenneTwister(seed) # r.vals should be all zeros
+    @test hash(r) == hash(MersenneTwister(seed))
     s = copy(r)
     @test s == r && s !== r
+    @test hash(s) == hash(r)
     skip, len = rand(0:2000, 2)
     for j=1:skip
         rand(r)
@@ -462,6 +515,9 @@ let seed = rand(UInt32, 10)
     end
     @test rand(r, len) == rand(s, len)
     @test s == r
+    @test hash(s) == hash(r)
+    h = rand(UInt)
+    @test hash(s, h) == hash(r, h)
 end
 
 # MersenneTwister initialization with invalid values
@@ -496,3 +552,32 @@ let g = Base.Random.GLOBAL_RNG,
     @test srand(m, rand(UInt32, rand(1:10))) === m
     @test srand(m, rand(1:10)) === m
 end
+
+# Issue 20062 - ensure internal functions reserve_1, reserve are type-stable
+let r = MersenneTwister(0)
+    @inferred Base.Random.reserve_1(r)
+    @inferred Base.Random.reserve(r, 1)
+end
+
+# test randstring API
+let b = ['0':'9';'A':'Z';'a':'z']
+    for rng = [[], [MersenneTwister(0)]]
+        @test length(randstring(rng...)) == 8
+        @test length(randstring(rng..., 20)) == 20
+        @test issubset(randstring(rng...), b)
+        for c = ['a':'z', "qwèrtï", Set(Vector{UInt8}("gcat"))],
+                len = [8, 20]
+            s = len == 8 ? randstring(rng..., c) : randstring(rng..., c, len)
+            @test length(s) == len
+            if eltype(c) == Char
+                @test issubset(s, c)
+            else # UInt8
+                @test issubset(s, map(Char, c))
+            end
+        end
+    end
+    @test randstring(MersenneTwister(0)) == randstring(MersenneTwister(0), b)
+end
+
+# this shouldn't crash (#22403)
+@test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3])

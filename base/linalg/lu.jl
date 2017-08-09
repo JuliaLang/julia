@@ -12,24 +12,28 @@ end
 LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T} = LU{T,typeof(factors)}(factors, ipiv, info)
 
 # StridedMatrix
-function lufact!(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) where T<:BlasFloat
-    if pivot === Val{false}
+function lufact!(A::StridedMatrix{T}, pivot::Union{Val{false}, Val{true}} = Val(true)) where T<:BlasFloat
+    if pivot === Val(false)
         return generic_lufact!(A, pivot)
     end
     lpt = LAPACK.getrf!(A)
     return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
 end
+function lufact!(A::HermOrSym, pivot::Union{Val{false}, Val{true}} = Val(true))
+    copytri!(A.data, A.uplo, isa(A, Hermitian))
+    lufact!(A.data, pivot)
+end
 
 """
-    lufact!(A, pivot=Val{true}) -> LU
+    lufact!(A, pivot=Val(true)) -> LU
 
 `lufact!` is the same as [`lufact`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy. An [`InexactError`](@ref)
 exception is thrown if the factorization produces a number not representable by the
 element type of `A`, e.g. for integer types.
 """
-lufact!(A::StridedMatrix, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) = generic_lufact!(A, pivot)
-function generic_lufact!(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{true}) where {T,Pivot}
+lufact!(A::StridedMatrix, pivot::Union{Val{false}, Val{true}} = Val(true)) = generic_lufact!(A, pivot)
+function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true)) where {T,Pivot}
     m, n = size(A)
     minmn = min(m,n)
     info = 0
@@ -39,7 +43,7 @@ function generic_lufact!(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{true}) wh
             # find index max
             kp = k
             if Pivot
-                amax = real(zero(T))
+                amax = abs(zero(T))
                 for i = k:m
                     absi = abs(A[i,k])
                     if absi > amax
@@ -49,7 +53,7 @@ function generic_lufact!(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{true}) wh
                 end
             end
             ipiv[k] = kp
-            if A[kp,k] != 0
+            if !iszero(A[kp,k])
                 if k != kp
                     # Interchange
                     for i = 1:n
@@ -79,12 +83,12 @@ end
 
 # floating point types doesn't have to be promoted for LU, but should default to pivoting
 lufact(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}},
-    pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) where {T<:AbstractFloat} =
+    pivot::Union{Val{false}, Val{true}} = Val(true)) where {T<:AbstractFloat} =
         lufact!(copy(A), pivot)
 
 # for all other types we must promote to a type which is stable under division
 """
-    lufact(A [,pivot=Val{true}]) -> F::LU
+    lufact(A [,pivot=Val(true)]) -> F::LU
 
 Compute the LU factorization of `A`.
 
@@ -118,8 +122,7 @@ The relationship between `F` and `A` is
 | [`logabsdet`](@ref)              | ✓    | ✓                      |
 | [`size`](@ref)                   | ✓    | ✓                      |
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [4 3; 6 3]
 2×2 Array{Int64,2}:
@@ -130,12 +133,13 @@ julia> F = lufact(A)
 Base.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:
 [1.0 0.0; 1.5 1.0]
 [4.0 3.0; 0.0 -1.5]
+successful: true
 
 julia> F[:L] * F[:U] == A[F[:p], :]
 true
 ```
 """
-function lufact(A::AbstractMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}}) where T
+function lufact(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}}) where T
     S = typeof(zero(T)/one(T))
     AA = similar(A, S, size(A))
     copy!(AA, A)
@@ -146,13 +150,13 @@ function lufact(A::AbstractMatrix{T}) where T
     S = typeof(zero(T)/one(T))
     AA = similar(A, S, size(A))
     copy!(AA, A)
-    F = lufact!(AA, Val{false})
-    if F.info == 0
+    F = lufact!(AA, Val(false))
+    if issuccess(F)
         return F
     else
         AA = similar(A, S, size(A))
         copy!(AA, A)
-        return lufact!(AA, Val{true})
+        return lufact!(AA, Val(true))
     end
 end
 
@@ -162,16 +166,15 @@ lufact(F::LU) = F
 lu(x::Number) = (one(x), x, 1)
 
 """
-    lu(A, pivot=Val{true}) -> L, U, p
+    lu(A, pivot=Val(true)) -> L, U, p
 
 Compute the LU factorization of `A`, such that `A[p,:] = L*U`.
 By default, pivoting is used. This can be overridden by passing
-`Val{false}` for the second argument.
+`Val(false)` for the second argument.
 
 See also [`lufact`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [4. 3.; 6. 3.]
 2×2 Array{Float64,2}:
@@ -185,7 +188,7 @@ julia> A[p, :] == L * U
 true
 ```
 """
-function lu(A::AbstractMatrix, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
+function lu(A::AbstractMatrix, pivot::Union{Val{false}, Val{true}} = Val(true))
     F = lufact(A, pivot)
     F[:L], F[:U], F[:p]
 end
@@ -198,6 +201,7 @@ convert(::Type{LU{T,S}}, F::LU) where {T,S} = LU{T,S}(convert(S, F.factors), F.i
 convert(::Type{Factorization{T}}, F::LU{T}) where {T} = F
 convert(::Type{Factorization{T}}, F::LU) where {T} = convert(LU{T}, F)
 
+copy(A::LU{T,S}) where {T,S} = LU{T,S}(copy(A.factors), copy(A.ipiv), A.info)
 
 size(A::LU) = size(A.factors)
 size(A::LU,n) = size(A.factors,n)
@@ -227,11 +231,14 @@ function getindex(F::LU{T,<:StridedMatrix}, d::Symbol) where T
     end
 end
 
-function show(io::IO, C::LU)
-    println(io, "$(typeof(C)) with factors L and U:")
-    show(io, C[:L])
+issuccess(F::LU) = F.info == 0
+
+function show(io::IO, F::LU)
+    println(io, "$(typeof(F)) with factors L and U:")
+    show(io, F[:L])
     println(io)
-    show(io, C[:U])
+    show(io, F[:U])
+    print(io, "\nsuccessful: $(issuccess(F))")
 end
 
 A_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
@@ -271,31 +278,31 @@ Ac_ldiv_Bc(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasComple
     @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, ctranspose(B)) A.info
 Ac_ldiv_Bc(A::LU, B::StridedVecOrMat) = Ac_ldiv_B(A, ctranspose(B))
 
-function det(A::LU{T}) where T
-    n = checksquare(A)
-    A.info > 0 && return zero(T)
+function det(F::LU{T}) where T
+    n = checksquare(F)
+    issuccess(F) || return zero(T)
     P = one(T)
     c = 0
     @inbounds for i = 1:n
-        P *= A.factors[i,i]
-        if A.ipiv[i] != i
-                c += 1
+        P *= F.factors[i,i]
+        if F.ipiv[i] != i
+            c += 1
         end
     end
     s = (isodd(c) ? -one(T) : one(T))
     return P * s
 end
 
-function logabsdet(A::LU{T}) where T  # return log(abs(det)) and sign(det)
-    n = checksquare(A)
-    A.info > 0 && return log(zero(real(T))), log(one(T))
+function logabsdet(F::LU{T}) where T  # return log(abs(det)) and sign(det)
+    n = checksquare(F)
+    issuccess(F) || return log(zero(real(T))), log(one(T))
     c = 0
     P = one(T)
     abs_det = zero(real(T))
     @inbounds for i = 1:n
-        dg_ii = A.factors[i,i]
+        dg_ii = F.factors[i,i]
         P *= sign(dg_ii)
-        if A.ipiv[i] != i
+        if F.ipiv[i] != i
             c += 1
         end
         abs_det += log(abs(dg_ii))
@@ -306,8 +313,9 @@ end
 
 inv!(A::LU{<:BlasFloat,<:StridedMatrix}) =
     @assertnonsingular LAPACK.getri!(A.factors, A.ipiv) A.info
-inv(A::LU{<:BlasFloat,<:StridedMatrix}) =
-    inv!(LU(copy(A.factors), copy(A.ipiv), copy(A.info)))
+inv!(A::LU{T,<:StridedMatrix}) where {T} =
+    @assertnonsingular A_ldiv_B!(A.factors, copy(A), eye(T, size(A, 1))) A.info
+inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 
 function _cond1Inf(A::LU{<:BlasFloat,<:StridedMatrix}, p::Number, normA::Real)
     if p != 1 && p != Inf
@@ -319,7 +327,7 @@ end
 # Tridiagonal
 
 # See dgttrf.f
-function lufact!(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) where T
+function lufact!(A::Tridiagonal{T}, pivot::Union{Val{false}, Val{true}} = Val(true)) where T
     n = size(A, 1)
     info = 0
     ipiv = Vector{BlasInt}(n)
@@ -334,7 +342,7 @@ function lufact!(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{true
         end
         for i = 1:n-2
             # pivot or not?
-            if pivot === Val{false} || abs(d[i]) >= abs(dl[i])
+            if pivot === Val(false) || abs(d[i]) >= abs(dl[i])
                 # No interchange
                 if d[i] != 0
                     fact = dl[i]/d[i]
@@ -357,7 +365,7 @@ function lufact!(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{true
         end
         if n > 1
             i = n-1
-            if pivot === Val{false} || abs(d[i]) >= abs(dl[i])
+            if pivot === Val(false) || abs(d[i]) >= abs(dl[i])
                 if d[i] != 0
                     fact = dl[i]/d[i]
                     dl[i] = fact
@@ -389,7 +397,7 @@ factorize(A::Tridiagonal) = lufact(A)
 function getindex(F::Base.LinAlg.LU{T,Tridiagonal{T}}, d::Symbol) where T
     m, n = size(F)
     if d == :L
-        L = Array(Bidiagonal(ones(T, n), F.factors.dl, false))
+        L = Array(Bidiagonal(ones(T, n), F.factors.dl, d))
         for i = 2:n
             tmp = L[F.ipiv[i], 1:i - 1]
             L[F.ipiv[i], 1:i - 1] = L[i, 1:i - 1]
@@ -397,7 +405,7 @@ function getindex(F::Base.LinAlg.LU{T,Tridiagonal{T}}, d::Symbol) where T
         end
         return L
     elseif d == :U
-        U = Array(Bidiagonal(F.factors.d, F.factors.du, true))
+        U = Array(Bidiagonal(F.factors.d, F.factors.du, d))
         for i = 1:n - 2
             U[i,i + 2] = F.factors.du2[i]
         end

@@ -87,6 +87,7 @@
 
 #struct LineNumberNode
 #    line::Int
+#    file::Any # nominally Union{Symbol,Void}
 #end
 
 #struct LabelNode
@@ -131,9 +132,10 @@ export
     # string types
     Char, DirectIndexString, AbstractString, String, IO,
     # errors
-    ErrorException, BoundsError, DivideError, DomainError, Exception, InexactError,
-    InterruptException, OutOfMemoryError, ReadOnlyMemoryError, OverflowError,
-    StackOverflowError, SegmentationFault, UndefRefError, UndefVarError, TypeError,
+    ErrorException, BoundsError, DivideError, DomainError, Exception,
+    InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
+    OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
+    TypeError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
     GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
@@ -141,7 +143,7 @@ export
     fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
-    issubtype, typeof, isa, typeassert,
+    <:, typeof, isa, typeassert,
     # method reflection
     applicable, invoke,
     # constants
@@ -160,16 +162,16 @@ primitive type Float16 <: AbstractFloat 16 end
 primitive type Float32 <: AbstractFloat 32 end
 primitive type Float64 <: AbstractFloat 64 end
 
-primitive type Bool <: Integer 8 end
+#primitive type Bool <: Integer 8 end
 primitive type Char 32 end
 
 primitive type Int8    <: Signed   8 end
-primitive type UInt8   <: Unsigned 8 end
+#primitive type UInt8   <: Unsigned 8 end
 primitive type Int16   <: Signed   16 end
 primitive type UInt16  <: Unsigned 16 end
-primitive type Int32   <: Signed   32 end
+#primitive type Int32   <: Signed   32 end
 primitive type UInt32  <: Unsigned 32 end
-primitive type Int64   <: Signed   64 end
+#primitive type Int64   <: Signed   64 end
 primitive type UInt64  <: Unsigned 64 end
 primitive type Int128  <: Signed   128 end
 primitive type UInt128 <: Unsigned 128 end
@@ -181,15 +183,22 @@ else
 end
 
 function Typeof end
-(f::typeof(Typeof))(x::ANY) = isa(x,Type) ? Type{x} : typeof(x)
+ccall(:jl_toplevel_eval_in, Any, (Any, Any),
+      Core, quote
+      (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
+      end)
+
+macro nospecialize(x)
+    _expr(:meta, :nospecialize, x)
+end
+
+Expr(@nospecialize args...) = _expr(args...)
 
 abstract type Exception end
 mutable struct ErrorException <: Exception
     msg::AbstractString
     ErrorException(msg::AbstractString) = new(msg)
 end
-
-Expr(args::ANY...) = _expr(args...)
 
 macro _noinline_meta()
     Expr(:meta, :noinline)
@@ -199,13 +208,10 @@ struct BoundsError        <: Exception
     a::Any
     i::Any
     BoundsError() = new()
-    BoundsError(a::ANY) = (@_noinline_meta; new(a))
-    BoundsError(a::ANY, i) = (@_noinline_meta; new(a,i))
+    BoundsError(@nospecialize(a)) = (@_noinline_meta; new(a))
+    BoundsError(@nospecialize(a), i) = (@_noinline_meta; new(a,i))
 end
 struct DivideError        <: Exception end
-struct DomainError        <: Exception end
-struct OverflowError      <: Exception end
-struct InexactError       <: Exception end
 struct OutOfMemoryError   <: Exception end
 struct ReadOnlyMemoryError<: Exception end
 struct SegmentationFault  <: Exception end
@@ -215,11 +221,27 @@ struct UndefVarError      <: Exception
     var::Symbol
 end
 struct InterruptException <: Exception end
+struct DomainError <: Exception
+    val
+    msg
+    DomainError(@nospecialize(val)) = (@_noinline_meta; new(val))
+    DomainError(@nospecialize(val), @nospecialize(msg)) = (@_noinline_meta; new(val, msg))
+end
 mutable struct TypeError <: Exception
     func::Symbol
     context::AbstractString
     expected::Type
     got
+end
+struct InexactError <: Exception
+    func::Symbol
+    T::Type
+    val
+
+    InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@_noinline_meta; new(f, T, val))
+end
+struct OverflowError <: Exception
+    msg
 end
 
 abstract type DirectIndexString <: AbstractString end
@@ -229,18 +251,18 @@ String(s::String) = s  # no constructor yet
 # This should always be inlined
 getptls() = ccall(:jl_get_ptls_states, Ptr{Void}, ())
 
-include(fname::String) = ccall(:jl_load_, Any, (Any,), fname)
+include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
 
-eval(e::ANY) = eval(Main, e)
-eval(m::Module, e::ANY) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
+eval(@nospecialize(e)) = eval(Main, e)
+eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
-kwfunc(f::ANY) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
+kwfunc(@nospecialize(f)) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
 
-kwftype(t::ANY) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t))
+kwftype(@nospecialize(t)) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t))
 
 mutable struct Box
     contents::Any
-    Box(x::ANY) = new(x)
+    Box(@nospecialize(x)) = new(x)
     Box() = new()
 end
 
@@ -249,18 +271,18 @@ end
 mutable struct WeakRef
     value
     WeakRef() = WeakRef(nothing)
-    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref_th, Ref{WeakRef},
-                            (Ptr{Void}, Any), getptls(), v)
+    WeakRef(@nospecialize(v)) = ccall(:jl_gc_new_weakref_th, Ref{WeakRef},
+                                      (Ptr{Void}, Any), getptls(), v)
 end
 
 TypeVar(n::Symbol) =
     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, Any)
-TypeVar(n::Symbol, ub::ANY) =
+TypeVar(n::Symbol, @nospecialize(ub)) =
     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub)
-TypeVar(n::Symbol, lb::ANY, ub::ANY) =
+TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) =
     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb, ub)
 
-UnionAll(v::TypeVar, t::ANY) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
+UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
 Void() = nothing
 
@@ -275,25 +297,26 @@ VecElement(arg::T) where {T} = VecElement{T}(arg)
 # used by lowering of splicing unquote
 splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
 
-_new(typ::Symbol, argty::Symbol) = eval(:((::Type{$typ})(n::$argty) = $(Expr(:new, typ, :n))))
+_new(typ::Symbol, argty::Symbol) = eval(Core, :((::Type{$typ})(@nospecialize n::$argty) = $(Expr(:new, typ, :n))))
 _new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
 _new(:NewvarNode, :SlotNumber)
-_new(:QuoteNode, :ANY)
+_new(:QuoteNode, :Any)
 _new(:SSAValue, :Int)
-eval(:((::Type{LineNumberNode})(l::Int) = $(Expr(:new, :LineNumberNode, :l))))
-eval(:((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
-eval(:((::Type{SlotNumber})(n::Int) = $(Expr(:new, :SlotNumber, :n))))
-eval(:((::Type{TypedSlot})(n::Int, t::ANY) = $(Expr(:new, :TypedSlot, :n, :t))))
+eval(Core, :((::Type{LineNumberNode})(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
+eval(Core, :((::Type{LineNumberNode})(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumberNode, :l, :f))))
+eval(Core, :((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
+eval(Core, :((::Type{SlotNumber})(n::Int) = $(Expr(:new, :SlotNumber, :n))))
+eval(Core, :((::Type{TypedSlot})(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
-Task(f::ANY) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
+Task(@nospecialize(f)) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
 
 # simple convert for use by constructors of types in Core
 # note that there is no actual conversion defined here,
 # so the methods and ccall's in Core aren't permitted to use convert
-convert(::Type{Any}, x::ANY) = x
+convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
 cconvert(::Type{T}, x) where {T} = convert(T, x)
 unsafe_convert(::Type{T}, x::T) where {T} = x
@@ -335,7 +358,7 @@ end
 
 # docsystem basics
 macro doc(x...)
-    atdoc(x...)
+    atdoc(__source__, __module__, x...)
 end
 macro __doc__(x)
     Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
@@ -343,7 +366,7 @@ end
 macro doc_str(s)
     Expr(:escape, s)
 end
-atdoc     = (str, expr) -> Expr(:escape, expr)
+atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
 
 
@@ -368,16 +391,16 @@ function write(io::IO, x::String)
     return nb
 end
 
-show(io::IO, x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any), io_pointer(io), x)
+show(io::IO, @nospecialize x) = ccall(:jl_static_show, Void, (Ptr{Void}, Any), io_pointer(io), x)
 print(io::IO, x::Char) = ccall(:jl_uv_putc, Void, (Ptr{Void}, Char), io_pointer(io), x)
 print(io::IO, x::String) = (write(io, x); nothing)
-print(io::IO, x::ANY) = show(io, x)
-print(io::IO, x::ANY, a::ANY...) = (print(io, x); print(io, a...))
+print(io::IO, @nospecialize x) = show(io, x)
+print(io::IO, @nospecialize(x), @nospecialize a...) = (print(io, x); print(io, a...))
 println(io::IO) = (write(io, 0x0a); nothing) # 0x0a = '\n'
-println(io::IO, x::ANY...) = (print(io, x...); println(io))
+println(io::IO, @nospecialize x...) = (print(io, x...); println(io))
 
-show(a::ANY) = show(STDOUT, a)
-print(a::ANY...) = print(STDOUT, a...)
-println(a::ANY...) = println(STDOUT, a...)
+show(@nospecialize a) = show(STDOUT, a)
+print(@nospecialize a...) = print(STDOUT, a...)
+println(@nospecialize a...) = println(STDOUT, a...)
 
-ccall(:jl_set_istopmod, Void, (Bool,), true)
+ccall(:jl_set_istopmod, Void, (Any, Bool), Core, true)

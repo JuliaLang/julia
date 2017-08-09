@@ -37,10 +37,10 @@ The `hello` is the output of the `echo` command, sent to [`STDOUT`](@ref). The r
 returns `nothing`, and throws an [`ErrorException`](@ref) if the external command fails to run
 successfully.
 
-If you want to read the output of the external command, [`readstring()`](@ref) can be used instead:
+If you want to read the output of the external command, [`read`](@ref) can be used instead:
 
 ```jldoctest
-julia> a = readstring(`echo hello`)
+julia> a = read(`echo hello`, String)
 "hello\n"
 
 julia> chomp(a) == "hello"
@@ -49,7 +49,7 @@ true
 
 More generally, you can use [`open()`](@ref) to read from or write to an external command.
 
-```julia
+```jldoctest
 julia> open(`less`, "w", STDOUT) do io
            for i = 1:3
                println(io, i)
@@ -58,6 +58,18 @@ julia> open(`less`, "w", STDOUT) do io
 1
 2
 3
+```
+
+The program name and the individual arguments in a command can be accessed
+and iterated over as if the command were an array of strings:
+```jldoctest
+julia> collect(`echo "foo bar"`)
+2-element Array{String,1}:
+ "echo"
+ "foo bar"
+
+julia> `echo "foo bar"`[2]
+"foo bar"
 ```
 
 ## [Interpolation](@id command-interpolation)
@@ -244,7 +256,7 @@ This pipes the output of the `echo` command to the `sort` command. Of course, th
 interesting since there's only one line to sort, but we can certainly do much more interesting
 things:
 
-```julia
+```julia-repl
 julia> run(pipeline(`cut -d: -f3 /etc/passwd`, `sort -n`, `tail -n5`))
 210
 211
@@ -261,7 +273,7 @@ that shells cannot.
 
 Julia can run multiple commands in parallel:
 
-```julia
+```julia-repl
 julia> run(`echo hello` & `echo world`)
 world
 hello
@@ -294,15 +306,15 @@ pipeline(`do_work`, stdout=pipeline(`sort`, "out.txt"), stderr="errs.txt")
 When reading and writing to both ends of a pipeline from a single process, it is important to
 avoid forcing the kernel to buffer all of the data.
 
-For example, when reading all of the output from a command, call `readstring(out)`, not `wait(process)`,
+For example, when reading all of the output from a command, call `read(out, String)`, not `wait(process)`,
 since the former will actively consume all of the data written by the process, whereas the latter
 will attempt to store the data in the kernel's buffers while waiting for a reader to be connected.
 
 Another common solution is to separate the reader and writer of the pipeline into separate Tasks:
 
 ```julia
-writer = @async writeall(process, "data")
-reader = @async do_compute(readstring(process))
+writer = @async write(process, "data")
+reader = @async do_compute(read(process, String))
 wait(process)
 fetch(reader)
 ```
@@ -314,7 +326,7 @@ setup of pipes between processes is a powerful one. To give some sense of the co
 that can be created easily, here are some more sophisticated examples, with apologies for the
 excessive use of Perl one-liners:
 
-```julia
+```julia-repl
 julia> prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`;
 
 julia> run(pipeline(`perl -le '$|=1; for(0..9){ print; sleep 1 }'`, prefixer("A",2) & prefixer("B",2)))
@@ -340,7 +352,7 @@ the output is buffered and printed to the pipe at once, to be read by just one c
 
 Here is an even more complex multi-stage producer-consumer example:
 
-```julia
+```julia-repl
 julia> run(pipeline(`perl -le '$|=1; for(0..9){ print; sleep 1 }'`,
            prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3),
            prefixer("A",2) & prefixer("B",2)))

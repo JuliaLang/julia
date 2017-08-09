@@ -58,7 +58,8 @@ julia> f(x::Float64, y::Float64) = 2x + y
 f (generic function with 1 method)
 ```
 
-This function definition applies only to calls where `x` and `y` are both values of type `Float64`:
+This function definition applies only to calls where `x` and `y` are both values of type
+[`Float64`](@ref):
 
 ```jldoctest fofxy
 julia> f(2.0, 3.0)
@@ -87,12 +88,12 @@ julia> f("2.0", "3.0")
 ERROR: MethodError: no method matching f(::String, ::String)
 ```
 
-As you can see, the arguments must be precisely of type `Float64`. Other numeric types, such as
-integers or 32-bit floating-point values, are not automatically converted to 64-bit floating-point,
-nor are strings parsed as numbers. Because `Float64` is a concrete type and concrete types cannot
-be subclassed in Julia, such a definition can only be applied to arguments that are exactly of
-type `Float64`. It may often be useful, however, to write more general methods where the declared
-parameter types are abstract:
+As you can see, the arguments must be precisely of type [`Float64`](@ref). Other numeric
+types, such as integers or 32-bit floating-point values, are not automatically converted
+to 64-bit floating-point, nor are strings parsed as numbers. Because `Float64` is a concrete
+type and concrete types cannot be subclassed in Julia, such a definition can only be applied
+to arguments that are exactly of type `Float64`. It may often be useful, however, to write
+more general methods where the declared parameter types are abstract:
 
 ```jldoctest fofxy
 julia> f(x::Number, y::Number) = 2x - y
@@ -102,9 +103,10 @@ julia> f(2.0, 3)
 1.0
 ```
 
-This method definition applies to any pair of arguments that are instances of `Number`. They need
-not be of the same type, so long as they are each numeric values. The problem of handling disparate
-numeric types is delegated to the arithmetic operations in the expression `2x - y`.
+This method definition applies to any pair of arguments that are instances of [`Number`](@ref).
+They need not be of the same type, so long as they are each numeric values. The problem of
+handling disparate numeric types is delegated to the arithmetic operations in the
+expression `2x - y`.
 
 To define a function with multiple methods, one simply defines the function multiple times, with
 different numbers and types of arguments. The first method definition for a function creates the
@@ -112,9 +114,9 @@ function object, and subsequent method definitions add new methods to the existi
 The most specific method definition matching the number and types of the arguments will be executed
 when the function is applied. Thus, the two method definitions above, taken together, define the
 behavior for `f` over all pairs of instances of the abstract type `Number` -- but with a different
-behavior specific to pairs of `Float64` values. If one of the arguments is a 64-bit float but
-the other one is not, then the `f(Float64,Float64)` method cannot be called and the more general
-`f(Number,Number)` method must be used:
+behavior specific to pairs of [`Float64`](@ref) values. If one of the arguments is a 64-bit
+float but the other one is not, then the `f(Float64,Float64)` method cannot be called and
+the more general `f(Number,Number)` method must be used:
 
 ```jldoctest fofxy
 julia> f(2.0, 3.0)
@@ -163,11 +165,11 @@ f (generic function with 2 methods)
 This output tells us that `f` is a function object with two methods. To find out what the signatures
 of those methods are, use the [`methods()`](@ref) function:
 
-```julia
+```julia-repl
 julia> methods(f)
 # 2 methods for generic function "f":
-f(x::Float64, y::Float64) in Main at none:1
-f(x::Number, y::Number) in Main at none:1
+[1] f(x::Float64, y::Float64) in Main at none:1
+[2] f(x::Number, y::Number) in Main at none:1
 ```
 
 which shows that `f` has two methods, one taking two `Float64` arguments and one taking arguments
@@ -187,34 +189,34 @@ Whoa there, Nelly.
 ```
 
 This catch-all is less specific than any other possible method definition for a pair of parameter
-values, so it is only be called on pairs of arguments to which no other method definition applies.
+values, so it will only be called on pairs of arguments to which no other method definition applies.
 
 Although it seems a simple concept, multiple dispatch on the types of values is perhaps the single
 most powerful and central feature of the Julia language. Core operations typically have dozens
 of methods:
 
-```julia
+```julia-repl
 julia> methods(+)
 # 180 methods for generic function "+":
-+(x::Bool, z::Complex{Bool}) in Base at complex.jl:224
-+(x::Bool, y::Bool) in Base at bool.jl:89
-+(x::Bool) in Base at bool.jl:86
-+(x::Bool, y::T) where T<:AbstractFloat in Base at bool.jl:96
-+(x::Bool, z::Complex) in Base at complex.jl:231
-+(a::Float16, b::Float16) in Base at float.jl:372
-+(x::Float32, y::Float32) in Base at float.jl:374
-+(x::Float64, y::Float64) in Base at float.jl:375
-+(z::Complex{Bool}, x::Bool) in Base at complex.jl:225
-+(z::Complex{Bool}, x::Real) in Base at complex.jl:239
-+(x::Char, y::Integer) in Base at char.jl:40
-+(c::BigInt, x::BigFloat) in Base.MPFR at mpfr.jl:303
-+(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt) in Base.GMP at gmp.jl:303
-+(a::BigInt, b::BigInt, c::BigInt, d::BigInt) in Base.GMP at gmp.jl:296
-+(a::BigInt, b::BigInt, c::BigInt) in Base.GMP at gmp.jl:290
-+(x::BigInt, y::BigInt) in Base.GMP at gmp.jl:258
-+(x::BigInt, c::Union{UInt16, UInt32, UInt64, UInt8}) in Base.GMP at gmp.jl:315
+[1] +(x::Bool, z::Complex{Bool}) in Base at complex.jl:227
+[2] +(x::Bool, y::Bool) in Base at bool.jl:89
+[3] +(x::Bool) in Base at bool.jl:86
+[4] +(x::Bool, y::T) where T<:AbstractFloat in Base at bool.jl:96
+[5] +(x::Bool, z::Complex) in Base at complex.jl:234
+[6] +(a::Float16, b::Float16) in Base at float.jl:373
+[7] +(x::Float32, y::Float32) in Base at float.jl:375
+[8] +(x::Float64, y::Float64) in Base at float.jl:376
+[9] +(z::Complex{Bool}, x::Bool) in Base at complex.jl:228
+[10] +(z::Complex{Bool}, x::Real) in Base at complex.jl:242
+[11] +(x::Char, y::Integer) in Base at char.jl:40
+[12] +(c::BigInt, x::BigFloat) in Base.MPFR at mpfr.jl:307
+[13] +(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt) in Base.GMP at gmp.jl:392
+[14] +(a::BigInt, b::BigInt, c::BigInt, d::BigInt) in Base.GMP at gmp.jl:391
+[15] +(a::BigInt, b::BigInt, c::BigInt) in Base.GMP at gmp.jl:390
+[16] +(x::BigInt, y::BigInt) in Base.GMP at gmp.jl:361
+[17] +(x::BigInt, c::Union{UInt16, UInt32, UInt64, UInt8}) in Base.GMP at gmp.jl:398
 ...
-+(a, b, c, xs...) at operators.jl:119
+[180] +(a, b, c, xs...) in Base at operators.jl:424
 ```
 
 Multiple dispatch together with the flexible parametric type system give Julia its ability to
@@ -412,7 +414,7 @@ Indeed, any new method definition won't be visible to the current runtime enviro
 including Tasks and Threads (and any previously defined `@generated` functions).
 Let's start with an example to see what this means:
 
-```julia
+```julia-repl
 julia> function tryeval()
            @eval newfun() = 1
            newfun()
@@ -544,6 +546,9 @@ function getindex(A::AbstractArray{T,N}, indexes::Vararg{Number,N}) where {T,N}
 ```
 
 would be called only when the number of `indexes` matches the dimensionality of the array.
+
+When only the type of supplied arguments needs to be constrained `Vararg{T}` can be equivalently
+written as `T...`. For instance `f(x::Int...) = x` is a shorthand for `f(x::Vararg{Int}) = x`.
 
 ## Note on Optional and keyword Arguments
 

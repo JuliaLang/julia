@@ -17,7 +17,7 @@ the `Time` are used along with the year, month, and day of the `Date` to create 
 Non-zero microseconds or nanoseconds in the `Time` type will result in an `InexactError` being thrown.
 """
 function (+)(dt::Date, t::Time)
-    (microsecond(t) > 0 || nanosecond(t) > 0) && throw(InexactError())
+    (microsecond(t) > 0 || nanosecond(t) > 0) && throw(InexactError(:+, DateTime, t))
     y, m, d = yearmonthday(dt)
     return DateTime(y, m, d, hour(t), minute(t), second(t), millisecond(t))
 end

@@ -107,8 +107,8 @@ end
 Compute the LU factorization of a sparse matrix `A`.
 
 For sparse `A` with real or complex element type, the return type of `F` is
-`UmfpackLU{Tv, Ti}`, with `Tv` = `Float64` or `Complex128` respectively and
-`Ti` is an integer type (`Int32` or `Int64`).
+`UmfpackLU{Tv, Ti}`, with `Tv` = [`Float64`](@ref) or `Complex128` respectively and
+`Ti` is an integer type ([`Int32`](@ref) or [`Int64`](@ref)).
 
 The individual components of the factorization `F` can be accessed by indexing:
 
@@ -133,7 +133,7 @@ The relation between `F` and `A` is
 
 !!! note
     `lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
-    SuiteSparse. As this library only supports sparse matrices with `Float64` or
+    SuiteSparse. As this library only supports sparse matrices with [`Float64`](@ref) or
     `Complex128` elements, `lufact` converts `A` into a copy that is of type
     `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as appropriate.
 """
@@ -146,11 +146,11 @@ function lufact(S::SparseMatrixCSC{<:UMFVTypes,<:UMFITypes})
     finalizer(res, umfpack_free_symbolic)
     umfpack_numeric!(res)
 end
-lufact{Ti<:UMFITypes}(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) =
+lufact(A::SparseMatrixCSC{<:Union{Float16,Float32},Ti}) where {Ti<:UMFITypes} =
     lufact(convert(SparseMatrixCSC{Float64,Ti}, A))
-lufact{Ti<:UMFITypes}(A::SparseMatrixCSC{<:Union{Complex32,Complex64},Ti}) =
+lufact(A::SparseMatrixCSC{<:Union{Complex32,Complex64},Ti}) where {Ti<:UMFITypes} =
     lufact(convert(SparseMatrixCSC{Complex128,Ti}, A))
-lufact{T<:AbstractFloat}(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) =
+lufact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) where {T<:AbstractFloat} =
     throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
     "Try lufact(convert(SparseMatrixCSC{Float64/Complex128,Int}, A)) for ",
     "sparse floating point LU using UMFPACK or lufact(Array(A)) for generic ",
@@ -409,25 +409,25 @@ function _Aq_ldiv_B!(X::StridedVecOrMat, lu::UmfpackLU, B::StridedVecOrMat, tran
     _AqldivB_kernel!(X, lu, B, transposeoptype)
     return X
 end
-function _AqldivB_kernel!{T<:UMFVTypes}(x::StridedVector{T}, lu::UmfpackLU{T},
-                                        b::StridedVector{T}, transposeoptype)
+function _AqldivB_kernel!(x::StridedVector{T}, lu::UmfpackLU{T},
+                          b::StridedVector{T}, transposeoptype) where T<:UMFVTypes
     solve!(x, lu, b, transposeoptype)
 end
-function _AqldivB_kernel!{T<:UMFVTypes}(X::StridedMatrix{T}, lu::UmfpackLU{T},
-                                        B::StridedMatrix{T}, transposeoptype)
+function _AqldivB_kernel!(X::StridedMatrix{T}, lu::UmfpackLU{T},
+                          B::StridedMatrix{T}, transposeoptype) where T<:UMFVTypes
     for col in 1:size(X, 2)
         solve!(view(X, :, col), lu, view(B, :, col), transposeoptype)
     end
 end
-function _AqldivB_kernel!{Tb<:Complex}(x::StridedVector{Tb}, lu::UmfpackLU{Float64},
-                                        b::StridedVector{Tb}, transposeoptype)
+function _AqldivB_kernel!(x::StridedVector{Tb}, lu::UmfpackLU{Float64},
+                          b::StridedVector{Tb}, transposeoptype) where Tb<:Complex
     r, i = similar(b, Float64), similar(b, Float64)
     solve!(r, lu, Vector{Float64}(real(b)), transposeoptype)
     solve!(i, lu, Vector{Float64}(imag(b)), transposeoptype)
     map!(complex, x, r, i)
 end
-function _AqldivB_kernel!{Tb<:Complex}(X::StridedMatrix{Tb}, lu::UmfpackLU{Float64},
-                                        B::StridedMatrix{Tb}, transposeoptype)
+function _AqldivB_kernel!(X::StridedMatrix{Tb}, lu::UmfpackLU{Float64},
+                          B::StridedMatrix{Tb}, transposeoptype) where Tb<:Complex
     r = similar(B, Float64, size(B, 1))
     i = similar(B, Float64, size(B, 1))
     for j in 1:size(B, 2)

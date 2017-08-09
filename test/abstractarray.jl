@@ -202,28 +202,28 @@ end
 T24Linear(::Type{T}, dims::Int...) where T = T24Linear(T, dims)
 T24Linear(::Type{T}, dims::NTuple{N,Int}) where {T,N} = T24Linear{T,N,dims}()
 
-Base.convert{T,N  }(::Type{T24Linear     }, X::AbstractArray{T,N}) = convert(T24Linear{T,N}, X)
-Base.convert{T,N,_}(::Type{T24Linear{T  }}, X::AbstractArray{_,N}) = convert(T24Linear{T,N}, X)
-Base.convert{T,N  }(::Type{T24Linear{T,N}}, X::AbstractArray     ) = T24Linear{T,N,size(X)}(X...)
+Base.convert(::Type{T24Linear     }, X::AbstractArray{T,N}) where {T,N  } = convert(T24Linear{T,N}, X)
+Base.convert(::Type{T24Linear{T  }}, X::AbstractArray{_,N}) where {T,N,_} = convert(T24Linear{T,N}, X)
+Base.convert(::Type{T24Linear{T,N}}, X::AbstractArray     ) where {T,N  } = T24Linear{T,N,size(X)}(X...)
 
-Base.size{T,N,dims}(::T24Linear{T,N,dims}) = dims
+Base.size(::T24Linear{T,N,dims}) where {T,N,dims} = dims
 import Base: IndexLinear
-Base.IndexStyle{A<:T24Linear}(::Type{A}) = IndexLinear()
+Base.IndexStyle(::Type{A}) where {A<:T24Linear} = IndexLinear()
 Base.getindex(A::T24Linear, i::Int) = getfield(A, i)
-Base.setindex!{T}(A::T24Linear{T}, v, i::Int) = setfield!(A, i, convert(T, v))
+Base.setindex!(A::T24Linear{T}, v, i::Int) where {T} = setfield!(A, i, convert(T, v))
 
 # A custom linear slow sparse-like array that relies upon Dict for its storage
 struct TSlow{T,N} <: AbstractArray{T,N}
     data::Dict{NTuple{N,Int}, T}
     dims::NTuple{N,Int}
 end
-TSlow{T}(::Type{T}, dims::Int...) = TSlow(T, dims)
-TSlow{T,N}(::Type{T}, dims::NTuple{N,Int}) = TSlow{T,N}(Dict{NTuple{N,Int}, T}(), dims)
+TSlow(::Type{T}, dims::Int...) where {T} = TSlow(T, dims)
+TSlow(::Type{T}, dims::NTuple{N,Int}) where {T,N} = TSlow{T,N}(Dict{NTuple{N,Int}, T}(), dims)
 
-Base.convert{T,N  }(::Type{TSlow{T,N}}, X::TSlow{T,N}) = X
-Base.convert{T,N  }(::Type{TSlow     }, X::AbstractArray{T,N}) = convert(TSlow{T,N}, X)
-Base.convert{T,N,_}(::Type{TSlow{T  }}, X::AbstractArray{_,N}) = convert(TSlow{T,N}, X)
-Base.convert{T,N  }(::Type{TSlow{T,N}}, X::AbstractArray     ) = begin
+Base.convert(::Type{TSlow{T,N}}, X::TSlow{T,N})         where {T,N  } = X
+Base.convert(::Type{TSlow     }, X::AbstractArray{T,N}) where {T,N  } = convert(TSlow{T,N}, X)
+Base.convert(::Type{TSlow{T  }}, X::AbstractArray{_,N}) where {T,N,_} = convert(TSlow{T,N}, X)
+Base.convert(::Type{TSlow{T,N}}, X::AbstractArray     ) where {T,N  } = begin
     A = TSlow(T, size(X))
     for I in CartesianRange(size(X))
         A[I.I...] = X[I.I...]
@@ -232,32 +232,32 @@ Base.convert{T,N  }(::Type{TSlow{T,N}}, X::AbstractArray     ) = begin
 end
 
 Base.size(A::TSlow) = A.dims
-Base.similar{T}(A::TSlow, ::Type{T}, dims::Dims) = TSlow(T, dims)
+Base.similar(A::TSlow, ::Type{T}, dims::Dims) where {T} = TSlow(T, dims)
 import Base: IndexCartesian
-Base.IndexStyle{A<:TSlow}(::Type{A}) = IndexCartesian()
+Base.IndexStyle(::Type{A}) where {A<:TSlow} = IndexCartesian()
 # Until #11242 is merged, we need to define each dimension independently
-Base.getindex{T}(A::TSlow{T,0}) = get(A.data, (), zero(T))
-Base.getindex{T}(A::TSlow{T,1}, i1::Int) = get(A.data, (i1,), zero(T))
-Base.getindex{T}(A::TSlow{T,2}, i1::Int, i2::Int) = get(A.data, (i1,i2), zero(T))
-Base.getindex{T}(A::TSlow{T,3}, i1::Int, i2::Int, i3::Int) =
+Base.getindex(A::TSlow{T,0}) where {T} = get(A.data, (), zero(T))
+Base.getindex(A::TSlow{T,1}, i1::Int) where {T} = get(A.data, (i1,), zero(T))
+Base.getindex(A::TSlow{T,2}, i1::Int, i2::Int) where {T} = get(A.data, (i1,i2), zero(T))
+Base.getindex(A::TSlow{T,3}, i1::Int, i2::Int, i3::Int) where {T} =
     get(A.data, (i1,i2,i3), zero(T))
-Base.getindex{T}(A::TSlow{T,4}, i1::Int, i2::Int, i3::Int, i4::Int) =
+Base.getindex(A::TSlow{T,4}, i1::Int, i2::Int, i3::Int, i4::Int) where {T} =
     get(A.data, (i1,i2,i3,i4), zero(T))
-Base.getindex{T}(A::TSlow{T,5}, i1::Int, i2::Int, i3::Int, i4::Int, i5::Int) =
+Base.getindex(A::TSlow{T,5}, i1::Int, i2::Int, i3::Int, i4::Int, i5::Int) where {T} =
     get(A.data, (i1,i2,i3,i4,i5), zero(T))
 
-Base.setindex!{T}(A::TSlow{T,0}, v) = (A.data[()] = v)
-Base.setindex!{T}(A::TSlow{T,1}, v, i1::Int) = (A.data[(i1,)] = v)
-Base.setindex!{T}(A::TSlow{T,2}, v, i1::Int, i2::Int) = (A.data[(i1,i2)] = v)
-Base.setindex!{T}(A::TSlow{T,3}, v, i1::Int, i2::Int, i3::Int) =
+Base.setindex!(A::TSlow{T,0}, v) where {T} = (A.data[()] = v)
+Base.setindex!(A::TSlow{T,1}, v, i1::Int) where {T} = (A.data[(i1,)] = v)
+Base.setindex!(A::TSlow{T,2}, v, i1::Int, i2::Int) where {T} = (A.data[(i1,i2)] = v)
+Base.setindex!(A::TSlow{T,3}, v, i1::Int, i2::Int, i3::Int) where {T} =
     (A.data[(i1,i2,i3)] = v)
-Base.setindex!{T}(A::TSlow{T,4}, v, i1::Int, i2::Int, i3::Int, i4::Int) =
+Base.setindex!(A::TSlow{T,4}, v, i1::Int, i2::Int, i3::Int, i4::Int) where {T} =
     (A.data[(i1,i2,i3,i4)] = v)
-Base.setindex!{T}(A::TSlow{T,5}, v, i1::Int, i2::Int, i3::Int, i4::Int, i5::Int) =
+Base.setindex!(A::TSlow{T,5}, v, i1::Int, i2::Int, i3::Int, i4::Int, i5::Int) where {T} =
     (A.data[(i1,i2,i3,i4,i5)] = v)
 
 const can_inline = Base.JLOptions().can_inline != 0
-function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
+function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     N = prod(shape)
     A = reshape(collect(1:N), shape)
     B = T(A)
@@ -341,7 +341,7 @@ function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     @test C == B == A
     C = T(Int, shape)
     i=0
-    C2 = reshape(C, Val{2})
+    C2 = reshape(C, Val(2))
     for i2 = 1:size(C2, 2)
         for i1 = 1:size(C2, 1)
             i += 1
@@ -351,7 +351,7 @@ function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     @test C == B == A
     C = T(Int, shape)
     i=0
-    C3 = reshape(C, Val{3})
+    C3 = reshape(C, Val(3))
     for i3 = 1:size(C3, 3)
         for i2 = 1:size(C3, 2)
             for i1 = 1:size(C3, 1)
@@ -367,7 +367,7 @@ function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     @test A == B
 end
 
-function test_vector_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
+function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @testset "test_vector_indexing{$(T)}" begin
         N = prod(shape)
         A = reshape(collect(1:N), shape)
@@ -410,7 +410,7 @@ function test_vector_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     end
 end
 
-function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
+function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     N = prod(shape)
     A = reshape(collect(1:N), shape)
     B = T(A)
@@ -481,7 +481,7 @@ Base.IndexStyle(::UnimplementedSlowArray) = Base.IndexCartesian()
 
 mutable struct UnimplementedArray{T, N} <: AbstractArray{T, N} end
 
-function test_getindex_internals{T}(::Type{T}, shape, ::Type{TestAbstractArray})
+function test_getindex_internals(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     N = prod(shape)
     A = reshape(collect(1:N), shape)
     B = T(A)
@@ -501,7 +501,7 @@ function test_getindex_internals(::Type{TestAbstractArray})
     @test_throws ErrorException Base.unsafe_getindex(V, 1, 1)
 end
 
-function test_setindex!_internals{T}(::Type{T}, shape, ::Type{TestAbstractArray})
+function test_setindex!_internals(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     N = prod(shape)
     A = reshape(collect(1:N), shape)
     B = T(A)
@@ -616,17 +616,17 @@ end
 mutable struct TSlowNIndexes{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
-Base.IndexStyle{A<:TSlowNIndexes}(::Type{A}) = Base.IndexCartesian()
+Base.IndexStyle(::Type{A}) where {A<:TSlowNIndexes} = Base.IndexCartesian()
 Base.size(A::TSlowNIndexes) = size(A.data)
 Base.getindex(A::TSlowNIndexes, index::Int...) = error("Must use $(ndims(A)) indexes")
-Base.getindex{T}(A::TSlowNIndexes{T,2}, i::Int, j::Int) = A.data[i,j]
+Base.getindex(A::TSlowNIndexes{T,2}, i::Int, j::Int) where {T} = A.data[i,j]
 
 
 mutable struct GenericIterator{N} end
-Base.start{N}(::GenericIterator{N}) = 1
-Base.next{N}(::GenericIterator{N}, i) = (i, i + 1)
-Base.done{N}(::GenericIterator{N}, i) = i > N ? true : false
-Base.iteratorsize{N}(::Type{GenericIterator{N}}) = Base.SizeUnknown()
+Base.start(::GenericIterator{N}) where {N} = 1
+Base.next(::GenericIterator{N}, i) where {N} = (i, i + 1)
+Base.done(::GenericIterator{N}, i) where {N} = i > N ? true : false
+Base.iteratorsize(::Type{GenericIterator{N}}) where {N} = Base.SizeUnknown()
 
 function test_map(::Type{TestAbstractArray})
     empty_pool = WorkerPool([myid()])

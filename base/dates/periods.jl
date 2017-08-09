@@ -33,7 +33,7 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
             $($period_str)(v)
 
         Construct a `$($period_str)` object with the given `v` value. Input must be
-        losslessly convertible to an `Int64`.
+        losslessly convertible to an [`Int64`](@ref).
         """ $period(v)
     end
 end
@@ -65,7 +65,6 @@ Base.isless(x::P, y::P) where {P<:Period} = isless(value(x), value(y))
 Base.isless(x::Period, y::Period) = isless(promote(x, y)...)
 
 # Period Arithmetic, grouped by dimensionality:
-import Base: div, fld, mod, rem, gcd, lcm, +, -, *, /, %
 for op in (:+, :-, :lcm, :gcd)
     @eval ($op)(x::P, y::P) where {P<:Period} = P(($op)(value(x), value(y)))
 end
@@ -89,7 +88,7 @@ end
 for (op, Ty, Tz) in ((:*, Real, :P),
                    (:/, :P, Float64), (:/, Real, :P))
     @eval begin
-        function ($op){P<:Period}(X::StridedArray{P}, y::$Ty)
+        function ($op)(X::StridedArray{P}, y::$Ty) where P<:Period
             Z = similar(X, $Tz)
             for (Idst, Isrc) in zip(eachindex(Z), eachindex(X))
                 @inbounds Z[Idst] = ($op)(X[Isrc], y)
@@ -100,8 +99,8 @@ for (op, Ty, Tz) in ((:*, Real, :P),
 end
 
 # intfuncs
-Base.gcdx{T<:Period}(a::T, b::T) = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)
-Base.abs{T<:Period}(a::T) = T(abs(value(a)))
+Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)
+Base.abs(a::T) where {T<:Period} = T(abs(value(a)))
 
 periodisless(::Period,::Year)        = true
 periodisless(::Period,::Month)       = true
@@ -136,7 +135,7 @@ periodisless(::Nanosecond,::Microsecond)  = true
 periodisless(::Period,::Nanosecond)       = false
 
 # return (next coarser period, conversion factor):
-coarserperiod{P<:Period}(::Type{P}) = (P, 1)
+coarserperiod(::Type{P}) where {P<:Period} = (P, 1)
 coarserperiod(::Type{Nanosecond})  = (Microsecond, 1000)
 coarserperiod(::Type{Microsecond}) = (Millisecond, 1000)
 coarserperiod(::Type{Millisecond}) = (Second, 1000)
@@ -400,7 +399,7 @@ const FixedPeriod = Union{Week, Day, Hour, Minute, Second, Millisecond, Microsec
 # like div but throw an error if remainder is nonzero
 function divexact(x, y)
     q, r = divrem(x, y)
-    r == 0 || throw(InexactError())
+    r == 0 || throw(InexactError(:divexact, Int, x/y))
     return q
 end
 
@@ -415,7 +414,7 @@ for i = 1:length(fixedperiod_conversions)
         vmax = typemax(Int64) ÷ N
         vmin = typemin(Int64) ÷ N
         @eval function Base.convert(::Type{$T}, x::$Tc)
-            $vmin ≤ value(x) ≤ $vmax || throw(InexactError())
+            $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, $T, x))
             return $T(value(x) * $N)
         end
     end
@@ -432,7 +431,7 @@ end
 const OtherPeriod = Union{Month, Year}
 let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
     @eval function Base.convert(::Type{Month}, x::Year)
-        $vmin ≤ value(x) ≤ $vmax || throw(InexactError())
+        $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, Month, x))
         Month(value(x) * 12)
     end
 end
@@ -443,10 +442,20 @@ Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
 (==)(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(==, (x, y)))
 (==)(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(==, (x, y)))
 
+const fixedperiod_seed = UInt === UInt64 ? 0x5b7fc751bba97516 : 0xeae0fdcb
+const otherperiod_seed = UInt === UInt64 ? 0xe1837356ff2d2ac9 : 0x170d1b00
+# tons() will overflow for periods longer than ~300,000 years, implying a hash collision
+# which is relatively harmless given how infrequent such periods should appear
+Base.hash(x::FixedPeriod, h::UInt) = hash(tons(x), h + fixedperiod_seed)
+# Overflow can also happen here for really long periods (~8e17 years)
+Base.hash(x::Year, h::UInt) = hash(12 * value(x), h + otherperiod_seed)
+Base.hash(x::Month, h::UInt) = hash(value(x), h + otherperiod_seed)
+
 Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(isless, (x, y)))
 Base.isless(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(isless, (x, y)))
 
-# truncating conversions to milliseconds and days:
+# truncating conversions to milliseconds, nanoseconds and days:
+# overflow can happen for periods longer than ~300,000 years
 toms(c::Nanosecond)  = div(value(c), 1000000)
 toms(c::Microsecond) = div(value(c), 1000)
 toms(c::Millisecond) = value(c)

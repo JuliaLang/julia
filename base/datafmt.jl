@@ -117,10 +117,11 @@ readdlm(input, dlm::Char, T::Type, eol::Char; opts...) =
 readdlm_auto(input::Vector{UInt8}, dlm::Char, T::Type, eol::Char, auto::Bool; opts...) =
     readdlm_string(String(input), dlm, T, eol, auto, val_opts(opts))
 readdlm_auto(input::IO, dlm::Char, T::Type, eol::Char, auto::Bool; opts...) =
-    readdlm_string(readstring(input), dlm, T, eol, auto, val_opts(opts))
+    readdlm_string(read(input, String), dlm, T, eol, auto, val_opts(opts))
 function readdlm_auto(input::AbstractString, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
+    isfile(input) || throw(ArgumentError("Cannot open \'$input\': not a file"))
     optsd = val_opts(opts)
-    use_mmap = get(optsd, :use_mmap, is_windows() ? false : true)
+    use_mmap = get(optsd, :use_mmap, Sys.iswindows() ? false : true)
     fsz = filesize(input)
     if use_mmap && fsz > 0 && fsz < typemax(Int)
         a = open(input, "r") do f
@@ -131,7 +132,7 @@ function readdlm_auto(input::AbstractString, dlm::Char, T::Type, eol::Char, auto
         # jl_try_substrtod to segfault below.
         return readdlm_string(unsafe_string(pointer(a),length(a)), dlm, T, eol, auto, optsd)
     else
-        return readdlm_string(readstring(input), dlm, T, eol, auto, optsd)
+        return readdlm_string(read(input, String), dlm, T, eol, auto, optsd)
     end
 end
 
@@ -208,8 +209,8 @@ mutable struct DLMStore{T} <: DLMHandler
     eol::Char
 end
 
-function DLMStore{T}(::Type{T}, dims::NTuple{2,Integer},
-        has_header::Bool, sbuff::String, auto::Bool, eol::Char)
+function DLMStore(::Type{T}, dims::NTuple{2,Integer},
+                  has_header::Bool, sbuff::String, auto::Bool, eol::Char) where T
     (nrows,ncols) = dims
     nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
     ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
@@ -223,7 +224,7 @@ _chrinstr(sbuff::String, chr::UInt8, startpos::Int, endpos::Int) =
     (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff)+startpos-1, chr, endpos-startpos+1))
 
 function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
-        quoted::Bool, startpos::Int, endpos::Int) where T
+                    quoted::Bool, startpos::Int, endpos::Int) where T
     drow = row - dlmstore.hdr_offset
 
     ncols = dlmstore.ncols
@@ -408,7 +409,7 @@ function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Bool,2},
     isnull(n) || (cells[row, col] = get(n))
     isnull(n)
 end
-function colval{T<:Integer}(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
+function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int) where T<:Integer
     n = tryparse_internal(T, sbuff, startpos, endpos, 0, false)
     isnull(n) || (cells[row, col] = get(n))
     isnull(n)
@@ -620,7 +621,7 @@ readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
 
 # todo: keyword argument for # of digits to print
 writedlm_cell(io::IO, elt::AbstractFloat, dlm, quotes) = print_shortest(io, elt)
-function writedlm_cell{T}(io::IO, elt::AbstractString, dlm::T, quotes::Bool)
+function writedlm_cell(io::IO, elt::AbstractString, dlm::T, quotes::Bool) where T
     if quotes && !isempty(elt) && (('"' in elt) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm)))
         print(io, '"', replace(elt, r"\"", "\"\""), '"')
     else

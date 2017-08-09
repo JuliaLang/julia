@@ -10,7 +10,7 @@ on implementing a custom array type.
 
 An array is a collection of objects stored in a multi-dimensional grid. In the most general case,
 an array may contain objects of type `Any`. For most computational purposes, arrays should contain
-objects of a more specific type, such as `Float64` or `Int32`.
+objects of a more specific type, such as [`Float64`](@ref) or [`Int32`](@ref).
 
 In general, unlike many other technical computing languages, Julia does not expect programs to
 be written in a vectorized style for performance. Julia's compiler uses type inference and generates
@@ -46,7 +46,7 @@ Many functions for constructing and initializing arrays are provided. In the fol
 such functions, calls with a `dims...` argument can either take a single tuple of dimension sizes
 or a series of dimension sizes passed as a variable number of arguments. Most of these functions
 also accept a first input `T`, which is the element type of the array. If the type `T` is
-omitted it will default to `Float64`.
+omitted it will default to [`Float64`](@ref).
 
 | Function                           | Description                                                                                                                                                                                                                                  |
 |:---------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -137,7 +137,7 @@ of the variable ranges `rx`, `ry`, etc. and each `F(x,y,...)` evaluation returns
 The following example computes a weighted average of the current element and its left and right
 neighbor along a 1-d grid. :
 
-```julia
+```julia-repl
 julia> x = rand(8)
 8-element Array{Float64,1}:
  0.843025
@@ -182,7 +182,7 @@ julia> sum(1/n^2 for n=1:1000)
 When writing a generator expression with multiple dimensions inside an argument list, parentheses
 are needed to separate the generator from subsequent arguments:
 
-```julia
+```julia-repl
 julia> map(tuple, 1/(i+j) for i=1:2, j=1:2, [1:4;])
 ERROR: syntax: invalid iteration specification
 ```
@@ -510,7 +510,7 @@ iterate over any array type.
 
 ### Array traits
 
-If you write a custom `AbstractArray` type, you can specify that it has fast linear indexing using
+If you write a custom [`AbstractArray`](@ref) type, you can specify that it has fast linear indexing using
 
 ```julia
 Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
@@ -556,7 +556,7 @@ It is sometimes useful to perform element-by-element binary operations on arrays
 sizes, such as adding a vector to each column of a matrix. An inefficient way to do this would
 be to replicate the vector to the size of the matrix:
 
-```julia
+```julia-repl
 julia> a = rand(2,1); A = rand(2,3);
 
 julia> repmat(a,1,3)+A
@@ -569,7 +569,7 @@ This is wasteful when dimensions get large, so Julia offers [`broadcast()`](@ref
 singleton dimensions in array arguments to match the corresponding dimension in the other array
 without using extra memory, and applies the given function elementwise:
 
-```julia
+```julia-repl
 julia> broadcast(+, a, A)
 2×3 Array{Float64,2}:
  1.20813  1.82068  1.25387
@@ -617,8 +617,8 @@ julia> string.(1:3, ". ", ["First", "Second", "Third"])
 
 ### Implementation
 
-The base array type in Julia is the abstract type `AbstractArray{T,N}`. It is parametrized by
-the number of dimensions `N` and the element type `T`. `AbstractVector` and `AbstractMatrix` are
+The base array type in Julia is the abstract type [`AbstractArray{T,N}`](@ref). It is parametrized by
+the number of dimensions `N` and the element type `T`. [`AbstractVector`](@ref) and [`AbstractMatrix`](@ref) are
 aliases for the 1-d and 2-d cases. Operations on `AbstractArray` objects are defined using higher
 level operators and functions, in a way that is independent of the underlying storage. These operations
 generally work correctly as a fallback for any specific array implementation.
@@ -644,7 +644,7 @@ method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is provided, the memory layout s
 in the same way to these strides.
 
 The [`Array`](@ref) type is a specific instance of `DenseArray` where elements are stored in column-major
-order (see additional notes in [Performance Tips](@ref man-performance-tips)). `Vector` and `Matrix` are aliases for
+order (see additional notes in [Performance Tips](@ref man-performance-tips)). [`Vector`](@ref) and [`Matrix`](@ref) are aliases for
 the 1-d and 2-d cases. Specific operations such as scalar indexing, assignment, and a few other
 basic storage-specific operations are all that have to be implemented for [`Array`](@ref), so
 that the rest of the array library can be implemented in a generic manner.
@@ -666,7 +666,7 @@ The following example computes the QR decomposition of a small section of a larg
 creating any temporaries, and by calling the appropriate LAPACK function with the right leading
 dimension size and stride parameters.
 
-```julia
+```julia-repl
 julia> a = rand(10,10)
 10×10 Array{Float64,2}:
  0.561255   0.226678   0.203391  0.308912   …  0.750307  0.235023   0.217964
@@ -702,26 +702,27 @@ julia> r
   0.0       0.866567
 ```
 
-## Sparse Matrices
+## Sparse Vectors and Matrices
 
-[Sparse matrices](https://en.wikipedia.org/wiki/Sparse_matrix) are matrices that contain enough
-zeros that storing them in a special data structure leads to savings in space and execution time.
-Sparse matrices may be used when operations on the sparse representation of a matrix lead to considerable
-gains in either time or space when compared to performing the same operations on a dense matrix.
+Julia has built-in support for sparse vectors and
+[sparse matrices](https://en.wikipedia.org/wiki/Sparse_matrix). Sparse arrays are arrays
+that contain enough zeros that storing them in a special data structure leads to savings
+in space and execution time, compared to dense arrays.
 
-### Compressed Sparse Column (CSC) Storage
+### [Compressed Sparse Column (CSC) Sparse Matrix Storage](@id man-csc)
 
 In Julia, sparse matrices are stored in the [Compressed Sparse Column (CSC) format](https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_column_.28CSC_or_CCS.29).
-Julia sparse matrices have the type `SparseMatrixCSC{Tv,Ti}`, where `Tv` is the type of the nonzero
-values, and `Ti` is the integer type for storing column pointers and row indices.:
+Julia sparse matrices have the type [`SparseMatrixCSC{Tv,Ti}`](@ref), where `Tv` is the
+type of the stored values, and `Ti` is the integer type for storing column pointers and
+row indices. The internal representation of `SparseMatrixCSC` is as follows:
 
 ```julia
 struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
-    rowval::Vector{Ti}      # Row values of nonzeros
-    nzval::Vector{Tv}       # Nonzero values
+    rowval::Vector{Ti}      # Row indices of stored values
+    nzval::Vector{Tv}       # Stored values, typically nonzeros
 end
 ```
 
@@ -743,19 +744,50 @@ In some applications, it is convenient to store explicit zero values in a `Spars
 *are* accepted by functions in `Base` (but there is no guarantee that they will be preserved in
 mutating operations). Such explicitly stored zeros are treated as structural nonzeros by many
 routines. The [`nnz()`](@ref) function returns the number of elements explicitly stored in the
-sparse data structure, including structural nonzeros. In order to count the exact number of actual
-values that are nonzero, use [`countnz()`](@ref), which inspects every stored element of a sparse
-matrix.
-
-### Sparse matrix constructors
-
-The simplest way to create sparse matrices is to use functions equivalent to the [`zeros()`](@ref)
-and [`eye()`](@ref) functions that Julia provides for working with dense matrices. To produce
-sparse matrices instead, you can use the same names with an `sp` prefix:
+sparse data structure, including structural nonzeros. In order to count the exact number of
+numerical nonzeros, use [`countnz()`](@ref), which inspects every stored element of a sparse
+matrix. [`dropzeros()`](@ref), and the in-place [`dropzeros!()`](@ref), can be used to
+remove stored zeros from the sparse matrix.
 
 ```jldoctest
-julia> spzeros(3,5)
-3×5 SparseMatrixCSC{Float64,Int64} with 0 stored entries
+julia> A = sparse([1, 2, 3], [1, 2, 3], [0, 2, 0])
+3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+  [1, 1]  =  0
+  [2, 2]  =  2
+  [3, 3]  =  0
+
+julia> dropzeros(A)
+3×3 SparseMatrixCSC{Int64,Int64} with 1 stored entry:
+  [2, 2]  =  2
+```
+
+### Sparse Vector Storage
+
+Sparse vectors are stored in a close analog to compressed sparse column format for sparse
+matrices. In Julia, sparse vectors have the type [`SparseVector{Tv,Ti}`](@ref) where `Tv`
+is the type of the stored values and `Ti` the integer type for the indices. The internal
+representation is as follows:
+
+```julia
+struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
+    n::Int              # Length of the sparse vector
+    nzind::Vector{Ti}   # Indices of stored values
+    nzval::Vector{Tv}   # Stored values, typically nonzeros
+end
+```
+
+As for [`SparseMatrixCSC`](@ref), the `SparseVector` type can also contain explicitly
+stored zeros. (See [Sparse Matrix Storage](@ref man-csc).).
+
+### Sparse Vector and Matrix Constructors
+
+The simplest way to create sparse arrays is to use functions equivalent to the [`zeros()`](@ref)
+and [`eye()`](@ref) functions that Julia provides for working with dense arrays. To produce
+sparse arrays instead, you can use the same names with an `sp` prefix:
+
+```jldoctest
+julia> spzeros(3)
+3-element SparseVector{Float64,Int64} with 0 stored entries
 
 julia> speye(3,5)
 3×5 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
@@ -764,11 +796,16 @@ julia> speye(3,5)
   [3, 3]  =  1.0
 ```
 
-The [`sparse()`](@ref) function is often a handy way to construct sparse matrices. It takes as
-its input a vector `I` of row indices, a vector `J` of column indices, and a vector `V` of nonzero
-values. `sparse(I,J,V)` constructs a sparse matrix such that `S[I[k], J[k]] = V[k]`.
+The [`sparse()`](@ref) function is often a handy way to construct sparse arrays. For
+example, to construct a sparse matrix we can input a vector `I` of row indices, a vector
+`J` of column indices, and a vector `V` of stored values (this is also known as the
+[COO (coordinate) format](https://en.wikipedia.org/wiki/Sparse_matrix#Coordinate_list_.28COO.29)).
+`sparse(I,J,V)` then constructs a sparse matrix such that `S[I[k], J[k]] = V[k]`. The
+equivalent sparse vector constructor is [`sparsevec`](@ref), which takes the (row) index
+vector `I` and the vector `V` with the stored values and constructs a sparse vector `R`
+such that `R[I[k]] = V[k]`.
 
-```jldoctest
+```jldoctest sparse_function
 julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
@@ -777,20 +814,38 @@ julia> S = sparse(I,J,V)
   [4 ,  7]  =  2
   [5 ,  9]  =  3
   [3 , 18]  =  -5
+
+julia> R = sparsevec(I,V)
+5-element SparseVector{Int64,Int64} with 4 stored entries:
+  [1]  =  1
+  [3]  =  -5
+  [4]  =  2
+  [5]  =  3
 ```
 
-The inverse of the [`sparse()`](@ref) function is [`findn()`](@ref), which retrieves the inputs
-used to create the sparse matrix.
+The inverse of the [`sparse()`](@ref) and [`sparsevec`](@ref) functions is
+[`findnz()`](@ref), which retrieves the inputs used to create the sparse array.
+There is also a [`findn`](@ref) function which only returns the index vectors.
 
-```julia
-julia> findn(S)
-([1,4,5,3],[4,7,9,18])
-
+```jldoctest sparse_function
 julia> findnz(S)
-([1,4,5,3],[4,7,9,18],[1,2,3,-5])
+([1, 4, 5, 3], [4, 7, 9, 18], [1, 2, 3, -5])
+
+julia> findn(S)
+([1, 4, 5, 3], [4, 7, 9, 18])
+
+julia> findnz(R)
+([1, 3, 4, 5], [1, -5, 2, 3])
+
+julia> findn(R)
+4-element Array{Int64,1}:
+ 1
+ 3
+ 4
+ 5
 ```
 
-Another way to create sparse matrices is to convert a dense matrix into a sparse matrix using
+Another way to create a sparse array is to convert a dense array into a sparse array using
 the [`sparse()`](@ref) function:
 
 ```jldoctest
@@ -801,9 +856,14 @@ julia> sparse(eye(5))
   [3, 3]  =  1.0
   [4, 4]  =  1.0
   [5, 5]  =  1.0
+
+julia> sparse([1.0, 0.0, 1.0])
+3-element SparseVector{Float64,Int64} with 2 stored entries:
+  [1]  =  1.0
+  [3]  =  1.0
 ```
 
-You can go in the other direction using the [`full()`](@ref) function. The [`issparse()`](@ref)
+You can go in the other direction using the [`Array`](@ref) constructor. The [`issparse()`](@ref)
 function can be used to query if a matrix is sparse.
 
 ```jldoctest
@@ -828,8 +888,8 @@ differ from their dense counterparts in that the resulting matrix follows the sa
 as a given sparse matrix `S`, or that the resulting sparse matrix has density `d`, i.e. each matrix
 element has a probability `d` of being non-zero.
 
-Details can be found in the [Sparse Vectors and Matrices](@ref) section of the standard library
-reference.
+Details can be found in the [Sparse Vectors and Matrices](@ref stdlib-sparse-arrays)
+section of the standard library reference.
 
 | Sparse                     | Dense                  | Description                                                                                                                                                           |
 |:-------------------------- |:---------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

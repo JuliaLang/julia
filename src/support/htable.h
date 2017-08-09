@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef HTABLE_H
-#define HTABLE_H
+#ifndef JL_HTABLE_H
+#define JL_HTABLE_H
 
 #define HT_N_INLINE 32
 

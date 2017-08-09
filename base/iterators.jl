@@ -4,7 +4,8 @@ module Iterators
 
 import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, indices, ndims
 
-using Base: tuple_type_cons, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds
+using Base: tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
+            IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds
 
 export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
 
@@ -18,7 +19,7 @@ _diff_length(a, b, ::IsInfinite, ::IsInfinite) = 0
 _diff_length(a, b, ::IsInfinite, B) = length(a) # inherit behaviour, error
 _diff_length(a, b, A, B) = max(length(a)-length(b), 0)
 
-and_iteratorsize{T}(isz::T, ::T) = isz
+and_iteratorsize(isz::T, ::T) where {T} = isz
 and_iteratorsize(::HasLength, ::HasShape) = HasLength()
 and_iteratorsize(::HasShape, ::HasLength) = HasLength()
 and_iteratorsize(a, b) = SizeUnknown()
@@ -43,6 +44,7 @@ for indexing `iter`; it's also possible that `x != iter[i]`, if `iter`
 has indices that do not start at 1. See the `enumerate(IndexLinear(),
 iter)` method if you want to ensure that `i` is an index.
 
+# Examples
 ```jldoctest
 julia> a = ["a", "b", "c"];
 
@@ -90,6 +92,7 @@ specifying `IndexCartesian()` ensures that `i` will be a
 `CartesianIndex`; specifying `IndexStyle(A)` chooses whichever has
 been defined as the native indexing style for array `A`.
 
+# Examples
 ```jldoctest
 julia> A = ["a" "d"; "b" "e"; "c" "f"];
 
@@ -200,8 +203,7 @@ end
 For a set of iterable objects, returns an iterable of tuples, where the `i`th tuple contains
 the `i`th component of each input iterable.
 
-Note that [`zip`](@ref) is its own inverse: `collect(zip(zip(a...)...)) == collect(a)`.
-
+# Examples
 ```jldoctest
 julia> a = 1:5
 1:5
@@ -261,6 +263,17 @@ returned iterable object. These calls are not cached and repeated calls will be
 made when reiterating.
 
 See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
+
+# Examples
+```jldoctest
+julia> f = Iterators.filter(isodd, [1, 2, 3, 4, 5])
+Base.Iterators.Filter{Base.#isodd,Array{Int64,1}}(isodd, [1, 2, 3, 4, 5])
+
+julia> foreach(println, f)
+1
+3
+5
+```
 """
 filter(flt, itr) = Filter(flt, itr)
 
@@ -307,6 +320,15 @@ end
     rest(iter, state)
 
 An iterator that yields the same elements as `iter`, but starting at the given `state`.
+
+# Examples
+```jldoctest
+julia> collect(Iterators.rest([1,2,3,4], 2))
+3-element Array{Any,1}:
+ 2
+ 3
+ 4
+```
 """
 rest(itr,state) = Rest(itr,state)
 
@@ -332,6 +354,17 @@ end
     countfrom(start=1, step=1)
 
 An iterator that counts forever, starting at `start` and incrementing by `step`.
+
+# Examples
+```jldoctest
+julia> for v in Iterators.countfrom(5, 2)
+           v > 10 && break
+           println(v)
+       end
+5
+7
+9
+```
 """
 countfrom(start::Number, step::Number) = Count(promote(start, step)...)
 countfrom(start::Number)               = Count(start, oneunit(start))
@@ -357,6 +390,7 @@ end
 
 An iterator that generates at most the first `n` elements of `iter`.
 
+# Examples
 ```jldoctest
 julia> a = 1:2:11
 1:2:11
@@ -412,6 +446,7 @@ end
 
 An iterator that generates all but the first `n` elements of `iter`.
 
+# Examples
 ```jldoctest
 julia> a = 1:2:11
 1:2:11
@@ -468,6 +503,15 @@ end
     cycle(iter)
 
 An iterator that cycles through `iter` forever.
+
+# Examples
+```jldoctest
+julia> for (i, v) in enumerate(Iterators.cycle("hello"))
+           print(v)
+           i > 10 && break
+       end
+hellohelloh
+```
 """
 cycle(xs) = Cycle(xs)
 
@@ -505,6 +549,7 @@ repeated(x) = Repeated(x)
 An iterator that generates the value `x` forever. If `n` is specified, generates `x` that
 many times (equivalent to `take(repeated(x), n)`).
 
+# Examples
 ```jldoctest
 julia> a = Iterators.repeated([1 2], 4);
 
@@ -529,62 +574,8 @@ iteratoreltype(::Type{<:Repeated}) = HasEltype()
 
 
 # Product -- cartesian product of iterators
-
-abstract type AbstractProdIterator end
-
-length(p::AbstractProdIterator) = prod(size(p))
-_length(p::AbstractProdIterator) = prod(map(unsafe_length, indices(p)))
-size(p::AbstractProdIterator) = _prod_size(p.a, p.b, iteratorsize(p.a), iteratorsize(p.b))
-indices(p::AbstractProdIterator) = _prod_indices(p.a, p.b, iteratorsize(p.a), iteratorsize(p.b))
-ndims(p::AbstractProdIterator) = length(indices(p))
-
-# generic methods to handle size of Prod* types
-_prod_size(a, ::HasShape)  = size(a)
-_prod_size(a, ::HasLength) = (length(a),)
-_prod_size(a, A) =
-    throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
-_prod_size(a, b, ::HasLength, ::HasLength)  = (length(a),  length(b))
-_prod_size(a, b, ::HasLength, ::HasShape)   = (length(a),  size(b)...)
-_prod_size(a, b, ::HasShape,  ::HasLength)  = (size(a)..., length(b))
-_prod_size(a, b, ::HasShape,  ::HasShape)   = (size(a)..., size(b)...)
-_prod_size(a, b, A, B) =
-    throw(ArgumentError("Cannot construct size for objects of types $(typeof(a)) and $(typeof(b))"))
-
-_prod_indices(a, ::HasShape)  = indices(a)
-_prod_indices(a, ::HasLength) = (OneTo(length(a)),)
-_prod_indices(a, A) =
-    throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
-_prod_indices(a, b, ::HasLength, ::HasLength)  = (OneTo(length(a)),  OneTo(length(b)))
-_prod_indices(a, b, ::HasLength, ::HasShape)   = (OneTo(length(a)),  indices(b)...)
-_prod_indices(a, b, ::HasShape,  ::HasLength)  = (indices(a)..., OneTo(length(b)))
-_prod_indices(a, b, ::HasShape,  ::HasShape)   = (indices(a)..., indices(b)...)
-_prod_indices(a, b, A, B) =
-    throw(ArgumentError("Cannot construct indices for objects of types $(typeof(a)) and $(typeof(b))"))
-
-# one iterator
-struct Prod1{I} <: AbstractProdIterator
-    a::I
-end
-product(a) = Prod1(a)
-
-eltype(::Type{Prod1{I}}) where {I} = Tuple{eltype(I)}
-size(p::Prod1) = _prod_size(p.a, iteratorsize(p.a))
-indices(p::Prod1) = _prod_indices(p.a, iteratorsize(p.a))
-
-@inline start(p::Prod1) = start(p.a)
-@inline function next(p::Prod1, st)
-    n, st = next(p.a, st)
-    (n,), st
-end
-@inline done(p::Prod1, st) = done(p.a, st)
-
-iteratoreltype(::Type{Prod1{I}}) where {I} = iteratoreltype(I)
-iteratorsize(::Type{Prod1{I}}) where {I} = iteratorsize(I)
-
-# two iterators
-struct Prod2{I1, I2} <: AbstractProdIterator
-    a::I1
-    b::I2
+struct ProductIterator{T<:Tuple}
+    iterators::T
 end
 
 """
@@ -592,8 +583,9 @@ end
 
 Returns an iterator over the product of several iterators. Each generated element is
 a tuple whose `i`th element comes from the `i`th argument iterator. The first iterator
-changes the fastest. Example:
+changes the fastest.
 
+# Examples
 ```jldoctest
 julia> collect(Iterators.product(1:2,3:5))
 2×3 Array{Tuple{Int64,Int64},2}:
@@ -601,54 +593,11 @@ julia> collect(Iterators.product(1:2,3:5))
  (2, 3)  (2, 4)  (2, 5)
 ```
 """
-product(a, b) = Prod2(a, b)
+product(iters...) = ProductIterator(iters)
 
-eltype(::Type{Prod2{I1,I2}}) where {I1,I2} = Tuple{eltype(I1), eltype(I2)}
-
-iteratoreltype(::Type{Prod2{I1,I2}}) where {I1,I2} = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
-iteratorsize(::Type{Prod2{I1,I2}}) where {I1,I2} = prod_iteratorsize(iteratorsize(I1),iteratorsize(I2))
-
-function start(p::AbstractProdIterator)
-    s1, s2 = start(p.a), start(p.b)
-    s1, s2, Nullable{eltype(p.b)}(), (done(p.a,s1) || done(p.b,s2))
-end
-
-@inline function prod_next(p, st)
-    s1, s2 = st[1], st[2]
-    v1, s1 = next(p.a, s1)
-
-    nv2 = st[3]
-    if isnull(nv2)
-        v2, s2 = next(p.b, s2)
-    else
-        v2 = nv2.value
-    end
-
-    if done(p.a, s1)
-        return (v1,v2), (start(p.a), s2, Nullable{eltype(nv2)}(), done(p.b,s2))
-    end
-    return (v1,v2), (s1, s2, Nullable(v2), false)
-end
-
-@inline next(p::Prod2, st) = prod_next(p, st)
-@inline done(p::AbstractProdIterator, st) = st[4]
-
-# n iterators
-struct Prod{I1, I2<:AbstractProdIterator} <: AbstractProdIterator
-    a::I1
-    b::I2
-end
-product(a, b, c...) = Prod(a, product(b, c...))
-
-eltype(::Type{Prod{I1,I2}}) where {I1,I2} = tuple_type_cons(eltype(I1), eltype(I2))
-
-iteratoreltype(::Type{Prod{I1,I2}}) where {I1,I2} = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
-iteratorsize(::Type{Prod{I1,I2}}) where {I1,I2} = prod_iteratorsize(iteratorsize(I1),iteratorsize(I2))
-
-@inline function next{I1,I2}(p::Prod{I1,I2}, st)
-    x = prod_next(p, st)
-    ((x[1][1],x[1][2]...), x[2])
-end
+iteratorsize(::Type{ProductIterator{Tuple{}}}) = HasShape()
+iteratorsize(::Type{ProductIterator{T}}) where {T<:Tuple} =
+    prod_iteratorsize( iteratorsize(tuple_type_head(T)), iteratorsize(ProductIterator{tuple_type_tail(T)}) )
 
 prod_iteratorsize(::Union{HasLength,HasShape}, ::Union{HasLength,HasShape}) = HasShape()
 # products can have an infinite iterator
@@ -657,6 +606,101 @@ prod_iteratorsize(a, ::IsInfinite) = IsInfinite()
 prod_iteratorsize(::IsInfinite, b) = IsInfinite()
 prod_iteratorsize(a, b) = SizeUnknown()
 
+size(P::ProductIterator) = _prod_size(P.iterators)
+_prod_size(::Tuple{}) = ()
+_prod_size(t::Tuple) = (_prod_size1(t[1], iteratorsize(t[1]))..., _prod_size(tail(t))...)
+_prod_size1(a, ::HasShape)  = size(a)
+_prod_size1(a, ::HasLength) = (length(a),)
+_prod_size1(a, A) =
+    throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
+
+indices(P::ProductIterator) = _prod_indices(P.iterators)
+_prod_indices(::Tuple{}) = ()
+_prod_indices(t::Tuple) = (_prod_indices1(t[1], iteratorsize(t[1]))..., _prod_indices(tail(t))...)
+_prod_indices1(a, ::HasShape)  = indices(a)
+_prod_indices1(a, ::HasLength) = (OneTo(length(a)),)
+_prod_indices1(a, A) =
+    throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
+
+ndims(p::ProductIterator) = length(indices(p))
+length(P::ProductIterator) = prod(size(P))
+_length(p::ProductIterator) = prod(map(unsafe_length, indices(p)))
+
+iteratoreltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
+iteratoreltype(::Type{ProductIterator{Tuple{I}}}) where {I} = iteratoreltype(I)
+function iteratoreltype(::Type{ProductIterator{T}}) where {T<:Tuple}
+    I = tuple_type_head(T)
+    P = ProductIterator{tuple_type_tail(T)}
+    iteratoreltype(I) == EltypeUnknown() ? EltypeUnknown() : iteratoreltype(P)
+end
+
+eltype(P::ProductIterator) = _prod_eltype(P.iterators)
+_prod_eltype(::Tuple{}) = Tuple{}
+_prod_eltype(t::Tuple) = Base.tuple_type_cons(eltype(t[1]),_prod_eltype(tail(t)))
+
+start(::ProductIterator{Tuple{}}) = false
+next(::ProductIterator{Tuple{}}, state) = (), true
+done(::ProductIterator{Tuple{}}, state) = state
+
+function start(P::ProductIterator)
+    iterators = P.iterators
+    iter1 = first(iterators)
+    state1 = start(iter1)
+    d, states, nvalues = _prod_start(tail(iterators))
+    d |= done(iter1, state1)
+    return (d, (state1, states...), nvalues)
+end
+function next(P::ProductIterator, state)
+    iterators = P.iterators
+    d, states, nvalues = state
+    iter1 = first(iterators)
+    value1, state1 = next(iter1, states[1])
+    tailstates = tail(states)
+    values = (value1, map(unsafe_get, nvalues)...) # safe if not done(P, state)
+    if done(iter1, state1)
+        d, tailstates, nvalues = _prod_next(tail(iterators), tailstates, nvalues)
+        if !d # only restart iter1 if not completely done
+            state1 = start(iter1)
+        end
+    end
+    return values, (d, (state1, tailstates...), nvalues)
+end
+done(P::ProductIterator, state) = state[1]
+
+_prod_start(iterators::Tuple{}) = false, (), ()
+function _prod_start(iterators)
+    iter1 = first(iterators)
+    state1 = start(iter1)
+    d, tailstates, tailnvalues = _prod_start(tail(iterators))
+    if done(iter1, state1)
+        d = true
+        nvalue1 = Nullable{eltype(iter1)}()
+    else
+        value1, state1 = next(iter1, state1)
+        nvalue1 = Nullable{eltype(iter1)}(value1)
+    end
+    return (d, (state1, tailstates...), (nvalue1, tailnvalues...))
+end
+
+_prod_next(iterators::Tuple{}, states, nvalues) = true, (), ()
+function _prod_next(iterators, states, nvalues)
+    iter1 = first(iterators)
+    state1 = first(states)
+    if !done(iter1, state1)
+        value1, state1 = next(iter1, state1)
+        nvalue1 = Nullable{eltype(iter1)}(value1)
+        return false, (state1, tail(states)...), (nvalue1, tail(nvalues)...)
+    else
+        d, tailstates, tailnvalues = _prod_next(tail(iterators), tail(states), tail(nvalues))
+        if d # all iterators are done
+            nvalue1 = Nullable{eltype(iter1)}()
+        else
+            value1, state1 = next(iter1, start(iter1)) # iter cannot be done immediately
+            nvalue1 = Nullable{eltype(iter1)}(value1)
+        end
+        return d, (state1, tailstates...), (nvalue1, tailnvalues...)
+    end
+end
 
 # flatten an iterator of iterators
 
@@ -669,8 +713,9 @@ end
 
 Given an iterator that yields iterators, return an iterator that yields the
 elements of those iterators.
-Put differently, the elements of the argument iterator are concatenated. Example:
+Put differently, the elements of the argument iterator are concatenated.
 
+# Examples
 ```jldoctest
 julia> collect(Iterators.flatten((1:2, 8:9)))
 4-element Array{Int64,1}:
@@ -683,10 +728,27 @@ julia> collect(Iterators.flatten((1:2, 8:9)))
 flatten(itr) = Flatten(itr)
 
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
-iteratorsize(::Type{Flatten{I}}) where {I} = SizeUnknown()
 iteratoreltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, iteratoreltype(I))
 _flatteneltype(I, ::HasEltype) = iteratoreltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()
+
+flatten_iteratorsize(::Union{HasShape, HasLength}, b::Type{<:Tuple}) = isleaftype(b) ? HasLength() : SizeUnknown()
+flatten_iteratorsize(::Union{HasShape, HasLength}, b::Type{<:Number}) = HasLength()
+flatten_iteratorsize(a, b) = SizeUnknown()
+
+iteratorsize(::Type{Flatten{I}}) where {I} = flatten_iteratorsize(iteratorsize(I), eltype(I))
+
+function flatten_length(f, ::Type{T}) where {T<:Tuple}
+    if !isleaftype(T)
+        throw(ArgumentError(
+            "Cannot compute length of a tuple-type which is not a leaf-type"))
+    end
+    fieldcount(T)*length(f.it)
+end
+flatten_length(f, ::Type{<:Number}) = length(f.it)
+flatten_length(f, T) = throw(ArgumentError(
+    "Iterates of the argument to Flatten are not known to have constant length"))
+length(f::Flatten{I}) where {I} = flatten_length(f, eltype(I))
 
 function start(f::Flatten)
     local inner, s2
@@ -724,6 +786,7 @@ end
 
 Iterate over a collection `n` elements at a time.
 
+# Examples
 ```jldoctest
 julia> collect(Iterators.partition([1,2,3,4,5], 2))
 3-element Array{Array{Int64,1},1}:
@@ -741,6 +804,11 @@ mutable struct PartitionIterator{T}
 end
 
 eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
+partition_iteratorsize(::HasShape) = HasLength()
+partition_iteratorsize(isz) = isz
+function iteratorsize(::Type{PartitionIterator{T}}) where {T}
+    partition_iteratorsize(iteratorsize(T))
+end
 
 function length(itr::PartitionIterator)
     l = length(itr.c)

@@ -12,6 +12,7 @@ Base.:\(::Any, ::Any)
 Base.:^(::Number, ::Number)
 Base.fma
 Base.muladd
+Base.inv(::Number)
 Base.div
 Base.fld
 Base.cld
@@ -58,6 +59,7 @@ Base.:(!)
 Base.isapprox
 Base.sin
 Base.cos
+Base.sincos
 Base.tan
 Base.Math.sind
 Base.Math.cosd
@@ -180,6 +182,7 @@ Base.Math.lbeta
 Base.ndigits
 Base.widemul
 Base.Math.@evalpoly
+Base.FastMath.@fastmath
 ```
 
 ## Statistics
@@ -198,55 +201,4 @@ Base.quantile
 Base.quantile!
 Base.cov
 Base.cor
-```
-
-## Signal Processing
-
-Fast Fourier transform (FFT) functions in Julia are implemented by calling functions from [FFTW](http://www.fftw.org).
-
-```@docs
-Base.DFT.fft
-Base.DFT.fft!
-Base.DFT.ifft
-Base.DFT.ifft!
-Base.DFT.bfft
-Base.DFT.bfft!
-Base.DFT.plan_fft
-Base.DFT.plan_ifft
-Base.DFT.plan_bfft
-Base.DFT.plan_fft!
-Base.DFT.plan_ifft!
-Base.DFT.plan_bfft!
-Base.DFT.rfft
-Base.DFT.irfft
-Base.DFT.brfft
-Base.DFT.plan_rfft
-Base.DFT.plan_brfft
-Base.DFT.plan_irfft
-Base.DFT.FFTW.dct
-Base.DFT.FFTW.dct!
-Base.DFT.FFTW.idct
-Base.DFT.FFTW.idct!
-Base.DFT.FFTW.plan_dct
-Base.DFT.FFTW.plan_dct!
-Base.DFT.FFTW.plan_idct
-Base.DFT.FFTW.plan_idct!
-Base.DFT.fftshift(::Any)
-Base.DFT.fftshift(::Any, ::Any)
-Base.DFT.ifftshift
-Base.DSP.filt
-Base.DSP.filt!
-Base.DSP.deconv
-Base.DSP.conv
-Base.DSP.conv2
-Base.DSP.xcorr
-```
-
-The following functions are defined within the `Base.FFTW` module.
-
-```@docs
-Base.DFT.FFTW.r2r
-Base.DFT.FFTW.r2r!
-Base.DFT.FFTW.plan_r2r
-Base.DFT.FFTW.plan_r2r!
 ```

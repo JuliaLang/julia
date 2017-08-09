@@ -1,24 +1,25 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 catcmd = `cat`
-if is_windows()
+if Sys.iswindows()
+    busybox = joinpath(JULIA_HOME, "busybox.exe")
     try # use busybox-w32 on windows
-        success(`busybox`)
-        catcmd = `busybox cat`
+        success(`$busybox`)
+        catcmd = `$busybox cat`
     end
 end
 
 let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     # --version
-    let v = split(readstring(`$exename -v`), "julia version ")[end]
+    let v = split(read(`$exename -v`, String), "julia version ")[end]
         @test Base.VERSION_STRING == chomp(v)
     end
-    @test readstring(`$exename -v`) == readstring(`$exename --version`)
+    @test read(`$exename -v`, String) == read(`$exename --version`, String)
 
     # --help
     let header = "julia [switches] -- [programfile] [args...]"
-        @test startswith(readstring(`$exename -h`), header)
-        @test startswith(readstring(`$exename --help`), header)
+        @test startswith(read(`$exename -h`, String), header)
+        @test startswith(read(`$exename --help`, String), header)
     end
 
     # --quiet
@@ -40,8 +41,8 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     @test !success(`$exename -i -e "exit(1)"`)
 
     # --print
-    @test readstring(`$exename -E "1+1"`) == "2\n"
-    @test readstring(`$exename --print="1+1"`) == "2\n"
+    @test read(`$exename -E "1+1"`, String) == "2\n"
+    @test read(`$exename --print="1+1"`, String) == "2\n"
     @test !success(`$exename -E`)
     @test !success(`$exename --print`)
 
@@ -133,19 +134,19 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
-    let code = readstring(`$exename -g0 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`)
+    let code = read(`$exename -g0 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`, String)
         @test contains(code, "llvm.module.flags")
         @test !contains(code, "llvm.dbg.cu")
         @test !contains(code, "int.jl")
         @test !contains(code, "Int64")
     end
-    let code = readstring(`$exename -g1 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`)
+    let code = read(`$exename -g1 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`, String)
         @test contains(code, "llvm.module.flags")
         @test contains(code, "llvm.dbg.cu")
         @test contains(code, "int.jl")
         @test !contains(code, "Int64")
     end
-    let code = readstring(`$exename -g2 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`)
+    let code = read(`$exename -g2 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`, String)
         @test contains(code, "llvm.module.flags")
         @test contains(code, "llvm.dbg.cu")
         @test contains(code, "int.jl")
@@ -207,7 +208,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
 
         let out  = Pipe(),
             proc = spawn(pipeline(`$exename -E "$code" --depwarn=no`, stderr=out))
-            output = @async readstring(out)
+            output = @async read(out, String)
 
             wait(proc)
             close(out.in)
@@ -248,53 +249,73 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     # tested in test/parallel.jl, test/examples.jl)
     @test !success(`$exename --worker=true`)
 
-    escape(str) = replace(str, "\\", "\\\\")
-
     # test passing arguments
-    let testfile = tempname()
-        try
-            # write a julia source file that just prints ARGS to STDOUT
-            write(testfile, """
-                println(ARGS)
+    mktempdir() do dir
+        testfile = joinpath(dir, tempname())
+        # write a julia source file that just prints ARGS to STDOUT
+        write(testfile, """
+            println(ARGS)
             """)
-            @test readchomp(`$exename $testfile foo -bar --baz`) ==
-                "String[\"foo\", \"-bar\", \"--baz\"]"
-            @test readchomp(`$exename $testfile -- foo -bar --baz`) ==
-                "String[\"foo\", \"-bar\", \"--baz\"]"
+        cp(testfile, joinpath(dir, ".juliarc.jl"))
+
+        withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => dir) do
+            output = "String[\"foo\", \"-bar\", \"--baz\"]"
+            @test readchomp(`$exename $testfile foo -bar --baz`) == output
+            @test readchomp(`$exename $testfile -- foo -bar --baz`) == output
             @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) ==
-                "String[\"foo\", \"-bar\", \"--baz\"]"
-            @test split(readchomp(`$exename -L $testfile $testfile`), '\n') ==
-                ["String[\"$(escape(testfile))\"]", "String[]"]
+                output
+            @test readchomp(`$exename --startup-file=yes -e 'exit(0)' -- foo -bar --baz`) ==
+                output
+
+            output = "String[]\nString[]"
+            @test readchomp(`$exename -L $testfile $testfile`) == output
+            @test readchomp(`$exename --startup-file=yes $testfile`) == output
+
             @test !success(`$exename --foo $testfile`)
-            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) == "String[\"foo\", \"-bar\", \"--\", \"baz\"]"
-        finally
-            rm(testfile)
+            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) ==
+                "String[\"foo\", \"-bar\", \"--\", \"baz\"]"
         end
     end
 
-    # test the script name
-    let a = tempname(), b = tempname()
-        try
-            write(a, """
-                println(@__FILE__)
-                println(PROGRAM_FILE)
-                println(length(ARGS))
-                include(\"$(escape(b))\")
+    # test the program name remains constant
+    mktempdir() do dir
+        a = joinpath(dir, "a.jl")
+        b = joinpath(dir, "b.jl")
+        c = joinpath(dir, ".juliarc.jl")
+
+        write(a, """
+            println(@__FILE__)
+            println(PROGRAM_FILE)
+            include(\"$(escape_string(b))\")
             """)
-            write(b, """
-                println(@__FILE__)
-                println(PROGRAM_FILE)
-                println(length(ARGS))
+        write(b, """
+            println(@__FILE__)
+            println(PROGRAM_FILE)
             """)
-            @test split(readchomp(`$exename $a`), '\n') ==
-                ["$a", "$a", "0", "$b", "$a", "0"]
-            @test split(readchomp(`$exename -L $b -e 'exit(0)'`), '\n') ==
-                ["$(realpath(b))", "", "0"]
-            @test split(readchomp(`$exename -L $b $a`), '\n') ==
-                ["$(realpath(b))", "", "1", "$a", "$a", "0", "$b", "$a", "0"]
-        finally
-            rm(a)
-            rm(b)
+        cp(b, c)
+
+        readsplit(cmd) = split(readchomp(cmd), '\n')
+
+        withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => dir) do
+            @test readsplit(`$exename $a`) ==
+                [a, a,
+                 b, a]
+            @test readsplit(`$exename -L $b -e 'exit(0)'`) ==
+                [realpath(b), ""]
+            @test readsplit(`$exename -L $b $a`) ==
+                [realpath(b), a,
+                 a, a,
+                 b, a]
+            @test readsplit(`$exename --startup-file=yes -e 'exit(0)'`) ==
+                [c, ""]
+            @test readsplit(`$exename --startup-file=yes -L $b -e 'exit(0)'`) ==
+                [c, "",
+                 realpath(b), ""]
+            @test readsplit(`$exename --startup-file=yes -L $b $a`) ==
+                [c, a,
+                 realpath(b), a,
+                 a, a,
+                 b, a]
         end
     end
 
@@ -322,7 +343,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     # issue #12671, starting from a non-directory
     # rm(dir) fails on windows with Permission denied
     # and was an upstream bug in llvm <= v3.3
-    if !is_windows() && VersionNumber(Base.libllvm_version) > v"3.3"
+    if !Sys.iswindows() && Base.libllvm_version > v"3.3"
         testdir = mktempdir()
         cd(testdir) do
             rm(testdir)
@@ -346,7 +367,7 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename()),
         let stderr = Pipe(),
             p = spawn(pipeline(`$exename --sysimage=$nonexist_image`, stderr=stderr))
             close(stderr.in)
-            let s = readstring(stderr)
+            let s = read(stderr, String)
                 @test contains(s, "ERROR: could not load library \"$nonexist_image\"\n")
                 @test !contains(s, "Segmentation fault")
                 @test !contains(s, "EXCEPTION_ACCESS_VIOLATION")
@@ -359,7 +380,7 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename()),
     let stderr = Pipe(),
         p = spawn(pipeline(`$exename --sysimage=$libjulia`, stderr=stderr))
         close(stderr.in)
-        let s = readstring(stderr)
+        let s = read(stderr, String)
             @test s == "ERROR: System image file failed consistency check: maybe opened the wrong version?\n"
         end
         @test !success(p)
@@ -401,15 +422,9 @@ end
 
 # backtrace contains type and line number info (esp. on windows #17179)
 for precomp in ("yes", "no")
-    bt = readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --precompiled=$precomp
-        -E 'include("____nonexistent_file")'`), stderr=catcmd))
-    @test contains(bt, "include_from_node1")
-    if ((is_windows() && Sys.WORD_SIZE == 32) || (is_bsd() && !is_apple())) && precomp == "yes"
-        # FIXME: Issue #17251 (Windows), #20798 (FreeBSD)
-        @test_broken contains(bt, "include_from_node1(::String) at $(joinpath(".","loading.jl"))")
-    else
-        @test contains(bt, "include_from_node1(::String) at $(joinpath(".","loading.jl"))")
-    end
+    bt = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --precompiled=$precomp
+        -E 'include("____nonexistent_file")'`), stderr=catcmd), String)
+    @test contains(bt, "include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))")
     lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)
     @test length(lno.captures) == 1
     @test parse(Int, lno.captures[1]) > 0

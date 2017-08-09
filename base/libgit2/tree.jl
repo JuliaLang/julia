@@ -8,7 +8,7 @@ Function parameter should have following signature:
     (Cstring, Ptr{Void}, Ptr{Void}) -> Cint
 """
 function treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool = false)
-    cbf = cfunction(f, Cint, (Cstring, Ptr{Void}, Ptr{Void}))
+    cbf = cfunction(f, Cint, Tuple{Cstring, Ptr{Void}, Ptr{Void}})
     cbf_payload = Ref{typeof(payload)}(payload)
     @check ccall((:git_tree_walk, :libgit2), Cint,
                   (Ptr{Void}, Cint, Ptr{Void}, Ptr{Void}),

@@ -187,7 +187,7 @@ julia> Squares(10)[[3,4.,5]]
 While this is starting to support more of the [indexing operations supported by some of the builtin types](@ref man-array-indexing),
 there's still quite a number of behaviors missing. This `Squares` sequence is starting to look
 more and more like a vector as we've added behaviors to it. Instead of defining all these behaviors
-ourselves, we can officially define it as a subtype of an `AbstractArray`.
+ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref).
 
 ## [Abstract Arrays](@id man-interface-array)
 
@@ -231,8 +231,9 @@ arrays are simple: just define `getindex(A::ArrayType, i::Int)`.  When the array
 indexed with a multidimensional set of indices, the fallback `getindex(A::AbstractArray, I...)()`
 efficiently converts the indices into one linear index and then calls the above method. `IndexCartesian()`
 arrays, on the other hand, require methods to be defined for each supported dimensionality with
-`ndims(A)``Int` indices.  For example, the builtin `SparseMatrixCSC` type only supports two dimensions,
-so it just defines `getindex(A::SparseMatrixCSC, i::Int, j::Int)()`.  The same holds for `setindex!()`.
+`ndims(A)` `Int` indices. For example, the built-in [`SparseMatrixCSC`](@ref) type only
+supports two dimensions, so it just defines
+`getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for `setindex!()`.
 
 Returning to the sequence of squares from above, we could instead define it as a subtype of an
 `AbstractArray{Int, 1}`:

@@ -6,8 +6,8 @@
   . pool-allocates small objects, keeps big objects on a simple list
 */
 
-#ifndef JULIA_GC_H
-#define JULIA_GC_H
+#ifndef JL_GC_H
+#define JL_GC_H
 
 #include <stdlib.h>
 #include <string.h>
@@ -32,7 +32,7 @@ extern "C" {
 
 #define GC_PAGE_LG2 14 // log2(size of a page)
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
-#define GC_PAGE_OFFSET (JL_SMALL_BYTE_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_SMALL_BYTE_ALIGNMENT))
+#define GC_PAGE_OFFSET (JL_HEAP_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_HEAP_ALIGNMENT))
 
 #define jl_malloc_tag ((void*)0xdeadaa01)
 #define jl_singleton_tag ((void*)0xdeadaa02)
@@ -211,7 +211,7 @@ typedef union {
 
 // layout for big (>2k) objects
 
-typedef struct _bigval_t {
+JL_EXTENSION typedef struct _bigval_t {
     struct _bigval_t *next;
     struct _bigval_t **prev; // pointer to the next field of the prev entry
     union {
@@ -522,6 +522,7 @@ void gc_final_pause_end(int64_t t0, int64_t tend);
 void gc_time_pool_start(void);
 void gc_time_count_page(int freedall, int pg_skpd);
 void gc_time_pool_end(int sweep_full);
+void gc_time_sysimg_end(uint64_t t0);
 
 void gc_time_big_start(void);
 void gc_time_count_big(int old_bits, int bits);
@@ -543,7 +544,8 @@ STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd)
     (void)freedall;
     (void)pg_skpd;
 }
-#define gc_time_pool_end(sweep_full)
+#define gc_time_pool_end(sweep_full) (void)(sweep_full)
+#define gc_time_sysimg_end(t0) (void)(t0)
 #define gc_time_big_start()
 STATIC_INLINE void gc_time_count_big(int old_bits, int bits)
 {

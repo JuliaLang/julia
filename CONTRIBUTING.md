@@ -48,7 +48,7 @@ A useful bug report filed as a GitHub issue provides information about how to re
 3. When filing a bug report, provide where possible:
   - The full error message, including the backtrace.
   - A minimal working example, i.e. the smallest chunk of code that triggers the error. Ideally, this should be code that can be pasted into a REPL or run from a source file. If the code is larger than (say) 50 lines, consider putting it in a [gist](https://gist.github.com).
-  - The version of Julia as provided by the `versioninfo()` command. Occasionally, the longer output produced by `versioninfo(true)` may be useful also, especially if the issue is related to a specific package.
+  - The version of Julia as provided by the `versioninfo()` command. Occasionally, the longer output produced by `versioninfo(verbose = true)` may be useful also, especially if the issue is related to a specific package.
 
 4. When pasting code blocks or output, put triple backquotes (\`\`\`) around the text so GitHub will format it nicely. Code statements should be surrounded by single backquotes (\`). Be aware that the `@` sign tags users on GitHub, so references to macros should always be in single backquotes. See [GitHub's guide on Markdown](https://guides.github.com/features/mastering-markdown) for more formatting tricks.
 
@@ -182,7 +182,7 @@ Examples written within docstrings can be used as testcases known as "doctests" 
     "DOCSTRING TEST"
     ```
 
-A doctest needs to match an interactive REPL including the `julia>` prompt. To run doctests you need to run `make -C doc check` from the root directory.
+A doctest needs to match an interactive REPL including the `julia>` prompt. To run doctests you need to run `make -C doc check` from the root directory. It is recommended to add the header `# Examples` above the doctests.
 
 #### News-worthy changes
 

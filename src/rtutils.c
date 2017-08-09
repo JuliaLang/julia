@@ -236,7 +236,7 @@ JL_DLLEXPORT void jl_pop_handler(int n)
     jl_eh_restore_state(eh);
 }
 
-JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int catch_exceptions)
+JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int drop_exceptions)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *exc = ptls->exception_in_transit;
@@ -245,16 +245,17 @@ JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, 
     if (ptls->bt_size > 0)
         bt = (jl_array_t*)jl_get_backtrace();
     jl_value_t *v;
-    if (catch_exceptions) {
-        JL_TRY {
-            v = jl_apply(args, nargs);
-        }
-        JL_CATCH {
-            v = NULL;
-        }
-    }
-    else {
+    JL_TRY {
         v = jl_apply(args, nargs);
+    }
+    JL_CATCH {
+        if (!drop_exceptions) {
+            jl_printf(JL_STDERR, "Internal error: encountered unexpected error in runtime:\n");
+            jl_static_show(JL_STDERR, ptls->exception_in_transit);
+            jl_printf(JL_STDERR, "\n");
+            jlbacktrace(); // written to STDERR_FILENO
+        }
+        v = NULL;
     }
     ptls->exception_in_transit = exc;
     if (bt != NULL) {
@@ -493,6 +494,20 @@ struct recur_list {
 static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth);
 
 JL_DLLEXPORT int jl_id_start_char(uint32_t wc);
+JL_DLLEXPORT int jl_id_char(uint32_t wc);
+
+JL_DLLEXPORT int jl_is_identifier(char *str)
+{
+    size_t i = 0;
+    uint32_t wc = u8_nextchar(str, &i);
+    if (!jl_id_start_char(wc))
+        return 0;
+    while ((wc = u8_nextchar(str, &i)) != 0) {
+        if (!jl_id_char(wc))
+            return 0;
+    }
+    return 1;
+}
 
 // `v` might be pointing to a field inlined in a structure therefore
 // `jl_typeof(v)` may not be the same with `vt` and only `vt` should be
@@ -504,10 +519,10 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
 {
     size_t n = 0;
     if ((uintptr_t)vt < 4096U) {
-        n += jl_printf(out, "<?#%p::%p>", v, vt);
+        n += jl_printf(out, "<?#%p::%p>", (void*)v, (void*)vt);
     }
     else if ((uintptr_t)v < 4096U) {
-        n += jl_printf(out, "<?#%p::", v);
+        n += jl_printf(out, "<?#%p::", (void*)v);
         n += jl_static_show_x(out, (jl_value_t*)vt, depth);
         n += jl_printf(out, ">");
     }
@@ -518,19 +533,21 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_method_instance_type) {
         jl_method_instance_t *li = (jl_method_instance_t*)v;
-        if (li->def) {
-            n += jl_static_show_x(out, (jl_value_t*)li->def->module, depth);
+        if (jl_is_method(li->def.method)) {
+            jl_method_t *m = li->def.method;
+            n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
             if (li->specTypes) {
                 n += jl_printf(out, ".");
                 n += jl_show_svec(out, ((jl_datatype_t*)jl_unwrap_unionall(li->specTypes))->parameters,
-                                  jl_symbol_name(li->def->name), "(", ")");
+                                  jl_symbol_name(m->name), "(", ")");
             }
             else {
-                n += jl_printf(out, ".%s(?)", jl_symbol_name(li->def->name));
+                n += jl_printf(out, ".%s(?)", jl_symbol_name(m->name));
             }
         }
         else {
-            n += jl_printf(out, "<toplevel thunk> -> ");
+            n += jl_static_show_x(out, (jl_value_t*)li->def.module, depth);
+            n += jl_printf(out, ".<toplevel thunk> -> ");
             n += jl_static_show_x(out, li->inferred, depth);
         }
     }
@@ -542,7 +559,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
         int globfunc = 0;
         if (globname && !strchr(jl_symbol_name(globname), '#') &&
-            !strchr(jl_symbol_name(globname), '@') &&
+            !strchr(jl_symbol_name(globname), '@') && dv->name->module &&
             jl_binding_resolved_p(dv->name->module, globname)) {
             jl_binding_t *b = jl_get_binding(dv->name->module, globname);
             if (b && jl_typeof(b->value) == v)
@@ -717,8 +734,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_sym_type) {
         char *sn = jl_symbol_name((jl_sym_t*)v);
-        // TODO check for valid identifier
-        int quoted = strchr(sn, '/') && strcmp(sn, "/") && strcmp(sn, "//") && strcmp(sn, "//=");
+        int quoted = !jl_is_identifier(sn) && jl_operator_precedence(sn) == 0;
         if (quoted)
             n += jl_printf(out, "Symbol(\"");
         else
@@ -746,9 +762,15 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         if (!jl_is_symbol(qv)) {
             n += jl_printf(out, "quote ");
         }
+        else {
+            n += jl_printf(out, ":(");
+        }
         n += jl_static_show_x(out, qv, depth);
         if (!jl_is_symbol(qv)) {
             n += jl_printf(out, " end");
+        }
+        else {
+            n += jl_printf(out, ")");
         }
     }
     else if (vt == jl_newvarnode_type) {
@@ -757,7 +779,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, ">");
     }
     else if (vt == jl_linenumbernode_type) {
-        n += jl_printf(out, "# line %" PRIuPTR, jl_linenode_line(v));
+        n += jl_printf(out, "#= ");
+        n += jl_static_show_x(out, jl_linenode_file(v), depth);
+        n += jl_printf(out, ":%" PRIuPTR " =#", jl_linenode_line(v));
     }
     else if (vt == jl_expr_type) {
         jl_expr_t *e = (jl_expr_t*)v;
@@ -850,7 +874,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 i = 1;
             for (; i < tlen; i++) {
                 if (!istuple) {
-                    n += jl_printf(out, "%s", jl_symbol_name((jl_sym_t*)jl_svecref(vt->name->names, i)));
+                    n += jl_printf(out, "%s", jl_symbol_name(jl_field_name(vt, i)));
                     n += jl_printf(out, "=");
                 }
                 size_t offs = jl_field_offset(vt, i);
@@ -876,7 +900,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, ")");
     }
     else {
-        n += jl_printf(out, "<?#%p::", v);
+        n += jl_printf(out, "<?#%p::", (void*)v);
         n += jl_static_show_x(out, (jl_value_t*)vt, depth);
         n += jl_printf(out, ">");
     }
@@ -992,7 +1016,7 @@ void jl_depwarn(const char *msg, jl_value_t *sym)
     JL_GC_POP();
 }
 
-void jl_depwarn_partial_indexing(size_t n)
+JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n)
 {
     static jl_value_t *depwarn_func = NULL;
     if (!depwarn_func && jl_base_module) {
@@ -1000,7 +1024,7 @@ void jl_depwarn_partial_indexing(size_t n)
     }
     if (!depwarn_func) {
         jl_safe_printf("WARNING: Partial linear indexing is deprecated. Use "
-            "`reshape(A, Val{%zd})` to make the dimensionality of the array match "
+            "`reshape(A, Val(%zd))` to make the dimensionality of the array match "
             "the number of indices\n", n);
         return;
     }

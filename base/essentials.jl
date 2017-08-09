@@ -17,6 +17,42 @@ end
 macro _noinline_meta()
     Expr(:meta, :noinline)
 end
+
+"""
+    @nospecialize
+
+Applied to a function argument name, hints to the compiler that the method
+should not be specialized for different types of that argument.
+This is only a hint for avoiding excess code generation.
+Can be applied to an argument within a formal argument list, or in the
+function body.
+When applied to an argument, the macro must wrap the entire argument
+expression.
+When used in a function body, the macro must occur in statement position and
+before any code.
+
+```julia
+function example_function(@nospecialize x)
+    ...
+end
+
+function example_function(@nospecialize(x = 1), y)
+    ...
+end
+
+function example_function(x, y, z)
+    @nospecialize x y
+    ...
+end
+```
+"""
+macro nospecialize(var, vars...)
+    if isa(var, Expr) && var.head === :(=)
+        var.head = :kw
+    end
+    Expr(:meta, :nospecialize, var, vars...)
+end
+
 macro _pure_meta()
     Expr(:meta, :pure)
 end
@@ -25,7 +61,7 @@ macro _propagate_inbounds_meta()
     Expr(:meta, :inline, :propagate_inbounds)
 end
 
-convert(::Type{Any}, x::ANY) = x
+convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
 
 convert(::Type{Tuple{}}, ::Tuple{}) = ()
@@ -34,16 +70,6 @@ convert(::Type{Tuple{Vararg{T}}}, x::Tuple) where {T} = cnvt_all(T, x...)
 cnvt_all(T) = ()
 cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
 
-macro generated(f)
-    isa(f, Expr) || error("invalid syntax; @generated must be used with a function definition")
-    if f.head === :function || (isdefined(:length) && f.head === :(=) && length(f.args) == 2 && f.args[1].head == :call)
-        f.head = :stagedfunction
-        return Expr(:escape, f)
-    else
-        error("invalid syntax; @generated must be used with a function definition")
-    end
-end
-
 """
     @eval [mod,] ex
 
@@ -51,7 +77,7 @@ Evaluate an expression with values interpolated into it using `eval`.
 If two arguments are provided, the first is the module to evaluate in.
 """
 macro eval(ex)
-    :(eval($(current_module()), $(Expr(:quote,ex))))
+    :(eval($__module__, $(Expr(:quote,ex))))
 end
 macro eval(mod, ex)
     :(eval($(esc(mod)), $(Expr(:quote,ex))))
@@ -60,13 +86,13 @@ end
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
-tuple_type_head(T::UnionAll) = tuple_type_head(T.body)
+tuple_type_head(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_head(T.body)))
 function tuple_type_head(T::DataType)
     @_pure_meta
     T.name === Tuple.name || throw(MethodError(tuple_type_head, (T,)))
     return unwrapva(T.parameters[1])
 end
-tuple_type_tail(T::UnionAll) = tuple_type_tail(T.body)
+tuple_type_tail(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_tail(T.body)))
 function tuple_type_tail(T::DataType)
     @_pure_meta
     T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
@@ -77,19 +103,19 @@ function tuple_type_tail(T::DataType)
 end
 
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
-function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
+function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
     @_pure_meta
     Tuple{S, T.parameters...}
 end
 
-function unwrap_unionall(a::ANY)
+function unwrap_unionall(@nospecialize(a))
     while isa(a,UnionAll)
         a = a.body
     end
     return a
 end
 
-function rewrap_unionall(t::ANY, u::ANY)
+function rewrap_unionall(@nospecialize(t), @nospecialize(u))
     if !isa(u, UnionAll)
         return t
     end
@@ -97,7 +123,7 @@ function rewrap_unionall(t::ANY, u::ANY)
 end
 
 # replace TypeVars in all enclosing UnionAlls with fresh TypeVars
-function rename_unionall(u::ANY)
+function rename_unionall(@nospecialize(u))
     if !isa(u,UnionAll)
         return u
     end
@@ -113,13 +139,13 @@ function rename_unionall(u::ANY)
 end
 
 const _va_typename = Vararg.body.body.name
-function isvarargtype(t::ANY)
+function isvarargtype(@nospecialize(t))
     t = unwrap_unionall(t)
     isa(t, DataType) && (t::DataType).name === _va_typename
 end
 
 isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
-function unwrapva(t::ANY)
+function unwrapva(@nospecialize(t))
     t2 = unwrap_unionall(t)
     isvarargtype(t2) ? t2.parameters[1] : t
 end
@@ -181,9 +207,9 @@ function append_any(xs...)
 end
 
 # simple Array{Any} operations needed for bootstrap
-setindex!(A::Array{Any}, x::ANY, i::Int) = Core.arrayset(A, x, i)
+setindex!(A::Array{Any}, @nospecialize(x), i::Int) = Core.arrayset(A, x, i)
 
-function precompile(f::ANY, args::Tuple)
+function precompile(@nospecialize(f), args::Tuple)
     ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
 end
 
@@ -192,13 +218,13 @@ function precompile(argt::Type)
 end
 
 """
-    esc(e::ANY)
+    esc(e)
 
 Only valid in the context of an `Expr` returned from a macro. Prevents the macro hygiene
 pass from turning embedded variables into gensym variables. See the [Macros](@ref man-macros)
 section of the Metaprogramming chapter of the manual for more details and examples.
 """
-esc(e::ANY) = Expr(:escape, e)
+esc(@nospecialize(e)) = Expr(:escape, e)
 
 macro boundscheck(blk)
     # hack: use this syntax since it avoids introducing line numbers
@@ -254,12 +280,13 @@ function getindex(v::SimpleVector, i::Int)
     return unsafe_pointer_to_objref(x)
 end
 
-length(v::SimpleVector) = v.length
-endof(v::SimpleVector) = v.length
+# TODO: add gc use intrinsic call instead of noinline
+length(v::SimpleVector) = (@_noinline_meta; unsafe_load(convert(Ptr{Int},data_pointer_from_objref(v))))
+endof(v::SimpleVector) = length(v)
 start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
-done(v::SimpleVector,i) = (i > v.length)
-isempty(v::SimpleVector) = (v.length == 0)
+done(v::SimpleVector,i) = (i > length(v))
+isempty(v::SimpleVector) = (length(v) == 0)
 indices(v::SimpleVector) = (OneTo(length(v)),)
 linearindices(v::SimpleVector) = indices(v, 1)
 indices(v::SimpleVector, d) = d <= 1 ? indices(v)[d] : OneTo(1)
@@ -304,7 +331,7 @@ false
 function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
-    1 <= i <= length(v) || return false
+    @boundscheck 1 <= i <= length(v) || return false
     x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
     return x != C_NULL
 end
@@ -315,19 +342,40 @@ end
 Colons (:) are used to signify indexing entire objects or dimensions at once.
 
 Very few operations are defined on Colons directly; instead they are converted
-by `to_indices` to an internal vector type (`Base.Slice`) to represent the
+by [`to_indices`](@ref) to an internal vector type (`Base.Slice`) to represent the
 collection of indices they span before being used.
 """
 struct Colon
 end
 const (:) = Colon()
 
-# For passing constants through type inference
-struct Val{T}
+"""
+    Val(c)
+
+Return `Val{c}()`, which contains no run-time data. Types like this can be used to
+pass the information between functions through the value `c`, which must be an `isbits`
+value. The intent of this construct is to be able to dispatch on constants directly (at
+compile time) without having to test the value of the constant at run time.
+
+# Examples
+```jldoctest
+julia> f(::Val{true}) = "Good"
+f (generic function with 1 method)
+
+julia> f(::Val{false}) = "Bad"
+f (generic function with 2 methods)
+
+julia> f(Val(true))
+"Good"
+```
+"""
+struct Val{x}
 end
 
+Val(x) = (@_pure_meta; Val{x}())
+
 # used by interpolating quote and some other things in the front end
-function vector_any(xs::ANY...)
+function vector_any(@nospecialize xs...)
     n = length(xs)
     a = Vector{Any}(n)
     @inbounds for i = 1:n
@@ -359,13 +407,17 @@ end
 isempty(itr) = done(itr, start(itr))
 
 """
-    invokelatest(f, args...)
+    invokelatest(f, args...; kwargs...)
 
-Calls `f(args...)`, but guarantees that the most recent method of `f`
+Calls `f(args...; kwargs...)`, but guarantees that the most recent method of `f`
 will be executed.   This is useful in specialized circumstances,
 e.g. long-running event loops or callback functions that may
 call obsolete versions of a function `f`.
 (The drawback is that `invokelatest` is somewhat slower than calling
 `f` directly, and the type of the result cannot be inferred by the compiler.)
 """
-invokelatest(f, args...) = Core._apply_latest(f, args)
+function invokelatest(f, args...; kwargs...)
+    # We use a closure (`inner`) to handle kwargs.
+    inner() = f(args...; kwargs...)
+    Core._apply_latest(inner)
+end

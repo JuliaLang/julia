@@ -27,6 +27,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Discussion forum:** <https://discourse.julialang.org>
 - **Mailing lists:** <https://julialang.org/community/>
+- **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
 - **Gitter:** <https://gitter.im/JuliaLang/julia>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
@@ -42,12 +43,25 @@ New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang
 
 ## Currently Supported Platforms
 
-- **Linux**
-- **MacOS**
-- **FreeBSD**
-- **Windows**
+Julia is built and tested regularly on the following platforms:
 
-All systems are supported with both x86/64 (64-bit) and x86 (32-bit, except MacOS) architectures. Support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md), AARCH64, and POWER8 (little-endian) has been added recently.
+| Operating System | Architecture     | CI | Binaries | Support Level |
+|:----------------:|:----------------:|:--:|:--------:|:-------------:|
+| Linux 2.6.18+    | x86-64 (64-bit)  | ✓  | ✓        | Official      |
+|                  | i686 (32-bit)    | ✓  | ✓        | Official      |
+|                  | ARM v7 (32-bit)  |    | ✓        | Official      |
+|                  | ARM v8 (64-bit)  |    | ✓        | Official      |
+|                  | PowerPC (64-bit) |    |          | Community     |
+| macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Official      |
+| Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Official      |
+|                  | i686 (32-bit)    | ✓  | ✓        | Official      |
+| FreeBSD 11.0+    | x86-64 (64-bit)  | ✓  |          | Community     |
+
+All systems marked with ✓ for CI are tested using continuous integration for every commit.
+Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly.
+The systems listed here with neither CI nor official binaries are known to build and work, but ongoing support for those platforms is dependent on community efforts.
+It's possible that Julia will build and work on other platforms too, and we're always looking to better our platform coverage.
+If you're using Julia on a platform not listed here, let us know!
 
 ## Source Download and Compilation
 
@@ -62,9 +76,9 @@ Then, acquire the source code by cloning the git repository:
 
 Be sure to also configure your system to use the appropriate proxy settings, e.g. by setting the `https_proxy` and `http_proxy` variables.)
 
-By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.5` series of releases. You can get this version by changing to the Julia directory and running
+By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.6` series of releases. You can get this version by changing to the Julia directory and running
 
-    git checkout release-0.5
+    git checkout v0.6.0
 
 Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.)
 When compiled the first time, it will automatically download and build its [external dependencies](#required-build-tools-and-external-libraries).
@@ -225,20 +239,24 @@ When building Julia, or its dependencies, libraries installed by third party pac
 
 ### FreeBSD
 
-On *FreeBSD Release 11.0*, install the gfortran, git, cmake, and gmake packages/ports (`pkg install gcc6 gmake git cmake`), and compile Julia with the command:
+Clang is the default compiler on FreeBSD 11.0-RELEASE and above.
+The remaining build tools are available from the Ports Collection, and can be installed using `pkg install git gcc gmake cmake`.
+To build Julia, simply run `gmake`.
+(Note that `gmake` must be used rather than `make`, since `make` on FreeBSD corresponds to the incompatible BSD Make rather than GNU Make.)
 
-    $ echo 'FC=gfortran6' >> Make.user
-    $ gmake
+It's important to note that the `USE_SYSTEM_*` flags should be used with caution on FreeBSD.
+This is because many system libraries, and even libraries from the Ports Collection, link to the system's `libgcc_s.so.1`,
+or to another library which links to the system `libgcc_s`.
+This library declares its GCC version to be 4.6, which is too old to build Julia, and conflicts with other libraries when linking.
+Thus it is highly recommended to simply allow Julia to build all of its dependencies.
+If you do choose to use the `USE_SYSTEM_*` flags, note that `/usr/local` is not on the compiler path by default, so you may need
+to add `LDFLAGS=-L/usr/local/lib` and `CPPFLAGS=-I/usr/local/include` to your `Make.user`, though doing so may interfere with
+other dependencies.
 
-You must use the `gmake` command on FreeBSD instead of `make`.
+Some known issues on FreeBSD are:
 
-Note that Julia is community-supported and we have little control over our upstream dependencies, you may still run into issues with dependencies and YMMV. Current known issues include:
-
- - The x86 arch doesn't support threading due to lack of compiler runtime library support (set `JULIA_THREADS=0`).
- - OpenBLAS patches in pkg haven't been upstreamed.
- - gfortran can't link binaries. Set `FFLAGS=-Wl,-rpath,/usr/local/lib/gcc6` to work around this (upstream bug submitted to FreeBSD pkg maintainers).
- - System libraries installed by pkg are not on the compiler path by default. You may need to add `LDFLAGS=-L/usr/local/lib` and `CPPFLAGS=-I/usr/local/include` to your environment or `Make.user` file to build successfully.
-
+* The x86 architecture does not support threading due to lack of compiler runtime library support, so you may need to
+  set `JULIA_THREADS=0` in your `Make.user` if you're on a 32-bit system.
 
 ### Windows
 
@@ -277,7 +295,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[AMOS]**                 — subroutines for computing Bessel and Airy functions.
 - **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices.
 - **[ARPACK]**               — collection of subroutines designed to solve large, sparse eigenvalue problems.
-- **[FFTW]** (>= 3.3)        — library for computing fast Fourier transforms very quickly and efficiently.
 - **[PCRE]** (>= 10.00)      — Perl-compatible regular expressions library.
 - **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
@@ -309,7 +326,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 [SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
 [AMOS]:         http://netlib.org/amos
 [ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng
-[FFTW]:         http://www.fftw.org
 [PCRE]:         http://www.pcre.org
 [LLVM]:         http://www.llvm.org
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
@@ -350,7 +366,6 @@ Add the following to the `Make.user` file:
     USEICC = 1
     USEIFC = 1
     USE_INTEL_MKL = 1
-    USE_INTEL_MKL_FFT = 1
     USE_INTEL_LIBM = 1
 
 It is highly recommended to start with a fresh clone of the Julia repository.
@@ -407,6 +422,7 @@ The following distributions include julia, but the versions may be out of date d
   * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
 * [MacPorts](https://trac.macports.org/browser/trunk/dports/lang/julia/Portfile)
 * [OS X Homebrew Tap](https://github.com/staticfloat/homebrew-julia/)
+* [FreeBSD Ports](https://www.freshports.org/lang/julia/)
 
 ## Editor and Terminal Setup
 
@@ -427,4 +443,4 @@ is available through
 [Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia) plugin
 enables interaction between IJulia and Sublime Text.
 
-In the terminal, Julia makes great use of both control-key and meta-key bindings. To make the meta-key bindings more accessible, many terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc.) allow you to use the alt or option key as meta.  See the section in the manual on [interacting with Julia](https://docs.julialang.org/en/latest/manual/interacting-with-julia/) for more details.
+In the terminal, Julia makes great use of both control-key and meta-key bindings. To make the meta-key bindings more accessible, many terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc.) allow you to use the alt or option key as meta.  See the section in the manual on [interacting with Julia](https://docs.julialang.org/en/latest/manual/interacting-with-julia) for more details.

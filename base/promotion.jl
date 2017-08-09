@@ -3,9 +3,9 @@
 ## type join (closest common ancestor, or least upper bound) ##
 
 typejoin() = (@_pure_meta; Bottom)
-typejoin(t::ANY) = (@_pure_meta; t)
-typejoin(t::ANY, ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
-function typejoin(a::ANY, b::ANY)
+typejoin(@nospecialize(t)) = (@_pure_meta; t)
+typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
+function typejoin(@nospecialize(a), @nospecialize(b))
     @_pure_meta
     if a <: b
         return b
@@ -122,14 +122,14 @@ end
 
 ## promotion mechanism ##
 
-promote_type()  = (@_pure_meta; Bottom)
-promote_type(T) = (@_pure_meta; T)
-promote_type(T, S, U, V...) = (@_pure_meta; promote_type(T, promote_type(S, U, V...)))
+promote_type()  = Bottom
+promote_type(T) = T
+promote_type(T, S, U, V...) = (@_inline_meta; promote_type(T, promote_type(S, U, V...)))
 
-promote_type(::Type{Bottom}, ::Type{Bottom}) = (@_pure_meta; Bottom)
-promote_type(::Type{T}, ::Type{T}) where {T} = (@_pure_meta; T)
-promote_type(::Type{T}, ::Type{Bottom}) where {T} = (@_pure_meta; T)
-promote_type(::Type{Bottom}, ::Type{T}) where {T} = (@_pure_meta; T)
+promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
+promote_type(::Type{T}, ::Type{T}) where {T} = T
+promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
+promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
 
 """
     promote_type(type1, type2)
@@ -137,8 +137,8 @@ promote_type(::Type{Bottom}, ::Type{T}) where {T} = (@_pure_meta; T)
 Determine a type big enough to hold values of each argument type without loss, whenever
 possible. In some cases, where no type exists to which both types can be promoted
 losslessly, some loss is tolerated; for example, `promote_type(Int64, Float64)` returns
-`Float64` even though strictly, not all `Int64` values can be represented exactly as
-`Float64` values.
+[`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be represented
+exactly as `Float64` values.
 
 ```jldoctest
 julia> promote_type(Int64, Float64)
@@ -152,7 +152,7 @@ BigFloat
 ```
 """
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
-    @_pure_meta
+    @_inline_meta
     # Try promote_rule in both orders. Typically only one is defined,
     # and there is a fallback returning Bottom below, so the common case is
     #   promote_type(T, S) =>
@@ -161,31 +161,34 @@ function promote_type(::Type{T}, ::Type{S}) where {T,S}
     promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
 end
 
-promote_rule(T, S) = (@_pure_meta; Bottom)
+promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
 
-promote_result(t,s,T,S) = (@_pure_meta; promote_type(T,S))
+promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@_inline_meta; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@_pure_meta; typejoin(T, S))
+promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@_inline_meta; typejoin(T, S))
 
 promote() = ()
 promote(x) = (x,)
 function promote(x::T, y::S) where {T,S}
+    @_inline_meta
     (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
 end
-promote_typeof(x) = (@_pure_meta; typeof(x))
-promote_typeof(x, xs...) = (@_pure_meta; promote_type(typeof(x), promote_typeof(xs...)))
+promote_typeof(x) = typeof(x)
+promote_typeof(x, xs...) = (@_inline_meta; promote_type(typeof(x), promote_typeof(xs...)))
 function promote(x, y, z)
+    @_inline_meta
     (convert(promote_typeof(x,y,z), x),
      convert(promote_typeof(x,y,z), y),
      convert(promote_typeof(x,y,z), z))
 end
 function promote(x, y, zs...)
+    @_inline_meta
     (convert(promote_typeof(x,y,zs...), x),
      convert(promote_typeof(x,y,zs...), y),
      convert(Tuple{Vararg{promote_typeof(x,y,zs...)}}, zs)...)
 end
-# TODO: promote{T}(x::T, ys::T...) here to catch all circularities?
+# TODO: promote(x::T, ys::T...) where {T} here to catch all circularities?
 
 ## promotions in arithmetic, etc. ##
 
@@ -195,16 +198,16 @@ end
 # happens, and +(promote(x,y)...) is called again, causing a stack
 # overflow.
 function promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
-    @_pure_meta
+    @_inline_meta
     promote_to_supertype(T, S, typejoin(T,S))
 end
 
 # promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
 # for example this makes promote_type(Integer,Real) == Real without
 # promoting arbitrary pairs of numeric types to Number.
-promote_to_supertype(::Type{T}, ::Type{T}, ::Type{T}) where {T<:Number}           = (@_pure_meta; T)
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type{T}) where {T<:Number,S<:Number} = (@_pure_meta; T)
-promote_to_supertype(::Type{T}, ::Type{S}, ::Type{S}) where {T<:Number,S<:Number} = (@_pure_meta; S)
+promote_to_supertype(::Type{T}, ::Type{T}, ::Type{T}) where {T<:Number}           = (@_inline_meta; T)
+promote_to_supertype(::Type{T}, ::Type{S}, ::Type{T}) where {T<:Number,S<:Number} = (@_inline_meta; T)
+promote_to_supertype(::Type{T}, ::Type{S}, ::Type{S}) where {T<:Number,S<:Number} = (@_inline_meta; S)
 promote_to_supertype(::Type{T}, ::Type{S}, ::Type) where {T<:Number,S<:Number} =
     error("no promotion exists for ", T, " and ", S)
 
@@ -254,9 +257,9 @@ end
 Exponentiation operator. If `x` is a matrix, computes matrix exponentiation.
 
 If `y` is an `Int` literal (e.g. `2` in `x^2` or `-3` in `x^-3`), the Julia code
-`x^y` is transformed by the compiler to `Base.literal_pow(^, x, Val{y})`, to
+`x^y` is transformed by the compiler to `Base.literal_pow(^, x, Val(y))`, to
 enable compile-time specialization on the value of the exponent.
-(As a default fallback we have `Base.literal_pow(^, x, Val{y}) = ^(x,y)`,
+(As a default fallback we have `Base.literal_pow(^, x, Val(y)) = ^(x,y)`,
 where usually `^ == Base.^` unless `^` has been defined in the calling
 namespace.)
 
@@ -304,22 +307,22 @@ minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 # "Promotion" that takes a function into account and tries to preserve
 # non-concrete types. These are meant to be used mainly by elementwise
 # operations, so it is advised against overriding them
-_default_type(T::Type) = (@_pure_meta; T)
+_default_type(T::Type) = (@_inline_meta; T)
 
 if isdefined(Core, :Inference)
     const _return_type = Core.Inference.return_type
 else
-    _return_type(f::ANY, t::ANY) = Any
+    _return_type(@nospecialize(f), @nospecialize(t)) = Any
 end
 
-promote_op(::Any...) = (@_pure_meta; Any)
-function promote_op{S}(f, ::Type{S})
+promote_op(::Any...) = (@_inline_meta; Any)
+function promote_op(f, ::Type{S}) where S
     @_inline_meta
     T = _return_type(f, Tuple{_default_type(S)})
     isleaftype(S) && return isleaftype(T) ? T : Any
     return typejoin(S, T)
 end
-function promote_op{R,S}(f, ::Type{R}, ::Type{S})
+function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
     @_inline_meta
     T = _return_type(f, Tuple{_default_type(R), _default_type(S)})
     isleaftype(R) && isleaftype(S) && return isleaftype(T) ? T : Any

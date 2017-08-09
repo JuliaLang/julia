@@ -20,7 +20,7 @@ function choosetests(choices = [])
         "printf", "char", "strings", "triplequote", "unicode", "intrinsics",
         "dates", "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
-        "intfuncs", "simdloop", "vecelement", "blas", "sparse",
+        "intfuncs", "simdloop", "vecelement", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "path", "ccall", "parse", "loading", "bigint",
         "bigfloat", "sorting", "statistics", "spawn", "backtrace",
@@ -35,7 +35,7 @@ function choosetests(choices = [])
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "intset", "floatfuncs", "compile", "distributed", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
-        "channels", "iostream"
+        "channels", "iostream", "specificity", "codegen"
     ]
     profile_skipped = false
     if startswith(string(Sys.ARCH), "arm")
@@ -43,10 +43,6 @@ function choosetests(choices = [])
         # Allow explicitly adding it for testing
         filter!(x -> (x != "profile"), testnames)
         profile_skipped = true
-    end
-
-    if Base.USE_GPL_LIBS
-        append!(testnames, ["fft", "dsp"])
     end
 
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
@@ -130,7 +126,8 @@ function choosetests(choices = [])
                    "linalg/diagonal", "linalg/pinv", "linalg/givens",
                    "linalg/cholesky", "linalg/lu", "linalg/symmetric",
                    "linalg/generic", "linalg/uniformscaling", "linalg/lq",
-                   "linalg/hessenberg", "linalg/rowvector", "linalg/conjarray"]
+                   "linalg/hessenberg", "linalg/rowvector", "linalg/conjarray",
+                   "linalg/blas"]
     if Base.USE_GPL_LIBS
         push!(linalgtests, "linalg/arnoldi")
     end

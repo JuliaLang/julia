@@ -39,7 +39,7 @@ Fully implemented by:
   * `UnitRange`
   * `Tuple`
   * `Number`
-  * `AbstractArray`
+  * [`AbstractArray`](@ref)
   * [`IntSet`](@ref)
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
@@ -54,7 +54,6 @@ Fully implemented by:
 Base.isempty
 Base.empty!
 Base.length(::Any)
-Base.endof
 ```
 
 Fully implemented by:
@@ -63,7 +62,7 @@ Fully implemented by:
   * `UnitRange`
   * `Tuple`
   * `Number`
-  * `AbstractArray`
+  * [`AbstractArray`](@ref)
   * [`IntSet`](@ref)
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
@@ -79,6 +78,7 @@ Base.eltype
 Base.indexin
 Base.findin
 Base.unique
+Base.unique!
 Base.allunique
 Base.reduce(::Any, ::Any, ::Any)
 Base.reduce(::Any, ::Any)
@@ -139,24 +139,25 @@ Base.filter!
 ```@docs
 Base.getindex(::Any, ::Any...)
 Base.setindex!(::Any, ::Any, ::Any...)
+Base.endof
 ```
 
 Fully implemented by:
 
   * [`Array`](@ref)
   * [`BitArray`](@ref)
-  * `AbstractArray`
+  * [`AbstractArray`](@ref)
   * `SubArray`
-  * [`ObjectIdDict`](@ref)
-  * [`Dict`](@ref)
-  * [`WeakKeyDict`](@ref)
-  * `AbstractString`
 
 Partially implemented by:
 
   * `Range`
   * `UnitRange`
   * `Tuple`
+  * `AbstractString`
+  * [`Dict`](@ref)
+  * [`ObjectIdDict`](@ref)
+  * [`WeakKeyDict`](@ref)
 
 ## Associative Collections
 
@@ -196,7 +197,8 @@ Base.pop!(::Any, ::Any, ::Any)
 Base.keys
 Base.values
 Base.merge
-Base.merge!
+Base.merge!(::Associative, ::Associative...)
+Base.merge!(::Function, ::Associative, ::Associative...)
 Base.sizehint!
 Base.keytype
 Base.valtype

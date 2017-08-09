@@ -78,7 +78,7 @@ end
 @test Integer(_zerobi) == 1
 
 # can't use non-identifiers as enum members
-@test_throws ArgumentError eval(:(@enum(Test2, ?)))
+@test_throws ArgumentError eval(:(@enum Test2  x ? 1 : 2))
 @test_throws ArgumentError eval(:(@enum Test22 1=2))
 
 # other Integer types of enum members

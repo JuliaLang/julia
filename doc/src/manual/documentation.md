@@ -27,7 +27,7 @@ Compute the Bar index between `x` and `y`. If `y` is missing, compute
 the Bar index between all pairs of columns of `x`.
 
 # Examples
-```julia
+```julia-repl
 julia> bar([1, 2], [1, 2])
 1
 ```
@@ -107,10 +107,13 @@ As in the example above, we recommend following some simple conventions when wri
 
    !!! warning
        Calling `rand` and other RNG-related functions should be avoided in doctests since they will not
-       produce consistent outputs during different Julia sessions.
+       produce consistent outputs during different Julia sessions. If you would like to show some random
+       number generation related functionality, one option is to explicitly construct and seed your own
+       [`MersenneTwister`](@ref) (or other pseudorandom number generator) and pass it to the functions you are
+       doctesting.
 
-       Operating system word size (`Int32` or `Int64`) as well as path separator differences (`/` or
-       `\`) will also effect the reproducibility of some doctests.
+       Operating system word size ([`Int32`](@ref) or [`Int64`](@ref)) as well as path separator differences
+       (`/` or `\`) will also affect the reproducibility of some doctests.
 
        Note that whitespace in your doctest is significant! The doctest will fail if you misalign the
        output of pretty-printing an array, for example.
@@ -164,7 +167,7 @@ Documentation can be accessed at the REPL or in [IJulia](https://github.com/Juli
 by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
 
 ```julia
-?fft
+?cos
 ?@time
 ?r""
 ```

@@ -69,30 +69,32 @@ end
 # test show() function for UDPSocket()
 @test repr(UDPSocket()) == "UDPSocket(init)"
 
-port = Channel(1)
 defaultport = rand(2000:4000)
-tsk = @async begin
-    p, s = listenany(defaultport)
-    put!(port, p)
-    sock = accept(s)
-    # test write call
-    write(sock,"Hello World\n")
+for testport in [0, defaultport]
+    port = Channel(1)
+    tsk = @async begin
+        p, s = listenany(testport)
+        put!(port, p)
+        sock = accept(s)
+        # test write call
+        write(sock,"Hello World\n")
 
-    # test "locked" println to a socket
-    @sync begin
-        for i in 1:100
-            @async println(sock, "a", 1)
+        # test "locked" println to a socket
+        @sync begin
+            for i in 1:100
+                @async println(sock, "a", 1)
+            end
         end
+        close(s)
+        close(sock)
     end
-    close(s)
-    close(sock)
+    wait(port)
+    @test read(connect(fetch(port)), String) == "Hello World\n" * ("a1\n"^100)
+    wait(tsk)
 end
-wait(port)
-@test readstring(connect(fetch(port))) == "Hello World\n" * ("a1\n"^100)
-wait(tsk)
 
 mktempdir() do tmpdir
-    socketname = is_windows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
+    socketname = Sys.iswindows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
     c = Base.Condition()
     tsk = @async begin
         s = listen(socketname)
@@ -103,7 +105,7 @@ mktempdir() do tmpdir
         close(sock)
     end
     wait(c)
-    @test readstring(connect(socketname)) == "Hello World\n"
+    @test read(connect(socketname), String) == "Hello World\n"
     wait(tsk)
 end
 
@@ -174,7 +176,7 @@ begin
     close(a)
     close(b)
 end
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"::1", UInt16(port))
@@ -191,62 +193,41 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 end
 
 begin
-    default_port = UInt16(11011)
-    default_addr = IPv4("127.0.0.1")
+    for (addr, porthint) in [(IPv4("127.0.0.1"), UInt16(11011)),
+                        (IPv6("::1"), UInt16(11012)), (getipaddr(), UInt16(11013))]
+        port, listen_sock = listenany(addr, porthint)
+        gsn_addr, gsn_port = getsockname(listen_sock)
 
-    sock = Base.TCPServer()
-    bind(sock,Base.InetAddr(default_addr,default_port))
-    listen(sock)
+        @test addr == gsn_addr
+        @test port == gsn_port
 
-    new_addr, new_port = getsockname(sock)
+        @test_throws MethodError getpeername(listen_sock)
 
-    @test default_addr == new_addr
-    @test default_port == new_port
-    close(sock)
-end
+        # connect to it
+        client_sock = connect(addr, port)
+        server_sock = accept(listen_sock)
 
-begin
-    default_port = UInt16(21011)
-    default_addr = IPv6("::1")
+        self_client_addr, self_client_port = getsockname(client_sock)
+        peer_client_addr, peer_client_port = getpeername(client_sock)
+        self_srvr_addr, self_srvr_port = getsockname(server_sock)
+        peer_srvr_addr, peer_srvr_port = getpeername(server_sock)
 
-    sock = Base.TCPServer()
-    addr = Base.InetAddr(default_addr,default_port)
-    bind(sock,addr)
-    listen(sock)
+        @test self_client_addr == peer_client_addr == self_srvr_addr == peer_srvr_addr
 
-    new_addr, new_port = getsockname(sock)
+        @test peer_client_port == self_srvr_port
+        @test peer_srvr_port == self_client_port
+        @test self_srvr_port != self_client_port
 
-    @test default_addr == new_addr
-    @test default_port == new_port
-    close(sock)
-end
-
-begin
-    default_port = UInt16(11011)
-    default_addr = getipaddr()
-
-    sock = Base.TCPServer()
-    bind(sock,Base.InetAddr(default_addr,default_port))
-    listen(sock)
-
-    @async begin
-        sleep(1)
-        ssock = connect(default_addr, default_port)
+        close(listen_sock)
+        close(client_sock)
+        close(server_sock)
     end
-
-    csock = accept(sock)
-    new_addr, new_port = getsockname(csock)
-
-    @test default_addr == new_addr
-    @test new_port > 0
-    close(csock)
-    close(sock)
 end
 
 # Local-machine broadcast
 let
     # (Mac OS X's loopback interface doesn't support broadcasts)
-    bcastdst = is_apple() ? ip"255.255.255.255" : ip"127.255.255.255"
+    bcastdst = Sys.isapple() ? ip"255.255.255.255" : ip"127.255.255.255"
 
     function create_socket()
         s = UDPSocket()
@@ -270,7 +251,7 @@ let
     try
         # bsd family do not allow broadcasting to ip"255.255.255.255"
         # or ip"127.255.255.255"
-        @static if !is_bsd() || is_apple()
+        @static if !Sys.isbsd() || Sys.isapple()
             send(c, bcastdst, 2000, "hello")
             recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
             wait_with_timeout(recvs)
@@ -307,12 +288,12 @@ let P = Pipe()
     # on windows, the kernel fails to do even that
     # causing the `write` call to freeze
     # so we end up forced to do a slightly weaker test here
-    is_windows() || wait(t)
+    Sys.iswindows() || wait(t)
     @test isopen(P) # without an active uv_reader, P shouldn't be closed yet
     @test !eof(P) # should already know this,
     @test isopen(P) #  so it still shouldn't have an active uv_reader
     @test readuntil(P, 'w') == "llow"
-    is_windows() && wait(t)
+    Sys.iswindows() && wait(t)
     @test eof(P)
     @test !isopen(P) # eof test should have closed this by now
     close(P) # should be a no-op, just make sure

@@ -22,6 +22,7 @@ const text_colors = AnyDict(
     :normal        => "\033[0m",
     :default       => "\033[39m",
     :bold          => "\033[1m",
+    :underline     => "\033[4m",
     :nothing       => "",
 )
 
@@ -31,6 +32,7 @@ end
 
 const disable_text_style = AnyDict(
     :bold => "\033[22m",
+    :underline => "\033[24m",
     :normal => "",
     :default => "",
 )
@@ -100,7 +102,7 @@ function repl_cmd(cmd, out)
                 end
                 cd(ENV["OLDPWD"])
             else
-                cd(@static is_windows() ? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+                cd(@static Sys.iswindows() ? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
             end
         else
             cd()
@@ -108,7 +110,7 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@static is_windows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
+        run(ignorestatus(@static Sys.iswindows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
     end
     nothing
 end
@@ -140,7 +142,7 @@ end
 display_error(er, bt) = display_error(STDERR, er, bt)
 display_error(er) = display_error(er, [])
 
-function eval_user_input(ast::ANY, show_value)
+function eval_user_input(@nospecialize(ast), show_value)
     errcount, lasterr, bt = 0, (), nothing
     while true
         try
@@ -151,7 +153,7 @@ function eval_user_input(ast::ANY, show_value)
                 display_error(lasterr,bt)
                 errcount, lasterr = 0, ()
             else
-                ast = expand(ast)
+                ast = expand(Main, ast)
                 value = eval(Main, ast)
                 eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
                 if !(value === nothing) && show_value
@@ -208,7 +210,7 @@ function parse_input_line(s::String; filename::String="none")
                s, sizeof(s), filename, sizeof(filename))
     if ex === :_
         # remove with 0.6 deprecation
-        expand(ex)  # to get possible warning about using _ as an rvalue
+        expand(Main, ex)  # to get possible warning about using _ as an rvalue
     end
     return ex
 end
@@ -241,7 +243,7 @@ function incomplete_tag(ex::Expr)
 end
 
 # try to include() a file, ignoring if not found
-try_include(path::AbstractString) = isfile(path) && include(path)
+try_include(mod::Module, path::AbstractString) = isfile(path) && include(mod, path)
 
 function process_options(opts::JLOptions)
     if !isempty(ARGS)
@@ -255,11 +257,21 @@ function process_options(opts::JLOptions)
     color_set             = (opts.color != 0)
     global have_color     = (opts.color == 1)
     global is_interactive = (opts.isinteractive != 0)
+
+    # remove filename from ARGS
+    arg_is_program = opts.eval == C_NULL && opts.print == C_NULL && !isempty(ARGS)
+    global PROGRAM_FILE = arg_is_program ? shift!(ARGS) : ""
+
     while true
         # startup worker.
         # opts.startupfile, opts.load, etc should should not be processed for workers.
-        if opts.worker != C_NULL
-            start_worker(unsafe_string(opts.worker)) # does not return
+        if opts.worker == 1
+            # does not return
+            if opts.cookie != C_NULL
+                start_worker(unsafe_string(opts.cookie))
+            else
+                start_worker()
+            end
         end
 
         # add processors
@@ -277,7 +289,7 @@ function process_options(opts::JLOptions)
         # load file immediately on all processors
         if opts.load != C_NULL
             @sync for p in procs()
-                @async remotecall_fetch(include, p, unsafe_string(opts.load))
+                @async remotecall_fetch(include, p, Main, unsafe_string(opts.load))
             end
         end
         # eval expression
@@ -294,15 +306,13 @@ function process_options(opts::JLOptions)
             break
         end
         # load file
-        if !isempty(ARGS) && !isempty(ARGS[1])
+        if !isempty(PROGRAM_FILE)
             # program
             repl = false
-            # remove filename from ARGS
-            global PROGRAM_FILE = shift!(ARGS)
             if !is_interactive
                 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
             end
-            include(PROGRAM_FILE)
+            include(Main, PROGRAM_FILE)
         end
         break
     end
@@ -313,17 +323,18 @@ end
 function load_juliarc()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a juliarc.jl file
     #   If it is not found, then continue on to the relative path based on JULIA_HOME
-    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(JULIA_HOME,Base.SYSCONFDIR,"julia","juliarc.jl"))
-        include(abspath(JULIA_HOME,Base.SYSCONFDIR,"julia","juliarc.jl"))
+    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(JULIA_HOME, Base.SYSCONFDIR, "julia", "juliarc.jl"))
+        include(Main, abspath(JULIA_HOME, Base.SYSCONFDIR, "julia", "juliarc.jl"))
     else
-        try_include(abspath(JULIA_HOME,"..","etc","julia","juliarc.jl"))
+        try_include(Main, abspath(JULIA_HOME, "..", "etc", "julia", "juliarc.jl"))
     end
-    try_include(abspath(homedir(),".juliarc.jl"))
+    try_include(Main, abspath(homedir(), ".juliarc.jl"))
+    nothing
 end
 
 function load_machine_file(path::AbstractString)
     machines = []
-    for line in split(readstring(path),'\n'; keep=false)
+    for line in split(read(path, String),'\n'; keep=false)
         s = split(line, '*'; keep = false)
         map!(strip, s, s)
         if length(s) > 1
@@ -361,12 +372,13 @@ function __atreplinit(repl)
         end
     end
 end
-_atreplinit(repl) = @eval Main $__atreplinit($repl)
+_atreplinit(repl) = invokelatest(__atreplinit, repl)
 
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     opts = JLOptions()
+    @eval Main include(x) = $include(Main, x)
     try
         (quiet,repl,startup,color_set,history_file) = process_options(opts)
 
@@ -378,7 +390,7 @@ function _start()
                 global is_interactive |= !isa(STDIN, Union{File, IOStream})
                 color_set || (global have_color = false)
             else
-                term = Terminals.TTYTerminal(get(ENV, "TERM", @static is_windows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
+                term = Terminals.TTYTerminal(get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
                 quiet || REPL.banner(term,term)
@@ -401,7 +413,7 @@ function _start()
                 # note: currently IOStream is used for file STDIN
                 if isa(STDIN,File) || isa(STDIN,IOStream)
                     # reading from a file, behave like include
-                    eval(Main,parse_input_line(readstring(STDIN)))
+                    eval(Main,parse_input_line(read(STDIN, String)))
                 else
                     # otherwise behave repl-like
                     while !eof(STDIN)

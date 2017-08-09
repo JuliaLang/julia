@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import .Libc: RawFD, dup
-if is_windows()
+if Sys.iswindows()
     import .Libc: WindowsRawSocket
 end
 
@@ -11,7 +11,7 @@ abstract type LibuvServer <: IOServer end
 abstract type LibuvStream <: IO end
 
 # IO
-# +- AbstractIOBuffer{T<:AbstractArray{UInt8,1}} (not exported)
+# +- GenericIOBuffer{T<:AbstractArray{UInt8,1}} (not exported)
 # +- AbstractPipe (not exported)
 # .  +- Pipe
 # .  +- Process (not exported)
@@ -26,7 +26,7 @@ abstract type LibuvStream <: IO end
 # .  +- TCPSocket
 # .  +- TTY (not exported)
 # .  +- UDPSocket
-# +- IOBuffer = Base.AbstractIOBuffer{Array{UInt8,1}}
+# +- IOBuffer = Base.GenericIOBuffer{Array{UInt8,1}}
 # +- IOStream
 
 # IOServer
@@ -159,7 +159,7 @@ mutable struct TTY <: LibuvStream
     sendbuf::Nullable{IOBuffer}
     lock::ReentrantLock
     throttle::Int
-    @static if is_windows(); ispty::Bool; end
+    @static if Sys.iswindows(); ispty::Bool; end
     TTY() = TTY(Libc.malloc(_sizeof_uv_tty), StatusUninit)
     function TTY(handle::Ptr{Void}, status)
         tty = new(
@@ -172,7 +172,7 @@ mutable struct TTY <: LibuvStream
             DEFAULT_READ_BUFFER_SZ)
         associate_julia_struct(handle, tty)
         finalizer(tty, uvfinalize)
-        @static if is_windows()
+        @static if Sys.iswindows()
             tty.ispty = ccall(:jl_ispty, Cint, (Ptr{Void},), handle) != 0
         end
         return tty
@@ -343,7 +343,7 @@ function uvfinalize(uv::Union{LibuvStream, LibuvServer})
     nothing
 end
 
-if is_windows()
+if Sys.iswindows()
     ispty(s::TTY) = s.ispty
     ispty(s::IO) = false
 end
@@ -358,11 +358,11 @@ function displaysize(io::TTY)
     local h::Int, w::Int
     default_size = displaysize()
 
-    @static if is_windows()
+    @static if Sys.iswindows()
         if ispty(io)
             # io is actually a libuv pipe but a cygwin/msys2 pty
             try
-                h, w = parse.(Int, split(readstring(open(Base.Cmd(String["stty", "size"]), "r", io).out)))
+                h, w = parse.(Int, split(read(open(Base.Cmd(String["stty", "size"]), "r", io).out, String)))
                 h > 0 || (h = default_size[1])
                 w > 0 || (w = default_size[2])
                 return h, w
@@ -676,7 +676,7 @@ function start_reading(stream::LibuvStream)
     end
 end
 
-if is_windows()
+if Sys.iswindows()
     # the low performance version of stop_reading is required
     # on Windows due to a NT kernel bug that we can't use a blocking
     # stream for non-blocking (overlapped) calls,
@@ -994,8 +994,8 @@ Connect to the named pipe / UNIX domain socket at `path`.
 """
 connect(path::AbstractString) = connect(init_pipe!(PipeEndpoint(); readable=false, writable=false, julia_only=true),path)
 
-const OS_HANDLE = is_windows() ? WindowsRawSocket : RawFD
-const INVALID_OS_HANDLE = is_windows() ? WindowsRawSocket(Ptr{Void}(-1)) : RawFD(-1)
+const OS_HANDLE = Sys.iswindows() ? WindowsRawSocket : RawFD
+const INVALID_OS_HANDLE = Sys.iswindows() ? WindowsRawSocket(Ptr{Void}(-1)) : RawFD(-1)
 _fd(x::IOStream) = RawFD(fd(x))
 function _fd(x::Union{LibuvStream, LibuvServer})
     fd = Ref{OS_HANDLE}(INVALID_OS_HANDLE)
@@ -1016,7 +1016,7 @@ for (x, writable, unix_fd, c_symbol) in
         function ($_f)(stream)
             global $x
             posix_fd = _fd(stream)
-            @static if is_windows()
+            @static if Sys.iswindows()
                 ccall(:SetStdHandle, stdcall, Int32, (Int32, Ptr{Void}),
                     $(-10 - unix_fd), Libc._get_osfhandle(posix_fd).handle)
             end

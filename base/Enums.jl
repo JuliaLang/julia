@@ -35,6 +35,7 @@ Create an `Enum{BaseType}` subtype with name `EnumName` and enum member values o
 `EnumValue1` and `EnumValue2` with optional assigned values of `x` and `y`, respectively.
 `EnumName` can be used just like other types and enum member values as regular values, such as
 
+# Examples
 ```jldoctest
 julia> @enum Fruit apple=1 orange=2 kiwi=3
 
@@ -45,22 +46,23 @@ julia> f(apple)
 "I'm a Fruit with value: 1"
 ```
 
-`BaseType`, which defaults to `Int32`, must be a primitive subtype of Integer. Member values can be converted between
-the enum type and `BaseType`. `read` and `write` perform these conversions automatically.
+`BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
+Member values can be converted between the enum type and `BaseType`. `read` and `write`
+perform these conversions automatically.
 """
-macro enum(T,syms...)
+macro enum(T, syms...)
     if isempty(syms)
         throw(ArgumentError("no arguments given for Enum $T"))
     end
     basetype = Int32
     typename = T
-    if isa(T,Expr) && T.head == :(::) && length(T.args) == 2 && isa(T.args[1], Symbol)
+    if isa(T, Expr) && T.head == :(::) && length(T.args) == 2 && isa(T.args[1], Symbol)
         typename = T.args[1]
-        basetype = eval(current_module(),T.args[2])
+        basetype = eval(__module__, T.args[2])
         if !isa(basetype, DataType) || !(basetype <: Integer) || !isbits(basetype)
             throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer primitive type"))
         end
-    elseif !isa(T,Symbol)
+    elseif !isa(T, Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
     vals = Vector{Tuple{Symbol,Integer}}(0)
@@ -68,14 +70,14 @@ macro enum(T,syms...)
     i = zero(basetype)
     hasexpr = false
     for s in syms
-        if isa(s,Symbol)
+        if isa(s, Symbol)
             if i == typemin(basetype) && !isempty(vals)
                 throw(ArgumentError("overflow in value \"$s\" of Enum $typename"))
             end
-        elseif isa(s,Expr) &&
+        elseif isa(s, Expr) &&
                (s.head == :(=) || s.head == :kw) &&
-               length(s.args) == 2 && isa(s.args[1],Symbol)
-            i = eval(current_module(),s.args[2]) # allow exprs, e.g. uint128"1"
+               length(s.args) == 2 && isa(s.args[1], Symbol)
+            i = eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
             if !isa(i, Integer)
                 throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
             end
@@ -143,7 +145,7 @@ macro enum(T,syms...)
             end
         end
     end
-    if isa(typename,Symbol)
+    if isa(typename, Symbol)
         for (sym,i) in vals
             push!(blk.args, :(const $(esc(sym)) = $(esc(typename))($i)))
         end

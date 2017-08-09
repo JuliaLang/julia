@@ -10,7 +10,7 @@ function capture_stdout(f::Function)
                     f()
                 end
             end
-            return readstring(fname)
+            return read(fname, String)
         finally
             rm(fname, force=true)
         end
@@ -39,6 +39,12 @@ function temp_pkg_dir(fn::Function, tmp_dir=joinpath(tempdir(), randstring()),
     end
 end
 
+function write_build(pkg, content)
+    build_filename = Pkg.dir(pkg, "deps", "build.jl")
+    mkpath(dirname(build_filename))
+    write(build_filename, content)
+end
+
 # Test basic operations: adding or removing a package, status, free
 # Also test for the existence of REQUIRE and META_BRANCH
 temp_pkg_dir() do
@@ -59,11 +65,11 @@ temp_pkg_dir() do
     @test_throws PkgError Pkg.installed("MyFakePackage")
     @test Pkg.installed("Example") === nothing
 
-    # check that versioninfo(io, true) doesn't error and produces some output
+    # check that versioninfo(io; verbose=true) doesn't error and produces some output
     # (done here since it calls Pkg.status which might error or clone metadata)
     buf = PipeBuffer()
-    versioninfo(buf, true)
-    ver = readstring(buf)
+    versioninfo(buf, verbose=true)
+    ver = read(buf, String)
     @test startswith(ver, "Julia Version $VERSION")
     @test contains(ver, "Environment:")
 
@@ -316,7 +322,7 @@ temp_pkg_dir() do
         include(Pkg.dir("Example","src","Example.jl"))
         meth = first(methods(Example.domath))
         fname = string(meth.file)
-        @test ('\\' in fname) == is_windows()
+        @test ('\\' in fname) == Sys.iswindows()
         @test startswith(Base.url(meth), "https://github.com/JuliaLang/Example.jl/tree")
     end
 
@@ -402,13 +408,13 @@ temp_pkg_dir() do
         touch(depsbuild)
         # Pkg.build works without the src directory now
         # but it's probably fine to require it.
-        msg = readstring(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
+        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`, String)
         @test contains(msg, "Building BuildFail")
         @test !contains(msg, "ERROR")
         open(depsbuild, "w") do fd
             println(fd, "error(\"Throw build error\")")
         end
-        msg = readstring(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
+        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`, String)
         @test contains(msg, "Building BuildFail")
         @test contains(msg, "ERROR")
         @test contains(msg, "Pkg.build(\"BuildFail\")")
@@ -419,7 +425,7 @@ temp_pkg_dir() do
     let package = "Example"
         Pkg.rm(package)  # Remove package if installed
         @test Pkg.installed(package) === nothing  # Registered with METADATA but not installed
-        msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`))
+        msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`), String)
         @test contains(msg, "$package is not an installed package")
         @test !contains(msg, "signal (15)")
     end
@@ -489,6 +495,16 @@ temp_pkg_dir() do
         @test isempty(Pkg.dependents("Example"))
         @test isempty(Pkg.dependents("Example.jl"))
 
+        @test_warn s -> !contains(s, "updated but were already imported") begin
+            Pkg.add("Iterators")
+            Pkg.update("Iterators")
+        end
+
+        # Do it again, because the above Iterators test will update things prematurely
+        LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
+            LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
+        end
+
         @test_warn ("INFO: Installing Colors v0.6.4",
                     "INFO: Installing ColorTypes v0.2.2",
                     "INFO: Installing FixedPointNumbers v0.1.3",
@@ -517,9 +533,52 @@ temp_pkg_dir() do
         end
 
         Pkg.add(package)
-        msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
-            "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`))
+        msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
+            "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`), String)
         @test contains(msg, "- $package\nRestart Julia to use the updated versions.")
+    end
+
+    # Verify that the --startup-file flag is respected by Pkg.build / Pkg.test
+    let package = "StartupFile"
+        content = """
+            info("JULIA_RC_LOADED defined \$(isdefined(@__MODULE__, :JULIA_RC_LOADED))")
+            info("Main.JULIA_RC_LOADED defined \$(isdefined(Main, :JULIA_RC_LOADED))")
+            """
+
+        write_build(package, content)
+
+        test_filename = Pkg.dir(package, "test", "runtests.jl")
+        mkpath(dirname(test_filename))
+        write(test_filename, content)
+
+        # Make a .juliarc.jl
+        home = Pkg.dir(".home")
+        mkdir(home)
+        write(joinpath(home, ".juliarc.jl"), "const JULIA_RC_LOADED = true")
+
+        withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => home) do
+            code = "redirect_stderr(STDOUT); Pkg.build(\"$package\")"
+
+            msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
+            @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
+            @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined false")
+
+            msg = read(`$(Base.julia_cmd()) --startup-file=yes -e $code`, String)
+            @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
+            @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined true")
+
+            code = "redirect_stderr(STDOUT); Pkg.test(\"$package\")"
+
+            msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
+            @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
+            @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined false")
+
+            # Note: Since both the startup-file and "runtests.jl" are run in the Main
+            # module any global variables created in the .juliarc.jl can be referenced.
+            msg = read(`$(Base.julia_cmd()) --startup-file=yes -e $code`, String)
+            @test contains(msg, "INFO: JULIA_RC_LOADED defined true")
+            @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined true")
+        end
     end
 end
 
@@ -584,12 +643,6 @@ end
 end
 
 temp_pkg_dir(initialize=false) do
-    function write_build(pkg, content)
-        build_filename = Pkg.dir(pkg, "deps", "build.jl")
-        mkpath(dirname(build_filename))
-        write(build_filename, content)
-    end
-
     write_build("Normal", "")
     write_build("Error", "error(\"An error has occurred while building a package\")")
     write_build("Exit", "exit()")

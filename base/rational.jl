@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Rational{T<:Integer} <: Real
+
+Rational number type, with numerator and denominator of type `T`.
+"""
 struct Rational{T<:Integer} <: Real
     num::T
     den::T
@@ -22,7 +27,7 @@ end
 """
     //(num, den)
 
-Divide two integers or rational numbers, giving a `Rational` result.
+Divide two integers or rational numbers, giving a [`Rational`](@ref) result.
 
 ```jldoctest
 julia> 3 // 5
@@ -75,9 +80,12 @@ convert(::Type{Rational{T}}, x::Integer) where {T<:Integer} = Rational{T}(conver
 convert(::Type{Rational}, x::Rational) = x
 convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
 
-convert(::Type{Bool}, x::Rational) = x==0 ? false : x==1 ? true : throw(InexactError()) # to resolve ambiguity
-convert(::Type{Integer}, x::Rational) = (isinteger(x) ? convert(Integer, x.num) : throw(InexactError()))
-convert(::Type{T}, x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
+convert(::Type{Bool}, x::Rational) = x==0 ? false : x==1 ? true :
+    throw(InexactError(:convert, Bool, x)) # to resolve ambiguity
+convert(::Type{Integer}, x::Rational) = (isinteger(x) ? convert(Integer, x.num) :
+    throw(InexactError(:convert, Integer, x)))
+convert(::Type{T}, x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
+    throw(InexactError(:convert, T, x)))
 
 convert(::Type{AbstractFloat}, x::Rational) = float(x.num)/float(x.den)
 function convert(::Type{T}, x::Rational{S}) where T<:AbstractFloat where S
@@ -87,7 +95,7 @@ end
 
 function convert(::Type{Rational{T}}, x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
-    x == convert(typeof(x), r) || throw(InexactError())
+    x == convert(typeof(x), r) || throw(InexactError(:convert, Rational{T}, x))
     r
 end
 convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)
@@ -104,7 +112,7 @@ widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 """
     rationalize([T<:Integer=Int,] x; tol::Real=eps(x))
 
-Approximate floating point number `x` as a `Rational` number with components
+Approximate floating point number `x` as a [`Rational`](@ref) number with components
 of the given integer type. The result will differ from `x` by no more than `tol`.
 If `T` is not provided, it defaults to `Int`.
 
@@ -225,11 +233,11 @@ isinteger(x::Rational) = x.den == 1
 
 -(x::Rational) = (-x.num) // x.den
 function -(x::Rational{T}) where T<:Signed
-    x.num == typemin(T) && throw(OverflowError())
+    x.num == typemin(T) && throw(OverflowError("rational numerator is typemin(T)"))
     (-x.num) // x.den
 end
 function -(x::Rational{T}) where T<:Unsigned
-    x.num != zero(T) && throw(OverflowError())
+    x.num != zero(T) && throw(OverflowError("cannot negate unsigned number"))
     x
 end
 
@@ -250,6 +258,7 @@ function *(x::Rational, y::Rational)
 end
 /(x::Rational, y::Rational) = x//y
 /(x::Rational, y::Complex{<:Union{Integer,Rational}}) = x//y
+inv(x::Rational) = Rational(x.den, x.num)
 
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
@@ -281,7 +290,8 @@ for rel in (:<,:<=,:cmp)
     for (Tx,Ty) in ((Rational,AbstractFloat), (AbstractFloat,Rational))
         @eval function ($rel)(x::$Tx, y::$Ty)
             if isnan(x) || isnan(y)
-                $(rel == :cmp ? :(throw(DomainError())) : :(return false))
+                $(rel == :cmp ? :(throw(DomainError((x,y), "Inputs cannot be NaN."))) :
+                                :(return false))
             end
 
             xn, xp, xd = decompose(x)
@@ -395,7 +405,7 @@ function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp}) where
 end
 
 function round(::Type{T}, x::Rational{Bool}) where T
-    if denominator(x) == false && issubtype(T, Union{Integer, Bool})
+    if denominator(x) == false && (T <: Union{Integer, Bool})
         throw(DivideError())
     end
     convert(T, x)
@@ -425,6 +435,7 @@ function ^(z::Complex{<:Rational}, n::Integer)
 end
 
 iszero(x::Rational) = iszero(numerator(x))
+isone(x::Rational) = isone(numerator(x)) & isone(denominator(x))
 
 function lerpi(j::Integer, d::Integer, a::Rational, b::Rational)
     ((d-j)*a)/d + (j*b)/d

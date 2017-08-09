@@ -140,7 +140,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
             void *f = items[i + 1];
             move = 1;
             if (gc_ptr_tag(v, 1)) {
-                ((void (*)(void*))f)(o);
+                ((void (*)(void*))(uintptr_t)f)(o);
             }
             else {
                 arraylist_push(copied_list, o);
@@ -260,7 +260,7 @@ static void schedule_all_finalizers(arraylist_t *flist)
             schedule_finalization(v, f);
         }
         else {
-            ((void (*)(void*))f)(gc_ptr_clear_tag(v, 1));
+            ((void (*)(void*))(uintptr_t)f)(gc_ptr_clear_tag(v, 1));
         }
     }
     flist->len = 0;
@@ -644,6 +644,37 @@ void gc_setmark_buf(jl_ptls_t ptls, void *o, uint8_t mark_mode, size_t minsz)
     gc_setmark_buf_(ptls, o, mark_mode, minsz);
 }
 
+void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v)
+{
+    jl_taggedvalue_t *o = jl_astaggedvalue(v);
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
+    size_t dtsz = jl_datatype_size(dt);
+    if (o->bits.gc == GC_OLD_MARKED)
+        return;
+    o->bits.gc = GC_OLD_MARKED;
+    if (dt == jl_simplevector_type) {
+        size_t l = jl_svec_len(v);
+        dtsz = l * sizeof(void*) + sizeof(jl_svec_t);
+    }
+    else if (dt->name == jl_array_typename) {
+        jl_array_t *a = (jl_array_t*)v;
+        if (!a->flags.pooled)
+            dtsz = GC_MAX_SZCLASS + 1;
+    }
+    else if (dt == jl_module_type) {
+        dtsz = sizeof(jl_module_t);
+    }
+    else if (dt == jl_task_type) {
+        dtsz = sizeof(jl_task_t);
+    }
+    else if (dt == jl_symbol_type) {
+        return;
+    }
+    gc_setmark(ptls, o, GC_OLD_MARKED, dtsz);
+    if (dt->layout->npointers != 0)
+        jl_gc_queue_root(v);
+}
+
 #define should_collect() (__unlikely(gc_num.allocd>0))
 
 static inline int maybe_collect(jl_ptls_t ptls)
@@ -706,6 +737,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
 {
     maybe_collect(ptls);
     size_t offs = offsetof(bigval_t, header);
+    static_assert(sizeof(bigval_t) % JL_HEAP_ALIGNMENT == 0, "");
     size_t allocsz = LLT_ALIGN(sz + offs, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
@@ -1254,6 +1286,14 @@ static void gc_sweep_pool(int sweep_full)
     gc_time_pool_end(sweep_full);
 }
 
+static void gc_sweep_perm_alloc(void)
+{
+    uint64_t t0 = jl_hrtime();
+    gc_sweep_sysimg();
+    gc_time_sysimg_end(t0);
+}
+
+
 // mark phase
 
 JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
@@ -1287,9 +1327,19 @@ void gc_queue_binding(jl_binding_t *bnd)
     arraylist_push(&ptls->heap.rem_bindings, bnd);
 }
 
+
 #ifdef JL_DEBUG_BUILD
 static void *volatile gc_findval; // for usage from gdb, for finding the gc-root for a value
 #endif
+
+static void *sysimg_base;
+static void *sysimg_end;
+void jl_gc_set_permalloc_region(void *start, void *end)
+{
+    sysimg_base = start;
+    sysimg_end = end;
+}
+
 
 // Handle the case where the stack is only partially copied.
 STATIC_INLINE uintptr_t gc_get_stack_addr(void *_addr, uintptr_t offset,
@@ -1683,7 +1733,7 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, gc_mark_sp_t *sp, gc_mark_o
 // Additional optimizations are done for some of the common cases by skipping
 // the unnecessary data stack pointer increment and the load from the stack
 // (i.e. store to load forwaring). See `objary_loaded`, `obj8_loaded` and `obj16_loaded`.
-NOINLINE void gc_mark_loop(jl_ptls_t ptls, gc_mark_sp_t sp)
+JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, gc_mark_sp_t sp)
 {
     if (__unlikely(ptls == NULL)) {
         gc_mark_label_addrs[GC_MARK_L_marked_obj] = gc_mark_laddr(marked_obj);
@@ -1852,7 +1902,16 @@ module_binding: {
             jl_binding_t *b = *begin;
             if (b == (jl_binding_t*)HT_NOTFOUND)
                 continue;
-            gc_setmark_buf_(ptls, b, mbits, sizeof(jl_binding_t));
+            if ((void*)b >= sysimg_base && (void*)b < sysimg_end) {
+                jl_taggedvalue_t *buf = jl_astaggedvalue(b);
+                uintptr_t tag = buf->header;
+                uint8_t bits;
+                if (!gc_marked(tag))
+                    gc_setmark_tag(buf, GC_OLD_MARKED, tag, &bits);
+            }
+            else {
+                gc_setmark_buf_(ptls, b, mbits, sizeof(jl_binding_t));
+            }
             void *vb = jl_astaggedvalue(b);
             verify_parent1("module", binding->parent, &vb, "binding_buff");
             (void)vb;
@@ -1952,15 +2011,23 @@ mark: {
 #endif
         jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
         jl_datatype_t *vt = (jl_datatype_t*)tag;
+        int foreign_alloc = 0;
         int update_meta = __likely(!meta_updated && !gc_verifying);
+        if (update_meta && (void*)o >= sysimg_base && (void*)o < sysimg_end) {
+            foreign_alloc = 1;
+            update_meta = 0;
+        }
         meta_updated = 0;
         // Symbols are always marked
         assert(vt != jl_symbol_type);
         if (vt == jl_simplevector_type) {
             size_t l = jl_svec_len(new_obj);
             jl_value_t **data = jl_svec_data(new_obj);
+            size_t dtsz = l * sizeof(void*) + sizeof(jl_svec_t);
             if (update_meta)
-                gc_setmark(ptls, o, bits, l * sizeof(void*) + sizeof(jl_svec_t));
+                gc_setmark(ptls, o, bits, dtsz);
+            else if (foreign_alloc)
+                objprofile_count(vt, bits == GC_OLD_MARKED, dtsz);
             uintptr_t nptr = (l << 2) | (bits & GC_OLD);
             objary_begin = data;
             objary_end = data + l;
@@ -1979,6 +2046,8 @@ mark: {
                 else
                     gc_setmark_big(ptls, o, bits);
             }
+            else if (foreign_alloc)
+                objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_array_t));
             if (flags.how == 1) {
                 void *val_buf = jl_astaggedvalue((char*)a->data - a->offset * a->elsize);
                 verify_parent1("array", new_obj, &val_buf, "buffer ('loc' addr is meaningless)");
@@ -1987,7 +2056,7 @@ mark: {
                                 bits, array_nbytes(a));
             }
             else if (flags.how == 2) {
-                if (update_meta) {
+                if (update_meta || foreign_alloc) {
                     objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED,
                                      array_nbytes(a));
                     if (bits == GC_OLD_MARKED) {
@@ -2024,6 +2093,8 @@ mark: {
         else if (vt == jl_module_type) {
             if (update_meta)
                 gc_setmark(ptls, o, bits, sizeof(jl_module_t));
+            else if (foreign_alloc)
+                objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_module_t));
             jl_module_t *m = (jl_module_t*)new_obj;
             jl_binding_t **table = (jl_binding_t**)m->bindings.table;
             size_t bsize = m->bindings.size;
@@ -2037,6 +2108,8 @@ mark: {
         else if (vt == jl_task_type) {
             if (update_meta)
                 gc_setmark(ptls, o, bits, sizeof(jl_task_t));
+            else if (foreign_alloc)
+                objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_task_t));
             jl_task_t *ta = (jl_task_t*)new_obj;
             gc_scrub_record_task(ta);
             int stkbuf = (ta->stkbuf != (void*)(intptr_t)-1 && ta->stkbuf != NULL);
@@ -2089,15 +2162,21 @@ mark: {
             goto obj8_loaded;
         }
         else if (vt == jl_string_type) {
+            size_t dtsz = jl_string_len(new_obj) + sizeof(size_t) + 1;
             if (update_meta)
-                gc_setmark(ptls, o, bits, jl_string_len(new_obj) + sizeof(size_t) + 1);
+                gc_setmark(ptls, o, bits, dtsz);
+            else if (foreign_alloc)
+                objprofile_count(vt, bits == GC_OLD_MARKED, dtsz);
             goto pop;
         }
         else {
             if (__unlikely(!jl_is_datatype(vt)))
                 gc_assert_datatype_fail(ptls, vt, sp);
+            size_t dtsz = jl_datatype_size(vt);
             if (update_meta)
-                gc_setmark(ptls, o, bits, jl_datatype_size(vt));
+                gc_setmark(ptls, o, bits, dtsz);
+            else if (foreign_alloc)
+                objprofile_count(vt, bits == GC_OLD_MARKED, dtsz);
             if (vt == jl_weakref_type)
                 goto pop;
             const jl_datatype_layout_t *layout = vt->layout;
@@ -2234,7 +2313,7 @@ static void sweep_finalizer_list(arraylist_t *list)
         if (isfreed) {
             // schedule finalizer or execute right away if it is not julia code
             if (is_cptr) {
-                ((void (*)(void*))fin)(jl_data_ptr(v));
+                ((void (*)(void*))(uintptr_t)fin)(jl_data_ptr(v));
                 continue;
             }
             schedule_finalization(v, fin);
@@ -2471,6 +2550,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     gc_scrub();
     gc_verify_tags();
     gc_sweep_pool(sweep_full);
+    if (sweep_full)
+        gc_sweep_perm_alloc();
     // sweeping is over
     // 6. if it is a quick sweep, put back the remembered objects in queued state
     // so that we don't trigger the barrier again on them.
@@ -2632,10 +2713,11 @@ void jl_gc_init(void)
     gc_mark_loop(NULL, sp);
 }
 
+// allocation wrappers that track allocation and let collection run
+
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    sz += JL_SMALL_BYTE_ALIGNMENT;
     maybe_collect(ptls);
     gc_num.allocd += sz;
     gc_num.malloc++;
@@ -2648,7 +2730,6 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    nm += JL_SMALL_BYTE_ALIGNMENT;
     maybe_collect(ptls);
     gc_num.allocd += nm*sz;
     gc_num.malloc++;
@@ -2658,23 +2739,27 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
     return b;
 }
 
-JL_DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
+JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
     free(p);
-    gc_num.freed += sz + JL_SMALL_BYTE_ALIGNMENT;
+    gc_num.freed += sz;
     gc_num.freecall++;
+}
+
+// older name for jl_gc_counted_free_with_size
+JL_DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
+{
+    jl_gc_counted_free_with_size(p, sz);
 }
 
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    old += JL_SMALL_BYTE_ALIGNMENT;
-    sz += JL_SMALL_BYTE_ALIGNMENT;
     maybe_collect(ptls);
     if (sz < old)
-       gc_num.freed += (old - sz);
+        gc_num.freed += (old - sz);
     else
-       gc_num.allocd += (sz - old);
+        gc_num.allocd += (sz - old);
     gc_num.realloc++;
     void *b = realloc(p, sz);
     if (b == NULL)
@@ -2682,18 +2767,20 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     return b;
 }
 
+// allocation wrappers that save the size of allocations, to allow using
+// jl_gc_counted_* functions with a libc-compatible API.
+
 JL_DLLEXPORT void *jl_malloc(size_t sz)
 {
-    int64_t *p = (int64_t *)jl_gc_counted_malloc(sz);
+    int64_t *p = (int64_t *)jl_gc_counted_malloc(sz + JL_SMALL_BYTE_ALIGNMENT);
     p[0] = sz;
     return (void *)(p + 2);
 }
 
 JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
 {
-    int64_t *p;
     size_t nmsz = nm*sz;
-    p = (int64_t *)jl_gc_counted_calloc(nmsz, 1);
+    int64_t *p = (int64_t *)jl_gc_counted_calloc(nmsz + JL_SMALL_BYTE_ALIGNMENT, 1);
     p[0] = nmsz;
     return (void *)(p + 2);
 }
@@ -2703,7 +2790,7 @@ JL_DLLEXPORT void jl_free(void *p)
     if (p != NULL) {
         int64_t *pp = (int64_t *)p - 2;
         size_t sz = pp[0];
-        jl_gc_counted_free(pp, sz);
+        jl_gc_counted_free_with_size(pp, sz + JL_SMALL_BYTE_ALIGNMENT);
     }
 }
 
@@ -2717,12 +2804,14 @@ JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
     }
     else {
         pp = (int64_t *)p - 2;
-        szold = pp[0];
+        szold = pp[0] + JL_SMALL_BYTE_ALIGNMENT;
     }
-    int64_t *pnew = (int64_t *)jl_gc_counted_realloc_with_old_size(pp, szold, sz);
+    int64_t *pnew = (int64_t *)jl_gc_counted_realloc_with_old_size(pp, szold, sz + JL_SMALL_BYTE_ALIGNMENT);
     pnew[0] = sz;
     return (void *)(pnew + 2);
 }
+
+// allocating blocks for Arrays and Strings
 
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 {
@@ -2792,7 +2881,8 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
         return snew;
     }
     size_t newsz = sz + sizeof(size_t) + 1;
-    size_t offs = offsetof(bigval_t, header);
+    size_t offs = sizeof(bigval_t);
+    size_t oldsz = LLT_ALIGN(strsz + offs, JL_CACHE_BYTE_ALIGNMENT);
     size_t allocsz = LLT_ALIGN(newsz + offs, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
@@ -2804,9 +2894,7 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
     // the old pointer to be left alone if we can't grow in place.
     // for now it's up to the caller to make sure there are no references to the
     // old pointer.
-    bigval_t *newbig =
-        (bigval_t*)gc_managed_realloc_(ptls, hdr, allocsz, LLT_ALIGN(strsz+offs, JL_CACHE_BYTE_ALIGNMENT),
-                                       1, s, 0);
+    bigval_t *newbig = (bigval_t*)gc_managed_realloc_(ptls, hdr, allocsz, oldsz, 1, s, 0);
     newbig->sz = allocsz;
     newbig->age = 0;
     gc_big_object_link(newbig, &ptls->heap.big_objects);
@@ -2821,51 +2909,68 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
 // 20k limit for pool allocation. At most 1% fragmentation
 #define GC_PERM_POOL_LIMIT (20 * 1024)
 jl_mutex_t gc_perm_lock = {0, 0};
-static char *gc_perm_pool = NULL;
-static size_t gc_perm_size = 0;
+static uintptr_t gc_perm_pool = 0;
+static uintptr_t gc_perm_end = 0;
 
-// **NOT** a safepoint
-void *jl_gc_perm_alloc_nolock(size_t sz, int zero)
+static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned offset)
 {
-    // The caller should have acquired `gc_perm_lock`
-#ifndef MEMDEBUG
-    if (__unlikely(sz > GC_PERM_POOL_LIMIT))
-#endif
-        return zero ? calloc(1, sz) : malloc(sz);
-    sz = LLT_ALIGN(sz, JL_SMALL_BYTE_ALIGNMENT);
-    if (__unlikely(sz > gc_perm_size)) {
-#ifdef _OS_WINDOWS_
-        void *pool = VirtualAlloc(NULL,
-                                  GC_PERM_POOL_SIZE + JL_SMALL_BYTE_ALIGNMENT,
-                                  MEM_COMMIT, PAGE_READWRITE);
-        if (__unlikely(pool == NULL))
-            return NULL;
-        pool = (void*)LLT_ALIGN((uintptr_t)pool, JL_SMALL_BYTE_ALIGNMENT);
-#else
-        void *pool = mmap(0, GC_PERM_POOL_SIZE, PROT_READ | PROT_WRITE,
-                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if (__unlikely(pool == MAP_FAILED))
-            return NULL;
-#endif
-        gc_perm_pool = (char*)pool;
-        gc_perm_size = GC_PERM_POOL_SIZE;
-    }
-    assert(((uintptr_t)gc_perm_pool) % JL_SMALL_BYTE_ALIGNMENT == 0);
-    void *p = gc_perm_pool;
-    gc_perm_size -= sz;
-    gc_perm_pool += sz;
-    return p;
+    // `align` must be power of two
+    assert(offset == 0 || offset < align);
+    const size_t malloc_align = sizeof(void*) == 8 ? 16 : 4;
+    if (align > 1 && (offset != 0 || align > malloc_align))
+        sz += align - 1;
+    uintptr_t base = (uintptr_t)(zero ? calloc(1, sz) : malloc(sz));
+    unsigned diff = (offset - base) % align;
+    return (void*)(base + diff);
+}
+
+STATIC_INLINE void *gc_try_perm_alloc_pool(size_t sz, unsigned align, unsigned offset)
+{
+    uintptr_t pool = LLT_ALIGN(gc_perm_pool + offset, (uintptr_t)align) - offset;
+    uintptr_t end = pool + sz;
+    if (end > gc_perm_end)
+        return NULL;
+    gc_perm_pool = end;
+    return (void*)jl_assume(pool);
 }
 
 // **NOT** a safepoint
-void *jl_gc_perm_alloc(size_t sz, int zero)
+void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offset)
 {
+    // The caller should have acquired `gc_perm_lock`
+    assert(align < GC_PERM_POOL_LIMIT);
 #ifndef MEMDEBUG
     if (__unlikely(sz > GC_PERM_POOL_LIMIT))
 #endif
-        return zero ? calloc(1, sz) : malloc(sz);
+        return gc_perm_alloc_large(sz, zero, align, offset);
+    void *ptr = gc_try_perm_alloc_pool(sz, align, offset);
+    if (__likely(ptr))
+        return ptr;
+#ifdef _OS_WINDOWS_
+    void *pool = VirtualAlloc(NULL, GC_PERM_POOL_SIZE, MEM_COMMIT, PAGE_READWRITE);
+    if (__unlikely(pool == NULL))
+        return NULL;
+#else
+    void *pool = mmap(0, GC_PERM_POOL_SIZE, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (__unlikely(pool == MAP_FAILED))
+        return NULL;
+#endif
+    gc_perm_pool = (uintptr_t)pool;
+    gc_perm_end = gc_perm_pool + GC_PERM_POOL_SIZE;
+    return gc_try_perm_alloc_pool(sz, align, offset);
+}
+
+// **NOT** a safepoint
+void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset)
+{
+    assert(align < GC_PERM_POOL_LIMIT);
+#ifndef MEMDEBUG
+    if (__unlikely(sz > GC_PERM_POOL_LIMIT))
+#endif
+        return gc_perm_alloc_large(sz, zero, align, offset);
     JL_LOCK_NOGC(&gc_perm_lock);
-    void *p = jl_gc_perm_alloc_nolock(sz, zero);
+    void *p = jl_gc_perm_alloc_nolock(sz, zero, align, offset);
     JL_UNLOCK_NOGC(&gc_perm_lock);
     return p;
 }

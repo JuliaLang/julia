@@ -82,7 +82,7 @@ gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 Set a timer to be read by the next call to [`toc`](@ref) or [`toq`](@ref). The
 macro call `@time expr` can also be used to time evaluation.
 
-```julia
+```julia-repl
 julia> tic()
 0x0000c45bc7abac95
 
@@ -105,7 +105,7 @@ end
 Return, but do not print, the time elapsed since the last [`tic`](@ref). The
 macro calls `@timed expr` and `@elapsed expr` also return evaluation time.
 
-```julia
+```julia-repl
 julia> tic()
 0x0000c46477a9675d
 
@@ -132,7 +132,7 @@ end
 Print and return the time elapsed since the last [`tic`](@ref). The macro call
 `@time expr` can also be used to time evaluation.
 
-```julia
+```julia-repl
 julia> tic()
 0x0000c45bc7abac95
 
@@ -219,7 +219,7 @@ returning the value of the expression.
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
-```julia
+```julia-repl
 julia> @time rand(10^6);
   0.001525 seconds (7 allocations: 7.630 MiB)
 
@@ -228,6 +228,7 @@ julia> @time begin
            1+1
        end
   0.301395 seconds (8 allocations: 336 bytes)
+2
 ```
 """
 macro time(ex)
@@ -253,7 +254,7 @@ expression.
 See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
-```julia
+```julia-repl
 julia> @timev rand(10^6);
   0.001006 seconds (7 allocations: 7.630 MiB)
 elapsed time (ns): 1005567
@@ -282,7 +283,7 @@ number of seconds it took to execute as a floating-point number.
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@allocated`](@ref).
 
-```julia
+```julia-repl
 julia> @elapsed sleep(0.3)
 0.301391426
 ```
@@ -314,7 +315,7 @@ for the effects of compilation.
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
 
-```julia
+```julia-repl
 julia> @allocated rand(10^6)
 8000080
 ```
@@ -343,7 +344,7 @@ counters.
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
-```julia
+```julia-repl
 julia> val, t, bytes, gctime, memallocs = @timed rand(10^6);
 
 julia> t
@@ -379,14 +380,6 @@ macro timed(ex)
         elapsedtime = time_ns() - elapsedtime
         local diff = GC_Diff(gc_num(), stats)
         val, elapsedtime/1e9, diff.allocd, diff.total_time/1e9, diff
-    end
-end
-
-function fftw_vendor()
-    if Base.libfftw_name in ("libmkl_rt", "mkl_rt")
-        return :mkl
-    else
-        return :fftw
     end
 end
 
@@ -431,7 +424,8 @@ const log_error_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
 
 function _redirect(io::IO, log_to::Dict, sf::StackTraces.StackFrame)
     isnull(sf.linfo) && return io
-    mod = get(sf.linfo).def.module
+    mod = get(sf.linfo).def
+    isa(mod, Method) && (mod = mod.module)
     fun = sf.func
     if haskey(log_to, (mod,fun))
         return log_to[(mod,fun)]
@@ -456,7 +450,9 @@ function _redirect(io::IO, log_to::Dict, fun::Symbol)
             isnull(frame.linfo) && continue
             sf = frame
             break_next_frame && (@goto skip)
-            get(frame.linfo).def.module == Base || continue
+            mod = get(frame.linfo).def
+            isa(mod, Method) && (mod = mod.module)
+            mod === Base || continue
             sff = string(frame.func)
             if frame.func == fun || startswith(sff, clos) || startswith(sff, kw)
                 break_next_frame = true
@@ -513,6 +509,7 @@ Argument `msg` is a string describing the information to be displayed.
 The `prefix` keyword argument can be used to override the default
 prepending of `msg`.
 
+# Examples
 ```jldoctest
 julia> info("hello world")
 INFO: hello world
@@ -577,6 +574,7 @@ end
 
 Display a warning. Argument `msg` is a string describing the warning to be displayed.
 
+# Examples
 ```jldoctest
 julia> warn("Beep Beep")
 WARNING: Beep Beep
@@ -621,9 +619,9 @@ end
 
 function julia_exename()
     if ccall(:jl_is_debugbuild, Cint, ()) == 0
-        return @static is_windows() ? "julia.exe" : "julia"
+        return @static Sys.iswindows() ? "julia.exe" : "julia"
     else
-        return @static is_windows() ? "julia-debug.exe" : "julia-debug"
+        return @static Sys.iswindows() ? "julia-debug.exe" : "julia-debug"
     end
 end
 
@@ -638,11 +636,11 @@ will always be called.
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
 securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
-@noinline unsafe_securezero!{T}(p::Ptr{T}, len::Integer=1) =
+@noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Void}, len::Integer=1) = Ptr{Void}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
-if is_windows()
+if Sys.iswindows()
 function getpass(prompt::AbstractString)
     print(prompt)
     flush(STDOUT)
@@ -675,7 +673,7 @@ getpass(prompt::AbstractString) = unsafe_string(ccall(:getpass, Cstring, (Cstrin
 end
 
 # Windows authentication prompt
-if is_windows()
+if Sys.iswindows()
     struct CREDUI_INFO
         cbSize::UInt32
         parent::Ptr{Void}
@@ -764,14 +762,56 @@ end
 
 """
     crc32c(data, crc::UInt32=0x00000000)
+
 Compute the CRC-32c checksum of the given `data`, which can be
-an `Array{UInt8}` or a `String`.  Optionally, you can pass
-a starting `crc` integer to be mixed in with the checksum.
+an `Array{UInt8}`, a contiguous subarray thereof, or a `String`.  Optionally, you can pass
+a starting `crc` integer to be mixed in with the checksum.  The `crc` parameter
+can be used to compute a checksum on data divided into chunks: performing
+`crc32c(data2, crc32c(data1))` is equivalent to the checksum of `[data1; data2]`.
 (Technically, a little-endian checksum is computed.)
+
+There is also a method `crc32c(io, nb, crc)` to checksum `nb` bytes from
+a stream `io`, or `crc32c(io, crc)` to checksum all the remaining bytes.
+Hence you can do [`open(crc32c, filename)`](@ref) to checksum an entire file,
+or `crc32c(seekstart(buf))` to checksum an [`IOBuffer`](@ref) without
+calling [`take!`](@ref).
+
+For a `String`, note that the result is specific to the UTF-8 encoding
+(a different checksum would be obtained from a different Unicode encoding).
+To checksum an `a::Array` of some other bitstype, you can do `crc32c(reinterpret(UInt8,a))`,
+but note that the result may be endian-dependent.
 """
 function crc32c end
-crc32c(a::Union{Array{UInt8},String}, crc::UInt32=0x00000000) =
-    ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, sizeof(a))
+
+unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)
+
+crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
+    unsafe_crc32c(a, length(a) % Csize_t, crc)
+
+crc32c(s::String, crc::UInt32=0x00000000) = unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
+
+"""
+    crc32c(io::IO, [nb::Integer,] crc::UInt32=0x00000000)
+
+Read up to `nb` bytes from `io` and return the CRC-32c checksum, optionally
+mixed with a starting `crc` integer.  If `nb` is not supplied, then
+`io` will be read until the end of the stream.
+"""
+function crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
+    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
+    # use block size 24576=8192*3, since that is the threshold for
+    # 3-way parallel SIMD code in the underlying jl_crc32c C function.
+    buf = Array{UInt8}(min(nb, 24576))
+    while !eof(io) && nb > 24576
+        n = readbytes!(io, buf)
+        crc = unsafe_crc32c(buf, n, crc)
+        nb -= n
+    end
+    return unsafe_crc32c(buf, readbytes!(io, buf, min(nb, length(buf))), crc)
+end
+crc32c(io::IO, crc::UInt32=0x00000000) = crc32c(io, typemax(Int64), crc)
+crc32c(io::IOStream, crc::UInt32=0x00000000) = crc32c(io, filesize(io)-position(io), crc)
+
 
 """
     @kwdef typedef
@@ -782,17 +822,24 @@ expression. The default argument is supplied by declaring fields of the form `fi
 default`. If no default is provided then the default is provided by the `kwdef_val(T)`
 function.
 
-```julia
-@kwdef struct Foo
-    a::Cint            # implied default Cint(0)
-    b::Cint = 1        # specified default
-    z::Cstring         # implied default Cstring(C_NULL)
-    y::Bar             # implied default Bar()
-end
+# Examples
+```jldoctest
+julia> struct Bar end
+
+julia> Base.@kwdef struct Foo
+           a::Cint            # implied default Cint(0)
+           b::Cint = 1        # specified default
+           z::Cstring         # implied default Cstring(C_NULL)
+           y::Bar             # implied default Bar()
+       end
+Foo
+
+julia> Foo()
+Foo(0, 1, Cstring(0x0000000000000000), Bar())
 ```
 """
 macro kwdef(expr)
-    expr = macroexpand(expr) # to expand @static
+    expr = macroexpand(__module__, expr) # to expand @static
     T = expr.args[2]
     params_ex = Expr(:parameters)
     call_ex = Expr(:call, T)
@@ -841,6 +888,23 @@ The default value for a type for use with the `@kwdef` macro. Returns:
  - null pointer for pointer types (`Ptr{T}`, `Cstring`, `Cwstring`)
  - zero for integer types
  - no-argument constructor calls (e.g. `T()`) for all other types
+
+# Examples
+```jldoctest
+julia> struct Foo
+           i::Int
+       end
+
+julia> Base.kwdef_val(::Type{Foo}) = Foo(42)
+
+julia> Base.@kwdef struct Bar
+           y::Foo
+       end
+Bar
+
+julia> Bar()
+Bar(Foo(42))
+```
 """
 function kwdef_val end
 

@@ -16,31 +16,31 @@ using TestHelpers.OAs
     @test length((1,)) == 1
     @test length((1,2)) == 2
 
-    @test isequal(1.+[1,2,3], [2,3,4])
-    @test isequal([1,2,3].+1, [2,3,4])
-    @test isequal(1.-[1,2,3], [0,-1,-2])
-    @test isequal([1,2,3].-1, [0,1,2])
+    @test isequal(1 .+ [1,2,3], [2,3,4])
+    @test isequal([1,2,3] .+ 1, [2,3,4])
+    @test isequal(1 .- [1,2,3], [0,-1,-2])
+    @test isequal([1,2,3] .- 1, [0,1,2])
 
     @test isequal(5*[1,2,3], [5,10,15])
     @test isequal([1,2,3]*5, [5,10,15])
-    @test isequal(1./[1,2,5], [1.0,0.5,0.2])
+    @test isequal(1 ./ [1,2,5], [1.0,0.5,0.2])
     @test isequal([1,2,3]/5, [0.2,0.4,0.6])
 
-    @test isequal(2.%[1,2,3], [0,0,2])
-    @test isequal([1,2,3].%2, [1,0,1])
-    @test isequal(2.÷[1,2,3], [2,1,0])
-    @test isequal([1,2,3].÷2, [0,1,1])
-    @test isequal(-2.%[1,2,3], [0,0,-2])
+    @test isequal(2 .% [1,2,3], [0,0,2])
+    @test isequal([1,2,3] .% 2, [1,0,1])
+    @test isequal(2 .÷ [1,2,3], [2,1,0])
+    @test isequal([1,2,3] .÷ 2, [0,1,1])
+    @test isequal(-2 .% [1,2,3], [0,0,-2])
     @test isequal([-1,-2,-3].%2, [-1,0,-1])
-    @test isequal(-2.÷[1,2,3], [-2,-1,0])
-    @test isequal([-1,-2,-3].÷2, [0,-1,-1])
+    @test isequal(-2 .÷ [1,2,3], [-2,-1,0])
+    @test isequal([-1,-2,-3] .÷ 2, [0,-1,-1])
 
-    @test isequal(1.<<[1,2,5], [2,4,32])
-    @test isequal(128.>>[1,2,5], [64,32,4])
-    @test isequal(2.>>1, 1)
-    @test isequal(1.<<1, 2)
-    @test isequal([1,2,5].<<[1,2,5], [2,8,160])
-    @test isequal([10,20,50].>>[1,2,5], [5,5,1])
+    @test isequal(1 .<< [1,2,5], [2,4,32])
+    @test isequal(128 .>> [1,2,5], [64,32,4])
+    @test isequal(2 .>> 1, 1)
+    @test isequal(1 .<< 1, 2)
+    @test isequal([1,2,5] .<< [1,2,5], [2,8,160])
+    @test isequal([10,20,50] .>> [1,2,5], [5,5,1])
 
 
     a = ones(2,2)
@@ -107,6 +107,7 @@ end
         @test_throws MethodError convert(Array{Int,2}, r)
         @test convert(Array{Int}, r) == [2,3,4]
         @test Base.unsafe_convert(Ptr{Int}, r) == Base.unsafe_convert(Ptr{Int}, s)
+        @test isa(r, StridedArray)  # issue #22411
     end
     @testset "linearslow" begin
         s = view(a, :, [2,3,5])
@@ -129,12 +130,12 @@ end
         @test length(reshape(s, length(s))) == 0
     end
 end
-@testset "reshape(a, Val{N})" begin
+@testset "reshape(a, Val(N))" begin
     a = ones(Int,3,3)
     s = view(a, 1:2, 1:2)
     for N in (1,3)
-        @test isa(reshape(a, Val{N}), Array{Int,N})
-        @test isa(reshape(s, Val{N}), Base.ReshapedArray{Int,N})
+        @test isa(reshape(a, Val(N)), Array{Int,N})
+        @test isa(reshape(s, Val(N)), Base.ReshapedArray{Int,N})
     end
 end
 @testset "reshape with colon" begin
@@ -223,7 +224,7 @@ end
     @test A[2:6] == [2:6;]
     @test A[1:3,2,2:4] == cat(2,46:48,86:88,126:128)
     @test A[:,7:-3:1,5] == [191 176 161; 192 177 162; 193 178 163; 194 179 164; 195 180 165]
-    @test reshape(A, Val{2})[:,3:9] == reshape(11:45,5,7)
+    @test reshape(A, Val(2))[:,3:9] == reshape(11:45,5,7)
     rng = (2,2:3,2:2:5)
     tmp = zeros(Int,map(maximum,rng)...)
     tmp[rng...] = A[rng...]
@@ -257,12 +258,35 @@ end
     B[4,[2,3]] = 7
     @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
 
-    @test isequal(reshape(reshape(1:27, 3, 3, 3), Val{2})[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
+    @test isequal(reshape(reshape(1:27, 3, 3, 3), Val(2))[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
 
     a = [3, 5, -7, 6]
     b = [4, 6, 2, -7, 1]
     ind = findin(a, b)
     @test ind == [3,4]
+    @test findin(a, Int[]) == Int[]
+    @test findin(Int[], a) == Int[]
+
+    a = [1,2,3,4,5]
+    b = [2,3,4,6]
+    @test findin(a, b) == [2,3,4]
+    @test findin(b, a) == [1,2,3]
+    @test findin(a, Int[]) == Int[]
+    @test findin(Int[], a) == Int[]
+
+    a = collect(1:3:15)
+    b = collect(2:4:10)
+    @test findin(a, b) == [4]
+    @test findin([a[1:4]; a[4:end]], b) == [4,5]
+
+    @test findin([1.0, NaN, 2.0], NaN) == [2]
+    @test findin([1.0, 2.0, NaN], NaN) == [3]
+
+    @testset "findin for uncomparable element types" begin
+        a = [1 + 1im, 1 - 1im]
+        @test findin(a, 1 + 1im) == [1]
+        @test findin(a, a)       == [1,2]
+    end
 
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
     @test length(rt) == 1 && rt[1] == Array{Int32, 3}
@@ -433,8 +457,8 @@ end
     # @test find(s) == [1,2,3,4,5]
     @test find(c -> c == 'l', s) == [3]
     g = graphemes("日本語")
-    @test find(g) == [1,2,3]
     @test find(isascii, g) == Int[]
+    @test find((i % 2 for i in 1:10)) == collect(1:2:9)
 end
 @testset "findn" begin
     b = findn(ones(2,2,2,2))
@@ -791,6 +815,11 @@ end
     @test R == [1, 2, 1, 2]
     R = repeat(1:2, inner=(3,), outer=(2,))
     @test R == [1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2]
+
+    # Arrays of arrays
+    @test repeat([[1], [2]], inner=2) == [[1], [1], [2], [2]]
+    @test repeat([[1], [2]], outer=2) == [[1], [2], [1], [2]]
+    @test repeat([[1], [2]], inner=2, outer=2) == [[1], [1], [2], [2], [1], [1], [2], [2]]
 
     @test size(repeat([1], inner=(0,))) == (0,)
     @test size(repeat([1], outer=(0,))) == (0,)
@@ -1159,8 +1188,8 @@ end
             @test [1,2] ⊙ [3,4] == 11
         end
 
-        @test_throws DomainError (10.^[-1])[1] == 0.1
-        @test (10.^[-1.])[1] == 0.1
+        @test_throws DomainError (10 .^ [-1])[1] == 0.1
+        @test (10 .^ [-1.])[1] == 0.1
     end
 end
 
@@ -1450,11 +1479,11 @@ end
         @test a[:, [CartesianIndex()], :, :] == (@view a[:, [CartesianIndex()], :, :]) == reshape(a, 3, 1, 4, 5)
         @test a[:, :, [CartesianIndex()], :] == (@view a[:, :, [CartesianIndex()], :]) == reshape(a, 3, 4, 1, 5)
         @test a[:, :, :, [CartesianIndex()]] == (@view a[:, :, :, [CartesianIndex()]]) == reshape(a, 3, 4, 5, 1)
-        a2 = reshape(a, Val{2})
+        a2 = reshape(a, Val(2))
         @test a2[[CartesianIndex()], :, :]   == (@view a2[[CartesianIndex()], :, :])   == reshape(a, 1, 3, 20)
         @test a2[:, [CartesianIndex()], :]   == (@view a2[:, [CartesianIndex()], :])   == reshape(a, 3, 1, 20)
         @test a2[:, :, [CartesianIndex()]]   == (@view a2[:, :, [CartesianIndex()]])   == reshape(a, 3, 20, 1)
-        a1 = reshape(a, Val{1})
+        a1 = reshape(a, Val(1))
         @test a1[[CartesianIndex()], :]      == (@view a1[[CartesianIndex()], :])      == reshape(a, 1, 60)
         @test a1[:, [CartesianIndex()]]      == (@view a1[:, [CartesianIndex()]])      == reshape(a, 60, 1)
 
@@ -1520,9 +1549,10 @@ end
     @test a[1,2] == 7
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
 
-    R = CartesianRange(CartesianIndex{2}(2,3),CartesianIndex{2}(5,5))
+    R = CartesianRange(2:5, 3:5)
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
+    @test eltype(CartesianRange{2}) <: CartesianIndex{2}
     indexes = collect(R)
     @test indexes[1] == CartesianIndex{2}(2,3)
     @test indexes[2] == CartesianIndex{2}(3,3)
@@ -1544,9 +1574,14 @@ end
     @test @inferred(convert(NTuple{2,UnitRange}, R)) === (2:5, 3:5)
     @test @inferred(convert(Tuple{Vararg{UnitRange}}, R)) === (2:5, 3:5)
 
-    @test CartesianRange((3:5,-7:7)) == CartesianRange(CartesianIndex{2}(3,-7),CartesianIndex{2}(5,7))
-    @test CartesianRange((3,-7:7)) == CartesianRange(CartesianIndex{2}(3,-7),CartesianIndex{2}(3,7))
+    @test CartesianRange((3:5,-7:7)) == CartesianRange(3:5,-7:7)
+    @test CartesianRange((3,-7:7)) == CartesianRange(3:3,-7:7)
 end
+
+# All we really care about is that we have an optimized
+# implementation, but the seed is a useful way to check that.
+@test hash(CartesianIndex()) == Base.IteratorsMD.cartindexhash_seed
+@test hash(CartesianIndex(1, 2)) != hash((1, 2))
 
 @testset "itr, start, done, next" begin
     r = 2:3
@@ -1671,16 +1706,16 @@ module RetTypeDecl
     struct MeterUnits{T,P} <: Number
         val::T
     end
-    MeterUnits{T}(val::T, pow::Int) = MeterUnits{T,pow}(val)
+    MeterUnits(val::T, pow::Int) where {T} = MeterUnits{T,pow}(val)
 
     m  = MeterUnits(1.0, 1)   # 1.0 meter, i.e. units of length
     m2 = MeterUnits(1.0, 2)   # 1.0 meter^2, i.e. units of area
 
-    (+){T,pow}(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) = MeterUnits{T,pow}(x.val+y.val)
-    (*){T,pow}(x::Int, y::MeterUnits{T,pow}) = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
-    (*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
-    broadcast{T}(::typeof(*), x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
-    convert{T,pow}(::Type{MeterUnits{T,pow}}, y::Real) = MeterUnits{T,pow}(convert(T,y))
+    (+)(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{T,pow}(x.val+y.val)
+    (*)(x::Int, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
+    (*)(x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
+    broadcast(::typeof(*), x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
+    convert(::Type{MeterUnits{T,pow}}, y::Real) where {T,pow} = MeterUnits{T,pow}(convert(T,y))
 
     @test @inferred(m+[m,m]) == [m+m,m+m]
     @test @inferred([m,m]+m) == [m+m,m+m]
@@ -1715,7 +1750,7 @@ struct LinSlowMatrix{T} <: DenseArray{T,2}
 end
 
 # This is the default, but just to be sure
-Base.IndexStyle{A<:LinSlowMatrix}(::Type{A}) = Base.IndexCartesian()
+Base.IndexStyle(::Type{A}) where {A<:LinSlowMatrix} = Base.IndexCartesian()
 
 Base.size(A::LinSlowMatrix) = size(A.data)
 
@@ -2059,12 +2094,12 @@ struct F21666{T <: Base.TypeArithmetic}
     x::Float32
 end
 
+Base.TypeArithmetic(::Type{F21666{T}}) where {T} = T()
+Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
+Base.convert(::Type{Float64}, x::F21666) = Float64(x.x)
 @testset "Exactness of cumsum # 21666" begin
     # test that cumsum uses more stable algorithm
     # for types with unknown/rounding arithmetic
-    Base.TypeArithmetic(::Type{F21666{T}}) where {T} = T
-    Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
-    Base.convert(::Type{Float64}, x::F21666) = Float64(x.x)
     # we make v pretty large, because stable algorithm may have a large base case
     v = zeros(300); v[1] = 2; v[200:end] = eps(Float32)
 
@@ -2123,3 +2158,29 @@ end
 Base.:*(a::T11053, b::Real) = T11053(a.a*b)
 Base.:(==)(a::T11053, b::T11053) = a.a == b.a
 @test [T11053(1)] * 5 == [T11053(1)] .* 5 == [T11053(5.0)]
+
+#15907
+@test typeof(Array{Int,0}()) == Array{Int,0}
+
+# check a == b for arrays of Union type (#22403)
+let TT = Union{UInt8, Int8}
+    a = TT[0x0, 0x1]
+    b = TT[0x0, 0x0]
+    pa = pointer(a)
+    pb = pointer(b)
+    resize!(a, 1) # sets a[2] = 0
+    resize!(b, 1)
+    @assert pointer(a) == pa
+    @assert pointer(b) == pb
+    unsafe_store!(pa, 0x1, 2) # reset a[2] to 1
+    @test length(a) == length(b) == 1
+    @test a[1] == b[1] == 0x0
+    @test a == b
+end
+
+let a = Vector{Int}[[1]],
+    b = Vector{Float64}[[2.0]],
+    c = Vector{Char}[['a']]
+    @test eltype([a;b]) == Vector{Float64}
+    @test eltype([a;c]) == Vector
+end

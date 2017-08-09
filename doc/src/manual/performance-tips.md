@@ -34,13 +34,13 @@ being done, and what their inputs and outputs are.
 
 In the following REPL session:
 
-```julia
+```julia-repl
 julia> x = 1.0
 ```
 
 is equivalent to:
 
-```julia
+```julia-repl
 julia> global x = 1.0
 ```
 
@@ -51,7 +51,7 @@ so all the performance issues discussed previously apply.
 A useful tool for measuring performance is the [`@time`](@ref) macro. The following example
 illustrates good working style:
 
-```julia
+```julia-repl
 julia> function f(n)
            s = 0
            for i = 1:n
@@ -88,7 +88,7 @@ As a teaser, an improved version of this function allocates no memory
 (the allocation reported below is due to running the `@time` macro in global scope)
 and has an order of magnitude faster execution after the first call:
 
-```julia
+```julia-repl
 julia> @time f_improved(1)
   0.007008 seconds (1.32 k allocations: 63.640 KiB)
 0.5
@@ -137,10 +137,10 @@ if (f = rand()) < .8
 end
 ```
 
-Because `a` is a an array of abstract type `Real`, it must be able to hold any `Real` value.  Since
-`Real` objects can be of arbitrary size and structure, `a` must be represented as an array of
-pointers to individually allocated `Real` objects.  Because `f` will always be a [`Float64`](@ref),
-we should instead, use:
+Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
+`Real` value.  Since `Real` objects can be of arbitrary size and structure, `a` must be
+represented as an array of pointers to individually allocated `Real` objects. Because `f`
+will always be a [`Float64`](@ref), we should instead, use:
 
 ```julia
 a = Float64[] # typeof(a) = Array{Float64,1}
@@ -188,9 +188,9 @@ MyAmbiguousType
 
 `b` and `c` have the same type, yet their underlying representation of data in memory is very
 different. Even if you stored just numeric values in field `a`, the fact that the memory representation
-of a `UInt8` differs from a `Float64` also means that the CPU needs to handle them using two different
-kinds of instructions. Since the required information is not available in the type, such decisions
-have to be made at run-time. This slows performance.
+of a [`UInt8`](@ref) differs from a [`Float64`](@ref) also means that the CPU needs to handle
+them using two different kinds of instructions. Since the required information is not available
+in the type, such decisions have to be made at run-time. This slows performance.
 
 You can do better by declaring the type of `a`. Here, we are focused on the case where `a` might
 be any one of several types, in which case the natural solution is to use parameters. For example:
@@ -257,7 +257,7 @@ like `m` but not for objects like `t`.
 Of course, all of this is true only if we construct `m` with a concrete type.  We can break this
 by explicitly constructing it with an abstract type:
 
-```julia myambig2
+```jldoctest myambig2
 julia> m = MyType{AbstractFloat}(3.2)
 MyType{AbstractFloat}(3.2)
 
@@ -409,7 +409,7 @@ myfunc (generic function with 3 methods)
     Because we can only define `MyContainer` for
     `A<:AbstractArray`, and any unspecified parameters are arbitrary,
     the first function above could have been written more succinctly as
-    `function myfunc{T<:Integer}(c::MyContainer{T})`
+    `function myfunc(c::MyContainer{<:Integer})`
 
 
 ```jldoctest containers2
@@ -429,7 +429,7 @@ the array type `A`.
 However, there's one remaining hole: we haven't enforced that `A` has element type `T`, so it's
 perfectly possible to construct an object like this:
 
-```julia
+```jldoctest containers2
 julia> b = MyContainer{Int64, UnitRange{Float64}}(UnitRange(1.3, 5.0));
 
 julia> typeof(b)
@@ -465,7 +465,7 @@ It is often convenient to work with data structures that may contain values of a
 of type `Array{Any}`). But, if you're using one of these structures and happen to know the type
 of an element, it helps to share this knowledge with the compiler:
 
-```
+```julia
 function foo(a::Array{Any,1})
     x = a[1]::Int32
     b = x+1
@@ -473,15 +473,23 @@ function foo(a::Array{Any,1})
 end
 ```
 
-Here, we happened to know that the first element of `a` would be an `Int32`. Making an annotation
-like this has the added benefit that it will raise a run-time error if the value is not of the
-expected type, potentially catching certain bugs earlier.
+Here, we happened to know that the first element of `a` would be an [`Int32`](@ref). Making
+an annotation like this has the added benefit that it will raise a run-time error if the
+value is not of the expected type, potentially catching certain bugs earlier.
+
+In the case that the type of `a[1]` is not known precisely, `x` can be declared via
+`x = convert(Int32,a[1])::Int32`. The use of the [`convert`](@ref) function allows `a[1]`
+to be any object convertible to an `Int32` (such as `UInt8`), thus increasing the genericity
+of the code by loosening the type requirement. Notice that `convert` itself needs a type
+annotation in this context in order to achieve type stability. This is because the compiler
+cannot deduce the type of the return value of a function, even `convert`, unless the types of
+all the function's arguments are known.
 
 ### Declare types of keyword arguments
 
 Keyword arguments can have declared types:
 
-```
+```julia
 function with_keyword(x; name::Int = 1)
     ...
 end
@@ -637,7 +645,7 @@ loaded from an input file that might contain either integers, floats, strings, o
 
 ## Types with values-as-parameters
 
-Let's say you want to create an `N`-dimensional array that has size 3 along each axis.  Such arrays
+Let's say you want to create an `N`-dimensional array that has size 3 along each axis. Such arrays
 can be created like this:
 
 ```jldoctest
@@ -677,37 +685,37 @@ slow.
 
 Now, one very good way to solve such problems is by using the [function-barrier technique](@ref kernal-functions).
 However, in some cases you might want to eliminate the type-instability altogether.  In such cases,
-one approach is to pass the dimensionality as a parameter, for example through `Val{T}` (see
+one approach is to pass the dimensionality as a parameter, for example through `Val{T}()` (see
 ["Value types"](@ref)):
 
 ```jldoctest
-julia> function array3(fillval, ::Type{Val{N}}) where N
-           fill(fillval, ntuple(d->3, Val{N}))
+julia> function array3(fillval, ::Val{N}) where N
+           fill(fillval, ntuple(d->3, Val(N)))
        end
 array3 (generic function with 1 method)
 
-julia> array3(5.0, Val{2})
+julia> array3(5.0, Val(2))
 3×3 Array{Float64,2}:
  5.0  5.0  5.0
  5.0  5.0  5.0
  5.0  5.0  5.0
 ```
 
-Julia has a specialized version of `ntuple` that accepts a `Val{::Int}` as the second parameter;
-by passing `N` as a type-parameter, you make its "value" known to the compiler. Consequently,
-this version of `array3` allows the compiler to predict the return type.
+Julia has a specialized version of `ntuple` that accepts a `Val{::Int}` instance as the second
+parameter; by passing `N` as a type-parameter, you make its "value" known to the compiler.
+Consequently, this version of `array3` allows the compiler to predict the return type.
 
 However, making use of such techniques can be surprisingly subtle. For example, it would be of
 no help if you called `array3` from a function like this:
 
 ```julia
 function call_array3(fillval, n)
-    A = array3(fillval, Val{n})
+    A = array3(fillval, Val(n))
 end
 ```
 
-Here, you've created the same problem all over again: the compiler can't guess the type of `n`,
-so it doesn't know the type of `Val{n}`.  Attempting to use `Val`, but doing so incorrectly, can
+Here, you've created the same problem all over again: the compiler can't guess what `n` is,
+so it doesn't know the *type* of `Val(n)`.  Attempting to use `Val`, but doing so incorrectly, can
 easily make performance *worse* in many situations.  (Only in situations where you're effectively
 combining `Val` with the function-barrier trick, to make the kernel function more efficient, should
 code like the above be used.)
@@ -716,13 +724,14 @@ An example of correct usage of `Val` would be:
 
 ```julia
 function filter3(A::AbstractArray{T,N}) where {T,N}
-    kernel = array3(1, Val{N})
+    kernel = array3(1, Val(N))
     filter(A, kernel)
 end
 ```
 
 In this example, `N` is passed as a parameter, so its "value" is known to the compiler.  Essentially,
-`Val{T}` works only when `T` is either hard-coded (`Val{3}`) or already specified in the type-domain.
+`Val(T)` works only when `T` is either hard-coded/literal (`Val(3)`) or already specified in the
+type-domain.
 
 ## The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)
 
@@ -798,7 +807,7 @@ is that with column-major arrays, the first index changes most rapidly. Essentia
 that looping will be faster if the inner-most loop index is the first to appear in a slice expression.
 
 Consider the following contrived example. Imagine we wanted to write a function that accepts a
-`Vector` and returns a square `Matrix` with either the rows or the columns filled with copies
+[`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
 of the input vector. Assume that it is not important whether rows or columns are filled with these
 copies (perhaps the rest of the code can be easily adapted accordingly). We could conceivably
 do this in at least four ways (in addition to the recommended call to the built-in [`repmat()`](@ref)):
@@ -843,7 +852,7 @@ end
 
 Now we will time each of these functions using the same random `10000` by `1` input vector:
 
-```julia
+```julia-repl
 julia> x = randn(10000);
 
 julia> fmt(f) = println(rpad(string(f)*": ", 14, ' '), @elapsed f(x))
@@ -906,7 +915,7 @@ end
 
 Timing results:
 
-```julia
+```julia-repl
 julia> @time loopinc()
   0.529894 seconds (40.00 M allocations: 1.490 GiB, 12.14% gc time)
 50000015000000
@@ -951,7 +960,7 @@ Both `f` and `fdot` compute the same thing.  However, `fdot`
 (defined with the help of the [`@.`](@ref @__dot__) macro) is
 significantly faster when applied to an array:
 
-```julia
+```julia-repl
 julia> x = rand(10^6);
 
 julia> @time f(x);
@@ -992,7 +1001,7 @@ This can be done for individual slices by calling [`view()`](@ref),
 or more simply for a whole expression or block of code by putting
 [`@views`](@ref) in front of that expression.  For example:
 
-```julia
+```julia-repl
 julia> fcopy(x) = sum(x[2:end-1])
 
 julia> @views fview(x) = sum(x[2:end-1])
@@ -1008,6 +1017,44 @@ julia> @time fview(x);
 
 Notice both the 3× speedup and the decreased memory allocation
 of the `fview` version of the function.
+
+## Copying data is not always bad
+
+Arrays are stored contiguously in memory, lending themselves to CPU vectorization
+and fewer memory accesses due to caching. These are the same reasons that it is recommended
+to access arrays in column-major order (see above). Irregular access patterns and non-contiguous views
+can drastically slow down computations on arrays because of non-sequential memory access.
+
+Copying irregularly-accessed data into a contiguous array before operating on it can result
+in a large speedup, such as in the example below. Here, a matrix and a vector are being accessed at
+800,000 of their randomly-shuffled indices before being multiplied. Copying the views into
+plain arrays speeds the multiplication by more than a factor of 2 even with the cost of the copying operation.
+
+```julia-repl
+julia> x = randn(1_000_000);
+
+julia> inds = shuffle(1:1_000_000)[1:800000];
+
+julia> A = randn(50, 1_000_000);
+
+julia> xtmp = zeros(800_000);
+
+julia> Atmp = zeros(50, 800_000);
+
+julia> @time sum(view(A, :, inds) * view(x, inds))
+  0.640320 seconds (41 allocations: 1.391 KiB)
+7253.242699002263
+
+julia> @time begin
+           copy!(xtmp, view(x, inds))
+           copy!(Atmp, view(A, :, inds))
+           sum(Atmp * xtmp)
+       end
+  0.261294 seconds (41 allocations: 1.391 KiB)
+7253.242699002323
+```
+Provided there is enough memory for the copies, the cost of copying the view to an array is
+far outweighed by the speed boost from doing the matrix multiplication on a contiguous array.
 
 ## Avoid string interpolation for I/O
 
@@ -1082,7 +1129,7 @@ These are some minor points that might help in tight inner loops.
   * Use [`div(x,y)`](@ref) for truncating division of integers instead of [`trunc(x/y)`](@ref), [`fld(x,y)`](@ref)
     instead of [`floor(x/y)`](@ref), and [`cld(x,y)`](@ref) instead of [`ceil(x/y)`](@ref).
 
-## Performance Annotations
+## [Performance Annotations](@id man-performance-annotations)
 
 Sometimes you can enable better optimization by promising certain program properties.
 
@@ -1388,7 +1435,7 @@ code defined in `pos`.
 
 Starting at `2:`, the variable `y` is defined, and again annotated as a `Union` type.  Next, we
 see that the compiler created the temporary variable `_var1` to hold the result of `y*x`. Because
-a [`Float64`](@ref) times *either* an `Int64` or [`Float64`](@ref) yields a [`Float64`](@ref),
+a [`Float64`](@ref) times *either* an [`Int64`](@ref) or `Float64` yields a `Float64`,
 all type-instability ends here. The net result is that `f(x::Float64)` will not be type-unstable
 in its output, even if some of the intermediate computations are type-unstable.
 

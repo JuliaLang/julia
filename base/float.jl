@@ -5,25 +5,25 @@
 """
     Inf16
 
-Positive infinity of type `Float16`.
+Positive infinity of type [`Float16`](@ref).
 """
 const Inf16 = bitcast(Float16, 0x7c00)
 """
     NaN16
 
-A not-a-number value of type `Float16`.
+A not-a-number value of type [`Float16`](@ref).
 """
 const NaN16 = bitcast(Float16, 0x7e00)
 """
     Inf32
 
-Positive infinity of type `Float32`.
+Positive infinity of type [`Float32`](@ref).
 """
 const Inf32 = bitcast(Float32, 0x7f800000)
 """
     NaN32
 
-A not-a-number value of type `Float32`.
+A not-a-number value of type [`Float32`](@ref).
 """
 const NaN32 = bitcast(Float32, 0x7fc00000)
 const Inf64 = bitcast(Float64, 0x7ff0000000000000)
@@ -32,13 +32,13 @@ const NaN64 = bitcast(Float64, 0x7ff8000000000000)
 """
     Inf
 
-Positive infinity of type `Float64`.
+Positive infinity of type [`Float64`](@ref).
 """
 const Inf = Inf64
 """
     NaN
 
-A not-a-number value of type `Float64`.
+A not-a-number value of type [`Float64`](@ref).
 """
 const NaN = NaN64
 
@@ -443,17 +443,18 @@ for op in (:<, :<=, :isless)
 end
 
 function cmp(x::AbstractFloat, y::AbstractFloat)
-    (isnan(x) || isnan(y)) && throw(DomainError())
+    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
+    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
 function cmp(x::Real, y::AbstractFloat)
-    isnan(y) && throw(DomainError())
+    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
 function cmp(x::AbstractFloat, y::Real)
-    isnan(x) && throw(DomainError())
+    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
@@ -649,14 +650,14 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     if $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf))
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:trunc, $Ti, x))
                     end
                 end
                 function convert(::Type{$Ti}, x::$Tf)
                     if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (trunc(x) == x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:convert, $Ti, x))
                     end
                 end
             end
@@ -670,14 +671,14 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:trunc, $Ti, x))
                     end
                 end
                 function convert(::Type{$Ti}, x::$Tf)
                     if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (trunc(x) == x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:convert, $Ti, x))
                     end
                 end
             end
@@ -704,6 +705,13 @@ end
     realmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
     realmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
     realmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
+
+    """
+        realmin(T)
+
+    The smallest in absolute value non-subnormal value representable by the given
+    floating-point DataType `T`.
+    """
     realmin(x::T) where {T<:AbstractFloat} = realmin(T)
     realmax(x::T) where {T<:AbstractFloat} = realmax(T)
     realmin() = realmin(Float64)
@@ -750,8 +758,8 @@ of `x` is different, then the larger of the two is taken, that is
     eps(x) == max(x-prevfloat(x), nextfloat(x)-x)
 
 The exceptions to this rule are the smallest and largest finite values
-(e.g. `nextfloat(-Inf)` and `prevfloat(Inf)` for `Float64`), which round to the smaller of
-the values.
+(e.g. `nextfloat(-Inf)` and `prevfloat(Inf)` for [`Float64`](@ref)), which round to the
+smaller of the values.
 
 The rationale for this behavior is that `eps` bounds the floating point rounding
 error. Under the default `RoundNearest` rounding mode, if ``y`` is a real number and ``x``

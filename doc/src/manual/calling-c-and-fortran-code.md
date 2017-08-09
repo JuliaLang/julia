@@ -55,7 +55,7 @@ to [`ccall`](@ref) are as follows:
 As a complete but simple example, the following calls the `clock` function from the standard C
 library:
 
-```julia
+```julia-repl
 julia> t = ccall((:clock, "libc"), Int32, ())
 2292761
 
@@ -66,11 +66,11 @@ julia> typeof(ans)
 Int32
 ```
 
-`clock` takes no arguments and returns an `Int32`. One common gotcha is that a 1-tuple must be
+`clock` takes no arguments and returns an [`Int32`](@ref). One common gotcha is that a 1-tuple must be
 written with a trailing comma. For example, to call the `getenv` function to get a pointer to
 the value of an environment variable, one makes a call like this:
 
-```julia
+```julia-repl
 julia> path = ccall((:getenv, "libc"), Cstring, (Cstring,), "SHELL")
 Cstring(@0x00007fff5fbffc45)
 
@@ -113,7 +113,7 @@ indicate errors in various different ways, including by returning -1, 0, 1 and o
 This wrapper throws an exception clearly indicating the problem if the caller tries to get a non-existent
 environment variable:
 
-```julia
+```julia-repl
 julia> getenv("SHELL")
 "/bin/bash"
 
@@ -154,11 +154,15 @@ typedef returntype (*functiontype)(argumenttype,...)
 ```
 
 The function [`cfunction()`](@ref) generates the C-compatible function pointer for a call to a
-Julia library function. Arguments to [`cfunction()`](@ref) are as follows:
+Julia function. Arguments to [`cfunction()`](@ref) are as follows:
 
 1. A Julia Function
 2. Return type
 3. A tuple of input types
+
+Only platform-default C calling convention is supported. `cfunction`-generated pointers cannot
+be used in calls where WINAPI expects `stdcall` function on 32-bit windows, but can be used on WIN64
+(where `stdcall` is unified with C calling convention).
 
 A classic example is the standard C library `qsort` function, declared as:
 
@@ -192,8 +196,8 @@ julia> const mycompare_c = cfunction(mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble
 ```
 
 [`cfunction()`](@ref) accepts three arguments: the Julia function (`mycompare`), the return type
-(`Cint`), and a tuple of the argument types, in this case to sort an array of `Cdouble` (`Float64`)
-elements.
+(`Cint`), and a tuple of the argument types, in this case to sort an array of `Cdouble`
+([`Float64`](@ref)) elements.
 
 The final call to `qsort` looks like this:
 
@@ -251,8 +255,9 @@ ccall((:foo, "libfoo"), Void, (Int32, Float64),
 ```
 
 [`Base.cconvert()`](@ref) normally just calls [`convert()`](@ref), but can be defined to return an
-arbitrary new object more appropriate for passing to C. For example, this is used to convert an
-`Array` of objects (e.g. strings) to an array of pointers.
+arbitrary new object more appropriate for passing to C.
+This should be used to perform all allocations of memory that will be accessed by the C code.
+For example, this is used to convert an `Array` of objects (e.g. strings) to an array of pointers.
 
 [`Base.unsafe_convert()`](@ref) handles conversion to `Ptr` types. It is considered unsafe because
 converting an object to a native pointer can hide the object from the garbage collector, causing
@@ -298,7 +303,7 @@ same:
   * `Signed`
 
     Exactly corresponds to the `signed` type annotation in C (or any `INTEGER` type in Fortran).
-    Any Julia type that is not a subtype of `Signed` is assumed to be unsigned.
+    Any Julia type that is not a subtype of [`Signed`](@ref) is assumed to be unsigned.
 
 
   * `Ref{T}`
@@ -847,21 +852,19 @@ case, the expression must evaluate to a `Ptr`, which will be used as the address
 function to call. This behavior occurs when the first [`ccall`](@ref) argument contains references
 to non-constants, such as local variables, function arguments, or non-constant globals.
 
-For example, you might look up the function via `dlsym`, then cache it in a global
-variable for that session. For example:
+For example, you might look up the function via `dlsym`,
+then cache it in a shared reference for that session. For example:
 
 ```julia
 macro dlsym(func, lib)
-    z, zlocal = gensym(string(func)), gensym()
-    eval(current_module(), :(global $z = C_NULL))
-    z = esc(z)
+    z = Ref{Ptr{Void}}(C_NULL)
     quote
-        let $zlocal::Ptr{Void} = $z::Ptr{Void}
-            if $zlocal == C_NULL
-                $zlocal = dlsym($(esc(lib))::Ptr{Void}, $(esc(func)))
-                global $z = $zlocal
+        let zlocal = $z[]
+            if zlocal == C_NULL
+                zlocal = dlsym($(esc(lib))::Ptr{Void}, $(esc(func)))::Ptr{Void}
+                $z[] = $zlocal
             end
-            $zlocal
+            zlocal
         end
     end
 end
@@ -874,7 +877,7 @@ ccall(@dlsym("myfunc", mylibvar), Void, ())
 
 The second argument to [`ccall`](@ref) can optionally be a calling convention specifier (immediately
 preceding return type). Without any specifier, the platform-default C calling convention is used.
-Other supported conventions are: `stdcall`, `cdecl`, `fastcall`, and `thiscall`. For example (from
+Other supported conventions are: `stdcall`, `cdecl`, `fastcall`, and `thiscall` (no-op on 64-bit Windows). For example (from
 `base/libc.jl`) we see the same `gethostname`[`ccall`](@ref) as above, but with the correct
 signature for Windows:
 
@@ -905,7 +908,7 @@ Global variables exported by native libraries can be accessed by name using the 
 function. The arguments to [`cglobal()`](@ref) are a symbol specification identical to that used
 by [`ccall`](@ref), and a type describing the value stored in the variable:
 
-```julia
+```julia-repl
 julia> cglobal((:errno, :libc), Int32)
 Ptr{Int32} @0x00007f418d0816b8
 ```

@@ -239,7 +239,7 @@ let
     redir_err = "redirect_stderr(STDOUT)"
     exename = Base.julia_cmd()
     script = "$redir_err; module A; f() = 1; end; A.f() = 1"
-    warning_str = readstring(`$exename --startup-file=no -e $script`)
+    warning_str = read(`$exename --startup-file=no -e $script`, String)
     @test contains(warning_str, "f()")
 end
 
@@ -265,11 +265,34 @@ let l = ReentrantLock()
     @test_throws ErrorException unlock(l)
 end
 
+# task switching
+
+@noinline function f6597(c)
+    t = @schedule nothing
+    finalizer(t, t -> c[] += 1)
+    wait(t)
+    @test c[] == 0
+    wait(t)
+    nothing
+end
+let c = Ref(0),
+    t2 = @schedule (wait(); c[] += 99)
+    @test c[] == 0
+    f6597(c)
+    gc() # this should run the finalizer for t
+    @test c[] == 1
+    yield()
+    @test c[] == 1
+    yield(t2)
+    @test c[] == 100
+end
+
+
 # timing macros
 
 # test that they don't introduce global vars
 global v11801, t11801, names_before_timing
-names_before_timing = names(current_module(), true)
+names_before_timing = names(@__MODULE__, true)
 
 let t = @elapsed 1+1
     @test isa(t, Real) && t >= 0
@@ -288,7 +311,7 @@ v11801, t11801 = @timed sin(1)
 @test v11801 == sin(1)
 @test isa(t11801,Real) && t11801 >= 0
 
-@test names(current_module(), true) == names_before_timing
+@test names(@__MODULE__, true) == names_before_timing
 
 # interactive utilities
 
@@ -507,7 +530,7 @@ let s = "abcα🐨\0x\0"
 end
 
 # clipboard functionality
-if is_windows()
+if Sys.iswindows()
     for str in ("Hello, world.", "∀ x ∃ y", "")
         clipboard(str)
         @test clipboard() == str
@@ -546,7 +569,7 @@ let creds = Base.LibGit2.CachedCredentials()
 end
 
 # Test that we can VirtualProtect jitted code to writable
-if is_windows()
+if Sys.iswindows()
     @noinline function WeVirtualProtectThisToRWX(x, y)
         x+y
     end
@@ -562,13 +585,65 @@ if is_windows()
     end
 end
 
-# CRC32c checksum (test data generated from @andrewcooke's CRC.jl package)
-for force_software_crc in (1,0)
-    ccall(:jl_crc32c_init, Void, (Cint,), force_software_crc)
+function test_crc32c(crc32c)
+    # CRC32c checksum (test data generated from @andrewcooke's CRC.jl package)
     for (n,crc) in [(0,0x00000000),(1,0xa016d052),(2,0x03f89f52),(3,0xf130f21e),(4,0x29308cf4),(5,0x53518fab),(6,0x4f4dfbab),(7,0xbd3a64dc),(8,0x46891f81),(9,0x5a14b9f9),(10,0xb219db69),(11,0xd232a91f),(12,0x51a15563),(13,0x9f92de41),(14,0x4d8ae017),(15,0xc8b74611),(16,0xa0de6714),(17,0x672c992a),(18,0xe8206eb6),(19,0xc52fd285),(20,0x327b0397),(21,0x318263dd),(22,0x08485ccd),(23,0xea44d29e),(24,0xf6c0cb13),(25,0x3969bba2),(26,0x6a8810ec),(27,0x75b3d0df),(28,0x82d535b1),(29,0xbdf7fc12),(30,0x1f836b7d),(31,0xd29f33af),(32,0x8e4acb3e),(33,0x1cbee2d1),(34,0xb25f7132),(35,0xb0fa484c),(36,0xb9d262b4),(37,0x3207fe27),(38,0xa024d7ac),(39,0x49a2e7c5),(40,0x0e2c157f),(41,0x25f7427f),(42,0x368c6adc),(43,0x75efd4a5),(44,0xa84c5c31),(45,0x0fc817b2),(46,0x8d99a881),(47,0x5cc3c078),(48,0x9983d5e2),(49,0x9267c2db),(50,0xc96d4745),(51,0x058d8df3),(52,0x453f9cf3),(53,0xb714ade1),(54,0x55d3c2bc),(55,0x495710d0),(56,0x3bddf494),(57,0x4f2577d0),(58,0xdae0f604),(59,0x3c57c632),(60,0xfe39bbb0),(61,0x6f5d1d41),(62,0x7d996665),(63,0x68c738dc),(64,0x8dfea7ae)]
-        @test Base.crc32c(UInt8[1:n;]) == crc
+        @test crc32c(UInt8[1:n;]) == crc == crc32c(String(UInt8[1:n;]))
+    end
+
+    # test that crc parameter is equivalent to checksum of concatenated data,
+    # and test crc of subarrays:
+    a = UInt8[1:255;]
+    crc_256 = crc32c(a)
+    @views for n = 1:255
+        @test crc32c(a[n+1:end], crc32c(a[1:n])) == crc_256
+    end
+    @test crc32c(IOBuffer(a)) == crc_256
+    let buf = IOBuffer()
+        write(buf, a[1:3])
+        @test crc32c(seekstart(buf)) == crc32c(a[1:3])
+        @test crc32c(buf) == 0x00000000
+        @test crc32c(seek(buf, 1)) == crc32c(a[2:3])
+        @test crc32c(seek(buf, 0), 2) == crc32c(a[1:2])
+        @test crc32c(buf) == crc32c(a[3:3])
+    end
+
+    let f = tempname()
+        try
+            write(f, a)
+            @test open(crc32c, f) == crc_256
+            open(f, "r") do io
+                @test crc32c(io, 16) == crc32c(a[1:16])
+                @test crc32c(io, 16) == crc32c(a[17:32])
+                @test crc32c(io) == crc32c(a[33:end])
+                @test crc32c(io, 1000) == 0x00000000
+            end
+            a = rand(UInt8, 30000)
+            write(f, a)
+            @test open(crc32c, f) == crc32c(a) == open(io -> crc32c(io, 10^6), f)
+        finally
+            rm(f, force=true)
+        end
     end
 end
+unsafe_crc32c_sw(a, n, crc) =
+    ccall(:jl_crc32c_sw, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)
+crc32c_sw(a::Union{Array{UInt8},Base.FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N},
+          crc::UInt32=0x00000000) = unsafe_crc32c_sw(a, length(a), crc)
+crc32c_sw(s::String, crc::UInt32=0x00000000) = unsafe_crc32c_sw(s, sizeof(s), crc)
+function crc32c_sw(io::IO, nb::Integer, crc::UInt32=0x00000000)
+    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
+    buf = Array{UInt8}(min(nb, 24576))
+    while !eof(io) && nb > 24576
+        n = readbytes!(io, buf)
+        crc = unsafe_crc32c_sw(buf, n, crc)
+        nb -= n
+    end
+    return unsafe_crc32c_sw(buf, readbytes!(io, buf, min(nb, length(buf))), crc)
+end
+crc32c_sw(io::IO, crc::UInt32=0x00000000) = crc32c_sw(io, typemax(Int64), crc)
+test_crc32c(crc32c)
+test_crc32c(crc32c_sw)
 
 let
     old_have_color = Base.have_color
@@ -629,7 +704,7 @@ let
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
-Base.convert{S,T,N}(::Type{Array{S, N}}, ::DA_19281{T, N}) = error()
+Base.convert(::Type{Array{S, N}}, ::DA_19281{T, N}) where {S,T,N} = error()
 x_19281 = [(), (1,)]
 mutable struct Foo_19281
     f::Vector{Tuple}
@@ -670,13 +745,42 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
     end
 end
 
-# invokelatest function for issue #19774
-issue19774(x) = 1
+# Test issue #19774 invokelatest fix.
+
+# we define this in a module to allow rewriting
+# rather than needing an extra eval.
+module Issue19774
+f(x) = 1
+end
+
+# First test the world issue condition.
 let foo() = begin
-        eval(:(issue19774(x::Int) = 2))
-        return Base.invokelatest(issue19774, 0)
+        Issue19774.f(x::Int) = 2
+        return Issue19774.f(0)
     end
-    @test foo() == 2
+    @test foo() == 1    # We should be using the original function.
+end
+
+# Now check that invokelatest fixes that issue.
+let foo() = begin
+        Issue19774.f(x::Int) = 3
+        return Base.invokelatest(Issue19774.f, 0)
+    end
+    @test foo() == 3
+end
+
+# Check that the kwargs conditions also works
+module Kwargs19774
+f(x, y; z=0) = x * y + z
+end
+
+@test Kwargs19774.f(2, 3; z=1) == 7
+
+let foo() = begin
+        Kwargs19774.f(x::Int, y::Int; z=3) = z
+        return Base.invokelatest(Kwargs19774.f, 2, 3; z=1)
+    end
+    @test foo() == 1
 end
 
 # Endian tests
@@ -701,3 +805,19 @@ end
 @test hton(0x102030405060708) == 0x807060504030201
 @test ltoh(0x102030405060708) == 0x102030405060708
 @test htol(0x102030405060708) == 0x102030405060708
+
+@testset "inline bug #18735" begin
+    @noinline f(n) = n ? error() : Int
+    g() = Union{f(true)}
+    @test_throws ErrorException g()
+end
+
+include("testenv.jl")
+
+let flags = Cmd(filter(a->!contains(a, "depwarn"), collect(test_exeflags)))
+    local cmd = `$test_exename $flags deprecation_exec.jl`
+
+    if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR))
+        error("Deprecation test failed, cmd : $cmd")
+    end
+end

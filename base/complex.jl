@@ -1,5 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Complex{T<:Real} <: Number
+
+Complex number type with real and imaginary part of type `T`.
+
+`Complex32`, `Complex64` and `Complex128` are aliases for
+`Complex{Float16}`, `Complex{Float32}` and `Complex{Float64}` respectively.
+"""
 struct Complex{T<:Real} <: Number
     re::T
     im::T
@@ -11,8 +19,14 @@ Complex(x::Real) = Complex(x, zero(x))
     im
 
 The imaginary unit.
+
+# Examples
+```jldoctest
+julia> im * im
+-1 + 0im
+```
 """
-const im = Complex(false,true)
+const im = Complex(false, true)
 
 const Complex128 = Complex{Float64}
 const Complex64  = Complex{Float32}
@@ -21,7 +35,7 @@ const Complex32  = Complex{Float16}
 convert(::Type{Complex{T}}, x::Real) where {T<:Real} = Complex{T}(x,0)
 convert(::Type{Complex{T}}, z::Complex) where {T<:Real} = Complex{T}(real(z),imag(z))
 convert(::Type{T}, z::Complex) where {T<:Real} =
-    isreal(z) ? convert(T,real(z)) : throw(InexactError())
+    isreal(z) ? convert(T,real(z)) : throw(InexactError(:convert, T, z))
 
 convert(::Type{Complex}, z::Complex) = z
 convert(::Type{Complex}, x::Real) = Complex(x)
@@ -41,6 +55,7 @@ float(::Type{Complex{T}}) where {T} = Complex{float(T)}
 
 Return the real part of the complex number `z`.
 
+# Examples
 ```jldoctest
 julia> real(1 + 3im)
 1
@@ -53,6 +68,7 @@ real(z::Complex) = z.re
 
 Return the imaginary part of the complex number `z`.
 
+# Examples
 ```jldoctest
 julia> imag(1 + 3im)
 3
@@ -67,6 +83,7 @@ imag(x::Real) = zero(x)
 
 Return both the real and imaginary parts of the complex number `z`.
 
+# Examples
 ```jldoctest
 julia> reim(1 + 3im)
 (1, 3)
@@ -98,6 +115,7 @@ real(::Type{Complex{T}}) where {T<:Real} = T
 
 Test whether `x` or all its elements are numerically equal to some real number.
 
+# Examples
 ```jldoctest
 julia> isreal(5.)
 true
@@ -113,6 +131,7 @@ isfinite(z::Complex) = isfinite(real(z)) & isfinite(imag(z))
 isnan(z::Complex) = isnan(real(z)) | isnan(imag(z))
 isinf(z::Complex) = isinf(real(z)) | isinf(imag(z))
 iszero(z::Complex) = iszero(real(z)) & iszero(imag(z))
+isone(z::Complex) = isone(real(z)) & iszero(imag(z))
 
 """
     complex(r, [i])
@@ -129,6 +148,7 @@ complex(x::Real, y::Real) = Complex(x, y)
 Returns an appropriate type which can represent a value of type `T` as a complex number.
 Equivalent to `typeof(complex(zero(T)))`.
 
+# Examples
 ```jldoctest
 julia> complex(Complex{Int})
 Complex{Int64}
@@ -161,6 +181,16 @@ end
 show(io::IO, z::Complex{Bool}) =
     print(io, z == im ? "im" : "Complex($(z.re),$(z.im))")
 
+function show_unquoted(io::IO, z::Complex, ::Int, prec::Int)
+    if operator_precedence(:+) <= prec
+        print(io, "(")
+        show(io, z)
+        print(io, ")")
+    else
+        show(io, z)
+    end
+end
+
 function read(s::IO, ::Type{Complex{T}}) where T<:Real
     r = read(s,T)
     i = read(s,T)
@@ -180,6 +210,8 @@ bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
 ==(x::Real, z::Complex) = isreal(z) && real(z) == x
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
+
+in(x::Complex, r::Range{<:Real}) = isreal(x) && real(x) in r
 
 if UInt === UInt64
     const h_imag = 0x32a7a07f3e7cd1f9
@@ -201,6 +233,7 @@ end
 
 Compute the complex conjugate of a complex number `z`.
 
+# Examples
 ```jldoctest
 julia> conj(1 + 3im)
 1 - 3im
@@ -424,22 +457,44 @@ sqrt(z::Complex) = sqrt(float(z))
 # end
 
 # compute exp(im*theta)
-cis(theta::Real) = Complex(cos(theta),sin(theta))
+function cis(theta::Real)
+    s, c = sincos(theta)
+    Complex(c, s)
+end
 
 """
     cis(z)
 
 Return ``\\exp(iz)``.
+
+# Examples
+```jldoctest
+julia> cis(π) ≈ -1
+true
+```
 """
 function cis(z::Complex)
     v = exp(-imag(z))
-    Complex(v*cos(real(z)), v*sin(real(z)))
+    s, c = sincos(real(z))
+    Complex(v * c, v * s)
 end
 
 """
     angle(z)
 
 Compute the phase angle in radians of a complex number `z`.
+
+# Examples
+```jldoctest
+julia> rad2deg(angle(1 + im))
+45.0
+
+julia> rad2deg(angle(1 - im))
+-45.0
+
+julia> rad2deg(angle(-1 - im))
+-135.0
+```
 """
 angle(z::Complex) = atan2(imag(z), real(z))
 
@@ -510,7 +565,8 @@ function exp(z::Complex)
         if iszero(zi)
             Complex(er, zi)
         else
-            Complex(er*cos(zi), er*sin(zi))
+            s, c = sincos(zi)
+            Complex(er * c, er * s)
         end
     end
 end
@@ -538,7 +594,8 @@ function expm1(z::Complex{T}) where T<:Real
                 wr = erm1 - 2 * er * (sin(convert(Tf, 0.5) * zi))^2
                 return Complex(wr, er * sin(zi))
             else
-                return Complex(er * cos(zi), er * sin(zi))
+                s, c = sincos(zi)
+                return Complex(er * c, er * s)
             end
         end
     end
@@ -597,17 +654,21 @@ function ^(z::Complex{T}, p::Complex{T})::Complex{T} where T<:AbstractFloat
     end
 end
 
-function exp2(z::Complex{T}) where T
+function exp2(z::Complex{T}) where T<:AbstractFloat
     er = exp2(real(z))
     theta = imag(z) * log(convert(T, 2))
-    Complex(er*cos(theta), er*sin(theta))
+    s, c = sincos(theta)
+    Complex(er * c, er * s)
 end
+exp2(z::Complex) = exp2(float(z))
 
-function exp10(z::Complex{T}) where T
+function exp10(z::Complex{T}) where T<:AbstractFloat
     er = exp10(real(z))
     theta = imag(z) * log(convert(T, 10))
-    Complex(er*cos(theta), er*sin(theta))
+    s, c = sincos(theta)
+    Complex(er * c, er * s)
 end
+exp10(z::Complex) = exp10(float(z))
 
 function ^(z::T, p::T) where T<:Complex
     if isinteger(p)
@@ -628,8 +689,7 @@ function ^(z::T, p::T) where T<:Complex
         rp = rp*exp(-pim*theta)
         ntheta = ntheta + pim*log(r)
     end
-    cosntheta = cos(ntheta)
-    sinntheta = sin(ntheta)
+    sinntheta, cosntheta = sincos(ntheta)
     re, im = rp*cosntheta, rp*sinntheta
     if isinf(rp)
         if isnan(re)
@@ -689,7 +749,8 @@ function sin(z::Complex{T}) where T
             Complex(F(NaN), F(NaN))
         end
     else
-        Complex(sin(zr)*cosh(zi), cos(zr)*sinh(zi))
+        s, c = sincos(zr)
+        Complex(s * cosh(zi), c * sinh(zi))
     end
 end
 
@@ -708,7 +769,8 @@ function cos(z::Complex{T}) where T
             Complex(F(NaN), F(NaN))
         end
     else
-        Complex(cos(zr)*cosh(zi), -sin(zr)*sinh(zi))
+        s, c = sincos(zr)
+        Complex(c * cosh(zi), -s * sinh(zi))
     end
 end
 
