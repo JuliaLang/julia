@@ -359,7 +359,7 @@ julia> max(2, 5, 1)
 5
 ```
 """
-max(x, y) = ifelse(y < x, x, y)
+max(x, y) = ifelse(isless(y, x), x, y)
 
 """
     min(x, y, ...)
@@ -373,7 +373,7 @@ julia> min(2, 5, 1)
 1
 ```
 """
-min(x,y) = ifelse(y < x, y, x)
+min(x,y) = ifelse(isless(y, x), y, x)
 
 """
     minmax(x, y)
@@ -386,7 +386,7 @@ julia> minmax('c','b')
 ('b', 'c')
 ```
 """
-minmax(x,y) = y < x ? (y, x) : (x, y)
+minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
 
 scalarmax(x,y) = max(x,y)
 scalarmax(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))

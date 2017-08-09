@@ -1697,7 +1697,7 @@ end
 
 Returns the maximum element of the collection `itr` and its index. If there are multiple
 maximal elements, then the first one will be returned. `NaN` values are ignored, unless
-all elements are `NaN`.
+all elements are `NaN`. Other than the treatment of `NaN`, the result is in line with `max`.
 
 The collection must not be empty.
 
@@ -1723,7 +1723,8 @@ function findmax(a)
     while !done(a, s)
         ai, s = next(a, s)
         i += 1
-        if ai > m || m!=m
+        ai != ai && continue # assume x != x => x is a NaN
+        if m != m || isless(m, ai)
             m = ai
             mi = i
         end
@@ -1736,7 +1737,7 @@ end
 
 Returns the minimum element of the collection `itr` and its index. If there are multiple
 minimal elements, then the first one will be returned. `NaN` values are ignored, unless
-all elements are `NaN`.
+all elements are `NaN`. Other than the treatment of `NaN`, the result is in line with `min`.
 
 The collection must not be empty.
 
@@ -1762,7 +1763,8 @@ function findmin(a)
     while !done(a, s)
         ai, s = next(a, s)
         i += 1
-        if ai < m || m!=m
+        ai != ai && continue
+        if m != m || isless(ai, m)
             m = ai
             mi = i
         end
