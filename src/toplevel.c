@@ -359,6 +359,8 @@ static jl_module_t *eval_import_path_(jl_module_t *from, jl_array_t *args, int r
     else {
         m = from;
         while (1) {
+            if (i >= jl_array_len(args))
+                jl_error("invalid module path");
             var = (jl_sym_t*)jl_array_ptr_ref(args, i);
             if (!jl_is_symbol(var))
                 jl_type_error("import or using", (jl_value_t*)jl_sym_type, (jl_value_t*)var);
