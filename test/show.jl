@@ -3,7 +3,7 @@
 # For curmod_*
 include("testenv.jl")
 
-replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true), MIME("text/plain"), x), x)
+replstr(x) = sprint((io,x) -> show(IOContext(io, limit=true, displaysize=(24, 80)), MIME("text/plain"), x), x)
 
 @test replstr(Array{Any}(2)) == "2-element Array{Any,1}:\n #undef\n #undef"
 @test replstr(Array{Any}(2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"

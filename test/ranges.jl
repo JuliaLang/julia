@@ -664,7 +664,7 @@ end
 
 # stringmime/show should display the range or linspace nicely
 # to test print_range in range.jl
-replstrmime(x) = sprint((io,x) -> show(IOContext(io, :limit => true), MIME("text/plain"), x), x)
+replstrmime(x) = sprint((io,x) -> show(IOContext(io, limit=true, displaysize=(24, 80)), MIME("text/plain"), x), x)
 @test replstrmime(1:4) == "1:4"
 @test stringmime("text/plain", 1:4) == "1:4"
 @test stringmime("text/plain", linspace(1,5,7)) == "1.0:0.6666666666666666:5.0"
