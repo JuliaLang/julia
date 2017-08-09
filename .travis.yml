@@ -3,21 +3,21 @@ sudo: false
 dist: trusty
 matrix:
   include:
-    - os: linux
-      env: ARCH="i686"
-      compiler: "g++ -m32"
-      addons:
-        apt:
-          packages:
-            - libssl1.0.0
-            - bar
-            - time
-            - gcc-multilib
-            - g++-multilib
-            - make:i386
-            - libssl-dev:i386
-            - gfortran
-            - gfortran-multilib
+#    - os: linux
+#      env: ARCH="i686"
+#      compiler: "g++ -m32"
+#      addons:
+#        apt:
+#          packages:
+#            - libssl1.0.0
+#            - bar
+#            - time
+#            - gcc-multilib
+#            - g++-multilib
+#            - make:i386
+#            - libssl-dev:i386
+#            - gfortran
+#            - gfortran-multilib
     - os: linux
       env: ARCH="x86_64"
       compiler: "g++ -m64"
