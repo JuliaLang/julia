@@ -660,9 +660,9 @@ flush(io::IO) = nothing
 """
     skipchars(io::IO, predicate; linecomment::Char)
 
-Advance the stream `io` until before the first character for which `predicate`
-returns `false`. If keyword argument `linecomment` is specified, all characters
-from that character until the start of the next line are ignored.
+Advance the stream `io` such that the next-read character will be the first remaining for
+which `predicate` returns `false`. If the keyword argument `linecomment` is specified, all
+characters from that character until the start of the next line are ignored.
 
 ```jldoctext
 julia> buf = IOBuffer("    text")
