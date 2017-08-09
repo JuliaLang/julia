@@ -400,3 +400,18 @@ end
         end
     end
 end
+
+@testset "multiplication of transposes of Diagonal (#22428)" begin
+    for T in (Float64, Complex{Float64})
+        D = Diagonal(randn(T, 5, 5))
+        B = Diagonal(randn(T, 5, 5))
+        DD = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
+        BB = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
+        fullDD = copy!(Matrix{Matrix{T}}(2, 2), DD)
+        fullBB = copy!(Matrix{Matrix{T}}(2, 2), BB)
+        for f in (*, Ac_mul_B, A_mul_Bc, Ac_mul_Bc, At_mul_B, A_mul_Bt, At_mul_Bt)
+            @test f(D, B)::typeof(D) == f(Matrix(D), Matrix(B))
+            @test f(DD, BB)::typeof(DD) == f(fullDD, fullBB)
+        end
+    end
+end
