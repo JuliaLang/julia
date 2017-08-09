@@ -140,10 +140,12 @@ when applied to `-1` versus `-1 + 0im` even though `-1 == -1 + 0im`:
 
 ```jldoctest
 julia> sqrt(-1)
-ERROR: DomainError:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
+ERROR: DomainError with -1.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:447
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
+ [2] sqrt at ./math.jl:462 [inlined]
+ [3] sqrt(::Int64) at ./math.jl:472
 
 julia> sqrt(-1 + 0im)
 0.0 + 1.0im

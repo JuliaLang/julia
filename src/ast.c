@@ -44,8 +44,8 @@ jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
-jl_sym_t *abstracttype_sym; jl_sym_t *bitstype_sym;
-jl_sym_t *compositetype_sym; jl_sym_t *foreigncall_sym;
+jl_sym_t *abstracttype_sym; jl_sym_t *primtype_sym;
+jl_sym_t *structtype_sym; jl_sym_t *foreigncall_sym;
 jl_sym_t *global_sym; jl_sym_t *list_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
@@ -56,6 +56,7 @@ jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
 jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
 jl_sym_t *polly_sym; jl_sym_t *inline_sym;
 jl_sym_t *propagate_inbounds_sym;
+jl_sym_t *isdefined_sym; jl_sym_t *nospecialize_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -172,17 +173,16 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     JL_TIMING(MACRO_INVOCATION);
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
-    if (nargs < 2) // macro name and location
-        argcount(fl_ctx, "invoke-julia-macro", nargs, 2);
-    nargs++; // add __module__ argument
+    if (nargs < 3) // macro name and location
+        argcount(fl_ctx, "invoke-julia-macro", nargs, 3);
     jl_method_instance_t *mfunc = NULL;
     jl_value_t **margs;
     // Reserve one more slot for the result
     JL_GC_PUSHARGS(margs, nargs + 1);
     int i;
-    margs[0] = scm_to_julia(fl_ctx, args[0], 1);
+    margs[0] = scm_to_julia(fl_ctx, args[1], 1);
     // __source__ argument
-    jl_value_t *lno = scm_to_julia(fl_ctx, args[1], 1);
+    jl_value_t *lno = scm_to_julia(fl_ctx, args[2], 1);
     margs[1] = lno;
     if (jl_is_expr(lno) && ((jl_expr_t*)lno)->head == line_sym) {
         jl_value_t *file = jl_nothing;
@@ -205,12 +205,16 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     }
     margs[2] = (jl_value_t*)ctx->module;
     for (i = 3; i < nargs; i++)
-        margs[i] = scm_to_julia(fl_ctx, args[i - 1], 1);
+        margs[i] = scm_to_julia(fl_ctx, args[i], 1);
+    margs[nargs] = scm_to_julia(fl_ctx, args[0], 1); // module context for @macrocall argument
     jl_value_t *result = NULL;
     size_t world = jl_get_ptls_states()->world_age;
 
     JL_TRY {
-        margs[0] = jl_toplevel_eval(ctx->module, margs[0]);
+        jl_module_t *m = (jl_module_t*)margs[nargs];
+        if (!jl_is_module(m))
+            m = ctx->module;
+        margs[0] = jl_toplevel_eval(m, margs[0]);
         mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1, world);
         if (mfunc == NULL) {
             jl_method_error((jl_function_t*)margs[0], margs, nargs, world);
@@ -410,8 +414,8 @@ void jl_init_frontend(void)
     underscore_sym = jl_symbol("_");
     amp_sym = jl_symbol("&");
     abstracttype_sym = jl_symbol("abstract_type");
-    bitstype_sym = jl_symbol("bits_type");
-    compositetype_sym = jl_symbol("composite_type");
+    primtype_sym = jl_symbol("primitive_type");
+    structtype_sym = jl_symbol("struct_type");
     toplevel_sym = jl_symbol("toplevel");
     dot_sym = jl_symbol(".");
     boundscheck_sym = jl_symbol("boundscheck");
@@ -431,6 +435,8 @@ void jl_init_frontend(void)
     polly_sym = jl_symbol("polly");
     inline_sym = jl_symbol("inline");
     propagate_inbounds_sym = jl_symbol("propagate_inbounds");
+    isdefined_sym = jl_symbol("isdefined");
+    nospecialize_sym = jl_symbol("nospecialize");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -983,6 +989,12 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
 {
     JL_TIMING(LOWERING);
     return jl_call_scm_on_ast("jl-macroexpand", expr, inmodule);
+}
+
+JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule)
+{
+    JL_TIMING(LOWERING);
+    return jl_call_scm_on_ast("jl-macroexpand-1", expr, inmodule);
 }
 
 // wrap expr in a thunk AST

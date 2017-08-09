@@ -9,6 +9,11 @@ const DOT_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
 
+# Generic cross-over constant based on benchmarking on a single thread with an i7 CPU @ 2.5GHz
+# L1 cache: 32K, L2 cache: 256K, L3 cache: 6144K
+# This constant should ideally be determined by the actual CPU cache size
+const ISONE_CUTOFF = 2^21 # 2M
+
 function scale!(X::Array{T}, s::T) where T<:BlasFloat
     s == 0 && return fill!(X, zero(T))
     s == 1 && return X
@@ -29,16 +34,49 @@ function scale!(X::Array{T}, s::Real) where T<:BlasComplex
     X
 end
 
-# Test whether a matrix is positive-definite
-isposdef!(A::StridedMatrix{<:BlasFloat}, UL::Symbol) = LAPACK.potrf!(char_uplo(UL), A)[2] == 0
+
+function isone(A::StridedMatrix)
+    m, n = size(A)
+    m != n && return false # only square matrices can satisfy x == one(x)
+    if sizeof(A) < ISONE_CUTOFF
+        _isone_triacheck(A, m)
+    else
+        _isone_cachefriendly(A, m)
+    end
+end
+
+@inline function _isone_triacheck(A::StridedMatrix, m::Int)
+    @inbounds for i in 1:m, j in i:m
+        if i == j
+            isone(A[i,i]) || return false
+        else
+            iszero(A[i,j]) && iszero(A[j,i]) || return false
+        end
+    end
+    return true
+end
+
+# Inner loop over rows to be friendly to the CPU cache
+@inline function _isone_cachefriendly(A::StridedMatrix, m::Int)
+    @inbounds for i in 1:m, j in 1:m
+        if i == j
+            isone(A[i,i]) || return false
+        else
+            iszero(A[j,i]) || return false
+        end
+    end
+    return true
+end
+
 
 """
     isposdef!(A) -> Bool
 
-Test whether a matrix is positive definite, overwriting `A` in the process.
+Test whether a matrix is positive definite by trying to perform a
+Cholesky factorization of `A`, overwriting `A` in the process.
+See also [`isposdef`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1. 2.; 2. 50.];
 
@@ -51,19 +89,16 @@ julia> A
  2.0  6.78233
 ```
 """
-isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
+isposdef!(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact!(Hermitian(A)))
 
-function isposdef(A::AbstractMatrix{T}, UL::Symbol) where T
-    S = typeof(sqrt(one(T)))
-    isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL)
-end
 """
     isposdef(A) -> Bool
 
-Test whether a matrix is positive definite.
+Test whether a matrix is positive definite by trying to perform a
+Cholesky factorization of `A`.
+See also [`isposdef!`](@ref)
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 2; 2 50]
 2×2 Array{Int64,2}:
@@ -74,10 +109,7 @@ julia> isposdef(A)
 true
 ```
 """
-function isposdef(A::AbstractMatrix{T}) where T
-    S = typeof(sqrt(one(T)))
-    isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A))
-end
+isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact(Hermitian(A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 stride1(x::Array) = 1
@@ -102,7 +134,7 @@ vecnorm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
 Returns the upper triangle of `M` starting from the `k`th superdiagonal,
 overwriting `M` in the process.
 
-# Example
+# Examples
 ```jldoctest
 julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
 5×5 Array{Int64,2}:
@@ -145,8 +177,7 @@ triu(M::Matrix, k::Integer) = triu!(copy(M), k)
 Returns the lower triangle of `M` starting from the `k`th superdiagonal, overwriting `M` in
 the process.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
 5×5 Array{Int64,2}:
@@ -211,8 +242,7 @@ end
 
 A `Range` giving the indices of the `k`th diagonal of the matrix `M`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
 3×3 Array{Int64,2}:
@@ -232,8 +262,7 @@ diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
 The `k`th diagonal of a matrix, as a vector.
 Use [`diagm`](@ref) to construct a diagonal matrix.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
 3×3 Array{Int64,2}:
@@ -252,10 +281,10 @@ diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 """
     diagm(v, k::Integer=0)
 
-Construct a matrix by placing `v` on the `k`th diagonal.
+Construct a matrix by placing `v` on the `k`th diagonal. This constructs a full matrix; if
+you want a storage-efficient version with fast arithmetic, use [`Diagonal`](@ref) instead.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> diagm([1,2,3],1)
 4×4 Array{Int64,2}:
@@ -288,8 +317,7 @@ end
 
 Kronecker tensor product of two vectors or two matrices.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -329,34 +357,12 @@ kron(a::AbstractMatrix, b::AbstractVector) = kron(a, reshape(b, length(b), 1))
 kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
 
 # Matrix power
-(^)(A::AbstractMatrix{T}, p::Integer) where {T} = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
-function (^)(A::AbstractMatrix{T}, p::Real) where T
-    # For integer powers, use repeated squaring
-    if isinteger(p)
-        TT = Base.promote_op(^, eltype(A), typeof(p))
-        return (TT == eltype(A) ? A : copy!(similar(A, TT), A))^Integer(p)
-    end
-
-    # If possible, use diagonalization
-    if T <: Real && issymmetric(A)
-        return (Symmetric(A)^p)
-    end
-    if ishermitian(A)
-        return (Hermitian(A)^p)
-    end
-
-    n = checksquare(A)
-
-    # Quicker return if A is diagonal
-    if isdiag(A)
-        retmat = copy(A)
-        for i in 1:n
-            retmat[i, i] = retmat[i, i] ^ p
-        end
-        return retmat
-    end
-
-    # Otherwise, use Schur decomposition
+(^)(A::AbstractMatrix, p::Integer) = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
+function integerpow(A::AbstractMatrix{T}, p) where T
+    TT = Base.promote_op(^, T, typeof(p))
+    return (TT == T ? A : copy!(similar(A, TT), A))^Integer(p)
+end
+function schurpow(A::AbstractMatrix, p)
     if istriu(A)
         # Integer part
         retmat = A ^ floor(p)
@@ -388,6 +394,32 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
         return retmat
     end
 end
+function (^)(A::AbstractMatrix{T}, p::Real) where T
+    n = checksquare(A)
+
+    # Quicker return if A is diagonal
+    if isdiag(A)
+        retmat = copy(A)
+        for i in 1:n
+            retmat[i, i] = retmat[i, i] ^ p
+        end
+        return retmat
+    end
+
+    # For integer powers, use power_by_squaring
+    isinteger(p) && return integerpow(A, p)
+
+    # If possible, use diagonalization
+    if issymmetric(A)
+        return (Symmetric(A)^p)
+    end
+    if ishermitian(A)
+        return (Hermitian(A)^p)
+    end
+
+    # Otherwise, use Schur decomposition
+    return schurpow(A, p)
+end
 (^)(A::AbstractMatrix, p::Number) = expm(p*logm(A))
 
 # Matrix exponential
@@ -406,8 +438,7 @@ used, otherwise the scaling and squaring algorithm (see [^H05]) is chosen.
 
 [^H05]: Nicholas J. Higham, "The squaring and scaling method for the matrix exponential revisited", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. [doi:10.1137/090768539](http://dx.doi.org/10.1137/090768539)
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = eye(2, 2)
 2×2 Array{Float64,2}:
@@ -537,8 +568,7 @@ triangular factor.
 
 [^AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, "Computing the Fréchet derivative of the matrix logarithm and estimating the condition number", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. [doi:10.1137/120885991](http://dx.doi.org/10.1137/120885991)
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = 2.7182818 * eye(2)
 2×2 Array{Float64,2}:
@@ -604,8 +634,7 @@ and then the complex square root of the triangular factor.
     Linear Algebra and its Applications, 52-53, 1983, 127-140.
     [doi:10.1016/0024-3795(83)80010-X](http://dx.doi.org/10.1016/0024-3795(83)80010-X)
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [4 0; 0 4]
 2×2 Array{Int64,2}:
@@ -653,12 +682,15 @@ function inv(A::StridedMatrix{T}) where T
     AA = convert(AbstractArray{S}, A)
     if istriu(AA)
         Ai = inv(UpperTriangular(AA))
+        Ai = convert(typeof(parent(Ai)), Ai)
     elseif istril(AA)
         Ai = inv(LowerTriangular(AA))
+        Ai = convert(typeof(parent(Ai)), Ai)
     else
-        Ai = inv(lufact(AA))
+        Ai = inv!(lufact(AA))
+        Ai = convert(typeof(parent(Ai)), Ai)
     end
-    return convert(typeof(parent(Ai)), Ai)
+    return Ai
 end
 
 """
@@ -687,10 +719,9 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 If `factorize` is called on a Hermitian positive-definite matrix, for instance, then `factorize`
 will return a Cholesky factorization.
 
-# Example
-
+# Examples
 ```jldoctest
-julia> A = Array(Bidiagonal(ones(5, 5), true))
+julia> A = Array(Bidiagonal(ones(5, 5), :U))
 5×5 Array{Float64,2}:
  1.0  1.0  0.0  0.0  0.0
  0.0  1.0  1.0  0.0  0.0
@@ -750,12 +781,12 @@ function factorize(A::StridedMatrix{T}) where T
                     return Diagonal(A)
                 end
                 if utri1
-                    return Bidiagonal(diag(A), diag(A, -1), false)
+                    return Bidiagonal(diag(A), diag(A, -1), :L)
                 end
                 return LowerTriangular(A)
             end
             if utri
-                return Bidiagonal(diag(A), diag(A, 1), true)
+                return Bidiagonal(diag(A), diag(A, 1), :U)
             end
             if utri1
                 if (herm & (T <: Complex)) | sym
@@ -782,7 +813,7 @@ function factorize(A::StridedMatrix{T}) where T
         end
         return lufact(A)
     end
-    qrfact(A, Val{true})
+    qrfact(A, Val(true))
 end
 
 ## Moore-Penrose pseudoinverse
@@ -805,8 +836,7 @@ inverting dense ill-conditioned matrices in a least-squares sense,
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 
-# Example
-
+# Examples
 ```jldoctest
 julia> M = [1.5 1.3; 1.2 1.9]
 2×2 Array{Float64,2}:
@@ -878,8 +908,7 @@ end
 
 Basis for nullspace of `M`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> M = [1 0 0; 0 1 0; 0 0 0]
 3×3 Array{Int64,2}:

@@ -117,6 +117,8 @@ end
     reverse(s::AbstractString) -> AbstractString
 
 Reverses a string.
+
+# Examples
 ```jldoctest
 julia> reverse("JuliaLang")
 "gnaLailuJ"
@@ -127,31 +129,56 @@ reverse(s::RevString) = s.string
 
 ## reverse an index i so that reverse(s)[i] == s[reverseind(s,i)]
 
+"""
+    reverseind(v, i)
+
+Given an index `i` in `reverse(v)`, return the corresponding index in `v` so that
+`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in the case where `v` is a
+Unicode string.)
+
+# Examples
+```jldoctest
+julia> r = reverse("Julia")
+"ailuJ"
+
+julia> for i in 1:length(r)
+           print(r[reverseind("Julia", i)])
+       end
+Julia
+```
+"""
 reverseind(s::AbstractString, i) = chr2ind(s, length(s) + 1 - ind2chr(reverse(s), i))
 reverseind(s::Union{DirectIndexString,SubString{DirectIndexString}}, i::Integer) = length(s) + 1 - i
 reverseind(s::RevString, i::Integer) = endof(s) - i + 1
 reverseind(s::SubString{String}, i::Integer) =
     reverseind(s.string, nextind(s.string, endof(s.string))-s.offset-s.endof+i-1) - s.offset
 
-function repeat(s::AbstractString, r::Integer)
-    r <  0 ? throw(ArgumentError("can't repeat a string $r times")) :
-    r == 0 ? "" :
-    r == 1 ? s  :
-    repeat(convert(String, s), r)
-end
+"""
+    repeat(s::AbstractString, r::Integer)
+
+Repeat a string `r` times. This can equivalently be accomplished by calling [`s^r`](@ref ^).
+
+# Examples
+```jldoctest
+julia> repeat("ha", 3)
+"hahaha"
+```
+"""
+repeat(s::AbstractString, r::Integer) = repeat(convert(String, s), r)
 
 """
-    ^(s::AbstractString, n::Integer)
+    ^(s::Union{AbstractString,Char}, n::Integer)
 
-Repeat `n` times the string `s`.
+Repeat a string or character `n` times.
 The [`repeat`](@ref) function is an alias to this operator.
 
+# Examples
 ```jldoctest
 julia> "Test "^3
 "Test Test Test "
 ```
 """
-(^)(s::AbstractString, r::Integer) = repeat(s,r)
+(^)(s::Union{AbstractString,Char}, r::Integer) = repeat(s,r)
 
 pointer(x::SubString{String}) = pointer(x.string) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)

@@ -27,6 +27,9 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
 jl_value_t *jl_eval_module_expr(jl_module_t *m, jl_expr_t *ex);
 int jl_is_toplevel_only_expr(jl_value_t *e);
 
+// deprecated: do not use this method in new code
+// it uses special scoping / evaluation / error rules
+// which should instead be handled in lowering
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_code_info_t *src,
                                           jl_svec_t *sparam_vals)
@@ -102,7 +105,7 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
           dta->mutabl == dtb->mutabl &&
           dta->size == dtb->size &&
           dta->ninitialized == dtb->ninitialized &&
-          jl_egal((jl_value_t*)dta->name->names, (jl_value_t*)dtb->name->names) &&
+          jl_egal((jl_value_t*)jl_field_names(dta), (jl_value_t*)jl_field_names(dtb)) &&
           jl_nparams(dta) == jl_nparams(dtb) &&
           jl_field_count(dta) == jl_field_count(dtb)))
         return 0;
@@ -203,33 +206,58 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         ssize_t n = jl_slot_number(e);
         if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
             jl_error("access to invalid slot number");
-        jl_value_t *v = s->locals[n-1];
+        jl_value_t *v = s->locals[n - 1];
         if (v == NULL)
             jl_undefined_var_error((jl_sym_t*)jl_array_ptr_ref(src->slotnames, n - 1));
         return v;
     }
     if (jl_is_globalref(e)) {
-        jl_sym_t *s = jl_globalref_name(e);
-        jl_value_t *v = jl_get_global(jl_globalref_mod(e), s);
-        if (v == NULL)
-            jl_undefined_var_error(s);
-        return v;
+        return jl_eval_global_var(jl_globalref_mod(e), jl_globalref_name(e));
     }
     if (jl_is_quotenode(e))
         return jl_fieldref(e,0);
     jl_module_t *modu = s->module;
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
-        jl_value_t *v = jl_get_global(modu, (jl_sym_t*)e);
-        if (v == NULL)
-            jl_undefined_var_error((jl_sym_t*)e);
-        return v;
+        return jl_eval_global_var(modu, (jl_sym_t*)e);
     }
     if (!jl_is_expr(e))
         return e;
     jl_expr_t *ex = (jl_expr_t*)e;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t nargs = jl_array_len(ex->args);
-    if (ex->head == call_sym) {
+    if (ex->head == isdefined_sym) {
+        jl_value_t *sym = args[0];
+        int defined = 0;
+        if (jl_is_slot(sym)) {
+            ssize_t n = jl_slot_number(sym);
+            if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
+                jl_error("access to invalid slot number");
+            defined = s->locals[n - 1] != NULL;
+        }
+        else if (jl_is_globalref(sym)) {
+            defined = jl_boundp(jl_globalref_mod(sym), jl_globalref_name(sym));
+        }
+        else if (jl_is_symbol(sym)) {
+            defined = jl_boundp(modu, (jl_sym_t*)sym);
+        }
+        else if (jl_is_expr(sym) && ((jl_expr_t*)sym)->head == static_parameter_sym) {
+            ssize_t n = jl_unbox_long(args[0]);
+            assert(n > 0);
+            if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
+                jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
+                defined = !jl_is_typevar(sp);
+            }
+            else {
+                // static parameter val unknown needs to be an error for ccall
+                jl_error("could not determine static parameter value");
+            }
+        }
+        else {
+            assert(0 && "malformed isdefined expression");
+        }
+        return defined ? jl_true : jl_false;
+    }
+    else if (ex->head == call_sym) {
         return do_call(args, nargs, s);
     }
     else if (ex->head == invoke_sym) {
@@ -274,20 +302,15 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         assert(jl_expr_nargs(ex) != 1 || jl_is_symbol(fname));
 
         if (jl_is_symbol(fname)) {
-            jl_value_t **bp=NULL;
-            jl_value_t *bp_owner=NULL;
-            jl_binding_t *b=NULL;
-            if (bp == NULL) {
-                b = jl_get_binding_for_method_def(modu, fname);
-                bp = &b->value;
-                bp_owner = (jl_value_t*)modu;
-            }
-            jl_value_t *gf = jl_generic_function_def(fname, modu, bp, bp_owner, b);
+            jl_value_t *bp_owner = (jl_value_t*)modu;
+            jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
+            jl_value_t **bp = &b->value;
+            jl_value_t *gf = jl_generic_function_def(b->name, b->owner, bp, bp_owner, b);
             if (jl_expr_nargs(ex) == 1)
                 return gf;
         }
 
-        jl_value_t *atypes=NULL, *meth=NULL;
+        jl_value_t *atypes = NULL, *meth = NULL;
         JL_GC_PUSH2(&atypes, &meth);
         atypes = eval(args[1], s);
         meth = eval(args[2], s);
@@ -302,24 +325,8 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             sym = jl_globalref_name(sym);
         }
         assert(jl_is_symbol(sym));
-        jl_binding_t *b = jl_get_binding_wr(modu, sym);
+        jl_binding_t *b = jl_get_binding_wr(modu, sym, 1);
         jl_declare_constant(b);
-        return (jl_value_t*)jl_nothing;
-    }
-    else if (ex->head == global_sym) {
-        // create uninitialized mutable binding for "global x" decl
-        // TODO: handle type decls
-        size_t i, l = jl_array_len(ex->args);
-        for (i = 0; i < l; i++) {
-            jl_sym_t *gsym = (jl_sym_t*)args[i];
-            jl_module_t *gmodu = modu;
-            if (jl_is_globalref(gsym)) {
-                gmodu = jl_globalref_mod(gsym);
-                gsym = jl_globalref_name(gsym);
-            }
-            assert(jl_is_symbol(gsym));
-            jl_get_binding_wr(gmodu, gsym);
-        }
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == abstracttype_sym) {
@@ -340,7 +347,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         assert(jl_is_symbol(name));
         dt = jl_new_abstracttype(name, modu, NULL, (jl_svec_t*)para);
         w = dt->name->wrapper;
-        jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
+        jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name, 1);
         temp = b->value;
         check_can_assign_type(b, w);
         b->value = w;
@@ -363,7 +370,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
     }
-    else if (ex->head == bitstype_sym) {
+    else if (ex->head == primtype_sym) {
         if (inside_typedef)
             jl_error("cannot eval a new bits type definition while defining another type");
         jl_value_t *name = args[0];
@@ -388,7 +395,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
                       jl_symbol_name((jl_sym_t*)name));
         dt = jl_new_primitivetype(name, modu, NULL, (jl_svec_t*)para, nb);
         w = dt->name->wrapper;
-        jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
+        jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name, 1);
         temp = b->value;
         check_can_assign_type(b, w);
         b->value = w;
@@ -411,7 +418,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
     }
-    else if (ex->head == compositetype_sym) {
+    else if (ex->head == structtype_sym) {
         if (inside_typedef)
             jl_error("cannot eval a new data type definition while defining another type");
         jl_value_t *name = args[0];
@@ -433,7 +440,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
                              0, args[5]==jl_true ? 1 : 0, jl_unbox_long(args[6]));
         w = dt->name->wrapper;
 
-        jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
+        jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name, 1);
         temp = b->value;  // save old value
         // temporarily assign so binding is available for field types
         check_can_assign_type(b, w);
@@ -462,10 +469,6 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             jl_rethrow();
         }
         jl_compute_field_offsets(dt);
-        if (para == (jl_value_t*)jl_emptysvec && jl_is_datatype_make_singleton(dt)) {
-            dt->instance = jl_gc_alloc(ptls, 0, dt);
-            jl_gc_wb(dt, dt->instance);
-        }
 
         b->value = temp;
         if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)jl_unwrap_unionall(temp))) {
@@ -549,17 +552,14 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
                     s->locals[n-1] = rhs;
                 }
                 else {
-                    jl_module_t *m;
+                    jl_module_t *modu = s->module;
                     if (jl_is_globalref(sym)) {
-                        m = jl_globalref_mod(sym);
+                        modu = jl_globalref_mod(sym);
                         sym = (jl_value_t*)jl_globalref_name(sym);
-                    }
-                    else {
-                        m = s->module;
                     }
                     assert(jl_is_symbol(sym));
                     JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr(m, (jl_sym_t*)sym);
+                    jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)sym, 1);
                     jl_checked_assignment(b, rhs);
                     JL_GC_POP();
                 }
@@ -631,13 +631,14 @@ jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint
         return lam->inferred_const;
     jl_code_info_t *src = (jl_code_info_t*)lam->inferred;
     if (!src || (jl_value_t*)src == jl_nothing) {
-        if (lam->def.method->isstaged) {
+        if (lam->def.method->source) {
+            src = (jl_code_info_t*)lam->def.method->source;
+        }
+        else {
+            assert(lam->def.method->generator);
             src = jl_code_for_staged(lam);
             lam->inferred = (jl_value_t*)src;
             jl_gc_wb(lam, src);
-        }
-        else {
-            src = (jl_code_info_t*)lam->def.method->source;
         }
     }
     if (src && (jl_value_t*)src != jl_nothing) {

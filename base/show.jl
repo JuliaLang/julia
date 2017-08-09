@@ -107,8 +107,8 @@ get(io::IO, key, default) = default
 
 displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
 
-show_circular(io::IO, x::ANY) = false
-function show_circular(io::IOContext, x::ANY)
+show_circular(io::IO, @nospecialize(x)) = false
+function show_circular(io::IOContext, @nospecialize(x))
     d = 1
     for (k, v) in io.dict
         if k === :SHOWN_SET
@@ -122,12 +122,12 @@ function show_circular(io::IOContext, x::ANY)
     return false
 end
 
-show(io::IO, x::ANY) = show_default(io, x)
-function show_default(io::IO, x::ANY)
+show(io::IO, @nospecialize(x)) = show_default(io, x)
+function show_default(io::IO, @nospecialize(x))
     t = typeof(x)::DataType
     show(io, t)
     print(io, '(')
-    nf = nfields(t)
+    nf = nfields(x)
     nb = sizeof(x)
     if nf != 0 || nb == 0
         if !show_circular(io, x)
@@ -187,11 +187,10 @@ show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 
 function show(io::IO, x::Union)
     print(io, "Union")
-    sorted_types = sort!(uniontypes(x); by=string)
-    show_comma_array(io, sorted_types, '{', '}')
+    show_comma_array(io, uniontypes(x), '{', '}')
 end
 
-function print_without_params(x::ANY)
+function print_without_params(@nospecialize(x))
     if isa(x,UnionAll)
         b = unwrap_unionall(x)
         return isa(b,DataType) && b.name.wrapper === x
@@ -246,6 +245,11 @@ end
 
 show_supertypes(typ::DataType) = show_supertypes(STDOUT, typ)
 
+"""
+    @show
+
+Show an expression and result, returning the result.
+"""
 macro show(exs...)
     blk = Expr(:block)
     for ex in exs
@@ -273,19 +277,26 @@ print(io::IO, n::Unsigned) = print(io, dec(n))
 
 show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(hex(UInt(p), Sys.WORD_SIZE>>2))")
 
-function show(io::IO, p::Pair)
-    if typeof(p.first) != typeof(p).parameters[1] ||
-       typeof(p.second) != typeof(p).parameters[2]
-        return show_default(io, p)
-    end
+has_tight_type(p::Pair) =
+    typeof(p.first)  == typeof(p).parameters[1] &&
+    typeof(p.second) == typeof(p).parameters[2]
 
-    isa(p.first,Pair) && print(io, "(")
-    show(io, p.first)
-    isa(p.first,Pair) && print(io, ")")
-    print(io, "=>")
-    isa(p.second,Pair) && print(io, "(")
-    show(io, p.second)
-    isa(p.second,Pair) && print(io, ")")
+isdelimited(io::IO, x) = true
+
+isdelimited(io::IO, p::Pair) = !has_tight_type(p)
+
+function show(io::IO, p::Pair)
+    compact = get(io, :compact, false)
+    iocompact = IOContext(io, :compact => get(io, :compact, true))
+    has_tight_type(p) || return show_default(iocompact, p)
+
+    isdelimited(iocompact, p.first) || print(io, "(")
+    show(iocompact, p.first)
+    isdelimited(iocompact, p.first) || print(io, ")")
+    print(io, compact ? "=>" : " => ")
+    isdelimited(iocompact, p.second) || print(io, "(")
+    show(iocompact, p.second)
+    isdelimited(iocompact, p.second) || print(io, ")")
     nothing
 end
 
@@ -320,7 +331,7 @@ end
 function show(io::IO, l::Core.MethodInstance)
     def = l.def
     if isa(def, Method)
-        if def.isstaged && l === def.generator
+        if isdefined(def, :generator) && l === def.generator
             print(io, "MethodInstance generator for ")
             show(io, def)
         else
@@ -461,7 +472,8 @@ const all_ops = union(quoted_syms, uni_ops, expr_infix_any)
 const expr_calls  = Dict(:call => ('(',')'), :calldecl => ('(',')'),
                          :ref => ('[',']'), :curly => ('{','}'), :(.) => ('(',')'))
 const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
-                         :hcat =>('[',']'), :row =>('[',']'), :vect=>('[',']'))
+                         :hcat =>('[',']'), :row =>('[',']'), :vect=>('[',']'),
+                         :braces=>('{','}'), :bracescat=>('{','}'))
 
 ## AST decoding helpers ##
 
@@ -490,7 +502,6 @@ other operators. Higher-numbered operators take precedence over lower-numbered
 operators. Return `0` if `s` is not a valid operator.
 
 # Examples
-
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
 (9,11,15)
@@ -520,7 +531,7 @@ typeemphasize(io::IO) = get(io, :TYPEEMPHASIZE, false) === true
 
 const indent_width = 4
 
-function show_expr_type(io::IO, ty::ANY, emph::Bool)
+function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     if ty === Function
         print(io, "::F")
     elseif ty === Core.IntrinsicFunction
@@ -545,7 +556,11 @@ function show_block(io::IO, head, args::Vector, body, indent::Int)
     print(io, head)
     if !isempty(args)
         print(io, ' ')
-        show_list(io, args, ", ", indent)
+        if head === :elseif
+            show_list(io, args, " ", indent)
+        else
+            show_list(io, args, ", ", indent)
+        end
     end
 
     ind = head === :module || head === :baremodule ? indent : indent + indent_width
@@ -573,9 +588,13 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operato
     first = true
     for item in items
         !first && print(io, sep)
-        parens = enclose_operators && isa(item,Symbol) && isoperator(item)
+        parens = !is_quoted(item) &&
+            (first && prec >= prec_power &&
+             ((item isa Expr && item.head === :call && item.args[1] in uni_ops) ||
+              (item isa Real && item < 0))) ||
+              (enclose_operators && item isa Symbol && isoperator(item))
         parens && print(io, '(')
-        show_unquoted(io, item, indent, prec)
+        show_unquoted(io, item, indent, parens ? 0 : prec)
         parens && print(io, ')')
         first = false
     end
@@ -719,15 +738,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     end
     # dot (i.e. "x.y"), but not compact broadcast exps
     if head === :(.) && !is_expr(args[2], :tuple)
-        show_unquoted(io, args[1], indent + indent_width)
-        print(io, '.')
-        if is_quoted(args[2])
-            show_unquoted(io, unquoted(args[2]), indent + indent_width)
-        else
-            print(io, '(')
-            show_unquoted(io, args[2], indent + indent_width)
-            print(io, ')')
-        end
+        func_prec = operator_precedence(head)
+        args_ = (args[1], (is_quoted(arg) && !is_quoted(unquoted(arg)) ? unquoted(arg) : arg for arg in args[2:end])...)
+        show_list(io, args_, head, indent, func_prec)
 
     # infix (i.e. "x <: y" or "x = y")
     elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
@@ -742,7 +755,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # list (i.e. "(1, 2, 3)" or "[1, 2, 3]")
     elseif haskey(expr_parens, head)               # :tuple/:vcat
         op, cl = expr_parens[head]
-        if head === :vcat
+        if head === :vcat || head === :bracescat
             sep = "; "
         elseif head === :hcat || head === :row
             sep = " "
@@ -793,7 +806,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             if isa(func_args[1], Expr) || func_args[1] in all_ops
                 show_enclosed_list(io, '(', func_args, ", ", ')', indent, func_prec)
             else
-                show_unquoted(io, func_args[1])
+                show_unquoted(io, func_args[1], indent, func_prec)
             end
 
         # binary operator (i.e. "x + y")
@@ -802,6 +815,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
                     all(!isa(a, Expr) || a.head !== :... for a in func_args)
                 sep = " $func "
+
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
                 else
@@ -869,22 +883,31 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "function ", args[1], " end")
 
     # block with argument
-    elseif head in (:for,:while,:function,:if) && nargs==2
+    elseif head in (:for,:while,:function,:if,:elseif) && nargs==2
         show_block(io, head, args[1], args[2], indent)
         print(io, "end")
+
+    elseif (head === :if || head === :elseif) && nargs == 3
+        show_block(io, head, args[1], args[2], indent)
+        if isa(args[3],Expr) && args[3].head == :elseif
+            show_unquoted(io, args[3], indent, prec)
+        else
+            show_block(io, "else", args[3], indent)
+            print(io, "end")
+        end
 
     elseif head === :module && nargs==3 && isa(args[1],Bool)
         show_block(io, args[1] ? :module : :baremodule, args[2], args[3], indent)
         print(io, "end")
 
     # type declaration
-    elseif head === :type && nargs==3
+    elseif head === :struct && nargs==3
         show_block(io, args[1] ? Symbol("mutable struct") : Symbol("struct"), args[2], args[3], indent)
         print(io, "end")
 
-    elseif head === :bitstype && nargs == 2
+    elseif head === :primitive && nargs == 2
         print(io, "primitive type ")
-        show_list(io, reverse(args), ' ', indent)
+        show_list(io, args, ' ', indent)
         print(io, " end")
 
     elseif head === :abstract && nargs == 1
@@ -933,11 +956,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     elseif head === :line && 1 <= nargs <= 2
         show_linenumber(io, args...)
-
-    elseif head === :if && nargs == 3     # if/else
-        show_block(io, "if",   args[1], args[2], indent)
-        show_block(io, "else", args[3], indent)
-        print(io, "end")
 
     elseif head === :try && 3 <= nargs <= 4
         show_block(io, "try", args[1], indent)
@@ -1099,7 +1117,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     nothing
 end
 
-resolvebinding(ex::ANY) = ex
+resolvebinding(@nospecialize(ex)) = ex
 resolvebinding(ex::QuoteNode) = ex.value
 resolvebinding(ex::Symbol) = resolvebinding(GlobalRef(Main, ex))
 function resolvebinding(ex::Expr)
@@ -1132,7 +1150,7 @@ function show(io::IO, tv::TypeVar)
     # Otherwise, the lower bound should be printed if it is not `Bottom`
     # and the upper bound should be printed if it is not `Any`.
     in_env = (:unionall_env => tv) in io
-    function show_bound(io::IO, b::ANY)
+    function show_bound(io::IO, @nospecialize(b))
         parens = isa(b,UnionAll) && !print_without_params(b)
         parens && print(io, "(")
         show(io, b)
@@ -1179,14 +1197,14 @@ function dump(io::IO, x::SimpleVector, n::Int, indent)
     nothing
 end
 
-function dump(io::IO, x::ANY, n::Int, indent)
+function dump(io::IO, @nospecialize(x), n::Int, indent)
     T = typeof(x)
     if isa(x, Function)
         print(io, x, " (function of type ", T, ")")
     else
         print(io, T)
     end
-    if nfields(T) > 0
+    if nfields(x) > 0
         if n > 0
             for field in (isa(x,Tuple) ? (1:length(x)) : fieldnames(T))
                 println(io)
@@ -1250,7 +1268,7 @@ function dump(io::IO, x::DataType, n::Int, indent)
     if x !== Any
         print(io, " <: ", supertype(x))
     end
-    if n > 0 && !(x <: Tuple)
+    if n > 0 && !(x <: Tuple) && !x.abstract
         tvar_io::IOContext = io
         for tparam in x.parameters
             # approximately recapture the list of tvar parameterization
@@ -1272,7 +1290,7 @@ end
 
 # dumptype is for displaying abstract type hierarchies,
 # based on Jameson Nash's examples/typetree.jl
-function dumptype(io::IO, x::ANY, n::Int, indent)
+function dumptype(io::IO, @nospecialize(x), n::Int, indent)
     print(io, x)
     n == 0 && return  # too deeply nested
     isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)
@@ -1371,6 +1389,19 @@ function alignment(io::IO, x::Rational)
     m = match(r"^(.*?/)(/.*)$", sprint(0, show, x, env=io))
     m === nothing ? (length(sprint(0, show, x, env=io)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
+end
+
+function alignment(io::IO, x::Pair)
+    s = sprint(0, show, x, env=io)
+    if has_tight_type(x) # i.e. use "=>" for display
+        iocompact = IOContext(io, :compact => get(io, :compact, true))
+        left = length(sprint(0, show, x.first, env=iocompact))
+        left += 2 * !isdelimited(iocompact, x.first) # for parens around p.first
+        left += !get(io, :compact, false) # spaces are added around "=>"
+        (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
+    else
+        (0, length(s)) # as for x::Any
+    end
 end
 
 const undef_ref_str = "#undef"
@@ -1720,7 +1751,7 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
     if repr && ndims(X) == 1
         return show_vector(io, X, "[", "]")
     end
-    if !haskey(io, :compact)
+    if !haskey(io, :compact) && length(indices(X, 2)) > 1
         io = IOContext(io, :compact => true)
     end
     if !repr && get(io, :limit, false) && eltype(X) === Method
@@ -1758,15 +1789,20 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
     end
 end
 
-showall(x) = showall(STDOUT, x)
-function showall(io::IO, x)
-    if !get(io, :limit, false)
-        show(io, x)
-    else
-        show(IOContext(io, :limit => false), x)
-    end
-end
+"""
+    showcompact(x)
+    showcompact(io::IO, x)
 
+Show a compact representation of a value to `io`. If `io` is not specified, the
+default is to print to [`STDOUT`](@ref).
+
+This is used for printing array elements without repeating type information (which would
+be redundant with that printed once for the whole array), and without line breaks inside
+the representation of an element.
+
+To offer a compact representation different from its standard one, a custom type should
+test `get(io, :compact, false)` in its normal [`show`](@ref) method.
+"""
 showcompact(x) = showcompact(STDOUT, x)
 function showcompact(io::IO, x)
     if get(io, :compact, false)

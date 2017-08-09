@@ -10,9 +10,3 @@ LLVM_VER_PATCH:=$(word 3, $(subst ., ,$(LLVM_VER)))
 ifeq ($(LLVM_VER_PATCH),)
 LLVM_VER_PATCH := 0
 endif
-
-ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
-LLVM_USE_CMAKE := 0
-else
-LLVM_USE_CMAKE := 1
-endif

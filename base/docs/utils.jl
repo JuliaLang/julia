@@ -195,7 +195,7 @@ end
 isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isempty(x.args[3])
 repl(io::IO, ex::Expr) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex)
 repl(io::IO, str::AbstractString) = :(apropos($io, $str))
-repl(io::IO, other) = :(@doc $(esc(other)))
+repl(io::IO, other) = esc(:(@doc $other))
 
 repl(x) = repl(STDOUT, x)
 
@@ -203,7 +203,7 @@ function _repl(x)
     if (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args))
         x.args[2:end] = [:(::typeof($arg)) for arg in x.args[2:end]]
     end
-    docs = :(@doc $(esc(x)))
+    docs = esc(:(@doc $x))
     if isfield(x)
         quote
             if isa($(esc(x.args[1])), DataType)
@@ -253,7 +253,7 @@ avgdistance(xs) =
 function fuzzyscore(needle, haystack)
     score = 0.
     is, acro = bestmatch(needle, haystack)
-    score += (acro?2:1)*length(is) # Matched characters
+    score += (acro ? 2 : 1)*length(is) # Matched characters
     score -= 2(length(needle)-length(is)) # Missing characters
     !acro && (score -= avgdistance(is)/10) # Contiguous
     !isempty(is) && (score -= mean(is)/100) # Closer to beginning
@@ -330,7 +330,7 @@ function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = displays
     total = 0
     for i = 1:length(ss)
         total += length(ss[i])
-        total + max(i-2,0)*length(delim) + (i>1?1:0)*length(last) > cols && (i-=1; break)
+        total + max(i-2,0)*length(delim) + (i>1 ? 1 : 0)*length(last) > cols && (i-=1; break)
     end
     join(io, ss[1:i], delim, last)
 end
@@ -416,7 +416,7 @@ Strip all Markdown markup from x, leaving the result in plain text. Used
 internally by apropos to make docstrings containing more than one markdown
 element searchable.
 """
-stripmd(x::ANY) = string(x) # for random objects interpolated into the docstring
+stripmd(@nospecialize x) = string(x) # for random objects interpolated into the docstring
 stripmd(x::AbstractString) = x  # base case
 stripmd(x::Void) = " "
 stripmd(x::Vector) = string(map(stripmd, x)...)

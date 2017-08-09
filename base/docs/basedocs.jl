@@ -17,7 +17,7 @@ as well many great tutorials and learning resources:
     https://julialang.org/learning/
 
 For help on a specific function or macro, type `?` followed
-by its name, e.g. `?fft`, or `?@time`, and press enter.
+by its name, e.g. `?cos`, or `?@time`, and press enter.
 """
 kw"help", kw"?", kw"julia"
 
@@ -555,20 +555,21 @@ Short-circuiting boolean OR.
 kw"||"
 
 """
-    ccall((symbol, library) or function_pointer, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
+    ccall((function_name, library), returntype, (argtype1, ...), argvalue1, ...)
+    ccall(function_pointer, returntype, (argtype1, ...), argvalue1, ...)
 
-Call function in C-exported shared library, specified by `(function name, library)`
-tuple, where each component is a string or symbol.
+Call a function in a C-exported shared library, specified by the tuple `(function_name, library)`,
+where each component is either a string or symbol. Alternatively, `ccall` may
+also be used to call a function pointer `function_pointer`, such as one returned by `dlsym`.
 
 Note that the argument type tuple must be a literal tuple, and not a tuple-valued
-variable or expression. Alternatively, `ccall` may also be used to call a function
-pointer, such as one returned by `dlsym`.
+variable or expression.
 
-Each `ArgumentValue` to the `ccall` will be converted to the corresponding
-`ArgumentType`, by automatic insertion of calls to `unsafe_convert(ArgumentType,
-cconvert(ArgumentType, ArgumentValue))`. (See also the documentation for each of these
+Each `argvalue` to the `ccall` will be converted to the corresponding
+`argtype`, by automatic insertion of calls to `unsafe_convert(argtype,
+cconvert(argtype, argvalue))`. (See also the documentation for each of these
 functions for further details.) In most cases, this simply results in a call to
-`convert(ArgumentType, ArgumentValue)`.
+`convert(argtype, argvalue)`.
 """
 kw"ccall"
 
@@ -688,14 +689,6 @@ The singleton instance of type `Void`, used by convention when there is no value
 (as in a C `void` function). Can be converted to an empty `Nullable` value.
 """
 nothing
-
-"""
-    ANY
-
-Equivalent to `Any` for dispatch purposes, but signals the compiler to skip code
-generation specialization for that field.
-"""
-ANY
 
 """
     Core.TypeofBottom

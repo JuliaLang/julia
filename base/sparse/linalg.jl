@@ -194,7 +194,7 @@ function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
 end
 
 ## solvers
-function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
+function fwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
 # forward substitution for CSC matrices
     nrowB, ncolB  = size(B, 1), size(B, 2)
     ncol = LinAlg.checksquare(A)
@@ -202,9 +202,9 @@ function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
         throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
     end
 
-    aa = A.nzval
-    ja = A.rowval
-    ia = A.colptr
+    aa = getnzval(A)
+    ja = getrowval(A)
+    ia = getcolptr(A)
 
     joff = 0
     for k = 1:ncolB
@@ -239,7 +239,7 @@ function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
     B
 end
 
-function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
+function bwdTriSolve!(A::SparseMatrixCSCUnion, B::AbstractVecOrMat)
 # backward substitution for CSC matrices
     nrowB, ncolB = size(B, 1), size(B, 2)
     ncol = LinAlg.checksquare(A)
@@ -247,9 +247,9 @@ function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
         throw(DimensionMismatch("A is $(ncol) columns and B has $(nrowB) rows"))
     end
 
-    aa = A.nzval
-    ja = A.rowval
-    ia = A.colptr
+    aa = getnzval(A)
+    ja = getrowval(A)
+    ia = getcolptr(A)
 
     joff = 0
     for k = 1:ncolB
@@ -284,11 +284,32 @@ function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
     B
 end
 
-A_ldiv_B!(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) where {T} = fwdTriSolve!(L.data, B)
-A_ldiv_B!(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) where {T} = bwdTriSolve!(U.data, B)
+A_ldiv_B!(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = fwdTriSolve!(L.data, B)
+A_ldiv_B!(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::StridedVecOrMat) where {T} = bwdTriSolve!(U.data, B)
 
-(\)(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(L, Array(B))
-(\)(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(U, Array(B))
+(\)(L::LowerTriangular{T,<:SparseMatrixCSCUnion{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(L, Array(B))
+(\)(U::UpperTriangular{T,<:SparseMatrixCSCUnion{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(U, Array(B))
+
+function A_rdiv_B!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
+    dd = D.diag
+    if (k = length(dd)) ≠ A.n
+        throw(DimensionMismatch("size(A, 2)=$(A.n) should be size(D, 1)=$k"))
+    end
+    nonz = nonzeros(A)
+    @inbounds for j in 1:k
+        ddj = dd[j]
+        if iszero(ddj)
+            throw(LinAlg.SingularException(j))
+        end
+        for k in nzrange(A, j)
+            nonz[k] /= ddj
+        end
+    end
+    A
+end
+
+A_rdiv_Bc!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, conj(D))
+A_rdiv_Bt!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, D)
 
 ## triu, tril
 
@@ -565,7 +586,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
 
     function _rand_pm1!(v)
         for i in eachindex(v)
-            v[i] = rand()<0.5?1:-1
+            v[i] = rand()<0.5 ? 1 : -1
         end
     end
 
@@ -590,7 +611,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
             end
         end
     end
-    scale!(X, 1./n)
+    scale!(X, 1 ./ n)
 
     iter = 0
     local est
@@ -622,7 +643,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
         S_old = copy(S)
         for j = 1:t
             for i = 1:n
-                S[i,j] = Y[i,j]==0?one(Y[i,j]):sign(Y[i,j])
+                S[i,j] = Y[i,j]==0 ? one(Y[i,j]) : sign(Y[i,j])
             end
         end
 
@@ -890,12 +911,7 @@ function factorize(A::SparseMatrixCSC)
             return UpperTriangular(A)
         end
         if ishermitian(A)
-            try
-                return cholfact(Hermitian(A))
-            catch e
-                isa(e, PosDefException) || rethrow(e)
-                return ldltfact(Hermitian(A))
-            end
+            return factorize(Hermitian(A))
         end
         return lufact(A)
     else
@@ -903,23 +919,48 @@ function factorize(A::SparseMatrixCSC)
     end
 end
 
-function factorize(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where Ti
-    try
-        return cholfact(A)
-    catch e
-        isa(e, PosDefException) || rethrow(e)
-        return ldltfact(A)
-    end
-end
-function factorize(A::Hermitian{Complex{Float64}, SparseMatrixCSC{Complex{Float64},Ti}}) where Ti
-    try
-        return cholfact(A)
-    catch e
-        isa(e, PosDefException) || rethrow(e)
-        return ldltfact(A)
+# function factorize(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where Ti
+#     F = cholfact(A)
+#     if LinAlg.issuccess(F)
+#         return F
+#     else
+#         ldltfact!(F, A)
+#         return F
+#     end
+# end
+function factorize(A::LinAlg.RealHermSymComplexHerm{Float64,<:SparseMatrixCSC})
+    F = cholfact(A)
+    if LinAlg.issuccess(F)
+        return F
+    else
+        ldltfact!(F, A)
+        return F
     end
 end
 
 chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
 lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")
 eig(A::SparseMatrixCSC) = error("Use eigs() instead of eig() for sparse matrices.")
+
+function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
+    a, b = size(X)
+    n, p = vardim == 1 ? (a, b) : (b, a)
+
+    # The covariance can be decomposed into two terms
+    # 1/(n - 1) ∑ (x_i - x̄)*(x_i - x̄)' = 1/(n - 1) (∑ x_i*x_i' - n*x̄*x̄')
+    # which can be evaluated via a sparse matrix-matrix product
+
+    # Compute ∑ x_i*x_i' = X'X using sparse matrix-matrix product
+    out = Matrix(Base.unscaled_covzm(X, vardim))
+
+    # Compute x̄
+    x̄ᵀ = mean(X, vardim)
+
+    # Subtract n*x̄*x̄' from X'X
+    @inbounds for j in 1:p, i in 1:p
+        out[i,j] -= x̄ᵀ[i] * x̄ᵀ[j]' * n
+    end
+
+    # scale with the sample size n or the corrected sample size n - 1
+    return scale!(out, inv(n - corrected))
+end

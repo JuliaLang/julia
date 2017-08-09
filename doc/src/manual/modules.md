@@ -214,9 +214,8 @@ in other modules can be invoked as `Mod.@mac` or `@Mod.mac`.
 The syntax `M.x = y` does not work to assign a global in another module; global assignment is
 always module-local.
 
-A variable can be "reserved" for the current module without assigning to it by declaring it as
-`global x` at the top level. This can be used to prevent name conflicts for globals initialized
-after load time.
+A variable name can be "reserved" without assigning to it by declaring it as `global x`.
+This prevents name conflicts for globals initialized after load time.
 
 ### Module initialization and precompilation
 
@@ -283,6 +282,7 @@ const foo_data_ptr = Ref{Ptr{Void}}(0)
 function __init__()
     ccall((:foo_init, :libfoo), Void, ())
     foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Void}, ())
+    nothing
 end
 ```
 

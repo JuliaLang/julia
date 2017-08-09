@@ -1,5 +1,9 @@
 ## Some shared configuration options ##
 
+# NOTE: Do not make RPATH changes in CMAKE_COMMON on platforms other than FreeBSD, since
+# it will make its way into the LLVM build flags, and LLVM is picky about RPATH (though
+# apparently not on FreeBSD). Ref PR #22352
+
 CONFIGURE_COMMON := --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir)) --bindir=$(abspath $(build_depsbindir)) $(CUSTOM_LD_LIBRARY_PATH)
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
@@ -41,14 +45,12 @@ endif
 endif
 
 # For now this is LLVM specific, but I expect it won't be in the future
-ifeq ($(LLVM_USE_CMAKE),1)
 ifeq ($(CMAKE_GENERATOR),Ninja)
 CMAKE_GENERATOR_COMMAND := -G Ninja
 else ifeq ($(CMAKE_GENERATOR),make)
 CMAKE_GENERATOR_COMMAND := -G "Unix Makefiles"
 else
 $(error Unknown CMake generator '$(CMAKE_GENERATOR)'. Options are 'Ninja' and 'make')
-endif
 endif
 
 # If the top-level Makefile is called with environment variables,
@@ -99,7 +101,7 @@ DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_inclu
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
 $(build_prefix): | $(DIRS)
-$(eval $(call dir_target,$(SRCDIR)/srccache))
+$(eval $(call dir_target,$(SRCCACHE)))
 
 
 upper = $(shell echo $1 | tr a-z A-Z)

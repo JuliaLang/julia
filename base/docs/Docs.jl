@@ -146,7 +146,7 @@ mutable struct DocStr
     data   :: Dict{Symbol, Any}
 end
 
-function docstr(binding::Binding, typesig::ANY = Union{})
+function docstr(binding::Binding, @nospecialize typesig = Union{})
     for m in modules
         dict = meta(m)
         if haskey(dict, binding)
@@ -229,13 +229,14 @@ end
 
 Adds a new docstring `str` to the docsystem of `__module__` for `binding` and signature `sig`.
 """
-function doc!(__module__::Module, b::Binding, str::DocStr, sig::ANY = Union{})
+function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = Union{})
     initmeta(__module__)
     m = get!(meta(__module__), b, MultiDoc())
     if haskey(m.docs, sig)
         # We allow for docstrings to be updated, but print a warning since it is possible
-        # that over-writing a docstring *may* have been accidental.
-        warn("replacing docs for '$b :: $sig' in module '$(__module__)'.")
+        # that over-writing a docstring *may* have been accidental.  The warning
+        # is suppressed for symbols in Main, for interactive use (#23011).
+        __module__ == Main || warn("replacing docs for '$b :: $sig' in module '$(__module__)'.")
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
         # are initially added. Replacing a specific docstring does not change it's ordering.
@@ -379,7 +380,7 @@ function summarize(io::IO, λ::Function, binding)
 end
 
 function summarize(io::IO, T::DataType, binding)
-    println(io, "**Summary:**")
+    println(io, "# Summary")
     println(io, "```")
     println(io,
             T.abstract ? "abstract type" :
@@ -388,8 +389,8 @@ function summarize(io::IO, T::DataType, binding)
             " ", T, " <: ", supertype(T)
             )
     println(io, "```")
-    if !isempty(fieldnames(T))
-        println(io, "**Fields:**")
+    if !T.abstract && T.name !== Tuple.name && !isempty(fieldnames(T))
+        println(io, "# Fields")
         println(io, "```")
         pad = maximum(length(string(f)) for f in fieldnames(T))
         for (f, t) in zip(fieldnames(T), T.types)
@@ -398,7 +399,7 @@ function summarize(io::IO, T::DataType, binding)
         println(io, "```")
     end
     if !isempty(subtypes(T))
-        println(io, "**Subtypes:**")
+        println(io, "# Subtypes")
         println(io, "```")
         for t in subtypes(T)
             println(io, t)
@@ -406,7 +407,7 @@ function summarize(io::IO, T::DataType, binding)
         println(io, "```")
     end
     if supertype(T) != Any
-        println(io, "**Supertype Hierarchy:**")
+        println(io, "# Supertype Hierarchy")
         println(io, "```")
         Base.show_supertypes(io, T)
         println(io)
@@ -419,7 +420,7 @@ function summarize(io::IO, m::Module, binding)
     if isfile(readme)
         println(io, "Displaying the `README.md` for the module instead.\n")
         println(io, "---\n")
-        println(io, readstring(readme))
+        println(io, read(readme, String))
     else
         println(io, "No docstring or `README.md` found for module `", m, "`.\n")
     end
@@ -462,7 +463,7 @@ function nameof(x::Expr, ismacro)
     if isexpr(x, :.)
         ismacro ? macroname(x) : x
     else
-        n = isexpr(x, (:module, :type, :bitstype)) ? 2 : 1
+        n = isexpr(x, (:module, :struct)) ? 2 : 1
         nameof(x.args[n], ismacro)
     end
 end
@@ -504,7 +505,7 @@ function metadata(__source__, __module__, expr, ismodule)
     else
         push!(args, Pair(:module, __module__))
     end
-    if isexpr(expr, :type)
+    if isexpr(expr, :struct)
         # Field docs for concrete types.
         fields = []
         tmp = nothing
@@ -684,11 +685,11 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define = true)
 
     # Type definitions.
     #
-    #   type T ... end
-    #   abstract T
-    #   bitstype N T
+    #   struct T ... end
+    #   abstract type T end
+    #   primitive type T N end
     #
-    isexpr(x, [:type, :abstract, :bitstype]) ? objectdoc(source, mod, meta, def, x) :
+    isexpr(x, [:struct, :abstract, :primitive]) ? objectdoc(source, mod, meta, def, x) :
 
     # "Bindings". Names that resolve to objects with different names, ie.
     #

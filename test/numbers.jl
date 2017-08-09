@@ -53,6 +53,7 @@ const ≣ = isequal # convenient for comparing NaNs
 @test_throws InexactError Bool(1//2)
 
 @test iszero(false) && !iszero(true)
+@test isone(true) && !isone(false)
 
 # basic arithmetic
 @test 2 + 3 == 5
@@ -2916,7 +2917,7 @@ struct PR20889; x; end
 ^(::PR20530, p::Int) = 1
 ^(t::PR20889, b) = t.x + b
 ^(t::PR20889, b::Integer) = t.x + b
-Base.literal_pow{p}(::typeof(^), ::PR20530, ::Type{Val{p}}) = 2
+Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
 @testset "literal powers" begin
     x = PR20530()
     p = 2
@@ -2942,26 +2943,49 @@ module M20889 # do we get the expected behavior without importing Base.^?
     Base.Test.@test PR20889(2)^3 == 5
 end
 
-@testset "iszero" begin
+@testset "iszero & isone" begin
     # Numeric scalars
     for T in [Float16, Float32, Float64, BigFloat,
               Int8, Int16, Int32, Int64, Int128, BigInt,
               UInt8, UInt16, UInt32, UInt64, UInt128]
         @test iszero(T(0))
+        @test isone(T(1))
         @test iszero(Complex{T}(0))
+        @test isone(Complex{T}(1))
         if T <: Integer
             @test iszero(Rational{T}(0))
+            @test isone(Rational{T}(1))
         elseif T <: AbstractFloat
             @test iszero(T(-0.0))
             @test iszero(Complex{T}(-0.0))
         end
     end
     @test !iszero(nextfloat(BigFloat(0)))
+    @test !isone(nextfloat(BigFloat(1)))
     for x in (π, e, γ, catalan, φ)
         @test !iszero(x)
+        @test !isone(x)
     end
 
     # Array reduction
     @test !iszero([0, 1, 2, 3])
     @test iszero(zeros(Int, 5))
+    @test !isone(tril(ones(Int, 5, 5)))
+    @test !isone(triu(ones(Int, 5, 5)))
+    @test !isone(zeros(Int, 5, 5))
+    @test isone(eye(Int, 5, 5))
+    @test isone(eye(Int, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
 end
+
+f20065(B, i) = UInt8(B[i])
+@testset "issue 20065" begin
+    # f20065 must be called from global scope to exhibit the buggy behavior
+    for B in (Array{Bool}(10), Array{Bool}(10,10), reinterpret(Bool, rand(UInt8, 10)))
+        @test all(x-> x <= 1, (f20065(B, i) for i in eachindex(B)))
+        for i in 1:length(B)
+            @test (@eval f20065($B, $i) <= 1)
+        end
+    end
+end
+
+@test inv(3//4) === 4//3 === 1 / (3//4) === 1 // (3//4)

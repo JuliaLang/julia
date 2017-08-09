@@ -13,52 +13,6 @@ include("testenv.jl")
 addprocs_with_testenv(4)
 @test nprocs() == 5
 
-function reuseport_tests()
-    # Run the test on all processes.
-    results = asyncmap(procs()) do p
-        remotecall_fetch(p) do
-            ports_lower = []        # ports of pids lower than myid()
-            ports_higher = []       # ports of pids higher than myid()
-            for w in Base.Distributed.PGRP.workers
-                w.id == myid() && continue
-                port = Base._sockname(w.r_stream, true)[2]
-                if (w.id == 1)
-                    # master connects to workers
-                    push!(ports_higher, port)
-                elseif w.id < myid()
-                    push!(ports_lower, port)
-                elseif w.id > myid()
-                    push!(ports_higher, port)
-                end
-            end
-            @assert (length(ports_lower) + length(ports_higher)) == nworkers()
-            for portset in [ports_lower, ports_higher]
-                if (length(portset) > 0) && (length(unique(portset)) != 1)
-                    warn("SO_REUSEPORT TESTS FAILED. UNSUPPORTED/OLDER UNIX VERSION?")
-                    return 0
-                end
-            end
-            return myid()
-        end
-    end
-
-    # Ensure that the code has indeed been successfully executed everywhere
-    @test all(p -> p in results, procs())
-end
-
-# Test that the client port is reused. SO_REUSEPORT may not be supported on
-# all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
-if is_unix()
-    # Run reuse client port tests only if SO_REUSEPORT is supported.
-    s = TCPSocket(delay = false)
-    is_linux() && Base.Distributed.bind_client_port(s)
-    if ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle) == 0
-        reuseport_tests()
-    else
-        info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
-    end
-end
-
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 
@@ -149,6 +103,7 @@ function test_futures_dgc(id)
     @test isnull(f.v) == true
     @test fetch(f) == id
     @test isnull(f.v) == false
+    yield(); # flush gc msgs
     @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, fid) == false
 
 
@@ -158,14 +113,14 @@ function test_futures_dgc(id)
     @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, fid) == true
     @test isnull(f.v) == true
     finalize(f)
-    Base.Distributed.flush_gc_msgs()
+    yield(); # flush gc msgs
     @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, fid) == false
 end
 
 test_futures_dgc(id_me)
 test_futures_dgc(id_other)
 
-# if sent to another worker, it should not be deleted till the other worker has fetched.
+# if sent to another worker, it should not be deleted till all references are fetched.
 wid1 = workers()[1]
 wid2 = workers()[2]
 f = remotecall(myid, wid1)
@@ -176,7 +131,8 @@ put!(fstore, f)
 
 @test fetch(f) == wid1
 @test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, fid) == true
-remotecall_fetch(r->fetch(fetch(r)), wid2, fstore)
+remotecall_fetch(r->(fetch(fetch(r)); yield()), wid2, fstore)
+sleep(0.5) # to ensure that wid2 gc messages have been executed on wid1
 @test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, fid) == false
 
 # put! should release remote reference since it would have been cached locally
@@ -228,7 +184,7 @@ function test_remoteref_dgc(id)
     @test fetch(rr) == :OK
     @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, rrid) == true
     finalize(rr)
-    Base.Distributed.flush_gc_msgs()
+    yield(); # flush gc msgs
     @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, rrid) == false
 end
 test_remoteref_dgc(id_me)
@@ -244,11 +200,28 @@ fstore = RemoteChannel(wid2)
 put!(fstore, rr)
 
 @test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == true
-finalize(rr); Base.Distributed.flush_gc_msgs() # finalize locally
+finalize(rr) # finalize locally
+yield(); # flush gc msgs
 @test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == true
-remotecall_fetch(r->(finalize(take!(r)); Base.Distributed.flush_gc_msgs(); nothing), wid2, fstore) # finalize remotely
+remotecall_fetch(r->(finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
 sleep(0.5) # to ensure that wid2 messages have been executed on wid1
 @test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == false
+
+# Tests for issue #23109 - should not hang.
+f = @spawn rand(1,1)
+@sync begin
+    for _ in 1:10
+        @async fetch(f)
+    end
+end
+
+wid1,wid2 = workers()[1:2]
+f = @spawnat wid1 rand(1,1)
+@sync begin
+        @async fetch(f)
+        @async remotecall_fetch(()->fetch(f), wid2)
+end
+
 
 @test fetch(@spawnat id_other myid()) == id_other
 @test (@fetchfrom id_other myid()) == id_other
@@ -273,9 +246,30 @@ test_indexing(Future(id_other))
 test_indexing(RemoteChannel())
 test_indexing(RemoteChannel(id_other))
 
+# Test ser/deser to non-ClusterSerializer objects.
+function test_regular_io_ser(ref::Base.Distributed.AbstractRemoteRef)
+    io = IOBuffer()
+    serialize(io, ref)
+    seekstart(io)
+    ref2 = deserialize(io)
+    for fld in fieldnames(typeof(ref))
+        v = getfield(ref2, fld)
+        if isa(v, Number)
+            @test v === zero(typeof(v))
+        elseif isa(v, Nullable)
+            @test v === Nullable{Any}()
+        else
+            error(string("Add test for field ", fld))
+        end
+    end
+end
+
+test_regular_io_ser(Future())
+test_regular_io_ser(RemoteChannel())
+
 dims = (20,20,20)
 
-if is_linux()
+if Sys.islinux()
     S = SharedArray{Int64,3}(dims)
     @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
@@ -368,12 +362,8 @@ Atrue = reshape(1:30, sz)
 S = @inferred(SharedArray{Int,2}(fn, sz))
 @test S == Atrue
 @test length(procs(S)) > 1
-@sync begin
-    for p in procs(S)
-        @async remotecall_wait(p, S) do D
-            fill!(D.loc_subarr_1d, myid())
-        end
-    end
+@everywhere procs(S) begin
+    $fill!($S.loc_subarr_1d, $myid())
 end
 check_pids_all(S)
 
@@ -461,9 +451,7 @@ remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.
 @test s != d
 copy!(d, s)
 @everywhere setid!(A) = A[localindexes(A)] = myid()
-@sync for p in procs(ds)
-    @async remotecall_wait(setid!, p, ds)
-end
+@everywhere procs(ds) setid!($ds)
 @test d == s
 @test ds != s
 @test first(ds) == first(procs(ds))
@@ -664,9 +652,16 @@ catch ex
     @test length(ex) == 5
     @test typeof(ex.exceptions[1]) == CapturedException
     @test typeof(ex.exceptions[1].ex) == ErrorException
-    errors = map(x->x.ex.msg, ex.exceptions)
-    @test collect(1:5) == sort(map(x->parse(Int, x), errors))
+    # test start, next, and done
+    for (i, i_ex) in enumerate(ex)
+        @test i == parse(Int, i_ex.ex.msg)
+    end
+    # test showerror
+    err_str = sprint(showerror, ex)
+    err_one_str = sprint(showerror, ex.exceptions[1])
+    @test err_str == err_one_str * "\n\n...and 4 more exception(s).\n"
 end
+@test sprint(showerror, CompositeException()) == "CompositeException()\n"
 
 function test_remoteexception_thrown(expr)
     try
@@ -907,9 +902,9 @@ function testmap_equivalence(f, c...)
 end
 
 testmap_equivalence(identity, (1,2,3,4))
-testmap_equivalence(x->x>0?1.0:0.0, sparse(eye(5)))
+testmap_equivalence(x->x>0 ? 1.0 : 0.0, sparse(eye(5)))
 testmap_equivalence((x,y,z)->x+y+z, 1,2,3)
-testmap_equivalence(x->x?false:true, BitArray(10,10))
+testmap_equivalence(x->x ? false : true, BitArray(10,10))
 testmap_equivalence(x->"foobar", BitArray(10,10))
 testmap_equivalence((x,y,z)->string(x,y,z), BitArray(10), ones(10), "1234567890")
 
@@ -967,7 +962,7 @@ if DoFullTest
     @test workers() == all_w
     @test all([p == remotecall_fetch(myid, p) for p in all_w])
 
-if is_unix() # aka have ssh
+if Sys.isunix() # aka have ssh
     function test_n_remove_pids(new_pids)
         for p in new_pids
             w_in_remote = sort(remotecall_fetch(workers, p))
@@ -1223,6 +1218,50 @@ for p in procs()
     @test p == remotecall_fetch(new_bar, p)
 end
 
+# @everywhere (remotecall_eval) behaviors (#22589)
+let (p, p2) = filter!(p -> p != myid(), procs())
+    @test (myid() + 1) == @everywhere myid() (myid() + 1)
+    @test (p * 2) == @everywhere p (myid() * 2)
+    @test 1 == @everywhere p defined_on_p = 1
+    @test !@isdefined defined_on_p
+    @test !isdefined(Main, :defined_on_p)
+    @test remotecall_fetch(isdefined, p, Main, :defined_on_p)
+    @test !remotecall_fetch(isdefined, p2, Main, :defined_on_p)
+    @test nothing === @everywhere [p, p] defined_on_p += 1
+    @test 3 === @everywhere p defined_on_p
+    let ref = Ref(0)
+        @test nothing ===
+            @everywhere [myid(), p, myid(), myid(), p] begin
+                Test.@test Main === @__MODULE__
+                $ref[] += 1
+            end
+        @test ref[] == 3
+    end
+    function test_throw_on(procs, msg)
+        try
+            @everywhere procs error($msg)
+            error("test failed to throw")
+        catch excpt
+            if procs isa Int
+                ex = Any[excpt]
+            else
+                ex = Any[ (ex::CapturedException).ex for ex in (excpt::CompositeException).exceptions ]
+            end
+            for (p, ex) in zip(procs, ex)
+                if procs isa Int || p != myid()
+                    @test (ex::RemoteException).pid == p
+                    ex = ((ex::RemoteException).captured::CapturedException).ex
+                end
+                @test (ex::ErrorException).msg == msg
+            end
+        end
+    end
+    test_throw_on(p, "everywhere on p")
+    test_throw_on(myid(), "everywhere on myid")
+    test_throw_on([p, myid()], "everywhere on myid and p")
+    test_throw_on([p2, p], "everywhere on p and p2")
+end
+
 # Test addprocs enable_threaded_blas parameter
 
 const get_num_threads = function() # anonymous so it will be serialized when called
@@ -1238,7 +1277,7 @@ const get_num_threads = function() # anonymous so it will be serialized when cal
         end
 
         # OSX BLAS looks at an environment variable
-        if is_apple()
+        if Sys.isapple()
             return ENV["VECLIB_MAXIMUM_THREADS"]
         end
     end
@@ -1590,6 +1629,20 @@ let thrown = false
     @test thrown
 end
 
+#19463
+function foo19463()
+    w1 = workers()[1]
+    w2 = workers()[2]
+    w3 = workers()[3]
+
+    b1 = () -> 1
+    b2 = () -> fetch(@spawnat w1 b1()) + 1
+    b3 = () -> fetch(@spawnat w2 b2()) + 1
+    b4 = () -> fetch(@spawnat w3 b3()) + 1
+    b4()
+end
+@test foo19463() == 4
+
 # Testing clear!
 function setup_syms(n, pids)
     syms = []
@@ -1647,6 +1700,142 @@ catch ex
     @test isa(ex.captured.ex.exceptions[1].ex, ErrorException)
     @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
+end
+
+@test let
+    # creates a new worker in the same folder and tries to include file
+    tmp_file, temp_file_stream = mktemp()
+    close(temp_file_stream)
+    tmp_file = relpath(tmp_file)
+    try
+        proc = addprocs_with_testenv(1)
+        include(tmp_file)
+        remotecall_fetch(include, proc[1], tmp_file)
+        rmprocs(proc)
+        rm(tmp_file)
+        return true
+    catch e
+        println(e)
+        rm(tmp_file, force=true)
+        return false
+    end
+end == true
+
+let
+    # creates a new worker in a different folder and tries to include file
+    tmp_dir = mktempdir()
+    tmp_dir2 = joinpath(tmp_dir, "2")
+    tmp_file = joinpath(tmp_dir2, "testfile")
+    tmp_file2 = joinpath(tmp_dir2, "testfile2")
+    proc = addprocs_with_testenv(1, dir=tmp_dir)
+    try
+        mkdir(tmp_dir2)
+        write(tmp_file, "23.32 + 32 + myid() + include(\"testfile2\")")
+        write(tmp_file2, "myid() * 2")
+        @test_throws(ErrorException("could not open file $(abspath("testfile"))"),
+                     include("testfile"))
+        @test_throws(ErrorException("could not open file $(abspath("testfile2"))"),
+                     include("testfile2"))
+        @test_throws(ErrorException("could not open file $(abspath("2", "testfile"))"),
+                     include(joinpath("2", "testfile")))
+        @test include(tmp_file) == 58.32
+        @test remotecall_fetch(include, proc[1], joinpath("2", "testfile")) == 55.32 + proc[1] * 3
+    finally
+        rmprocs(proc)
+        rm(tmp_file, force=true)
+        rm(tmp_file2, force=true)
+        rm(tmp_dir2, force=true)
+        rm(tmp_dir, force=true)
+    end
+end
+# cookie and comand line option `--worker` tests. remove workers, set cookie and test
+struct WorkerArgTester <: ClusterManager
+    worker_opt
+    write_cookie
+end
+
+function Base.launch(manager::WorkerArgTester, params::Dict, launched::Array, c::Condition)
+    dir = params[:dir]
+    exename = params[:exename]
+    exeflags = params[:exeflags]
+
+    cmd = `$exename $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) $(manager.worker_opt)`
+    cmd = pipeline(detach(setenv(cmd, dir=dir)))
+    io = open(cmd, "r+")
+    manager.write_cookie && Base.Distributed.write_cookie(io)
+
+    wconfig = WorkerConfig()
+    wconfig.process = io
+    wconfig.io = io.out
+    push!(launched, wconfig)
+
+    notify(c)
+end
+Base.manage(::WorkerArgTester, ::Integer, ::WorkerConfig, ::Symbol) = nothing
+
+nprocs()>1 && rmprocs(workers())
+
+npids = addprocs_with_testenv(WorkerArgTester(`--worker`, true))
+@test remotecall_fetch(myid, npids[1]) == npids[1]
+rmprocs(npids)
+
+Base.cluster_cookie("")  # An empty string is a valid cookie
+npids = addprocs_with_testenv(WorkerArgTester(`--worker=`, false))
+@test remotecall_fetch(myid, npids[1]) == npids[1]
+rmprocs(npids)
+
+Base.cluster_cookie("foobar") # custom cookie
+npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
+@test remotecall_fetch(myid, npids[1]) == npids[1]
+
+# Issue # 22865
+# Must be run on a new cluster, i.e., all workers must be in the same state.
+rmprocs(workers())
+p1,p2 = addprocs_with_testenv(2)
+@everywhere f22865(p) = remotecall_fetch(x->x.*2, p, ones(2))
+@test ones(2).*2 == remotecall_fetch(f22865, p1, p2)
+
+function reuseport_tests()
+    # Run the test on all processes.
+    results = asyncmap(procs()) do p
+        remotecall_fetch(p) do
+            ports_lower = []        # ports of pids lower than myid()
+            ports_higher = []       # ports of pids higher than myid()
+            for w in Base.Distributed.PGRP.workers
+                w.id == myid() && continue
+                port = Base._sockname(w.r_stream, true)[2]
+                if (w.id == 1)
+                    # master connects to workers
+                    push!(ports_higher, port)
+                elseif w.id < myid()
+                    push!(ports_lower, port)
+                elseif w.id > myid()
+                    push!(ports_higher, port)
+                end
+            end
+            @assert (length(ports_lower) + length(ports_higher)) == nworkers()
+            for portset in [ports_lower, ports_higher]
+                if (length(portset) > 0) && (length(unique(portset)) != 1)
+                    warn("SO_REUSEPORT TESTS FAILED. UNSUPPORTED/OLDER UNIX VERSION?")
+                    return 0
+                end
+            end
+            return myid()
+        end
+    end
+
+    # Ensure that the code has indeed been successfully executed everywhere
+    @test all(p -> p in results, procs())
+end
+
+# Test that the client port is reused. SO_REUSEPORT may not be supported on
+# all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
+if ccall(:jl_has_so_reuseport, Int32, ()) == 1
+    rmprocs(workers())
+    addprocs_with_testenv(4; lazy=false)
+    reuseport_tests()
+else
+    info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
 end
 
 # Run topology tests last after removing all workers, since a given

@@ -4,6 +4,31 @@ using Base.Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
+@testset "Simple svdvals / svdfact tests" begin
+    ≊(x,y) = isapprox(x,y,rtol=1e-15)
+
+    m1 = [2 0; 0 0]
+    m2 = [2 -2; 1 1]/sqrt(2)
+    m2c = Complex.([2 -2; 1 1]/sqrt(2))
+    @test @inferred(svdvals(m1))  ≊ [2, 0]
+    @test @inferred(svdvals(m2))  ≊ [2, 1]
+    @test @inferred(svdvals(m2c)) ≊ [2, 1]
+
+    sf1 = svdfact(m1)
+    sf2 = svdfact(m2)
+    @test sf1.S ≊ [2, 0]
+    @test sf2.S ≊ [2, 1]
+    # U & Vt are unitary
+    @test sf1.U*sf1.U'   ≊ eye(2)
+    @test sf1.Vt*sf1.Vt' ≊ eye(2)
+    @test sf2.U*sf2.U'   ≊ eye(2)
+    @test sf2.Vt*sf2.Vt' ≊ eye(2)
+    # SVD not uniquely determined, so just test we can reconstruct the
+    # matrices from the factorization as expected.
+    @test sf1.U*Diagonal(sf1.S)*sf1.Vt' ≊ m1
+    @test sf2.U*Diagonal(sf2.S)*sf2.Vt' ≊ m2
+end
+
 n = 10
 
 # Split n into 2 parts for tests needing two matrices

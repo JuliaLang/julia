@@ -21,25 +21,11 @@
 #include <inttypes.h>
 
 #include "uv.h"
-#define WHOLE_ARCHIVE
 #include "../src/julia.h"
+JULIA_DEFINE_FAST_TLS()
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_static(void)
-{
-    static __attribute__((tls_model("local-exec"))) __thread jl_tls_states_t tls_states;
-    return &tls_states;
-}
-__attribute__((constructor)) void jl_register_ptls_states_getter(void)
-{
-    // We need to make sure this function is called before any reference to
-    // TLS variables.
-    jl_set_ptls_states_getter(jl_get_ptls_states_static);
-}
 #endif
 
 static int exec_program(char *program)

@@ -17,7 +17,7 @@
 #include <unistd.h>
 #endif
 
-// ::ANY has no effect if the number of overlapping methods is greater than this
+// @nospecialize has no effect if the number of overlapping methods is greater than this
 #define MAX_UNSPECIALIZED_CONFLICTS 32
 
 #ifdef __cplusplus
@@ -262,12 +262,13 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
     li->inInference = 1;
     jl_svec_t *linfo_src_rettype = (jl_svec_t*)jl_apply_with_saved_exception_state(fargs, 3, 0);
     ptls->world_age = last_age;
-    assert((jl_is_method(li->def.method) || li->inInference == 0) && "inference failed on a toplevel expr");
+    li->inInference = 0;
 
     jl_code_info_t *src = NULL;
-    if (jl_is_svec(linfo_src_rettype) && jl_svec_len(linfo_src_rettype) == 3 &&
-        jl_is_method_instance(jl_svecref(linfo_src_rettype, 0)) &&
-        jl_is_code_info(jl_svecref(linfo_src_rettype, 1))) {
+    if (linfo_src_rettype &&
+            jl_is_svec(linfo_src_rettype) && jl_svec_len(linfo_src_rettype) == 3 &&
+            jl_is_method_instance(jl_svecref(linfo_src_rettype, 0)) &&
+            jl_is_code_info(jl_svecref(linfo_src_rettype, 1))) {
         *pli = (jl_method_instance_t*)jl_svecref(linfo_src_rettype, 0);
         src = (jl_code_info_t*)jl_svecref(linfo_src_rettype, 1);
     }
@@ -579,7 +580,6 @@ static void jl_cacheable_sig(
     int *const need_guard_entries,
     int *const makesimplesig)
 {
-    int8_t isstaged = definition->isstaged;
     assert(jl_is_tuple_type(type));
     size_t i, np = jl_nparams(type);
     for (i = 0; i < np; i++) {
@@ -592,7 +592,7 @@ static void jl_cacheable_sig(
             continue;
         }
 
-        if (isstaged) {
+        if (definition->generator) {
             // staged functions can't be optimized
             continue;
         }
@@ -610,8 +610,9 @@ static void jl_cacheable_sig(
 
         int notcalled_func = (i > 0 && i <= 8 && !(definition->called & (1 << (i - 1))) &&
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
-        if (decl_i == jl_ANY_flag) {
-            // don't specialize on slots marked ANY
+        if (i > 0 && i <= sizeof(definition->nospecialize) * 8 &&
+            (definition->nospecialize & (1 << (i - 1))) &&
+            decl_i == (jl_value_t*)jl_any_type) { // TODO: nospecialize with other types
             if (!*newparams) *newparams = jl_svec_copy(type->parameters);
             jl_svecset(*newparams, i, (jl_value_t*)jl_any_type);
             *need_guard_entries = 1;
@@ -666,7 +667,7 @@ static void jl_cacheable_sig(
                  !jl_has_free_typevars(decl_i)) {
             /*
               here's a fairly simple heuristic: if this argument slot's
-              declared type is general (Type, Any, or ANY),
+              declared type is general (Type or Any),
               then don't specialize for every Type that got passed.
 
               Since every type x has its own type Type{x}, this would be
@@ -696,7 +697,7 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
     // compute whether this type signature is a possible return value from jl_cacheable_sig
     //return jl_cacheable_sig(type, NULL, definition->sig, definition, NULL, NULL);
 
-    if (definition->isstaged)
+    if (definition->generator)
         // staged functions can't be optimized
         // so assume the caller was intelligent about calling us
         return 1;
@@ -713,9 +714,10 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
             continue;
         if (jl_is_kind(elt)) // kind slots always need guard entries (checking for subtypes of Type)
             continue;
-        if (decl_i == jl_ANY_flag) {
-            // don't specialize on slots marked ANY
-            if (elt != (jl_value_t*)jl_any_type && elt != jl_ANY_flag)
+        if (i > 0 && i <= sizeof(definition->nospecialize) * 8 &&
+            (definition->nospecialize & (1 << (i - 1))) &&
+            decl_i == (jl_value_t*)jl_any_type) { // TODO: nospecialize with other types
+            if (elt != (jl_value_t*)jl_any_type)
                 return 0;
             continue;
         }
@@ -793,7 +795,7 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
                  !jl_has_free_typevars(decl_i)) {
             /*
               here's a fairly simple heuristic: if this argument slot's
-              declared type is general (Type, Any, or ANY),
+              declared type is general (Type or Any),
               then don't specialize for every Type that got passed.
 
               Since every type x has its own type Type{x}, this would be
@@ -846,7 +848,7 @@ static jl_method_instance_t *cache_method(jl_methtable_t *mt, union jl_typemap_t
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
-    if (!definition->isstaged && jl_nparams(type) > mt->max_args
+    if (definition->generator == NULL && jl_nparams(type) > mt->max_args
         && jl_va_tuple_kind((jl_datatype_t*)decl) == JL_VARARG_UNBOUND) {
         size_t i, nspec = mt->max_args + 2;
         jl_svec_t *limited = jl_alloc_svec(nspec);
@@ -1248,6 +1250,8 @@ static int JL_DEBUG_METHOD_INVALIDATION = 0;
 // invalidate cached methods that had an edge to a replaced method
 static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world, int depth)
 {
+    if (!jl_is_method(replaced->def.method))
+        return;
     JL_LOCK_NOGC(&replaced->def.method->writelock);
     jl_array_t *backedges = replaced->backedges;
     if (replaced->max_world > max_world) {
@@ -1598,7 +1602,8 @@ jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, si
 //
 // lim is the max # of methods to return. if there are more, returns jl_false.
 // -1 for no limit.
-JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous, size_t world, size_t *min_valid, size_t *max_valid)
+JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous,
+                                             size_t world, size_t *min_valid, size_t *max_valid)
 {
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
     if (jl_is_tuple_type(unw) && jl_tparam0(unw) == jl_bottom_type)
@@ -1621,7 +1626,7 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
         jl_options.compile_enabled == JL_OPTIONS_COMPILE_MIN) {
         // copy fptr from the template method definition
         jl_method_t *def = li->def.method;
-        if (jl_is_method(def) && !def->isstaged && def->unspecialized) {
+        if (jl_is_method(def) && def->unspecialized) {
             if (def->unspecialized->jlcall_api == 2) {
                 li->functionObjectsDecls.functionObject = NULL;
                 li->functionObjectsDecls.specFunctionObject = NULL;
@@ -2116,8 +2121,8 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
 
 JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_value_t *ty)
 {
-    jl_datatype_t *dt = jl_argument_datatype(ty);
-    if (dt == NULL)
+    jl_datatype_t *dt = (jl_datatype_t*)jl_argument_datatype(ty);
+    if ((jl_value_t*)dt == jl_nothing)
         jl_error("cannot get keyword sorter for abstract type");
     jl_typename_t *tn = dt->name;
     jl_methtable_t *mt = tn->mt;
@@ -2254,16 +2259,6 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
                 break;
             }
         }
-        // don't analyze slots declared with ANY
-        // TODO
-        /*
-        l = jl_nparams(ml->sig);
-        size_t m = jl_nparams(ti);
-        for(i=0; i < l && i < m; i++) {
-            if (jl_tparam(ml->sig, i) == jl_ANY_flag)
-                jl_tupleset(ti, i, jl_any_type);
-        }
-        */
     }
     if (!skip) {
         /*

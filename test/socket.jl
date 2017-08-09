@@ -89,12 +89,12 @@ for testport in [0, defaultport]
         close(sock)
     end
     wait(port)
-    @test readstring(connect(fetch(port))) == "Hello World\n" * ("a1\n"^100)
+    @test read(connect(fetch(port)), String) == "Hello World\n" * ("a1\n"^100)
     wait(tsk)
 end
 
 mktempdir() do tmpdir
-    socketname = is_windows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
+    socketname = Sys.iswindows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
     c = Base.Condition()
     tsk = @async begin
         s = listen(socketname)
@@ -105,7 +105,7 @@ mktempdir() do tmpdir
         close(sock)
     end
     wait(c)
-    @test readstring(connect(socketname)) == "Hello World\n"
+    @test read(connect(socketname), String) == "Hello World\n"
     wait(tsk)
 end
 
@@ -176,7 +176,7 @@ begin
     close(a)
     close(b)
 end
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"::1", UInt16(port))
@@ -227,7 +227,7 @@ end
 # Local-machine broadcast
 let
     # (Mac OS X's loopback interface doesn't support broadcasts)
-    bcastdst = is_apple() ? ip"255.255.255.255" : ip"127.255.255.255"
+    bcastdst = Sys.isapple() ? ip"255.255.255.255" : ip"127.255.255.255"
 
     function create_socket()
         s = UDPSocket()
@@ -251,7 +251,7 @@ let
     try
         # bsd family do not allow broadcasting to ip"255.255.255.255"
         # or ip"127.255.255.255"
-        @static if !is_bsd() || is_apple()
+        @static if !Sys.isbsd() || Sys.isapple()
             send(c, bcastdst, 2000, "hello")
             recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
             wait_with_timeout(recvs)
@@ -288,12 +288,12 @@ let P = Pipe()
     # on windows, the kernel fails to do even that
     # causing the `write` call to freeze
     # so we end up forced to do a slightly weaker test here
-    is_windows() || wait(t)
+    Sys.iswindows() || wait(t)
     @test isopen(P) # without an active uv_reader, P shouldn't be closed yet
     @test !eof(P) # should already know this,
     @test isopen(P) #  so it still shouldn't have an active uv_reader
     @test readuntil(P, 'w') == "llow"
-    is_windows() && wait(t)
+    Sys.iswindows() && wait(t)
     @test eof(P)
     @test !isopen(P) # eof test should have closed this by now
     close(P) # should be a no-op, just make sure

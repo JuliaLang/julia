@@ -87,6 +87,7 @@ Base.isfinite
 Base.isinf
 Base.isnan
 Base.iszero
+Base.isone
 Base.nextfloat
 Base.prevfloat
 Base.isinteger

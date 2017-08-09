@@ -775,13 +775,16 @@ void jl_get_builtin_hooks(void)
     jl_floatingpoint_type = (jl_datatype_t*)core("AbstractFloat");
     jl_number_type = (jl_datatype_t*)core("Number");
     jl_signed_type = (jl_datatype_t*)core("Signed");
+    jl_datatype_t *jl_unsigned_type = (jl_datatype_t*)core("Unsigned");
+    jl_datatype_t *jl_integer_type = (jl_datatype_t*)core("Integer");
+    jl_bool_type->super = jl_integer_type;
+    jl_uint8_type->super = jl_unsigned_type;
+    jl_int32_type->super = jl_signed_type;
+    jl_int64_type->super = jl_signed_type;
 
     jl_errorexception_type = (jl_datatype_t*)core("ErrorException");
     jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
     jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
-    jl_domain_exception    = jl_new_struct_uninit((jl_datatype_t*)core("DomainError"));
-    jl_overflow_exception  = jl_new_struct_uninit((jl_datatype_t*)core("OverflowError"));
-    jl_inexact_exception   = jl_new_struct_uninit((jl_datatype_t*)core("InexactError"));
     jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
     jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
@@ -813,7 +816,7 @@ void jl_get_builtins(void)
 {
     jl_builtin_throw = core("throw");           jl_builtin_is = core("===");
     jl_builtin_typeof = core("typeof");         jl_builtin_sizeof = core("sizeof");
-    jl_builtin_issubtype = core("issubtype");   jl_builtin_isa = core("isa");
+    jl_builtin_issubtype = core("<:");          jl_builtin_isa = core("isa");
     jl_builtin_typeassert = core("typeassert"); jl_builtin__apply = core("_apply");
     jl_builtin_isdefined = core("isdefined");   jl_builtin_nfields = core("nfields");
     jl_builtin_tuple = core("tuple");           jl_builtin_svec = core("svec");

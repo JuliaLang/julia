@@ -790,8 +790,6 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
 // diagonal rule (record_var_occurrence).
 static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
 {
-    if (x == jl_ANY_flag) x = (jl_value_t*)jl_any_type;
-    if (y == jl_ANY_flag) y = (jl_value_t*)jl_any_type;
     if (jl_is_uniontype(x)) {
         if (x == y) return 1;
         x = pick_union_element(x, e, 0);
@@ -883,21 +881,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         }
         if (jl_is_type_type(y) && !jl_is_type_type(x) && x != (jl_value_t*)jl_typeofbottom_type) {
             jl_value_t *tp0 = jl_tparam0(yd);
-            if (!jl_is_typevar(tp0))
+            if (!jl_is_typevar(tp0) || !jl_is_kind(x))
                 return 0;
-            if (!jl_is_kind(x)) return 0;
-            jl_varbinding_t *yy = lookup(e, (jl_tvar_t*)tp0);
-            jl_value_t *ub = yy ? yy->ub : ((jl_tvar_t*)tp0)->ub;
-            int ans;
-            if (ub == (jl_value_t*)jl_any_type) {
-                ans = subtype((jl_value_t*)jl_type_type, y, e, param);
-            }
-            else {
-                e->invdepth++;
-                ans = forall_exists_equal(x, tp0, e);
-                e->invdepth--;
-            }
-            return ans;
+            return subtype((jl_value_t*)jl_type_type, y, e, param);
         }
         while (xd != jl_any_type && xd->name != yd->name) {
             if (xd->super == NULL)
@@ -1826,8 +1812,6 @@ static jl_value_t *intersect_type_type(jl_value_t *x, jl_value_t *y, jl_stenv_t 
 static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
 {
     if (x == y) return y;
-    if (x == jl_ANY_flag) x = (jl_value_t*)jl_any_type;
-    if (y == jl_ANY_flag) y = (jl_value_t*)jl_any_type;
     if (jl_is_typevar(x)) {
         if (jl_is_typevar(y)) {
             jl_varbinding_t *xx = lookup(e, (jl_tvar_t*)x);
@@ -2158,20 +2142,9 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         else {
             sz = szb;
             // TODO: compute better `env` directly during intersection.
-            // we assume that if the intersection is a leaf type, we have
-            // full information in `env`. however the intersection algorithm
-            // does not yet provide that in all cases so use subtype.
+            // for now, we attempt to compute env by using subtype on the intersection result
             if (szb > 0 && !jl_types_equal(b, (jl_value_t*)jl_type_type)) {
-                if (jl_subtype_env(*ans, b, env, szb)) {
-                    if (jl_is_leaf_type(*ans)) {
-                        for(i=0; i < sz; i++) {
-                            if (jl_is_typevar(env[i])) {
-                                *ans = jl_bottom_type; goto bot;
-                            }
-                        }
-                    }
-                }
-                else {
+                if (!jl_subtype_env(*ans, b, env, szb)) {
                     sz = 0;
                 }
             }
@@ -2219,10 +2192,6 @@ JL_DLLEXPORT jl_svec_t *jl_env_from_type_intersection(jl_value_t *a, jl_value_t 
 
 static int eq_msp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env)
 {
-    // equate ANY and Any for specificity purposes, #16153
-    if ((a == (jl_value_t*)jl_any_type && b == jl_ANY_flag) ||
-        (b == (jl_value_t*)jl_any_type && a == jl_ANY_flag))
-        return 1;
     if (!(jl_is_type(a) || jl_is_typevar(a)) ||
         !(jl_is_type(b) || jl_is_typevar(b)))
         return jl_egal(a, b);
@@ -2322,11 +2291,17 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invari
         if (!cms && !eqv)
             return 0;
 
+        // Tuple{..., T} not more specific than Tuple{..., Vararg{S}} if S is diagonal
+        if (eqv && i == clen-1 && clen == plen && !cva && pva && jl_is_typevar(ce) && jl_is_typevar(pe) && !cdiag && pdiag)
+            return 0;
+
         if (cms) some_morespecific = 1;
         i++;
     }
     if (cva && pva && clen > plen && (!pdiag || cdiag))
         return 1;
+    if (cva && !pva && !some_morespecific)
+        return 0;
     return some_morespecific || (cdiag && !pdiag);
 }
 
@@ -2502,8 +2477,8 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
     }
 
     if (!invariant) {
-        if ((jl_datatype_t*)a == jl_any_type || a == jl_ANY_flag) return 0;
-        if ((jl_datatype_t*)b == jl_any_type || b == jl_ANY_flag) return 1;
+        if ((jl_datatype_t*)a == jl_any_type) return 0;
+        if ((jl_datatype_t*)b == jl_any_type) return 1;
     }
 
     if (jl_is_datatype(a) && jl_is_datatype(b)) {
@@ -2570,8 +2545,7 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
                     ( type_morespecific_((jl_value_t*)((jl_tvar_t*)b)->lb,
                                          (jl_value_t*)((jl_tvar_t*)a)->lb, 0, env) &&
                      !type_morespecific_((jl_value_t*)((jl_tvar_t*)b)->ub,
-                                         (jl_value_t*)((jl_tvar_t*)a)->ub, 0, env))) &&
-                num_occurs((jl_tvar_t*)a, env) >= num_occurs((jl_tvar_t*)b, env);
+                                         (jl_value_t*)((jl_tvar_t*)a)->ub, 0, env)));
         }
         if (!jl_is_type(b))
             return 0;

@@ -9,6 +9,7 @@ Transform an array to its complex conjugate in-place.
 
 See also [`conj`](@ref).
 
+# Examples
 ```jldoctest
 julia> A = [1+im 2-im; 2+2im 3+im]
 2×2 Array{Complex{Int64},2}:
@@ -116,6 +117,7 @@ end
 
 Rotate matrix `A` left 90 degrees.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -143,6 +145,7 @@ end
 
 Rotate matrix `A` right 90 degrees.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -169,6 +172,7 @@ end
 
 Rotate matrix `A` 180 degrees.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -196,6 +200,7 @@ end
 Rotate matrix `A` left 90 degrees an integer `k` number of times.
 If `k` is zero or a multiple of four, this is equivalent to a `copy`.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -235,6 +240,7 @@ end
 Rotate matrix `A` right 90 degrees an integer `k` number of times. If `k` is zero or a
 multiple of four, this is equivalent to a `copy`.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -269,6 +275,7 @@ rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 Rotate matrix `A` 180 degrees an integer `k` number of times.
 If `k` is even, this is equivalent to a `copy`.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:

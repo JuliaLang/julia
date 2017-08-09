@@ -513,15 +513,10 @@ julia> contains("Xylophon", "a")
 false
 
 julia> contains("Xylophon", 'o')
-ERROR: MethodError: no method matching contains(::String, ::Char)
-Closest candidates are:
-  contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:664
-  contains(::AbstractString, !Matched::AbstractString) at strings/search.jl:378
+true
 ```
 
-The last error is because `'o'` is a character literal, and [`contains()`](@ref) is a generic
-function that looks for subsequences. To look for an element in a sequence, you must use [`in()`](@ref)
-instead.
+The last example shows that [`contains()`](@ref) can also look for a character literal.
 
 Two other handy string functions are [`repeat()`](@ref) and [`join()`](@ref):
 
@@ -712,7 +707,7 @@ julia> m[2]
 ```
 
 Captures can be referenced in a substitution string when using [`replace()`](@ref) by using `\n`
-to refer to the nth capture group and prefixing the subsitution string with `s`. Capture group
+to refer to the nth capture group and prefixing the substitution string with `s`. Capture group
 0 refers to the entire match object. Named capture groups can be referenced in the substitution
 with `g<groupname>`. For example:
 

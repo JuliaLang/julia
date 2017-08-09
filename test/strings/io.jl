@@ -82,10 +82,6 @@ for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
     @test string(unescape_string(string("\\x",hex(i,3),p))) == hp
 end
 
-@test "\z" == unescape_string("\z") == "z"
-@test "\X" == unescape_string("\X") == "X"
-@test "\AbC" == unescape_string("\AbC") == "AbC"
-
 @test "\0" == unescape_string("\\0")
 @test "\1" == unescape_string("\\1")
 @test "\7" == unescape_string("\\7")

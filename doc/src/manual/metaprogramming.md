@@ -33,7 +33,7 @@ julia> typeof(ex1)
 Expr
 ```
 
-`Expr` objects contain three parts:
+`Expr` objects contain two parts:
 
   * a `Symbol` identifying the kind of expression. A symbol is an [interned string](https://en.wikipedia.org/wiki/String_interning)
     identifier (more discussion below).
@@ -51,14 +51,6 @@ julia> ex1.args
   :+
  1
  1
-```
-
-  * finally, the expression result type, which may be annotated by the user or inferred by the compiler
-    (and may be ignored completely for the purposes of this chapter):
-
-```jldoctest prog
-julia> ex1.typ
-Any
 ```
 
 Expressions may also be constructed directly in [prefix notation](https://en.wikipedia.org/wiki/Polish_notation):
@@ -166,7 +158,7 @@ Expr
 ```
 
 (to view the structure of this expression, try `ex.head` and `ex.args`, or use [`dump()`](@ref)
-as above)
+as above or [`Meta.@dump`](@ref))
 
 Note that equivalent expressions may be constructed using [`parse()`](@ref) or the direct `Expr`
 form:
@@ -421,9 +413,9 @@ Hello, human
 We can view the quoted return expression using the function [`macroexpand()`](@ref) (**important note:**
 this is an extremely useful tool for debugging macros):
 
-```jldoctest sayhello2
-julia> ex = macroexpand( :(@sayhello("human")) )
-:((println)("Hello, ", "human"))
+```julia-repl sayhello2
+julia> ex = macroexpand(Main, :(@sayhello("human")) )
+:((Main.println)("Hello, ", "human"))
 
 julia> typeof(ex)
 Expr
@@ -448,21 +440,21 @@ Macros are necessary because they execute when code is parsed, therefore, macros
 to generate and include fragments of customized code *before* the full program is run. To illustrate
 the difference, consider the following example:
 
-```jldoctest whymacros
+```julia-repl whymacros
 julia> macro twostep(arg)
            println("I execute at parse time. The argument is: ", arg)
            return :(println("I execute at runtime. The argument is: ", $arg))
        end
 @twostep (macro with 1 method)
 
-julia> ex = macroexpand( :(@twostep :(1, 2, 3)) );
+julia> ex = macroexpand(Main, :(@twostep :(1, 2, 3)) );
 I execute at parse time. The argument is: $(Expr(:quote, :((1, 2, 3))))
 ```
 
 The first call to [`println()`](@ref) is executed when [`macroexpand()`](@ref) is called. The
 resulting expression contains *only* the second `println`:
 
-```jldoctest whymacros
+```julia-repl whymacros
 julia> typeof(ex)
 Expr
 
@@ -596,21 +588,21 @@ Now `@assert` has two modes of operation, depending upon the number of arguments
 If there's only one argument, the tuple of expressions captured by `msgs` will be empty and it
 will behave the same as the simpler definition above. But now if the user specifies a second argument,
 it is printed in the message body instead of the failing expression. You can inspect the result
-of a macro expansion with the aptly named [`macroexpand()`](@ref) function:
+of a macro expansion with the aptly named [`@macroexpand`](@ref) macro:
 
-```jldoctest assert2
-julia> macroexpand(:(@assert a == b))
-:(if a == b
-        nothing
+```julia-repl assert2
+julia> @macroexpand @assert a == b
+:(if Main.a == Main.b
+        Main.nothing
     else
-        (throw)((AssertionError)("a == b"))
+        (Main.throw)((Main.AssertionError)("a == b"))
     end)
 
-julia> macroexpand(:(@assert a==b "a should equal b!"))
-:(if a == b
-        nothing
+julia> @macroexpand @assert a==b "a should equal b!"
+:(if Main.a == Main.b
+        Main.nothing
     else
-        (throw)((AssertionError)("a should equal b!"))
+        (Main.throw)((Main.AssertionError)("a should equal b!"))
     end)
 ```
 

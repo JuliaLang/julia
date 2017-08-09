@@ -16,6 +16,25 @@ macro assertnonsingular(A, info)
    :($(esc(info)) == 0 ? $(esc(A)) : throw(SingularException($(esc(info)))))
 end
 
+"""
+    issuccess(F::Factorization)
+
+Test that a factorization of a matrix succeeded.
+
+```jldoctest
+julia> cholfact([1 0; 0 1])
+Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
+[1.0 0.0; 0.0 1.0]
+successful: true
+
+julia> cholfact([1 0; 0 -1])
+Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
+[1.0 0.0; 0.0 -1.0]
+successful: false
+```
+"""
+issuccess(F::Factorization)
+
 function logdet(F::Factorization)
     d, s = logabsdet(F)
     return d + log(s)
@@ -30,9 +49,9 @@ end
 convert(::Type{Factorization{T}}, F::Factorization{T}) where {T} = F
 inv(F::Factorization{T}) where {T} = A_ldiv_B!(F, eye(T, size(F,1)))
 
-Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, h, fieldnames(F))
-Base.:(==)(  F::T, G::T) where {T<:Factorization} = all(f -> getfield(F, f) == getfield(G, f), fieldnames(F))
-Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F, f), getfield(G, f)), fieldnames(F))
+Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, h, 1:nfields(F))
+Base.:(==)(  F::T, G::T) where {T<:Factorization} = all(f -> getfield(F, f) == getfield(G, f), 1:nfields(F))
+Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F, f), getfield(G, f)), 1:nfields(F))
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns

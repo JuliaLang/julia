@@ -52,7 +52,7 @@ method_c2(x::Int32, args...) = true
 method_c2(x::Int32, y::Float64, args...) = true
 method_c2(x::Int32, y::Float64) = true
 method_c2(x::Int32, y::Int32, z::Int32) = true
-method_c2{T<:Real}(x::T, y::T, z::T) = true
+method_c2(x::T, y::T, z::T) where {T<:Real} = true
 
 Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
 color = "\e[0m\nClosest candidates are:\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Any...)$cfile$(c2line+1)\n  method_c2(::T<:Real, ::T<:Real, \e[1m\e[31m::T<:Real\e[0m)$cfile$(c2line+5)\n  ...\e[0m"
@@ -98,7 +98,7 @@ mutable struct PR16155
     b
 end
 PR16155line2 = @__LINE__() + 1
-(::Type{T}){T<:PR16155}(arg::Any) = "replace call-to-convert method from sysimg"
+(::Type{T})(arg::Any) where {T<:PR16155} = "replace call-to-convert method from sysimg"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(\e[1m\e[31m::Int64\e[0m, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\e[0m",
@@ -182,13 +182,14 @@ macro except_str(expr, err_type)
 end
 
 macro except_strbt(expr, err_type)
+    errmsg = "expected failure, but no exception thrown for $expr"
     return quote
         let err = nothing
             try
                 $(esc(expr))
             catch err
             end
-            err === nothing && error("expected failure, but no exception thrown")
+            err === nothing && error($errmsg)
             @test typeof(err) === $(esc(err_type))
             buf = IOBuffer()
             showerror(buf, err, catch_backtrace())
@@ -254,11 +255,16 @@ end
 struct TypeWithIntParam{T <: Integer} end
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
-    @test contains(err_str, "Try sqrt(complex(x)).")
+    @test contains(err_str, "Try sqrt(Complex(x)).")
     err_str = @except_strbt 2^(-1) DomainError
-    @test contains(err_str, "Cannot raise an integer x to a negative power -n")
+    @test contains(err_str, "Cannot raise an integer x to a negative power -1")
     err_str = @except_strbt (-1)^0.25 DomainError
     @test contains(err_str, "Exponentiation yielding a complex result requires a complex argument")
+    A = zeros(10, 10)
+    A[2,1] = 1
+    A[1,2] = -1
+    err_str = @except_strbt eigmax(A) DomainError
+    @test contains(err_str, "DomainError with [0.0 -1.0 …")
 
     err_str = @except_str (1, 2, 3)[4] BoundsError
     @test err_str == "BoundsError: attempt to access (1, 2, 3)\n  at index [4]"
@@ -271,17 +277,17 @@ let undefvar
     err_str = @except_str 0::Bool TypeError
     @test err_str == "TypeError: non-boolean ($Int) used in boolean context"
     err_str = @except_str 0::AbstractFloat TypeError
-    @test err_str == "TypeError: typeassert: expected AbstractFloat, got $Int"
+    @test err_str == "TypeError: in typeassert, expected AbstractFloat, got $Int"
     err_str = @except_str 0::7 TypeError
-    @test err_str == "TypeError: typeassert: expected Type, got $Int"
+    @test err_str == "TypeError: in typeassert, expected Type, got $Int"
     err_str = @except_str "" <: AbstractString TypeError
-    @test err_str == "TypeError: issubtype: expected Type, got String"
+    @test err_str == "TypeError: in <:, expected Type, got String"
     err_str = @except_str AbstractString <: "" TypeError
-    @test err_str == "TypeError: issubtype: expected Type, got String"
+    @test err_str == "TypeError: in <:, expected Type, got String"
     err_str = @except_str Type{""} TypeError
-    @test err_str == "TypeError: Type: in parameter, expected Type, got String"
+    @test err_str == "TypeError: in Type, in parameter, expected Type, got String"
     err_str = @except_str TypeWithIntParam{Any} TypeError
-    @test err_str == "TypeError: TypeWithIntParam: in T, expected T<:Integer, got Type{Any}"
+    @test err_str == "TypeError: in TypeWithIntParam, in T, expected T<:Integer, got Type{Any}"
 
     err_str = @except_str mod(1,0) DivideError
     @test err_str == "DivideError: integer division error"
@@ -350,7 +356,7 @@ Base.Symbol() = throw(ErrorException("1"))
 EightBitType() = throw(ErrorException("3"))
 (::EightBitType)() = throw(ErrorException("4"))
 EightBitTypeT() = throw(ErrorException("5"))
-(::Type{EightBitTypeT{T}}){T}() = throw(ErrorException("6"))
+(::Type{EightBitTypeT{T}})() where {T} = throw(ErrorException("6"))
 (::EightBitTypeT)() = throw(ErrorException("7"))
 (::FunctionLike)() = throw(ErrorException("8"))
 
@@ -444,14 +450,13 @@ let d = Dict(1 => 2, 3 => 45)
     buf = IOBuffer()
     td = TextDisplay(buf)
     display(td, d)
-    result = String(td.io)
+    result = String(take!(td.io))
 
     @test contains(result, summary(d))
 
     # Is every pair in the string?
-    # Compare by removing spaces
     for el in d
-        @test contains(replace(result, " ", ""), string(el))
+        @test contains(result, string(el))
     end
 end
 
@@ -460,13 +465,13 @@ let err, buf = IOBuffer()
     try Array() catch err end
     Base.show_method_candidates(buf,err)
     @test isa(err, MethodError)
-    @test contains(String(buf), "Closest candidates are:")
+    @test contains(String(take!(buf)), "Closest candidates are:")
 end
 
 # Issue 20111
 let K20111(x) = y -> x, buf = IOBuffer()
     show(buf, methods(K20111(1)))
-    @test contains(String(buf), " 1 method for generic function")
+    @test contains(String(take!(buf)), " 1 method for generic function")
 end
 
 # @macroexpand tests
@@ -485,6 +490,32 @@ let
     @test (@macroexpand @seven_dollar $bar) == 7
     x = 2
     @test (@macroexpand @seven_dollar 1+$x) == :(1 + $(Expr(:$, :x)))
+end
+
+macro nest1(code)
+    code
+end
+
+macro nest2(code)
+    :(@nest1 $code)
+end
+
+macro nest2b(code)
+    :(@nest1($code); @nest1($code))
+end
+
+@testset "@macroexpand1" begin
+    M = @__MODULE__
+    _macroexpand1(ex) = macroexpand(M, ex, recursive=false)
+    ex = :(@nest1 42)
+    @test _macroexpand1(ex) == macroexpand(M,ex)
+    ex = :(@nest2 42)
+    @test _macroexpand1(ex) != macroexpand(M,ex)
+    @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M,ex)
+    ex = :(@nest2b 42)
+    @test _macroexpand1(ex) != macroexpand(M,ex)
+    @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M, ex)
+    @test (@macroexpand1 @nest2b 42) == _macroexpand1(ex)
 end
 
 foo_9965(x::Float64; w=false) = x
@@ -568,4 +599,50 @@ end
         @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
         @test !contains(str, "The applicable method may be too new")
     end
+end
+
+# issue #22798
+@generated f22798(x::Integer, y) = :x
+let buf = IOBuffer()
+    show(buf, methods(f22798))
+    @test contains(String(take!(buf)), "f22798(x::Integer, y)")
+end
+
+@testset "Dict printing with limited rows" begin
+    buf = IOBuffer()
+    io = IOContext(IOContext(buf, :displaysize => (4, 80)), :limit => true)
+    d = Base.ImmutableDict(1=>2)
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
+
+    io = IOContext(io, :displaysize => (5, 80))
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry:\n  1 => 2"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
+    d = Base.ImmutableDict(d, 3=>4)
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  ⋮ => ⋮"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
+
+    io = IOContext(io, :displaysize => (6, 80))
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) ==
+        "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  3 => 4\n  1 => 2"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
+    d = Base.ImmutableDict(d, 5=>6)
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) ==
+        "Base.ImmutableDict{$Int,$Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
 end

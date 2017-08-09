@@ -5,7 +5,8 @@
 # This module provides versions of math functions that may violate
 # strict IEEE semantics.
 
-# This allows the following transformations:
+# This allows the following transformations. For more information see
+# http://llvm.org/docs/LangRef.html#fast-math-flags:
 # nnan: No NaNs - Allow optimizations to assume the arguments and
 #       result are not NaN. Such optimizations are required to retain
 #       defined behavior over NaNs, but the value of the result is
@@ -23,7 +24,7 @@ module FastMath
 
 export @fastmath
 
-import Core.Intrinsics: sqrt_llvm_fast, neg_float_fast,
+import Core.Intrinsics: sqrt_llvm, neg_float_fast,
     add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, rem_float_fast,
     eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
 
@@ -124,6 +125,27 @@ function make_fastmath(symb::Symbol)
 end
 make_fastmath(expr) = expr
 
+"""
+    @fastmath expr
+
+Execute a transformed version of the expression, which calls functions that
+may violate strict IEEE semantics. This allows the fastest possible operation,
+but results are undefined -- be careful when doing this, as it may change numerical
+results.
+
+This sets the [LLVM Fast-Math flags](http://llvm.org/docs/LangRef.html#fast-math-flags),
+and corresponds to the `-ffast-math` option in clang. See [the notes on performance
+annotations](@ref man-performance-annotations) for more details.
+
+# Examples
+```jldoctest
+julia> @fastmath 1+2
+3
+
+julia> @fastmath(sin(3))
+0.1411200080598672
+```
+"""
 macro fastmath(expr)
     make_fastmath(esc(expr))
 end
@@ -242,9 +264,7 @@ end
 pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32", llvmcall, Float32, (Float32, Int32), x, y)
 pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Float64, Int32), x, y)
 
-# TODO: Change sqrt_llvm intrinsic to avoid nan checking; add nan
-# checking to sqrt in math.jl; remove sqrt_llvm_fast intrinsic
-sqrt_fast(x::FloatTypes) = sqrt_llvm_fast(x)
+sqrt_fast(x::FloatTypes) = sqrt_llvm(x)
 
 # libm
 
@@ -314,9 +334,6 @@ sincos_fast(v::Real) = sincos_fast(float(v)::AbstractFloat)
 sincos_fast(v) = (sin_fast(v), cos_fast(v))
 
 @fastmath begin
-    exp10_fast(x::T) where {T<:FloatTypes} = exp2(log2(T(10))*x)
-    exp10_fast(x::Integer) = exp10(float(x))
-
     hypot_fast(x::T, y::T) where {T<:FloatTypes} = sqrt(x*x + y*y)
 
     # Note: we use the same comparison for min, max, and minmax, so

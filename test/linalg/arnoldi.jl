@@ -31,6 +31,10 @@ using Base.Test
         (d,v) = eigs(a, nev=3)
         @test a*v[:,2] ≈ d[2]*v[:,2]
         @test norm(v) > testtol # eigenvectors cannot be null vectors
+        (d,v) = eigs(a, I, nev=3) # test eigs(A, B; kwargs...)
+        @test a*v[:,2] ≈ d[2]*v[:,2]
+        @test norm(v) > testtol # eigenvectors cannot be null vectors
+        @test_warn "Use symbols instead of strings for specifying which eigenvalues to compute" eigs(a, which="LM")
         # (d,v) = eigs(a, b, nev=3, tol=1e-8) # not handled yet
         # @test a*v[:,2] ≈ d[2]*b*v[:,2] atol=testtol
         # @test norm(v) > testtol # eigenvectors cannot be null vectors
@@ -116,7 +120,7 @@ size(Phi::CPM) = (size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
 issymmetric(Phi::CPM) = false
 ishermitian(Phi::CPM) = false
 import Base: A_mul_B!
-function A_mul_B!{T<:Base.LinAlg.BlasFloat}(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T})
+function A_mul_B!(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T}) where {T<:Base.LinAlg.BlasFloat}
     rho = reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
     rho1 = zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
     for s = 1:size(Phi.kraus,2)
@@ -153,7 +157,10 @@ let
     @test numiter2 < numiter
     @test v ≈ v2
 
-    @test eigs(speye(50), nev=10)[1] ≈ ones(10) #Issue 4246
+    # Adjust the tolerance a bit since matrices with repeated eigenvalues
+    # can be very stressful to ARPACK and this may therefore fail with
+    # info = 3 if the tolerance is too small
+    @test eigs(speye(50), nev=10, tol = 5e-16)[1] ≈ ones(10) #Issue 4246
 end
 
 @testset "real svds" begin

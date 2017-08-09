@@ -6,6 +6,8 @@ Base.sizeof(::AbstractString)
 Base.:*(::AbstractString, ::Any...)
 Base.:^(::AbstractString, ::Integer)
 Base.string
+Base.repeat(::AbstractString, ::Integer)
+Base.repeat(::Char, ::Integer)
 Base.repr
 Core.String(::AbstractString)
 Base.transcode

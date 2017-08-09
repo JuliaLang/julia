@@ -154,11 +154,15 @@ typedef returntype (*functiontype)(argumenttype,...)
 ```
 
 The function [`cfunction()`](@ref) generates the C-compatible function pointer for a call to a
-Julia library function. Arguments to [`cfunction()`](@ref) are as follows:
+Julia function. Arguments to [`cfunction()`](@ref) are as follows:
 
 1. A Julia Function
 2. Return type
 3. A tuple of input types
+
+Only platform-default C calling convention is supported. `cfunction`-generated pointers cannot
+be used in calls where WINAPI expects `stdcall` function on 32-bit windows, but can be used on WIN64
+(where `stdcall` is unified with C calling convention).
 
 A classic example is the standard C library `qsort` function, declared as:
 
@@ -251,8 +255,9 @@ ccall((:foo, "libfoo"), Void, (Int32, Float64),
 ```
 
 [`Base.cconvert()`](@ref) normally just calls [`convert()`](@ref), but can be defined to return an
-arbitrary new object more appropriate for passing to C. For example, this is used to convert an
-`Array` of objects (e.g. strings) to an array of pointers.
+arbitrary new object more appropriate for passing to C.
+This should be used to perform all allocations of memory that will be accessed by the C code.
+For example, this is used to convert an `Array` of objects (e.g. strings) to an array of pointers.
 
 [`Base.unsafe_convert()`](@ref) handles conversion to `Ptr` types. It is considered unsafe because
 converting an object to a native pointer can hide the object from the garbage collector, causing
@@ -872,7 +877,7 @@ ccall(@dlsym("myfunc", mylibvar), Void, ())
 
 The second argument to [`ccall`](@ref) can optionally be a calling convention specifier (immediately
 preceding return type). Without any specifier, the platform-default C calling convention is used.
-Other supported conventions are: `stdcall`, `cdecl`, `fastcall`, and `thiscall`. For example (from
+Other supported conventions are: `stdcall`, `cdecl`, `fastcall`, and `thiscall` (no-op on 64-bit Windows). For example (from
 `base/libc.jl`) we see the same `gethostname`[`ccall`](@ref) as above, but with the correct
 signature for Windows:
 

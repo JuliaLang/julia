@@ -33,7 +33,7 @@ const subs = [
 ]
 
 function regex_dna(infile="regexdna-input.txt")
-    seq = readstring(infile)
+    seq = read(infile, String)
     l1 = length(seq)
 
     seq = replace(seq, r">.*\n|\n", "")
