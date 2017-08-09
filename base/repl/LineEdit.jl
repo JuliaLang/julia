@@ -62,6 +62,8 @@ mutable struct PromptState <: ModeState
     p::Prompt
     input_buffer::IOBuffer
     ias::InputAreaState
+    # indentation of lines which do not include the prompt
+    # if negative, the width of the prompt is used
     indent::Int
 end
 
@@ -201,11 +203,9 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     buf_pos = position(buf)
     line_pos = buf_pos
     # Write out the prompt string
-    write_prompt(termbuf, prompt)
-    prompt = prompt_string(prompt)
+    lindent = write_prompt(termbuf, prompt)
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
     miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
-    lindent = strwidth(prompt)
 
     # Now go through the buffer line by line
     seek(buf, 0)
@@ -244,7 +244,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
             end
         end
         cur_row += div(max(lindent + llength + miscountnl - 1, 0), cols)
-        lindent = indent
+        lindent = indent < 0 ? lindent : indent
     end
     seek(buf, buf_pos)
 
@@ -627,16 +627,24 @@ default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
 write_prompt(terminal, s::PromptState) = write_prompt(terminal, s.p)
+
 function write_prompt(terminal, p::Prompt)
     prefix = prompt_string(p.prompt_prefix)
     suffix = prompt_string(p.prompt_suffix)
     write(terminal, prefix)
     write(terminal, Base.text_colors[:bold])
-    write(terminal, prompt_string(p.prompt))
+    width = write_prompt(terminal, p.prompt)
     write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
+    width
 end
-write_prompt(terminal, s::Union{AbstractString,Function}) = write(terminal, prompt_string(s))
+
+# returns the width of the written prompt
+function write_prompt(terminal, s::Union{AbstractString,Function})
+    promptstr = prompt_string(s)
+    write(terminal, promptstr)
+    strwidth(promptstr)
+end
 
 ### Keymap Support
 
@@ -1568,7 +1576,7 @@ run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), InputAreaState(1, 1),
-    #=indent(spaces)=# strwidth(prompt_string(prompt)))
+    #=indent(spaces)=# -1)
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, m.modes[1], false, Dict{Any,Any}())
