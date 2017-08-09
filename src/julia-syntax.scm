@@ -2538,7 +2538,7 @@
 (define (resolve-scopes- e env outerglobals implicitglobals lam renames newlam)
   (cond ((symbol? e) (let ((r (assq e renames)))
                        (if r (cdr r) e))) ;; return the renaming for e, or e
-        ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel global))) e)
+        ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel global symbolicgoto symboliclabel))) e)
         ((eq? (car e) 'local) '(null)) ;; remove local decls
         ((eq? (car e) 'local-def) '(null)) ;; remove local decls
         ((eq? (car e) 'implicit-global) '(null)) ;; remove implicit-global decls
