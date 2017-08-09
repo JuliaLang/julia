@@ -1115,7 +1115,7 @@ function const_datatype_getfield_tfunc(sv, fld)
     return nothing
 end
 
-function getfield_tfunc(@nospecialize(s00), name)
+function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     if isa(s00, TypeVar)
         s00 = s00.ub
     end
@@ -2732,6 +2732,18 @@ function label_counter(body::Vector{Any})
 end
 genlabel(sv) = LabelNode(sv.label_counter += 1)
 
+function get_label_map(body::Vector{Any}, sv::InferenceState)
+    labelmap = zeros(Int, sv.label_counter)
+    for i = 1:length(body)
+        el = body[i]
+        if isa(el, LabelNode)
+            labelmap[el.label] = i
+        end
+    end
+    return labelmap
+end
+
+
 function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     uses = IntSet[ IntSet() for i = 1:nvals ]
     for line in 1:length(body)
@@ -3341,15 +3353,23 @@ function optimize(me::InferenceState)
         # optimizing and use unoptimized IR in codegen.
         gotoifnot_elim_pass!(me)
         inlining_pass!(me)
+        # probably not an ideal location for most of these steps,
+        # but boundscheck elimination is not idempotent and needs to run as part of inlining
+        code = me.src.code::Array{Any,1}
+        meta_elim_pass!(code, me.src.propagate_inbounds, coverage_enabled())
+        # Clean up after inlining
+        gotoifnot_elim_pass!(me)
+        basic_dce_pass!(me)
         void_use_elim_pass!(me)
+        # Compute escape information
+        # and elide unnecessary allocations
         alloc_elim_pass!(me)
         getfield_elim_pass!(me)
         # Clean up for `alloc_elim_pass!` and `getfield_elim_pass!`
         void_use_elim_pass!(me)
-        do_coverage = coverage_enabled()
-        meta_elim_pass!(me.src.code::Array{Any,1}, me.src.propagate_inbounds, do_coverage)
+        filter!(x -> x !== nothing, code)
         # Pop metadata before label reindexing
-        force_noinline = popmeta!(me.src.code::Array{Any,1}, :noinline)[1]
+        force_noinline = popmeta!(code, :noinline)[1]
         reindex_labels!(me)
     end
 
@@ -4792,12 +4812,17 @@ const corenumtype = Union{Int32, Int64, Float32, Float64}
 # return inlined replacement for `e`, inserting new needed statements
 # at index `ins` in `stmts`.
 function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
-    if e.head === :isdefined
-        isa(e.typ, Const) && return e.typ.val
+    if e.head === :meta
+        # ignore meta nodes
         return e
     end
     if e.head === :method
         # avoid running the inlining pass on function definitions
+        return e
+    end
+    # inliners for special expressions
+    if e.head === :isdefined
+        isa(e.typ, Const) && return e.typ.val
         return e
     end
     eargs = e.args
@@ -5598,7 +5623,6 @@ function meta_elim_pass!(code::Array{Any,1}, propagate_inbounds::Bool, do_covera
             continue
         end
     end
-    return filter!(x -> x !== nothing, code)
 end
 
 # does the same job as alloc_elim_pass for allocations inline in getfields
@@ -5607,6 +5631,7 @@ function getfield_elim_pass!(sv::InferenceState)
     body = sv.src.code
     nssavalues = length(sv.src.ssavaluetypes)
     sv.ssavalue_defs = find_ssavalue_defs(body, nssavalues)
+    sv.ssavalue_uses = find_ssavalue_uses(body, nssavalues)
     for i = 1:length(body)
         body[i] = _getfield_elim_pass!(body[i], sv)
     end
@@ -5622,7 +5647,11 @@ function _getfield_elim_pass!(e::Expr, sv::InferenceState)
         j = e.args[3]
         single_use = true
         while isa(e1, SSAValue)
-            single_use = false
+            if single_use
+                if length(sv.ssavalue_uses[e1.id + 1]) > 1
+                    single_use = false
+                end
+            end
             def = sv.ssavalue_defs[e1.id + 1]
             stmt = sv.src.code[def]::Expr
             e1 = stmt.args[2]
@@ -5709,7 +5738,6 @@ function gotoifnot_elim_pass!(sv::InferenceState)
         expr = body[i]
         i += 1
         isa(expr, Expr) || continue
-        expr = expr::Expr
         expr.head === :gotoifnot || continue
         cond = expr.args[1]
         condt = exprtype(cond, sv.src, sv.mod)
@@ -5728,6 +5756,45 @@ function gotoifnot_elim_pass!(sv::InferenceState)
         end
     end
 end
+
+# basic dead-code-elimination of unreachable statements
+function basic_dce_pass!(sv::InferenceState)
+    body = sv.src.code
+    labelmap = get_label_map(body, sv)
+    reachable = IntSet()
+    W = IntSet()
+    push!(W, 1)
+    while !isempty(W)
+        pc = pop!(W)
+        pc in reachable && continue
+        push!(reachable, pc)
+        expr = body[pc]
+        pc += 1
+        if isa(expr, GotoNode)
+            pc = labelmap[expr.label]
+        elseif isa(expr, Expr)
+            label = 0
+            if expr.head === :gotoifnot
+                label = labelmap[expr.args[2]::Int]
+                label === 0 || push!(W, label) # inference must have computed that this condition is always true
+            elseif expr.head === :enter
+                push!(W, labelmap[expr.args[1]::Int])
+            elseif expr.head === :return
+                continue
+            end
+        end
+        pc <= length(body) && push!(W, pc)
+    end
+    for i in 1:length(body)
+        expr = body[i]
+        if !(i in reachable ||
+             (isa(expr, Expr) && is_meta_expr(expr)) ||
+             isa(expr, LineNumberNode))
+            body[i] = nothing
+        end
+    end
+end
+
 
 # eliminate allocation of unnecessary objects
 # that are only used as arguments to safe getfield calls
@@ -5937,14 +6004,7 @@ end
 # fix label numbers to always equal the statement index of the label
 function reindex_labels!(sv::InferenceState)
     body = sv.src.code
-    mapping = zeros(Int, sv.label_counter)
-    for i = 1:length(body)
-        el = body[i]
-        if isa(el,LabelNode)
-            mapping[el.label] = i
-            body[i] = LabelNode(i)
-        end
-    end
+    mapping = get_label_map(body, sv)
     for i = 1:length(body)
         el = body[i]
         # For goto and enter, the statement and the target has to be
@@ -5952,22 +6012,25 @@ function reindex_labels!(sv::InferenceState)
         # elimination in type_annotate! can delete the target
         # of a reachable (but never taken) node. In which case we can
         # just replace the node with the branch condition.
-        if isa(el,GotoNode)
+        if isa(el, LabelNode)
+            labelnum = mapping[el.label]
+            @assert labelnum !== 0
+            body[i] = LabelNode(labelnum)
+        elseif isa(el, GotoNode)
             labelnum = mapping[el.label]
             @assert labelnum !== 0
             body[i] = GotoNode(labelnum)
-        elseif isa(el,Expr)
-            el = el::Expr
+        elseif isa(el, Expr)
             if el.head === :gotoifnot
-                labelnum = mapping[el.args[2]]
-                if labelnum !== 0
-                    el.args[2] = mapping[el.args[2]]
-                else
-                    # Might have side effects
+                labelnum = mapping[el.args[2]::Int]
+                if labelnum === 0
+                    # Might still have side effects
                     body[i] = el.args[1]
+                else
+                    el.args[2] = labelnum
                 end
             elseif el.head === :enter
-                labelnum = mapping[el.args[1]]
+                labelnum = mapping[el.args[1]::Int]
                 @assert labelnum !== 0
                 el.args[1] = labelnum
             end
