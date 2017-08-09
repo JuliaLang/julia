@@ -658,7 +658,7 @@ Commit all currently buffered writes to the given stream.
 flush(io::IO) = nothing
 
 """
-    skipchars(io::IO, predicate; linecomment::Char)
+    skipchars(io::IO, predicate; linecomment=nothing)
 
 Advance the stream `io` such that the next-read character will be the first remaining for
 which `predicate` returns `false`. If the keyword argument `linecomment` is specified, all
