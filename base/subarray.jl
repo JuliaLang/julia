@@ -73,10 +73,10 @@ parentindexes(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 # indices that end up getting passed to it, so we store the parent as a
 # ReshapedArray view if necessary. The trouble is that arrays of `CartesianIndex`
 # can make the number of effective indices not equal to length(I).
-_maybe_reshape_parent(A::AbstractArray, ::NTuple{1, Bool}) = reshape(A, Val{1})
-_maybe_reshape_parent(A::AbstractArray{<:Any,1}, ::NTuple{1, Bool}) = reshape(A, Val{1})
+_maybe_reshape_parent(A::AbstractArray, ::NTuple{1, Bool}) = reshape(A, Val(1))
+_maybe_reshape_parent(A::AbstractArray{<:Any,1}, ::NTuple{1, Bool}) = reshape(A, Val(1))
 _maybe_reshape_parent(A::AbstractArray{<:Any,N}, ::NTuple{N, Bool}) where {N} = A
-_maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A, Val{N}) # TODO: DEPRECATE FOR #14770
+_maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A, Val(N)) # TODO: DEPRECATE FOR #14770
 """
     view(A, inds...)
 
@@ -107,14 +107,14 @@ julia> A # Note A has changed even though we modified b
  0  4
 ```
 """
-function view(A::AbstractArray, I...)
+function view(A::AbstractArray, I::Vararg{Any,N}) where {N}
     @_inline_meta
     J = to_indices(A, I)
     @boundscheck checkbounds(A, J...)
     unsafe_view(_maybe_reshape_parent(A, index_ndims(J...)), J...)
 end
 
-function unsafe_view(A::AbstractArray, I::ViewIndex...)
+function unsafe_view(A::AbstractArray, I::Vararg{ViewIndex,N}) where {N}
     @_inline_meta
     SubArray(A, I)
 end
@@ -124,7 +124,8 @@ end
 # might span multiple parent indices, making the reindex calculation very hard.
 # So we use _maybe_reindex to figure out if there are any arrays of
 # `CartesianIndex`, and if so, we punt and keep two layers of indirection.
-unsafe_view(V::SubArray, I::ViewIndex...) = (@_inline_meta; _maybe_reindex(V, I))
+unsafe_view(V::SubArray, I::Vararg{ViewIndex,N}) where {N} =
+    (@_inline_meta; _maybe_reindex(V, I))
 _maybe_reindex(V, I) = (@_inline_meta; _maybe_reindex(V, I, I))
 _maybe_reindex(V, I, ::Tuple{AbstractArray{<:AbstractCartesianIndex}, Vararg{Any}}) =
     (@_inline_meta; SubArray(V, I))
@@ -238,7 +239,7 @@ substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("st
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
 compute_stride1(parent::AbstractArray, I::NTuple{N,Any}) where {N} =
-    (@_inline_meta; compute_stride1(1, fill_to_length(indices(parent), OneTo(1), Val{N}), I))
+    (@_inline_meta; compute_stride1(1, fill_to_length(indices(parent), OneTo(1), Val(N)), I))
 compute_stride1(s, inds, I::Tuple{}) = s
 compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
     (@_inline_meta; compute_stride1(s*unsafe_length(inds[1]), tail(inds), tail(I)))
@@ -272,7 +273,7 @@ compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
 
 function compute_linindex(parent, I::NTuple{N,Any}) where N
     @_inline_meta
-    IP = fill_to_length(indices(parent), OneTo(1), Val{N})
+    IP = fill_to_length(indices(parent), OneTo(1), Val(N))
     compute_linindex(1, 1, IP, I)
 end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{ScalarIndex, Vararg{Any}})

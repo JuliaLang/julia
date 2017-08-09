@@ -8,7 +8,6 @@ Base.C_NULL
 Base.VERSION
 Base.LOAD_PATH
 Base.JULIA_HOME
-Core.ANY
 Base.Sys.CPU_CORES
 Base.Sys.WORD_SIZE
 Base.Sys.KERNEL

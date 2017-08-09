@@ -33,7 +33,7 @@ r_promote(op, x::T) where {T} = convert(r_promote_type(op, T), x)
 
 ## foldl && mapfoldl
 
-function mapfoldl_impl(f, op, v0, itr, i)
+@noinline function mapfoldl_impl(f, op, v0, itr, i)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
     if done(itr, i)
@@ -174,7 +174,7 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
 
 # This is a generic implementation of `mapreduce_impl()`,
 # certain `op` (e.g. `min` and `max`) may have their own specialized versions.
-function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int=pairwise_blocksize(f, op))
+@noinline function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
         return r_promote(op, f(a1))
@@ -196,6 +196,9 @@ function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer
         return op(v1, v2)
     end
 end
+
+mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer) =
+    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 """
     mapreduce(f, op, itr)
@@ -307,7 +310,6 @@ be executed in groups. Future versions of Julia might change the algorithm. Note
 elements are not reordered if you use an ordered collection.
 
 # Examples
-
 ```jldoctest
 julia> reduce(*, 1, [2; 3; 4])
 24

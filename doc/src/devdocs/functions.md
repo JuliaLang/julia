@@ -110,7 +110,7 @@ a method table via special arrangement.
 The "builtin" functions, defined in the `Core` module, are:
 
 ```
-=== typeof sizeof issubtype isa typeassert throw tuple getfield setfield! fieldtype
+=== typeof sizeof <: isa typeassert throw tuple getfield setfield! fieldtype
 nfields isdefined arrayref arrayset arraysize applicable invoke apply_type _apply
 _expr svec
 ```
@@ -223,8 +223,8 @@ Performance-critical higher-order functions like `map` certainly call their argu
 and so will still be specialized as expected. This optimization is implemented by recording which
 arguments are called during the `analyze-variables` pass in the front end. When `cache_method`
 sees an argument in the `Function` type hierarchy passed to a slot declared as `Any` or `Function`,
-it pretends the slot was declared as `ANY` (the "don't specialize" hint). This heuristic seems
-to be extremely effective in practice.
+it behaves as if the `@nospecialize` annotation were applied. This heuristic seems to be extremely
+effective in practice.
 
 The next issue concerns the structure of method cache hash tables. Empirical studies show that
 the vast majority of dynamically-dispatched calls involve one or two arguments. In turn, many
@@ -243,7 +243,7 @@ The front end generates type declarations for all closures. Initially, this was 
 generating normal type declarations. However, this produced an extremely large number of constructors,
 all of which were trivial (simply passing all arguments through to `new`). Since methods are partially
 ordered, inserting all of these methods is O(n^2), plus there are just too many of them to keep
-around. This was optimized by generating `composite_type` expressions directly (bypassing default
+around. This was optimized by generating `struct_type` expressions directly (bypassing default
 constructor generation), and using `new` directly to create closure instances. Not the prettiest
 thing ever, but you do what you gotta do.
 

@@ -226,6 +226,14 @@ end
         @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
         @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
 
+        # UpperTriangular/LowerTriangular solve
+        a = UpperTriangular(speye(5) + triu(0.1*sprandn(5, 5, 0.2)))
+        b = sprandn(5, 5, 0.2)
+        @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*eps())
+        a = LowerTriangular(speye(5) + tril(0.1*sprandn(5, 5, 0.2)))
+        b = sprandn(5, 5, 0.2)
+        @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*eps())
+
         a = spdiagm(randn(5)) + im*spdiagm(randn(5))
         b = randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
@@ -295,6 +303,8 @@ end
     @test scale!(copy(dAt), bi) ≈ Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(b))
     @test scale!(copy(dAt), bi) ≈ Base.LinAlg.A_rdiv_Bt!(copy(sAt), Diagonal(b))
     @test scale!(copy(dAt), conj(bi)) ≈ Base.LinAlg.A_rdiv_Bc!(copy(sAt), Diagonal(b))
+    @test_throws DimensionMismatch Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(ones(length(b) + 1)))
+    @test_throws LinAlg.SingularException Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(zeros(length(b))))
 end
 
 @testset "copy!" begin
@@ -1021,7 +1031,7 @@ end
     @test size(rotl90(a)) == (5,3)
 end
 
-function test_getindex_algs{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector, alg::Int)
+function test_getindex_algs(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector, alg::Int) where {Tv,Ti}
     # Sorted vectors for indexing rows.
     # Similar to getindex_general but without the transpose trick.
     (m, n) = size(A)
@@ -1182,10 +1192,10 @@ end
     T = SymTridiagonal(randn(5),rand(4))
     S = sparse(T)
     @test norm(Array(T) - Array(S)) == 0.0
-    B = Bidiagonal(randn(5),randn(4),true)
+    B = Bidiagonal(randn(5),randn(4),:U)
     S = sparse(B)
     @test norm(Array(B) - Array(S)) == 0.0
-    B = Bidiagonal(randn(5),randn(4),false)
+    B = Bidiagonal(randn(5),randn(4),:L)
     S = sparse(B)
     @test norm(Array(B) - Array(S)) == 0.0
 end
@@ -1762,6 +1772,45 @@ end
     @test String(take!(io)) == "1×1 SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
     show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
     @test String(take!(io)) == "2×2 SparseMatrixCSC{Float32,Int64} with 0 stored entries"
+
+    ioc = IOContext(io, displaysize = (5, 80), limit = true)
+    show(ioc, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
+    @test String(take!(io)) == "1×1 SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
+    show(ioc, MIME"text/plain"(), sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0]))
+    @test String(take!(io)) == "1×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  ⋮"
+
+    # even number of rows
+    ioc = IOContext(io, displaysize = (8, 80), limit = true)
+    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4], Int64[1,1,2,2], [1.0,2.0,3.0,4.0]))
+    @test String(take!(io)) == string("4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]",
+                                      "  =  1.0\n  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0")
+
+    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
+    @test String(take!(io)) ==  string("5×3 SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
+                                       "  =  1.0\n  ⋮\n  [5, 3]  =  5.0")
+
+    show(ioc, MIME"text/plain"(), sparse(ones(5,3)))
+    @test String(take!(io)) ==  string("5×3 SparseMatrixCSC{Float64,$Int} with 15 stored entries:\n  [1, 1]",
+                                       "  =  1.0\n  ⋮\n  [5, 3]  =  1.0")
+
+    # odd number of rows
+    ioc = IOContext(io, displaysize = (9, 80), limit = true)
+    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
+    @test String(take!(io)) == string("5×3 SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
+                                      "  =  1.0\n  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0")
+
+    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5,6], Int64[1,1,2,2,3,3], [1.0,2.0,3.0,4.0,5.0,6.0]))
+    @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]",
+                                       "  =  1.0\n  [2, 1]  =  2.0\n  ⋮\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
+
+    show(ioc, MIME"text/plain"(), sparse(ones(6,3)))
+    @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,$Int} with 18 stored entries:\n  [1, 1]",
+                                       "  =  1.0\n  [2, 1]  =  1.0\n  ⋮\n  [5, 3]  =  1.0\n  [6, 3]  =  1.0")
+
+    ioc = IOContext(io, displaysize = (9, 80))
+    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5,6], Int64[1,1,2,2,3,3], [1.0,2.0,3.0,4.0,5.0,6.0]))
+    @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]  =  1.0\n",
+        "  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
 end
 
 @testset "similar aliasing" begin
@@ -1784,4 +1833,69 @@ end
     A = SparseMatrixCSC(n, n, colptr, rowval, nzval2)
     @test nnz(A) == n
     @test A      == eye(n)
+end
+
+@testset "reverse search direction if step < 0 #21986" begin
+    srand(1234)
+    A = sprand(5, 5, 1/5)
+    A = max.(A, A')
+    A = spones(A)
+    B = A[5:-1:1, 5:-1:1]
+    @test issymmetric(B)
+end
+
+# Faster covariance function for sparse matrices
+# Prevents densifying the input matrix when subtracting the mean
+# Test against dense implementation
+# PR https://github.com/JuliaLang/julia/pull/22735
+# Part of this test needed to be hacked due to the treatment
+# of Inf in sparse matrix algebra
+# https://github.com/JuliaLang/julia/issues/22921
+# The issue will be resolved in
+# https://github.com/JuliaLang/julia/issues/22733
+@testset "optimizing sparse $elty covariance" for elty in (Float64, Complex{Float64})
+    n = 10
+    p = 5
+    np2 = div(n*p, 2)
+    srand(1)
+    if elty <: Real
+        nzvals = randn(np2)
+    else
+        nzvals = complex.(randn(np2), randn(np2))
+    end
+    x_sparse = sparse(rand(1:n, np2), rand(1:p, np2), nzvals, n, p)
+    x_dense  = convert(Matrix{elty}, x_sparse)
+    @testset "Test with no Infs and NaNs, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
+                                                                                 corrected in (true, false)
+        @test cov(x_sparse, vardim, corrected=corrected) ≈
+              cov(x_dense , vardim, corrected=corrected)
+    end
+
+    @testset "Test with $x11, vardim=$vardim, corrected=$corrected" for x11 in (NaN, Inf),
+                                                                     vardim in (1, 2),
+                                                                  corrected in (true, false)
+        x_sparse[1,1] = x11
+        x_dense[1 ,1] = x11
+
+        cov_sparse = cov(x_sparse, vardim, corrected=corrected)
+        cov_dense  = cov(x_dense , vardim, corrected=corrected)
+        @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+    end
+
+    @testset "Test with NaN and Inf, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
+                                                                            corrected in (true, false)
+        x_sparse[1,1] = Inf
+        x_dense[1 ,1] = Inf
+        x_sparse[2,1] = NaN
+        x_dense[2 ,1] = NaN
+
+        cov_sparse = cov(x_sparse, vardim, corrected=corrected)
+        cov_dense  = cov(x_dense , vardim, corrected=corrected)
+        @test cov_sparse[(1 + vardim):end, (1 + vardim):end] ≈
+              cov_dense[ (1 + vardim):end, (1 + vardim):end]
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+    end
 end

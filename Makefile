@@ -169,10 +169,6 @@ $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)
 $(build_sysconfdir)/julia/juliarc.jl: $(JULIAHOME)/etc/juliarc.jl | $(build_sysconfdir)/julia
 	@echo Creating usr/etc/julia/juliarc.jl
 	@cp $< $@
-ifeq ($(OS), WINNT)
-	@cat $(JULIAHOME)/contrib/windows/juliarc.jl >> $(build_sysconfdir)/julia/juliarc.jl
-$(build_sysconfdir)/julia/juliarc.jl: $(JULIAHOME)/contrib/windows/juliarc.jl
-endif
 
 $(build_datarootdir)/julia/julia-config.jl : $(JULIAHOME)/contrib/julia-config.jl | $(build_datarootdir)/julia
 	$(INSTALL_M) $< $(dir $@)
@@ -323,6 +319,7 @@ $(eval $(call std_dll,gcc_s_seh-1))
 endif
 $(eval $(call std_dll,ssp-0))
 $(eval $(call std_dll,winpthread-1))
+$(eval $(call std_dll,atomic-1))
 endif
 define stringreplace
 	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
@@ -622,7 +619,9 @@ LLVM_SIZE := $(build_depsbindir)/llvm-size$(EXE)
 endif
 build-stats:
 	@echo $(JULCOLOR)' ==> ./julia binary sizes'$(ENDCOLOR)
-	$(call spawn,$(LLVM_SIZE) -A $(build_private_libdir)/sys.$(SHLIB_EXT) $(build_shlibdir)/libjulia.$(SHLIB_EXT) $(build_bindir)/julia$(EXE))
+	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_private_libdir)/sys.$(SHLIB_EXT)) \
+		$(call cygpath_w,$(build_shlibdir)/libjulia.$(SHLIB_EXT)) \
+		$(call cygpath_w,$(build_bindir)/julia$(EXE)))
 	@echo $(JULCOLOR)' ==> ./julia launch speedtest'$(ENDCOLOR)
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')

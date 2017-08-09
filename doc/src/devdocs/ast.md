@@ -466,8 +466,8 @@ if a
     b
 elseif c
     d
-else e
-    f
+else
+    e
 end
 ```
 
@@ -475,9 +475,8 @@ parses as:
 
 ```
 (if a (block (line 2) b)
-    (block (line 3) (if c (block (line 4) d)
-                             (block (line 5) e
-                                    (line 6) f))))
+    (elseif (block (line 3) c) (block (line 4) d)
+            (block (line 5 e))))
 ```
 
 A `while` loop parses as `(while condition body)`.
@@ -517,8 +516,8 @@ end
 parses as:
 
 ```
-(type true (curly Foo (<: T S))
-      (block (line 2) (:: x T)))
+(struct true (curly Foo (<: T S))
+        (block (line 2) (:: x T)))
 ```
 
 The first argument is a boolean telling whether the type is mutable.

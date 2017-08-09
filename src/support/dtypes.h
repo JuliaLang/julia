@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef DTYPES_H
-#define DTYPES_H
+#ifndef JL_DTYPES_H
+#define JL_DTYPES_H
 
 #include <stddef.h>
 #include <stddef.h> // double include of stddef.h fixes #3421
@@ -214,6 +214,12 @@ typedef enum { T_INT8, T_UINT8, T_INT16, T_UINT16, T_INT32, T_UINT32,
 #define JL_FALLTHROUGH [[clang::fallthrough]]
 #else
 #define JL_FALLTHROUGH
+#endif
+
+#if defined(__GNUC__)
+#define JL_UNUSED __attribute__((__unused__))
+#else
+#define JL_UNUSED
 #endif
 
 #endif /* DTYPES_H */

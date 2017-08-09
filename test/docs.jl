@@ -135,7 +135,7 @@ const K = :K
 
 t(x::AbstractString) = x
 t(x::Int, y) = y
-t{S <: Integer}(x::S) = x
+t(x::S) where {S <: Integer} = x
 
 "t-1"
 t(::AbstractString)
@@ -613,7 +613,7 @@ module I12515
 struct EmptyType{T} end
 
 "A new method"
-Base.collect{T}(::Type{EmptyType{T}}) = "borked"
+Base.collect(::Type{EmptyType{T}}) where {T} = "borked"
 
 end
 
@@ -741,12 +741,12 @@ Binding `$(curmod_prefix)Undocumented.bindingdoesnotexist` does not exist.
 doc_str = Markdown.parse("""
 No documentation found.
 
-**Summary:**
+# Summary
 ```
 abstract type $(curmod_prefix)Undocumented.A <: Any
 ```
 
-**Subtypes:**
+# Subtypes
 ```
 $(curmod_prefix)Undocumented.B
 $(curmod_prefix)Undocumented.C
@@ -757,17 +757,17 @@ $(curmod_prefix)Undocumented.C
 doc_str = Markdown.parse("""
 No documentation found.
 
-**Summary:**
+# Summary
 ```
 abstract type $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A
 ```
 
-**Subtypes:**
+# Subtypes
 ```
 $(curmod_prefix)Undocumented.D
 ```
 
-**Supertype Hierarchy:**
+# Supertype Hierarchy
 ```
 $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
 ```
@@ -777,12 +777,12 @@ $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
 doc_str = Markdown.parse("""
 No documentation found.
 
-**Summary:**
+# Summary
 ```
 mutable struct $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A
 ```
 
-**Supertype Hierarchy:**
+# Supertype Hierarchy
 ```
 $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A <: Any
 ```
@@ -792,19 +792,19 @@ $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A <: Any
 doc_str = Markdown.parse("""
 No documentation found.
 
-**Summary:**
+# Summary
 ```
 struct $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B
 ```
 
-**Fields:**
+# Fields
 ```
 one   :: Any
 two   :: String
 three :: Float64
 ```
 
-**Supertype Hierarchy:**
+# Supertype Hierarchy
 ```
 $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
 ```
@@ -979,8 +979,8 @@ dynamic_test.x = "test 2"
 @test @doc(dynamic_test) == "test 2 Union{}"
 @test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
 
-@test Docs._repl(:(dynamic_test(1.0))) == Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), esc(:(dynamic_test(::typeof(1.0)))))
-@test Docs._repl(:(dynamic_test(::String))) == Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), esc(:(dynamic_test(::String))))
+@test Docs._repl(:(dynamic_test(1.0))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), :(dynamic_test(::typeof(1.0)))))
+@test Docs._repl(:(dynamic_test(::String))) == Expr(:escape, Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), :(dynamic_test(::String))))
 
 
 # Equality testing
@@ -1047,3 +1047,11 @@ let foo_docs = meta(I22105)[@var(I22105.foo)].docs
     @test docstr.data[:typesig] === Union{}
     @test docstr.data[:binding] == Binding(I22105, :foo)
 end
+
+# issue #23011
+@test_nowarn @eval Main begin
+    @doc "first" f23011() = 1
+    @doc "second" f23011() = 2
+end
+@test Main.f23011() == 2
+@test docstrings_equal(@doc(Main.f23011), doc"second")

@@ -27,7 +27,7 @@ function svdfact!(A::StridedMatrix{T}; thin::Bool=true) where T<:BlasFloat
 end
 
 """
-    svdfact(A, thin::Bool=true) -> SVD
+    svdfact(A; thin::Bool=true) -> SVD
 
 Compute the singular value decomposition (SVD) of `A` and return an `SVD` object.
 
@@ -40,7 +40,7 @@ If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 `A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
 ``M \\times \\min(M, N)`` for a thin SVD.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
 4×5 Array{Float64,2}:
@@ -68,7 +68,7 @@ svdfact(x::Number; thin::Bool=true) = SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/a
 svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin=thin)
 
 """
-    svd(A, thin::Bool=true) -> U, S, V
+    svd(A; thin::Bool=true) -> U, S, V
 
 Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
 `A == U*diagm(S)*V'`. The singular values in `S` are sorted in descending order.
@@ -81,8 +81,7 @@ If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 of the `SVD` factorization to a tuple. Direct use of `svdfact` is therefore more
 efficient.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
 4×5 Array{Float64,2}:
@@ -128,7 +127,7 @@ end
 Returns the singular values of `A`, saving space by overwriting the input.
 See also [`svdvals`](@ref).
 """
-svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = findfirst(size(A), 0) > 0 ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
+svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = isempty(A) ? zeros(real(T), 0) : LAPACK.gesdd!('N', A)[2]
 svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
 
 """
@@ -136,8 +135,7 @@ svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
 
 Returns the singular values of `A` in descending order.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
 4×5 Array{Float64,2}:

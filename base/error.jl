@@ -16,6 +16,13 @@
 #     rethrow(val)
 # end
 
+"""
+    throw(e)
+
+Throw an object as an exception.
+"""
+throw
+
 ## native julia error handling ##
 
 error(s::AbstractString) = throw(ErrorException(s))
@@ -27,7 +34,10 @@ Raise an `ErrorException` with the given message.
 
 See also [`logging`](@ref).
 """
-error(s...) = throw(ErrorException(Main.Base.string(s...)))
+function error(s::Vararg{Any,N}) where {N}
+    @_noinline_meta
+    throw(ErrorException(Main.Base.string(s...)))
+end
 
 """
     rethrow([e])
@@ -53,7 +63,10 @@ Get the backtrace of the current exception, for use within `catch` blocks.
 catch_backtrace() = ccall(:jl_get_backtrace, Array{Ptr{Void},1}, ())
 
 ## keyword arg lowering generates calls to this ##
-kwerr(kw, args...) = throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,args...)))
+function kwerr(kw, args::Vararg{Any,N}) where {N}
+    @_noinline_meta
+    throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,args...)))
+end
 
 ## system error handling ##
 """
@@ -65,7 +78,29 @@ systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(str
 
 ## assertion functions and macros ##
 
+
+"""
+    assert(cond)
+
+Throw an [`AssertionError`](@ref) if `cond` is `false`.
+Also available as the macro [`@assert`](@ref).
+"""
 assert(x) = x ? nothing : throw(Main.Base.AssertionError())
+
+"""
+    @assert cond [text]
+
+Throw an [`AssertionError`](@ref) if `cond` is `false`. Preferred syntax for writing assertions.
+Message `text` is optionally displayed upon assertion failure.
+
+# Examples
+```jldoctest
+julia> @assert iseven(3) "3 is an odd number!"
+ERROR: AssertionError: 3 is an odd number!
+
+julia> @assert isodd(3) "What even are numbers?"
+```
+"""
 macro assert(ex, msgs...)
     msg = isempty(msgs) ? ex : msgs[1]
     if isa(msg, AbstractString)

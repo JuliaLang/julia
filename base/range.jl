@@ -763,61 +763,78 @@ end
 
 /(x::Number, r::Range) = [ x/y for y=r ]
 
-promote_rule(::Type{UnitRange{T1}},::Type{UnitRange{T2}}) where {T1,T2} =
-    UnitRange{promote_type(T1,T2)}
+# promote eltype if at least one container wouldn't change, otherwise join container types.
+el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{T,n}}) where {T,n}   = a
+el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{S,n}}) where {T,S,n} = a
+el_same(::Type{T}, a::Type{<:AbstractArray{S,n}}, b::Type{<:AbstractArray{T,n}}) where {T,S,n} = b
+el_same(::Type, a, b) = typejoin(a, b)
+
+promote_rule(a::Type{UnitRange{T1}}, b::Type{UnitRange{T2}}) where {T1,T2} =
+    el_same(promote_type(T1,T2), a, b)
 convert(::Type{UnitRange{T}}, r::UnitRange{T}) where {T<:Real} = r
 convert(::Type{UnitRange{T}}, r::UnitRange) where {T<:Real} = UnitRange{T}(r.start, r.stop)
 
-promote_rule(::Type{OneTo{T1}},::Type{OneTo{T2}}) where {T1,T2} =
-    OneTo{promote_type(T1,T2)}
+promote_rule(a::Type{OneTo{T1}}, b::Type{OneTo{T2}}) where {T1,T2} =
+    el_same(promote_type(T1,T2), a, b)
 convert(::Type{OneTo{T}}, r::OneTo{T}) where {T<:Real} = r
 convert(::Type{OneTo{T}}, r::OneTo) where {T<:Real} = OneTo{T}(r.stop)
 
-promote_rule(::Type{UnitRange{T1}}, ::Type{UR}) where {T1,UR<:AbstractUnitRange} =
-    UnitRange{promote_type(T1,eltype(UR))}
+promote_rule(a::Type{UnitRange{T1}}, ::Type{UR}) where {T1,UR<:AbstractUnitRange} =
+    promote_rule(a, UnitRange{eltype(UR)})
 convert(::Type{UnitRange{T}}, r::AbstractUnitRange) where {T<:Real} = UnitRange{T}(first(r), last(r))
 convert(::Type{UnitRange}, r::AbstractUnitRange) = UnitRange(first(r), last(r))
 
-promote_rule(::Type{StepRange{T1a,T1b}},::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b} =
-    StepRange{promote_type(T1a,T2a),promote_type(T1b,T2b)}
+convert(::Type{AbstractUnitRange{T}}, r::AbstractUnitRange{T}) where {T} = r
+convert(::Type{AbstractUnitRange{T}}, r::UnitRange) where {T} = convert(UnitRange{T}, r)
+convert(::Type{AbstractUnitRange{T}}, r::OneTo) where {T} = convert(OneTo{T}, r)
+
+promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b} =
+    el_same(promote_type(T1a,T2a),
+            # el_same only operates on array element type, so just promote second type parameter
+            StepRange{T1a, promote_type(T1b,T2b)},
+            StepRange{T2a, promote_type(T1b,T2b)})
 convert(::Type{StepRange{T1,T2}}, r::StepRange{T1,T2}) where {T1,T2} = r
 
-promote_rule(::Type{StepRange{T1a,T1b}},::Type{UR}) where {T1a,T1b,UR<:AbstractUnitRange} =
-    StepRange{promote_type(T1a,eltype(UR)),promote_type(T1b,eltype(UR))}
+promote_rule(a::Type{StepRange{T1a,T1b}}, ::Type{UR}) where {T1a,T1b,UR<:AbstractUnitRange} =
+    promote_rule(a, StepRange{eltype(UR), eltype(UR)})
 convert(::Type{StepRange{T1,T2}}, r::Range) where {T1,T2} =
     StepRange{T1,T2}(convert(T1, first(r)), convert(T2, step(r)), convert(T1, last(r)))
 convert(::Type{StepRange}, r::AbstractUnitRange{T}) where {T} =
     StepRange{T,T}(first(r), step(r), last(r))
+convert(::Type{StepRange{T1,T2} where T1}, r::Range) where {T2} =
+    convert(StepRange{eltype(r),T2}, r)
 
 promote_rule(::Type{StepRangeLen{T1,R1,S1}},::Type{StepRangeLen{T2,R2,S2}}) where {T1,T2,R1,R2,S1,S2} =
-    StepRangeLen{promote_type(T1,T2), promote_type(R1,R2), promote_type(S1,S2)}
+    el_same(promote_type(T1,T2),
+            StepRangeLen{T1,promote_type(R1,R2),promote_type(S1,S2)},
+            StepRangeLen{T2,promote_type(R1,R2),promote_type(S1,S2)})
 convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) where {T,R,S} = r
 convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) where {T,R,S} =
     StepRangeLen{T,R,S}(convert(R, r.ref), convert(S, r.step), length(r), r.offset)
 convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T} =
     StepRangeLen(convert(T, r.ref), convert(T, r.step), length(r), r.offset)
 
-promote_rule(::Type{StepRangeLen{T,R,S}}, ::Type{OR}) where {T,R,S,OR<:Range} =
-    StepRangeLen{promote_type(T,eltype(OR)),promote_type(R,eltype(OR)),promote_type(S,eltype(OR))}
+promote_rule(a::Type{StepRangeLen{T,R,S}}, ::Type{OR}) where {T,R,S,OR<:Range} =
+    promote_rule(a, StepRangeLen{eltype(OR), eltype(OR), eltype(OR)})
 convert(::Type{StepRangeLen{T,R,S}}, r::Range) where {T,R,S} =
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
 convert(::Type{StepRangeLen{T}}, r::Range) where {T} =
     StepRangeLen(T(first(r)), T(step(r)), length(r))
 convert(::Type{StepRangeLen}, r::Range) = convert(StepRangeLen{eltype(r)}, r)
 
-promote_rule(::Type{LinSpace{T1}},::Type{LinSpace{T2}}) where {T1,T2} =
-    LinSpace{promote_type(T1,T2)}
+promote_rule(a::Type{LinSpace{T1}}, b::Type{LinSpace{T2}}) where {T1,T2} =
+    el_same(promote_type(T1,T2), a, b)
 convert(::Type{LinSpace{T}}, r::LinSpace{T}) where {T} = r
 convert(::Type{LinSpace{T}}, r::Range) where {T} =
     LinSpace{T}(first(r), last(r), length(r))
 convert(::Type{LinSpace}, r::Range{T}) where {T} =
     convert(LinSpace{T}, r)
 
-promote_rule(::Type{LinSpace{T}}, ::Type{OR}) where {T,OR<:OrdinalRange} =
-    LinSpace{promote_type(T,eltype(OR))}
+promote_rule(a::Type{LinSpace{T}}, ::Type{OR}) where {T,OR<:OrdinalRange} =
+    promote_rule(a, LinSpace{eltype(OR)})
 
-promote_rule(::Type{LinSpace{L}}, ::Type{StepRangeLen{T,R,S}}) where {L,T,R,S} =
-    StepRangeLen{promote_type(L,T),promote_type(L,R),promote_type(L,S)}
+promote_rule(::Type{LinSpace{L}}, b::Type{StepRangeLen{T,R,S}}) where {L,T,R,S} =
+    promote_rule(StepRangeLen{L,L,L}, b)
 
 # +/- of ranges is defined in operators.jl (to be able to use @eval etc.)
 
@@ -871,13 +888,22 @@ end
 
 median(r::Range{<:Real}) = mean(r)
 
-function in(x, r::Range)
-    n = step(r) == 0 ? 1 : round(Integer,(x-first(r))/step(r))+1
-    n >= 1 && n <= length(r) && r[n] == x
+function _in_range(x, r::Range)
+    if step(r) == 0
+        return !isempty(r) && first(r) == x
+    else
+        n = round(Integer, (x - first(r)) / step(r)) + 1
+        return n >= 1 && n <= length(r) && r[n] == x
+    end
 end
+in(x::Real, r::Range{<:Real}) = _in_range(x, r)
+# This method needs to be defined separately since -(::T, ::T) can be implemented
+# even if -(::T, ::Real) is not
+in(x::T, r::Range{T}) where {T} = _in_range(x, r)
 
 in(x::Integer, r::AbstractUnitRange{<:Integer}) = (first(r) <= x) & (x <= last(r))
-in(x, r::Range{T}) where {T<:Integer} =
+
+in(x::Real, r::Range{T}) where {T<:Integer} =
     isinteger(x) && !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
         (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
 in(x::Char, r::Range{Char}) =
@@ -886,7 +912,7 @@ in(x::Char, r::Range{Char}) =
 
 # Addition/subtraction of ranges
 
-function _define_range_op(f::ANY)
+function _define_range_op(@nospecialize f)
     @eval begin
         function $f(r1::OrdinalRange, r2::OrdinalRange)
             r1l = length(r1)

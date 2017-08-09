@@ -35,6 +35,7 @@ Create an `Enum{BaseType}` subtype with name `EnumName` and enum member values o
 `EnumValue1` and `EnumValue2` with optional assigned values of `x` and `y`, respectively.
 `EnumName` can be used just like other types and enum member values as regular values, such as
 
+# Examples
 ```jldoctest
 julia> @enum Fruit apple=1 orange=2 kiwi=3
 

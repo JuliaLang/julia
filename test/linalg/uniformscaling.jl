@@ -173,3 +173,11 @@ end
             hvcat((2,1,2),B,2eye(3,3),eye(6,6),3eye(3,3),4eye(3,3))
     end
 end
+
+@testset "chol" begin
+    for T in (Float64, Complex64, BigFloat, Int)
+        λ = T(4)
+        @test chol(λ*I) ≈ √λ*I
+        @test_throws LinAlg.PosDefException chol(-λ*I)
+    end
+end

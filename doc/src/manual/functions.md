@@ -389,7 +389,7 @@ interprets a string as a number in some base. The `base` argument defaults to `1
 can be expressed concisely as:
 
 ```julia
-function parse(type, num, base=10)
+function parse(T, num, base=10)
     ###
 end
 ```
@@ -472,9 +472,8 @@ this example, `width` is certain to have the value `2`.
 
 ## Evaluation Scope of Default Values
 
-Optional and keyword arguments differ slightly in how their default values are evaluated. When
-optional argument default expressions are evaluated, only *previous* arguments are in scope. In
-contrast, *all* the arguments are in scope when keyword arguments default expressions are evaluated.
+When optional and keyword argument default expressions are evaluated, only *previous* arguments are in
+scope.
 For example, given this definition:
 
 ```julia
@@ -483,11 +482,7 @@ function f(x, a=b, b=1)
 end
 ```
 
-the `b` in `a=b` refers to a `b` in an outer scope, not the subsequent argument `b`. However,
-if `a` and `b` were keyword arguments instead, then both would be created in the same scope and
-the `b` in `a=b` would refer to the subsequent argument `b` (shadowing any `b` in an outer scope),
-which would result in an undefined variable error (since the default expressions are evaluated
-left-to-right, and `b` has not been assigned yet).
+the `b` in `a=b` refers to a `b` in an outer scope, not the subsequent argument `b`.
 
 ## Do-Block Syntax for Function Arguments
 
@@ -632,7 +627,7 @@ loops cannot be merged because of the intervening `sort` function.
 
 Finally, the maximum efficiency is typically achieved when the output array of a vectorized operation
 is *pre-allocated*, so that repeated calls do not allocate new arrays over and over again for
-the results ([Pre-allocating outputs](@ref):). A convenient syntax for this is `X .= ...`, which
+the results (see [Pre-allocating outputs](@ref)). A convenient syntax for this is `X .= ...`, which
 is equivalent to `broadcast!(identity, X, ...)` except that, as above, the `broadcast!` loop is
 fused with any nested "dot" calls. For example, `X .= sin.(Y)` is equivalent to `broadcast!(sin, X, Y)`,
 overwriting `X` with `sin.(Y)` in-place. If the left-hand side is an array-indexing expression,

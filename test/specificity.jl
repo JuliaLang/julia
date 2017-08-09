@@ -69,8 +69,8 @@ let A = Tuple{Any, Tuple{Vararg{Integer,N} where N}},
 end
 
 # with bound varargs
-_bound_vararg_specificity_1{T,N}(::Type{Array{T,N}}, d::Vararg{Int, N}) = 0
-_bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
+_bound_vararg_specificity_1(::Type{Array{T,N}}, d::Vararg{Int, N}) where {T,N} = 0
+_bound_vararg_specificity_1(::Type{Array{T,1}}, d::Int) where {T} = 1
 @test _bound_vararg_specificity_1(Array{Int,1}, 1) == 1
 @test _bound_vararg_specificity_1(Array{Int,2}, 1, 1) == 0
 
@@ -81,22 +81,22 @@ _bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
 # Method specificity
 begin
     local f, A
-    f{T}(dims::Tuple{}, A::AbstractArray{T,0}) = 1
-    f{T,N}(dims::NTuple{N,Int}, A::AbstractArray{T,N}) = 2
-    f{T,M,N}(dims::NTuple{M,Int}, A::AbstractArray{T,N}) = 3
+    f(dims::Tuple{}, A::AbstractArray{T,0}) where {T} = 1
+    f(dims::NTuple{N,Int}, A::AbstractArray{T,N}) where {T,N} = 2
+    f(dims::NTuple{M,Int}, A::AbstractArray{T,N}) where {T,M,N} = 3
     A = zeros(2,2)
     @test f((1,2,3), A) == 3
     @test f((1,2), A) == 2
     @test f((), reshape([1])) == 1
-    f{T,N}(dims::NTuple{N,Int}, A::AbstractArray{T,N}) = 4
+    f(dims::NTuple{N,Int}, A::AbstractArray{T,N}) where {T,N} = 4
     @test f((1,2), A) == 4
     @test f((1,2,3), A) == 3
 end
 
 # a method specificity issue
-c99991{T}(::Type{T},x::T) = 0
-c99991{T}(::Type{UnitRange{T}},x::StepRangeLen{T}) = 1
-c99991{T}(::Type{UnitRange{T}},x::Range{T}) = 2
+c99991(::Type{T},x::T) where {T} = 0
+c99991(::Type{UnitRange{T}},x::StepRangeLen{T}) where {T} = 1
+c99991(::Type{UnitRange{T}},x::Range{T}) where {T} = 2
 @test c99991(UnitRange{Float64}, 1.0:2.0) == 1
 @test c99991(UnitRange{Int}, 1:2) == 2
 
@@ -170,3 +170,8 @@ let A = Tuple{T, Array{T, 1}} where T,
     @test args_morespecific(C, B)
     @test args_morespecific(C, A)
 end
+
+# issue #22908
+f22908(::Union) = 2
+f22908(::Type{Union{Int, Float32}}) = 1
+@test f22908(Union{Int, Float32}) == 1

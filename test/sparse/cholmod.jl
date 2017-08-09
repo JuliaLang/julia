@@ -102,7 +102,7 @@ A = CHOLMOD.Sparse(48, 48,
 B = A * ones(size(A,2))
 chma = ldltfact(A)                      # LDL' form
 @test CHOLMOD.isvalid(chma)
-@test unsafe_load(chma.p).is_ll == 0    # check that it is in fact an LDLt
+@test unsafe_load(pointer(chma)).is_ll == 0    # check that it is in fact an LDLt
 x = chma\B
 @test x ≈ ones(size(x))
 @test nnz(ldltfact(A, perm=1:size(A,1))) > nnz(chma)
@@ -113,7 +113,7 @@ chmal = CHOLMOD.FactorComponent(chma, :L)
 
 chma = cholfact(A)                      # LL' form
 @test CHOLMOD.isvalid(chma)
-@test unsafe_load(chma.p).is_ll == 1    # check that it is in fact an LLt
+@test unsafe_load(pointer(chma)).is_ll == 1    # check that it is in fact an LLt
 x = chma\B
 @test x ≈ ones(size(x))
 @test nnz(chma) == 489
@@ -279,7 +279,7 @@ for elty in (Float64, Complex{Float64})
     @test CHOLMOD.check_dense(bDense)
 
     AA = CHOLMOD.eye(3)
-    unsafe_store!(convert(Ptr{Csize_t}, AA.p), 2, 1) # change size, but not stride, of Dense
+    unsafe_store!(convert(Ptr{Csize_t}, pointer(AA)), 2, 1) # change size, but not stride, of Dense
     @test convert(Matrix, AA) == eye(2, 3)
 end
 
@@ -301,8 +301,8 @@ p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Float6
 @test CHOLMOD.free_sparse!(p)
 
 for elty in (Float64, Complex{Float64})
-    A1 = sparse([1:5, 1;], [1:5, 2;], elty == Float64 ? randn(6) : complex.(randn(6), randn(6)))
-    A2 = sparse([1:5, 1;], [1:5, 2;], elty == Float64 ? randn(6) : complex.(randn(6), randn(6)))
+    A1 = sparse([1:5; 1], [1:5; 2], elty == Float64 ? randn(6) : complex.(randn(6), randn(6)))
+    A2 = sparse([1:5; 1], [1:5; 2], elty == Float64 ? randn(6) : complex.(randn(6), randn(6)))
     A1pd = A1'A1
     A1Sparse = CHOLMOD.Sparse(A1)
     A2Sparse = CHOLMOD.Sparse(A2)
@@ -348,14 +348,18 @@ for elty in (Float64, Complex{Float64})
 
     # Factor
     @test_throws ArgumentError cholfact(A1)
-    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))I)
-    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1')))
-    @test_throws ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])I)
-    @test_throws ArgumentError ldltfact(A1 + A1', shift=-2real(A1[1,1]))
     @test_throws ArgumentError cholfact(A1)
     @test_throws ArgumentError cholfact(A1, shift=1.0)
     @test_throws ArgumentError ldltfact(A1)
     @test_throws ArgumentError ldltfact(A1, shift=1.0)
+    @test_throws LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))*I)\ones(size(A1, 1))
+    @test_throws LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1')))\ones(size(A1, 1))
+    @test_throws ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])*I)\ones(size(A1, 1))
+    @test_throws ArgumentError ldltfact(A1 + A1', shift=-2real(A1[1,1]))\ones(size(A1, 1))
+    @test !isposdef(cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))*I))
+    @test !isposdef(cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1'))))
+    @test !LinAlg.issuccess(ldltfact(A1 + A1' - 2real(A1[1,1])*I))
+    @test !LinAlg.issuccess(ldltfact(A1 + A1', shift=-2real(A1[1,1])))
     F = cholfact(A1pd)
     tmp = IOBuffer()
     show(tmp, F)
@@ -405,7 +409,7 @@ for elty in (Float64, Complex{Float64})
     ### cholfact!/ldltfact!
     F = cholfact(A1pd)
     CHOLMOD.change_factor!(elty, false, false, true, true, F)
-    @test unsafe_load(F.p).is_ll == 0
+    @test unsafe_load(pointer(F)).is_ll == 0
     CHOLMOD.change_factor!(elty, true, false, true, true, F)
     @test CHOLMOD.Sparse(cholfact!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
     @test size(F, 2) == 5
@@ -440,11 +444,11 @@ for elty in (Float64, Complex{Float64})
         svec = ones(elty, 5)
         @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense(svec), CHOLMOD.SCALAR, A1Sparse)
         @test CHOLMOD.scale!(CHOLMOD.Dense(svec), CHOLMOD.ROW, A1Sparse) == A1Sparse
-        @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense([svec, 1;]), CHOLMOD.ROW, A1Sparse)
+        @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense([svec; 1]), CHOLMOD.ROW, A1Sparse)
         @test CHOLMOD.scale!(CHOLMOD.Dense(svec), CHOLMOD.COL, A1Sparse) == A1Sparse
-        @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense([svec, 1;]), CHOLMOD.COL, A1Sparse)
+        @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense([svec; 1]), CHOLMOD.COL, A1Sparse)
         @test CHOLMOD.scale!(CHOLMOD.Dense(svec), CHOLMOD.SYM, A1Sparse) == A1Sparse
-        @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense([svec, 1;]), CHOLMOD.SYM, A1Sparse)
+        @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense([svec; 1]), CHOLMOD.SYM, A1Sparse)
         @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense(svec), CHOLMOD.SYM, CHOLMOD.Sparse(A1[:,1:4]))
     else
         @test_throws MethodError CHOLMOD.copy(A1Sparse, 0, 1) == A1Sparse
@@ -652,7 +656,7 @@ let m = 400, n = 500
     M = [speye(n) A'; A -speye(m)]
     b = M*ones(m + n)
     F = ldltfact(M)
-    s = unsafe_load(get(F.p))
+    s = unsafe_load(pointer(F))
     @test s.is_super == 0
     @test F\b ≈ ones(m + n)
 end
@@ -678,7 +682,7 @@ let A = sprandn(10, 10, 0.1)
     # Change internal representation to symmetric (upper/lower)
     o = fieldoffset(CHOLMOD.C_Sparse{eltype(C)}, find(fieldnames(CHOLMOD.C_Sparse{eltype(C)}) .== :stype)[1])
     for uplo in (1, -1)
-        unsafe_store!(Ptr{Int8}(C.p), uplo, Int(o) + 1)
+        unsafe_store!(Ptr{Int8}(pointer(C)), uplo, Int(o) + 1)
         @test convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, C) == Symmetric(A'A)
     end
 end
@@ -738,3 +742,15 @@ for F in (cholfact(AtA), cholfact(AtA, perm=1:5), ldltfact(AtA), ldltfact(AtA, p
         @test C == Ctest    #Make sure C didn't change
     end
 end
+
+@testset "Issue #22335" begin
+    A = speye(3)
+    @test LinAlg.issuccess(cholfact(A))
+    A[3, 3] = -1
+    F = cholfact(A)
+    @test !LinAlg.issuccess(F)
+    @test LinAlg.issuccess(ldltfact!(F, A))
+    A[3, 3] = 1
+    @test A[:, 3:-1:1]\ones(3) == [1, 1, 1]
+end
+

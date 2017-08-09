@@ -15,7 +15,6 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/MDBuilder.h>
 
 #if defined(JULIA_ENABLE_THREADING)
@@ -264,9 +263,4 @@ static RegisterPass<LowerPTLS> X("LowerPTLS", "LowerPTLS Pass",
 Pass *createLowerPTLSPass(bool imaging_mode)
 {
     return new LowerPTLS(imaging_mode);
-}
-
-extern "C" JL_DLLEXPORT
-void LLVMAddLowerPTLSPass(LLVMPassManagerRef PM, int imaging_mode) {
-    unwrap(PM)->add(createLowerPTLSPass(imaging_mode != 0));
 }

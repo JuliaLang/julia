@@ -107,7 +107,10 @@ As in the example above, we recommend following some simple conventions when wri
 
    !!! warning
        Calling `rand` and other RNG-related functions should be avoided in doctests since they will not
-       produce consistent outputs during different Julia sessions.
+       produce consistent outputs during different Julia sessions. If you would like to show some random
+       number generation related functionality, one option is to explicitly construct and seed your own
+       [`MersenneTwister`](@ref) (or other pseudorandom number generator) and pass it to the functions you are
+       doctesting.
 
        Operating system word size ([`Int32`](@ref) or [`Int64`](@ref)) as well as path separator differences
        (`/` or `\`) will also affect the reproducibility of some doctests.

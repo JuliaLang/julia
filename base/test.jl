@@ -20,7 +20,7 @@ export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
 export detect_ambiguities
-export GenericString, GenericSet, GenericDict
+export GenericString, GenericSet, GenericDict, GenericArray
 
 #-----------------------------------------------------------------------
 
@@ -69,14 +69,14 @@ struct Pass <: Result
     value
 end
 function Base.show(io::IO, t::Pass)
-    print_with_color(:green, io, "Test Passed\n"; bold = true)
+    print_with_color(:green, io, "Test Passed"; bold = true)
     if !(t.orig_expr === nothing)
-        print(io, "  Expression: ", t.orig_expr)
+        print(io, "\n  Expression: ", t.orig_expr)
     end
     if t.test_type == :test_throws
         # The correct type of exception was thrown
         print(io, "\n      Thrown: ", typeof(t.value))
-    elseif t.test_type == :test && isa(t.data,Expr) && t.data.head == :comparison
+    elseif t.test_type == :test && isa(t.data, Expr)
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.data)
@@ -106,7 +106,7 @@ function Base.show(io::IO, t::Fail)
         # An exception was expected, but no exception was thrown
         print(io, "\n    Expected: ", t.data)
         print(io, "\n  No exception thrown")
-    elseif t.test_type == :test && isa(t.data,Expr) && t.data.head == :comparison
+    elseif t.test_type == :test && isa(t.data, Expr)
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.data)
@@ -188,20 +188,42 @@ struct Threw <: ExecutionResult
     backtrace
 end
 
-function eval_comparison(evaluated::Expr, quoted::Expr)
+function eval_test(evaluated::Expr, quoted::Expr)
     res = true
     i = 1
-    args = evaluated.args
+    evaled_args = evaluated.args
     quoted_args = quoted.args
-    n = length(args)
-    while i < n
-        a, op, b = args[i], args[i+1], args[i+2]
-        if res
-            res = op(a, b) === true  # Keep `res` type stable
+    n = length(evaled_args)
+    if evaluated.head == :comparison
+        args = evaled_args
+        while i < n
+            a, op, b = args[i], args[i+1], args[i+2]
+            if res
+                res = op(a, b) === true  # Keep `res` type stable
+            end
+            quoted_args[i] = a
+            quoted_args[i+2] = b
+            i += 2
         end
-        quoted_args[i] = a
-        quoted_args[i+2] = b
-        i += 2
+
+    elseif evaluated.head == :call
+        op = evaled_args[1]
+        kwargs = evaled_args[2].args  # Keyword arguments from `Expr(:parameters, ...)`
+        args = evaled_args[3:n]
+
+        res = op(args...; kwargs...) === true
+
+        # Create "Evaluated" expression which looks like the original call but has all of
+        # the arguments evaluated
+        func_sym = quoted_args[1]
+        if isempty(kwargs)
+            quoted = Expr(:call, func_sym, args...)
+        else
+            kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
+            quoted = Expr(:call, func_sym, kwargs_expr, args...)
+        end
+    else
+        throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
     end
     Returned(res, quoted)
 end
@@ -296,10 +318,10 @@ end
 # evaluate each term in the comparison individually so the results
 # can be displayed nicely.
 function get_test_result(ex)
-    orig_ex = Expr(:inert, ex)
     # Normalize non-dot comparison operator calls to :comparison expressions
+    is_splat = x -> isa(x, Expr) && x.head == :...
     if isa(ex, Expr) && ex.head == :call && length(ex.args) == 3 &&
-        first(string(ex.args[1])) != '.' &&
+        first(string(ex.args[1])) != '.' && !is_splat(ex.args[2]) && !is_splat(ex.args[3]) &&
         (ex.args[1] === :(==) || Base.operator_precedence(ex.args[1]) == comparison_prec)
         ex = Expr(:comparison, ex.args[2], ex.args[1], ex.args[3])
     end
@@ -307,9 +329,51 @@ function get_test_result(ex)
         # pass all terms of the comparison to `eval_comparison`, as an Expr
         escaped_terms = [esc(arg) for arg in ex.args]
         quoted_terms = [QuoteNode(arg) for arg in ex.args]
-        testret = :(eval_comparison(
+        testret = :(eval_test(
             Expr(:comparison, $(escaped_terms...)),
             Expr(:comparison, $(quoted_terms...)),
+        ))
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox)
+        escaped_func = esc(ex.args[1])
+        quoted_func = QuoteNode(ex.args[1])
+
+        escaped_args = []
+        escaped_kwargs = []
+
+        # Keywords that occur before `;`. Note that the keywords are being revised into
+        # a form we can splat.
+        for a in ex.args[2:end]
+            if isa(a, Expr) && a.head == :kw
+                push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
+            end
+        end
+
+        # Keywords that occur after ';'
+        parameters_expr = ex.args[2]
+        if isa(parameters_expr, Expr) && parameters_expr.head == :parameters
+            for a in parameters_expr.args
+                if isa(a, Expr) && a.head == :kw
+                    push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
+                elseif isa(a, Expr) && a.head == :...
+                    push!(escaped_kwargs, Expr(:..., esc(a.args[1])))
+                end
+            end
+        end
+
+        # Positional arguments
+        for a in ex.args[2:end]
+            isa(a, Expr) && a.head in (:kw, :parameters) && continue
+
+            if isa(a, Expr) && a.head == :...
+                push!(escaped_args, Expr(:..., esc(a)))
+            else
+                push!(escaped_args, esc(a))
+            end
+        end
+
+        testret = :(eval_test(
+            Expr(:call, $escaped_func, Expr(:parameters, $(escaped_kwargs...)), $(escaped_args...)),
+            Expr(:call, $quoted_func),
         ))
     else
         testret = :(Returned($(esc(ex)), nothing))
@@ -391,7 +455,7 @@ end
 
 # An internal function, called by the code generated by @test_throws
 # to evaluate and catch the thrown exception - if it exists
-function do_test_throws(result::ExecutionResult, orig_expr::ANY, extype::ANY)
+function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), @nospecialize(extype))
     if isa(result, Threw)
         # Check that the right type of exception was thrown
         success = false
@@ -449,7 +513,7 @@ macro test_warn(msg, expr)
                         $(esc(expr))
                     end
                 end
-                @test ismatch_warn($(esc(msg)), readstring(fname))
+                @test ismatch_warn($(esc(msg)), read(fname, String))
                 ret
             finally
                 eval(Base, Expr(:(=), :have_color, have_color))
@@ -1238,5 +1302,24 @@ for (G, A) in ((GenericSet, AbstractSet),
 end
 
 Base.get(s::GenericDict, x, y) = get(s.s, x, y)
+
+"""
+The `GenericArray` can be used to test generic array APIs that program to
+the `AbstractArray` interface, in order to ensure that functions can work
+with array types besides the standard `Array` type.
+"""
+struct GenericArray{T,N} <: AbstractArray{T,N}
+    a::Array{T,N}
+end
+
+GenericArray{T}(args...) where {T} = GenericArray(Array{T}(args...))
+GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(args...))
+
+Base.eachindex(a::GenericArray) = eachindex(a.a)
+Base.indices(a::GenericArray) = indices(a.a)
+Base.length(a::GenericArray) = length(a.a)
+Base.size(a::GenericArray) = size(a.a)
+Base.getindex(a::GenericArray, i...) = a.a[i...]
+Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
 
 end # module

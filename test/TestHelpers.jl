@@ -20,7 +20,7 @@ Base.Terminals.raw!(t::FakeTerminal, raw::Bool) = t.raw = raw
 Base.Terminals.size(t::FakeTerminal) = (24, 80)
 
 function open_fake_pty()
-    @static if is_windows()
+    @static if Sys.iswindows()
         error("Unable to create a fake PTY in Windows")
     end
 
@@ -77,7 +77,7 @@ end
 
 function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool=true)
     function format_output(output)
-        debug ? "Process output found:\n\"\"\"\n$(readstring(seekstart(out)))\n\"\"\"" : ""
+        debug ? "Process output found:\n\"\"\"\n$(read(seekstart(out), String))\n\"\"\"" : ""
     end
     out = IOBuffer()
     with_fake_pty() do slave, master
@@ -126,14 +126,14 @@ struct OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
 end
 OffsetVector{T,AA<:AbstractArray} = OffsetArray{T,1,AA}
 
-OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) = OffsetArray{T,N,typeof(A)}(A, offsets)
-OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) = OffsetArray(A, offsets)
+OffsetArray(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) where {T,N} = OffsetArray{T,N,typeof(A)}(A, offsets)
+OffsetArray(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) where {T,N} = OffsetArray(A, offsets)
 
-(::Type{OffsetArray{T,N}}){T,N}(inds::Indices{N}) = OffsetArray{T,N,Array{T,N}}(Array{T,N}(map(length, inds)), map(indsoffset, inds))
-(::Type{OffsetArray{T}}){T,N}(inds::Indices{N}) = OffsetArray{T,N}(inds)
+(::Type{OffsetArray{T,N}})(inds::Indices{N}) where {T,N} = OffsetArray{T,N,Array{T,N}}(Array{T,N}(map(length, inds)), map(indsoffset, inds))
+(::Type{OffsetArray{T}})(inds::Indices{N}) where {T,N} = OffsetArray{T,N}(inds)
 
-Base.IndexStyle{T<:OffsetArray}(::Type{T}) = Base.IndexStyle(parenttype(T))
-parenttype{T,N,AA}(::Type{OffsetArray{T,N,AA}}) = AA
+Base.IndexStyle(::Type{T}) where {T<:OffsetArray} = Base.IndexStyle(parenttype(T))
+parenttype(::Type{OffsetArray{T,N,AA}}) where {T,N,AA} = AA
 parenttype(A::OffsetArray) = parenttype(typeof(A))
 
 Base.parent(A::OffsetArray) = A.parent
@@ -151,7 +151,7 @@ Base.eachindex(::IndexLinear, A::OffsetVector) = indices(A, 1)
 @inline Base.indices(A::OffsetArray) = _indices(indices(parent(A)), A.offsets)  # would rather use ntuple, but see #15276
 @inline _indices(inds, offsets) = (inds[1]+offsets[1], _indices(tail(inds), tail(offsets))...)
 _indices(::Tuple{}, ::Tuple{}) = ()
-Base.indices1{T}(A::OffsetArray{T,0}) = 1:1  # we only need to specialize this one
+Base.indices1(A::OffsetArray{T,0}) where {T} = 1:1  # we only need to specialize this one
 
 function Base.similar(A::OffsetArray, T::Type, dims::Dims)
     B = similar(parent(A), T, dims)
@@ -165,7 +165,7 @@ Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}})
 
 Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(length, inds)), map(indsoffset, inds))
 
-@inline function Base.getindex{T,N}(A::OffsetArray{T,N}, I::Vararg{Int,N})
+@inline function Base.getindex(A::OffsetArray{T,N}, I::Vararg{Int,N}) where {T,N}
     checkbounds(A, I...)
     @inbounds ret = parent(A)[offset(A.offsets, I)...]
     ret
@@ -182,7 +182,7 @@ end
     @inbounds ret = parent(A)[i]
     ret
 end
-@inline function Base.setindex!{T,N}(A::OffsetArray{T,N}, val, I::Vararg{Int,N})
+@inline function Base.setindex!(A::OffsetArray{T,N}, val, I::Vararg{Int,N}) where {T,N}
     checkbounds(A, I...)
     @inbounds parent(A)[offset(A.offsets, I)...] = val
     val
@@ -203,7 +203,7 @@ end
     @inbounds deleteat!(parent(A), offset(A.offsets, (i,))[1])
 end
 
-@inline function Base.deleteat!{T,N}(A::OffsetArray{T,N}, I::Vararg{Int, N})
+@inline function Base.deleteat!(A::OffsetArray{T,N}, I::Vararg{Int, N}) where {T,N}
     checkbounds(A, I...)
     @inbounds deleteat!(parent(A), offset(A.offsets, I)...)
 end
@@ -217,7 +217,7 @@ end
 end
 
 # Computing a shifted index (subtracting the offset)
-offset{N}(offsets::NTuple{N,Int}, inds::NTuple{N,Int}) = _offset((), offsets, inds)
+offset(offsets::NTuple{N,Int}, inds::NTuple{N,Int}) where {N} = _offset((), offsets, inds)
 _offset(out, ::Tuple{}, ::Tuple{}) = out
 @inline _offset(out, offsets, inds) = _offset((out..., inds[1]-offsets[1]), Base.tail(offsets), Base.tail(inds))
 

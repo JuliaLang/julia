@@ -246,11 +246,6 @@ end
         end
     end
 end
-@test exp10(5) ≈ exp10(5.0)
-@test exp10(50//10) ≈ exp10(5.0)
-@test log10(exp10(e)) ≈ e
-@test exp2(Float16(2.)) ≈ exp2(2.)
-@test log(e) == 1
 
 @testset "exp function" for T in (Float64, Float32)
     @testset "$T accuracy" begin
@@ -270,7 +265,32 @@ end
     end
 end
 
-@testset "test abstractarray trig fxns" begin
+@testset "exp10 function" begin
+    @testset "accuracy" begin
+        X = map(Float64, vcat(-10:0.00021:10, -35:0.0023:100, -300:0.001:300))
+        for x in X
+            y, yb = exp10(x), exp10(big(x))
+            @test abs(y-yb) <= 1.2*eps(Float64(yb))
+        end
+        X = map(Float32, vcat(-10:0.00021:10, -35:0.0023:35, -35:0.001:35))
+        for x in X
+            y, yb = exp10(x), exp10(big(x))
+            @test abs(y-yb) <= 1.2*eps(Float32(yb))
+        end
+    end
+    @testset "$T edge cases" for T in (Float64, Float32)
+        @test isnan(exp10(T(NaN)))
+        @test exp10(T(-Inf)) === T(0.0)
+        @test exp10(T(Inf)) === T(Inf)
+        @test exp10(T(0.0)) === T(1.0) # exact
+        @test exp10(T(1.0)) === T(10.0)
+        @test exp10(T(3.0)) === T(1000.0)
+        @test exp10(T(5000.0)) === T(Inf)
+        @test exp10(T(-5000.0)) === T(0.0)
+    end
+end
+
+@testset "test abstractarray trig functions" begin
     TAA = rand(2,2)
     TAA = (TAA + TAA.')/2.
     STAA = Symmetric(TAA)
@@ -306,6 +326,8 @@ end
         @test rad2deg(T(1)) ≈ rad2deg(true)
         @test deg2rad(T(1)) ≈ deg2rad(true)
     end
+    @test deg2rad(180 + 60im) ≈ pi + (pi/3)*im
+    @test rad2deg(pi + (pi/3)*im) ≈ 180 + 60im
 end
 
 @testset "degree-based trig functions" begin
@@ -635,4 +657,24 @@ end
     @test sincos(1) === (sin(1), cos(1))
     @test sincos(big(1)) == (sin(big(1)), cos(big(1)))
     @test sincos(big(1.0)) == (sin(big(1.0)), cos(big(1.0)))
+end
+
+@testset "test fallback definitions" begin
+    @test exp10(5) ≈ exp10(5.0)
+    @test exp10(50//10) ≈ exp10(5.0)
+    @test log10(exp10(e)) ≈ e
+    @test log(e) === 1
+    @test exp2(Float16(2.0)) ≈ exp2(2.0)
+    @test exp2(Float16(1.0)) === Float16(exp2(1.0))
+    @test exp10(Float16(1.0)) === Float16(exp10(1.0))
+end
+
+# test AbstractFloat fallback pr22716
+struct Float22716{T<:AbstractFloat} <: AbstractFloat
+    x::T
+end
+Base.:^(x::Number, y::Float22716) = x^(y.x)
+let x = 2.0
+    @test exp2(Float22716(x)) === 2^x
+    @test exp10(Float22716(x)) === 10^x
 end

@@ -161,7 +161,7 @@ end
 let
     local bar
     bestkey(d, key) = key
-    bestkey{K<:AbstractString,V}(d::Associative{K,V}, key) = string(key)
+    bestkey(d::Associative{K,V}, key) where {K<:AbstractString,V} = string(key)
     bar(x) = bestkey(x, :y)
     @test bar(Dict(:x => [1,2,5])) == :y
     @test bar(Dict("x" => [1,2,5])) == "y"
@@ -301,7 +301,7 @@ let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
 
     # Check explicitly for the expected strings, since the CPU bitness effects
     # dictionary ordering.
-    result = String(buf)
+    result = String(take!(buf))
     @test contains(result, "Dict")
     @test contains(result, "(1=>2)=>(3=>45)")
     @test contains(result, "(3=>10)=>(10=>11)")
@@ -314,8 +314,9 @@ let sbuff = IOBuffer(),
     io = Base.IOContext(Base.IOContext(sbuff, :limit => true), :displaysize => (10, 20))
 
     Base.show(io, MIME("text/plain"), Dict(Alpha()=>1))
-    @test !contains(String(sbuff), "…")
-    @test endswith(String(sbuff), "α => 1")
+    local str = String(take!(sbuff))
+    @test !contains(str, "…")
+    @test endswith(str, "α => 1")
 end
 
 # issue #2540
@@ -487,7 +488,7 @@ let d = ImmutableDict{String, String}(),
     @test (k1 => v2) in d3
     @test (k1 => v1) in d4
     @test (k1 => v2) in d4
-    @test !in(k2 => "value2", d4, ===)
+    @test in(k2 => "value2", d4, ===)
     @test in(k2 => v2, d4, ===)
     @test in(k2 => NaN, dnan, isequal)
     @test in(k2 => NaN, dnan, ===)
@@ -618,11 +619,13 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     wkd[C] = 4
     dd = convert(Dict{Any,Any},wkd)
     @test WeakKeyDict(dd) == wkd
+    @test convert(WeakKeyDict{Any, Any}, dd) == wkd
     @test isa(WeakKeyDict(dd), WeakKeyDict{Any,Any})
     @test WeakKeyDict(A=>2, B=>3, C=>4) == wkd
     @test isa(WeakKeyDict(A=>2, B=>3, C=>4), WeakKeyDict{Array{Int,1},Int})
     @test WeakKeyDict(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
     @test WeakKeyDict([(A,2), (B,3), (C,4)]) == wkd
+    @test WeakKeyDict(Pair(A,2), Pair(B,3), Pair(C,4)) == wkd
     @test copy(wkd) == wkd
 
     @test length(wkd) == 3
@@ -637,6 +640,7 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test B ∉ keys(wkd)
     @test 3 ∉ values(wkd)
     @test length(wkd) == 1
+    @test WeakKeyDict(Pair(A, 2)) == wkd
     @test !isempty(wkd)
 
     wkd = empty!(wkd)
@@ -645,6 +649,8 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test length(wkd) == 0
     @test isempty(wkd)
     @test isa(wkd, WeakKeyDict)
+
+    @test_throws ArgumentError WeakKeyDict([1, 2, 3])
 end
 
 @testset "issue #19995, hash of dicts" begin

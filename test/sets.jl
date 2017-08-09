@@ -138,7 +138,6 @@ for data_in in ((7,8,4,5),
 end
 
 # union
-@test isequal(union(),Set())
 @test isequal(union(Set([1])),Set([1]))
 s = ∪(Set([1,2]), Set([3,4]))
 @test isequal(s, Set([1,2,3,4]))
@@ -147,6 +146,10 @@ s = union(Set([5,6,7,8]), Set([7,8,9]))
 s = Set([1,3,5,7])
 union!(s,(2,3,4,5))
 @test isequal(s,Set([1,2,3,4,5,7]))
+@test ===(typeof(union(Set([1]), IntSet())), Set{Int})
+@test isequal(union(Set([1,2,3]), 2:4), Set([1,2,3,4]))
+@test isequal(union(Set([1,2,3]), [2,3,4]), Set([1,2,3,4]))
+@test isequal(union(Set([1,2,3]), [2,3,4], Set([5])), Set([1,2,3,4,5]))
 
 # intersect
 @test isequal(intersect(Set([1])),Set([1]))
@@ -155,6 +158,10 @@ s = ∩(Set([1,2]), Set([3,4]))
 s = intersect(Set([5,6,7,8]), Set([7,8,9]))
 @test isequal(s, Set([7,8]))
 @test isequal(intersect(Set([2,3,1]), Set([4,2,3]), Set([5,4,3,2])), Set([2,3]))
+@test ===(typeof(intersect(Set([1]), IntSet())), Set{Int})
+@test isequal(intersect(Set([1,2,3]), 2:10), Set([2,3]))
+@test isequal(intersect(Set([1,2,3]), [2,3,4]), Set([2,3]))
+@test isequal(intersect(Set([1,2,3]), [2,3,4], 3:4), Set([3]))
 
 # setdiff
 @test isequal(setdiff(Set([1,2,3]), Set()),        Set([1,2,3]))
@@ -163,6 +170,10 @@ s = intersect(Set([5,6,7,8]), Set([7,8,9]))
 @test isequal(setdiff(Set([1,2,3]), Set([1,2,3])), Set())
 @test isequal(setdiff(Set([1,2,3]), Set([4])),     Set([1,2,3]))
 @test isequal(setdiff(Set([1,2,3]), Set([4,1])),   Set([2,3]))
+@test ===(typeof(setdiff(Set([1]), IntSet())), Set{Int})
+@test isequal(setdiff(Set([1,2,3]), 2:10), Set([1]))
+@test isequal(setdiff(Set([1,2,3]), [2,3,4]), Set([1]))
+@test_throws MethodError setdiff(Set([1,2,3]), Set([2,3,4]), Set([1]))
 s = Set([1,3,5,7])
 setdiff!(s,(3,5))
 @test isequal(s,Set([1,7]))

@@ -136,7 +136,7 @@ struct FileRedirect
     filename::AbstractString
     append::Bool
     function FileRedirect(filename, append)
-        if lowercase(filename) == (@static is_windows() ? "nul" : "/dev/null")
+        if lowercase(filename) == (@static Sys.iswindows() ? "nul" : "/dev/null")
             warn_once("for portability use DevNull instead of a file redirect")
         end
         new(filename, append)
@@ -553,16 +553,15 @@ spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::R
 spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{ProcessChain}()) =
     spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 
-function eachline(cmd::AbstractCmd, stdin; chomp::Bool=true)
+function eachline(cmd::AbstractCmd; chomp::Bool=true)
     stdout = Pipe()
-    processes = spawn(cmd, (stdin,stdout,STDERR))
+    processes = spawn(cmd, (DevNull,stdout,STDERR))
     close(stdout.in)
     out = stdout.out
     # implicitly close after reading lines, since we opened
     return EachLine(out, chomp=chomp,
         ondone=()->(close(out); success(processes) || pipeline_error(processes)))::EachLine
 end
-eachline(cmd::AbstractCmd; chomp::Bool=true) = eachline(cmd, DevNull, chomp=chomp)
 
 # return a Process object to read-to/write-from the pipeline
 """
@@ -642,22 +641,14 @@ function readandwrite(cmds::AbstractCmd)
     return (processes.out, processes.in, processes)
 end
 
-function read(cmd::AbstractCmd, stdin::Redirectable=DevNull)
-    procs = open(cmd, "r", stdin)
+function read(cmd::AbstractCmd)
+    procs = open(cmd, "r", DevNull)
     bytes = read(procs.out)
     success(procs) || pipeline_error(procs)
     return bytes
 end
 
-function readstring(cmd::AbstractCmd, stdin::Redirectable=DevNull)
-    return String(read(cmd, stdin))
-end
-
-function writeall(cmd::AbstractCmd, stdin::AbstractString, stdout::Redirectable=DevNull)
-    open(cmd, "w", stdout) do io
-        write(io, stdin)
-    end
-end
+read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))
 
 """
     run(command, args...)

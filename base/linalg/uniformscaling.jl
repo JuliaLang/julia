@@ -4,6 +4,29 @@ import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv,
              hcat, vcat, hvcat
 import Base.LinAlg: SingularException
 
+"""
+    UniformScaling{T<:Number}
+
+Generically sized uniform scaling operator defined as a scalar times the
+identity operator, `λ*I`. See also [`I`](@ref).
+
+# Examples
+```jldoctest
+julia> J = UniformScaling(2.)
+UniformScaling{Float64}
+2.0*I
+
+julia> A = [1. 2.; 3. 4.]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> J*A
+2×2 Array{Float64,2}:
+ 2.0  4.0
+ 6.0  8.0
+```
+"""
 struct UniformScaling{T<:Number}
     λ::T
 end
@@ -11,10 +34,9 @@ end
 """
     I
 
-An object of type `UniformScaling`, representing an identity matrix of any size.
+An object of type [`UniformScaling`](@ref), representing an identity matrix of any size.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> ones(5, 6) * I == ones(5, 6)
 true
@@ -290,3 +312,27 @@ function hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScalin
     end
     return hvcat(rows, promote_to_arrays(n,1, promote_to_array_type(A), A...)...)
 end
+
+
+## Cholesky
+function _chol!(J::UniformScaling, uplo)
+    c, info = _chol!(J.λ, uplo)
+    UniformScaling(c), info
+end
+
+chol!(J::UniformScaling, uplo) = ((J, info) = _chol!(J, uplo); @assertposdef J info)
+
+"""
+    chol(J::UniformScaling) -> C
+
+Compute the square root of a non-negative UniformScaling `J`.
+
+# Examples
+```jldoctest
+julia> chol(16I)
+UniformScaling{Float64}
+4.0*I
+```
+"""
+chol(J::UniformScaling, args...) = ((C, info) = _chol!(J, nothing); @assertposdef C info)
+

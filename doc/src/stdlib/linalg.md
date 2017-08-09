@@ -18,6 +18,9 @@ Base.LinAlg.SymTridiagonal
 Base.LinAlg.Tridiagonal
 Base.LinAlg.Symmetric
 Base.LinAlg.Hermitian
+Base.LinAlg.LowerTriangular
+Base.LinAlg.UpperTriangular
+Base.LinAlg.UniformScaling
 Base.LinAlg.lu
 Base.LinAlg.lufact
 Base.LinAlg.lufact!
@@ -82,11 +85,10 @@ Base.LinAlg.trace
 Base.LinAlg.det
 Base.LinAlg.logdet
 Base.LinAlg.logabsdet
-Base.inv
+Base.inv(::AbstractMatrix)
 Base.LinAlg.pinv
 Base.LinAlg.nullspace
 Base.repmat
-Base.repeat
 Base.kron
 Base.SparseArrays.blkdiag
 Base.LinAlg.linreg
@@ -95,6 +97,7 @@ Base.LinAlg.logm
 Base.LinAlg.sqrtm
 Base.LinAlg.lyap
 Base.LinAlg.sylvester
+Base.LinAlg.issuccess
 Base.LinAlg.issymmetric
 Base.LinAlg.isposdef
 Base.LinAlg.isposdef!

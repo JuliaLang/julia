@@ -56,7 +56,7 @@ splat2(3, 3:5)
 @test String(take!(stagediobuf)) == "($intstr, UnitRange{$intstr})"
 
 # varargs specialization with parametric @generated functions (issue #8944)
-@generated function splat3{T,N}(A::AbstractArray{T,N}, indx::RangeIndex...)
+@generated function splat3(A::AbstractArray{T,N}, indx::RangeIndex...) where {T,N}
     print(stagediobuf, indx)
     :(nothing)
 end
@@ -101,10 +101,10 @@ end
 @test MyTest8497.h(3) == 4
 
 # static parameters (issue #8505)
-@generated function foo1{N,T}(a::Array{T,N})
+@generated function foo1(a::Array{T,N}) where {N,T}
     "N = $N, T = $T"
 end
-@generated function foo2{T,N}(a::Array{T,N})
+@generated function foo2(a::Array{T,N}) where {T,N}
     "N = $N, T = $T"
 end
 @test foo1(randn(3,3)) == "N = 2, T = Float64"
@@ -179,7 +179,7 @@ end
 
 gf_err_ref[] = 0
 let gf_err2
-    @generated function gf_err2{f}(::f)
+    @generated function gf_err2(::f) where {f}
         gf_err_ref[] += 1
         reflect = f.instance
         gf_err_ref[] += 1
@@ -228,3 +228,25 @@ g10178(x) = f10178(x)
 # issue #22135
 @generated f22135(x::T) where T = x
 @test f22135(1) === Int
+
+# PR #22440
+
+f22440kernel(x...) = x[1] + x[1]
+f22440kernel(x::AbstractFloat) = x * x
+f22440kernel(::Type{T}) where {T} = one(T)
+f22440kernel(::Type{T}) where {T<:AbstractFloat} = zero(T)
+
+@generated function f22440(y)
+    sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, typemax(UInt))[1]
+    code_info = Base.uncompressed_ast(method)
+    body = Expr(:block, code_info.code...)
+    Base.Core.Inference.substitute!(body, 0, Any[], sig, Any[spvals...], 0)
+    return code_info
+end
+
+@test f22440(Int) === f22440kernel(Int)
+@test f22440(Float64) === f22440kernel(Float64)
+@test f22440(Float32) === f22440kernel(Float32)
+@test f22440(0.0) === f22440kernel(0.0)
+@test f22440(0.0f0) === f22440kernel(0.0f0)
+@test f22440(0) === f22440kernel(0)

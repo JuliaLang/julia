@@ -159,6 +159,28 @@ r = (-4*Int64(maxintfloat(Int === Int32 ? Float32 : Float64))):5
 @test !(1 in 1:0)
 @test !(1.0 in 1.0:0.0)
 
+# test that in() works across types, including non-numeric types (#21728)
+@test 1//1 in 1:3
+@test 1//1 in 1.0:3.0
+@test !(5//1 in 1:3)
+@test !(5//1 in 1.0:3.0)
+@test Complex(1, 0) in 1:3
+@test Complex(1, 0) in 1.0:3.0
+@test Complex(1.0, 0.0) in 1:3
+@test Complex(1.0, 0.0) in 1.0:3.0
+@test !(Complex(1, 1) in 1:3)
+@test !(Complex(1, 1) in 1.0:3.0)
+@test !(Complex(1.0, 1.0) in 1:3)
+@test !(Complex(1.0, 1.0) in 1.0:3.0)
+@test !(π in 1:3)
+@test !(π in 1.0:3.0)
+@test !("a" in 1:3)
+@test !("a" in 1.0:3.0)
+@test !(1 in Date(2017, 01, 01):Date(2017, 01, 05))
+@test !(Complex(1, 0) in Date(2017, 01, 01):Date(2017, 01, 05))
+@test !(π in Date(2017, 01, 01):Date(2017, 01, 05))
+@test !("a" in Date(2017, 01, 01):Date(2017, 01, 05))
+
 # indexing range with empty range (#4309)
 @test (3:6)[5:4] == 7:6
 @test_throws BoundsError (3:6)[5:5]
@@ -356,14 +378,17 @@ for T = (Float32, Float64,), i = 1:2^15, n = 1:5
     # FIXME: these fail some small portion of the time
     @test_skip start == first(r)
     @test_skip stop  == last(r)
-    # FIXME: linspace construction fails on 32-bit
-    Sys.WORD_SIZE == 64 || continue
     l = linspace(start,stop,n)
     @test n == length(l)
     # FIXME: these fail some small portion of the time
     @test_skip start == first(l)
     @test_skip stop  == last(l)
 end
+
+# Inexact errors on 32 bit architectures. #22613
+@test first(linspace(log(0.2), log(10.0), 10)) == log(0.2)
+@test last(linspace(log(0.2), log(10.0), 10)) == log(10.0)
+@test length(Base.floatrange(-3e9, 1.0, 1, 1.0)) == 1
 
 # linspace & ranges with very small endpoints
 for T = (Float32, Float64)
@@ -607,6 +632,9 @@ end
 @test convert(LinSpace, 0.0:0.1:0.3) === LinSpace{Float64}(0.0, 0.3, 4)
 @test convert(LinSpace, 0:3) === LinSpace{Int}(0, 3, 4)
 
+@test promote('a':'z', 1:2) === ('a':'z', 1:1:2)
+@test eltype(['a':'z', 1:2]) == (StepRange{T,Int} where T)
+
 @test start(LinSpace(0,3,4)) == 1
 @test 2*LinSpace(0,3,4) == LinSpace(0,6,4)
 @test LinSpace(0,3,4)*2 == LinSpace(0,6,4)
@@ -677,7 +705,7 @@ test_range_index(linspace(1.0, 1.0, 1), 1:1)
 test_range_index(linspace(1.0, 1.0, 1), 1:0)
 test_range_index(linspace(1.0, 2.0, 0), 1:0)
 
-function test_linspace_identity{T}(r::Range{T}, mr)
+function test_linspace_identity(r::Range{T}, mr) where T
     @test -r == mr
     @test -collect(r) == collect(mr)
     @test isa(-r, typeof(r))
@@ -922,8 +950,8 @@ end
 @testset "logspace" begin
     n = 10; a = 2; b = 4
     # test default values; n = 50, base = 10
-    @test logspace(a, b) == logspace(a, b, 50) == 10.^linspace(a, b, 50)
-    @test logspace(a, b, n) == 10.^linspace(a, b, n)
+    @test logspace(a, b) == logspace(a, b, 50) == 10 .^ linspace(a, b, 50)
+    @test logspace(a, b, n) == 10 .^ linspace(a, b, n)
     for base in (10, 2, e)
         @test logspace(a, b, base=base) == logspace(a, b, 50, base=base) == base.^linspace(a, b, 50)
         @test logspace(a, b, n, base=base) == base.^linspace(a, b, n)

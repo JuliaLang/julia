@@ -9,7 +9,7 @@ A string containing the script name passed to Julia from the command line. Note 
 script name remains unchanged from within included files. Alternatively see
 [`@__FILE__`](@ref).
 """
-:PROGRAM_FILE
+global PROGRAM_FILE = ""
 
 """
     ARGS
@@ -18,13 +18,32 @@ An array of the command line arguments passed to Julia, as strings.
 """
 const ARGS = String[]
 
+"""
+    exit([code])
+
+Quit (or control-D at the prompt). The default exit code is zero, indicating that the
+processes completed successfully.
+"""
 exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
+
+"""
+    quit()
+
+Quit the program indicating that the processes completed successfully. This function calls
+`exit(0)` (see [`exit`](@ref)).
+"""
 quit() = exit()
 
 const roottask = current_task()
 
 is_interactive = false
+
+"""
+    isinteractive() -> Bool
+
+Determine whether Julia is running an interactive session.
+"""
 isinteractive() = (is_interactive::Bool)
 
 """
@@ -50,7 +69,7 @@ const LOAD_CACHE_PATH = String[]
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV, "JULIA_LOAD_PATH")
-        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @static is_windows() ? ';' : ':'))
+        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @static Sys.iswindows() ? ';' : ':'))
     end
     push!(LOAD_PATH, abspath(JULIA_HOME, "..", "local", "share", "julia", "site", vers))
     push!(LOAD_PATH, abspath(JULIA_HOME, "..", "share", "julia", "site", vers))
@@ -77,6 +96,12 @@ A string containing the full path to the directory containing the `julia` execut
 
 const atexit_hooks = []
 
+"""
+    atexit(f)
+
+Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
+called in last in first out (LIFO) order and run before object finalizers.
+"""
 atexit(f::Function) = (unshift!(atexit_hooks, f); nothing)
 
 function _atexit()

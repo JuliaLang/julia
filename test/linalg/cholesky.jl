@@ -51,6 +51,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
         end
         @test apd*inv(capd) ≈ eye(n)
+        @test LinAlg.issuccess(capd)
         @test abs((det(capd) - det(apd))/det(capd)) <= ε*κ*n # Ad hoc, but statistically verified, revisit
         @test @inferred(logdet(capd)) ≈ log(det(capd)) # logdet is less likely to overflow
 
@@ -77,7 +78,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
                 @test isposdef(capds)
             end
             ulstring = sprint(show,capds[:UL])
-            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
+            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring\nsuccessful: true"
         else
             capdh = cholfact(apdh)
             @test inv(capdh)*apdh ≈ eye(n)
@@ -95,13 +96,12 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             @test logdet(capdh) ≈ log(det(capdh))
             @test isposdef(capdh)
             ulstring = sprint(show,capdh[:UL])
-            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
+            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring\nsuccessful: true"
         end
 
         # test chol of 2x2 Strang matrix
         S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
-        U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
-        @test full(chol(S)) ≈ full(U)
+        @test full(chol(S)) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
 
         # test extraction of factor and re-creating original matrix
         if eltya <: Real
@@ -132,9 +132,9 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
 
         #pivoted upper Cholesky
         if eltya != BigFloat
-            cz = cholfact(Hermitian(zeros(eltya,n,n)), Val{true})
+            cz = cholfact(Hermitian(zeros(eltya,n,n)), Val(true))
             @test_throws Base.LinAlg.RankDeficientException Base.LinAlg.chkfullrank(cz)
-            cpapd = cholfact(apdh, Val{true})
+            cpapd = cholfact(apdh, Val(true))
             @test rank(cpapd) == n
             @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
             if isreal(apd)
@@ -175,11 +175,11 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
 
                 if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted Cholesky decomposition in julia
 
-                    cpapd = cholfact(apdh, Val{true})
+                    cpapd = cholfact(apdh, Val(true))
                     @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
                     @test norm(apd * (cpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
 
-                    lpapd = cholfact(apdhL, Val{true})
+                    lpapd = cholfact(apdhL, Val(true))
                     @test norm(apd * (lpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
                     @test norm(apd * (lpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
 
@@ -251,7 +251,7 @@ end
         0.25336108035924787 + 0.975317836492159im 0.0628393808469436 - 0.1253397353973715im
         0.11192755545114 - 0.1603741874112385im 0.8439562576196216 + 1.0850814110398734im
         -1.0568488936791578 - 0.06025820467086475im 0.12696236014017806 - 0.09853584666755086im]
-    cholfact(Hermitian(apd, :L), Val{true}) \ b
+    cholfact(Hermitian(apd, :L), Val(true)) \ b
     r = factorize(apd)[:U]
     E = abs.(apd - r'*r)
     ε = eps(abs(float(one(Complex64))))
@@ -273,7 +273,7 @@ end
 end
 
 @testset "fail for non-BLAS element types" begin
-    @test_throws ArgumentError cholfact!(Hermitian(rand(Float16, 5,5)), Val{true})
+    @test_throws ArgumentError cholfact!(Hermitian(rand(Float16, 5,5)), Val(true))
 end
 
 @testset "throw for non positive definite matrix" begin
@@ -281,6 +281,7 @@ end
         A = T[1 2; 2 1]; B = T[1, 1]
         C = cholfact(A)
         @test !isposdef(C)
+        @test !LinAlg.issuccess(C)
         @test_throws PosDefException C\B
         @test_throws PosDefException det(C)
         @test_throws PosDefException logdet(C)

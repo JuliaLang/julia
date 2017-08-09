@@ -21,9 +21,9 @@ end
 # issue #9684
 let
     undot(op) = Symbol(string(op)[2:end])
-    for (ex1, ex2) in [("5.≠x", "5.!=x"),
-                       ("5.≥x", "5.>=x"),
-                       ("5.≤x", "5.<=x")]
+    for (ex1, ex2) in [("5 .≠ x", "5 .!= x"),
+                       ("5 .≥ x", "5 .>= x"),
+                       ("5 .≤ x", "5 .<= x")]
         ex1 = parse(ex1); ex2 = parse(ex2)
         @test ex1.head === :call && (ex1.head === ex2.head)
         @test ex1.args[2] === 5 && ex2.args[2] === 5
@@ -619,14 +619,25 @@ end
 @test_throws ParseError parse("--x")
 @test_throws ParseError parse("stagedfunction foo(x); end")
 
-#@test_throws ParseError parse("{1,2,3}")
-#@test_throws ParseError parse("{1 2 3 4}")
-#@test_throws ParseError parse("{1,2; 3,4}")
-@test_throws ParseError parse("{x for x in 1:10}")
-@test_throws ParseError parse("{x=>y for (x,y) in zip([1,2,3],[4,5,6])}")
-#@test_throws ParseError parse("{:a=>1, :b=>2}")
-
 @test parse("A=>B") == Expr(:call, :(=>), :A, :B)
+
+@test parse("{1,2,3}") == Expr(:braces, 1, 2, 3)
+@test parse("{1 2 3 4}") == Expr(:bracescat, Expr(:row, 1, 2, 3, 4))
+@test parse("{1 2; 3 4}") == Expr(:bracescat, Expr(:row, 1, 2), Expr(:row, 3, 4))
+@test parse("{x for x in 1:10}") == Expr(:braces, :(x for x in 1:10))
+@test parse("{x=>y for (x,y) in zip([1,2,3],[4,5,6])}") == Expr(:braces, :(x=>y for (x,y) in zip([1,2,3],[4,5,6])))
+@test parse("{:a=>1, :b=>2}") == Expr(:braces, Expr(:call, :(=>), QuoteNode(:a), 1),
+                                      Expr(:call, :(=>), QuoteNode(:b), 2))
+
+@test parse("[a,b;c]")  == Expr(:vect, Expr(:parameters, :c), :a, :b)
+@test parse("[a,;c]")   == Expr(:vect, Expr(:parameters, :c), :a)
+@test parse("a[b,c;d]") == Expr(:ref, :a, Expr(:parameters, :d), :b, :c)
+@test parse("a[b,;d]")  == Expr(:ref, :a, Expr(:parameters, :d), :b)
+@test_throws ParseError parse("[a,;,b]")
+@test parse("{a,b;c}")  == Expr(:braces, Expr(:parameters, :c), :a, :b)
+@test parse("{a,;c}")   == Expr(:braces, Expr(:parameters, :c), :a)
+@test parse("a{b,c;d}") == Expr(:curly, :a, Expr(:parameters, :d), :b, :c)
+@test parse("a{b,;d}")  == Expr(:curly, :a, Expr(:parameters, :d), :b)
 
 # this now is parsed as getindex(Pair{Any,Any}, ...)
 @test_throws MethodError eval(parse("(Any=>Any)[]"))
@@ -701,7 +712,7 @@ let m_error, error_out, filename = Base.source_path()
     @test error_out == "syntax: keyword argument \"B\" needs a default value"
 
     # issue #20614
-    m_error = try @eval foo{N}(types::NTuple{N}, values::Vararg{Any,N}, c) = nothing; catch e; e; end
+    m_error = try @eval foo(types::NTuple{N}, values::Vararg{Any,N}, c) where {N} = nothing; catch e; e; end
     error_out = sprint(showerror, m_error)
     @test startswith(error_out, "ArgumentError: Vararg on non-final argument")
 end
@@ -753,18 +764,26 @@ end
 module M16096
 macro iter()
     return quote
-        @inline function foo(sub)
+        @inline function foo16096(sub)
             it = 1
         end
     end
 end
 end
-let ex = expand(@__MODULE__, :(@M16096.iter))
-    @test isa(ex, Expr) && ex.head === :thunk
+let ex = expand(M16096, :(@iter))
+    @test isa(ex, Expr) && ex.head === :body
 end
 let ex = expand(Main, :($M16096.@iter))
-    @test isa(ex, Expr) && ex.head === :thunk
+    @test isa(ex, Expr) && ex.head === :body
 end
+let ex = expand(@__MODULE__, :(@M16096.iter))
+    @test isa(ex, Expr) && ex.head === :body
+    @test !isdefined(M16096, :foo16096)
+    @test eval(@__MODULE__, ex) === nothing
+    @test !@isdefined foo16096
+    @test isdefined(M16096, :foo16096)
+end
+@test M16096.foo16096(2.0) == 1
 macro f16096()
     quote
         g16096($(esc(:x))) = 2x
@@ -808,7 +827,7 @@ for op in ["+", "-", "\$", "|", ".+", ".-", "*", ".*"]
 end
 
 # issue #17701
-@test expand(Main, :(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i,3)&&i\"")
+@test expand(Main, :(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i, 3) && i\"")
 
 # issue #18667
 @test expand(Main, :(true = 1)) == Expr(:error, "invalid assignment location \"true\"")
@@ -1175,10 +1194,7 @@ end
 # comment 298107224 on pull #21607
 module Test21607
     using Base.Test
-
-    @test_warn(
-    "WARNING: imported binding for Any overwritten in module Test21607",
-    @eval const Any = Integer)
+    const Any = Integer
 
     # check that X <: Core.Any, not Integer
     mutable struct X; end
@@ -1220,6 +1236,64 @@ let f(x) =
     @test functionloc(f(1))[2] > functionloc(f)[2]
 end
 
+# let-bound functions with `where` and static parameters
+@test let f()::Int = 2.0
+    f()
+end === 2
+@test let (f(x::T)::Tuple{Int,Any}) where {T} = (3.0, T)
+    f("")
+end === (3, String)
+
 # issue #19351
 # adding return type decl should not affect parse of function body
 @test :(t(abc) = 3).args[2] == :(t(abc)::Int = 3).args[2]
+
+# issue #7314
+@test parse("local x, y = 1, 2") == Expr(:local, Expr(:(=),
+                                                      Expr(:tuple, :x, :y),
+                                                      Expr(:tuple, 1, 2)))
+
+@test_throws ParseError parse("[2for i=1:10]")
+@test_throws ParseError parse("[1 for i in 1:2for j in 2]")
+@test_throws ParseError parse("(1 for i in 1:2for j in 2)")
+# issue #20441
+@test_throws ParseError parse("[x.2]")
+@test_throws ParseError parse("x.2")
+@test parse("[x;.2]") == Expr(:vcat, :x, 0.2)
+
+# issue #22840
+@test parse("[:a :b]") == Expr(:hcat, QuoteNode(:a), QuoteNode(:b))
+
+# issue #22868
+@test_throws ParseError parse("x@time 2")
+@test_throws ParseError parse("@ time")
+
+# issue #7479
+@test expand(Main, parse("(true &&& false)")) == Expr(:error, "misplaced \"&\" expression")
+
+# if an indexing expression becomes a cat expression, `end` is not special
+@test_throws ParseError parse("a[end end]")
+@test_throws ParseError parse("a[end;end]")
+#@test_throws ParseError parse("a[end;]")  # this is difficult to fix
+let a = rand(8), i = 3
+    @test a[[1:i-1; i+1:end]] == a[[1,2,4,5,6,7,8]]
+end
+
+# issue #18935
+@test [begin
+          @inbounds for i = 1:10 end
+       end for i = 1:5] == fill(nothing, 5)
+
+# issue #18912
+@test_throws ParseError parse("(::)")
+@test parse(":(::)") == QuoteNode(Symbol("::"))
+@test_throws ParseError parse("f(::) = ::")
+@test parse("(::A)") == Expr(Symbol("::"), :A)
+@test_throws ParseError parse("(::, 1)")
+@test_throws ParseError parse("(1, ::)")
+
+# issue #18650
+let ex = parse("maximum(@elapsed sleep(1) for k = 1:10)")
+    @test isa(ex, Expr) && ex.head === :call && ex.args[2].head === :generator &&
+        ex.args[2].args[1].head === :macrocall
+end

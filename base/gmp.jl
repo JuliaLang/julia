@@ -9,7 +9,8 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0zpb,
-             widen, signed, unsafe_trunc, trunc, iszero, big, flipsign, signbit
+             widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
+             hastypemax
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -31,8 +32,12 @@ const GMP_BITS_PER_LIMB = gmp_bits_per_limb()
 # be used whenever mp_limb_t is in the signature of ccall'ed GMP functions.
 if GMP_BITS_PER_LIMB == 32
     const Limb = UInt32
+    const SLimbMax = Union{Int8, Int16, Int32}
+    const ULimbMax = Union{UInt8, UInt16, UInt32}
 elseif GMP_BITS_PER_LIMB == 64
     const Limb = UInt64
+    const SLimbMax = Union{Int8, Int16, Int32, Int64}
+    const ULimbMax = Union{UInt8, UInt16, UInt32, UInt64}
 else
     error("GMP: cannot determine the type mp_limb_t (__gmp_bits_per_limb == $GMP_BITS_PER_LIMB)")
 end
@@ -88,7 +93,7 @@ function __init__()
               (Ptr{Void},Ptr{Void},Ptr{Void}),
               cglobal(:jl_gc_counted_malloc),
               cglobal(:jl_gc_counted_realloc_with_old_size),
-              cglobal(:jl_gc_counted_free))
+              cglobal(:jl_gc_counted_free_with_size))
 
         ZERO.alloc, ZERO.size, ZERO.d = 0, 0, C_NULL
         ONE.alloc, ONE.size, ONE.d = 1, 1, pointer(_ONE)
@@ -228,6 +233,8 @@ signed(x::BigInt) = x
 
 convert(::Type{BigInt}, x::BigInt) = x
 
+hastypemax(::Type{BigInt}) = false
+
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     _n = Nullable{BigInt}()
 
@@ -263,12 +270,12 @@ convert(::Type{BigInt}, x::Bool) = BigInt(UInt(x))
 unsafe_trunc(::Type{BigInt}, x::Union{Float32,Float64}) = MPZ.set_d(x)
 
 function convert(::Type{BigInt}, x::Union{Float32,Float64})
-    isinteger(x) || throw(InexactError())
+    isinteger(x) || throw(InexactError(:convert, BigInt, x))
     unsafe_trunc(BigInt,x)
 end
 
 function trunc(::Type{BigInt}, x::Union{Float32,Float64})
-    isfinite(x) || throw(InexactError())
+    isfinite(x) || throw(InexactError(:trunc, BigInt, x))
     unsafe_trunc(BigInt,x)
 end
 
@@ -304,13 +311,17 @@ function convert(::Type{BigInt}, x::Integer)
 end
 
 
-rem(x::BigInt, ::Type{Bool}) = ((x&1)!=0)
+rem(x::BigInt, ::Type{Bool}) = !iszero(x) & unsafe_load(x.d) % Bool # never unsafe here
+
+rem(x::BigInt, ::Type{T}) where T<:Union{SLimbMax,ULimbMax} =
+    iszero(x) ? zero(T) : flipsign(unsafe_load(x.d) % T, x.size)
+
 function rem(x::BigInt, ::Type{T}) where T<:Union{Unsigned,Signed}
     u = zero(T)
-    for l = 1:min(abs(x.size), cld(sizeof(T),sizeof(Limb)))
-        u += (unsafe_load(x.d,l)%T) << ((sizeof(Limb)<<3)*(l-1))
+    for l = 1:min(abs(x.size), cld(sizeof(T), sizeof(Limb)))
+        u += (unsafe_load(x.d, l) % T) << ((sizeof(Limb)<<3)*(l-1))
     end
-    flipsign(u, x)
+    flipsign(u, x.size)
 end
 
 rem(x::Integer, ::Type{BigInt}) = convert(BigInt, x)
@@ -319,7 +330,7 @@ function convert(::Type{T}, x::BigInt) where T<:Unsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
     else
-        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
+        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(:convert, T, x))
         x % T
     end
 end
@@ -330,9 +341,9 @@ function convert(::Type{T}, x::BigInt) where T<:Signed
         SLimb = typeof(Signed(one(Limb)))
         convert(T, convert(SLimb, x))
     else
-        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
+        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(:convert, T, x))
         y = x % T
-        ispos(x) ⊻ (y > 0) && throw(InexactError()) # catch overflow
+        ispos(x) ⊻ (y > 0) && throw(InexactError(:convert, T, x)) # catch overflow
         y
     end
 end
@@ -403,7 +414,7 @@ function invmod(x::BigInt, y::BigInt)
         return z
     end
     if (y==0 || MPZ.invert!(z, x, ya) == 0)
-        throw(DomainError())
+        throw(DomainError(y))
     end
     # GMP always returns a positive inverse; we instead want to
     # normalize such that div(z, y) == 0, i.e. we want a negative z
@@ -474,7 +485,7 @@ cmp(x::BigInt, y::CulongMax) = MPZ.cmp_ui(x, y)
 cmp(x::BigInt, y::Integer) = cmp(x, big(y))
 cmp(x::Integer, y::BigInt) = -cmp(y, x)
 
-cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? throw(DomainError()) : MPZ.cmp_d(x, y)
+cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? throw(DomainError(y, "`y` cannot be NaN.")) : MPZ.cmp_d(x, y)
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y, x)
 
 isqrt(x::BigInt) = MPZ.sqrt(x)
@@ -482,7 +493,9 @@ isqrt(x::BigInt) = MPZ.sqrt(x)
 ^(x::BigInt, y::Culong) = MPZ.pow_ui(x, y)
 
 function bigint_pow(x::BigInt, y::Integer)
-    if y<0; throw(DomainError()); end
+    if y<0; throw(DomainError(y, "`y` cannot be negative.")); end
+    @noinline throw1(y) =
+        throw(OverflowError("exponent $y is too large and computation will overflow"))
     if x== 1; return x; end
     if x==-1; return isodd(y) ? x : -x; end
     if y>typemax(Culong)
@@ -496,7 +509,7 @@ function bigint_pow(x::BigInt, y::Integer)
        #
        #Assume that the answer will definitely overflow.
 
-       throw(OverflowError())
+       throw1(y)
     end
     return x^convert(Culong, y)
 end
@@ -551,6 +564,7 @@ binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(k))
 ==(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) == 0
 ==(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) == 0
 iszero(x::BigInt) = x.size == 0
+isone(x::BigInt) = x == Culong(1)
 
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
 <=(x::BigInt, i::Integer) = cmp(x,i) <= 0
@@ -583,31 +597,23 @@ oct(n::BigInt, pad::Int) = base( 8, n, pad)
 dec(n::BigInt, pad::Int) = base(10, n, pad)
 hex(n::BigInt, pad::Int) = base(16, n, pad)
 
-function base(b::Integer, n::BigInt)
-    b < 0 && return base(Int(b), n, 1, (b>0) & (n.size<0))
-    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
-    nd = ndigits(n, b)
-    str = Base._string_n(n < 0 ? nd+1 : nd)
-    MPZ.get_str!(str, b, n)
-end
-
-function base(b::Integer, n::BigInt, pad::Integer)
+function base(b::Integer, n::BigInt, pad::Integer=1)
     b < 0 && return base(Int(b), n, pad, (b>0) & (n.size<0))
-    s = base(b, n)
-    buf = IOBuffer()
-    if n < 0
-        s = s[2:end]
-        write(buf, '-')
+    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
+    iszero(n) && pad < 1 && return ""
+    nd1 = ndigits(n, b)
+    nd  = max(nd1, pad)
+    sv  = Base.StringVector(nd + isneg(n))
+    MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
+    @inbounds for i = (1:nd-nd1) + isneg(n)
+        sv[i] = '0' % UInt8
     end
-    for i in 1:pad-sizeof(s) # `s` is known to be ASCII, and `length` is slower
-        write(buf, '0')
-    end
-    write(buf, s)
-    String(buf)
+    isneg(n) && (sv[1] = '-' % UInt8)
+    String(sv)
 end
 
 function ndigits0zpb(x::BigInt, b::Integer)
-    b < 2 && throw(DomainError())
+    b < 2 && throw(DomainError(b, "`b` cannot be less than 2."))
     x.size == 0 && return 0 # for consistency with other ndigits0z methods
     if ispow2(b) && 2 <= b <= 62 # GMP assumes b is in this range
         MPZ.sizeinbase(x, b)

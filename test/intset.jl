@@ -86,6 +86,10 @@ end
 
     i = IntSet(1:6)
     @test symdiff!(i, IntSet([6, 513])) == IntSet([1:5; 513])
+
+    # issue #23099 : these tests should not segfault
+    @test_throws ArgumentError symdiff!(IntSet(rand(1:100, 30)), 0)
+    @test_throws ArgumentError symdiff!(IntSet(rand(1:100, 30)), [0, 2, 4])
 end
 
 @testset "copy, copy!, similar" begin
@@ -135,6 +139,12 @@ end
 
 @testset "pop!, delete!" begin
     s = IntSet(1:2:10)
+    # deleting non-positive values should be no-op
+    # (Issue #23179 : delete!(s, 0) should not crash)
+    len = length(s)
+    for n in -20:0
+        @test length(delete!(s, n)) == len
+    end
     @test pop!(s, 1) === 1
     @test !(1 in s)
     @test_throws KeyError pop!(s, 1)
@@ -280,4 +290,13 @@ end
     @test_throws KeyError pop!(s, 0)
     @test pop!(s, 100, 0) === 0
     @test pop!(s, 99, 0) === 99
+end
+
+@testset "order" begin
+    a = rand(1:1000, 100)
+    s = IntSet(a)
+    m, M = extrema(s)
+    @test m == first(s) == minimum(s) == minimum(a)
+    @test M == last(s)  == maximum(s) == maximum(a)
+    @test issorted(s)
 end

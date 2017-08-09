@@ -12,5 +12,3 @@
 #if JL_LLVM_VERSION < 30901
     #error Only LLVM versions >= 3.9.1 are supported by Julia
 #endif
-
-#define USE_ORCJIT

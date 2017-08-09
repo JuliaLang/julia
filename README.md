@@ -27,6 +27,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Discussion forum:** <https://discourse.julialang.org>
 - **Mailing lists:** <https://julialang.org/community/>
+- **Slack:** <https://julialang.slack.com> (get an invite from <https://slackinvite.julialang.org>)
 - **Gitter:** <https://gitter.im/JuliaLang/julia>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
@@ -48,13 +49,13 @@ Julia is built and tested regularly on the following platforms:
 |:----------------:|:----------------:|:--:|:--------:|:-------------:|
 | Linux 2.6.18+    | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 |                  | i686 (32-bit)    | ✓  | ✓        | Official      |
-|                  | PowerPC (64-bit) |    | ✓        | Official      |
 |                  | ARM v7 (32-bit)  |    | ✓        | Official      |
 |                  | ARM v8 (64-bit)  |    | ✓        | Official      |
+|                  | PowerPC (64-bit) |    |          | Community     |
 | macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 | Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 |                  | i686 (32-bit)    | ✓  | ✓        | Official      |
-| FreeBSD 11.0+    | x86-64 (64-bit)  |    |          | Community     |
+| FreeBSD 11.0+    | x86-64 (64-bit)  | ✓  |          | Community     |
 
 All systems marked with ✓ for CI are tested using continuous integration for every commit.
 Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly.
@@ -75,9 +76,9 @@ Then, acquire the source code by cloning the git repository:
 
 Be sure to also configure your system to use the appropriate proxy settings, e.g. by setting the `https_proxy` and `http_proxy` variables.)
 
-By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.5` series of releases. You can get this version by changing to the Julia directory and running
+By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.6` series of releases. You can get this version by changing to the Julia directory and running
 
-    git checkout release-0.5
+    git checkout v0.6.0
 
 Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.)
 When compiled the first time, it will automatically download and build its [external dependencies](#required-build-tools-and-external-libraries).
@@ -256,7 +257,6 @@ Some known issues on FreeBSD are:
 
 * The x86 architecture does not support threading due to lack of compiler runtime library support, so you may need to
   set `JULIA_THREADS=0` in your `Make.user` if you're on a 32-bit system.
-* Some stack trace information is not available due to differences with libunwind.
 
 ### Windows
 

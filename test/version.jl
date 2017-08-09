@@ -94,8 +94,7 @@ show(io,v"4.3.2+1.a")
 
 # typemin and typemax
 @test typemin(VersionNumber) == v"0-"
-@test typemax(VersionNumber) ==
-  VersionNumber(typemax(Int), typemax(Int), typemax(Int), (), ("",))
+@test typemax(VersionNumber) == v"∞"
 
 # issupbuild
 import Base.issupbuild

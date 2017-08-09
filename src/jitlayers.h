@@ -6,7 +6,6 @@
 #include <llvm/IR/Value.h>
 
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
-#if defined(USE_ORCJIT)
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 #include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
@@ -17,11 +16,7 @@
 #  include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
 #endif
 #include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
-#else
-#include <llvm/ExecutionEngine/MCJIT.h>
-#include <llvm/ADT/DenseMapInfo.h>
-#include <llvm/Object/ObjectFile.h>
-#endif
+#include "llvm/ExecutionEngine/JITEventListener.h"
 
 #include "llvm/IR/LegacyPassManager.h"
 extern legacy::PassManager *jl_globalPM;
@@ -55,8 +50,8 @@ void* jl_get_globalvar(GlobalVariable *gv);
 GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M);
 void jl_add_to_shadow(Module *m);
 void jl_init_function(Function *f);
-bool jl_can_finalize_function(Function *F);
-void jl_finalize_function(Function *F);
+bool jl_can_finalize_function(StringRef F);
+void jl_finalize_function(StringRef F);
 void jl_finalize_module(Module *m, bool shadow);
 
 // Connect Modules via prototypes, each owned by module `M`
@@ -75,39 +70,7 @@ static inline GlobalVariable *global_proto(GlobalVariable *G, Module *M = NULL)
     return proto;
 }
 
-static inline Function *function_proto(Function *F, Module *M = NULL)
-{
-    // Copy the declaration characteristics of the Function (not the body)
-    Function *NewF = Function::Create(F->getFunctionType(),
-                                      Function::ExternalLinkage,
-                                      F->getName(), M);
-
-    // Declarations are not allowed to have personality routines, but
-    // copyAttributesFrom sets them anyway. Temporarily unset the personality
-    // routine from `F`, since copying it and then resetting is more expensive
-    // as well as introducing an extra use from this unowned function, which
-    // can cause crashes in the LLVMContext's global destructor.
-    llvm::Constant *OldPersonalityFn = nullptr;
-    if (F->hasPersonalityFn()) {
-        OldPersonalityFn = F->getPersonalityFn();
-        F->setPersonalityFn(nullptr);
-    }
-
-     // FunctionType does not include any attributes. Copy them over manually
-     // as codegen may make decisions based on the presence of certain attributes
-     NewF->copyAttributesFrom(F);
-
-    if (OldPersonalityFn)
-        F->setPersonalityFn(OldPersonalityFn);
-
-    // DLLImport only needs to be set for the shadow module
-    // it just gets annoying in the JIT
-    NewF->setDLLStorageClass(GlobalValue::DefaultStorageClass);
-
-    return NewF;
-}
-
-static inline GlobalVariable *prepare_global(GlobalVariable *G, Module *M)
+static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
 {
     if (G->getParent() == M)
         return G;
@@ -128,7 +91,6 @@ static inline void add_named_global(GlobalObject *gv, T *addr, bool dllimport = 
 }
 
 void jl_init_jit(Type *T_pjlvalue_);
-#ifdef USE_ORCJIT
 #if JL_LLVM_VERSION >= 40000
 typedef JITSymbol JL_JITSymbol;
 // The type that is similar to SymbolInfo on LLVM 4.0 is actually
@@ -140,12 +102,9 @@ typedef orc::JITSymbol JL_JITSymbol;
 typedef RuntimeDyld::SymbolInfo JL_SymbolInfo;
 #endif
 #if JL_LLVM_VERSION >= 50000
-using orc::RTDyldObjectLinkingLayerBase;
-using orc::RTDyldObjectLinkingLayer;
+using RTDyldObjHandleT = orc::RTDyldObjectLinkingLayerBase::ObjHandleT;
 #else
-using RTDyldObjectLinkingLayerBase = orc::ObjectLinkingLayerBase;
-template <typename NotifyLoadedFtor>
-using RTDyldObjectLinkingLayer = orc::ObjectLinkingLayer<NotifyLoadedFtor>;
+using RTDyldObjHandleT = orc::ObjectLinkingLayerBase::ObjSetHandleT;
 #endif
 
 class JuliaOJIT {
@@ -155,19 +114,35 @@ class JuliaOJIT {
     public:
         DebugObjectRegistrar(JuliaOJIT &JIT);
         template <typename ObjSetT, typename LoadResult>
-        void operator()(RTDyldObjectLinkingLayerBase::ObjSetHandleT H, const ObjSetT &Objects,
-                        const LoadResult &LOS);
+        void operator()(RTDyldObjHandleT H, const ObjSetT &Objects, const LoadResult &LOS);
     private:
+        template <typename ObjT, typename LoadResult>
+        void registerObject(RTDyldObjHandleT H, const ObjT &Object, const LoadResult &LO);
         void NotifyGDB(object::OwningBinary<object::ObjectFile> &DebugObj);
         std::vector<object::OwningBinary<object::ObjectFile>> SavedObjects;
         std::unique_ptr<JITEventListener> JuliaListener;
         JuliaOJIT &JIT;
     };
 
+    struct CompilerT {
+        CompilerT(JuliaOJIT *pjit)
+            : jit(*pjit)
+        {}
+        object::OwningBinary<object::ObjectFile> operator()(Module &M);
+    private:
+        JuliaOJIT &jit;
+    };
+
 public:
-    typedef RTDyldObjectLinkingLayer<DebugObjectRegistrar> ObjLayerT;
+#if JL_LLVM_VERSION >= 50000
+    typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
+    typedef orc::IRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
+    typedef CompileLayerT::ModuleHandleT ModuleHandleT;
+#else
+    typedef orc::ObjectLinkingLayer<std::reference_wrapper<DebugObjectRegistrar>> ObjLayerT;
     typedef orc::IRCompileLayer<ObjLayerT> CompileLayerT;
     typedef CompileLayerT::ModuleSetHandleT ModuleHandleT;
+#endif
     typedef StringMap<void*> SymbolTableT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
@@ -199,23 +174,23 @@ private:
     raw_svector_ostream ObjStream;
     legacy::PassManager PM;
     MCContext *Ctx;
-    RTDyldMemoryManager *MemMgr;
+    std::shared_ptr<RTDyldMemoryManager> MemMgr;
+    DebugObjectRegistrar registrar;
     ObjLayerT ObjectLayer;
     CompileLayerT CompileLayer;
     SymbolTableT GlobalSymbolTable;
     SymbolTableT LocalSymbolTable;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-#else
-extern ExecutionEngine *jl_ExecutionEngine;
-#endif
 JL_DLLEXPORT extern LLVMContext jl_LLVMContext;
 
 Pass *createLowerPTLSPass(bool imaging_mode);
+Pass *createCombineMulAddPass();
 Pass *createLateLowerGCFramePass();
 Pass *createLowerExcHandlersPass();
 Pass *createGCInvariantVerifierPass(bool Strong);
 Pass *createPropagateJuliaAddrspaces();
+Pass *createAllocOptPass();
 // Whether the Function is an llvm or julia intrinsic.
 static inline bool isIntrinsicFunction(Function *F)
 {

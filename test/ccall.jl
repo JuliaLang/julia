@@ -139,7 +139,7 @@ end
 copy(a::Struct1) = Struct1(a.x, a.y)
 copy(a::Struct1I) = a
 
-function test_struct1{Struct}(::Type{Struct})
+function test_struct1(::Type{Struct}) where {Struct}
     a = Struct(352.39422f23, 19.287577)
     b = Float32(123.456)
 
@@ -223,7 +223,7 @@ struct Struct4I
     z::Int32
 end
 
-function test_struct4{Struct}(::Type{Struct})
+function test_struct4(::Type{Struct}) where {Struct}
     a = Struct(-512275808,882558299,-2133022131)
     b = Int32(42)
 
@@ -253,7 +253,7 @@ struct Struct5I
     a::Int32
 end
 
-function test_struct5{Struct}(::Type{Struct})
+function test_struct5(::Type{Struct}) where {Struct}
     a = Struct(1771319039, 406394736, -1269509787, -745020976)
     b = Int32(42)
 
@@ -282,7 +282,7 @@ struct Struct6I
     z::Int64
 end
 
-function test_struct6{Struct}(::Type{Struct})
+function test_struct6(::Type{Struct}) where {Struct}
     a = Struct(-654017936452753226, -5573248801240918230, -983717165097205098)
     b = Int64(42)
 
@@ -308,7 +308,7 @@ struct Struct7I
     y::Cchar
 end
 
-function test_struct7{Struct}(::Type{Struct})
+function test_struct7(::Type{Struct}) where {Struct}
     a = Struct(-384082741977533896, 'h')
     b = Int8(42)
 
@@ -333,7 +333,7 @@ struct Struct8I
     y::Cchar
 end
 
-function test_struct8{Struct}(::Type{Struct})
+function test_struct8(::Type{Struct}) where {Struct}
     a = Struct(-384082896, 'h')
     b = Int8(42)
 
@@ -358,7 +358,7 @@ struct Struct9I
     y::Int16
 end
 
-function test_struct9{Struct}(::Type{Struct})
+function test_struct9(::Type{Struct}) where {Struct}
     a = Struct(-394092996, -3840)
     b = Int16(42)
 
@@ -387,7 +387,7 @@ struct Struct10I
     a::Cchar
 end
 
-function test_struct10{Struct}(::Type{Struct})
+function test_struct10(::Type{Struct}) where {Struct}
     a = Struct('0', '1', '2', '3')
     b = Int8(2)
 
@@ -412,7 +412,7 @@ struct Struct11I
     x::Complex64
 end
 
-function test_struct11{Struct}(::Type{Struct})
+function test_struct11(::Type{Struct}) where {Struct}
     a = Struct(0.8877077f0 + 0.4591081f0im)
     b = Float32(42)
 
@@ -436,7 +436,7 @@ struct Struct12I
     y::Complex64
 end
 
-function test_struct12{Struct}(::Type{Struct})
+function test_struct12(::Type{Struct}) where {Struct}
     a = Struct(0.8877077f5 + 0.4591081f2im, 0.0004842868f0 - 6982.3265f3im)
     b = Float32(42)
 
@@ -459,7 +459,7 @@ struct Struct13I
     x::Complex128
 end
 
-function test_struct13{Struct}(::Type{Struct})
+function test_struct13(::Type{Struct}) where {Struct}
     a = Struct(42968.97560380495 - 803.0576845153616im)
     b = Float64(42)
 
@@ -483,7 +483,7 @@ struct Struct14I
     y::Float32
 end
 
-function test_struct14{Struct}(::Type{Struct})
+function test_struct14(::Type{Struct}) where {Struct}
     a = Struct(0.024138331f0, 0.89759064f32)
     b = Float32(42)
 
@@ -508,7 +508,7 @@ struct Struct15I
     y::Float64
 end
 
-function test_struct15{Struct}(::Type{Struct})
+function test_struct15(::Type{Struct}) where {Struct}
     a = Struct(4.180997967273657, -0.404218594294923)
     b = Float64(42)
 
@@ -541,7 +541,7 @@ struct Struct16I
     c::Float64
 end
 
-function test_struct16{Struct}(::Type{Struct})
+function test_struct16(::Type{Struct}) where {Struct}
     a = Struct(0.1604656f0, 0.6297606f0, 0.83588994f0,
                0.6460273620993535, 0.9472692581106656, 0.47328535437352093)
     b = Float32(42)
@@ -571,7 +571,7 @@ struct Struct17I
     b::Int16
 end
 
-function test_struct17{Struct}(::Type{Struct})
+function test_struct17(::Type{Struct}) where {Struct}
     a = Struct(2, 10)
     b = Int8(2)
 
@@ -598,7 +598,7 @@ struct Struct18I
     c::Int8
 end
 
-function test_struct18{Struct}(::Type{Struct})
+function test_struct18(::Type{Struct}) where {Struct}
     a = Struct(2, 10, -3)
     b = Int8(2)
 
@@ -638,7 +638,7 @@ end
 copy(a::Struct_Big) = Struct_Big(a.x, a.y, a.z)
 copy(a::Struct_BigI) = a
 
-function test_struct_big{Struct}(::Type{Struct})
+function test_struct_big(::Type{Struct}) where {Struct}
     a = Struct(424,-5,Int8('Z'))
     a2 = copy(a)
 
@@ -888,7 +888,7 @@ let A = [1]
 end
 
 # Pointer finalizer at exit (PR #19911)
-let result = readstring(`$(Base.julia_cmd()) --startup-file=no -e "A = Ref{Cint}(42); finalizer(A, cglobal((:c_exit_finalizer, \"$libccalltest\"), Void))"`)
+let result = read(`$(Base.julia_cmd()) --startup-file=no -e "A = Ref{Cint}(42); finalizer(A, cglobal((:c_exit_finalizer, \"$libccalltest\"), Void))"`, String)
     @test result == "c_exit_finalizer: 42, 0"
 end
 
@@ -1278,10 +1278,28 @@ mutable struct callinfos_19805{FUNC_FT<:Function}
     f :: FUNC_FT
 end
 
-evalf_callback_19805{FUNC_FT}(ci::callinfos_19805{FUNC_FT}) = ci.f(0.5)::Float64
+evalf_callback_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = ci.f(0.5)::Float64
 
-evalf_callback_c_19805{FUNC_FT}(ci::callinfos_19805{FUNC_FT}) = cfunction(
+evalf_callback_c_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = cfunction(
     evalf_callback_19805, Float64, (callinfos_19805{FUNC_FT},))
 
 @test_throws(ErrorException("ccall: the type of argument 1 doesn't correspond to a C type"),
              evalf_callback_c_19805( callinfos_19805(sin) ))
+
+# test Ref{abstract_type} calling parameter passes a heap box
+abstract type Abstract22734 end
+struct Bits22734 <: Abstract22734
+    x::Int
+    y::Float64
+end
+function cb22734(ptr::Ptr{Void})
+    gc()
+    obj = unsafe_pointer_to_objref(ptr)::Bits22734
+    obj.x + obj.y
+end
+ptr22734 = cfunction(cb22734, Float64, Tuple{Ptr{Void}})
+function caller22734(ptr)
+    obj = Bits22734(12, 20)
+    ccall(ptr, Float64, (Ref{Abstract22734},), obj)
+end
+@test caller22734(ptr22734) === 32.0

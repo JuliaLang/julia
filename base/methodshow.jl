@@ -51,9 +51,9 @@ function arg_decl_parts(m::Method)
     end
     file = m.file
     line = m.line
-    if isdefined(m, :source)
+    if isdefined(m, :source) || isdefined(m, :generator)
         argnames = Vector{Any}(m.nargs)
-        ccall(:jl_fill_argnames, Void, (Any, Any), m.source, argnames)
+        ccall(:jl_fill_argnames, Void, (Any, Any), isdefined(m, :source) ? m.source : m.generator.inferred, argnames)
         show_env = ImmutableDict{Symbol, Any}()
         for t in tv
             show_env = ImmutableDict(show_env, :unionall_env => t)
@@ -71,7 +71,7 @@ function kwarg_decl(m::Method, kwtype::DataType)
     kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, typemax(UInt))
     if kwli !== nothing
         kwli = kwli::Method
-        src = uncompressed_ast(kwli, kwli.source)
+        src = uncompressed_ast(kwli)
         kws = filter(x -> !('#' in string(x)), src.slotnames[(kwli.nargs + 1):end])
         # ensure the kwarg... is always printed last. The order of the arguments are not
         # necessarily the same as defined in the function
@@ -97,15 +97,16 @@ end
 function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
-    ft = unwrap_unionall(sig.parameters[1])
+    ft0 = sig.parameters[1]
+    ft = unwrap_unionall(ft0)
     d1 = decls[1]
     if sig === Tuple
         print(io, m.name)
         decls = Any[(), ("...", "")]
-    elseif ft <: Function &&
+    elseif ft <: Function && isa(ft, DataType) &&
             isdefined(ft.name.module, ft.name.mt.name) &&
                 # TODO: more accurate test? (tn.name === "#" name)
-            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
     elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
         f = ft.parameters[1]
@@ -193,7 +194,7 @@ function url(m::Method)
     file = string(m.file)
     line = m.line
     line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
-    is_windows() && (file = replace(file, '\\', '/'))
+    Sys.iswindows() && (file = replace(file, '\\', '/'))
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
             # this url will only work if we're on a tagged release
@@ -226,11 +227,12 @@ end
 function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
-    ft = sig.parameters[1]
+    ft0 = sig.parameters[1]
+    ft = unwrap_unionall(ft0)
     d1 = decls[1]
-    if ft <: Function &&
+    if ft <: Function && isa(ft, DataType) &&
             isdefined(ft.name.module, ft.name.mt.name) &&
-            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
     elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
         f = ft.parameters[1]
