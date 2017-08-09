@@ -122,15 +122,6 @@ end
 
 ## promotion mechanism ##
 
-promote_type()  = Bottom
-promote_type(T) = T
-promote_type(T, S, U, V...) = (@_inline_meta; promote_type(T, promote_type(S, U, V...)))
-
-promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
-promote_type(::Type{T}, ::Type{T}) where {T} = T
-promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
-promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
-
 """
     promote_type(type1, type2)
 
@@ -151,6 +142,17 @@ julia> promote_type(Float32, BigInt)
 BigFloat
 ```
 """
+function promote_type end
+
+promote_type()  = Bottom
+promote_type(T) = T
+promote_type(T, S, U, V...) = (@_inline_meta; promote_type(T, promote_type(S, U, V...)))
+
+promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
+promote_type(::Type{T}, ::Type{T}) where {T} = T
+promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
+promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
+
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
     @_inline_meta
     # Try promote_rule in both orders. Typically only one is defined,

@@ -63,8 +63,18 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-eltype(::Type{<:Tuple{Vararg{E}}}) where {E} = E
-function eltype(t::Type{<:Tuple})
+eltype(::Type{Tuple{Vararg{E}}}) where {E} = E
+function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
+    if @isdefined(E)
+        return E
+    else
+        # TODO: need to guard against E being miscomputed by subtyping (ref #23017)
+        # and compute the result manually in this case
+        return _compute_eltype(t)
+    end
+end
+eltype(t::Type{<:Tuple}) = _compute_eltype(t)
+function _compute_eltype(t::Type{<:Tuple})
     @_pure_meta
     t isa Union && return typejoin(eltype(t.a), eltype(t.b))
     t´ = unwrap_unionall(t)
@@ -199,7 +209,8 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 # constructing from an iterator
 
 # only define these in Base, to avoid overwriting the constructors
-if isdefined(Main, :Base)
+# NOTE: this means this constructor must be avoided in Inference!
+if module_name(@__MODULE__) === :Base
 
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
 

@@ -124,21 +124,6 @@ end
 
 @test promote_type(Bool,Bottom) === Bool
 
-# ntuples
-nttest1(x::NTuple{n,Int}) where {n} = n
-@test nttest1(()) == 0
-@test nttest1((1,2)) == 2
-@test NTuple <: Tuple
-@test (NTuple{T,Int32} where T) <: Tuple{Vararg{Int32}}
-@test !((NTuple{T,Int32} where T) <: Tuple{Int32,Vararg{Int32}})
-@test Tuple{Vararg{Int32}} <: (NTuple{T,Int32} where T)
-@test Tuple{Int32,Vararg{Int32}} <: (NTuple{T,Int32} where T)
-
-# #17198
-@test_throws MethodError convert(Tuple{Int}, (1.0, 2.0, 3.0))
-# #21238
-@test_throws MethodError convert(Tuple{Int,Int,Int}, (1, 2))
-
 # type declarations
 
 abstract type Sup_{A,B} end
@@ -1466,8 +1451,8 @@ end
 import Base: promote_rule
 promote_rule(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) where {T,T2,S,S2} = SIQ{promote_type(T,S)}
 @test_throws ErrorException promote_type(SIQ{Int},SIQ{Float64})
-f4731(x::T...) where {T} = 0
-f4731(x...) = ""
+f4731(x::T...) where {T} = ""
+f4731(x...) = 0
 g4731() = f4731()
 @test f4731() == ""
 @test g4731() == ""
@@ -3464,9 +3449,13 @@ end
 @test_throws MethodError @eval @m8846(a,b,c)
 
 # a simple case of parametric dispatch with unions
-let foo(x::Union{T,Void},y::Union{T,Void}) where {T} = 1
+let foo(x::Union{T, Void}, y::Union{T, Void}) where {T} = 1
     @test foo(1, nothing) === 1
-    @test_throws MethodError foo(nothing, nothing)  # can't determine T
+    @test foo(nothing, nothing) === 1
+end
+let foo(x::Union{T, Void}, y::Union{T, Void}) where {T} = T
+    @test foo(1, nothing) === Int
+    @test_throws UndefVarError(:T) foo(nothing, nothing)
 end
 
 module TestMacroGlobalFunction
@@ -4556,8 +4545,15 @@ gc_enable(true)
 
 # issue #18710
 bad_tvars() where {T} = 1
-@test_throws ErrorException @which(bad_tvars())
-@test_throws MethodError bad_tvars()
+@test isa(@which(bad_tvars()), Method)
+@test bad_tvars() === 1
+bad_tvars2() where {T} = T
+@test_throws UndefVarError(:T) bad_tvars2()
+missing_tvar(::T...) where {T} = T
+@test_throws UndefVarError(:T) missing_tvar()
+@test missing_tvar(1) === Int
+@test missing_tvar(1, 2, 3) === Int
+@test_throws MethodError missing_tvar(1, 2, "3")
 
 # issue #19059 - test for lowering of `let` with assignment not adding Box in simple cases
 contains_Box(e::GlobalRef) = (e.name === :Box)
@@ -5098,7 +5094,7 @@ f_isdefined_cl_6() = (local x; () -> @isdefined x)
 f_isdefined_tv(::T) where {T} = @isdefined T
 @test f_isdefined_tv(1)
 f_isdefined_va(::T...) where {T} = @isdefined T
-@test_throws MethodError f_isdefined_va()
+@test !f_isdefined_va()
 @test f_isdefined_va(1, 2, 3)
 
 mutable struct MyStruct22929

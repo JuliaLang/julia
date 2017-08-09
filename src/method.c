@@ -663,6 +663,7 @@ JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt)
 }
 
 extern tracer_cb jl_newmeth_tracer;
+
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                                 jl_code_info_t *f,
                                 jl_module_t *module,
@@ -681,9 +682,11 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     jl_methtable_t *mt;
     jl_sym_t *name;
     jl_method_t *m = NULL;
+    jl_value_t *argtype = NULL;
+    JL_GC_PUSH3(&f, &m, &argtype);
     size_t i, na = jl_svec_len(atypes);
     int32_t nospec = 0;
-    for (i=1; i < na; i++) {
+    for (i = 1; i < na; i++) {
         jl_value_t *ti = jl_svecref(atypes, i);
         if (ti == jl_ANY_flag ||
             (jl_is_vararg_type(ti) && jl_tparam0(jl_unwrap_unionall(ti)) == jl_ANY_flag)) {
@@ -694,17 +697,15 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
             jl_svecset(atypes, i, jl_substitute_var(ti, (jl_tvar_t*)jl_ANY_flag, (jl_value_t*)jl_any_type));
         }
     }
-    jl_value_t *argtype = (jl_value_t*)jl_apply_tuple_type(atypes);
-    JL_GC_PUSH3(&f, &m, &argtype);
 
-    if (!jl_is_code_info(f)) {
-        // this occurs when there is a closure being added to an out-of-scope function
-        // the user should only do this at the toplevel
-        // the result is that the closure variables get interpolated directly into the AST
-        f = jl_new_code_info_from_ast((jl_expr_t*)f);
+    argtype = (jl_value_t*)jl_apply_tuple_type(atypes);
+    for (i = jl_svec_len(tvars); i > 0; i--) {
+        jl_value_t *tv = jl_svecref(tvars, i - 1);
+        if (!jl_is_typevar(tv))
+            jl_type_error_rt("method definition", "type parameter", (jl_value_t*)jl_tvar_type, tv);
+        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
     }
 
-    assert(jl_is_code_info(f));
     jl_datatype_t *ftype = jl_first_argument_datatype(argtype);
     if (ftype == NULL ||
         !(jl_is_type_type((jl_value_t*)ftype) ||
@@ -712,20 +713,17 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
            (!ftype->abstract || jl_is_leaf_type((jl_value_t*)ftype)) &&
            ftype->name->mt != NULL)))
         jl_error("cannot add methods to an abstract type");
-    mt = ftype->name->mt;
-    name = mt->name;
-
     if (jl_subtype((jl_value_t*)ftype, (jl_value_t*)jl_builtin_type))
         jl_error("cannot add methods to a builtin function");
 
-    int j;
-    for (j = (int)jl_svec_len(tvars) - 1; j >= 0 ; j--) {
-        jl_value_t *tv = jl_svecref(tvars,j);
-        if (!jl_is_typevar(tv))
-            jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
-        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
+    mt = ftype->name->mt;
+    name = mt->name;
+    if (!jl_is_code_info(f)) {
+        // this occurs when there is a closure being added to an out-of-scope function
+        // the user should only do this at the toplevel
+        // the result is that the closure variables get interpolated directly into the AST
+        f = jl_new_code_info_from_ast((jl_expr_t*)f);
     }
-
     m = jl_new_method(f, name, module, (jl_tupletype_t*)argtype, nargs, isva, tvars, isstaged == jl_true);
     m->nospecialize |= nospec;
 
@@ -736,8 +734,6 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                       jl_symbol_name(m->file),
                       m->line);
     }
-
-    jl_check_static_parameter_conflicts(m, f, tvars);
 
     for (i = 0; i < na; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
@@ -767,18 +763,21 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     }
 
     int ishidden = !!strchr(jl_symbol_name(name), '#');
-    jl_value_t *atemp = argtype;
-    while (jl_is_unionall(atemp)) {
-        jl_unionall_t *ua = (jl_unionall_t*)atemp;
-        jl_tvar_t *tv = ua->var;
-        if (!ishidden && !jl_has_typevar(ua->body, tv)) {
-            jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
-                      jl_symbol_name(tv->name), jl_symbol_name(name));
-            print_func_loc(JL_STDERR, m);
-            jl_printf(JL_STDERR, ".\nThe method will not be callable.\n");
+    if (!ishidden) {
+        jl_value_t *atemp = argtype;
+        while (jl_is_unionall(atemp)) {
+            jl_unionall_t *ua = (jl_unionall_t*)atemp;
+            jl_tvar_t *tv = ua->var;
+            if (!jl_has_typevar(ua->body, tv)) {
+                jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
+                          jl_symbol_name(tv->name), jl_symbol_name(name));
+                print_func_loc(JL_STDERR, m);
+                jl_printf(JL_STDERR, ".\n");
+            }
+            atemp = ua->body;
         }
-        atemp = ua->body;
     }
+    jl_check_static_parameter_conflicts(m, f, tvars);
 
     jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)

@@ -89,28 +89,6 @@ void jl_write_compiler_output(void)
     JL_GC_POP();
 }
 
-static int any_bottom_field(jl_value_t *typ)
-{
-    if (typ == jl_bottom_type)
-        return 1;
-    typ = jl_unwrap_unionall(typ);
-    if (jl_is_vararg_type(typ))
-        typ = jl_unwrap_vararg(typ);
-    if (!jl_is_datatype(typ))
-        return 0;
-    jl_svec_t *fields = ((jl_datatype_t*)typ)->types;
-    size_t i, l = jl_svec_len(fields);
-    if (l != ((jl_datatype_t*)typ)->ninitialized)
-        if (((jl_datatype_t*)typ)->name != jl_tuple_typename)
-            return 0;
-    for (i = 0; i < l; i++) {
-        jl_value_t *ft = jl_svecref(fields, i);
-        if (any_bottom_field(ft))
-            return 1;
-    }
-    return 0;
-}
-
 // f{<:Union{...}}(...) is a common pattern
 // and expanding the Union may give a leaf function
 static void _compile_all_tvar_union(jl_value_t *methsig)
@@ -146,7 +124,7 @@ static void _compile_all_tvar_union(jl_value_t *methsig)
         JL_CATCH {
             goto getnext; // sigh, we found an invalid type signature. should we warn the user?
         }
-        if (any_bottom_field(sig))
+        if (!jl_has_concrete_subtype(sig))
             goto getnext; // signature wouldn't be callable / is invalid -- skip it
         if (jl_is_leaf_type(sig)) {
             if (jl_compile_hint((jl_tupletype_t*)sig))
