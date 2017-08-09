@@ -29,6 +29,7 @@ Base.eachmatch
 Base.matchall
 Base.lpad
 Base.rpad
+Base.cpad
 Base.search
 Base.rsearch
 Base.searchindex

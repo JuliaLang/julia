@@ -229,6 +229,10 @@ function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     string(s, p^q, p[1:i])
 end
 
+function cpad(s::AbstractString, n::Integer, p::AbstractString=" ")
+    rpad(lpad(s,div(n+strwidth(s),2),p),n,p)
+end
+
 """
     lpad(s, n::Integer, p::AbstractString=" ")
 
@@ -256,7 +260,19 @@ julia> rpad("March",20)
 ```
 """
 rpad(s, n::Integer, p=" ") = rpad(string(s),n,string(p))
-cpad(s, n::Integer, p=" ") = rpad(lpad(s,div(n+strwidth(s),2),p),n,p)
+
+"""
+    cpad(s, n::Integer, p::AbstractString=" ")
+
+Make a string at least `n` columns wide when printed by padding `s` on either side
+with copies of `p`.
+
+```jldoctest
+julia> cpad("March",15)
+"     March     "
+```
+"""
+cpad(s, n::Integer, p=" ") = cpad(string(s),n,string(p))
 
 # splitter can be a Char, Vector{Char}, AbstractString, Regex, ...
 # any splitter that provides search(s::AbstractString, splitter)
