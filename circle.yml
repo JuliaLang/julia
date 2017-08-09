@@ -9,26 +9,26 @@ workflows:
 jobs:
   build-i686:
     docker:
-#      - image: ubuntu:14.04
       - image: circleci/python:2.7
         environment:
           JULIA_CPU_CORES: 6
           JULIA_TEST_MAXRSS_MB: 800
           ARCH: i686
-#    resource_class: xlarge
     steps: &steps
-#          apt-get update &&
-#            curl make patch m4 xz-utils git time ccache bar
       - run: | # install build dependencies
           sudo apt-get install -y g++-4.8-multilib gfortran-4.8-multilib \
             time ccache bar &&
           for prog in gcc g++ gfortran; do
             sudo ln -s /usr/bin/$prog-4.8 /usr/local/bin/$prog;
           done
-      - checkout # circle ci code checkout step - TODO checkout PR merge commit
+      - checkout # circle ci code checkout step
 # (FIXME: need to unset url."ssh://git@github.com".insteadOf or libgit2 tests fail)
-      - run: | # set versioning info and Make.user variables
+      - run: | # checkout merge commit, set versioning info and Make.user variables
           git config --global --unset url."ssh://git@github.com".insteadOf &&
+          if [ -n "$CIRCLE_PULL_REQUEST" ]; then
+            git fetch origin +refs/pull/$(basename $CIRCLE_PULL_REQUEST)/merge &&
+            git checkout -qf FETCH_HEAD;
+          fi &&
           make -C base version_git.jl.phony &&
           echo "override ARCH = $ARCH" | tee -a Make.user &&
           for var in FORCE_ASSERTIONS LLVM_ASSERTIONS USECCACHE NO_GIT; do
@@ -38,7 +38,7 @@ jobs:
       - restore_cache: # silly to take a checksum of the tag file here instead of
           keys: # its contents but this is the only thing that works on circle
             - ccache-{{ checksum "/tmp/weeknumber" }}
-      - run: | # build deps
+      - run: | # compile julia deps
           contrib/download_cmake.sh &&
           make -j8 -C deps || make
       - run: | # build julia, output ccache stats when done
