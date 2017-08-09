@@ -35,20 +35,6 @@ isset(val::Integer, flag::Integer) = (val & flag == flag)
 reset(val::Integer, flag::Integer) = (val &= ~flag)
 toggle(val::Integer, flag::Integer) = (val |= flag)
 
-function prompt(msg::AbstractString; default::AbstractString="", password::Bool=false)
-    if Sys.iswindows() && password
-        error("Command line prompt not supported for password entry on windows. Use winprompt instead")
-    end
-    msg = !isempty(default) ? msg*" [$default]:" : msg*":"
-    uinput = if password
-        Base.getpass(msg)
-    else
-        print(msg)
-        readline()
-    end
-    isempty(uinput) ? default : uinput
-end
-
 function features()
     feat = ccall((:git_libgit2_features, :libgit2), Cint, ())
     res = Consts.GIT_FEATURE[]

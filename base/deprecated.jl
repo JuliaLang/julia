@@ -1632,6 +1632,16 @@ function SymTridiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}) where {T,S
     SymTridiagonal(convert(Vector{R}, dv), convert(Vector{R}, ev))
 end
 
+# PR #23092
+@eval LibGit2 begin
+    function prompt(msg::AbstractString; default::AbstractString="", password::Bool=false)
+        Base.depwarn(string(
+            "`LibGit2.prompt(msg::AbstractString; default::AbstractString=\"\", password::Bool=false)` is deprecated, use ",
+            "`get(Base.prompt(msg, default=default, password=password), \"\")` instead."), :prompt)
+        Base.get(Base.prompt(msg, default=default, password=password), "")
+    end
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

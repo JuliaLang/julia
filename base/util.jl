@@ -672,6 +672,32 @@ else
 getpass(prompt::AbstractString) = unsafe_string(ccall(:getpass, Cstring, (Cstring,), prompt))
 end
 
+"""
+    prompt(message; default="", password=false) -> Nullable{String}
+
+Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
+is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
+then the user can enter just a newline character to select the `default`. Alternatively,
+when the `password` keyword is `true` the characters entered by the user will not be
+displayed.
+"""
+function prompt(message::AbstractString; default::AbstractString="", password::Bool=false)
+    if Sys.iswindows() && password
+        error("Command line prompt not supported for password entry on windows. Use `Base.winprompt` instead")
+    end
+    msg = !isempty(default) ? "$message [$default]:" : "$message:"
+    if password
+        # `getpass` automatically chomps. We cannot tell an EOF from a '\n'.
+        uinput = getpass(msg)
+    else
+        print(msg)
+        uinput = readline(chomp=false)
+        isempty(uinput) && return Nullable{String}()  # Encountered an EOF
+        uinput = chomp(uinput)
+    end
+    Nullable{String}(isempty(uinput) ? default : uinput)
+end
+
 # Windows authentication prompt
 if Sys.iswindows()
     struct CREDUI_INFO
