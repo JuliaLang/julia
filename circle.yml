@@ -3,18 +3,18 @@ workflows:
   version: 2
   linux-builds:
     jobs:
-      - build-x86_64
       - build-i686
+#      - build-x86_64
 
 jobs:
-  build-x86_64:
+  build-i686:
     docker:
 #      - image: ubuntu:14.04
       - image: circleci/python:2.7
         environment:
-          JULIA_CPU_CORES: 4
+          JULIA_CPU_CORES: 6
           JULIA_TEST_MAXRSS_MB: 800
-          ARCH: x86_64
+          ARCH: i686
 #    resource_class: xlarge
     steps: &steps
 #          apt-get update &&
@@ -70,13 +70,13 @@ jobs:
           paths:
             - ~/.ccache
 
-  build-i686:
-    docker:
+#  build-x86_64:
+#    docker:
 #      - image: ubuntu:14.04
-      - image: circleci/python:2.7
-        environment:
-          JULIA_CPU_CORES: 4
-          JULIA_TEST_MAXRSS_MB: 800
-          ARCH: i686
+#      - image: circleci/python:2.7
+#        environment:
+#          JULIA_CPU_CORES: 6
+#          JULIA_TEST_MAXRSS_MB: 800
+#          ARCH: x86_64
 #    resource_class: xlarge
-    steps: *steps
+#    steps: *steps
