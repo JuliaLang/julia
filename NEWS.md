@@ -55,13 +55,13 @@ Language changes
     contains `sin` eagerly, rather than delaying that decision until `f` is run. ([#22984]).
 
   * Dispatch rules have been simplified:
-    matching methods is now determined exclusively by subtyping;
-    the rule that method type parameters must be also be captured has been removed.
-    Instead, attempting to access the uncontrained parameters will throw an `UndefVarError`.
+    method matching is now determined exclusively by subtyping;
+    the rule that method type parameters must also be captured has been removed.
+    Instead, attempting to access the unconstrained parameters will throw an `UndefVarError`.
     Linting in package tests is recommended to confirm that the set of methods
     which might throw `UndefVarError` when accessing the static parameters
     (`need_to_handle_undef_sparam = Set{Any}(m.sig for m in Test.detect_unbound_args(Base, recursive=true))`)
-    is equal (`==`) to some known set (`expected = Set()`). ([#TBD])
+    is equal (`==`) to some known set (`expected = Set()`). ([#23117])
 
 
 Breaking changes
@@ -1148,4 +1148,8 @@ Command-line option changes
 [#22868]: https://github.com/JuliaLang/julia/issues/22868
 [#22925]: https://github.com/JuliaLang/julia/issues/22925
 [#22961]: https://github.com/JuliaLang/julia/issues/22961
+[#22984]: https://github.com/JuliaLang/julia/issues/22984
 [#23035]: https://github.com/JuliaLang/julia/issues/23035
+[#23117]: https://github.com/JuliaLang/julia/issues/23117
+[#23144]: https://github.com/JuliaLang/julia/issues/23144
+[#23157]: https://github.com/JuliaLang/julia/issues/23157
