@@ -1582,7 +1582,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 if i == rowsA[halfheight]
                     print(io, i == first(rowsA) ? pre : presp)
                     print_matrix_vdots(io, vdots,A,sep,vmod,1)
-                    print(io, i == last(rowsA) ? post : postsp*'\n')
+                    print(io, i == last(rowsA) ? post : postsp * '\n')
                 end
             end
         else # neither rows nor cols fit, so use all 3 kinds of dots
@@ -1603,7 +1603,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                     print_matrix_vdots(io, vdots,Lalign,sep,vmod,1)
                     print(io, ddots)
                     print_matrix_vdots(io, vdots,Ralign,sep,vmod,r)
-                    print(io, i == last(rowsA) ? post : postsp*'\n')
+                    print(io, i == last(rowsA) ? post : postsp * '\n')
                 end
             end
         end

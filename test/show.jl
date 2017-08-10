@@ -882,10 +882,13 @@ end
 end
 
 @testset "Array printing with limited rows" begin
-    buf = IOBuffer()
-    arrstr(A, rows) = (Base.showarray(IOContext(buf, displaysize=(rows, 80), limit=true),
-                                      A, false, header=true);
-                       String(take!(buf)))
+    arrstr = let buf = IOBuffer()
+        function (A, rows)
+            Base.showarray(IOContext(buf, displaysize=(rows, 80), limit=true),
+                           A, false, header=true)
+            String(take!(buf))
+        end
+    end
     A = Int64[1]
     @test arrstr(A, 4) == "1-element Array{Int64,1}: …"
     @test arrstr(A, 5) == "1-element Array{Int64,1}:\n 1"
@@ -897,8 +900,8 @@ end
 
     @test arrstr(zeros(4, 3), 4)  == "4×3 Array{Float64,2}: …"
     @test arrstr(zeros(4, 30), 4) == "4×30 Array{Float64,2}: …"
-    @test arrstr(zeros(4, 3), 5)  =="4×3 Array{Float64,2}:\n ⋮      ⋱  "
-    @test arrstr(zeros(4, 30), 5) =="4×30 Array{Float64,2}:\n ⋮      ⋱  "
+    @test arrstr(zeros(4, 3), 5)  == "4×3 Array{Float64,2}:\n ⋮      ⋱  "
+    @test arrstr(zeros(4, 30), 5) == "4×30 Array{Float64,2}:\n ⋮      ⋱  "
     @test arrstr(zeros(4, 3), 6)  == "4×3 Array{Float64,2}:\n 0.0  0.0  0.0\n ⋮            "
     @test arrstr(zeros(4, 30), 6) ==
               string("4×30 Array{Float64,2}:\n",
