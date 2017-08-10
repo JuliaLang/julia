@@ -557,11 +557,3 @@ function Base.string(dt::Date)
     dd = lpad(d, 2, "0")
     return "$yy-$mm-$dd"
 end
-
-# vectorized
-function format(Y::AbstractArray{<:TimeType}, f::AbstractString; locale::Locale=ENGLISH)
-    format(Y, DateFormat(f, locale))
-end
-function format(Y::AbstractArray{T}, df::DateFormat=default_format(T)) where T<:TimeType
-    return reshape([format(y, df) for y in Y], size(Y))
-end
