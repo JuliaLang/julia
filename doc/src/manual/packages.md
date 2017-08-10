@@ -978,25 +978,20 @@ By "forking" the main METADATA repository, you can create a personal copy (of ME
 your GitHub account. Once that copy exists, you can push your local changes to your copy (just
 like any other GitHub project).
 
-1. go to [https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2FJuliaLang%2FMETADATA.jl%2Ffork](https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2FJuliaLang%2FMETADATA.jl%2Ffork)
-and create your own fork.
+1. Create a [fork of METADATA.jl](https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2FJuliaLang%2FMETADATA.jl%2Ffork).
 
-2. add your fork as a remote repository for the METADATA repository on your local computer (in
-the terminal where USERNAME is your github username):
+2. Add your fork as a remote repository for the METADATA repository on your local computer (in
+   the terminal where USERNAME is your github username):
 
-```
-cd ~/.julia/v0.6/METADATA
-git remote add USERNAME https://github.com/USERNAME/METADATA.jl.git
-```
+       cd ~/.julia/v0.6/METADATA
+       git remote add USERNAME https://github.com/USERNAME/METADATA.jl.git
 
-1. push your changes to your fork:
+3. Push your changes to your fork:
 
-   ```
-   git push USERNAME metadata-v2
-   ```
+       git push USERNAME metadata-v2
 
 4. If all of that works, then go back to the GitHub page for your fork, and click the "pull request"
-link.
+   link.
 
 ## Fixing Package Requirements
 
