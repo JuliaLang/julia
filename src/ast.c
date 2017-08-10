@@ -981,7 +981,6 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     JL_GC_PUSHARGS(margs, nargs);
     int i;
     margs[0] = jl_array_ptr_ref(args, 0);
-    margs[0] = jl_toplevel_eval(*ctx, margs[0]);
     // __source__ argument
     jl_value_t *lno = jl_array_ptr_ref(args, 1);
     margs[1] = lno;
@@ -1011,13 +1010,33 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     size_t last_age = ptls->world_age;
     size_t world = jl_world_counter;
     ptls->world_age = world;
-    jl_method_instance_t *mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1, world);
-    if (mfunc == NULL) {
-        jl_method_error((jl_function_t*)margs[0], margs, nargs, world);
-        // unreachable
+    jl_value_t *result;
+    JL_TRY {
+        margs[0] = jl_toplevel_eval(*ctx, margs[0]);
+        jl_method_instance_t *mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1, world);
+        if (mfunc == NULL) {
+            jl_method_error((jl_function_t*)margs[0], margs, nargs, world);
+            // unreachable
+        }
+        *ctx = mfunc->def.method->module;
+        result = jl_call_method_internal(mfunc, margs, nargs);
     }
-    *ctx = mfunc->def.method->module;
-    jl_value_t *result = jl_call_method_internal(mfunc, margs, nargs);
+    JL_CATCH {
+        if (jl_loaderror_type == NULL) {
+            jl_rethrow();
+        }
+        else {
+            jl_value_t *lno = margs[1];
+            jl_value_t *file = jl_fieldref(lno, 1);
+            if (jl_is_symbol(file))
+                margs[0] = jl_cstr_to_string(jl_symbol_name((jl_sym_t*)file));
+            else
+                margs[0] = jl_cstr_to_string("<macrocall>");
+            margs[1] = jl_fieldref(lno, 0); // extract and allocate line number
+            jl_rethrow_other(jl_new_struct(jl_loaderror_type, margs[0], margs[1],
+                                           ptls->exception_in_transit));
+        }
+    }
     ptls->world_age = last_age;
     JL_GC_POP();
     return result;

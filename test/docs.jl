@@ -706,7 +706,18 @@ end
 )
 
 # Issue #13905.
-@test @macroexpand(@doc "" f() = @x) == Expr(:error, UndefVarError(Symbol("@x")))
+let err = try; @macroexpand(@doc "" f() = @x); false; catch ex; ex; end
+    __source__ = LineNumberNode(@__LINE__() -  1, Symbol(@__FILE__))
+    err::LoadError
+    @test err.file === string(__source__.file)
+    @test err.line === __source__.line
+    err = err.error::LoadError
+    @test err.file === string(__source__.file)
+    @test err.line === __source__.line
+    err = err.error::UndefVarError
+    @test err.var == Symbol("@x")
+ end
+
 
 # Undocumented DataType Summaries.
 
