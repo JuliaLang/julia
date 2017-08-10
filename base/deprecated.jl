@@ -1591,6 +1591,12 @@ end
 @eval Dates @deprecate(
     DateTime(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateTimeFormat),
     DateTime.(Y, df) )
+@eval Dates @deprecate(
+    Date(Y::AbstractArray{<:AbstractString}, f::AbstractString; locale::Locale=ENGLISH),
+    Date.(Y, f; locale=locale) )
+@eval Dates @deprecate(
+    Date(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateFormat),
+    Date.(Y, df) )
 
 # PR #22182
 @deprecate is_apple   Sys.isapple

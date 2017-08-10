@@ -559,7 +559,6 @@ function Base.string(dt::Date)
 end
 
 # vectorized
-
 function format(Y::AbstractArray{<:TimeType}, f::AbstractString; locale::Locale=ENGLISH)
     format(Y, DateFormat(f, locale))
 end

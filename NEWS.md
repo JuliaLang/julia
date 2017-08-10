@@ -299,7 +299,8 @@ Deprecated or removed
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).
 
-  * Vectorized `DateTime` methods have been deprecated in favor of dot-syntax ([#CATS]).
+  * Vectorized `DateTime` and `Date` methods have been deprecated in favor of dot-syntax
+    ([#CATS]).
 
   * `Base.cpad` has been removed; use an appropriate combination of `rpad` and `lpad`
     instead ([#23187]).
