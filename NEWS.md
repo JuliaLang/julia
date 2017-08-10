@@ -299,6 +299,9 @@ Deprecated or removed
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).
 
+  * `Base.cpad` has been removed; use an appropriate combination of `rpad` and `lpad`
+    instead ([#23187]).
+
 Julia v0.6.0 Release Notes
 ==========================
 

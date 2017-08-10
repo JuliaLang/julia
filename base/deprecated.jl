@@ -1642,6 +1642,9 @@ end
     end
 end
 
+# PR #23187
+@deprecate cpad(s, n::Integer, p=" ") rpad(lpad(s, div(n+strwidth(s), 2), p), n, p) false
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
