@@ -477,14 +477,14 @@ function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
     elseif m === :skip
         history_prev(s, hist, num+1, save_idx)
     else
-        Terminals.beep(LineEdit.terminal(s))
+        Terminals.beep(s)
     end
 end
 
 function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
                       num::Int=1, save_idx::Int = hist.cur_idx)
     if num == 0
-        Terminals.beep(LineEdit.terminal(s))
+        Terminals.beep(s)
         return
     end
     num < 0 && return history_prev(s, hist, -num, save_idx)
@@ -502,7 +502,7 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
     elseif m === :skip
         history_next(s, hist, num+1, save_idx)
     else
-        Terminals.beep(LineEdit.terminal(s))
+        Terminals.beep(s)
     end
 end
 
@@ -546,7 +546,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
             end
         end
     end
-    Terminals.beep(LineEdit.terminal(s))
+    Terminals.beep(s)
 end
 history_next_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, prefix::AbstractString) =
     history_move_prefix(s, hist, prefix, false)
