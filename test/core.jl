@@ -3491,8 +3491,16 @@ macro m8846(a, b=0)
     a, b
 end
 @test @m8846(a) === (:a, 0)
-@test @m8846(a,1) === (:a, 1)
-@test_throws MethodError @eval @m8846(a,b,c)
+@test @m8846(a, 1) === (:a, 1)
+let nometh = try; @eval @m8846(a, b, c); false; catch ex; ex; end
+    __source__ = LineNumberNode(@__LINE__() -  1, Symbol(@__FILE__))
+    nometh::LoadError
+    @test nometh.file === string(__source__.file)
+    @test nometh.line === __source__.line
+    e = nometh.error::MethodError
+    @test e.f === getfield(@__MODULE__, Symbol("@m8846"))
+    @test e.args === (__source__, @__MODULE__, :a, :b, :c)
+ end
 
 # a simple case of parametric dispatch with unions
 let foo(x::Union{T, Void}, y::Union{T, Void}) where {T} = 1
@@ -5130,8 +5138,13 @@ f_isdefined_unionvar(y, t) = (t > 0 && (x = (t == 1 ? 1 : y)); @isdefined x)
 @test !f_isdefined_unionvar(1, 0)
 f_isdefined_splat(x...) = @isdefined x
 @test f_isdefined_splat(1, 2, 3)
-@test let err = @macroexpand @isdefined :x
-    isa(err, Expr) && err.head === :error && isa(err.args[1], MethodError)
+let err = try; @macroexpand @isdefined :x; false; catch ex; ex; end,
+    __source__ = LineNumberNode(@__LINE__() - 1, Symbol(@__FILE__))
+    @test err.file === string(__source__.file)
+    @test err.line === __source__.line
+    e = err.error::MethodError
+    @test e.f === getfield(@__MODULE__, Symbol("@isdefined"))
+    @test e.args === (__source__, @__MODULE__, :(:x))
 end
 f_isdefined_cl_1(y) = (local x; for i = 1:y; x = 2; end; () -> x; @isdefined x)
 f_isdefined_cl_2(y) = (local x; for i = 1:y; x = 2; end; () -> @isdefined x)
