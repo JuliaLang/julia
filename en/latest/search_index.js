@@ -3445,7 +3445,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Packages",
     "title": "Publishing METADATA manually",
     "category": "section",
-    "text": "If PkgDev.publish() fails you can follow these instructions to manually publish your package.By \"forking\" the main METADATA repository, you can create a personal copy (of METADATA.jl) under your GitHub account. Once that copy exists, you can push your local changes to your copy (just like any other GitHub project).go to https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2FJuliaLang%2FMETADATA.jl%2Fforkand create your own fork.add your fork as a remote repository for the METADATA repository on your local computer (inthe terminal where USERNAME is your github username):cd ~/.julia/v0.6/METADATA\ngit remote add USERNAME https://github.com/USERNAME/METADATA.jl.gitpush your changes to your fork:\ngit push USERNAME metadata-v2\nIf all of that works, then go back to the GitHub page for your fork, and click the \"pull request\"link."
+    "text": "If PkgDev.publish() fails you can follow these instructions to manually publish your package.By \"forking\" the main METADATA repository, you can create a personal copy (of METADATA.jl) under your GitHub account. Once that copy exists, you can push your local changes to your copy (just like any other GitHub project).Create a fork of METADATA.jl.\nAdd your fork as a remote repository for the METADATA repository on your local computer (in the terminal where USERNAME is your github username):\ncd ~/.julia/v0.6/METADATA\ngit remote add USERNAME https://github.com/USERNAME/METADATA.jl.git\nPush your changes to your fork:\ngit push USERNAME metadata-v2\nIf all of that works, then go back to the GitHub page for your fork, and click the \"pull request\" link."
 },
 
 {
@@ -9073,22 +9073,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/numbers/#Base.num2hex",
-    "page": "Numbers",
-    "title": "Base.num2hex",
-    "category": "Function",
-    "text": "num2hex(f)\n\nGet a hexadecimal string of the binary representation of a floating point number.\n\nExamples\n\njulia> num2hex(2.2)\n\"400199999999999a\"\n\n\n\n"
-},
-
-{
-    "location": "stdlib/numbers/#Base.hex2num",
-    "page": "Numbers",
-    "title": "Base.hex2num",
-    "category": "Function",
-    "text": "hex2num(str)\n\nConvert a hexadecimal string to the floating point number it represents.\n\n\n\n"
-},
-
-{
     "location": "stdlib/numbers/#Base.hex2bytes",
     "page": "Numbers",
     "title": "Base.hex2bytes",
@@ -9109,7 +9093,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Data Formats",
     "category": "section",
-    "text": "Base.bin\nBase.hex\nBase.dec\nBase.oct\nBase.base\nBase.digits\nBase.digits!\nBase.bits\nBase.parse(::Type, ::Any, ::Any)\nBase.tryparse\nBase.big\nBase.signed\nBase.unsigned\nBase.float(::Any)\nBase.Math.significand\nBase.Math.exponent\nBase.complex(::Complex)\nBase.bswap\nBase.num2hex\nBase.hex2num\nBase.hex2bytes\nBase.bytes2hex"
+    "text": "Base.bin\nBase.hex\nBase.dec\nBase.oct\nBase.base\nBase.digits\nBase.digits!\nBase.bits\nBase.parse(::Type, ::Any, ::Any)\nBase.tryparse\nBase.big\nBase.signed\nBase.unsigned\nBase.float(::Any)\nBase.Math.significand\nBase.Math.exponent\nBase.complex(::Complex)\nBase.bswap\nBase.hex2bytes\nBase.bytes2hex"
 },
 
 {
@@ -12781,7 +12765,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExamples\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\nqrfact(A) -> QRSparse\n\nCompute the QR factorization of a sparse matrix A. Fill-reducing row and column permutations are used such that F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]. The main application of this type is to solve least squares or underdetermined problems with \\. The function calls the C library SPQR.\n\nExamples\n\njulia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))\n4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 1]  =  1.0\n  [3, 2]  =  1.0\n  [4, 2]  =  1.0\n\njulia> qrfact(A)\nBase.SparseArrays.SPQR.QRSparse{Float64,Int64}\nQ factor:\n4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:\n -0.707107   0.0        0.0       -0.707107\n  0.0       -0.707107  -0.707107   0.0\n  0.0       -0.707107   0.707107   0.0\n -0.707107   0.0        0.0        0.707107\nR factor:\n2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  -1.41421\n  [2, 2]  =  -1.41421\nRow permutation:\n4-element Array{Int64,1}:\n 1\n 3\n 4\n 2\nColumn permutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
+    "text": "qrfact(A) -> QRSparse\n\nCompute the QR factorization of a sparse matrix A. Fill-reducing row and column permutations are used such that F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]. The main application of this type is to solve least squares or underdetermined problems with \\. The function calls the C library SPQR.\n\nExamples\n\njulia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))\n4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 1]  =  1.0\n  [3, 2]  =  1.0\n  [4, 2]  =  1.0\n\njulia> qrfact(A)\nBase.SparseArrays.SPQR.QRSparse{Float64,Int64}\nQ factor:\n4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:\n -0.707107   0.0        0.0       -0.707107\n  0.0       -0.707107  -0.707107   0.0\n  0.0       -0.707107   0.707107   0.0\n -0.707107   0.0        0.0        0.707107\nR factor:\n2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  -1.41421\n  [2, 2]  =  -1.41421\nRow permutation:\n4-element Array{Int64,1}:\n 1\n 3\n 4\n 2\nColumn permutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\nqrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExamples\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\n"
 },
 
 {
