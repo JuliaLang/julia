@@ -299,6 +299,8 @@ Deprecated or removed
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).
 
+  * Vectorized `DateTime` methods have been deprecated in favor of dot-syntax ([#CATS]).
+
   * `Base.cpad` has been removed; use an appropriate combination of `rpad` and `lpad`
     instead ([#23187]).
 
@@ -1156,3 +1158,4 @@ Command-line option changes
 [#23117]: https://github.com/JuliaLang/julia/issues/23117
 [#23144]: https://github.com/JuliaLang/julia/issues/23144
 [#23157]: https://github.com/JuliaLang/julia/issues/23157
+[#23187]: https://github.com/JuliaLang/julia/issues/23187

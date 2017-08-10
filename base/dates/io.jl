@@ -559,18 +559,6 @@ function Base.string(dt::Date)
 end
 
 # vectorized
-function DateTime(Y::AbstractArray{<:AbstractString}, f::AbstractString; locale::Locale=ENGLISH)
-    DateTime(Y, DateFormat(f, locale))
-end
-function DateTime(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateTimeFormat)
-    return reshape(DateTime[parse(DateTime, y, df) for y in Y], size(Y))
-end
-function Date(Y::AbstractArray{<:AbstractString}, f::AbstractString; locale::Locale=ENGLISH)
-    Date(Y, DateFormat(f, locale))
-end
-function Date(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateFormat)
-    return reshape(Date[Date(parse(Date, y, df)) for y in Y], size(Y))
-end
 
 function format(Y::AbstractArray{<:TimeType}, f::AbstractString; locale::Locale=ENGLISH)
     format(Y, DateFormat(f, locale))
