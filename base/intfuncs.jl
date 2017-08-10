@@ -584,8 +584,6 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     String(a)
 end
 
-num2hex(n::Integer) = hex(n, sizeof(n)*2)
-
 const base36digits = ['0':'9';'a':'z']
 const base62digits = ['0':'9';'A':'Z';'a':'z']
 

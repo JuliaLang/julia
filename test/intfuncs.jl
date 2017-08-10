@@ -123,7 +123,6 @@ end
 
 @test hex(12) == "c"
 @test hex(-12, 3) == "-00c"
-@test num2hex(1243) == (Int == Int32 ? "000004db" : "00000000000004db")
 
 @test base(2, 5, 7) == "0000101"
 

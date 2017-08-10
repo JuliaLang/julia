@@ -429,19 +429,6 @@ original string, otherwise they must be from distinct character ranges.
 eachmatch
 
 """
-    num2hex(f)
-
-Get a hexadecimal string of the binary representation of a floating point number.
-
-# Examples
-```jldoctest
-julia> num2hex(2.2)
-"400199999999999a"
-```
-"""
-num2hex
-
-"""
     truncate(file,n)
 
 Resize the file or buffer given by the first argument to exactly `n` bytes, filling
@@ -1300,13 +1287,6 @@ false
 ```
 """
 isempty
-
-"""
-    hex2num(str)
-
-Convert a hexadecimal string to the floating point number it represents.
-"""
-hex2num
 
 """
     InexactError(name::Symbol, T, val)
