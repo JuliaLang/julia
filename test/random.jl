@@ -550,7 +550,7 @@ let seed = rand(UInt32, 10)
 end
 
 # srand(rng, ...) returns rng (#21248)
-let g = Base.Random.GLOBAL_RNG,
+let g = Base.Random.defaultRNG(),
     m = MersenneTwister(0)
     @test srand() === g
     @test srand(rand(UInt)) === g

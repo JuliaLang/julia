@@ -17,7 +17,7 @@ export srand,
        randperm, randperm!,
        randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice,
-       GLOBAL_RNG, randjump
+       defaultRNG, randjump
 
 
 abstract type AbstractRNG end
@@ -38,7 +38,7 @@ const BitFloatType = Union{Type{Float16},Type{Float32},Type{Float64}}
 
 function __init__()
     try
-        srand()
+        srand(MersenneTwister)
     catch ex
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module Random")
@@ -54,7 +54,7 @@ include("misc.jl")
 ## rand & rand! & srand docstrings
 
 """
-    rand([rng=GLOBAL_RNG], [S], [dims...])
+    rand([rng=defaultRNG()], [S], [dims...])
 
 Pick a random element or array of random elements from the set of values specified by `S`;
 `S` can be
@@ -90,7 +90,7 @@ julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
 rand
 
 """
-    rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])
+    rand!([rng=defaultRNG()], A, [S=eltype(A)])
 
 Populate the array `A` with random values. If `S` is specified
 (`S` can be a type or a collection, cf. [`rand`](@ref) for details),
@@ -114,8 +114,8 @@ julia> rand!(rng, zeros(5))
 rand!
 
 """
-    srand([rng=GLOBAL_RNG], seed) -> rng
-    srand([rng=GLOBAL_RNG]) -> rng
+    srand([rng=defaultRNG()], seed) -> rng
+    srand([rng=defaultRNG()]) -> rng
 
 Reseed the random number generator. If a `seed` is provided, the RNG will give a
 reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
@@ -141,7 +141,34 @@ julia> x2 = rand(2)
 julia> x1 == x2
 true
 ```
+
+    srand(T::Type{<:AbstractRNG}, [seed]) -> AbstractRNG
+
+If the current default RNG (as returned by [`defaultRNG`](@ref)()) is of
+type `T`, then reseed it (equivalent to `srand(defaultRNG(), seed)`.
+Otherwise, initialize a new RNG of type `T` using `seed` if provided,
+and make it the new value returned by `defaultRNG()`.
 """
 srand
+
+function srand(::Type{T}, seed=nothing) where T <: AbstractRNG
+    if defaultRNG() isa T
+        seed == nothing ?
+            srand(defaultRNG()) :
+            srand(defaultRNG(), seed)
+    else
+        @eval let rng = $seed === nothing ? $T() : $T($seed)
+            global defaultRNG() = rng::$T
+        end
+    end
+end
+
+"""
+    Base.Random.defaultRNG() -> AbstractRNG
+
+The current default RNG, which is used in `rand`-related functionalities when
+no explicit RNG is provided. Its type can be set in [`srand`](@ref).
+"""
+defaultRNG() = nothing # initialized in __init__
 
 end # module

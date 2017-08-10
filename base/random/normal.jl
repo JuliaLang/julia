@@ -10,7 +10,7 @@
 ## randn
 
 """
-    randn([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randn([rng=defaultRNG()], [T=Float64], [dims...])
 
 Generate a normally-distributed random number of type `T`
 with mean 0 and standard deviation 1.
@@ -33,7 +33,7 @@ julia> randn(rng, Complex64, (2, 3))
   0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im
 ```
 """
-@inline function randn(rng::AbstractRNG=GLOBAL_RNG)
+@inline function randn(rng::AbstractRNG=defaultRNG())
     @inbounds begin
         r = rand_ui52(rng)
         rabs = Int64(r>>1) # One bit for the sign
@@ -71,7 +71,7 @@ randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T<:AbstractFloat} =
 ## randexp
 
 """
-    randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randexp([rng=defaultRNG()], [T=Float64], [dims...])
 
 Generate a random number of type `T` according to the
 exponential distribution with scale 1.
@@ -93,7 +93,7 @@ julia> randexp(rng, 3, 3)
  0.695867  0.693292  0.643644
 ```
 """
-@inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
+@inline function randexp(rng::AbstractRNG=defaultRNG())
     @inbounds begin
         ri = rand_ui52(rng)
         idx = ri & 0xFF
@@ -117,7 +117,7 @@ end
 ## arrays & other scalar methods
 
 """
-    randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randn!([rng=defaultRNG()], A::AbstractArray) -> A
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
 Also see the [`rand`](@ref) function.
@@ -138,7 +138,7 @@ julia> randn!(rng, zeros(5))
 function randn! end
 
 """
-    randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randexp!([rng=defaultRNG()], A::AbstractArray) -> A
 
 Fill the array `A` with random numbers following the exponential distribution
 (with scale 1).
@@ -163,7 +163,7 @@ for randfun in [:randn, :randexp]
     @eval begin
         # scalars
         $randfun(rng::AbstractRNG, T::BitFloatType) = convert(T, $randfun(rng))
-        $randfun(::Type{T}) where {T} = $randfun(GLOBAL_RNG, T)
+        $randfun(::Type{T}) where {T} = $randfun(defaultRNG(), T)
 
         # filling arrays
         function $randfun!(rng::AbstractRNG, A::AbstractArray{T}) where T
@@ -173,19 +173,19 @@ for randfun in [:randn, :randexp]
             A
         end
 
-        $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
+        $randfun!(A::AbstractArray) = $randfun!(defaultRNG(), A)
 
         # generating arrays
         $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(dims))
         # Note that this method explicitly does not define $randfun(rng, T),
         # in order to prevent an infinite recursion.
         $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(dim1, dims...))
-        $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(GLOBAL_RNG, T, dims)
-        $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(GLOBAL_RNG, T, dims...)
+        $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(defaultRNG(), T, dims)
+        $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(defaultRNG(), T, dims...)
         $randfun(rng::AbstractRNG,            dims::Dims                     )           = $randfun(rng, Float64, dims)
         $randfun(rng::AbstractRNG,            dims::Integer...               )           = $randfun(rng, Float64, dims...)
-        $randfun(                             dims::Dims                     )           = $randfun(GLOBAL_RNG, Float64, dims)
-        $randfun(                             dims::Integer...               )           = $randfun(GLOBAL_RNG, Float64, dims...)
+        $randfun(                             dims::Dims                     )           = $randfun(defaultRNG(), Float64, dims)
+        $randfun(                             dims::Integer...               )           = $randfun(defaultRNG(), Float64, dims...)
     end
 end
 

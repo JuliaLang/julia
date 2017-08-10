@@ -178,15 +178,9 @@ function srand(r::MersenneTwister, seed::Vector{UInt32})
     return r
 end
 
-srand(r::MersenneTwister=GLOBAL_RNG) = srand(r, make_seed())
+srand(r::MersenneTwister=defaultRNG()) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
-srand(seed::Union{Integer,Vector{UInt32}}) = srand(GLOBAL_RNG, seed)
-
-
-### Global RNG (must be defined after srand)
-
-const GLOBAL_RNG = MersenneTwister(0)
-
+srand(seed::Union{Integer,Vector{UInt32}}) = srand(defaultRNG(), seed)
 
 ### generation
 

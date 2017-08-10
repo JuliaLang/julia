@@ -11,7 +11,7 @@ function rand!(rng::AbstractRNG, B::BitArray)
 end
 
 """
-    bitrand([rng=GLOBAL_RNG], [dims...])
+    bitrand([rng=defaultRNG()], [dims...])
 
 Generate a `BitArray` of random boolean values.
 
@@ -43,7 +43,7 @@ bitrand(dims::Integer...) = rand!(BitArray(convert(Dims, dims)))
 ## randstring (often useful for temporary filenames/dirnames)
 
 """
-    randstring([rng=GLOBAL_RNG], [chars], [len=8])
+    randstring([rng=defaultRNG()], [chars], [len=8])
 
 Create a random string of length `len`, consisting of characters from
 `chars`, which defaults to the set of upper- and lower-case letters
@@ -73,8 +73,8 @@ let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
     randstring(r::AbstractRNG, chars=b, n::Integer=8) = String(rand(r, chars, n))
     randstring(r::AbstractRNG, n::Integer) = randstring(r, b, n)
-    randstring(chars=b, n::Integer=8) = randstring(GLOBAL_RNG, chars, n)
-    randstring(n::Integer) = randstring(GLOBAL_RNG, b, n)
+    randstring(chars=b, n::Integer=8) = randstring(defaultRNG(), chars, n)
+    randstring(n::Integer) = randstring(defaultRNG(), b, n)
 end
 
 
@@ -125,7 +125,7 @@ end
 Like [`randsubseq`](@ref), but the results are stored in `S`
 (which is resized as needed).
 """
-randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RNG, S, A, p)
+randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(defaultRNG(), S, A, p)
 
 randsubseq(r::AbstractRNG, A::AbstractArray{T}, p::Real) where {T} =
     randsubseq!(r, T[], A, p)
@@ -138,7 +138,7 @@ element of `A` is included (in order) with independent probability `p`. (Complex
 linear in `p*length(A)`, so this function is efficient even if `p` is small and `A` is
 large.) Technically, this process is known as "Bernoulli sampling" of `A`.
 """
-randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
+randsubseq(A::AbstractArray, p::Real) = randsubseq(defaultRNG(), A, p)
 
 
 ## rand_lt (helper function)
@@ -157,7 +157,7 @@ end
 ## shuffle & shuffle!
 
 """
-    shuffle!([rng=GLOBAL_RNG,] v::AbstractArray)
+    shuffle!([rng=defaultRNG(),] v::AbstractArray)
 
 In-place version of [`shuffle`](@ref): randomly permute `v` in-place,
 optionally supplying the random-number generator `rng`.
@@ -198,10 +198,10 @@ function shuffle!(r::AbstractRNG, a::AbstractArray)
     return a
 end
 
-shuffle!(a::AbstractArray) = shuffle!(GLOBAL_RNG, a)
+shuffle!(a::AbstractArray) = shuffle!(defaultRNG(), a)
 
 """
-    shuffle([rng=GLOBAL_RNG,] v::AbstractArray)
+    shuffle([rng=defaultRNG(),] v::AbstractArray)
 
 Return a randomly permuted copy of `v`. The optional `rng` argument specifies a random
 number generator (see [Random Numbers](@ref)).
@@ -227,13 +227,13 @@ julia> shuffle(rng, collect(1:10))
 ```
 """
 shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
-shuffle(a::AbstractArray) = shuffle(GLOBAL_RNG, a)
+shuffle(a::AbstractArray) = shuffle(defaultRNG(), a)
 
 
 ## randperm & randperm!
 
 """
-    randperm([rng=GLOBAL_RNG,] n::Integer)
+    randperm([rng=defaultRNG(),] n::Integer)
 
 Construct a random permutation of length `n`. The optional `rng`
 argument specifies a random number generator (see [Random Numbers](@ref)).
@@ -251,10 +251,10 @@ julia> randperm(MersenneTwister(1234), 4)
 ```
 """
 randperm(r::AbstractRNG, n::Integer) = randperm!(r, Vector{Int}(n))
-randperm(n::Integer) = randperm(GLOBAL_RNG, n)
+randperm(n::Integer) = randperm(defaultRNG(), n)
 
 """
-    randperm!([rng=GLOBAL_RNG,] A::Array{<:Integer})
+    randperm!([rng=defaultRNG(),] A::Array{<:Integer})
 
 Construct in `A` a random permutation of length `length(A)`. The
 optional `rng` argument specifies a random number generator (see
@@ -288,13 +288,13 @@ function randperm!(r::AbstractRNG, a::Array{<:Integer})
     return a
 end
 
-randperm!(a::Array{<:Integer}) = randperm!(GLOBAL_RNG, a)
+randperm!(a::Array{<:Integer}) = randperm!(defaultRNG(), a)
 
 
 ## randcycle & randcycle!
 
 """
-    randcycle([rng=GLOBAL_RNG,] n::Integer)
+    randcycle([rng=defaultRNG(),] n::Integer)
 
 Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
@@ -312,10 +312,10 @@ julia> randcycle(MersenneTwister(1234), 6)
 ```
 """
 randcycle(r::AbstractRNG, n::Integer) = randcycle!(r, Vector{Int}(n))
-randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
+randcycle(n::Integer) = randcycle(defaultRNG(), n)
 
 """
-    randcycle!([rng=GLOBAL_RNG,] A::Array{<:Integer})
+    randcycle!([rng=defaultRNG(),] A::Array{<:Integer})
 
 Construct in `A` a random cyclic permutation of length `length(A)`.
 The optional `rng` argument specifies a random number generator, see
@@ -348,7 +348,7 @@ function randcycle!(r::AbstractRNG, a::Array{<:Integer})
     return a
 end
 
-randcycle!(a::Array{<:Integer}) = randcycle!(GLOBAL_RNG, a)
+randcycle!(a::Array{<:Integer}) = randcycle!(defaultRNG(), a)
 
 
 ## random UUID generation
@@ -360,7 +360,7 @@ struct UUID
 end
 
 """
-    uuid1([rng::AbstractRNG=GLOBAL_RNG]) -> UUID
+    uuid1([rng::AbstractRNG=defaultRNG()]) -> UUID
 
 Generates a version 1 (time-based) universally unique identifier (UUID), as specified
 by RFC 4122. Note that the Node ID is randomly generated (does not identify the host)
@@ -374,7 +374,7 @@ julia> Base.Random.uuid1(rng)
 2cc938da-5937-11e7-196e-0f4ef71aa64b
 ```
 """
-function uuid1(rng::AbstractRNG=GLOBAL_RNG)
+function uuid1(rng::AbstractRNG=defaultRNG())
     u = rand(rng, UInt128)
 
     # mask off clock sequence and node
@@ -398,7 +398,7 @@ function uuid1(rng::AbstractRNG=GLOBAL_RNG)
 end
 
 """
-    uuid4([rng::AbstractRNG=GLOBAL_RNG]) -> UUID
+    uuid4([rng::AbstractRNG=defaultRNG()]) -> UUID
 
 Generates a version 4 (random or pseudo-random) universally unique identifier (UUID),
 as specified by RFC 4122.
@@ -411,7 +411,7 @@ julia> Base.Random.uuid4(rng)
 82015f10-44cc-4827-996e-0f4ef71aa64b
 ```
 """
-function uuid4(rng::AbstractRNG=GLOBAL_RNG)
+function uuid4(rng::AbstractRNG=defaultRNG())
     u = rand(rng, UInt128)
     u &= 0xffffffffffff0fff3fffffffffffffff
     u |= 0x00000000000040008000000000000000

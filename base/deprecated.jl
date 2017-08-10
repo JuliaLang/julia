@@ -1730,6 +1730,8 @@ end
 
 @deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)
 
+@eval Base.Random Base.@deprecate_binding GLOBAL_RNG srand(MersenneTwister(0))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

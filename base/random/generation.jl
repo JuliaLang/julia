@@ -4,14 +4,14 @@
 
 ## from types: rand(::Type, [dims...])
 
-### GLOBAL_RNG fallback for all types
+### defaultRNG() fallback for all types
 
-@inline rand(T::Type) = rand(GLOBAL_RNG, T)
+@inline rand(T::Type) = rand(defaultRNG(), T)
 
 ### random floats
 
 # CloseOpen(T) is the fallback for an AbstractFloat T
-@inline rand(r::AbstractRNG=GLOBAL_RNG, ::Type{T}=Float64) where {T<:AbstractFloat} =
+@inline rand(r::AbstractRNG=defaultRNG(), ::Type{T}=Float64) where {T<:AbstractFloat} =
     rand(r, CloseOpen(T))
 
 # generic random generation function which can be used by RNG implementors
@@ -119,20 +119,20 @@ function rand!(r::AbstractRNG, A::AbstractArray{T}, ::Type{X}=T) where {T,X}
     A
 end
 
-rand!(A::AbstractArray, ::Type{X}) where {X} = rand!(GLOBAL_RNG, A, X)
+rand!(A::AbstractArray, ::Type{X}) where {X} = rand!(defaultRNG(), A, X)
 # NOTE: if the second parameter above is defaulted to eltype(A) and the
 # method below is removed, then some specialized methods (e.g. for
 # rand!(::Array{Float64})) will fail to be called
-rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
+rand!(A::AbstractArray) = rand!(defaultRNG(), A)
 
 
 rand(r::AbstractRNG, dims::Dims)       = rand(r, Float64, dims)
-rand(                dims::Dims)       = rand(GLOBAL_RNG, dims)
+rand(                dims::Dims)       = rand(defaultRNG(), dims)
 rand(r::AbstractRNG, dims::Integer...) = rand(r, Dims(dims))
 rand(                dims::Integer...) = rand(Dims(dims))
 
 rand(r::AbstractRNG, T::Type, dims::Dims)                   = rand!(r, Array{T}(dims))
-rand(                T::Type, dims::Dims)                   = rand(GLOBAL_RNG, T, dims)
+rand(                T::Type, dims::Dims)                   = rand(defaultRNG(), T, dims)
 rand(r::AbstractRNG, T::Type, d::Integer, dims::Integer...) = rand(r, T, Dims((d, dims...)))
 rand(                T::Type, d::Integer, dims::Integer...) = rand(T, Dims((d, dims...)))
 # note: the above methods would trigger an ambiguity warning if d was not separated out:
@@ -159,7 +159,7 @@ function rand!(rng::AbstractRNG, A::AbstractArray, I::FloatInterval{BigFloat})
     A
 end
 
-rand!(A::AbstractArray, I::FloatInterval) = rand!(GLOBAL_RNG, A, I)
+rand!(A::AbstractArray, I::FloatInterval) = rand!(defaultRNG(), A, I)
 
 ## Generate random integer within a range
 
@@ -301,7 +301,7 @@ rand!(rng::AbstractRNG, A::AbstractArray,
 ## random values from AbstractArray
 
 rand(rng::AbstractRNG, r::AbstractArray) = @inbounds return r[rand(rng, 1:length(r))]
-rand(                  r::AbstractArray) = rand(GLOBAL_RNG, r)
+rand(                  r::AbstractArray) = rand(defaultRNG(), r)
 
 ### arrays
 
@@ -313,13 +313,13 @@ function rand!(rng::AbstractRNG, A::AbstractArray, r::AbstractArray)
     return A
 end
 
-rand!(A::AbstractArray, r::AbstractArray) = rand!(GLOBAL_RNG, A, r)
+rand!(A::AbstractArray, r::AbstractArray) = rand!(defaultRNG(), A, r)
 
 rand(rng::AbstractRNG, r::AbstractArray{T}, dims::Dims) where {T} =
     rand!(rng, Array{T}(dims), r)
-rand(                  r::AbstractArray, dims::Dims)       = rand(GLOBAL_RNG, r, dims)
+rand(                  r::AbstractArray, dims::Dims)       = rand(defaultRNG(), r, dims)
 rand(rng::AbstractRNG, r::AbstractArray, dims::Integer...) = rand(rng, r, Dims(dims))
-rand(                  r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, Dims(dims))
+rand(                  r::AbstractArray, dims::Integer...) = rand(defaultRNG(), r, Dims(dims))
 
 
 ## random values from Dict, Set, IntSet
@@ -356,7 +356,7 @@ nth(iter::AbstractArray, n::Integer) = iter[n]
 
 rand(r::AbstractRNG, s::Union{Associative,AbstractSet}) = nth(s, rand(r, 1:length(s)))
 
-rand(s::Union{Associative,AbstractSet}) = rand(GLOBAL_RNG, s)
+rand(s::Union{Associative,AbstractSet}) = rand(defaultRNG(), s)
 
 ### arrays
 
@@ -371,7 +371,7 @@ end
 rand!(r::AbstractRNG, A::AbstractArray, s::Union{Associative,AbstractSet}) =
     rand!(r, A, collect(s))
 
-rand!(A::AbstractArray, s::Union{Associative,AbstractSet}) = rand!(GLOBAL_RNG, A, s)
+rand!(A::AbstractArray, s::Union{Associative,AbstractSet}) = rand!(defaultRNG(), A, s)
 
 rand(r::AbstractRNG, s::Associative{K,V}, dims::Dims) where {K,V} =
     rand!(r, Array{Pair{K,V}}(dims), s)
@@ -379,8 +379,8 @@ rand(r::AbstractRNG, s::Associative{K,V}, dims::Dims) where {K,V} =
 rand(r::AbstractRNG, s::AbstractSet{T}, dims::Dims) where {T} = rand!(r, Array{T}(dims), s)
 rand(r::AbstractRNG, s::Union{Associative,AbstractSet}, dims::Integer...) =
     rand(r, s, Dims(dims))
-rand(s::Union{Associative,AbstractSet}, dims::Integer...) = rand(GLOBAL_RNG, s, Dims(dims))
-rand(s::Union{Associative,AbstractSet}, dims::Dims) = rand(GLOBAL_RNG, s, dims)
+rand(s::Union{Associative,AbstractSet}, dims::Integer...) = rand(defaultRNG(), s, Dims(dims))
+rand(s::Union{Associative,AbstractSet}, dims::Dims) = rand(defaultRNG(), s, dims)
 
 
 ## random characters from a string
@@ -398,19 +398,19 @@ function rand(rng::AbstractRNG, s::AbstractString)::Char
     end
 end
 
-rand(s::AbstractString) = rand(GLOBAL_RNG, s)
+rand(s::AbstractString) = rand(defaultRNG(), s)
 
 ### arrays
 
 # we use collect(str), which is most of the time more efficient than specialized methods
 # (except maybe for very small arrays)
 rand!(rng::AbstractRNG, A::AbstractArray, str::AbstractString) = rand!(rng, A, collect(str))
-rand!(A::AbstractArray, str::AbstractString) = rand!(GLOBAL_RNG, A, str)
+rand!(A::AbstractArray, str::AbstractString) = rand!(defaultRNG(), A, str)
 rand(rng::AbstractRNG, str::AbstractString, dims::Dims) =
     rand!(rng, Array{eltype(str)}(dims), str)
 
 rand(rng::AbstractRNG, str::AbstractString, d::Integer, dims::Integer...) =
     rand(rng, str, Dims((d, dims...)))
 
-rand(str::AbstractString, dims::Dims) = rand(GLOBAL_RNG, str, dims)
-rand(str::AbstractString, d::Integer, dims::Integer...) = rand(GLOBAL_RNG, str, d, dims...)
+rand(str::AbstractString, dims::Dims) = rand(defaultRNG(), str, dims)
+rand(str::AbstractString, d::Integer, dims::Integer...) = rand(defaultRNG(), str, d, dims...)
