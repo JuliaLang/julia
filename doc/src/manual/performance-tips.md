@@ -486,8 +486,8 @@ cannot deduce the type of the return value of a function, even `convert`, unless
 all the function's arguments are known.
 
 Type annotation will not enhance (and can actually hinder) performance if the type is constructed
-at run-time.  This is because the compiler cannot use the annotation to specialize the subsequent
-code, and the type-check itself takes time.  For example, in the code:
+at run-time. This is because the compiler cannot use the annotation to specialize the subsequent
+code, and the type-check itself takes time. For example, in the code:
 
 ```julia
 function nr(a, prec)
@@ -498,11 +498,11 @@ function nr(a, prec)
 end
 ```
 
-the annotation of `c` harms performance.  To write performant code involving types constructed at
+the annotation of `c` harms performance. To write performant code involving types constructed at
 run-time, use the [function-barrier technique](@ref kernal-functions) discussed below, and ensure
 that the constructed type appears among the argument types of the kernel function so that the kernel
-operations are properly specialized by the compiler.  For example, in the above snippet, as soon as
-`b` is constructed, it can be passed to another function `k`, the kernel.  If, for example, function 
+operations are properly specialized by the compiler. For example, in the above snippet, as soon as
+`b` is constructed, it can be passed to another function `k`, the kernel. If, for example, function 
 `k` declares `b` as an argument of type `Complex{T}`, where `T` is a type parameter, then a type annotation
 appearing in an assignment statement within `k` of the form:
 
