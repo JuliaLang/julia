@@ -1661,6 +1661,8 @@ end
 @deprecate num2hex(x::Union{Float16,Float32,Float64}) hex(reintepret(Unsigned, x), sizeof(x)*2)
 @deprecate num2hex(n::Integer) hex(n, sizeof(n)*2)
 
+# PR #22742: change in isapprox semantics
+@deprecate rtoldefault(x,y) rtoldefault(x,y,0) false
 
 # END 0.7 deprecations
 
