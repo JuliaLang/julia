@@ -479,12 +479,12 @@ end
 @testset "findmin findmax indmin indmax" begin
     @test indmax([10,12,9,11]) == 2
     @test indmin([10,12,9,11]) == 3
-    @test findmin([NaN,3.2,1.8]) == (1.8,3)
-    @test findmax([NaN,3.2,1.8]) == (3.2,2)
-    @test findmin([NaN,3.2,1.8,NaN]) == (1.8,3)
-    @test findmax([NaN,3.2,1.8,NaN]) == (3.2,2)
-    @test findmin([3.2,1.8,NaN,2.0]) == (1.8,2)
-    @test findmax([3.2,1.8,NaN,2.0]) == (3.2,1)
+    @test findmin([NaN,3.2,1.8]) === (NaN,1)
+    @test findmax([NaN,3.2,1.8]) === (NaN,1)
+    @test findmin([NaN,3.2,1.8,NaN]) === (NaN,1)
+    @test findmax([NaN,3.2,1.8,NaN]) === (NaN,1)
+    @test findmin([3.2,1.8,NaN,2.0]) === (NaN,3)
+    @test findmax([3.2,1.8,NaN,2.0]) === (NaN,3)
 
     #14085
     @test findmax(4:9) == (9,6)

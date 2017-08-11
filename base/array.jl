@@ -1696,8 +1696,9 @@ end
     findmax(itr) -> (x, index)
 
 Returns the maximum element of the collection `itr` and its index. If there are multiple
-maximal elements, then the first one will be returned. `NaN` values are ignored, unless
-all elements are `NaN`. Other than the treatment of `NaN`, the result is in line with `max`.
+maximal elements, then the first one will be returned.
+If any data element is `NaN`, this element is returned.
+The result is in line with `max`.
 
 The collection must not be empty.
 
@@ -1710,7 +1711,7 @@ julia> findmax([1,7,7,6])
 (7, 2)
 
 julia> findmax([1,7,7,NaN])
-(7.0, 2)
+(NaN, 4)
 ```
 """
 function findmax(a)
@@ -1721,10 +1722,10 @@ function findmax(a)
     mi = i = 1
     m, s = next(a, s)
     while !done(a, s)
+        m != m && break
         ai, s = next(a, s)
         i += 1
-        ai != ai && continue # assume x != x => x is a NaN
-        if m != m || isless(m, ai)
+        if ai != ai || isless(m, ai)
             m = ai
             mi = i
         end
@@ -1736,8 +1737,9 @@ end
     findmin(itr) -> (x, index)
 
 Returns the minimum element of the collection `itr` and its index. If there are multiple
-minimal elements, then the first one will be returned. `NaN` values are ignored, unless
-all elements are `NaN`. Other than the treatment of `NaN`, the result is in line with `min`.
+minimal elements, then the first one will be returned.
+If any data element is `NaN`, this element is returned.
+The result is in line with `min`.
 
 The collection must not be empty.
 
@@ -1750,7 +1752,7 @@ julia> findmin([7,1,1,6])
 (1, 2)
 
 julia> findmin([7,1,1,NaN])
-(1.0, 2)
+(NaN, 4)
 ```
 """
 function findmin(a)
@@ -1761,10 +1763,10 @@ function findmin(a)
     mi = i = 1
     m, s = next(a, s)
     while !done(a, s)
+        m != m && break
         ai, s = next(a, s)
         i += 1
-        ai != ai && continue
-        if m != m || isless(ai, m)
+        if ai != ai || isless(ai, m)
             m = ai
             mi = i
         end
@@ -1776,8 +1778,7 @@ end
     indmax(itr) -> Integer
 
 Returns the index of the maximum element in a collection. If there are multiple maximal
-elements, then the first one will be returned. `NaN` values are ignored, unless all
-elements are `NaN`.
+elements, then the first one will be returned.
 
 The collection must not be empty.
 
@@ -1790,7 +1791,7 @@ julia> indmax([1,7,7,6])
 2
 
 julia> indmax([1,7,7,NaN])
-2
+4
 ```
 """
 indmax(a) = findmax(a)[2]
@@ -1799,8 +1800,7 @@ indmax(a) = findmax(a)[2]
     indmin(itr) -> Integer
 
 Returns the index of the minimum element in a collection. If there are multiple minimal
-elements, then the first one will be returned. `NaN` values are ignored, unless all
-elements are `NaN`.
+elements, then the first one will be returned. 
 
 The collection must not be empty.
 
@@ -1813,7 +1813,7 @@ julia> indmin([7,1,1,6])
 2
 
 julia> indmin([7,1,1,NaN])
-2
+4
 ```
 """
 indmin(a) = findmin(a)[2]

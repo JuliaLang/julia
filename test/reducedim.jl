@@ -119,6 +119,10 @@ rt = Base.return_types(reducedim, Tuple{Function, Array{Float64, 3}, Int, Float6
 
 
 ## findmin/findmax
+
+eqeq2(a, b) = all(x->eqeq1(x[1], x[2]), zip(a, b))
+eqeq1(a, b) = all(x->x[1]===x[2], zip(a, b))
+
 A = [1.0 3.0 6.0;
      5.0 2.0 4.0]
 for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [1 4 6]),
@@ -133,6 +137,38 @@ for (tup, rval, rind) in [((1,), [5.0 3.0 6.0], [2 3 5]),
                           ((1,2), fill(6.0,1,1),fill(5,1,1))]
     @test findmax(A, tup) == (rval, rind)
     @test findmax!(similar(rval), similar(rind), A) == (rval, rind)
+end
+
+A = [1.0 3.0 6.0;
+     NaN 2.0 4.0]
+for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [2 4 6]),
+                          ((2,), reshape([1.0, NaN], 2, 1), reshape([1,2], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(2,1,1))]
+    @test string(findmin(A, tup)) == string((rval, rind))
+    @test string(findmin!(similar(rval), similar(rind), A)) == string((rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), [NaN 3.0 6.0], [2 3 5]),
+                          ((2,), reshape([6.0, NaN], 2, 1), reshape([5,2], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(2,1,1))]
+    @test string(findmax(A, tup)) == string((rval, rind))
+    @test string(findmax!(similar(rval), similar(rind), A)) == string((rval, rind))
+end
+
+A = [1.0 NaN 6.0;
+     NaN 2.0 4.0]
+for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [2 3 6]),
+                          ((2,), reshape([NaN, NaN], 2, 1), reshape([3,2], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(2,1,1))]
+    @test string(findmin(A, tup))  == string((rval, rind))
+    @test string(findmin!(similar(rval), similar(rind), A)) == string((rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [2 3 5]),
+                          ((2,), reshape([NaN, NaN], 2, 1), reshape([3,2], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(2,1,1))]
+    @test string(findmax(A, tup)) == string((rval, rind))
+    @test string(findmax!(similar(rval), similar(rind), A)) == string((rval, rind))
 end
 
 # issue #6672

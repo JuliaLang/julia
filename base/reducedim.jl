@@ -608,8 +608,9 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             tmpRi = Rind[i1,IR]
             for i in indices(A,1)
                 k += 1
+                nan = tmpRv != tmpRv
                 tmpAv = A[i,IA]
-                if f(tmpAv, tmpRv)
+                if !nan && (tmpAv != tmpAv || f(tmpAv, tmpRv))
                     tmpRv = tmpAv
                     tmpRi = k
                 end
@@ -623,7 +624,8 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             for i in indices(A, 1)
                 k += 1
                 tmpAv = A[i,IA]
-                if f(tmpAv, Rval[i,IR])
+                tmpRv = Rval[i,IR]
+                if tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv))
                     Rval[i,IR] = tmpAv
                     Rind[i,IR] = k
                 end
@@ -639,29 +641,31 @@ end
 
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
+`NaN` is treated as less than all other values.
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(<, initarray!(rval, scalarmin, init), rind, A)
+    findminmax!(isless, initarray!(rval, scalarmin, init), rind, A)
 end
 
 """
     findmin(A, region) -> (minval, index)
 
 For an array input, returns the value and index of the minimum over the given region.
+`NaN` is treated as less than all other values.
 
 # Examples
 ```jldoctest
-julia> A = [1 2; 3 4]
+julia> A = [1.0 2; 3 4]
 2×2 Array{Int64,2}:
- 1  2
- 3  4
+ 1.0  2.0
+ 3.0  4.0
 
 julia> findmin(A, 1)
-([1 2], [1 3])
+([1.0 2.0], [1 3])
 
 julia> findmin(A, 2)
-([1; 3], [1; 2])
+([1.0; 3.0], [1; 2])
 ```
 """
 function findmin(A::AbstractArray{T}, region) where T
@@ -669,38 +673,42 @@ function findmin(A::AbstractArray{T}, region) where T
         return (similar(A, reduced_indices0(A, region)),
                 similar(dims->zeros(Int, dims), reduced_indices0(A, region)))
     end
-    return findminmax!(<, reducedim_initarray0(A, region, typemax(T)),
+    return findminmax!(isless, reducedim_initarray0(A, region, typemax(T)),
             similar(dims->zeros(Int, dims), reduced_indices0(A, region)), A)
 end
+
+isgt(a, b) = isless(b,a)
 
 """
     findmax!(rval, rind, A, [init=true]) -> (maxval, index)
 
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
+`NaN` is treated as greater than all other values.
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(>, initarray!(rval, scalarmax, init), rind, A)
+    findminmax!(isgt, initarray!(rval, scalarmax, init), rind, A)
 end
 
 """
     findmax(A, region) -> (maxval, index)
 
 For an array input, returns the value and index of the maximum over the given region.
+`NaN` is treated as greater than all other values.
 
 # Examples
 ```jldoctest
-julia> A = [1 2; 3 4]
+julia> A = [1.0 2; 3 4]
 2×2 Array{Int64,2}:
- 1  2
- 3  4
+ 1.0  2.0
+ 3.0  4.0
 
 julia> findmax(A,1)
-([3 4], [2 4])
+([3.0 4.0], [2 4])
 
 julia> findmax(A,2)
-([2; 4], [3; 4])
+([2.0; 4.0], [3; 4])
 ```
 """
 function findmax(A::AbstractArray{T}, region) where T
@@ -708,7 +716,7 @@ function findmax(A::AbstractArray{T}, region) where T
         return (similar(A, reduced_indices0(A,region)),
                 similar(dims->zeros(Int, dims), reduced_indices0(A,region)))
     end
-    return findminmax!(>, reducedim_initarray0(A, region, typemin(T)),
+    return findminmax!(isgt, reducedim_initarray0(A, region, typemin(T)),
             similar(dims->zeros(Int, dims), reduced_indices0(A, region)), A)
 end
 
