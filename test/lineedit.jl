@@ -401,3 +401,29 @@ let
         Base.LineEdit.InputAreaState(0,0), "julia> ", indent = 7)
     @test s == Base.LineEdit.InputAreaState(3,1)
 end
+
+@testset "function prompt indentation" begin
+    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer(), false)
+    # default prompt: PromptState.indent should not be set to a final fixed value
+    s = LineEdit.init_state(term, ModalInterface([Prompt("julia> ")]))
+    ps::LineEdit.PromptState = s.mode_state[s.current_mode]
+    @test ps.indent == -1
+    # the prompt is modified afterwards to a function
+    ps.p.prompt = let i = 0
+        () -> ["Julia is Fun! > ", "> "][mod1(i+=1, 2)] # lengths are 16 and 2
+    end
+    buf = LineEdit.buffer(ps)
+    write(buf, "begin\n    julia = :fun\nend")
+    outbuf = IOBuffer()
+    termbuf = Base.Terminals.TerminalBuffer(outbuf)
+    LineEdit.refresh_multi_line(termbuf, term, ps)
+    @test String(take!(outbuf)) ==
+        "\r\e[0K\e[1mJulia is Fun! > \e[0m\r\e[16Cbegin\n" *
+        "\r\e[16C    julia = :fun\n" *
+        "\r\e[16Cend\r\e[19C"
+    LineEdit.refresh_multi_line(termbuf, term, ps)
+    @test String(take!(copy(outbuf))) ==
+        "\r\e[0K\e[1A\r\e[0K\e[1A\r\e[0K\e[1m> \e[0m\r\e[2Cbegin\n" *
+        "\r\e[2C    julia = :fun\n" *
+        "\r\e[2Cend\r\e[5C"
+end
