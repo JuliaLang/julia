@@ -558,7 +558,11 @@ function to_tuple_type(@nospecialize(t))
     t
 end
 
-tt_cons(@nospecialize(t), @nospecialize(tup)) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...})
+function signature_type(@nospecialize(f), @nospecialize(args))
+    f_type = isa(f, Type) ? Type{f} : typeof(f)
+    arg_types = isa(args, Type) ? args.parameters : args
+    return Tuple{f_type, arg_types...}
+end
 
 """
     code_lowered(f, types, expand_generated = true)
@@ -575,8 +579,7 @@ Note that an error will be thrown if `types` are not leaf types when `expand_gen
 """
 function code_lowered(@nospecialize(f), @nospecialize(t = Tuple), expand_generated::Bool = true)
     if expand_generated
-        ft = isa(f,Type) ? Type{f} : typeof(f)
-        tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
+        tt = signature_type(f, t)
         asts = map(_methods_by_ftype(tt, -1, typemax(UInt))) do method_data
             mtypes, msp, m = method_data
             if isdefined(m, :generator)
@@ -605,8 +608,7 @@ _uniontypes(@nospecialize(x), ts) = (push!(ts, x); ts)
 uniontypes(@nospecialize(x)) = _uniontypes(x, Any[])
 
 function _methods(@nospecialize(f), @nospecialize(t), lim::Int, world::UInt)
-    ft = isa(f,Type) ? Type{f} : typeof(f)
-    tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
+    tt = signature_type(f, t)
     return _methods_by_ftype(tt, lim, world)
 end
 
@@ -658,8 +660,7 @@ end
 methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
 
 function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
-    ft = isa(f,Type) ? Type{f} : typeof(f)
-    tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
+    tt = signature_type(f, t)
     world = typemax(UInt)
     min = UInt[typemin(UInt)]
     max = UInt[typemax(UInt)]
@@ -762,8 +763,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     world = typemax(UInt)
     meth = which(f, t)
     t = to_tuple_type(t)
-    ft = isa(f, Type) ? Type{f} : typeof(f)
-    tt = Tuple{ft, t.parameters...}
+    tt = signature_type(f, t)
     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), tt, meth.sig)::SimpleVector
     meth = func_for_method_checked(meth, ti)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, ti, env, world)
@@ -894,8 +894,7 @@ function which(@nospecialize(f), @nospecialize(t))
         length(ms)!=1 && error("no unique matching method for the specified argument types")
         return first(ms)
     else
-        ft = isa(f,Type) ? Type{f} : typeof(f)
-        tt = Tuple{ft, t.parameters...}
+        tt = signature_type(f, t)
         m = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tt, typemax(UInt))
         if m === nothing
             error("no method found for the specified argument types")
@@ -1002,7 +1001,7 @@ true
 """
 function method_exists(@nospecialize(f), @nospecialize(t), world=typemax(UInt))
     t = to_tuple_type(t)
-    t = Tuple{isa(f,Type) ? Type{f} : typeof(f), t.parameters...}
+    t = signature_type(f, t)
     return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t, world) != 0
 end
 
