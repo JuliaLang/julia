@@ -359,6 +359,17 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         LineEdit.history_last(s, hp)
         @test buffercontents(LineEdit.buffer(s)) == "wip"
         @test position(LineEdit.buffer(s)) == 3
+        # test that history_first jumps to beginning of current session's history
+        hp.start_idx -= 5 # temporarily alter history
+        LineEdit.history_first(s, hp)
+        @test hp.cur_idx == 6
+        # we are at the beginning of current session's history, so history_first
+        # must now jump to the beginning of all history
+        LineEdit.history_first(s, hp)
+        @test hp.cur_idx == 1
+        LineEdit.history_last(s, hp)
+        @test hp.cur_idx-1 == length(hp.history)
+        hp.start_idx += 5
         LineEdit.move_line_start(s)
         @test position(LineEdit.buffer(s)) == 0
 
