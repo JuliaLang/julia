@@ -429,3 +429,30 @@ for precomp in ("yes", "no")
     @test length(lno.captures) == 1
     @test parse(Int, lno.captures[1]) > 0
 end
+
+# PR #23002
+let exename = `$(Base.julia_cmd()) --startup-file=no`
+    for (mac, flag, pfix, msg) in [("@test_nowarn", ``, "_1", ""),
+                                   ("@test_warn",   `--warn-overwrite=yes`, "_2", "\"WARNING: Method definition\"")]
+        str = """
+        using Base.Test
+        try
+            # issue #18725
+            $mac $msg @eval Main begin
+                f18725$(pfix)(x) = 1
+                f18725$(pfix)(x) = 2
+            end
+            @test Main.f18725$(pfix)(0) == 2
+            # PR #23030
+            $mac $msg @eval Main module Module23030$(pfix)
+                f23030$(pfix)(x) = 1
+                f23030$(pfix)(x) = 2
+            end
+        catch
+            exit(-1)
+        end
+        exit(0)
+        """
+        run(`$exename $flag -e $str`)
+    end
+end

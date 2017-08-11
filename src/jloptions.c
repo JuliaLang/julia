@@ -124,7 +124,7 @@ static const char opts[]  =
 
     // error and warning options
     " --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings (\"error\" turns warnings into errors)\n\n"
-    " --overwritewarn={yes|no}  Enable or disable method overwrite warnings"
+    " --warn-overwrite={yes|no} Enable or disable method overwrite warnings"
 
     // compiler output options
     " --output-o name           Generate an object file (including system image data)\n"
@@ -158,7 +158,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_output_unopt_bc,
            opt_output_bc,
            opt_depwarn,
-           opt_overwritewarn,
+           opt_warn_overwrite,
            opt_inline,
            opt_polly,
            opt_math_mode,
@@ -204,7 +204,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "output-ji",       required_argument, 0, opt_output_ji },
         { "output-incremental",required_argument, 0, opt_incremental },
         { "depwarn",         required_argument, 0, opt_depwarn },
-        { "overwritewarn",   required_argument, 0, opt_overwritewarn },
+        { "warn-overwrite",  required_argument, 0, opt_warn_overwrite },
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
         { "math-mode",       required_argument, 0, opt_math_mode },
@@ -482,13 +482,13 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --depwarn={yes|no|error} (%s)", optarg);
             break;
-        case opt_overwritewarn:
+        case opt_warn_overwrite:
             if (!strcmp(optarg,"yes"))
-                jl_options.overwritewarn = JL_OPTIONS_OVERWRITEWARN_ON;
+                jl_options.warn_overwrite = JL_OPTIONS_WARN_OVERWRITE_ON;
             else if (!strcmp(optarg,"no"))
-                jl_options.overwritewarn = JL_OPTIONS_OVERWRITEWARN_OFF;
+                jl_options.warn_overwrite = JL_OPTIONS_WARN_OVERWRITE_OFF;
             else
-                jl_errorf("julia: invalid argument to --overwritewarn={yes|no|} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --warn-overwrite={yes|no|} (%s)", optarg);
             break;
         case opt_inline:
             if (!strcmp(optarg,"yes"))

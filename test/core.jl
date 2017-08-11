@@ -5100,7 +5100,6 @@ m22929_2.x = m22929_1
 @test isdefined_22929_1(m22929_2)
 @test isdefined_22929_x(m22929_2)
 
-<<<<<<< 9f974bf8b47c781e5d89f43c4a278aa84c8c3c34
 # Union type sorting
 for T in (
         (Void, Int8),
@@ -5174,30 +5173,4 @@ module GlobalDef18933
     @test @which(sincos) === Base.Math
     @test @isdefined sincos
     @test sincos === Base.sincos
-end
-
-let exename = `$(Base.julia_cmd()) --startup-file=no`
-    for (mac, flag, pfix, msg) in [("@test_nowarn", ``, "_1", ""),
-                                   ("@test_warn",   `--overwritewarn=yes`, "_2", "\"WARNING: Method definition\"")]
-        str = """
-        using Base.Test
-        try
-            # issue #18725
-            $mac $msg @eval Main begin
-                f18725$(pfix)(x) = 1
-                f18725$(pfix)(x) = 2
-            end
-            @test Main.f18725$(pfix)(0) == 2
-            # PR #23030
-            $mac $msg @eval Main module Module23030$(pfix)
-                f23030$(pfix)(x) = 1
-                f23030$(pfix)(x) = 2
-            end
-        catch
-            exit(-1)
-        end
-        exit(0)
-        """
-        run(`$exename $flag -e $str`)
-    end
 end
