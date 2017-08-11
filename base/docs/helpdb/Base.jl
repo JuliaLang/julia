@@ -1978,16 +1978,6 @@ Values for `String` can be of that type, or `Vector{UInt8}`.
 isvalid(T,value)
 
 """
-    skipchars(stream, predicate; linecomment::Char)
-
-Advance the stream until before the first character for which `predicate` returns `false`.
-For example `skipchars(stream, isspace)` will skip all whitespace. If keyword argument
-`linecomment` is specified, characters from that character through the end of a line will
-also be skipped.
-"""
-skipchars
-
-"""
     pop!(collection, key[, default])
 
 Delete and return the mapping for `key` if it exists in `collection`, otherwise return
