@@ -58,7 +58,7 @@ jl_options_t jl_options = { 0,    // quiet
 #endif
                             JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
                             1,    // deprecation warning
-                            1,    // method overwrite warning
+                            0,    // method overwrite warning
                             1,    // can_inline
                             JL_OPTIONS_POLLY_ON, // polly
                             JL_OPTIONS_FAST_MATH_DEFAULT,
