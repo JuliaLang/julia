@@ -714,7 +714,7 @@ uncompressed_ast(m::Core.MethodInstance) = uncompressed_ast(m.def)
 
 function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = typemax(UInt))
     tt = signature_type(f, t)
-    results = Vector{Any}()
+    results = Vector{Union{Method,Core.MethodInstance}}()
     for method_data in _methods_by_ftype(tt, -1, world)
         mtypes, msp, m = method_data
         instance = Core.Inference.code_for_method(m, mtypes, msp, world, false)
