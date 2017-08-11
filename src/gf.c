@@ -1223,7 +1223,17 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
     jl_method_t *method = (jl_method_t*)newentry->func.method;
     jl_module_t *newmod = method->module;
     jl_module_t *oldmod = oldvalue->module;
-    if (newmod != jl_main_module || oldmod != jl_main_module) {
+
+    int isinteractive = 0;
+    if (!jl_generating_output()) {
+        jl_function_t *func = jl_get_function(jl_base_module, "isinteractive");
+        jl_value_t *ret = jl_call0(func);
+        JL_GC_PUSH1(&ret);
+        assert(jl_typeis(ret, jl_bool_type));
+        isinteractive = jl_unbox_bool(ret);
+        JL_GC_POP();
+    }
+    if (!isinteractive || newmod != oldmod) {
         JL_STREAM *s = JL_STDERR;
         jl_printf(s, "WARNING: Method definition ");
         jl_static_show_func_sig(s, (jl_value_t*)newentry->sig);
