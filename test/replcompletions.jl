@@ -162,6 +162,11 @@ c,r = test_complete(s)
 @test r == 19:23
 @test s[r] == "getin"
 
+# issue #23193: after `using`, identifiers can be prefixed by module names
+s = "using Base.Test, Base.Random"
+c,r = test_complete(s)
+@test !("RandomDevice" in c)
+
 # inexistent completion inside a string
 s = "Pkg.add(\"lol"
 c,r,res = test_complete(s)

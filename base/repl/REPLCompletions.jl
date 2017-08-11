@@ -368,7 +368,7 @@ function afterusing(string::String, startpos::Int)
     r = search(rstr, r"\s(gnisu|tropmi)\b")
     isempty(r) && return false
     fr = reverseind(str, last(r))
-    return ismatch(r"^\b(using|import)\s*(\w+\s*,\s*)*\w*$", str[fr:end])
+    return ismatch(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*\w*$", str[fr:end])
 end
 
 function bslash_completions(string, pos)
