@@ -578,25 +578,22 @@ Note that an error will be thrown if `types` are not leaf types when `expand_gen
 `true` and the corresponding method is a `@generated` method.
 """
 function code_lowered(@nospecialize(f), @nospecialize(t = Tuple), expand_generated::Bool = true)
-    if expand_generated
-        tt = signature_type(f, t)
-        asts = map(_methods_by_ftype(tt, -1, typemax(UInt))) do method_data
-            mtypes, msp, m = method_data
-            if isdefined(m, :generator)
-                func_for_method_checked(m, mtypes)
-                instance = Core.Inference.code_for_method(m, mtypes, msp, typemax(UInt), false)
-                return Core.Inference.get_staged(instance::Core.MethodInstance)
-            else
-                return uncompressed_ast(m::Method)
+    return map(method_instances(f, t)) do m
+        if expand_generated && isgenerated(m)
+            if isa(m, MethodInstance)
+                return Core.Inference.get_staged(m)
+            else # isa(m, Method)
+                error("Could not expand generator for `@generated` method ", m, ". ",
+                      "This can happen if the provided argument types (", t, ") are ",
+                      "not leaf types, but the `expand_generated` argument is `true`.")
             end
         end
-    else
-        asts = map(methods(f, t)) do m
-            return uncompressed_ast(m::Method)
-        end
+        return uncompressed_ast(m)
     end
-    return asts
 end
+
+isgenerated(m::Method) = isdefined(m, :generator)
+isgenerated(m::Core.MethodInstance) = isgenerated(m.def)
 
 # low-level method lookup functions used by the compiler
 
@@ -710,9 +707,21 @@ function length(mt::MethodTable)
 end
 isempty(mt::MethodTable) = (mt.defs === nothing)
 
-uncompressed_ast(m::Method) = uncompressed_ast(m, isdefined(m,:source) ? m.source : m.generator.inferred)
+uncompressed_ast(m::Method) = uncompressed_ast(m, isdefined(m, :source) ? m.source : m.generator.inferred)
 uncompressed_ast(m::Method, s::CodeInfo) = s
 uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Any), m, s)::CodeInfo
+uncompressed_ast(m::Core.MethodInstance) = uncompressed_ast(m.def)
+
+function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = typemax(UInt))
+    tt = signature_type(f, t)
+    results = Vector{Any}()
+    for method_data in _methods_by_ftype(tt, -1, world)
+        mtypes, msp, m = method_data
+        instance = Core.Inference.code_for_method(m, mtypes, msp, world, false)
+        push!(results, ifelse(isa(instance, Core.MethodInstance), instance, m))
+    end
+    return results
+end
 
 # this type mirrors jl_cghooks_t (documented in julia.h)
 struct CodegenHooks
