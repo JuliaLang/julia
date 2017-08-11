@@ -287,11 +287,12 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     # No authentication method we support succeeded. The most likely cause is
     # that explicit credentials were passed in, but said credentials are incompatible
-    # with the remote host.
+    # with the requested authentication method.
     if err == 0
         if explicit
-            warn("The explicitly provided credentials were incompatible with " *
-                 "the server's supported authentication methods")
+            ccall((:giterr_set_str, :libgit2), Void, (Cint, Cstring), Cint(Error.Callback),
+                  "The explicitly provided credential is incompatible with the requested " *
+                  "authentication methods.")
         end
         err = Cint(Error.EAUTH)
     end

@@ -1613,6 +1613,11 @@ mktempdir() do dir
             LibGit2.Error.Callback, LibGit2.Error.EAUTH,
             "Aborting, user cancelled credential request.")
 
+        incompatible_error = LibGit2.GitError(
+            LibGit2.Error.Callback, LibGit2.Error.EAUTH,
+            "The explicitly provided credential is incompatible with the requested " *
+            "authentication methods.")
+
         eauth_error = LibGit2.GitError(
             LibGit2.Error.None, LibGit2.Error.EAUTH,
             "No errors")
@@ -2046,7 +2051,7 @@ mktempdir() do dir
 
         @testset "Incompatible explicit credentials" begin
             # User provides a user/password credential where a SSH credential is required.
-            ssh_cmd = """
+            expect_ssh_cmd = """
             include("$LIBGIT2_HELPER_PATH")
             valid_cred = LibGit2.UserPasswordCredentials("foo", "bar")
             payload = CredentialPayload(Nullable(valid_cred))
@@ -2056,7 +2061,7 @@ mktempdir() do dir
             """
 
             # User provides a SSH credential where a user/password credential is required.
-            https_cmd = """
+            expect_https_cmd = """
             include("$LIBGIT2_HELPER_PATH")
             valid_cred = LibGit2.SSHCredentials("foo", "", "", "")
             payload = CredentialPayload(Nullable(valid_cred))
@@ -2065,11 +2070,8 @@ mktempdir() do dir
             (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
             """
 
-            # TODO: Currently a warning is reported about the explicit credential being
-            # incompatible with the authentication method. We should change this to an
-            # error.
-            err, auth_attempts = challenge_prompt(ssh_cmd, [])
-            @test err == eauth_error
+            err, auth_attempts = challenge_prompt(expect_ssh_cmd, [])
+            @test err == incompatible_error
             @test auth_attempts == 1
 
             # TODO: Providing an explicit SSH credential which is incompatible with the
@@ -2077,7 +2079,7 @@ mktempdir() do dir
             challenges = [
                 "Username for 'https://github.com':" => "\x04",
             ]
-            err, auth_attempts = challenge_prompt(https_cmd, challenges)
+            err, auth_attempts = challenge_prompt(expect_https_cmd, challenges)
             @test err == abort_prompt
             @test auth_attempts == 1
         end
