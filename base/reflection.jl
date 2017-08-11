@@ -561,22 +561,26 @@ end
 tt_cons(@nospecialize(t), @nospecialize(tup)) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...})
 
 """
-    code_lowered(f, types, expand_generated = false)
+    code_lowered(f, types, expand_generated = true)
 
-Returns an array of lowered ASTs for the methods matching the given generic function and type signature.
+Return an array of lowered ASTs for the methods matching the given generic function and type signature.
 
 If `expand_generated` is `false`, then the `CodeInfo` instances returned for `@generated`
 methods will correspond to the generators' lowered ASTs. If `expand_generated` is `true`,
 these `CodeInfo` instances will correspond to the lowered ASTs of the method bodies yielded
 by expanding the generators.
+
+Note that an error will be thrown if `types` are not leaf types when `expand_generated` is
+`true` and the corresponding method is a `@generated` method.
 """
-function code_lowered(@nospecialize(f), @nospecialize(t = Tuple), expand_generated::Bool = false)
+function code_lowered(@nospecialize(f), @nospecialize(t = Tuple), expand_generated::Bool = true)
     if expand_generated
         ft = isa(f,Type) ? Type{f} : typeof(f)
         tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
         asts = map(_methods_by_ftype(tt, -1, typemax(UInt))) do method_data
             mtypes, msp, m = method_data
             if isdefined(m, :generator)
+                func_for_method_checked(m, mtypes)
                 instance = Core.Inference.code_for_method(m, mtypes, msp, typemax(UInt), false)
                 return Core.Inference.get_staged(instance::Core.MethodInstance)
             else
