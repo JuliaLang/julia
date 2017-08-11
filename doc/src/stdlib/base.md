@@ -59,8 +59,7 @@ ans
 ```@docs
 Core.:(===)
 Core.isa
-Base.isequal(::Any, ::Any)
-Base.isequal(::Nullable, ::Nullable)
+Base.isequal
 Base.isless
 Base.isless(::Nullable, ::Nullable)
 Base.ifelse
