@@ -714,3 +714,32 @@ end
 @test_throws ErrorException fieldcount(Real)
 @test_throws ErrorException fieldcount(AbstractArray)
 @test_throws ErrorException fieldcount(Tuple{Any,Vararg{Any}})
+
+# PR #22979
+
+function test_similar_codeinfo(a, b)
+    @test a.code == b.code
+    @test a.slotnames == b.slotnames
+    @test a.slotflags == b.slotflags
+end
+
+@generated f22979(x...) = (y = 1; :(x[1] + x[2]))
+x22979 = (1, 2.0, 3.0 + im)
+T22979 = Tuple{typeof(f22979),typeof.(x22979)...}
+world = typemax(UInt)
+mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[]
+instance = Core.Inference.code_for_method(m, mtypes, msp, world, false)
+cinfo_generated = Core.Inference.get_staged(instance)
+cinfo_ungenerated = Base.uncompressed_ast(m)
+
+test_similar_codeinfo(@code_lowered(f22979(x22979...)), cinfo_generated)
+
+cinfos = code_lowered(f22979, typeof.(x22979), true)
+@test length(cinfos) == 1
+cinfo = cinfos[]
+test_similar_codeinfo(cinfo, cinfo_generated)
+
+cinfos = code_lowered(f22979, typeof.(x22979), false)
+@test length(cinfos) == 1
+cinfo = cinfos[]
+test_similar_codeinfo(cinfo, cinfo_ungenerated)
