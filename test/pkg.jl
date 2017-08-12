@@ -539,6 +539,7 @@ end
         Pkg.add("Example.jl")
         @test [keys(Pkg.installed())...] == ["Example"]
         iob = IOBuffer()
+        Pkg.update("Example.jl")
         Pkg.checkout("Example.jl")
         Pkg.status("Example.jl", iob)
         str = chomp(String(take!(iob)))
