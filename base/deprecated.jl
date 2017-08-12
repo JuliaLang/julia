@@ -1585,6 +1585,26 @@ for op in (:exp, :exp2, :exp10, :log, :log2, :log10,
     @eval @deprecate ($op)(x::AbstractSparseVector{<:Number,<:Integer}) ($op).(x)
 end
 
+# deprecate remaining vectorized methods from Base.Dates
+@eval Dates @deprecate(
+    DateTime(Y::AbstractArray{<:AbstractString}, f::AbstractString; locale::Locale=ENGLISH),
+    DateTime.(Y, f; locale=locale) )
+@eval Dates @deprecate(
+    DateTime(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateTimeFormat),
+    DateTime.(Y, df) )
+@eval Dates @deprecate(
+    Date(Y::AbstractArray{<:AbstractString}, f::AbstractString; locale::Locale=ENGLISH),
+    Date.(Y, f; locale=locale) )
+@eval Dates @deprecate(
+    Date(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateFormat),
+    Date.(Y, df) )
+@eval Dates @deprecate(
+    format(Y::AbstractArray{<:TimeType}, f::AbstractString; locale::Locale=ENGLISH),
+    format.(Y, f; locale=locale) )
+@eval Dates @deprecate(
+    format(Y::AbstractArray{T}, df::DateFormat=default_format(T)) where {T<:TimeType},
+    format.(Y, df) )
+
 # PR #22182
 @deprecate is_apple   Sys.isapple
 @deprecate is_bsd     Sys.isbsd

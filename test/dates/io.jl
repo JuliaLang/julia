@@ -319,19 +319,18 @@ f = "ymd"
 @test Dates.Date(string(Dates.Date(dt))) == Dates.Date(dt)
 @test Dates.DateTime(string(dt)) == dt
 
-# Vectorized
+# formerly vectorized Date/DateTime/format methods
 dr = ["2000-01-01", "2000-01-02", "2000-01-03", "2000-01-04", "2000-01-05",
       "2000-01-06", "2000-01-07", "2000-01-08", "2000-01-09", "2000-01-10"]
 dr2 = [Dates.Date(2000) : Dates.Date(2000, 1, 10);]
-@test Dates.Date(dr) == dr2
-@test Dates.Date(dr, "yyyy-mm-dd") == dr2
+@test Dates.Date.(dr) == dr2
+@test Dates.Date.(dr, dateformat"yyyy-mm-dd") == dr2
 @test Dates.DateTime.(dr) == Dates.DateTime.(dr2)
-@test Dates.DateTime(dr, "yyyy-mm-dd") == Dates.DateTime.(dr2)
+@test Dates.DateTime.(dr, dateformat"yyyy-mm-dd") == Dates.DateTime.(dr2)
 
-@test Dates.format(dr2) == dr
-@test Dates.format(dr2, "yyyy-mm-dd") == dr
+@test Dates.format.(dr2, "yyyy-mm-dd") == dr
 
-@test typeof(Dates.Date(dr)) == Array{Date, 1}
+@test typeof(Dates.Date.(dr)) == Array{Date, 1}
 
 # Issue 13
 t = Dates.DateTime(1, 1, 1, 14, 51, 0, 118)
