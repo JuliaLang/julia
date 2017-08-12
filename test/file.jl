@@ -1156,3 +1156,67 @@ if !Sys.iswindows()
         test_22566()
     end
 end  # !Sys.iswindows
+
+function file_prefix_test(path, prefix, pfxlen=length(prefix))
+    if Sys.iswindows() && (pfxlen > 3)
+        pfxlen = 3
+    end
+
+    filename = basename(path)
+    prefixpart = prefix[1:pfxlen]
+
+    @test startswith(filename, prefixpart)
+end
+
+function test_22922()
+    def_prefix="jl_"
+    tst_prefix="ABCDEF"
+    mktempdir() do tmpdir
+        file_prefix_test(tmpdir, def_prefix)
+    end
+    mktempdir(; prefix=tst_prefix) do tmpdir
+        file_prefix_test(tmpdir, tst_prefix)
+    end
+    mktemp() do tmp,io
+        file_prefix_test(tmp, def_prefix)
+    end
+    mktemp(; prefix=tst_prefix) do tmp,io
+        file_prefix_test(tmp, tst_prefix)
+    end
+    file_prefix_test(tempname(), def_prefix)
+    # Unix like OS have prefix size limit of 5 bytes
+    file_prefix_test(tempname(; prefix=tst_prefix), tst_prefix, 5)
+
+    # Special character prefix tests
+    tst_prefix="#!@%^&*()"
+    mktempdir(; prefix=tst_prefix) do tmpdir
+        file_prefix_test(tmpdir, tst_prefix)
+    end
+    mktemp(; prefix=tst_prefix) do tmp,io
+        file_prefix_test(tmp, tst_prefix)
+    end
+
+    # Unicode test
+    tst_prefix="\u2200x\u2203y"
+    mktempdir(; prefix=tst_prefix) do tmpdir
+        file_prefix_test(tmpdir, tst_prefix)
+    end
+    mktemp(; prefix=tst_prefix) do tmp,io
+        file_prefix_test(tmp, tst_prefix)
+    end
+    #=
+    In unix the prefix is computed up to 5 bytes and not chars so will
+    fail on unicode test. But extracting first 5 bytes and creating an
+    invalid 5-byte character array and converting to a string will pass
+    =#
+    if !Sys.iswindows()
+        bytepfx=transcode(UInt8, tst_prefix)
+        pfxstr=String(bytepfx[1:5])
+        file_prefix_test(tempname(; prefix=tst_prefix), pfxstr)
+    else
+        # It will pass in windows up to 3 chars
+        file_prefix_test(tempname(; prefix=tst_prefix), tst_prefix)
+    end
+end
+
+test_22922()
