@@ -1921,6 +1921,7 @@ mktempdir() do dir
             include("$LIBGIT2_HELPER_PATH")
             valid_cred = LibGit2.SSHCredentials("$username", "$passphrase", "$valid_p_key", "$valid_p_key.pub")
             invalid_cred = LibGit2.SSHCredentials("$username", "", "$invalid_key", "$invalid_key.pub")
+            invalid_cred.usesshagent = "N"  # Disable SSH agent use
             payload = CredentialPayload(Nullable(invalid_cred))
             err, auth_attempts = credential_loop(valid_cred, "$url", "$username", payload)
             (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
@@ -1931,13 +1932,11 @@ mktempdir() do dir
             @test err == 0
             @test auth_attempts == 1
 
-            # TODO: Currently infinite loops
             # Explicitly provided credential is incorrect
-            #=
+            # TODO: Unless the SSH agent is disabled we may get caught in an infinite loop
             err, auth_attempts = challenge_prompt(invalid_cmd, [])
-            @test err == 0
-            @test auth_attempts == 1
-            =#
+            @test err == eauth_error
+            @test auth_attempts == 4
         end
 
         @testset "HTTPS explicit credentials" begin
