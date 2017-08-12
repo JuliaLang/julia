@@ -171,6 +171,44 @@ for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [2 3 5]),
     @test string(findmax!(similar(rval), similar(rind), A)) == string((rval, rind))
 end
 
+A = [Inf -Inf Inf  -Inf;
+     Inf  Inf -Inf -Inf]
+for (tup, rval, rind) in [((1,), [Inf -Inf -Inf -Inf], [1 3 6 7]),
+                          ((2,), reshape([-Inf -Inf], 2, 1), reshape([3,6], 2, 1)),
+                          ((1,2), fill(-Inf,1,1),fill(3,1,1))]
+    @test string(findmin(A, tup))  == string((rval, rind))
+    @test string(findmin!(similar(rval), similar(rind), A)) == string((rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [1 4 5 7]),
+                          ((2,), reshape([Inf Inf], 2, 1), reshape([1,2], 2, 1)),
+                          ((1,2), fill(Inf,1,1),fill(1,1,1))]
+    @test string(findmax(A, tup)) == string((rval, rind))
+    @test string(findmax!(similar(rval), similar(rind), A)) == string((rval, rind))
+end
+
+A = [BigInt(10)]
+for (tup, rval, rind) in [((1,), [BigInt(10)], [1])]
+    @test string(findmin(A, tup))  == string((rval, rind))
+    @test string(findmin!(similar(rval), similar(rind), A)) == string((rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), [BigInt(10)], [1])]
+    @test string(findmax(A, tup)) == string((rval, rind))
+    @test string(findmax!(similar(rval), similar(rind), A)) == string((rval, rind))
+end
+
+A = ["a", "b"]
+for (tup, rval, rind) in [((1,), ["a"], [1])]
+    @test string(findmin(A, tup))  == string((rval, rind))
+    @test string(findmin!(similar(rval), similar(rind), A)) == string((rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), ["b"], [2])]
+    @test string(findmax(A, tup)) == string((rval, rind))
+    @test string(findmax!(similar(rval), similar(rind), A)) == string((rval, rind))
+end
+
 # issue #6672
 @test sum(Real[1 2 3; 4 5.3 7.1], 2) == reshape([6, 16.4], 2, 1)
 @test std(AbstractFloat[1,2,3], 1) == [1.0]

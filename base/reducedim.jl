@@ -588,7 +588,8 @@ end
 
 
 ##### findmin & findmax #####
-
+# The initial values of Rval are not used if the correponding indices in Rind are 0.
+# 
 function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval) || isempty(A)) && return Rval, Rind
     lsiz = check_reducedims(Rval, A)
@@ -608,9 +609,8 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             tmpRi = Rind[i1,IR]
             for i in indices(A,1)
                 k += 1
-                nan = tmpRv != tmpRv
                 tmpAv = A[i,IA]
-                if !nan && (tmpAv != tmpAv || f(tmpAv, tmpRv))
+                if tmpRi == 0 || (tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv)))
                     tmpRv = tmpAv
                     tmpRi = k
                 end
@@ -625,7 +625,8 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
                 k += 1
                 tmpAv = A[i,IA]
                 tmpRv = Rval[i,IR]
-                if tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv))
+                tmpRi = Rind[i,IR]
+                if tmpRi == 0 || (tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv)))
                     Rval[i,IR] = tmpAv
                     Rind[i,IR] = k
                 end
@@ -645,7 +646,7 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(isless, initarray!(rval, scalarmin, init), rind, A)
+    findminmax!(isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,0), A)
 end
 
 """
@@ -673,7 +674,7 @@ function findmin(A::AbstractArray{T}, region) where T
         return (similar(A, reduced_indices0(A, region)),
                 similar(dims->zeros(Int, dims), reduced_indices0(A, region)))
     end
-    return findminmax!(isless, reducedim_initarray0(A, region, typemax(T)),
+    return findminmax!(isless, fill!(similar(A, reduced_indices0(A, region)), first(A)),
             similar(dims->zeros(Int, dims), reduced_indices0(A, region)), A)
 end
 
@@ -688,7 +689,7 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(isgt, initarray!(rval, scalarmax, init), rind, A)
+    findminmax!(isgt, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,0), A)
 end
 
 """
@@ -716,7 +717,7 @@ function findmax(A::AbstractArray{T}, region) where T
         return (similar(A, reduced_indices0(A,region)),
                 similar(dims->zeros(Int, dims), reduced_indices0(A,region)))
     end
-    return findminmax!(isgt, reducedim_initarray0(A, region, typemin(T)),
+    return findminmax!(isgt, fill!(similar(A, reduced_indices0(A, region)), first(A)),
             similar(dims->zeros(Int, dims), reduced_indices0(A, region)), A)
 end
 
