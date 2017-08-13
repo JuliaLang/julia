@@ -389,8 +389,17 @@ function g15714(array_var15714)
     for index_var15714 in eachindex(array_var15714)
         array_var15714[index_var15714] += 0
     end
-    for index_var15714 in eachindex(array_var15714)
-        array_var15714[index_var15714] += 0
+    let index_var15714
+        for index_var15714 in eachindex(array_var15714)
+            array_var15714[index_var15714] += 0
+        end
+        index_var15714
+    end
+    let index_var15714
+        for index_var15714 in eachindex(array_var15714)
+            array_var15714[index_var15714] += 0
+        end
+        index_var15714
     end
 end
 
@@ -411,6 +420,10 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     for name in must_used_vars
         @test name in slotnames
     end
+    must_used_checked = Dict{Symbol,Bool}()
+    for sym in must_used_vars
+        must_used_checked[sym] = false
+    end
     for str in (sprint(code_warntype, f, types),
                 stringmime("text/plain", src))
         for var in must_used_vars
@@ -422,17 +435,23 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
         for i in 1:length(src.slotnames)
             name = src.slotnames[i]
             if name in dupnames
-                @test contains(str, "_$i")
-                if name in must_used_vars
+                if name in must_used_vars && ismatch(Regex("_$i\\b"), str)
+                    must_used_checked[name] = true
                     global used_dup_var_tested15714 = true
                 end
             else
-                @test !contains(str, "_$i")
+                @test !ismatch(Regex("_$i\\b"), str)
                 if name in must_used_vars
                     global used_unique_var_tested15714 = true
                 end
             end
         end
+    end
+    for sym in must_used_vars
+        if sym in dupnames
+            @test must_used_checked[sym]
+        end
+        must_used_checked[sym] = false
     end
     # Make sure printing an AST outside CodeInfo still works.
     str = sprint(show, src.code)
@@ -440,13 +459,16 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     # Use the variable names that we know should be present in the optimized AST
     for i in 2:length(src.slotnames)
         name = src.slotnames[i]
-        if name in must_used_vars
-            @test contains(str, "_$i")
+        if name in must_used_vars && ismatch(Regex("_$i\\b"), str)
+            must_used_checked[name] = true
         end
+    end
+    for sym in must_used_vars
+        @test must_used_checked[sym]
     end
 end
 test_typed_ast_printing(f15714, Tuple{Vector{Float32}},
-                        [:array_var15714, :index_var15714])
+                        [:array_var15714])
 test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
                         [:array_var15714, :index_var15714])
 @test used_dup_var_tested15714
