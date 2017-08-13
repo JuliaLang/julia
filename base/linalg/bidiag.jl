@@ -243,7 +243,8 @@ broadcast(::typeof(floor), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiag
 broadcast(::typeof(ceil), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(ceil.(T, M.dv), ceil.(T, M.ev), M.uplo)
 
 transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, M.uplo == 'U' ? :L : :U)
-adjoint(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), M.uplo == 'U' ? :L : :U)
+adjoint(M::Bidiagonal{<:Number}) = Bidiagonal(conj(M.dv), conj(M.ev), M.uplo == 'U' ? :L : :U)
+adjoint(M::Bidiagonal) = Bidiagonal(adjoint.(M.dv), adjoint.(M.ev), M.uplo == 'U' ? :L : :U)
 
 istriu(M::Bidiagonal) = M.uplo == 'U' || iszero(M.ev)
 istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)

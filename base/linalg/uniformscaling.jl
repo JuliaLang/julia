@@ -63,7 +63,7 @@ end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
 transpose(J::UniformScaling) = J
-adjoint(J::UniformScaling) = UniformScaling(conj(J.λ))
+adjoint(J::UniformScaling) = UniformScaling(adjoint(J.λ))
 
 one(::Type{UniformScaling{T}}) where {T} = UniformScaling(one(T))
 one(J::UniformScaling{T}) where {T} = one(UniformScaling{T})

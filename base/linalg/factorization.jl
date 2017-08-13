@@ -81,7 +81,7 @@ end
 
 # fallback methods for transposed solves
 At_ldiv_B(F::Factorization{<:Real}, B::AbstractVecOrMat) = Ac_ldiv_B(F, B)
-At_ldiv_B(F::Factorization, B) = conj.(Ac_ldiv_B(F, conj.(B)))
+At_ldiv_B(F::Factorization, B) = conj.(Ac_ldiv_B(F, conj.(B))) # TODO fix for array eltypes?
 
 """
     A_ldiv_B!([Y,] A, B) -> Y

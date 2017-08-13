@@ -16,8 +16,9 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     inv, isapprox, isone, IndexStyle, kron, length, log, map, ndims, oneunit, parent,
     power_by_squaring, print_matrix, promote_rule, real, round, sec, sech, setindex!, show, similar,
     sin, sincos, sinh, size, sqrt, tan, tanh, transpose, trunc, typed_hcat, vec
+import Base.MappedArrays: inv_func
 using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat
+    @propagate_inbounds, @pure, reduce, transpose_f!, typed_vcat
 # We use `_length` because of non-1 indices; releases after julia 0.5
 # can go back to `length`. `_length(A)` is equivalent to `length(linearindices(A))`.
 
@@ -242,8 +243,32 @@ end
 copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
 copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
 
-include("conjarray.jl")
-include("transpose.jl")
+function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+    A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int})
+    if length(ir_dest) != length(jr_src)
+        throw(ArgumentError(string("source and destination must have same size (got ",
+              length(jr_src)," and ",length(ir_dest),")")))
+    end
+    if length(jr_dest) != length(ir_src)
+        throw(ArgumentError(string("source and destination must have same size (got ",
+              length(ir_src)," and ",length(jr_dest),")")))
+    end
+    @boundscheck checkbounds(B, ir_dest, jr_dest)
+    @boundscheck checkbounds(A, ir_src, jr_src)
+    idest = first(ir_dest)
+    for jsrc in jr_src
+        jdest = first(jr_dest)
+        for isrc in ir_src
+            B[idest,jdest] = A[isrc,jsrc]
+            jdest += step(jr_dest)
+        end
+        idest += step(ir_dest)
+    end
+    return B
+end
+
+
+include("adjoint.jl")
 include("rowvector.jl")
 
 include("exceptions.jl")
@@ -275,7 +300,6 @@ include("special.jl")
 include("bitarray.jl")
 include("ldlt.jl")
 include("schur.jl")
-
 
 include("arpack.jl")
 include("arnoldi.jl")

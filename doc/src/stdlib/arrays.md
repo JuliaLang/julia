@@ -30,6 +30,7 @@ Base.linspace
 Base.logspace
 Base.Random.randsubseq
 Base.Random.randsubseq!
+Base.MappedArrays.MappedArray
 ```
 
 ## Basic functions
