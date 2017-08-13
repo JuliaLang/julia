@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-@testset "Core" begin
+@testset "ConjArray core" begin
     m = [1+im 2; 2 4-im]
     cm = ConjMatrix(m)
     @test cm[1,1] == 1-im
@@ -16,13 +16,9 @@
     @test cv[1] == [1-im]
 end
 
-@testset "RowVector conjugates" begin
+@testset "RowVector conjugation" begin
     v = [1+im, 1-im]
-    rv = v'
+    rv = conj(v.')
     @test (parent(rv) isa ConjArray)
     @test rv' === v
-
-    # Currently, view behavior defaults to only RowVectors.
-    @test isa((v').', Vector)
-    @test isa((v.')', Vector)
 end

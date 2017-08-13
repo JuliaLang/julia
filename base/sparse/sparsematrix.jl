@@ -753,7 +753,7 @@ count (`length(q) == A.n`).
 
 This method is the parent of several methods performing transposition and permutation
 operations on [`SparseMatrixCSC`](@ref)s. As this method performs no argument checking,
-prefer the safer child methods (`[c]transpose[!]`, `permute[!]`) to direct use.
+prefer the safer child methods (`transpose[!]`, `adjoint[!]`, `permute[!]`) to direct use.
 
 This method implements the `HALFPERM` algorithm described in F. Gustavson, "Two fast
 algorithms for sparse matrices: multiplication and permuted transposition," ACM TOMS 4(3),
@@ -826,14 +826,14 @@ function ftranspose!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, f::Fu
     halfperm!(X, A, 1:A.n, f)
 end
 transpose!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = ftranspose!(X, A, identity)
-adjoint!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = ftranspose!(X, A, conj)
+adjoint!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = ftranspose!(X, A, adjoint)
 
 function ftranspose(A::SparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
     X = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m+1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
     halfperm!(X, A, 1:A.n, f)
 end
 transpose(A::SparseMatrixCSC) = ftranspose(A, identity)
-adjoint(A::SparseMatrixCSC) = ftranspose(A, conj)
+adjoint(A::SparseMatrixCSC) = ftranspose(A, adjoint)
 
 """
     unchecked_noalias_permute!(X::SparseMatrixCSC{Tv,Ti},
@@ -3135,7 +3135,7 @@ end
 ## Structure query functions
 issymmetric(A::SparseMatrixCSC) = is_hermsym(A, identity)
 
-ishermitian(A::SparseMatrixCSC) = is_hermsym(A, conj)
+ishermitian(A::SparseMatrixCSC) = is_hermsym(A, adjoint)
 
 function is_hermsym(A::SparseMatrixCSC, check::Function)
     m, n = size(A)

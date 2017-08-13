@@ -1370,11 +1370,16 @@ end
 
 # Handle block matrices
 let A = [randn(2, 2) for i = 1:2, j = 1:2]
-    @test issymmetric(A.'A)
+    @test issymmetric(A'A)
 end
 let A = [complex.(randn(2, 2), randn(2, 2)) for i = 1:2, j = 1:2]
     @test ishermitian(A'A)
+    @test issymmetric(conj(A') * A)
 end
+let A = [[1 2; 3 4]]
+    @test !issymmetric(A.' * A) # issymmetric is recursive, but transpose is not
+end
+
 
 # issue #7197
 function i7197()

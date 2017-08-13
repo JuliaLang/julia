@@ -83,6 +83,94 @@ end
 
 squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
 
+## Transposition ##
+
+"""
+    transpose(A::AbstractMatrix)
+
+The transposition operator (`.'`).
+
+# Examples
+```jldoctest
+julia> A = [1 2 3; 4 5 6; 7 8 9]
+3×3 Array{Int64,2}:
+1  2  3
+4  5  6
+7  8  9
+
+julia> transpose(A)
+3×3 Array{Int64,2}:
+1  4  7
+2  5  8
+3  6  9
+```
+"""
+function transpose(A::AbstractMatrix)
+    ind1, ind2 = indices(A)
+    B = similar(A, (ind2, ind1))
+    transpose!(B, A)
+end
+
+transpose(a::AbstractArray) = error("transpose not defined for $(typeof(a)). Consider using `permutedims` for higher-dimensional arrays.")
+
+"""
+    transpose!(dest, src)
+
+Transpose array `src` and store the result in the preallocated array `dest`, which should
+have a size corresponding to `(size(src,2),size(src,1))`. No in-place transposition is
+supported and unexpected results will happen if `src` and `dest` have overlapping memory
+regions.
+"""
+transpose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(identity, B, A)
+
+function transpose!(B::AbstractVector, A::AbstractMatrix)
+    indices(B,1) == indices(A,2) && indices(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
+    copy!(B, A)
+end
+function transpose!(B::AbstractMatrix, A::AbstractVector)
+    indices(B,2) == indices(A,1) && indices(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
+    copy!(B, A)
+end
+
+const transposebaselength=64
+function transpose_f!(f, B::AbstractMatrix, A::AbstractMatrix)
+    inds = indices(A)
+    indices(B,1) == inds[2] && indices(B,2) == inds[1] || throw(DimensionMismatch(string(f)))
+
+    m, n = length(inds[1]), length(inds[2])
+    if m*n<=4*transposebaselength
+        @inbounds begin
+            for j = inds[2]
+                for i = inds[1]
+                    B[j,i] = f(A[i,j])
+                end
+            end
+        end
+    else
+        transposeblock!(f,B,A,m,n,first(inds[1])-1,first(inds[2])-1)
+    end
+    return B
+end
+function transposeblock!(f, B::AbstractMatrix, A::AbstractMatrix, m::Int, n::Int, offseti::Int, offsetj::Int)
+    if m*n<=transposebaselength
+        @inbounds begin
+            for j = (offsetj+1):(offsetj+n)
+                for i = (offseti+1):(offseti+m)
+                    B[j,i] = f(A[i,j])
+                end
+            end
+        end
+    elseif m>n
+        newm=m>>1
+        transposeblock!(f,B,A,newm,n,offseti,offsetj)
+        transposeblock!(f,B,A,m-newm,n,offseti+newm,offsetj)
+    else
+        newn=n>>1
+        transposeblock!(f,B,A,m,newn,offseti,offsetj)
+        transposeblock!(f,B,A,m,n-newn,offseti,offsetj+newn)
+    end
+    return B
+end
 
 ## Unary operators ##
 

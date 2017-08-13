@@ -915,7 +915,7 @@ issymmetric(A::AbstractMatrix{<:Real}) = ishermitian(A)
 """
     issymmetric(A) -> Bool
 
-Test whether a matrix is symmetric.
+Test whether a matrix is symmetric (such that `A == transpose(A)`).
 
 # Examples
 ```jldoctest
@@ -942,7 +942,7 @@ function issymmetric(A::AbstractMatrix)
         return false
     end
     for i = first(indsn):last(indsn), j = (i):last(indsn)
-        if A[i,j] != transpose(A[j,i])
+        if A[i,j] != conjadjoint(A[j,i])
             return false
         end
     end
@@ -954,7 +954,7 @@ issymmetric(x::Number) = x == x
 """
     ishermitian(A) -> Bool
 
-Test whether a matrix is Hermitian.
+Test whether a matrix is Hermitian (such that `A == adjoint(A)`).
 
 # Examples
 ```jldoctest

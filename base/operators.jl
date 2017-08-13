@@ -739,51 +739,7 @@ fldmod1(x::T, y::T) where {T<:Real} = (fld1(x,y), mod1(x,y))
 # efficient version for integers
 fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 
-# transpose
-
-"""
-    adjoint(A)
-
-The conjugate transposition operator (`'`).
-
-# Examples
-```jldoctest
-julia> A =  [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
- 3+2im  9+2im
- 8+7im  4+6im
-
-julia> adjoint(A)
-2×2 Array{Complex{Int64},2}:
- 3-2im  8-7im
- 9-2im  4-6im
-```
-"""
-adjoint(x) = conj(transpose(x))
-conj(x) = x
-
 # transposed multiply
-
-"""
-    Ac_mul_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ⋅B``.
-"""
-Ac_mul_B(a,b)  = adjoint(a)*b
-
-"""
-    A_mul_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᴴ``.
-"""
-A_mul_Bc(a,b)  = a*adjoint(b)
-
-"""
-    Ac_mul_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ Bᴴ``.
-"""
-Ac_mul_Bc(a,b) = adjoint(a)*adjoint(b)
 
 """
     At_mul_B(A, B)
@@ -809,27 +765,6 @@ At_mul_Bt(a,b) = transpose(a)*transpose(b)
 # transposed divide
 
 """
-    Ac_rdiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / B``.
-"""
-Ac_rdiv_B(a,b)  = adjoint(a)/b
-
-"""
-    A_rdiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A / Bᴴ``.
-"""
-A_rdiv_Bc(a,b)  = a/adjoint(b)
-
-"""
-    Ac_rdiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / Bᴴ``.
-"""
-Ac_rdiv_Bc(a,b) = adjoint(a)/adjoint(b)
-
-"""
     At_rdiv_B(A, B)
 
 For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / B``.
@@ -849,27 +784,6 @@ A_rdiv_Bt(a,b)  = a/transpose(b)
 For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / Bᵀ``.
 """
 At_rdiv_Bt(a,b) = transpose(a)/transpose(b)
-
-"""
-    Ac_ldiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``B``.
-"""
-Ac_ldiv_B(a,b)  = adjoint(a)\b
-
-"""
-    A_ldiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᴴ``.
-"""
-A_ldiv_Bc(a,b)  = a\adjoint(b)
-
-"""
-    Ac_ldiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᴴ``.
-"""
-Ac_ldiv_Bc(a,b) = adjoint(a)\adjoint(b)
 
 """
     At_ldiv_B(A, B)
@@ -897,7 +811,21 @@ At_ldiv_Bt(a,b) = At_ldiv_B(a,transpose(b))
 
 For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᵀ``.
 """
-Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
+Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b)) # TODO: I think this function can be removed
+
+# Operators that live in `Base` but rely on `LinAlg.adjoint`
+
+function Ac_mul_B end
+function A_mul_Bc end
+function Ac_mul_Bc end
+
+function Ac_rdiv_B end
+function A_rdiv_Bc end
+function Ac_rdiv_Bc end
+
+function Ac_ldiv_B end
+function A_ldiv_Bc end
+function Ac_ldiv_Bc end
 
 """
     widen(x)
