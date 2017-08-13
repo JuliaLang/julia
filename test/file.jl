@@ -1204,6 +1204,20 @@ function test_22922()
     if Sys.iswindows()
         @test_throws Base.UVError mktempdir(; prefix="*")
         @test_throws Base.UVError mktempdir(; prefix="cdcdccd/")
+
+        # The API accepts "c:/ and c:\\" as valid prefix. The parent directory is ignored.
+	mkdir("c:/mydir")
+
+        mktempdir("c:/mydir"; prefix="c:/") do tmpdir
+            filename = basename(tmpdir)
+            @test length(filename) == 6
+        end
+        mktempdir("c:\\mydir"; prefix="c:\\") do tmpdir
+            filename = basename(tmpdir)
+            @test length(filename) == 6
+        end
+
+        @test_throws Base.UVError mktempdir(; prefix="cdcdccd/")
     else
         # '/' is accepted in a prefix but affects the overall path and permissions.
         @test_throws Base.UVError mktempdir(; prefix="/")
@@ -1216,7 +1230,7 @@ function test_22922()
     end
 
     # Unicode test
-    tst_prefix="\u2200x\u2203y"
+    tst_prefix="∃x∀y"
     mktempdir(; prefix=tst_prefix) do tmpdir
         filename = basename(tmpdir)
         @test startswith(filename, tst_prefix)
