@@ -1199,6 +1199,7 @@ function test_22922()
         filename = basename(tmpdir)
         @test startswith(filename, tst_prefix)
     end
+
     # Behavioral differences across OS types
     if Sys.iswindows()
         @test_throws Base.UVError mktempdir(; prefix="*")
