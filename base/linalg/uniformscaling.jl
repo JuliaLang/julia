@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv,
+import Base: copy, adjoint, getindex, show, transpose, one, zero, inv,
              hcat, vcat, hvcat
 import Base.LinAlg: SingularException
 
@@ -63,7 +63,7 @@ end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
 transpose(J::UniformScaling) = J
-ctranspose(J::UniformScaling) = UniformScaling(conj(J.λ))
+adjoint(J::UniformScaling) = UniformScaling(conj(J.λ))
 
 one(::Type{UniformScaling{T}}) where {T} = UniformScaling(one(T))
 one(J::UniformScaling{T}) where {T} = one(UniformScaling{T})

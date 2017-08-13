@@ -131,16 +131,16 @@ end
                 end
             end
 
-            @testset "transpose, ctranspose" begin
+            @testset "transpose, adjoint" begin
                 S = Symmetric(asym)
                 H = Hermitian(aherm)
                 @test  transpose(S) === S == asym
-                @test ctranspose(H) === H == aherm
+                @test adjoint(H) === H == aherm
                 if eltya <: Real
-                    @test ctranspose(S) === S == asym
+                    @test adjoint(S) === S == asym
                     @test  transpose(H) === H == aherm
                 else
-                    @test ctranspose(S) ==  Symmetric(conj(asym))
+                    @test adjoint(S) ==  Symmetric(conj(asym))
                     @test  transpose(H) ==  Hermitian(transpose(aherm))
                 end
             end

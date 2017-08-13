@@ -100,7 +100,7 @@ srand(1)
                     @test A_ldiv_B!(D, copy(U)) ≈ DM\U atol=atol_three
                     @test At_ldiv_B!(D, copy(U)) ≈ DM\U atol=atol_three
                     @test Ac_ldiv_B!(conj(D), copy(U)) ≈ DM\U atol=atol_three
-                    Uc = ctranspose(U)
+                    Uc = adjoint(U)
                     target = scale!(Uc, inv.(D.diag))
                     @test A_rdiv_B!(Uc, D) ≈ target atol=atol_three
                     @test_throws DimensionMismatch A_rdiv_B!(eye(elty, n-1), D)
@@ -222,7 +222,7 @@ srand(1)
         @test transpose(D) == D
         if elty <: BlasComplex
             @test Array(conj(D)) ≈ conj(DM)
-            @test ctranspose(D) == conj(D)
+            @test adjoint(D) == conj(D)
         end
         # Translates to Ac/t_mul_B, which is specialized after issue 21286
         @test(D' * v == conj(D) * v)

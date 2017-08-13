@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-ctranspose(a::AbstractArray) = error("ctranspose not defined for $(typeof(a)). Consider using `permutedims` for higher-dimensional arrays.")
+adjoint(a::AbstractArray) = error("adjoint not defined for $(typeof(a)). Consider using `permutedims` for higher-dimensional arrays.")
 transpose(a::AbstractArray) = error("transpose not defined for $(typeof(a)). Consider using `permutedims` for higher-dimensional arrays.")
 
 ## Matrix transposition ##
@@ -16,14 +16,14 @@ regions.
 transpose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(transpose, B, A)
 
 """
-    ctranspose!(dest,src)
+    adjoint!(dest,src)
 
 Conjugate transpose array `src` and store the result in the preallocated array `dest`, which
 should have a size corresponding to `(size(src,2),size(src,1))`. No in-place transposition
 is supported and unexpected results will happen if `src` and `dest` have overlapping memory
 regions.
 """
-ctranspose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(ctranspose, B, A)
+adjoint!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(adjoint, B, A)
 function transpose!(B::AbstractVector, A::AbstractMatrix)
     indices(B,1) == indices(A,2) && indices(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
     copy!(B, A)
@@ -32,11 +32,11 @@ function transpose!(B::AbstractMatrix, A::AbstractVector)
     indices(B,2) == indices(A,1) && indices(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
     copy!(B, A)
 end
-function ctranspose!(B::AbstractVector, A::AbstractMatrix)
+function adjoint!(B::AbstractVector, A::AbstractMatrix)
     indices(B,1) == indices(A,2) && indices(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
     ccopy!(B, A)
 end
-function ctranspose!(B::AbstractMatrix, A::AbstractVector)
+function adjoint!(B::AbstractMatrix, A::AbstractVector)
     indices(B,2) == indices(A,1) && indices(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
     ccopy!(B, A)
 end
@@ -85,11 +85,11 @@ function ccopy!(B, A)
     RB, RA = eachindex(B), eachindex(A)
     if RB == RA
         for i = RB
-            B[i] = ctranspose(A[i])
+            B[i] = adjoint(A[i])
         end
     else
         for (i,j) = zip(RB, RA)
-            B[i] = ctranspose(A[j])
+            B[i] = adjoint(A[j])
         end
     end
 end
@@ -119,14 +119,14 @@ function transpose(A::AbstractMatrix)
     B = similar(A, (ind2, ind1))
     transpose!(B, A)
 end
-function ctranspose(A::AbstractMatrix)
+function adjoint(A::AbstractMatrix)
     ind1, ind2 = indices(A)
     B = similar(A, (ind2, ind1))
-    ctranspose!(B, A)
+    adjoint!(B, A)
 end
 
-@inline ctranspose(A::AbstractVector{<:Real}) = transpose(A)
-@inline ctranspose(A::AbstractMatrix{<:Real}) = transpose(A)
+@inline adjoint(A::AbstractVector{<:Real}) = transpose(A)
+@inline adjoint(A::AbstractMatrix{<:Real}) = transpose(A)
 
 function copy_transpose!(B::AbstractVecOrMat, ir_dest::Range{Int}, jr_dest::Range{Int},
                          A::AbstractVecOrMat, ir_src::Range{Int}, jr_src::Range{Int})

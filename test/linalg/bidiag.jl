@@ -105,7 +105,7 @@ srand(1)
             @test Array(imag(T)) == imag(diagm(dv)) + imag(diagm(ev, uplo == :U ? 1 : -1))
         end
 
-        @testset for func in (conj, transpose, ctranspose)
+        @testset for func in (conj, transpose, adjoint)
             @test func(func(T)) == T
         end
 

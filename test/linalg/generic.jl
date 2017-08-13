@@ -371,6 +371,6 @@ Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 end
 
 @testset "fallback throws properly for AbstractArrays with dimension > 2" begin
-    @test_throws ErrorException ctranspose(rand(2,2,2,2))
+    @test_throws ErrorException adjoint(rand(2,2,2,2))
     @test_throws ErrorException transpose(rand(2,2,2,2))
 end

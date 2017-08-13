@@ -56,7 +56,7 @@ convert(::Type{Matrix}, A::LQ) = convert(Array, convert(AbstractArray, A))
 convert(::Type{Array}, A::LQ) = convert(Matrix, A)
 full(A::LQ) = convert(AbstractArray, A)
 
-ctranspose(A::LQ{T}) where {T} = QR{T,typeof(A.factors)}(A.factors', A.τ)
+adjoint(A::LQ{T}) where {T} = QR{T,typeof(A.factors)}(A.factors', A.τ)
 
 function getindex(A::LQ, d::Symbol)
     m, n = size(A)
@@ -164,7 +164,7 @@ for (f1, f2) in ((:A_mul_Bc, :A_mul_B!),
         function ($f1)(A::LQPackedQ, B::StridedVecOrMat)
             TAB = promote_type(eltype(A), eltype(B))
             BB = similar(B, TAB, (size(B, 2), size(B, 1)))
-            ctranspose!(BB, B)
+            adjoint!(BB, B)
             return ($f2)(A, BB)
         end
     end
@@ -198,7 +198,7 @@ for (f1, f2) in ((:Ac_mul_B, :A_mul_B!),
         function ($f1)(A::StridedMatrix, B::LQPackedQ)
             TAB = promote_type(eltype(A), eltype(B))
             AA = similar(A, TAB, (size(A, 2), size(A, 1)))
-            ctranspose!(AA, A)
+            adjoint!(AA, A)
             return ($f2)(AA, B)
         end
     end

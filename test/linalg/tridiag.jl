@@ -58,7 +58,7 @@ B = randn(n,2)
     @testset "elementary operations" begin
         @test conj(T) == Tridiagonal(conj(dl), conj(d), conj(du))
         @test transpose(T) == Tridiagonal(du, d, dl)
-        @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
+        @test adjoint(T) == Tridiagonal(conj(du), conj(d), conj(dl))
 
         @test abs.(T) == Tridiagonal(abs.(dl),abs.(d),abs.(du))
         if elty <: Real
@@ -258,7 +258,7 @@ let n = 12 #Size of matrix problem to test
                 @test_throws ArgumentError diag(A,n+1)
             end
             @testset "Idempotent tests" begin
-                for func in (conj, transpose, ctranspose)
+                for func in (conj, transpose, adjoint)
                     @test func(func(A)) == A
                 end
             end

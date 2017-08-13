@@ -309,6 +309,9 @@ Deprecated or removed
   * `Base.cpad` has been removed; use an appropriate combination of `rpad` and `lpad`
     instead ([#23187]).
 
+  * `ctranspose` and `ctranspose!` have been deprecated in favor of `adjoint` and `adjoint!`,
+    respectively.
+
 Julia v0.6.0 Release Notes
 ==========================
 

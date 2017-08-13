@@ -401,11 +401,11 @@ end
             fullAt = transpose(Array(A))
             @test transpose(A) == fullAt
             @test transpose!(similar(At), A) == fullAt
-            # ctranspose[!]
+            # adjoint[!]
             C = A + im*A/2
-            fullCh = ctranspose(Array(C))
-            @test ctranspose(C) == fullCh
-            @test ctranspose!(similar(sparse(fullCh)), C) == fullCh
+            fullCh = adjoint(Array(C))
+            @test adjoint(C) == fullCh
+            @test adjoint!(similar(sparse(fullCh)), C) == fullCh
             # permute[!]
             p = randperm(m)
             q = randperm(n)
@@ -423,7 +423,7 @@ end
 @testset "transpose of SubArrays" begin
     A = view(sprandn(10, 10, 0.3), 1:4, 1:4)
     @test  transpose(Array(A)) == Array(transpose(A))
-    @test ctranspose(Array(A)) == Array(ctranspose(A))
+    @test adjoint(Array(A)) == Array(adjoint(A))
 end
 
 @testset "exp" begin
