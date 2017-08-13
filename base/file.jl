@@ -387,7 +387,11 @@ end
 """
     mktempdir(f::Function, parent=tempdir(); prefix="$temp_prefix")
 
+<<<<<<< HEAD
 Apply the function `f` to the result of [`mktempdir(parent; prefix)`](@ref) and remove the
+=======
+Apply the function `f` to the result of [`mktempdir(parent); prefix`](@ref) and remove the
+>>>>>>> mktempdir() now supports prefix.
 temporary directory upon completion. An optional `prefix` to the directory name can
 be provided.
 """
