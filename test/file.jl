@@ -1183,8 +1183,13 @@ if !Sys.iswindows()
 end  # !Sys.iswindows
 
 function test_22922()
+<<<<<<< HEAD
     def_prefix = "jl_"
     tst_prefix = "ABCDEF"
+=======
+    const def_prefix = "jl_"
+    const tst_prefix = "ABCDEF"
+>>>>>>> mktempdir() now supports prefix.
     mktempdir() do tmpdir
         filename = basename(tmpdir)
         @test startswith(filename, def_prefix)
