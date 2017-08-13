@@ -1183,13 +1183,8 @@ if !Sys.iswindows()
 end  # !Sys.iswindows
 
 function test_22922()
-<<<<<<< HEAD
     def_prefix = "jl_"
     tst_prefix = "ABCDEF"
-=======
-    const def_prefix = "jl_"
-    const tst_prefix = "ABCDEF"
->>>>>>> mktempdir() now supports prefix.
     mktempdir() do tmpdir
         filename = basename(tmpdir)
         @test startswith(filename, def_prefix)
@@ -1199,17 +1194,11 @@ function test_22922()
         @test startswith(filename, tst_prefix)
     end
     # Special character prefix tests
-<<<<<<< HEAD
     tst_prefix="#!@%^&()"
-=======
-    tst_prefix="#!@%^&*()"
->>>>>>> mktempdir() now supports prefix.
     mktempdir(; prefix=tst_prefix) do tmpdir
         filename = basename(tmpdir)
         @test startswith(filename, tst_prefix)
     end
-<<<<<<< HEAD
-
     # Behavioral differences across OS types
     if Sys.iswindows()
         @test_throws Base.UVError mktempdir(; prefix="*")
