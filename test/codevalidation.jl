@@ -105,13 +105,6 @@ errors = Core.Inference.validate_code(c)
 @test length(errors) == 1
 @test errors[1].kind === Core.Inference.SSAVALUETYPES_MISMATCH_UNINFERRED
 
-# INVALID_ASSIGNMENT_SLOTFLAG
-c = Core.Inference.copy_code_info(c0)
-c.slotflags[8] = 0x00
-errors = Core.Inference.validate_code(c)
-@test length(errors) == 1
-@test errors[1].kind === Core.Inference.INVALID_ASSIGNMENT_SLOTFLAG
-
 # SIGNATURE_NARGS_MISMATCH
 old_sig = mi.def.sig
 mi.def.sig = Tuple{1,2}

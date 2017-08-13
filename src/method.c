@@ -170,6 +170,8 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
     jl_gc_wb(li, li->slotflags);
     li->ssavaluetypes = jl_box_long(nssavalue);
     jl_gc_wb(li, li->ssavaluetypes);
+    // Flags that need to be copied to slotflags
+    const uint8_t vinfo_mask = 16 | 32 | 64;
     int i;
     for (i = 0; i < nslots; i++) {
         jl_value_t *vi = jl_array_ptr_ref(vis, i);
@@ -187,7 +189,7 @@ static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
             }
         }
         jl_array_ptr_set(li->slotnames, i, name);
-        jl_array_uint8_set(li->slotflags, i, jl_unbox_long(jl_array_ptr_ref(vi, 2)));
+        jl_array_uint8_set(li->slotflags, i, vinfo_mask & jl_unbox_long(jl_array_ptr_ref(vi, 2)));
     }
 }
 
