@@ -46,6 +46,7 @@ Standard library changes
 * `filter` now supports `SkipMissing`-wrapped arrays ([#31235]).
 * A no-argument construct to `Ptr{T}` has been added which constructs a null pointer ([#30919])
 * `strip` now accepts a function argument in the same manner as `lstrip` and `rstrip` ([#31211])
+* `mktempdir` now accepts a `prefix` keyword argument to customize the file name ([#31230], [#22922])
 
 #### LinearAlgebra
 
