@@ -1169,11 +1169,27 @@ function test_22922()
         @test startswith(filename, tst_prefix)
     end
     # Special character prefix tests
-    tst_prefix="#!@%^&*()"
+    tst_prefix="#!@%^&()"
     mktempdir(; prefix=tst_prefix) do tmpdir
         filename = basename(tmpdir)
         @test startswith(filename, tst_prefix)
     end
+
+    # Behavioral differences across OS types
+    if Sys.iswindows()
+        @test_throws Base.UVError mktempdir(; prefix="*")
+        @test_throws Base.UVError mktempdir(; prefix="cdcdccd/")
+    else
+        # '/' is accepted in a prefix but affects the overall path and permissions.
+        @test_throws Base.UVError mktempdir(; prefix="/")
+
+        # The file created will be of format "/tmp/XXXXXX"
+        mktempdir("/"; prefix="tmp/") do tmpdir
+            filename = basename(tmpdir)
+            @test length(filename) == 6
+        end
+    end
+
     # Unicode test
     tst_prefix="\u2200x\u2203y"
     mktempdir(; prefix=tst_prefix) do tmpdir
