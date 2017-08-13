@@ -117,11 +117,7 @@ R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
 rt = Base.return_types(reducedim, Tuple{Function, Array{Float64, 3}, Int, Float64})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
 
-
-## findmin/findmax
-
-eqeq2(a, b) = all(x->eqeq1(x[1], x[2]), zip(a, b))
-eqeq1(a, b) = all(x->x[1]===x[2], zip(a, b))
+## findmin/findmax/minumum/maximum
 
 A = [1.0 3.0 6.0;
      5.0 2.0 4.0]
@@ -130,6 +126,9 @@ for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [1 4 6]),
                           ((1,2), fill(1.0,1,1),fill(1,1,1))]
     @test findmin(A, tup) == (rval, rind)
     @test findmin!(similar(rval), similar(rind), A) == (rval, rind)
+    @test string(minimum(A, tup)) == string(rval)
+    @test string(minimum!(similar(rval), A)) == string(rval)
+    @test string(minimum!(copy(rval), A, init=false)) == string(rval)
 end
 
 for (tup, rval, rind) in [((1,), [5.0 3.0 6.0], [2 3 5]),
@@ -137,7 +136,12 @@ for (tup, rval, rind) in [((1,), [5.0 3.0 6.0], [2 3 5]),
                           ((1,2), fill(6.0,1,1),fill(5,1,1))]
     @test findmax(A, tup) == (rval, rind)
     @test findmax!(similar(rval), similar(rind), A) == (rval, rind)
+    @test string(maximum(A, tup)) == string(rval)
+    @test string(maximum!(similar(rval), A)) == string(rval)
+    @test string(maximum!(copy(rval), A, init=false)) == string(rval)
 end
+
+#issue 23209
 
 A = [1.0 3.0 6.0;
      NaN 2.0 4.0]
@@ -146,6 +150,9 @@ for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [2 4 6]),
                           ((1,2), fill(NaN,1,1),fill(2,1,1))]
     @test string(findmin(A, tup)) == string((rval, rind))
     @test string(findmin!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(minimum(A, tup)) == string(rval)
+    @test string(minimum!(similar(rval), A)) == string(rval)
+    @test string(minimum!(copy(rval), A, init=false)) == string(rval)
 end
 
 for (tup, rval, rind) in [((1,), [NaN 3.0 6.0], [2 3 5]),
@@ -153,6 +160,9 @@ for (tup, rval, rind) in [((1,), [NaN 3.0 6.0], [2 3 5]),
                           ((1,2), fill(NaN,1,1),fill(2,1,1))]
     @test string(findmax(A, tup)) == string((rval, rind))
     @test string(findmax!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(maximum(A, tup)) == string(rval)
+    @test string(maximum!(similar(rval), A)) == string(rval)
+    @test string(maximum!(copy(rval), A, init=false)) == string(rval)
 end
 
 A = [1.0 NaN 6.0;
@@ -162,6 +172,9 @@ for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [2 3 6]),
                           ((1,2), fill(NaN,1,1),fill(2,1,1))]
     @test string(findmin(A, tup))  == string((rval, rind))
     @test string(findmin!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(minimum(A, tup)) == string(rval)
+    @test string(minimum!(similar(rval), A)) == string(rval)
+    @test string(minimum!(copy(rval), A, init=false)) == string(rval)
 end
 
 for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [2 3 5]),
@@ -169,6 +182,9 @@ for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [2 3 5]),
                           ((1,2), fill(NaN,1,1),fill(2,1,1))]
     @test string(findmax(A, tup)) == string((rval, rind))
     @test string(findmax!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(maximum(A, tup)) == string(rval)
+    @test string(maximum!(similar(rval), A)) == string(rval)
+    @test string(maximum!(copy(rval), A, init=false)) == string(rval)
 end
 
 A = [Inf -Inf Inf  -Inf;
@@ -178,6 +194,9 @@ for (tup, rval, rind) in [((1,), [Inf -Inf -Inf -Inf], [1 3 6 7]),
                           ((1,2), fill(-Inf,1,1),fill(3,1,1))]
     @test string(findmin(A, tup))  == string((rval, rind))
     @test string(findmin!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(minimum(A, tup)) == string(rval)
+    @test string(minimum!(similar(rval), A)) == string(rval)
+    @test string(minimum!(copy(rval), A, init=false)) == string(rval)
 end
 
 for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [1 4 5 7]),
@@ -185,28 +204,77 @@ for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [1 4 5 7]),
                           ((1,2), fill(Inf,1,1),fill(1,1,1))]
     @test string(findmax(A, tup)) == string((rval, rind))
     @test string(findmax!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(maximum(A, tup)) == string(rval)
+    @test string(maximum!(similar(rval), A)) == string(rval)
+    @test string(maximum!(copy(rval), A, init=false)) == string(rval)
 end
 
 A = [BigInt(10)]
-for (tup, rval, rind) in [((1,), [BigInt(10)], [1])]
+for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
     @test string(findmin(A, tup))  == string((rval, rind))
     @test string(findmin!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(minimum(A, tup)) == string(rval)
+    @test string(minimum!(similar(rval), A)) == string(rval)
+    @test string(minimum!(copy(rval), A, init=false)) == string(rval)
 end
 
-for (tup, rval, rind) in [((1,), [BigInt(10)], [1])]
+for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
     @test string(findmax(A, tup)) == string((rval, rind))
     @test string(findmax!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(maximum(A, tup)) == string(rval)
+    @test string(maximum!(similar(rval), A)) == string(rval)
+    @test string(maximum!(copy(rval), A, init=false)) == string(rval)
+end
+
+A = [BigInt(-10)]
+for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
+    @test string(findmin(A, tup))  == string((rval, rind))
+    @test string(findmin!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(minimum(A, tup)) == string(rval)
+    @test string(minimum!(similar(rval), A)) == string(rval)
+    @test string(minimum!(copy(rval), A, init=false)) == string(rval)
+end
+
+for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
+    @test string(findmax(A, tup)) == string((rval, rind))
+    @test string(findmax!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(maximum(A, tup)) == string(rval)
+    @test string(maximum!(similar(rval), A)) == string(rval)
+    @test string(maximum!(copy(rval), A, init=false)) == string(rval)
+end
+
+A = [BigInt(10) BigInt(-10)]
+for (tup, rval, rind) in [((2,), [BigInt(-10)], [2])]
+    @test string(findmin(A, tup))  == string((rval, rind))
+    @test string(findmin!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(minimum(A, tup)) == string(rval)
+    @test string(minimum!(similar(rval), A)) == string(rval)
+    @test string(minimum!(copy(rval), A, init=false)) == string(rval)
+end
+
+for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
+    @test string(findmax(A, tup)) == string((rval, rind))
+    @test string(findmax!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(maximum(A, tup)) == string(rval)
+    @test string(maximum!(similar(rval), A)) == string(rval)
+    @test string(maximum!(copy(rval), A, init=false)) == string(rval)
 end
 
 A = ["a", "b"]
 for (tup, rval, rind) in [((1,), ["a"], [1])]
     @test string(findmin(A, tup))  == string((rval, rind))
     @test string(findmin!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(minimum(A, tup)) == string(rval)
+    @test string(minimum!(similar(rval), A)) == string(rval)
+    @test string(minimum!(copy(rval), A, init=false)) == string(rval)
 end
 
 for (tup, rval, rind) in [((1,), ["b"], [2])]
     @test string(findmax(A, tup)) == string((rval, rind))
     @test string(findmax!(similar(rval), similar(rind), A)) == string((rval, rind))
+    @test string(maximum(A, tup)) == string(rval)
+    @test string(maximum!(similar(rval), A)) == string(rval)
+    @test string(maximum!(copy(rval), A, init=false)) == string(rval)
 end
 
 # issue #6672

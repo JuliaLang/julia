@@ -260,7 +260,6 @@ function fill!(a::Array{T}, x) where T<:Union{Integer,AbstractFloat}
     return a
 end
 
-
 """
     fill(x, dims)
 
@@ -777,7 +776,6 @@ function _prepend!(a, ::IteratorSize, iter)
     a
 end
 
-
 """
     resize!(a::Vector, n::Integer) -> Vector
 
@@ -1181,7 +1179,6 @@ function reverse!(v::AbstractVector, s=first(linearindices(v)), n=last(linearind
     return v
 end
 
-
 # concatenations of homogeneous combinations of vectors, horizontal and vertical
 
 vcat() = Array{Any,1}(0)
@@ -1225,7 +1222,6 @@ function vcat(arrays::Vector{T}...) where T
 end
 
 cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x)))
-
 
 ## find ##
 
@@ -1800,7 +1796,7 @@ indmax(a) = findmax(a)[2]
     indmin(itr) -> Integer
 
 Returns the index of the minimum element in a collection. If there are multiple minimal
-elements, then the first one will be returned. 
+elements, then the first one will be returned.
 
 The collection must not be empty.
 

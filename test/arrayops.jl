@@ -42,7 +42,6 @@ using TestHelpers.OAs
     @test isequal([1,2,5] .<< [1,2,5], [2,8,160])
     @test isequal([10,20,50] .>> [1,2,5], [5,5,1])
 
-
     a = ones(2,2)
     a[1,1] = 1
     a[1,2] = 2
@@ -632,7 +631,6 @@ end
     @test_throws MethodError repmat(1, 2, 3)
     @test_throws MethodError repmat([1, 2], 1, 2, 3)
 
-
     R = repeat([1, 2])
     @test R == [1, 2]
     R = repeat([1, 2], inner=1)
@@ -1154,7 +1152,6 @@ end
     @test isempty(eoa)
 end
 
-
 @testset "deleteat!" begin
     for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                    8:9, 9:10, 6:9, 7:10]
@@ -1631,7 +1628,6 @@ R = CartesianRange((3,0))
 @test @inferred(eachindex(zeros(3),view(zeros(3,3),1:2,1:2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
 @test @inferred(eachindex(zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
 
-
 @testset "rotates" begin
     a = [1 0 0; 0 0 0]
     @test rotr90(a,1) == [0 1; 0 0; 0 0]
@@ -1920,7 +1916,6 @@ mutable struct OOB_Functor{T}; a::T; end
 let f = OOB_Functor([1,2])
     @test_throws BoundsError map(f, [1,2,3,4,5])
 end
-
 
 # issue 15654
 @test cumprod([5], 2) == [5]
