@@ -1156,3 +1156,30 @@ if !Sys.iswindows()
         test_22566()
     end
 end  # !Sys.iswindows
+
+function test_22922()
+    const def_prefix = "jl_"
+    const tst_prefix = "ABCDEF"
+    mktempdir() do tmpdir
+        filename = basename(tmpdir)
+        @test startswith(filename, def_prefix)
+    end
+    mktempdir(; prefix=tst_prefix) do tmpdir
+        filename = basename(tmpdir)
+        @test startswith(filename, tst_prefix)
+    end
+    # Special character prefix tests
+    tst_prefix="#!@%^&*()"
+    mktempdir(; prefix=tst_prefix) do tmpdir
+        filename = basename(tmpdir)
+        @test startswith(filename, tst_prefix)
+    end
+    # Unicode test
+    tst_prefix="\u2200x\u2203y"
+    mktempdir(; prefix=tst_prefix) do tmpdir
+        filename = basename(tmpdir)
+        @test startswith(filename, tst_prefix)
+    end
+end
+
+test_22922()
