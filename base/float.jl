@@ -134,6 +134,10 @@ end
 
 function convert(::Type{Float16}, val::Float32)
     f = reinterpret(UInt32, val)
+    if isnan(val)
+        t = 0x8000 ⊻ (0x8000 & ((f >> 0x10) % UInt16))
+        return reinterpret(Float16, t ⊻ ((f >> 0xd) % UInt16))
+    end
     i = (f >> 23) & 0x1ff + 1
     sh = shifttable[i]
     f &= 0x007fffff
@@ -182,7 +186,7 @@ function convert(::Type{Float32}, val::Float16)
                 ret = 0xff800000
             end
         else  # NaN
-            ret = 0x7fc00000 | (sign<<31)
+            ret = 0x7fc00000 | (sign<<31) | (sig<<(23-10))
         end
     else
         sign = sign << 31
