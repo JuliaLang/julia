@@ -580,7 +580,7 @@ Note that an error will be thrown if `types` are not leaf types when `expand_gen
 function code_lowered(@nospecialize(f), @nospecialize(t = Tuple), expand_generated::Bool = true)
     return map(method_instances(f, t)) do m
         if expand_generated && isgenerated(m)
-            if isa(m, MethodInstance)
+            if isa(m, Core.MethodInstance)
                 return Core.Inference.get_staged(m)
             else # isa(m, Method)
                 error("Could not expand generator for `@generated` method ", m, ". ",
