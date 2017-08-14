@@ -76,7 +76,7 @@ function temp_pkg_dir_noinit(fn::Function)
     # Used in tests below to set up and tear down a sandboxed package directory
     # Unlike the version in test/pkg.jl, this does not run Pkg.init so does not
     # clone METADATA (only pkg and libgit2-online tests should need internet access)
-    const tmpdir = joinpath(tempdir(),randstring())
+    tmpdir = joinpath(tempdir(),randstring())
     withenv("JULIA_PKGDIR" => tmpdir) do
         @test !isdir(Pkg.dir())
         try

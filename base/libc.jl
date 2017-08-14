@@ -39,7 +39,7 @@ if Sys.iswindows()
     function dup(src::WindowsRawSocket)
         new_handle = Ref{Ptr{Void}}(-1)
         my_process = ccall(:GetCurrentProcess, stdcall, Ptr{Void}, ())
-        const DUPLICATE_SAME_ACCESS = 0x2
+        DUPLICATE_SAME_ACCESS = 0x2
         status = ccall(:DuplicateHandle, stdcall, Int32,
             (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Ptr{Void}}, UInt32, Int32, UInt32),
             my_process, src.handle, my_process, new_handle, 0, false, DUPLICATE_SAME_ACCESS)
@@ -290,10 +290,10 @@ if Sys.iswindows()
     GetLastError() = ccall(:GetLastError, stdcall, UInt32, ())
 
     function FormatMessage(e=GetLastError())
-        const FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
-        const FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
-        const FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
-        const FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
+        FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
+        FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
+        FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
+        FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
         lpMsgBuf = Ref{Ptr{UInt16}}()
         lpMsgBuf[] = 0
         len = ccall(:FormatMessageW, stdcall, UInt32, (Cint, Ptr{Void}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Void}),

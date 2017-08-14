@@ -63,6 +63,9 @@ Language changes
     (`need_to_handle_undef_sparam = Set{Any}(m.sig for m in Test.detect_unbound_args(Base, recursive=true))`)
     is equal (`==`) to some known set (`expected = Set()`). ([#23117])
 
+  * `const` declarations on local variables were previously ignored. They now give a
+    warning, so that this syntax can be disallowed or given a new meaning in a
+    future version ([#5148]).
 
 Breaking changes
 ----------------

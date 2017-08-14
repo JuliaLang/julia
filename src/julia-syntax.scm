@@ -1320,7 +1320,7 @@
         (if (null? params)
             (error (string "empty type parameter list in \"" (deparse `(= (curly ,name) ,type-ex)) "\"")))
         `(block
-          (const ,name)
+          (const-if-global ,name)
           ,(expand-forms
             `(= ,name (where ,type-ex ,@params)))))
       (expand-forms
@@ -3115,11 +3115,12 @@ f(x) = yt(x)
                  (if (vinfo:never-undef vi)
                      '(null)
                      `(newvar ,(cadr e))))))
-          ((const)
+          ((const) e)
+          ((const-if-global)
            (if (or (assq (cadr e) (car  (lam:vinfo lam)))
                    (assq (cadr e) (cadr (lam:vinfo lam))))
                '(null)
-               e))
+               `(const ,(cadr e))))
           ((isdefined) ;; convert isdefined expr to function for closure converted variables
            (let* ((sym (cadr e))
                   (vi (and (symbol? sym) (assq sym (car  (lam:vinfo lam)))))
@@ -3661,7 +3662,14 @@ f(x) = yt(x)
             ((local-def) #f)
             ((local) #f)
             ((implicit-global) #f)
-            ((const) (emit e))
+            ((const)
+             (if (or (assq (cadr e) (car  (lam:vinfo lam)))
+                     (assq (cadr e) (cadr (lam:vinfo lam))))
+                 (begin
+                   (syntax-deprecation #f (string "`const` declaration on local variable" (linenode-string current-loc))
+                                       "")
+                   '(null))
+                 (emit e)))
             ((isdefined) (if tail (emit-return e) e))
 
             ;; top level expressions returning values

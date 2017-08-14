@@ -251,10 +251,10 @@ function _write_capture(io, re, group)
 end
 
 function _replace(io, repl_s::SubstitutionString, str, r, re)
-    const SUB_CHAR = '\\'
-    const GROUP_CHAR = 'g'
-    const LBRACKET = '<'
-    const RBRACKET = '>'
+    SUB_CHAR = '\\'
+    GROUP_CHAR = 'g'
+    LBRACKET = '<'
+    RBRACKET = '>'
     repl = repl_s.string
     i = start(repl)
     e = endof(repl)
