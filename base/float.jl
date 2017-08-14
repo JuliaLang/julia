@@ -182,7 +182,7 @@ function convert(::Type{Float32}, val::Float16)
                 ret = 0xff800000
             end
         else  # NaN
-            ret = 0x7fc00000 | (sign<<31)
+            ret = 0x7fc00000 | (sign<<31) | (sig<<(23-10))
         end
     else
         sign = sign << 31
