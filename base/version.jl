@@ -16,13 +16,13 @@ struct VersionNumber
             bld::Tuple{Vararg{Union{UInt64,String}}})
         for ident in pre
             if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
-                isempty(ident) && !(length(pre)==1 && isempty(bld))
+                    isempty(ident) && !(length(pre) == 1 && isempty(bld))
                 throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
             end
         end
         for ident in bld
             if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
-                isempty(ident) && length(bld)!=1
+                    isempty(ident) && length(bld) != 1
                 throw(ArgumentError("invalid build identifier: $(repr(ident))"))
             end
         end
