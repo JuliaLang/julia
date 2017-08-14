@@ -1300,3 +1300,12 @@ end
 
 # issue #23173
 @test_throws ErrorException("invalid module path") eval(:(import $(:.)))
+
+# issue #23234
+let
+    f = function (x=0)
+        x
+    end
+    @test f() == 0
+    @test f(2) == 2
+end

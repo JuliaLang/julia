@@ -1238,6 +1238,11 @@
            (and (eq? (car sig) 'where)
                 (valid-func-sig? paren (cadr sig))))))
 
+(define (valid-1arg-func-sig? sig)
+  (or (symbol? sig)
+      (and (pair? sig) (eq? (car sig) '|::|)
+           (symbol? (cadr sig)))))
+
 (define (unwrap-where x)
   (if (and (pair? x) (eq? (car x) 'where))
       (unwrap-where (cadr x))
@@ -1361,9 +1366,9 @@
                      (take-token s)
                      `(function ,sig))
               (let* ((usig (unwrap-where sig))
-                     (def  (if (or (symbol? usig)
-                                   (and (pair? usig) (eq? (car usig) '|::|)
-                                        (symbol? (cadr usig))))
+                     (def  (if (or (valid-1arg-func-sig? usig)
+                                   (and (assignment? usig)
+                                        (valid-1arg-func-sig? (cadr usig))))
                                (if paren
                                    ;; in "function (x)" the (x) is a tuple
                                    (rewrap-where `(tuple ,usig) sig)
