@@ -530,28 +530,45 @@ of any arbitrary subtype of `AbstractArray`:
 
 ```julia
 abstract AbstractArray{T, N}
+eltype(::Type{<:AbstractArray{T}}) where {T} = T
+```
+using so-called triangular dispatch.  Note that if `T` is a `UnionAll`
+type, as e.g. `eltype(Array{T} where T <: Integer)`, then `Any` is
+returned (as does the the version of `eltype` in `Base`).
+
+Another way, which used to be the only correct way before the advent of
+triangular dispatch in Julia v0.6, is:
+
+```julia
+abstract AbstractArray{T, N}
 eltype(::Type{AbstractArray}) = Any
 eltype{T}(::Type{AbstractArray{T}}) = T
 eltype{T, N}(::Type{AbstractArray{T, N}}) = T
 eltype{A<:AbstractArray}(::Type{A}) = eltype(supertype(A))
 ```
 
-One common mistake here is to try to extract the type-parameter directly::
-
+Another possibility is the following, which could useful to adapt
+to cases where the parameter `T` would need to be matched more
+narrowly:
 ```julia
-eltype_wrong{A<:AbstractArray, T}(::Type{A{T}}) = T
+eltype(::Type{AbstractArray{T, N} where {T<:S, N<:M}}) where {M, S} = Any
+eltype(::Type{AbstractArray{T, N} where {T<:S}}) where {N, S} = Any
+eltype(::Type{AbstractArray{T, N} where {N<:M}}) where {M, T} = T
+eltype(::Type{AbstractArray{T, N}}) where {T, N} = T
+eltype(::Type{A}) where {A <: AbstractArray} = eltype(supertype(A))
 ```
 
-Or (when that fails to compile), by using introspection::
+
+One common mistake is to try and get the element-type by using introspection:
 
 ```julia
-@pure eltype_wrong{A<:AbstractArray}(::Type{A}) = A.parameters[1]
+eltype_wrong(::Type{A}) where {A<:AbstractArray} = A.parameters[1]
 ```
 
-However, it is not hard to construct cases where this will fail::
+However, it is not hard to construct cases where this will fail:
 
 ```julia
-type BitVector <: AbstractArray{Bool, 1}
+struct BitVector <: AbstractArray{Bool, 1}; end
 ```
 
 Here we have created a type `BitVector` which has no parameters,
@@ -561,39 +578,41 @@ but where the element-type is still fully specified, with `T` equal to `Bool`!
 ### Building a similar type with a different type parameter
 
 When building generic code, there is often a need for constructing a similar
-object with some change made to the layout of the type.
+object with some change made to the layout of the type, also
+necessitating a change of the type parameters.
 For instance, you might have some sort of abstract array with an arbitrary element type
-and want to write the computation on it with a specific element type.
-
-Another implication of the common mistake discussed above mentioned above,
-is that we must implement a method for each type that describes how to compute this type transform.
+and want to write your computation on it with a specific element type.
+We must implement a method for each `AbstractArray{T}` subtype that describes how to compute this type transform.
 There is no general transform of one subtype into another subtype with a different parameter.
 (Quick review: do you see why this is?)
 
-The subtypes of `AbstractArray` typically implement two methods for expressing this:
-A method to convert the input to a subtype of a specific `AbstractArray{T, N}` abstract type;
-and a method to make a new uninitialized matrix with a specific element type.
+The subtypes of `AbstractArray` typically implement two methods to
+achieve this:
+A method to convert the input array to a subtype of a specific `AbstractArray{T, N}` abstract type;
+and a method to make a new uninitialized array with a specific element type.
 Sample implementations of these can be found in the standard library.
-Here is a basic example usage of them:
+Here is a basic example usage of them, guaranteeing that `input` and
+`output` are of the same type:
 
 ```julia
 input = convert(AbstractArray{Eltype}, input)
-output = similar(Eltype, input)
+output = similar(input, Eltype)
 ```
 
-As an extension of this, in cases where the algorithm wants to mutate the input array,
-`convert` is insufficient as the return value may alias the original input.
-Combining `similar` (to make the output array) and `copy!` (to fill it with the input data)
+As an extension of this, in cases where the algorithm needs a copy of
+the input array,
+[`convert`](@ref) is insufficient as the return value may alias the original input.
+Combining [`similar`](@ref) (to make the output array) and [`copy!`](@ref) (to fill it with the input data)
 is a generic way to express the requirement for a mutable copy of the input argument:
 
 ```julia
-copy_with_eltype(Eltype, input) = copy!(similar(Eltype, input), input)
+copy_with_eltype(input, Eltype) = copy!(similar(input, Eltype), input)
 ```
 
 ### Iterated dispatch
 
 In order to dispatch a multi-level parametric argument list,
-often it is best to separate each level of dispatch into separate functions.
+often it is best to separate each level of dispatch into distinct functions.
 This may sound similar in approach to single-dispatch, but as we shall see below, it is still more flexible.
 
 For example, trying to dispatch on the element-type of an array will often run into ambiguous situations.
@@ -611,51 +630,61 @@ This dispatching branching can be observed, for example, in the logic to sum two
 +(a, b) = +(promote(a, b)...)
 # Once the elements have the same type, they can be added.
 # For example, via primitive operations exposed by the processor.
-+(a::Float, b::Float) = Core.add(a, b)
++(a::Float64, b::Float64) = Core.add(a, b)
 ```
 
 ### Trait-based dispatch
 
 A natural extension to the iterated dispatch above is to add a layer to
-method selection that identifies classes of types.
-We could do this by writing out a `Union` of the types with similar characteristics.
-But then this list would not be extensible.
-However, by expressing the property as a "trait",
-it is possible to express type behaviors in the abstract
-in a way that is flexible to new additions, but which has no performance impact.
+method selection that allows to dispatch on sets of types which are
+independent from the sets defined by the type hierarchy.
+We could construct such a set by writing out a `Union` of the types in question,
+but then this set would not be extensible as `Union`-types cannot be
+altered after creation.
+However, such an extensible set can be programmed with a design pattern
+often referred to as a
+["Holy-trait"](https://github.com/JuliaLang/julia/issues/2345#issuecomment-54537633).
 
-A trait is implemented by defining a pure generic function which returns a
-singleton value from a particular set, as a computation on the types of its arguments.
+This pattern is implemented by defining a generic function which
+computes a different singleton value (or type) for each trait-set to which the
+function arguments may belong to.  If this function is pure there is
+no impact on performance compared to normal dispatch.
 
-The example above glossed over the implementation details of `map` and `promote`,
-since those both operate in terms of type traits.
+The example in the previous section glossed over the implementation details of
+[`map`](@ref) and [`promote`](@ref), which both operate in terms of these traits.
 When iterating over a matrix, such as in the implementation of `map`,
 one important question is what order to use to traverse the data.
-When `AbstractArray` subtypes implement the `linearindexing` trait,
-other functions such as `map` can dispatch on this information to pick the best algorithm.
-This means that each subtypes does not need to implement a custom version of `map`,
+When `AbstractArray` subtypes implement the [`Base.IndexStyle`](@ref) trait,
+other functions such as `map` can dispatch on this information to pick
+the best algorithm (see [Abstract Array Interface](@ref man-interface-array)).
+This means that each subtype does not need to implement a custom version of `map`,
 since the generic definitions + trait classes will enable the system to select the fastest version.
+Here a toy implementation of `map` illustrating the trait-based dispatch:
 
 ```julia
-map(a::AbstractArray, b::AbstractArray) = map(Base.linearindexing(a, b), a, b)
-map(::LinearSlow, a::AbstractArray, b::AbstractArray) = # generic implementation
-map(::LinearFast, a::AbstractArray, b::AbstractArray) = # linear-fast implementation
+map(f, a::AbstractArray, b::AbstractArray) = map(Base.IndexStyle(a, b), f, a, b)
+# generic implementation:
+map(::Base.IndexCartesian, f, a::AbstractArray, b::AbstractArray) = ...
+# linear-indexing implementation (faster)
+map(::Base.IndexLinear, f, a::AbstractArray, b::AbstractArray) = ...
 ```
 
-This trait-based mechanism is also present in the `promote` mechanism used by `+`.
-That mechanism uses the types to compute the optimal common type for computing the operation.
+This trait-based approach is also present in the [`promote`](@ref)
+mechanism employed by the scalar `+`.
+It uses [`promote_type`](@ref), which returns the optimal common type to
+compute the operation given the two types of the operands.
 This makes it possible to reduce the problem of implementing every function for every pair of possible type arguments,
 to the much smaller problem of implementing a conversion operation from each type to a common type,
 plus a table of preferred pair-wise promotion rules.
 
 
-### Output-type Computation
+### Output-type computation
 
 The discussion of trait-based promotion provides a transition into our next design pattern:
 computing the output element type for a matrix operation.
 
 For implementing primitive operations, such as addition,
-we use the `promote_type` function to compute the desired output type.
+we use the [`promote_type`](@ref) function to compute the desired output type.
 (As before, we saw this at work in the `promote` call in the call to `+`).
 
 For more complex functions on matrices, it may be necessary to compute the expected return
@@ -665,9 +694,9 @@ This is often performed by the following steps:
 1. Write a small function `op` that expresses the set of operations performed by the kernel of the algorithm.
 2. Compute the element type `R` of the result matrix as `promote_op(op, argument_types...)`,
    where `argument_types` is computed from `eltype` applied to each input array.
-3. Build the output matrix as `similar(R, dims)`, where `dims` is the desired dimensions of the output array.
+3. Build the output matrix as `similar(R, dims)`, where `dims` are the desired dimensions of the output array.
 
-For a more specific example, a generic matrix multiply pseudo-code might look like:
+For a more specific example, a generic square-matrix multiply pseudo-code might look like:
 
 ```julia
 function matmul(a::AbstractMatrix, b::AbstractMatrix)
@@ -685,7 +714,7 @@ function matmul(a::AbstractMatrix, b::AbstractMatrix)
 
     # this is wrong, since depending on the return value
     # of type-inference is very brittle (as well as not being optimizable):
-    # R = return_types(ap, (eltype(a), eltype(b)))
+    # R = return_types(op, (eltype(a), eltype(b)))
 
     ## but, finally, this works:
     R = promote_op(op, eltype(a), eltype(b))
@@ -695,7 +724,7 @@ function matmul(a::AbstractMatrix, b::AbstractMatrix)
     output = similar(b, R, (size(a, 1), size(b, 2)))
     if size(a, 2) > 0
         for j in 1:size(b, 2)
-            for i in 1:size(i, 1)
+            for i in 1:size(b, 1)
                 ## here we don't use `ab = zero(R)`,
                 ## since `R` might be `Any` and `zero(Any)` is not defined
                 ## we also must declare `ab::R` to make the type of `ab` constant in the loop,
