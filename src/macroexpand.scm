@@ -377,7 +377,7 @@
              (let ((parent-scope (cons (list env m) parent-scope))
                    (body (cadr e))
                    (m (caddr e)))
-              (resolve-expansion-vars-with-new-env body env m parent-scope inarg)))
+              (resolve-expansion-vars-with-new-env body env m parent-scope inarg #t)))
 
            ;; todo: trycatch
            (else
@@ -407,10 +407,30 @@
                      (and (eq? (car e) '=) (length= e 3)
                           (eventually-call? (cadr e))))))
 
+;; count hygienic / escape pairs
+;; and fold together a list resulting from applying the function to
+;; any block at the same hygienic scope
+(define (resume-on-escape lam e nblocks)
+  (if (or (not (pair? e)) (quoted? e))
+      '()
+      (cond ((memq (car e) '(lambda module toplevel))
+             '())
+            ((eq? (car e) 'hygienic-scope)
+             (resume-on-escape lam (cadr e) (+ nblocks 1)))
+            ((eq? (car e) 'escape)
+             (if (= nblocks 0)
+                 (lam (cadr e))
+                 (resume-on-escape lam (cadr e) (- nblocks 1))))
+            (else
+             (foldl (lambda (a l) (append! l (resume-on-escape lam a nblocks)))
+                    '()
+                    (cdr e))))))
+
 (define (find-declared-vars-in-expansion e decl (outer #t))
   (cond ((or (not (pair? e)) (quoted? e)) '())
         ((eq? (car e) 'escape)  '())
-        ((eq? (car e) 'hygienic-scope)  '())
+        ((eq? (car e) 'hygienic-scope)
+         (resume-on-escape (lambda (e) (find-declared-vars-in-expansion e decl outer)) (cadr e) 0))
         ((eq? (car e) decl)     (map decl-var* (cdr e)))
         ((and (not outer) (function-def? e)) '())
         (else
@@ -421,7 +441,8 @@
 (define (find-assigned-vars-in-expansion e (outer #t))
   (cond ((or (not (pair? e)) (quoted? e))  '())
         ((eq? (car e) 'escape)  '())
-        ((eq? (car e) 'hygienic-scope)  '())
+        ((eq? (car e) 'hygienic-scope)
+         (resume-on-escape (lambda (e) (find-assigned-vars-in-expansion e outer)) (cadr e) 0))
         ((and (not outer) (function-def? e))
          ;; pick up only function name
          (let ((fname (cond ((eq? (car e) '=) (decl-var* (cadr e)))
@@ -498,11 +519,12 @@
                (error (string "macro \"" (cadr e) "\" not defined")))
            (if (and (pair? form) (eq? (car form) 'error))
                (error (cadr form)))
-           (let ((form (car form)) ;; form is the expression returned from expand-macros
-                 (modu (cdr form))) ;; modu is the macro's def module
-             `(hygienic-scope
-               ,(julia-expand-macros- (cons modu m) form (- max-depth 1))
-               ,modu))))
+           (let* ((modu (cdr form)) ;; modu is the macro's def module
+                  (form (car form)) ;; form is the expression returned from expand-macros
+                  (form (julia-expand-macros- (cons modu m) form (- max-depth 1))))
+             (if (and (pair? form) (eq? (car form) 'escape))
+                 (cadr form) ; immediately fold away (hygienic-scope (escape ...))
+                 `(hygienic-scope ,form ,modu)))))
         ((eq? (car e) 'module) e)
         ((eq? (car e) 'escape)
          (let ((m (if (null? m) m (cdr m))))

@@ -4989,7 +4989,7 @@ let a_foo = Foo22256(Bar22256{true}(2))
     @test a_foo.bar.inner == 3
 end
 
-# macro hygiene scope (#22307)
+# macro hygiene scope (#22307, #23239)
 macro a22307()
     return esc(:a22307)
 end
@@ -5002,6 +5002,36 @@ function c22307()
 end
 a22307 = 2
 @test c22307() == 2
+
+macro identity23239b(x)
+    return esc(x)
+end
+macro identity23239c(x)
+    return quote
+        $(esc(x))
+    end
+end
+macro assign23239d(x, v)
+    return esc(:($x = $v))
+end
+macro assign23239e(x, v)
+    return quote
+        $(esc(:($x = $v)))
+    end
+end
+macro aa23239()
+    return quote
+        a = 1
+        @identity23239b b = 2
+        @identity23239c c = 3
+        @assign23239d d 4
+        @assign23239e e 5
+        (a, b, c, d, e)
+    end
+end
+f23239() = @aa23239()
+@test @inferred(f23239()) === (1, 2, 3, 4, 5)
+
 
 # issue #22026
 module M22026
