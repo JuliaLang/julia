@@ -509,7 +509,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::Vector{
         """
     io = open(pipeline(detach(`$(julia_cmd()) -O0
                               --output-ji $output --output-incremental=yes
-                              --startup-file=no --history-file=no
+                              --startup-file=no --history-file=no --warn-overwrite=yes
                               --color=$(have_color ? "yes" : "no")
                               --eval $code_object`), stderr=STDERR),
               "w", STDOUT)

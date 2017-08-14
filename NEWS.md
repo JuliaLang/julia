@@ -309,6 +309,12 @@ Deprecated or removed
   * `Base.cpad` has been removed; use an appropriate combination of `rpad` and `lpad`
     instead ([#23187]).
 
+Command-line option changes
+---------------------------
+
+  * New option `--warn-overwrite={yes|no}` to control the warning for overwriting method
+    definitions. The default is `no` ([#23002]).
+
 Julia v0.6.0 Release Notes
 ==========================
 
