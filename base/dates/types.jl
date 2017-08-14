@@ -340,7 +340,7 @@ Base.typemin(::Union{Time, Type{Time}}) = Time(0)
 Base.eltype(::Type{T}) where {T<:Period} = T
 Base.promote_rule(::Type{Date}, x::Type{DateTime}) = DateTime
 Base.isless(x::T, y::T) where {T<:TimeType} = isless(value(x), value(y))
-Base.isless(x::TimeType, y::TimeType) = isless(Base.promote_noncircular(x, y)...)
+Base.isless(x::TimeType, y::TimeType) = isless(promote(x, y)...)
 (==)(x::T, y::T) where {T<:TimeType} = (==)(value(x), value(y))
 function ==(a::Time, b::Time)
     return hour(a) == hour(b) && minute(a) == minute(b) &&
