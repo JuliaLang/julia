@@ -5174,3 +5174,9 @@ module GlobalDef18933
     @test @isdefined sincos
     @test sincos === Base.sincos
 end
+
+# issue #23218
+let idx = (7,5,9)
+    (v,) = (idx...,)
+    @test v == 7
+end
