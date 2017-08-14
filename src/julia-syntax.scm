@@ -1677,6 +1677,7 @@
     (if (and (null? splat)
              (length= expr 3) (eq? (car expr) 'call)
              (eq? (caddr expr) argname)
+             (not (dotop? (cadr expr)))
              (not (expr-contains-eq argname (cadr expr))))
         (cadr expr)  ;; eta reduce `x->f(x)` => `f`
         `(-> ,argname (block ,@splat ,expr)))))
