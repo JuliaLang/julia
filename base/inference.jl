@@ -53,7 +53,6 @@ end
 #     cond && use(a)
 
 # slot property bit flags
-const Slot_Assigned     = 2
 const Slot_AssignedOnce = 16
 const Slot_UsedUndef    = 32
 
@@ -5110,7 +5109,7 @@ function add_slot!(src::CodeInfo, @nospecialize(typ), is_sa::Bool, name::Symbol=
     id = length(src.slotnames) + 1
     push!(src.slotnames, name)
     push!(src.slottypes, typ)
-    push!(src.slotflags, Slot_Assigned + is_sa * Slot_AssignedOnce)
+    push!(src.slotflags, is_sa * Slot_AssignedOnce)
     return SlotNumber(id)
 end
 

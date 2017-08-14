@@ -70,6 +70,7 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // bind-to
                             NULL, // output-bc
                             NULL, // output-unopt-bc
+                            NULL, // output-jit-bc
                             NULL, // output-o
                             NULL, // output-ji
                             0, // incremental

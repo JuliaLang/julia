@@ -27,8 +27,6 @@ const VALID_EXPR_HEADS = ObjectIdDict(
     :simdloop => 0:0
 )
 
-const ASSIGNED_FLAG = 0x02
-
 # @enum isn't defined yet, otherwise I'd use it for this
 const INVALID_EXPR_HEAD = "invalid expression head"
 const INVALID_EXPR_NARGS = "invalid number of expression args"
@@ -41,7 +39,6 @@ const SLOTTYPES_MISMATCH = "length(slotnames) != length(slottypes)"
 const SLOTTYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo slottypes field is not `nothing`"
 const SSAVALUETYPES_MISMATCH = "not all SSAValues in AST have a type in ssavaluetypes"
 const SSAVALUETYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
-const INVALID_ASSIGNMENT_SLOTFLAG = "slot has wrong assignment slotflag setting (bit flag 2 not set)"
 const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
 const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of method arguments"
 const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
@@ -76,9 +73,6 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                     push!(errors, InvalidCodeError(INVALID_LVALUE, lhs))
                 elseif isa(lhs, SlotNumber) && !in(lhs.id, lhs_slotnums)
                     n = lhs.id
-                    if isassigned(c.slotflags, n) && !is_flag_set(c.slotflags[n], ASSIGNED_FLAG)
-                        push!(errors, InvalidCodeError(INVALID_ASSIGNMENT_SLOTFLAG, lhs))
-                    end
                     push!(lhs_slotnums, n)
                 end
                 if !is_valid_rvalue(rhs)

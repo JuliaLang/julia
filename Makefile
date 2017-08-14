@@ -187,6 +187,7 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/array.jl \
 		base/bool.jl \
 		base/associative.jl \
+		base/codevalidation.jl \
 		base/error.jl \
 		base/essentials.jl \
 		base/generator.jl \
