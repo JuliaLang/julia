@@ -281,21 +281,12 @@ true
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
 
-
-function dsfmt_gv_srand()
-    # Temporary fix for #8874 and #9124: update global RNG for Rmath
-    dsfmt_gv_init_by_array(GLOBAL_RNG.seed+UInt32(1))
-    return GLOBAL_RNG
-end
-
 function srand()
     srand(GLOBAL_RNG)
-    dsfmt_gv_srand()
 end
 
 function srand(seed::Union{Integer,Vector{UInt32}})
     srand(GLOBAL_RNG, seed)
-    dsfmt_gv_srand()
 end
 
 ## Global RNG
