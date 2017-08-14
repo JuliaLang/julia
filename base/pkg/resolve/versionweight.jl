@@ -74,7 +74,7 @@ struct VWPreBuildItem
     i::Int
 end
 VWPreBuildItem() = VWPreBuildItem(0, HierarchicalValue(Int), 0)
-VWPreBuildItem(i::Int) = VWPreBuildItem(1, HierarchicalValue(Int), i)
+VWPreBuildItem(i::Integer) = VWPreBuildItem(1, HierarchicalValue(Int), i)
 VWPreBuildItem(s::String) = VWPreBuildItem(1, HierarchicalValue(Int[s...]), 0)
 
 Base.zero(::Type{VWPreBuildItem}) = VWPreBuildItem()
@@ -105,7 +105,7 @@ end
 
 const _vwprebuild_zero = VWPreBuild(0, HierarchicalValue(VWPreBuildItem))
 
-function VWPreBuild(ispre::Bool, desc::Tuple{Vararg{Union{Int,String}}})
+function VWPreBuild(ispre::Bool, desc::Tuple{Vararg{Union{Integer,String}}})
     isempty(desc) && return _vwprebuild_zero
     desc == ("",) && return VWPreBuild(ispre ? -1 : 1, HierarchicalValue(VWPreBuildItem[]))
     nonempty = ispre ? -1 : 0
