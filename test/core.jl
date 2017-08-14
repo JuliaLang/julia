@@ -4985,3 +4985,9 @@ end
 end
 @test M22026.foofunction(Int16) === Int16
 @test M22026.foofunction2(3) === 6.0f0
+
+# issue #23218
+let idx = (7,5,9)
+    (v,) = (idx...,)
+    @test v == 7
+end
