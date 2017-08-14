@@ -14,27 +14,16 @@ struct VersionNumber
     function VersionNumber(major::VInt, minor::VInt, patch::VInt,
             pre::Tuple{Vararg{Union{UInt64,String}}},
             bld::Tuple{Vararg{Union{UInt64,String}}})
-        major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
-        minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
-        patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
         for ident in pre
-            if ident isa Integer
-                ident >= 0 || throw(ArgumentError("invalid negative pre-release identifier: $ident"))
-            else
-                if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
-                    isempty(ident) && !(length(pre)==1 && isempty(bld))
-                    throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
-                end
+            if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
+                isempty(ident) && !(length(pre)==1 && isempty(bld))
+                throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
             end
         end
         for ident in bld
-            if ident isa Integer
-                ident >= 0 || throw(ArgumentError("invalid negative build identifier: $ident"))
-            else
-                if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
-                    isempty(ident) && length(bld)!=1
-                    throw(ArgumentError("invalid build identifier: $(repr(ident))"))
-                end
+            if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
+                isempty(ident) && length(bld)!=1
+                throw(ArgumentError("invalid build identifier: $(repr(ident))"))
             end
         end
         new(major, minor, patch, pre, bld)
