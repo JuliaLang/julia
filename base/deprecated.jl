@@ -1686,7 +1686,7 @@ end
 
 # PR #23235
 @deprecate ctranspose adjoint
-@deprecate ctranspose! adjoint
+@deprecate ctranspose! adjoint!
 
 # END 0.7 deprecations
 

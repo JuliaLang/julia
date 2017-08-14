@@ -310,7 +310,7 @@ Deprecated or removed
     instead ([#23187]).
 
   * `ctranspose` and `ctranspose!` have been deprecated in favor of `adjoint` and `adjoint!`,
-    respectively.
+    respectively ([#23235]).
 
 Julia v0.6.0 Release Notes
 ==========================
