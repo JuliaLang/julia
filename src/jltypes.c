@@ -65,7 +65,6 @@ jl_datatype_t *jl_float32_type;
 jl_datatype_t *jl_float64_type;
 jl_datatype_t *jl_floatingpoint_type;
 jl_datatype_t *jl_number_type;
-jl_unionall_t *jl_complex_type;
 jl_datatype_t *jl_signed_type;
 
 JL_DLLEXPORT jl_value_t *jl_emptytuple=NULL;
@@ -1832,14 +1831,10 @@ void jl_init_types(void)
     jl_emptytuple_type->instance = jl_emptytuple;
 
     // non-primitive definitions follow
-    jl_int32_type = NULL;
     jl_int32_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Int32"), core,
                                          jl_any_type, jl_emptysvec, 32);
-    jl_int64_type = NULL;
     jl_int64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Int64"), core,
                                          jl_any_type, jl_emptysvec, 64);
-
-    jl_uint8_type = NULL;
     jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"), core,
                                          jl_any_type, jl_emptysvec, 8);
 

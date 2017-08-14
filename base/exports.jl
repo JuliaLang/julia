@@ -151,22 +151,15 @@ export
     Cwstring,
 
 # Exceptions
-    ArgumentError,
     DimensionMismatch,
     CapturedException,
     CompositeException,
     EOFError,
-    ErrorException,
     InvalidStateException,
     KeyError,
-    LoadError,
-    InitError,
-    MethodError,
     NullException,
     ParseError,
     SystemError,
-    TypeError,
-    AssertionError,
     UnicodeError,
 
 # Global constants and variables

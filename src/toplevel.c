@@ -120,7 +120,6 @@ static void jl_module_load_time_initialize(jl_module_t *m)
     }
 }
 
-extern void jl_get_system_hooks(void);
 jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
 {
     jl_ptls_t ptls = jl_get_ptls_states();

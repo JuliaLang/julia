@@ -51,7 +51,7 @@ convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
 convert(::Type{T}, arg::T) where {T<:VecElement} = arg
 
 # init core docsystem
-import Core: @doc, @__doc__, @doc_str
+import Core: @doc, @__doc__, @doc_str, WrappedException
 if isdefined(Core, :Inference)
     import Core.Inference.CoreDocs
     Core.atdoc!(CoreDocs.docm)
@@ -72,7 +72,8 @@ end
 ## Load essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
-include("base.jl")
+include("gcutils.jl")
+include("nullabletype.jl")
 include("generator.jl")
 include("reflection.jl")
 include("options.jl")

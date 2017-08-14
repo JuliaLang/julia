@@ -270,13 +270,6 @@ Stacktrace:
 sizeof(::Type)
 
 """
-    ReadOnlyMemoryError()
-
-An operation tried to write to memory that is read-only.
-"""
-ReadOnlyMemoryError
-
-"""
     ceil([T,] x, [digits, [base]])
 
 `ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
@@ -491,13 +484,6 @@ not representable.
 floor
 
 """
-    ErrorException(msg)
-
-Generic error type. The error message, in the `.msg` field, may provide more specific details.
-"""
-ErrorException
-
-"""
     reverse(v [, start=1 [, stop=length(v) ]] )
 
 Return a copy of `v` reversed from start to stop.
@@ -545,13 +531,6 @@ reverse
 In-place version of [`reverse`](@ref).
 """
 reverse!
-
-"""
-    UndefRefError()
-
-The item or field is not defined for the given object.
-"""
-UndefRefError
 
 """
     append!(collection, collection2) -> collection.
@@ -674,25 +653,6 @@ julia> a
 ```
 """
 select!
-
-"""
-    Float64(x [, mode::RoundingMode])
-
-Create a Float64 from `x`. If `x` is not exactly representable then `mode` determines how
-`x` is rounded.
-
-# Examples
-```jldoctest
-julia> Float64(pi, RoundDown)
-3.141592653589793
-
-julia> Float64(pi, RoundUp)
-3.1415926535897936
-```
-
-See [`RoundingMode`](@ref) for available rounding modes.
-"""
-Float64(x)
 
 """
     union(s1,s2...)
@@ -866,70 +826,11 @@ Suggest that collection `s` reserve capacity for at least `n` elements. This can
 sizehint!
 
 """
-    OutOfMemoryError()
-
-An operation allocated too much memory for either the system or the garbage collector to
-handle properly.
-"""
-OutOfMemoryError
-
-"""
     finalize(x)
 
 Immediately run finalizers registered for object `x`.
 """
 finalize
-
-"""
-    BoundsError([a],[i])
-
-An indexing operation into an array, `a`, tried to access an out-of-bounds element at index `i`.
-
-# Examples
-```jldoctest
-julia> A = ones(7);
-
-julia> A[8]
-ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
-Stacktrace:
- [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:586
-
-julia> B = ones(2, 3);
-
-julia> B[2, 4]
-ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]
-Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:587
-
-julia> B[9]
-ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [9]
-Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:586
-```
-"""
-BoundsError
-
-"""
-    invoke(f, argtypes::Type, args...; kwargs...)
-
-Invoke a method for the given generic function `f` matching the specified types `argtypes` on the
-specified arguments `args` and passing the keyword arguments `kwargs`. The arguments `args` must
-conform with the specified types in `argtypes`, i.e. conversion is not automatically performed.
-This method allows invoking a method other than the most specific matching method, which is useful
-when the behavior of a more general definition is explicitly needed (often as part of the
-implementation of a more specific method of the same function).
-
-# Examples
-```jldoctest
-julia> f(x::Real) = x^2;
-
-julia> f(x::Integer) = 1 + invoke(f, Tuple{Real}, x);
-
-julia> f(2)
-5
-```
-"""
-invoke
 
 """
     parse(str, start; greedy=true, raise=true)
@@ -1289,70 +1190,11 @@ false
 isempty
 
 """
-    InexactError(name::Symbol, T, val)
-
-Cannot exactly convert `val` to type `T` in a method of function `name`.
-
-# Examples
-```jldoctest
-julia> convert(Float64, 1+2im)
-ERROR: InexactError: convert(Float64, 1 + 2im)
-Stacktrace:
- [1] convert(::Type{Float64}, ::Complex{Int64}) at ./complex.jl:37
-```
-"""
-InexactError
-
-"""
     typemax(T)
 
 The highest value representable by the given (real) numeric `DataType`.
 """
 typemax
-
-"""
-    DomainError(val)
-    DomainError(val, msg)
-
-The argument `val` to a function or constructor is outside the valid domain.
-
-# Examples
-```jldoctest
-julia> sqrt(-1)
-ERROR: DomainError with -1.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
-Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt(::Int64) at ./math.jl:472
-```
-"""
-DomainError
-
-"""
-    Task(func)
-
-Create a `Task` (i.e. coroutine) to execute the given function (which must be
-callable with no arguments). The task exits when this function returns.
-
-# Examples
-```jldoctest
-julia> a() = det(rand(1000, 1000));
-
-julia> b = Task(a);
-```
-
-In this example, `b` is a runnable `Task` that hasn't started yet.
-"""
-Task
-
-"""
-    StackOverflowError()
-
-The function call grew beyond the size of the call stack. This usually happens when a call
-recurses infinitely.
-"""
-StackOverflowError
 
 """
     ==(x, y)
@@ -1377,13 +1219,6 @@ Base.:(==)
 Seek a stream to its beginning.
 """
 seekstart
-
-"""
-    nfields(x) -> Int
-
-Get the number of fields in the given object.
-"""
-nfields
 
 """
     show(stream, mime, x)
@@ -1442,13 +1277,6 @@ Equivalent to [`readdlm`](@ref) with `delim` set to comma, and type optionally d
 readcsv
 
 """
-    UndefVarError(var::Symbol)
-
-A symbol in the current scope is not defined.
-"""
-UndefVarError
-
-"""
     gc()
 
 Perform garbage collection. This should not generally be used.
@@ -1500,13 +1328,6 @@ used only with extreme caution, as it can cause memory use to grow without bound
 gc_enable
 
 """
-    OverflowError(msg)
-
-The result of an expression is too large for the specified type and will cause a wraparound.
-"""
-OverflowError
-
-"""
     object_id(x)
 
 Get a hash value for `x` based on object identity. `object_id(x)==object_id(y)` if `x === y`.
@@ -1547,13 +1368,6 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 unpredictable.
 """
 finalizer
-
-"""
-    TypeError(func::Symbol, context::AbstractString, expected::Type, got)
-
-A type assertion failure, or calling an intrinsic function with an incorrect argument type.
-"""
-TypeError
 
 """
     setfield!(value, name::Symbol, x)
@@ -1669,13 +1483,6 @@ julia> length([1 2; 3 4])
 length(collection)
 
 """
-    InterruptException()
-
-The process was stopped by a terminal interrupt (CTRL+C).
-"""
-InterruptException
-
-"""
     issubnormal(f) -> Bool
 
 Test whether a floating point number is subnormal.
@@ -1759,14 +1566,6 @@ julia> start([4;2;3])
 ```
 """
 start
-
-"""
-    isa(x, type) -> Bool
-
-Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
-`x isa type`.
-"""
-isa
 
 """
     done(iter, state) -> Bool
@@ -1857,26 +1656,6 @@ true
 ```
 """
 convert
-
-"""
-    applicable(f, args...) -> Bool
-
-Determine whether the given generic function has a method applicable to the given arguments.
-
-# Examples
-```jldoctest
-julia> function f(x, y)
-           x + y
-       end;
-
-julia> applicable(f, 1)
-false
-
-julia> applicable(f, 1, 2)
-true
-```
-"""
-applicable
 
 """
     fma(x, y, z)
@@ -2044,102 +1823,6 @@ pop!(collection)
 Seek a stream to its end.
 """
 seekend
-
-"""
-    DivideError()
-
-Integer division was attempted with a denominator value of 0.
-
-# Examples
-```jldoctest
-julia> 2/0
-Inf
-
-julia> div(2, 0)
-ERROR: DivideError: integer division error
-Stacktrace:
- [1] div(::Int64, ::Int64) at ./int.jl:183
-```
-"""
-DivideError
-
-"""
-    Number
-
-Abstract supertype for all number types.
-"""
-Number
-
-"""
-    Real <: Number
-
-Abstract supertype for all real numbers.
-"""
-Real
-
-"""
-    AbstractFloat <: Real
-
-Abstract supertype for all floating point numbers.
-"""
-AbstractFloat
-
-"""
-    Integer <: Real
-
-Abstract supertype for all integers.
-"""
-Integer
-
-"""
-    Signed <: Integer
-
-Abstract supertype for all signed integers.
-"""
-Signed
-
-"""
-    Unsigned <: Integer
-
-Abstract supertype for all unsigned integers.
-"""
-Unsigned
-
-"""
-    Bool <: Integer
-
-Boolean type.
-"""
-Bool
-
-for bit in (16, 32, 64)
-    @eval begin
-        """
-            Float$($bit) <: AbstractFloat
-
-        $($bit)-bit floating point number type.
-        """
-        $(Symbol("Float", bit))
-    end
-end
-
-for bit in (8, 16, 32, 64, 128)
-    @eval begin
-        """
-            Int$($bit) <: Signed
-
-        $($bit)-bit signed integer type.
-        """
-        $(Symbol("Int", bit))
-
-        """
-            UInt$($bit) <: Unsigned
-
-        $($bit)-bit unsigned integer type.
-        """
-        $(Symbol("UInt", bit))
-    end
-end
 
 """
     Vector{T}(n)

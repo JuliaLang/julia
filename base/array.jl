@@ -2,6 +2,17 @@
 
 ## array.jl: Dense arrays
 
+"""
+    DimensionMismatch([msg])
+
+The objects called do not have matching dimensionality. Optional argument `msg` is a
+descriptive error string.
+"""
+mutable struct DimensionMismatch <: Exception
+    msg::AbstractString
+end
+DimensionMismatch() = DimensionMismatch("")
+
 ## Type aliases for convenience ##
 """
     AbstractVector{T}

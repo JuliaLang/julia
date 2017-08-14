@@ -217,6 +217,16 @@ float(a::AbstractArray{<:AbstractString}) = map!(float, similar(a,typeof(float(0
 
 ## interface to parser ##
 
+"""
+    ParseError(msg)
+
+The expression passed to the `parse` function could not be interpreted as a valid Julia
+expression.
+"""
+mutable struct ParseError <: Exception
+    msg::AbstractString
+end
+
 function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true)
     # pos is one based byte offset.
     # returns (expr, end_pos). expr is () in case of parse error.

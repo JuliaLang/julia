@@ -1340,7 +1340,6 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname)
 extern int jl_boot_file_loaded;
 extern void jl_get_builtins(void);
 extern void jl_get_builtin_hooks(void);
-extern void jl_get_system_hooks(void);
 extern void jl_gc_set_permalloc_region(void *start, void *end);
 
 // Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
@@ -1496,9 +1495,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
     jl_get_builtins();
     jl_get_builtin_hooks();
-    if (jl_base_module) {
-        jl_get_system_hooks();
-    }
     jl_boot_file_loaded = 1;
     jl_init_box_caches();
 
