@@ -1669,7 +1669,7 @@
                             (if ,g ,g
                                 ,(loop (cdr tail)))))))))))
 
-(define (expand-for while lhs X body)
+(define (expand-for while lhs X elsebody body)
   ;; (for (= lhs X) body)
   (let ((coll  (make-ssavalue))
         (state (gensy)))
@@ -1685,7 +1685,8 @@
                    #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
                    ,(lower-tuple-assignment (list lhs state)
                                             `(call (top next) ,coll ,state))
-                   ,body))))))))
+                   ,body))
+                 ,elsebody))))))
 
 ;; convert an operator parsed as (op a b) to (call op a b)
 (define (syntactic-op-to-call e)
@@ -2224,10 +2225,13 @@
    'while
    (lambda (e)
      `(scope-block
-       (break-block loop-exit
+       (break-block-with-value loop-exit
                     (_while ,(expand-forms (cadr e))
                             (break-block loop-cont
-                                         ,(expand-forms (caddr e)))))))
+                                         ,(expand-forms (caddr e))))
+                    ,(if (length> e 3)
+                       (expand-forms (cadddr e))
+                       '(null)))))
 
    'inner-while
    (lambda (e)
@@ -2238,9 +2242,9 @@
 
    'break
    (lambda (e)
-     (if (pair? (cdr e))
+     (if (symbol? (cadr e))
          e
-         '(break loop-exit)))
+         `(break loop-exit ,(cadr e))))
 
    'continue (lambda (e) '(break loop-cont))
 
@@ -2253,6 +2257,9 @@
        (expand-for (if first 'while 'inner-while)
                    (cadr (car ranges))
                    (caddr (car ranges))
+                   (if (and (length> e 3) first)
+                     (cadddr e) ;; elsebody
+                     '(null))
                    (if (null? (cdr ranges))
                        (caddr e)  ;; body
                        (nest (cdr ranges) #f)))))
@@ -2524,6 +2531,8 @@
         ((or (not (pair? e)) (quoted? e)) tab)
         ((memq (car e) '(lambda scope-block module toplevel)) tab)
         ((eq? (car e) 'break-block) (unbound-vars (caddr e) bound tab))
+        ((eq? (car e) 'break-block-with-value) (unbound-vars (caddr e) bound tab))
+        ;; TODO: elsebody in (cadddr e)
         ((eq? (car e) 'with-static-parameters) (unbound-vars (cadr e) bound tab))
         (else (for-each (lambda (x) (unbound-vars x bound tab))
                             (cdr e))
@@ -2620,8 +2629,12 @@
         ((eq? (car e) 'module)
          (error "module expression not at top level"))
         ((eq? (car e) 'break-block)
-         `(break-block ,(cadr e) ;; ignore type symbol of break-block expression
+         `(,(car e) ,(cadr e) ;; ignore type symbol of break-block expression
                        ,(resolve-scopes- (caddr e) env outerglobals implicitglobals lam renames #f))) ;; body of break-block expression
+        ((eq? (car e) 'break-block-with-value)
+         `(,(car e) ,(cadr e) ;; ignore type symbol of break-block expression
+                       ,(resolve-scopes- (caddr e) env outerglobals implicitglobals lam renames #f) ;; body of break-block expression
+                       ,(resolve-scopes- (cadddr e) env outerglobals implicitglobals lam renames #f))) ;; elsebody of break-block-with-value expression
         ((eq? (car e) 'with-static-parameters)
          `(with-static-parameters ;; ignore list of sparams in break-block expression
             ,(resolve-scopes- (cadr e) env outerglobals implicitglobals lam renames #f)
@@ -2646,6 +2659,8 @@
         ((symbol? e) (put! tab e #t))
         ((and (pair? e) (eq? (car e) 'outerref)) (put! tab (cadr e) #t))
         ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
+        ;; TODO: elsebody in (cadddr e)
+        ((and (pair? e) (eq? (car e) 'break-block-with-value)) (free-vars- (caddr e) tab))
         ((and (pair? e) (eq? (car e) 'with-static-parameters)) (free-vars- (cadr e) tab))
         ((or (atom? e) (quoted? e)) tab)
         ((eq? (car e) 'lambda)
@@ -3553,14 +3568,34 @@ f(x) = yt(x)
                                 value #f)
                        (mark-label endl)))
              (if value (compile '(null) break-labels value tail)))
+            ((break-block-with-value)
+             (let ((endl (make-label))
+                   (valvar (if (or value tail) (new-mutable-var) #f)))
+               (compile (caddr e)
+                        (cons (list (cadr e) endl handler-level valvar)
+                              break-labels)
+                        value #f)
+               (if (length> e 3)
+                 (let ((elseval (compile (cadddr e) break-labels valvar #f)))
+                   (if valvar (emit `(= ,valvar ,elseval))))
+                 (let ((elseval (compile '(null) break-labels valvar #f)))
+                   (if (and valvar elseval) (emit `(= ,valvar ,elseval)))))
+               (mark-label endl)
+               (if tail (emit-return valvar) valvar)))
             ((break)
              (let ((labl (assq (cadr e) break-labels)))
                (if (not labl)
                    (error "break or continue outside loop")
-                   (begin
-                     (if (> handler-level (caddr labl))
-                         (emit `(leave ,(- handler-level (caddr labl)))))
-                     (emit `(goto ,(cadr labl)))))))
+                   (let ((endl (cadr labl))
+                         (hlevel (caddr labl))
+                         (valtarget (if (length> labl 3) (cadddr labl) #f))
+                         (valexpr (if (length> e 2) (caddr e) '(null))))
+                     (let ((res (compile valexpr break-labels valtarget #f)))
+                       (if valtarget
+                         (emit `(= ,valtarget ,res))))
+                     (if (> handler-level hlevel)
+                         (emit `(leave ,(- handler-level hlevel))))
+                     (emit `(goto ,endl))))))
             ((label symboliclabel)
              (if (eq? (car e) 'symboliclabel)
                  (if (has? label-level (cadr e))

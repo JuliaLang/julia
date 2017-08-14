@@ -1286,11 +1286,22 @@
                          (expect-end s word)))
        ((for)
         (let* ((ranges (parse-comma-separated-iters s))
-               (body   (parse-block s)))
-          (expect-end s word)
-          `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
-                ,body)))
-
+               (body   (parse-block s))
+               (nxt    (take-token s)))
+          (case nxt
+            ((end)
+              `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
+                    ,body))
+            ((else)
+              (let* ((elsebody (parse-block s)))
+                (expect-end s word)
+                `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
+                      ,body
+                      ,elsebody)))
+            (otherwise
+              (error (string "\"" word "\" at "
+                             current-filename ":" input-port-line
+                             " expected \"end\", got \"" nxt "\""))))))
        ((if elseif)
         (if (newline? (peek-token s))
             (error (string "missing condition in \"if\" at " current-filename
@@ -1481,14 +1492,20 @@
                             (if (or (eqv? t #\newline) (closing-token? t))
                                 (list 'return '(null))
                                 (list 'return (parse-eq s)))))
-       ((break continue)
+       ((continue)
         (let ((t (peek-token s)))
           (if (or (eof-object? t)
                   (and (eq? t 'end) (not end-symbol))
                   (memv t '(#\newline #\; #\) :)))
               (list word)
               (error (string "unexpected \"" t "\" after " word)))))
-
+       ((break)
+        (let ((t (peek-token s)))
+          (if (or (eof-object? t)
+                  (and (eq? t 'end) (not end-symbol))
+                  (memv t '(#\newline #\; #\) :)))
+              (list word '(null))
+              (list word (parse-eq s)))))
        ((module baremodule)
         (let* ((name (parse-unary-prefix s))
                (loc  (line-number-node s))
