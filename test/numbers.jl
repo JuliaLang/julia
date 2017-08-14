@@ -2975,3 +2975,51 @@ f20065(B, i) = UInt8(B[i])
 end
 
 @test inv(3//4) === 4//3 === 1 / (3//4) === 1 // (3//4)
+
+# issues #23244 & #23250
+@testset "convert preserves NaN payloads" begin
+    @testset "smallest NaNs" begin
+        @test convert(Float32,  NaN16) ===  NaN32
+        @test convert(Float32, -NaN16) === -NaN32
+        @test convert(Float64,  NaN16) ===  NaN64
+        @test convert(Float64, -NaN16) === -NaN64
+        @test convert(Float16,  NaN32) ===  NaN16
+        @test convert(Float16, -NaN32) === -NaN16
+        @test convert(Float64,  NaN32) ===  NaN64
+        @test convert(Float64, -NaN32) === -NaN64
+        @test convert(Float32,  NaN64) ===  NaN32
+        @test convert(Float32, -NaN64) === -NaN32
+        @test convert(Float16,  NaN64) ===  NaN16
+        @test convert(Float16, -NaN64) === -NaN16
+    end
+
+    @testset "largest NaNs" begin
+        @test convert(Float32, reinterpret(Float16, typemax(UInt16))) ===
+              reinterpret(Float32, typemax(UInt32) >> 13 << 13)
+        @test convert(Float64, reinterpret(Float16, typemax(UInt16))) ===
+              reinterpret(Float64, typemax(UInt64) >> 42 << 42)
+        @test convert(Float16, reinterpret(Float32, typemax(UInt32))) ===
+              reinterpret(Float16, typemax(UInt16) >> 00 << 00)
+        @test convert(Float64, reinterpret(Float32, typemax(UInt32))) ===
+              reinterpret(Float64, typemax(UInt64) >> 29 << 29)
+        @test convert(Float32, reinterpret(Float64, typemax(UInt64))) ===
+              reinterpret(Float32, typemax(UInt32) >> 00 << 00)
+        @test convert(Float16, reinterpret(Float64, typemax(UInt64))) ===
+              reinterpret(Float16, typemax(UInt16) >> 00 << 00)
+    end
+
+    @testset "random NaNs" begin
+        nans = AbstractFloat[NaN16, NaN32, NaN64]
+        F = [Float16, Float32, Float64]
+        U = [UInt16, UInt32, UInt64]
+        sig = [11, 24, 53]
+        for i = 1:length(F), j = 1:length(F)
+            for _ = 1:100
+                nan = reinterpret(F[i], rand(U[i]) | reinterpret(U[i], nans[i]))
+                z = sig[i] - sig[j]
+                nan′ = i <= j ? nan : reinterpret(F[i], reinterpret(U[i], nan) >> z << z)
+                @test convert(F[i], convert(F[j], nan)) === nan′
+            end
+        end
+    end
+end
