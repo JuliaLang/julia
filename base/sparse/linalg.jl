@@ -879,7 +879,7 @@ for f in (:\, :Ac_ldiv_B, :At_ldiv_B)
             if m == n
                 if istril(A)
                     if istriu(A)
-                        return ($f)(Diagonal(A), B)
+                        return ($f)(Diagonal(Vector(diag(A))), B)
                     else
                         return ($f)(LowerTriangular(A), B)
                     end

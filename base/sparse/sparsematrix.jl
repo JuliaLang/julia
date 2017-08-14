@@ -3412,8 +3412,6 @@ function trace(A::SparseMatrixCSC{Tv}) where Tv
     s
 end
 
-diag(A::SparseMatrixCSC{Tv}) where {Tv} = Tv[d for d in SpDiagIterator(A)]
-
 function diagm(v::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     if size(v,1) != 1 && size(v,2) != 1
         throw(DimensionMismatch("input should be nx1 or 1xn"))

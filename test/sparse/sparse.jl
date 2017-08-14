@@ -1323,6 +1323,16 @@ end
     @test diagm(sparse(ones(5,1))) == speye(5)
 end
 
+@testset "diag" begin
+    for T in (Float64, Complex128)
+        S = sprand(T, 5, 5, 0.5)
+        A = Matrix(S)
+        @test diag(S)::SparseVector{T,Int}     == diag(A)
+        @test diag(S, 1)::SparseVector{T,Int}  == diag(A, 1)
+        @test diag(S, -1)::SparseVector{T,Int} == diag(A, -1)
+    end
+end
+
 @testset "expandptr" begin
     A = speye(5)
     @test Base.SparseArrays.expandptr(A.colptr) == collect(1:5)
