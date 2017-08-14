@@ -247,6 +247,11 @@ let x = [1:4;]
     @test sin.(f17300kw.(x, y=1)) == sin.(f17300kw.(x; y=1)) == sin.(x .+ 1)
 end
 
+# issue #23236
+let X = [[true,false],[false,true]]
+    @test [.!x for x in X] == [[false,true],[true,false]]
+end
+
 # splice escaping of @.
 let x = [4, -9, 1, -16]
     @test [2, 3, 4, 5] == @.(1 + sqrt($sort(abs(x))))
