@@ -186,4 +186,19 @@ end
     P
 end
 
+function Base.similar(a::PermutedDimsArray{T,N,perm,iperm}, ::Type{S}) where {T,S,N,perm,iperm}
+    new_parent = similar(a.parent, S)
+    PermutedDimsArray{S,N,perm,iperm,typeof(new_parent)}(new_parent)
+end
+
+function Base.similar(a::PermutedDimsArray{T,N,perm,iperm}, ::Type{S}, dims::Dims{N}) where {T,S,N,perm,iperm}
+    new_parent = similar(a.parent, S, ntuple(i->dims[perm[i]], N))
+    PermutedDimsArray{S,N,perm,iperm,typeof(new_parent)}(new_parent)
+end
+
+function Base.similar(a::PermutedDimsArray{T,N,perm,iperm}, dims::Dims{N}) where {T,N,perm,iperm}
+    new_parent = similar(a.parent, ntuple(i->dims[perm[i]], N))
+    PermutedDimsArray{T,N,perm,iperm,typeof(new_parent)}(new_parent)
+end
+
 end

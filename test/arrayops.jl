@@ -546,6 +546,11 @@ end
     @test strides(cp) == (9,3,1)
     ap = PermutedDimsArray(collect(a), (2,1,3))
     @test strides(ap) == (3,1,12)
+    @test isa(similar(ap, Float64), PermutedDimsArray{Float64, 3})
+    @test size(similar(ap, (10, 11, 12))) == (10, 11, 12)
+    sap = similar(ap, Float64, (10, 11, 12))
+    @test isa(sap, PermutedDimsArray{Float64, 3})
+    @test size(sap.parent) == (11, 10, 12)
 
     for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
         perm = randperm(4)
