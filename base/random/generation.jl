@@ -12,6 +12,17 @@
 
 @inline rand(r::AbstractRNG=GLOBAL_RNG) = rand(r, CloseOpen)
 
+# generic random generation function which can be used by RNG implementors
+# it is not defined as a fallback rand method as this could create ambiguities
+@inline rand_generic(r::AbstractRNG, ::Type{Float64}) = rand(r, CloseOpen)
+
+rand_generic(r::AbstractRNG, ::Type{Float16}) =
+    Float16(reinterpret(Float32,
+                        (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
+
+rand_generic(r::AbstractRNG, ::Type{Float32}) =
+    reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
+
 ### random integers
 
 rand_ui10_raw(r::AbstractRNG) = rand(r, UInt16)

@@ -50,14 +50,7 @@ rand(rng::RandomDevice, ::Type{Close1Open2}) =
 
 rand(rng::RandomDevice, ::Type{CloseOpen}) = rand(rng, Close1Open2) - 1.0
 
-@inline rand(r::RandomDevice, ::Type{Float64}) = rand(r, CloseOpen)
-
-rand(r::RandomDevice, ::Type{Float16}) =
-    Float16(reinterpret(Float32,
-                        (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
-
-rand(r::RandomDevice, ::Type{Float32}) =
-    reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
+@inline rand(r::RandomDevice, T::BitFloatType) = rand_generic(r, T)
 
 
 ## MersenneTwister
@@ -232,14 +225,7 @@ rand_ui23_raw(r::MersenneTwister) = rand_ui52_raw(r)
 @inline rand(r::MersenneTwister, ::Type{I}) where {I<:FloatInterval} =
     (reserve_1(r); rand_inbounds(r, I))
 
-@inline rand(r::MersenneTwister, ::Type{Float64}) = rand(r, CloseOpen)
-
-rand(r::MersenneTwister, ::Type{Float16}) =
-    Float16(reinterpret(Float32,
-                        (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
-
-rand(r::MersenneTwister, ::Type{Float32}) =
-    reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
+@inline rand(r::MersenneTwister, T::BitFloatType) = rand_generic(r, T)
 
 #### integers
 

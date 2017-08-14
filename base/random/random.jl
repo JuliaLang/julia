@@ -26,6 +26,8 @@ abstract type FloatInterval end
 mutable struct CloseOpen <: FloatInterval end
 mutable struct Close1Open2 <: FloatInterval end
 
+const BitFloatType = Union{Type{Float16},Type{Float32},Type{Float64}}
+
 function __init__()
     try
         srand()
