@@ -521,13 +521,13 @@ end
 for T = (Float32, Float64,),# BigFloat),
     a = -5:25, s = [-5:-1;1:25;], d = 1:25, n = -1:15
     denom = convert(T,d)
-    start = convert(T,a)/denom
-    step  = convert(T,s)/denom
+    strt = convert(T,a)/denom
+    Δ     = convert(T,s)/denom
     stop  = convert(T,(a+(n-1)*s))/denom
     vals  = T[a:s:a+(n-1)*s;]./denom
-    r = start:step:stop
+    r = strt:Δ:stop
     @test [r;] == vals
-    @test [linspace(start, stop, length(r));] == vals
+    @test [linspace(strt, stop, length(r));] == vals
     # issue #7420
     n = length(r)
     @test [r[1:n];] == [r;]
@@ -546,24 +546,24 @@ end
 
 function range_fuzztests(::Type{T}, niter, nrange) where {T}
     for i = 1:niter, n in nrange
-        start, Δ = randn(T), randn(T)
+        strt, Δ = randn(T), randn(T)
         Δ == 0 && continue
-        stop = start + (n-1)*Δ
-        # `n` is not necessarily unique s.t. `start + (n-1)*Δ == stop`
-        # so test that `length(start:Δ:stop)` satisfies this identity
-        # and is the closest value to `(stop-start)/Δ` to do so
+        stop = strt + (n-1)*Δ
+        # `n` is not necessarily unique s.t. `strt + (n-1)*Δ == stop`
+        # so test that `length(strt:Δ:stop)` satisfies this identity
+        # and is the closest value to `(stop-strt)/Δ` to do so
         lo = hi = n
-        while start + (lo-1)*Δ == stop; lo -= 1; end
-        while start + (hi-1)*Δ == stop; hi += 1; end
-        m = clamp(round(Int, (stop-start)/Δ) + 1, lo+1, hi-1)
-        r = start:Δ:stop
+        while strt + (lo-1)*Δ == stop; lo -= 1; end
+        while strt + (hi-1)*Δ == stop; hi += 1; end
+        m = clamp(round(Int, (stop-strt)/Δ) + 1, lo+1, hi-1)
+        r = strt:Δ:stop
         @test m == length(r)
-        @test start == first(r)
+        @test strt == first(r)
         @test Δ == step(r)
         @test_skip stop == last(r)
-        l = linspace(start,stop,n)
+        l = linspace(strt,stop,n)
         @test n == length(l)
-        @test start == first(l)
+        @test strt == first(l)
         @test stop  == last(l)
     end
 end
@@ -1078,6 +1078,7 @@ for i = 2:4
     @test r[i] == x
 end
 
+# issue #23178
 r = linspace(Float16(0.1094), Float16(0.9697), 300)
 @test r[1] == Float16(0.1094)
 @test r[end] == Float16(0.9697)
@@ -1148,7 +1149,7 @@ end
     end
 end
 
-# Issue #23300
+# issue #23300
 x = -5:big(1.0):5
 @test map(Float64, x) === -5.0:1.0:5.0
 @test map(Float32, x) === -5.0f0:1.0f0:5.0f0

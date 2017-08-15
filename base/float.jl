@@ -885,7 +885,8 @@ end
 
 float(r::StepRange) = float(r.start):float(r.step):float(last(r))
 float(r::UnitRange) = float(r.start):float(last(r))
-float(r::StepRangeLen) = StepRangeLen(float(r.ref), float(r.step), length(r), r.offset)
+float(r::StepRangeLen{T}) where {T} =
+    StepRangeLen{typeof(float(T(r.ref)))}(float(r.ref), float(r.step), length(r), r.offset)
 function float(r::LinSpace)
     LinSpace(float(r.start), float(r.stop), length(r))
 end

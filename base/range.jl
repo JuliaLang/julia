@@ -205,6 +205,8 @@ end
 
 StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where {R,S} =
     StepRangeLen{typeof(ref+0*step),R,S}(ref, step, len, offset)
+StepRangeLen{T}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S} =
+    StepRangeLen{T,R,S}(ref, step, len, offset)
 
 ## linspace and logspace
 
@@ -370,8 +372,11 @@ julia> step(linspace(2.5,10.9,85))
 """
 step(r::StepRange) = r.step
 step(r::AbstractUnitRange) = 1
-step(r::StepRangeLen) = r.step
+step(r::StepRangeLen{T}) where {T} = T(r.step)
 step(r::LinSpace) = (last(r)-first(r))/r.lendiv
+
+step_hp(r::StepRangeLen) = r.step
+step_hp(r::Range) = step(r)
 
 unsafe_length(r::Range) = length(r)  # generic fallback
 
@@ -455,10 +460,9 @@ done(r::StepRange, i) = isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.sta
 done(r::StepRange, i::Integer) =
     isempty(r) | (i == oftype(i, r.stop) + r.step)
 
-# see also twiceprecision.jl
-start(r::StepRangeLen) = (unsafe_getindex(r, 1), 1)
-next(r::StepRangeLen{T}, s) where {T} = s[1], (T(s[1]+r.step), s[2]+1)
-done(r::StepRangeLen, s) = s[2] > length(r)
+start(r::StepRangeLen) = 1
+next(r::StepRangeLen{T}, i) where {T} = unsafe_getindex(r, i), i+1
+done(r::StepRangeLen, i) = i > length(r)
 
 start(r::UnitRange{T}) where {T} = oftype(r.start + oneunit(T), r.start)
 next(r::AbstractUnitRange{T}, i) where {T} = (convert(T, i), i + oneunit(T))
@@ -496,7 +500,7 @@ end
 
 function getindex(v::Range{T}, i::Integer) where T
     @_inline_meta
-    ret = convert(T, first(v) + (i - 1)*step(v))
+    ret = convert(T, first(v) + (i - 1)*step_hp(v))
     ok = ifelse(step(v) > zero(step(v)),
                 (ret <= v.stop) & (ret >= v.start),
                 (ret <= v.start) & (ret >= v.stop))
@@ -514,6 +518,11 @@ end
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
     u = i - r.offset
     T(r.ref + u*r.step)
+end
+
+function _getindex_hiprec(r::StepRangeLen, i::Integer)  # without rounding by T
+    u = i - r.offset
+    r.ref + u*r.step
 end
 
 function unsafe_getindex(r::LinSpace, i::Integer)
@@ -556,11 +565,14 @@ function getindex(r::StepRange, s::Range{<:Integer})
     range(st, step(r)*step(s), length(s))
 end
 
-function getindex(r::StepRangeLen, s::OrdinalRange{<:Integer})
+function getindex(r::StepRangeLen{T}, s::OrdinalRange{<:Integer}) where {T}
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    vfirst = unsafe_getindex(r, first(s))
-    return StepRangeLen(vfirst, r.step*step(s), length(s))
+    # Find closest approach to offset by s
+    ind = linearindices(s)
+    offset = max(min(1 + round(Int, (r.offset - first(s))/step(s)), last(ind)), first(ind))
+    ref = _getindex_hiprec(r, first(s) + (offset-1)*step(s))
+    return StepRangeLen{T}(ref, r.step*step(s), length(s), offset)
 end
 
 function getindex(r::LinSpace, s::OrdinalRange{<:Integer})
@@ -725,16 +737,17 @@ end
 ## linear operations on ranges ##
 
 -(r::OrdinalRange) = range(-first(r), -step(r), length(r))
--(r::StepRangeLen) = StepRangeLen(-r.ref, -r.step, length(r), r.offset)
+-(r::StepRangeLen{T,R,S}) where {T,R,S} =
+    StepRangeLen{T,R,S}(-r.ref, -r.step, length(r), r.offset)
 -(r::LinSpace) = LinSpace(-r.start, -r.stop, length(r))
 
 +(x::Real, r::AbstractUnitRange) = range(x + first(r), length(r))
 # For #18336 we need to prevent promotion of the step type:
 +(x::Number, r::AbstractUnitRange) = range(x + first(r), step(r), length(r))
 +(x::Number, r::Range) = (x+first(r)):step(r):(x+last(r))
-function +(x::Number, r::StepRangeLen)
+function +(x::Number, r::StepRangeLen{T}) where T
     newref = x + r.ref
-    StepRangeLen{eltype(newref),typeof(newref),typeof(r.step)}(newref, r.step, length(r), r.offset)
+    StepRangeLen{typeof(T(r.ref) + x)}(newref, r.step, length(r), r.offset)
 end
 function +(x::Number, r::LinSpace)
     LinSpace(x + r.start, x + r.stop, r.len)
@@ -750,15 +763,18 @@ end
 -(r::Range, x::Number) = +(-x, r)
 
 *(x::Number, r::Range)        = range(x*first(r), x*step(r), length(r))
-*(x::Number, r::StepRangeLen) = StepRangeLen(x*r.ref, x*r.step, length(r), r.offset)
+*(x::Number, r::StepRangeLen{T}) where {T} =
+    StepRangeLen{typeof(x*T(r.ref))}(x*r.ref, x*r.step, length(r), r.offset)
 *(x::Number, r::LinSpace)     = LinSpace(x * r.start, x * r.stop, r.len)
 # separate in case of noncommutative multiplication
 *(r::Range, x::Number)        = range(first(r)*x, step(r)*x, length(r))
-*(r::StepRangeLen, x::Number) = StepRangeLen(r.ref*x, r.step*x, length(r), r.offset)
+*(r::StepRangeLen{T}, x::Number) where {T} =
+    StepRangeLen{typeof(T(r.ref)*x)}(r.ref*x, r.step*x, length(r), r.offset)
 *(r::LinSpace, x::Number)     = LinSpace(r.start * x, r.stop * x, r.len)
 
 /(r::Range, x::Number)        = range(first(r)/x, step(r)/x, length(r))
-/(r::StepRangeLen, x::Number) = StepRangeLen(r.ref/x, r.step/x, length(r), r.offset)
+/(r::StepRangeLen{T}, x::Number) where {T} =
+    StepRangeLen{typeof(T(r.ref)/x)}(r.ref/x, r.step/x, length(r), r.offset)
 /(r::LinSpace, x::Number)     = LinSpace(r.start / x, r.stop / x, r.len)
 
 /(x::Number, r::Range) = [ x/y for y=r ]
