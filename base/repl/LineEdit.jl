@@ -116,14 +116,14 @@ complete_line(c::EmptyCompletionProvider, s) = [], true, true
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
-const beeping = Threads.Atomic{Float64}(0.0)
+const beeping = Ref(0.0)
 
 function beep(s::PromptState, duration=0.2, blink=0.2, maxduration=1.0;
               colors=[Base.text_colors[:light_black]],
               use_current::Bool=true,
               underline::Bool=false)
 
-    Threads.atomic_add!(beeping, min(duration, maxduration-beeping[]))
+    beeping[] = min(beeping[]+duration, maxduration)
     @async begin
         trylock(BEEP_LOCK) || return
         orig_prefix = s.p.prompt_prefix
@@ -134,7 +134,7 @@ function beep(s::PromptState, duration=0.2, blink=0.2, maxduration=1.0;
             s.p.prompt_prefix = prefix
             refresh_multi_line(s)
             sleep(blink)
-            Threads.atomic_sub!(beeping, blink)
+            beeping[] -= blink
         end
         s.p.prompt_prefix = orig_prefix
         refresh_multi_line(s)
