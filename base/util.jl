@@ -827,7 +827,7 @@ function crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
     # use block size 24576=8192*3, since that is the threshold for
     # 3-way parallel SIMD code in the underlying jl_crc32c C function.
-    buf = Array{UInt8}(min(nb, 24576))
+    buf = Vector{UInt8}(min(nb, 24576))
     while !eof(io) && nb > 24576
         n = readbytes!(io, buf)
         crc = unsafe_crc32c(buf, n, crc)

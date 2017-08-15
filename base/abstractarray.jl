@@ -1107,8 +1107,8 @@ vcat(X::T...) where {T<:Number} = T[ X[i] for i=1:length(X) ]
 hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=1:length(X) ]
 hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=1:length(X) ]
 
-vcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(length(X)), X)
-hcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(1,length(X)), X)
+vcat(X::Number...) = hvcat_fill(Vector{promote_typeof(X...)}(length(X)), X)
+hcat(X::Number...) = hvcat_fill(Matrix{promote_typeof(X...)}(1,length(X)), X)
 typed_vcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Array{T,1}(length(X)), X)
 typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill(Array{T,2}(1,length(X)), X)
 
