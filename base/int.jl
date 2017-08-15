@@ -31,8 +31,8 @@ const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UIn
 
 const BitIntegerType = Union{map(T->Type{T}, BitInteger_types)...}
 
-throw_inexacterror(f::Symbol, ::Type{T}, val) where T =
-    (@_noinline_meta; throw(InexactError(f, T, val)))
+# calls constructors defined in boot.jl
+convert(T::BitIntegerType, x::Union{BitInteger, Bool}) = T(x)
 
 ## integer comparisons ##
 
@@ -419,75 +419,19 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 >>>(x::BitInteger, y::Int) =
     select_value(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
-function is_top_bit_set(x::BitInteger)
-    @_inline_meta
-    lshr_int(x, (sizeof(x) << 0x03) - 1) == rem(0x01, typeof(x))
-end
-function check_top_bit(x::BitInteger)
-    @_inline_meta
-    is_top_bit_set(x) && throw_inexacterror(:check_top_bit, typeof(x), x)
-    x
-end
-
-## integer conversions ##
-
-function checked_trunc_sint(::Type{To}, x::From) where {To,From}
-    @_inline_meta
-    y = trunc_int(To, x)
-    back = sext_int(From, y)
-    x == back || throw_inexacterror(:trunc, To, x)
-    y
-end
-
-function checked_trunc_uint(::Type{To}, x::From) where {To,From}
-    @_inline_meta
-    y = trunc_int(To, x)
-    back = zext_int(From, y)
-    x == back || throw_inexacterror(:trunc, To, x)
-    y
-end
-
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
         if to.size < from.size
-            if to <: Signed
-                if from <: Unsigned
-                    @eval convert(::Type{$to}, x::($from)) =
-                        checked_trunc_sint($to, check_top_bit(x))
-                else
-                    @eval convert(::Type{$to}, x::($from)) =
-                        checked_trunc_sint($to, x)
-                end
-            else
-                @eval convert(::Type{$to}, x::($from)) =
-                    checked_trunc_uint($to, x)
-            end
             @eval rem(x::($from), ::Type{$to}) = trunc_int($to, x)
         elseif from === Bool
-            # Bools use i8 storage and may have garbage in their 7 high bits
-            @eval convert(::Type{$to}, x::($from)) = zext_int($to, x) & $to(1)
             @eval rem(x::($from), ::Type{$to}) = convert($to, x)
         elseif from.size < to.size
             if from <: Signed
-                if to <: Unsigned
-                    @eval convert(::Type{$to}, x::($from)) =
-                        sext_int($to, check_top_bit(x))
-                else
-                    @eval convert(::Type{$to}, x::($from)) =
-                        sext_int($to, x)
-                end
                 @eval rem(x::($from), ::Type{$to}) = sext_int($to, x)
             else
-                @eval convert(::Type{$to}, x::($from)) = zext_int($to, x)
                 @eval rem(x::($from), ::Type{$to}) = convert($to, x)
             end
         else
-            if !((from <: Signed) === (to <: Signed))
-                # raise InexactError if x's top bit is set
-                @eval convert(::Type{$to}, x::($from)) = bitcast($to, check_top_bit(x))
-            else
-                @eval convert(::Type{$to}, x::($from)) = bitcast($to, x)
-            end
             @eval rem(x::($from), ::Type{$to}) = bitcast($to, x)
         end
     end

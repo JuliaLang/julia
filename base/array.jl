@@ -381,7 +381,7 @@ function ones end
 
 for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     @eval begin
-        $fname(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(uninitialized, Dims(dims)), $felt(T))
+        $fname(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(uninitialized, convert(Dims, dims)::Dims), $felt(T))
         $fname(dims::Tuple) = ($fname)(Float64, dims)
         $fname(::Type{T}, dims...) where {T} = $fname(T, dims)
         $fname(dims...) = $fname(dims)
