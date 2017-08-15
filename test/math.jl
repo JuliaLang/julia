@@ -703,3 +703,40 @@ end
         @test asin(T(NaN)) === T(NaN)
     end
 end
+
+@testset "sin, cos, sincos, tan, rem_pio2 #23088" begin
+    for T in (Float32, Float64)
+        @test sin(zero(T)) === zero(T)
+        @test sin(-zero(T)) === -zero(T)
+        @test cos(zero(T)) === T(1.0)
+        @test cos(-zero(T)) === T(1.0)
+        @test sin(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test sin(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test cos(nextfloat(zero(T))) === T(1.0)
+        @test cos(prevfloat(zero(T))) === T(1.0)
+        for x in (-0.1, 0.1, -0.75, 0.75, -0.79, 0.79, 0.45, 0.6, 0.98)
+            @show x
+            by = T(sin(big(x)))
+            @test abs(sin(T(x)) - by)/eps(by) <= one(T)
+            bym = T(sin(big(-x)))
+            @test abs(sin(T(-x)) - bym)/eps(bym) <= one(T)
+            by = T(cos(big(x)))
+            @test abs(cos(T(x)) - by)/eps(by) <= one(T)
+            bym = T(cos(big(-x)))
+            @test abs(cos(T(-x)) - bym)/eps(bym) <= one(T)
+            by = T(tan(big(x)))
+            @test abs(tan(T(x)) - by)/eps(by) <= one(T)
+            bym = T(tan(big(-x)))
+            @test abs(tan(T(-x)) - bym)/eps(bym) <= one(T)
+        end
+        @test_throws DomainError sin(-T(Inf))
+        @test_throws DomainError sin(T(Inf))
+        @test sin(T(NaN)) === T(NaN)
+        @test_throws DomainError cos(-T(Inf))
+        @test_throws DomainError cos(T(Inf))
+        @test cos(T(NaN)) === T(NaN)
+        @test_throws DomainError tan(-T(Inf))
+        @test_throws DomainError tan(T(Inf))
+        @test tan(T(NaN)) === T(NaN)
+    end
+end
