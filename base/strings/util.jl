@@ -464,6 +464,55 @@ function hex2bytes(s::AbstractString)
 end
 
 """
+    hex2bytes(d::Vector{UInt8}, s::Vector{UInt8}, nInBytes::Int=length(s))
+
+Convert the first `nInBytes` hexadecimal bytes array to its binary representation. The
+results are populated into a destination array. The function returns the number of bytes
+copied into the destination array. The size of destination array must be at least half of
+the `nInBytes` parameter.
+"""
+function hex2bytes(d::Vector{UInt8}, s::Vector{UInt8}, nInBytes::Int=length(s))
+    if isodd(nInBytes)
+        throw(ArgumentError("Input data length should be even"))
+    end
+
+    len2 = div(nInBytes, 2)
+    if size(d)[1] <  len2
+        throw(ArgumentError("Destination data buffer should be sufficiently large"))
+    end
+
+    i = 0
+    j = 1
+    # This line is important as this ensures computation happens in word boundary and not
+    # byte boundary. Boundary computation can be almost 10 times slower
+    n = c1 = c2 = UInt(0)
+    for j = 1:len2
+        n = 0
+        @inbounds c1 = UInt(s[i+=1])
+        @inbounds c2 = UInt(s[i+=1])
+        n = get_number_from_hex(c1)
+        n <<= 4
+        n += get_number_from_hex(c2)
+        @inbounds d[j] = (n & 0xFF)
+    end
+    return j
+end
+
+@inline get_number_from_hex(c::UInt) = begin
+    const DIGIT_ZERO     = UInt('0')
+    const DIGIT_NINE     = UInt('9')
+    const LATIN_UPPER_A  = UInt('A')
+    const LATIN_UPPER_F  = UInt('F')
+    const LATIN_A        = UInt('a')
+    const LATIN_F        = UInt('f')
+
+    return (DIGIT_ZERO <= c <= DIGIT_NINE) ? c - DIGIT_ZERO :
+        (LATIN_UPPER_A <= c <= LATIN_UPPER_F) ? c - LATIN_UPPER_A + 10 :
+        (LATIN_A <= c <= LATIN_F) ? c - LATIN_A + 10 :
+        throw(ArgumentError("Not a hexadecimal number"))
+end
+
+"""
     bytes2hex(bin_arr::Array{UInt8, 1}) -> String
 
 Convert an array of bytes to its hexadecimal representation.
