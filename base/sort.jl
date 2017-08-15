@@ -87,10 +87,68 @@ function select!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
     sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
     v[k]
 end
+
+"""
+    select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Partially sort the vector `v` in place, according to the order specified by `by`, `lt` and
+`rev` so that the value at index `k` (or range of adjacent values if `k` is a range) occurs
+at the position where it would appear if the array were fully sorted via a non-stable
+algorithm. If `k` is a single index, that value is returned; if `k` is a range, an array of
+values at those indices is returned. Note that `select!` does not fully sort the input
+array.
+
+# Examples
+```jldoctest
+julia> a = [1, 2, 4, 3, 4]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 3
+ 4
+
+julia> select!(a, 4)
+4
+
+julia> a
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 4
+
+julia> a = [1, 2, 4, 3, 4]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 3
+ 4
+
+julia> select!(a, 4, rev=true)
+2
+
+julia> a
+5-element Array{Int64,1}:
+ 4
+ 4
+ 3
+ 2
+ 1
+```
+"""
 select!(v::AbstractVector, k::Union{Int,OrdinalRange};
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     select!(v, k, ord(lt,by,rev,order))
 
+"""
+    select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Variant of [`select!`](@ref) which copies `v` before partially sorting it, thereby returning the
+same thing as `select!` but leaving `v` unmodified.
+"""
 select(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) = select!(copymutable(v), k; kws...)
 
 
@@ -611,9 +669,27 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
 ## selectperm: the permutation to sort the first k elements of an array ##
 
+"""
+    selectperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Return a partial permutation of the vector `v`, according to the order specified by
+`by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
+if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index
+(Integer), an array of the first `k` indices is returned; if `k` is a range, an array of
+those indices is returned. Note that the handling of integer values for `k` is different
+from [`select`](@ref) in that it returns a vector of `k` elements instead of just the `k` th
+element. Also note that this is equivalent to, but more efficient than, calling
+`sortperm(...)[k]`.
+"""
 selectperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     selectperm!(similar(Vector{eltype(k)}, indices(v,1)), v, k; kwargs..., initialized=false)
 
+"""
+    selectperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
+
+Like [`selectperm`](@ref), but accepts a preallocated index vector `ix`. If `initialized` is `false`
+(the default), ix is initialized to contain the values `1:length(ix)`.
+"""
 function selectperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                      k::Union{Int, OrdinalRange};
                      lt::Function=isless,

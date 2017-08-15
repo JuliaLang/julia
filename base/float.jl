@@ -278,6 +278,15 @@ Float64
 float(::Type{T}) where {T<:Number} = typeof(float(zero(T)))
 float(::Type{T}) where {T<:AbstractFloat} = T
 
+"""
+    unsafe_trunc(T, x)
+
+`unsafe_trunc(T, x)` returns the nearest integral value of type `T` whose absolute value is
+less than or equal to `x`. If the value is not representable by `T`, an arbitrary value will
+be returned.
+"""
+function unsafe_trunc end
+
 for Ti in (Int8, Int16, Int32, Int64)
     @eval begin
         unsafe_trunc(::Type{$Ti}, x::Float16) = unsafe_trunc($Ti, Float32(x))
@@ -565,7 +574,14 @@ hash(x::Float64, h::UInt) = isnan(x) ? (hx_NaN ⊻ h) : hx(fptoui(UInt64, abs(x)
 hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
 hash(x::Float32, h::UInt) = hash(Float64(x), h)
 
-## precision, as defined by the effective number of bits in the mantissa ##
+"""
+    precision(num::AbstractFloat)
+
+Get the precision of a floating point number, as defined by the effective number of bits in
+the mantissa.
+"""
+function precision end
+
 precision(::Type{Float16}) = 11
 precision(::Type{Float32}) = 24
 precision(::Type{Float64}) = 53
@@ -690,6 +706,13 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
     end
 end
 
+"""
+    issubnormal(f) -> Bool
+
+Test whether a floating point number is subnormal.
+"""
+function issubnormal end
+
 @eval begin
     issubnormal(x::Float32) = (abs(x) < $(bitcast(Float32, 0x00800000))) & (x!=0)
     issubnormal(x::Float64) = (abs(x) < $(bitcast(Float64, 0x0010000000000000))) & (x!=0)
@@ -710,23 +733,39 @@ end
     realmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
     realmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
 
-    """
-        realmin(T)
-
-    The smallest in absolute value non-subnormal value representable by the given
-    floating-point DataType `T`.
-    """
-    realmin(x::T) where {T<:AbstractFloat} = realmin(T)
-    realmax(x::T) where {T<:AbstractFloat} = realmax(T)
-    realmin() = realmin(Float64)
-    realmax() = realmax(Float64)
-
     eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
     eps(::Type{Float16}) = $(bitcast(Float16, 0x1400))
     eps(::Type{Float32}) = $(bitcast(Float32, 0x34000000))
     eps(::Type{Float64}) = $(bitcast(Float64, 0x3cb0000000000000))
     eps() = eps(Float64)
 end
+
+"""
+    realmin(T)
+
+The smallest in absolute value non-subnormal value representable by the given
+floating-point DataType `T`.
+"""
+realmin(x::T) where {T<:AbstractFloat} = realmin(T)
+
+"""
+    realmax(T)
+
+The highest finite value representable by the given floating-point DataType `T`.
+
+# Examples
+```jldoctest
+julia> realmax(Float16)
+Float16(6.55e4)
+
+julia> realmax(Float32)
+3.4028235f38
+```
+"""
+realmax(x::T) where {T<:AbstractFloat} = realmax(T)
+
+realmin() = realmin(Float64)
+realmax() = realmax(Float64)
 
 """
     eps(::Type{T}) where T<:AbstractFloat

@@ -146,6 +146,21 @@ julia> flipsign(5, -3)
 ```
 """
 flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, +x) # the + is for type-stability on Bool
+
+"""
+    copysign(x, y) -> z
+
+Return `z` which has the magnitude of `x` and the same sign as `y`.
+
+# Examples
+```jldoctest
+julia> copysign(1, -2)
+-1
+
+julia> copysign(-1, 2)
+1
+```
+"""
 copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
 
 conj(x::Real) = x

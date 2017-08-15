@@ -13,6 +13,24 @@ export normalize_string, graphemes, is_assigned_char, charwidth, isvalid,
    iscntrl, ispunct, isspace, isprint, isgraph
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
+
+"""
+    isvalid(value) -> Bool
+
+Returns `true` if the given value is valid for its type, which currently can be either
+`Char` or `String`.
+"""
+isvalid(value)
+
+"""
+    isvalid(T, value) -> Bool
+
+Returns `true` if the given value is valid for that type. Types currently can
+be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt32`](@ref).
+Values for `String` can be of that type, or `Vector{UInt8}`.
+"""
+isvalid(T,value)
+
 isvalid(::Type{Char}, ch::Unsigned) = !((ch - 0xd800 < 0x800) | (ch > 0x10ffff))
 isvalid(::Type{Char}, ch::Integer) = isvalid(Char, Unsigned(ch))
 isvalid(::Type{Char}, ch::Char) = isvalid(Char, UInt32(ch))

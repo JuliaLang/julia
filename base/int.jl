@@ -294,6 +294,26 @@ julia> 4 | 1
 (|)(x::T, y::T) where {T<:BitInteger} = or_int(x, y)
 xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
 
+"""
+    bswap(n)
+
+Byte-swap an integer. Flip the bits of its binary representation.
+
+# Examples
+```jldoctest
+julia> a = bswap(4)
+288230376151711744
+
+julia> bswap(a)
+4
+
+julia> bin(1)
+"1"
+
+julia> bin(bswap(1))
+"100000000000000000000000000000000000000000000000000000000"
+```
+"""
 bswap(x::Union{Int8, UInt8}) = x
 bswap(x::Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}) =
     bswap_int(x)
@@ -513,6 +533,45 @@ convert(::Type{Unsigned}, x::Union{Float32, Float64, Bool}) = convert(UInt, x)
 convert(::Type{Integer}, x::Integer) = x
 convert(::Type{Integer}, x::Real) = convert(Signed, x)
 
+"""
+    trunc([T,] x, [digits, [base]])
+
+`trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
+is less than or equal to `x`.
+
+`trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
+not representable.
+
+`digits` and `base` work as for [`round`](@ref).
+"""
+function trunc end
+
+"""
+    floor([T,] x, [digits, [base]])
+
+`floor(x)` returns the nearest integral value of the same type as `x` that is less than or
+equal to `x`.
+
+`floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
+not representable.
+
+`digits` and `base` work as for [`round`](@ref).
+"""
+function floor end
+
+"""
+    ceil([T,] x, [digits, [base]])
+
+`ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
+equal to `x`.
+
+`ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is not
+representable.
+
+`digits` and `base` work as for [`round`](@ref).
+"""
+function ceil end
+
 round(x::Integer) = x
 trunc(x::Integer) = x
 floor(x::Integer) = x
@@ -567,6 +626,29 @@ _default_type(::Type{Unsigned}) = UInt
 _default_type(::Union{Type{Integer},Type{Signed}}) = Int
 
 ## traits ##
+
+"""
+    typemin(T)
+
+The lowest value representable by the given (real) numeric DataType `T`.
+
+# Examples
+```jldoctest
+julia> typemin(Float16)
+-Inf16
+
+julia> typemin(Float32)
+-Inf32
+```
+"""
+function typemin end
+
+"""
+    typemax(T)
+
+The highest value representable by the given (real) numeric `DataType`.
+"""
+function typemax end
 
 typemin(::Type{Int8  }) = Int8(-128)
 typemax(::Type{Int8  }) = Int8(127)

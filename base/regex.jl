@@ -141,6 +141,11 @@ function getindex(m::RegexMatch, name::Symbol)
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
+"""
+    ismatch(r::Regex, s::AbstractString) -> Bool
+
+Test whether a string contains a match of the given regular expression.
+"""
 function ismatch(r::Regex, s::AbstractString, offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, String(s), offset, r.match_options,
@@ -154,6 +159,16 @@ function ismatch(r::Regex, s::SubString, offset::Integer=0)
 end
 
 (r::Regex)(s) = ismatch(r, s)
+
+"""
+    match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
+
+Search for the first match of the regular expression `r` in `s` and return a `RegexMatch`
+object containing the match, or nothing if the match failed. The matching substring can be
+retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
+`m.captures` The optional `idx` argument specifies an index at which to start the search.
+"""
+function match end
 
 function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, add_opts::UInt32=UInt32(0))
     compile(re)
@@ -175,6 +190,11 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
     "regex matching is only available for the String type; use String(s) to convert"
 ))
 
+"""
+    matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
+
+Return a vector of the matching substrings from [`eachmatch`](@ref).
+"""
 function matchall(re::Regex, str::String, overlap::Bool=false)
     regex = compile(re).regex
     n = sizeof(str)
@@ -362,6 +382,13 @@ function eachmatch(re::Regex, str::AbstractString, ovr::Bool)
     RegexMatchIterator(re,str,ovr)
 end
 
+"""
+    eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
+
+Search for all matches of a the regular expression `r` in `s` and return a iterator over the
+matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the
+original string, otherwise they must be from distinct character ranges.
+"""
 eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
 
 ## comparison ##

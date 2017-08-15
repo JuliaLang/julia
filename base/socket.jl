@@ -333,6 +333,13 @@ _jl_sockaddr_from_addrinfo(addrinfo::Ptr{Void}) =
 _jl_sockaddr_set_port(ptr::Ptr{Void}, port::UInt16) =
     ccall(:jl_sockaddr_set_port, Void, (Ptr{Void}, UInt16), ptr, port)
 
+"""
+    accept(server[,client])
+
+Accepts a connection on the given server and returns a connection to the client. An
+uninitialized client stream may be provided, in which case it will be used instead of
+creating a new stream.
+"""
 accept(server::TCPServer) = accept(server, TCPSocket())
 
 # Libuv will internally reset the readable and writable flags on

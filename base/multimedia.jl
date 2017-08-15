@@ -44,6 +44,37 @@ false
 mimewritable(::MIME{mime}, x) where {mime} =
     method_exists(show, Tuple{IO, MIME{mime}, typeof(x)})
 
+"""
+    show(stream, mime, x)
+
+The [`display`](@ref) functions ultimately call `show` in order to write an object `x` as a
+given `mime` type to a given I/O `stream` (usually a memory buffer), if possible. In order
+to provide a rich multimedia representation of a user-defined type `T`, it is only necessary
+to define a new `show` method for `T`, via: `show(stream, ::MIME"mime", x::T) = ...`,
+where `mime` is a MIME-type string and the function body calls `write` (or similar) to write
+that representation of `x` to `stream`. (Note that the `MIME""` notation only supports
+literal strings; to construct `MIME` types in a more flexible manner use
+`MIME{Symbol("")}`.)
+
+For example, if you define a `MyImage` type and know how to write it to a PNG file, you
+could define a function `show(stream, ::MIME"image/png", x::MyImage) = ...` to allow
+your images to be displayed on any PNG-capable `Display` (such as IJulia). As usual, be sure
+to `import Base.show` in order to add new methods to the built-in Julia function
+`show`.
+
+The default MIME type is `MIME"text/plain"`. There is a fallback definition for `text/plain`
+output that calls `show` with 2 arguments. Therefore, this case should be handled by
+defining a 2-argument `show(stream::IO, x::MyType)` method.
+
+Technically, the `MIME"mime"` macro defines a singleton type for the given `mime` string,
+which allows us to exploit Julia's dispatch mechanisms in determining how to display objects
+of any given type.
+
+The first argument to `show` can be an [`IOContext`](@ref) specifying output format properties.
+See [`IOContext`](@ref) for details.
+"""
+show(stream, mime, x)
+
 # it is convenient to accept strings instead of ::MIME
 show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
 mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)

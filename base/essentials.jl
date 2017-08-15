@@ -61,6 +61,77 @@ macro _propagate_inbounds_meta()
     Expr(:meta, :inline, :propagate_inbounds)
 end
 
+"""
+    convert(T, x)
+
+Convert `x` to a value of type `T`.
+
+If `T` is an [`Integer`](@ref) type, an [`InexactError`](@ref) will be raised if `x`
+is not representable by `T`, for example if `x` is not integer-valued, or is outside the
+range supported by `T`.
+
+# Examples
+```jldoctest
+julia> convert(Int, 3.0)
+3
+
+julia> convert(Int, 3.5)
+ERROR: InexactError: convert(Int64, 3.5)
+Stacktrace:
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
+```
+
+If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
+then it will return the closest value to `x` representable by `T`.
+
+```jldoctest
+julia> x = 1/3
+0.3333333333333333
+
+julia> convert(Float32, x)
+0.33333334f0
+
+julia> convert(Rational{Int32}, x)
+1//3
+
+julia> convert(Rational{Int64}, x)
+6004799503160661//18014398509481984
+```
+
+If `T` is a collection type and `x` a collection, the result of `convert(T, x)` may alias
+`x`.
+```jldoctest
+julia> x = Int[1,2,3];
+
+julia> y = convert(Vector{Int}, x);
+
+julia> y === x
+true
+```
+Similarly, if `T` is a composite type and `x` a related instance, the result of
+`convert(T, x)` may alias part or all of `x`.
+```jldoctest
+julia> x = speye(5);
+
+julia> typeof(x)
+SparseMatrixCSC{Float64,Int64}
+
+julia> y = convert(SparseMatrixCSC{Float64,Int64}, x);
+
+julia> z = convert(SparseMatrixCSC{Float32,Int64}, y);
+
+julia> y === x
+true
+
+julia> z === x
+false
+
+julia> z.colptr === x.colptr
+true
+```
+"""
+function convert end
+
 convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
 
@@ -201,7 +272,12 @@ convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
 #convert(::Type{Tuple{}}, ::Tuple{}) = ()
 #convert(::Type{Tuple{Vararg{S}}} where S, ::Tuple{}) = ()
 
-oftype(x, c) = convert(typeof(x), c)
+"""
+    oftype(x, y)
+
+Convert `y` to the type of `x` (`convert(typeof(x), y)`).
+"""
+oftype(x, y) = convert(typeof(x), y)
 
 unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)
@@ -211,16 +287,83 @@ ptr_arg_cconvert(::Type{Ptr{T}}, x) where {T} = cconvert(T, x)
 ptr_arg_unsafe_convert(::Type{Ptr{T}}, x) where {T} = unsafe_convert(T, x)
 ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
 
+"""
+    cconvert(T,x)
+
+Convert `x` to a value to be passed to C code as type `T`, typically by calling `convert(T, x)`.
+
+In cases where `x` cannot be safely converted to `T`, unlike [`convert`](@ref), `cconvert` may
+return an object of a type different from `T`, which however is suitable for
+[`unsafe_convert`](@ref) to handle. The result of this function should be kept valid (for the GC)
+until the result of [`unsafe_convert`](@ref) is not needed anymore.
+This can be used to allocate memory that will be accessed by the `ccall`.
+If multiple objects need to be allocated, a tuple of the objects can be used as return value.
+
+Neither `convert` nor `cconvert` should take a Julia object and turn it into a `Ptr`.
+"""
+function cconvert end
+
 cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
 unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 
+"""
+    reinterpret(type, A)
+
+Change the type-interpretation of a block of memory.
+For arrays, this constructs an array with the same binary data as the given
+array, but with the specified element type.
+For example,
+`reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
+[`Float32`](@ref).
+
+!!! warning
+
+    It is not allowed to `reinterpret` an array to an element type with a larger alignment then
+    the alignment of the array. For a normal `Array`, this is the alignment of its element type.
+    For a reinterpreted array, this is the alignment of the `Array` it was reinterpreted from.
+    For example, `reinterpret(UInt32, UInt8[0, 0, 0, 0])` is not allowed but
+    `reinterpret(UInt32, reinterpret(UInt8, Float32[1.0]))` is allowed.
+
+# Examples
+```jldoctest
+julia> reinterpret(Float32, UInt32(7))
+1.0f-44
+
+julia> reinterpret(Float32, UInt32[1 2 3 4 5])
+1×5 Array{Float32,2}:
+ 1.4013f-45  2.8026f-45  4.2039f-45  5.60519f-45  7.00649f-45
+```
+"""
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
 reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 
+"""
+    sizeof(T)
+
+Size, in bytes, of the canonical binary representation of the given DataType `T`, if any.
+
+# Examples
+```jldoctest
+julia> sizeof(Float32)
+4
+
+julia> sizeof(Complex128)
+16
+```
+
+If `T` does not have a specific size, an error is thrown.
+
+```jldoctest
+julia> sizeof(Base.LinAlg.LU)
+ERROR: argument is an abstract type; size is indeterminate
+Stacktrace:
+ [1] sizeof(::Type{T} where T) at ./essentials.jl:150
+```
+"""
 sizeof(x) = Core.sizeof(x)
 
 function append_any(xs...)
@@ -247,6 +390,11 @@ end
 # simple Array{Any} operations needed for bootstrap
 setindex!(A::Array{Any}, @nospecialize(x), i::Int) = Core.arrayset(A, x, i)
 
+"""
+    precompile(f, args::Tuple{Vararg{Any}})
+
+Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
+"""
 function precompile(@nospecialize(f), args::Tuple)
     ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
 end
@@ -442,8 +590,6 @@ function as_kwargs(xs)
     return to
 end
 
-isempty(itr) = done(itr, start(itr))
-
 """
     invokelatest(f, args...; kwargs...)
 
@@ -459,3 +605,75 @@ function invokelatest(f, args...; kwargs...)
     inner() = f(args...; kwargs...)
     Core._apply_latest(inner)
 end
+
+# iteration protocol
+
+"""
+    next(iter, state) -> item, state
+
+For a given iterable object and iteration state, return the current item and the next iteration state.
+
+# Examples
+```jldoctest
+julia> next(1:5, 3)
+(3, 4)
+
+julia> next(1:5, 5)
+(5, 6)
+```
+"""
+function next end
+
+"""
+    start(iter) -> state
+
+Get initial iteration state for an iterable object.
+
+# Examples
+```jldoctest
+julia> start(1:5)
+1
+
+julia> start([1;2;3])
+1
+
+julia> start([4;2;3])
+1
+```
+"""
+function start end
+
+"""
+    done(iter, state) -> Bool
+
+Test whether we are done iterating.
+
+# Examples
+```jldoctest
+julia> done(1:5, 3)
+false
+
+julia> done(1:5, 5)
+false
+
+julia> done(1:5, 6)
+true
+```
+"""
+function done end
+
+"""
+    isempty(collection) -> Bool
+
+Determine whether a collection is empty (has no elements).
+
+# Examples
+```jldoctest
+julia> isempty([])
+true
+
+julia> isempty([1 2 3])
+false
+```
+"""
+isempty(itr) = done(itr, start(itr))

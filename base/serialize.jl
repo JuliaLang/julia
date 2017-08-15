@@ -637,10 +637,28 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
     end
 end
 
+"""
+    serialize(stream, value)
+
+Write an arbitrary value to a stream in an opaque format, such that it can be read back by
+[`deserialize`](@ref). The read-back value will be as identical as possible to the original. In
+general, this process will not work if the reading and writing are done by different
+versions of Julia, or an instance of Julia with a different system image. `Ptr` values are
+serialized as all-zero bit patterns (`NULL`).
+"""
 serialize(s::IO, x) = serialize(SerializationState(s), x)
 
 ## deserializing values ##
 
+"""
+    deserialize(stream)
+
+Read a value written by [`serialize`](@ref). `deserialize` assumes the binary data read from
+`stream` is correct and has been serialized by a compatible implementation of [`serialize`](@ref).
+It has been designed with simplicity and performance as a goal and does not validate
+the data read. Malformed data can result in process termination. The caller has to ensure
+the integrity and correctness of data read from `stream`.
+"""
 deserialize(s::IO) = deserialize(SerializationState(s))
 
 function deserialize(s::AbstractSerializer)
