@@ -2004,3 +2004,30 @@ function fill!(A::Union{SparseVector, SparseMatrixCSC}, x)
     end
     return A
 end
+
+function diagm(v::SparseVector{Tv,Ti}) where {Tv,Ti}
+    n = length(v)
+    numnz = nnz(v)
+    colptr = Vector{Ti}(n+1)
+    rowval = Vector{Ti}(numnz)
+    nzval = Vector{Tv}(numnz)
+
+    copy!(rowval, 1, v.nzind, 1, numnz)
+    copy!(nzval, 1, v.nzval, 1, numnz)
+    colptr[1] = 1
+    ptr = 1
+    col = 1
+    while col <= n && ptr <= numnz
+        while rowval[ptr] > col
+            colptr[col+1] = colptr[col]
+            col += 1
+        end
+        colptr[col+1] = colptr[col] + 1
+        ptr += 1
+        col += 1
+    end
+    if col <= n
+        colptr[(col+1):(n+1)] = colptr[col]
+    end
+    return SparseMatrixCSC(n, n, colptr, rowval, nzval)
+end

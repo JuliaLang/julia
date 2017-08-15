@@ -1150,3 +1150,10 @@ end
 @testset "spzeros with index type" begin
     @test typeof(spzeros(Float32, Int16, 3)) == SparseVector{Float32,Int16}
 end
+
+@testset "diagm" begin
+    v = sprand(10, 0.4)
+    @test diagm(v)::SparseMatrixCSC                == diagm(Vector(v))
+    @test diagm(sparse(ones(5)))::SparseMatrixCSC  == speye(5)
+    @test diagm(sparse(zeros(5)))::SparseMatrixCSC == spzeros(5,5)
+end
