@@ -464,24 +464,23 @@ function hex2bytes(s::AbstractString)
 end
 
 """
-    hex2bytes(s::Vector{UInt8})
+    hex2bytes(s::AbstractVector{UInt8})
 
 Convert the hexadecimal bytes array to its binary representation. Returns an
-`Array{UInt8,1}`, i.e. an array of bytes.
+`Vector{UInt8}`, i.e. a vector of bytes.
 """
-@inline function hex2bytes(s::Vector{UInt8})
+@inline function hex2bytes(s::AbstractVector{UInt8})
     d = Vector{UInt8}(div(length(s), 2))
-    hex2bytes!(d, s)
-    return d
+    return hex2bytes!(d, s)
 end
 
 """
-    hex2bytes!(d::Vector{UInt8}, s::Vector{UInt8}, n::Int=length(s))
+    hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
 
-Convert the first `n` hexadecimal bytes array to its binary representation. The
-results are populated into a destination array. The function returns the number of bytes
-copied into the destination array. The size of destination array must be at least half
-of the `n` parameter.
+Convert the hexadecimal bytes vector to its binary representation. The results are
+populated into a destination vector. The function returns the number of bytes copied
+into the destination array. The size of destination array must be half of the source
+vector. `@view` macro can be used to pass `SubArray`s as arguments.
 
 # Examples
 ```
@@ -500,7 +499,7 @@ of the `n` parameter.
      0x00
      0x00
 
-    julia> hex2bytes!(d, s, 6)
+    julia> hex2bytes!(d, s)
     3
 
     julia> d
@@ -510,35 +509,26 @@ of the `n` parameter.
      0xef
 ```
 """
-function hex2bytes!(d::Vector{UInt8}, s::Vector{UInt8}, n::Int=length(s))
-    if isodd(n)
-        throw(ArgumentError("Input data length should be even"))
+function hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
+    i, j = start(s), 0
+    # This line is important as this ensures computation happens in word boundary and not
+    # byte boundary. Boundary computation can be almost 10 times slower
+    n::UInt = 0
+    c1::UInt = 0
+    c2::UInt = 0
+    while !done(s, i)
+        n = 0
+        c1, i = next(s, i)
+        done(s, i) && throw(ArgumentError(
+            "string length must be even: length($(repr(s))) == $(length(s))"))
+        c2, i = next(s, i)
+        n = number_from_hex(c1)
+        n <<= 4
+        n += number_from_hex(c2)
+        d[j+=1] = (n & 0xFF)
     end
-
-    if n > length(s)
-        throw(ArgumentError("Input data length should not exceed array length"))
-    end
-
-    len2 = div(n, 2)
-
-    if length(d) <  len2
-        throw(ArgumentError("Destination data buffer should be sufficiently large"))
-    end
-
-    i = j = 0
-    # This line is important as this ensures computation happens on word boundary and
-    # not byte boundary. Byte boundary computation can be almost 10 times slower.
-    n = c1 = c2 = UInt(0)
-    for j = 1:len2
-        num = 0
-        @inbounds c1 = UInt(s[i+=1])
-        @inbounds c2 = UInt(s[i+=1])
-        num = number_from_hex(c1)
-        num <<= 4
-        num += number_from_hex(c2)
-        @inbounds d[j] = (num & 0xFF)
-    end
-    return j
+    resize!(d, j)
+    return d
 end
 
 @inline function number_from_hex(c::UInt)
