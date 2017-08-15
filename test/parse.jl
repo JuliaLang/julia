@@ -1215,3 +1215,12 @@ end === (3, String)
 # issue #19351
 # adding return type decl should not affect parse of function body
 @test :(t(abc) = 3).args[2] == :(t(abc)::Int = 3).args[2]
+
+# issue #23234
+let
+    f = function (x=0)
+        x
+    end
+    @test f() == 0
+    @test f(2) == 2
+end
