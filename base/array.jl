@@ -425,7 +425,7 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
         $fname(a::AbstractArray, ::Type{T}, dims...) where {T} = fill!(similar(a, T, dims...), $felt(T))
         $fname(a::AbstractArray, ::Type{T}=eltype(a)) where {T} = fill!(similar(a, T), $felt(T))
 
-        $fname(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(Dims(dims)), $felt(T))
+        $fname(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(convert(Dims, dims)::Dims), $felt(T))
         $fname(dims::Tuple) = ($fname)(Float64, dims)
         $fname(::Type{T}, dims...) where {T} = $fname(T, dims)
         $fname(dims...) = $fname(dims)

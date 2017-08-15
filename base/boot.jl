@@ -199,6 +199,10 @@ struct ErrorException <: Exception
     msg::AbstractString
 end
 
+macro _inline_meta()
+    Expr(:meta, :inline)
+end
+
 macro _noinline_meta()
     Expr(:meta, :noinline)
 end
@@ -457,5 +461,177 @@ function (g::GeneratedFunctionStub)(@nospecialize args...)
         return Expr(Symbol("with-static-parameters"), lam, g.spnames...)
     end
 end
+
+# constructors for built-in types
+
+import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
+
+throw_inexacterror(f::Symbol, T::Type, val) = (@_noinline_meta; throw(InexactError(f, T, val)))
+
+function is_top_bit_set(x)
+    @_inline_meta
+    eq_int(trunc_int(Int8, lshr_int(x, sub_int(shl_int(sizeof(x), 3), 1))), trunc_int(Int8, 1))
+end
+
+function check_top_bit(x)
+    @_inline_meta
+    is_top_bit_set(x) && throw_inexacterror(:check_top_bit, typeof(x), x)
+    x
+end
+
+function checked_trunc_sint(::Type{To}, x::From) where {To,From}
+    @_inline_meta
+    y = trunc_int(To, x)
+    back = sext_int(From, y)
+    eq_int(x, back) || throw_inexacterror(:trunc, To, x)
+    y
+end
+
+function checked_trunc_uint(::Type{To}, x::From) where {To,From}
+    @_inline_meta
+    y = trunc_int(To, x)
+    back = zext_int(From, y)
+    eq_int(x, back) || throw_inexacterror(:trunc, To, x)
+    y
+end
+
+toInt8(x::Int8)       = x
+toInt8(x::Int16)      = checked_trunc_sint(Int8, x)
+toInt8(x::Int32)      = checked_trunc_sint(Int8, x)
+toInt8(x::Int64)      = checked_trunc_sint(Int8, x)
+toInt8(x::Int128)     = checked_trunc_sint(Int8, x)
+toInt8(x::UInt8)      = bitcast(Int8, check_top_bit(x))
+toInt8(x::UInt16)     = checked_trunc_sint(Int8, check_top_bit(x))
+toInt8(x::UInt32)     = checked_trunc_sint(Int8, check_top_bit(x))
+toInt8(x::UInt64)     = checked_trunc_sint(Int8, check_top_bit(x))
+toInt8(x::UInt128)    = checked_trunc_sint(Int8, check_top_bit(x))
+toInt8(x::Bool)       = and_int(zext_int(Int8, x), Int8(1))
+toInt16(x::Int8)      = sext_int(Int16, x)
+toInt16(x::Int16)     = x
+toInt16(x::Int32)     = checked_trunc_sint(Int16, x)
+toInt16(x::Int64)     = checked_trunc_sint(Int16, x)
+toInt16(x::Int128)    = checked_trunc_sint(Int16, x)
+toInt16(x::UInt8)     = zext_int(Int16, x)
+toInt16(x::UInt16)    = bitcast(Int16, check_top_bit(x))
+toInt16(x::UInt32)    = checked_trunc_sint(Int16, check_top_bit(x))
+toInt16(x::UInt64)    = checked_trunc_sint(Int16, check_top_bit(x))
+toInt16(x::UInt128)   = checked_trunc_sint(Int16, check_top_bit(x))
+toInt16(x::Bool)      = and_int(zext_int(Int16, x), Int16(1))
+toInt32(x::Int8)      = sext_int(Int32, x)
+toInt32(x::Int16)     = sext_int(Int32, x)
+toInt32(x::Int32)     = x
+toInt32(x::Int64)     = checked_trunc_sint(Int32, x)
+toInt32(x::Int128)    = checked_trunc_sint(Int32, x)
+toInt32(x::UInt8)     = zext_int(Int32, x)
+toInt32(x::UInt16)    = zext_int(Int32, x)
+toInt32(x::UInt32)    = bitcast(Int32, check_top_bit(x))
+toInt32(x::UInt64)    = checked_trunc_sint(Int32, check_top_bit(x))
+toInt32(x::UInt128)   = checked_trunc_sint(Int32, check_top_bit(x))
+toInt32(x::Bool)      = and_int(zext_int(Int32, x), Int32(1))
+toInt64(x::Int8)      = sext_int(Int64, x)
+toInt64(x::Int16)     = sext_int(Int64, x)
+toInt64(x::Int32)     = sext_int(Int64, x)
+toInt64(x::Int64)     = x
+toInt64(x::Int128)    = checked_trunc_sint(Int64, x)
+toInt64(x::UInt8)     = zext_int(Int64, x)
+toInt64(x::UInt16)    = zext_int(Int64, x)
+toInt64(x::UInt32)    = zext_int(Int64, x)
+toInt64(x::UInt64)    = bitcast(Int64, check_top_bit(x))
+toInt64(x::UInt128)   = checked_trunc_sint(Int64, check_top_bit(x))
+toInt64(x::Bool)      = and_int(zext_int(Int64, x), Int64(1))
+toInt128(x::Int8)     = sext_int(Int128, x)
+toInt128(x::Int16)    = sext_int(Int128, x)
+toInt128(x::Int32)    = sext_int(Int128, x)
+toInt128(x::Int64)    = sext_int(Int128, x)
+toInt128(x::Int128)   = x
+toInt128(x::UInt8)    = zext_int(Int128, x)
+toInt128(x::UInt16)   = zext_int(Int128, x)
+toInt128(x::UInt32)   = zext_int(Int128, x)
+toInt128(x::UInt64)   = zext_int(Int128, x)
+toInt128(x::UInt128)  = bitcast(Int128, check_top_bit(x))
+toInt128(x::Bool)     = and_int(zext_int(Int128, x), Int128(1))
+toUInt8(x::Int8)      = bitcast(UInt8, check_top_bit(x))
+toUInt8(x::Int16)     = checked_trunc_uint(UInt8, x)
+toUInt8(x::Int32)     = checked_trunc_uint(UInt8, x)
+toUInt8(x::Int64)     = checked_trunc_uint(UInt8, x)
+toUInt8(x::Int128)    = checked_trunc_uint(UInt8, x)
+toUInt8(x::UInt8)     = x
+toUInt8(x::UInt16)    = checked_trunc_uint(UInt8, x)
+toUInt8(x::UInt32)    = checked_trunc_uint(UInt8, x)
+toUInt8(x::UInt64)    = checked_trunc_uint(UInt8, x)
+toUInt8(x::UInt128)   = checked_trunc_uint(UInt8, x)
+toUInt8(x::Bool)      = and_int(zext_int(UInt8, x), UInt8(1))
+toUInt16(x::Int8)     = sext_int(UInt16, check_top_bit(x))
+toUInt16(x::Int16)    = bitcast(UInt16, check_top_bit(x))
+toUInt16(x::Int32)    = checked_trunc_uint(UInt16, x)
+toUInt16(x::Int64)    = checked_trunc_uint(UInt16, x)
+toUInt16(x::Int128)   = checked_trunc_uint(UInt16, x)
+toUInt16(x::UInt8)    = zext_int(UInt16, x)
+toUInt16(x::UInt16)   = x
+toUInt16(x::UInt32)   = checked_trunc_uint(UInt16, x)
+toUInt16(x::UInt64)   = checked_trunc_uint(UInt16, x)
+toUInt16(x::UInt128)  = checked_trunc_uint(UInt16, x)
+toUInt16(x::Bool)     = and_int(zext_int(UInt16, x), UInt16(1))
+toUInt32(x::Int8)     = sext_int(UInt32, check_top_bit(x))
+toUInt32(x::Int16)    = sext_int(UInt32, check_top_bit(x))
+toUInt32(x::Int32)    = bitcast(UInt32, check_top_bit(x))
+toUInt32(x::Int64)    = checked_trunc_uint(UInt32, x)
+toUInt32(x::Int128)   = checked_trunc_uint(UInt32, x)
+toUInt32(x::UInt8)    = zext_int(UInt32, x)
+toUInt32(x::UInt16)   = zext_int(UInt32, x)
+toUInt32(x::UInt32)   = x
+toUInt32(x::UInt64)   = checked_trunc_uint(UInt32, x)
+toUInt32(x::UInt128)  = checked_trunc_uint(UInt32, x)
+toUInt32(x::Bool)     = and_int(zext_int(UInt32, x), UInt32(1))
+toUInt64(x::Int8)     = sext_int(UInt64, check_top_bit(x))
+toUInt64(x::Int16)    = sext_int(UInt64, check_top_bit(x))
+toUInt64(x::Int32)    = sext_int(UInt64, check_top_bit(x))
+toUInt64(x::Int64)    = bitcast(UInt64, check_top_bit(x))
+toUInt64(x::Int128)   = checked_trunc_uint(UInt64, x)
+toUInt64(x::UInt8)    = zext_int(UInt64, x)
+toUInt64(x::UInt16)   = zext_int(UInt64, x)
+toUInt64(x::UInt32)   = zext_int(UInt64, x)
+toUInt64(x::UInt64)   = x
+toUInt64(x::UInt128)  = checked_trunc_uint(UInt64, x)
+toUInt64(x::Bool)     = and_int(zext_int(UInt64, x), UInt64(1))
+toUInt128(x::Int8)    = sext_int(UInt128, check_top_bit(x))
+toUInt128(x::Int16)   = sext_int(UInt128, check_top_bit(x))
+toUInt128(x::Int32)   = sext_int(UInt128, check_top_bit(x))
+toUInt128(x::Int64)   = sext_int(UInt128, check_top_bit(x))
+toUInt128(x::Int128)  = bitcast(UInt128, check_top_bit(x))
+toUInt128(x::UInt8)   = zext_int(UInt128, x)
+toUInt128(x::UInt16)  = zext_int(UInt128, x)
+toUInt128(x::UInt32)  = zext_int(UInt128, x)
+toUInt128(x::UInt64)  = zext_int(UInt128, x)
+toUInt128(x::UInt128) = x
+toUInt128(x::Bool)    = and_int(zext_int(UInt128, x), UInt128(1))
+
+# TODO: this is here to work around the 4 method limit in inference (#23210).
+const BuiltinInts = Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8, Bool}
+Int8(x::BuiltinInts)    = toInt8(x)::Int8
+Int16(x::BuiltinInts)   = toInt16(x)::Int16
+Int32(x::BuiltinInts)   = toInt32(x)::Int32
+Int64(x::BuiltinInts)   = toInt64(x)::Int64
+Int128(x::BuiltinInts)  = toInt128(x)::Int128
+UInt8(x::BuiltinInts)   = toUInt8(x)::UInt8
+UInt16(x::BuiltinInts)  = toUInt16(x)::UInt16
+UInt32(x::BuiltinInts)  = toUInt32(x)::UInt32
+UInt64(x::BuiltinInts)  = toUInt64(x)::UInt64
+UInt128(x::BuiltinInts) = toUInt128(x)::UInt128
+
+UInt32(x::Char) = bitcast(UInt32, x)
+Char(x::UInt32) = bitcast(Char, x)
+Char(x::Number) = Char(UInt32(x))
+(::Type{T})(x::Char) where {T<:Number} = T(UInt32(x))
+
+(::Type{T})(x::T) where {T<:Number} = x
+
+Int(x::Ptr)  = bitcast(Int, x)
+UInt(x::Ptr) = bitcast(UInt, x)
+if Int === Int32
+Int64(x::Ptr) = Int64(UInt32(x))
+UInt64(x::Ptr) = UInt64(UInt32(x))
+end
+Ptr{T}(x::Union{Int,UInt,Ptr}) where {T} = bitcast(Ptr{T}, x)
 
 ccall(:jl_set_istopmod, Void, (Any, Bool), Core, true)

@@ -12,9 +12,6 @@ eval(m, x) = Core.eval(m, x)
 include(x) = Core.include(Inference, x)
 include(mod, x) = Core.include(mod, x)
 
-# conditional to allow redefining Core.Inference after base exists
-isdefined(Main, :Base) || ((::Type{T})(arg) where {T} = convert(T, arg)::T)
-
 function return_type end
 
 ## Load essential files and libraries

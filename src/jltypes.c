@@ -403,6 +403,8 @@ static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, s
 
 STATIC_INLINE const char *datatype_module_name(jl_value_t *t)
 {
+    if (((jl_datatype_t*)t)->name->module == NULL)
+        return NULL;
     return jl_symbol_name(((jl_datatype_t*)t)->name->module->name);
 }
 
