@@ -520,11 +520,11 @@ end
 
 for T = (Float32, Float64,),# BigFloat),
     a = -5:25, s = [-5:-1;1:25;], d = 1:25, n = -1:15
-    den   = convert(T,d)
-    start = convert(T,a)/den
-    step  = convert(T,s)/den
-    stop  = convert(T,(a+(n-1)*s))/den
-    vals  = T[a:s:a+(n-1)*s;]./den
+    denom = convert(T,d)
+    start = convert(T,a)/denom
+    step  = convert(T,s)/denom
+    stop  = convert(T,(a+(n-1)*s))/denom
+    vals  = T[a:s:a+(n-1)*s;]./denom
     r = start:step:stop
     @test [r;] == vals
     @test [linspace(start, stop, length(r));] == vals
@@ -544,27 +544,31 @@ end
 @test [-3*0.05:-0.05:-0.2;] == [linspace(-3*0.05,-0.2,2);] == [-3*0.05,-0.2]
 @test [-0.2:0.05:-3*0.05;]  == [linspace(-0.2,-3*0.05,2);] == [-0.2,-3*0.05]
 
-for T = (Float32, Float64,), i = 1:2^15, n = 1:5
-    start, step = randn(T), randn(T)
-    step == 0 && continue
-    stop = start + (n-1)*step
-    # `n` is not necessarily unique s.t. `start + (n-1)*step == stop`
-    # so test that `length(start:step:stop)` satisfies this identity
-    # and is the closest value to `(stop-start)/step` to do so
-    lo = hi = n
-    while start + (lo-1)*step == stop; lo -= 1; end
-    while start + (hi-1)*step == stop; hi += 1; end
-    m = clamp(round(Int, (stop-start)/step) + 1, lo+1, hi-1)
-    r = start:step:stop
-    @test m == length(r)
-    # FIXME: these fail some small portion of the time
-    @test_skip start == first(r)
-    @test_skip stop  == last(r)
-    l = linspace(start,stop,n)
-    @test n == length(l)
-    # FIXME: these fail some small portion of the time
-    @test_skip start == first(l)
-    @test_skip stop  == last(l)
+function range_fuzztests(::Type{T}, niter, nrange) where {T}
+    for i = 1:niter, n in nrange
+        start, Δ = randn(T), randn(T)
+        Δ == 0 && continue
+        stop = start + (n-1)*Δ
+        # `n` is not necessarily unique s.t. `start + (n-1)*Δ == stop`
+        # so test that `length(start:Δ:stop)` satisfies this identity
+        # and is the closest value to `(stop-start)/Δ` to do so
+        lo = hi = n
+        while start + (lo-1)*Δ == stop; lo -= 1; end
+        while start + (hi-1)*Δ == stop; hi += 1; end
+        m = clamp(round(Int, (stop-start)/Δ) + 1, lo+1, hi-1)
+        r = start:Δ:stop
+        @test m == length(r)
+        @test start == first(r)
+        @test Δ == step(r)
+        @test_skip stop == last(r)
+        l = linspace(start,stop,n)
+        @test n == length(l)
+        @test start == first(l)
+        @test stop  == last(l)
+    end
+end
+for T = (Float32, Float64,)
+    range_fuzztests(T, 2^15, 1:5)
 end
 
 # Inexact errors on 32 bit architectures. #22613

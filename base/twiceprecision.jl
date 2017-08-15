@@ -614,10 +614,8 @@ function linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, de
     imin = clamp(imin, 1, Int(len))
     ref_num = Int128(len-imin) * start_n + Int128(imin-1) * stop_n
     ref_denom = Int128(len-1) * den
-    ref = ratio128(T, ref_num, ref_denom)
-    # Compute step to 2x precision without risking overflow...
-    step_full = ratio128(T, Int128(stop_n) - Int128(start_n), ref_denom)
-    # ...and truncate hi-bits as needed
+    ref = TwicePrecision{T}((ref_num, ref_denom))
+    step_full = TwicePrecision{T}((Int128(stop_n) - Int128(start_n), ref_denom))
     step = twiceprecision(step_full, nbitslen(T, len, imin))
     StepRangeLen(ref, step, Int(len), imin)
 end
@@ -660,23 +658,12 @@ narrow(::Type{Float64}) = Float32
 narrow(::Type{Float32}) = Float16
 narrow(::Type{Float16}) = Float16
 
-# hi-precision version of prod(num)/prod(den)
-# num and den are tuples to avoid risk of overflow
-function proddiv(T, num, den)
-    @_inline_meta
-    t = TwicePrecision{T}(num[1])
-    t = _prod(t, tail(num)...)
-    _divt(t, den...)
-end
 function _prod(t::TwicePrecision, x, y...)
     @_inline_meta
     _prod(t * x, y...)
 end
 _prod(t::TwicePrecision) = t
-function _divt(t::TwicePrecision, x, y...)
-    @_inline_meta
-    _divt(t / x, y...)
-end
-_divt(t::TwicePrecision) = t
+<(x::TwicePrecision{T}, y::TwicePrecision{T}) where {T} =
+    x.hi < y.hi || ((x.hi == y.hi) & (x.lo < y.lo))
 
 isbetween(a, x, b) = a <= x <= b || b <= x <= a
