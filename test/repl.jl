@@ -232,7 +232,7 @@ function AddCustomMode(repl, prompt)
     hp.mode_mapping[:foobar] = foobar_mode
     foobar_mode.hist = hp
 
-    const foobar_keymap = Dict{Any,Any}(
+    foobar_keymap = Dict{Any,Any}(
         '<' => function (s,args...)
             if isempty(s)
                 if !haskey(s.mode_state,foobar_mode)

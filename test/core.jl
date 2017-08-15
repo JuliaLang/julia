@@ -438,7 +438,8 @@ function const_implies_local()
         x = 1
         local y
         let
-            const x = 0
+            # TODO: change back to `const` if that's ever allowed
+            local x = 0
             y = x
         end
         x, y
@@ -2055,11 +2056,11 @@ end
 
 # issue #8798
 let
-    const npy_typestrs = Dict("b1"=>Bool,
-                              "i1"=>Int8,      "u1"=>UInt8,
-                              "i2"=>Int16,     "u2"=>UInt16,
-                              "i4"=>Int32,     "u4"=>UInt32,
-                              "i8"=>Int64,     "u8"=>UInt64)
+    npy_typestrs = Dict("b1"=>Bool,
+                        "i1"=>Int8,      "u1"=>UInt8,
+                        "i2"=>Int16,     "u2"=>UInt16,
+                        "i4"=>Int32,     "u4"=>UInt32,
+                        "i8"=>Int64,     "u8"=>UInt64)
     sizeof_lookup() = sizeof(npy_typestrs["i8"])
     @test sizeof_lookup() == 8
 end

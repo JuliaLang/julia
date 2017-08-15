@@ -807,7 +807,7 @@ function setup_interface(
         extra_repl_keymap = [extra_repl_keymap]
     end
 
-    const repl_keymap = AnyDict(
+    repl_keymap = AnyDict(
         ';' => function (s,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))

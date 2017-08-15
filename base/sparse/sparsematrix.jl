@@ -2042,8 +2042,8 @@ function getindex_I_sorted(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::Abst
 end
 
 function getindex_I_sorted_bsearch_A(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
-    const nI = length(I)
-    const nJ = length(J)
+    nI = length(I)
+    nJ = length(J)
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrS = Vector{Ti}(nJ+1)
@@ -2101,8 +2101,8 @@ function getindex_I_sorted_bsearch_A(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVecto
 end
 
 function getindex_I_sorted_linear(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
-    const nI = length(I)
-    const nJ = length(J)
+    nI = length(I)
+    nJ = length(J)
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrS = Vector{Ti}(nJ+1)
@@ -2160,8 +2160,8 @@ function getindex_I_sorted_linear(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, 
 end
 
 function getindex_I_sorted_bsearch_I(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
-    const nI = length(I)
-    const nJ = length(J)
+    nI = length(I)
+    nJ = length(J)
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrS = Vector{Ti}(nJ+1)

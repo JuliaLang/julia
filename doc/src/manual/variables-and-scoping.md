@@ -475,7 +475,8 @@ their values (or even their types) might change at almost any time. If a global 
 not change, adding a `const` declaration solves this performance problem.
 
 Local constants are quite different. The compiler is able to determine automatically when a local
-variable is constant, so local constant declarations are not necessary, and are currently just ignored.
+variable is constant, so local constant declarations are not necessary, and in fact are currently
+not supported.
 
 Special top-level assignments, such as those performed by the `function` and `struct` keywords,
 are constant by default.

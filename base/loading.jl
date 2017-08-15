@@ -46,7 +46,7 @@ elseif Sys.isapple()
         isfile(path) || return false
         path_basename = String(basename(path))
         local casepreserved_basename
-        const header_size = 12
+        header_size = 12
         buf = Vector{UInt8}(length(path_basename) + header_size + 1)
         while true
             ret = ccall(:getattrlist, Cint,

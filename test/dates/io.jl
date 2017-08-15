@@ -378,7 +378,7 @@ end
 
 # Issue: https://github.com/quinnj/TimeZones.jl/issues/19
 let
-    const Zulu = String
+    Zulu = String
 
     function Dates.tryparsenext(d::Dates.DatePart{'Z'}, str, i, len)
         Dates.tryparsenext_word(str, i, len, Dates.min_width(d), Dates.max_width(d))
