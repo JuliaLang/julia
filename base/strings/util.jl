@@ -482,6 +482,33 @@ Convert the first `n` hexadecimal bytes array to its binary representation. The
 results are populated into a destination array. The function returns the number of bytes
 copied into the destination array. The size of destination array must be at least half
 of the `n` parameter.
+
+# Examples
+```
+    julia> s = UInt8["01abEF"...]
+    6-element Array{UInt8,1}:
+     0x30
+     0x31
+     0x61
+     0x62
+     0x45
+     0x46
+
+    julia> d =zeros(UInt8, 3)
+    3-element Array{UInt8,1}:
+     0x00
+     0x00
+     0x00
+
+    julia> hex2bytes!(d, s, 6)
+    3
+
+    julia> d
+    3-element Array{UInt8,1}:
+     0x01
+     0xab
+     0xef
+```
 """
 function hex2bytes!(d::Vector{UInt8}, s::Vector{UInt8}, n::Int=length(s))
     if isodd(n)
