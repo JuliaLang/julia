@@ -1288,7 +1288,8 @@
                                 `(try ,tryb ,var ,catchb)
                                 tryb))
                         false
-                        (= ,err true)))
+                        (= ,err true))
+                   (null))
                   (= ,finally-exception (the_exception))
                   ,finalb
                   (if ,err (foreigncall 'jl_rethrow_other (core Void) (call (core svec) Any)
@@ -2225,10 +2226,11 @@
    'while
    (lambda (e)
      `(scope-block
-       (break-block-with-value loop-exit
+       (break-block loop-exit
                     (_while ,(expand-forms (cadr e))
                             (break-block loop-cont
-                                         ,(expand-forms (caddr e))))
+                                         ,(expand-forms (caddr e))
+                                         (null)))
                     ,(if (length> e 3)
                        (expand-forms (cadddr e))
                        '(null)))))
@@ -2238,7 +2240,8 @@
      `(scope-block
        (_while ,(expand-forms (cadr e))
                (break-block loop-cont
-                            ,(expand-forms (caddr e))))))
+                            ,(expand-forms (caddr e))
+                            (null)))))
 
    'break
    (lambda (e)
@@ -2531,8 +2534,8 @@
         ((symbol? e) (if (not (memq e bound)) (put! tab e #t)) tab)
         ((or (not (pair? e)) (quoted? e)) tab)
         ((memq (car e) '(lambda scope-block module toplevel)) tab)
+        ;; TODO: elseblock
         ((eq? (car e) 'break-block) (unbound-vars (caddr e) bound tab))
-        ((eq? (car e) 'break-block-with-value) (unbound-vars (caddr e) bound tab))
         ;; TODO: elsebody in (cadddr e)
         ((eq? (car e) 'with-static-parameters) (unbound-vars (cadr e) bound tab))
         (else (for-each (lambda (x) (unbound-vars x bound tab))
@@ -2630,12 +2633,9 @@
         ((eq? (car e) 'module)
          (error "module expression not at top level"))
         ((eq? (car e) 'break-block)
-         `(,(car e) ,(cadr e) ;; ignore type symbol of break-block expression
-                       ,(resolve-scopes- (caddr e) env outerglobals implicitglobals lam renames #f))) ;; body of break-block expression
-        ((eq? (car e) 'break-block-with-value)
-         `(,(car e) ,(cadr e) ;; ignore type symbol of break-block expression
+         `(break-block ,(cadr e) ;; ignore type symbol of break-block expression
                        ,(resolve-scopes- (caddr e) env outerglobals implicitglobals lam renames #f) ;; body of break-block expression
-                       ,(resolve-scopes- (cadddr e) env outerglobals implicitglobals lam renames #f))) ;; elsebody of break-block-with-value expression
+                       ,(resolve-scopes- (cadddr e) env outerglobals implicitglobals lam renames #f))) ;; elsebody of break-block expression
         ((eq? (car e) 'with-static-parameters)
          `(with-static-parameters ;; ignore list of sparams in break-block expression
             ,(resolve-scopes- (cadr e) env outerglobals implicitglobals lam renames #f)
@@ -2659,9 +2659,8 @@
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e UNUSED)) tab)
         ((symbol? e) (put! tab e #t))
         ((and (pair? e) (eq? (car e) 'outerref)) (put! tab (cadr e) #t))
-        ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
         ;; TODO: elsebody in (cadddr e)
-        ((and (pair? e) (eq? (car e) 'break-block-with-value)) (free-vars- (caddr e) tab))
+        ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
         ((and (pair? e) (eq? (car e) 'with-static-parameters)) (free-vars- (cadr e) tab))
         ((or (atom? e) (quoted? e)) tab)
         ((eq? (car e) 'lambda)
@@ -3562,27 +3561,16 @@ f(x) = yt(x)
                (emit `(goto ,topl))
                (mark-label endl)))
             ((break-block)
-             (let ((endl (make-label)))
-               (begin0 (compile (caddr e)
-                                (cons (list (cadr e) endl handler-level)
-                                      break-labels)
-                                value #f)
-                       (mark-label endl)))
-             (if value (compile '(null) break-labels value tail)))
-            ((break-block-with-value)
              (let ((endl (make-label))
                    (valvar (if (or value tail) (new-mutable-var) #f)))
                (compile (caddr e)
-                        (cons (list (cadr e) endl handler-level valvar)
+                        (cons (list (cadr e) endl handler-level valvar tail)
                               break-labels)
-                        value #f)
-               (if (length> e 3)
-                 (let ((elseval (compile (cadddr e) break-labels valvar #f)))
-                   (if valvar (emit `(= ,valvar ,elseval))))
-                 (let ((elseval (compile '(null) break-labels valvar #f)))
-                   (if (and valvar elseval) (emit `(= ,valvar ,elseval)))))
+                        #f #f)
+               (let ((elseval (compile (cadddr e) break-labels value tail)))
+                 (if (and value (not tail)) (emit `(= ,valvar ,elseval))))
                (mark-label endl)
-               (if tail (emit-return valvar) valvar)))
+               valvar))
             ((break)
              (let ((labl (assq (caddr e) break-labels)))
                (if (not labl)
@@ -3590,13 +3578,15 @@ f(x) = yt(x)
                    (let ((endl (cadr labl))
                          (hlevel (caddr labl))
                          (valtarget (if (length> labl 3) (cadddr labl) #f))
+                         (blocktail (if (length> labl 3) (cadddr (cdr labl)) #f))
                          (valexpr (cadr e)))
-                     (let ((res (compile valexpr break-labels valtarget #f)))
-                       (if valtarget
-                         (emit `(= ,valtarget ,res))))
-                     (if (> handler-level hlevel)
-                         (emit `(leave ,(- handler-level hlevel))))
-                     (emit `(goto ,endl))))))
+                     (let ((res (compile valexpr break-labels valtarget blocktail)))
+                       (if (not blocktail)
+                         (begin
+                           (if valtarget (emit `(= ,valtarget ,res)))
+                           (if (> handler-level hlevel)
+                             (emit `(leave ,(- handler-level hlevel))))
+                           (emit `(goto ,endl)))))))))
             ((label symboliclabel)
              (if (eq? (car e) 'symboliclabel)
                  (if (has? label-level (cadr e))
