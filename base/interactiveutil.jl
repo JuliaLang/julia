@@ -384,8 +384,7 @@ function code_warntype(io::IO, f, @nospecialize(t))
         body.args = src.code
         body.typ = rettype
         # Fix slot names and types in function body
-        show_unquoted(IOContext(IOContext(emph_io, :SOURCEINFO => src),
-                                          :SOURCE_SLOTNAMES => slotnames),
+        show_unquoted(IOContext(emph_io, :SOURCEINFO => src, :SOURCE_SLOTNAMES => slotnames),
                       body, 2)
         print(emph_io, '\n')
     end

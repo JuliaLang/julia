@@ -1719,6 +1719,14 @@ export hex2num
 # PR #23373
 @deprecate diagm(A::BitMatrix) diagm(vec(A))
 
+# PR #23271
+function IOContext(io::IO; kws...)
+    depwarn("IOContext(io, k=v, ...) is deprecated, use IOContext(io, :k => v, ...) instead.", :IOContext)
+    IOContext(io, (k=>v for (k, v) in kws)...)
+end
+
+@deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

@@ -610,7 +610,7 @@ end
 
 @testset "Dict printing with limited rows" begin
     buf = IOBuffer()
-    io = IOContext(IOContext(buf, :displaysize => (4, 80)), :limit => true)
+    io = IOContext(buf, :displaysize => (4, 80), :limit => true)
     d = Base.ImmutableDict(1=>2)
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"
