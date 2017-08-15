@@ -1244,7 +1244,7 @@
         ((eq? (car e) 'return)
          `(block ,@(if ret `((= ,ret true)) '())
                  (= ,retval ,(cadr e))
-                 (break ,bb)))
+                 (break (null) ,bb)))
         (else (map (lambda (x) (replace-return x bb ret retval)) e))))
 
 (define (expand-try e)
@@ -2242,11 +2242,12 @@
 
    'break
    (lambda (e)
-     (if (symbol? (cadr e))
-         e
-         `(break loop-exit ,(cadr e))))
+     (case (length e)
+       ((3) e)
+       ((2) `(break ,(cadr e) loop-exit))
+       ((1) `(break (null) loop-exit))))
 
-   'continue (lambda (e) '(break loop-cont))
+   'continue (lambda (e) `(break (null) loop-cont))
 
    'for
    (lambda (e)
@@ -3583,13 +3584,13 @@ f(x) = yt(x)
                (mark-label endl)
                (if tail (emit-return valvar) valvar)))
             ((break)
-             (let ((labl (assq (cadr e) break-labels)))
+             (let ((labl (assq (caddr e) break-labels)))
                (if (not labl)
                    (error "break or continue outside loop")
                    (let ((endl (cadr labl))
                          (hlevel (caddr labl))
                          (valtarget (if (length> labl 3) (cadddr labl) #f))
-                         (valexpr (if (length> e 2) (caddr e) '(null))))
+                         (valexpr (cadr e)))
                      (let ((res (compile valexpr break-labels valtarget #f)))
                        (if valtarget
                          (emit `(= ,valtarget ,res))))
