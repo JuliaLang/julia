@@ -247,3 +247,24 @@ bin_val = hex2bytes("07bf")
 
 #non-hex characters
 @test_throws ArgumentError hex2bytes("0123456789abcdefABCDEFGH")
+
+function test_23161()
+    arr = UInt8["0123456789abcdefABCDEF"...]
+    arr1 = Vector{UInt8}(11)
+    @test hex2bytes!(arr1, arr) == 11
+    @test "0123456789abcdefabcdef" == bytes2hex(arr1)
+    @test hex2bytes("0123456789abcdefABCDEF") == hex2bytes(arr)
+    @test hex2bytes!(arr1, UInt8[""...]) == 0
+    @test hex2bytes(UInt8[""...]) == UInt8[]
+
+    # odd size
+    @test_throws ArgumentError hex2bytes(UInt8["0123456789abcdefABCDEF0"...])
+
+    # Input array size smaller than the number of bytes to be converted.
+    @test_throws ArgumentError hex2bytes!(arr1, arr, 24)
+
+    #non-hex characters
+    @test_throws ArgumentError hex2bytes(UInt8["0123456789abcdefABCDEFGH"...])
+end
+
+test_23161()

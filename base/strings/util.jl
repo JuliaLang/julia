@@ -464,47 +464,63 @@ function hex2bytes(s::AbstractString)
 end
 
 """
-    hex2bytes(d::Vector{UInt8}, s::Vector{UInt8}, nInBytes::Int=length(s))
+    hex2bytes(s::Vector{UInt8})
 
-Convert the first `nInBytes` hexadecimal bytes array to its binary representation. The
-results are populated into a destination array. The function returns the number of bytes
-copied into the destination array. The size of destination array must be at least half of
-the `nInBytes` parameter.
+Convert the hexadecimal bytes array to its binary representation. Returns an
+`Array{UInt8,1}`, i.e. an array of bytes.
 """
-function hex2bytes(d::Vector{UInt8}, s::Vector{UInt8}, nInBytes::Int=length(s))
-    if isodd(nInBytes)
+@inline function hex2bytes(s::Vector{UInt8})
+    d = Vector{UInt8}(div(length(s), 2))
+    hex2bytes!(d, s)
+    return d
+end
+
+"""
+    hex2bytes!(d::Vector{UInt8}, s::Vector{UInt8}, n::Int=length(s))
+
+Convert the first `n` hexadecimal bytes array to its binary representation. The
+results are populated into a destination array. The function returns the number of bytes
+copied into the destination array. The size of destination array must be at least half
+of the `n` parameter.
+"""
+function hex2bytes!(d::Vector{UInt8}, s::Vector{UInt8}, n::Int=length(s))
+    if isodd(n)
         throw(ArgumentError("Input data length should be even"))
     end
 
-    len2 = div(nInBytes, 2)
-    if size(d)[1] <  len2
+    if n > length(s)
+        throw(ArgumentError("Input data length should not exceed array length"))
+    end
+
+    len2 = div(n, 2)
+
+    if length(d) <  len2
         throw(ArgumentError("Destination data buffer should be sufficiently large"))
     end
 
-    i = 0
-    j = 1
-    # This line is important as this ensures computation happens in word boundary and not
-    # byte boundary. Boundary computation can be almost 10 times slower
+    i = j = 0
+    # This line is important as this ensures computation happens on word boundary and
+    # not byte boundary. Byte boundary computation can be almost 10 times slower.
     n = c1 = c2 = UInt(0)
     for j = 1:len2
-        n = 0
+        num = 0
         @inbounds c1 = UInt(s[i+=1])
         @inbounds c2 = UInt(s[i+=1])
-        n = get_number_from_hex(c1)
-        n <<= 4
-        n += get_number_from_hex(c2)
-        @inbounds d[j] = (n & 0xFF)
+        num = number_from_hex(c1)
+        num <<= 4
+        num += number_from_hex(c2)
+        @inbounds d[j] = (num & 0xFF)
     end
     return j
 end
 
-@inline get_number_from_hex(c::UInt) = begin
-    const DIGIT_ZERO     = UInt('0')
-    const DIGIT_NINE     = UInt('9')
-    const LATIN_UPPER_A  = UInt('A')
-    const LATIN_UPPER_F  = UInt('F')
-    const LATIN_A        = UInt('a')
-    const LATIN_F        = UInt('f')
+@inline function number_from_hex(c::UInt)
+    DIGIT_ZERO     = UInt('0')
+    DIGIT_NINE     = UInt('9')
+    LATIN_UPPER_A  = UInt('A')
+    LATIN_UPPER_F  = UInt('F')
+    LATIN_A        = UInt('a')
+    LATIN_F        = UInt('f')
 
     return (DIGIT_ZERO <= c <= DIGIT_NINE) ? c - DIGIT_ZERO :
         (LATIN_UPPER_A <= c <= LATIN_UPPER_F) ? c - LATIN_UPPER_A + 10 :
@@ -517,7 +533,7 @@ end
 
 Convert an array of bytes to its hexadecimal representation.
 All characters are in lower-case.
-
+it
 # Examples
 ```jldoctest
 julia> a = hex(12345)
