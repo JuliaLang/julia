@@ -289,9 +289,8 @@ function free(pkgs)
     end
 end
 
-function pin(pkg::AbstractString, head::AbstractString)
+function pin(pkg::AbstractString, head::AbstractString; should_resolve = true)
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
-    should_resolve = true
     with(GitRepo, pkg) do repo
         id = if isempty(head) # get HEAD commit
             # no need to resolve, branch will be from HEAD
@@ -338,15 +337,15 @@ function pin(pkg::AbstractString, head::AbstractString)
     should_resolve && resolve()
     nothing
 end
-pin(pkg::AbstractString) = pin(pkg, "")
+pin(pkg::AbstractString; should_resolve = true) = pin(pkg, "", should_resolve = should_resolve)
 
-function pin(pkg::AbstractString, ver::VersionNumber)
+function pin(pkg::AbstractString, ver::VersionNumber; should_resolve = true)
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
     Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be pinned – not an installed package"))
     avail = Read.available(pkg)
     isempty(avail) && throw(PkgError("$pkg cannot be pinned – not a registered package"))
     haskey(avail,ver) || throw(PkgError("$pkg – $ver is not a registered version"))
-    pin(pkg, avail[ver].sha1)
+    pin(pkg, avail[ver].sha1, should_resolve = should_resolve)
 end
 
 function update(branch::AbstractString, upkgs::Set{String})

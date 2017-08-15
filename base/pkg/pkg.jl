@@ -201,12 +201,15 @@ You can also supply an iterable collection of package names, e.g., `Pkg.free(("P
 free(pkg) = cd(Entry.free,splitjl.(pkg))
 
 """
-    pin(pkg)
+    pin(pkg; should_resolve = true)
 
 Pin `pkg` at the current version. To go back to using the newest compatible released
-version, use `Pkg.free(pkg)`
+version, use `Pkg.free(pkg)`. Set `should_resolve` to false to disable resolution after
+pinning.
 """
-pin(pkg::AbstractString) = cd(Entry.pin,splitjl(pkg))
+pin(pkg::AbstractString; should_resolve = true) = cd(splitjl(pkg)) do splitpkg
+    Entry.pin(splitpkg, should_resolve = should_resolve)
+end
 
 """
     pin(pkg, version)
