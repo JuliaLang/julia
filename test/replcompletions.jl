@@ -167,6 +167,11 @@ s = "using Base.Test, Base.Random"
 c,r = test_complete(s)
 @test !("RandomDevice" in c)
 
+# issue #23226: identifiers must be separated by a comma (not a newline)
+s = "using Base\nusi"
+c,r = test_complete(s)
+@test "using" in c
+
 # inexistent completion inside a string
 s = "Pkg.add(\"lol"
 c,r,res = test_complete(s)
