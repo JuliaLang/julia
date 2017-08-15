@@ -2,6 +2,16 @@
 
 # generic operations on associative collections
 
+"""
+    KeyError(key)
+
+An indexing operation into an `Associative` (`Dict`) or `Set` like object tried to access or
+delete a non-existent element.
+"""
+mutable struct KeyError <: Exception
+    key
+end
+
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::Associative, k) = in(k,keys(d))

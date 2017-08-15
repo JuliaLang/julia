@@ -550,7 +550,6 @@ extern JL_DLLEXPORT jl_datatype_t *jl_float64_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_floatingpoint_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_number_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_void_type;
-extern JL_DLLEXPORT jl_unionall_t *jl_complex_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_signed_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_voidpointer_type;
 extern JL_DLLEXPORT jl_unionall_t *jl_pointer_type;

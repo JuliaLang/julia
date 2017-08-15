@@ -2,6 +2,27 @@
 
 # Generic IO stubs -- all subtypes should implement these (if meaningful)
 
+"""
+    EOFError()
+
+No more data was available to read from a file or stream.
+"""
+mutable struct EOFError <: Exception end
+
+"""
+    SystemError(prefix::AbstractString, [errno::Int32])
+
+A system call failed with an error code (in the `errno` global variable).
+"""
+mutable struct SystemError <: Exception
+    prefix::AbstractString
+    errnum::Int32
+    extrainfo
+    SystemError(p::AbstractString, e::Integer, extrainfo) = new(p, e, extrainfo)
+    SystemError(p::AbstractString, e::Integer) = new(p, e, nothing)
+    SystemError(p::AbstractString) = new(p, Libc.errno())
+end
+
 lock(::IO) = nothing
 unlock(::IO) = nothing
 reseteof(x::IO) = nothing
