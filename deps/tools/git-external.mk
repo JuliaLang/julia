@@ -63,6 +63,8 @@ $5/$$($2_SRC_DIR)/source-extracted: $$($2_SRC_FILE)
 	$$(JLCHECKSUM) $$<
 	-rm -r $$(dir $$@)
 	mkdir -p $$(dir $$@)
+	$(if $(filter $(BUILD_OS),WINNT), \
+		-$(TAR) -C $$(dir $$@) --strip-components 1 -xf $$<, )
 	$(TAR) -C $$(dir $$@) --strip-components 1 -xf $$<
 	echo 1 > $$@
 endif # DEPS_GIT

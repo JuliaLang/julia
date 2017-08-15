@@ -309,7 +309,11 @@ $$(build_depsbindir)/lib$(1).dll: | $$(build_depsbindir)
 	cp $$(call pathsearch,lib$(1).dll,$$(STD_LIB_PATH)) $$(build_depsbindir)
 JL_LIBS += $(1)
 endef
+ifeq ($(BUILD_OS),WINNT)
+$(eval $(call std_dll,gfortran-4))
+else
 $(eval $(call std_dll,gfortran-3))
+endif
 $(eval $(call std_dll,quadmath-0))
 $(eval $(call std_dll,stdc++-6))
 ifeq ($(ARCH),i686)

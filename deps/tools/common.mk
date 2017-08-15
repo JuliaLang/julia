@@ -27,7 +27,7 @@ ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
 # The call to which here is to work around https://cmake.org/Bug/view.php?id=14366
-CMAKE_COMMON += -DCMAKE_C_COMPILER="$$(which $(CC_BASE))"
+CMAKE_COMMON += -DCMAKE_C_COMPILER="$(CC_BASE)"
 ifneq ($(strip $(CMAKE_CC_ARG)),)
 CMAKE_COMMON += -DCMAKE_C_COMPILER_ARG1="$(CMAKE_CC_ARG)"
 endif
