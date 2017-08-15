@@ -3734,7 +3734,7 @@ end
 
 # replace slots 1:na with argexprs, static params with spvals, and increment
 # other slots by offset.
-function substitute!(@nospecialize(e), na::Int, argexprs::Vector{Any}, @nospecialize(spsig), spvals::SimpleVector, offset::Int)
+function substitute!(@nospecialize(e), na::Int, argexprs::Vector{Any}, @nospecialize(spsig), spvals::Vector{Any}, offset::Int)
     if isa(e, Slot)
         id = slot_id(e)
         if 1 <= id <= na
@@ -4526,7 +4526,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     end
 
     # ok, substitute argument expressions for argument names in the body
-    body = substitute!(body, na, argexprs, method.sig, methsp, length(sv.src.slotnames) - na)
+    body = substitute!(body, na, argexprs, method.sig, Any[methsp...], length(sv.src.slotnames) - na)
     append!(sv.src.slotnames, src.slotnames[(na + 1):end])
     append!(sv.src.slottypes, src.slottypes[(na + 1):end])
     append!(sv.src.slotflags, src.slotflags[(na + 1):end])
