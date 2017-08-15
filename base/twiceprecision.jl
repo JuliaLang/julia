@@ -7,6 +7,157 @@
 #     0.1 + 2*0.1 = 0.30000000000000004
 
 """
+    hi, lo = splitprec(F::Type{<:AbstractFloat}, i::Integer)
+
+Represent an integer `i` as a pair of floating-point numbers `hi` and
+`lo` (of type `F`) such that:
+- `widen(hi) + widen(lo) ≈ i`. It is exact if 1.5 * (number of precision bits in `F`) is greater than the number of bits in `i`.
+- all bits in `hi` are more significant than any of the bits in `lo`
+- `hi` can be exactly multiplied by the `hi` component of another call to `splitprec`.
+
+In particular, while `convert(Float64, i)` can be lossy since Float64
+has only 53 bits of precision, `splitprec(Float64, i)` is exact for
+any Int64/UInt64.
+"""
+function splitprec(::Type{F}, i::Integer) where {F<:AbstractFloat}
+    hi = truncbits(F(i), cld(precision(F), 2))
+    ihi = oftype(i, hi)
+    hi, F(i - ihi)
+end
+
+function truncmask(x::F, mask) where {F<:IEEEFloat}
+    reinterpret(F, mask & reinterpret(uinttype(F), x))
+end
+truncmask(x, mask) = x
+
+function truncbits(x::F, nb) where {F<:IEEEFloat}
+    truncmask(x, typemax(uinttype(F)) << nb)
+end
+truncbits(x, nb) = x
+
+
+## Dekker arithmetic
+
+"""
+    hi, lo = canonicalize2(big, little)
+
+Generate a representation where all the nonzero bits in `hi` are more
+significant than any of the nonzero bits in `lo`. `big` must be larger
+in absolute value than `little`.
+"""
+function canonicalize2(big, little)
+    h = big+little
+    h, (big - h) + little
+end
+
+"""
+    zhi, zlo = add12(x, y)
+
+A high-precision representation of `x + y` for floating-point
+numbers. Mathematically, `zhi + zlo = x + y`, where `zhi` contains the
+most significant bits and `zlo` the least significant.
+
+Because of the way floating-point numbers are printed, `lo` may not
+look the way you might expect from the standpoint of decimal
+representation, even though it is exact from the standpoint of binary
+representation.
+
+Example:
+```julia
+julia> 1.0 + 1.0001e-15
+1.000000000000001
+
+julia> big(1.0) + big(1.0001e-15)
+1.000000000000001000100000000000020165767380775934141445417482375879192346701529
+
+julia> hi, lo = Base.add12(1.0, 1.0001e-15)
+(1.000000000000001, -1.1012302462515652e-16)
+
+julia> big(hi) + big(lo)
+1.000000000000001000100000000000020165767380775934141445417482375879192346701529
+```
+
+`lo` differs from 1.0e-19 because `hi` is not exactly equal to
+the first 16 decimal digits of the answer.
+"""
+function add12(x::T, y::T) where {T}
+    x, y = ifelse(abs(y) > abs(x), (y, x), (x, y))
+    canonicalize2(x, y)
+end
+add12(x, y) = add12(promote_noncircular(x, y)...)
+
+"""
+    zhi, zlo = mul12(x, y)
+
+A high-precision representation of `x * y` for floating-point
+numbers. Mathematically, `zhi + zlo = x * y`, where `zhi` contains the
+most significant bits and `zlo` the least significant.
+
+Example:
+```julia
+julia> x = Float32(π)
+3.1415927f0
+
+julia> x * x
+9.869605f0
+
+julia> Float64(x) * Float64(x)
+9.869604950382893
+
+julia> hi, lo = Base.mul12(x, x)
+(9.869605f0, -1.140092f-7)
+
+julia> Float64(hi) + Float64(lo)
+9.869604950382893
+```
+"""
+function mul12(x::T, y::T) where {T<:AbstractFloat}
+    h = x * y
+    ifelse(iszero(h) | !isfinite(h), (h, h), canonicalize2(h, fma(x, y, -h)))
+end
+mul12(x::T, y::T) where {T} = (p = x * y; (p, zero(p)))
+mul12(x, y) = mul12(promote_noncircular(x, y)...)
+
+"""
+    zhi, zlo = div12(x, y)
+
+A high-precision representation of `x / y` for floating-point
+numbers. Mathematically, `zhi + zlo ≈ x / y`, where `zhi` contains the
+most significant bits and `zlo` the least significant.
+
+Example:
+```julia
+julia> x, y = Float32(π), 3.1f0
+(3.1415927f0, 3.1f0)
+
+julia> x / y
+1.013417f0
+
+julia> Float64(x) / Float64(y)
+1.0134170444063078
+
+julia> hi, lo = Base.div12(x, y)
+(1.013417f0, 3.8867366f-8)
+
+julia> Float64(hi) + Float64(lo)
+1.0134170444063066
+"""
+function div12(x::T, y::T) where {T<:AbstractFloat}
+    # We lose precision if any intermediate calculation results in a subnormal.
+    # To prevent this from happening, standardize the values.
+    xs, xe = frexp(x)
+    ys, ye = frexp(y)
+    r = xs / ys
+    rh, rl = canonicalize2(r, -fma(r, ys, -xs)/ys)
+    ifelse(iszero(r) | !isfinite(r), (r, r), (ldexp(rh, xe-ye), ldexp(rl, xe-ye)))
+end
+div12(x::T, y::T) where {T} = (p = x / y; (p, zero(p)))
+div12(x, y) = div12(promote_noncircular(x, y)...)
+
+
+## TwicePrecision
+
+"""
     TwicePrecision{T}(hi::T, lo::T)
     TwicePrecision{T}((num, denom))
 
@@ -16,7 +167,7 @@ Float64`. `hi` represents the high bits (most significant bits) and
 `num//denom` can be approximated conveniently using the syntax
 `TwicePrecision{T}((num, denom))`.
 
-When used with `T<:AbstractFloat` to construct an exact
+When used with `T<:Union{Float16,Float32,Float64}` to construct an "exact"
 `StepRangeLen`, `ref` should be the range element with smallest
 magnitude and `offset` set to the corresponding index.  For
 efficiency, multiplication of `step` by the index is not performed at
@@ -35,30 +186,52 @@ struct TwicePrecision{T}
     lo::T    # least significant bits
 end
 
-function TwicePrecision{T}(nd::Tuple{I,I}) where {T,I}
+TwicePrecision{T}(x::T) where {T} = TwicePrecision{T}(x, zero(T))
+
+function TwicePrecision{T}(x) where {T}
+    xT = convert(T, x)
+    Δx = x - xT
+    TwicePrecision{T}(xT, T(Δx))
+end
+
+TwicePrecision{T}(i::Integer) where {T<:AbstractFloat} =
+    TwicePrecision{T}(canonicalize2(splitprec(T, i)...)...)
+
+TwicePrecision(x) = TwicePrecision{typeof(x)}(x)
+
+# Numerator/Denominator constructors
+function TwicePrecision{T}(nd::Tuple{Integer,Integer}) where {T<:Union{Float16,Float32}}
     n, d = nd
-    TwicePrecision{T}(n, zero(T)) / d
+    TwicePrecision{T}(n/d)
+end
+
+function TwicePrecision{T}(nd::Tuple{Any,Any}) where {T}
+    n, d = nd
+    TwicePrecision{T}(n) / d
 end
 
 function TwicePrecision{T}(nd::Tuple{I,I}, nb::Integer) where {T,I}
     twiceprecision(TwicePrecision{T}(nd), nb)
 end
 
-function twiceprecision(val::T, nb::Integer) where T<:Number
+# Truncating constructors. Useful for generating values that can be
+# exactly multiplied by small integers.
+function twiceprecision(val::T, nb::Integer) where {T<:IEEEFloat}
     hi = truncbits(val, nb)
     TwicePrecision{T}(hi, val - hi)
 end
 
-function twiceprecision(val::TwicePrecision{T}, nb::Integer) where T<:Number
+function twiceprecision(val::TwicePrecision{T}, nb::Integer) where {T<:IEEEFloat}
     hi = truncbits(val.hi, nb)
     TwicePrecision{T}(hi, (val.hi - hi) + val.lo)
 end
 
 nbitslen(r::StepRangeLen) = nbitslen(eltype(r), length(r), r.offset)
-nbitslen(::Type{Float64}, len, offset) = min(26, nbitslen(len, offset))
-nbitslen(::Type{Float32}, len, offset) = min(12, nbitslen(len, offset))
-nbitslen(::Type{Float16}, len, offset) = min(5,  nbitslen(len, offset))
-nbitslen(len, offset) = len < 2 ? 0 : ceil(Int, log2(max(offset-1, len-offset)))
+nbitslen(::Type{T}, len, offset) where {T<:IEEEFloat} =
+    min(cld(precision(T), 2), nbitslen(len, offset))
+# The +1 here is for safety, because the precision of the significand
+# is 1 bit higher than the number that are explicitly stored.
+nbitslen(len, offset) = len < 2 ? 0 : ceil(Int, log2(max(offset-1, len-offset))) + 1
 
 eltype(::Type{TwicePrecision{T}}) where {T} = T
 
@@ -82,6 +255,56 @@ big(x::TwicePrecision) = big(x.hi) + big(x.lo)
 -(x::TwicePrecision) = TwicePrecision(-x.hi, -x.lo)
 
 zero(::Type{TwicePrecision{T}}) where {T} = TwicePrecision{T}(0, 0)
+
+# Arithmetic
+
+function +(x::TwicePrecision, y::Number)
+    s_hi, s_lo = add12(x.hi, y)
+    TwicePrecision(canonicalize2(s_hi, s_lo+x.lo)...)
+end
++(x::Number, y::TwicePrecision) = y+x
+
+function +(x::TwicePrecision{T}, y::TwicePrecision{T}) where T
+    r = x.hi + y.hi
+    s = abs(x.hi) > abs(y.hi) ? (((x.hi - r) + y.hi) + y.lo) + x.lo : (((y.hi - r) + x.hi) + x.lo) + y.lo
+    TwicePrecision(canonicalize2(r, s)...)
+end
++(x::TwicePrecision, y::TwicePrecision) = +(promote_noncircular(x, y)...)
+
+-(x::TwicePrecision, y::TwicePrecision) = x + (-y)
+-(x::TwicePrecision, y::Number) = x + (-y)
+-(x::Number, y::TwicePrecision) = x + (-y)
+
+function *(x::TwicePrecision, v::Number)
+    v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
+    x * TwicePrecision{typeof(x.hi*v)}(v)
+end
+function *(x::TwicePrecision{<:IEEEFloat}, v::Integer)
+    v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
+    nb = ceil(Int, log2(abs(v)))
+    u = truncbits(x.hi, nb)
+    TwicePrecision(canonicalize2(u*v, ((x.hi-u) + x.lo)*v)...)
+end
+*(v::Number, x::TwicePrecision) = x*v
+
+function *(x::TwicePrecision{T}, y::TwicePrecision{T}) where {T}
+    zh, zl = mul12(x.hi, y.hi)
+    ret = TwicePrecision{T}(canonicalize2(zh, (x.hi * y.lo + x.lo * y.hi) + zl)...)
+    ifelse(iszero(zh) | !isfinite(zh), TwicePrecision{T}(zh, zh), ret)
+end
+*(x::TwicePrecision, y::TwicePrecision) = *(promote_noncircular(x, y)...)
+
+function /(x::TwicePrecision, v::Number)
+    x / TwicePrecision{typeof(x.hi/v)}(v)
+end
+
+function /(x::TwicePrecision, y::TwicePrecision)
+    hi = x.hi / y.hi
+    uh, ul = mul12(hi, y.hi)
+    lo = ((((x.hi - uh) - ul) + x.lo) - hi*y.lo)/y.hi
+    ret = TwicePrecision(canonicalize2(hi, lo)...)
+    ifelse(iszero(hi) | !isfinite(hi), TwicePrecision(hi, hi), ret)
+end
 
 ## StepRangeLen
 
@@ -158,6 +381,7 @@ function colon(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float6
         # if we've overshot the end, subtract one:
         len -= (start < stop < stop′) + (start > stop > stop′)
     end
+
     StepRangeLen(TwicePrecision(start, zero(T)), twiceprecision(step, nbitslen(T, len, 1)), len)
 end
 
@@ -189,24 +413,23 @@ end
 
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
 function unsafe_getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::Integer) where T
-    # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add2
+    # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
     @_inline_meta
     u = i - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
-    x_hi, x_lo = add2(r.ref.hi, shift_hi)
+    x_hi, x_lo = add12(r.ref.hi, shift_hi)
     T(x_hi + (x_lo + (shift_lo + r.ref.lo)))
 end
 
 function _getindex_hiprec(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}, i::Integer)
     u = i - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
-    x_hi, x_lo = add2(r.ref.hi, shift_hi)
-    x_hi, x_lo = add2(x_hi, x_lo + (shift_lo + r.ref.lo))
+    x_hi, x_lo = add12(r.ref.hi, shift_hi)
+    x_hi, x_lo = add12(x_hi, x_lo + (shift_lo + r.ref.lo))
     TwicePrecision(x_hi, x_lo)
 end
 
 function getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::OrdinalRange{<:Integer}) where T
-    @_inline_meta
     @boundscheck checkbounds(r, s)
     soffset = 1 + round(Int, (r.offset - first(s))/step(s))
     soffset = clamp(soffset, 1, length(s))
@@ -234,10 +457,10 @@ convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) where {T<:AbstractF
 convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) where {T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision} =
     _convertSRL(StepRangeLen{T,R,S}, r)
 
-convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T<:Union{Float16,Float32,Float64}} =
+convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T<:IEEEFloat} =
     _convertSRL(StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}, r)
 
-convert(::Type{StepRangeLen{T}}, r::Range) where {T<:Union{Float16,Float32,Float64}} =
+convert(::Type{StepRangeLen{T}}, r::Range) where {T<:IEEEFloat} =
     _convertSRL(StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}, r)
 
 function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{<:Integer}) where {T,R,S}
@@ -285,12 +508,12 @@ function sum(r::StepRangeLen)
     sp, sn = sumpair(np), sumpair(nn)
     tp = _prod(r.step, sp[1], sp[2])
     tn = _prod(r.step, sn[1], sn[2])
-    s_hi, s_lo = add2(tp.hi, -tn.hi)
+    s_hi, s_lo = add12(tp.hi, -tn.hi)
     s_lo += tp.lo - tn.lo
     # Add in contributions of ref
     ref = r.ref * l
-    sm_hi, sm_lo = add2(s_hi, ref.hi)
-    add2(sm_hi, sm_lo + ref.lo)[1]
+    sm_hi, sm_lo = add12(s_hi, ref.hi)
+    add12(sm_hi, sm_lo + ref.lo)[1]
 end
 
 # sum(1:n) as a product of two integers
@@ -316,7 +539,7 @@ end
 ## LinSpace
 
 # For Float16, Float32, and Float64, linspace returns a StepRangeLen
-function linspace(start::T, stop::T, len::Integer) where T<:Union{Float16,Float32,Float64}
+function linspace(start::T, stop::T, len::Integer) where {T<:IEEEFloat}
     len < 2 && return _linspace1(T, start, stop, len)
     if start == stop
         return StepRangeLen(TwicePrecision(start,zero(T)), TwicePrecision(zero(T),zero(T)), len)
@@ -338,15 +561,15 @@ function linspace(start::T, stop::T, len::Integer) where T<:Union{Float16,Float3
     _linspace(start, stop, len)
 end
 
-function _linspace(start::T, stop::T, len::Integer) where T<:Union{Float16,Float32,Float64}
+function _linspace(start::T, stop::T, len::Integer) where {T<:IEEEFloat}
     (isfinite(start) && isfinite(stop)) || throw(ArgumentError("start and stop must be finite, got $start and $stop"))
     # Find the index that returns the smallest-magnitude element
     Δ, Δfac = stop-start, 1
     if !isfinite(Δ)   # handle overflow for large endpoints
         Δ, Δfac = stop/len - start/len, Int(len)
     end
-    tmin = -(start/Δ)/Δfac            # interpolation t such that return value is 0
-    imin = round(Int, tmin*(len-1)+1)
+    tmin = -(start/Δ)/Δfac            # t such that (1-t)*start + t*stop == 0
+    imin = round(Int, tmin*(len-1)+1) # index approximately corresponding to t
     if 1 < imin < len
         # The smallest-magnitude element is in the interior
         t = (imin-1)/(len-1)
@@ -373,8 +596,8 @@ function _linspace(start::T, stop::T, len::Integer) where T<:Union{Float16,Float
     step_hi_pre = clamp(step, max(-(m+ref)/k, (-m+ref)/k), min((m-ref)/k, (m+ref)/k))
     nb = nbitslen(T, len, imin)
     step_hi = truncbits(step_hi_pre, nb)
-    x1_hi, x1_lo = add2((1-imin)*step_hi, ref)
-    x2_hi, x2_lo = add2((len-imin)*step_hi, ref)
+    x1_hi, x1_lo = add12((1-imin)*step_hi, ref)
+    x2_hi, x2_lo = add12((len-imin)*step_hi, ref)
     a, b = (start - x1_hi) - x1_lo, (stop - x2_hi) - x2_lo
     step_lo = (b - a)/(len - 1)
     ref_lo = a - (1 - imin)*step_lo
@@ -440,70 +663,11 @@ narrow(::Type{Float64}) = Float32
 narrow(::Type{Float32}) = Float16
 narrow(::Type{Float16}) = Float16
 
-function add2(u::T, v::T) where T<:Number
-    @_inline_meta
-    u, v = ifelse(abs(v) > abs(u), (v, u), (u, v))
-    w = u + v
-    w, (u-w) + v
-end
-
-add2(u, v) = _add2(promote(u, v)...)
-_add2(u::T, v::T) where {T<:Number} = add2(u, v)
-_add2(u, v) = error("$u::$(typeof(u)) and $v::$(typeof(v)) cannot be promoted to a common type")
-
-function +(x::TwicePrecision, y::Number)
-    s_hi, s_lo = add2(x.hi, y)
-    TwicePrecision(s_hi, s_lo+x.lo)
-end
-+(x::Number, y::TwicePrecision) = y+x
-
-function +(x::TwicePrecision{T}, y::TwicePrecision{T}) where T
-    r = x.hi + y.hi
-    s = abs(x.hi) > abs(y.hi) ? (((x.hi - r) + y.hi) + y.lo) + x.lo : (((y.hi - r) + x.hi) + x.lo) + y.lo
-    TwicePrecision(r, s)
-end
-+(x::TwicePrecision, y::TwicePrecision) = _add2(promote(x, y)...)
-_add2(x::T, y::T) where {T<:TwicePrecision} = x + y
-_add2(x::TwicePrecision, y::TwicePrecision) = TwicePrecision(x.hi+y.hi, x.lo+y.lo)
-
-function *(x::TwicePrecision, v::Integer)
-    v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
-    nb = ceil(Int, log2(abs(v)))
-    u = truncbits(x.hi, nb)
-    y_hi, y_lo = add2(u*v, ((x.hi-u) + x.lo)*v)
-    TwicePrecision(y_hi, y_lo)
-end
-
-function _mul2(x::TwicePrecision{T}, v::T) where T<:Union{Float16,Float32,Float64}
-    v == 0 && return TwicePrecision(T(0), T(0))
-    xhh, xhl = splitprec(x.hi)
-    vh, vl = splitprec(v)
-    y_hi, y_lo = add2(xhh*vh, xhh*vl + xhl*vh)
-    TwicePrecision(y_hi, y_lo + xhl*vl + x.lo*v)
-end
-
-_mul2(x::TwicePrecision, v::Number) = TwicePrecision(x.hi*v, x.lo*v)
-
-function *(x::TwicePrecision{R}, v::S) where R where S<:Number
-    T = promote_type(R, S)
-    _mul2(convert(TwicePrecision{T}, x), convert(T, v))
-end
-
-*(v::Number, x::TwicePrecision) = x*v
-
-function /(x::TwicePrecision, v::Number)
-    hi = x.hi/v
-    w = TwicePrecision(hi, zero(hi)) * v
-    lo = (((x.hi - w.hi) - w.lo) + x.lo)/v
-    y_hi, y_lo = add2(hi, lo)
-    TwicePrecision(y_hi, y_lo)
-end
-
 # hi-precision version of prod(num)/prod(den)
 # num and den are tuples to avoid risk of overflow
 function proddiv(T, num, den)
     @_inline_meta
-    t = TwicePrecision(T(num[1]), zero(T))
+    t = TwicePrecision{T}(num[1])
     t = _prod(t, tail(num)...)
     _divt(t, den...)
 end
