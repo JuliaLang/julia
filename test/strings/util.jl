@@ -248,7 +248,7 @@ bin_val = hex2bytes("07bf")
 #non-hex characters
 @test_throws ArgumentError hex2bytes("0123456789abcdefABCDEFGH")
 
-function test_23161()
+@testset "Issue 23161" begin
     arr = UInt8["0123456789abcdefABCDEF"...]
     arr1 = Vector{UInt8}(11)
     @test hex2bytes!(arr1, arr) == arr1
@@ -263,5 +263,3 @@ function test_23161()
     #non-hex characters
     @test_throws ArgumentError hex2bytes(UInt8["0123456789abcdefABCDEFGH"...])
 end
-
-test_23161()

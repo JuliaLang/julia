@@ -466,11 +466,11 @@ end
 """
     hex2bytes(s::AbstractVector{UInt8})
 
-Convert the hexadecimal bytes array to its binary representation. Returns an
+Convert the hexadecimal bytes array to its binary representation. Returns
 `Vector{UInt8}`, i.e. a vector of bytes.
 """
 @inline function hex2bytes(s::AbstractVector{UInt8})
-    d = Vector{UInt8}(div(length(s), 2))
+    d = zeros(UInt8, div(endof(s), 2))
     return hex2bytes!(d, s)
 end
 
@@ -479,34 +479,33 @@ end
 
 Convert the hexadecimal bytes vector to its binary representation. The results are
 populated into a destination vector. The function returns the number of bytes copied
-into the destination array. The size of destination array must be half of the source
-vector. `@view` macro can be used to pass `SubArray`s as arguments.
+into the destination vector.
 
 # Examples
-```
-    julia> s = UInt8["01abEF"...]
-    6-element Array{UInt8,1}:
-     0x30
-     0x31
-     0x61
-     0x62
-     0x45
-     0x46
+```jldoctest
+julia> s = UInt8["01abEF"...]
+6-element Array{UInt8,1}:
+ 0x30
+ 0x31
+ 0x61
+ 0x62
+ 0x45
+ 0x46
 
-    julia> d =zeros(UInt8, 3)
-    3-element Array{UInt8,1}:
-     0x00
-     0x00
-     0x00
+julia> d =zeros(UInt8, 3)
+3-element Array{UInt8,1}:
+ 0x00
+ 0x00
+ 0x00
 
-    julia> hex2bytes!(d, s)
-    3
+julia> hex2bytes!(d, s)
+3
 
-    julia> d
-    3-element Array{UInt8,1}:
-     0x01
-     0xab
-     0xef
+julia> d
+3-element Array{UInt8,1}:
+ 0x01
+ 0xab
+ 0xef
 ```
 """
 function hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
@@ -550,7 +549,6 @@ end
 
 Convert an array of bytes to its hexadecimal representation.
 All characters are in lower-case.
-it
 # Examples
 ```jldoctest
 julia> a = hex(12345)
