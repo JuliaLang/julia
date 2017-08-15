@@ -1,8 +1,9 @@
 module Types
 
 using Base.Random: UUID
+using Base.Pkg.Types: VersionSet, Available
 
-export SHA1, VersionRange, VersionSet, @vr_str
+export SHA1, VersionRange, VersionSpec, Addition, Removal
 
 ## ordering of UUIDs ##
 
@@ -81,36 +82,33 @@ function Base.convert(::Type{VersionRange}, s::AbstractString)
     return VersionRange(lower, upper)
 end
 
-macro vr_str(s::String); VersionRange(s); end
-
-function Base.show(io::IO, r::VersionRange)
-    print(io, "vr\"")
+function Base.print(io::IO, r::VersionRange)
     join(io, r.lower.t, '.')
     if r.lower != r.upper
         print(io, '-')
         join(io, r.upper.t, '.')
     end
-    print(io, '"')
 end
-Base.show(io::IO, ::VersionRange{0,0}) = print(io, "vr\"*\"")
+Base.print(io::IO, ::VersionRange{0,0}) = print(io, "*")
+Base.show(io::IO, r::VersionRange) = print(io, "VersionRange(\"", r, "\")")
 
 Base.in(v::VersionNumber, r::VersionRange) = r.lower ≲ v ≲ r.upper
 Base.in(v::VersionNumber, r::VersionNumber) = v == r
 
-struct VersionSet
+struct VersionSpec
     ranges::Vector{VersionRange}
-    VersionSet(r::Vector{<:VersionRange}) = new(r)
+    VersionSpec(r::Vector{<:VersionRange}) = new(r)
 end
-VersionSet() = VersionSet(VersionRange())
+VersionSpec() = VersionSpec(VersionRange())
 
-Base.in(v::VersionNumber, s::VersionSet) = any(v in r for r in s.ranges)
+Base.in(v::VersionNumber, s::VersionSpec) = any(v in r for r in s.ranges)
 
-Base.convert(::Type{VersionSet}, v::VersionNumber) = VersionSet(VersionRange(v))
-Base.convert(::Type{VersionSet}, r::VersionRange) = VersionSet(VersionRange[r])
-Base.convert(::Type{VersionSet}, s::AbstractString) = VersionSet(VersionRange(s))
-Base.convert(::Type{VersionSet}, v::AbstractVector) = VersionSet(map(VersionRange, v))
+Base.convert(::Type{VersionSpec}, v::VersionNumber) = VersionSpec(VersionRange(v))
+Base.convert(::Type{VersionSpec}, r::VersionRange) = VersionSpec(VersionRange[r])
+Base.convert(::Type{VersionSpec}, s::AbstractString) = VersionSpec(VersionRange(s))
+Base.convert(::Type{VersionSpec}, v::AbstractVector) = VersionSpec(map(VersionRange, v))
 
-function Base.show(io::IO, s::VersionSet)
+function Base.print(io::IO, s::VersionSpec)
     length(s.ranges) == 1 && return print(io, s.ranges[1])
     print(io, '[')
     for i = 1:length(s.ranges)
@@ -119,18 +117,41 @@ function Base.show(io::IO, s::VersionSet)
     end
     print(io, ']')
 end
+Base.show(io::IO, s::VersionSpec) = print(io, "VersionSpec(\"", s, "\")")
 
-let VS = Pkg.Types.VersionSet, Av = Pkg.Types.Available
-    Base.convert(::Type{VS}, v::VersionNumber) = VS(v, Base.nextpatch(v))
-    Base.convert(::Type{VS}, r::VersionRange{0,0}) = VS()
-    Base.convert(::Type{VS}, r::VersionRange{m,1}) where {m} =
-        VS(VersionNumber(r.lower.t...), VersionNumber(r.upper[1]+1))
-    Base.convert(::Type{VS}, r::VersionRange{m,2}) where {m} =
-        VS(VersionNumber(r.lower.t...), VersionNumber(r.upper[1], r.upper[2]+1))
-    Base.convert(::Type{VS}, r::VersionRange{m,3}) where {m} =
-        VS(VersionNumber(r.lower.t...), VersionNumber(r.upper[1], r.upper[2], r.upper[3]+1))
-    Base.convert(::Type{VS}, s::VersionSet) = mapreduce(VS, ∪, s.ranges)
-    Base.convert(::Type{Av}, t::Tuple{SHA1,Dict{UUID,VersionSet}}) = Av(t...)
+Base.convert(::Type{VersionSet}, v::VersionNumber) = VersionSet(v, Base.nextpatch(v))
+Base.convert(::Type{VersionSet}, r::VersionRange{0,0}) = VersionSet()
+Base.convert(::Type{VersionSet}, r::VersionRange{m,1}) where {m} =
+    VersionSet(VersionNumber(r.lower.t...), VersionNumber(r.upper[1]+1))
+Base.convert(::Type{VersionSet}, r::VersionRange{m,2}) where {m} =
+    VersionSet(VersionNumber(r.lower.t...), VersionNumber(r.upper[1], r.upper[2]+1))
+Base.convert(::Type{VersionSet}, r::VersionRange{m,3}) where {m} =
+    VersionSet(VersionNumber(r.lower.t...), VersionNumber(r.upper[1], r.upper[2], r.upper[3]+1))
+Base.convert(::Type{VersionSet}, s::VersionSpec) = mapreduce(VersionSet, ∪, s.ranges)
+Base.convert(::Type{Available}, t::Tuple{SHA1,Dict{UUID,VersionSpec}}) = Available(t...)
+
+## type for expressing operations ##
+
+mutable struct Addition
+    name::String
+    uuid::UUID
+    vers::VersionRange
+    Addition(
+        name::AbstractString = "",
+        uuid::UUID = UUID(zero(UInt128)),
+        vers::VersionRange = VersionRange("*"),
+    ) = new(name, uuid, vers)
 end
+Addition(uuid::UUID) = Addition("", uuid)
+
+mutable struct Removal
+    name::String
+    uuid::UUID
+    Removal(
+        name::AbstractString = "",
+        uuid::UUID = UUID(zero(UInt128)),
+    ) = new(name, uuid)
+end
+Removal(uuid::UUID) = Removal("", uuid)
 
 end # module

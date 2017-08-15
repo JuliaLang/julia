@@ -284,7 +284,7 @@ end
 function add(names...; kwargs...)
     pkgs = Dict{String,Union{VersionNumber,VersionRange}}()
     for name in names
-        pkgs[string(name)] = vr"*"
+        pkgs[string(name)] = VersionRange("*")
     end
     for (key, val) in kwargs
         pkgs[string(key)] = val
