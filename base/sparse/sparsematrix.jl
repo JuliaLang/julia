@@ -3382,23 +3382,38 @@ end
 
 ## diag and related using an iterator
 
-mutable struct SpDiagIterator{Tv,Ti}
+struct SpDiagIterator{Tv,Ti}
     A::SparseMatrixCSC{Tv,Ti}
-    n::Int
+    d::Int # diagonal to iterate over
 end
-SpDiagIterator(A::SparseMatrixCSC) = SpDiagIterator(A,minimum(size(A)))
 
-length(d::SpDiagIterator) = d.n
-start(d::SpDiagIterator) = 1
-done(d::SpDiagIterator, j) = j > d.n
+start(it::SpDiagIterator) = it.d < 0 ? (1-it.d, 1) : (1, it.d+1)
+done(it::SpDiagIterator, rc) = rc[1] > size(it.A,1) || rc[2] > size(it.A,2)
+function next(it::SpDiagIterator{Tv}, rc) where Tv
+    r, c = rc
+    A = it.A
+    r1 = Int(A.colptr[c])
+    r2 = Int(A.colptr[c+1]-1)
+    (r1 > r2) && (return (zero(Tv), (r+1, c+1)))
+    r1 = searchsortedfirst(A.rowval, r, r1, r2, Forward)
+    (((r1 > r2) || (A.rowval[r1] != r)) ? zero(Tv) : A.nzval[r1], (r+1, c+1))
+end
 
-function next(d::SpDiagIterator{Tv}, j) where Tv
-    A = d.A
-    r1 = Int(A.colptr[j])
-    r2 = Int(A.colptr[j+1]-1)
-    (r1 > r2) && (return (zero(Tv), j+1))
-    r1 = searchsortedfirst(A.rowval, j, r1, r2, Forward)
-    (((r1 > r2) || (A.rowval[r1] != j)) ? zero(Tv) : A.nzval[r1], j+1)
+function diag(A::SparseMatrixCSC{Tv,Ti}, d::Int=0) where {Tv,Ti}
+    m, n = size(A)
+    if !(-m <= d <= n)
+        throw(ArgumentError("requested diagonal, $d, out of bounds in matrix of size ($m, $n)"))
+    end
+    l = d < 0 ? min(m+d,n) : min(n-d,m)
+    ind = Vector{Ti}(); sizehint!(ind, min(l, nnz(A)))
+    val = Vector{Tv}(); sizehint!(val, min(l, nnz(A)))
+    for (i, v) in enumerate(SpDiagIterator(A, d))
+        if !iszero(v)
+            push!(ind, i)
+            push!(val, v)
+        end
+    end
+    return SparseVector{Tv,Ti}(l, ind, val)
 end
 
 function trace(A::SparseMatrixCSC{Tv}) where Tv
@@ -3406,7 +3421,7 @@ function trace(A::SparseMatrixCSC{Tv}) where Tv
         throw(DimensionMismatch("expected square matrix"))
     end
     s = zero(Tv)
-    for d in SpDiagIterator(A)
+    for d in SpDiagIterator(A,0)
         s += d
     end
     s

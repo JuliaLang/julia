@@ -1325,11 +1325,18 @@ end
 
 @testset "diag" begin
     for T in (Float64, Complex128)
-        S = sprand(T, 5, 5, 0.5)
-        A = Matrix(S)
-        @test diag(S)::SparseVector{T,Int}     == diag(A)
-        @test diag(S, 1)::SparseVector{T,Int}  == diag(A, 1)
-        @test diag(S, -1)::SparseVector{T,Int} == diag(A, -1)
+        S1 = sprand(T,  5,  5, 0.5)
+        S2 = sprand(T, 10,  5, 0.5)
+        S3 = sprand(T,  5, 10, 0.5)
+        for S in (S1, S2, S3)
+            A = Matrix(S)
+            @test diag(S)::SparseVector{T,Int}  == diag(A)
+            for k in -5:5
+                @test diag(S, k)::SparseVector{T,Int}  == diag(A, k)
+            end
+            @test_throws ArgumentError diag(S, -size(S,1)-1)
+            @test_throws ArgumentError diag(S,  size(S,2)+1)
+        end
     end
 end
 
