@@ -524,7 +524,58 @@ julia> for i = 1:2, j = 3:4
 (2, 4)
 ```
 
-A `break` statement inside such a loop exits the entire nest of loops, not just the inner one.
+A `break` statement inside such a loop exits the entire nest of loops, not just
+the inner one.
+
+Every statement in julia is an expression, and a `for` loop is no exception.
+Its value is `nothing`:
+```jldoctest
+julia> nothing === (for i=1:10 end)
+true
+```
+However, in some cases it is convenient to return a value from a loop. For
+example, if we search a record in an unordered list, we'll want to `break` out
+of it as soon as we found it. For this, the `break` statement allows passing a
+value:
+
+```jldoctest using-records-variable
+julia> records = [(10,"Alice"), (12, "Bob"), (5, "Carol")];
+julia> name = for (id, n) in records
+           if id == 12
+               # break the loop, returning the current value of n
+               break n
+           end
+       end;
+julia> name
+"Bob"
+```
+If we want to specify a default value in case the iteration ends without ever
+hitting a `break` statement, we can add an `else` block:
+```jldoctest using-records-variable
+julia> name = for (id, n) in records
+           if id == 16
+               # break the loop, returning the current value of n
+               break n
+           end
+       else
+           "<name not found>"
+       end;
+julia> name
+"<name not found>"
+```
+
+Similar semantics work in a `while` loop:
+```jldoctest
+julia> f(p) = while true
+           q = nextfloat(p)
+           if q > pi
+               break p
+           end
+           p = q
+       end
+julia> f(3.1415926)
+3.141592653589793
+```
 
 ## Exception Handling
 
