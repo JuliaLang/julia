@@ -1005,6 +1005,110 @@ end
     @test iA === iS === nothing
 end
 
+# findmin/findmax/minumum/maximum
+
+stringf(a) = string(full(a))
+stringf(a::Tuple) = string("(", stringf(a[1]), ", ", stringf(a[2]), ")")
+
+A = sparse([1.0 5.0 6.0;
+            5.0 2.0 4.0])
+for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [1 4 6]),
+                          ((2,), reshape([1.0,2.0], 2, 1), reshape([1,4], 2, 1)),
+                          ((1,2), fill(1.0,1,1),fill(1,1,1))]
+    @test findmin(A, tup) == (rval, rind)
+end
+
+for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [2 3 5]),
+                          ((2,), reshape([6.0,5.0], 2, 1), reshape([5,2], 2, 1)),
+                          ((1,2), fill(6.0,1,1),fill(5,1,1))]
+    @test findmax(A, tup) == (rval, rind)
+end
+
+#issue 23209
+
+A = sparse([1.0 5.0 6.0;
+            NaN 2.0 4.0])
+for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [2 4 6]),
+                          ((2,), reshape([1.0, NaN], 2, 1), reshape([1,2], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(2,1,1))]
+    @test stringf(findmin(A, tup)) == string((rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), [NaN 5.0 6.0], [2 3 5]),
+                          ((2,), reshape([6.0, NaN], 2, 1), reshape([5,2], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(2,1,1))]
+    @test stringf(findmax(A, tup)) == string((rval, rind))
+end
+
+A = sparse([1.0 NaN 6.0;
+            NaN 2.0 4.0])
+for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [2 3 6]),
+                          ((2,), reshape([NaN, NaN], 2, 1), reshape([3,2], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(2,1,1))]
+    @test stringf(findmin(A, tup))  == string((rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [2 3 5]),
+                          ((2,), reshape([NaN, NaN], 2, 1), reshape([3,2], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(2,1,1))]
+    @test stringf(findmax(A, tup)) == string((rval, rind))
+end
+
+A = sparse([Inf -Inf Inf  -Inf;
+            Inf  Inf -Inf -Inf])
+for (tup, rval, rind) in [((1,), [Inf -Inf -Inf -Inf], [1 3 6 7]),
+                          ((2,), reshape([-Inf -Inf], 2, 1), reshape([3,6], 2, 1)),
+                          ((1,2), fill(-Inf,1,1),fill(3,1,1))]
+    @test stringf(findmin(A, tup))  == string((rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [1 4 5 7]),
+                          ((2,), reshape([Inf Inf], 2, 1), reshape([1,2], 2, 1)),
+                          ((1,2), fill(Inf,1,1),fill(1,1,1))]
+    @test stringf(findmax(A, tup)) == string((rval, rind))
+end
+
+A = sparse([BigInt(10)])
+for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
+    @test stringf(findmin(A, tup))  == string((rval, rind))
+end
+
+for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
+    @test stringf(findmax(A, tup)) == string((rval, rind))
+end
+
+A = sparse([BigInt(-10)])
+for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
+    @test stringf(findmin(A, tup))  == string((rval, rind))
+end
+
+for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
+    @test stringf(findmax(A, tup)) == string((rval, rind))
+end
+
+A = sparse([BigInt(10) BigInt(-10)])
+for (tup, rval, rind) in [((2,), [BigInt(-10)], [2])]
+    @test stringf(findmin(A, tup))  == string((rval, rind))
+end
+
+for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
+    @test stringf(findmax(A, tup)) == string((rval, rind))
+end
+
+A = sparse(["a", "b"])
+@test_throws MethodError findmin(A, 1) == ["a"]
+
+# Support the case, when user defined `zero` and `isless` for non-numerical type
+# 
+Base.zero(::Type{T}) where T<:AbstractString = ""
+for (tup, rval, rind) in [((1,), ["a"], [1])]
+    @test stringf(findmin(A, tup))  == string((rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), ["b"], [2])]
+    @test stringf(findmax(A, tup)) == string((rval, rind))
+end
+
 @testset "findn" begin
     b = findn( speye(4) )
     @test (length(b[1]) == 4)

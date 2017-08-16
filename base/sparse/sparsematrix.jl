@@ -1903,8 +1903,11 @@ macro _findr(op, A, region, Tv, Ti)
     end) #quote
 end
 
-findmin(A::SparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = @_findr(<, A, region, Tv, Ti)
-findmax(A::SparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = @_findr(>, A, region, Tv, Ti)
+_isless_fm(a, b)    =  b == b && ( a != a || isless(a, b) )
+_isgreater_fm(a, b) =  b == b && ( a != a || isless(b, a) )
+
+findmin(A::SparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = @_findr(_isless_fm, A, region, Tv, Ti)
+findmax(A::SparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = @_findr(_isgreater_fm, A, region, Tv, Ti)
 findmin(A::SparseMatrixCSC) = (r=findmin(A,(1,2)); (r[1][1], r[2][1]))
 findmax(A::SparseMatrixCSC) = (r=findmax(A,(1,2)); (r[1][1], r[2][1]))
 
