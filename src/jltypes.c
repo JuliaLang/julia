@@ -211,16 +211,16 @@ JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v)
 }
 
 // test whether a type has vars bound by the given environment
-static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env)
+static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env, int only_triangular)
 {
     if (jl_typeis(v, jl_tvar_type))
         return typeenv_has(env, (jl_tvar_t*)v);
     if (jl_is_uniontype(v))
-        return jl_has_bound_typevars(((jl_uniontype_t*)v)->a, env) ||
-            jl_has_bound_typevars(((jl_uniontype_t*)v)->b, env);
+        return jl_has_bound_typevars(((jl_uniontype_t*)v)->a, env, only_triangular) ||
+            jl_has_bound_typevars(((jl_uniontype_t*)v)->b, env, only_triangular);
     if (jl_is_unionall(v)) {
         jl_unionall_t *ua = (jl_unionall_t*)v;
-        if (jl_has_bound_typevars(ua->var->lb, env) || jl_has_bound_typevars(ua->var->ub, env))
+        if (jl_has_bound_typevars(ua->var->lb, env, 0) || jl_has_bound_typevars(ua->var->ub, env, 0))
             return 1;
         jl_typeenv_t *te = env;
         while (te != NULL) {
@@ -229,16 +229,16 @@ static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env)
             te = te->prev;
         }
         if (te) te->var = NULL;  // temporarily remove this var from env
-        int ans = jl_has_bound_typevars(ua->body, env);
+        int ans = jl_has_bound_typevars(ua->body, env, only_triangular);
         if (te) te->var = ua->var;
         return ans;
     }
-    if (jl_is_datatype(v)) {
+    if (jl_is_datatype(v) && !only_triangular) {
         if (!((jl_datatype_t*)v)->hasfreetypevars)
             return 0;
         size_t i;
-        for (i=0; i < jl_nparams(v); i++) {
-            if (jl_has_bound_typevars(jl_tparam(v,i), env))
+        for (i = 0; i < jl_nparams(v); i++) {
+            if (jl_has_bound_typevars(jl_tparam(v, i), env, 0))
                 return 1;
         }
     }
@@ -248,7 +248,13 @@ static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env)
 JL_DLLEXPORT int jl_has_typevar(jl_value_t *t, jl_tvar_t *v)
 {
     jl_typeenv_t env = { v, NULL, NULL };
-    return jl_has_bound_typevars(t, &env);
+    return jl_has_bound_typevars(t, &env, 0);
+}
+
+static int jl_has_typevar_in_ua(jl_value_t *t, jl_tvar_t *v)
+{
+    jl_typeenv_t env = { v, NULL, NULL };
+    return jl_has_bound_typevars(t, &env, 1);
 }
 
 static int _jl_has_typevar_from_ua(jl_value_t *t, jl_unionall_t *ua, jl_typeenv_t *prev)
@@ -257,7 +263,7 @@ static int _jl_has_typevar_from_ua(jl_value_t *t, jl_unionall_t *ua, jl_typeenv_
     if (jl_is_unionall(ua->body))
         return _jl_has_typevar_from_ua(t, (jl_unionall_t*)ua->body, &env);
     else
-        return jl_has_bound_typevars(t, &env);
+        return jl_has_bound_typevars(t, &env, 0);
 }
 
 JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua)
@@ -1083,17 +1089,21 @@ static jl_value_t *extract_wrapper(jl_value_t *t)
 }
 
 // convert `Vararg{X, Y} where T` to `Vararg{X where T, Y}` where T doesn't occur free in Y
+// (this is basically just a sub-par implementation of jl_normalize_covariance)
 static jl_value_t *normalize_vararg(jl_value_t *va)
 {
     assert(jl_is_vararg_type(va));
-    if (!jl_is_unionall(va)) return va;
-    jl_value_t *body=NULL;
+    if (!jl_is_unionall(va))
+        return va;
+    jl_value_t *body = NULL;
     JL_GC_PUSH2(&va, &body);
     jl_unionall_t *ua = (jl_unionall_t*)va;
     body = normalize_vararg(ua->body);
     jl_value_t *unw = jl_unwrap_unionall(body);
-    jl_value_t *va0 = jl_tparam0(unw), *va1 = jl_tparam1(unw);
-    if (jl_has_typevar(va1, ua->var)) {
+    jl_value_t *va0 = jl_tparam0(unw);
+    jl_value_t *va1 = jl_tparam1(unw);
+    if (jl_has_typevar(va1, ua->var) ||
+        jl_has_typevar_in_ua(body, ua->var)) {
         if (body != ua->body)
             va = jl_type_unionall(ua->var, body);
     }
@@ -1106,6 +1116,8 @@ static jl_value_t *normalize_vararg(jl_value_t *va)
     return va;
 }
 
+JL_DLLEXPORT jl_value_t* jl_normalize_covariance(jl_value_t *t);
+
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
                                        int cacheable, jl_typestack_t *stack, jl_typeenv_t *env)
 {
@@ -1116,7 +1128,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     if (cacheable) {
         JL_LOCK(&typecache_lock); // Might GC
         size_t i;
-        for(i=0; i < ntp; i++) {
+        for (i = 0; i < ntp; i++) {
             jl_value_t *pi = iparams[i];
             if (pi == jl_bottom_type)
                 continue;
@@ -1131,6 +1143,13 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 jl_types_equal(pi, tw)) {
                 iparams[i] = tw;
                 if (p) jl_gc_wb(p, tw);
+            }
+            else {
+                tw = jl_normalize_covariance(pi);
+                if (tw != pi) {
+                    iparams[i] = tw;
+                    if (p) jl_gc_wb(p, tw);
+                }
             }
         }
         jl_value_t *lkup = (jl_value_t*)lookup_type(tn, iparams, ntp);
@@ -1179,7 +1198,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             JL_GC_POP();
             return (jl_value_t*)jl_anytuple_type;
         }
-        {
+        if (!cacheable) { // jl_normalize_covariance would already have run and done a better job
             JL_GC_PUSH1(&last);
             jl_value_t *last2 = normalize_vararg(last);
             if (last2 != last) {
@@ -1439,9 +1458,9 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         jl_value_t *res=NULL, *lb=ua->var->lb, *ub=ua->var->ub;
         JL_GC_PUSH3(&lb, &ub, &res);
         res = jl_new_struct(jl_unionall_type, ua->var, NULL);
-        if (jl_has_bound_typevars(ua->var->lb, env))
+        if (jl_has_bound_typevars(ua->var->lb, env, 0))
             lb = inst_type_w_(ua->var->lb, env, stack, check);
-        if (jl_has_bound_typevars(ua->var->ub, env))
+        if (jl_has_bound_typevars(ua->var->ub, env, 0))
             ub = inst_type_w_(ua->var->ub, env, stack, check);
         if (lb != ua->var->lb || ub != ua->var->ub) {
             ((jl_unionall_t*)res)->var = jl_new_typevar(ua->var->name, lb, ub);
@@ -1621,6 +1640,116 @@ void jl_reset_instantiate_inner_types(jl_datatype_t *t)
     inside_typedef = 0;
     partial_inst.len = 0;
 }
+
+// move unionall bounds as far inside other covariant types as possible
+// while ignoring the triangular dispatch rule
+static jl_value_t* _jl_normalize_covariance(jl_value_t *t, jl_typeenv_t *env)
+{
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *ua = (jl_unionall_t*)t;
+        jl_typeenv_t newenv = { ua->var, (jl_value_t*)ua->var, env };
+        jl_value_t *newt = _jl_normalize_covariance(ua->body, &newenv);
+        if (newt != ua->body)
+            t = newt; // unionall bounds are now inside the type
+    }
+    else if (jl_is_uniontype(t)) {
+        jl_uniontype_t *ut = (jl_uniontype_t*)t;
+        jl_value_t **uargs;
+        JL_GC_PUSHARGS(uargs, 2);
+        uargs[0] = _jl_normalize_covariance(ut->a, env);
+        uargs[1] = _jl_normalize_covariance(ut->b, env);
+        int new_a = (uargs[0] != ut->a);
+        int new_b = (uargs[1] != ut->b);
+        if (new_a || new_b) {
+            // at least one of the bounds moved inside the union
+            if (!new_a) {
+                // if one of the bounds did not move inside,
+                // move it now
+                while (env) {
+                    uargs[0] = jl_type_unionall(env->var, uargs[0]);
+                    env = env->prev;
+                }
+            }
+            else if (!new_b) {
+                while (env) {
+                    uargs[1] = jl_type_unionall(env->var, uargs[1]);
+                    env = env->prev;
+                }
+            }
+            t = jl_type_union(uargs, 2);
+        }
+        JL_GC_POP();
+    }
+    else if (jl_is_datatype(t)) {
+        jl_datatype_t *dt = (jl_datatype_t*)t;
+        if (dt->name == jl_tuple_typename) {
+            int changed = 0;
+            size_t i, nparams = jl_svec_len(dt->parameters);
+            jl_value_t **newparams;
+            JL_GC_PUSHARGS(newparams, nparams);
+            for (i = 0; i < nparams; i++) {
+                jl_value_t *p = jl_svecref(dt->parameters, i);
+                newparams[i] = _jl_normalize_covariance(p, env);
+                if (newparams[i] != p)
+                    changed = 1;
+            }
+            if (changed) {
+                for (i = 0; i < nparams; i++) {
+                    // if any of the bounds did not move inside,
+                    // move it now
+                    jl_value_t *p = jl_svecref(dt->parameters, i);
+                    if (p == newparams[i]) {
+                        jl_typeenv_t *e = env;
+                        while (e) {
+                            newparams[i] = jl_type_unionall(e->var, newparams[i]);
+                            e = e->prev;
+                        }
+                    }
+                }
+                t = (jl_value_t*)jl_apply_tuple_type_v(newparams, nparams);
+            }
+            JL_GC_POP();
+        }
+        else if (dt->name == jl_vararg_typename) {
+            jl_value_t *va_T = jl_tparam0(dt);
+            jl_value_t *va_N = jl_tparam1(dt);
+            jl_value_t *va = NULL;
+            JL_GC_PUSH3(&va_T, &va, &t);
+            while (env) {
+                if (jl_has_typevar(va_N, env->var) ||
+                    jl_has_typevar_in_ua(t, env->var)) {
+                    t = jl_type_unionall(env->var, t);
+                }
+                else if (jl_has_typevar(va_T, env->var)) {
+                    va_T = jl_type_unionall(env->var, va_T);
+                    va = jl_wrap_vararg(va_T, va_N);
+                    t = jl_rewrap_unionall(va, t);
+                }
+                env = env->prev;
+            }
+            JL_GC_POP();
+        }
+    }
+    else if (jl_is_typevar(t)) {
+        while (env != NULL) {
+            if (env->var == (jl_tvar_t*)t) {
+                t = env->var->ub;
+                break;
+            }
+            env = env->prev;
+        }
+    }
+    return t;
+}
+
+JL_DLLEXPORT jl_value_t* jl_normalize_covariance(jl_value_t *t)
+{
+    if (jl_is_unionall(t)) {
+        return _jl_normalize_covariance(t, NULL);
+    }
+    return t;
+}
+
 
 // initialization -------------------------------------------------------------
 
