@@ -5169,7 +5169,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/base/#Base.parse-Tuple{Any,Any}",
+    "location": "stdlib/base/#Base.parse-Tuple{AbstractString,Int64}",
     "page": "Essentials",
     "title": "Base.parse",
     "category": "Method",
@@ -5177,7 +5177,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/base/#Base.parse-Tuple{Any}",
+    "location": "stdlib/base/#Base.parse-Tuple{AbstractString}",
     "page": "Essentials",
     "title": "Base.parse",
     "category": "Method",
@@ -5189,7 +5189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Syntax",
     "category": "section",
-    "text": "Core.eval\nBase.@eval\nBase.evalfile\nBase.esc\nBase.@inbounds\nBase.@inline\nBase.@noinline\nBase.@nospecialize\nBase.gensym\nBase.@gensym\nBase.@polly\nBase.parse(::Any, ::Any)\nBase.parse(::Any)"
+    "text": "Core.eval\nBase.@eval\nBase.evalfile\nBase.esc\nBase.@inbounds\nBase.@inline\nBase.@noinline\nBase.@nospecialize\nBase.gensym\nBase.@gensym\nBase.@polly\nBase.parse(::AbstractString, ::Int)\nBase.parse(::AbstractString)"
 },
 
 {
@@ -5557,7 +5557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.error",
     "category": "Function",
-    "text": "error(message::AbstractString)\n\nRaise an ErrorException with the given message.\n\n\n\n"
+    "text": "error(message::AbstractString)\n\nRaise an ErrorException with the given message.\n\n\n\nerror(msg...)\n\nRaise an ErrorException with the given message.\n\nSee also logging.\n\n\n\n"
 },
 
 {
@@ -6157,7 +6157,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.precompile",
     "category": "Function",
-    "text": "precompile(f,args::Tuple{Vararg{Any}})\n\nCompile the given function f for the argument tuple (of types) args, but do not execute it.\n\n\n\n"
+    "text": "precompile(f, args::Tuple{Vararg{Any}})\n\nCompile the given function f for the argument tuple (of types) args, but do not execute it.\n\n\n\n"
 },
 
 {
@@ -6249,11 +6249,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/collections/#Base.length-Tuple{Any}",
+    "location": "stdlib/collections/#Base.length",
     "page": "Collections and Data Structures",
     "title": "Base.length",
-    "category": "Method",
-    "text": "length(collection) -> Integer\n\nReturn the number of elements in the collection.\n\nUse endof to get the last valid index of an indexable collection.\n\nExamples\n\njulia> length(1:5)\n5\n\njulia> length([1, 2, 3, 4])\n4\n\njulia> length([1 2; 3 4])\n4\n\n\n\n"
+    "category": "Function",
+    "text": "length(collection) -> Integer\n\nReturn the number of elements in the collection.\n\nUse endof to get the last valid index of an indexable collection.\n\nExamples\n\njulia> length(1:5)\n5\n\njulia> length([1, 2, 3, 4])\n4\n\njulia> length([1 2; 3 4])\n4\n\n\n\nlength(s::AbstractString)\n\nThe number of characters in string s.\n\nExamples\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n"
 },
 
 {
@@ -6261,7 +6261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "General Collections",
     "category": "section",
-    "text": "Base.isempty\nBase.empty!\nBase.length(::Any)Fully implemented by:Range\nUnitRange\nTuple\nNumber\nAbstractArray\nIntSet\nObjectIdDict\nDict\nWeakKeyDict\nAbstractString\nSet"
+    "text": "Base.isempty\nBase.empty!\nBase.lengthFully implemented by:Range\nUnitRange\nTuple\nNumber\nAbstractArray\nIntSet\nObjectIdDict\nDict\nWeakKeyDict\nAbstractString\nSet"
 },
 
 {
@@ -6745,18 +6745,18 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/collections/#Base.getindex-Tuple{Any,Vararg{Any,N} where N}",
+    "location": "stdlib/collections/#Base.getindex",
     "page": "Collections and Data Structures",
     "title": "Base.getindex",
-    "category": "Method",
+    "category": "Function",
     "text": "getindex(collection, key...)\n\nRetrieve the value(s) stored at the given key or index within a collection. The syntax a[i,j,...] is converted by the compiler to getindex(a, i, j, ...).\n\nExamples\n\njulia> A = Dict(\"a\" => 1, \"b\" => 2)\nDict{String,Int64} with 2 entries:\n  \"b\" => 2\n  \"a\" => 1\n\njulia> getindex(A, \"a\")\n1\n\n\n\n"
 },
 
 {
-    "location": "stdlib/collections/#Base.setindex!-Tuple{Any,Any,Vararg{Any,N} where N}",
+    "location": "stdlib/collections/#Base.setindex!",
     "page": "Collections and Data Structures",
     "title": "Base.setindex!",
-    "category": "Method",
+    "category": "Function",
     "text": "setindex!(collection, value, key...)\n\nStore the given value at the given key or index within a collection. The syntax a[i,j,...] = x is converted by the compiler to (setindex!(a, x, i, j, ...); x).\n\n\n\n"
 },
 
@@ -6773,7 +6773,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Indexable Collections",
     "category": "section",
-    "text": "Base.getindex(::Any, ::Any...)\nBase.setindex!(::Any, ::Any, ::Any...)\nBase.endofFully implemented by:Array\nBitArray\nAbstractArray\nSubArrayPartially implemented by:Range\nUnitRange\nTuple\nAbstractString\nDict\nObjectIdDict\nWeakKeyDict"
+    "text": "Base.getindex\nBase.setindex!\nBase.endofFully implemented by:Array\nBitArray\nAbstractArray\nSubArrayPartially implemented by:Range\nUnitRange\nTuple\nAbstractString\nDict\nObjectIdDict\nWeakKeyDict"
 },
 
 {
@@ -6821,7 +6821,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.get",
     "category": "Function",
-    "text": "get(f::Function, collection, key)\n\nReturn the value stored for the given key, or if no mapping for the key is present, return f().  Use get! to also store the default value in the dictionary.\n\nThis is intended to be called using do block syntax\n\nget(dict, key) do\n    # default value calculated here\n    time()\nend\n\n\n\n"
+    "text": "get(collection, key, default)\n\nReturn the value stored for the given key, or the given default value if no mapping for the key is present.\n\nExamples\n\njulia> d = Dict(\"a\"=>1, \"b\"=>2);\n\njulia> get(d, \"a\", 3)\n1\n\njulia> get(d, \"c\", 3)\n3\n\n\n\nget(f::Function, collection, key)\n\nReturn the value stored for the given key, or if no mapping for the key is present, return f().  Use get! to also store the default value in the dictionary.\n\nThis is intended to be called using do block syntax\n\nget(dict, key) do\n    # default value calculated here\n    time()\nend\n\n\n\nget(x::Nullable[, y])\n\nAttempt to access the value of x. Returns the value if it is present; otherwise, returns y if provided, or throws a NullException if not.\n\nExamples\n\njulia> get(Nullable(5))\n5\n\njulia> get(Nullable())\nERROR: NullException()\nStacktrace:\n [1] get(::Nullable{Union{}}) at ./nullable.jl:102\n\n\n\n"
 },
 
 {
@@ -7057,11 +7057,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/collections/#Base.pop!-Tuple{Any}",
+    "location": "stdlib/collections/#Base.pop!",
     "page": "Collections and Data Structures",
     "title": "Base.pop!",
-    "category": "Method",
-    "text": "pop!(collection) -> item\n\nRemove an item in collection and return it. If collection is an ordered container, the last item is returned.\n\nExamples\n\njulia> A=[1, 2, 3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> pop!(A)\n3\n\njulia> A\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> S = Set([1, 2])\nSet([2, 1])\n\njulia> pop!(S)\n2\n\njulia> S\nSet([1])\n\njulia> pop!(Dict(1=>2))\n1 => 2\n\n\n\n"
+    "category": "Function",
+    "text": "pop!(collection) -> item\n\nRemove an item in collection and return it. If collection is an ordered container, the last item is returned.\n\nExamples\n\njulia> A=[1, 2, 3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> pop!(A)\n3\n\njulia> A\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> S = Set([1, 2])\nSet([2, 1])\n\njulia> pop!(S)\n2\n\njulia> S\nSet([1])\n\njulia> pop!(Dict(1=>2))\n1 => 2\n\n\n\npop!(collection, key[, default])\n\nDelete and return the mapping for key if it exists in collection, otherwise return default, or throw an error if default is not specified.\n\nExamples\n\njulia> d = Dict(\"a\"=>1, \"b\"=>2, \"c\"=>3);\n\njulia> pop!(d, \"a\")\n1\n\njulia> pop!(d, \"d\")\nERROR: KeyError: key \"d\" not found\nStacktrace:\n [1] pop!(::Dict{String,Int64}, ::String) at ./dict.jl:539\n\njulia> pop!(d, \"e\", 4)\n4\n\n\n\n"
 },
 
 {
@@ -7133,7 +7133,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Dequeues",
     "category": "section",
-    "text": "Base.push!\nBase.pop!(::Any)\nBase.unshift!\nBase.shift!\nBase.insert!\nBase.deleteat!\nBase.splice!\nBase.resize!\nBase.append!\nBase.prepend!Fully implemented by:Vector (a.k.a. 1-dimensional Array)\nBitVector (a.k.a. 1-dimensional BitArray)"
+    "text": "Base.push!\nBase.pop!\nBase.unshift!\nBase.shift!\nBase.insert!\nBase.deleteat!\nBase.splice!\nBase.resize!\nBase.append!\nBase.prepend!Fully implemented by:Vector (a.k.a. 1-dimensional Array)\nBitVector (a.k.a. 1-dimensional BitArray)"
 },
 
 {
@@ -7165,7 +7165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
 },
 
 {
@@ -7981,7 +7981,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.exp10",
     "category": "Function",
-    "text": "exp10(x)\n\nCompute 10^x.\n\nExamples\n\njulia> exp10(2)\n100.0\n\njulia> exp10(0.2)\n1.5848931924611136\n\n\n\n"
+    "text": "exp10(x)\n\nCompute the base 10 exponential of x, in other words 10^x.\n\nExamples\n\njulia> exp10(2)\n100.0\n\n\n\nexp10(x)\n\nCompute 10^x.\n\nExamples\n\njulia> exp10(2)\n100.0\n\njulia> exp10(0.2)\n1.5848931924611136\n\n\n\n"
 },
 
 {
@@ -10293,7 +10293,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.getindex",
     "category": "Method",
-    "text": "getindex(type[, elements...])\n\nConstruct a 1-d array of the specified type. This is usually called with the syntax Type[]. Element values can be specified using Type[a,b,c,...].\n\nExamples\n\njulia> Int8[1, 2, 3]\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\njulia> getindex(Int8, 1, 2, 3)\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\n\n\ngetindex(collection, key...)\n\nRetrieve the value(s) stored at the given key or index within a collection. The syntax a[i,j,...] is converted by the compiler to getindex(a, i, j, ...).\n\nExamples\n\njulia> A = Dict(\"a\" => 1, \"b\" => 2)\nDict{String,Int64} with 2 entries:\n  \"b\" => 2\n  \"a\" => 1\n\njulia> getindex(A, \"a\")\n1\n\n\n\n"
+    "text": "getindex(type[, elements...])\n\nConstruct a 1-d array of the specified type. This is usually called with the syntax Type[]. Element values can be specified using Type[a,b,c,...].\n\nExamples\n\njulia> Int8[1, 2, 3]\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\njulia> getindex(Int8, 1, 2, 3)\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\n\n\n"
 },
 
 {
@@ -11261,7 +11261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.reverse",
     "category": "Function",
-    "text": "reverse(v [, start=1 [, stop=length(v) ]] )\n\nReturn a copy of v reversed from start to stop.\n\nExamples\n\njulia> A = collect(1:5)\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n\njulia> reverse(A)\n5-element Array{Int64,1}:\n 5\n 4\n 3\n 2\n 1\n\njulia> reverse(A, 1, 4)\n5-element Array{Int64,1}:\n 4\n 3\n 2\n 1\n 5\n\njulia> reverse(A, 3, 5)\n5-element Array{Int64,1}:\n 1\n 2\n 5\n 4\n 3\n\n\n\n"
+    "text": "reverse(v [, start=1 [, stop=length(v) ]] )\n\nReturn a copy of v reversed from start to stop.\n\nExamples\n\njulia> A = collect(1:5)\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n\njulia> reverse(A)\n5-element Array{Int64,1}:\n 5\n 4\n 3\n 2\n 1\n\njulia> reverse(A, 1, 4)\n5-element Array{Int64,1}:\n 4\n 3\n 2\n 1\n 5\n\njulia> reverse(A, 3, 5)\n5-element Array{Int64,1}:\n 1\n 2\n 5\n 4\n 3\n\n\n\nreverse(s::AbstractString) -> AbstractString\n\nReverses a string.\n\nExamples\n\njulia> reverse(\"JuliaLang\")\n\"gnaLailuJ\"\n\n\n\n"
 },
 
 {
@@ -15349,7 +15349,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.read",
     "category": "Function",
-    "text": "read(filename::AbstractString, args...)\n\nOpen a file and read its contents. args is passed to read: this is equivalent to open(io->read(io, args...), filename).\n\nread(filename::AbstractString, String)\n\nRead the entire contents of a file as a string.\n\n\n\nread(s::IO, nb=typemax(Int))\n\nRead at most nb bytes from s, returning a Vector{UInt8} of the bytes read.\n\n\n\nread(s::IOStream, nb::Integer; all=true)\n\nRead at most nb bytes from s, returning a Vector{UInt8} of the bytes read.\n\nIf all is true (the default), this function will block repeatedly trying to read all requested bytes, until an error or end-of-file occurs. If all is false, at most one read call is performed, and the amount of data returned is device-dependent. Note that not all stream types support the all option.\n\n\n\nread(stream::IO, T)\n\nRead a single value of type T from stream, in canonical binary representation.\n\nread(stream::IO, String)\n\nRead the entirety of stream, as a String.\n\n\n\n"
+    "text": "read(stream::IO, T)\n\nRead a single value of type T from stream, in canonical binary representation.\n\nread(stream::IO, String)\n\nRead the entirety of stream, as a String.\n\n\n\nread(filename::AbstractString, args...)\n\nOpen a file and read its contents. args is passed to read: this is equivalent to open(io->read(io, args...), filename).\n\nread(filename::AbstractString, String)\n\nRead the entire contents of a file as a string.\n\n\n\nread(s::IO, nb=typemax(Int))\n\nRead at most nb bytes from s, returning a Vector{UInt8} of the bytes read.\n\n\n\nread(s::IOStream, nb::Integer; all=true)\n\nRead at most nb bytes from s, returning a Vector{UInt8} of the bytes read.\n\nIf all is true (the default), this function will block repeatedly trying to read all requested bytes, until an error or end-of-file occurs. If all is false, at most one read call is performed, and the amount of data returned is device-dependent. Note that not all stream types support the all option.\n\n\n\n"
 },
 
 {
@@ -16033,19 +16033,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/io-network/#Base.Mmap.mmap-Tuple{Any,Type,Any,Any}",
+    "location": "stdlib/io-network/#Base.Mmap.mmap",
     "page": "I/O and Network",
     "title": "Base.Mmap.mmap",
-    "category": "Method",
-    "text": "Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)\n       Mmap.mmap(type::Type{Array{T,N}}, dims)\n\nCreate an Array whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.\n\nThe type is an Array{T,N} with a bits-type element of T and dimension N that determines how the bytes of the array are interpreted. Note that the file must be stored in binary format, and no format conversions are possible (this is a limitation of operating systems, not Julia).\n\ndims is a tuple or single Integer specifying the size or length of the array.\n\nThe file is passed via the stream argument, either as an open IOStream or filename string. When you initialize the stream, use \"r\" for a \"read-only\" array, and \"w+\" to create a new array used to write values to disk.\n\nIf no type argument is specified, the default is Vector{UInt8}.\n\nOptionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position for an IOStream.\n\nThe grow keyword argument specifies whether the disk file should be grown to accommodate the requested size of array (if the total file size is < requested array size). Write privileges are required to grow the file.\n\nThe shared keyword argument specifies whether the resulting Array and changes made to it will be visible to other processes mapping the same file.\n\nFor example, the following code\n\n# Create a file for mmapping\n# (you could alternatively use mmap to do this step, too)\nA = rand(1:20, 5, 30)\ns = open(\"/tmp/mmap.bin\", \"w+\")\n# We'll write the dimensions of the array as the first two Ints in the file\nwrite(s, size(A,1))\nwrite(s, size(A,2))\n# Now write the data\nwrite(s, A)\nclose(s)\n\n# Test by reading it back in\ns = open(\"/tmp/mmap.bin\")   # default is read-only\nm = read(s, Int)\nn = read(s, Int)\nA2 = Mmap.mmap(s, Matrix{Int}, (m,n))\n\ncreates a m-by-n Matrix{Int}, linked to the file associated with stream s.\n\nA more portable file would need to encode the word size – 32 bit or 64 bit – and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/io-network/#Base.Mmap.mmap-Tuple{Any,BitArray,Any,Any}",
-    "page": "I/O and Network",
-    "title": "Base.Mmap.mmap",
-    "category": "Method",
-    "text": "Mmap.mmap(io, BitArray, [dims, offset])\n\nCreate a BitArray whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same arguments, as mmap, but the byte representation is different.\n\nExample: B = Mmap.mmap(s, BitArray, (25,30000))\n\nThis would create a 25-by-30000 BitArray, linked to the file associated with stream s.\n\n\n\n"
+    "category": "Function",
+    "text": "Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)\n       Mmap.mmap(type::Type{Array{T,N}}, dims)\n\nCreate an Array whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.\n\nThe type is an Array{T,N} with a bits-type element of T and dimension N that determines how the bytes of the array are interpreted. Note that the file must be stored in binary format, and no format conversions are possible (this is a limitation of operating systems, not Julia).\n\ndims is a tuple or single Integer specifying the size or length of the array.\n\nThe file is passed via the stream argument, either as an open IOStream or filename string. When you initialize the stream, use \"r\" for a \"read-only\" array, and \"w+\" to create a new array used to write values to disk.\n\nIf no type argument is specified, the default is Vector{UInt8}.\n\nOptionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position for an IOStream.\n\nThe grow keyword argument specifies whether the disk file should be grown to accommodate the requested size of array (if the total file size is < requested array size). Write privileges are required to grow the file.\n\nThe shared keyword argument specifies whether the resulting Array and changes made to it will be visible to other processes mapping the same file.\n\nFor example, the following code\n\n# Create a file for mmapping\n# (you could alternatively use mmap to do this step, too)\nA = rand(1:20, 5, 30)\ns = open(\"/tmp/mmap.bin\", \"w+\")\n# We'll write the dimensions of the array as the first two Ints in the file\nwrite(s, size(A,1))\nwrite(s, size(A,2))\n# Now write the data\nwrite(s, A)\nclose(s)\n\n# Test by reading it back in\ns = open(\"/tmp/mmap.bin\")   # default is read-only\nm = read(s, Int)\nn = read(s, Int)\nA2 = Mmap.mmap(s, Matrix{Int}, (m,n))\n\ncreates a m-by-n Matrix{Int}, linked to the file associated with stream s.\n\nA more portable file would need to encode the word size – 32 bit or 64 bit – and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).\n\n\n\nMmap.mmap(io, BitArray, [dims, offset])\n\nCreate a BitArray whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same arguments, as mmap, but the byte representation is different.\n\nExample: B = Mmap.mmap(s, BitArray, (25,30000))\n\nThis would create a 25-by-30000 BitArray, linked to the file associated with stream s.\n\n\n\n"
 },
 
 {
@@ -16061,7 +16053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Memory-mapped I/O",
     "category": "section",
-    "text": "Base.Mmap.Anonymous\nBase.Mmap.mmap(::Any, ::Type, ::Any, ::Any)\nBase.Mmap.mmap(::Any, ::BitArray, ::Any, ::Any)\nBase.Mmap.sync!"
+    "text": "Base.Mmap.Anonymous\nBase.Mmap.mmap\nBase.Mmap.sync!"
 },
 
 {
@@ -17797,7 +17789,7 @@ var documenterSearchIndex = {"docs": [
     "page": "C Interface",
     "title": "Base.unsafe_convert",
     "category": "Function",
-    "text": "unsafe_convert(T,x)\n\nConvert x to a C argument of type T where the input x must be the return value of cconvert(T, ...).\n\nIn cases where convert would need to take a Julia object and turn it into a Ptr, this function should be used to define and perform that conversion.\n\nBe careful to ensure that a Julia reference to x exists as long as the result of this function will be used. Accordingly, the argument x to this function should never be an expression, only a variable name or field reference. For example, x=a.b.c is acceptable, but x=[a,b,c] is not.\n\nThe unsafe prefix on this function indicates that using the result of this function after the x argument to this function is no longer accessible to the program may cause undefined behavior, including program corruption or segfaults, at any later time.\n\nSee also cconvert\n\n\n\n"
+    "text": "unsafe_convert(T, x)\n\nConvert x to a C argument of type T where the input x must be the return value of cconvert(T, ...).\n\nIn cases where convert would need to take a Julia object and turn it into a Ptr, this function should be used to define and perform that conversion.\n\nBe careful to ensure that a Julia reference to x exists as long as the result of this function will be used. Accordingly, the argument x to this function should never be an expression, only a variable name or field reference. For example, x=a.b.c is acceptable, but x=[a,b,c] is not.\n\nThe unsafe prefix on this function indicates that using the result of this function after the x argument to this function is no longer accessible to the program may cause undefined behavior, including program corruption or segfaults, at any later time.\n\nSee also cconvert\n\n\n\n"
 },
 
 {
@@ -17833,7 +17825,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/c/#Base.unsafe_copy!-Tuple{Array,Any,Array,Any,Any}",
+    "location": "stdlib/c/#Base.unsafe_copy!-Union{Tuple{T}, Tuple{Array{T,N} where N,Any,Array{T,N} where N,Any,Any}} where T",
     "page": "C Interface",
     "title": "Base.unsafe_copy!",
     "category": "Method",
@@ -17841,19 +17833,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/c/#Base.copy!-Tuple{Any,Any}",
+    "location": "stdlib/c/#Base.copy!",
     "page": "C Interface",
     "title": "Base.copy!",
-    "category": "Method",
-    "text": "copy!(dest, src) -> dest\n\nCopy all elements from collection src to array dest.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/c/#Base.copy!-NTuple{5,Any}",
-    "page": "C Interface",
-    "title": "Base.copy!",
-    "category": "Method",
-    "text": "copy!(dest, do, src, so, N)\n\nCopy N elements from collection src starting at offset so, to array dest starting at offset do. Returns dest.\n\n\n\n"
+    "category": "Function",
+    "text": "copy!(dest, do, src, so, N)\n\nCopy N elements from collection src starting at offset so, to array dest starting at offset do. Returns dest.\n\n\n\ncopy!(dest, src) -> dest\n\nCopy all elements from collection src to array dest.\n\n\n\ncopy!(dest, Rdest::CartesianRange, src, Rsrc::CartesianRange) -> dest\n\nCopy the block of src in the range of Rsrc to the block of dest in the range of Rdest. The sizes of the two regions must match.\n\n\n\n"
 },
 
 {
@@ -18077,7 +18061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "C Interface",
     "title": "C Interface",
     "category": "section",
-    "text": "ccall\nCore.Intrinsics.cglobal\nBase.cfunction\nBase.unsafe_convert\nBase.cconvert\nBase.unsafe_load\nBase.unsafe_store!\nBase.unsafe_copy!{T}(::Ptr{T}, ::Ptr{T}, ::Any)\nBase.unsafe_copy!(::Array, ::Any, ::Array, ::Any, ::Any)\nBase.copy!(::Any, ::Any)\nBase.copy!(::Any, ::Any, ::Any, ::Any, ::Any)\nBase.pointer\nBase.unsafe_wrap{T,N}(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}}, ::Ptr{T}, ::NTuple{N,Int})\nBase.pointer_from_objref\nBase.unsafe_pointer_to_objref\nBase.disable_sigint\nBase.reenable_sigint\nBase.systemerror\nCore.Ptr\nCore.Ref\nBase.Cchar\nBase.Cuchar\nBase.Cshort\nBase.Cushort\nBase.Cint\nBase.Cuint\nBase.Clong\nBase.Culong\nBase.Clonglong\nBase.Culonglong\nBase.Cintmax_t\nBase.Cuintmax_t\nBase.Csize_t\nBase.Cssize_t\nBase.Cptrdiff_t\nBase.Cwchar_t\nBase.Cfloat\nBase.Cdouble"
+    "text": "ccall\nCore.Intrinsics.cglobal\nBase.cfunction\nBase.unsafe_convert\nBase.cconvert\nBase.unsafe_load\nBase.unsafe_store!\nBase.unsafe_copy!{T}(::Ptr{T}, ::Ptr{T}, ::Any)\nBase.unsafe_copy!{T}(::Array{T}, ::Any, ::Array{T}, ::Any, ::Any)\nBase.copy!\nBase.pointer\nBase.unsafe_wrap{T,N}(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}}, ::Ptr{T}, ::NTuple{N,Int})\nBase.pointer_from_objref\nBase.unsafe_pointer_to_objref\nBase.disable_sigint\nBase.reenable_sigint\nBase.systemerror\nCore.Ptr\nCore.Ref\nBase.Cchar\nBase.Cuchar\nBase.Cshort\nBase.Cushort\nBase.Cint\nBase.Cuint\nBase.Clong\nBase.Culong\nBase.Clonglong\nBase.Culonglong\nBase.Cintmax_t\nBase.Cuintmax_t\nBase.Csize_t\nBase.Cssize_t\nBase.Cptrdiff_t\nBase.Cwchar_t\nBase.Cfloat\nBase.Cdouble"
 },
 
 {
