@@ -1099,7 +1099,7 @@ A = sparse(["a", "b"])
 @test_throws MethodError findmin(A, 1) == ["a"]
 
 # Support the case, when user defined `zero` and `isless` for non-numerical type
-# 
+#
 Base.zero(::Type{T}) where T<:AbstractString = ""
 for (tup, rval, rind) in [((1,), ["a"], [1])]
     @test stringf(findmin(A, tup))  == string((rval, rind))
