@@ -661,8 +661,12 @@ static void jl_dump_asm_internal(
 
     std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
     MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
+#if JL_LLVM_VERSION >= 60000
+    MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false, Ctx);
+#else
     MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false,
                                CodeModel::Default, Ctx);
+#endif
 
     // Set up Subtarget and Disassembler
     std::unique_ptr<MCSubtargetInfo>
