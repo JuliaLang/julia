@@ -119,7 +119,7 @@ rt = Base.return_types(reducedim, Tuple{Function, Array{Float64, 3}, Int, Float6
 
 ## findmin/findmax/minumum/maximum
 
-A = [1.0 3.0 6.0;
+A = [1.0 5.0 6.0;
      5.0 2.0 4.0]
 for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [1 4 6]),
                           ((2,), reshape([1.0,2.0], 2, 1), reshape([1,4], 2, 1)),
@@ -131,7 +131,7 @@ for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [1 4 6]),
     @test string(minimum!(copy(rval), A, init=false)) == string(rval)
 end
 
-for (tup, rval, rind) in [((1,), [5.0 3.0 6.0], [2 3 5]),
+for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [2 3 5]),
                           ((2,), reshape([6.0,5.0], 2, 1), reshape([5,2], 2, 1)),
                           ((1,2), fill(6.0,1,1),fill(5,1,1))]
     @test findmax(A, tup) == (rval, rind)
@@ -141,7 +141,7 @@ for (tup, rval, rind) in [((1,), [5.0 3.0 6.0], [2 3 5]),
     @test string(maximum!(copy(rval), A, init=false)) == string(rval)
 end
 
-#issue 23209
+#issue #23209
 
 A = [1.0 3.0 6.0;
      NaN 2.0 4.0]
@@ -153,6 +153,7 @@ for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [2 4 6]),
     @test string(minimum(A, tup)) == string(rval)
     @test string(minimum!(similar(rval), A)) == string(rval)
     @test string(minimum!(copy(rval), A, init=false)) == string(rval)
+    @test string(Base.reducedim!(min, copy(rval), A)) == string(rval)
 end
 
 for (tup, rval, rind) in [((1,), [NaN 3.0 6.0], [2 3 5]),
@@ -163,6 +164,7 @@ for (tup, rval, rind) in [((1,), [NaN 3.0 6.0], [2 3 5]),
     @test string(maximum(A, tup)) == string(rval)
     @test string(maximum!(similar(rval), A)) == string(rval)
     @test string(maximum!(copy(rval), A, init=false)) == string(rval)
+    @test string(Base.reducedim!(max, copy(rval), A)) == string(rval)
 end
 
 A = [1.0 NaN 6.0;

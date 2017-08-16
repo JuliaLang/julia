@@ -59,12 +59,6 @@ end
 
 ###### Generic reduction functions #####
 
-## extensions to the standard functions for BigInt, String and others
-
-zero2(t::Type) =  zero(t)
-zero2(::Type{T}) where T<:Number = zero(T)
-zero2(::Type{T}) where T<:AbstractString = ""
-
 ## initialization
 
 for (Op, initfun) in ((:(typeof(+)), :zero), (:(typeof(*)), :one))
@@ -233,7 +227,7 @@ mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) =
     (_mapreducedim!(f, op, R, A); R)
 
 reducedim!(op, R::AbstractArray{RT}, A::AbstractArray) where {RT} =
-    mapreducedim!(identity, op, R, A, zero2(RT))
+    mapreducedim!(identity, op, R, A)
 
 """
     mapreducedim(f, op, A, region[, v0])
