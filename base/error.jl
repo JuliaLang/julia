@@ -25,6 +25,11 @@ throw
 
 ## native julia error handling ##
 
+"""
+    error(message::AbstractString)
+
+Raise an `ErrorException` with the given message.
+"""
 error(s::AbstractString) = throw(ErrorException(s))
 
 """

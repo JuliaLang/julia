@@ -437,7 +437,50 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     return h
 end
 
+"""
+    get!(collection, key, default)
+
+Return the value stored for the given key, or if no mapping for the key is present, store
+`key => default`, and return `default`.
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
+
+julia> get!(d, "a", 5)
+1
+
+julia> get!(d, "d", 4)
+4
+
+julia> d
+Dict{String,Int64} with 4 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+  "d" => 4
+```
+"""
+get!(collection, key, default)
+
 get!(h::Dict{K,V}, key0, default) where {K,V} = get!(()->default, h, key0)
+
+"""
+    get!(f::Function, collection, key)
+
+Return the value stored for the given key, or if no mapping for the key is present, store
+`key => f()`, and return `f()`.
+
+This is intended to be called using `do` block syntax:
+```julia
+get!(dict, key) do
+    # default value calculated here
+    time()
+end
+```
+"""
+get!(f::Function, collection, key)
+
 function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
@@ -480,10 +523,46 @@ function getindex(h::Dict{K,V}, key) where V where K
     return (index < 0) ? throw(KeyError(key)) : h.vals[index]::V
 end
 
+"""
+    get(collection, key, default)
+
+Return the value stored for the given key, or the given default value if no mapping for the
+key is present.
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2);
+
+julia> get(d, "a", 3)
+1
+
+julia> get(d, "c", 3)
+3
+```
+"""
+get(collection, key, default)
+
 function get(h::Dict{K,V}, key, default) where V where K
     index = ht_keyindex(h, key)
     return (index < 0) ? default : h.vals[index]::V
 end
+
+"""
+    get(f::Function, collection, key)
+
+Return the value stored for the given key, or if no mapping for the key is present, return
+`f()`.  Use [`get!`](@ref) to also store the default value in the dictionary.
+
+This is intended to be called using `do` block syntax
+
+```julia
+get(dict, key) do
+    # default value calculated here
+    time()
+end
+```
+"""
+get(::Function, collection, key)
 
 function get(default::Callable, h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
@@ -545,6 +624,30 @@ function pop!(h::Dict, key)
     return index > 0 ? _pop!(h, index) : throw(KeyError(key))
 end
 
+"""
+    pop!(collection, key[, default])
+
+Delete and return the mapping for `key` if it exists in `collection`, otherwise return
+`default`, or throw an error if `default` is not specified.
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
+
+julia> pop!(d, "a")
+1
+
+julia> pop!(d, "d")
+ERROR: KeyError: key "d" not found
+Stacktrace:
+ [1] pop!(::Dict{String,Int64}, ::String) at ./dict.jl:539
+
+julia> pop!(d, "e", 4)
+4
+```
+"""
+pop!(collection, key, default)
+
 function pop!(h::Dict, key, default)
     index = ht_keyindex(h, key)
     return index > 0 ? _pop!(h, index) : default
@@ -568,6 +671,25 @@ function _delete!(h::Dict, index)
     h.age += 1
     return h
 end
+
+"""
+    delete!(collection, key)
+
+Delete the mapping for the given key in a collection, and return the collection.
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2)
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+
+julia> delete!(d, "b")
+Dict{String,Int64} with 1 entry:
+  "a" => 1
+```
+"""
+delete!(collection, key)
 
 function delete!(h::Dict, key)
     index = ht_keyindex(h, key)

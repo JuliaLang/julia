@@ -1683,6 +1683,13 @@ end
 # each element of A is included in S with independent probability p.
 # (Note that this is different from the problem of finding a random
 #  size-m subset of A where m is fixed!)
+
+"""
+    randsubseq!(S, A, p)
+
+Like [`randsubseq`](@ref), but the results are stored in `S`
+(which is resized as needed).
+"""
 function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
     0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
     n = length(A)

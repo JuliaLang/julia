@@ -57,6 +57,30 @@ size(V::SubArray) = (@_inline_meta; map(n->Int(unsafe_length(n)), indices(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
+"""
+    parent(A)
+
+Returns the "parent array" of an array view type (e.g., `SubArray`), or the array itself if
+it is not a view.
+
+# Examples
+```jldoctest
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> s_a = Symmetric(a)
+2×2 Symmetric{Int64,Array{Int64,2}}:
+ 1  2
+ 2  4
+
+julia> parent(s_a)
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+```
+"""
 parent(V::SubArray) = V.parent
 parentindexes(V::SubArray) = V.indexes
 
