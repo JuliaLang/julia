@@ -300,11 +300,11 @@ macro inbounds(blk)
 end
 
 macro label(name::Symbol)
-    Expr(:symboliclabel, name)
+    return esc(Expr(:symboliclabel, name))
 end
 
 macro goto(name::Symbol)
-    Expr(:symbolicgoto, name)
+    return esc(Expr(:symbolicgoto, name))
 end
 
 # SimpleVector
