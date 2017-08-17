@@ -59,6 +59,7 @@ Base.Math.exponent
 Base.complex(::Complex)
 Base.bswap
 Base.hex2bytes
+Base.hex2bytes!
 Base.bytes2hex
 ```
 
