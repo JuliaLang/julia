@@ -155,7 +155,7 @@ mutable struct TmStruct
         t = floor(t)
         tm = TmStruct()
         # TODO: add support for UTC via gmtime_r()
-        ccall(:localtime_r, Ptr{TmStruct}, (Ptr{Int}, Ptr{TmStruct}), &t, &tm)
+        ccall(:localtime_r, Ptr{TmStruct}, (Ref{Int}, Ref{TmStruct}), t, tm)
         return tm
     end
 end
@@ -171,8 +171,8 @@ strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
 function strftime(fmt::AbstractString, tm::TmStruct)
     timestr = Vector{UInt8}(128)
-    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ptr{TmStruct}),
-              timestr, length(timestr), fmt, &tm)
+    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ref{TmStruct}),
+              timestr, length(timestr), fmt, tm)
     if n == 0
         return ""
     end
@@ -192,8 +192,7 @@ determine the timezone.
 strptime(timestr::AbstractString) = strptime("%c", timestr)
 function strptime(fmt::AbstractString, timestr::AbstractString)
     tm = TmStruct()
-    r = ccall(:strptime, Cstring, (Cstring, Cstring, Ptr{TmStruct}),
-              timestr, fmt, &tm)
+    r = ccall(:strptime, Cstring, (Cstring, Cstring, Ref{TmStruct}), timestr, fmt, tm)
     # the following would tell mktime() that this is a local time, and that
     # it should try to guess the timezone. not sure if/how this should be
     # exposed in the API.
@@ -206,7 +205,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
         if !ismatch(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
-            ccall(:mktime, Int, (Ptr{TmStruct},), &tm)
+            ccall(:mktime, Int, (Ref{TmStruct},), tm)
         end
     end
     return tm
@@ -219,7 +218,7 @@ end
 
 Converts a `TmStruct` struct to a number of seconds since the epoch.
 """
-time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ptr{TmStruct},), &tm))
+time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ref{TmStruct},), tm))
 
 """
     time()
