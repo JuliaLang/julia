@@ -27,8 +27,11 @@ import Base.Math.lgamma_r
 
 import Base.FastMath.sincos_fast
 
-get_version() = VersionNumber(unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ())))
-get_patches() = split(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())),' ')
+function get_version()
+    version = unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ()))
+    build = replace(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())), ' ', '.')
+    isempty(build) ? VersionNumber(version) : VersionNumber(version * '+' * build)
+end
 
 function __init__()
     try
