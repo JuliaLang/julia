@@ -3381,21 +3381,17 @@ function expandptr(V::Vector{<:Integer})
 end
 
 
-function diag(A::SparseMatrixCSC{Tv,Ti}, d::Int=0) where {Tv,Ti}
+function diag(A::SparseMatrixCSC{Tv,Ti}, d::Integer=0) where {Tv,Ti}
     m, n = size(A)
     if !(-m <= d <= n)
         throw(ArgumentError("requested diagonal, $d, out of bounds in matrix of size ($m, $n)"))
     end
-    if d <= 0
-        rrange = (1-d):min(m, min(m,n)-d)
-        crange = 1:min(n, m+d)
-    else # d > 0
-        rrange = 1:min(m, n-d)
-        crange = (1+d):min(n, min(m,n)+d)
-    end
+    l = d < 0 ? min(m+d,n) : min(n-d,m)
+    r, c = d <= 0 ? (-d, 0) : (0, d) # start row/col -1
     ind = Vector{Ti}()
     val = Vector{Tv}()
-    for (i, (r, c)) in enumerate(zip(rrange, crange))
+    for i in 1:l
+        r += 1; c += 1
         r1 = Int(A.colptr[c])
         r2 = Int(A.colptr[c+1]-1)
         r1 > r2 && continue
@@ -3404,7 +3400,7 @@ function diag(A::SparseMatrixCSC{Tv,Ti}, d::Int=0) where {Tv,Ti}
         push!(ind, i)
         push!(val, A.nzval[r1])
     end
-    return SparseVector{Tv,Ti}(length(rrange), ind, val)
+    return SparseVector{Tv,Ti}(l, ind, val)
 end
 
 function trace(A::SparseMatrixCSC{Tv}) where Tv
