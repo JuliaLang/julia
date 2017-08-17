@@ -499,9 +499,6 @@ julia> d =zeros(UInt8, 3)
  0x00
 
 julia> hex2bytes!(d, s)
-3
-
-julia> d
 3-element Array{UInt8,1}:
  0x01
  0xab
