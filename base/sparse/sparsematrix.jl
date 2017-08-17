@@ -52,7 +52,6 @@ getrowval(S::SparseMatrixCSCView) = S.parent.rowval
 getnzval( S::SparseMatrixCSC)     = S.nzval
 getnzval( S::SparseMatrixCSCView) = S.parent.nzval
 
-
 """
     nnz(A)
 
@@ -1274,7 +1273,6 @@ julia> dropzeros(A)
 """
 dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
 
-
 ## Find methods
 
 function find(S::SparseMatrixCSC)
@@ -1331,7 +1329,6 @@ function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
 
     return (I, J, V)
 end
-
 
 import Base.Random.GLOBAL_RNG
 function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat)
@@ -1424,7 +1421,6 @@ sprand(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat
 sprand(r::AbstractRNG, ::Type{Bool}, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density, truebools, Bool)
 sprand(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) where {T} = sprand(GLOBAL_RNG, T, m, n, density)
 
-
 """
     sprandn([rng], m[,n],p::AbstractFloat)
 
@@ -1446,7 +1442,6 @@ julia> sprandn(rng, 2, 2, 0.75)
 """
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
 sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
-
 
 """
     spones(S)
@@ -1569,7 +1564,6 @@ function speye_scaled(::Type{T}, diag, m::Integer, n::Integer) where T
 end
 
 sparse(S::UniformScaling, m::Integer, n::Integer=m) = speye_scaled(S.λ, m, n)
-
 
 # TODO: More appropriate location?
 conj!(A::SparseMatrixCSC) = (@inbounds broadcast!(conj, A.nzval, A.nzval); A)
@@ -1813,27 +1807,28 @@ function _mapreducecols!(f, op::typeof(+), R::AbstractArray, A::SparseMatrixCSC{
 end
 
 # findmax/min and indmax/min methods
+# find first zero value in sparse matrix - return linear index in full matrix
+# non-structural zeros are identified by x == 0 in line with the sparse constructors.
 function _findz(A::SparseMatrixCSC{Tv,Ti}, rows=1:A.m, cols=1:A.n) where {Tv,Ti}
     colptr = A.colptr; rowval = A.rowval; nzval = A.nzval
-    zval = zero(Tv)
-    col = cols[1]; row = 0
+    zval = 0
+    row = 0
     rowmin = rows[1]; rowmax = rows[end]
     allrows = (rows == 1:A.m)
-    @inbounds while col <= cols[end]
+    @inbounds for  col in cols
         r1::Int = colptr[col]
         r2::Int = colptr[col+1] - 1
         if !allrows && (r1 <= r2)
             r1 = searchsortedfirst(rowval, rowmin, r1, r2, Forward)
-            (r1 <= r2 ) && (r2 = searchsortedlast(rowval, rowmax, r1, r2, Forward) + 1)
+            (r1 <= r2 ) && (r2 = searchsortedlast(rowval, rowmax, r1, r2, Forward))
         end
         row = rowmin
-        (r1 > r2) && (return sub2ind(size(A),row,col))
+
         while (r1 <= r2) && (row == rowval[r1]) && (nzval[r1] != zval)
             r1 += 1
             row += 1
         end
-        (row <= rowmax) && (return sub2ind(size(A),row,col))
-        col += 1
+        (row <= rowmax) && (return sub2ind(size(A), row, col))
     end
     return 0
 end
@@ -2556,7 +2551,6 @@ setindex!(A::SparseMatrixCSC, v::AbstractVector, i::Integer, J::AbstractVector{<
 setindex!(A::SparseMatrixCSC, v::AbstractVector, I::AbstractVector{T}, J::AbstractVector{T}) where {T<:Integer} =
       setindex!(A, reshape(v, length(I), length(J)), I, J)
 
-
 # A[I,J] = B
 function setindex!(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::AbstractVector{T}, J::AbstractVector{T}) where {Tv,Ti,T<:Integer}
     if size(B,1) != length(I) || size(B,2) != length(J)
@@ -2798,7 +2792,6 @@ function setindex!(A::SparseMatrixCSC, x, I::AbstractMatrix{Bool})
     A
 end
 
-
 function setindex!(A::SparseMatrixCSC, x, I::AbstractVector{<:Real})
     n = length(I)
     (n == 0) && (return A)
@@ -3036,7 +3029,6 @@ dropstored!(A::SparseMatrixCSC, ::Colon) = dropstored!(A, :, :)
 # TODO: Implement linear indexing methods for dropstored! ?
 # TODO: Implement logical indexing methods for dropstored! ?
 
-
 # Sparse concatenation
 
 function vcat(X::SparseMatrixCSC...)
@@ -3093,7 +3085,6 @@ end
         ptr_Xi += 1
     end
 end
-
 
 function hcat(X::SparseMatrixCSC...)
     num = length(X)
