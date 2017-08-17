@@ -216,7 +216,11 @@ macro isdefined(s::Symbol)
     return Expr(:isdefined, esc(s))
 end
 
-# return an integer such that object_id(x)==object_id(y) if x===y
+"""
+    object_id(x)
+
+Get a hash value for `x` based on object identity. `object_id(x)==object_id(y)` if `x === y`.
+"""
 object_id(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
 struct DataTypeLayout

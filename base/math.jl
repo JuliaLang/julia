@@ -758,9 +758,9 @@ end
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
 
 function angle_restrict_symm(theta)
-    const P1 = 4 * 7.8539812564849853515625e-01
-    const P2 = 4 * 3.7748947079307981766760e-08
-    const P3 = 4 * 2.6951514290790594840552e-15
+    P1 = 4 * 7.8539812564849853515625e-01
+    P2 = 4 * 3.7748947079307981766760e-08
+    P3 = 4 * 2.6951514290790594840552e-15
 
     y = 2*floor(theta/(2*pi))
     r = ((theta - y*P1) - y*P2) - y*P3

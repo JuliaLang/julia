@@ -18,6 +18,29 @@ mutable struct Condition
     Condition() = new([])
 end
 
+"""
+    wait([x])
+
+Block the current task until some event occurs, depending on the type of the argument:
+
+* [`RemoteChannel`](@ref) : Wait for a value to become available on the specified remote
+  channel.
+* [`Future`](@ref) : Wait for a value to become available for the specified future.
+* [`Channel`](@ref): Wait for a value to be appended to the channel.
+* [`Condition`](@ref): Wait for [`notify`](@ref) on a condition.
+* `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
+  can be used to determine success or failure.
+* [`Task`](@ref): Wait for a `Task` to finish, returning its result value. If the task fails
+  with an exception, the exception is propagated (re-thrown in the task that called `wait`).
+* `RawFD`: Wait for changes on a file descriptor (see [`poll_fd`](@ref) for keyword
+  arguments and return code)
+
+If no argument is passed, the task blocks for an undefined period. A task can only be
+restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
+
+Often `wait` is called within a `while` loop to ensure a waited-for condition is met before
+proceeding.
+"""
 function wait(c::Condition)
     ct = current_task()
 

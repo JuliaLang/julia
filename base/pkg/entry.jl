@@ -719,6 +719,7 @@ function test!(pkg::AbstractString,
                     --color=$(Base.have_color ? "yes" : "no")
                     --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
                     --check-bounds=yes
+                    --warn-overwrite=yes
                     --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
                     $test_path
                     ```

@@ -771,19 +771,29 @@ macro iter()
 end
 end
 let ex = expand(M16096, :(@iter))
-    @test isa(ex, Expr) && ex.head === :body
+    @test isa(ex, Expr) && ex.head === :thunk
 end
 let ex = expand(Main, :($M16096.@iter))
-    @test isa(ex, Expr) && ex.head === :body
+    @test isa(ex, Expr) && ex.head === :thunk
 end
-let ex = expand(@__MODULE__, :(@M16096.iter))
-    @test isa(ex, Expr) && ex.head === :body
+let thismodule = @__MODULE__,
+    ex = expand(thismodule, :(@M16096.iter))
+    @test isa(ex, Expr) && ex.head === :thunk
     @test !isdefined(M16096, :foo16096)
-    @test eval(@__MODULE__, ex) === nothing
+    local_foo16096 = eval(@__MODULE__, ex)
+    @test local_foo16096(2.0) == 1
     @test !@isdefined foo16096
-    @test isdefined(M16096, :foo16096)
+    @test !@isdefined it
+    @test !isdefined(M16096, :foo16096)
+    @test !isdefined(M16096, :it)
+    @test typeof(local_foo16096).name.module === thismodule
+    @test typeof(local_foo16096).name.mt.module === thismodule
+    @test getfield(thismodule, typeof(local_foo16096).name.mt.name) === local_foo16096
+    @test getfield(thismodule, typeof(local_foo16096).name.name) === typeof(local_foo16096)
+    @test !isdefined(M16096, typeof(local_foo16096).name.mt.name)
+    @test !isdefined(M16096, typeof(local_foo16096).name.name)
 end
-@test M16096.foo16096(2.0) == 1
+
 macro f16096()
     quote
         g16096($(esc(:x))) = 2x
@@ -794,7 +804,7 @@ let g = @f16096
 end
 macro f16096_2()
     quote
-        g16096_2(;$(esc(:x))=2) = 2x
+        g16096_2(; $(esc(:x))=2) = 2x
     end
 end
 let g = @f16096_2
@@ -1300,3 +1310,12 @@ end
 
 # issue #23173
 @test_throws ErrorException("invalid module path") eval(:(import $(:.)))
+
+# issue #23234
+let
+    f = function (x=0)
+        x
+    end
+    @test f() == 0
+    @test f(2) == 2
+end

@@ -148,8 +148,7 @@ Base.Multimedia.istextmime
 
 ```@docs
 Base.Mmap.Anonymous
-Base.Mmap.mmap(::Any, ::Type, ::Any, ::Any)
-Base.Mmap.mmap(::Any, ::BitArray, ::Any, ::Any)
+Base.Mmap.mmap
 Base.Mmap.sync!
 ```
 

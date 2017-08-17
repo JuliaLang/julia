@@ -67,7 +67,7 @@ end
 pos_stable(x) = x > 0 ? x : zero(x)
 pos_unstable(x) = x > 0 ? x : 0
 
-tag = Base.have_color ? Base.error_color() : "UNION"
+tag = Base.have_color ? Base.text_colors[Base.error_color()] : "UNION"
 @test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
 @test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
@@ -80,13 +80,13 @@ end
 Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
-tag = Base.have_color ? Base.error_color() : "ARRAY{FLOAT64,N}"
+tag = Base.have_color ? Base.text_colors[Base.error_color()] : "ARRAY{FLOAT64,N}"
 @test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
 @test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
 @test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
 
 # Make sure emphasis is not used for other functions
-tag = Base.have_color ? Base.error_color() : "ANY"
+tag = Base.have_color ? Base.text_colors[Base.error_color()] : "ANY"
 iob = IOBuffer()
 show(iob, expand(Main, :(x -> x^2)))
 str = String(take!(iob))
@@ -100,7 +100,8 @@ import Core.Intrinsics: sqrt_llvm, bitcast
 sqrt15819(x::Float64) = bitcast(Float64, sqrt_llvm(x))
 # Use fully qualified name
 sqrt15819(x::Float32) = bitcast(Float32, Core.Intrinsics.sqrt_llvm(x))
-end
+end # module ImportIntrinsics15819
+
 foo11122(x) = @fastmath x - 1.0
 
 # issue #11122, #13568 and #15819
@@ -118,7 +119,7 @@ foo11122(x) = @fastmath x - 1.0
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float64}, tag)
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float32}, tag)
 
-end
+end # module WarnType
 
 # isbits
 
@@ -389,8 +390,17 @@ function g15714(array_var15714)
     for index_var15714 in eachindex(array_var15714)
         array_var15714[index_var15714] += 0
     end
-    for index_var15714 in eachindex(array_var15714)
-        array_var15714[index_var15714] += 0
+    let index_var15714
+        for index_var15714 in eachindex(array_var15714)
+            array_var15714[index_var15714] += 0
+        end
+        index_var15714
+    end
+    let index_var15714
+        for index_var15714 in eachindex(array_var15714)
+            array_var15714[index_var15714] += 0
+        end
+        index_var15714
     end
 end
 
@@ -411,6 +421,10 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     for name in must_used_vars
         @test name in slotnames
     end
+    must_used_checked = Dict{Symbol,Bool}()
+    for sym in must_used_vars
+        must_used_checked[sym] = false
+    end
     for str in (sprint(code_warntype, f, types),
                 stringmime("text/plain", src))
         for var in must_used_vars
@@ -422,17 +436,23 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
         for i in 1:length(src.slotnames)
             name = src.slotnames[i]
             if name in dupnames
-                @test contains(str, "_$i")
-                if name in must_used_vars
+                if name in must_used_vars && ismatch(Regex("_$i\\b"), str)
+                    must_used_checked[name] = true
                     global used_dup_var_tested15714 = true
                 end
             else
-                @test !contains(str, "_$i")
+                @test !ismatch(Regex("_$i\\b"), str)
                 if name in must_used_vars
                     global used_unique_var_tested15714 = true
                 end
             end
         end
+    end
+    for sym in must_used_vars
+        if sym in dupnames
+            @test must_used_checked[sym]
+        end
+        must_used_checked[sym] = false
     end
     # Make sure printing an AST outside CodeInfo still works.
     str = sprint(show, src.code)
@@ -440,13 +460,16 @@ function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types
     # Use the variable names that we know should be present in the optimized AST
     for i in 2:length(src.slotnames)
         name = src.slotnames[i]
-        if name in must_used_vars
-            @test contains(str, "_$i")
+        if name in must_used_vars && ismatch(Regex("_$i\\b"), str)
+            must_used_checked[name] = true
         end
+    end
+    for sym in must_used_vars
+        @test must_used_checked[sym]
     end
 end
 test_typed_ast_printing(f15714, Tuple{Vector{Float32}},
-                        [:array_var15714, :index_var15714])
+                        [:array_var15714])
 test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
                         [:array_var15714, :index_var15714])
 @test used_dup_var_tested15714

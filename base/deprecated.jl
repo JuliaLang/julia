@@ -1688,6 +1688,9 @@ end
 @deprecate ctranspose adjoint
 @deprecate ctranspose! adjoint!
 
+# issue #5148, PR #23259
+# warning for `const` on locals should be changed to an error in julia-syntax.scm
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

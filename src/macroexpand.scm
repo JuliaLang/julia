@@ -377,7 +377,7 @@
              (let ((parent-scope (cons (list env m) parent-scope))
                    (body (cadr e))
                    (m (caddr e)))
-              (resolve-expansion-vars-with-new-env body env m parent-scope inarg)))
+              (resolve-expansion-vars-with-new-env body env m parent-scope inarg #t)))
 
            ;; todo: trycatch
            (else
@@ -407,10 +407,30 @@
                      (and (eq? (car e) '=) (length= e 3)
                           (eventually-call? (cadr e))))))
 
+;; count hygienic / escape pairs
+;; and fold together a list resulting from applying the function to
+;; any block at the same hygienic scope
+(define (resume-on-escape lam e nblocks)
+  (if (or (not (pair? e)) (quoted? e))
+      '()
+      (cond ((memq (car e) '(lambda module toplevel))
+             '())
+            ((eq? (car e) 'hygienic-scope)
+             (resume-on-escape lam (cadr e) (+ nblocks 1)))
+            ((eq? (car e) 'escape)
+             (if (= nblocks 0)
+                 (lam (cadr e))
+                 (resume-on-escape lam (cadr e) (- nblocks 1))))
+            (else
+             (foldl (lambda (a l) (append! l (resume-on-escape lam a nblocks)))
+                    '()
+                    (cdr e))))))
+
 (define (find-declared-vars-in-expansion e decl (outer #t))
   (cond ((or (not (pair? e)) (quoted? e)) '())
         ((eq? (car e) 'escape)  '())
-        ((eq? (car e) 'hygienic-scope)  '())
+        ((eq? (car e) 'hygienic-scope)
+         (resume-on-escape (lambda (e) (find-declared-vars-in-expansion e decl outer)) (cadr e) 0))
         ((eq? (car e) decl)     (map decl-var* (cdr e)))
         ((and (not outer) (function-def? e)) '())
         (else
@@ -421,7 +441,8 @@
 (define (find-assigned-vars-in-expansion e (outer #t))
   (cond ((or (not (pair? e)) (quoted? e))  '())
         ((eq? (car e) 'escape)  '())
-        ((eq? (car e) 'hygienic-scope)  '())
+        ((eq? (car e) 'hygienic-scope)
+         (resume-on-escape (lambda (e) (find-assigned-vars-in-expansion e outer)) (cadr e) 0))
         ((and (not outer) (function-def? e))
          ;; pick up only function name
          (let ((fname (cond ((eq? (car e) '=) (decl-var* (cadr e)))
@@ -453,39 +474,36 @@
   ;; and wrap globals in (globalref module var) for macro's home module
   (resolve-expansion-vars-with-new-env e '() m '() #f #t))
 
-(define (find-symbolic-labels e)
-  (let ((defs (table))
-        (refs (table)))
-    (find-symbolic-label-defs e defs)
-    (find-symbolic-label-refs e refs)
-    (table.foldl
-     (lambda (label v labels)
-       (if (has? refs label)
-           (cons label labels)
-           labels))
-     '() defs)))
-
-(define (rename-symbolic-labels- e relabel)
+(define (rename-symbolic-labels- e relabels parent-scope)
   (cond
    ((or (not (pair? e)) (quoted? e)) e)
-   ((eq? (car e) 'symbolicgoto)
-    (let ((newlabel (assq (cadr e) relabel)))
-      (if newlabel `(symbolicgoto ,(cdr newlabel)) e)))
-   ((eq? (car e) 'symboliclabel)
-    (let ((newlabel (assq (cadr e) relabel)))
-      (if newlabel `(symboliclabel ,(cdr newlabel)) e)))
-   (else (map (lambda (x) (rename-symbolic-labels- x relabel)) e))))
+   ((eq? (car e) 'hygienic-scope)
+     (let ((parent-scope (list relabels parent-scope))
+           (body (cadr e))
+           (m (caddr e)))
+     `(hygienic-scope ,(rename-symbolic-labels- (cadr e) (table) parent-scope) ,m)))
+   ((and (eq? (car e) 'escape) (not (null? parent-scope)))
+     `(escape ,(apply rename-symbolic-labels- (cadr e) parent-scope)))
+   ((or (eq? (car e) 'symbolicgoto) (eq? (car e) 'symboliclabel))
+    (let* ((s (cadr e))
+           (havelabel (if (or (null? parent-scope) (not (symbol? s))) s (get relabels s #f)))
+           (newlabel (if havelabel havelabel (named-gensy s))))
+      (if (not havelabel) (put! relabels s newlabel))
+      `(,(car e) ,newlabel)))
+   (else
+     (cons (car e)
+           (map (lambda (x) (rename-symbolic-labels- x relabels parent-scope))
+                (cdr e))))))
 
 (define (rename-symbolic-labels e)
-  (let* ((labels (find-symbolic-labels e))
-         (relabel (pair-with-gensyms labels)))
-    (rename-symbolic-labels- e relabel)))
+  (rename-symbolic-labels- e (table) '()))
 
 ;; macro expander entry point
 
 (define (julia-expand-macros e (max-depth -1))
   (julia-expand-macroscopes
-    (julia-expand-macros- '() e max-depth)))
+    (rename-symbolic-labels
+     (julia-expand-macros- '() e max-depth))))
 
 (define (julia-expand-macros- m e max-depth)
   (cond ((= max-depth 0)   e)
@@ -501,11 +519,12 @@
                (error (string "macro \"" (cadr e) "\" not defined")))
            (if (and (pair? form) (eq? (car form) 'error))
                (error (cadr form)))
-           (let ((form (car form)) ;; form is the expression returned from expand-macros
-                 (modu (cdr form))) ;; modu is the macro's def module
-             `(hygienic-scope
-               ,(julia-expand-macros- (cons modu m) (rename-symbolic-labels form) (- max-depth 1))
-               ,modu))))
+           (let* ((modu (cdr form)) ;; modu is the macro's def module
+                  (form (car form)) ;; form is the expression returned from expand-macros
+                  (form (julia-expand-macros- (cons modu m) form (- max-depth 1))))
+             (if (and (pair? form) (eq? (car form) 'escape))
+                 (cadr form) ; immediately fold away (hygienic-scope (escape ...))
+                 `(hygienic-scope ,form ,modu)))))
         ((eq? (car e) 'module) e)
         ((eq? (car e) 'escape)
          (let ((m (if (null? m) m (cdr m))))

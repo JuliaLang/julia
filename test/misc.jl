@@ -239,7 +239,7 @@ let
     redir_err = "redirect_stderr(STDOUT)"
     exename = Base.julia_cmd()
     script = "$redir_err; module A; f() = 1; end; A.f() = 1"
-    warning_str = read(`$exename --startup-file=no -e $script`, String)
+    warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $script`, String)
     @test contains(warning_str, "f()")
 end
 
@@ -576,7 +576,7 @@ if Sys.iswindows()
 
     let addr = cfunction(WeVirtualProtectThisToRWX, UInt64, (UInt64, UInt64))
         addr = addr-(UInt64(addr)%4096)
-        const PAGE_EXECUTE_READWRITE = 0x40
+        PAGE_EXECUTE_READWRITE = 0x40
         oldPerm = Ref{UInt32}()
         err18083 = ccall(:VirtualProtect,stdcall,Cint,
             (Ptr{Void}, Csize_t, UInt32, Ptr{UInt32}),

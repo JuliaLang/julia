@@ -53,7 +53,6 @@ end
 #     cond && use(a)
 
 # slot property bit flags
-const Slot_Assigned     = 2
 const Slot_AssignedOnce = 16
 const Slot_UsedUndef    = 32
 
@@ -3758,7 +3757,9 @@ function substitute!(@nospecialize(e), na::Int, argexprs::Vector{Any}, @nospecia
         e = e::Expr
         head = e.head
         if head === :static_parameter
-            return spvals[e.args[1]]
+            sp = spvals[e.args[1]]
+            is_self_quoting(sp) && return sp
+            return QuoteNode(sp)
         elseif head === :foreigncall
             @assert !isa(spsig,UnionAll) || !isempty(spvals)
             for i = 1:length(e.args)
@@ -4460,17 +4461,6 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         add_backedge!(linfo, sv)
     end
 
-    spvals = Any[]
-    for i = 1:length(methsp)
-        push!(spvals, methsp[i])
-    end
-    for i = 1:length(spvals)
-        si = spvals[i]
-        if isa(si, Symbol) || isa(si, SSAValue) || isa(si, Slot)
-            spvals[i] = QuoteNode(si)
-        end
-    end
-
     nm = length(unwrap_unionall(metharg).parameters)
 
     body = Expr(:block)
@@ -4536,7 +4526,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     end
 
     # ok, substitute argument expressions for argument names in the body
-    body = substitute!(body, na, argexprs, method.sig, spvals, length(sv.src.slotnames) - na)
+    body = substitute!(body, na, argexprs, method.sig, Any[methsp...], length(sv.src.slotnames) - na)
     append!(sv.src.slotnames, src.slotnames[(na + 1):end])
     append!(sv.src.slottypes, src.slottypes[(na + 1):end])
     append!(sv.src.slotflags, src.slotflags[(na + 1):end])
@@ -5110,7 +5100,7 @@ function add_slot!(src::CodeInfo, @nospecialize(typ), is_sa::Bool, name::Symbol=
     id = length(src.slotnames) + 1
     push!(src.slotnames, name)
     push!(src.slottypes, typ)
-    push!(src.slotflags, Slot_Assigned + is_sa * Slot_AssignedOnce)
+    push!(src.slotflags, is_sa * Slot_AssignedOnce)
     return SlotNumber(id)
 end
 

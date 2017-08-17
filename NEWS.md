@@ -63,6 +63,9 @@ Language changes
     (`need_to_handle_undef_sparam = Set{Any}(m.sig for m in Test.detect_unbound_args(Base, recursive=true))`)
     is equal (`==`) to some known set (`expected = Set()`). ([#23117])
 
+  * `const` declarations on local variables were previously ignored. They now give a
+    warning, so that this syntax can be disallowed or given a new meaning in a
+    future version ([#5148]).
 
 Breaking changes
 ----------------
@@ -311,6 +314,12 @@ Deprecated or removed
 
   * `ctranspose` and `ctranspose!` have been deprecated in favor of `adjoint` and `adjoint!`,
     respectively ([#23235]).
+
+Command-line option changes
+---------------------------
+
+  * New option `--warn-overwrite={yes|no}` to control the warning for overwriting method
+    definitions. The default is `no` ([#23002]).
 
 Julia v0.6.0 Release Notes
 ==========================

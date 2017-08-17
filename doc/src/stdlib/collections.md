@@ -53,7 +53,7 @@ Fully implemented by:
 ```@docs
 Base.isempty
 Base.empty!
-Base.length(::Any)
+Base.length
 ```
 
 Fully implemented by:
@@ -137,8 +137,8 @@ Base.filter!
 ## Indexable Collections
 
 ```@docs
-Base.getindex(::Any, ::Any...)
-Base.setindex!(::Any, ::Any, ::Any...)
+Base.getindex
+Base.setindex!
 Base.endof
 ```
 
@@ -249,7 +249,7 @@ Partially implemented by:
 
 ```@docs
 Base.push!
-Base.pop!(::Any)
+Base.pop!
 Base.unshift!
 Base.shift!
 Base.insert!

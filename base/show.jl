@@ -122,7 +122,17 @@ function show_circular(io::IOContext, @nospecialize(x))
     return false
 end
 
+"""
+    show(x)
+
+Write an informative text representation of a value to the current output stream. New types
+should overload `show(io, x)` where the first argument is a stream. The representation used
+by `show` generally includes Julia-specific formatting and type information.
+"""
+show(x) = show(STDOUT::IO, x)
+
 show(io::IO, @nospecialize(x)) = show_default(io, x)
+
 function show_default(io::IO, @nospecialize(x))
     t = typeof(x)::DataType
     show(io, t)
@@ -1362,6 +1372,12 @@ end
 dump(io::IO, x::DataType; maxdepth=8) = ((x.abstract ? dumptype : dump)(io, x, maxdepth, ""); println(io))
 
 dump(io::IO, arg; maxdepth=8) = (dump(io, arg, maxdepth, ""); println(io))
+
+"""
+    dump(x)
+
+Show every part of the representation of a value.
+"""
 dump(arg; maxdepth=8) = dump(IOContext(STDOUT::IO, :limit => true), arg; maxdepth=maxdepth)
 
 

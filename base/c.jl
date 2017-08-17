@@ -5,6 +5,18 @@
 import Core.Intrinsics: cglobal, bitcast
 
 """
+    cglobal((symbol, library) [, type=Void])
+
+Obtain a pointer to a global variable in a C-exported shared library, specified exactly as
+in [`ccall`](@ref).
+Returns a `Ptr{Type}`, defaulting to `Ptr{Void}` if no `Type` argument is
+supplied.
+The values can be read or written by [`unsafe_load`](@ref) or [`unsafe_store!`](@ref),
+respectively.
+"""
+cglobal
+
+"""
     cfunction(f::Function, returntype::Type, argtypes::Type) -> Ptr{Void}
 
 Generate C-callable function pointer from the Julia function `f`. Type annotation of the return
@@ -86,6 +98,17 @@ convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = bitcast(Ptr{Cwchar_t}, p)
 
 # construction from untyped pointers
 convert(::Type{T}, p::Ptr{Void}) where {T<:Union{Cstring,Cwstring}} = bitcast(T, p)
+
+"""
+    pointer(array [, index])
+
+Get the native address of an array or string element. Be careful to ensure that a Julia
+reference to `a` exists as long as this pointer will be used. This function is "unsafe" like
+`unsafe_convert`.
+
+Calling `Ref(array[, index])` is generally preferable to this function.
+"""
+function pointer end
 
 pointer(p::Cstring) = convert(Ptr{UInt8}, p)
 pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)

@@ -507,7 +507,8 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
 end
 
 history_first(s::LineEdit.MIState, hist::REPLHistoryProvider) =
-    history_prev(s, hist, hist.cur_idx - 1)
+    history_prev(s, hist, hist.cur_idx - 1 -
+                 (hist.cur_idx > hist.start_idx+1 ? hist.start_idx : 0))
 
 history_last(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_next(s, hist, length(hist.history) - hist.cur_idx + 1)
@@ -807,7 +808,7 @@ function setup_interface(
         extra_repl_keymap = [extra_repl_keymap]
     end
 
-    const repl_keymap = AnyDict(
+    repl_keymap = AnyDict(
         ';' => function (s,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))

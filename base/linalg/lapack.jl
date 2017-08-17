@@ -1546,8 +1546,8 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             S      = similar(A, $relty, minmn)
             cmplx  = eltype(A)<:Complex
             if cmplx
-                rwork = Array{$relty}(job == 'N' ? 7*minmn :
-                              minmn*max(5*minmn+7, 2*max(m,n)+2*minmn+1))
+                rwork = Vector{$relty}(job == 'N' ? 7*minmn :
+                                       minmn*max(5*minmn+7, 2*max(m,n)+2*minmn+1))
             end
             iwork  = Vector{BlasInt}(8*minmn)
             info   = Ref{BlasInt}()
