@@ -43,8 +43,10 @@
                                       tab)))
                 ((lambda)       tab)
                 ((local)        tab)
-                ;; TODO: elsebody in (cadddr e)
-                ((break-block)             (find-possible-globals- (caddr e) tab))
+                ((break-block)
+                  (begin
+                    (find-possible-globals- (caddr e) tab)
+                    (find-possible-globals- (cadddr e) tab)))
                 ((module toplevel) '())
                 (else
                  (for-each (lambda (x) (find-possible-globals- x tab))

@@ -2534,9 +2534,10 @@
         ((symbol? e) (if (not (memq e bound)) (put! tab e #t)) tab)
         ((or (not (pair? e)) (quoted? e)) tab)
         ((memq (car e) '(lambda scope-block module toplevel)) tab)
-        ;; TODO: elseblock
-        ((eq? (car e) 'break-block) (unbound-vars (caddr e) bound tab))
-        ;; TODO: elsebody in (cadddr e)
+        ((eq? (car e) 'break-block)
+         (begin
+           (unbound-vars (caddr e) bound tab)
+           (unbound-vars (cadddr e) bound tab)))
         ((eq? (car e) 'with-static-parameters) (unbound-vars (cadr e) bound tab))
         (else (for-each (lambda (x) (unbound-vars x bound tab))
                             (cdr e))
@@ -2659,8 +2660,10 @@
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e UNUSED)) tab)
         ((symbol? e) (put! tab e #t))
         ((and (pair? e) (eq? (car e) 'outerref)) (put! tab (cadr e) #t))
-        ;; TODO: elsebody in (cadddr e)
-        ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
+        ((and (pair? e) (eq? (car e) 'break-block))
+          (begin
+            (free-vars- (caddr e) tab)
+            (free-vars- (cadddr e) tab)))
         ((and (pair? e) (eq? (car e) 'with-static-parameters)) (free-vars- (cadr e) tab))
         ((or (atom? e) (quoted? e)) tab)
         ((eq? (car e) 'lambda)
