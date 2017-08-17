@@ -1338,6 +1338,10 @@ end
             @test_throws ArgumentError diag(S,  size(S,2)+1)
         end
     end
+    # test that stored zeros are still stored zeros in the diagonal
+    S = sparse([1,3],[1,3],[0.0,0.0]); V = diag(S)
+    @test V.nzind == [1,3]
+    @test V.nzval == [0.0,0.0]
 end
 
 @testset "expandptr" begin
