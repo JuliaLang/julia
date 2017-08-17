@@ -127,6 +127,7 @@ julia [switches] -- [programfile] [args...]
  --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)
 
  --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings ("error" turns warnings into errors)
+ --warn-overwrite={yes|no} Enable or disable method overwrite warnings
 
  --output-o name           Generate an object file (including system image data)
  --output-ji name          Generate a system image data file (.ji)

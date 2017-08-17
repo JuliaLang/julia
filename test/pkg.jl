@@ -480,7 +480,7 @@ temp_pkg_dir() do
                     nothingtodomsg) Pkg.update("Example")
 
         metadata_dir = Pkg.dir("METADATA")
-        const old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
+        old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
 
         # Force a METADATA rollback to an old version, so that we will install some
         # outdated versions of some packages and then update some of those
@@ -525,7 +525,7 @@ temp_pkg_dir() do
         Pkg.rm(package)  # Remove package if installed
 
         metadata_dir = Pkg.dir("METADATA")
-        const old_commit = "83ff7116e51fc9cdbd7e67affbd344b9f5c9dbf2"
+        old_commit = "83ff7116e51fc9cdbd7e67affbd344b9f5c9dbf2"
 
         # Reset METADATA to the second to last update of Example.jl
         LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
@@ -588,6 +588,7 @@ end
         Pkg.add("Example.jl")
         @test [keys(Pkg.installed())...] == ["Example"]
         iob = IOBuffer()
+        Pkg.update("Example.jl")
         Pkg.checkout("Example.jl")
         Pkg.status("Example.jl", iob)
         str = chomp(String(take!(iob)))

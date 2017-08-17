@@ -700,6 +700,22 @@ julia> dec(20, 3)
 """
 dec
 
+"""
+    bits(n)
+
+A string giving the literal bit representation of a number.
+
+# Examples
+```jldoctest
+julia> bits(4)
+"0000000000000000000000000000000000000000000000000000000000000100"
+
+julia> bits(2.2)
+"0100000000000001100110011001100110011001100110011001100110011010"
+```
+"""
+function bits end
+
 bits(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
 bits(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
 bits(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)

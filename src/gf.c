@@ -1223,7 +1223,7 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
     jl_method_t *method = (jl_method_t*)newentry->func.method;
     jl_module_t *newmod = method->module;
     jl_module_t *oldmod = oldvalue->module;
-    if (newmod != jl_main_module || oldmod != jl_main_module) {
+    if (jl_options.warn_overwrite == JL_OPTIONS_WARN_OVERWRITE_ON) {
         JL_STREAM *s = JL_STDERR;
         jl_printf(s, "WARNING: Method definition ");
         jl_static_show_func_sig(s, (jl_value_t*)newentry->sig);

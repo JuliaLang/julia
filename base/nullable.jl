@@ -1,5 +1,21 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    NullException()
+
+An attempted access to a [`Nullable`](@ref) with no defined value.
+
+# Examples
+```jldoctest
+julia> a = Nullable{Int}()
+Nullable{Int64}()
+
+julia> get(a)
+ERROR: NullException()
+Stacktrace:
+ [1] get(::Nullable{Int64}) at ./nullable.jl:92
+```
+"""
 struct NullException <: Exception
 end
 

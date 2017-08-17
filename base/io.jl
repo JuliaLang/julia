@@ -2,6 +2,27 @@
 
 # Generic IO stubs -- all subtypes should implement these (if meaningful)
 
+"""
+    EOFError()
+
+No more data was available to read from a file or stream.
+"""
+mutable struct EOFError <: Exception end
+
+"""
+    SystemError(prefix::AbstractString, [errno::Int32])
+
+A system call failed with an error code (in the `errno` global variable).
+"""
+mutable struct SystemError <: Exception
+    prefix::AbstractString
+    errnum::Int32
+    extrainfo
+    SystemError(p::AbstractString, e::Integer, extrainfo) = new(p, e, extrainfo)
+    SystemError(p::AbstractString, e::Integer) = new(p, e, nothing)
+    SystemError(p::AbstractString) = new(p, Libc.errno())
+end
+
 lock(::IO) = nothing
 unlock(::IO) = nothing
 reseteof(x::IO) = nothing
@@ -55,6 +76,17 @@ Returns `true` if the specified IO object is writable (if that can be determined
 function iswritable end
 function copy end
 function eof end
+
+"""
+    read(stream::IO, T)
+
+Read a single value of type `T` from `stream`, in canonical binary representation.
+
+    read(stream::IO, String)
+
+Read the entirety of `stream`, as a String.
+"""
+read(stream, t)
 
 """
     write(stream::IO, x)
@@ -169,6 +201,15 @@ Open a file and read its contents. `args` is passed to `read`: this is equivalen
 Read the entire contents of a file as a string.
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
+
+"""
+    read!(stream::IO, array::Union{Array, BitArray})
+    read!(filename::AbstractString, array::Union{Array, BitArray})
+
+Read binary data from an I/O stream or file, filling in `array`.
+"""
+function read! end
+
 read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
 
 """
@@ -660,11 +701,11 @@ flush(io::IO) = nothing
 """
     skipchars(io::IO, predicate; linecomment=nothing)
 
-Skip forward in `io` until `predicate` returns `false`. If `linecomment`
-is defined, all characters after the `linecomment` character are ignored
-until the next line.
+Advance the stream `io` such that the next-read character will be the first remaining for
+which `predicate` returns `false`. If the keyword argument `linecomment` is specified, all
+characters from that character until the start of the next line are ignored.
 
-```jldoctext
+```jldoctest
 julia> buf = IOBuffer("    text")
 IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=1, mark=-1)
 

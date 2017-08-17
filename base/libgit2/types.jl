@@ -161,6 +161,8 @@ Matches the [`git_checkout_options`](https://libgit2.github.com/libgit2/#HEAD/ty
     perfdata_payload::Ptr{Void}
 end
 
+abstract type Payload end
+
 """
     LibGit2.RemoteCallbacks
 
@@ -183,12 +185,16 @@ Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/ty
     payload::Ptr{Void}
 end
 
-function RemoteCallbacks(credentials::Ptr{Void}, payload::Ref{Nullable{AbstractCredentials}})
-    RemoteCallbacks(credentials=credentials, payload=pointer_from_objref(payload))
+function RemoteCallbacks(credentials_cb::Ptr{Void}, payload::Ref{<:Payload})
+    RemoteCallbacks(credentials=credentials_cb, payload=pointer_from_objref(payload))
 end
 
-function RemoteCallbacks(credentials::Ptr{Void}, payload::Nullable{<:AbstractCredentials})
-    RemoteCallbacks(credentials, Ref{Nullable{AbstractCredentials}}(payload))
+function RemoteCallbacks(credentials_cb::Ptr{Void}, payload::Payload)
+    RemoteCallbacks(credentials_cb, Ref(payload))
+end
+
+function RemoteCallbacks(credentials_cb::Ptr{Void}, credentials)
+    RemoteCallbacks(credentials_cb, CredentialPayload(credentials))
 end
 
 """
@@ -919,4 +925,36 @@ end
 function securezero!(p::CachedCredentials)
     foreach(securezero!, values(p.cred))
     return p
+end
+
+"""
+    LibGit2.CredentialPayload
+
+Retains state between multiple calls to the credential callback. A single
+`CredentialPayload` instance will be used when authentication fails for a URL but different
+instances will be used when the URL has changed.
+"""
+mutable struct CredentialPayload <: Payload
+    credential::Nullable{AbstractCredentials}
+    cache::Nullable{CachedCredentials}
+    scheme::String
+    username::String
+    host::String
+    path::String
+
+    function CredentialPayload(credential::Nullable{<:AbstractCredentials}, cache::Nullable{CachedCredentials})
+        new(credential, cache, "", "", "", "")
+    end
+end
+
+function CredentialPayload(credential::Nullable{<:AbstractCredentials})
+    CredentialPayload(credential, Nullable{CachedCredentials}())
+end
+
+function CredentialPayload(cache::Nullable{CachedCredentials})
+    CredentialPayload(Nullable{AbstractCredentials}(), cache)
+end
+
+function CredentialPayload()
+    CredentialPayload(Nullable{AbstractCredentials}(), Nullable{CachedCredentials}())
 end

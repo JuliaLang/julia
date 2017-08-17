@@ -53,7 +53,6 @@ end
 #     cond && use(a)
 
 # slot property bit flags
-const Slot_Assigned     = 2
 const Slot_AssignedOnce = 16
 const Slot_UsedUndef    = 32
 
@@ -289,24 +288,16 @@ end
 function InferenceState(linfo::MethodInstance,
                         optimize::Bool, cached::Bool, params::InferenceParams)
     # prepare an InferenceState object for inferring lambda
-    # create copies of the CodeInfo definition, and any fields that type-inference might modify
-    m = linfo.def::Method
-    if isdefined(m, :generator)
-        try
-            # user code might throw errors – ignore them
-            src = get_staged(linfo)
-        catch
-            return nothing
-        end
-    else
-        # TODO: post-inference see if we can swap back to the original arrays?
-        if isa(m.source, Array{UInt8,1})
-            src = ccall(:jl_uncompress_ast, Any, (Any, Any), m, m.source)
-        else
-            src = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), m.source)
-            src.code = copy_exprargs(src.code)
-            src.slotnames = copy(src.slotnames)
-            src.slotflags = copy(src.slotflags)
+    src = retrieve_code_info(linfo)
+    src === nothing && return nothing
+    if JLOptions().debug_level == 2
+        # this is a debug build of julia, so let's validate linfo
+        errors = validate_code(linfo, src)
+        if !isempty(errors)
+            for e in errors
+                println(STDERR, "WARNING: Encountered invalid lowered code for method ",
+                        linfo.def, ": ", e)
+            end
         end
     end
     return InferenceState(linfo, src, optimize, cached, params)
@@ -331,6 +322,35 @@ end
 
 
 #### helper functions ####
+
+# create copies of the CodeInfo definition, and any fields that type-inference might modify
+function copy_code_info(c::CodeInfo)
+    cnew = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), c)
+    cnew.code = copy_exprargs(cnew.code)
+    cnew.slotnames = copy(cnew.slotnames)
+    cnew.slotflags = copy(cnew.slotflags)
+    return cnew
+end
+
+function retrieve_code_info(linfo::MethodInstance)
+    m = linfo.def::Method
+    if isdefined(m, :generator)
+        try
+            # user code might throw errors – ignore them
+            c = get_staged(linfo)
+        catch
+            return nothing
+        end
+    else
+        # TODO: post-inference see if we can swap back to the original arrays?
+        if isa(m.source, Array{UInt8,1})
+            c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, m.source)
+        else
+            c = copy_code_info(m.source)
+        end
+    end
+    return c
+end
 
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id # using a function to ensure we can infer this
 
@@ -3737,7 +3757,9 @@ function substitute!(@nospecialize(e), na::Int, argexprs::Vector{Any}, @nospecia
         e = e::Expr
         head = e.head
         if head === :static_parameter
-            return spvals[e.args[1]]
+            sp = spvals[e.args[1]]
+            is_self_quoting(sp) && return sp
+            return QuoteNode(sp)
         elseif head === :foreigncall
             @assert !isa(spsig,UnionAll) || !isempty(spvals)
             for i = 1:length(e.args)
@@ -4439,17 +4461,6 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         add_backedge!(linfo, sv)
     end
 
-    spvals = Any[]
-    for i = 1:length(methsp)
-        push!(spvals, methsp[i])
-    end
-    for i = 1:length(spvals)
-        si = spvals[i]
-        if isa(si, Symbol) || isa(si, SSAValue) || isa(si, Slot)
-            spvals[i] = QuoteNode(si)
-        end
-    end
-
     nm = length(unwrap_unionall(metharg).parameters)
 
     body = Expr(:block)
@@ -4515,7 +4526,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     end
 
     # ok, substitute argument expressions for argument names in the body
-    body = substitute!(body, na, argexprs, method.sig, spvals, length(sv.src.slotnames) - na)
+    body = substitute!(body, na, argexprs, method.sig, Any[methsp...], length(sv.src.slotnames) - na)
     append!(sv.src.slotnames, src.slotnames[(na + 1):end])
     append!(sv.src.slottypes, src.slottypes[(na + 1):end])
     append!(sv.src.slotflags, src.slotflags[(na + 1):end])
@@ -5089,7 +5100,7 @@ function add_slot!(src::CodeInfo, @nospecialize(typ), is_sa::Bool, name::Symbol=
     id = length(src.slotnames) + 1
     push!(src.slotnames, name)
     push!(src.slottypes, typ)
-    push!(src.slotflags, Slot_Assigned + is_sa * Slot_AssignedOnce)
+    push!(src.slotflags, is_sa * Slot_AssignedOnce)
     return SlotNumber(id)
 end
 

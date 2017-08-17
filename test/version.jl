@@ -95,6 +95,10 @@ show(io,v"4.3.2+1.a")
 # typemin and typemax
 @test typemin(VersionNumber) == v"0-"
 @test typemax(VersionNumber) == v"∞"
+let ∞ = typemax(UInt32)
+    @test typemin(VersionNumber) == VersionNumber(0, 0, 0, ("",), ())
+    @test typemax(VersionNumber) == VersionNumber(∞, ∞, ∞, (), ("",))
+end
 
 # issupbuild
 import Base.issupbuild

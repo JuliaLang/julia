@@ -401,3 +401,109 @@ let
         Base.LineEdit.InputAreaState(0,0), "julia> ", indent = 7)
     @test s == Base.LineEdit.InputAreaState(3,1)
 end
+
+@testset "function prompt indentation" begin
+    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer(), false)
+    # default prompt: PromptState.indent should not be set to a final fixed value
+    s = LineEdit.init_state(term, ModalInterface([Prompt("julia> ")]))
+    ps::LineEdit.PromptState = s.mode_state[s.current_mode]
+    @test ps.indent == -1
+    # the prompt is modified afterwards to a function
+    ps.p.prompt = let i = 0
+        () -> ["Julia is Fun! > ", "> "][mod1(i+=1, 2)] # lengths are 16 and 2
+    end
+    buf = LineEdit.buffer(ps)
+    write(buf, "begin\n    julia = :fun\nend")
+    outbuf = IOBuffer()
+    termbuf = Base.Terminals.TerminalBuffer(outbuf)
+    LineEdit.refresh_multi_line(termbuf, term, ps)
+    @test String(take!(outbuf)) ==
+        "\r\e[0K\e[1mJulia is Fun! > \e[0m\r\e[16Cbegin\n" *
+        "\r\e[16C    julia = :fun\n" *
+        "\r\e[16Cend\r\e[19C"
+    LineEdit.refresh_multi_line(termbuf, term, ps)
+    @test String(take!(copy(outbuf))) ==
+        "\r\e[0K\e[1A\r\e[0K\e[1A\r\e[0K\e[1m> \e[0m\r\e[2Cbegin\n" *
+        "\r\e[2C    julia = :fun\n" *
+        "\r\e[2Cend\r\e[5C"
+end
+
+@testset "tab/backspace alignment feature" begin
+    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    s = LineEdit.init_state(term, ModalInterface([Prompt("test> ")]))
+    function bufferdata(s)
+        buf = LineEdit.buffer(s)
+        String(buf.data[1:buf.size])
+    end
+    move_left(s, n) = for x = 1:n
+        LineEdit.edit_move_left(s)
+    end
+
+    bufpos(s::Base.LineEdit.MIState) = position(LineEdit.buffer(s))
+
+    LineEdit.edit_insert(s, "for x=1:10\n")
+    LineEdit.edit_tab(s)
+    @test bufferdata(s) == "for x=1:10\n    "
+    LineEdit.edit_backspace(s, true, false)
+    @test bufferdata(s) == "for x=1:10\n"
+    LineEdit.edit_insert(s, "  ")
+    @test bufpos(s) == 13
+    LineEdit.edit_tab(s)
+    @test bufferdata(s) == "for x=1:10\n    "
+    LineEdit.edit_insert(s, "  ")
+    LineEdit.edit_backspace(s, true, false)
+    @test bufferdata(s) == "for x=1:10\n    "
+    LineEdit.edit_insert(s, "éé=3   ")
+    LineEdit.edit_tab(s)
+    @test bufferdata(s) == "for x=1:10\n    éé=3    "
+    LineEdit.edit_backspace(s, true, false)
+    @test bufferdata(s) == "for x=1:10\n    éé=3"
+    LineEdit.edit_insert(s, "\n    1∉x  ")
+    LineEdit.edit_tab(s)
+    @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x     "
+    LineEdit.edit_backspace(s, false, false)
+    @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x    "
+    LineEdit.edit_backspace(s, true, false)
+    @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x "
+    LineEdit.edit_move_word_left(s)
+    LineEdit.edit_tab(s)
+    @test bufferdata(s) == "for x=1:10\n    éé=3\n        1∉x "
+    LineEdit.move_line_start(s)
+    @test bufpos(s) == 22
+    LineEdit.edit_tab(s, true)
+    @test bufferdata(s) == "for x=1:10\n    éé=3\n        1∉x "
+    @test bufpos(s) == 30
+    LineEdit.edit_move_left(s)
+    @test bufpos(s) == 29
+    LineEdit.edit_backspace(s, true, true)
+    @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x "
+    @test bufpos(s) == 26
+    LineEdit.edit_tab(s, false) # same as edit_tab(s, true) here
+    @test bufpos(s) == 30
+    move_left(s, 6)
+    @test bufpos(s) == 24
+    LineEdit.edit_backspace(s, true, true)
+    @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x "
+    @test bufpos(s) == 22
+    LineEdit.edit_kill_line(s)
+    LineEdit.edit_insert(s, ' '^10)
+    move_left(s, 7)
+    @test bufferdata(s) == "for x=1:10\n    éé=3\n          "
+    @test bufpos(s) == 25
+    LineEdit.edit_tab(s, true, false)
+    @test bufpos(s) == 32
+    move_left(s, 7)
+    LineEdit.edit_tab(s, true, true)
+    @test bufpos(s) == 26
+    @test bufferdata(s) == "for x=1:10\n    éé=3\n    "
+    # test again the same, when there is a next line
+    LineEdit.edit_insert(s, "      \nend")
+    move_left(s, 11)
+    @test bufpos(s) == 25
+    LineEdit.edit_tab(s, true, false)
+    @test bufpos(s) == 32
+    move_left(s, 7)
+    LineEdit.edit_tab(s, true, true)
+    @test bufpos(s) == 26
+    @test bufferdata(s) == "for x=1:10\n    éé=3\n    \nend"
+end

@@ -204,6 +204,7 @@ fi
 echo 'FORCE_ASSERTIONS = 1' >> Make.user
 
 cat Make.user
+make -j3 VERBOSE=1 all
 make -j3 VERBOSE=1 install
 make VERBOSE=1 -C examples
 cp usr/bin/busybox.exe julia-*/bin

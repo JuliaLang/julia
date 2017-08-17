@@ -1320,7 +1320,7 @@
         (if (null? params)
             (error (string "empty type parameter list in \"" (deparse `(= (curly ,name) ,type-ex)) "\"")))
         `(block
-          (const ,name)
+          (const-if-global ,name)
           ,(expand-forms
             `(= ,name (where ,type-ex ,@params)))))
       (expand-forms
@@ -1397,24 +1397,32 @@
                 (unnecessary (tuple ,@(reverse elts))))
         (let ((L (car lhss))
               (R (car rhss)))
-          (if (and (symbol-like? L)
-                   (or (not (pair? R)) (quoted? R) (equal? R '(null)))
-                   ;; overwrite var immediately if it doesn't occur elsewhere
-                   (not (contains (lambda (e) (eq-sym? e L)) (cdr rhss)))
-                   (not (contains (lambda (e) (eq-sym? e R)) assigned)))
-              (loop (cdr lhss)
-                    (cons L assigned)
-                    (cdr rhss)
-                    (cons (make-assignment L R) stmts)
-                    after
-                    (cons R elts))
-              (let ((temp (if (eventually-call? L) (gensy) (make-ssavalue))))
-                (loop (cdr lhss)
-                      (cons L assigned)
-                      (cdr rhss)
-                      (cons (make-assignment temp R) stmts)
-                      (cons (make-assignment L temp) after)
-                      (cons temp elts))))))))
+          (cond ((and (symbol-like? L)
+                      (or (not (pair? R)) (quoted? R) (equal? R '(null)))
+                      ;; overwrite var immediately if it doesn't occur elsewhere
+                      (not (contains (lambda (e) (eq-sym? e L)) (cdr rhss)))
+                      (not (contains (lambda (e) (eq-sym? e R)) assigned)))
+                 (loop (cdr lhss)
+                       (cons L assigned)
+                       (cdr rhss)
+                       (cons (make-assignment L R) stmts)
+                       after
+                       (cons R elts)))
+                ((vararg? R)
+                 (let ((temp (make-ssavalue)))
+                   `(block ,@(reverse stmts)
+                           ,(make-assignment temp (cadr R))
+                           ,@(reverse after)
+                           (= (tuple ,@lhss) ,temp)
+                           (unnecessary (tuple ,@(reverse elts) (... ,temp))))))
+                (else
+                 (let ((temp (if (eventually-call? L) (gensy) (make-ssavalue))))
+                   (loop (cdr lhss)
+                         (cons L assigned)
+                         (cdr rhss)
+                         (cons (make-assignment temp R) stmts)
+                         (cons (make-assignment L temp) after)
+                         (cons temp elts)))))))))
 
 ;; convert (lhss...) = x to tuple indexing
 (define (lower-tuple-assignment lhss x)
@@ -1707,6 +1715,7 @@
     (if (and (null? splat)
              (length= expr 3) (eq? (car expr) 'call)
              (eq? (caddr expr) argname)
+             (not (dotop? (cadr expr)))
              (not (expr-contains-eq argname (cadr expr))))
         (cadr expr)  ;; eta reduce `x->f(x)` => `f`
         `(-> ,argname (block ,@splat ,expr)))))
@@ -2012,13 +2021,20 @@
           ;; multiple assignment
           (let ((lhss (cdr lhs))
                 (x    (caddr e)))
+            (define (sides-match? l r)
+              ;; l and r either have equal lengths, or r has a trailing ...
+              (cond ((null? l)          (null? r))
+                    ((null? r)          #f)
+                    ((vararg? (car r))  (null? (cdr r)))
+                    (else               (sides-match? (cdr l) (cdr r)))))
             (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
-                     (length= lhss (length (cdr x))))
+                     (sides-match? lhss (cdr x)))
                 ;; (a, b, ...) = (x, y, ...)
                 (expand-forms
                  (tuple-to-assignments lhss x))
                 ;; (a, b, ...) = other
-                (let* ((xx  (if (and (symbol? x) (not (memq x lhss)))
+                (let* ((xx  (if (or (and (symbol? x) (not (memq x lhss)))
+                                    (ssavalue? x))
                                 x (make-ssavalue)))
                        (ini (if (eq? x xx) '() `((= ,xx ,(expand-forms x)))))
                        (st  (gensy)))
@@ -2538,7 +2554,7 @@
 (define (resolve-scopes- e env outerglobals implicitglobals lam renames newlam)
   (cond ((symbol? e) (let ((r (assq e renames)))
                        (if r (cdr r) e))) ;; return the renaming for e, or e
-        ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel global))) e)
+        ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel global symbolicgoto symboliclabel))) e)
         ((eq? (car e) 'local) '(null)) ;; remove local decls
         ((eq? (car e) 'local-def) '(null)) ;; remove local decls
         ((eq? (car e) 'implicit-global) '(null)) ;; remove implicit-global decls
@@ -3099,11 +3115,12 @@ f(x) = yt(x)
                  (if (vinfo:never-undef vi)
                      '(null)
                      `(newvar ,(cadr e))))))
-          ((const)
+          ((const) e)
+          ((const-if-global)
            (if (or (assq (cadr e) (car  (lam:vinfo lam)))
                    (assq (cadr e) (cadr (lam:vinfo lam))))
                '(null)
-               e))
+               `(const ,(cadr e))))
           ((isdefined) ;; convert isdefined expr to function for closure converted variables
            (let* ((sym (cadr e))
                   (vi (and (symbol? sym) (assq sym (car  (lam:vinfo lam)))))
@@ -3645,7 +3662,14 @@ f(x) = yt(x)
             ((local-def) #f)
             ((local) #f)
             ((implicit-global) #f)
-            ((const) (emit e))
+            ((const)
+             (if (or (assq (cadr e) (car  (lam:vinfo lam)))
+                     (assq (cadr e) (cadr (lam:vinfo lam))))
+                 (begin
+                   (syntax-deprecation #f (string "`const` declaration on local variable" (linenode-string current-loc))
+                                       "")
+                   '(null))
+                 (emit e)))
             ((isdefined) (if tail (emit-return e) e))
 
             ;; top level expressions returning values

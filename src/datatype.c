@@ -484,6 +484,15 @@ JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *bt, void *data)
     return jl_new_bits_internal(bt, data, &len);
 }
 
+// used by boot.jl
+JL_DLLEXPORT jl_value_t *jl_typemax_uint(jl_value_t *bt)
+{
+    uint64_t data = 0xffffffffffffffffULL;
+    jl_value_t *v = jl_gc_alloc(jl_get_ptls_states(), sizeof(size_t), bt);
+    memcpy(jl_data_ptr(v), &data, sizeof(size_t));
+    return v;
+}
+
 void jl_assign_bits(void *dest, jl_value_t *bits)
 {
     size_t nb = jl_datatype_size(jl_typeof(bits));

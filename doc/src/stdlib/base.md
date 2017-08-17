@@ -59,8 +59,7 @@ ans
 ```@docs
 Core.:(===)
 Core.isa
-Base.isequal(::Any, ::Any)
-Base.isequal(::Nullable, ::Nullable)
+Base.isequal
 Base.isless
 Base.isless(::Nullable, ::Nullable)
 Base.ifelse
@@ -141,8 +140,8 @@ Base.@nospecialize
 Base.gensym
 Base.@gensym
 Base.@polly
-Base.parse(::Any, ::Any)
-Base.parse(::Any)
+Base.parse(::AbstractString, ::Int)
+Base.parse(::AbstractString)
 ```
 
 ## Nullables

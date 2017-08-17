@@ -63,6 +63,9 @@ Language changes
     (`need_to_handle_undef_sparam = Set{Any}(m.sig for m in Test.detect_unbound_args(Base, recursive=true))`)
     is equal (`==`) to some known set (`expected = Set()`). ([#23117])
 
+  * `const` declarations on local variables were previously ignored. They now give a
+    warning, so that this syntax can be disallowed or given a new meaning in a
+    future version ([#5148]).
 
 Breaking changes
 ----------------
@@ -119,6 +122,10 @@ This section lists changes that do not have deprecation warnings.
     `Diagonal{T}`, `Bidiagonal{T}` and `SymTridiagonal{T}` to `Diagonal{T,V<:AbstractVector{T}}`,
     `Bidiagonal{T,V<:AbstractVector{T}}` and `SymTridiagonal{T,V<:AbstractVector{T}}`
     respectively ([#22718], [#22925], [#23035]).
+
+  * `isapprox(x,y)` now tests `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`
+    rather than `norm(x-y) <= atol + ...`, and `rtol` defaults to zero
+    if an `atol > 0` is specified ([#22742]).
 
   * Spaces are no longer allowed between `@` and the name of a macro in a macro call ([#22868]).
 
@@ -299,8 +306,17 @@ Deprecated or removed
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).
 
+  * Vectorized `DateTime`, `Date`, and `format` methods have been deprecated in favor of
+    dot-syntax ([#23207]).
+
   * `Base.cpad` has been removed; use an appropriate combination of `rpad` and `lpad`
     instead ([#23187]).
+
+Command-line option changes
+---------------------------
+
+  * New option `--warn-overwrite={yes|no}` to control the warning for overwriting method
+    definitions. The default is `no` ([#23002]).
 
 Julia v0.6.0 Release Notes
 ==========================
@@ -1156,3 +1172,5 @@ Command-line option changes
 [#23117]: https://github.com/JuliaLang/julia/issues/23117
 [#23144]: https://github.com/JuliaLang/julia/issues/23144
 [#23157]: https://github.com/JuliaLang/julia/issues/23157
+[#23187]: https://github.com/JuliaLang/julia/issues/23187
+[#23207]: https://github.com/JuliaLang/julia/issues/23207

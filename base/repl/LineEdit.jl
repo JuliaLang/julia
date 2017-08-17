@@ -62,6 +62,8 @@ mutable struct PromptState <: ModeState
     p::Prompt
     input_buffer::IOBuffer
     ias::InputAreaState
+    # indentation of lines which do not include the prompt
+    # if negative, the width of the prompt is used
     indent::Int
 end
 
@@ -201,11 +203,9 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     buf_pos = position(buf)
     line_pos = buf_pos
     # Write out the prompt string
-    write_prompt(termbuf, prompt)
-    prompt = prompt_string(prompt)
+    lindent = write_prompt(termbuf, prompt)
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
     miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
-    lindent = strwidth(prompt)
 
     # Now go through the buffer line by line
     seek(buf, 0)
@@ -244,7 +244,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
             end
         end
         cur_row += div(max(lindent + llength + miscountnl - 1, 0), cols)
-        lindent = indent
+        lindent = indent < 0 ? lindent : indent
     end
     seek(buf, buf_pos)
 
@@ -478,22 +478,49 @@ function edit_insert(buf::IOBuffer, c)
     end
 end
 
-function edit_backspace(s::PromptState)
-    if edit_backspace(s.input_buffer)
-        refresh_line(s)
-    else
-        beep(terminal(s))
-    end
+# align: delete up to 4 spaces to align to a multiple of 4 chars
+# adjust: also delete spaces on the right of the cursor to try to keep aligned what is
+# on the right
+edit_backspace(s::PromptState, align::Bool=false, adjust=align) =
+    edit_backspace(s.input_buffer, align) ? refresh_line(s) : beep(terminal(s))
+
+const _newline =  UInt8('\n')
+const _space = UInt8(' ')
+
+_notspace(c) = c != _space
+
+beginofline(buf, pos=position(buf)) = findprev(buf.data, _newline, pos)
+
+function endofline(buf, pos=position(buf))
+    eol = findnext(buf.data[pos+1:buf.size], _newline, 1)
+    eol == 0 ? buf.size : pos + eol - 1
 end
-function edit_backspace(buf::IOBuffer)
-    if position(buf) > 0
-        oldpos = position(buf)
-        char_move_left(buf)
-        splice_buffer!(buf, position(buf):oldpos-1)
-        return true
-    else
-        return false
+
+function edit_backspace(buf::IOBuffer, align::Bool=false, adjust::Bool=align)
+    !align && adjust &&
+        throw(DomainError((align, adjust),
+                          "if `adjust` is `true`, `align` must be `true`"))
+    oldpos = position(buf)
+    oldpos == 0 && return false
+    c = char_move_left(buf)
+    newpos = position(buf)
+    if align && c == ' ' # maybe delete multiple spaces
+        beg = beginofline(buf, newpos)
+        align = strwidth(String(buf.data[1+beg:newpos])) % 4
+        nonspace = findprev(_notspace, buf.data, newpos)
+        if newpos - align >= nonspace
+            newpos -= align
+            seek(buf, newpos)
+            if adjust
+                spaces = findnext(_notspace, buf.data[newpos+2:buf.size], 1)
+                oldpos = spaces == 0 ? buf.size :
+                    buf.data[newpos+1+spaces] == _newline ? newpos+spaces :
+                    newpos + min(spaces, 4)
+            end
+        end
     end
+    splice_buffer!(buf, newpos:oldpos-1)
+    return true
 end
 
 edit_delete(s) = edit_delete(buffer(s)) ? refresh_line(s) : beep(terminal(s))
@@ -627,16 +654,24 @@ default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
 write_prompt(terminal, s::PromptState) = write_prompt(terminal, s.p)
+
 function write_prompt(terminal, p::Prompt)
     prefix = prompt_string(p.prompt_prefix)
     suffix = prompt_string(p.prompt_suffix)
     write(terminal, prefix)
     write(terminal, Base.text_colors[:bold])
-    write(terminal, prompt_string(p.prompt))
+    width = write_prompt(terminal, p.prompt)
     write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
+    width
 end
-write_prompt(terminal, s::Union{AbstractString,Function}) = write(terminal, prompt_string(s))
+
+# returns the width of the written prompt
+function write_prompt(terminal, s::Union{AbstractString,Function})
+    promptstr = prompt_string(s)
+    write(terminal, promptstr)
+    strwidth(promptstr)
+end
 
 ### Keymap Support
 
@@ -1329,30 +1364,52 @@ function bracketed_paste(s)
     return replace(input, '\t', " "^tabwidth)
 end
 
+function tab_should_complete(s)
+    # Yes, we are ignoring the possiblity
+    # the we could be in the middle of a multi-byte
+    # sequence, here but that's ok, since any
+    # whitespace we're interested in is only one byte
+    buf = buffer(s)
+    pos = position(buf)
+    pos == 0 && return true
+    c = buf.data[pos]
+    c != _newline && c != UInt8('\t') &&
+        # hack to allow path completion in cmds
+        # after a space, e.g., `cd <tab>`, while still
+        # allowing multiple indent levels
+        (c != _space || pos <= 3 || buf.data[pos-1] != _space)
+end
+
+# jump_spaces: if cursor is on a ' ', move it to the first non-' ' char on the right
+# if `delete_trailing`, ignore trailing ' ' by deleting them
+function edit_tab(s, jump_spaces=false, delete_trailing=jump_spaces)
+    tab_should_complete(s) ?
+        complete_line(s) :
+        edit_tab(buffer(s), jump_spaces, delete_trailing)
+    refresh_line(s)
+end
+
+function edit_tab(buf::IOBuffer, jump_spaces=false, delete_trailing=jump_spaces)
+    i = position(buf)
+    if jump_spaces && i < buf.size && buf.data[i+1] == _space
+        spaces = findnext(_notspace, buf.data[i+1:buf.size], 1)
+        if delete_trailing && (spaces == 0 || buf.data[i+spaces] == _newline)
+            splice_buffer!(buf, i:(spaces == 0 ? buf.size-1 : i+spaces-2))
+        else
+            jump = spaces == 0 ? buf.size : i+spaces-1
+            return seek(buf, jump)
+        end
+    end
+    # align to multiples of 4:
+    align = 4 - strwidth(String(buf.data[1+beginofline(buf, i):i])) % 4
+    return edit_insert(buf, ' '^align)
+end
+
+
 const default_keymap =
 AnyDict(
     # Tab
-    '\t' => (s,o...)->begin
-        buf = buffer(s)
-        # Yes, we are ignoring the possiblity
-        # the we could be in the middle of a multi-byte
-        # sequence, here but that's ok, since any
-        # whitespace we're interested in is only one byte
-        i = position(buf)
-        if i != 0
-            c = buf.data[i]
-            if c == UInt8('\n') || c == UInt8('\t') ||
-               # hack to allow path completion in cmds
-               # after a space, e.g., `cd <tab>`, while still
-               # allowing multiple indent levels
-               (c == UInt8(' ') && i > 3 && buf.data[i-1] == UInt8(' '))
-                edit_insert(s, " "^4)
-                return
-            end
-        end
-        complete_line(s)
-        refresh_line(s)
-    end,
+    '\t' => (s,o...)->edit_tab(s, true),
     # Enter
     '\r' => (s,o...)->begin
         if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)
@@ -1364,7 +1421,7 @@ AnyDict(
     end,
     '\n' => KeyAlias('\r'),
     # Backspace/^H
-    '\b' => (s,o...)->edit_backspace(s),
+    '\b' => (s,o...)->edit_backspace(s, true),
     127 => KeyAlias('\b'),
     # Meta Backspace
     "\e\b" => (s,o...)->edit_delete_prev_word(s),
@@ -1568,7 +1625,7 @@ run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), InputAreaState(1, 1),
-    #=indent(spaces)=# strwidth(prompt_string(prompt)))
+    #=indent(spaces)=# -1)
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, m.modes[1], false, Dict{Any,Any}())

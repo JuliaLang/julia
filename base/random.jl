@@ -164,7 +164,16 @@ end
 
 @inline rand_ui52_raw_inbounds(r::MersenneTwister) = reinterpret(UInt64, rand_inbounds(r, Close1Open2))
 @inline rand_ui52_raw(r::MersenneTwister) = (reserve_1(r); rand_ui52_raw_inbounds(r))
-@inline rand_ui2x52_raw(r::MersenneTwister) = rand_ui52_raw(r) % UInt128 << 64 | rand_ui52_raw(r)
+
+@inline function rand_ui2x52_raw(r::MersenneTwister)
+    reserve(r, 2)
+    rand_ui52_raw_inbounds(r) % UInt128 << 64 | rand_ui52_raw_inbounds(r)
+end
+
+@inline function rand_ui104_raw(r::MersenneTwister)
+    reserve(r, 2)
+    rand_ui52_raw_inbounds(r) % UInt128 << 52 ⊻ rand_ui52_raw_inbounds(r)
+end
 
 function srand(r::MersenneTwister, seed::Vector{UInt32})
     copy!(resize!(r.seed, length(seed)), seed)
@@ -272,21 +281,12 @@ true
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
 
-
-function dsfmt_gv_srand()
-    # Temporary fix for #8874 and #9124: update global RNG for Rmath
-    dsfmt_gv_init_by_array(GLOBAL_RNG.seed+UInt32(1))
-    return GLOBAL_RNG
-end
-
 function srand()
     srand(GLOBAL_RNG)
-    dsfmt_gv_srand()
 end
 
 function srand(seed::Union{Integer,Vector{UInt32}})
     srand(GLOBAL_RNG, seed)
-    dsfmt_gv_srand()
 end
 
 ## Global RNG
@@ -744,6 +744,34 @@ end
 
 rand(rng::AbstractRNG, r::UnitRange{<:Union{Signed,Unsigned,BigInt,Bool}}) = rand(rng, RangeGenerator(r))
 
+## special case for MersenneTwister
+@inline function rand_lteq(r::AbstractRNG, randfun, u::U, mask::U) where U<:Integer
+    while true
+        x = randfun(r) & mask
+        x <= u && return x
+    end
+end
+
+function rand(rng::MersenneTwister, r::UnitRange{T}) where T<:Union{Base.BitInteger64,Bool}
+    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    m = last(r) % UInt64 - first(r) % UInt64
+    bw = (64 - leading_zeros(m)) % UInt # bit-width
+    mask = (1 % UInt64 << bw) - (1 % UInt64)
+    x = bw <= 52 ? rand_lteq(rng, rand_ui52_raw, m, mask) :
+                   rand_lteq(rng, rng->rand(rng, UInt64), m, mask)
+    (x + first(r) % UInt64) % T
+end
+
+function rand(rng::MersenneTwister, r::UnitRange{T}) where T<:Union{Int128,UInt128}
+    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    m = (last(r)-first(r)) % UInt128
+    bw = (128 - leading_zeros(m)) % UInt # bit-width
+    mask = (1 % UInt128 << bw) - (1 % UInt128)
+    x = bw <= 52  ? rand_lteq(rng, rand_ui52_raw, m % UInt64, mask % UInt64) % UInt128 :
+        bw <= 104 ? rand_lteq(rng, rand_ui104_raw, m, mask) :
+                    rand_lteq(rng, rng->rand(rng, UInt128), m, mask)
+    x % T + first(r)
+end
 
 # Randomly draw a sample from an AbstractArray r
 # (e.g. r is a range 0:2:8 or a vector [2, 3, 5, 7])
@@ -1655,6 +1683,13 @@ end
 # each element of A is included in S with independent probability p.
 # (Note that this is different from the problem of finding a random
 #  size-m subset of A where m is fixed!)
+
+"""
+    randsubseq!(S, A, p)
+
+Like [`randsubseq`](@ref), but the results are stored in `S`
+(which is resized as needed).
+"""
 function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
     0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
     n = length(A)

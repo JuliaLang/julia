@@ -438,7 +438,8 @@ function const_implies_local()
         x = 1
         local y
         let
-            const x = 0
+            # TODO: change back to `const` if that's ever allowed
+            local x = 0
             y = x
         end
         x, y
@@ -2055,11 +2056,11 @@ end
 
 # issue #8798
 let
-    const npy_typestrs = Dict("b1"=>Bool,
-                              "i1"=>Int8,      "u1"=>UInt8,
-                              "i2"=>Int16,     "u2"=>UInt16,
-                              "i4"=>Int32,     "u4"=>UInt32,
-                              "i8"=>Int64,     "u8"=>UInt64)
+    npy_typestrs = Dict("b1"=>Bool,
+                        "i1"=>Int8,      "u1"=>UInt8,
+                        "i2"=>Int16,     "u2"=>UInt16,
+                        "i4"=>Int32,     "u4"=>UInt32,
+                        "i8"=>Int64,     "u8"=>UInt64)
     sizeof_lookup() = sizeof(npy_typestrs["i8"])
     @test sizeof_lookup() == 8
 end
@@ -4680,17 +4681,6 @@ end
 @test f14893() == 14893
 @test M14893.f14893() == 14893
 
-# issue #18725
-@test_nowarn @eval Main begin
-    f18725(x) = 1
-    f18725(x) = 2
-end
-@test Main.f18725(0) == 2
-@test_warn "WARNING: Method definition f18725(Any) in module Module18725" @eval Main module Module18725
-    f18725(x) = 1
-    f18725(x) = 2
-end
-
 # issue #19599
 f19599(x::((S)->Vector{S})(T)...) where {T} = 1
 @test f19599([1],[1]) == 1
@@ -5184,4 +5174,10 @@ module GlobalDef18933
     @test @which(sincos) === Base.Math
     @test @isdefined sincos
     @test sincos === Base.sincos
+end
+
+# issue #23218
+let idx = (7,5,9)
+    (v,) = (idx...,)
+    @test v == 7
 end

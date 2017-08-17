@@ -189,15 +189,16 @@ end
 
 # isapprox: approximate equality of numbers
 """
-    isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0, nans::Bool=false, norm::Function)
+    isapprox(x, y; rtol::Real=atol>0 ? √eps : 0, atol::Real=0, nans::Bool=false, norm::Function)
 
-Inexact equality comparison: `true` if `norm(x-y) <= atol + rtol*max(norm(x), norm(y))`. The
+Inexact equality comparison: `true` if `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The
 default `atol` is zero and the default `rtol` depends on the types of `x` and `y`. The keyword
 argument `nans` determines whether or not NaN values are considered equal (defaults to false).
 
-For real or complex floating-point values, `rtol` defaults to
-`sqrt(eps(typeof(real(x-y))))`. This corresponds to requiring equality of about half of the
-significand digits. For other types, `rtol` defaults to zero.
+For real or complex floating-point values, if an `atol > 0` is not specified, `rtol` defaults to
+the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger (least precise).
+This corresponds to requiring equality of about half of the significand digits. Otherwise,
+e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
 
 `x` and `y` may also be arrays of numbers, in which case `norm` defaults to `vecnorm` but
 may be changed by passing a `norm::Function` keyword argument. (For numbers, `norm` is the
@@ -220,8 +221,8 @@ julia> isapprox([10.0^9, 1.0], [10.0^9, 2.0])
 true
 ```
 """
-function isapprox(x::Number, y::Number; rtol::Real=rtoldefault(x,y), atol::Real=0, nans::Bool=false)
-    x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= atol + rtol*max(abs(x), abs(y))) || (nans && isnan(x) && isnan(y))
+function isapprox(x::Number, y::Number; atol::Real=0, rtol::Real=rtoldefault(x,y,atol), nans::Bool=false)
+    x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= max(atol, rtol*max(abs(x), abs(y)))) || (nans && isnan(x) && isnan(y))
 end
 
 const ≈ = isapprox
@@ -230,9 +231,22 @@ const ≈ = isapprox
 # default tolerance arguments
 rtoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
 rtoldefault(::Type{<:Real}) = 0
-rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}) where {T<:Number,S<:Number} = max(rtoldefault(real(T)),rtoldefault(real(S)))
+function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, atol::Real) where {T<:Number,S<:Number}
+    rtol = max(rtoldefault(real(T)),rtoldefault(real(S)))
+    return atol > 0 ? zero(rtol) : rtol
+end
 
 # fused multiply-add
+
+"""
+    fma(x, y, z)
+
+Computes `x*y+z` without rounding the intermediate result `x*y`. On some systems this is
+significantly more expensive than `x*y+z`. `fma` is used to improve accuracy in certain
+algorithms. See [`muladd`](@ref).
+"""
+function fma end
+
 fma_libm(x::Float32, y::Float32, z::Float32) =
     ccall(("fmaf", libm_name), Float32, (Float32,Float32,Float32), x, y, z)
 fma_libm(x::Float64, y::Float64, z::Float64) =

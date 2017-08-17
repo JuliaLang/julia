@@ -225,7 +225,7 @@ optimal set of packages versions.
 Without arguments, updates all installed packages. When one or more package names are provided as
 arguments, only those packages and their dependencies are updated.
 """
-update(upkgs::AbstractString...) = cd(Entry.update,Dir.getmetabranch(),Set{String}([upkgs...]))
+update(upkgs::AbstractString...) = cd(Entry.update,Dir.getmetabranch(),Set{String}(splitjl.([upkgs...])))
 
 """
     resolve()

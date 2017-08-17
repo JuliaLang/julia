@@ -9,9 +9,8 @@ Base.cconvert
 Base.unsafe_load
 Base.unsafe_store!
 Base.unsafe_copy!{T}(::Ptr{T}, ::Ptr{T}, ::Any)
-Base.unsafe_copy!(::Array, ::Any, ::Array, ::Any, ::Any)
-Base.copy!(::Any, ::Any)
-Base.copy!(::Any, ::Any, ::Any, ::Any, ::Any)
+Base.unsafe_copy!{T}(::Array{T}, ::Any, ::Array{T}, ::Any, ::Any)
+Base.copy!
 Base.pointer
 Base.unsafe_wrap{T,N}(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}}, ::Ptr{T}, ::NTuple{N,Int})
 Base.pointer_from_objref
