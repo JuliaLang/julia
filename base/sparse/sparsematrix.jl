@@ -3380,51 +3380,40 @@ function expandptr(V::Vector{<:Integer})
     res
 end
 
-## diag and related using an iterator
-
-struct SpDiagIterator{Tv,Ti}
-    A::SparseMatrixCSC{Tv,Ti}
-    d::Int # diagonal to iterate over
-end
-
-start(it::SpDiagIterator) = it.d < 0 ? (1-it.d, 1) : (1, it.d+1)
-done(it::SpDiagIterator, rc) = rc[1] > size(it.A,1) || rc[2] > size(it.A,2)
-function next(it::SpDiagIterator{Tv}, rc) where Tv
-    r, c = rc
-    A = it.A
-    r1 = Int(A.colptr[c])
-    r2 = Int(A.colptr[c+1]-1)
-    (r1 > r2) && (return (zero(Tv), (r+1, c+1)))
-    r1 = searchsortedfirst(A.rowval, r, r1, r2, Forward)
-    (((r1 > r2) || (A.rowval[r1] != r)) ? zero(Tv) : A.nzval[r1], (r+1, c+1))
-end
 
 function diag(A::SparseMatrixCSC{Tv,Ti}, d::Int=0) where {Tv,Ti}
     m, n = size(A)
     if !(-m <= d <= n)
         throw(ArgumentError("requested diagonal, $d, out of bounds in matrix of size ($m, $n)"))
     end
-    l = d < 0 ? min(m+d,n) : min(n-d,m)
-    ind = Vector{Ti}(); sizehint!(ind, min(l, nnz(A)))
-    val = Vector{Tv}(); sizehint!(val, min(l, nnz(A)))
-    for (i, v) in enumerate(SpDiagIterator(A, d))
-        if !iszero(v)
-            push!(ind, i)
-            push!(val, v)
-        end
+    if d <= 0
+        rrange = (1-d):min(m, min(m,n)-d)
+        crange = 1:min(n, m+d)
+    else # d > 0
+        rrange = 1:min(m, n-d)
+        crange = (1+d):min(n, min(m,n)+d)
     end
-    return SparseVector{Tv,Ti}(l, ind, val)
+    ind = Vector{Ti}()
+    val = Vector{Tv}()
+    for (i, (r, c)) in enumerate(zip(rrange, crange))
+        r1 = Int(A.colptr[c])
+        r2 = Int(A.colptr[c+1]-1)
+        r1 > r2 && continue
+        r1 = searchsortedfirst(A.rowval, r, r1, r2, Forward)
+        ((r1 > r2) || (A.rowval[r1] != r)) && continue
+        push!(ind, i)
+        push!(val, A.nzval[r1])
+    end
+    return SparseVector{Tv,Ti}(length(rrange), ind, val)
 end
 
 function trace(A::SparseMatrixCSC{Tv}) where Tv
-    if size(A,1) != size(A,2)
-        throw(DimensionMismatch("expected square matrix"))
-    end
+    n = checksquare(A)
     s = zero(Tv)
-    for d in SpDiagIterator(A,0)
-        s += d
+    for i in 1:n
+        s += A[i,i]
     end
-    s
+    return s
 end
 
 function diagm(v::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}

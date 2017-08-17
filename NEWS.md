@@ -312,6 +312,8 @@ Deprecated or removed
   * `Base.cpad` has been removed; use an appropriate combination of `rpad` and `lpad`
     instead ([#23187]).
 
+  * `Base.SparseArrays.SpDiagIterator` has been removed ([#23261]).
+
 Command-line option changes
 ---------------------------
 

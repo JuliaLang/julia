@@ -1331,7 +1331,7 @@ end
         for S in (S1, S2, S3)
             A = Matrix(S)
             @test diag(S)::SparseVector{T,Int}  == diag(A)
-            for k in -5:5
+            for k in -size(S,1):size(S,2)
                 @test diag(S, k)::SparseVector{T,Int}  == diag(A, k)
             end
             @test_throws ArgumentError diag(S, -size(S,1)-1)
