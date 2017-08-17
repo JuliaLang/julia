@@ -478,8 +478,7 @@ end
     hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
 
 Convert the hexadecimal bytes vector to its binary representation. The results are
-populated into a destination vector. The function returns the number of bytes copied
-into the destination vector.
+populated into a destination vector. The function returns the destination vector.
 
 # Examples
 ```jldoctest
