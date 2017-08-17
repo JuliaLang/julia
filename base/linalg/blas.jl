@@ -463,6 +463,55 @@ function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},Range{Ti}},
     y
 end
 
+"""
+    axpby!(a, X, b, Y)
+
+Overwrite `Y` with `a*X + b*Y`, where `a` and `b` are scalars. Return `Y`.
+
+# Examples
+```jldoctest
+julia> x = [1., 2, 3];
+
+julia> y = [4., 5, 6];
+
+julia> Base.BLAS.axpby!(2., x, 3., y)
+3-element Array{Float64,1}:
+14.0
+19.0
+24.0
+```
+"""
+function axpby! end
+
+for (fname, elty) in ((:daxpby_,:Float64),
+                  (:saxpby_,:Float32),
+                  (:zaxpby_,:Complex128),
+                  (:caxpby_,:Complex64))
+@eval begin
+            # SUBROUTINE DAXPBY(N,DA,DX,INCX,DB,DY,INCY)
+            # DY <- DA*DX + DB*DY
+            #*     .. Scalar Arguments ..
+            #      DOUBLE PRECISION DA,DB
+            #      INTEGER INCX,INCY,N
+            #*     .. Array Arguments ..
+            #      DOUBLE PRECISION DX(*),DY(*)
+    function axpby!(n::Integer, alpha::($elty), dx::Union{Ptr{$elty}, DenseArray{$elty}}, incx::Integer, beta::($elty), dy::Union{Ptr{$elty}, DenseArray{$elty}}, incy::Integer)
+        ccall((@blasfunc($fname), libblas), Void,
+            (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
+             &n, &alpha, dx, &incx, &beta, dy, &incy)
+        dy
+    end
+end
+end
+
+function axpby!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, beta::Number, y::Union{DenseArray{T},StridedVector{T}}) where T<:BlasFloat
+    if length(x) != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+    end
+    axpby!(length(x), convert(T,alpha), pointer(x), stride(x, 1), convert(T,beta), pointer(y), stride(y, 1))
+    y
+end
+
 ## iamax
 for (fname, elty) in ((:idamax_,:Float64),
                       (:isamax_,:Float32),
