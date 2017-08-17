@@ -436,7 +436,7 @@ others such as Textmate, Notepad++, and Kate, are in
 
 Three major IDEs are supported for Julia: [Juno](http://junolab.org/),
 which is based on [Atom](https://atom.io/), 
-[julia-vscode](https://github.com/JuliaEditorSupport/julia-vscode) based on [VS Code](https://code.visualstudio.com/)
+[julia-vscode](https://github.com/JuliaEditorSupport/julia-vscode), based on [VS Code](https://code.visualstudio.com/)
 and
 [JuliaDT](https://github.com/JuliaComputing/JuliaDT), which is an
 [Eclipse](http://eclipse.org) plugin. A [Jupyter](http://jupyter.org/) notebooks interface
