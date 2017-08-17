@@ -3,6 +3,10 @@
 # Run the distributed test outside of the main driver since it needs its own
 # set of dedicated workers.
 
+using Base.Test
+
+@test open("distributed_exec.jl") do io; true end
+
 include("testenv.jl")
 cmd = `$test_exename $test_exeflags distributed_exec.jl`
 
