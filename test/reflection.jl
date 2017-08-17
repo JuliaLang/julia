@@ -67,7 +67,7 @@ end
 pos_stable(x) = x > 0 ? x : zero(x)
 pos_unstable(x) = x > 0 ? x : 0
 
-tag = Base.have_color ? Base.error_color() : "UNION"
+tag = Base.have_color ? Base.text_colors[Base.error_color()] : "UNION"
 @test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
 @test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
@@ -80,13 +80,13 @@ end
 Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
-tag = Base.have_color ? Base.error_color() : "ARRAY{FLOAT64,N}"
+tag = Base.have_color ? Base.text_colors[Base.error_color()] : "ARRAY{FLOAT64,N}"
 @test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
 @test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
 @test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
 
 # Make sure emphasis is not used for other functions
-tag = Base.have_color ? Base.error_color() : "ANY"
+tag = Base.have_color ? Base.text_colors[Base.error_color()] : "ANY"
 iob = IOBuffer()
 show(iob, expand(Main, :(x -> x^2)))
 str = String(take!(iob))
@@ -100,7 +100,8 @@ import Core.Intrinsics: sqrt_llvm, bitcast
 sqrt15819(x::Float64) = bitcast(Float64, sqrt_llvm(x))
 # Use fully qualified name
 sqrt15819(x::Float32) = bitcast(Float32, Core.Intrinsics.sqrt_llvm(x))
-end
+end # module ImportIntrinsics15819
+
 foo11122(x) = @fastmath x - 1.0
 
 # issue #11122, #13568 and #15819
@@ -118,7 +119,7 @@ foo11122(x) = @fastmath x - 1.0
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float64}, tag)
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float32}, tag)
 
-end
+end # module WarnType
 
 # isbits
 
