@@ -42,7 +42,7 @@ function __init__()
 end
 
 const ROUNDING_MODE = Ref{Cint}(0)
-const DEFAULT_PRECISION = [256]
+const DEFAULT_PRECISION = Ref(256)
 
 # Basic type and initialization definitions
 
@@ -740,7 +740,7 @@ end
 
 Get the precision (in bits) currently used for [`BigFloat`](@ref) arithmetic.
 """
-precision(::Type{BigFloat}) = DEFAULT_PRECISION[end]  # precision of the type BigFloat itself
+precision(::Type{BigFloat}) = DEFAULT_PRECISION[] # precision of the type BigFloat itself
 
 """
     setprecision([T=BigFloat,] precision::Int)
@@ -751,7 +751,7 @@ function setprecision(::Type{BigFloat}, precision::Int)
     if precision < 2
         throw(DomainError(precision, "`precision` cannot be less than 2."))
     end
-    DEFAULT_PRECISION[end] = precision
+    DEFAULT_PRECISION[] = precision
 end
 
 setprecision(precision::Int) = setprecision(BigFloat, precision)
