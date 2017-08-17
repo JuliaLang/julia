@@ -134,7 +134,7 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
     end
     isempty(head) && return typemin(VersionNumber)
 
-    vers = collect(keys(filter((ver,info)->info.sha1==head, avail)))
+    vers = collect(keys(filter(#=ver,info=#p->p[2].sha1==head, avail)))
     !isempty(vers) && return maximum(vers)
 
     cache = Cache.path(pkg)

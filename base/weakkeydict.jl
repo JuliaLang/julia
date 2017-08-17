@@ -137,11 +137,4 @@ function next(t::WeakKeyDict{K,V}, i)  where V where K
     return (kv, (i, gc_token))
 end
 
-function filter!(f, d::WeakKeyDict)
-    for (k, v) in d
-        if !f(k, v)
-            delete!(d, k)
-        end
-    end
-    return d
-end
+filter!(f, d::WeakKeyDict) = filter_in_one_pass!(f, d)

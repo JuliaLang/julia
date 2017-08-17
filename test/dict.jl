@@ -511,7 +511,7 @@ let d = ImmutableDict{String, String}(),
 end
 
 # filtering
-let d = Dict(zip(1:1000,1:1000)), f = (k,v) -> iseven(k)
+let d = Dict(zip(1:1000,1:1000)), f = p -> iseven(p.first)
     @test filter(f, d) == filter!(f, copy(d)) ==
           invoke(filter!, Tuple{Function,Associative}, f, copy(d)) ==
           Dict(zip(2:2:1000, 2:2:1000))
@@ -636,7 +636,7 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test 4 ∉ values(wkd)
     @test length(wkd) == 2
     @test !isempty(wkd)
-    wkd = filter!( (k,v) -> k != B, wkd)
+    wkd = filter!( p -> p.first != B, wkd)
     @test B ∉ keys(wkd)
     @test 3 ∉ values(wkd)
     @test length(wkd) == 1
