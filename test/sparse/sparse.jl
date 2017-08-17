@@ -1330,9 +1330,9 @@ end
         S3 = sprand(T,  5, 10, 0.5)
         for S in (S1, S2, S3)
             A = Matrix(S)
-            @test diag(S)::SparseVector{T,Int}  == diag(A)
+            @test diag(S)::SparseVector{T,Int} == diag(A)
             for k in -size(S,1):size(S,2)
-                @test diag(S, k)::SparseVector{T,Int}  == diag(A, k)
+                @test diag(S, k)::SparseVector{T,Int} == diag(A, k)
             end
             @test_throws ArgumentError diag(S, -size(S,1)-1)
             @test_throws ArgumentError diag(S,  size(S,2)+1)

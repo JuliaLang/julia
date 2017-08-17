@@ -3383,11 +3383,12 @@ end
 
 function diag(A::SparseMatrixCSC{Tv,Ti}, d::Integer=0) where {Tv,Ti}
     m, n = size(A)
-    if !(-m <= d <= n)
-        throw(ArgumentError("requested diagonal, $d, out of bounds in matrix of size ($m, $n)"))
+    k = Int(d)
+    if !(-m <= k <= n)
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m, $n)"))
     end
-    l = d < 0 ? min(m+d,n) : min(n-d,m)
-    r, c = d <= 0 ? (-d, 0) : (0, d) # start row/col -1
+    l = k < 0 ? min(m+k,n) : min(n-k,m)
+    r, c = k <= 0 ? (-k, 0) : (0, k) # start row/col -1
     ind = Vector{Ti}()
     val = Vector{Tv}()
     for i in 1:l
