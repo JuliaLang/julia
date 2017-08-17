@@ -7,7 +7,7 @@ export
     setprecision
 
 import
-    Base: (*), +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
+    Base: *, +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
         exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
@@ -203,20 +203,20 @@ unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_cast(T, x, Roun
 
 function trunc(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
     (typemin(T) <= x <= typemax(T)) || throw(InexactError(:trunc, T, x))
-    unsafe_cast(T,x,RoundToZero)
+    unsafe_cast(T, x, RoundToZero)
 end
 function floor(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
     (typemin(T) <= x <= typemax(T)) || throw(InexactError(:floor, T, x))
-    unsafe_cast(T,x,RoundDown)
+    unsafe_cast(T, x, RoundDown)
 end
 function ceil(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
     (typemin(T) <= x <= typemax(T)) || throw(InexactError(:ceil, T, x))
-    unsafe_cast(T,x,RoundUp)
+    unsafe_cast(T, x, RoundUp)
 end
 
 function round(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
     (typemin(T) <= x <= typemax(T)) || throw(InexactError(:round, T, x))
-    unsafe_cast(T,x,ROUNDING_MODE[])
+    unsafe_cast(T, x, ROUNDING_MODE[])
 end
 
 trunc(::Type{BigInt}, x::BigFloat) = unsafe_cast(BigInt, x, RoundToZero)
@@ -230,8 +230,9 @@ floor(::Type{Integer}, x::BigFloat) = floor(BigInt, x)
 ceil(::Type{Integer}, x::BigFloat) = ceil(BigInt, x)
 round(::Type{Integer}, x::BigFloat) = round(BigInt, x)
 
-convert(::Type{Bool}, x::BigFloat) = x == 0 ? false : x == 1 ? true :
-    throw(InexactError(:convert, Bool, x))
+function convert(::Type{Bool}, x::BigFloat)
+    x == 0 ? false : x == 1 ? true : throw(InexactError(:convert, Bool, x))
+end
 function convert(::Type{BigInt},x::BigFloat)
     isinteger(x) || throw(InexactError(:convert, BigInt, x))
     trunc(BigInt,x)
@@ -268,8 +269,8 @@ promote_rule(::Type{BigFloat}, ::Type{<:AbstractFloat}) = BigFloat
 big(::Type{<:AbstractFloat}) = BigFloat
 
 function convert(::Type{Rational{BigInt}}, x::AbstractFloat)
-    isnan(x) && return zero(BigInt)//zero(BigInt)
-    isinf(x) && return copysign(one(BigInt),x)//zero(BigInt)
+    isnan(x) && return zero(BigInt) // zero(BigInt)
+    isinf(x) && return copysign(one(BigInt),x) // zero(BigInt)
     x == 0 && return zero(BigInt) // one(BigInt)
     s = max(precision(x) - exponent(x), 0)
     BigInt(ldexp(x,s)) // (BigInt(1) << s)
@@ -584,7 +585,7 @@ end
 function log1p(x::BigFloat)
     if x < -1
         throw(DomainError(x, string("log1p will only return a complex result if called ",
-                                    "with a complex argument. Try log1p(complex(x)).")))
+                          "with a complex argument. Try log1p(complex(x)).")))
     end
     z = BigFloat()
     ccall((:mpfr_log1p, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Int32), z, x, ROUNDING_MODE[])
@@ -640,7 +641,7 @@ function sum(arr::AbstractArray{BigFloat})
 end
 
 # Functions for which NaN results are converted to DomainError, following Base
-for f in (:sin,:cos,:tan,:sec,:csc,:acos,:asin,:atan,:acosh,:asinh,:atanh,:gamma)
+for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh, :gamma)
     @eval begin
         function ($f)(x::BigFloat)
             isnan(x) && return x
@@ -697,18 +698,18 @@ function cmp(x::BigFloat, y::CdoubleMax)
 end
 cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)
 
-==(x::BigFloat, y::Integer)   = !isnan(x) && cmp(x,y) == 0
-==(x::Integer, y::BigFloat)   = y == x
+==(x::BigFloat, y::Integer)    = !isnan(x) && cmp(x,y) == 0
+==(x::Integer, y::BigFloat)    = y == x
 ==(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) == 0
 ==(x::CdoubleMax, y::BigFloat) = y == x
 
-<(x::BigFloat, y::Integer)   = !isnan(x) && cmp(x,y) < 0
-<(x::Integer, y::BigFloat)   = !isnan(y) && cmp(y,x) > 0
+<(x::BigFloat, y::Integer)    = !isnan(x) && cmp(x,y) < 0
+<(x::Integer, y::BigFloat)    = !isnan(y) && cmp(y,x) > 0
 <(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) < 0
 <(x::CdoubleMax, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) > 0
 
-<=(x::BigFloat, y::Integer)   = !isnan(x) && cmp(x,y) <= 0
-<=(x::Integer, y::BigFloat)   = !isnan(y) && cmp(y,x) >= 0
+<=(x::BigFloat, y::Integer)    = !isnan(x) && cmp(x,y) <= 0
+<=(x::Integer, y::BigFloat)    = !isnan(y) && cmp(y,x) >= 0
 <=(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) <= 0
 <=(x::CdoubleMax, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) >= 0
 
