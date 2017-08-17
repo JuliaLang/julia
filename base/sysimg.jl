@@ -325,8 +325,8 @@ include("hashing2.jl")
 include("irrationals.jl")
 
 # random number generation
-include("dSFMT.jl")
-include("random.jl")
+include("random/dSFMT.jl")
+include("random/random.jl")
 importall .Random
 
 # (s)printf macros
