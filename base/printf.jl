@@ -1130,7 +1130,7 @@ function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision:
     @assert length(printf_fmt) == fmt_len
     bufsiz = length(DIGITS)
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32,
-                (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}),
+                (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...),
                 DIGITS, bufsiz, printf_fmt, d)
     lng > 0 || error("invalid printf formatting for BigFloat")
     unsafe_write(out, pointer(DIGITS), min(lng, bufsiz-1))
