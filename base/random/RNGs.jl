@@ -45,12 +45,7 @@ RandomDevice
 
 ### generation of floats
 
-rand(rng::RandomDevice, ::Close1Open2_64) =
-    reinterpret(Float64, 0x3ff0000000000000 | rand(rng, UInt64) & 0x000fffffffffffff)
-
-rand(rng::RandomDevice, ::CloseOpen_64) = rand(rng, Close1Open2()) - 1.0
-
-@inline rand(r::RandomDevice, T::BitFloatType) = rand_generic(r, T)
+@inline rand(r::RandomDevice, I::FloatInterval) = rand_generic(r, I)
 
 
 ## MersenneTwister
@@ -224,7 +219,7 @@ rand_ui23_raw(r::MersenneTwister) = rand_ui52_raw(r)
 
 @inline rand(r::MersenneTwister, I::FloatInterval_64) = (reserve_1(r); rand_inbounds(r, I))
 
-@inline rand(r::MersenneTwister, T::BitFloatType) = rand_generic(r, T)
+@inline rand(r::MersenneTwister, I::FloatInterval) = rand_generic(r, I)
 
 #### integers
 

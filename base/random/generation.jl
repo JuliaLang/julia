@@ -10,18 +10,24 @@
 
 ### random floats
 
-@inline rand(r::AbstractRNG=GLOBAL_RNG) = rand(r, CloseOpen())
+# CloseOpen(T) is the fallback for an AbstractFloat T
+@inline rand(r::AbstractRNG=GLOBAL_RNG, ::Type{T}=Float64) where {T<:AbstractFloat} =
+    rand(r, CloseOpen(T))
 
 # generic random generation function which can be used by RNG implementors
 # it is not defined as a fallback rand method as this could create ambiguities
-@inline rand_generic(r::AbstractRNG, ::Type{Float64}) = rand(r, CloseOpen())
 
-rand_generic(r::AbstractRNG, ::Type{Float16}) =
+rand_generic(r::AbstractRNG, ::CloseOpen{Float16}) =
     Float16(reinterpret(Float32,
                         (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
 
-rand_generic(r::AbstractRNG, ::Type{Float32}) =
+rand_generic(r::AbstractRNG, ::CloseOpen{Float32}) =
     reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
+
+rand_generic(r::AbstractRNG, ::Close1Open2_64) =
+    reinterpret(Float64, 0x3ff0000000000000 | rand(r, UInt64) & 0x000fffffffffffff)
+
+rand_generic(r::AbstractRNG, ::CloseOpen_64) = rand(r, Close1Open2()) - 1.0
 
 ### random integers
 
@@ -72,6 +78,19 @@ rand(                T::Type, d::Integer, dims::Integer...) = rand(T, Dims((d, d
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
+#### arrays of floats
+
+rand!(r::AbstractRNG, A::AbstractArray, ::Type{T}) where {T<:AbstractFloat} =
+    rand!(r, A, CloseOpen{T}())
+
+function rand!(r::AbstractRNG, A::AbstractArray, I::FloatInterval)
+    for i in eachindex(A)
+        @inbounds A[i] = rand(r, I)
+    end
+    A
+end
+
+rand!(A::AbstractArray, I::FloatInterval) = rand!(GLOBAL_RNG, A, I)
 
 ## Generate random integer within a range
 
