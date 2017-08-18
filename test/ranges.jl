@@ -957,3 +957,8 @@ end
         @test logspace(a, b, n, base=base) == base.^linspace(a, b, n)
     end
 end
+
+
+@test -5.0:1.0:5.0 === -5.0:1.0:5.0
+@test -5.0f0:1.0f0:5.0f0 === -5.0f0:1.0f0:5.0f0
+@test Float16(-5.0):Float16(1.0):Float16(5.0) === Float16(-5.0):Float16(1.0):Float16(5.0)
