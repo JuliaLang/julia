@@ -495,7 +495,7 @@ julia> s = UInt8["01abEF"...]
  0x45
  0x46
 
-julia> d =zeros(UInt8, 3)
+julia> d = zeros(UInt8, 3)
 3-element Array{UInt8,1}:
  0x00
  0x00
