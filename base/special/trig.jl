@@ -87,7 +87,7 @@ cos_kernel(x::Real) = cos(x)
 ASIN_X_MIN_THRESHOLD(::Type{Float32}) = 2.0f0^-12
 ASIN_X_MIN_THRESHOLD(::Type{Float64}) = sqrt(eps(Float64))
 
-asin_p(t::Float64) =
+arc_p(t::Float64) =
     t*@horner(t,
     1.66666666666666657415e-01,
     -3.25565818622400915405e-01,
@@ -96,7 +96,7 @@ asin_p(t::Float64) =
     7.91534994289814532176e-04,
     3.47933107596021167570e-05)
 
-asin_q(t::Float64) =
+arc_q(t::Float64) =
     @horner(t,
     1.0,
     -2.40339491173441421878e+00,
@@ -104,19 +104,19 @@ asin_q(t::Float64) =
     -6.88283971605453293030e-01,
     7.70381505559019352791e-02)
 
-asin_p(t::Float32) =
+arc_p(t::Float32) =
     t*@horner(t,
     1.6666586697f-01,
     -4.2743422091f-02,
     -8.6563630030f-03)
 
-asin_q(t::Float32) = @horner(t, 1.0f0, -7.0662963390f-01)
+arc_q(t::Float32) = @horner(t, 1.0f0, -7.0662963390f-01)
 
 @inline function asin_kernel(t::Float64, x::Float64)
     pio2_lo = 6.12323399573676603587e-17
     s = sqrt_llvm(t)
-    p = asin_p(t) # numerator polynomial
-    q = asin_q(t) # denominator polynomial
+    p = arc_p(t) # numerator polynomial
+    q = arc_q(t) # denominator polynomial
     if abs(x) >= 0.975 # |x| > 0.975
         Rx = p/q
         return flipsign(pi/2 - (2.0*(s + s*Rx) - pio2_lo), x)
@@ -131,8 +131,8 @@ asin_q(t::Float32) = @horner(t, 1.0f0, -7.0662963390f-01)
 end
 @inline function asin_kernel(t::Float32, x::Float32)
     s = sqrt_llvm(Float64(t))
-    p = asin_p(t) # numerator polynomial
-    q = asin_q(t) # denominator polynomial
+    p = arc_p(t) # numerator polynomial
+    q = arc_q(t) # denominator polynomial
     Rx = p/q # rational approximation
     flipsign(Float32(pi/2 - 2*(s + s*Rx)), x)
 end
@@ -178,7 +178,7 @@ function asin(x::T) where T<:Union{Float32, Float64}
         # else if |x|<0.5 we use a rational approximation R(x)=p(x)/q(x) such that
         # tan(x) ≈ x+x*R(x)
         x² = x*x
-        Rx = asin_p(x²)/asin_q(x²) # rational approximation
+        Rx = arc_p(x²)/arc_q(x²) # rational approximation
         return muladd(x, Rx, x)
     end
     # else 1/2 <= |x| < 1
