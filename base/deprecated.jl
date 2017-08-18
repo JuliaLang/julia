@@ -1352,6 +1352,8 @@ end
 @deprecate IOBuffer(read::Bool, write::Bool) IOBuffer(read=read, write=write)
 @deprecate IOBuffer(maxsize::Integer) IOBuffer(read=true, write=true, maxsize=maxsize)
 
+# PR #23332
+@deprecate ^(x, p::Integer) Base.power_by_squaring(x,p)
 
 # END 0.7 deprecations
 
