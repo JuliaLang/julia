@@ -574,3 +574,15 @@ end
         @test bufferdata(s) == "begin\n" * ' '^(i-6) * "\n    x"
     end
 end
+
+@testset "change case on the right" begin
+    buf = IOBuffer()
+    LineEdit.edit_insert(buf, "aa bb CC")
+    seekstart(buf)
+    LineEdit.edit_upper_case(buf)
+    LineEdit.edit_title_case(buf)
+    @test String(take!(copy(buf))) == "AA Bb CC"
+    @test position(buf) == 5
+    LineEdit.edit_lower_case(buf)
+    @test String(take!(copy(buf))) == "AA Bb cc"
+end
