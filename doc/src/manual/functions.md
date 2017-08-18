@@ -267,6 +267,25 @@ end
 
 This has the exact same effect as the previous definition of `foo`.
 
+## Argument destructuring
+
+The destructuring feature can also be used within a function argument.
+If a function argument name is written as a tuple (e.g. `(x, y)`) instead of just
+a symbol, then an assignment `(x, y) = argument` will be inserted for you:
+
+```julia
+julia> minmax(x, y) = (y < x) ? (y, x) : (x, y)
+
+julia> range((min, max)) = max - min
+
+julia> range(minmax(10, 2))
+8
+```
+
+Notice the extra set of parentheses in the definition of `range`.
+Without those, `range` would be a two-argument function, and this example would
+not work.
+
 ## Varargs Functions
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
