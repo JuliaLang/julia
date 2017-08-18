@@ -648,7 +648,7 @@ julia> m.match
 "acd"
 
 julia> m.captures
-3-element Array{Union{SubString{String}, Void},1}:
+3-element Array{Union{Void, SubString{String}},1}:
  "a"
  "c"
  "d"
@@ -669,7 +669,7 @@ julia> m.match
 "ad"
 
 julia> m.captures
-3-element Array{Union{SubString{String}, Void},1}:
+3-element Array{Union{Void, SubString{String}},1}:
  "a"
  nothing
  "d"
