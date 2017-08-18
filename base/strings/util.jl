@@ -470,7 +470,11 @@ Convert the hexadecimal bytes array to its binary representation. Returns
 `Vector{UInt8}`, i.e. a vector of bytes.
 """
 @inline function hex2bytes(s::AbstractVector{UInt8})
-    d = zeros(UInt8, div(endof(s), 2))
+    len = length(s)
+    if isodd(len)
+        throw(ArgumentError("source vector length must be even"))
+    end
+    d = zeros(UInt8, div(len, 2))
     return hex2bytes!(d, s)
 end
 
@@ -521,7 +525,6 @@ function hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
         n += number_from_hex(c2)
         d[j+=1] = (n & 0xFF)
     end
-    resize!(d, j)
     return d
 end
 
