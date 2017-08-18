@@ -98,17 +98,17 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
         end
         if cmd == :add
             isempty(tokens) &&
-                error("no packages to add")
+                error("`add` – list packages to add to the environment")
             tokens[1][1] == :ver &&
                 error("package name/uuid must precede version spec `@$(tokens[1][2])`")
-            pkgs = Addition[]
+            pkgs = PackageVersion[]
             # tokens: package names and/or uuids, optionally followed by version specs
             while !isempty(tokens)
                 token = shift!(tokens)
                 if token[1] == :pkg
-                    push!(pkgs, Addition(token[2:end]...))
+                    push!(pkgs, PackageVersion(Package(token[2:end]...)))
                 elseif token[1] == :ver
-                    pkgs[end].vers = token[2]
+                    pkgs[end].version = token[2]
                     isempty(tokens) || tokens[1][1] == :pkg ||
                         error("package name/uuid must precede version spec `@$(tokens[1][2])`")
                 elseif token[1] == :opt
@@ -119,14 +119,14 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
             display(disp, pkgs)
         elseif cmd == :rm
             isempty(tokens) &&
-                error("no packages to remove")
-            pkgs = Removal[]
+                error("`rm` – list packages to remove from the current environment")
+            pkgs = Package[]
             # tokens: package names and/or uuids
             while !isempty(tokens)
                 token = shift!(tokens)
                 token[1] != :pkg &&
                     error("`rm` only accepts package names and/or UUIDs")
-                push!(pkgs, Removal(token[2:end]...))
+                push!(pkgs, Package(token[2:end]...))
             end
             # Pkg3.Operations.rm(pkgs)
             display(disp, pkgs)

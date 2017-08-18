@@ -3,7 +3,7 @@ module Types
 using Base.Random: UUID
 using Base.Pkg.Types: VersionSet, Available
 
-export SHA1, VersionRange, VersionSpec, Addition, Removal
+export SHA1, VersionRange, VersionSpec, Package, PackageVersion
 
 ## ordering of UUIDs ##
 
@@ -132,26 +132,17 @@ Base.convert(::Type{Available}, t::Tuple{SHA1,Dict{UUID,VersionSpec}}) = Availab
 
 ## type for expressing operations ##
 
-mutable struct Addition
+mutable struct Package
     name::String
     uuid::UUID
-    vers::VersionRange
-    Addition(
-        name::AbstractString = "",
-        uuid::UUID = UUID(zero(UInt128)),
-        vers::VersionRange = VersionRange("*"),
-    ) = new(name, uuid, vers)
 end
-Addition(uuid::UUID) = Addition("", uuid)
+Package(name::AbstractString) = Package(name, UUID(zero(UInt128)))
+Package(uuid::UUID) = Package("", uuid)
 
-mutable struct Removal
-    name::String
-    uuid::UUID
-    Removal(
-        name::AbstractString = "",
-        uuid::UUID = UUID(zero(UInt128)),
-    ) = new(name, uuid)
+mutable struct PackageVersion
+    package::Package
+    version::VersionSpec
 end
-Removal(uuid::UUID) = Removal("", uuid)
+PackageVersion(pkg::Package) = PackageVersion(pkg, VersionSpec("*"))
 
 end # module
