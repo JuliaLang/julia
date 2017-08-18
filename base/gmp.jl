@@ -86,7 +86,7 @@ function __init__()
             msg = gmp_bits_per_limb() != GMP_BITS_PER_LIMB ? error : warn
             msg(string("The dynamically loaded GMP library (version $(gmp_version()) ",
                        "with __gmp_bits_per_limb == $(gmp_bits_per_limb()))\n",
-                       "does not correspond to the compile time version",
+                       "does not correspond to the compile time version ",
                        "(version $GMP_VERSION with __gmp_bits_per_limb == $GMP_BITS_PER_LIMB).\n",
                        "Please rebuild Julia."))
         end
@@ -100,8 +100,7 @@ function __init__()
         ZERO.alloc, ZERO.size, ZERO.d = 0, 0, C_NULL
         ONE.alloc, ONE.size, ONE.d = 1, 1, pointer(_ONE)
     catch ex
-        Base.showerror_nostdio(ex,
-            "WARNING: Error during initialization of module GMP")
+        Base.showerror_nostdio(ex, "WARNING: Error during initialization of module GMP")
     end
 end
 
