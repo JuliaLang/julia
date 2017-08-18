@@ -1338,9 +1338,9 @@ function _sparse_findnext(m::SparseMatrixCSC, i::Int)
    end
    row, col = ind2sub(m, i)
    lo, hi = m.colptr[col], m.colptr[col+1]
-   n = searchsortedfirst(@view(m.rowval[lo:hi-1]), row)
-   if 1 <= n <= hi-lo
-       return sub2ind(m, m.rowval[lo+n-1], col)
+   n = searchsortedfirst(m.rowval, row, lo, hi-1, Base.Order.Forward)
+   if lo <= n <= hi-1
+       return sub2ind(m, m.rowval[n], col)
    end
    nextcol = findnext(c->(c>hi), m.colptr, col+1)
    if nextcol == 0
@@ -1356,9 +1356,9 @@ function _sparse_findprev(m::SparseMatrixCSC, i::Int)
    end
    row, col = ind2sub(m, i)
    lo, hi = m.colptr[col], m.colptr[col+1]
-   n = searchsortedlast(@view(m.rowval[lo:hi-1]), row)
-   if 1 <= n <= hi-lo
-       return sub2ind(m, m.rowval[lo+n-1], col)
+   n = searchsortedlast(m.rowval, row, lo, hi-1, Base.Order.Forward)
+   if lo <= n <= hi-1
+       return sub2ind(m, m.rowval[n], col)
    end
    prevcol = findprev(c->(c<lo), m.colptr, col-1)
    if prevcol == 0
