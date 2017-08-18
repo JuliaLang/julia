@@ -923,7 +923,7 @@ function string(x::BigFloat)
         buf = Base.StringVector(lng + 1)
         lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     end
-    n = (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng
+    n = (1 <= x < 10 || -10 < x <= -1 || iszero(x)) ? lng - 4 : lng
     return String(resize!(buf,n))
 end
 
