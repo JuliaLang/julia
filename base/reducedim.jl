@@ -23,7 +23,8 @@ reduced_indices(inds::Indices, d::Int) = reduced_indices(inds, d, OneTo(1))
 function reduced_indices0(inds::Indices{N}, d::Int) where N
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
     if d <= N
-        return reduced_indices(inds, d, (inds[d] == OneTo(0) ? OneTo(0) : OneTo(1)))
+        ind = inds[d]
+        return reduced_indices(inds, d, (isempty(ind) ? ind : OneTo(1)))
     else
         return inds
     end
@@ -51,7 +52,8 @@ function reduced_indices0(inds::Indices{N}, region) where N
         if d < 1
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
         elseif d <= N
-            rinds[d] = oftype(rinds[d], (rinds[d] == OneTo(0) ? OneTo(0) : OneTo(1)))
+            rind = rinds[d]
+            rinds[d] = oftype(rind, (isempty(rind) ? rind : OneTo(1)))
         end
     end
     tuple(rinds...)::typeof(inds)
@@ -76,8 +78,24 @@ end
 reducedim_initarray(A::AbstractArray, region, v0, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), v0)
 reducedim_initarray(A::AbstractArray, region, v0::T) where {T} = reducedim_initarray(A, region, v0, T)
 
-reducedim_initarray0(A::AbstractArray, region, f) = f.(getindex(A, reduced_indices0(A, region)...))
-reducedim_initarray0(A::AbstractArray, region, ::typeof(identity)) = getindex(A, reduced_indices0(A, region)...)
+function reducedim_initarray0(A::AbstractArray{T}, region, f, ops) where T
+    ri = reduced_indices0(A, region)
+    if isempty(A)
+        if prod(map(length, reduced_indices(A, region))) != 0
+            reducedim_initarray0_empty(A, region, f, ops) # ops over empty slice of A
+        else
+            R = f == identity ? T : Core.Inference.return_type(f, (T,))
+            similar(A, R, ri)
+        end
+    else
+        R = f == identity ? T : typeof(f(first(A)))
+        si = similar(A, R, ri)
+        mapfirst!(f, si, A)
+    end
+end
+
+reducedim_initarray0_empty(A::AbstractArray, region, f, ops) = mapslices(x->ops(f.(x)), A, region)
+reducedim_initarray0_empty(A::AbstractArray, region,::typeof(identity), ops) = mapslices(ops, A, region)
 
 # TODO: better way to handle reducedim initialization
 #
@@ -109,8 +127,8 @@ reducedim_init(f, op::typeof(max), A::AbstractArray, region) = reducedim_init(f,
 reducedim_init(f, op::typeof(min), A::AbstractArray, region) = reducedim_init(f, scalarmin, A, region)
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray, region) = reducedim_init(f, scalarmax, A, region)
 
-reducedim_init(f, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f)
-reducedim_init(f, op::typeof(scalarmin), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f)
+reducedim_init(f, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, maximum)
+reducedim_init(f, op::typeof(scalarmin), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, minimum)
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))))
 
@@ -174,15 +192,18 @@ end
 """
 Extract first entry of slices of array A into existing array R.
 """
-function copyfirst!(R::AbstractArray, A::AbstractArray)
+copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
+
+function mapfirst!(f, R::AbstractArray, A::AbstractArray)
     lsiz = check_reducedims(R, A)
-    iA = collect(map(length, indices(A)))
-    iR = map!(length, ones(ndims(A)), collect(indices(R)))
+    iA = indices(A)
+    iR = indices(R)
     t = []
     for i in 1:length(iR)
-        push!(t, iA[i] == iR[i] ? Colon() : 1)
+        iAi = iA[i]
+        push!(t, iAi == iR[i] ? iAi : first(iAi))
     end
-    copy!(R, view(A, t...))
+    map!(f, R, view(A, t...))
 end
 
 function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
@@ -683,15 +704,19 @@ julia> findmin(A, 2)
 ```
 """
 function findmin(A::AbstractArray{T}, region) where T
+    ri = reduced_indices0(A, region)
     if isempty(A)
-        return (similar(A, reduced_indices0(A, region)),
-                similar(dims->zeros(Int, dims), reduced_indices0(A, region)))
+        if prod(map(length, reduced_indices(A, region))) != 0
+            throw(ArgumentError("collection slices must be non-empty"))
+        end
+        (similar(A, ri), similar(dims->zeros(Int, dims), ri))
+    else
+        findminmax!(isless, fill!(similar(A, ri), first(A)),
+                    similar(dims->zeros(Int, dims), ri), A)
     end
-    return findminmax!(isless, fill!(similar(A, reduced_indices0(A, region)), first(A)),
-            similar(dims->zeros(Int, dims), reduced_indices0(A, region)), A)
 end
 
-isgt(a, b) = isless(b,a)
+isgreater(a, b) = isless(b,a)
 
 """
     findmax!(rval, rind, A, [init=true]) -> (maxval, index)
@@ -702,7 +727,7 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(isgt, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,0), A)
+    findminmax!(isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,0), A)
 end
 
 """
@@ -726,12 +751,16 @@ julia> findmax(A,2)
 ```
 """
 function findmax(A::AbstractArray{T}, region) where T
+    ri = reduced_indices0(A, region)
     if isempty(A)
-        return (similar(A, reduced_indices0(A,region)),
-                similar(dims->zeros(Int, dims), reduced_indices0(A,region)))
+        if prod(map(length, reduced_indices(A, region))) != 0
+            throw(ArgumentError("collection slices must be non-empty"))
+        end
+        similar(A, ri), similar(dims->zeros(Int, dims), ri)
+    else
+        findminmax!(isgreater, fill!(similar(A, ri), first(A)),
+                    similar(dims->zeros(Int, dims), ri), A)
     end
-    return findminmax!(isgt, fill!(similar(A, reduced_indices0(A, region)), first(A)),
-            similar(dims->zeros(Int, dims), reduced_indices0(A, region)), A)
 end
 
 reducedim1(R, A) = length(indices1(R)) == 1

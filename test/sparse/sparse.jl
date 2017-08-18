@@ -466,11 +466,17 @@ end
         @test_throws ArgumentError maximum(sparse(Int[]))
         @test var(sparse(Int[])) === NaN
 
-        for f in (sum, prod, minimum, maximum, var)
+        for f in (sum, prod, var)
             @test isequal(f(spzeros(0, 1), 1), f(Array{Int}(0, 1), 1))
             @test isequal(f(spzeros(0, 1), 2), f(Array{Int}(0, 1), 2))
             @test isequal(f(spzeros(0, 1), (1, 2)), f(Array{Int}(0, 1), (1, 2)))
             @test isequal(f(spzeros(0, 1), 3), f(Array{Int}(0, 1), 3))
+        end
+        for f in (minimum, maximum, findmin, findmax)
+            @test_throws ArgumentError f(spzeros(0, 1), 1)
+            @test isequal(f(spzeros(0, 1), 2), f(Array{Int}(0,1), 2))
+            @test_throws ArgumentError f(spzeros(0, 1), (1, 2))
+            @test isequal(f(spzeros(0, 1), 3), f(Array{Int}(0,1), 3))
         end
     end
 end

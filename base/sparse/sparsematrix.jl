@@ -1837,7 +1837,14 @@ macro _findr(op, A, region, Tv, Ti)
     esc(quote
     N = nnz($A)
     L = length($A)
-    (L == 0) && error("array must be non-empty")
+    if L == 0
+        if prod(map(length, Base.reduced_indices($A, $region))) != 0
+            throw(ArgumentError("array slices must be non-empty"))
+        else
+            ri = Base.reduced_indices0($A, $region)
+            return (similar($A, ri), similar(dims->zeros(Int, dims), ri))
+        end
+    end
 
     colptr = $A.colptr; rowval = $A.rowval; nzval = $A.nzval; m = $A.m; n = $A.n
     zval = zero($Tv)
