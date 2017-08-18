@@ -1687,6 +1687,9 @@ end
 # issue #5148, PR #23259
 # warning for `const` on locals should be changed to an error in julia-syntax.scm
 
+# PR #23332
+@deprecate ^(x, p::Integer) power_by_squaring(x,p)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
