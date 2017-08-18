@@ -1684,6 +1684,8 @@ AnyDict(
 const history_keymap = AnyDict(
     "^P" => (s,o...)->(edit_move_up(s) || history_prev(s, mode(s).hist)),
     "^N" => (s,o...)->(edit_move_down(s) || history_next(s, mode(s).hist)),
+    "\ep" => (s,o...)->(history_prev(s, mode(s).hist)),
+    "\en" => (s,o...)->(history_next(s, mode(s).hist)),
     # Up Arrow
     "\e[A" => (s,o...)->(edit_move_up(s) || history_prev(s, mode(s).hist)),
     # Down Arrow

@@ -158,8 +158,8 @@ to do so).
 | End, `^E`           | Move to end of line                                                                                        |
 | Up arrow, `^P`      | Move up one line (or change to the previous history entry that matches the text before the cursor)         |
 | Down arrow, `^N`    | Move down one line (or change to the next history entry that matches the text before the cursor)           |
-| Page-up             | Change to the previous history entry                                                                       |
-| Page-down           | Change to the next history entry                                                                           |
+| Page-up, `meta-P`   | Change to the previous history entry                                                                       |
+| Page-down, `meta-N` | Change to the next history entry                                                                           |
 | `meta-<`            | Change to the first history entry (of the current session if it is before the current position in history) |
 | `meta->`            | Change to the last history entry                                                                           |
 | `^-Space`           | Set the "mark" in the editing region                                                                       |
