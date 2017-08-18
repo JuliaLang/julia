@@ -432,3 +432,11 @@ end
     @test quantile(x, 0.5)  === 3.0
     @test quantile(x, 1//2) === 3//1
 end
+
+@testset "Promotion in covzm. Issue #8080" begin
+    A = [1 -1 -1; -1 1 1; -1 1 -1; 1 -1 -1; 1 -1 1]
+    @test Base.covzm(A) - mean(A, 1)'*mean(A, 1)*size(A, 1)/(size(A, 1) - 1) ≈ cov(A)
+    A = [1//1 -1 -1; -1 1 1; -1 1 -1; 1 -1 -1; 1 -1 1]
+    @test (A'A - size(A, 1)*Base.mean(A, 1)'*Base.mean(A, 1))/4 == cov(A)
+end
+
