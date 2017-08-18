@@ -477,7 +477,7 @@ end
 """
     hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
 
-Convert the hexadecimal bytes vector to its binary representation. The results are
+Converts the hexadecimal bytes vector to its binary representation. The results are
 populated into a destination vector. The function returns the destination vector.
 
 # Examples
@@ -514,8 +514,7 @@ function hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
     while !done(s, i)
         n = 0
         c1, i = next(s, i)
-        done(s, i) && throw(ArgumentError(
-            "string length must be even: length($(repr(s))) == $(length(s))"))
+        done(s, i) && throw(ArgumentError("source vector length must be even"))
         c2, i = next(s, i)
         n = number_from_hex(c1)
         n <<= 4
@@ -537,7 +536,7 @@ end
     return (DIGIT_ZERO <= c <= DIGIT_NINE) ? c - DIGIT_ZERO :
         (LATIN_UPPER_A <= c <= LATIN_UPPER_F) ? c - LATIN_UPPER_A + 10 :
         (LATIN_A <= c <= LATIN_F) ? c - LATIN_A + 10 :
-        throw(ArgumentError("Not a hexadecimal number"))
+        throw(ArgumentError("not a hexadecimal number: '$(Char(c))'"))
 end
 
 """
