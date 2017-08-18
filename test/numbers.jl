@@ -3023,3 +3023,10 @@ end
         end
     end
 end
+
+@testset "compact NaN printing" begin
+    @test sprint(io->show(IOContext(io, :compact => true), NaN16)) == "NaN"
+    @test_broken sprint(io->show(IOContext(io, :compact => true), NaN32)) == "NaN"
+    @test sprint(io->show(IOContext(io, :compact => true), NaN64)) == "NaN"
+    @test_broken sprint(io->show(IOContext(io, :compact => true), big(NaN))) == "NaN"
+end
