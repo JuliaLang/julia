@@ -13,7 +13,7 @@ Nullable{Int64}()
 julia> get(a)
 ERROR: NullException()
 Stacktrace:
- [1] get(::Nullable{Int64}) at ./nullable.jl:92
+ [1] get(::Nullable{Int64}) at ./nullable.jl:118
 ```
 """
 struct NullException <: Exception

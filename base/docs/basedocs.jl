@@ -982,7 +982,7 @@ Inf
 julia> div(2, 0)
 ERROR: DivideError: integer division error
 Stacktrace:
- [1] div(::Int64, ::Int64) at ./int.jl:183
+ [1] div(::Int64, ::Int64) at ./int.jl:220
 ```
 """
 DivideError

@@ -62,25 +62,32 @@ then paste the symbol.)
 Julia will even let you redefine built-in constants and functions if needed:
 
 ```jldoctest
+julia> pi = 3
+3
+
+julia> pi
+3
+
+julia> sqrt = 4
+4
+```
+
+However, if you try to redefine a built-in constant or function already in use, Julia will give
+you an error to avoid potential confusions:
+
+```jldoctest
 julia> pi
 π = 3.1415926535897...
 
 julia> pi = 3
-WARNING: imported binding for pi overwritten in module Main
-3
-
-julia> pi
-3
+ERROR: cannot assign variable Base.pi from module Main
 
 julia> sqrt(100)
 10.0
 
 julia> sqrt = 4
-WARNING: imported binding for sqrt overwritten in module Main
-4
+ERROR: cannot assign variable Base.sqrt from module Main
 ```
-
-However, this is obviously not recommended to avoid potential confusion.
 
 ## Allowed Variable Names
 
