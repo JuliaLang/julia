@@ -117,6 +117,41 @@ R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
 rt = Base.return_types(reducedim, Tuple{Function, Array{Float64, 3}, Int, Float64})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
 
+@testset "empty cases" begin
+    A = Array{Int}(0,1)
+    @test sum(A) === 0
+    @test prod(A) === 1
+    @test_throws ArgumentError minimum(A)
+    @test_throws ArgumentError maximum(A)
+    @test var(A) === NaN
+
+    @test isequal(sum(A, 1), zeros(Int, 1, 1))
+    @test isequal(sum(A, 2), zeros(Int, 0, 1))
+    @test isequal(sum(A, (1, 2)), zeros(Int, 1, 1))
+    @test isequal(sum(A, 3), zeros(Int, 0, 1))
+    @test isequal(prod(A, 1), ones(Int, 1, 1))
+    @test isequal(prod(A, 2), ones(Int, 0, 1))
+    @test isequal(prod(A, (1, 2)), ones(Int, 1, 1))
+    @test isequal(prod(A, 3), ones(Int, 0, 1))
+    @test isequal(var(A, 1), fill(NaN, 1, 1))
+    @test isequal(var(A, 2), fill(NaN, 0, 1))
+    @test isequal(var(A, (1, 2)), fill(NaN, 1, 1))
+    @test isequal(var(A, 3), fill(NaN, 0, 1))
+
+    for f in (minimum, maximum)
+        @test_throws ArgumentError f(A, 1)
+        @test isequal(f(A, 2), zeros(Int, 0, 1))
+        @test_throws ArgumentError f(A, (1, 2))
+        @test isequal(f(A, 3), zeros(Int, 0, 1))
+    end
+    for f in (findmin, findmax)
+        @test_throws ArgumentError f(A, 1)
+        @test isequal(f(A, 2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+        @test_throws ArgumentError f(A, (1, 2))
+        @test isequal(f(A, 3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+    end
+
+end
 ## findmin/findmax/minumum/maximum
 
 A = [1.0 5.0 6.0;
