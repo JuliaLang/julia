@@ -1261,4 +1261,126 @@ available in the `.error` field.
 """
 InitError
 
+"""
+    Any::DataType
+
+`Any` is the union of all types. It has the defining property `isa(x, Any) == true` for any `x`. `Any` describes
+therefore the entire universe of possible values. For example `Integer` is a subset of `Any` that includes `Int`,
+`Int8`, and other concrete types.
+"""
+Any
+
+"""
+    Union{}
+
+`Union{}`, the empty [`Union`](@ref) of types, is the type that has no values. That is, it has the defining
+property `isa(x, Union{}) == false` for any `x`. `Base.Bottom` is defined as its alias and the type of `Any`
+is `Core.TypeofBottom`.
+
+Examples:
+```jldoctest
+julia> isa(nothing, Union{})
+false
+```
+"""
+kw"Union{}"
+
+"""
+    Union{Types...}
+
+A type union is an abstract type which includes all instances of any of its argument types.
+
+Examples:
+```jldoctest
+julia> IntOrString = Union{Int,AbstractString}
+Union{AbstractString, Int64}
+
+julia> 1 :: IntOrString
+1
+
+julia> "Hello!" :: IntOrString
+"Hello!"
+
+julia> 1.0 :: IntOrString
+ERROR: TypeError: typeassert: expected Union{AbstractString, Int64}, got Float64
+```
+"""
+Union
+
+
+"""
+    UnionAll
+
+A union of types over all values of a type parameter. `UnionAll` is used to describe parametric types
+where the values of some parameters are not known.
+
+```jldoctest
+julia> typeof(Vector)
+UnionAll
+
+julia> typeof(Vector{Int})
+DataType
+```
+"""
+UnionAll
+
+"""
+    ::
+With the `::`-operator type annotations are attached to expressions and variables in programs.
+See manual/types/#type-declarations.
+
+Outside of declarations `::` is used to assert that expressions and variables in programs have a given type.
+
+```jldoctest
+julia> (1+2)::AbstractFloat
+ERROR: TypeError: typeassert: expected AbstractFloat, got Int64
+
+julia> (1+2)::Int
+3
+```
+"""
+kw"::"
+
+"""
+    Vararg{T,N}
+
+The last parameter of a tuple type [`Tuple`](@ref) can be the special type `Vararg`. `Vararg` which denotes any
+number of trailing elements. The type `Vararg{T,N}` corresponds to exactly `N` elements of type `T`.
+`Vararg{T}` correspondsvto zero or more elements of type `T`. `Vararg` tuple types are used to represent the
+arguments accepted byvvarargs methods (see vararg-functions in the manual).
+
+```jldoctest
+julia> mytupletype = Tuple{AbstractString,Vararg{Int}}
+Tuple{AbstractString,Vararg{Int64,N} where N}
+
+julia> isa(("1",), mytupletype)
+true
+
+julia> isa(("1",1), mytupletype)
+true
+
+julia> isa(("1",1,2), mytupletype)
+true
+
+julia> isa(("1",1,2,3.0), mytupletype)
+false
+```
+"""
+Vararg
+
+"""
+    Tuple{Types...}
+
+Tuples are an abstraction of the arguments of a function – without the function itself. The salient aspects of
+a function's arguments are their order and their types. Therefore a tuple type is similar to a parameterized
+immutable type where each parameter is the type of one field. Tuple types may have any number of parameters.
+
+Tuple types are covariant in their parameters: `Tuple{Int}` is a subtype of `Tuple{Any}`. Therefore `Tuple{Any}`
+is considered an abstract type, and tuple types are only concrete if their parameters are. Tuples do not have
+field names; fields are only accessed by index.
+
+See manual, section "Tuple Types".
+"""
+kw"Tuple"
+
 end
