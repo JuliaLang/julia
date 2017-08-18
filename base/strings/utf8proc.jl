@@ -500,8 +500,6 @@ end
 hash(g::GraphemeIterator, h::UInt) = hash(g.s, h)
 isless(g1::GraphemeIterator, g2::GraphemeIterator) = isless(g1.s, g2.s)
 
-convert(::Type{S}, g::GraphemeIterator) where {S<:AbstractString} = convert(S, g.s)
-
 show(io::IO, g::GraphemeIterator{S}) where {S} = print(io, "length-$(length(g)) GraphemeIterator{$S} for \"$(g.s)\"")
 
 ############################################################################
