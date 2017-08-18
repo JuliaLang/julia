@@ -110,6 +110,7 @@ Base.isleaftype
 Base.typejoin
 Base.typeintersect
 Base.Val
+Core.Void
 Base.Enums.@enum
 Base.instances
 ```
