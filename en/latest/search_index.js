@@ -6725,7 +6725,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.filter",
     "category": "Function",
-    "text": "filter(f, a::AbstractArray)\n\nReturn a copy of a, removing elements for which f is false. The function f is passed one argument.\n\nExamples\n\njulia> a = 1:10\n1:10\n\njulia> filter(isodd, a)\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\n\n\nfilter(f, d::Associative)\n\nReturn a copy of d, removing elements for which f is false. The function f is passed two arguments (key and value).\n\nExamples\n\njulia> d = Dict(1=>\"a\", 2=>\"b\")\nDict{Int64,String} with 2 entries:\n  2 => \"b\"\n  1 => \"a\"\n\njulia> filter((x,y)->isodd(x), d)\nDict{Int64,String} with 1 entry:\n  1 => \"a\"\n\n\n\nfilter(p, x::Nullable)\n\nReturn null if either x is null or p(get(x)) is false, and x otherwise.\n\nExamples\n\njulia> filter(isodd, Nullable(5))\nNullable{Int64}(5)\n\njulia> filter(isodd, Nullable(4))\nNullable{Int64}()\n\njulia> filter(isodd, Nullable{Int}())\nNullable{Int64}()\n\n\n\n"
+    "text": "filter(f, a::AbstractArray)\n\nReturn a copy of a, removing elements for which f is false. The function f is passed one argument.\n\nExamples\n\njulia> a = 1:10\n1:10\n\njulia> filter(isodd, a)\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\n\n\nfilter(f, d::Associative)\n\nReturn a copy of d, removing elements for which f is false. The function f is passed key=>value pairs.\n\nExamples\n\njulia> d = Dict(1=>\"a\", 2=>\"b\")\nDict{Int64,String} with 2 entries:\n  2 => \"b\"\n  1 => \"a\"\n\njulia> filter(p->isodd(p.first), d)\nDict{Int64,String} with 1 entry:\n  1 => \"a\"\n\n\n\nfilter(p, x::Nullable)\n\nReturn null if either x is null or p(get(x)) is false, and x otherwise.\n\nExamples\n\njulia> filter(isodd, Nullable(5))\nNullable{Int64}(5)\n\njulia> filter(isodd, Nullable(4))\nNullable{Int64}()\n\njulia> filter(isodd, Nullable{Int}())\nNullable{Int64}()\n\n\n\n"
 },
 
 {
@@ -6733,7 +6733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.filter!",
     "category": "Function",
-    "text": "filter!(f, a::AbstractVector)\n\nUpdate a, removing elements for which f is false. The function f is passed one argument.\n\nExamples\n\njulia> filter!(isodd, collect(1:10))\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\n\n\nfilter!(f, d::Associative)\n\nUpdate d, removing elements for which f is false. The function f is passed two arguments (key and value).\n\nExample\n\njulia> d = Dict(1=>\"a\", 2=>\"b\", 3=>\"c\")\nDict{Int64,String} with 3 entries:\n  2 => \"b\"\n  3 => \"c\"\n  1 => \"a\"\n\njulia> filter!((x,y)->isodd(x), d)\nDict{Int64,String} with 2 entries:\n  3 => \"c\"\n  1 => \"a\"\n\n\n\n"
+    "text": "filter!(f, a::AbstractVector)\n\nUpdate a, removing elements for which f is false. The function f is passed one argument.\n\nExamples\n\njulia> filter!(isodd, collect(1:10))\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\n\n\nfilter!(f, d::Associative)\n\nUpdate d, removing elements for which f is false. The function f is passed key=>value pairs.\n\nExample\n\njulia> d = Dict(1=>\"a\", 2=>\"b\", 3=>\"c\")\nDict{Int64,String} with 3 entries:\n  2 => \"b\"\n  3 => \"c\"\n  1 => \"a\"\n\njulia> filter!(p->isodd(p.first), d)\nDict{Int64,String} with 2 entries:\n  3 => \"c\"\n  1 => \"a\"\n\n\n\n"
 },
 
 {
