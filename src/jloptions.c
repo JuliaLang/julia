@@ -180,6 +180,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         // with the required arguments defined in base/client.jl `process_options()`
         { "version",         no_argument,       0, 'v' },
         { "help",            no_argument,       0, 'h' },
+        { "quiet",           no_argument,       0, 'q' },
         { "banner",          required_argument, 0, opt_banner },
         { "home",            required_argument, 0, 'H' },
         { "eval",            required_argument, 0, 'e' },
@@ -312,6 +313,10 @@ restart_switch:
         case 'J': // sysimage
             jl_options.image_file = strdup(optarg);
             jl_options.image_file_specified = 1;
+            break;
+        case 'q': // quiet
+            jl_printf(JL_STDERR, "-q and --quiet are deprecated, use --banner=no instead\n");
+            jl_options.banner = 0;
             break;
         case opt_banner: // banner
             if (!strcmp(optarg,"yes"))
