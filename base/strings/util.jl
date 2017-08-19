@@ -415,6 +415,18 @@ is a function, each occurrence is replaced with `r(s)` where `s` is the matched 
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
+
+# Examples
+```jldoctest
+julia> replace("Python is a programming language.", "Python", "Julia")
+"Julia is a programming language."
+
+julia> replace("The quick foxes run quickly.", "quick", "slow", 1)
+"The slow foxes run quickly."
+
+julia> replace("The quick foxes run quickly.", "quick", "", 1)
+"The  foxes run quickly."
+```
 """
 replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int))
 # TODO: change this to the following when `replace` is removed from deprecated.jl:
