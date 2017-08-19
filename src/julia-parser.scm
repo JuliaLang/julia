@@ -1282,8 +1282,23 @@
             (if (eq? word 'quote)
                 (list 'quote blk)
                 blk))))
-       ((while)  (begin0 (list 'while (parse-cond s) (parse-block s))
-                         (expect-end s word)))
+       ((while)
+        (let* ((cnd  (parse-cond s))
+               (body (parse-block s))
+               (nxt  (peek-token s)))
+          (case nxt
+            ((end)
+             (begin
+               (take-token s) ;; consume nxt
+               (list 'while cnd body)))
+            ((else)
+             (begin
+               (take-token s) ;; consume nxt
+               (let* ((elsebody (parse-block s)))
+                 (expect-end s word)
+                 (list 'while cnd body elsebody))))
+            (else
+             (expect-end s word))))) ;; which will throw the correct error
        ((for)
         (let* ((ranges (parse-comma-separated-iters s))
                (body   (parse-block s))
