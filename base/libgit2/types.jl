@@ -833,7 +833,6 @@ abstract type AbstractCredentials end
 
 "Checks if credentials were used"
 checkused!(p::AbstractCredentials) = true
-checkused!(p::Void) = false
 "Resets credentials for another use"
 reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 
