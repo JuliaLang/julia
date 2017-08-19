@@ -58,6 +58,9 @@ function tokenize(cmd::String)::Vector{Tuple{Symbol,Vararg{Any}}}
             help_mode = true
         end
     end
+    if isempty(tokens) || tokens[end][1] != :cmd
+        error("no package command given")
+    end
     while !isempty(words)
         word = shift!(words)
         if word[1] == '-'
@@ -75,7 +78,6 @@ function tokenize(cmd::String)::Vector{Tuple{Symbol,Vararg{Any}}}
             error("invalid argument: ", repr(word))
         end
     end
-    isempty(tokens) && push!(tokens, (:cmd, :help))
     return tokens
 end
 
@@ -83,7 +85,7 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
     disp = REPL.REPLDisplay(repl)
     try
         tokens = tokenize(input)
-        top_opts = Dict{Symbol,Any}()
+        env = EnvCache()
         local cmd::Symbol
         while !isempty(tokens)
             token = shift!(tokens)
@@ -91,51 +93,101 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
                 cmd = token[2]
                 break
             elseif token[1] == :opt
-                top_opts[token[2]] = length(token) == 2 ? true : token[3]
+                if token[2] == :env
+                    length(token) == 3 ||
+                        error("the `--env` option requires a value")
+                    env.env = token[3]
+                else
+                    error("unrecognized option: `--$(token[2])`")
+                end
             else
                 error("misplaced token: ", token)
             end
         end
-        if cmd == :add
-            isempty(tokens) &&
-                error("`add` – list packages to add to the environment")
-            tokens[1][1] == :ver &&
-                error("package name/uuid must precede version spec `@$(tokens[1][2])`")
-            pkgs = PackageVersion[]
-            # tokens: package names and/or uuids, optionally followed by version specs
-            while !isempty(tokens)
-                token = shift!(tokens)
-                if token[1] == :pkg
-                    push!(pkgs, PackageVersion(Package(token[2:end]...)))
-                elseif token[1] == :ver
-                    pkgs[end].version = token[2]
-                    isempty(tokens) || tokens[1][1] == :pkg ||
-                        error("package name/uuid must precede version spec `@$(tokens[1][2])`")
-                elseif token[1] == :opt
-                    error("`add` doesn't take options: --$(join(token[2:end], '='))\ninvalid command: $input")
-                end
-            end
-            # Pkg3.Operations.add(pkgs)
-            display(disp, pkgs)
-        elseif cmd == :rm
-            isempty(tokens) &&
-                error("`rm` – list packages to remove from the current environment")
-            pkgs = Package[]
-            # tokens: package names and/or uuids
-            while !isempty(tokens)
-                token = shift!(tokens)
-                token[1] != :pkg &&
-                    error("`rm` only accepts package names and/or UUIDs")
-                push!(pkgs, Package(token[2:end]...))
-            end
-            # Pkg3.Operations.rm(pkgs)
-            display(disp, pkgs)
-        else
+        ret =
+        cmd == :rm  ?  do_rm!(env, tokens) :
+        cmd == :add ? do_add!(env, tokens) :
+        cmd == :up  ?  do_up!(env, tokens) :
             error("`$cmd` command not yet implemented")
+        ret isa Tuple || (ret = (ret,))
+        for x in ret
+            display(disp, x)
         end
     catch exc
-        Base.display_error(repl.t.err_stream, exc, [])
+        Base.display_error(repl.t.err_stream, exc, Base.catch_backtrace())
     end
+end
+
+function do_rm!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+    # tokens: package names and/or uuids
+    isempty(tokens) &&
+        error("`rm` – list packages to remove")
+    pkgs = Package[]
+    while !isempty(tokens)
+        token = shift!(tokens)
+        token[1] != :pkg &&
+            error("`rm` only accepts package names and/or UUIDs")
+        push!(pkgs, Package(token[2:end]...))
+    end
+    return pkgs
+    Pkg3.Operations.rm(env, pkgs)
+end
+
+function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+    # tokens: package names and/or uuids, optionally followed by version specs
+    isempty(tokens) &&
+    error("`add` – list packages to add")
+    tokens[1][1] == :ver &&
+        error("package name/uuid must precede version spec `@$(tokens[1][2])`")
+    pkgs = PackageVersion[]
+    while !isempty(tokens)
+        token = shift!(tokens)
+        if token[1] == :pkg
+            push!(pkgs, PackageVersion(Package(token[2:end]...)))
+        elseif token[1] == :ver
+            pkgs[end].version = token[2]
+            isempty(tokens) || tokens[1][1] == :pkg ||
+                error("package name/uuid must precede version spec `@$(tokens[1][2])`")
+        elseif token[1] == :opt
+            error("`add` doesn't take options: --$(join(token[2:end], '='))\ninvalid command: $input")
+        end
+    end
+    return pkgs
+    Pkg3.Operations.add(env, pkgs)
+end
+
+function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+    # tokens:
+    #  - upgrade levels as options
+    #  - option --rest=[fixed|patch|minor|major]
+    #  - package names and/or uuids, optionally followed by version specs
+    !isempty(tokens) && tokens[1][1] == :ver &&
+        error("package name/uuid must precede version spec `@$(tokens[1][2])`")
+    pkgs = PackageVersion[]
+    rest = UpgradeLevel(:major)
+    level = UpgradeLevel(:patch)
+    while !isempty(tokens)
+        token = shift!(tokens)
+        if token[1] == :pkg
+            push!(pkgs, PackageVersion(Package(token[2:end]...), level))
+        elseif token[1] == :ver
+            pkgs[end].version = token[2]
+            isempty(tokens) || tokens[1][1] == :pkg ||
+                error("package name/uuid must precede version spec `@$(tokens[1][2])`")
+        elseif token[1] == :opt
+            if token[2] == :rest
+                length(token) == 3 ||
+                    error("the --rest option requires an argument")
+                rest = UpgradeLevel(token[3])
+            else
+                level = UpgradeLevel(token[2])
+                length(token) == 3 &&
+                    error("the --$(token[2]) option does not take an argument")
+            end
+        end
+    end
+    return pkgs, rest
+    Pkg3.Operations.up(env, pkgs, rest)
 end
 
 function create_mode(repl, main)

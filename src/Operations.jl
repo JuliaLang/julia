@@ -4,18 +4,10 @@ using Base.Random: UUID
 using Base: LibGit2
 using Base: Pkg
 
-using TOML
 using TerminalMenus
 
+using Pkg3: user_depot, depots
 using Pkg3.Types
-
-function parse_toml(path::String...; fakeit::Bool=false)
-    p = joinpath(path...)
-    !fakeit || isfile(p) ? TOML.parsefile(p) : Dict{Any,Any}()
-end
-
-user_depot() = abspath(homedir(), ".julia")
-depots() = Base.Loading.DEPOTS
 
 function registries(depot::String)
     d = joinpath(depot, "registries")
@@ -81,105 +73,8 @@ function find_installed(uuid::UUID, sha1::SHA1)
     return abspath(user_depot(), "packages", string(uuid), string(sha1))
 end
 
-include("libgit2_discover.jl")
-
-default_env() = get(ENV, "JULIA_ENV", nothing)
-find_config() = find_config(default_env())
-
-const config_names = ["JuliaConfig.toml", "Config.toml"]
-const manifest_names = ["JuliaManifest.toml", "Manifest.toml"]
-const default_envs = [
-    "v$(VERSION.major).$(VERSION.minor).$(VERSION.patch)",
-    "v$(VERSION.major).$(VERSION.minor)",
-    "v$(VERSION.major)",
-    "default",
-]
-
-function find_project_env(start_path::String = pwd())
-    path = LibGit2.discover(start_path, ceiling = homedir())
-    repo = LibGit2.GitRepo(path)
-    work = LibGit2.workdir(repo)
-    for name in config_names
-        path = abspath(work, name)
-        isfile(path) && return path
-    end
-    return abspath(work, config_names[end])
-end
-
-function find_default_env()
-    for depot in depots(), env in default_envs, name in config_names
-        path = joinpath(depot, "environments", env, name)
-        isfile(path) && return path
-    end
-    env = VERSION.major == 0 ? default_envs[2] : default_envs[3]
-    return joinpath(user_depot(), "environments", env, config_names[end])
-end
-
-function find_config(env::String)
-    if isempty(env)
-        error("invalid environment name: \"\"")
-    elseif env == "/"
-        return find_default_env()
-    elseif env == "."
-        return find_project_env()
-    elseif startswith(env, "/") || startswith(env, "./")
-        # path to config file or project directory
-        splitext(env)[2] == ".toml" && return abspath(env)
-        for name in config_names
-            path = abspath(env, name)
-            isfile(path) && return path
-        end
-        return abspath(env, config_names[end])
-    else # named environment
-        for depot in depots()
-            path = joinpath(depot, "environments", env, "Config.toml")
-            isfile(path) && return path
-        end
-        return joinpath(user_depot(), "environments", env, "Config.toml")
-    end
-end
-
-function find_config(::Void)
-    try
-        return find_project_env()
-    catch err
-        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-    end
-    return find_default_env()
-end
-
-function find_manifest(env::Union{Void,String} = default_env())
-    config_file = find_config(env)
-    if isfile(config_file)
-        config = parse_toml(config_file)
-        haskey(config, "manifest") &&
-        return abspath(config["manifest"])
-    end
-    names = ["JuliaManifest.toml", "Manifest.toml"]
-    dir = dirname(config_file)
-    for name in names
-        path = joinpath(dir, name)
-        isfile(path) && return path
-    end
-    return joinpath(dir, names[end])
-end
-
 load_config(config_file::String = find_config()) =
     parse_toml(config_file, fakeit=true)
-
-function load_manifest(manifest_file::String = find_manifest())
-    manifest = parse_toml(manifest_file, fakeit=true)
-    for (name, infos) in manifest, info in infos
-        haskey(info, "deps") || continue
-        info["deps"] isa AbstractVector || continue
-        for dep in info["deps"]
-            length(manifest[dep]) == 1 ||
-                error("ambiguious dependency for $name: $dep")
-        end
-        info["deps"] = Dict(d => manifest[d][1]["uuid"] for d in info["deps"])
-    end
-    return manifest
-end
 
 function write_manifest(manifest::Dict, manifest_file::String = find_manifest())
     uniques = sort!(collect(keys(manifest)), by=lowercase)
@@ -597,16 +492,6 @@ function rm(pkgs::Vector{String})
     update_manifest(manifest, manifest_file)
 end
 rm(pkgs::String...) = rm(String[pkgs...])
-
-@enum UpgradeLevel fixed=0 patch=1 minor=2 major=3
-
-function Base.convert(::Type{UpgradeLevel}, s::Symbol)
-    s == :fixed ? fixed :
-    s == :patch ? patch :
-    s == :minor ? minor :
-    s == :major ? major :
-    throw(ArgumentError("invalid upgrade bound: $s"))
-end
 
 function up(
     pkgs::Vector{String};

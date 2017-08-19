@@ -2,7 +2,8 @@ module Loading
 
 using TerminalMenus
 
-using Pkg3.Operations: user_depot, package_env_info
+using Pkg3: user_depot
+using Pkg3.Operations: package_env_info
 
 abstract type Loader end
 
