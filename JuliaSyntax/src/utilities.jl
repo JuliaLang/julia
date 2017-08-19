@@ -95,12 +95,12 @@ function is_identifier_char(c::Char)
     cat = UTF8proc.category_code(c)
     is_cat_id_start(c, cat) && return true
     if cat == UTF8proc.UTF8PROC_CATEGORY_MN || cat == UTF8proc.UTF8PROC_CATEGORY_MC ||
-       cat == UTF8proc.UTF8PROC_CATEGORY_ND || cat == UTF8proc.UTF8PROC_CATEGORY_PC ||
-       cat == UTF8proc.UTF8PROC_CATEGORY_SK || cat == UTF8proc.UTF8PROC_CATEGORY_ME ||
-       cat == UTF8proc.UTF8PROC_CATEGORY_NO ||
-       (0x2032 <= UInt32(c) <= 0x2034) || # primes
-       UInt32(c) == 0x0387 || UInt32(c) == 0x19da ||
-       (0x1369 <= UInt32(c) <= 0x1371)
+        cat == UTF8proc.UTF8PROC_CATEGORY_ND || cat == UTF8proc.UTF8PROC_CATEGORY_PC ||
+        cat == UTF8proc.UTF8PROC_CATEGORY_SK || cat == UTF8proc.UTF8PROC_CATEGORY_ME ||
+        cat == UTF8proc.UTF8PROC_CATEGORY_NO ||
+        (0x2032 <= UInt32(c) <= 0x2034) || # primes
+        UInt32(c) == 0x0387 || UInt32(c) == 0x19da ||
+        (0x1369 <= UInt32(c) <= 0x1371)
        return true
     end
     return false
@@ -149,7 +149,7 @@ peekchar(s::IOStream) = begin
 end
 
 eof(io::IO) = Base.eof(io)
-eof(c) = c === EOF_CHAR
+eof(c::Char) = c === EOF_CHAR
 
 readchar(io::IO) = eof(io) ? EOF_CHAR : read(io, Char)
 takechar(io::IO) = (readchar(io); io)
