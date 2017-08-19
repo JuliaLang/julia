@@ -250,11 +250,11 @@ bin_val = hex2bytes("07bf")
 
 @testset "Issue 23161" begin
     arr = b"0123456789abcdefABCDEF"
-    arr1 = Vector{UInt8}(11)
-    @test hex2bytes!(arr1, arr) == arr1
+    arr1 = Vector{UInt8}(length(arr) >> 1)
+    @test hex2bytes!(arr1, arr) === arr1 # check in-place
     @test "0123456789abcdefabcdef" == bytes2hex(arr1)
     @test hex2bytes("0123456789abcdefABCDEF") == hex2bytes(arr)
-    @test hex2bytes!(arr1, b"") == arr1
+    @test_throws ArgumentError hex2bytes!(arr1, b"") # incorrect arr1 length
     @test hex2bytes(b"") == UInt8[]
     @test hex2bytes(view(b"012345",1:6)) == UInt8[0x01,0x23,0x45]
     @test begin
