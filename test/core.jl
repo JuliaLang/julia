@@ -5232,6 +5232,11 @@ const unboxedunions = [Union{Int8, Void}, Union{Int8, Float16, Void},
 @test Base.bitsunionsize(unboxedunions[3]) == 16
 @test Base.bitsunionsize(unboxedunions[4]) == 8
 
+@test sizeof(unboxedunions[1]) == 1
+@test sizeof(unboxedunions[2]) == 2
+@test sizeof(unboxedunions[3]) == 16
+@test sizeof(unboxedunions[4]) == 8
+
 initvalue(::Type{Void}) = nothing
 initvalue(::Type{Char}) = '\0'
 initvalue(::Type{Date}) = Date(0, 12, 31)
@@ -5259,11 +5264,11 @@ for U in boxedunions
     for N in (1, 2, 3, 4)
         A = Array{U}(ntuple(x->0, N)...)
         @test isempty(A)
-        @test Core.sizeof(A) == 0
+        @test sizeof(A) == 0
 
         A = Array{U}(ntuple(x->10, N)...)
         @test length(A) == 10^N
-        @test Core.sizeof(A) == sizeof(Int) * (10^N)
+        @test sizeof(A) == sizeof(Int) * (10^N)
         @test !isassigned(A, 1)
     end
 end
@@ -5278,13 +5283,13 @@ for U in unboxedunions
     for N in (1, 2, 3, 4)
         A = Array{U}(ntuple(x->0, N)...)
         @test isempty(A)
-        @test Core.sizeof(A) == 0
+        @test sizeof(A) == 0
 
         len = ntuple(x->10, N)
         mxsz = maximum(sizeof, Base.uniontypes(U))
         A = Array{U}(len)
         @test length(A) == prod(len)
-        @test Core.sizeof(A) == prod(len) * mxsz
+        @test sizeof(A) == prod(len) * mxsz
         @test isassigned(A, 1)
         @test isassigned(A, length(A))
 
@@ -5312,7 +5317,7 @@ for U in unboxedunions
 
         # reshape
         A3 = reshape(A, (div(prod(len), 2), 2))
-        @test Core.sizeof(A) == prod(len) * mxsz
+        @test sizeof(A) == prod(len) * mxsz
         @test isassigned(A, 1)
         @test A[1] === initvalue2(F)
 
