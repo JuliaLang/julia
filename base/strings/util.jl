@@ -482,8 +482,8 @@ function hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
         isodd(length(s)) && throw(ArgumentError("input hex array must have even length"))
         throw(ArgumentError("output array must be half length of input array"))
     end
-    j = start(d) - 1
-    for i = start(s):2:endof(s)
+    j = first(eachindex(d)) - 1
+    for i = first(eachindex(s)):2:endof(s)
         @inbounds d[j += 1] = number_from_hex(s[i]) << 4 + number_from_hex(s[i+1])
     end
     return d
