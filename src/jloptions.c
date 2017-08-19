@@ -33,7 +33,7 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
 }
 
 
-jl_options_t jl_options = { 0,    // banner
+jl_options_t jl_options = { 1,    // banner
                             NULL, // julia_home
                             NULL, // julia_bin
                             NULL, // eval
