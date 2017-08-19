@@ -1521,7 +1521,7 @@
           (if (or (eof-object? t)
                   (and (eq? t 'end) (not end-symbol))
                   (memv t '(#\newline #\; #\) :)))
-              (list word '(null))
+              (list word)
               (list word (parse-eq s)))))
        ((module baremodule)
         (let* ((name (parse-unary-prefix s))
