@@ -308,39 +308,75 @@ let buf = IOBuffer()
     @test String(buf.data[1:buf.size]) == "a"
 end
 
-## edit_transpose ##
+## edit_transpose_chars ##
 let buf = IOBuffer()
     LineEdit.edit_insert(buf, "abcde")
     seek(buf,0)
-    LineEdit.edit_transpose(buf)
+    LineEdit.edit_transpose_chars(buf)
     @test String(buf.data[1:buf.size]) == "abcde"
     LineEdit.char_move_right(buf)
-    LineEdit.edit_transpose(buf)
+    LineEdit.edit_transpose_chars(buf)
     @test String(buf.data[1:buf.size]) == "bacde"
-    LineEdit.edit_transpose(buf)
+    LineEdit.edit_transpose_chars(buf)
     @test String(buf.data[1:buf.size]) == "bcade"
     seekend(buf)
-    LineEdit.edit_transpose(buf)
+    LineEdit.edit_transpose_chars(buf)
     @test String(buf.data[1:buf.size]) == "bcaed"
-    LineEdit.edit_transpose(buf)
+    LineEdit.edit_transpose_chars(buf)
     @test String(buf.data[1:buf.size]) == "bcade"
 
     seek(buf, 0)
     LineEdit.edit_clear(buf)
     LineEdit.edit_insert(buf, "αβγδε")
     seek(buf,0)
-    LineEdit.edit_transpose(buf)
+    LineEdit.edit_transpose_chars(buf)
     @test String(buf.data[1:buf.size]) == "αβγδε"
     LineEdit.char_move_right(buf)
-    LineEdit.edit_transpose(buf)
+    LineEdit.edit_transpose_chars(buf)
     @test String(buf.data[1:buf.size]) == "βαγδε"
-    LineEdit.edit_transpose(buf)
+    LineEdit.edit_transpose_chars(buf)
     @test String(buf.data[1:buf.size]) == "βγαδε"
     seekend(buf)
-    LineEdit.edit_transpose(buf)
+    LineEdit.edit_transpose_chars(buf)
     @test String(buf.data[1:buf.size]) == "βγαεδ"
-    LineEdit.edit_transpose(buf)
+    LineEdit.edit_transpose_chars(buf)
     @test String(buf.data[1:buf.size]) == "βγαδε"
+end
+
+@testset "edit_word_transpose" begin
+    buf = IOBuffer()
+    mode = Ref{Symbol}()
+    function transpose!(i) # i: char indice
+        seek(buf, Base.unsafe_chr2ind(String(take!(copy(buf))), i+1)-1)
+        LineEdit.edit_transpose_words(buf, mode[])
+        str = String(take!(copy(buf)))
+        str, Base.unsafe_ind2chr(str, position(buf)+1)-1
+    end
+
+    mode[] = :readline
+    LineEdit.edit_insert(buf, "àbç def  gh ")
+    @test transpose!(0) == ("àbç def  gh ", 0)
+    @test transpose!(1) == ("àbç def  gh ", 1)
+    @test transpose!(2) == ("àbç def  gh ", 2)
+    @test transpose!(3) == ("def àbç  gh ", 7)
+    @test transpose!(4) == ("àbç def  gh ", 7)
+    @test transpose!(5) == ("def àbç  gh ", 7)
+    @test transpose!(6) == ("àbç def  gh ", 7)
+    @test transpose!(7) == ("àbç gh  def ", 11)
+    @test transpose!(10) == ("àbç def  gh ", 11)
+    @test transpose!(11) == ("àbç gh   def", 12)
+    LineEdit.edit_insert(buf, " ")
+    @test transpose!(13) == ("àbç def    gh", 13)
+
+    take!(buf)
+    mode[] = :emacs
+    LineEdit.edit_insert(buf, "àbç def  gh ")
+    @test transpose!(0) == ("def àbç  gh ", 7)
+    @test transpose!(4) == ("àbç def  gh ", 7)
+    @test transpose!(5) == ("àbç gh  def ", 11)
+    @test transpose!(10) == ("àbç def   gh", 12)
+    LineEdit.edit_insert(buf, " ")
+    @test transpose!(13) == ("àbç gh    def", 13)
 end
 
 let
