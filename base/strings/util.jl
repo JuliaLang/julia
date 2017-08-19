@@ -425,72 +425,26 @@ replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int)
 # hex <-> bytes conversion
 
 """
-    hex2bytes(s::AbstractString)
+    hex2bytes(s::Union{AbstractString,AbstractVector{UInt8}})
 
-Convert an arbitrarily long hexadecimal string to its binary representation. Returns an
-`Array{UInt8,1}`, i.e. an array of bytes.
-
-# Examples
-```jldoctest
-julia> a = hex(12345)
-"3039"
-
-julia> hex2bytes(a)
-2-element Array{UInt8,1}:
- 0x30
- 0x39
-```
-"""
-function hex2bytes(s::AbstractString)
-    a = zeros(UInt8, div(endof(s), 2))
-    i, j = start(s), 0
-    while !done(s, i)
-        c, i = next(s, i)
-        n = '0' <= c <= '9' ? c - '0' :
-            'a' <= c <= 'f' ? c - 'a' + 10 :
-            'A' <= c <= 'F' ? c - 'A' + 10 :
-            throw(ArgumentError("not a hexadecimal string: $(repr(s))"))
-        done(s, i) &&
-            throw(ArgumentError("string length must be even: length($(repr(s))) == $(length(s))"))
-        c, i = next(s, i)
-        n = '0' <= c <= '9' ? n << 4 + c - '0' :
-            'a' <= c <= 'f' ? n << 4 + c - 'a' + 10 :
-            'A' <= c <= 'F' ? n << 4 + c - 'A' + 10 :
-            throw(ArgumentError("not a hexadecimal string: $(repr(s))"))
-        a[j += 1] = n
-    end
-    resize!(a, j)
-    return a
-end
-
-"""
-    hex2bytes(s::AbstractVector{UInt8})
-
-Given an array `s` of ASCII codes for a sequence of hexadecimal digits, returns a
+Given a string or array `s` of ASCII codes for a sequence of hexadecimal digits, returns a
 `Vector{UInt8}` of bytes  corresponding to the binary representation: each successive pair
 of hexadecimal digits in `s` gives the value of one byte in the return vector.
 
 The length of `s` must be even, and the returned array has half of the length of `s`.
-"""
-@inline function hex2bytes(s::AbstractVector{UInt8})
-    len = length(s)
-    if isodd(len)
-        throw(ArgumentError("source vector length must be even"))
-    end
-    d = zeros(UInt8, div(len, 2))
-    return hex2bytes!(d, s)
-end
-
-"""
-    hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
-
-Convert an array `s` of bytes representing a hexadecimal string to its binary
-representation, similar to [`hex2bytes`](@ref) except that the output is written in-place
-in `d`.   The length of `s` must be exactly twice the length of `d`.
+See also [`hex2bytes!`](@ref) for an in-place version, and [`bytes2hex`](@ref) for the inverse.
 
 # Examples
 ```jldoctest
-julia> s = b"01abEF"
+julia> s = hex(12345)
+"3039"
+
+julia> hex2bytes(s)
+2-element Array{UInt8,1}:
+ 0x30
+ 0x39
+
+julia> a = b"01abEF"
 6-element Array{UInt8,1}:
  0x30
  0x31
@@ -499,29 +453,38 @@ julia> s = b"01abEF"
  0x45
  0x46
 
-julia> d = zeros(UInt8, 3)
-3-element Array{UInt8,1}:
- 0x00
- 0x00
- 0x00
-
-julia> hex2bytes!(d, s)
+julia> hex2bytes(a)
 3-element Array{UInt8,1}:
  0x01
  0xab
  0xef
 ```
 """
+function hex2bytes end
+
+hex2bytes(s::AbstractString) = hex2bytes(Vector{UInt8}(String(s)))
+
+function hex2bytes(s::AbstractVector{UInt8})
+    len = length(s)
+    isodd(len) && throw(ArgumentError("source vector length must be even"))
+    return hex2bytes!(Vector{UInt8}(len >> 1), s)
+end
+
+"""
+    hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
+
+Convert an array `s` of bytes representing a hexadecimal string to its binary
+representation, similar to [`hex2bytes`](@ref) except that the output is written in-place
+in `d`.   The length of `s` must be exactly twice the length of `d`.
+"""
 function hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
     if 2length(d) != length(s)
         isodd(length(s)) && throw(ArgumentError("input hex array must have even length"))
         throw(ArgumentError("output array must be half length of input array"))
     end
-    i, j = start(s), start(d)
-    while !done(s, i)
-        @inbounds d[j] = number_from_hex(s[i]) << 4 + number_from_hex(s[i+1])
-        i += 2
-        j += 1
+    j = start(d) - 1
+    for i = start(s):2:endof(s)
+        @inbounds d[j += 1] = number_from_hex(s[i]) << 4 + number_from_hex(s[i+1])
     end
     return d
 end
@@ -530,7 +493,7 @@ end
     (UInt8('0') <= c <= UInt8('9')) ? c - UInt8('0') :
     (UInt8('A') <= c <= UInt8('F')) ? c - (UInt8('A') - 0x0a) :
     (UInt8('a') <= c <= UInt8('f')) ? c - (UInt8('a') - 0x0a) :
-    throw(ArgumentError("byte is not a ASCII hexadecimal digit"))
+    throw(ArgumentError("byte is not an ASCII hexadecimal digit"))
 
 """
     bytes2hex(bin_arr::Array{UInt8, 1}) -> String
