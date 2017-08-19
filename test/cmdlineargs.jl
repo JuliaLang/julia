@@ -22,7 +22,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
         @test startswith(read(`$exename --help`, String), header)
     end
 
-    # --quiet
+    # --banner
     # This flag is indirectly tested in test/repl.jl
 
     # --home

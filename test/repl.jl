@@ -603,7 +603,7 @@ let exename = Base.julia_cmd()
         TestHelpers.with_fake_pty() do slave, master
             nENV = copy(ENV)
             nENV["TERM"] = "dumb"
-            p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
+            p = spawn(setenv(`$exename --startup-file=no --banner=no`,nENV),slave,slave,slave)
             output = readuntil(master,"julia> ")
             if ccall(:jl_running_on_valgrind,Cint,()) == 0
                 # If --trace-children=yes is passed to valgrind, we will get a
@@ -620,7 +620,7 @@ let exename = Base.julia_cmd()
     end
 
     # Test stream mode
-    outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
+    outs, ins, p = readandwrite(`$exename --startup-file=no --banner=no`)
     write(ins,"1\nquit()\n")
     @test read(outs, String) == "1\n"
 end # let exename
