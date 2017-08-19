@@ -88,6 +88,7 @@ end
 
 Determines whether a path is absolute (begins at the root directory).
 
+# Examples
 ```jldoctest
 julia> isabspath("/home")
 true
@@ -103,6 +104,7 @@ isabspath(path::AbstractString)
 
 Determines whether a path refers to a directory (for example, ends with a path separator).
 
+# Examples
 ```jldoctest
 julia> isdirpath("/home")
 false
@@ -118,6 +120,7 @@ isdirpath(path::String) = ismatch(path_directory_re, splitdrive(path)[2])
 
 Split a path into a tuple of the directory name and file name.
 
+# Examples
 ```jldoctest
 julia> splitdir("/home/myuser")
 ("/home", "myuser")
@@ -136,6 +139,7 @@ end
 
 Get the directory part of a path.
 
+# Examples
 ```jldoctest
 julia> dirname("/home/myuser")
 "/home"
@@ -150,6 +154,7 @@ See also: [`basename`](@ref)
 
 Get the file name part of a path.
 
+# Examples
  ```jldoctest
 julia> basename("/home/myuser/example.jl")
 "example.jl"
@@ -166,6 +171,7 @@ If the last component of a path contains a dot, split the path into everything b
 dot and everything including and after the dot. Otherwise, return a tuple of the argument
 unmodified and the empty string.
 
+# Examples
 ```jldoctest
 julia> splitext("/home/myuser/example.jl")
 ("/home/myuser/example", ".jl")
@@ -197,6 +203,7 @@ joinpath(a::AbstractString) = a
 Join path components into a full path. If some argument is an absolute path, then prior
 components are dropped.
 
+# Examples
 ```jldoctest
 julia> joinpath("/home/myuser","example.jl")
 "/home/myuser/example.jl"
@@ -221,6 +228,7 @@ joinpath(a::AbstractString, b::AbstractString) = joinpath(String(a), String(b))
 
 Normalize a path, removing "." and ".." entries.
 
+# Examples
 ```jldoctest
 julia> normpath("/home/myuser/../example.jl")
 "/home/example.jl"
