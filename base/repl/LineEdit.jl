@@ -43,10 +43,11 @@ mutable struct MIState
     aborted::Bool
     mode_state::Dict
     kill_buffer::String
-    previous_key::Array{Char,1}
+    previous_key::Vector{Char}
     key_repeats::Int
+    last_action::Symbol
 end
-MIState(i, c, a, m) = MIState(i, c, a, m, "", Char[], 0)
+MIState(i, c, a, m) = MIState(i, c, a, m, "", Char[], 0, :begin)
 
 function show(io::IO, s::MIState)
     print(io, "MI State (", s.current_mode, " active)")
@@ -103,12 +104,19 @@ complete_line(c::EmptyCompletionProvider, s) = [], true, true
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
-for f in [:terminal, :edit_insert, :edit_insert_newline, :on_enter, :add_history,
-          :buffer, :edit_backspace, :(Base.isempty), :replace_line, :refresh_multi_line,
-          :input_string, :edit_move_left, :edit_move_right,
-          :edit_move_word_left, :edit_move_word_right, :update_display_buffer]
+for f in [:terminal, :on_enter, :add_history, :buffer, :(Base.isempty),
+        :replace_line, :refresh_multi_line, :input_string, :update_display_buffer]
     @eval ($f)(s::MIState, args...) = $(f)(s.mode_state[s.current_mode], args...)
 end
+
+for f in [:edit_insert, :edit_insert_newline, :edit_backspace, :edit_move_left,
+          :edit_move_right, :edit_move_word_left, :edit_move_word_right]
+    @eval function ($f)(s::MIState, args...)
+        $(f)(s.mode_state[s.current_mode], args...)
+        return $(Expr(:quote, f))
+    end
+end
+
 
 function common_prefix(completions)
     ret = ""
@@ -153,7 +161,12 @@ function show_completions(s::PromptState, completions)
 end
 
 # Prompt Completions
-complete_line(s::MIState) = complete_line(s.mode_state[s.current_mode], s.key_repeats)
+function complete_line(s::MIState)
+    complete_line(s.mode_state[s.current_mode], s.key_repeats)
+    refresh_line(s)
+    :complete_line
+end
+
 function complete_line(s::PromptState, repeats)
     completions, partial, should_complete = complete_line(s.p.complete, s)
     if isempty(completions)
@@ -564,7 +577,9 @@ function edit_backspace(buf::IOBuffer, align::Bool=false, adjust::Bool=align)
     return true
 end
 
-edit_delete(s) = edit_delete(buffer(s)) ? refresh_line(s) : beep(terminal(s))
+edit_delete(s::MIState) = (edit_delete(buffer(s)) ? refresh_line(s) : beep(terminal(s));
+                           :edit_delete)
+
 function edit_delete(buf::IOBuffer)
     eof(buf) && return false
     oldpos = position(buf)
@@ -581,9 +596,7 @@ function edit_werase(buf::IOBuffer)
     splice_buffer!(buf, pos0:pos1-1)
     true
 end
-function edit_werase(s)
-    edit_werase(buffer(s)) && refresh_line(s)
-end
+edit_werase(s::MIState) = (edit_werase(buffer(s)) && refresh_line(s); :edit_werase)
 
 function edit_delete_prev_word(buf::IOBuffer)
     pos1 = position(buf)
@@ -593,8 +606,9 @@ function edit_delete_prev_word(buf::IOBuffer)
     splice_buffer!(buf, pos0:pos1-1)
     true
 end
-function edit_delete_prev_word(s)
+function edit_delete_prev_word(s::MIState)
     edit_delete_prev_word(buffer(s)) && refresh_line(s)
+    :edit_delete_prev_word
 end
 
 function edit_delete_next_word(buf::IOBuffer)
@@ -605,13 +619,16 @@ function edit_delete_next_word(buf::IOBuffer)
     splice_buffer!(buf, pos0:pos1-1)
     true
 end
+
 function edit_delete_next_word(s)
     edit_delete_next_word(buffer(s)) && refresh_line(s)
+    :edit_delete_next_word
 end
 
 function edit_yank(s::MIState)
     edit_insert(buffer(s), s.kill_buffer)
     refresh_line(s)
+    :edit_yank
 end
 
 function edit_kill_line(s::MIState)
@@ -622,10 +639,14 @@ function edit_kill_line(s::MIState)
         killbuf = killbuf[1:end-1]
         char_move_left(buf)
     end
-    s.kill_buffer = s.key_repeats > 0 ? s.kill_buffer * killbuf : killbuf
-
-    splice_buffer!(buf, pos:position(buf)-1)
-    refresh_line(s)
+    if !isempty(killbuf)
+        s.kill_buffer = s.key_repeats > 0 ? s.kill_buffer * killbuf : killbuf
+        splice_buffer!(buf, pos:position(buf)-1)
+        refresh_line(s)
+        :edit_kill_line
+    else
+        :ignore
+    end
 end
 
 function edit_copy_region(s::MIState)
@@ -637,6 +658,9 @@ function edit_copy_region(s::MIState)
             sleep(REGION_ANIMATION_DURATION[])
         end
         edit_exchange_point_and_mark(s) # includes refresh_line
+        :edit_copy_region
+    else
+        :ignore
     end
 end
 
@@ -645,10 +669,16 @@ function edit_kill_region(s::MIState)
     if !isempty(reg)
         s.kill_buffer = splice_buffer!(buffer(s), reg)
         refresh_line(s)
+        :edit_kill_region
+    else
+        :ignore
     end
 end
 
-edit_transpose_chars(s) = edit_transpose_chars(buffer(s)) && refresh_line(s)
+function edit_transpose_chars(s::MIState)
+    edit_transpose_chars(buffer(s)) && refresh_line(s)
+    :edit_transpose
+end
 
 function edit_transpose_chars(buf::IOBuffer)
     position(buf) == 0 && return false
@@ -661,7 +691,10 @@ function edit_transpose_chars(buf::IOBuffer)
     return true
 end
 
-edit_transpose_words(s) = edit_transpose_words(buffer(s)) && refresh_line(s)
+function edit_transpose_words(s)
+    edit_transpose_words(buffer(s)) && refresh_line(s)
+    :edit_transpose_words
+end
 
 function edit_transpose_words(buf::IOBuffer, mode=:emacs)
     mode in [:readline, :emacs] ||
@@ -687,9 +720,9 @@ function edit_transpose_words(buf::IOBuffer, mode=:emacs)
 end
 
 
-edit_upper_case(s) = edit_replace_word_right(s, uppercase)
-edit_lower_case(s) = edit_replace_word_right(s, lowercase)
-edit_title_case(s) = edit_replace_word_right(s, ucfirst)
+edit_upper_case(s) = (edit_replace_word_right(s, uppercase); :edit_upper_case)
+edit_lower_case(s) = (edit_replace_word_right(s, lowercase); :edit_lower_case)
+edit_title_case(s) = (edit_replace_word_right(s, ucfirst);   :edit_title_case)
 
 edit_replace_word_right(s, replace::Function) =
     edit_replace_word_right(buffer(s), replace) && refresh_line(s)
@@ -711,6 +744,7 @@ edit_clear(buf::IOBuffer) = truncate(buf, 0)
 function edit_clear(s::MIState)
     edit_clear(buffer(s))
     refresh_line(s)
+    :edit_clear
 end
 
 function replace_line(s::PromptState, l::IOBuffer)
@@ -1429,11 +1463,13 @@ function move_line_start(s::MIState)
     else
         seek(buf, rsearch(buf.data, '\n', curpos))
     end
+    :move_line_start
 end
 function move_line_end(s::MIState)
     s.key_repeats > 0 ?
         move_input_end(s) :
         move_line_end(buffer(s))
+    :move_line_end
 end
 function move_line_end(buf::IOBuffer)
     eof(buf) && return
@@ -1491,14 +1527,17 @@ end
 
 # jump_spaces: if cursor is on a ' ', move it to the first non-' ' char on the right
 # if `delete_trailing`, ignore trailing ' ' by deleting them
-function edit_tab(s, jump_spaces=false, delete_trailing=jump_spaces)
-    tab_should_complete(s) ?
-        complete_line(s) :
-        edit_tab(buffer(s), jump_spaces, delete_trailing)
-    refresh_line(s)
+function edit_tab(s::MIState, jump_spaces=false, delete_trailing=jump_spaces)
+    if tab_should_complete(s)
+        complete_line(s)
+    else
+        edit_insert_tab(buffer(s), jump_spaces, delete_trailing)
+        refresh_line(s)
+        :edit_insert_tab
+    end
 end
 
-function edit_tab(buf::IOBuffer, jump_spaces=false, delete_trailing=jump_spaces)
+function edit_insert_tab(buf::IOBuffer, jump_spaces=false, delete_trailing=jump_spaces)
     i = position(buf)
     if jump_spaces && i < buf.size && buf.data[i+1] == _space
         spaces = findnext(_notspace, buf.data[i+1:buf.size], 1)
@@ -1793,34 +1832,34 @@ function prompt!(term, prompt, s = init_state(term, prompt))
             kmap = keymap(s, prompt)
             fcn = match_input(kmap, s)
             kdata = keymap_data(s, prompt)
+            local action
             # errors in keymaps shouldn't cause the REPL to fail, so wrap in a
             # try/catch block
-            local state
             try
-                state = fcn(s, kdata)
+                action = fcn(s, kdata)
             catch e
                 bt = catch_backtrace()
                 warn(e, bt = bt, prefix = "ERROR (in the keymap): ")
                 # try to cleanup and get `s` back to its original state before returning
                 transition(s, :reset)
                 transition(s, old_state)
-                state = :done
+                action = :done
             end
-            if state === :abort
+            action != :ignore && (s.last_action = action)
+            if action === :abort
                 return buffer(s), false, false
-            elseif state === :done
+            elseif action === :done
                 return buffer(s), true, false
-            elseif state === :suspend
+            elseif action === :suspend
                 if Sys.isunix()
                     return buffer(s), true, true
                 end
-            else
-                @assert state === :ok
             end
         end
     finally
         raw!(term, false) && disable_bracketed_paste(term)
     end
 end
+
 
 end # module
