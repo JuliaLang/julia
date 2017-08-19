@@ -1333,39 +1333,39 @@ function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
 end
 
 function _sparse_findnext(m::SparseMatrixCSC, i::Int)
-   if i > length(m)
-       return 0
-   end
-   row, col = ind2sub(m, i)
-   lo, hi = m.colptr[col], m.colptr[col+1]
-   n = searchsortedfirst(m.rowval, row, lo, hi-1, Base.Order.Forward)
-   if lo <= n <= hi-1
-       return sub2ind(m, m.rowval[n], col)
-   end
-   nextcol = findnext(c->(c>hi), m.colptr, col+1)
-   if nextcol == 0
-       return 0
-   end
-   nextlo = m.colptr[nextcol-1]
-   return sub2ind(m, m.rowval[nextlo], nextcol-1)
+    if i > length(m)
+        return 0
+    end
+    row, col = ind2sub(m, i)
+    lo, hi = m.colptr[col], m.colptr[col+1]
+    n = searchsortedfirst(m.rowval, row, lo, hi-1, Base.Order.Forward)
+    if lo <= n <= hi-1
+        return sub2ind(m, m.rowval[n], col)
+    end
+    nextcol = findnext(c->(c>hi), m.colptr, col+1)
+    if nextcol == 0
+        return 0
+    end
+    nextlo = m.colptr[nextcol-1]
+    return sub2ind(m, m.rowval[nextlo], nextcol-1)
 end
 
 function _sparse_findprev(m::SparseMatrixCSC, i::Int)
-   if i < 1
-       return 0
-   end
-   row, col = ind2sub(m, i)
-   lo, hi = m.colptr[col], m.colptr[col+1]
-   n = searchsortedlast(m.rowval, row, lo, hi-1, Base.Order.Forward)
-   if lo <= n <= hi-1
-       return sub2ind(m, m.rowval[n], col)
-   end
-   prevcol = findprev(c->(c<lo), m.colptr, col-1)
-   if prevcol == 0
-       return 0
-   end
-   prevhi = m.colptr[prevcol+1]
-   return sub2ind(m, m.rowval[prevhi-1], prevcol)
+    if i < 1
+        return 0
+    end
+    row, col = ind2sub(m, i)
+    lo, hi = m.colptr[col], m.colptr[col+1]
+    n = searchsortedlast(m.rowval, row, lo, hi-1, Base.Order.Forward)
+    if lo <= n <= hi-1
+        return sub2ind(m, m.rowval[n], col)
+    end
+    prevcol = findprev(c->(c<lo), m.colptr, col-1)
+    if prevcol == 0
+        return 0
+    end
+    prevhi = m.colptr[prevcol+1]
+    return sub2ind(m, m.rowval[prevhi-1], prevcol)
 end
 
 
