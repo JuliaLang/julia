@@ -1310,15 +1310,15 @@
                `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
                      ,body)))
             ((else)
-              (begin
-                (take-token s) ;; consume nxt
-                (let* ((elsebody (parse-block s)))
-                  (expect-end s word)
-                  `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
-                        ,body
-                        ,elsebody))))
+             (begin
+               (take-token s) ;; consume nxt
+               (let* ((elsebody (parse-block s)))
+                 (expect-end s word)
+                 `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
+                       ,body
+                       ,elsebody))))
             (else
-              (expect-end s word))))) ;; which will throw the correct error
+             (expect-end s word))))) ;; which will throw the correct error
        ((if elseif)
         (if (newline? (peek-token s))
             (error (string "missing condition in \"if\" at " current-filename
