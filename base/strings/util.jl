@@ -513,38 +513,24 @@ julia> hex2bytes!(d, s)
 ```
 """
 function hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
-    i, j = start(s), 0
-    # This line is important as this ensures computation happens in word boundary and not
-    # byte boundary. Boundary computation can be almost 10 times slower
-    n::UInt = 0
-    c1::UInt = 0
-    c2::UInt = 0
+    if 2length(d) != length(s)
+        isodd(length(s)) && throw(ArgumentError("input hex array must have even length"))
+        throw(ArgumentError("output array must be half length of input array"))
+    end
+    i, j = start(s), start(d)
     while !done(s, i)
-        n = 0
-        c1, i = next(s, i)
-        done(s, i) && throw(ArgumentError("source vector length must be even"))
-        c2, i = next(s, i)
-        n = number_from_hex(c1)
-        n <<= 4
-        n += number_from_hex(c2)
-        d[j+=1] = (n & 0xFF)
+        @inbounds d[j] = number_from_hex(s[i]) << 4 + number_from_hex(s[i+1])
+        i += 2
+        j += 1
     end
     return d
 end
 
-@inline function number_from_hex(c::UInt)
-    DIGIT_ZERO     = UInt('0')
-    DIGIT_NINE     = UInt('9')
-    LATIN_UPPER_A  = UInt('A')
-    LATIN_UPPER_F  = UInt('F')
-    LATIN_A        = UInt('a')
-    LATIN_F        = UInt('f')
-
-    return (DIGIT_ZERO <= c <= DIGIT_NINE) ? c - DIGIT_ZERO :
-        (LATIN_UPPER_A <= c <= LATIN_UPPER_F) ? c - LATIN_UPPER_A + 10 :
-        (LATIN_A <= c <= LATIN_F) ? c - LATIN_A + 10 :
-        throw(ArgumentError("not a hexadecimal number: '$(Char(c))'"))
-end
+@inline number_from_hex(c) =
+    (UInt8('0') <= c <= UInt8('9')) ? c - UInt8('0') :
+    (UInt8('A') <= c <= UInt8('F')) ? c - (UInt8('A') - 0x0a) :
+    (UInt8('a') <= c <= UInt8('f')) ? c - (UInt8('a') - 0x0a) :
+    throw(ArgumentError("byte is not a ASCII hexadecimal digit"))
 
 """
     bytes2hex(bin_arr::Array{UInt8, 1}) -> String
