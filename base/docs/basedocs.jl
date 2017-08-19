@@ -1264,9 +1264,9 @@ InitError
 """
     Any::DataType
 
-`Any` is the union of all types. It has the defining property `isa(x, Any) == true` for any `x`. `Any` describes
-therefore the entire universe of possible values. For example `Integer` is a subset of `Any` that includes `Int`,
-`Int8`, and other concrete types.
+`Any` is the union of all types. It has the defining property `isa(x, Any) == true` for any `x`. `Any` therefore
+describes the entire universe of possible values. For example `Integer` is a subset of `Any` that includes `Int`,
+`Int8`, and other integer types.
 """
 Any
 
@@ -1274,23 +1274,24 @@ Any
     Union{}
 
 `Union{}`, the empty [`Union`](@ref) of types, is the type that has no values. That is, it has the defining
-property `isa(x, Union{}) == false` for any `x`. `Base.Bottom` is defined as its alias and the type of `Any`
-is `Core.TypeofBottom`.
+property `isa(x, Union{}) == false` for any `x`. `Base.Bottom` is defined as its alias and the type of `Union{}`
+is [`Core.TypeofBottom`](@ref).
 
-Examples:
+# Examples
 ```jldoctest
 julia> isa(nothing, Union{})
 false
 ```
 """
-kw"Union{}"
+kw"Union{}", Base.Bottom
 
 """
     Union{Types...}
 
-A type union is an abstract type which includes all instances of any of its argument types.
+A type union is an abstract type which includes all instances of any of its argument types. The empty
+union [`Union{}`](@ref) is the bottom type of Julia.
 
-Examples:
+# Examples
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
 Union{AbstractString, Int64}
@@ -1314,6 +1315,7 @@ Union
 A union of types over all values of a type parameter. `UnionAll` is used to describe parametric types
 where the values of some parameters are not known.
 
+# Examples
 ```jldoctest
 julia> typeof(Vector)
 UnionAll
@@ -1326,11 +1328,13 @@ UnionAll
 
 """
     ::
+
 With the `::`-operator type annotations are attached to expressions and variables in programs.
-See manual/types/#type-declarations.
+See the manual section on [Type Declarations](@ref).
 
 Outside of declarations `::` is used to assert that expressions and variables in programs have a given type.
 
+# Examples
 ```jldoctest
 julia> (1+2)::AbstractFloat
 ERROR: TypeError: typeassert: expected AbstractFloat, got Int64
@@ -1344,11 +1348,12 @@ kw"::"
 """
     Vararg{T,N}
 
-The last parameter of a tuple type [`Tuple`](@ref) can be the special type `Vararg`. `Vararg` which denotes any
+The last parameter of a tuple type [`Tuple`](@ref) can be the special type `Vararg`, which denotes any
 number of trailing elements. The type `Vararg{T,N}` corresponds to exactly `N` elements of type `T`.
-`Vararg{T}` correspondsvto zero or more elements of type `T`. `Vararg` tuple types are used to represent the
-arguments accepted byvvarargs methods (see vararg-functions in the manual).
+`Vararg{T}` corresponds to zero or more elements of type `T`. `Vararg` tuple types are used to represent the
+arguments accepted by varargs methods (see the section on [Varargs Functions](@ref) in the manual.)
 
+# Examples
 ```jldoctest
 julia> mytupletype = Tuple{AbstractString,Vararg{Int}}
 Tuple{AbstractString,Vararg{Int64,N} where N}
@@ -1379,7 +1384,7 @@ Tuple types are covariant in their parameters: `Tuple{Int}` is a subtype of `Tup
 is considered an abstract type, and tuple types are only concrete if their parameters are. Tuples do not have
 field names; fields are only accessed by index.
 
-See manual, section "Tuple Types".
+See the manual section on [Tuple Types](@ref).
 """
 kw"Tuple"
 
