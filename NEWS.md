@@ -315,6 +315,8 @@ Deprecated or removed
   * `filter` and `filter!` on dictionaries now pass a single `key=>value` pair to the
     argument function, instead of two arguments ([#17886]).
 
+  * `Base.SparseArrays.SpDiagIterator` has been removed ([#23261]).
+
 Command-line option changes
 ---------------------------
 

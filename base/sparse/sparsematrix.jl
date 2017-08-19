@@ -3380,39 +3380,38 @@ function expandptr(V::Vector{<:Integer})
     res
 end
 
-## diag and related using an iterator
 
-mutable struct SpDiagIterator{Tv,Ti}
-    A::SparseMatrixCSC{Tv,Ti}
-    n::Int
-end
-SpDiagIterator(A::SparseMatrixCSC) = SpDiagIterator(A,minimum(size(A)))
-
-length(d::SpDiagIterator) = d.n
-start(d::SpDiagIterator) = 1
-done(d::SpDiagIterator, j) = j > d.n
-
-function next(d::SpDiagIterator{Tv}, j) where Tv
-    A = d.A
-    r1 = Int(A.colptr[j])
-    r2 = Int(A.colptr[j+1]-1)
-    (r1 > r2) && (return (zero(Tv), j+1))
-    r1 = searchsortedfirst(A.rowval, j, r1, r2, Forward)
-    (((r1 > r2) || (A.rowval[r1] != j)) ? zero(Tv) : A.nzval[r1], j+1)
+function diag(A::SparseMatrixCSC{Tv,Ti}, d::Integer=0) where {Tv,Ti}
+    m, n = size(A)
+    k = Int(d)
+    if !(-m <= k <= n)
+        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m, $n)"))
+    end
+    l = k < 0 ? min(m+k,n) : min(n-k,m)
+    r, c = k <= 0 ? (-k, 0) : (0, k) # start row/col -1
+    ind = Vector{Ti}()
+    val = Vector{Tv}()
+    for i in 1:l
+        r += 1; c += 1
+        r1 = Int(A.colptr[c])
+        r2 = Int(A.colptr[c+1]-1)
+        r1 > r2 && continue
+        r1 = searchsortedfirst(A.rowval, r, r1, r2, Forward)
+        ((r1 > r2) || (A.rowval[r1] != r)) && continue
+        push!(ind, i)
+        push!(val, A.nzval[r1])
+    end
+    return SparseVector{Tv,Ti}(l, ind, val)
 end
 
 function trace(A::SparseMatrixCSC{Tv}) where Tv
-    if size(A,1) != size(A,2)
-        throw(DimensionMismatch("expected square matrix"))
-    end
+    n = checksquare(A)
     s = zero(Tv)
-    for d in SpDiagIterator(A)
-        s += d
+    for i in 1:n
+        s += A[i,i]
     end
-    s
+    return s
 end
-
-diag(A::SparseMatrixCSC{Tv}) where {Tv} = Tv[d for d in SpDiagIterator(A)]
 
 function diagm(v::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     if size(v,1) != 1 && size(v,2) != 1
