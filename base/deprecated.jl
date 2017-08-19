@@ -1687,6 +1687,9 @@ export hex2num
 # issue #5148, PR #23259
 # warning for `const` on locals should be changed to an error in julia-syntax.scm
 
+# issue #23342, PR #23343
+# `-q` and `--quiet` are deprecated in jloptions.c
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
