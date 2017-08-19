@@ -957,3 +957,10 @@ end
         @test logspace(a, b, n, base=base) == base.^linspace(a, b, n)
     end
 end
+
+# Issue #23300
+x = -5:big(1.0):5
+@test map(Float64, x) === -5.0:1.0:5.0
+@test map(Float32, x) === -5.0f0:1.0f0:5.0f0
+@test map(Float16, x) === Float16(-5.0):Float16(1.0):Float16(5.0)
+@test map(BigFloat, x) === x
