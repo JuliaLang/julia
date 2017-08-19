@@ -422,7 +422,7 @@ function rat(x)
     y = x
     a = d = 1
     b = c = 0
-    m = maxintfloat(narrow(typeof(x)))
+    m = maxintfloat(narrow(typeof(x)), Int)
     while abs(y) <= m
         f = trunc(Int,y)
         y -= f
@@ -435,6 +435,7 @@ function rat(x)
     return a, b
 end
 
+narrow(::Type{T}) where {T<:AbstractFloat} = Float64
 narrow(::Type{Float64}) = Float32
 narrow(::Type{Float32}) = Float16
 narrow(::Type{Float16}) = Float16
