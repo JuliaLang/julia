@@ -1921,4 +1921,12 @@ end
         @test findnext(y,i) == findnext(y_sp,i)
         @test findprev(y,i) == findprev(y_sp,i)
     end
+
+    z_sp = sparsevec(Dict(1=>1, 5=>1, 8=>0, 10=>1))
+    z = collect(z_sp)
+
+    for i=1:length(z)
+        @test findnext(z,i) == findnext(z_sp,i)
+        @test findprev(z,i) == findprev(z_sp,i)
+    end
 end
