@@ -377,6 +377,18 @@ end
     @test tok("0x0167_032").kind           == T.INTEGER
     @test tok("0b0101001_0100_0101").kind  == T.INTEGER
     @test tok("0o01054001_0100_0101").kind == T.INTEGER
+    @test T.kind.(collect(tokenize("1.2."))) == [T.ERROR, T.ENDMARKER]
+    @test tok("1__2").kind == T.INTEGER
+    @test tok("1.2_3").kind == T.FLOAT
+    @test tok("1.2_3", 2).kind == T.ENDMARKER
+    @test T.kind.(collect(tokenize("3e2_2"))) == [T.FLOAT, T.IDENTIFIER, T.ENDMARKER]
+    @test T.kind.(collect(tokenize("1__2"))) == [T.INTEGER, T.IDENTIFIER, T.ENDMARKER]
+    @test T.kind.(collect(tokenize("0x2_0_2"))) == [T.INTEGER, T.ENDMARKER]
+    @test T.kind.(collect(tokenize("0x2__2"))) == [T.INTEGER, T.IDENTIFIER, T.ENDMARKER]
+    @test T.kind.(collect(tokenize("3_2.5_2"))) == [T.FLOAT, T.ENDMARKER]
+    @test T.kind.(collect(tokenize("3.2e2.2"))) == [T.ERROR, T.INTEGER, T.ENDMARKER]
+    @test T.kind.(collect(tokenize("3e2.2"))) == [T.ERROR, T.INTEGER, T.ENDMARKER]
+    @test T.kind.(collect(tokenize("0b101__101"))) == [T.INTEGER, T.IDENTIFIER, T.ENDMARKER]
 end
 
 @testset "floating points" begin

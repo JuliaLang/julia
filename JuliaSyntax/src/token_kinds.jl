@@ -21,7 +21,7 @@
         DO,
         ELSE,
         ELSEIF,
-        END,  
+        END,
         EXPORT,
         FINALLY,
         FOR,
@@ -85,7 +85,7 @@
         CHAR, # 'a'
         CMD, # `cmd ...`
         TRIPLE_CMD, # ```cmd ...```
-        TRUE, FALSE, 
+        TRUE, FALSE,
     end_literal,
 
     begin_delimiters,
@@ -129,7 +129,7 @@
         begin_conditional,
             CONDITIONAL, # ?
         end_conditional,
-    
+
         # Level 3
         begin_arrow,
             RIGHT_ARROW, # -->

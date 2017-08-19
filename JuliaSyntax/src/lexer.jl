@@ -1,7 +1,6 @@
 module Lexers
 
 include("utilities.jl")
-global const charstore = IOBuffer() # TODO thread safety?
 
 import ..Tokens
 import ..Tokens: Token, Kind, TokenError, UNICODE_OPS, EMPTY_TOKEN, isliteral
@@ -14,10 +13,9 @@ import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BITSTYPE, BR
 
 export tokenize
 
-ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F') || c ==
-'_'
-isbinary(c::Char) = c == '0' || c == '1' || c == '_'
-isoctal(c::Char) =  '0' ≤ c ≤ '7' || c == '_'
+ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
+isbinary(c::Char) = c == '0' || c == '1'
+isoctal(c::Char) =  '0' ≤ c ≤ '7'
 iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
 
 mutable struct Lexer{IO_t <: IO}
@@ -35,9 +33,10 @@ mutable struct Lexer{IO_t <: IO}
     current_pos::Int
 
     last_token::Tokens.Kind
+    charstore::IOBuffer
 end
 
-Lexer(io) = Lexer(io, position(io), 1, 1, -1, position(io), 1, 1, position(io), Tokens.ERROR)
+Lexer(io) = Lexer(io, position(io), 1, 1, -1, position(io), 1, 1, position(io), Tokens.ERROR, IOBuffer())
 Lexer(str::AbstractString) = Lexer(IOBuffer(str))
 
 """
@@ -248,7 +247,7 @@ end
 Returns all characters since the start of the current `Token` as a `String`.
 """
 function extract_tokenstring(l::Lexer)
-    global charstore
+    charstore = l.charstore
     curr_pos = position(l)
     seek2startpos!(l)
 
@@ -514,12 +513,12 @@ function lex_xor(l::Lexer)
     return emit(l, Tokens.XOR)
 end
 
-function accept_integer(l::Lexer)
-    !isdigit(peekchar(l)) && return false
+function accept_number{F}(l::Lexer, f::F)
+    !f(peekchar(l)) && return false
     while true
-        if !accept(l, isdigit)
+        if !accept(l, f)
             if accept(l, '_')
-                if !isdigit(peekchar(l))
+                if !f(peekchar(l))
                     backup!(l)
                     return true
                 end
@@ -536,7 +535,7 @@ function lex_digit(l::Lexer)
     longest, kind = position(l), Tokens.ERROR
 
     # accept_batch(l, isdigit)
-    accept_integer(l)
+    accept_number(l, isdigit)
 
     if accept(l, '.')
         if peekchar(l) == '.' # 43.. -> [43, ..]
@@ -562,13 +561,13 @@ function lex_digit(l::Lexer)
             backup!(l)
             return emit(l, Tokens.INTEGER)
         end
-        # accept_batch(l, isdigit)
-        accept_integer(l)
+        accept_number(l, isdigit)
         if accept(l, '.')
-            if peekchar(l) == '.' # 1.23..3.21 is valid
+            if peekchar(l) == '.' # 1.23.. -> [1.23, ..]
                 backup!(l)
                 return emit(l, Tokens.FLOAT)
-            elseif !(isdigit(peekchar(l)) || iswhitespace(peekchar(l)) || is_identifier_start_char(peekchar(l)))
+            elseif !(isdigit(peekchar(l)) || iswhitespace(peekchar(l)) ||
+                        is_identifier_start_char(peekchar(l)) || eof(peekchar(l))) # {1.23a, 1.23␣, 1.23EOF} -> [1.23, ?]
                 backup!(l)
                 return emit(l, Tokens.FLOAT)
             else # 3213.313.3123 is an error
@@ -579,14 +578,22 @@ function lex_digit(l::Lexer)
         end
         if accept(l, "eEf") # 1313.[0-9]*e
             accept(l, "+-")
-            if accept_integer(l) && position(l) > longest
-                longest, kind = position(l), Tokens.FLOAT
+            if accept_batch(l, isdigit)
+                if accept(l, '.' ) # 1.2e2.3 -> [ERROR, 3]
+                    return emit_error(l)
+                elseif position(l) > longest
+                    longest, kind = position(l), Tokens.FLOAT
+                end
             end
         end
     elseif accept(l, "eEf")
         accept(l, "+-")
-        if accept_integer(l) && position(l) > longest
-            longest, kind = position(l), Tokens.FLOAT
+        if accept_batch(l, isdigit)
+            if accept(l, '.') # 1e2.3 -> [ERROR, 3]
+                return emit_error(l)
+            elseif position(l) > longest
+                longest, kind = position(l), Tokens.FLOAT
+            end
         else
             backup!(l)
             return emit(l, Tokens.INTEGER)
@@ -600,15 +607,15 @@ function lex_digit(l::Lexer)
     # 0x[0-9A-Fa-f]+
     if accept(l, '0')
         if accept(l, 'x')
-            if accept_batch(l, ishex) && position(l) > longest
+            if accept_number(l, ishex) && position(l) > longest
                 longest, kind = position(l), Tokens.INTEGER
             end
         elseif accept(l, 'b')
-            if accept_batch(l, isbinary) && position(l) > longest
+            if accept_number(l, isbinary) && position(l) > longest
                 longest, kind = position(l), Tokens.INTEGER
             end
         elseif accept(l, 'o')
-            if accept_batch(l, isoctal) && position(l) > longest
+            if accept_number(l, isoctal) && position(l) > longest
                 longest, kind = position(l), Tokens.INTEGER
             end
         end
@@ -956,7 +963,7 @@ function lex_identifier(l, c)
                             elseif c == 'a'
                                 return tryread(l, ('l','l'), IMPORTALL, c)
                             else
-                               return _doret(l, c)
+                                return _doret(l, c)
                             end
                         else
                             return _doret(l, c)
