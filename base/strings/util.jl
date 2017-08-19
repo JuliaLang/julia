@@ -466,8 +466,11 @@ end
 """
     hex2bytes(s::AbstractVector{UInt8})
 
-Convert the hexadecimal bytes array to its binary representation. Returns
-`Vector{UInt8}`, i.e. a vector of bytes.
+Given an array `s` of ASCII codes for a sequence of hexadecimal digits, returns a
+`Vector{UInt8}` of bytes  corresponding to the binary representation: each successive pair
+of hexadecimal digits in `s` gives the value of one byte in the return vector.
+
+The length of `s` must be even, and the returned array has half of the length of `s`.
 """
 @inline function hex2bytes(s::AbstractVector{UInt8})
     len = length(s)
@@ -481,12 +484,13 @@ end
 """
     hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
 
-Converts the hexadecimal bytes vector to its binary representation. The results are
-populated into a destination vector. The function returns the destination vector.
+Convert an array `s` of bytes representing a hexadecimal string to its binary
+representation, similar to [`hex2bytes`](@ref) except that the output is written in-place
+in `d`.   The length of `s` must be exactly twice the length of `d`.
 
 # Examples
 ```jldoctest
-julia> s = UInt8["01abEF"...]
+julia> s = b"01abEF"
 6-element Array{UInt8,1}:
  0x30
  0x31

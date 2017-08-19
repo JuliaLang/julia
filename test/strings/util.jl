@@ -249,22 +249,22 @@ bin_val = hex2bytes("07bf")
 @test_throws ArgumentError hex2bytes("0123456789abcdefABCDEFGH")
 
 @testset "Issue 23161" begin
-    arr = UInt8["0123456789abcdefABCDEF"...]
+    arr = b"0123456789abcdefABCDEF"
     arr1 = Vector{UInt8}(11)
     @test hex2bytes!(arr1, arr) == arr1
     @test "0123456789abcdefabcdef" == bytes2hex(arr1)
     @test hex2bytes("0123456789abcdefABCDEF") == hex2bytes(arr)
-    @test hex2bytes!(arr1, UInt8[""...]) == arr1
-    @test hex2bytes(UInt8[""...]) == UInt8[]
-    @test hex2bytes(view(UInt8["012345"...],1:6)) == UInt8[0x01,0x23,0x45]
+    @test hex2bytes!(arr1, b"") == arr1
+    @test hex2bytes(b"") == UInt8[]
+    @test hex2bytes(view(b"012345",1:6)) == UInt8[0x01,0x23,0x45]
     @test begin
-        s = view(UInt8["012345ab"...],1:6)
+        s = view(b"012345ab",1:6)
         d = view(zeros(UInt8, 10),1:3)
         hex2bytes!(d,s) == UInt8[0x01,0x23,0x45]
     end
     # odd size
-    @test_throws ArgumentError hex2bytes(UInt8["0123456789abcdefABCDEF0"...])
+    @test_throws ArgumentError hex2bytes(b"0123456789abcdefABCDEF0")
 
     #non-hex characters
-    @test_throws ArgumentError hex2bytes(UInt8["0123456789abcdefABCDEFGH"...])
+    @test_throws ArgumentError hex2bytes(b"0123456789abcdefABCDEFGH")
 end
