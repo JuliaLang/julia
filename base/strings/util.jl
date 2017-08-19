@@ -463,12 +463,7 @@ julia> hex2bytes(a)
 function hex2bytes end
 
 hex2bytes(s::AbstractString) = hex2bytes(Vector{UInt8}(String(s)))
-
-function hex2bytes(s::AbstractVector{UInt8})
-    len = length(s)
-    isodd(len) && throw(ArgumentError("source vector length must be even"))
-    return hex2bytes!(Vector{UInt8}(len >> 1), s)
-end
+hex2bytes(s::AbstractVector{UInt8}) = hex2bytes!(Vector{UInt8}(length(s) >> 1), s)
 
 """
     hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
