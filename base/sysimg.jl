@@ -163,6 +163,12 @@ include("reshapedarray.jl")
 include("bitarray.jl")
 include("intset.jl")
 include("associative.jl")
+
+if !isdefined(Core, :Inference)
+    include("docs/core.jl")
+    Core.atdoc!(CoreDocs.docm)
+end
+
 include("dict.jl")
 include("set.jl")
 include("iterators.jl")
@@ -188,11 +194,6 @@ include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # 
 
 include("osutils.jl")
 include("c.jl")
-
-if !isdefined(Core, :Inference)
-    include("docs/core.jl")
-    Core.atdoc!(CoreDocs.docm)
-end
 
 # Core I/O
 include("io.jl")
@@ -324,8 +325,8 @@ include("hashing2.jl")
 include("irrationals.jl")
 
 # random number generation
-include("dSFMT.jl")
-include("random.jl")
+include("random/dSFMT.jl")
+include("random/random.jl")
 importall .Random
 
 # (s)printf macros
@@ -417,7 +418,6 @@ include("threadcall.jl")
 include("deprecated.jl")
 
 # Some basic documentation
-include("docs/helpdb.jl")
 include("docs/basedocs.jl")
 
 # Documentation -- should always be included last in sysimg.

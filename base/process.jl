@@ -550,6 +550,11 @@ spawn_opts_inherit(stdios::StdIOSet) = (stdios,)
 spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2), args...) =
     ((in, out, err), args...)
 
+"""
+    spawn(command)
+
+Run a command object asynchronously, returning the resulting `Process` object.
+"""
 spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{ProcessChain}()) =
     spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 

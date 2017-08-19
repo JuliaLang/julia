@@ -50,6 +50,21 @@ end
 
 ## generic comparison ##
 
+"""
+    ==(x, y)
+
+Generic equality operator, giving a single [`Bool`](@ref) result. Falls back to `===`.
+Should be implemented for all types with a notion of equality, based on the abstract value
+that an instance represents. For example, all numeric types are compared by numeric value,
+ignoring type. Strings are compared as sequences of characters, ignoring encoding.
+
+Follows IEEE semantics for floating-point numbers.
+
+Collections should generally implement `==` by calling `==` recursively on all contents.
+
+New numeric types should implement this function for two arguments of the new type, and
+handle comparison to other types via promotion rules where possible.
+"""
 ==(x, y) = x === y
 
 """
@@ -94,6 +109,17 @@ signless(x, y) = signbit(x)::Bool & !signbit(y)::Bool
 isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
 isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
 isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
+
+"""
+    isless(x, y)
+
+Test whether `x` is less than `y`, according to a canonical total order. Values that are
+normally unordered, such as `NaN`, are ordered in an arbitrary but consistent fashion. This
+is the default comparison used by [`sort`](@ref). Non-numeric types with a canonical total order
+should implement this function. Numeric types only need to implement it if they have special
+values such as `NaN`.
+"""
+function isless end
 
 isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)

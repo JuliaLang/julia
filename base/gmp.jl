@@ -392,6 +392,14 @@ convert(::Type{Float16}, n::BigInt) = Float16(n,RoundNearest)
 
 promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
 
+"""
+    big(x)
+
+Convert a number to a maximum precision representation (typically [`BigInt`](@ref) or
+`BigFloat`). See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
+"""
+function big end
+
 big(::Type{<:Integer})  = BigInt
 big(::Type{<:Rational}) = Rational{BigInt}
 

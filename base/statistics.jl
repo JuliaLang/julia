@@ -59,7 +59,7 @@ julia> mean!([1. 1.], v)
 """
 function mean!(R::AbstractArray, A::AbstractArray)
     sum!(R, A; init=true)
-    scale!(R, _length(R) / _length(A))
+    scale!(R, _length(R) // max(1, _length(A)))
     return R
 end
 
@@ -175,7 +175,7 @@ function varm!(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; correcte
         fill!(R, convert(S, NaN))
     else
         rn = div(_length(A), _length(R)) - Int(corrected)
-        scale!(centralize_sumabs2!(R, A, m), one(S)/rn)
+        scale!(centralize_sumabs2!(R, A, m), 1//rn)
     end
     return R
 end
@@ -335,12 +335,18 @@ unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) =
 # covzm (with centered data)
 
 covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x) / (_length(x) - Int(corrected))
-covzm(x::AbstractMatrix, vardim::Int=1; corrected::Bool=true) =
-    scale!(unscaled_covzm(x, vardim), inv(size(x,vardim) - Int(corrected)))
+function covzm(x::AbstractMatrix, vardim::Int=1; corrected::Bool=true)
+    C = unscaled_covzm(x, vardim)
+    T = promote_type(typeof(first(C) / 1), eltype(C))
+    return scale!(convert(AbstractMatrix{T}, C), 1//(size(x, vardim) - corrected))
+end
 covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
     unscaled_covzm(x, y) / (_length(x) - Int(corrected))
-covzm(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int=1; corrected::Bool=true) =
-    scale!(unscaled_covzm(x, y, vardim), inv(_getnobs(x, y, vardim) - Int(corrected)))
+function covzm(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int=1; corrected::Bool=true)
+    C = unscaled_covzm(x, y, vardim)
+    T = promote_type(typeof(first(C) / 1), eltype(C))
+    return scale!(convert(AbstractArray{T}, C), 1//(_getnobs(x, y, vardim) - corrected))
+end
 
 # covm (with provided mean)
 

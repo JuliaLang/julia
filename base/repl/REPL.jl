@@ -507,7 +507,8 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
 end
 
 history_first(s::LineEdit.MIState, hist::REPLHistoryProvider) =
-    history_prev(s, hist, hist.cur_idx - 1)
+    history_prev(s, hist, hist.cur_idx - 1 -
+                 (hist.cur_idx > hist.start_idx+1 ? hist.start_idx : 0))
 
 history_last(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_next(s, hist, length(hist.history) - hist.cur_idx + 1)
