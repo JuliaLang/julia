@@ -67,6 +67,19 @@ mutable struct PromptState <: ModeState
     indent::Int
 end
 
+setmark(s) = mark(buffer(s))
+
+# the default mark is 0
+getmark(s) = max(0, buffer(s).mark)
+
+# given two buffer positions delimitating a region
+# as an close-open range, return a range of the included
+# positions, 0-based (suitable for splice_buffer!)
+region(a::Int, b::Int) = ((a, b) = minmax(a, b); a:b-1)
+region(s) = region(getmark(s), position(buffer(s)))
+
+const REGION_ANIMATION_DURATION = Ref(0.2)
+
 input_string(s::PromptState) = String(take!(copy(s.input_buffer)))
 
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
@@ -287,6 +300,17 @@ function reset_key_repeats(f::Function, s::MIState)
     end
 end
 
+edit_exchange_point_and_mark(s::MIState) =
+    edit_exchange_point_and_mark(buffer(s)) && (refresh_line(s); true)
+
+function edit_exchange_point_and_mark(buf::IOBuffer)
+    m = getmark(buf)
+    m == position(buf) && return false
+    mark(buf)
+    seek(buf, m)
+    true
+end
+
 char_move_left(s::PromptState) = char_move_left(s.input_buffer)
 function char_move_left(buf::IOBuffer)
     while position(buf) > 0
@@ -431,16 +455,23 @@ end
 
 # splice! for IOBuffer: convert from 0-indexed positions, update the size,
 # and keep the cursor position stable with the text
+# returns the removed portion as a String
 function splice_buffer!(buf::IOBuffer, r::UnitRange{<:Integer}, ins::AbstractString = "")
     pos = position(buf)
-    if !isempty(r) && pos in r
+    if pos in r
         seek(buf, first(r))
     elseif pos > last(r)
         seek(buf, pos - length(r))
     end
-    splice!(buf.data, r + 1, Vector{UInt8}(ins)) # position(), etc, are 0-indexed
+    if first(r) < buf.mark  <= last(r)
+        unmark(buf)
+    elseif buf.mark > last(r) && !isempty(r)
+        buf.mark += sizeof(ins) - length(r)
+    end
+    ret = splice!(buf.data, r + 1, Vector{UInt8}(ins)) # position(), etc, are 0-indexed
     buf.size = buf.size + sizeof(ins) - length(r)
     seek(buf, position(buf) + sizeof(ins))
+    String(ret)
 end
 
 function edit_replace(s, from, to, str)
@@ -595,6 +626,26 @@ function edit_kill_line(s::MIState)
 
     splice_buffer!(buf, pos:position(buf)-1)
     refresh_line(s)
+end
+
+function edit_copy_region(s::MIState)
+    buf = buffer(s)
+    if edit_exchange_point_and_mark(buf) # region non-empty
+        s.kill_buffer = String(buf.data[region(buf)+1])
+        if REGION_ANIMATION_DURATION[] > 0.0
+            refresh_line(s)
+            sleep(REGION_ANIMATION_DURATION[])
+        end
+        edit_exchange_point_and_mark(s) # includes refresh_line
+    end
+end
+
+function edit_kill_region(s::MIState)
+    reg = region(s)
+    if !isempty(reg)
+        s.kill_buffer = splice_buffer!(buffer(s), reg)
+        refresh_line(s)
+    end
 end
 
 edit_transpose_chars(s) = edit_transpose_chars(buffer(s)) && refresh_line(s)
@@ -784,20 +835,14 @@ function add_nested_key!(keymap::Dict, key, value; override = false)
     i = start(key)
     while !done(key, i)
         c, i = next(key, i)
-        if c in keys(keymap)
-            if done(key, i) && override
-                # isa(keymap[c], Dict) - In this case we're overriding a prefix of an existing command
-                keymap[c] = value
-                break
-            else
-                if !isa(keymap[c], Dict)
-                    error("Conflicting definitions for keyseq " * escape_string(key) * " within one keymap")
-                end
-            end
-        elseif done(key, i)
+        if !override && c in keys(keymap) && (done(key, i) || !isa(keymap[c], Dict))
+            error("Conflicting definitions for keyseq " * escape_string(key) *
+                  " within one keymap")
+        end
+        if done(key, i)
             keymap[c] = value
             break
-        else
+        elseif !(c in keys(keymap) && isa(keymap[c], Dict))
             keymap[c] = Dict{Char,Any}()
         end
         keymap = keymap[c]
@@ -1499,6 +1544,9 @@ AnyDict(
             return :abort
         end
     end,
+    # Ctrl-Space
+    "\0" => (s,o...)->setmark(s),
+    "^X^X" => (s,o...)->edit_exchange_point_and_mark(s),
     "^B" => (s,o...)->edit_move_left(s),
     "^F" => (s,o...)->edit_move_right(s),
     # Meta B
@@ -1521,6 +1569,8 @@ AnyDict(
     "^U" => (s,o...)->edit_clear(s),
     "^K" => (s,o...)->edit_kill_line(s),
     "^Y" => (s,o...)->edit_yank(s),
+    "\ew" => (s,o...)->edit_copy_region(s),
+    "\eW" => (s,o...)->edit_kill_region(s),
     "^A" => (s,o...)->(move_line_start(s); refresh_line(s)),
     "^E" => (s,o...)->(move_line_end(s); refresh_line(s)),
     # Try to catch all Home/End keys
@@ -1725,6 +1775,7 @@ end
 buffer(s::PromptState) = s.input_buffer
 buffer(s::SearchState) = s.query_buffer
 buffer(s::PrefixSearchState) = s.response_buffer
+buffer(s::IOBuffer) = s
 
 keymap(s::PromptState, prompt::Prompt) = prompt.keymap_dict
 keymap_data(s::PromptState, prompt::Prompt) = prompt.keymap_func_data
