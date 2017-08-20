@@ -7,7 +7,7 @@ using ..Terminals
 import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
-import Base: ensureroom, peek, show, AnyDict
+import Base: ensureroom, peek, show, AnyDict, position
 
 abstract type TextInterface end
 abstract type ModeState end
@@ -78,11 +78,14 @@ setmark(s) = mark(buffer(s))
 # the default mark is 0
 getmark(s) = max(0, buffer(s).mark)
 
-# given two buffer positions delimitating a region
-# as an close-open range, return a range of the included
-# positions, 0-based (suitable for splice_buffer!)
-region(a::Int, b::Int) = ((a, b) = minmax(a, b); a:b-1)
-region(s) = region(getmark(s), position(buffer(s)))
+const Region = Pair{<:Integer,<:Integer}
+
+_region(s) = getmark(s) => position(s)
+region(s) = Pair(extrema(_region(s))...)
+
+indexes(reg::Region) = first(reg)+1:last(reg)
+
+content(s, reg::Region = 0=>buffer(s).size) = String(buffer(s).data[indexes(reg)])
 
 const REGION_ANIMATION_DURATION = Ref(0.2)
 
@@ -92,7 +95,7 @@ input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
     str = input_string(s)
     isempty(str) && return 0
-    rest = str[nextind(str, position(s.input_buffer)):end]
+    rest = str[nextind(str, position(s)):end]
     return count(c->(c == '\n'), rest)
 end
 
@@ -182,17 +185,17 @@ function complete_line(s::PromptState, repeats)
         show_completions(s, completions)
     elseif length(completions) == 1
         # Replace word by completion
-        prev_pos = position(s.input_buffer)
+        prev_pos = position(s)
         seek(s.input_buffer, prev_pos-sizeof(partial))
-        edit_replace(s, position(s.input_buffer), prev_pos, completions[1])
+        edit_splice!(s, position(s) => prev_pos, completions[1])
     else
         p = common_prefix(completions)
         if !isempty(p) && p != partial
             # All possible completions share the same prefix, so we might as
             # well complete that
-            prev_pos = position(s.input_buffer)
+            prev_pos = position(s)
             seek(s.input_buffer, prev_pos-sizeof(partial))
-            edit_replace(s, position(s.input_buffer), prev_pos, p)
+            edit_splice!(s, position(s) => prev_pos, p)
         elseif repeats > 0
             show_completions(s, completions)
         end
@@ -358,7 +361,7 @@ end
 edit_move_left(s::PromptState) = edit_move_left(s.input_buffer) && refresh_line(s)
 
 function edit_move_word_left(s)
-    if position(s.input_buffer) > 0
+    if position(s) > 0
         char_move_word_left(s.input_buffer)
         refresh_line(s)
     end
@@ -429,7 +432,7 @@ function edit_move_up(buf::IOBuffer)
     npos = rsearch(buf.data, '\n', position(buf))
     npos == 0 && return false # we're in the first line
     # We're interested in character count, not byte count
-    offset = length(String(buf.data[(npos+1):(position(buf))]))
+    offset = length(content(buf, npos => position(buf)))
     npos2 = rsearch(buf.data, '\n', npos-1)
     seek(buf, npos2)
     for _ = 1:offset
@@ -471,30 +474,31 @@ function edit_move_down(s)
     changed
 end
 
-# splice! for IOBuffer: convert from 0-indexed positions, update the size,
-# and keep the cursor position stable with the text
+# splice! for IOBuffer: convert from close-open region to index, update the size,
+# and keep the cursor position and mark stable with the text
 # returns the removed portion as a String
-function splice_buffer!(buf::IOBuffer, r::UnitRange{<:Integer}, ins::AbstractString = "")
+function edit_splice!(s, r::Region=region(s), ins::AbstractString = "")
+    A, B = first(r), last(r)
+    A >= B && isempty(ins) && return String(ins)
+    buf = buffer(s)
     pos = position(buf)
-    if pos in r
-        seek(buf, first(r))
-    elseif pos > last(r)
-        seek(buf, pos - length(r))
+    if A <= pos < B
+        seek(buf, A)
+    elseif B <= pos
+        seek(buf, pos - B + A)
     end
-    if first(r) < buf.mark  <= last(r)
-        buf.mark = first(r)
-    elseif buf.mark > last(r) && !isempty(r)
-        buf.mark += sizeof(ins) - length(r)
+    if A < buf.mark  < B
+        buf.mark = A
+    elseif A < B <= buf.mark
+        buf.mark += sizeof(ins) - B + A
     end
-    ret = splice!(buf.data, r + 1, Vector{UInt8}(ins)) # position(), etc, are 0-indexed
-    buf.size = buf.size + sizeof(ins) - length(r)
+    ret = splice!(buf.data, A+1:B, Vector{UInt8}(ins)) # position(), etc, are 0-indexed
+    buf.size = buf.size + sizeof(ins) - B + A
     seek(buf, position(buf) + sizeof(ins))
     String(ret)
 end
 
-function edit_replace(s, from, to, str)
-    splice_buffer!(buffer(s), from:to-1, str)
-end
+edit_splice!(s, ins::AbstractString) = edit_splice!(s, region(s), ins)
 
 function edit_insert(s::PromptState, c)
     buf = s.input_buffer
@@ -518,7 +522,7 @@ function edit_insert(buf::IOBuffer, c)
         return write(buf, c)
     else
         s = string(c)
-        splice_buffer!(buf, position(buf):position(buf)-1, s)
+        edit_splice!(buf, position(buf) => position(buf), s)
         return sizeof(s)
     end
 end
@@ -578,7 +582,7 @@ function edit_backspace(buf::IOBuffer, align::Bool=false, adjust::Bool=align)
             end
         end
     end
-    splice_buffer!(buf, newpos:oldpos-1)
+    edit_splice!(buf, newpos => oldpos)
     return true
 end
 
@@ -589,7 +593,7 @@ function edit_delete(buf::IOBuffer)
     eof(buf) && return false
     oldpos = position(buf)
     char_move_right(buf)
-    splice_buffer!(buf, oldpos:position(buf)-1)
+    edit_splice!(buf, oldpos => position(buf))
     true
 end
 
@@ -598,9 +602,10 @@ function edit_werase(buf::IOBuffer)
     char_move_word_left(buf, isspace)
     pos0 = position(buf)
     pos0 < pos1 || return false
-    splice_buffer!(buf, pos0:pos1-1)
+    edit_splice!(buf, pos0 => pos1)
     true
 end
+
 edit_werase(s::MIState) = (edit_werase(buffer(s)) && refresh_line(s); :edit_werase)
 
 function edit_delete_prev_word(buf::IOBuffer)
@@ -608,9 +613,10 @@ function edit_delete_prev_word(buf::IOBuffer)
     char_move_word_left(buf)
     pos0 = position(buf)
     pos0 < pos1 || return false
-    splice_buffer!(buf, pos0:pos1-1)
+    edit_splice!(buf, pos0 => pos1)
     true
 end
+
 function edit_delete_prev_word(s::MIState)
     edit_delete_prev_word(buffer(s)) && refresh_line(s)
     :edit_delete_prev_word
@@ -621,7 +627,7 @@ function edit_delete_next_word(buf::IOBuffer)
     char_move_word_right(buf)
     pos1 = position(buf)
     pos0 < pos1 || return false
-    splice_buffer!(buf, pos0:pos1-1)
+    edit_splice!(buf, pos0 => pos1)
     true
 end
 
@@ -647,7 +653,7 @@ function edit_yank_pop(s::MIState, require_previous_yank=true)
         beep(terminal(s))
         :ignore
     else
-        splice_buffer!(buffer(s), region(s), s.kill_ring[mod1(s.kill_idx-=1, end)])
+        edit_splice!(s, s.kill_ring[mod1(s.kill_idx-=1, end)])
         refresh_line(s)
         :edit_yank_pop
     end
@@ -674,14 +680,14 @@ function edit_kill_line(s::MIState)
         char_move_left(buf)
     end
     push_kill!(s, killbuf, s.key_repeats > 0) || return :ignore
-    splice_buffer!(buf, pos:position(buf)-1)
+    edit_splice!(buf, pos => position(buf))
     refresh_line(s)
     :edit_kill_line
 end
 
 function edit_copy_region(s::MIState)
     buf = buffer(s)
-    push_kill!(s, String(buf.data[region(buf)+1])) || return :ignore
+    push_kill!(s, content(buf, region(buf))) || return :ignore
     if REGION_ANIMATION_DURATION[] > 0.0
         edit_exchange_point_and_mark(s)
         sleep(REGION_ANIMATION_DURATION[])
@@ -691,7 +697,7 @@ function edit_copy_region(s::MIState)
 end
 
 function edit_kill_region(s::MIState)
-    push_kill!(s, splice_buffer!(buffer(s), region(s))) || return :ignore
+    push_kill!(s, edit_splice!(s)) || return :ignore
     refresh_line(s)
     :edit_kill_region
 end
@@ -734,8 +740,8 @@ function edit_transpose_words(buf::IOBuffer, mode=:emacs)
     char_move_word_right(buf)
     e1 = position(buf)
     e1 >= b2 && (seek(buf, pos); return false)
-    word2 = splice!(buf.data, b2+1:e2, buf.data[b1+1:e1])
-    splice!(buf.data, b1+1:e1, word2)
+    word2 = edit_splice!(buf, b2 => e2, content(buf, b1 => e1))
+    edit_splice!(buf, b1 => e1, word2)
     seek(buf, e2)
     true
 end
@@ -755,8 +761,7 @@ function edit_replace_word_right(buf::IOBuffer, replace::Function)
     char_move_word_right(buf)
     e = position(buf)
     e == b && return false
-    newstr = replace(String(buf.data[b+1:e]))
-    splice_buffer!(buf, b:e-1, newstr)
+    edit_splice!(buf, b => e, replace(content(buf, b => e)))
     true
 end
 
@@ -1323,9 +1328,9 @@ function complete_line(s::SearchState, repeats)
     completions, partial, should_complete = complete_line(s.histprompt.complete, s)
     # For now only allow exact completions in search mode
     if length(completions) == 1
-        prev_pos = position(s.query_buffer)
+        prev_pos = position(s)
         seek(s.query_buffer, prev_pos-sizeof(partial))
-        edit_replace(s, position(s.query_buffer), prev_pos, completions[1])
+        edit_splice!(s, position(s) => prev_pos, completions[1])
     end
 end
 
@@ -1563,7 +1568,7 @@ function edit_insert_tab(buf::IOBuffer, jump_spaces=false, delete_trailing=jump_
     if jump_spaces && i < buf.size && buf.data[i+1] == _space
         spaces = findnext(_notspace, buf.data[i+1:buf.size], 1)
         if delete_trailing && (spaces == 0 || buf.data[i+spaces] == _newline)
-            splice_buffer!(buf, i:(spaces == 0 ? buf.size-1 : i+spaces-2))
+            edit_splice!(buf, i => (spaces == 0 ? buf.size : i+spaces-1))
         else
             jump = spaces == 0 ? buf.size : i+spaces-1
             return seek(buf, jump)
@@ -1837,6 +1842,8 @@ buffer(s::PromptState) = s.input_buffer
 buffer(s::SearchState) = s.query_buffer
 buffer(s::PrefixSearchState) = s.response_buffer
 buffer(s::IOBuffer) = s
+
+position(s::Union{MIState,ModeState}) = position(buffer(s))
 
 keymap(s::PromptState, prompt::Prompt) = prompt.keymap_dict
 keymap_data(s::PromptState, prompt::Prompt) = prompt.keymap_func_data
