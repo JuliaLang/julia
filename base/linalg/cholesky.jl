@@ -67,8 +67,8 @@ function _chol!(A::StridedMatrix{<:BlasFloat}, ::Type{LowerTriangular})
     return LowerTriangular(C), info
 end
 function _chol!(A::StridedMatrix)
-    if !ishermitian(A) # return with info = 1 if not Hermitian
-        return UpperTriangular(A), convert(BlasInt, 1)
+    if !ishermitian(A) # return with info = -1 if not Hermitian
+        return UpperTriangular(A), convert(BlasInt, -1)
     else
         return _chol!(A, UpperTriangular)
     end
@@ -184,9 +184,7 @@ julia> U'U
  2.0  50.0
 ```
 """
-function chol(A::AbstractMatrix)
-    return chol!(cholcopy(A))
-end
+chol(A::AbstractMatrix) = chol!(cholcopy(A))
 
 ## Numbers
 """
@@ -238,8 +236,8 @@ ERROR: InexactError: convert(Int64, 6.782329983125268)
 ```
 """
 function cholfact!(A::StridedMatrix, ::Val{false}=Val(false))
-    if !ishermitian(A) # return with info = 1 if not Hermitian
-        return Cholesky(A, 'U', convert(BlasInt, 1))
+    if !ishermitian(A) # return with info = -1 if not Hermitian
+        return Cholesky(A, 'U', convert(BlasInt, -1))
     else
         return cholfact!(Hermitian(A), Val(false))
     end
@@ -269,9 +267,9 @@ factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
 function cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0)
-    if !ishermitian(A) # return with info = 1 if not Hermitian
+    if !ishermitian(A) # return with info = -1 if not Hermitian
         return CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
-                               0.0, convert(BlasInt, 1))
+                               tol, convert(BlasInt, -1))
     else
         return cholfact!(Hermitian(A), Val(true); tol = tol)
     end

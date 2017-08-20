@@ -265,8 +265,8 @@ end
     R = randn(5, 5)
     C = complex.(R, R)
     for A in (R, C)
-        @test cholfact(A).info == 1
-        @test cholfact!(copy(A)).info == 1
+        @test !LinAlg.issuccess(cholfact(A))
+        @test !LinAlg.issuccess(cholfact!(copy(A)))
         @test_throws PosDefException chol(A)
         @test_throws PosDefException Base.LinAlg.chol!(copy(A))
     end
