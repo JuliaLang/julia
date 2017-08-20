@@ -1316,6 +1316,13 @@ end
     @test trace(speye(5)) == 5
 end
 
+@testset "spdiagm" begin
+    v = sprand(10, 0.4)
+    @test spdiagm(v)::SparseMatrixCSC                == diagm(Vector(v))
+    @test spdiagm(sparse(ones(5)))::SparseMatrixCSC  == speye(5)
+    @test spdiagm(sparse(zeros(5)))::SparseMatrixCSC == spzeros(5,5)
+end
+
 @testset "diag" begin
     for T in (Float64, Complex128)
         S1 = sprand(T,  5,  5, 0.5)
