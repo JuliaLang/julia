@@ -37,17 +37,22 @@ end
 
 show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), "\",...)"))
 
+"Maximum number of entries in the kill ring queue.
+Beyond this number, oldest entries are discarded first."
+const KILL_RING_MAX = Ref(100)
+
 mutable struct MIState
     interface::ModalInterface
     current_mode::TextInterface
     aborted::Bool
     mode_state::Dict
-    kill_buffer::String
+    kill_ring::Vector{String}
+    kill_idx::Int
     previous_key::Vector{Char}
     key_repeats::Int
     last_action::Symbol
 end
-MIState(i, c, a, m) = MIState(i, c, a, m, "", Char[], 0, :begin)
+MIState(i, c, a, m) = MIState(i, c, a, m, String[], 0, Char[], 0, :begin)
 
 function show(io::IO, s::MIState)
     print(io, "MI State (", s.current_mode, " active)")
@@ -477,7 +482,7 @@ function splice_buffer!(buf::IOBuffer, r::UnitRange{<:Integer}, ins::AbstractStr
         seek(buf, pos - length(r))
     end
     if first(r) < buf.mark  <= last(r)
-        unmark(buf)
+        buf.mark = first(r)
     elseif buf.mark > last(r) && !isempty(r)
         buf.mark += sizeof(ins) - length(r)
     end
@@ -626,9 +631,38 @@ function edit_delete_next_word(s)
 end
 
 function edit_yank(s::MIState)
-    edit_insert(buffer(s), s.kill_buffer)
+    if isempty(s.kill_ring)
+        beep(terminal(s))
+        return :ignore
+    end
+    setmark(s) # necessary for edit_yank_pop
+    edit_insert(buffer(s), s.kill_ring[mod1(s.kill_idx, end)])
     refresh_line(s)
     :edit_yank
+end
+
+function edit_yank_pop(s::MIState, require_previous_yank=true)
+    if require_previous_yank && !(s.last_action in [:edit_yank, :edit_yank_pop]) ||
+            isempty(s.kill_ring)
+        beep(terminal(s))
+        :ignore
+    else
+        splice_buffer!(buffer(s), region(s), s.kill_ring[mod1(s.kill_idx-=1, end)])
+        refresh_line(s)
+        :edit_yank_pop
+    end
+end
+
+function push_kill!(s::MIState, killed::String, concat=false)
+    isempty(killed) && return false
+    if concat
+        s.kill_ring[end] *= killed
+    else
+        push!(s.kill_ring, killed)
+        length(s.kill_ring) > KILL_RING_MAX[] && shift!(s.kill_ring)
+    end
+    s.kill_idx = endof(s.kill_ring)
+    true
 end
 
 function edit_kill_line(s::MIState)
@@ -639,40 +673,27 @@ function edit_kill_line(s::MIState)
         killbuf = killbuf[1:end-1]
         char_move_left(buf)
     end
-    if !isempty(killbuf)
-        s.kill_buffer = s.key_repeats > 0 ? s.kill_buffer * killbuf : killbuf
-        splice_buffer!(buf, pos:position(buf)-1)
-        refresh_line(s)
-        :edit_kill_line
-    else
-        :ignore
-    end
+    push_kill!(s, killbuf, s.key_repeats > 0) || return :ignore
+    splice_buffer!(buf, pos:position(buf)-1)
+    refresh_line(s)
+    :edit_kill_line
 end
 
 function edit_copy_region(s::MIState)
     buf = buffer(s)
-    if edit_exchange_point_and_mark(buf) # region non-empty
-        s.kill_buffer = String(buf.data[region(buf)+1])
-        if REGION_ANIMATION_DURATION[] > 0.0
-            refresh_line(s)
-            sleep(REGION_ANIMATION_DURATION[])
-        end
-        edit_exchange_point_and_mark(s) # includes refresh_line
-        :edit_copy_region
-    else
-        :ignore
+    push_kill!(s, String(buf.data[region(buf)+1])) || return :ignore
+    if REGION_ANIMATION_DURATION[] > 0.0
+        edit_exchange_point_and_mark(s)
+        sleep(REGION_ANIMATION_DURATION[])
+        edit_exchange_point_and_mark(s)
     end
+    :edit_copy_region
 end
 
 function edit_kill_region(s::MIState)
-    reg = region(s)
-    if !isempty(reg)
-        s.kill_buffer = splice_buffer!(buffer(s), reg)
-        refresh_line(s)
-        :edit_kill_region
-    else
-        :ignore
-    end
+    push_kill!(s, splice_buffer!(buffer(s), region(s))) || return :ignore
+    refresh_line(s)
+    :edit_kill_region
 end
 
 function edit_transpose_chars(s::MIState)
@@ -1608,6 +1629,7 @@ AnyDict(
     "^U" => (s,o...)->edit_clear(s),
     "^K" => (s,o...)->edit_kill_line(s),
     "^Y" => (s,o...)->edit_yank(s),
+    "\ey" => (s,o...)->edit_yank_pop(s),
     "\ew" => (s,o...)->edit_copy_region(s),
     "\eW" => (s,o...)->edit_kill_region(s),
     "^A" => (s,o...)->(move_line_start(s); refresh_line(s)),
