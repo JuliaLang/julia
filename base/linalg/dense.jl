@@ -358,6 +358,32 @@ kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
 
 # Matrix power
 (^)(A::AbstractMatrix, p::Integer) = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
+function (^)(A::AbstractMatrix{T}, p::Integer) where T<:Integer
+    TT = Base.promote_op(^, T, typeof(p))
+    if p<0
+        # if !isone(A) and !isone(-A), throw a domain error
+        m, n = size(A)
+        if m != n || !isdiag(A)
+            Base.throw_domerr_powbysq(p)
+        end
+        is_eye, is_minus_eye = true, true
+        for i = 1:m
+            is_eye = is_eye && A[i, i] == 1
+            is_minus_eye = is_minus_eye && A[i, i] == -1
+            if !is_eye && !is_minus_eye
+                Base.throw_domerr_powbysq(p)
+            end
+        end
+        # if isone(A) or isone(A), return one(A) or -one(A)
+        if is_eye
+            return copy!(similar(A, TT), A)
+        else is_minus_eye
+            return iseven(p) ? eye(TT, m, n) : copy!(similar(A, TT), A)
+        end
+    else
+        return Base.power_by_squaring(TT == T ? A : copy!(similar(A, TT), A), p)
+    end
+end
 function integerpow(A::AbstractMatrix{T}, p) where T
     TT = Base.promote_op(^, T, typeof(p))
     return (TT == T ? A : copy!(similar(A, TT), A))^Integer(p)
