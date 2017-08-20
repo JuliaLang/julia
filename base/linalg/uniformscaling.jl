@@ -167,6 +167,7 @@ end
 
 inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 norm(J::UniformScaling, p::Real=2) = abs(J.λ)
+det(J::UniformScaling) = 1.0
 
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(Array(B), J::UniformScaling)
