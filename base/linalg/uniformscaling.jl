@@ -167,8 +167,8 @@ end
 
 inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 norm(J::UniformScaling, p::Real=2) = abs(J.λ)
-det(J::UniformScaling{T}) where {T} = one(T)
-logdet(::UniformScaling{T}) where {T} = zero(T)
+det(J::UniformScaling{T}) where {T} = J.λ==one(T) ? one(T) : error("Determinant of UniformScaling is only well-defined when λ=1")
+logdet(::UniformScaling{T}) where {T} = J.λ==one(T) ? log(one(T)) : error("Determinant of UniformScaling is only well-defined when λ=1")
 
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(Array(B), J::UniformScaling)
