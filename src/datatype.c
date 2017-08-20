@@ -784,6 +784,8 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
     if (jl_is_uniontype(ty)) {
         uint8_t sel = ((uint8_t*)v)[offs + jl_field_size(st, i) - 1];
         ty = jl_nth_union_component(ty, sel);
+        if (jl_is_datatype_singleton((jl_datatype_t*)ty))
+            return ((jl_datatype_t*)ty)->instance;
     }
     return jl_new_bits(ty, (char*)v + offs);
 }

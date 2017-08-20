@@ -2244,15 +2244,27 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 Type *fty = julia_type_to_llvm(jtype);
                 const jl_cgval_t &fval_info = argv[i + 1];
                 emit_typecheck(ctx, fval_info, jtype, "new");
-                if (!type_is_ghost(fty)) {
-                    Value *fval = NULL, *dest = NULL;
-                    if (!init_as_value) {
+                Value *dest = NULL;
+                if (!init_as_value) {
+                    bool isunion = jl_is_uniontype(jtype);
+                    if (!type_is_ghost(fty) || isunion) {
                         // avoid unboxing the argument explicitly
                         // and use memcpy instead
                         dest = ctx.builder.CreateConstInBoundsGEP2_32(lt, strct, 0, i);
                     }
+                    if (isunion) {
+                        int fsz = jl_field_size(sty, i);
+                        // compute tindex from rhs
+                        // jl_cgval_t rhs_union = convert_julia_type(ctx, rhs, jtype);
+                        Value *tindex = compute_tindex_unboxed(ctx, fval_info, jtype);
+                        tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
+                        Value *ptindex = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, dest, T_pint8), ConstantInt::get(T_size, fsz - 1));
+                        ctx.builder.CreateStore(tindex, ptindex);
+                    }
+                }
+                if (!type_is_ghost(fty)) {
+                    Value *fval = NULL;
                     fval = emit_unbox(ctx, fty, fval_info, jtype, dest);
-
                     if (init_as_value) {
                         if (lt->isVectorTy())
                             strct = ctx.builder.CreateInsertElement(strct, fval, ConstantInt::get(T_int32, idx));
