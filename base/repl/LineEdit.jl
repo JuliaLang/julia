@@ -731,16 +731,18 @@ end
 
 ### Keymap Support
 
+const wildcard = Char(0x0010f7ff) # "Private Use" Char
+
 normalize_key(key::Char) = string(key)
 normalize_key(key::Integer) = normalize_key(Char(key))
 function normalize_key(key::AbstractString)
-    '\0' in key && error("Matching \\0 not currently supported.")
+    wildcard in key && error("Matching Char(0x0010f7ff) not supported.")
     buf = IOBuffer()
     i = start(key)
     while !done(key, i)
         c, i = next(key, i)
         if c == '*'
-            write(buf, '\0')
+            write(buf, wildcard)
         elseif c == '^'
             c, i = next(key, i)
             write(buf, uppercase(c)-64)
@@ -810,19 +812,25 @@ struct KeyAlias
     KeyAlias(seq) = new(normalize_key(seq))
 end
 
-match_input(k::Function, s, term, cs, keymap) = (update_key_repeats(s, cs); return keymap_fcn(k, String(cs)))
+function match_input(k::Function, s, term, cs, keymap)
+    update_key_repeats(s, cs)
+    return keymap_fcn(k, String(cs))
+end
+
 match_input(k::Void, s, term, cs, keymap) = (s,p) -> return :ok
-match_input(k::KeyAlias, s, term, cs, keymap) = match_input(keymap, s, IOBuffer(k.seq), Char[], keymap)
+match_input(k::KeyAlias, s, term, cs, keymap) =
+    match_input(keymap, s, IOBuffer(k.seq), Char[], keymap)
+
 function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     # if we run out of characters to match before resolving an action,
     # return an empty keymap function
     eof(term) && return keymap_fcn(nothing, "")
     c = read(term, Char)
-    # Ignore any '\0' (eg, CTRL-space in xterm), as this is used as a
+    # Ignore any `wildcard` as this is used as a
     # placeholder for the wildcard (see normalize_key("*"))
-    c != '\0' || return keymap_fcn(nothing, "")
+    c == wildcard && return keymap_fcn(nothing, "")
     push!(cs, c)
-    key = haskey(k, c) ? c : '\0'
+    key = haskey(k, c) ? c : wildcard
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
     return match_input(get(k, key, nothing), s, term, cs, keymap)
 end
@@ -913,12 +921,12 @@ function fixup_keymaps!(dict::Dict, level, s, subkeymap)
 end
 
 function add_specialisations(dict, subdict, level)
-    default_branch = subdict['\0']
+    default_branch = subdict[wildcard]
     if isa(default_branch, Dict)
         # Go through all the keymaps in the default branch
         # and copy them over to dict
         for s in keys(default_branch)
-            s == '\0' && add_specialisations(dict, default_branch, level+1)
+            s == wildcard && add_specialisations(dict, default_branch, level+1)
             fixup_keymaps!(dict, level, s, default_branch[s])
         end
     end
@@ -927,11 +935,11 @@ end
 postprocess!(others) = nothing
 function postprocess!(dict::Dict)
     # needs to be done first for every branch
-    if haskey(dict, '\0')
+    if haskey(dict, wildcard)
         add_specialisations(dict, dict, 1)
     end
     for (k,v) in dict
-        k == '\0' && continue
+        k == wildcard && continue
         postprocess!(v)
     end
 end
@@ -1015,7 +1023,7 @@ function keymap(keymaps::Array{<:Dict})
 end
 
 const escape_defaults = merge!(
-    AnyDict(Char(i) => nothing for i=vcat(1:26, 28:31)), # Ignore control characters by default
+    AnyDict(Char(i) => nothing for i=vcat(0:26, 28:31)), # Ignore control characters by default
     AnyDict( # And ignore other escape sequences by default
         "\e*" => nothing,
         "\e[*" => nothing,
