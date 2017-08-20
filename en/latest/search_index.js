@@ -6077,7 +6077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.code_lowered",
     "category": "Function",
-    "text": "code_lowered(f, types)\n\nReturns an array of lowered ASTs for the methods matching the given generic function and type signature.\n\n\n\n"
+    "text": "code_lowered(f, types, expand_generated = true)\n\nReturn an array of lowered ASTs for the methods matching the given generic function and type signature.\n\nIf expand_generated is false, then the CodeInfo instances returned for @generated methods will correspond to the generators' lowered ASTs. If expand_generated is true, these CodeInfo instances will correspond to the lowered ASTs of the method bodies yielded by expanding the generators.\n\nNote that an error will be thrown if types are not leaf types when expand_generated is true and the corresponding method is a @generated method.\n\n\n\n"
 },
 
 {
@@ -15109,7 +15109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.dirname",
     "category": "Function",
-    "text": "dirname(path::AbstractString) -> AbstractString\n\nGet the directory part of a path.\n\njulia> dirname(\"/home/myuser\")\n\"/home\"\n\nSee also: basename\n\n\n\n"
+    "text": "dirname(path::AbstractString) -> AbstractString\n\nGet the directory part of a path.\n\nExamples\n\njulia> dirname(\"/home/myuser\")\n\"/home\"\n\nSee also: basename\n\n\n\n"
 },
 
 {
@@ -15117,7 +15117,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.basename",
     "category": "Function",
-    "text": "basename(path::AbstractString) -> AbstractString\n\nGet the file name part of a path.\n\njulia> basename(\"/home/myuser/example.jl\")\n\"example.jl\"\n\nSee also: dirname\n\n\n\n"
+    "text": "basename(path::AbstractString) -> AbstractString\n\nGet the file name part of a path.\n\nExamples\n\njulia> basename(\"/home/myuser/example.jl\")\n\"example.jl\"\n\nSee also: dirname\n\n\n\n"
 },
 
 {
@@ -15149,7 +15149,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.isabspath",
     "category": "Function",
-    "text": "isabspath(path::AbstractString) -> Bool\n\nDetermines whether a path is absolute (begins at the root directory).\n\njulia> isabspath(\"/home\")\ntrue\n\njulia> isabspath(\"home\")\nfalse\n\n\n\n"
+    "text": "isabspath(path::AbstractString) -> Bool\n\nDetermines whether a path is absolute (begins at the root directory).\n\nExamples\n\njulia> isabspath(\"/home\")\ntrue\n\njulia> isabspath(\"home\")\nfalse\n\n\n\n"
 },
 
 {
@@ -15157,7 +15157,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.isdirpath",
     "category": "Function",
-    "text": "isdirpath(path::AbstractString) -> Bool\n\nDetermines whether a path refers to a directory (for example, ends with a path separator).\n\njulia> isdirpath(\"/home\")\nfalse\n\njulia> isdirpath(\"/home/\")\ntrue\n\n\n\n"
+    "text": "isdirpath(path::AbstractString) -> Bool\n\nDetermines whether a path refers to a directory (for example, ends with a path separator).\n\nExamples\n\njulia> isdirpath(\"/home\")\nfalse\n\njulia> isdirpath(\"/home/\")\ntrue\n\n\n\n"
 },
 
 {
@@ -15165,7 +15165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.joinpath",
     "category": "Function",
-    "text": "joinpath(parts...) -> AbstractString\n\nJoin path components into a full path. If some argument is an absolute path, then prior components are dropped.\n\njulia> joinpath(\"/home/myuser\",\"example.jl\")\n\"/home/myuser/example.jl\"\n\n\n\n"
+    "text": "joinpath(parts...) -> AbstractString\n\nJoin path components into a full path. If some argument is an absolute path, then prior components are dropped.\n\nExamples\n\njulia> joinpath(\"/home/myuser\",\"example.jl\")\n\"/home/myuser/example.jl\"\n\n\n\n"
 },
 
 {
@@ -15181,7 +15181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.normpath",
     "category": "Function",
-    "text": "normpath(path::AbstractString) -> AbstractString\n\nNormalize a path, removing \".\" and \"..\" entries.\n\njulia> normpath(\"/home/myuser/../example.jl\")\n\"/home/example.jl\"\n\n\n\n"
+    "text": "normpath(path::AbstractString) -> AbstractString\n\nNormalize a path, removing \".\" and \"..\" entries.\n\nExamples\n\njulia> normpath(\"/home/myuser/../example.jl\")\n\"/home/example.jl\"\n\n\n\n"
 },
 
 {
@@ -15213,7 +15213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.splitdir",
     "category": "Function",
-    "text": "splitdir(path::AbstractString) -> (AbstractString, AbstractString)\n\nSplit a path into a tuple of the directory name and file name.\n\njulia> splitdir(\"/home/myuser\")\n(\"/home\", \"myuser\")\n\n\n\n"
+    "text": "splitdir(path::AbstractString) -> (AbstractString, AbstractString)\n\nSplit a path into a tuple of the directory name and file name.\n\nExamples\n\njulia> splitdir(\"/home/myuser\")\n(\"/home\", \"myuser\")\n\n\n\n"
 },
 
 {
@@ -15229,7 +15229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Filesystem",
     "title": "Base.Filesystem.splitext",
     "category": "Function",
-    "text": "splitext(path::AbstractString) -> (AbstractString, AbstractString)\n\nIf the last component of a path contains a dot, split the path into everything before the dot and everything including and after the dot. Otherwise, return a tuple of the argument unmodified and the empty string.\n\njulia> splitext(\"/home/myuser/example.jl\")\n(\"/home/myuser/example\", \".jl\")\n\njulia> splitext(\"/home/myuser/example\")\n(\"/home/myuser/example\", \"\")\n\n\n\n"
+    "text": "splitext(path::AbstractString) -> (AbstractString, AbstractString)\n\nIf the last component of a path contains a dot, split the path into everything before the dot and everything including and after the dot. Otherwise, return a tuple of the argument unmodified and the empty string.\n\nExamples\n\njulia> splitext(\"/home/myuser/example.jl\")\n(\"/home/myuser/example\", \".jl\")\n\njulia> splitext(\"/home/myuser/example\")\n(\"/home/myuser/example\", \"\")\n\n\n\n"
 },
 
 {
