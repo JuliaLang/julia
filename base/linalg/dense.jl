@@ -374,7 +374,7 @@ function (^)(A::AbstractMatrix{T}, p::Integer) where T<:Integer
                 Base.throw_domerr_powbysq(p)
             end
         end
-        # if isone(A) or isone(A), return one(A) or -one(A)
+        # if isone(A) or isone(-A), return one(A) or -one(A)
         if is_eye
             return copy!(similar(A, TT), A)
         else is_minus_eye
