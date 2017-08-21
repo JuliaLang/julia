@@ -117,6 +117,11 @@ function test_chained_comparison(op, args)
     op(args...) === all((tup) -> op(tup...), zip(args[1:end-1], args[2:end]))
 end
 
+mutable struct T22638A end
+mutable struct T22638B end
+
+Base.:(==)(::T22638A, ::T22638B) = throw(MethodError("no equality"))
+
 let
     test_cases = [
         [1, 1, 1],
@@ -147,6 +152,16 @@ let
     @testset "chained comparisons" begin
         @testset "chained equality" for op in ops, test_case in test_cases
             @test test_chained_comparison(op, test_case)
+        end
+
+        # ensures no methods are accidentally defined with varargs but not 2-args
+        @testset "invalid comparisons" begin
+            a = T22638A()
+            b = T22638B()
+
+            @testset for op in ops
+                @test_throws MethodError op(a, b)
+            end
         end
     end
 end

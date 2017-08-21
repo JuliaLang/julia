@@ -343,7 +343,16 @@ for op in (:(==), :isequal, :<, :>, :<=, :>=, :isless, :lexless)
         Call `$($op)` successively on each pair of arguments
         (e.g. `$($op)(x, y) && $($op)(y, z) && ...`).
         """
-        ($op)(a, b, c, args...) = ($op)(a, b) && ($op)(b, c, args...)
+        function ($op)(a, b, c, args...)
+            result = ($op)(a, b) && ($op)(b, c)
+            @inbounds if result && length(args) > 0
+                ($op)(c, args[1]) || return false
+                for i in 1:length(args)-1
+                    ($op)(args[i], args[i + 1]) || return false
+                end
+            end
+            return result
+        end
     end
 end
 
