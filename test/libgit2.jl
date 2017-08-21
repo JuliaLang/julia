@@ -1644,10 +1644,11 @@ mktempdir() do dir
             end
 
             # SSH requires username
+            url_no_username = "github.com:test/package.jl"
             ssh_u_ex = quote
                 include($LIBGIT2_HELPER_PATH)
                 valid_cred = SSHCredentials($username, "", $valid_key, $(valid_key * ".pub"))
-                credential_loop(valid_cred, $url)
+                credential_loop(valid_cred, $url_no_username)
             end
 
             # Note: We cannot use the default ~/.ssh/id_rsa for tests since we cannot be
@@ -1748,7 +1749,7 @@ mktempdir() do dir
                 ssh_user_empty_ex = quote
                     include($LIBGIT2_HELPER_PATH)
                     valid_cred = LibGit2.SSHCredentials($username, "", $valid_key, $(valid_key * ".pub"))
-                    credential_loop(valid_cred, $url, "")
+                    credential_loop(valid_cred, $url_no_username, "")
                 end
 
                 challenges = [
