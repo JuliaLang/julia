@@ -324,14 +324,35 @@ problematic for performance, so the results need to be used judiciously.
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
 function code_warntype(io::IO, f, t::ANY)
+    function slots_used(ci, slotnames)
+        used = falses(length(slotnames))
+        scan_exprs!(used, ci.code)
+        return used
+    end
+
+    function scan_exprs!(used, exprs)
+        for ex in exprs
+            if isa(ex, Slot)
+                used[ex.id] = true
+            elseif isa(ex, Expr)
+                scan_exprs!(used, ex.args)
+            end
+        end
+    end
+
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
     for (src, rettype) in code_typed(f, t)
         println(emph_io, "Variables:")
         slotnames = sourceinfo_slotnames(src)
+        used_slotids = slots_used(src, slotnames)
         for i = 1:length(slotnames)
             print(emph_io, "  ", slotnames[i])
-            if isa(src.slottypes, Array)
-                show_expr_type(emph_io, src.slottypes[i], true)
+            if used_slotids[i]
+                if isa(src.slottypes, Array)
+                    show_expr_type(emph_io, src.slottypes[i], true)
+                end
+            else
+                print(emph_io, " <optimized out>")
             end
             print(emph_io, '\n')
         end
