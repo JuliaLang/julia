@@ -7165,7 +7165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
 },
 
 {
@@ -9885,7 +9885,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.replace",
     "category": "Function",
-    "text": "replace(s::AbstractString, pat, r, [count::Integer])\n\nSearch for the given pattern pat in s, and replace each occurrence with r. If count is provided, replace at most count occurrences. As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression. If r is a function, each occurrence is replaced with r(s) where s is the matched substring. If pat is a regular expression and r is a SubstitutionString, then capture group references in r are replaced with the corresponding matched text. To remove instances of pat from string, set r to the empty String (\"\").\n\n\n\n"
+    "text": "replace(s::AbstractString, pat, r, [count::Integer])\n\nSearch for the given pattern pat in s, and replace each occurrence with r. If count is provided, replace at most count occurrences. As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression. If r is a function, each occurrence is replaced with r(s) where s is the matched substring. If pat is a regular expression and r is a SubstitutionString, then capture group references in r are replaced with the corresponding matched text. To remove instances of pat from string, set r to the empty String (\"\").\n\nExamples\n\njulia> replace(\"Python is a programming language.\", \"Python\", \"Julia\")\n\"Julia is a programming language.\"\n\njulia> replace(\"The quick foxes run quickly.\", \"quick\", \"slow\", 1)\n\"The slow foxes run quickly.\"\n\njulia> replace(\"The quick foxes run quickly.\", \"quick\", \"\", 1)\n\"The  foxes run quickly.\"\n\n\n\n"
 },
 
 {
@@ -10053,7 +10053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.charwidth",
     "category": "Function",
-    "text": "charwidth(c)\n\nGives the number of columns needed to print a character.\n\n\n\n"
+    "text": "charwidth(c)\n\nGives the number of columns needed to print a character.\n\nExamples\n\njulia> charwidth('α')\n1\n\njulia> charwidth('❤')\n2\n\n\n\n"
 },
 
 {
@@ -10069,7 +10069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.isalnum",
     "category": "Function",
-    "text": "isalnum(c::Char) -> Bool\n\nTests whether a character is alphanumeric. A character is classified as alphabetic if it belongs to the Unicode general category Letter or Number, i.e. a character whose category code begins with 'L' or 'N'.\n\n\n\n"
+    "text": "isalnum(c::Char) -> Bool\n\nTests whether a character is alphanumeric. A character is classified as alphabetic if it belongs to the Unicode general category Letter or Number, i.e. a character whose category code begins with 'L' or 'N'.\n\nExamples\n\njulia> isalnum('❤')\nfalse\n\njulia> isalnum('9')\ntrue\n\njulia> isalnum('α')\ntrue\n\n\n\n"
 },
 
 {
@@ -10077,7 +10077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.isalpha",
     "category": "Function",
-    "text": "isalpha(c::Char) -> Bool\n\nTests whether a character is alphabetic. A character is classified as alphabetic if it belongs to the Unicode general category Letter, i.e. a character whose category code begins with 'L'.\n\n\n\n"
+    "text": "isalpha(c::Char) -> Bool\n\nTests whether a character is alphabetic. A character is classified as alphabetic if it belongs to the Unicode general category Letter, i.e. a character whose category code begins with 'L'.\n\nExamples\n\njulia> isalpha('❤')\nfalse\n\njulia> isalpha('α')\ntrue\n\njulia> isalpha('9')\nfalse\n\n\n\n"
 },
 
 {
@@ -10101,7 +10101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.isdigit",
     "category": "Function",
-    "text": "isdigit(c::Char) -> Bool\n\nTests whether a character is a numeric digit (0-9).\n\n\n\n"
+    "text": "isdigit(c::Char) -> Bool\n\nTests whether a character is a numeric digit (0-9).\n\nExamples\n\njulia> isdigit('❤')\nfalse\n\njulia> isdigit('9')\ntrue\n\njulia> isdigit('α')\nfalse\n\n\n\n"
 },
 
 {
@@ -10117,7 +10117,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.islower",
     "category": "Function",
-    "text": "islower(c::Char) -> Bool\n\nTests whether a character is a lowercase letter. A character is classified as lowercase if it belongs to Unicode category Ll, Letter: Lowercase.\n\n\n\n"
+    "text": "islower(c::Char) -> Bool\n\nTests whether a character is a lowercase letter. A character is classified as lowercase if it belongs to Unicode category Ll, Letter: Lowercase.\n\nExamples\n\njulia> islower('α')\ntrue\n\njulia> islower('Γ')\nfalse\n\njulia> islower('❤')\nfalse\n\n\n\n"
 },
 
 {
@@ -10125,7 +10125,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.isnumber",
     "category": "Function",
-    "text": "isnumber(c::Char) -> Bool\n\nTests whether a character is numeric. A character is classified as numeric if it belongs to the Unicode general category Number, i.e. a character whose category code begins with 'N'.\n\n\n\n"
+    "text": "isnumber(c::Char) -> Bool\n\nTests whether a character is numeric. A character is classified as numeric if it belongs to the Unicode general category Number, i.e. a character whose category code begins with 'N'.\n\nExamples\n\njulia> isnumber('9')\ntrue\n\njulia> isnumber('α')\nfalse\n\njulia> isnumber('❤')\nfalse\n\n\n\n"
 },
 
 {
@@ -10141,7 +10141,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.ispunct",
     "category": "Function",
-    "text": "ispunct(c::Char) -> Bool\n\nTests whether a character belongs to the Unicode general category Punctuation, i.e. a character whose category code begins with 'P'.\n\n\n\n"
+    "text": "ispunct(c::Char) -> Bool\n\nTests whether a character belongs to the Unicode general category Punctuation, i.e. a character whose category code begins with 'P'.\n\nExamples\n\njulia> ispunct('α')\nfalse\n\njulia> ispunct('/')\ntrue\n\njulia> ispunct(';')\ntrue\n\n\n\n"
 },
 
 {
@@ -10157,7 +10157,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.UTF8proc.isupper",
     "category": "Function",
-    "text": "isupper(c::Char) -> Bool\n\nTests whether a character is an uppercase letter. A character is classified as uppercase if it belongs to Unicode category Lu, Letter: Uppercase, or Lt, Letter: Titlecase.\n\n\n\n"
+    "text": "isupper(c::Char) -> Bool\n\nTests whether a character is an uppercase letter. A character is classified as uppercase if it belongs to Unicode category Lu, Letter: Uppercase, or Lt, Letter: Titlecase.\n\nExamples\n\njulia> isupper('γ')\nfalse\n\njulia> isupper('Γ')\ntrue\n\njulia> isupper('❤')\nfalse\n\n\n\n"
 },
 
 {
@@ -12757,7 +12757,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A) -> QRSparse\n\nCompute the QR factorization of a sparse matrix A. Fill-reducing row and column permutations are used such that F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]. The main application of this type is to solve least squares or underdetermined problems with \\. The function calls the C library SPQR.\n\nExamples\n\njulia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))\n4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 1]  =  1.0\n  [3, 2]  =  1.0\n  [4, 2]  =  1.0\n\njulia> qrfact(A)\nBase.SparseArrays.SPQR.QRSparse{Float64,Int64}\nQ factor:\n4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:\n -0.707107   0.0        0.0       -0.707107\n  0.0       -0.707107  -0.707107   0.0\n  0.0       -0.707107   0.707107   0.0\n -0.707107   0.0        0.0        0.707107\nR factor:\n2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  -1.41421\n  [2, 2]  =  -1.41421\nRow permutation:\n4-element Array{Int64,1}:\n 1\n 3\n 4\n 2\nColumn permutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\nqrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExamples\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\n"
+    "text": "qrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExamples\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\nqrfact(A) -> QRSparse\n\nCompute the QR factorization of a sparse matrix A. Fill-reducing row and column permutations are used such that F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]. The main application of this type is to solve least squares or underdetermined problems with \\. The function calls the C library SPQR.\n\nExamples\n\njulia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))\n4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 1]  =  1.0\n  [3, 2]  =  1.0\n  [4, 2]  =  1.0\n\njulia> qrfact(A)\nBase.SparseArrays.SPQR.QRSparse{Float64,Int64}\nQ factor:\n4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:\n -0.707107   0.0        0.0       -0.707107\n  0.0       -0.707107  -0.707107   0.0\n  0.0       -0.707107   0.707107   0.0\n -0.707107   0.0        0.0        0.707107\nR factor:\n2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  -1.41421\n  [2, 2]  =  -1.41421\nRow permutation:\n4-element Array{Int64,1}:\n 1\n 3\n 4\n 2\nColumn permutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
 },
 
 {
