@@ -3768,12 +3768,23 @@ f(x) = yt(x)
                         '() arg-map))
           body))))
 
-;; find newvar nodes that are unnecessary because (1) the variable is not
+(define (for-each-isdefined f e)
+  (cond ((or (atom? e) (quoted? e)) #f)
+        ((and (pair? e) (eq? (car e) 'isdefined))
+         (f (cadr e)))
+        (else
+         (for-each (lambda (x) (for-each-isdefined f x))
+                   (cdr e)))))
+
+;; Find newvar nodes that are unnecessary because (1) the variable is not
 ;; captured, and (2) the variable is assigned before any branches.
-;; this is used to remove newvar nodes that are not needed for re-initializing
-;; variables to undefined (see issue #11065). it doesn't look for variable
-;; *uses*, because any variables used-before-def that also pass this test
-;; are *always* used undefined, and therefore don't need to be *re*-initialized.
+;; This is used to remove newvar nodes that are not needed for re-initializing
+;; variables to undefined (see issue #11065).
+;; It doesn't look for variable *uses*, because any variables used-before-def
+;; that also pass this test are *always* used undefined, and therefore don't need
+;; to be *re*-initialized.
+;; The one exception to that is `@isdefined`, which can observe an undefined
+;; variable without throwing an error.
 (define (definitely-initialized-vars stmts vi)
   (let ((vars (table))
         (di   (table)))
@@ -3782,6 +3793,8 @@ f(x) = yt(x)
           di
           (begin
             (let ((e (car stmts)))
+              (for-each-isdefined (lambda (x) (if (has? vars x) (del! vars x)))
+                                  e)
               (cond ((and (pair? e) (eq? (car e) 'newvar))
                      (let ((vinf (var-info-for (cadr e) vi)))
                        (if (and vinf (not (vinfo:capt vinf)))

@@ -5117,6 +5117,15 @@ f_isdefined_va(::T...) where {T} = @isdefined T
 @test !f_isdefined_va()
 @test f_isdefined_va(1, 2, 3)
 
+# @isdefined in a loop
+let a = []
+    for i = 1:2
+        push!(a, @isdefined(j))
+        local j = 1
+    end
+    @test a == [false, false]
+end
+
 mutable struct MyStruct22929
     x::MyStruct22929
     MyStruct22929() = new()
