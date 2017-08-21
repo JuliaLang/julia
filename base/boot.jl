@@ -332,6 +332,7 @@ function Symbol(a::Array{UInt8,1})
                  ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
                  Intrinsics.arraylen(a))
 end
+Symbol(s::Symbol) = s
 
 # docsystem basics
 macro doc(x...)
