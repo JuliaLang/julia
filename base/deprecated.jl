@@ -1708,6 +1708,9 @@ export hex2num
 # PR 23341
 @deprecate diagm(A::SparseMatrixCSC) spdiagm(sparsevec(A))
 
+# PR #23373
+@deprecate diagm(A::BitMatrix) diagm(vec(A))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
