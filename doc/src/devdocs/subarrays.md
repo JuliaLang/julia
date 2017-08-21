@@ -94,7 +94,8 @@ a `Tuple` of the types of the indices for each dimension. The final one, `L`, is
 as a convenience for dispatch; it's a boolean that represents whether the index types support
 fast linear indexing. More on that later.
 
-If in our example above `A` is a `Array{Float64, 3}`, our `S1` case above would be a `SubArray{Float64,2,Array{Float64,3},Tuple{Base.Slice{Base.OneTo{Int64}},Int64,UnitRange{Int64}},false}`.
+If in our example above `A` is a `Array{Float64, 3}`, our `S1` case above would be a
+`SubArray{Float64,2,Array{Float64,3},Tuple{Base.Slice{Base.OneTo{Int64}},Int64,UnitRange{Int64}},false}`.
 Note in particular the tuple parameter, which stores the types of the indices used to create
 `S1`.  Likewise,
 
