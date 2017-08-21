@@ -1158,8 +1158,8 @@ if !Sys.iswindows()
 end  # !Sys.iswindows
 
 function test_22922()
-    const def_prefix = "jl_"
-    const tst_prefix = "ABCDEF"
+    def_prefix = "jl_"
+    tst_prefix = "ABCDEF"
     mktempdir() do tmpdir
         filename = basename(tmpdir)
         @test startswith(filename, def_prefix)
