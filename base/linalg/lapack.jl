@@ -5558,15 +5558,15 @@ for (gees, gges, elty) in
         #    $                   WR( * )
         function gees!(jobvs::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = checksquare(A)
-            sdim = Vector{BlasInt}(1)
-            wr = similar(A, $elty, n)
-            wi = similar(A, $elty, n)
-            ldvs = jobvs == 'V' ? n : 1
-            vs = similar(A, $elty, ldvs, n)
-            work = Vector{$elty}(1)
+            n     = checksquare(A)
+            sdim  = Vector{BlasInt}(1)
+            wr    = similar(A, $elty, n)
+            wi    = similar(A, $elty, n)
+            vs    = similar(A, $elty, jobvs == 'V' ? n : 0, n)
+            ldvs  = max(size(vs, 1), 1)
+            work  = Vector{$elty}(1)
             lwork = BlasInt(-1)
-            info = Ref{BlasInt}()
+            info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($gees), liblapack), Void,
                     (Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}, Ptr{BlasInt},
@@ -5651,16 +5651,16 @@ for (gees, gges, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), VS( LDVS, * ), W( * ), WORK( * )
         function gees!(jobvs::Char, A::StridedMatrix{$elty})
             chkstride1(A)
-            n = checksquare(A)
-            sort = 'N'
-            sdim = BlasInt(0)
-            w = similar(A, $elty, n)
-            ldvs = jobvs == 'V' ? n : 1
-            vs = similar(A, $elty, ldvs, n)
-            work = Vector{$elty}(1)
+            n     = checksquare(A)
+            sort  = 'N'
+            sdim  = BlasInt(0)
+            w     = similar(A, $elty, n)
+            vs    = similar(A, $elty, jobvs == 'V' ? n : 1, n)
+            ldvs  = max(size(vs, 1), 1)
+            work  = Vector{$elty}(1)
             lwork = BlasInt(-1)
             rwork = Vector{$relty}(n)
-            info = Ref{BlasInt}()
+            info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($gees), liblapack), Void,
                     (Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}, Ptr{BlasInt},
