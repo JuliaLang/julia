@@ -1902,6 +1902,39 @@ mktempdir() do dir
             @test auth_attempts == 2
         end
 
+        @testset "SSH agent username" begin
+            url = "github.com:test/package.jl"
+
+            valid_key = joinpath(KEY_DIR, "valid")
+            username = "git"
+
+            ssh_empty_ex = quote
+                include($LIBGIT2_HELPER_PATH)
+                valid_cred = LibGit2.SSHCredentials($username, "", $valid_key, $(valid_key * ".pub"))
+                credential_loop(valid_cred, $url, Nullable(""), use_ssh_agent=true)
+            end
+
+            ssh_null_ex = quote
+                include($LIBGIT2_HELPER_PATH)
+                valid_cred = LibGit2.SSHCredentials($username, "", $valid_key, $(valid_key * ".pub"))
+                credential_loop(valid_cred, $url, Nullable(), use_ssh_agent=true)
+            end
+
+            challenges = [
+                "Username for 'github.com':" => "\x04",
+            ]
+
+            err, auth_attempts = challenge_prompt(ssh_empty_ex, challenges)
+            @test err == abort_prompt  # TODO: `eauth_error` when we can disable prompting
+            @test auth_attempts == 2
+
+            # A null username_ptr passed into `git_cred_ssh_key_from_agent` can cause a
+            # segfault.
+            err, auth_attempts = challenge_prompt(ssh_null_ex, challenges)
+            @test err == abort_prompt  # TODO: `eauth_error` when we can disable prompting
+            @test auth_attempts == 1
+        end
+
         @testset "SSH explicit credentials" begin
             url = "git@github.com:test/package.jl"
 
