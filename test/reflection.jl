@@ -690,8 +690,8 @@ end
 @test sizeof(Symbol("")) == 0
 @test_throws(ErrorException("argument is an abstract type; size is indeterminate"),
              sizeof(Real))
-@test_throws ErrorException sizeof(Union{Complex64,Complex128})
-@test_throws ErrorException sizeof(Union{Int8,UInt8})
+@test sizeof(Union{Complex64,Complex128}) == 16
+@test sizeof(Union{Int8,UInt8}) == 1
 @test_throws ErrorException sizeof(AbstractArray)
 @test_throws ErrorException sizeof(Tuple)
 @test_throws ErrorException sizeof(Tuple{Any,Any})
