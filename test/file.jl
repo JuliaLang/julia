@@ -52,6 +52,7 @@ end
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
+@test !isfile(Base.Filesystem.StatStruct())
 @test isdir(dir)
 @test !isfile(dir)
 @test !islink(dir)
@@ -196,7 +197,7 @@ function test_timeout(tval)
     @async test_file_poll(channel, 10, tval)
     tr = take!(channel)
     t_elapsed = toq()
-    @test !ispath(tr[1]) && !ispath(tr[2])
+    @test tr[1] === Base.Filesystem.StatStruct() && tr[2] === EOFError()
     @test tval <= t_elapsed
 end
 
@@ -268,7 +269,9 @@ test_watch_file_timeout(0.1)
 test_watch_file_change(6)
 
 @test_throws Base.UVError watch_file("____nonexistent_file", 10)
-@test_throws Base.UVError poll_file("____nonexistent_file", 2, 10)
+@test(@elapsed(
+    @test(poll_file("____nonexistent_file", 1, 3.1) ===
+          (Base.Filesystem.StatStruct(), EOFError()))) > 3)
 
 ##############
 # mark/reset #
