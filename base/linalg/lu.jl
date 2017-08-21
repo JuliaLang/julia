@@ -327,14 +327,14 @@ end
 # Tridiagonal
 
 # See dgttrf.f
-function lufact!(A::Tridiagonal{T}, pivot::Union{Val{false}, Val{true}} = Val(true)) where T
+function lufact!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true)) where {T,V}
     n = size(A, 1)
     info = 0
     ipiv = Vector{BlasInt}(n)
     dl = A.dl
     d = A.d
     du = A.du
-    du2 = A.du2
+    du2 = fill!(similar(d, n-2), 0)::V
 
     @inbounds begin
         for i = 1:n
@@ -389,12 +389,13 @@ function lufact!(A::Tridiagonal{T}, pivot::Union{Val{false}, Val{true}} = Val(tr
             end
         end
     end
-    LU{T,Tridiagonal{T}}(A, ipiv, convert(BlasInt, info))
+    B = Tridiagonal{T,V}(dl, d, du, du2)
+    LU{T,Tridiagonal{T,V}}(B, ipiv, convert(BlasInt, info))
 end
 
 factorize(A::Tridiagonal) = lufact(A)
 
-function getindex(F::Base.LinAlg.LU{T,Tridiagonal{T}}, d::Symbol) where T
+function getindex(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
     m, n = size(F)
     if d == :L
         L = Array(Bidiagonal(ones(T, n), F.factors.dl, d))
@@ -419,7 +420,7 @@ function getindex(F::Base.LinAlg.LU{T,Tridiagonal{T}}, d::Symbol) where T
 end
 
 # See dgtts2.f
-function A_ldiv_B!(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) where T
+function A_ldiv_B!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
     n = size(A,1)
     if n != size(B,1)
         throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
@@ -450,7 +451,7 @@ function A_ldiv_B!(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) where T
     return B
 end
 
-function At_ldiv_B!(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) where T
+function At_ldiv_B!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
     n = size(A,1)
     if n != size(B,1)
         throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
@@ -485,7 +486,7 @@ function At_ldiv_B!(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) where T
 end
 
 # Ac_ldiv_B!(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) where {T<:Real} = At_ldiv_B!(A,B)
-function Ac_ldiv_B!(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) where T
+function Ac_ldiv_B!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
     n = size(A,1)
     if n != size(B,1)
         throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
@@ -528,7 +529,7 @@ convert(::Type{Matrix}, F::LU) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::LU) = convert(Matrix, F)
 full(F::LU) = convert(AbstractArray, F)
 
-function convert(::Type{Tridiagonal}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where T
+function convert(::Type{Tridiagonal}, F::Base.LinAlg.LU{T,Tridiagonal{T,V}}) where {T,V}
     n = size(F, 1)
 
     dl  = copy(F.factors.dl)
@@ -562,12 +563,12 @@ function convert(::Type{Tridiagonal}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where
     end
     return Tridiagonal(dl, d, du)
 end
-convert(::Type{AbstractMatrix}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where {T} =
+convert(::Type{AbstractMatrix}, F::LU{T,Tridiagonal{T,V}}) where {T,V} =
     convert(Tridiagonal, F)
-convert(::Type{AbstractArray}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where {T} =
+convert(::Type{AbstractArray}, F::LU{T,Tridiagonal{T,V}}) where {T,V} =
     convert(AbstractMatrix, F)
-convert(::Type{Matrix}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where {T} =
+convert(::Type{Matrix}, F::LU{T,Tridiagonal{T,V}}) where {T,V} =
     convert(Array, convert(AbstractArray, F))
-convert(::Type{Array}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) where {T} =
+convert(::Type{Array}, F::LU{T,Tridiagonal{T,V}}) where {T,V} =
     convert(Matrix, F)
-full(F::Base.LinAlg.LU{T,Tridiagonal{T}}) where {T} = convert(AbstractArray, F)
+full(F::LU{T,Tridiagonal{T,V}}) where {T,V} = convert(AbstractArray, F)
