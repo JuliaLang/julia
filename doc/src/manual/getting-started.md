@@ -114,7 +114,7 @@ julia [switches] -- [programfile] [args...]
  --machinefile <file>      Run processes on hosts listed in <file>
 
  -i                        Interactive mode; REPL runs and isinteractive() is true
- -q, --quiet               Quiet startup (no banner)
+ --banner={yes|no}         Enable or disable startup banner
  --color={yes|no}          Enable or disable color text
  --history-file={yes|no}   Load or save history
 
