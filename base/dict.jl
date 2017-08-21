@@ -721,16 +721,22 @@ length(t::Dict) = t.count
 next(v::KeyIterator{<:Dict}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
 next(v::ValueIterator{<:Dict}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
 
-# For these Associative types, it is safe to implement filter!
-# by deleting keys during iteration.
-function filter!(f, d::Union{ObjectIdDict,Dict})
-    for (k,v) in d
-        if !f(k,v)
-            delete!(d,k)
+function filter_in_one_pass!(f, d::Associative)
+    try
+        for (k, v) in d
+            if !f(k => v)
+                delete!(d, k)
+            end
         end
+    catch e
+        return filter!_dict_deprecation(e, f, d)
     end
     return d
 end
+
+# For these Associative types, it is safe to implement filter!
+# by deleting keys during iteration.
+filter!(f, d::Union{ObjectIdDict,Dict}) = filter_in_one_pass!(f, d)
 
 struct ImmutableDict{K,V} <: Associative{K,V}
     parent::ImmutableDict{K,V}

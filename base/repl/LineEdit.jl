@@ -895,7 +895,7 @@ end
 # source is the keymap specified by the user (with normalized keys)
 function keymap_merge(target,source)
     ret = copy(target)
-    direct_keys = filter((k,v) -> isa(v, Union{Function, KeyAlias, Void}), source)
+    direct_keys = filter(p -> isa(p.second, Union{Function, KeyAlias, Void}), source)
     # first direct entries
     for key in keys(direct_keys)
         add_nested_key!(ret, key, source[key]; override = true)

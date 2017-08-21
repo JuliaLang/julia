@@ -885,8 +885,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(^, 1.0im, b2) Matrix{Complex128}
         @check_bit_operation broadcast(^, 0im, b2)   Matrix{Complex{Int}}
         @check_bit_operation broadcast(^, 1im, b2)   Matrix{Complex{Int}}
-        @check_bit_operation broadcast(^, 0x0im, b2) Matrix{Complex{UInt8}}
-        @check_bit_operation broadcast(^, 0x1im, b2) Matrix{Complex{UInt8}}
+        @check_bit_operation broadcast(^, 0x0*im, b2) Matrix{Complex{UInt8}}
+        @check_bit_operation broadcast(^, 0x1*im, b2) Matrix{Complex{UInt8}}
     end
 
     @testset "Matrix/Number" begin
@@ -982,7 +982,7 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(^, b1, 0.0)   Matrix{Float64}
         @check_bit_operation broadcast(^, b1, 1.0)   Matrix{Float64}
         @check_bit_operation broadcast(^, b1, 0.0im) Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 0x0im) Matrix{Complex128}
+        @check_bit_operation broadcast(^, b1, 0x0*im) Matrix{Complex128}
         @check_bit_operation broadcast(^, b1, 0im)   Matrix{Complex128}
         @test_throws DomainError broadcast(^, b1, -1)
 
@@ -991,7 +991,7 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(^, b1, 1.0im)  Matrix{Complex128}
         @check_bit_operation broadcast(^, b1, -1im)   Matrix{Complex128}
         @check_bit_operation broadcast(^, b1, 1im)    Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 0x1im)  Matrix{Complex128}
+        @check_bit_operation broadcast(^, b1, 0x1*im)  Matrix{Complex128}
     end
 end
 
