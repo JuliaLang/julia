@@ -1346,7 +1346,6 @@ end
 @deprecate srand(filename::AbstractString, n::Integer=4) srand(read!(filename, Array{UInt32}(Int(n))))
 @deprecate MersenneTwister(filename::AbstractString)  srand(MersenneTwister(0), read!(filename, Array{UInt32}(Int(4))))
 
-
 # PR #21974
 @deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
 @deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
@@ -1677,6 +1676,7 @@ function hex2num(s::AbstractString)
     end
     return reinterpret(Float64, parse(UInt64, s, 16))
 end
+export hex2num
 
 @deprecate num2hex(x::Union{Float16,Float32,Float64}) hex(reinterpret(Unsigned, x), sizeof(x)*2)
 @deprecate num2hex(n::Integer) hex(n, sizeof(n)*2)
@@ -1690,6 +1690,9 @@ end
 
 # issue #5148, PR #23259
 # warning for `const` on locals should be changed to an error in julia-syntax.scm
+
+# issue #17886
+# deprecations for filter[!] with 2-arg functions are in associative.jl
 
 # END 0.7 deprecations
 

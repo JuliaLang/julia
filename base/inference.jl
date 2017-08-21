@@ -5294,7 +5294,7 @@ function find_sa_vars(src::CodeInfo, nargs::Int)
             end
         end
     end
-    filter!((v, _) -> !haskey(av2, v), av)
+    filter!(p -> !haskey(av2, p.first), av)
     return av
 end
 

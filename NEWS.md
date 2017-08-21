@@ -19,6 +19,9 @@ Language changes
   * In string and character literals, backslash `\` may no longer
     precede unrecognized escape characters ([#22800]).
 
+  * Juxtaposing binary, octal, and hexadecimal literals is deprecated, since it can lead to
+    confusing code such as `0xapi == 0xa * pi` ([#16356]).
+
   * Declaring arguments as `x::ANY` to avoid specialization has been replaced
     by `@nospecialize x`. ([#22666]).
 
@@ -314,6 +317,11 @@ Deprecated or removed
 
   * `ctranspose` and `ctranspose!` have been deprecated in favor of `adjoint` and `adjoint!`,
     respectively ([#23235]).
+
+  * `filter` and `filter!` on dictionaries now pass a single `key=>value` pair to the
+    argument function, instead of two arguments ([#17886]).
+
+  * `Base.SparseArrays.SpDiagIterator` has been removed ([#23261]).
 
 Command-line option changes
 ---------------------------
