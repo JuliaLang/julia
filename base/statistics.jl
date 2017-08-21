@@ -59,7 +59,7 @@ julia> mean!([1. 1.], v)
 """
 function mean!(R::AbstractArray, A::AbstractArray)
     sum!(R, A; init=true)
-    scale!(R, _length(R) // max(1, _length(A)))
+    scale!(R, max(1, _length(R)) // _length(A))
     return R
 end
 
