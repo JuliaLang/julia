@@ -2595,11 +2595,51 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
     jl_sysimg_handle = handle;
 }
 
+#ifdef _OS_WINDOWS_
+static unsigned __stdcall _jl_restore_system_image_from_stream(void*);
+extern DWORD jl_tls_key;
+#endif
+
 static void jl_restore_system_image_from_stream(ios_t *f)
 {
+#ifdef _OS_WINDOWS_
+    // on Windows, the default stack size is insufficient
+    // for this serializer design,
+    // use a separate thread to run this function
+    // as a workaround
+    int en = jl_gc_enable(0);
+    void *main_ptls = TlsGetValue(jl_tls_key);
+    void *args[] = {
+        (void*)f,
+        (void*)main_ptls
+    };
+    HANDLE hThread = (HANDLE)_beginthreadex(
+            NULL,
+            8 * 1024 * 1024, /* 8 MB */
+            &_jl_restore_system_image_from_stream,
+            (void*)args,
+            0,
+            NULL);
+    WaitForSingleObject(hThread, INFINITE);
+    CloseHandle(hThread);
+
+    jl_gc_reset_alloc_count();
+    jl_gc_enable(en);
+    jl_update_all_fptrs();
+}
+
+static unsigned __stdcall _jl_restore_system_image_from_stream(void* threadargs)
+{
+    ios_t *f = (ios_t*)((void**)threadargs)[0];
+    void *old_ptls = TlsGetValue(jl_tls_key);
+    void *main_ptls = ((void**)threadargs)[1];
+    TlsSetValue(jl_tls_key, main_ptls);
+#else
+    int en = jl_gc_enable(0);
+#endif
+
     JL_TIMING(SYSIMG_LOAD);
     jl_ptls_t ptls = jl_get_ptls_states();
-    int en = jl_gc_enable(0);
     arraylist_new(&backref_list, 250000);
     jl_serializer_state s = {
         f, MODE_SYSTEM_IMAGE,
@@ -2663,9 +2703,14 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     //jl_printf(JL_STDERR, "backref_list.len = %d\n", backref_list.len);
     arraylist_free(&backref_list);
 
+#ifdef _OS_WINDOWS_
+    TlsSetValue(jl_tls_key, old_ptls);
+    return 0;
+#else
     jl_gc_reset_alloc_count();
     jl_gc_enable(en);
     jl_update_all_fptrs();
+#endif
 }
 
 JL_DLLEXPORT void jl_restore_system_image(const char *fname)
