@@ -359,8 +359,9 @@ kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
 # Matrix power
 (^)(A::AbstractMatrix, p::Integer) = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
 function (^)(A::AbstractMatrix{T}, p::Integer) where T<:Integer
-    TT = Base.promote_op(^, T, typeof(p))
-    return Base.power_by_squaring(TT == T ? A : copy!(similar(A, TT), A), p)
+    TT = Base.promote_op(^, T, typeof(p)) # make sure that e.g. [1 1;1 0]^big(3)
+    # gets promotes in a similar way as 2^big(3)
+    return Base.power_by_squaring(convert(AbstractMatrix{TT}, A), p)
 end
 function integerpow(A::AbstractMatrix{T}, p) where T
     TT = Base.promote_op(^, T, typeof(p))
