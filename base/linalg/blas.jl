@@ -483,25 +483,25 @@ julia> Base.BLAS.axpby!(2., x, 3., y)
 """
 function axpby! end
 
-for (fname, elty) in ((:daxpby_,:Float64),
-                  (:saxpby_,:Float32),
-                  (:zaxpby_,:Complex128),
-                  (:caxpby_,:Complex64))
-@eval begin
-            # SUBROUTINE DAXPBY(N,DA,DX,INCX,DB,DY,INCY)
-            # DY <- DA*DX + DB*DY
-            #*     .. Scalar Arguments ..
-            #      DOUBLE PRECISION DA,DB
-            #      INTEGER INCX,INCY,N
-            #*     .. Array Arguments ..
-            #      DOUBLE PRECISION DX(*),DY(*)
-    function axpby!(n::Integer, alpha::($elty), dx::Union{Ptr{$elty}, DenseArray{$elty}}, incx::Integer, beta::($elty), dy::Union{Ptr{$elty}, DenseArray{$elty}}, incy::Integer)
-        ccall((@blasfunc($fname), libblas), Void,
-            (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
-             &n, &alpha, dx, &incx, &beta, dy, &incy)
-        dy
+for (fname, elty) in ((:daxpby_,:Float64), (:saxpby_,:Float32),
+                      (:zaxpby_,:Complex128), (:caxpby_,:Complex64))
+    @eval begin
+        # SUBROUTINE DAXPBY(N,DA,DX,INCX,DB,DY,INCY)
+        # DY <- DA*DX + DB*DY
+        #*     .. Scalar Arguments ..
+        #      DOUBLE PRECISION DA,DB
+        #      INTEGER INCX,INCY,N
+        #*     .. Array Arguments ..
+        #      DOUBLE PRECISION DX(*),DY(*)
+        function axpby!(n::Integer, alpha::($elty), dx::Union{Ptr{$elty},
+                        DenseArray{$elty}}, incx::Integer, beta::($elty),
+                        dy::Union{Ptr{$elty}, DenseArray{$elty}}, incy::Integer)
+            ccall((@blasfunc($fname), libblas), Void, (Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
+                Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
+                n, alpha, dx, incx, beta, dy, incy)
+            dy
+        end
     end
-end
 end
 
 function axpby!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, beta::Number, y::Union{DenseArray{T},StridedVector{T}}) where T<:BlasFloat
