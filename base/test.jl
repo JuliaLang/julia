@@ -1366,7 +1366,6 @@ with string types besides the standard `String` type.
 struct GenericString <: AbstractString
     string::AbstractString
 end
-Base.convert(::Type{GenericString}, s::AbstractString) = GenericString(s)
 Base.endof(s::GenericString) = endof(s.string)
 Base.next(s::GenericString, i::Int) = next(s.string, i)
 

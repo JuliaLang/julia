@@ -10,20 +10,15 @@ next(s::AbstractString, i::Integer) = next(s,Int(i))
 string() = ""
 string(s::AbstractString) = s
 
-"""
-    String(s::AbstractString)
+(::Type{Vector{UInt8}})(s::AbstractString) = Vector{UInt8}(String(s))
+(::Type{Array{UInt8}})(s::AbstractString) = Vector{UInt8}(s)
+(::Type{Vector{Char}})(s::AbstractString) = collect(s)
 
-Convert a string to a contiguous byte array representation encoded as UTF-8 bytes.
-This representation is often appropriate for passing strings to C.
-"""
-String(s::AbstractString) = print_to_string(s)
+Symbol(s::AbstractString) = Symbol(String(s))
 
-convert(::Type{Vector{UInt8}}, s::AbstractString) = convert(Vector{UInt8}, String(s))
-convert(::Type{Array{UInt8}}, s::AbstractString) = convert(Vector{UInt8}, s)
-convert(::Type{String}, s::AbstractString) = String(s)
-convert(::Type{Vector{Char}}, s::AbstractString) = collect(s)
-convert(::Type{Symbol}, s::AbstractString) = Symbol(s)
-convert(::Type{String}, s::Symbol) = unsafe_string(Cstring(s))
+# string types are convertible
+convert(::Type{T}, s::T) where {T<:AbstractString} = s
+convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
 
 ## generic supplied functions ##
 
@@ -40,7 +35,6 @@ getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 
 get(s::AbstractString, i::Integer, default) = isvalid(s,i) ? s[i] : default
-Symbol(s::AbstractString) = Symbol(String(s))
 
 """
     sizeof(s::AbstractString)
