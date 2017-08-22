@@ -366,8 +366,11 @@ end
     @testset "titlecase" begin
         @test titlecase('ǉ') == 'ǈ'
         @test titlecase("ǉubljana") == "ǈubljana"
-        @test titlecase("aBc ABC") == "ABc ABC"
-        @test titlecase("abcD   EFG\n\thij") == "AbcD   EFG\n\tHij"
+        @test titlecase("aBc ABC")               == "Abc Abc"
+        @test titlecase("aBc ABC", strict=true)  == "Abc Abc"
+        @test titlecase("aBc ABC", strict=false) == "ABc ABC"
+        @test titlecase("abcD   EFG\n\thij", strict=true)  == "Abcd   Efg\n\tHij"
+        @test titlecase("abcD   EFG\n\thij", strict=false) == "AbcD   EFG\n\tHij"
     end
 end
 
