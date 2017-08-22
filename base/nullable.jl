@@ -140,7 +140,7 @@ Nullable{String}()
 julia> unsafe_get(x)
 ERROR: UndefRefError: access to undefined reference
 Stacktrace:
- [1] unsafe_get(::Nullable{String}) at ./nullable.jl:136
+ [1] unsafe_get(::Nullable{String}) at ./nullable.jl:152
 
 julia> x = 1
 1
