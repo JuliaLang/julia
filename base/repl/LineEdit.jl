@@ -596,8 +596,9 @@ function edit_kill_line(s::MIState)
     refresh_line(s)
 end
 
-edit_transpose(s) = edit_transpose(buffer(s)) && refresh_line(s)
-function edit_transpose(buf::IOBuffer)
+edit_transpose_chars(s) = edit_transpose_chars(buffer(s)) && refresh_line(s)
+
+function edit_transpose_chars(buf::IOBuffer)
     position(buf) == 0 && return false
     eof(buf) && char_move_left(buf)
     char_move_left(buf)
@@ -607,6 +608,32 @@ function edit_transpose(buf::IOBuffer)
     write(buf, b, a)
     return true
 end
+
+edit_transpose_words(s) = edit_transpose_words(buffer(s)) && refresh_line(s)
+
+function edit_transpose_words(buf::IOBuffer, mode=:emacs)
+    mode in [:readline, :emacs] ||
+        throw(ArgumentError("`mode` must be `:readline` or `:emacs`"))
+    pos = position(buf)
+    if mode == :emacs
+        char_move_word_left(buf)
+        char_move_word_right(buf)
+    end
+    char_move_word_right(buf)
+    e2 = position(buf)
+    char_move_word_left(buf)
+    b2 = position(buf)
+    char_move_word_left(buf)
+    b1 = position(buf)
+    char_move_word_right(buf)
+    e1 = position(buf)
+    e1 >= b2 && (seek(buf, pos); return false)
+    word2 = splice!(buf.data, b2+1:e2, buf.data[b1+1:e1])
+    splice!(buf.data, b1+1:e1, word2)
+    seek(buf, e2)
+    true
+end
+
 
 edit_clear(buf::IOBuffer) = truncate(buf, 0)
 
@@ -1501,7 +1528,8 @@ AnyDict(
         input = bracketed_paste(s)
         edit_insert(s, input)
     end,
-    "^T" => (s,o...)->edit_transpose(s)
+    "^T" => (s,o...)->edit_transpose_chars(s),
+    "\et" => (s,o...)->edit_transpose_words(s),
 )
 
 const history_keymap = AnyDict(
