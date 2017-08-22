@@ -116,15 +116,6 @@ function free(buf_ref::Base.Ref{Buffer})
     ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ref)
 end
 
-"Abstract credentials payload"
-abstract type AbstractCredentials end
-
-"Checks if credentials were used"
-checkused!(p::AbstractCredentials) = true
-checkused!(p::Void) = false
-"Resets credentials for another use"
-reset!(p::AbstractCredentials, cnt::Int=3) = nothing
-
 """
     LibGit2.CheckoutOptions
 
@@ -837,6 +828,14 @@ end
 
 import Base.securezero!
 
+"Abstract credentials payload"
+abstract type AbstractCredentials end
+
+"Checks if credentials were used"
+checkused!(p::AbstractCredentials) = true
+"Resets credentials for another use"
+reset!(p::AbstractCredentials, cnt::Int=3) = nothing
+
 "Credentials that support only `user` and `password` parameters"
 mutable struct UserPasswordCredentials <: AbstractCredentials
     user::String
@@ -911,16 +910,6 @@ reset!(p::CachedCredentials) = (foreach(reset!, values(p.cred)); p)
 
 "Obtain the cached credentials for the given host+protocol (credid), or return and store the default if not found"
 get_creds!(collection::CachedCredentials, credid, default) = get!(collection.cred, credid, default)
-get_creds!(creds::AbstractCredentials, credid, default) = creds
-get_creds!(creds::Void, credid, default) = default
-function get_creds!(creds::Ref{Nullable{AbstractCredentials}}, credid, default)
-    if isnull(creds[])
-        creds[] = Nullable{AbstractCredentials}(default)
-        return default
-    else
-        get_creds!(Base.get(creds[]), credid, default)
-    end
-end
 
 function securezero!(p::CachedCredentials)
     foreach(securezero!, values(p.cred))
