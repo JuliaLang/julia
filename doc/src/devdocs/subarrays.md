@@ -40,25 +40,18 @@ Consider making 2d slices of a 3d array:
 DocTestSetup = :(srand(1234))
 ```
 ```jldoctest subarray
-julia> A = rand(6, 6, 6);
+julia> A = rand(2,3,4);
 
-julia> S1 = view(A, :, 5, 2:6)
-6×5 SubArray{Float64,2,Array{Float64,3},Tuple{Base.Slice{Base.OneTo{Int64}},Int64,UnitRange{Int64}},false}:
- 0.643704  0.386568  0.146333  0.34124   0.344757
- 0.401421  0.330579  0.647078  0.52376   0.929902
- 0.525057  0.748041  0.998546  0.661835  0.520697
- 0.61201   0.265595  0.495394  0.833012  0.613   
- 0.432577  0.291069  0.654293  0.498856  0.144613
- 0.082207  0.612628  0.834909  0.937867  0.465207
+julia> S1 = view(A, :, 1, 2:3)
+2×2 SubArray{Float64,2,Array{Float64,3},Tuple{Base.Slice{Base.OneTo{Int64}},Int64,UnitRange{Int64}},false}:
+ 0.200586  0.066423
+ 0.298614  0.956753
 
-julia> S2 = view(A, 5, :, 2:6)
-6×5 SubArray{Float64,2,Array{Float64,3},Tuple{Int64,Base.Slice{Base.OneTo{Int64}},UnitRange{Int64}},true}:
- 0.0462887  0.775194  0.727763  0.603624  0.481834
- 0.147329   0.60808   0.80743   0.140473  0.324266
- 0.260715   0.110096  0.883704  0.682579  0.778229
- 0.753508   0.838042  0.500725  0.494824  0.369212
- 0.432577   0.291069  0.654293  0.498856  0.144613
- 0.204728   0.192634  0.689977  0.677079  0.274452
+julia> S2 = view(A, 1, :, 2:3)
+3×2 SubArray{Float64,2,Array{Float64,3},Tuple{Int64,Base.Slice{Base.OneTo{Int64}},UnitRange{Int64}},true}:
+ 0.200586  0.066423
+ 0.246837  0.646691
+ 0.648882  0.276021
 ```
 ```@meta
 DocTestSetup = nothing
@@ -67,7 +60,7 @@ DocTestSetup = nothing
 `view` drops "singleton" dimensions (ones that are specified by an `Int`), so both `S1` and `S2`
 are two-dimensional `SubArray`s. Consequently, the natural way to index these is with `S1[i,j]`.
 To extract the value from the parent array `A`, the natural approach is to replace `S1[i,j]`
-with `A[i,5,(2:6)[j]]` and `S2[i,j]` with `A[5,i,(2:6)[j]]`.
+with `A[i,1,(2:3)[j]]` and `S2[i,j]` with `A[1,i,(2:3)[j]]`.
 
 The key feature of the design of SubArrays is that this index replacement can be performed without
 any runtime overhead.
@@ -97,11 +90,11 @@ fast linear indexing. More on that later.
 If in our example above `A` is a `Array{Float64, 3}`, our `S1` case above would be a
 `SubArray{Float64,2,Array{Float64,3},Tuple{Base.Slice{Base.OneTo{Int64}},Int64,UnitRange{Int64}},false}`.
 Note in particular the tuple parameter, which stores the types of the indices used to create
-`S1`.  Likewise,
+`S1`. Likewise,
 
 ```jldoctest subarray
 julia> S1.indexes
-(Base.Slice(Base.OneTo(6)), 5, 2:6)
+(Base.Slice(Base.OneTo(2)), 1, 2:3)
 ```
 
 Storing these values allows index replacement, and having the types encoded as parameters allows
