@@ -755,6 +755,7 @@ export
     graphemes,
     hex,
     hex2bytes,
+    hex2bytes!,
     ind2chr,
     info,
     is_assigned_char,
