@@ -235,7 +235,7 @@ ERROR: DomainError with -5:
 Cannot raise an integer x to a negative power -5.
 Make x a float by adding a zero decimal (e.g., 2.0^-5 instead of 2^-5), or write 1/x^5, float(x)^-5, or (x//1)^-5
 Stacktrace:
- [1] throw_domerr_powbysq(::Int64) at ./intfuncs.jl:163
+ [1] throw_domerr_powbysq(::Int64, ::Int64) at ./intfuncs.jl:163
  [2] power_by_squaring at ./intfuncs.jl:178 [inlined]
  [3] ^ at ./intfuncs.jl:202 [inlined]
  [4] literal_pow(::Base.#^, ::Int64, ::Val{-5}) at ./intfuncs.jl:213

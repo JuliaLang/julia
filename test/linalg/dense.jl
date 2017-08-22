@@ -587,16 +587,20 @@ end
                                             UInt128, UInt16, UInt32, UInt64, UInt8,
                                             BigInt)
         @test_throws DomainError elty[1 1;1 0]^-2
-        @test elty[1 1;1 0]^2 == elty[2 1;1 1]
+        @test (@inferred elty[1 1;1 0]^2) == elty[2 1;1 1]
         I_ = elty[1 0;0 1]
         @test I_^-1 == I_
         if !(elty<:Unsigned)
-            @test (-I_)^-1 == -I_
-            @test (-I_)^-2 == I_
+            @test (@inferred (-I_)^-1) == -I_
+            @test (@inferred (-I_)^-2) == I_
         end
+        # make sure that type promotion for ^(::Matrix{<:Integer}, ::Integer)
+        # is analogous to type promotion for ^(::Integer, ::Integer)
+        # e.g. [1 1;1 0]^big(10000) should return Matrix{BigInt}, the same
+        # way as 2^big(10000) returns BigInt
         for elty2 = (Int64, BigInt)
             TT = Base.promote_op(^, elty, elty2)
-            @test Base.return_types(^, (Array{elty,2}, elty2)) == [Array{TT,2}]
+            @test (@inferred elty[1 1;1 0]^elty2(1))::Matrix{TT} == [1 1;1 0]
         end
     end
 end
