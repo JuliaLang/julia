@@ -32,6 +32,15 @@ end
 struct PosDefException <: Exception
     info::BlasInt
 end
+function Base.showerror(io::IO, ex::PosDefException)
+    print(io, "PosDefException: matrix is not ")
+    if ex.info == -1
+        print(io, "Hermitian")
+    else
+        print(io, "positive definite")
+    end
+    print(io, "; Cholesky factorization failed.")
+end
 
 struct RankDeficientException <: Exception
     info::BlasInt
