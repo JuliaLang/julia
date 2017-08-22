@@ -1421,7 +1421,7 @@ end
 module Operators
     for op in [:!, :(!=), :(!==), :%, :&, :*, :+, :-, :/, ://, :<, :<:, :<<, :(<=),
                :<|, :(==), :(===), :>, :>:, :(>=), :>>, :>>>, :\, :^, :colon,
-               :ctranspose, :getindex, :hcat, :hvcat, :setindex!, :transpose, :vcat,
+               :adjoint, :getindex, :hcat, :hvcat, :setindex!, :transpose, :vcat,
                :xor, :|, :|>, :~, :×, :÷, :∈, :∉, :∋, :∌, :∘, :√, :∛, :∩, :∪, :≠, :≤,
                :≥, :⊆, :⊈, :⊊, :⊻, :⋅]
         if isdefined(Base, op)
@@ -1691,6 +1691,10 @@ export hex2num
 
 # PR #22742: change in isapprox semantics
 @deprecate rtoldefault(x,y) rtoldefault(x,y,0) false
+
+# PR #23235
+@deprecate ctranspose adjoint
+@deprecate ctranspose! adjoint!
 
 # issue #5148, PR #23259
 # warning for `const` on locals should be changed to an error in julia-syntax.scm

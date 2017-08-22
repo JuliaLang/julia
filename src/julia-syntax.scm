@@ -2369,7 +2369,7 @@
                      ,.(apply append rows)))
             `(call (top typed_vcat) ,t ,@a)))))
 
-   '|'|  (lambda (e) `(call ctranspose ,(expand-forms (cadr e))))
+   '|'|  (lambda (e) `(call adjoint ,(expand-forms (cadr e))))
    '|.'| (lambda (e) `(call  transpose ,(expand-forms (cadr e))))
 
    'generator

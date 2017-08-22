@@ -318,6 +318,9 @@ Deprecated or removed
   * `Base.cpad` has been removed; use an appropriate combination of `rpad` and `lpad`
     instead ([#23187]).
 
+  * `ctranspose` and `ctranspose!` have been deprecated in favor of `adjoint` and `adjoint!`,
+    respectively ([#23235]).
+
   * `filter` and `filter!` on dictionaries now pass a single `key=>value` pair to the
     argument function, instead of two arguments ([#17886]).
 

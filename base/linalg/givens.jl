@@ -41,8 +41,8 @@ convert(::Type{Rotation{T}}, R::Rotation) where {T} = Rotation{T}([convert(Given
 convert(::Type{AbstractRotation{T}}, G::Givens) where {T} = convert(Givens{T}, G)
 convert(::Type{AbstractRotation{T}}, R::Rotation) where {T} = convert(Rotation{T}, R)
 
-ctranspose(G::Givens) = Givens(G.i1, G.i2, conj(G.c), -G.s)
-ctranspose(R::Rotation{T}) where {T} = Rotation{T}(reverse!([ctranspose(r) for r in R.rotations]))
+adjoint(G::Givens) = Givens(G.i1, G.i2, conj(G.c), -G.s)
+adjoint(R::Rotation{T}) where {T} = Rotation{T}(reverse!([adjoint(r) for r in R.rotations]))
 
 realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
 realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)

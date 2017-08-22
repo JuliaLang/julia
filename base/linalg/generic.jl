@@ -942,7 +942,7 @@ function ishermitian(A::AbstractMatrix)
         return false
     end
     for i = indsn, j = i:last(indsn)
-        if A[i,j] != ctranspose(A[j,i])
+        if A[i,j] != adjoint(A[j,i])
             return false
         end
     end

@@ -296,7 +296,7 @@ let a = SparseVector(8, [2, 5, 6], Int32[12, 35, 72])
     @test complex(acp) == acp
     @test isa(acp, SparseVector{Complex128,Int})
     @test exact_equal(acp, SparseVector(8, [2, 5, 6], complex([12., 35., 72.])))
-    @test sparsevec(ctranspose(ctranspose(acp))) == acp
+    @test sparsevec(adjoint(adjoint(acp))) == acp
 end
 
 let x1 = SparseVector(8, [2, 5, 6], [12.2, 1.4, 5.0])

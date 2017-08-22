@@ -150,7 +150,7 @@ function chol(A::RealHermSymComplexHerm)
     if A.uplo == 'U'
         copy!(AA, A.data)
     else
-        Base.ctranspose!(AA, A.data)
+        Base.adjoint!(AA, A.data)
     end
     chol!(Hermitian(AA, :U))
 end
