@@ -159,8 +159,7 @@ end
 invmod(n::Integer, m::Integer) = invmod(promote(n,m)...)
 
 # ^ for any x supporting *
-to_power_type(x::Number) = oftype(x*x, x)
-to_power_type(x) = x
+to_power_type(x) = convert(Base.promote_op(*, typeof(x), typeof(x)), x)
 @noinline throw_domerr_powbysq(p) = throw(DomainError(p,
     string("Cannot raise an integer x to a negative power ", p, '.',
            "\nMake x a float by adding a zero decimal (e.g., 2.0^$p instead ",
@@ -174,8 +173,8 @@ function power_by_squaring(x_, p::Integer)
     elseif p == 2
         return x*x
     elseif p < 0
-        x == 1 && return copy(x)
-        x == -1 && return iseven(p) ? one(x) : copy(x)
+        isone(x) && return copy(x)
+        isone(-x) && return iseven(p) ? one(x) : copy(x)
         throw_domerr_powbysq(p)
     end
     t = trailing_zeros(p) + 1
