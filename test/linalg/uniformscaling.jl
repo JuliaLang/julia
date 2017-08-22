@@ -48,7 +48,7 @@ end
     @test typeof(det(I)) == Int
     @test typeof(det(1.0I)) == Float64
     @test iszero(det(0I))
-    @test isone(logdet(I))
+    @test iszero(logdet(I))
     @test_throws ArgumentError det(2I)
 end
 
