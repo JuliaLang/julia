@@ -21,11 +21,11 @@ import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              exp10, expm1, log1p
 
 using Base: sign_mask, exponent_mask, exponent_one,
-            exponent_half, fpinttype, significand_mask
+            exponent_half, uinttype, significand_mask
 
 using Core.Intrinsics: sqrt_llvm
 
-const IEEEFloat = Union{Float16, Float32, Float64}
+using Base.IEEEFloat
 
 @noinline function throw_complex_domainerror(f, x)
     throw(DomainError(x, string("$f will only return a complex result if called with a ",
@@ -588,7 +588,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         return flipsign(T(Inf), x)
     end
     if k > 0 # normal case
-        xu = (xu & ~exponent_mask(T)) | (rem(k, fpinttype(T)) << significand_bits(T))
+        xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return reinterpret(T, xu)
     else # subnormal case
         if k <= -significand_bits(T) # underflow
@@ -598,7 +598,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
         end
         k += significand_bits(T)
         z = T(2.0)^-significand_bits(T)
-        xu = (xu & ~exponent_mask(T)) | (rem(k, fpinttype(T)) << significand_bits(T))
+        xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
 end

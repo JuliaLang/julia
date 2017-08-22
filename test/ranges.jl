@@ -1,6 +1,188 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# ranges
+# Because ranges rely on high precision arithmetic, test those utilities first
+for (I, T) in ((Int16, Float16), (Int32, Float32), (Int64, Float64)), i = 1:10^3
+    i = rand(I) >> 1  # test large values below
+    hi, lo = Base.splitprec(T, i)
+    @test widen(hi) + widen(lo) == i
+    @test endswith(bits(hi), repeat('0', Base.Math.significand_bits(T) ÷ 2))
+end
+for (I, T) in ((Int16, Float16), (Int32, Float32), (Int64, Float64))
+    x = T(typemax(I))
+    Δi = ceil(I, eps(x))
+    for i = typemax(I)-2Δi:typemax(I)-Δi
+        hi, lo = Base.splitprec(T, i)
+        @test widen(hi) + widen(lo) == i
+        @test endswith(bits(hi), repeat('0', Base.Math.significand_bits(T) ÷ 2))
+    end
+    for i = typemin(I):typemin(I)+Δi
+        hi, lo = Base.splitprec(T, i)
+        @test widen(hi) + widen(lo) == i
+        @test endswith(bits(hi), repeat('0', Base.Math.significand_bits(T) ÷ 2))
+    end
+end
+
+# Compare precision in a manner sensitive to subnormals, which lose
+# precision compared to widening.
+function cmp_sn(w, hi, lo, slopbits=0)
+    if !isfinite(hi)
+        if abs(w) > realmax(typeof(hi))
+            return isinf(hi) && sign(w) == sign(hi)
+        end
+        if isnan(w) && isnan(hi)
+            return true
+        end
+        return w == hi
+    end
+    if abs(w) < subnormalmin(typeof(hi))
+        return (hi == zero(hi) || abs(w - widen(hi)) < abs(w)) && lo == zero(hi)
+    end
+    # Compare w == hi + lo unless `lo` issubnormal
+    z = widen(hi) + widen(lo)
+    if !issubnormal(lo) && lo != 0
+        if slopbits == 0
+            return z == w
+        end
+        wr, zr = roundshift(w, slopbits), roundshift(z, slopbits)
+        return max(wr-1, zero(wr)) <= zr <= wr+1
+    end
+    # round w to the same number of bits as z
+    zu = asbits(z)
+    wu = asbits(w)
+    lastbit = false
+    while zu > 0 && !isodd(zu)
+        lastbit = isodd(wu)
+        zu = zu >> 1
+        wu = wu >> 1
+    end
+    return wu <= zu <= wu + lastbit
+end
+
+asbits(x) = reinterpret(Base.uinttype(typeof(x)), x)
+
+function roundshift(x, n)
+    xu = asbits(x)
+    lastbit = false
+    for i = 1:n
+        lastbit = isodd(xu)
+        xu = xu >> 1
+    end
+    xu + lastbit
+end
+
+subnormalmin(::Type{T}) where T = reinterpret(T, Base.uinttype(T)(1))
+
+function highprec_pair(x, y)
+    slopbits = (Base.Math.significand_bits(typeof(widen(x))) + 1) -
+        2*(Base.Math.significand_bits(typeof(x)) + 1)
+    hi, lo = Base.add12(x, y)
+    @test cmp_sn(widen(x) + widen(y), hi, lo)
+    hi, lo = Base.mul12(x, y)
+    @test cmp_sn(widen(x) * widen(y), hi, lo)
+    y == 0 && return nothing
+    hi, lo = Base.div12(x, y)
+    @test cmp_sn(widen(x) / widen(y), hi, lo, slopbits)
+    nothing
+end
+
+# # This tests every possible pair of Float16s. It takes too long for
+# # ordinary use, which is why it's commented out.
+# function pair16()
+#     for yu in 0x0000:0xffff
+#         for xu in 0x0000:0xffff
+#             x, y = reinterpret(Float16, xu), reinterpret(Float16, yu)
+#             highprec_pair(x, y)
+#         end
+#     end
+# end
+
+for T in (Float16, Float32) # skip Float64 (bit representation of BigFloat is not available)
+    for i = 1:10^5
+        x, y = rand(T), rand(T)
+        highprec_pair(x, y)
+        highprec_pair(-x, y)
+        highprec_pair(x, -y)
+        highprec_pair(-x, -y)
+    end
+    # Make sure we test dynamic range too
+    for i = 1:10^5
+        x, y = rand(T), rand(T)
+        x == 0 || y == 0 && continue
+        x, y = log(x), log(y)
+        highprec_pair(x, y)
+    end
+end
+
+asww(x) = widen(widen(x.hi)) + widen(widen(x.lo))
+astuple(x) = (x.hi, x.lo)
+
+function cmp_sn2(w, hi, lo, slopbits=0)
+    if !isfinite(hi)
+        if abs(w) > realmax(typeof(hi))
+            return isinf(hi) && sign(w) == sign(hi)
+        end
+        if isnan(w) && isnan(hi)
+            return true
+        end
+        return w == hi
+    end
+    if abs(w) < subnormalmin(typeof(hi))
+        return (hi == zero(hi) || abs(w - widen(hi)) < abs(w)) && lo == zero(hi)
+    end
+    z = widen(hi) + widen(lo)
+    zu, wu = asbits(z), asbits(w)
+    while zu > 0 && !isodd(zu)
+        zu = zu >> 1
+        wu = wu >> 1
+    end
+    zu = zu >> slopbits
+    wu = wu >> slopbits
+    return wu - 1 <= zu <= wu + 1
+end
+
+# TwicePrecision test. These routines lose accuracy if you form
+# intermediate subnormals; with Float16, this happens so frequently,
+# let's only test Float32.
+T = Float32
+Tw = widen(T)
+slopbits = (Base.Math.significand_bits(Tw) + 1) -
+    2*(Base.Math.significand_bits(T) + 1)
+for i = 1:10^5
+    x = Base.TwicePrecision{T}(rand())
+    y = Base.TwicePrecision{T}(rand())
+    xw, yw = asww(x), asww(y)
+    @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
+    @test cmp_sn2(Tw(xw-yw), astuple(x-y)..., slopbits)
+    @test cmp_sn2(Tw(xw*yw), astuple(x*y)..., slopbits)
+    @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits)
+    y = rand(T)
+    yw = widen(widen(y))
+    @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
+    @test cmp_sn2(Tw(xw-yw), astuple(x-y)..., slopbits)
+    @test cmp_sn2(Tw(xw*yw), astuple(x*y)..., slopbits)
+    @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits)
+end
+
+x1 = Base.TwicePrecision{Float64}(1)
+x0 = Base.TwicePrecision{Float64}(0)
+xinf = Base.TwicePrecision{Float64}(Inf)
+@test Float64(x1+x0)  == 1
+@test Float64(x1+0)   == 1
+@test Float64(x1+0.0) == 1
+@test Float64(x1*x0)  == 0
+@test Float64(x1*0)   == 0
+@test Float64(x1*0.0) == 0
+@test Float64(x1/x0)  == Inf
+@test Float64(x1/0)   == Inf
+@test Float64(xinf*x1) == Inf
+@test isnan(Float64(xinf*x0))
+@test isnan(Float64(xinf*0))
+@test isnan(Float64(xinf*0.0))
+@test isnan(Float64(x0/x0))
+@test isnan(Float64(x0/0))
+@test isnan(Float64(x0/0.0))
+
+## ranges
 @test size(10:1:0) == (0,)
 @test length(1:.2:2) == 6
 @test length(1.:.2:2.) == 6
@@ -338,14 +520,14 @@ end
 
 for T = (Float32, Float64,),# BigFloat),
     a = -5:25, s = [-5:-1;1:25;], d = 1:25, n = -1:15
-    den   = convert(T,d)
-    start = convert(T,a)/den
-    step  = convert(T,s)/den
-    stop  = convert(T,(a+(n-1)*s))/den
-    vals  = T[a:s:a+(n-1)*s;]./den
-    r = start:step:stop
+    denom = convert(T,d)
+    strt = convert(T,a)/denom
+    Δ     = convert(T,s)/denom
+    stop  = convert(T,(a+(n-1)*s))/denom
+    vals  = T[a:s:a+(n-1)*s;]./denom
+    r = strt:Δ:stop
     @test [r;] == vals
-    @test [linspace(start, stop, length(r));] == vals
+    @test [linspace(strt, stop, length(r));] == vals
     # issue #7420
     n = length(r)
     @test [r[1:n];] == [r;]
@@ -362,27 +544,31 @@ end
 @test [-3*0.05:-0.05:-0.2;] == [linspace(-3*0.05,-0.2,2);] == [-3*0.05,-0.2]
 @test [-0.2:0.05:-3*0.05;]  == [linspace(-0.2,-3*0.05,2);] == [-0.2,-3*0.05]
 
-for T = (Float32, Float64,), i = 1:2^15, n = 1:5
-    start, step = randn(T), randn(T)
-    step == 0 && continue
-    stop = start + (n-1)*step
-    # `n` is not necessarily unique s.t. `start + (n-1)*step == stop`
-    # so test that `length(start:step:stop)` satisfies this identity
-    # and is the closest value to `(stop-start)/step` to do so
-    lo = hi = n
-    while start + (lo-1)*step == stop; lo -= 1; end
-    while start + (hi-1)*step == stop; hi += 1; end
-    m = clamp(round(Int, (stop-start)/step) + 1, lo+1, hi-1)
-    r = start:step:stop
-    @test m == length(r)
-    # FIXME: these fail some small portion of the time
-    @test_skip start == first(r)
-    @test_skip stop  == last(r)
-    l = linspace(start,stop,n)
-    @test n == length(l)
-    # FIXME: these fail some small portion of the time
-    @test_skip start == first(l)
-    @test_skip stop  == last(l)
+function range_fuzztests(::Type{T}, niter, nrange) where {T}
+    for i = 1:niter, n in nrange
+        strt, Δ = randn(T), randn(T)
+        Δ == 0 && continue
+        stop = strt + (n-1)*Δ
+        # `n` is not necessarily unique s.t. `strt + (n-1)*Δ == stop`
+        # so test that `length(strt:Δ:stop)` satisfies this identity
+        # and is the closest value to `(stop-strt)/Δ` to do so
+        lo = hi = n
+        while strt + (lo-1)*Δ == stop; lo -= 1; end
+        while strt + (hi-1)*Δ == stop; hi += 1; end
+        m = clamp(round(Int, (stop-strt)/Δ) + 1, lo+1, hi-1)
+        r = strt:Δ:stop
+        @test m == length(r)
+        @test strt == first(r)
+        @test Δ == step(r)
+        @test_skip stop == last(r)
+        l = linspace(strt,stop,n)
+        @test n == length(l)
+        @test strt == first(l)
+        @test stop  == last(l)
+    end
+end
+for T = (Float32, Float64,)
+    range_fuzztests(T, 2^15, 1:5)
 end
 
 # Inexact errors on 32 bit architectures. #22613
@@ -892,6 +1078,11 @@ for i = 2:4
     @test r[i] == x
 end
 
+# issue #23178
+r = linspace(Float16(0.1094), Float16(0.9697), 300)
+@test r[1] == Float16(0.1094)
+@test r[end] == Float16(0.9697)
+
 # issue #20382
 r = @inferred(colon(big(1.0),big(2.0),big(5.0)))
 @test eltype(r) == BigFloat
@@ -958,7 +1149,7 @@ end
     end
 end
 
-# Issue #23300
+# issue #23300
 x = -5:big(1.0):5
 @test map(Float64, x) === -5.0:1.0:5.0
 @test map(Float32, x) === -5.0f0:1.0f0:5.0f0
