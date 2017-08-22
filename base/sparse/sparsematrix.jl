@@ -3413,49 +3413,6 @@ function trace(A::SparseMatrixCSC{Tv}) where Tv
     return s
 end
 
-function diagm(v::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
-    if size(v,1) != 1 && size(v,2) != 1
-        throw(DimensionMismatch("input should be nx1 or 1xn"))
-    end
-
-    n = length(v)
-    numnz = nnz(v)
-    colptr = Vector{Ti}(n+1)
-    rowval = Vector{Ti}(numnz)
-    nzval = Vector{Tv}(numnz)
-
-    if size(v,1) == 1
-        copy!(colptr, 1, v.colptr, 1, n+1)
-        ptr = 1
-        for col = 1:n
-            if colptr[col] != colptr[col+1]
-                rowval[ptr] = col
-                nzval[ptr] = v.nzval[ptr]
-                ptr += 1
-            end
-        end
-    else
-        copy!(rowval, 1, v.rowval, 1, numnz)
-        copy!(nzval, 1, v.nzval, 1, numnz)
-        colptr[1] = 1
-        ptr = 1
-        col = 1
-        while col <= n && ptr <= numnz
-            while rowval[ptr] > col
-                colptr[col+1] = colptr[col]
-                col += 1
-            end
-            colptr[col+1] = colptr[col] + 1
-            ptr += 1
-            col += 1
-        end
-        if col <= n
-            colptr[(col+1):(n+1)] = colptr[col]
-        end
-    end
-
-    return SparseMatrixCSC(n, n, colptr, rowval, nzval)
-end
 
 # Sort all the indices in each column of a CSC sparse matrix
 # sortSparseMatrixCSC!(A, sortindices = :sortcols)        # Sort each column with sort()
