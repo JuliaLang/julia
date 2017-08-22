@@ -241,34 +241,44 @@ function show(io::IO, F::LU)
     print(io, "\nsuccessful: $(issuccess(F))")
 end
 
+_apply_ipiv!(A::LU, B::StridedVecOrMat) = _ipiv!(A, 1 : length(A.ipiv), B)
+_apply_inverse_ipiv!(A::LU, B::StridedVecOrMat) = _ipiv!(A, length(A.ipiv) : -1 : 1, B)
+
+function _ipiv!(A::LU, order::OrdinalRange, B::StridedVecOrMat)
+    for i = order
+        if i != A.ipiv[i]
+            _swap_rows!(B, i, A.ipiv[i])
+        end
+    end
+    B
+end
+
+function _swap_rows!(B::StridedVector, i::Integer, j::Integer)
+    B[i], B[j] = B[j], B[i]
+    B
+end
+
+function _swap_rows!(B::StridedMatrix, i::Integer, j::Integer)
+    for col = 1 : size(B, 2)
+        B[i,col], B[j,col] = B[j,col], B[i,col]
+    end
+    B
+end
+
 A_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
 
-function A_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, b::StridedVector)
-    b_permuted = b[ipiv2perm(A.ipiv, length(b))]
-    A_ldiv_B!(UpperTriangular(A.factors), A_ldiv_B!(UnitLowerTriangular(A.factors), b_permuted))
-    copy!(b, b_permuted)
-end
-
-function A_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedMatrix)
-    B_permuted = B[ipiv2perm(A.ipiv, size(B, 1)), :]
-    A_ldiv_B!(UpperTriangular(A.factors), A_ldiv_B!(UnitLowerTriangular(A.factors), B_permuted))
-    copy!(B, B_permuted)
+function A_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
+    _apply_ipiv!(A, B)
+    A_ldiv_B!(UpperTriangular(A.factors), A_ldiv_B!(UnitLowerTriangular(A.factors), B))
 end
 
 At_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, B) A.info
 
-function At_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, b::StridedVector)
-    At_ldiv_B!(UnitLowerTriangular(A.factors), At_ldiv_B!(UpperTriangular(A.factors), b))
-    b_permuted = b[invperm(ipiv2perm(A.ipiv, length(b)))]
-    copy!(b, b_permuted)
-end
-
-function At_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedMatrix)
+function At_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
     At_ldiv_B!(UnitLowerTriangular(A.factors), At_ldiv_B!(UpperTriangular(A.factors), B))
-    B_permuted = B[invperm(ipiv2perm(A.ipiv, size(B,1))), :]
-    copy!(B, B_permuted)
+    _apply_inverse_ipiv!(A, B)
 end
 
 Ac_ldiv_B!(F::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:Real} =
@@ -276,16 +286,9 @@ Ac_ldiv_B!(F::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:Real} =
 Ac_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
     @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, B) A.info
 
-function Ac_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, b::StridedVector)
-    Ac_ldiv_B!(UnitLowerTriangular(A.factors), Ac_ldiv_B!(UpperTriangular(A.factors), b))
-    b_permuted = b[invperm(ipiv2perm(A.ipiv, length(b)))]
-    copy!(b, b_permuted)
-end
-
-function Ac_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedMatrix)
+function Ac_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
     Ac_ldiv_B!(UnitLowerTriangular(A.factors), Ac_ldiv_B!(UpperTriangular(A.factors), B))
-    B_permuted = B[invperm(ipiv2perm(A.ipiv, size(B,1))), :]
-    copy!(B, B_permuted)
+    _apply_inverse_ipiv!(A, B)
 end
 
 At_ldiv_Bt(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
