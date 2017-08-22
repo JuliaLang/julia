@@ -6,81 +6,81 @@ n= 10 #Size of matrix to test
 srand(1)
 
 @testset "Interconversion between special matrix types" begin
-   a = [1.0:n;]
-   A = Diagonal(a)
-   @testset for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Matrix]
+    a = [1.0:n;]
+    A = Diagonal(a)
+    @testset for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Matrix]
        @test full(convert(newtype, A)) == full(A)
-   end
+    end
 
-   @testset for isupper in (true, false)
-       A = Bidiagonal(a, [1.0:n-1;], ifelse(isupper, :U, :L))
-       @testset for newtype in [Bidiagonal, Tridiagonal, Matrix]
+    @testset for isupper in (true, false)
+        A = Bidiagonal(a, [1.0:n-1;], ifelse(isupper, :U, :L))
+        for newtype in [Bidiagonal, Tridiagonal, Matrix]
            @test full(convert(newtype, A)) == full(A)
            @test full(newtype(A)) == full(A)
-       end
-       @test_throws ArgumentError convert(SymTridiagonal, A)
-       tritype = isupper ? UpperTriangular : LowerTriangular
-       @test full(tritype(A)) == full(A)
+        end
+        @test_throws ArgumentError convert(SymTridiagonal, A)
+        tritype = isupper ? UpperTriangular : LowerTriangular
+        @test full(tritype(A)) == full(A)
 
-       A = Bidiagonal(a, zeros(n-1), ifelse(isupper, :U, :L)) #morally Diagonal
-       @testset for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Matrix]
+        A = Bidiagonal(a, zeros(n-1), ifelse(isupper, :U, :L)) #morally Diagonal
+        for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Matrix]
            @test full(convert(newtype, A)) == full(A)
            @test full(newtype(A)) == full(A)
-       end
-       @test full(tritype(A)) == full(A)
-   end
+        end
+        @test full(tritype(A)) == full(A)
+    end
 
-   A = SymTridiagonal(a, [1.0:n-1;])
-   @testset for newtype in [Tridiagonal, Matrix]
+    A = SymTridiagonal(a, [1.0:n-1;])
+    for newtype in [Tridiagonal, Matrix]
        @test full(convert(newtype, A)) == full(A)
-   end
-   @testset for newtype in [Diagonal, Bidiagonal]
+    end
+    for newtype in [Diagonal, Bidiagonal]
        @test_throws ArgumentError convert(newtype,A)
-   end
-   A = SymTridiagonal(a, zeros(n-1))
-   @test full(convert(Bidiagonal,A)) == full(A)
+    end
+    A = SymTridiagonal(a, zeros(n-1))
+    @test full(convert(Bidiagonal,A)) == full(A)
 
-   A = Tridiagonal(zeros(n-1), [1.0:n;], zeros(n-1)) #morally Diagonal
-   @testset for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
+    A = Tridiagonal(zeros(n-1), [1.0:n;], zeros(n-1)) #morally Diagonal
+    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
        @test full(convert(newtype, A)) == full(A)
-   end
-   A = Tridiagonal(ones(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
-   @testset for newtype in [SymTridiagonal, Matrix]
+    end
+    A = Tridiagonal(ones(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
+    for newtype in [SymTridiagonal, Matrix]
        @test full(convert(newtype, A)) == full(A)
-   end
-   @testset for newtype in [Diagonal, Bidiagonal]
-       @test_throws ArgumentError convert(newtype,A)
-   end
-   A = Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
-   @test full(convert(Bidiagonal, A)) == full(A)
-   A = UpperTriangular(Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)))
-   @test full(convert(Bidiagonal, A)) == full(A)
-   A = Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)) #not morally Diagonal
-   @test full(convert(Bidiagonal, A)) == full(A)
-   A = LowerTriangular(Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)))
-   @test full(convert(Bidiagonal, A)) == full(A)
-   @test_throws ArgumentError convert(SymTridiagonal,A)
+    end
+    for newtype in [Diagonal, Bidiagonal]
+        @test_throws ArgumentError convert(newtype,A)
+    end
+    A = Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
+    @test full(convert(Bidiagonal, A)) == full(A)
+    A = UpperTriangular(Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)))
+    @test full(convert(Bidiagonal, A)) == full(A)
+    A = Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)) #not morally Diagonal
+    @test full(convert(Bidiagonal, A)) == full(A)
+    A = LowerTriangular(Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)))
+    @test full(convert(Bidiagonal, A)) == full(A)
+    @test_throws ArgumentError convert(SymTridiagonal,A)
 
-   A = LowerTriangular(full(Diagonal(a))) #morally Diagonal
-   @testset for newtype in [Diagonal, Bidiagonal, SymTridiagonal, LowerTriangular, Matrix]
-       @test full(convert(newtype, A)) == full(A)
-   end
-   A = UpperTriangular(full(Diagonal(a))) #morally Diagonal
-   @testset for newtype in [Diagonal, Bidiagonal, SymTridiagonal, UpperTriangular, Matrix]
-       @test full(convert(newtype, A)) == full(A)
-   end
-   A = UpperTriangular(triu(rand(n,n)))
-   @testset for newtype in [Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal]
-       @test_throws ArgumentError convert(newtype,A)
-   end
+    A = LowerTriangular(full(Diagonal(a))) #morally Diagonal
+    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, LowerTriangular, Matrix]
+        @test full(convert(newtype, A)) == full(A)
+    end
+    A = UpperTriangular(full(Diagonal(a))) #morally Diagonal
+    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, UpperTriangular, Matrix]
+        @test full(convert(newtype, A)) == full(A)
+    end
+    A = UpperTriangular(triu(rand(n,n)))
+    for newtype in [Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal]
+        @test_throws ArgumentError convert(newtype,A)
+    end
 end
 
 @testset "Binary ops among special types" begin
     a=[1.0:n;]
     A=Diagonal(a)
     Spectypes = [Diagonal, Bidiagonal, Tridiagonal, Matrix]
-    @testset for (idx, type1) in enumerate(Spectypes)
-        @testset for type2 in Spectypes
+    for (idx, type1) in enumerate(Spectypes)
+        for type2 in Spectypes
            B = convert(type1,A)
            C = convert(type2,A)
            @test full(B + C) ≈ full(A + A)
@@ -88,7 +88,7 @@ end
        end
     end
     B = SymTridiagonal(a, ones(n-1))
-    @testset for Spectype in [Diagonal, Bidiagonal, Tridiagonal, Matrix]
+    for Spectype in [Diagonal, Bidiagonal, Tridiagonal, Matrix]
         @test full(B + convert(Spectype,A)) ≈ full(B + A)
         @test full(convert(Spectype,A) + B) ≈ full(B + A)
         @test full(B - convert(Spectype,A)) ≈ full(B - A)
@@ -96,9 +96,9 @@ end
     end
 
     C = rand(n,n)
-    @testset for TriType in [Base.LinAlg.UnitLowerTriangular, Base.LinAlg.UnitUpperTriangular, UpperTriangular, LowerTriangular]
+    for TriType in [Base.LinAlg.UnitLowerTriangular, Base.LinAlg.UnitUpperTriangular, UpperTriangular, LowerTriangular]
         D = TriType(C)
-        @testset for Spectype in [Diagonal, Bidiagonal, Tridiagonal, Matrix]
+        for Spectype in [Diagonal, Bidiagonal, Tridiagonal, Matrix]
             @test full(D + convert(Spectype,A)) ≈ full(D + A)
             @test full(convert(Spectype,A) + D) ≈ full(A + D)
             @test full(D - convert(Spectype,A)) ≈ full(D - A)
@@ -108,7 +108,7 @@ end
 end
 
 @testset "Triangular Types and QR" begin
-    @testset for typ in [UpperTriangular,LowerTriangular,Base.LinAlg.UnitUpperTriangular,Base.LinAlg.UnitLowerTriangular]
+    for typ in [UpperTriangular,LowerTriangular,Base.LinAlg.UnitUpperTriangular,Base.LinAlg.UnitLowerTriangular]
         a = rand(n,n)
         atri = typ(a)
         b = rand(n,n)
