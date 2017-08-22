@@ -140,7 +140,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Julia cannot assign to the results of function calls on the left hand side of an assignment operation:
     you cannot write `diag(M) = ones(n)`.
   * Julia discourages populating the main namespace with functions. Most statistical functionality
-    for Julia is found in [packages](http://pkg.julialang.org/) under the [JuliaStats organization](https://github.com/JuliaStats).
+    for Julia is found in [packages](https://pkg.julialang.org/) under the [JuliaStats organization](https://github.com/JuliaStats).
     For example:
 
       * Functions pertaining to probability distributions are provided by the [Distributions package](https://github.com/JuliaStats/Distributions.jl).
