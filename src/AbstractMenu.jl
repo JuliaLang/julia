@@ -145,6 +145,26 @@ function request(m::AbstractMenu)
                     m.pageoffset = 0
                 end
 
+            elseif c == Int(PAGE_UP)
+                cursor -= m.pagesize
+                cursor = max(cursor, 1)
+                m.pageoffset -= m.pagesize
+                m.pageoffset = max(m.pageoffset, 0)
+
+            elseif c == Int(PAGE_DOWN)
+                cursor += m.pagesize
+                cursor = min(cursor, length(options(m)))
+                m.pageoffset += m.pagesize
+                m.pageoffset = min(m.pageoffset, length(options(m)) - m.pagesize)
+
+            elseif c == Int(HOME_KEY)
+                cursor = 1
+                m.pageoffset = 0
+
+            elseif c == Int(END_KEY)
+                cursor = length(options(m))
+                m.pageoffset = length(options(m)) - m.pagesize
+
             elseif c == 13 # <enter>
                 # will break if pick returns true
                 pick(m, cursor) && break
