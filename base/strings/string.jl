@@ -42,9 +42,17 @@ end
 
 _string_n(n::Integer) = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), n)
 
-convert(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
-convert(::Type{String}, s::String) = s
-convert(::Type{String}, v::Vector{UInt8}) = String(v)
+"""
+    String(s::AbstractString)
+
+Convert a string to a contiguous byte array representation encoded as UTF-8 bytes.
+This representation is often appropriate for passing strings to C.
+"""
+String(s::AbstractString) = print_to_string(s)
+
+String(s::Symbol) = unsafe_string(Cstring(s))
+
+(::Type{Vector{UInt8}})(s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
 ## low-level functions ##
 
@@ -394,7 +402,7 @@ function string(a::Union{String,Char}...)
 end
 
 function reverse(s::String)
-    dat = convert(Vector{UInt8},s)
+    dat = Vector{UInt8}(s)
     n = length(dat)
     n <= 1 && return s
     buf = StringVector(n)

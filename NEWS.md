@@ -70,6 +70,9 @@ Language changes
     warning, so that this syntax can be disallowed or given a new meaning in a
     future version ([#5148]).
 
+  * In `for i in x`, `x` used to be evaluated in a new scope enclosing the `for` loop.
+    Now it is evaluated in the scope outside the `for` loop.
+
 Breaking changes
 ----------------
 
@@ -328,6 +331,9 @@ Deprecated or removed
 
   * The tuple-of-types form of `cfunction`, `cfunction(f, returntype, (types...))`, has been deprecated
     in favor of the tuple-type form `cfunction(f, returntype, Tuple{types...})` ([#23066]).
+
+  * `diagm(A::SparseMatrixCSC)` has been deprecated in favor of
+    `spdiagm(sparsevec(A))` ([#23341]).
 
 Command-line option changes
 ---------------------------

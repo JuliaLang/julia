@@ -90,9 +90,10 @@ complete_line(c::EmptyCompletionProvider, s) = [], true, true
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
-for f in [:terminal, :edit_insert, :on_enter, :add_history, :buffer, :edit_backspace, :(Base.isempty),
-        :replace_line, :refresh_multi_line, :input_string, :edit_move_left, :edit_move_right,
-        :edit_move_word_left, :edit_move_word_right, :update_display_buffer]
+for f in [:terminal, :edit_insert, :edit_insert_newline, :on_enter, :add_history,
+          :buffer, :edit_backspace, :(Base.isempty), :replace_line, :refresh_multi_line,
+          :input_string, :edit_move_left, :edit_move_right,
+          :edit_move_word_left, :edit_move_word_right, :update_display_buffer]
     @eval ($f)(s::MIState, args...) = $(f)(s.mode_state[s.current_mode], args...)
 end
 
@@ -473,6 +474,19 @@ function edit_insert(buf::IOBuffer, c)
     end
 end
 
+# align: number of ' ' to insert after '\n'
+# if align < 0: align like line above
+function edit_insert_newline(s::PromptState, align=-1)
+    buf = buffer(s)
+    if align < 0
+        beg = beginofline(buf)
+        align = findnext(_notspace, buf.data[beg+1:buf.size], 1) - 1
+        align < 0 && (align = buf.size-beg)
+    end
+    edit_insert(buf, '\n' * ' '^align)
+    refresh_line(s)
+end
+
 # align: delete up to 4 spaces to align to a multiple of 4 chars
 # adjust: also delete spaces on the right of the cursor to try to keep aligned what is
 # on the right
@@ -582,8 +596,9 @@ function edit_kill_line(s::MIState)
     refresh_line(s)
 end
 
-edit_transpose(s) = edit_transpose(buffer(s)) && refresh_line(s)
-function edit_transpose(buf::IOBuffer)
+edit_transpose_chars(s) = edit_transpose_chars(buffer(s)) && refresh_line(s)
+
+function edit_transpose_chars(buf::IOBuffer)
     position(buf) == 0 && return false
     eof(buf) && char_move_left(buf)
     char_move_left(buf)
@@ -593,6 +608,32 @@ function edit_transpose(buf::IOBuffer)
     write(buf, b, a)
     return true
 end
+
+edit_transpose_words(s) = edit_transpose_words(buffer(s)) && refresh_line(s)
+
+function edit_transpose_words(buf::IOBuffer, mode=:emacs)
+    mode in [:readline, :emacs] ||
+        throw(ArgumentError("`mode` must be `:readline` or `:emacs`"))
+    pos = position(buf)
+    if mode == :emacs
+        char_move_word_left(buf)
+        char_move_word_right(buf)
+    end
+    char_move_word_right(buf)
+    e2 = position(buf)
+    char_move_word_left(buf)
+    b2 = position(buf)
+    char_move_word_left(buf)
+    b1 = position(buf)
+    char_move_word_right(buf)
+    e1 = position(buf)
+    e1 >= b2 && (seek(buf, pos); return false)
+    word2 = splice!(buf.data, b2+1:e2, buf.data[b1+1:e1])
+    splice!(buf.data, b1+1:e1, word2)
+    seek(buf, e2)
+    true
+end
+
 
 edit_clear(buf::IOBuffer) = truncate(buf, 0)
 
@@ -1411,7 +1452,7 @@ AnyDict(
             commit_line(s)
             return :done
         else
-            edit_insert(s, '\n')
+            edit_insert_newline(s)
         end
     end,
     '\n' => KeyAlias('\r'),
@@ -1445,7 +1486,7 @@ AnyDict(
     # Ctrl-Right Arrow on rxvt
     "\eOc" => "\ef",
     # Meta Enter
-    "\e\r" => (s,o...)->(edit_insert(s, '\n')),
+    "\e\r" => (s,o...)->edit_insert_newline(s),
     "\e\n" => "\e\r",
     # Simply insert it into the buffer by default
     "*" => (s,data,c)->(edit_insert(s, c)),
@@ -1487,7 +1528,8 @@ AnyDict(
         input = bracketed_paste(s)
         edit_insert(s, input)
     end,
-    "^T" => (s,o...)->edit_transpose(s)
+    "^T" => (s,o...)->edit_transpose_chars(s),
+    "\et" => (s,o...)->edit_transpose_words(s),
 )
 
 const history_keymap = AnyDict(

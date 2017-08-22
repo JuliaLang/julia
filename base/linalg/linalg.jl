@@ -53,6 +53,7 @@ export
 
 # Functions
     axpy!,
+    axpby!,
     bkfact,
     bkfact!,
     chol,

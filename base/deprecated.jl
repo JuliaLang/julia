@@ -1696,6 +1696,14 @@ export hex2num
 @deprecate ctranspose adjoint
 @deprecate ctranspose! adjoint!
 
+@deprecate convert(::Type{Vector{UInt8}}, s::AbstractString)  Vector{UInt8}(s)
+@deprecate convert(::Type{Array{UInt8}}, s::AbstractString)   Vector{UInt8}(s)
+@deprecate convert(::Type{Vector{Char}}, s::AbstractString)   Vector{Char}(s)
+@deprecate convert(::Type{Symbol}, s::AbstractString)         Symbol(s)
+@deprecate convert(::Type{String}, s::Symbol)                 String(s)
+@deprecate convert(::Type{String}, v::Vector{UInt8})          String(v)
+@deprecate convert(::Type{S}, g::UTF8proc.GraphemeIterator) where {S<:AbstractString}  convert(S, g.s)
+
 # issue #5148, PR #23259
 # warning for `const` on locals should be changed to an error in julia-syntax.scm
 
@@ -1707,6 +1715,9 @@ export hex2num
 
 # PR #23066
 @deprecate cfunction(f, r, a::Tuple) cfunction(f, r, Tuple{a...})
+
+# PR 23341
+@deprecate diagm(A::SparseMatrixCSC) spdiagm(sparsevec(A))
 
 # END 0.7 deprecations
 

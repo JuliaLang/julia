@@ -1316,11 +1316,11 @@ end
     @test trace(speye(5)) == 5
 end
 
-@testset "diagm on a matrix" begin
-    @test_throws DimensionMismatch diagm(sparse(ones(5,2)))
-    @test_throws DimensionMismatch diagm(sparse(ones(2,5)))
-    @test diagm(sparse(ones(1,5))) == speye(5)
-    @test diagm(sparse(ones(5,1))) == speye(5)
+@testset "spdiagm" begin
+    v = sprand(10, 0.4)
+    @test spdiagm(v)::SparseMatrixCSC                == diagm(Vector(v))
+    @test spdiagm(sparse(ones(5)))::SparseMatrixCSC  == speye(5)
+    @test spdiagm(sparse(zeros(5)))::SparseMatrixCSC == spzeros(5,5)
 end
 
 @testset "diag" begin
