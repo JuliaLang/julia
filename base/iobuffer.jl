@@ -13,10 +13,11 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     maxsize::Int # fixed array size (typically pre-allocated)
     ptr::Int # read (and maybe write) pointer
     mark::Int # reset mark location for ptr (or <0 for no mark)
+    written::Condition
 
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                                  maxsize::Int) where T<:AbstractVector{UInt8}
-        new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
+        new(data,readable,writable,seekable,append,length(data),maxsize,1,-1,Condition())
     end
 end
 const IOBuffer = GenericIOBuffer{Vector{UInt8}}
@@ -239,9 +240,15 @@ end
     return io
 end
 
-eof(io::GenericIOBuffer) = (io.ptr-1 == io.size)
+eof(io::GenericIOBuffer) = !io.writable && (io.ptr-1 == io.size)
+
+wait(io::GenericIOBuffer) = !io.writeable || nb_available(io) > 0 || wait(io.written)
 
 @noinline function close(io::GenericIOBuffer{T}) where T
+    if io.writable
+        io.writeable = false
+        return nothing
+    end
     io.readable = false
     io.writable = false
     io.seekable = false
@@ -327,6 +334,7 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     if !to.append
         to.ptr += written
     end
+    notify(io.written)
     return written
 end
 
@@ -349,6 +357,7 @@ end
     if !to.append
         to.ptr += 1
     end
+    notify(io.written)
     return sizeof(UInt8)
 end
 
