@@ -5133,6 +5133,17 @@ let a = []
     @test a == [false, false]
 end
 
+# while loop scope
+let a = [], i = 0
+    while i < (local b = 2)
+        push!(a, @isdefined(j))
+        local j = 1
+        i += 1
+    end
+    @test a == [false, false]
+    @test b == 2
+end
+
 mutable struct MyStruct22929
     x::MyStruct22929
     MyStruct22929() = new()

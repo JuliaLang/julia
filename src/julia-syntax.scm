@@ -1688,16 +1688,15 @@
             ,(expand-forms
               `(,while
                 (call (top !) (call (top done) ,coll ,state))
-                (scope-block
-                 (block
-                  ;; NOTE: enable this to force loop-local var
-                  #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
-                  ,@(if (and (not outer?) (or *depwarn* *deperror*))
-                        (map (lambda (v) `(warn-if-existing ,v)) (lhs-vars lhs))
-                        '())
-                  ,(lower-tuple-assignment (list lhs state)
-                                           `(call (top next) ,coll ,state))
-                  ,body)))))))
+                (block
+                 ;; NOTE: enable this to force loop-local var
+                 #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
+                 ,@(if (and (not outer?) (or *depwarn* *deperror*))
+                       (map (lambda (v) `(warn-if-existing ,v)) (lhs-vars lhs))
+                       '())
+                 ,(lower-tuple-assignment (list lhs state)
+                                          `(call (top next) ,coll ,state))
+                 ,body))))))
 
 ;; convert an operator parsed as (op a b) to (call op a b)
 (define (syntactic-op-to-call e)
@@ -2243,18 +2242,16 @@
 
    'while
    (lambda (e)
-     `(scope-block
-       (break-block loop-exit
-                    (_while ,(expand-forms (cadr e))
-                            (break-block loop-cont
-                                         ,(expand-forms (caddr e)))))))
+     `(break-block loop-exit
+		   (_while ,(expand-forms (cadr e))
+			   (break-block loop-cont
+					(scope-block ,(blockify (expand-forms (caddr e))))))))
 
    'inner-while
    (lambda (e)
-     `(scope-block
-       (_while ,(expand-forms (cadr e))
-               (break-block loop-cont
-                            ,(expand-forms (caddr e))))))
+     `(_while ,(expand-forms (cadr e))
+	      (break-block loop-cont
+			   (scope-block ,(blockify (expand-forms (caddr e)))))))
 
    'break
    (lambda (e)

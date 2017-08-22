@@ -416,10 +416,9 @@ outer local `x`.
 
 ### For Loops and Comprehensions
 
-`for` loops and [Comprehensions](@ref) have the following behavior: any new variables introduced
-in their body scopes are freshly allocated for each loop iteration. This is in contrast to `while`
-loops which reuse the variables for all iterations. Therefore these constructs are similar to
-`while` loops with `let` blocks inside:
+`for` loops, `while` loops, and [Comprehensions](@ref) have the following behavior: any new variables
+introduced in their body scopes are freshly allocated for each loop iteration, as if the loop body
+were surrounded by a `let` block:
 
 ```jldoctest
 julia> Fs = Array{Any}(2);
