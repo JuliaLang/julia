@@ -153,11 +153,7 @@
 ;; except for rest arg
 (define (method-lambda-expr argl body rett)
   (let ((argl (map arg-name argl))
-        (body (if (and (pair? body) (eq? (car body) 'block))
-                  (if (null? (cdr body))
-                      `(block (null))
-                      body)
-                  `(block ,body))))
+        (body (blockify body)))
     `(lambda ,argl ()
              (scope-block
               ,(if (equal? rett '(core Any))
@@ -381,9 +377,7 @@
                        (if (nospecialize-meta? a) (caddr a) a))
                      kargl))
          (pargl (cdr argl))   ;; positional args
-         (body  (if (and (pair? body) (eq? (car body) 'block))
-                    body
-                    `(block ,body)))
+         (body  (blockify body))
          (ftype (decl-type (car pargl)))
          ;; 1-element list of vararg argument, or empty if none
          (vararg (let ((l (if (null? pargl) '() (last pargl))))
@@ -1681,19 +1675,18 @@
   ;; (for (= lhs X) body)
   (let ((coll  (make-ssavalue))
         (state (gensy)))
-    `(scope-block
-      (block (= ,coll ,(expand-forms X))
-             (= ,state (call (top start) ,coll))
-             ,(expand-forms
-               `(,while
-                 (call (top !) (call (top done) ,coll ,state))
-                 (scope-block
-                  (block
-                   ;; NOTE: enable this to force loop-local var
-                   #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
-                   ,(lower-tuple-assignment (list lhs state)
-                                            `(call (top next) ,coll ,state))
-                   ,body))))))))
+    `(block (= ,coll ,(expand-forms X))
+            (= ,state (call (top start) ,coll))
+            ,(expand-forms
+              `(,while
+                (call (top !) (call (top done) ,coll ,state))
+                (scope-block
+                 (block
+                  ;; NOTE: enable this to force loop-local var
+                  #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
+                  ,(lower-tuple-assignment (list lhs state)
+                                           `(call (top next) ,coll ,state))
+                  ,body)))))))
 
 ;; convert an operator parsed as (op a b) to (call op a b)
 (define (syntactic-op-to-call e)
@@ -2628,9 +2621,7 @@
                    (set-car! (cddr lam)
                              (append real-new-vars real-new-vars-def (caddr lam))))
                (insert-after-meta ;; return the new, expanded scope-block
-                (if (and (pair? body) (eq? (car body) 'block))
-                    body
-                    `(block ,body))
+                (blockify body)
                 (append! (map (lambda (v) `(local ,v)) real-new-vars)
                          (map (lambda (v) `(local-def ,v)) real-new-vars-def)))))
         ((eq? (car e) 'module)
