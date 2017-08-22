@@ -461,6 +461,14 @@ static bool julia_struct_has_layout(jl_datatype_t *dt, jl_unionall_t *ua)
     return true;
 }
 
+static unsigned jl_field_align(jl_datatype_t *dt, size_t i)
+{
+    unsigned al = jl_field_offset(dt, i);
+    al |= 16;
+    al &= -al;
+    return std::min(al, jl_datatype_align(dt));
+}
+
 static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isboxed)
 {
     // this function converts a Julia Type into the equivalent LLVM struct
@@ -497,15 +505,34 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                     isvector = false;
                 jlasttype = ty;
                 bool isptr;
-                if (jst->layout)
+                size_t fsz = 0, al = 0;
+                if (jst->layout) {
                     isptr = jl_field_isptr(jst, i);
-                else // compute what jl_compute_field_offsets would say
-                    isptr = jl_isbits(ty) && jl_is_leaf_type(ty) && ((jl_datatype_t*)ty)->layout;
+                    fsz = jl_field_size(jst, i);
+                    al = jl_field_align(jst, i);
+                }
+                else { // compute what jl_compute_field_offsets would say
+                    isptr = !jl_islayout_inline(ty, &fsz, &al);
+                    if (!isptr && jl_is_uniontype(jst))
+                        fsz += 1;
+                }
                 Type *lty;
                 if (isptr)
                     lty = T_pjlvalue;
                 else if (ty == (jl_value_t*)jl_bool_type)
                     lty = T_int8;
+                else if (jl_is_uniontype(ty)) {
+                    // pick an Integer type size such that alignment will be correct
+                    // and always end with an Int8 (selector byte)
+                    lty = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (fsz - 1) / al);
+                    std::vector<Type*> Elements(2);
+                    Elements[0] = lty;
+                    Elements[1] = T_int8;
+                    unsigned remainder = (fsz - 1) % al;
+                    while (remainder--)
+                        Elements.push_back(T_int8);
+                    lty = StructType::get(jl_LLVMContext, makeArrayRef(Elements));
+                }
                 else
                     lty = julia_type_to_llvm(ty);
                 if (lasttype != NULL && lasttype != lty)
@@ -560,6 +587,16 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
         }
         return (Type*)jst->struct_decl;
     }
+    // TODO: enable this (with tests):
+    // if (jl_is_uniontype(ty)) {
+    //     size_t fsz = 0, al = 0;
+    //     bool isptr = !jl_islayout_inline(ty, &fsz, &al);
+    //     // pick an Integer type size such that alignment will be correct
+    //     return StructType::get(jl_LLVMContext, makeArrayRef({
+    //                 ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al),
+    //                                (fsz + al - 1) / al),
+    //                 T_int8 }));
+    // }
     if (isboxed) *isboxed = true;
     return T_pjlvalue;
 }
@@ -1378,9 +1415,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 addr = ctx.builder.CreateStructGEP(lt, ptr, idx);
             }
         }
-        int align = jl_field_offset(jt, idx);
-        align |= 16;
-        align &= -align;
+        int align = jl_field_align(jt, idx);
         if (jl_field_isptr(jt, idx)) {
             bool maybe_null = idx >= (unsigned)jt->ninitialized;
             Instruction *Load = maybe_mark_load_dereferenceable(
@@ -1895,6 +1930,8 @@ static Value *compute_box_tindex(jl_codectx_t &ctx, Value *datatype, jl_value_t 
 // get the runtime tindex value
 static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ)
 {
+    if (val.typ == jl_bottom_type)
+        return UndefValue::get(T_int8);
     if (val.constant)
         return ConstantInt::get(T_int8, get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
     if (val.isboxed)
@@ -2189,6 +2226,8 @@ static void emit_setfield(jl_codectx_t &ctx,
                 int fsz = jl_field_size(sty, idx0);
                 // compute tindex from rhs
                 jl_cgval_t rhs_union = convert_julia_type(ctx, rhs, jfty);
+                if (rhs_union.typ == jl_bottom_type)
+                    return;
                 Value *tindex = compute_tindex_unboxed(ctx, rhs_union, jfty);
                 tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
                 Value *ptindex = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, addr, T_pint8), ConstantInt::get(T_size, fsz - 1));
@@ -2199,9 +2238,7 @@ static void emit_setfield(jl_codectx_t &ctx,
                 }
             }
             else {
-                int align = jl_field_offset(sty, idx0);
-                align |= 16;
-                align &= -align;
+                int align = jl_field_align(sty, idx0);
                 typed_store(ctx, addr, ConstantInt::get(T_size, 0), rhs, jfty,
                     strct.tbaa, data_pointer(ctx, strct, T_pjlvalue), align);
             }
@@ -2231,17 +2268,16 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 type_is_ghost(lt)) // maybe also check the size ?
                 init_as_value = true;
 
-            size_t na = nargs-1 < nf ? nargs-1 : nf;
+            unsigned na = (nargs - 1 < nf) ? (nargs - 1) : nf;
             Value *strct;
             if (init_as_value)
                 strct = UndefValue::get(lt == T_void ? NoopType : lt);
             else
                 strct = emit_static_alloca(ctx, lt);
 
-            unsigned idx = 0;
-            for (size_t i = 0; i < na; i++) {
+            for (unsigned i = 0; i < na; i++) {
                 jl_value_t *jtype = jl_svecref(sty->types, i);
-                Type *fty = julia_type_to_llvm(jtype);
+                Type *fty = julia_struct_to_llvm(jtype, NULL, NULL);
                 const jl_cgval_t &fval_info = argv[i + 1];
                 emit_typecheck(ctx, fval_info, jtype, "new");
                 Value *dest = NULL;
@@ -2251,15 +2287,22 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                         // avoid unboxing the argument explicitly
                         // and use memcpy instead
                         dest = ctx.builder.CreateConstInBoundsGEP2_32(lt, strct, 0, i);
-                    }
-                    if (isunion) {
-                        int fsz = jl_field_size(sty, i);
-                        // compute tindex from rhs
-                        // jl_cgval_t rhs_union = convert_julia_type(ctx, rhs, jtype);
-                        Value *tindex = compute_tindex_unboxed(ctx, fval_info, jtype);
-                        tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
-                        Value *ptindex = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, dest, T_pint8), ConstantInt::get(T_size, fsz - 1));
-                        ctx.builder.CreateStore(tindex, ptindex);
+                        if (isunion) {
+                            // compute tindex from rhs
+                            jl_cgval_t rhs_union = convert_julia_type(ctx, fval_info, jtype);
+                            if (rhs_union.typ == jl_bottom_type)
+                                return jl_cgval_t();
+                            Value *tindex = compute_tindex_unboxed(ctx, rhs_union, jtype);
+                            tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
+                            StructType *lt_i = cast<StructType>(cast<GetElementPtrInst>(dest)->getResultElementType());
+                            Value *ptindex = ctx.builder.CreateConstInBoundsGEP2_32(
+                                    lt_i, dest, 0, lt_i->getNumElements() - 1);
+                            ctx.builder.CreateStore(tindex, ptindex);
+                            if (!rhs_union.isghost) {
+                                emit_unionmove(ctx, dest, fval_info, NULL, false, NULL);
+                            }
+                            continue;
+                        }
                     }
                 }
                 if (!type_is_ghost(fty)) {
@@ -2267,16 +2310,15 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     fval = emit_unbox(ctx, fty, fval_info, jtype, dest);
                     if (init_as_value) {
                         if (lt->isVectorTy())
-                            strct = ctx.builder.CreateInsertElement(strct, fval, ConstantInt::get(T_int32, idx));
+                            strct = ctx.builder.CreateInsertElement(strct, fval, ConstantInt::get(T_int32, i));
                         else if (jl_is_vecelement_type(ty))
                             strct = fval;  // VecElement type comes unwrapped in LLVM.
                         else if (lt->isAggregateType())
-                            strct = ctx.builder.CreateInsertValue(strct, fval, ArrayRef<unsigned>(&idx, 1));
+                            strct = ctx.builder.CreateInsertValue(strct, fval, ArrayRef<unsigned>(&i, 1));
                         else
                             assert(false);
                     }
                 }
-                idx++;
             }
             if (init_as_value)
                 return mark_julia_type(ctx, strct, false, ty);
