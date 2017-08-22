@@ -43,6 +43,15 @@ end
     @test UniformScaling(α)./α == UniformScaling(1.0)
 end
 
+@testset "det and logdet" begin
+    @test isone(det(I))
+    @test typeof(det(I)) == Int
+    @test typeof(det(1.0I)) == Float64
+    @test iszero(det(0I))
+    @test isone(logdet(I))
+    @test_throws ArgumentError det(2I)
+end
+
 @test copy(UniformScaling(one(Float64))) == UniformScaling(one(Float64))
 @test sprint(show,UniformScaling(one(Complex128))) == "UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
 @test sprint(show,UniformScaling(one(Float32))) == "UniformScaling{Float32}\n1.0*I"
