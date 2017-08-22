@@ -1169,6 +1169,16 @@ function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractAr
     y
 end
 
+function axpby!(α, x::AbstractArray, β, y::AbstractArray)
+    if _length(x) != _length(y)
+        throw(DimensionMismatch("x has length $(_length(x)), but y has length $(_length(y))"))
+    end
+    for (IX, IY) in zip(eachindex(x), eachindex(y))
+        @inbounds y[IY] = x[IX]*α + y[IY]*β
+    end
+    y
+end
+
 
 # Elementary reflection similar to LAPACK. The reflector is not Hermitian but
 # ensures that tridiagonalization of Hermitian matrices become real. See lawn72
