@@ -248,7 +248,7 @@ end
 function asyncmap(f, s::AbstractString; kwargs...)
     s2 = Array{Char,1}(length(s))
     asyncmap!(f, s2, s; kwargs...)
-    return convert(String, s2)
+    return String(s2)
 end
 
 # map on a single BitArray returns a BitArray if the mapping function is boolean.

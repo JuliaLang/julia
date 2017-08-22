@@ -28,7 +28,7 @@ struct Requirement <: Line
         package = shift!(fields)
         all(field->ismatch(Base.VERSION_REGEX, field), fields) ||
             throw(PkgError("invalid requires entry for $package: $content"))
-        versions = VersionNumber[fields...]
+        versions = map(VersionNumber, fields)
         issorted(versions) || throw(PkgError("invalid requires entry for $package: $content"))
         new(content, package, VersionSet(versions), system)
     end

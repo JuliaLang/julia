@@ -45,7 +45,7 @@ A not-a-number value of type [`Float64`](@ref).
 const NaN = NaN64
 
 ## conversions to floating-point ##
-convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32, x))
+Float16(x::Integer) = convert(Float16, convert(Float32, x))
 for t in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float16
 end
@@ -54,27 +54,27 @@ promote_rule(::Type{Float16}, ::Type{Bool}) = Float16
 for t1 in (Float32, Float64)
     for st in (Int8, Int16, Int32, Int64)
         @eval begin
-            convert(::Type{$t1}, x::($st)) = sitofp($t1, x)
+            (::Type{$t1})(x::($st)) = sitofp($t1, x)
             promote_rule(::Type{$t1}, ::Type{$st}) = $t1
         end
     end
     for ut in (Bool, UInt8, UInt16, UInt32, UInt64)
         @eval begin
-            convert(::Type{$t1}, x::($ut)) = uitofp($t1, x)
+            (::Type{$t1})(x::($ut)) = uitofp($t1, x)
             promote_rule(::Type{$t1}, ::Type{$ut}) = $t1
         end
     end
 end
-convert(::Type{Integer}, x::Float16) = convert(Integer, Float32(x))
-convert(::Type{T}, x::Float16) where {T<:Integer} = convert(T, Float32(x))
+(::Type{T})(x::Float16) where {T<:Integer} = T(Float32(x))
 
+Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
 
 promote_rule(::Type{Float64}, ::Type{UInt128}) = Float64
 promote_rule(::Type{Float64}, ::Type{Int128}) = Float64
 promote_rule(::Type{Float32}, ::Type{UInt128}) = Float32
 promote_rule(::Type{Float32}, ::Type{Int128}) = Float32
 
-function convert(::Type{Float64}, x::UInt128)
+function Float64(x::UInt128)
     x == 0 && return 0.0
     n = 128-leading_zeros(x) # ndigits0z(x,2)
     if n <= 53
@@ -88,7 +88,7 @@ function convert(::Type{Float64}, x::UInt128)
     reinterpret(Float64, d + y)
 end
 
-function convert(::Type{Float64}, x::Int128)
+function Float64(x::Int128)
     x == 0 && return 0.0
     s = ((x >>> 64) % UInt64) & 0x8000_0000_0000_0000 # sign bit
     x = abs(x) % UInt128
@@ -104,7 +104,7 @@ function convert(::Type{Float64}, x::Int128)
     reinterpret(Float64, s | d + y)
 end
 
-function convert(::Type{Float32}, x::UInt128)
+function Float32(x::UInt128)
     x == 0 && return 0f0
     n = 128-leading_zeros(x) # ndigits0z(x,2)
     if n <= 24
@@ -118,7 +118,7 @@ function convert(::Type{Float32}, x::UInt128)
     reinterpret(Float32, d + y)
 end
 
-function convert(::Type{Float32}, x::Int128)
+function Float32(x::Int128)
     x == 0 && return 0f0
     s = ((x >>> 96) % UInt32) & 0x8000_0000 # sign bit
     x = abs(x) % UInt128
@@ -134,7 +134,7 @@ function convert(::Type{Float32}, x::Int128)
     reinterpret(Float32, s | d + y)
 end
 
-function convert(::Type{Float16}, val::Float32)
+function Float16(val::Float32)
     f = reinterpret(UInt32, val)
     if isnan(val)
         t = 0x8000 ⊻ (0x8000 & ((f >> 0x10) % UInt16))
@@ -157,7 +157,7 @@ function convert(::Type{Float16}, val::Float32)
     reinterpret(Float16, h)
 end
 
-function convert(::Type{Float32}, val::Float16)
+function Float32(val::Float16)
     local ival::UInt32 = reinterpret(UInt16, val)
     local sign::UInt32 = (ival & 0x8000) >> 15
     local exp::UInt32  = (ival & 0x7c00) >> 10
@@ -235,25 +235,28 @@ for i = 0:255
         shifttable[i|0x100+1] = 13
     end
 end
+
 #convert(::Type{Float16}, x::Float32) = fptrunc(Float16, x)
-convert(::Type{Float32}, x::Float64) = fptrunc(Float32, x)
-convert(::Type{Float16}, x::Float64) = convert(Float16, convert(Float32, x))
+Float32(x::Float64) = fptrunc(Float32, x)
+Float16(x::Float64) = Float16(Float32(x))
 
 #convert(::Type{Float32}, x::Float16) = fpext(Float32, x)
-convert(::Type{Float64}, x::Float32) = fpext(Float64, x)
-convert(::Type{Float64}, x::Float16) = convert(Float64, convert(Float32, x))
+Float64(x::Float32) = fpext(Float64, x)
+Float64(x::Float16) = Float64(Float32(x))
 
-convert(::Type{AbstractFloat}, x::Bool)    = convert(Float64, x)
-convert(::Type{AbstractFloat}, x::Int8)    = convert(Float64, x)
-convert(::Type{AbstractFloat}, x::Int16)   = convert(Float64, x)
-convert(::Type{AbstractFloat}, x::Int32)   = convert(Float64, x)
-convert(::Type{AbstractFloat}, x::Int64)   = convert(Float64, x) # LOSSY
-convert(::Type{AbstractFloat}, x::Int128)  = convert(Float64, x) # LOSSY
-convert(::Type{AbstractFloat}, x::UInt8)   = convert(Float64, x)
-convert(::Type{AbstractFloat}, x::UInt16)  = convert(Float64, x)
-convert(::Type{AbstractFloat}, x::UInt32)  = convert(Float64, x)
-convert(::Type{AbstractFloat}, x::UInt64)  = convert(Float64, x) # LOSSY
-convert(::Type{AbstractFloat}, x::UInt128) = convert(Float64, x) # LOSSY
+AbstractFloat(x::Bool)    = Float64(x)
+AbstractFloat(x::Int8)    = Float64(x)
+AbstractFloat(x::Int16)   = Float64(x)
+AbstractFloat(x::Int32)   = Float64(x)
+AbstractFloat(x::Int64)   = Float64(x) # LOSSY
+AbstractFloat(x::Int128)  = Float64(x) # LOSSY
+AbstractFloat(x::UInt8)   = Float64(x)
+AbstractFloat(x::UInt16)  = Float64(x)
+AbstractFloat(x::UInt32)  = Float64(x)
+AbstractFloat(x::UInt64)  = Float64(x) # LOSSY
+AbstractFloat(x::UInt128) = Float64(x) # LOSSY
+
+Bool(x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
 
 """
     float(x)
@@ -261,7 +264,7 @@ convert(::Type{AbstractFloat}, x::UInt128) = convert(Float64, x) # LOSSY
 Convert a number or array to a floating point data type.
 When passed a string, this function is equivalent to `parse(Float64, x)`.
 """
-float(x) = convert(AbstractFloat, x)
+float(x) = AbstractFloat(x)
 
 """
     float(T::Type)
@@ -675,11 +678,11 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                         throw(InexactError(:trunc, $Ti, x))
                     end
                 end
-                function convert(::Type{$Ti}, x::$Tf)
+                function (::Type{$Ti})(x::$Tf)
                     if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (trunc(x) == x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError(:convert, $Ti, x))
+                        throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
                     end
                 end
             end
@@ -696,11 +699,11 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                         throw(InexactError(:trunc, $Ti, x))
                     end
                 end
-                function convert(::Type{$Ti}, x::$Tf)
+                function (::Type{$Ti})(x::$Tf)
                     if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (trunc(x) == x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError(:convert, $Ti, x))
+                        throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
                     end
                 end
             end

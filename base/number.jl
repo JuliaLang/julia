@@ -1,6 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## generic operations on numbers ##
+
+# Numbers are convertible
+convert(::Type{T}, x::T)      where {T<:Number} = x
+convert(::Type{T}, x::Number) where {T<:Number} = T(x)
+
 """
     isinteger(x) -> Bool
 
