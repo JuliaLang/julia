@@ -2,7 +2,7 @@
 
 using Test
 using Unicode
-using Unicode: normalize, isassigned
+using Unicode: normalize, isassigned, iscased
 
 @testset "string normalization" begin
     # normalize (Unicode normalization etc.):
@@ -371,6 +371,9 @@ end
         @test titlecase("aBc ABC", strict=false) == "ABc ABC"
         @test titlecase("abcD   EFG\n\thij", strict=true)  == "Abcd   Efg\n\tHij"
         @test titlecase("abcD   EFG\n\thij", strict=false) == "AbcD   EFG\n\tHij"
+        @test titlecase("abc-def")                     == "Abc-Def"
+        @test titlecase("abc-def", wordsep = !iscased) == "Abc-Def"
+        @test titlecase("abc-def", wordsep = isspace)  == "Abc-def"
     end
 end
 

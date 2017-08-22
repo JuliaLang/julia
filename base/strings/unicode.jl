@@ -385,6 +385,19 @@ function isupper(c::Char)
 end
 
 """
+    iscased(c::Char) -> Bool
+
+Tests whether a character is cased, i.e. is lower-, upper- or title-cased.
+"""
+function iscased(c::Char)
+    cat = category_code(c)
+    return cat == UTF8PROC_CATEGORY_LU ||
+           cat == UTF8PROC_CATEGORY_LT ||
+           cat == UTF8PROC_CATEGORY_LL
+end
+
+
+"""
     isdigit(c::Char) -> Bool
 
 Tests whether a character is a decimal digit (0-9).
@@ -649,11 +662,14 @@ julia> lowercase("STRINGS AND THINGS")
 lowercase(s::AbstractString) = map(lowercase, s)
 
 """
-    titlecase(s::AbstractString; strict::Bool=true) -> String
+    titlecase(s::AbstractString; [wordsep::Function], strict::Bool=true) -> String
 
 Capitalize the first character of each word in `s`;
 if `strict` is true, every other character is
 converted to lowercase, otherwise they are left unchanged.
+By default, all non-letters are considered as word separators;
+a predicate can be passed as the `wordsep` keyword to determine
+which characters should be considered as word separators.
 See also [`ucfirst`](@ref) to capitalize only the first
 character in `s`.
 
@@ -664,13 +680,16 @@ julia> titlecase("the JULIA programming language")
 
 julia> titlecase("ISS - international space station", strict=false)
 "ISS - International Space Station"
+
+julia> titlecase("a-a b-b", wordsep = c->c==' ')
+"A-a B-b"
 ```
 """
-function titlecase(s::AbstractString; strict::Bool=true)
+function titlecase(s::AbstractString; wordsep::Function = !iscased, strict::Bool=true)
     startword = true
     b = IOBuffer()
     for c in s
-        if isspace(c)
+        if wordsep(c)
             print(b, c)
             startword = true
         else
