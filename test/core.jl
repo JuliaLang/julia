@@ -2921,6 +2921,13 @@ function f11065()
 end
 @test_throws UndefVarError f11065()
 
+# for loop iterator expression should be evaluated in outer scope
+let
+    for i in (local a = 1:2)
+    end
+    @test a == 1:2
+end
+
 # issue #11295
 function f11295(x...)
     call = Expr(x...)
