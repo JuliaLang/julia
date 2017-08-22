@@ -466,7 +466,7 @@ end
 """
     axpby!(a, X, b, Y)
 
-Overwrite `Y` with `a*X + b*Y`, where `a` and `b` are scalars. Return `Y`.
+Overwrite `Y` with `X*a + Y*b`, where `a` and `b` are scalars. Return `Y`.
 
 # Examples
 ```jldoctest
