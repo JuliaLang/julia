@@ -1982,6 +1982,10 @@ end # module AutoRetType
         @test isa(hvcat((2,), densearray, densearray), Array)
         @test isa(cat((1,2), densearray, densearray), Array)
     end
+    @test isa([[1,2,3]'; [1,2,3]'], Matrix{Int})
+    @test isa([[1,2,3]' [1,2,3]'], RowVector{Int, Vector{Int}})
+    @test isa([Any[1.0, 2]'; Any[2.0, 2]'], Matrix{Any})
+    @test isa([Any[1.0, 2]' Any[2.0, 2']'], RowVector{Any, Vector{Any}})
     # Test that concatenations of heterogeneous Matrix-Vector pairs yield dense matrices
     @test isa(hcat(densemat, densevec), Array)
     @test isa(hcat(densevec, densemat), Array)
