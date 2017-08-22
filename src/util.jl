@@ -86,7 +86,13 @@ function readKey() ::UInt32
 		end
 
 		return '\x1b'
+
+    elseif c == '\x10'  # C-p
+        return ARROW_UP
+    elseif c == '\x0e'  # C-n
+        return ARROW_DOWN
+
     else
-		return c;
+		return c
 	end
 end
