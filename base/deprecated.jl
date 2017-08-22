@@ -1552,6 +1552,19 @@ export hex2num
 @deprecate convert(::Type{String}, s::Symbol)                 String(s)
 @deprecate convert(::Type{String}, v::Vector{UInt8})          String(v)
 @deprecate convert(::Type{S}, g::Unicode.GraphemeIterator) where {S<:AbstractString}  convert(S, g.s)
+@deprecate convert(::Type{String}, v::AbstractVector{Char})   String(v)
+
+@deprecate convert(::Type{UInt128},     u::Random.UUID)     UInt128(u)
+@deprecate convert(::Type{Random.UUID}, s::AbstractString)  Random.UUID(s)
+@deprecate convert(::Type{Libc.FILE}, s::IO)  Libc.FILE(s)
+@deprecate convert(::Type{VersionNumber}, v::Integer)         VersionNumber(v)
+@deprecate convert(::Type{VersionNumber}, v::Tuple)           VersionNumber(v)
+@deprecate convert(::Type{VersionNumber}, v::AbstractString)  VersionNumber(v)
+
+@deprecate (convert(::Type{Integer}, x::Enum{T}) where {T<:Integer})         Integer(x)
+@deprecate (convert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer})  T(x)
+
+@deprecate convert(dt::Type{<:Integer}, ip::IPAddr)  dt(ip)
 
 # Issue #19923
 @deprecate ror                  circshift

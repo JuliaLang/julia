@@ -31,9 +31,6 @@ const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UIn
 
 const BitIntegerType = Union{map(T->Type{T}, BitInteger_types)...}
 
-# calls constructors defined in boot.jl
-convert(T::BitIntegerType, x::Union{BitInteger, Bool}) = T(x)
-
 ## integer comparisons ##
 
 (<)(x::T, y::T) where {T<:BitSigned}  = slt_int(x, y)
@@ -466,16 +463,6 @@ rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
-for (Ts, Tu) in ((Int8, UInt8), (Int16, UInt16), (Int32, UInt32), (Int64, UInt64), (Int128, UInt128))
-    @eval convert(::Type{Signed}, x::$Tu) = convert($Ts, x)
-    @eval convert(::Type{Unsigned}, x::$Ts) = convert($Tu, x)
-end
-
-convert(::Type{Signed}, x::Union{Float32, Float64, Bool}) = convert(Int, x)
-convert(::Type{Unsigned}, x::Union{Float32, Float64, Bool}) = convert(UInt, x)
-
-convert(::Type{Integer}, x::Integer) = x
-convert(::Type{Integer}, x::Real) = convert(Signed, x)
 
 """
     trunc([T,] x, [digits, [base]])
