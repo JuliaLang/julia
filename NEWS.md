@@ -332,6 +332,10 @@ Deprecated or removed
   * `diagm(A::SparseMatrixCSC)` has been deprecated in favor of
     `spdiagm(sparsevec(A))` ([#23341]).
 
+  * `GMP.gmp_version()`, `GMP.GMP_VERSION`, `GMP.gmp_bits_per_limb()`, and `GMP.GMP_BITS_PER_LIBM`
+    have been renamed to `GMP.version()`, `GMP.VERSION`, `GMP.bits_per_libm()`, and `GMP.BITS_PER_LIBM`,
+    respectively. Similarly, `MPFR.get_version()`, has been renamed to `MPFR.version()` ([#23323]).
+
 Command-line option changes
 ---------------------------
 
