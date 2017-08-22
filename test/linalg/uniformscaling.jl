@@ -44,11 +44,11 @@ end
 end
 
 @testset "det and logdet" begin
-    @test isone(det(I))
-    @test typeof(det(I)) == Int
-    @test typeof(det(1.0I)) == Float64
-    @test iszero(det(0I))
-    @test iszero(logdet(I))
+    @test det(I) === 1
+    @test det(1.0I) === 1.0
+    @test det(0I) === 0
+    @test det(0.0I) === 0.0
+    @test logdet(I) == 0
     @test_throws ArgumentError det(2I)
 end
 
