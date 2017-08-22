@@ -146,16 +146,18 @@ function request(m::AbstractMenu)
                 end
 
             elseif c == Int(PAGE_UP)
+                # If we're at the bottom, move the page 1 less to move the cursor up from
+                # the bottom entry, since we try to avoid putting the cursor at bounds.
+                m.pageoffset -= m.pagesize - (cursor == length(options(m)) ? 1 : 0)
+                m.pageoffset = max(m.pageoffset, 0)
                 cursor -= m.pagesize
                 cursor = max(cursor, 1)
-                m.pageoffset -= m.pagesize
-                m.pageoffset = max(m.pageoffset, 0)
 
             elseif c == Int(PAGE_DOWN)
+                m.pageoffset += m.pagesize - (cursor == 1 ? 1 : 0)
+                m.pageoffset = min(m.pageoffset, length(options(m)) - m.pagesize)
                 cursor += m.pagesize
                 cursor = min(cursor, length(options(m)))
-                m.pageoffset += m.pagesize
-                m.pageoffset = min(m.pageoffset, length(options(m)) - m.pagesize)
 
             elseif c == Int(HOME_KEY)
                 cursor = 1
