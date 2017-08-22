@@ -1671,6 +1671,7 @@ JL_DLLEXPORT void jl_(void *jl_value);
 // julia options -----------------------------------------------------------
 // NOTE: This struct needs to be kept in sync with JLOptions type in base/options.jl
 typedef struct {
+    int8_t quiet;
     int8_t banner;
     const char *julia_home;
     const char *julia_bin;

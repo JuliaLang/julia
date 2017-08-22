@@ -251,9 +251,10 @@ function process_options(opts::JLOptions)
         length(idxs) > 0 && deleteat!(ARGS, idxs[1])
     end
     repl                  = true
+    quiet                 = (opts.quiet != 0)
+    banner                = (opts.banner == 1 || opts.banner != 0 && opts.isinteractive != 0)
     startup               = (opts.startupfile != 2)
     history_file          = (opts.historyfile != 0)
-    banner                = (opts.banner != 0)
     color_set             = (opts.color != 0)
     global have_color     = (opts.color == 1)
     global is_interactive = (opts.isinteractive != 0)
@@ -317,7 +318,7 @@ function process_options(opts::JLOptions)
         break
     end
     repl |= is_interactive
-    return (banner,repl,startup,color_set,history_file)
+    return (quiet,banner,repl,startup,color_set,history_file)
 end
 
 function load_juliarc()
@@ -380,7 +381,7 @@ function _start()
     opts = JLOptions()
     @eval Main include(x) = $include(Main, x)
     try
-        (banner,repl,startup,color_set,history_file) = process_options(opts)
+        (quiet,banner,repl,startup,color_set,history_file) = process_options(opts)
 
         local term
         global active_repl
@@ -396,7 +397,7 @@ function _start()
                 banner && REPL.banner(term,term)
                 if term.term_type == "dumb"
                     active_repl = REPL.BasicREPL(term)
-                    banner && warn("Terminal not fully functional")
+                    quiet || warn("Terminal not fully functional")
                 else
                     active_repl = REPL.LineEditREPL(term, true)
                     active_repl.history_file = history_file

@@ -33,7 +33,8 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
 }
 
 
-jl_options_t jl_options = { 1,    // banner
+jl_options_t jl_options = { 0,    // quiet
+                            -1,   // banner
                             NULL, // julia_home
                             NULL, // julia_bin
                             NULL, // eval
@@ -102,6 +103,7 @@ static const char opts[]  =
 
     // interactive options
     " -i                        Interactive mode; REPL runs and isinteractive() is true\n"
+    " -q, --quiet               Quiet startup: no banner, suppress REPL warnings\n"
     " --banner={yes|no}         Enable or disable startup banner\n"
     " --color={yes|no}          Enable or disable color text\n"
     " --history-file={yes|no}   Load or save history\n\n"
@@ -315,8 +317,9 @@ restart_switch:
             jl_options.image_file_specified = 1;
             break;
         case 'q': // quiet
-            jl_printf(JL_STDERR, "-q and --quiet are deprecated, use --banner=no instead\n");
-            jl_options.banner = 0;
+            jl_options.quiet = 1;
+            if (jl_options.banner < 0)
+                jl_options.banner = 0;
             break;
         case opt_banner: // banner
             if (!strcmp(optarg,"yes"))
