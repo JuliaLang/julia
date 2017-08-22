@@ -1273,7 +1273,7 @@ function (::Type{Matrix})()
 end
 
 for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
-             "lower", "print", "punct", "space", "upper", "xdigit")
+             "print", "punct", "space", "xdigit")
     f = Symbol("is",name)
     @eval @deprecate ($f)(s::AbstractString) all($f, s)
 end

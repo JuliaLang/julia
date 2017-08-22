@@ -320,3 +320,17 @@ end
     @test eltype(g) == SubString{String}
     @test collect(g) == ["1","2","3","α","5"]
 end
+
+@testset "islower, isupper, istitle for strings" begin
+    for f in islower, isupper, istitle
+        @test !f("")
+        @test !f("; == :")
+    end
+    @test islower(" aa; b => ab")
+    @test isupper(" AA; B => AB")
+    @test istitle(" Aa; B => Ab")
+    str = randstring(['a':'z'; 'A':'Z'; '0':'1'; collect("; .-"^10);], 100)
+    @test str |> lowecase |> islower
+    @test str |> uppercase |> isupper
+    @test str |> titlecase |> istitle
+end

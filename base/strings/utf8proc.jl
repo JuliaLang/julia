@@ -9,7 +9,7 @@ export isgraphemebreak, category_code, category_abbrev, category_string
 
 # also exported by Base:
 export normalize_string, graphemes, is_assigned_char, charwidth, isvalid,
-   islower, isupper, isalpha, isdigit, isnumber, isalnum,
+   islower, isupper, istitle, isalpha, isdigit, isnumber, isalnum,
    iscntrl, ispunct, isspace, isprint, isgraph
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
@@ -265,7 +265,31 @@ julia> islower('❤')
 false
 ```
 """
-islower(c::Char) = (category_code(c) == UTF8PROC_CATEGORY_LL)
+islower(c::Char) = islower(category_code(c))
+islower(ccode::Int32) = ccode == UTF8PROC_CATEGORY_LL
+
+"""
+    islower(s::AbstractString) -> Bool
+
+Tests whether all letters in `s` are lowercase, and that
+`s` contains at least one letter.
+
+# Examples
+```jldoctest
+julia> islower("let's see...")
+true
+
+julia> islower("Julia")
+false
+
+julia> islower("12 ÷ 3 == 4")
+false
+
+julia> islower(lowercase(randstring())) # very unlikely to be false
+true
+```
+"""
+islower(s::AbstractString) = iscasegood(s, islower, isupper)
 
 # true for Unicode upper and mixed case
 
@@ -288,9 +312,81 @@ julia> isupper('❤')
 false
 ```
 """
-function isupper(c::Char)
-    ccode = category_code(c)
-    return ccode == UTF8PROC_CATEGORY_LU || ccode == UTF8PROC_CATEGORY_LT
+isupper(c::Char) = isupper(category_code(c))
+isupper(ccode::Int32) = ccode == UTF8PROC_CATEGORY_LU || ccode == UTF8PROC_CATEGORY_LT
+
+"""
+    isupper(s::AbstractString) -> Bool
+
+Tests whether all letters in `s` are uppercase, and that
+`s` contains at least one letter.
+
+# Examples
+```jldoctest
+julia> isupper("JULIACON 2017")
+true
+
+julia> isupper("Julia")
+false
+
+julia> isupper("12 ÷ 3 == 4")
+false
+
+julia> isupper(uppercase(randstring())) # very unlikely to be false
+true
+```
+"""
+isupper(s::AbstractString) = iscasegood(s, isupper, islower)
+
+function iscasegood(s::AbstractString, good, bad)
+    onecased = false
+    for c in s
+        ccode = category_code(c)
+        bad(ccode) && return false
+        onecased || good(ccode) && (onecased = true)
+    end
+    onecased
+end
+
+"""
+    istitle(s::AbstractString, strict=true) -> Bool
+
+Tests whether all words in `s` have their first letter in uppercase;
+if `strict` is true, all remaining letters must be in lowercase.
+
+# Examples
+```jldoctest
+julia> istitle("The Julia Programming Language")
+true
+
+julia> istitle("ISS - International Space Station")
+false
+
+julia> istitle("ISS - International Space Station", false)
+true
+
+julia> istitle(titlecase(randstring())) # very unlikely to be false
+true
+```
+"""
+function istitle(s::AbstractString)
+    onecased = false
+    startword = true
+    for c in s
+        ccode = category_code(c)
+        if islower(ccode)
+            startword && return false
+            onecased = true
+            startword = false
+        elseif isupper(ccode)
+            startword || return false
+            onecased = true
+            startword = false
+        else
+            startword = false
+        end
+    end
+    onecased
 end
 
 """

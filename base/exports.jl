@@ -772,6 +772,7 @@ export
     ispunct,
     isspace,
     isupper,
+    istitle,
     isvalid,
     isxdigit,
     join,

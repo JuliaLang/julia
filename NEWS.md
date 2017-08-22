@@ -205,6 +205,11 @@ Library improvements
   * Mutating versions of `randperm` and `randcycle` have been added:
     `randperm!` and `randcycle!` ([#22723]).
 
+  * `islower`, `isupper` for strings have beed un-deprecated in favor of a refined behavior:
+    e.g. `islower(s)` returns `true` if all letters in `s` are lowercase, and if there
+    is at least on letter in `s` (the old behavior was `all(islower, s)`); also, a new
+    function `istitle` is provided.
+
 Compiler/Runtime improvements
 -----------------------------
 
