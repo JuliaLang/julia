@@ -338,8 +338,6 @@ Command-line option changes
   * New option `--warn-overwrite={yes|no}` to control the warning for overwriting method
     definitions. The default is `no` ([#23002]).
 
-  * The `-q` and `--quiet` flags have been deprecated in favor of `--banner={yes|no}` ([#23342]).
-
 Julia v0.6.0 Release Notes
 ==========================
 
@@ -1196,4 +1194,3 @@ Command-line option changes
 [#23157]: https://github.com/JuliaLang/julia/issues/23157
 [#23187]: https://github.com/JuliaLang/julia/issues/23187
 [#23207]: https://github.com/JuliaLang/julia/issues/23207
-[#23342]: https://github.com/JuliaLang/julia/issues/23342

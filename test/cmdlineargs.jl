@@ -22,7 +22,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
         @test startswith(read(`$exename --help`, String), header)
     end
 
-    # --banner
+    # --quiet
     # This flag is indirectly tested in test/repl.jl
 
     # --home
@@ -72,7 +72,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     end
 
     # --procs
-    @test readchomp(`$exename --banner=no -p 2 -e "println(nworkers())"`) == "2"
+    @test readchomp(`$exename -q -p 2 -e "println(nworkers())"`) == "2"
     @test !success(`$exename -p 0`)
     @test !success(`$exename --procs=1.0`)
 
