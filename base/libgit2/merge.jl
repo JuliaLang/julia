@@ -25,8 +25,7 @@ function GitAnnotated(repo::GitRepo, fh::FetchHead)
 end
 
 function GitAnnotated(repo::GitRepo, comittish::AbstractString)
-    obj = GitObject(repo, comittish)
-    cmt = peel(GitCommit, obj)
+    cmt = peel(GitCommit, repo, comittish)
     return GitAnnotated(repo, GitHash(cmt))
 end
 
