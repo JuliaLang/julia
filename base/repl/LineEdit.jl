@@ -480,7 +480,8 @@ function edit_insert_newline(s::PromptState, align=-1)
     buf = buffer(s)
     if align < 0
         beg = beginofline(buf)
-        align = findnext(_notspace, buf.data[beg+1:buf.size], 1) - 1
+        align = min(findnext(_notspace, buf.data[beg+1:buf.size], 1) - 1,
+                    position(buf) - beg) # indentation must not increase
         align < 0 && (align = buf.size-beg)
     end
     edit_insert(buf, '\n' * ' '^align)
