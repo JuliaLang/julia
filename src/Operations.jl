@@ -73,8 +73,8 @@ function find_installed(uuid::UUID, sha1::SHA1)
     return abspath(user_depot(), "packages", string(uuid), string(sha1))
 end
 
-load_config(config_file::String = find_config()) =
-    parse_toml(config_file, fakeit=true)
+load_project(project_file::String = find_project()) =
+    parse_toml(project_file, fakeit=true)
 
 function write_manifest(manifest::Dict, manifest_file::String = find_manifest())
     uniques = sort!(collect(keys(manifest)), by=lowercase)
@@ -91,15 +91,15 @@ end
 
 function package_env_info(
     pkg::String,
-    config::Dict = load_config(),
+    project::Dict = load_project(),
     manifest::Dict = load_manifest();
     verb::String = "choose",
 )
     haskey(manifest, pkg) || return nothing
     infos = manifest[pkg]
     isempty(infos) && return nothing
-    if haskey(config, "deps") && haskey(config["deps"], pkg)
-        uuid = config["deps"][pkg]
+    if haskey(project, "deps") && haskey(project["deps"], pkg)
+        uuid = project["deps"][pkg]
         filter!(infos) do info
             haskey(info, "uuid") && info["uuid"] == uuid
         end
@@ -161,12 +161,12 @@ end
 load_package_data(f::Base.Callable, path::String, version::VersionNumber) =
     get(load_package_data(f, path, [version]), version, nothing)
 
-function update_config(config::Dict, config_file::String = find_config())
-    isempty(config) && !ispath(config_file) && return
-    mkpath(dirname(config_file))
-    info("Updating config file $config_file")
-    open(config_file, "w") do io
-        TOML.print(io, config, sorted=true)
+function update_project(project::Dict, project_file::String = find_project())
+    isempty(project) && !ispath(project_file) && return
+    mkpath(dirname(project_file))
+    info("Updating project file $project_file")
+    open(project_file, "w") do io
+        TOML.print(io, project, sorted=true)
     end
 end
 
@@ -187,7 +187,7 @@ function add(names...; kwargs...)
     return add(pkgs)
 end
 
-function resolve_names(names::Vector{String}, config::Dict, manifest::Dict, reg::Dict)::Vector{UUID}
+function resolve_names(names::Vector{String}, project::Dict, manifest::Dict, reg::Dict)::Vector{UUID}
     info("Resolving package UUIDs")
     regs = find_registered(names)
     for name in names
@@ -200,7 +200,7 @@ function resolve_names(names::Vector{String}, config::Dict, manifest::Dict, reg:
                 end
             end
             haskey(regs, name) && !isempty(regs[name]) && continue
-            warn("$name/$uuid found in config but not in registries;")
+            warn("$name/$uuid found in project but not in registries;")
         elseif !haskey(regs, name) || length(regs[name]) == 0
             error("No registered package named $(repr(name)) found")
         elseif length(regs[name]) == 1
@@ -230,8 +230,8 @@ function add(pkgs::Dict{String})
     orig_pkgs = copy(pkgs)
     names = sort!(collect(keys(pkgs)))
     regs = find_registered(names)
-    config = load_config()
-    uuids = get_or_make(Dict{String,UUID}, config, "deps")
+    project = load_project()
+    uuids = get_or_make(Dict{String,UUID}, project, "deps")
 
     # disambiguate package names
     info("Resolving package UUIDs")
@@ -245,7 +245,7 @@ function add(pkgs::Dict{String})
             end
             haskey(regs, name) && !isempty(regs[name]) && continue
             error("""
-            $name/$uuid found in config but not in registries;
+            $name/$uuid found in project but not in registries;
             To install a different $name package `pkg rm $name` and then do `pkg add $name` again.
             """)
         elseif !haskey(regs, name) || length(regs[name]) == 0
@@ -395,16 +395,16 @@ function add(pkgs::Dict{String})
         LibGit2.checkout_tree(repo, tree, options=opts)
     end
 
-    # update config and manifest files
-    config_file = find_config()
-    config = parse_toml(config_file, fakeit=true)
-    if !haskey(config, "deps")
-        config["deps"] = Dict{String,String}()
+    # update project and manifest files
+    project_file = find_project()
+    project = parse_toml(project_file, fakeit=true)
+    if !haskey(project, "deps")
+        project["deps"] = Dict{String,String}()
     end
     for (name, uuid) in uuids
-        config["deps"][name] = string(uuid)
+        project["deps"][name] = string(uuid)
     end
-    isempty(config["deps"]) && delete!(config, "deps")
+    isempty(project["deps"]) && delete!(project, "deps")
 
     for (uuid, ver) in vers
         name = rud[uuid]
@@ -429,19 +429,19 @@ function add(pkgs::Dict{String})
         end
     end
 
-    update_config(config, config_file)
+    update_project(project, project_file)
     update_manifest(manifest, manifest_file)
 end
 
 function rm(pkgs::Vector{String})
-    config_file = find_config()
-    config = load_config(config_file)
+    project_file = find_project()
+    project = load_project(project_file)
     manifest_file = find_manifest()
     manifest = load_manifest(manifest_file)
     # drop named packages
     drop = String[]
     for pkg in pkgs
-        info = package_env_info(pkg, config, manifest, verb = "delete")
+        info = package_env_info(pkg, project, manifest, verb = "delete")
         info == nothing && error("$pkg not found in environment")
         push!(drop, info["uuid"])
     end
@@ -458,7 +458,7 @@ function rm(pkgs::Vector{String})
         clean && break
     end
     # keep forward dependencies
-    keep = setdiff(values(get(config, "deps", Dict())), drop)
+    keep = setdiff(values(get(project, "deps", Dict())), drop)
     while !isempty(keep)
         clean = true
         for (pkg, infos) in manifest
@@ -474,12 +474,12 @@ function rm(pkgs::Vector{String})
         end
         clean && break
     end
-    # filter config & manifest
-    if haskey(config, "deps")
-        filter!(config["deps"]) do _, uuid
+    # filter project & manifest
+    if haskey(project, "deps")
+        filter!(project["deps"]) do _, uuid
             uuid in keep
         end
-        isempty(config["deps"]) && delete!(config, "deps")
+        isempty(project["deps"]) && delete!(project, "deps")
     end
     filter!(manifest) do pkg, infos
         filter!(infos) do info
@@ -487,8 +487,8 @@ function rm(pkgs::Vector{String})
         end
         !isempty(infos)
     end
-    # update config & manifest files
-    update_config(config, config_file)
+    # update project & manifest files
+    update_project(project, project_file)
     update_manifest(manifest, manifest_file)
 end
 rm(pkgs::String...) = rm(String[pkgs...])

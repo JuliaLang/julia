@@ -166,7 +166,7 @@ function parse_toml(path::String...; fakeit::Bool=false)
     !fakeit || isfile(p) ? TOML.parsefile(p) : Dict{String,Any}()
 end
 
-const config_names = ["JuliaConfig.toml", "Config.toml"]
+const project_names = ["JuliaProject.toml", "Project.toml"]
 const manifest_names = ["JuliaManifest.toml", "Manifest.toml"]
 const default_envs = [
     "v$(VERSION.major).$(VERSION.minor).$(VERSION.patch)",
@@ -178,11 +178,11 @@ const default_envs = [
 struct EnvCache
     # environment info:
     env::Union{String,Void}
-    config_file::String
+    project_file::String
     manifest_file::String
 
     # cache of metadata:
-    config::Dict
+    project::Dict
     manifest::Dict
 
     # registered package info:
@@ -190,12 +190,12 @@ struct EnvCache
     paths::Dict{UUID,Vector{String}}
 
     function EnvCache(env::Union{Void,String})
-        config_file = find_config(env)
-        config = parse_toml(config_file, fakeit=true)
-        if haskey(config, "manifest")
-            manifest_file = abspath(config["manifest"])
+        project_file = find_project(env)
+        project = parse_toml(project_file, fakeit=true)
+        if haskey(project, "manifest")
+            manifest_file = abspath(project["manifest"])
         else
-            dir = abspath(dirname(config_file))
+            dir = abspath(dirname(project_file))
             for name in manifest_names
                 manifest_file = joinpath(dir, name)
                 isfile(manifest_file) && break
@@ -213,66 +213,66 @@ struct EnvCache
         end
         uuids = Dict{String,Vector{UUID}}()
         paths = Dict{UUID,Vector{String}}()
-        new(env, config_file, manifest_file, config, manifest, uuids, paths)
+        new(env, project_file, manifest_file, project, manifest, uuids, paths)
     end
 end
 EnvCache() = EnvCache(get(ENV, "JULIA_ENV", nothing))
 
-# finding the current config file
+# finding the current project file
 
 include("libgit2_discover.jl")
 
-function find_project_config(start_path::String = pwd())
+function find_project_project(start_path::String = pwd())
     path = LibGit2.discover(start_path, ceiling = homedir())
     repo = LibGit2.GitRepo(path)
     work = LibGit2.workdir(repo)
-    for name in config_names
+    for name in project_names
         path = abspath(work, name)
         isfile(path) && return path
     end
-    return abspath(work, config_names[end])
+    return abspath(work, project_names[end])
 end
 
-function find_default_config()
-    for depot in depots(), env in default_envs, name in config_names
+function find_default_project()
+    for depot in depots(), env in default_envs, name in project_names
         path = abspath(depot, "environments", env, name)
         isfile(path) && return path
     end
     env = VERSION.major == 0 ? default_envs[2] : default_envs[3]
-    return abspath(user_depot(), "environments", env, config_names[end])
+    return abspath(user_depot(), "environments", env, project_names[end])
 end
 
-function find_config(env::String)
+function find_project(env::String)
     if isempty(env)
         error("invalid environment name: \"\"")
     elseif env == "/"
-        return find_default_config()
+        return find_default_project()
     elseif env == "."
-        return find_project_config()
+        return find_project_project()
     elseif startswith(env, "/") || startswith(env, "./")
-        # path to config file or project directory
+        # path to project file or project directory
         splitext(env)[2] == ".toml" && return abspath(env)
-        for name in config_names
+        for name in project_names
             path = abspath(env, name)
             isfile(path) && return path
         end
-        return abspath(env, config_names[end])
+        return abspath(env, project_names[end])
     else # named environment
         for depot in depots()
-            path = abspath(depot, "environments", env, config_names[end])
+            path = abspath(depot, "environments", env, project_names[end])
             isfile(path) && return path
         end
-        return abspath(user_depot(), "environments", env, config_names[end])
+        return abspath(user_depot(), "environments", env, project_names[end])
     end
 end
 
-function find_config(::Void)
+function find_project(::Void)
     try
-        return find_project_config()
+        return find_project_project()
     catch err
         err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
     end
-    return find_default_config()
+    return find_default_project()
 end
 
 ## resolving packages from name or uuid ##

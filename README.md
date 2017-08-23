@@ -32,7 +32,7 @@ Load `Pkg3` in Julia 0.6 (0.6 only with precompilation off) to add packages and 
     julia> Pkg3.add("JSON")
     INFO: Resolving package UUIDs
     INFO: Resolving package versions
-    INFO: Updating config file /Users/stefan/projects/Pkg3.jl/Config.toml
+    INFO: Updating project file /Users/stefan/projects/Pkg3.jl/Project.toml
     INFO: Updating manifest file /Users/stefan/projects/Pkg3.jl/Manifest.toml
 
     julia> using JSON
