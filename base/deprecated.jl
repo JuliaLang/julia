@@ -1668,6 +1668,13 @@ export hex2num
 @deprecate convert(::Type{String}, v::Vector{UInt8})          String(v)
 @deprecate convert(::Type{S}, g::UTF8proc.GraphemeIterator) where {S<:AbstractString}  convert(S, g.s)
 
+# Issue #19923
+@deprecate ror                  circshift
+@deprecate ror!                 circshift!
+@deprecate rol(B, i)            circshift(B, -i)
+@deprecate rol!(dest, src, i)   circshift!(dest, src, -i)
+@deprecate rol!(B, i)           circshift!(B, -i)
+
 # issue #5148, PR #23259
 # warning for `const` on locals should be changed to an error in julia-syntax.scm
 
