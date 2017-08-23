@@ -111,8 +111,6 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
             end
         end
 
-        isfile(privatekey) || warn("Private key not found")
-
         # For SSH we need a public key location
         if !haskey(ENV, "SSH_PUB_KEY_PATH") && !isfile(publickey)
             response = Base.prompt("Public key location for '$prompt_url'",
