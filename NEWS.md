@@ -146,6 +146,10 @@ This section lists changes that do not have deprecation warnings.
   * Worker-worker connections are setup lazily for an `:all_to_all` topology. Use keyword
     arg `lazy=false` to force all connections to be setup during a `addprocs` call. ([#22814])
 
+  * `^(A::Matrix{S}, p::T) where S<:Integer, T<:Integer` now throws a `DomainError` if
+    `p<0` and `A!=I` and `A!=-I`. It also promotes types in the same way as
+    `^(x::S, p::T)` ([#23366])
+
 Library improvements
 --------------------
 
