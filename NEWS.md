@@ -331,6 +331,9 @@ Deprecated or removed
 
   * `Base.SparseArrays.SpDiagIterator` has been removed ([#23261]).
 
+  * The tuple-of-types form of `cfunction`, `cfunction(f, returntype, (types...))`, has been deprecated
+    in favor of the tuple-type form `cfunction(f, returntype, Tuple{types...})` ([#23066]).
+
   * `diagm(A::SparseMatrixCSC)` has been deprecated in favor of
     `spdiagm(sparsevec(A))` ([#23341]).
 

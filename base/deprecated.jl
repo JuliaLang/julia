@@ -1713,6 +1713,9 @@ export hex2num
 # issue #17886
 # deprecations for filter[!] with 2-arg functions are in associative.jl
 
+# PR #23066
+@deprecate cfunction(f, r, a::Tuple) cfunction(f, r, Tuple{a...})
+
 # PR 23341
 @deprecate diagm(A::SparseMatrixCSC) spdiagm(sparsevec(A))
 

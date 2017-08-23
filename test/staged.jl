@@ -147,7 +147,7 @@ module TestGeneratedThrow
     foo() = (bar(rand() > 0.5 ? 1 : 1.0); error("foo"))
     function __init__()
         code_typed(foo,(); optimize = false)
-        cfunction(foo,Void,())
+        cfunction(foo,Void,Tuple{})
     end
 end
 
