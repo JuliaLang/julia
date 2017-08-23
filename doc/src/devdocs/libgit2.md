@@ -50,6 +50,7 @@ Base.LibGit2.StatusOptions
 Base.LibGit2.StrArrayStruct
 Base.LibGit2.TimeStruct
 Base.LibGit2.UserPasswordCredentials
+Base.LibGit2.add!
 Base.LibGit2.add_fetch!
 Base.LibGit2.add_push!
 Base.LibGit2.addblob!
@@ -104,6 +105,7 @@ Base.LibGit2.rebase!
 Base.LibGit2.ref_list
 Base.LibGit2.reftype
 Base.LibGit2.remotes
+Base.LibGit2.remove!
 Base.LibGit2.reset!
 Base.LibGit2.restore
 Base.LibGit2.revcount
@@ -118,6 +120,7 @@ Base.LibGit2.tag_list
 Base.LibGit2.target
 Base.LibGit2.treewalk
 Base.LibGit2.upstream
+Base.LibGit2.update!
 Base.LibGit2.url
 Base.LibGit2.with
 Base.LibGit2.workdir
