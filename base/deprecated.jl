@@ -1716,15 +1716,16 @@ export hex2num
 # PR 23341
 @deprecate diagm(A::SparseMatrixCSC) spdiagm(sparsevec(A))
 
+# PR #23373
+@deprecate diagm(A::BitMatrix) diagm(vec(A))
+
 # PR 23341
 @eval GMP @deprecate gmp_version() version() false
 @eval GMP @Base.deprecate_binding GMP_VERSION VERSION false
-@eval GMP @deprecate gmp_bits_per_libm() bits_per_libm() false
+@eval GMP @deprecate gmp_bits_per_limb() bits_per_limb() false
 @eval GMP @Base.deprecate_binding GMP_BITS_PER_LIMB BITS_PER_LIMB false
 @eval MPFR @deprecate get_version() version() false
-
-# PR #23373
-@deprecate diagm(A::BitMatrix) diagm(vec(A))
+@eval LinAlg.LAPACK @deprecate laver() version() false
 
 # END 0.7 deprecations
 

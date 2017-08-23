@@ -332,11 +332,12 @@ Deprecated or removed
   * `diagm(A::SparseMatrixCSC)` has been deprecated in favor of
     `spdiagm(sparsevec(A))` ([#23341]).
 
+  * `diagm(A::BitMatrix)` has been deprecated, use `diagm(vec(A))` instead ([#23373]).
+
   * `GMP.gmp_version()`, `GMP.GMP_VERSION`, `GMP.gmp_bits_per_limb()`, and `GMP.GMP_BITS_PER_LIBM`
     have been renamed to `GMP.version()`, `GMP.VERSION`, `GMP.bits_per_libm()`, and `GMP.BITS_PER_LIBM`,
-    respectively. Similarly, `MPFR.get_version()`, has been renamed to `MPFR.version()` ([#23323]).
-
-  * `diagm(A::BitMatrix)` has been deprecated, use `diagm(vec(A))` instead ([#23373]).
+    respectively. Similarly, `MPFR.get_version()`, has been renamed to `MPFR.version()` ([#23323]). Also,
+    `LinAlg.LAPACK.laver()` has been renamed to `LinAlg.LAPACK.version()` and now returns a `VersionNumber`.
 
 Command-line option changes
 ---------------------------

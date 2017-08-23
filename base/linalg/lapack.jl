@@ -92,14 +92,14 @@ function chkfinite(A::StridedMatrix)
 end
 
 # LAPACK version number
-function laver()
+function version()
     major = Ref{BlasInt}(0)
     minor = Ref{BlasInt}(0)
     patch = Ref{BlasInt}(0)
     ccall((@blasfunc(ilaver_), liblapack), Void,
-        (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
-        major, minor, patch)
-    return major[], minor[], patch[]
+          (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+          major, minor, patch)
+    return VersionNumber(major[], minor[], patch[])
 end
 
 # (GB) general banded matrices, LU decomposition and solver
