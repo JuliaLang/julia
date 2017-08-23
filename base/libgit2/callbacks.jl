@@ -67,17 +67,13 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
 
     username = username_ptr != Cstring(C_NULL) ? unsafe_string(username_ptr) : ""
 
-    privatekey = if haskey(ENV,"SSH_KEY_PATH")
-        ENV["SSH_KEY_PATH"]
-    else
-        keydefpath = creds.prvkey # check if credentials were already used
-        if isempty(keydefpath)
-            defaultkeydefpath = joinpath(homedir(), ".ssh", "id_rsa")
-            if isfile(defaultkeydefpath)
-                keydefpath = defaultkeydefpath
-            end
+    privatekey = Base.get(ENV, "SSH_KEY_PATH") do
+        default = joinpath(homedir(), ".ssh", "id_rsa")
+        if isempty(creds.prvkey) && isfile(default)
+            default
+        else
+            creds.prvkey
         end
-        keydefpath
     end
 
     # If the private key changed, invalidate the cached public key
@@ -85,21 +81,16 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         creds.pubkey = ""
     end
 
-    publickey = if haskey(ENV,"SSH_PUB_KEY_PATH")
-        ENV["SSH_PUB_KEY_PATH"]
-    else
-        keydefpath = creds.pubkey # check if credentials were already used
-        if isempty(keydefpath)
-            keydefpath = privatekey * ".pub"
+    publickey = Base.get(ENV, "SSH_PUB_KEY_PATH") do
+        default = privatekey * ".pub"
+        if isempty(creds.pubkey) && isfile(default)
+            default
+        else
+            creds.pubkey
         end
-        keydefpath
     end
 
-    passphrase = if haskey(ENV,"SSH_KEY_PASS")
-        ENV["SSH_KEY_PASS"]
-    else
-        creds.pass
-    end
+    passphrase = Base.get(ENV, "SSH_KEY_PASS", creds.pass)
 
     if p.allow_prompt
         # if username is not provided or empty, then prompt for it
@@ -113,7 +104,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         prompt_url = git_url(scheme=p.scheme, host=p.host, username=username)
 
         # For SSH we need a private key location
-        if !haskey(ENV,"SSH_KEY_PATH") && isempty(privatekey)
+        if !haskey(ENV,"SSH_KEY_PATH") && !isfile(privatekey)
             response = Base.prompt("Private key location for '$prompt_url'",
                 default=privatekey)
             isnull(response) && return user_abort()
