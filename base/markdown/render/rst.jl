@@ -90,8 +90,8 @@ end
 
 function rst(io::IO, l::LaTeX)
     println(io, ".. math::\n")
-    for l in lines(l.formula)
-        println(io, "    ", l)
+    for line in lines(l.formula)
+        println(io, "    ", line)
     end
 end
 

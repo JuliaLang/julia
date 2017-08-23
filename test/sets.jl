@@ -120,9 +120,9 @@ let
 end
 
 # start, done, next
-for data_in in ((7,8,4,5),
-                ("hello", 23, 2.7, (), [], (1,8)))
-    s = Set(data_in)
+for data_ in ((7,8,4,5),
+              ("hello", 23, 2.7, (), [], (1,8)))
+    s = Set(data_)
 
     s_new = Set()
     for el in s

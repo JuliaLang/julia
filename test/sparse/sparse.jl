@@ -1095,14 +1095,14 @@ end
     N=2^3
     Irand = randperm(M)
     Jrand = randperm(N)
-    I = sort([Irand; Irand; Irand])
+    II = sort([Irand; Irand; Irand])
     J = [Jrand; Jrand]
 
     SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]]
     for S in SA
         res = Any[1,2,3]
         for searchtype in [0, 1, 2]
-            res[searchtype+1] = test_getindex_algs(S, I, J, searchtype)
+            res[searchtype+1] = test_getindex_algs(S, II, J, searchtype)
         end
 
         @test res[1] == res[2] == res[3]
@@ -1110,12 +1110,12 @@ end
 
     M = 2^14
     N=2^4
-    I = randperm(M)
+    II = randperm(M)
     J = randperm(N)
     Jsorted = sort(J)
 
     SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]]
-    IA = [I[1:round(Int,n)] for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]]
+    IA = [II[1:round(Int,n)] for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]]
     debug = false
     if debug
         @printf("         |         |         |        times        |        memory       |\n")

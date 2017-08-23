@@ -88,7 +88,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     lkup = StackTraces.UNKNOWN
     for frame in bt
         lkups = StackTraces.lookup(frame)
-        for lkup in lkups
+        for outer lkup in lkups
             if lkup == StackTraces.UNKNOWN
                 continue
             end
@@ -1067,7 +1067,7 @@ function partial_linear_indexing_warning_lookup(nidxs_remaining)
         caller = StackTraces.UNKNOWN
         for frame in bt
             lkups = StackTraces.lookup(frame)
-            for caller in lkups
+            for outer caller in lkups
                 if caller == StackTraces.UNKNOWN
                     continue
                 end
