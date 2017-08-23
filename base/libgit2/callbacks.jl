@@ -99,27 +99,27 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         prompt_url = git_url(scheme=p.scheme, host=p.host, username=username)
 
         # For SSH we need a private key location
-        if !haskey(ENV,"SSH_KEY_PATH") && !isfile(privatekey)
+        if !isfile(privatekey)
             response = Base.prompt("Private key location for '$prompt_url'",
                 default=privatekey)
             isnull(response) && return user_abort()
             privatekey = unsafe_get(response)
 
             # Only update the public key if the private key changed
-            if !haskey(ENV, "SSH_PUB_KEY_PATH") && privatekey != creds.prvkey
+            if privatekey != creds.prvkey
                 publickey = privatekey * ".pub"
             end
         end
 
         # For SSH we need a public key location
-        if !haskey(ENV, "SSH_PUB_KEY_PATH") && !isfile(publickey)
+        if !isfile(publickey)
             response = Base.prompt("Public key location for '$prompt_url'",
                 default=publickey)
             isnull(response) && return user_abort()
             publickey = unsafe_get(response)
         end
 
-        if !haskey(ENV,"SSH_KEY_PASS") && isempty(passphrase) && is_passphrase_required(privatekey)
+        if isempty(passphrase) && is_passphrase_required(privatekey)
             if Sys.iswindows()
                 response = Base.winprompt(
                     "Your SSH Key requires a password, please enter it now:",
