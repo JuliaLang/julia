@@ -56,4 +56,18 @@ macro dump(expr)
     dump(expr)
 end
 
+"""
+    leaftypes(t::Type) -> Vector{DataType}
+
+Return an array of all concrete subtypes of `t`, including `t` if it is concrete.
+"""
+leaftypes(t::Type) = isleaftype(t) ? [t] : vcat(leaftypes.(subtypes(t))...)
+
+"""
+    abstracts(t::Type) -> Vector{DataType}
+
+Return an array of all abstract subtypes of `t`, including `t` if it is abstract.
+"""
+abstracts(t::Type) = isleaftype(t) ? DataType[] : vcat(t, abstracts.(subtypes(t))...)
+
 end # module
