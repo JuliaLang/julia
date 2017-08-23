@@ -208,6 +208,8 @@ Library improvements
   * Mutating versions of `randperm` and `randcycle` have been added:
     `randperm!` and `randcycle!` ([#22723]).
 
+  * `BigFloat` random numbers can now be generated ([#22720]).
+
 Compiler/Runtime improvements
 -----------------------------
 
