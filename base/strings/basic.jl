@@ -271,16 +271,7 @@ julia> chr2ind(str, 2)
 """
 function ind2chr(s::AbstractString, i::Integer)
     s[i] # throws error if invalid
-    j = 1
-    k = start(s)
-    while true
-        c, l = next(s,k)
-        if i <= k
-            return j
-        end
-        j += 1
-        k = l
-    end
+    unsafe_ind2chr(s, i)
 end
 
 """
@@ -303,17 +294,24 @@ julia> ind2chr(str, 3)
 """
 function chr2ind(s::AbstractString, i::Integer)
     i < start(s) && throw(BoundsError(s, i))
+    k = unsafe_chr2ind(s, i)
+    s[k] # throws error if invalid
+    k
+end
+
+function map_chr_ind(s::AbstractString, i::Integer, stop, ret)
     j = 1
     k = start(s)
     while true
-        c, l = next(s,k)
-        if i == j
-            return k
-        end
+        i == stop((j, k)) && return ret((j, k)) # k could point after the last character
+        _, k = next(s, k)
         j += 1
-        k = l
     end
 end
+
+unsafe_ind2chr(s::AbstractString, i::Integer) = map_chr_ind(s, i, last, first)
+unsafe_chr2ind(s::AbstractString, i::Integer) = map_chr_ind(s, i, first, last)
+
 
 struct EachStringIndex{T<:AbstractString}
     s::T

@@ -1723,6 +1723,9 @@ export hex2num
 @eval GMP @Base.deprecate_binding GMP_BITS_PER_LIMB BITS_PER_LIMB false
 @eval MPFR @deprecate get_version() version() false
 
+# PR #23373
+@deprecate diagm(A::BitMatrix) diagm(vec(A))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

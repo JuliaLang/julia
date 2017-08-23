@@ -1395,9 +1395,6 @@ timesofar("cat")
     b1 = bitrand(v1)
     @check_bit_operation diagm(b1) BitMatrix
 
-    b1 = bitrand(n1, n2)
-    @test_throws DimensionMismatch diagm(b1)
-
     b1 = bitrand(n1, n1)
     @check_bit_operation diag(b1)
 end

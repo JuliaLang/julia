@@ -440,3 +440,13 @@ end
     @test (A'A - size(A, 1)*Base.mean(A, 1)'*Base.mean(A, 1))/4 == cov(A)
 end
 
+@testset "Mean along dimension of empty array" begin
+    a0  = zeros(0)
+    a00 = zeros(0, 0)
+    a01 = zeros(0, 1)
+    a10 = zeros(1, 0)
+    @test isequal(mean(a0, 1)      , fill(NaN, 1))
+    @test isequal(mean(a00, (1, 2)), fill(NaN, 1, 1))
+    @test isequal(mean(a01, 1)     , fill(NaN, 1, 1))
+    @test isequal(mean(a10, 2)     , fill(NaN, 1, 1))
+end
