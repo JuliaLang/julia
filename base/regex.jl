@@ -517,3 +517,49 @@ function hash(r::Regex, h::UInt)
     h = hash(r.compile_options, h)
     h = hash(r.match_options, h)
 end
+
+## String operations ##
+
+unwrap_string(r::Regex) = r.pattern
+unwrap_string(s::Union{AbstractString,AbstractChar}) = s
+
+"""
+    *(s::Regex, t::Union{Regex,AbstractString,AbstractChar}) -> Regex
+    *(s::Union{Regex,AbstractString,AbstractChar}, t::Regex) -> Regex
+
+Concatenate regexes, strings and/or characters, producing a [`Regex`](@ref).
+
+!!! compat "Julia 1.2"
+     This method requires at least Julia 1.2.
+
+# Examples
+```jldoctest
+julia> r"Hello " * "world"
+r"Hello world"
+
+julia> 'j' * r"ulia"
+r"julia"
+```
+"""
+function *(r1::Union{Regex,AbstractString,AbstractChar}, rs::Union{Regex,AbstractString,AbstractChar}...)
+    opts = unique((r.compile_options, r.match_options) for r in (r1, rs...) if r isa Regex)
+    length(opts) == 1 ||
+        throw(ArgumentError("cannot multiply regexes with incompatible options"))
+    Regex(string(unwrap_string(r1), unwrap_string.(rs)...), opts[1][1], opts[1][2])
+end
+
+"""
+    ^(s::Regex, n::Integer)
+
+Repeat a regex `n` times.
+
+!!! compat "Julia 1.2"
+     This method requires at least Julia 1.2.
+
+# Examples
+```jldoctest
+julia> r"Test "^3
+r"Test Test Test "
+```
+"""
+^(r::Regex, i::Integer) = Regex(r.pattern^i, r.compile_options, r.match_options)

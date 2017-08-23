@@ -24,7 +24,7 @@ New library functions
 Standard library changes
 ------------------------
 
-* Cmd interpolation (``` `$(x::Cmd) a b c` ``` where) now propagates `x`'s process flags (environment, flags, working directory, etc) if `x` is the first interpolant and errors otherwise ([#24353]).
+* `Regex` can now be multiplied (`*`) and exponentiated (`^`), like strings ([#23422]).
 
 #### LinearAlgebra
 

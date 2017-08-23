@@ -78,6 +78,29 @@
     @test !endswith("abc", r"C")
     @test endswith("abc", r"C"i)
 
+    @testset "multiplication & exponentiation" begin
+        @test r"a" * r"b" == r"ab"
+        @test r"a" * "b" == r"ab"
+        @test r"a" * 'b' == r"ab"
+        @test "a" * r"b" == r"ab"
+        @test 'a' * r"b" == r"ab"
+        for a = (r"a", "a", 'a'),
+            b = (r"b", "b", 'b'),
+            c = (r"c", "c", 'c')
+            a isa Regex || b isa Regex || c isa Regex || continue
+            @test a * b * c == r"abc"
+        end
+        @test r"a"i * r"b"i == r"ab"i
+        @test r"a"i * "b" == r"ab"i
+        @test r"a"i * 'b' == r"ab"i
+        @test "a" * r"b"i == r"ab"i
+        @test 'a' * r"b"i == r"ab"i
+        @test_throws ArgumentError r"a"i * r"b"
+        @test_throws ArgumentError r"a" * r"b"i
+
+        @test r"abc"^ 2 == r"abcabc"
+    end
+
     # Test that PCRE throws the correct kind of error
     # TODO: Uncomment this once the corresponding change has propagated to CI
     #@test_throws ErrorException Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
