@@ -144,7 +144,8 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     n = length(ms)
     if header
         m = n==1 ? "method" : "methods"
-        ns = isself ? string(name) : string("(::", name, ")")
+        sname = string(name)
+        ns = (isself || '#' in sname) ? sname : string("(::", name, ")")
         what = startswith(ns, '@') ? "macro" : "generic function"
         print(io, "# $n $m for ", what, " \"", ns, "\":")
     end
