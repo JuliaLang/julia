@@ -222,7 +222,7 @@ EnvCache() = EnvCache(get(ENV, "JULIA_ENV", nothing))
 
 include("libgit2_discover.jl")
 
-function find_project_project(start_path::String = pwd())
+function find_local_project(start_path::String = pwd())
     path = LibGit2.discover(start_path, ceiling = homedir())
     repo = LibGit2.GitRepo(path)
     work = LibGit2.workdir(repo)
@@ -233,7 +233,7 @@ function find_project_project(start_path::String = pwd())
     return abspath(work, project_names[end])
 end
 
-function find_default_project()
+function find_named_project()
     for depot in depots(), env in default_envs, name in project_names
         path = abspath(depot, "environments", env, name)
         isfile(path) && return path
@@ -246,9 +246,9 @@ function find_project(env::String)
     if isempty(env)
         error("invalid environment name: \"\"")
     elseif env == "/"
-        return find_default_project()
+        return find_named_project()
     elseif env == "."
-        return find_project_project()
+        return find_local_project()
     elseif startswith(env, "/") || startswith(env, "./")
         # path to project file or project directory
         splitext(env)[2] == ".toml" && return abspath(env)
@@ -268,11 +268,11 @@ end
 
 function find_project(::Void)
     try
-        return find_project_project()
+        return find_local_project()
     catch err
         err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
     end
-    return find_default_project()
+    return find_named_project()
 end
 
 ## resolving packages from name or uuid ##
