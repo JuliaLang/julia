@@ -337,13 +337,20 @@
                               (write-char (read-char port) str)
                               (read-digs #t #f)
                               (disallow-dot))
-                       (io.ungetc port c))))
+                       (io.ungetc port c)))))
+      (if (and (char? c)
+               (or (eq? pred char-bin?) (eq? pred char-oct?)
+                   (and (eq? pred char-hex?) (not is-hex-float-literal)))
+               (or (char-numeric? c)
+                   (and (identifier-start-char? c)
+                        (syntax-deprecation port  ;; remove after v0.7
+                                            (string (get-output-string str) c)
+                                            (string (get-output-string str) " * " c))
+                        #f)))  ;; remove after v0.7
           ;; disallow digits after binary or octal literals, e.g., 0b12
-          (if (and (or (eq? pred char-bin?) (eq? pred char-oct?))
-                   (not (eof-object? c))
-                   (char-numeric? c))
-              (error (string "invalid numeric constant \""
-                             (get-output-string str) c "\"")))))
+          ;; and disallow identifier chars after hex literals.
+          (error (string "invalid numeric constant \""
+                         (get-output-string str) c "\""))))
     (let* ((s (get-output-string str))
            (r (cond ((eq? pred char-hex?) 16)
                     ((eq? pred char-oct?) 8)

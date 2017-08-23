@@ -189,16 +189,15 @@ end
 struct tstStringType <: AbstractString
     data::Array{UInt8,1}
 end
-tstr = tstStringType("12")
+tstr = tstStringType(Vector{UInt8}("12"))
 @test_throws ErrorException endof(tstr)
 @test_throws ErrorException next(tstr, Bool(1))
 
 gstr = GenericString("12")
-@test typeof(string(gstr))==GenericString
+@test string(gstr) isa GenericString
 
-@test convert(Array{UInt8}, gstr) ==[49;50]
-@test convert(Array{Char,1}, gstr) ==['1';'2']
-@test convert(Symbol, gstr)==Symbol("12")
+@test Array{UInt8}(gstr) == [49, 50]
+@test Array{Char,1}(gstr) == ['1', '2']
 
 @test gstr[1] == '1'
 @test gstr[1:1] == "1"

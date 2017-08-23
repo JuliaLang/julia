@@ -160,8 +160,9 @@ end
 @testset "generic axpy" begin
     x = ['a','b','c','d','e']
     y = ['a','b','c','d','e']
-    α = 'f'
+    α, β = 'f', 'g'
     @test_throws DimensionMismatch Base.LinAlg.axpy!(α,x,['g'])
+    @test_throws DimensionMismatch Base.LinAlg.axpby!(α,x,β,['g'])
     @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(-1:5),y,collect(1:7))
     @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(1:7),y,collect(-1:5))
     @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(1:7),y,collect(1:7))
@@ -276,12 +277,17 @@ end
     @test norm(x, 3) ≈ cbrt(sqrt(125)+125)
 end
 
-@testset "LinAlg.axpy! for element type without commutative multiplication" begin
-    α = ones(Int, 2, 2)
-    x = fill([1 0; 1 1], 3)
-    y = fill(zeros(Int, 2, 2), 3)
-    @test LinAlg.axpy!(α, x, deepcopy(y)) == x .* Matrix{Int}[α]
-    @test LinAlg.axpy!(α, x, deepcopy(y)) != Matrix{Int}[α] .* x
+@testset "LinAlg.axp(b)y! for element type without commutative multiplication" begin
+    α = [1 2; 3 4]
+    β = [5 6; 7 8]
+    x = fill([ 9 10; 11 12], 3)
+    y = fill([13 14; 15 16], 3)
+    axpy = LinAlg.axpy!(α, x, deepcopy(y))
+    axpby = LinAlg.axpby!(α, x, β, deepcopy(y))
+    @test axpy == x .* [α] .+ y
+    @test axpy != [α] .* x .+ y
+    @test axpby == x .* [α] .+ y .* [β]
+    @test axpby != [α] .* x .+ [β] .* y
 end
 
 @testset "LinAlg.axpy! for x and y of different dimensions" begin
@@ -371,6 +377,6 @@ Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 end
 
 @testset "fallback throws properly for AbstractArrays with dimension > 2" begin
-    @test_throws ErrorException ctranspose(rand(2,2,2,2))
+    @test_throws ErrorException adjoint(rand(2,2,2,2))
     @test_throws ErrorException transpose(rand(2,2,2,2))
 end

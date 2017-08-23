@@ -19,6 +19,9 @@ Language changes
   * In string and character literals, backslash `\` may no longer
     precede unrecognized escape characters ([#22800]).
 
+  * Juxtaposing binary, octal, and hexadecimal literals is deprecated, since it can lead to
+    confusing code such as `0xapi == 0xa * pi` ([#16356]).
+
   * Declaring arguments as `x::ANY` to avoid specialization has been replaced
     by `@nospecialize x`. ([#22666]).
 
@@ -66,6 +69,9 @@ Language changes
   * `const` declarations on local variables were previously ignored. They now give a
     warning, so that this syntax can be disallowed or given a new meaning in a
     future version ([#5148]).
+
+  * In `for i in x`, `x` used to be evaluated in a new scope enclosing the `for` loop.
+    Now it is evaluated in the scope outside the `for` loop.
 
 Breaking changes
 ----------------
@@ -118,10 +124,11 @@ This section lists changes that do not have deprecation warnings.
     longer present. Use `first(R)` and `last(R)` to obtain
     start/stop. ([#20974])
 
-  * The `Diagonal`, `Bidiagonal` and `SymTridiagonal` type definitions have changed from
-    `Diagonal{T}`, `Bidiagonal{T}` and `SymTridiagonal{T}` to `Diagonal{T,V<:AbstractVector{T}}`,
-    `Bidiagonal{T,V<:AbstractVector{T}}` and `SymTridiagonal{T,V<:AbstractVector{T}}`
-    respectively ([#22718], [#22925], [#23035]).
+  * The `Diagonal`, `Bidiagonal`, `Tridiagonal` and `SymTridiagonal` type definitions have
+    changed from `Diagonal{T}`, `Bidiagonal{T}`, `Tridiagonal{T}` and `SymTridiagonal{T}`
+    to `Diagonal{T,V<:AbstractVector{T}}`, `Bidiagonal{T,V<:AbstractVector{T}}`,
+    `Tridiagonal{T,V<:AbstractVector{T}}` and `SymTridiagonal{T,V<:AbstractVector{T}}`
+    respectively ([#22718], [#22925], [#23035], [#23154]).
 
   * `isapprox(x,y)` now tests `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`
     rather than `norm(x-y) <= atol + ...`, and `rtol` defaults to zero
@@ -193,9 +200,10 @@ Library improvements
 
   * `Char`s can now be concatenated with `String`s and/or other `Char`s using `*` ([#22532]).
 
-  * `Diagonal`, `Bidiagonal` and `SymTridiagonal` are now parameterized on the type of the
-    wrapped vectors, allowing `Diagonal`, `Bidiagonal` and `SymTridiagonal` matrices with
-    arbitrary `AbstractVector`s ([#22718], [#22925], [#23035]).
+  * `Diagonal`, `Bidiagonal`, `Tridiagonal` and `SymTridiagonal` are now parameterized on
+    the type of the wrapped vectors, allowing `Diagonal`, `Bidiagonal`, `Tridiagonal` and
+    `SymTridiagonal` matrices with arbitrary `AbstractVector`s
+    ([#22718], [#22925], [#23035], [#23154]).
 
   * Mutating versions of `randperm` and `randcycle` have been added:
     `randperm!` and `randcycle!` ([#22723]).
@@ -258,8 +266,9 @@ Deprecated or removed
   * `Bidiagonal` constructors now use a `Symbol` (`:U` or `:L`) for the upper/lower
     argument, instead of a `Bool` or a `Char` ([#22703]).
 
-  * `Bidiagonal` and `SymTridiagonal` constructors that automatically converted the input
-    vectors to the same type are deprecated in favor of explicit conversion ([#22925], [#23035]).
+  * `Bidiagonal`, `Tridiagonal` and `SymTridiagonal` constructors that automatically
+    converted the input vectors to the same type are deprecated in favor of explicit
+    conversion ([#22925], [#23035], [#23154].
 
   * Calling `nfields` on a type to find out how many fields its instances have is deprecated.
     Use `fieldcount` instead. Use `nfields` only to get the number of fields in a specific object ([#22350]).
@@ -312,11 +321,24 @@ Deprecated or removed
   * `Base.cpad` has been removed; use an appropriate combination of `rpad` and `lpad`
     instead ([#23187]).
 
+  * `ctranspose` and `ctranspose!` have been deprecated in favor of `adjoint` and `adjoint!`,
+    respectively ([#23235]).
+
+  * `filter` and `filter!` on dictionaries now pass a single `key=>value` pair to the
+    argument function, instead of two arguments ([#17886]).
+
+  * `Base.SparseArrays.SpDiagIterator` has been removed ([#23261]).
+
+  * `diagm(A::SparseMatrixCSC)` has been deprecated in favor of
+    `spdiagm(sparsevec(A))` ([#23341]).
+
 Command-line option changes
 ---------------------------
 
   * New option `--warn-overwrite={yes|no}` to control the warning for overwriting method
     definitions. The default is `no` ([#23002]).
+
+  * The `-q` and `--quiet` flags have been deprecated in favor of `--banner={yes|no}` ([#23342]).
 
 Julia v0.6.0 Release Notes
 ==========================
@@ -1174,3 +1196,4 @@ Command-line option changes
 [#23157]: https://github.com/JuliaLang/julia/issues/23157
 [#23187]: https://github.com/JuliaLang/julia/issues/23187
 [#23207]: https://github.com/JuliaLang/julia/issues/23207
+[#23342]: https://github.com/JuliaLang/julia/issues/23342

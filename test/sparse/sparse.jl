@@ -401,11 +401,11 @@ end
             fullAt = transpose(Array(A))
             @test transpose(A) == fullAt
             @test transpose!(similar(At), A) == fullAt
-            # ctranspose[!]
+            # adjoint[!]
             C = A + im*A/2
-            fullCh = ctranspose(Array(C))
-            @test ctranspose(C) == fullCh
-            @test ctranspose!(similar(sparse(fullCh)), C) == fullCh
+            fullCh = adjoint(Array(C))
+            @test adjoint(C) == fullCh
+            @test adjoint!(similar(sparse(fullCh)), C) == fullCh
             # permute[!]
             p = randperm(m)
             q = randperm(n)
@@ -423,7 +423,7 @@ end
 @testset "transpose of SubArrays" begin
     A = view(sprandn(10, 10, 0.3), 1:4, 1:4)
     @test  transpose(Array(A)) == Array(transpose(A))
-    @test ctranspose(Array(A)) == Array(ctranspose(A))
+    @test adjoint(Array(A)) == Array(adjoint(A))
 end
 
 @testset "exp" begin
@@ -1316,11 +1316,32 @@ end
     @test trace(speye(5)) == 5
 end
 
-@testset "diagm on a matrix" begin
-    @test_throws DimensionMismatch diagm(sparse(ones(5,2)))
-    @test_throws DimensionMismatch diagm(sparse(ones(2,5)))
-    @test diagm(sparse(ones(1,5))) == speye(5)
-    @test diagm(sparse(ones(5,1))) == speye(5)
+@testset "spdiagm" begin
+    v = sprand(10, 0.4)
+    @test spdiagm(v)::SparseMatrixCSC                == diagm(Vector(v))
+    @test spdiagm(sparse(ones(5)))::SparseMatrixCSC  == speye(5)
+    @test spdiagm(sparse(zeros(5)))::SparseMatrixCSC == spzeros(5,5)
+end
+
+@testset "diag" begin
+    for T in (Float64, Complex128)
+        S1 = sprand(T,  5,  5, 0.5)
+        S2 = sprand(T, 10,  5, 0.5)
+        S3 = sprand(T,  5, 10, 0.5)
+        for S in (S1, S2, S3)
+            A = Matrix(S)
+            @test diag(S)::SparseVector{T,Int} == diag(A)
+            for k in -size(S,1):size(S,2)
+                @test diag(S, k)::SparseVector{T,Int} == diag(A, k)
+            end
+            @test_throws ArgumentError diag(S, -size(S,1)-1)
+            @test_throws ArgumentError diag(S,  size(S,2)+1)
+        end
+    end
+    # test that stored zeros are still stored zeros in the diagonal
+    S = sparse([1,3],[1,3],[0.0,0.0]); V = diag(S)
+    @test V.nzind == [1,3]
+    @test V.nzval == [0.0,0.0]
 end
 
 @testset "expandptr" begin

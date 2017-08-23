@@ -109,8 +109,8 @@ Base.LinAlg.RowVector
 Base.LinAlg.ConjArray
 Base.transpose
 Base.transpose!
-Base.ctranspose
-Base.ctranspose!
+Base.adjoint
+Base.adjoint!
 Base.LinAlg.eigs(::Any)
 Base.LinAlg.eigs(::Any, ::Any)
 Base.LinAlg.svds

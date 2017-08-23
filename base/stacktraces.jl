@@ -59,7 +59,8 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     pointer::UInt64  # Large enough to be read losslessly on 32- and 64-bit machines.
 end
 
-StackFrame(func, file, line) = StackFrame(func, file, line, Nullable{Core.MethodInstance}(), false, false, 0)
+StackFrame(func, file, line) = StackFrame(Symbol(func), Symbol(file), line,
+                                          Nullable{Core.MethodInstance}(), false, false, 0)
 
 """
     StackTrace

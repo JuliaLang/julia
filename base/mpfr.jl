@@ -27,8 +27,11 @@ import Base.Math.lgamma_r
 
 import Base.FastMath.sincos_fast
 
-get_version() = VersionNumber(unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ())))
-get_patches() = split(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())),' ')
+function get_version()
+    version = unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ()))
+    build = replace(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())), ' ', '.')
+    isempty(build) ? VersionNumber(version) : VersionNumber(version * '+' * build)
+end
 
 function __init__()
     try
@@ -41,7 +44,7 @@ function __init__()
 end
 
 const ROUNDING_MODE = Ref{Cint}(0)
-const DEFAULT_PRECISION = [256]
+const DEFAULT_PRECISION = Ref(256)
 
 # Basic type and initialization definitions
 
@@ -231,7 +234,9 @@ ceil(::Type{Integer}, x::BigFloat) = ceil(BigInt, x)
 round(::Type{Integer}, x::BigFloat) = round(BigInt, x)
 
 function convert(::Type{Bool}, x::BigFloat)
-    x == 0 ? false : x == 1 ? true : throw(InexactError(:convert, Bool, x))
+    iszero(x) && return false
+    isone(x) && return true
+    throw(InexactError(:convert, Bool, x))
 end
 function convert(::Type{BigInt},x::BigFloat)
     isinteger(x) || throw(InexactError(:convert, BigInt, x))
@@ -724,7 +729,7 @@ end
 
 Get the precision (in bits) currently used for [`BigFloat`](@ref) arithmetic.
 """
-precision(::Type{BigFloat}) = DEFAULT_PRECISION[end] # precision of the type BigFloat itself
+precision(::Type{BigFloat}) = DEFAULT_PRECISION[] # precision of the type BigFloat itself
 
 """
     setprecision([T=BigFloat,] precision::Int)
@@ -735,7 +740,7 @@ function setprecision(::Type{BigFloat}, precision::Int)
     if precision < 2
         throw(DomainError(precision, "`precision` cannot be less than 2."))
     end
-    DEFAULT_PRECISION[end] = precision
+    DEFAULT_PRECISION[] = precision
 end
 
 setprecision(precision::Int) = setprecision(BigFloat, precision)

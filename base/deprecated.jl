@@ -1346,7 +1346,6 @@ end
 @deprecate srand(filename::AbstractString, n::Integer=4) srand(read!(filename, Array{UInt32}(Int(n))))
 @deprecate MersenneTwister(filename::AbstractString)  srand(MersenneTwister(0), read!(filename, Array{UInt32}(Int(4))))
 
-
 # PR #21974
 @deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
 @deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
@@ -1422,7 +1421,7 @@ end
 module Operators
     for op in [:!, :(!=), :(!==), :%, :&, :*, :+, :-, :/, ://, :<, :<:, :<<, :(<=),
                :<|, :(==), :(===), :>, :>:, :(>=), :>>, :>>>, :\, :^, :colon,
-               :ctranspose, :getindex, :hcat, :hvcat, :setindex!, :transpose, :vcat,
+               :adjoint, :getindex, :hcat, :hvcat, :setindex!, :transpose, :vcat,
                :xor, :|, :|>, :~, :×, :÷, :∈, :∉, :∋, :∌, :∘, :√, :∛, :∩, :∪, :≠, :≤,
                :≥, :⊆, :⊈, :⊊, :⊻, :⋅]
         if isdefined(Base, op)
@@ -1653,6 +1652,14 @@ function SymTridiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}) where {T,S
     SymTridiagonal(convert(Vector{R}, dv), convert(Vector{R}, ev))
 end
 
+# PR #23154
+# also uncomment constructor tests in test/linalg/tridiag.jl
+function Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::AbstractVector{Tu}) where {Tl,Td,Tu}
+    depwarn(string("Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::AbstractVector{Tu}) ",
+        "where {Tl, Td, Tu} is deprecated; convert all vectors to the same type instead."), :Tridiagonal)
+    Tridiagonal(map(v->convert(Vector{promote_type(Tl,Td,Tu)}, v), (dl, d, du))...)
+end
+
 # PR #23092
 @eval LibGit2 begin
     function prompt(msg::AbstractString; default::AbstractString="", password::Bool=false)
@@ -1677,6 +1684,7 @@ function hex2num(s::AbstractString)
     end
     return reinterpret(Float64, parse(UInt64, s, 16))
 end
+export hex2num
 
 @deprecate num2hex(x::Union{Float16,Float32,Float64}) hex(reinterpret(Unsigned, x), sizeof(x)*2)
 @deprecate num2hex(n::Integer) hex(n, sizeof(n)*2)
@@ -1684,8 +1692,29 @@ end
 # PR #22742: change in isapprox semantics
 @deprecate rtoldefault(x,y) rtoldefault(x,y,0) false
 
+# PR #23235
+@deprecate ctranspose adjoint
+@deprecate ctranspose! adjoint!
+
+@deprecate convert(::Type{Vector{UInt8}}, s::AbstractString)  Vector{UInt8}(s)
+@deprecate convert(::Type{Array{UInt8}}, s::AbstractString)   Vector{UInt8}(s)
+@deprecate convert(::Type{Vector{Char}}, s::AbstractString)   Vector{Char}(s)
+@deprecate convert(::Type{Symbol}, s::AbstractString)         Symbol(s)
+@deprecate convert(::Type{String}, s::Symbol)                 String(s)
+@deprecate convert(::Type{String}, v::Vector{UInt8})          String(v)
+@deprecate convert(::Type{S}, g::UTF8proc.GraphemeIterator) where {S<:AbstractString}  convert(S, g.s)
+
 # issue #5148, PR #23259
 # warning for `const` on locals should be changed to an error in julia-syntax.scm
+
+# issue #23342, PR #23343
+# `-q` and `--quiet` are deprecated in jloptions.c
+
+# issue #17886
+# deprecations for filter[!] with 2-arg functions are in associative.jl
+
+# PR 23341
+@deprecate diagm(A::SparseMatrixCSC) spdiagm(sparsevec(A))
 
 # END 0.7 deprecations
 

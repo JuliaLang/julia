@@ -84,7 +84,6 @@ include("tuple.jl")
 include("pair.jl")
 include("traits.jl")
 include("range.jl")
-include("twiceprecision.jl")
 include("expr.jl")
 include("error.jl")
 
@@ -135,6 +134,7 @@ include("hashing.jl")
 include("rounding.jl")
 importall .Rounding
 include("float.jl")
+include("twiceprecision.jl")
 include("complex.jl")
 include("rational.jl")
 include("multinverses.jl")
@@ -325,8 +325,8 @@ include("hashing2.jl")
 include("irrationals.jl")
 
 # random number generation
-include("dSFMT.jl")
-include("random.jl")
+include("random/dSFMT.jl")
+include("random/random.jl")
 importall .Random
 
 # (s)printf macros
