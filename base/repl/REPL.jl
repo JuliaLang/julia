@@ -248,13 +248,15 @@ mutable struct Options
     extra_keymap::Union{Dict,Vector{<:Dict}}
     backspace_align::Bool
     backspace_adjust::Bool
+    confirm_exit::Bool # ^D must be repeated to confirm exit
 end
 
 Options(;
         hascolor = true,
         extra_keymap = AnyDict[],
-        backspace_align = true, backspace_adjust = backspace_align) =
-            Options(hascolor, extra_keymap, backspace_align, backspace_adjust)
+        backspace_align = true, backspace_adjust = backspace_align,
+        confirm_exit = true) =
+            Options(hascolor, extra_keymap, backspace_align, backspace_adjust, confirm_exit)
 
 ## LineEditREPL ##
 

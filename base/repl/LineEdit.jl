@@ -1880,6 +1880,16 @@ function edit_insert_tab(buf::IOBuffer, jump_spaces=false, delete_trailing=jump_
     return true
 end
 
+function edit_abort(s, confirm::Bool=options(s).confirm_exit; key="^D")
+    set_action!(s, :edit_abort)
+    if !confirm || s.last_action == :edit_abort
+        println(terminal(s))
+        :abort
+    else
+        println("Type $key again to exit.\n")
+        refresh_line(s)
+    end
+end
 
 const default_keymap =
 AnyDict(
@@ -1906,8 +1916,7 @@ AnyDict(
         if buffer(s).size > 0
             edit_delete(s)
         else
-            println(terminal(s))
-            return :abort
+            edit_abort(s)
         end
     end,
     # Ctrl-Space
