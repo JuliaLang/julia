@@ -5316,6 +5316,26 @@ x.u = initvalue2(Base.uniontypes(U)[1])
 x.u = initvalue(Base.uniontypes(U)[2])
 @test x.u === initvalue(Base.uniontypes(U)[2])
 
+struct AA
+    x::Union{Int8, Int16, NTuple{7, Int8}, Void}
+end
+struct B
+    x::Int8
+    y::AA
+    z::Int8
+end
+b = B(91, AA(ntuple(i -> Int8(i), Val(7))), 23)
+
+@test b.x === Int8(91)
+@test b.z === Int8(23)
+@test b.y === AA(ntuple(i -> Int8(i), Val(7)))
+@test sizeof(b) == 12
+@test AA(Int8(1)).x === Int8(1)
+@test AA(Int8(0)).x === Int8(0)
+@test AA(Int16(1)).x === Int16(1)
+@test AA(nothing).x === nothing
+@test sizeof(b.y) == 8
+
 for U in boxedunions
     local U
     for N in (1, 2, 3, 4)
