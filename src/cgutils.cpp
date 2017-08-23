@@ -2221,27 +2221,25 @@ static void emit_setfield(jl_codectx_t &ctx,
             if (wb && strct.isboxed)
                 emit_checked_write_barrier(ctx, boxed(ctx, strct), r);
         }
+        else if (jl_is_uniontype(jfty)) {
+            int fsz = jl_field_size(sty, idx0);
+            // compute tindex from rhs
+            jl_cgval_t rhs_union = convert_julia_type(ctx, rhs, jfty);
+            if (rhs_union.typ == jl_bottom_type)
+                return;
+            Value *tindex = compute_tindex_unboxed(ctx, rhs_union, jfty);
+            tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
+            Value *ptindex = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, addr, T_pint8), ConstantInt::get(T_size, fsz - 1));
+            ctx.builder.CreateStore(tindex, ptindex);
+            // copy data
+            if (!rhs.isghost) {
+                emit_unionmove(ctx, addr, rhs, NULL, false, NULL);
+            }
+        }
         else {
-            if (jl_is_uniontype(jfty)) {
-                int fsz = jl_field_size(sty, idx0);
-                // compute tindex from rhs
-                jl_cgval_t rhs_union = convert_julia_type(ctx, rhs, jfty);
-                if (rhs_union.typ == jl_bottom_type)
-                    return;
-                Value *tindex = compute_tindex_unboxed(ctx, rhs_union, jfty);
-                tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
-                Value *ptindex = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, addr, T_pint8), ConstantInt::get(T_size, fsz - 1));
-                ctx.builder.CreateStore(tindex, ptindex);
-                // copy data
-                if (!rhs.isghost) {
-                    emit_unionmove(ctx, addr, rhs, NULL, false, NULL);
-                }
-            }
-            else {
-                int align = jl_field_align(sty, idx0);
-                typed_store(ctx, addr, ConstantInt::get(T_size, 0), rhs, jfty,
-                    strct.tbaa, data_pointer(ctx, strct, T_pjlvalue), align);
-            }
+            int align = jl_field_align(sty, idx0);
+            typed_store(ctx, addr, ConstantInt::get(T_size, 0), rhs, jfty,
+                strct.tbaa, data_pointer(ctx, strct, T_pjlvalue), align);
         }
     }
     else {

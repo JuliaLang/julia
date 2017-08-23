@@ -5324,17 +5324,30 @@ struct B
     y::AA
     z::Int8
 end
-b = B(91, AA(ntuple(i -> Int8(i), Val(7))), 23)
+@noinline compare(a, b) = (a === b) # test code-generation of `is`
+let
+    b = B(91, AA(ntuple(i -> Int8(i), Val(7))), 23)
+    b2 = Ref(b)[] # copy b via field assignment
+    b3 = B[b][1] # copy b via array assignment
+    @test pointer_from_objref(b) == pointer_from_objref(b)
+    @test pointer_from_objref(b) != pointer_from_objref(b2)
+    @test pointer_from_objref(b) != pointer_from_objref(b3)
+    @test pointer_from_objref(b2) != pointer_from_objref(b3)
 
-@test b.x === Int8(91)
-@test b.z === Int8(23)
-@test b.y === AA(ntuple(i -> Int8(i), Val(7)))
-@test sizeof(b) == 12
-@test AA(Int8(1)).x === Int8(1)
-@test AA(Int8(0)).x === Int8(0)
-@test AA(Int16(1)).x === Int16(1)
-@test AA(nothing).x === nothing
-@test sizeof(b.y) == 8
+    @test b === b2 === b3
+    @test compare(b, b2)
+    @test compare(b, b3)
+    @test object_id(b) === object_id(b2) == object_id(b3)
+    @test b.x === Int8(91)
+    @test b.z === Int8(23)
+    @test b.y === AA((Int8(1), Int8(2), Int8(3), Int8(4), Int8(5), Int8(6), Int8(7)))
+    @test sizeof(b) == 12
+    @test AA(Int8(1)).x === Int8(1)
+    @test AA(Int8(0)).x === Int8(0)
+    @test AA(Int16(1)).x === Int16(1)
+    @test AA(nothing).x === nothing
+    @test sizeof(b.y) == 8
+end
 
 for U in boxedunions
     local U

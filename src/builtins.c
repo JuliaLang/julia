@@ -77,30 +77,40 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b)
 // See comment above for an explanation of NOINLINE.
 static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *dt)
 {
-    size_t nf = jl_datatype_nfields(dt);
-    for (size_t f=0; f < nf; f++) {
+    size_t f, nf = jl_datatype_nfields(dt);
+    for (f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *ao = (char*)jl_data_ptr(a) + offs;
         char *bo = (char*)jl_data_ptr(b) + offs;
-        int eq;
         if (jl_field_isptr(dt, f)) {
             jl_value_t *af = *(jl_value_t**)ao;
             jl_value_t *bf = *(jl_value_t**)bo;
-            if (af == bf) eq = 1;
-            else if (af==NULL || bf==NULL) eq = 0;
-            else eq = jl_egal(af, bf);
+            if (af != bf) {
+                if (af == NULL || bf == NULL)
+                    return 0;
+                if (!jl_egal(af, bf))
+                    return 0;
+            }
         }
         else {
             jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(dt, f);
+            if (jl_is_uniontype(ft)) {
+                uint8_t asel = ((uint8_t*)ao)[jl_field_size(dt, f) - 1];
+                uint8_t bsel = ((uint8_t*)bo)[jl_field_size(dt, f) - 1];
+                if (asel != bsel)
+                    return 0;
+                ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, asel);
+            }
             if (!ft->layout->haspadding) {
-                eq = bits_equal(ao, bo, jl_field_size(dt, f));
+                if (!bits_equal(ao, bo, jl_field_size(dt, f)))
+                    return 0;
             }
             else {
                 assert(jl_datatype_nfields(ft) > 0);
-                eq = compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft);
+                if (!compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft))
+                    return 0;
             }
         }
-        if (!eq) return 0;
     }
     return 1;
 }
@@ -127,9 +137,11 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
             return 0;
         return !memcmp(jl_string_data(a), jl_string_data(b), l);
     }
-    if (dt->mutabl) return 0;
+    if (dt->mutabl)
+        return 0;
     size_t sz = jl_datatype_size(dt);
-    if (sz == 0) return 1;
+    if (sz == 0)
+        return 1;
     size_t nf = jl_datatype_nfields(dt);
     if (nf == 0)
         return bits_equal(jl_data_ptr(a), jl_data_ptr(b), sz);
@@ -161,10 +173,10 @@ static uintptr_t bits_hash(void *b, size_t sz)
 static uintptr_t NOINLINE hash_svec(jl_svec_t *v)
 {
     uintptr_t h = 0;
-    size_t l = jl_svec_len(v);
-    for(size_t i = 0; i < l; i++) {
-        jl_value_t *x = jl_svecref(v,i);
-        uintptr_t u = x==NULL ? 0 : jl_object_id(x);
+    size_t i, l = jl_svec_len(v);
+    for (i = 0; i < l; i++) {
+        jl_value_t *x = jl_svecref(v, i);
+        uintptr_t u = (x == NULL) ? 0 : jl_object_id(x);
         h = bitmix(h, u);
     }
     return h;
@@ -188,9 +200,11 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     if (dt == jl_typename_type)
         return ((jl_typename_t*)v)->hash;
 #ifdef _P64
-    if (v == jl_ANY_flag) return 0x31c472f68ee30bddULL;
+    if (v == jl_ANY_flag)
+        return 0x31c472f68ee30bddULL;
 #else
-    if (v == jl_ANY_flag) return 0x8ee30bdd;
+    if (v == jl_ANY_flag)
+        return 0x8ee30bdd;
 #endif
     if (dt == jl_string_type) {
 #ifdef _P64
@@ -199,24 +213,29 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
         return memhash32_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
 #endif
     }
-    if (dt->mutabl) return inthash((uintptr_t)v);
+    if (dt->mutabl)
+        return inthash((uintptr_t)v);
     size_t sz = jl_datatype_size(tv);
     uintptr_t h = jl_object_id(tv);
-    if (sz == 0) return ~h;
-    size_t nf = jl_datatype_nfields(dt);
-    if (nf == 0) {
+    if (sz == 0)
+        return ~h;
+    size_t f, nf = jl_datatype_nfields(dt);
+    if (nf == 0)
         return bits_hash(jl_data_ptr(v), sz) ^ h;
-    }
-    for (size_t f=0; f < nf; f++) {
+    for (f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *vo = (char*)jl_data_ptr(v) + offs;
         uintptr_t u;
         if (jl_field_isptr(dt, f)) {
             jl_value_t *f = *(jl_value_t**)vo;
-            u = f==NULL ? 0 : jl_object_id(f);
+            u = (f == NULL) ? 0 : jl_object_id(f);
         }
         else {
             jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type(dt, f);
+            if (jl_is_uniontype(fieldtype)) {
+                uint8_t sel = ((uint8_t*)vo)[jl_field_size(dt, f) - 1];
+                fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
+            }
             assert(jl_is_datatype(fieldtype) && !fieldtype->abstract && !fieldtype->mutabl);
             if (fieldtype->layout->haspadding)
                 u = jl_object_id_((jl_value_t*)fieldtype, (jl_value_t*)vo);
@@ -244,7 +263,7 @@ JL_CALLABLE(jl_f_is)
     JL_NARGS(===, 2, 2);
     if (args[0] == args[1])
         return jl_true;
-    return jl_egal(args[0],args[1]) ? jl_true : jl_false;
+    return jl_egal(args[0], args[1]) ? jl_true : jl_false;
 }
 
 JL_CALLABLE(jl_f_typeof)

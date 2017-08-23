@@ -2061,10 +2061,47 @@ static jl_cgval_t emit_getfield(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_s
     return mark_julia_type(ctx, result, true, jl_any_type);
 }
 
+static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2);
+
+static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
+{
+    assert(arg1.typ == arg2.typ && arg1.TIndex && arg2.TIndex && jl_is_uniontype(arg1.typ) && "unimplemented");
+    Value *tindex = arg1.TIndex;
+    BasicBlock *defaultBB = BasicBlock::Create(jl_LLVMContext, "unionbits_is_boxed", ctx.f);
+    SwitchInst *switchInst = ctx.builder.CreateSwitch(tindex, defaultBB);
+    BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_unionbits_is", ctx.f);
+    ctx.builder.SetInsertPoint(postBB);
+    PHINode *phi = ctx.builder.CreatePHI(T_int1, 2);
+    unsigned counter = 0;
+    for_each_uniontype_small(
+        [&](unsigned idx, jl_datatype_t *jt) {
+            BasicBlock *tempBB = BasicBlock::Create(jl_LLVMContext, "unionbits_is", ctx.f);
+            ctx.builder.SetInsertPoint(tempBB);
+            switchInst->addCase(ConstantInt::get(T_int8, idx), tempBB);
+            jl_cgval_t sel_arg1(arg1, (jl_value_t*)jt, NULL);
+            jl_cgval_t sel_arg2(arg2, (jl_value_t*)jt, NULL);
+            phi->addIncoming(emit_bits_compare(ctx, sel_arg1, sel_arg2), tempBB);
+            ctx.builder.CreateBr(postBB);
+        },
+        arg1.typ,
+        counter);
+    ctx.builder.SetInsertPoint(defaultBB);
+    Function *trap_func = Intrinsic::getDeclaration(
+        ctx.f->getParent(),
+        Intrinsic::trap);
+    ctx.builder.CreateCall(trap_func);
+    ctx.builder.CreateUnreachable();
+    ctx.builder.SetInsertPoint(postBB);
+    return ctx.builder.CreateAnd(phi, ctx.builder.CreateICmpEQ(arg1.TIndex, arg2.TIndex));
+}
+
 static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
 {
     assert(jl_is_datatype(arg1.typ) && arg1.typ == arg2.typ);
     Type *at = julia_type_to_llvm(arg1.typ);
+
+    if (type_is_ghost(at))
+        return ConstantInt::get(T_int1, 1);
 
     if (at->isIntegerTy() || at->isPointerTy() || at->isFloatingPointTy()) {
         Type *at_int = INTT(at);
@@ -2114,11 +2151,29 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
                 Value *subAns, *fld1, *fld2;
                 fld1 = ctx.builder.CreateConstGEP2_32(at, varg1, 0, i);
                 fld2 = ctx.builder.CreateConstGEP2_32(at, varg2, 0, i);
-                if (type_is_ghost(fld1->getType()->getPointerElementType()))
+                Type *at_i = cast<GetElementPtrInst>(fld1)->getResultElementType();
+                if (type_is_ghost(at_i))
                     continue;
-                subAns = emit_bits_compare(ctx,
-                        mark_julia_slot(fld1, fldty, NULL, arg1.tbaa),
-                        mark_julia_slot(fld2, fldty, NULL, arg2.tbaa));
+                if (jl_is_uniontype(fldty)) {
+                    unsigned tindex_offset = cast<StructType>(at_i)->getNumElements() - 1;
+                    Value *ptindex1 = ctx.builder.CreateConstInBoundsGEP2_32(
+                            at_i, fld1, 0, tindex_offset);
+                    Value *ptindex2 = ctx.builder.CreateConstInBoundsGEP2_32(
+                            at_i, fld2, 0, tindex_offset);
+                    Value *tindex1 = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1),
+                            ctx.builder.CreateLoad(T_int8, ptindex1));
+                    Value *tindex2 = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1),
+                            ctx.builder.CreateLoad(T_int8, ptindex2));
+                    subAns = emit_bitsunion_compare(ctx,
+                            mark_julia_slot(fld1, fldty, tindex1, arg1.tbaa),
+                            mark_julia_slot(fld2, fldty, tindex2, arg2.tbaa));
+                }
+                else {
+                    assert(jl_is_leaf_type(fldty));
+                    subAns = emit_bits_compare(ctx,
+                            mark_julia_slot(fld1, fldty, NULL, arg1.tbaa),
+                            mark_julia_slot(fld2, fldty, NULL, arg2.tbaa));
+                }
                 answer = ctx.builder.CreateAnd(answer, subAns);
             }
             return answer;
@@ -2181,6 +2236,9 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
         cmp->addIncoming(bitcmp, isaBB);
         return cmp;
     }
+
+    // if (arg1.tindex || arg2.tindex)
+    //   TODO: handle with emit_bitsunion_compare
 
     int ptr_comparable = 0; // whether this type is unique'd by pointer
     if (rt1 == (jl_value_t*)jl_sym_type || rt2 == (jl_value_t*)jl_sym_type)
@@ -2398,7 +2456,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     Value *selidx = ctx.builder.CreateMul(emit_arraylen_prim(ctx, ary), nbytes);
                     selidx = ctx.builder.CreateAdd(selidx, idx);
                     Value *ptindex = ctx.builder.CreateGEP(T_int8, data, selidx);
-                    Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), tbaa_decorate(tbaa_arrayselbyte, ctx.builder.CreateLoad(T_int8, ptindex)));
+                    Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1),
+                            tbaa_decorate(tbaa_arrayselbyte, ctx.builder.CreateLoad(T_int8, ptindex)));
                     Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (elsz + al - 1) / al);
                     AllocaInst *lv = emit_static_alloca(ctx, AT);
                     if (al > 1)
