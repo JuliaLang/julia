@@ -70,6 +70,7 @@ Base.LibGit2.default_signature
 Base.LibGit2.delete_branch
 Base.LibGit2.diff_files
 Base.LibGit2.fetch
+Base.LibGit2.fetchheads
 Base.LibGit2.fetch_refspecs
 Base.LibGit2.fetchhead_foreach_cb
 Base.LibGit2.merge!(::Base.LibGit2.GitRepo; ::Any...)
