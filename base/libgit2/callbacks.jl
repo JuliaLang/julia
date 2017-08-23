@@ -76,11 +76,6 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         end
     end
 
-    # If the private key changed, invalidate the cached public key
-    if privatekey != creds.prvkey
-        creds.pubkey = ""
-    end
-
     publickey = Base.get(ENV, "SSH_PUB_KEY_PATH") do
         default = privatekey * ".pub"
         if isempty(creds.pubkey) && isfile(default)
@@ -110,6 +105,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
             isnull(response) && return user_abort()
             privatekey = unsafe_get(response)
 
+            # Only update the public key if the private key changed
             if !haskey(ENV, "SSH_PUB_KEY_PATH") && privatekey != creds.prvkey
                 publickey = privatekey * ".pub"
             end
