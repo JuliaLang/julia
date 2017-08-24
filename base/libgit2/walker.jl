@@ -61,7 +61,7 @@ end
     LibGit2.push!(w::GitRevWalker, cid::GitHash)
 
 Start the [`GitRevWalker`](@ref) `walker` at commit `cid`. This function can be used
-to apply a function to all commits since in a certain year, by passing the first commit
+to apply a function to all commits since a certain year, by passing the first commit
 of that year as `cid` and then passing the resulting `w` to [`map`](@ref LibGit2.map).
 """
 function Base.push!(w::GitRevWalker, cid::GitHash)
@@ -83,7 +83,7 @@ end
 repository(w::GitRevWalker) = w.owner
 
 """
-    LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint = Consts.SORT_NONE, rev::Bool=false)
+    LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)
 
 Using the [`GitRevWalker`](@ref) `walker` to "walk" over every commit in the repository's history,
 apply `f` to each commit in the walk. The keyword arguments are:
@@ -133,7 +133,7 @@ function Base.map(f::Function, walker::GitRevWalker;
 end
 
 """
-    LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint = Consts.SORT_NONE, rev::Bool=false)
+    LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)
 
 Using the [`GitRevWalker`](@ref) `walker` to "walk" over every commit in the repository's history,
 find the number of commits which return `true` when `f` is applied to them. The keyword arguments
