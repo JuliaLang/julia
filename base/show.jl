@@ -1703,10 +1703,11 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
 end
 
 """
-    summary(x)
+    summary(io::IO, x)
+    str = summary(x)
 
-Return a string giving a brief description of a value. By default returns
-`string(typeof(x))`, e.g. [`Int64`](@ref).
+Print to a stream `io`, or return a string `str`, giving a brief description of
+a value. By default returns `string(typeof(x))`, e.g. [`Int64`](@ref).
 
 For arrays, returns a string of size and type info,
 e.g. `10-element Array{Int64,1}`.
@@ -1719,8 +1720,14 @@ julia> summary(zeros(2))
 "2-element Array{Float64,1}"
 ```
 """
-summary(x) = string(typeof(x)) # e.g. Int64
+summary(io::IO, x) = print(io, typeof(x))
+function summary(x)
+    io = IOBuffer()
+    summary(io, x)
+    String(take!(io))
+end
 
+## `summary` for AbstractArrays
 # sizes such as 0-dimensional, 4-dimensional, 2x3
 dims2string(d::Dims) = isempty(d) ? "0-dimensional" :
                        length(d) == 1 ? "$(d[1])-element" :
@@ -1729,9 +1736,85 @@ dims2string(d::Dims) = isempty(d) ? "0-dimensional" :
 inds2string(inds::Indices) = join(map(string,inds), '×')
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
-summary(a::AbstractArray) = _summary(a, indices(a))
-_summary(a, inds::Tuple{Vararg{OneTo}}) = string(dims2string(length.(inds)), " ", typeof(a))
-_summary(a, inds) = string(typeof(a), " with indices ", inds2string(inds))
+summary(io::IO, a::AbstractArray) = summary(io, a, indices(a))
+function summary(io::IO, a, inds::Tuple{Vararg{OneTo}})
+    print(io, dims2string(length.(inds)), " ")
+    showarg(io, a, true)
+end
+function summary(io::IO, a, inds)
+    showarg(io, a, true)
+    print(io, " with indices ", inds2string(inds))
+end
+
+"""
+    showarg(io::IO, x, toplevel)
+
+Show `x` as if it were an argument to a function. This function is
+used by [`summary`](@ref) to display type information in terms of sequences of
+function calls on objects. `toplevel` is `true` if this is
+the direct call from `summary` and `false` for nested (recursive) calls.
+
+The fallback definition is to print `x` as "::\$(typeof(x))",
+representing argument `x` in terms of its type. (The double-colon is
+omitted if `toplevel=true`.) However, you can
+specialize this function for specific types to customize printing.
+
+# Example
+
+A SubArray created as `view(a, :, 3, 2:5)`, where `a` is a
+3-dimensional Float64 array, has type
+
+    SubArray{Float64,2,Array{Float64,3},Tuple{Colon,Int64,UnitRange{Int64}},false}
+
+The default `show` printing would display this full type.
+However, the summary for SubArrays actually prints as
+
+    2×4 view(::Array{Float64,3}, :, 3, 2:5) with eltype Float64
+
+because of a definition similar to
+
+    function Base.showarg(io::IO, v::SubArray, toplevel)
+        print(io, "view(")
+        showarg(io, parent(v), false)
+        print(io, ", ", join(v.indexes, ", "))
+        print(io, ')')
+        toplevel && print(io, " with eltype ", eltype(v))
+    end
+
+Note that we're calling `showarg` recursively for the parent array
+type, indicating that any recursed calls are not at the top level.
+Printing the parent as `::Array{Float64,3}` is the fallback (non-toplevel)
+behavior, because no specialized method for `Array` has been defined.
+"""
+function showarg(io::IO, ::Type{T}, toplevel) where {T}
+    toplevel || print(io, "::")
+    print(io, "Type{", T, "}")
+end
+function showarg(io::IO, x, toplevel)
+    toplevel || print(io, "::")
+    print(io, typeof(x))
+end
+
+function showarg(io::IO, v::SubArray, toplevel)
+    print(io, "view(")
+    showarg(io, parent(v), false)
+    showindices(io, v.indexes...)
+    print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(v))
+end
+showindices(io, ::Slice, inds...) =
+    (print(io, ", :"); showindices(io, inds...))
+showindices(io, ind1, inds...) =
+    (print(io, ", ", ind1); showindices(io, inds...))
+showindices(io) = nothing
+
+function showarg(io::IO, r::ReshapedArray, toplevel)
+    print(io, "reshape(")
+    showarg(io, parent(r), false)
+    print(io, ", ", join(r.dims, ", "))
+    print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(r))
+end
 
 # n-dimensional arrays
 function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
