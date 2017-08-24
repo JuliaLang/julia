@@ -307,6 +307,13 @@ function Base.show(io::IO, result::GitDescribeResult)
     println(io, fmt_desc)
 end
 
+"""
+    checkout_tree(repo::GitRepo, obj::GitObject; options::CheckoutOptions = CheckoutOptions())
+
+Update the working tree and index of `repo` to match the tree pointed to by `obj`.
+`obj` can be a commit, a tag, or a tree. `options` controls how the checkout will
+be performed. See [`CheckoutOptions`](@ref) for more information.
+"""
 function checkout_tree(repo::GitRepo, obj::GitObject;
                        options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_tree, :libgit2), Cint,
@@ -314,6 +321,13 @@ function checkout_tree(repo::GitRepo, obj::GitObject;
                  repo.ptr, obj.ptr, Ref(options))
 end
 
+"""
+    checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitIndex}(); options::CheckoutOptions = CheckoutOptions())
+
+Update the working tree of `repo` to match the index `idx`. If `idx` is null, the
+index of `repo` will be used. `options` controls how the checkout will be performed.
+See [`CheckoutOptions`](@ref) for more information.
+"""
 function checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitIndex}();
                         options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_index, :libgit2), Cint,
@@ -323,6 +337,16 @@ function checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitInd
                  Ref(options))
 end
 
+"""
+    checkout_head(repo::GitRepo; options::CheckoutOptions = CheckoutOptions())
+
+Update the index and working tree of `repo` to match the commit pointed to by HEAD.
+`options` controls how the checkout will be performed. See [`CheckoutOptions`](@ref) for more information.
+
+!!! warning
+    *Do not* use this function to switch branches! Doing so will cause checkout
+    conflicts.
+"""
 function checkout_head(repo::GitRepo; options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_head, :libgit2), Cint,
                  (Ptr{Void}, Ptr{CheckoutOptions}),
