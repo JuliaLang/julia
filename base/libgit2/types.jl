@@ -836,8 +836,12 @@ The fields represent:
     boundary::Char
 end
 
+"""
+    with(f::Function, obj)
 
-""" Resource management helper function
+Resource management helper function. Applies `f` to `obj`, making sure to call
+`close` on `obj` after `f` successfully returns or throws an error. Ensures that
+allocated git resources are finalized as soon as they are no longer needed.
 """
 function with(f::Function, obj)
     try
@@ -849,6 +853,15 @@ end
 
 with(f::Function, ::Type{T}, args...) where {T} = with(f, T(args...))
 
+"""
+    with_warn(f::Function, ::Type{T}, args..)
+
+Resource management helper function. Apply `f` to `args`, first constructing
+an instance of type `T` out of them. Makes sure to call `close` on the resulting
+object after `f` successfully returns or throws an error. Ensures that
+allocated git resources are finalized as soon as they are no longer needed. If an
+error is thrown by `f`, a warning is shown containing the error.
+"""
 function with_warn(f::Function, ::Type{T}, args...) where T
     obj = T(args...)
     try
