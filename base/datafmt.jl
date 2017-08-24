@@ -616,6 +616,11 @@ function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
     return (nrows, ncols)
 end
 
+"""
+    readcsv(source, [T::Type]; options...)
+
+Equivalent to [`readdlm`](@ref) with `delim` set to comma, and type optionally defined by `T`.
+"""
 readcsv(io; opts...)          = readdlm(io, ','; opts...)
 readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
 

@@ -310,7 +310,6 @@ end
         g = graphemes(str)
         h = hash(str)
         @test hash(g) == h
-        @test convert(GenericString, g) == str
         @test repr(g) == "length-14 GraphemeIterator{String} for \"$str\""
     end
 end

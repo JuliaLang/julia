@@ -44,7 +44,7 @@ end
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 
 for (f, op, transp) in ((:A_mul_B, :identity, false),
-                        (:Ac_mul_B, :ctranspose, true),
+                        (:Ac_mul_B, :adjoint, true),
                         (:At_mul_B, :transpose, true))
     @eval begin
         function $(Symbol(f,:!))(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
@@ -124,11 +124,11 @@ end
 
 (*)(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(A,B)
 for (f, opA, opB) in ((:A_mul_Bt, :identity, :transpose),
-                      (:A_mul_Bc, :identity, :ctranspose),
+                      (:A_mul_Bc, :identity, :adjoint),
                       (:At_mul_B, :transpose, :identity),
-                      (:Ac_mul_B, :ctranspose, :identity),
+                      (:Ac_mul_B, :adjoint, :identity),
                       (:At_mul_Bt, :transpose, :transpose),
-                      (:Ac_mul_Bc, :ctranspose, :ctranspose))
+                      (:Ac_mul_Bc, :adjoint, :adjoint))
     @eval begin
         function ($f)(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
             spmatmul(($opA)(A), ($opB)(B))
@@ -301,8 +301,8 @@ function A_rdiv_B!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
         if iszero(ddj)
             throw(LinAlg.SingularException(j))
         end
-        for k in nzrange(A, j)
-            nonz[k] /= ddj
+        for i in nzrange(A, j)
+            nonz[i] /= ddj
         end
     end
     A
@@ -879,7 +879,7 @@ for f in (:\, :Ac_ldiv_B, :At_ldiv_B)
             if m == n
                 if istril(A)
                     if istriu(A)
-                        return ($f)(Diagonal(A), B)
+                        return ($f)(Diagonal(Vector(diag(A))), B)
                     else
                         return ($f)(LowerTriangular(A), B)
                     end

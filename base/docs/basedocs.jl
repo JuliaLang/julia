@@ -751,6 +751,25 @@ The item or field is not defined for the given object.
 UndefRefError
 
 """
+    Float32(x [, mode::RoundingMode])
+
+Create a Float32 from `x`. If `x` is not exactly representable then `mode` determines how
+`x` is rounded.
+
+# Examples
+```jldoctest
+julia> Float32(1/3, RoundDown)
+0.3333333f0
+
+julia> Float32(1/3, RoundUp)
+0.33333334f0
+```
+
+See [`RoundingMode`](@ref) for available rounding modes.
+"""
+Float32(x)
+
+"""
     Float64(x [, mode::RoundingMode])
 
 Create a Float64 from `x`. If `x` is not exactly representable then `mode` determines how
@@ -789,19 +808,19 @@ julia> A = ones(7);
 julia> A[8]
 ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
 Stacktrace:
- [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:586
+ [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:763
 
 julia> B = ones(2, 3);
 
 julia> B[2, 4]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:587
+ [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:764
 
 julia> B[9]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [9]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:586
+ [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:763
 ```
 """
 BoundsError
@@ -963,7 +982,7 @@ Inf
 julia> div(2, 0)
 ERROR: DivideError: integer division error
 Stacktrace:
- [1] div(::Int64, ::Int64) at ./int.jl:183
+ [1] div(::Int64, ::Int64) at ./int.jl:220
 ```
 """
 DivideError
@@ -1045,6 +1064,162 @@ for bit in (8, 16, 32, 64, 128)
         $(Symbol("UInt", bit))
     end
 end
+
+"""
+    Symbol(x...) -> Symbol
+
+Create a `Symbol` by concatenating the string representations of the arguments together.
+"""
+Symbol
+
+"""
+    tuple(xs...)
+
+Construct a tuple of the given objects.
+
+# Examples
+```jldoctest
+julia> tuple(1, 'a', pi)
+(1, 'a', π = 3.1415926535897...)
+```
+"""
+tuple
+
+"""
+    getfield(value, name::Symbol)
+
+Extract a named field from a `value` of composite type. The syntax `a.b` calls
+`getfield(a, :b)`.
+
+# Examples
+```jldoctest
+julia> a = 1//2
+1//2
+
+julia> getfield(a, :num)
+1
+```
+"""
+getfield
+
+"""
+    setfield!(value, name::Symbol, x)
+
+Assign `x` to a named field in `value` of composite type. The syntax `a.b = c` calls
+`setfield!(a, :b, c)`.
+"""
+setfield!
+
+"""
+    typeof(x)
+
+Get the concrete type of `x`.
+"""
+typeof
+
+"""
+    isdefined(m::Module, s::Symbol)
+    isdefined(object, s::Symbol)
+    isdefined(object, index::Int)
+
+Tests whether an assignable location is defined. The arguments can be a module and a symbol
+or a composite object and field name (as a symbol) or index.
+"""
+isdefined
+
+
+"""
+    Vector{T}(n)
+
+Construct an uninitialized [`Vector{T}`](@ref) of length `n`.
+
+# Examples
+```julia-repl
+julia> Vector{Float64}(3)
+3-element Array{Float64,1}:
+ 6.90966e-310
+ 6.90966e-310
+ 6.90966e-310
+```
+"""
+Vector{T}(n)
+
+"""
+    Matrix{T}(m, n)
+
+Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`.
+
+# Examples
+```julia-repl
+julia> Matrix{Float64}(2, 3)
+2×3 Array{Float64,2}:
+ 6.93517e-310  6.93517e-310  6.93517e-310
+ 6.93517e-310  6.93517e-310  1.29396e-320
+```
+"""
+Matrix{T}(m, n)
+
+"""
+    Array{T}(dims)
+    Array{T,N}(dims)
+
+Construct an uninitialized `N`-dimensional [`Array`](@ref)
+containing elements of type `T`. `N` can either be supplied explicitly,
+as in `Array{T,N}(dims)`, or be determined by the length or number of `dims`.
+`dims` may be a tuple or a series of integer arguments corresponding to the lengths
+in each dimension. If the rank `N` is supplied explicitly, then it must
+match the length or number of `dims`.
+
+# Examples
+```julia-repl
+julia> A = Array{Float64,2}(2, 3) # N given explicitly
+2×3 Array{Float64,2}:
+ 6.90198e-310  6.90198e-310  6.90198e-310
+ 6.90198e-310  6.90198e-310  0.0
+
+julia> B = Array{Float64}(2) # N determined by the input
+2-element Array{Float64,1}:
+ 1.87103e-320
+ 0.0
+```
+"""
+Array{T,N}(dims)
+
+"""
+    +(x, y...)
+
+Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
+"""
+(+)(x, y...)
+
+"""
+    -(x)
+
+Unary minus operator.
+"""
+-(x)
+
+"""
+    -(x, y)
+
+Subtraction operator.
+"""
+-(x, y)
+
+"""
+    *(x, y...)
+
+Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`.
+"""
+(*)(x, y...)
+
+"""
+    /(x, y)
+
+Right division operator: multiplication of `x` by the inverse of `y` on the right. Gives
+floating-point results for integer arguments.
+"""
+/(x, y)
 
 """
     ArgumentError(msg)

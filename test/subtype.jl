@@ -1094,12 +1094,12 @@ f20103(::Type{TT20103{X,Y}},x::X,y::Y) where {X,Y} = 1
 f20103(::Type{TT20103{X,X}},x::X) where {X} = 100
 @test_broken typeintersect(Type{NTuple{N,E}} where E where N, Type{NTuple{N,E} where N} where E) == Union{} # use @testintersect once fixed
 let ints = (Int, Int32, UInt, UInt32)
-    const Ints = Union{ints...}
+    Ints = Union{ints...}
     vecs = []
     for i = 2:4, t in ints
         push!(vecs, NTuple{i, t})
     end
-    const Vecs = Union{vecs...}
+    Vecs = Union{vecs...}
     T = Type{Tuple{V, I}} where V <: Vecs where I <: Ints
     @testintersect(T, T, T)
     test(a::Type{Tuple{V, I}}) where {V <: Vecs, I <: Ints} = I

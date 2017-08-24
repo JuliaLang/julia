@@ -1,5 +1,21 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    NullException()
+
+An attempted access to a [`Nullable`](@ref) with no defined value.
+
+# Examples
+```jldoctest
+julia> a = Nullable{Int}()
+Nullable{Int64}()
+
+julia> get(a)
+ERROR: NullException()
+Stacktrace:
+ [1] get(::Nullable{Int64}) at ./nullable.jl:118
+```
+"""
 struct NullException <: Exception
 end
 
@@ -124,7 +140,7 @@ Nullable{String}()
 julia> unsafe_get(x)
 ERROR: UndefRefError: access to undefined reference
 Stacktrace:
- [1] unsafe_get(::Nullable{String}) at ./nullable.jl:136
+ [1] unsafe_get(::Nullable{String}) at ./nullable.jl:152
 
 julia> x = 1
 1

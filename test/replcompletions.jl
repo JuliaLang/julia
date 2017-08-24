@@ -51,7 +51,8 @@ ex = quote
     test5(x::Float64) = pass
     const a=x->x
     test6()=[a, a]
-
+    test7() = rand() > 0.5 ? 1 : 1.0
+    test8() = Any[1][1]
     kwtest(; x=1, y=2, w...) = pass
 
     array = [1, 1]
@@ -76,7 +77,7 @@ function temp_pkg_dir_noinit(fn::Function)
     # Used in tests below to set up and tear down a sandboxed package directory
     # Unlike the version in test/pkg.jl, this does not run Pkg.init so does not
     # clone METADATA (only pkg and libgit2-online tests should need internet access)
-    const tmpdir = joinpath(tempdir(),randstring())
+    tmpdir = joinpath(tempdir(),randstring())
     withenv("JULIA_PKGDIR" => tmpdir) do
         @test !isdir(Pkg.dir())
         try
@@ -171,6 +172,11 @@ c,r = test_complete(s)
 s = "using Base\nusi"
 c,r = test_complete(s)
 @test "using" in c
+
+# issue 23292
+@test_nowarn test_complete("test7().")
+c,r = test_complete("test8().")
+@test isempty(c)
 
 # inexistent completion inside a string
 s = "Pkg.add(\"lol"

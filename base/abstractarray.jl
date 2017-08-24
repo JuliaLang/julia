@@ -123,10 +123,42 @@ ndims(::AbstractArray{T,N}) where {T,N} = N
 ndims(::Type{AbstractArray{T,N}}) where {T,N} = N
 ndims(::Type{T}) where {T<:AbstractArray} = ndims(supertype(T))
 
+"""
+    length(collection) -> Integer
+
+Return the number of elements in the collection.
+
+Use [`endof`](@ref) to get the last valid index of an indexable collection.
+
+# Examples
+```jldoctest
+julia> length(1:5)
+5
+
+julia> length([1, 2, 3, 4])
+4
+
+julia> length([1 2; 3 4])
+4
+```
+"""
 length(t::AbstractArray) = (@_inline_meta; prod(size(t)))
 _length(A::AbstractArray) = (@_inline_meta; prod(map(unsafe_length, indices(A)))) # circumvent missing size
 _length(A) = (@_inline_meta; length(A))
+
+"""
+    endof(collection) -> Integer
+
+Returns the last index of the collection.
+
+# Examples
+```jldoctest
+julia> endof([1,2,4])
+3
+```
+"""
 endof(a::AbstractArray) = (@_inline_meta; last(linearindices(a)))
+
 first(a::AbstractArray) = a[first(eachindex(a))]
 
 """
@@ -1346,6 +1378,21 @@ hcat(X...) = cat(Val(2), X...)
 typed_vcat(T::Type, X...) = cat_t(Val(1), T, X...)
 typed_hcat(T::Type, X...) = cat_t(Val(2), T, X...)
 
+"""
+    cat(dims, A...)
+
+Concatenate the input arrays along the specified dimensions in the iterable `dims`. For
+dimensions not in `dims`, all input arrays should have the same size, which will also be the
+size of the output array along that dimension. For dimensions in `dims`, the size of the
+output array is the sum of the sizes of the input arrays along that dimension. If `dims` is
+a single number, the different arrays are tightly stacked along that dimension. If `dims` is
+an iterable containing several dimensions, this allows one to construct block diagonal
+matrices and their higher-dimensional analogues by simultaneously increasing several
+dimensions for every new input array and putting zero blocks elsewhere. For example,
+`cat([1,2], matrices...)` builds a block diagonal matrix, i.e. a block matrix with
+`matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the
+diagonal.
+"""
 cat(catdims, A::AbstractArray{T}...) where {T} = cat_t(catdims, T, A...)
 
 # The specializations for 1 and 2 inputs are important

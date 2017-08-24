@@ -158,7 +158,7 @@ Julia function. Arguments to [`cfunction()`](@ref) are as follows:
 
 1. A Julia Function
 2. Return type
-3. A tuple of input types
+3. A tuple type of input types
 
 Only platform-default C calling convention is supported. `cfunction`-generated pointers cannot
 be used in calls where WINAPI expects `stdcall` function on 32-bit windows, but can be used on WIN64
@@ -192,11 +192,11 @@ a C `int`, so we must be sure to return `Cint` via a call to `convert` and a `ty
 In order to pass this function to C, we obtain its address using the function `cfunction`:
 
 ```jldoctest mycompare
-julia> const mycompare_c = cfunction(mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble}));
+julia> const mycompare_c = cfunction(mycompare, Cint, Tuple{Ref{Cdouble}, Ref{Cdouble}});
 ```
 
 [`cfunction()`](@ref) accepts three arguments: the Julia function (`mycompare`), the return type
-(`Cint`), and a tuple of the argument types, in this case to sort an array of `Cdouble`
+(`Cint`), and a tuple type of the input argument types, in this case to sort an array of `Cdouble`
 ([`Float64`](@ref)) elements.
 
 The final call to `qsort` looks like this:

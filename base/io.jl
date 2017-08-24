@@ -78,6 +78,17 @@ function copy end
 function eof end
 
 """
+    read(stream::IO, T)
+
+Read a single value of type `T` from `stream`, in canonical binary representation.
+
+    read(stream::IO, String)
+
+Read the entirety of `stream`, as a String.
+"""
+read(stream, t)
+
+"""
     write(stream::IO, x)
     write(filename::AbstractString, x)
 
@@ -190,6 +201,15 @@ Open a file and read its contents. `args` is passed to `read`: this is equivalen
 Read the entire contents of a file as a string.
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
+
+"""
+    read!(stream::IO, array::Union{Array, BitArray})
+    read!(filename::AbstractString, array::Union{Array, BitArray})
+
+Read binary data from an I/O stream or file, filling in `array`.
+"""
+function read! end
+
 read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
 
 """

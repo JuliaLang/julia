@@ -5,7 +5,7 @@
 
 A lazy-view wrapper of an `AbstractArray`, taking the elementwise complex conjugate. This
 type is usually constructed (and unwrapped) via the [`conj`](@ref) function (or related
-[`ctranspose`](@ref)), but currently this is the default behavior for `RowVector` only. For
+[`adjoint`](@ref)), but currently this is the default behavior for `RowVector` only. For
 other arrays, the `ConjArray` constructor can be used directly.
 
 # Examples

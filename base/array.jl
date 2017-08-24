@@ -109,8 +109,36 @@ size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
+"""
+    Base.isbitsunion(::Type{T})
+
+Return whether a type is an "is-bits" Union type, meaning each type included in a Union is `isbits`.
+"""
+function isbitsunion end
+
+function isbitsunion(U::Union)
+    for u in Base.uniontypes(U)
+        isbits(u) || return false
+    end
+    return true
+end
+isbitsunion(T) = false
+
+"""
+    Base.bitsunionsize(U::Union)
+
+For a Union of `isbits` types, return the size of the largest type.
+"""
+function bitsunionsize(U::Union)
+    sz = 0
+    for u in Base.uniontypes(U)
+        sz = max(sz, sizeof(u))
+    end
+    return sz
+end
+
 length(a::Array) = arraylen(a)
-elsize(a::Array{T}) where {T} = isbits(T) ? sizeof(T) : sizeof(Ptr)
+elsize(a::Array{T}) where {T} = isbits(T) ? sizeof(T) : (isbitsunion(T) ? bitsunionsize(T) : sizeof(Ptr))
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
@@ -122,6 +150,16 @@ end
 
 ## copy ##
 
+"""
+    unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
+
+Copy `N` elements from a source pointer to a destination, with no checking. The size of an
+element is determined by the type of the pointers.
+
+The `unsafe` prefix on this function indicates that no validation is performed on the
+pointers `dest` and `src` to ensure that they are valid. Incorrect usage may corrupt or
+segfault your program, in the same manner as C.
+"""
 function unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
@@ -130,6 +168,16 @@ function unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, n) where T
     return dest
 end
 
+"""
+    unsafe_copy!(dest::Array, do, src::Array, so, N)
+
+Copy `N` elements from a source array to a destination, starting at offset `so` in the
+source and `do` in the destination (1-indexed).
+
+The `unsafe` prefix on this function indicates that no validation is performed to ensure
+that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in
+the same manner as C.
+"""
 function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
@@ -140,6 +188,12 @@ function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     return dest
 end
 
+"""
+    copy!(dest, do, src, so, N)
+
+Copy `N` elements from collection `src` starting at offset `so`, to array `dest` starting at
+offset `do`. Returns `dest`.
+"""
 function copy!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
     n == 0 && return dest
     n > 0 || throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
@@ -151,10 +205,17 @@ end
 
 copy!(dest::Array{T}, src::Array{T}) where {T} = copy!(dest, 1, src, 1, length(src))
 
+"""
+    copy(x)
+
+Create a shallow copy of `x`: the outer structure is copied, but not all internal values.
+For example, copying an array produces a new array with identically-same elements as the
+original.
+"""
 copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
 
 function reinterpret(::Type{T}, a::Array{S,1}) where T where S
-    nel = Int(div(length(a)*sizeof(S),sizeof(T)))
+    nel = Int(div(length(a) * sizeof(S), sizeof(T)))
     # TODO: maybe check that remainder is zero?
     return reinterpret(T, a, (nel,))
 end
@@ -173,7 +234,7 @@ function reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where T where 
     end
     isbits(T) || throwbits(S, T, T)
     isbits(S) || throwbits(S, T, S)
-    nel = div(length(a)*sizeof(S),sizeof(T))
+    nel = div(length(a) * sizeof(S), sizeof(T))
     if prod(dims) != nel
         _throw_dmrsa(dims, nel)
     end
@@ -294,6 +355,92 @@ dims)` will return an array filled with the result of evaluating `Foo()` once.
 """
 fill(v, dims::Dims)       = fill!(Array{typeof(v)}(dims), v)
 fill(v, dims::Integer...) = fill!(Array{typeof(v)}(dims...), v)
+
+"""
+    zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
+
+Create an array of all zeros with the same layout as `A`, element type `T` and size `dims`.
+The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
+For convenience `dims` may also be passed in variadic form.
+
+# Examples
+```jldoctest
+julia> zeros(1)
+1-element Array{Float64,1}:
+ 0.0
+
+julia> zeros(Int8, 2, 3)
+2×3 Array{Int8,2}:
+ 0  0  0
+ 0  0  0
+
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> zeros(A)
+2×2 Array{Int64,2}:
+ 0  0
+ 0  0
+
+julia> zeros(A, Float64)
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+
+julia> zeros(A, Bool, (3,))
+3-element Array{Bool,1}:
+ false
+ false
+ false
+```
+See also [`ones`](@ref), [`similar`](@ref).
+"""
+function zeros end
+
+"""
+    ones([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
+
+Create an array of all ones with the same layout as `A`, element type `T` and size `dims`.
+The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
+For convenience `dims` may also be passed in variadic form.
+
+# Examples
+```jldoctest
+julia> ones(Complex128, 2, 3)
+2×3 Array{Complex{Float64},2}:
+ 1.0+0.0im  1.0+0.0im  1.0+0.0im
+ 1.0+0.0im  1.0+0.0im  1.0+0.0im
+
+julia> ones(1,2)
+1×2 Array{Float64,2}:
+ 1.0  1.0
+
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> ones(A)
+2×2 Array{Int64,2}:
+ 1  1
+ 1  1
+
+julia> ones(A, Float64)
+2×2 Array{Float64,2}:
+ 1.0  1.0
+ 1.0  1.0
+
+julia> ones(A, Bool, (3,))
+3-element Array{Bool,1}:
+ true
+ true
+ true
+```
+See also [`zeros`](@ref), [`similar`](@ref).
+"""
+function ones end
 
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
@@ -593,6 +740,25 @@ done(a::Array,i) = (@_inline_meta; i == length(a)+1)
 
 ## Indexing: getindex ##
 
+"""
+    getindex(collection, key...)
+
+Retrieve the value(s) stored at the given key or index within a collection. The syntax
+`a[i,j,...]` is converted by the compiler to `getindex(a, i, j, ...)`.
+
+# Examples
+```jldoctest
+julia> A = Dict("a" => 1, "b" => 2)
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+
+julia> getindex(A, "a")
+1
+```
+"""
+function getindex end
+
 # This is more complicated than it needs to be in order to get Win64 through bootstrap
 getindex(A::Array, i1::Int) = arrayref(A, i1)
 getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref(A, i1, i2, I...)) # TODO: REMOVE FOR #14770
@@ -623,6 +789,15 @@ function getindex(A::Array{S}, I::Range{Int}) where S
 end
 
 ## Indexing: setindex! ##
+
+"""
+    setindex!(collection, value, key...)
+
+Store the given value at the given key or index within a collection. The syntax `a[i,j,...] =
+x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
+"""
+function setindex! end
+
 setindex!(A::Array{T}, x, i1::Int) where {T} = arrayset(A, convert(T,x)::T, i1)
 setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} = (@_inline_meta; arrayset(A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
 
@@ -697,6 +872,29 @@ _deleteat!(a::Vector, i::Integer, delta::Integer) =
 
 ## Dequeue functionality ##
 
+"""
+    push!(collection, items...) -> collection
+
+Insert one or more `items` at the end of `collection`.
+
+# Examples
+```jldoctest
+julia> push!([1, 2, 3], 4, 5, 6)
+6-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
+```
+
+Use [`append!`](@ref) to add all the elements of another collection to
+`collection`. The result of the preceding example is equivalent to `append!([1, 2, 3], [4,
+5, 6])`.
+"""
+function push! end
+
 function push!(a::Array{T,1}, item) where T
     # convert first so we don't grow the array if the assignment won't work
     itemT = convert(T, item)
@@ -711,6 +909,33 @@ function push!(a::Array{Any,1}, @nospecialize item)
     return a
 end
 
+"""
+    append!(collection, collection2) -> collection.
+
+Add the elements of `collection2` to the end of `collection`.
+
+# Examples
+```jldoctest
+julia> append!([1],[2,3])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> append!([1, 2, 3], [4, 5, 6])
+6-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
+```
+
+Use [`push!`](@ref) to add individual items to `collection` which are not already
+themselves in another collection. The result is of the preceding example is equivalent to
+`push!([1, 2, 3], 4, 5, 6)`.
+"""
 function append!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
@@ -832,11 +1057,53 @@ function resize!(a::Vector, nl::Integer)
     return a
 end
 
+"""
+    sizehint!(s, n)
+
+Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
+"""
+function sizehint! end
+
 function sizehint!(a::Vector, sz::Integer)
     ccall(:jl_array_sizehint, Void, (Any, UInt), a, sz)
     a
 end
 
+"""
+    pop!(collection) -> item
+
+Remove an item in `collection` and return it. If `collection` is an
+ordered container, the last item is returned.
+
+# Examples
+```jldoctest
+julia> A=[1, 2, 3]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> pop!(A)
+3
+
+julia> A
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> S = Set([1, 2])
+Set([2, 1])
+
+julia> pop!(S)
+2
+
+julia> S
+Set([1])
+
+julia> pop!(Dict(1=>2))
+1 => 2
+```
+"""
 function pop!(a::Vector)
     if isempty(a)
         throw(ArgumentError("array must be non-empty"))
@@ -870,6 +1137,34 @@ function unshift!(a::Array{T,1}, item) where T
     return a
 end
 
+"""
+    shift!(collection) -> item
+
+Remove the first `item` from `collection`.
+
+# Examples
+```jldoctest
+julia> A = [1, 2, 3, 4, 5, 6]
+6-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
+
+julia> shift!(A)
+1
+
+julia> A
+5-element Array{Int64,1}:
+ 2
+ 3
+ 4
+ 5
+ 6
+```
+"""
 function shift!(a::Vector)
     if isempty(a)
         throw(ArgumentError("array must be non-empty"))
@@ -1158,6 +1453,46 @@ function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
         :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(Arr)) * len)
 end
 
+"""
+    reverse(v [, start=1 [, stop=length(v) ]] )
+
+Return a copy of `v` reversed from start to stop.
+
+# Examples
+```jldoctest
+julia> A = collect(1:5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> reverse(A)
+5-element Array{Int64,1}:
+ 5
+ 4
+ 3
+ 2
+ 1
+
+julia> reverse(A, 1, 4)
+5-element Array{Int64,1}:
+ 4
+ 3
+ 2
+ 1
+ 5
+
+julia> reverse(A, 3, 5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 5
+ 4
+ 3
+```
+"""
 function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))
     B = similar(A)
     for i = first(linearindices(A)):s-1
@@ -1176,6 +1511,11 @@ function reverseind(a::AbstractVector, i::Integer)
     first(li) + last(li) - i
 end
 
+"""
+    reverse!(v [, start=1 [, stop=length(v) ]]) -> v
+
+In-place version of [`reverse`](@ref).
+"""
 function reverse!(v::AbstractVector, s=first(linearindices(v)), n=last(linearindices(v)))
     liv = linearindices(v)
     if n <= s  # empty case; ok

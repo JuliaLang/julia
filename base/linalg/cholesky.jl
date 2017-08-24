@@ -52,6 +52,9 @@ function CholeskyPivoted(A::AbstractMatrix{T}, uplo::Char, piv::Vector{BlasInt},
     CholeskyPivoted{T,typeof(A)}(A, uplo, piv, rank, tol, info)
 end
 
+# make a copy that allow inplace Cholesky factorization
+@inline choltype(A) = promote_type(typeof(chol(one(eltype(A)))), Float32)
+@inline cholcopy(A) = copy_oftype(A, choltype(A))
 
 # _chol!. Internal methods for calling unpivoted Cholesky
 ## BLAS/LAPACK element types
@@ -62,6 +65,13 @@ end
 function _chol!(A::StridedMatrix{<:BlasFloat}, ::Type{LowerTriangular})
     C, info = LAPACK.potrf!('L', A)
     return LowerTriangular(C), info
+end
+function _chol!(A::StridedMatrix)
+    if !ishermitian(A) # return with info = -1 if not Hermitian
+        return UpperTriangular(A), convert(BlasInt, -1)
+    else
+        return _chol!(A, UpperTriangular)
+    end
 end
 
 ## Non BLAS/LAPACK element types (generic)
@@ -124,10 +134,6 @@ end
 
 chol!(x::Number, uplo) = ((C, info) = _chol!(x, uplo); @assertposdef C info)
 
-non_hermitian_error(f) = throw(ArgumentError("matrix is not symmetric/" *
-    "Hermitian. This error can be avoided by calling $f(Hermitian(A)) " *
-    "which will ignore either the upper or lower triangle of the matrix."))
-
 # chol!. Destructive methods for computing Cholesky factor of real symmetric or Hermitian
 # matrix
 function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
@@ -135,8 +141,7 @@ function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
     @assertposdef C info
 end
 function chol!(A::StridedMatrix)
-    ishermitian(A) || non_hermitian_error("chol!")
-    C, info = _chol!(A, UpperTriangular)
+    C, info = _chol!(A)
     @assertposdef C info
 end
 
@@ -145,12 +150,11 @@ end
 # chol. Non-destructive methods for computing Cholesky factor of a real symmetric or
 # Hermitian matrix. Promotes elements to a type that is stable under square roots.
 function chol(A::RealHermSymComplexHerm)
-    T = promote_type(typeof(chol(one(eltype(A)))), Float32)
-    AA = similar(A, T, size(A))
+    AA = similar(A, choltype(A), size(A))
     if A.uplo == 'U'
         copy!(AA, A.data)
     else
-        Base.ctranspose!(AA, A.data)
+        Base.adjoint!(AA, A.data)
     end
     chol!(Hermitian(AA, :U))
 end
@@ -180,10 +184,7 @@ julia> U'U
  2.0  50.0
 ```
 """
-function chol(A::AbstractMatrix)
-    ishermitian(A) || non_hermitian_error("chol")
-    return chol(Hermitian(A))
-end
+chol(A::AbstractMatrix) = chol!(cholcopy(A))
 
 ## Numbers
 """
@@ -235,8 +236,11 @@ ERROR: InexactError: convert(Int64, 6.782329983125268)
 ```
 """
 function cholfact!(A::StridedMatrix, ::Val{false}=Val(false))
-    ishermitian(A) || non_hermitian_error("cholfact!")
-    return cholfact!(Hermitian(A), Val(false))
+    if !ishermitian(A) # return with info = -1 if not Hermitian
+        return Cholesky(A, 'U', convert(BlasInt, -1))
+    else
+        return cholfact!(Hermitian(A), Val(false))
+    end
 end
 
 
@@ -250,9 +254,8 @@ end
 
 ### Non BLAS/LAPACK element types (generic). Since generic fallback for pivoted Cholesky
 ### is not implemented yet we throw an error
-cholfact!(A::RealHermSymComplexHerm{<:Real}, ::Val{true};
-    tol = 0.0) =
-        throw(ArgumentError("generic pivoted Cholesky factorization is not implemented yet"))
+cholfact!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; tol = 0.0) =
+    throw(ArgumentError("generic pivoted Cholesky factorization is not implemented yet"))
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
@@ -264,17 +267,17 @@ factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
 function cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0)
-    ishermitian(A) || non_hermitian_error("cholfact!")
-    return cholfact!(Hermitian(A), Val(true); tol = tol)
+    if !ishermitian(A) # return with info = -1 if not Hermitian
+        return CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
+                               tol, convert(BlasInt, -1))
+    else
+        return cholfact!(Hermitian(A), Val(true); tol = tol)
+    end
 end
 
 # cholfact. Non-destructive methods for computing Cholesky factorization of real symmetric
 # or Hermitian matrix
 ## No pivoting (default)
-cholfact(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}, ::Val{false}=Val(false)) =
-    cholfact!(copy_oftype(A, promote_type(typeof(chol(one(eltype(A)))),Float32)))
-
-### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
     cholfact(A, Val(false)) -> Cholesky
 
@@ -314,18 +317,11 @@ julia> C[:L] * C[:U] == A
 true
 ```
 """
-function cholfact(A::StridedMatrix, ::Val{false}=Val(false))
-    ishermitian(A) || non_hermitian_error("cholfact")
-    return cholfact(Hermitian(A))
-end
+cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
+    ::Val{false}=Val(false)) = cholfact!(cholcopy(A))
 
 
 ## With pivoting
-cholfact(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}, ::Val{true}; tol = 0.0) =
-        cholfact!(copy_oftype(A, promote_type(typeof(chol(one(eltype(A)))),Float32)),
-            Val(true); tol = tol)
-
-### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
     cholfact(A, Val(true); tol = 0.0) -> CholeskyPivoted
 
@@ -338,10 +334,8 @@ The following functions are available for `PivotedCholesky` objects:
 The argument `tol` determines the tolerance for determining the rank.
 For negative values, the tolerance is the machine precision.
 """
-function cholfact(A::StridedMatrix, ::Val{true}; tol = 0.0)
-    ishermitian(A) || non_hermitian_error("cholfact")
-    return cholfact(Hermitian(A), Val(true); tol = tol)
-end
+cholfact(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}},
+    ::Val{true}; tol = 0.0) = cholfact!(cholcopy(A), Val(true); tol = tol)
 
 ## Number
 function cholfact(x::Number, uplo::Symbol=:U)

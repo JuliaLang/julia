@@ -20,41 +20,32 @@ struct IOContext{IO_t <: IO} <: AbstractPipe
     end
 end
 
-"""
-    IOContext(io::IO; properties...)
+unwrapcontext(io::IO) = io, ImmutableDict{Symbol,Any}()
+unwrapcontext(io::IOContext) = io.io, io.dict
 
-The same as `IOContext(io::IO, KV::Pair)`, but accepting properties as keyword arguments.
-"""
-IOContext(io::IO; kws...) = IOContext(convert(IOContext, io); kws...)
-function IOContext(io::IOContext; kws...)
-    for (k, v) in kws
-        io = IOContext(io, k, v)
-    end
-    return io
+function IOContext(io::IO, dict::ImmutableDict)
+    io0 = unwrapcontext(io)[1]
+    IOContext{typeof(io0)}(io0, dict)
 end
 
-convert(::Type{IOContext}, io::IOContext) = io
-convert(::Type{IOContext}, io::IO) = IOContext(io, ImmutableDict{Symbol, Any}())
+convert(::Type{IOContext}, io::IO) = IOContext(unwrapcontext(io)...)
 
-IOContext(io::IOContext, dict::ImmutableDict) = typeof(io)(io.io, dict)
-IOContext(io::IO, dict::ImmutableDict) = IOContext{typeof(io)}(io, dict)
-
-IOContext(io::IOContext, key, value) = IOContext(io.io, ImmutableDict{Symbol, Any}(io.dict, key, value))
-IOContext(io::IO, key, value) = IOContext(io, ImmutableDict{Symbol, Any}(key, value))
-
-IOContext(io::IO, context::IO) = convert(IOContext, io)
+function IOContext(io::IO, KV::Pair)
+    io0, d = unwrapcontext(io)
+    IOContext(io0, ImmutableDict{Symbol,Any}(d, KV[1], KV[2]))
+end
 
 """
     IOContext(io::IO, context::IOContext)
 
 Create an `IOContext` that wraps an alternate `IO` but inherits the properties of `context`.
 """
-IOContext(io::IO, context::IOContext) = IOContext(io, context.dict)
+IOContext(io::IO, context::IO) = IOContext(unwrapcontext(io)[1], unwrapcontext(context)[2])
 
 """
-    IOContext(io::IO, KV::Pair)
+    IOContext(io::IO, KV::Pair...)
 
-Create an `IOContext` that wraps a given stream, adding the specified `key=>value` pair to
+Create an `IOContext` that wraps a given stream, adding the specified `key=>value` pairs to
 the properties of that stream (note that `io` can itself be an `IOContext`).
 
  - use `(key => value) in dict` to see if this particular combination is in the properties set
@@ -87,7 +78,7 @@ julia> f(IOContext(STDOUT, :short => true))
 short
 ```
 """
-IOContext(io::IO, KV::Pair) = IOContext(io, KV[1], KV[2])
+IOContext(io::IO, KV::Pair, KVs::Pair...) = IOContext(IOContext(io, KV), KVs...)
 
 show(io::IO, ctx::IOContext) = (print(io, "IOContext("); show(io, ctx.io); print(io, ")"))
 
@@ -122,7 +113,17 @@ function show_circular(io::IOContext, @nospecialize(x))
     return false
 end
 
+"""
+    show(x)
+
+Write an informative text representation of a value to the current output stream. New types
+should overload `show(io, x)` where the first argument is a stream. The representation used
+by `show` generally includes Julia-specific formatting and type information.
+"""
+show(x) = show(STDOUT::IO, x)
+
 show(io::IO, @nospecialize(x)) = show_default(io, x)
+
 function show_default(io::IO, @nospecialize(x))
     t = typeof(x)::DataType
     show(io, t)
@@ -1325,7 +1326,7 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
                     tp = t
                     while true
                         show(tvar_io, tp.var)
-                        tvar_io = IOContext(tvar_io, :unionall_env, tp.var)
+                        tvar_io = IOContext(tvar_io, :unionall_env => tp.var)
                         tp = tp.body
                         if isa(tp, UnionAll)
                             print(io, ", ")
@@ -1362,6 +1363,12 @@ end
 dump(io::IO, x::DataType; maxdepth=8) = ((x.abstract ? dumptype : dump)(io, x, maxdepth, ""); println(io))
 
 dump(io::IO, arg; maxdepth=8) = (dump(io, arg, maxdepth, ""); println(io))
+
+"""
+    dump(x)
+
+Show every part of the representation of a value.
+"""
 dump(arg; maxdepth=8) = dump(IOContext(STDOUT::IO, :limit => true), arg; maxdepth=maxdepth)
 
 

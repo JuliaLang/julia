@@ -140,8 +140,8 @@ Base.@nospecialize
 Base.gensym
 Base.@gensym
 Base.@polly
-Base.parse(::Any, ::Any)
-Base.parse(::Any)
+Base.parse(::AbstractString, ::Int)
+Base.parse(::AbstractString)
 ```
 
 ## Nullables

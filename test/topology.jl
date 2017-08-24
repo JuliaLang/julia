@@ -77,8 +77,8 @@ while true
     end
 end
 
-for p1 in workers()
-    for p2 in workers()
+for outer p1 in workers()
+    for outer p2 in workers()
         i1 = map_pid_ident[p1]
         i2 = map_pid_ident[p2]
         if (iseven(i1) && iseven(i2)) || (isodd(i1) && isodd(i2))

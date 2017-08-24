@@ -65,14 +65,6 @@ temp_pkg_dir() do
     @test_throws PkgError Pkg.installed("MyFakePackage")
     @test Pkg.installed("Example") === nothing
 
-    # check that versioninfo(io; verbose=true) doesn't error and produces some output
-    # (done here since it calls Pkg.status which might error or clone metadata)
-    buf = PipeBuffer()
-    versioninfo(buf, verbose=true)
-    ver = read(buf, String)
-    @test startswith(ver, "Julia Version $VERSION")
-    @test contains(ver, "Environment:")
-
     # Check that setprotocol! works.
     begin
         try
@@ -480,7 +472,7 @@ temp_pkg_dir() do
                     nothingtodomsg) Pkg.update("Example")
 
         metadata_dir = Pkg.dir("METADATA")
-        const old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
+        old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
 
         # Force a METADATA rollback to an old version, so that we will install some
         # outdated versions of some packages and then update some of those
@@ -525,7 +517,7 @@ temp_pkg_dir() do
         Pkg.rm(package)  # Remove package if installed
 
         metadata_dir = Pkg.dir("METADATA")
-        const old_commit = "83ff7116e51fc9cdbd7e67affbd344b9f5c9dbf2"
+        old_commit = "83ff7116e51fc9cdbd7e67affbd344b9f5c9dbf2"
 
         # Reset METADATA to the second to last update of Example.jl
         LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo

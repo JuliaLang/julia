@@ -128,11 +128,11 @@ end
 
 # rounding in conversions
 let
-    for f in [.3325f0, -.3325f0]
-        f16 = Float16(f)
+    for ff in [.3325f0, -.3325f0]
+        f16 = Float16(ff)
         # need to round away from 0. make sure we picked closest number.
-        @test abs(f-f16) < abs(f-nextfloat(f16))
-        @test abs(f-f16) < abs(f-prevfloat(f16))
+        @test abs(ff-f16) < abs(ff-nextfloat(f16))
+        @test abs(ff-f16) < abs(ff-prevfloat(f16))
     end
     # halfway between and last bit is 1
     f = reinterpret(Float32,                           0b00111110101010100011000000000000)

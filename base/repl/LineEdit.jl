@@ -90,9 +90,10 @@ complete_line(c::EmptyCompletionProvider, s) = [], true, true
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
-for f in [:terminal, :edit_insert, :on_enter, :add_history, :buffer, :edit_backspace, :(Base.isempty),
-        :replace_line, :refresh_multi_line, :input_string, :edit_move_left, :edit_move_right,
-        :edit_move_word_left, :edit_move_word_right, :update_display_buffer]
+for f in [:terminal, :edit_insert, :edit_insert_newline, :on_enter, :add_history,
+          :buffer, :edit_backspace, :(Base.isempty), :replace_line, :refresh_multi_line,
+          :input_string, :edit_move_left, :edit_move_right,
+          :edit_move_word_left, :edit_move_word_right, :update_display_buffer]
     @eval ($f)(s::MIState, args...) = $(f)(s.mode_state[s.current_mode], args...)
 end
 
@@ -448,18 +449,13 @@ end
 
 function edit_insert(s::PromptState, c)
     buf = s.input_buffer
-    function line_size()
-        p = position(buf)
-        seek(buf, rsearch(buf.data, '\n', p))
-        ls = p - position(buf)
-        seek(buf, p)
-        return ls
-    end
     str = string(c)
     edit_insert(buf, str)
-    offset = s.ias.curs_row == 1 ? sizeof(prompt_string(s.p.prompt)) : s.indent
+    offset = s.ias.curs_row == 1 || s.indent < 0 ?
+        sizeof(prompt_string(s.p.prompt)) : s.indent
     if !('\n' in str) && eof(buf) &&
-        ((line_size() + offset + sizeof(str) - 1) < width(terminal(s)))
+        ((position(buf) - beginofline(buf) + # size of current line
+          offset + sizeof(str) - 1) < width(terminal(s)))
         # Avoid full update when appending characters to the end
         # and an update of curs_row isn't necessary (conservatively estimated)
         write(terminal(s), str)
@@ -478,22 +474,63 @@ function edit_insert(buf::IOBuffer, c)
     end
 end
 
-function edit_backspace(s::PromptState)
-    if edit_backspace(s.input_buffer)
-        refresh_line(s)
-    else
-        beep(terminal(s))
+# align: number of ' ' to insert after '\n'
+# if align < 0: align like line above
+function edit_insert_newline(s::PromptState, align=-1)
+    buf = buffer(s)
+    if align < 0
+        beg = beginofline(buf)
+        align = min(findnext(_notspace, buf.data[beg+1:buf.size], 1) - 1,
+                    position(buf) - beg) # indentation must not increase
+        align < 0 && (align = buf.size-beg)
     end
+    edit_insert(buf, '\n' * ' '^align)
+    refresh_line(s)
 end
-function edit_backspace(buf::IOBuffer)
-    if position(buf) > 0
-        oldpos = position(buf)
-        char_move_left(buf)
-        splice_buffer!(buf, position(buf):oldpos-1)
-        return true
-    else
-        return false
+
+# align: delete up to 4 spaces to align to a multiple of 4 chars
+# adjust: also delete spaces on the right of the cursor to try to keep aligned what is
+# on the right
+edit_backspace(s::PromptState, align::Bool=false, adjust=align) =
+    edit_backspace(s.input_buffer, align) ? refresh_line(s) : beep(terminal(s))
+
+const _newline =  UInt8('\n')
+const _space = UInt8(' ')
+
+_notspace(c) = c != _space
+
+beginofline(buf, pos=position(buf)) = findprev(buf.data, _newline, pos)
+
+function endofline(buf, pos=position(buf))
+    eol = findnext(buf.data[pos+1:buf.size], _newline, 1)
+    eol == 0 ? buf.size : pos + eol - 1
+end
+
+function edit_backspace(buf::IOBuffer, align::Bool=false, adjust::Bool=align)
+    !align && adjust &&
+        throw(DomainError((align, adjust),
+                          "if `adjust` is `true`, `align` must be `true`"))
+    oldpos = position(buf)
+    oldpos == 0 && return false
+    c = char_move_left(buf)
+    newpos = position(buf)
+    if align && c == ' ' # maybe delete multiple spaces
+        beg = beginofline(buf, newpos)
+        align = strwidth(String(buf.data[1+beg:newpos])) % 4
+        nonspace = findprev(_notspace, buf.data, newpos)
+        if newpos - align >= nonspace
+            newpos -= align
+            seek(buf, newpos)
+            if adjust
+                spaces = findnext(_notspace, buf.data[newpos+2:buf.size], 1)
+                oldpos = spaces == 0 ? buf.size :
+                    buf.data[newpos+1+spaces] == _newline ? newpos+spaces :
+                    newpos + min(spaces, 4)
+            end
+        end
     end
+    splice_buffer!(buf, newpos:oldpos-1)
+    return true
 end
 
 edit_delete(s) = edit_delete(buffer(s)) ? refresh_line(s) : beep(terminal(s))
@@ -560,8 +597,9 @@ function edit_kill_line(s::MIState)
     refresh_line(s)
 end
 
-edit_transpose(s) = edit_transpose(buffer(s)) && refresh_line(s)
-function edit_transpose(buf::IOBuffer)
+edit_transpose_chars(s) = edit_transpose_chars(buffer(s)) && refresh_line(s)
+
+function edit_transpose_chars(buf::IOBuffer)
     position(buf) == 0 && return false
     eof(buf) && char_move_left(buf)
     char_move_left(buf)
@@ -571,6 +609,32 @@ function edit_transpose(buf::IOBuffer)
     write(buf, b, a)
     return true
 end
+
+edit_transpose_words(s) = edit_transpose_words(buffer(s)) && refresh_line(s)
+
+function edit_transpose_words(buf::IOBuffer, mode=:emacs)
+    mode in [:readline, :emacs] ||
+        throw(ArgumentError("`mode` must be `:readline` or `:emacs`"))
+    pos = position(buf)
+    if mode == :emacs
+        char_move_word_left(buf)
+        char_move_word_right(buf)
+    end
+    char_move_word_right(buf)
+    e2 = position(buf)
+    char_move_word_left(buf)
+    b2 = position(buf)
+    char_move_word_left(buf)
+    b1 = position(buf)
+    char_move_word_right(buf)
+    e1 = position(buf)
+    e1 >= b2 && (seek(buf, pos); return false)
+    word2 = splice!(buf.data, b2+1:e2, buf.data[b1+1:e1])
+    splice!(buf.data, b1+1:e1, word2)
+    seek(buf, e2)
+    true
+end
+
 
 edit_clear(buf::IOBuffer) = truncate(buf, 0)
 
@@ -868,7 +932,7 @@ end
 # source is the keymap specified by the user (with normalized keys)
 function keymap_merge(target,source)
     ret = copy(target)
-    direct_keys = filter((k,v) -> isa(v, Union{Function, KeyAlias, Void}), source)
+    direct_keys = filter(p -> isa(p.second, Union{Function, KeyAlias, Void}), source)
     # first direct entries
     for key in keys(direct_keys)
         add_nested_key!(ret, key, source[key]; override = true)
@@ -1337,42 +1401,64 @@ function bracketed_paste(s)
     return replace(input, '\t', " "^tabwidth)
 end
 
+function tab_should_complete(s)
+    # Yes, we are ignoring the possiblity
+    # the we could be in the middle of a multi-byte
+    # sequence, here but that's ok, since any
+    # whitespace we're interested in is only one byte
+    buf = buffer(s)
+    pos = position(buf)
+    pos == 0 && return true
+    c = buf.data[pos]
+    c != _newline && c != UInt8('\t') &&
+        # hack to allow path completion in cmds
+        # after a space, e.g., `cd <tab>`, while still
+        # allowing multiple indent levels
+        (c != _space || pos <= 3 || buf.data[pos-1] != _space)
+end
+
+# jump_spaces: if cursor is on a ' ', move it to the first non-' ' char on the right
+# if `delete_trailing`, ignore trailing ' ' by deleting them
+function edit_tab(s, jump_spaces=false, delete_trailing=jump_spaces)
+    tab_should_complete(s) ?
+        complete_line(s) :
+        edit_tab(buffer(s), jump_spaces, delete_trailing)
+    refresh_line(s)
+end
+
+function edit_tab(buf::IOBuffer, jump_spaces=false, delete_trailing=jump_spaces)
+    i = position(buf)
+    if jump_spaces && i < buf.size && buf.data[i+1] == _space
+        spaces = findnext(_notspace, buf.data[i+1:buf.size], 1)
+        if delete_trailing && (spaces == 0 || buf.data[i+spaces] == _newline)
+            splice_buffer!(buf, i:(spaces == 0 ? buf.size-1 : i+spaces-2))
+        else
+            jump = spaces == 0 ? buf.size : i+spaces-1
+            return seek(buf, jump)
+        end
+    end
+    # align to multiples of 4:
+    align = 4 - strwidth(String(buf.data[1+beginofline(buf, i):i])) % 4
+    return edit_insert(buf, ' '^align)
+end
+
+
 const default_keymap =
 AnyDict(
     # Tab
-    '\t' => (s,o...)->begin
-        buf = buffer(s)
-        # Yes, we are ignoring the possiblity
-        # the we could be in the middle of a multi-byte
-        # sequence, here but that's ok, since any
-        # whitespace we're interested in is only one byte
-        i = position(buf)
-        if i != 0
-            c = buf.data[i]
-            if c == UInt8('\n') || c == UInt8('\t') ||
-               # hack to allow path completion in cmds
-               # after a space, e.g., `cd <tab>`, while still
-               # allowing multiple indent levels
-               (c == UInt8(' ') && i > 3 && buf.data[i-1] == UInt8(' '))
-                edit_insert(s, " "^4)
-                return
-            end
-        end
-        complete_line(s)
-        refresh_line(s)
-    end,
+    '\t' => (s,o...)->edit_tab(s, true),
     # Enter
     '\r' => (s,o...)->begin
         if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)
             commit_line(s)
             return :done
         else
-            edit_insert(s, '\n')
+            edit_insert_newline(s)
         end
     end,
     '\n' => KeyAlias('\r'),
     # Backspace/^H
-    '\b' => (s,o...)->edit_backspace(s),
+    '\b' => (s,o...)->edit_backspace(s, true),
     127 => KeyAlias('\b'),
     # Meta Backspace
     "\e\b" => (s,o...)->edit_delete_prev_word(s),
@@ -1401,7 +1487,7 @@ AnyDict(
     # Ctrl-Right Arrow on rxvt
     "\eOc" => "\ef",
     # Meta Enter
-    "\e\r" => (s,o...)->(edit_insert(s, '\n')),
+    "\e\r" => (s,o...)->edit_insert_newline(s),
     "\e\n" => "\e\r",
     # Simply insert it into the buffer by default
     "*" => (s,data,c)->(edit_insert(s, c)),
@@ -1443,7 +1529,8 @@ AnyDict(
         input = bracketed_paste(s)
         edit_insert(s, input)
     end,
-    "^T" => (s,o...)->edit_transpose(s)
+    "^T" => (s,o...)->edit_transpose_chars(s),
+    "\et" => (s,o...)->edit_transpose_words(s),
 )
 
 const history_keymap = AnyDict(

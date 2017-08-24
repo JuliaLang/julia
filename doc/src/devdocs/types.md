@@ -28,7 +28,7 @@ julia> typeintersect(Int, Float64)
 Union{}
 
 julia> Union{Int, Float64}
-Union{Float64, Int64}
+Union{Int64, Float64}
 
 julia> typejoin(Int, Float64)
 Real

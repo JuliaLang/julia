@@ -574,9 +574,9 @@ if Sys.iswindows()
         x+y
     end
 
-    let addr = cfunction(WeVirtualProtectThisToRWX, UInt64, (UInt64, UInt64))
+    let addr = cfunction(WeVirtualProtectThisToRWX, UInt64, Tuple{UInt64, UInt64})
         addr = addr-(UInt64(addr)%4096)
-        const PAGE_EXECUTE_READWRITE = 0x40
+        PAGE_EXECUTE_READWRITE = 0x40
         oldPerm = Ref{UInt32}()
         err18083 = ccall(:VirtualProtect,stdcall,Cint,
             (Ptr{Void}, Csize_t, UInt32, Ptr{UInt32}),

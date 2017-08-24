@@ -71,25 +71,28 @@ function complete_symbol(sym, ffunc)
         end
     else
         # Looking for a member of a type
-        fields = fieldnames(t)
-        for field in fields
-            s = string(field)
-            if startswith(s, name)
-                push!(suggestions, s)
+        if t isa DataType && t != Any
+            fields = fieldnames(t)
+            for field in fields
+                s = string(field)
+                if startswith(s, name)
+                    push!(suggestions, s)
+                end
             end
         end
     end
     suggestions
 end
 
+const sorted_keywords = [
+    "abstract type", "baremodule", "begin", "break", "catch", "ccall",
+    "const", "continue", "do", "else", "elseif", "end", "export", "false",
+    "finally", "for", "function", "global", "if", "import",
+    "importall", "let", "local", "macro", "module", "mutable struct",
+    "primitive type", "quote", "return", "struct",
+    "true", "try", "using", "while"]
+
 function complete_keyword(s::String)
-    const sorted_keywords = [
-        "abstract type", "baremodule", "begin", "break", "catch", "ccall",
-        "const", "continue", "do", "else", "elseif", "end", "export", "false",
-        "finally", "for", "function", "global", "if", "import",
-        "importall", "let", "local", "macro", "module", "mutable struct",
-        "primitive type", "quote", "return", "struct",
-        "true", "try", "using", "while"]
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)

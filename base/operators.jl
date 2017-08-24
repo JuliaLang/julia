@@ -50,6 +50,21 @@ end
 
 ## generic comparison ##
 
+"""
+    ==(x, y)
+
+Generic equality operator, giving a single [`Bool`](@ref) result. Falls back to `===`.
+Should be implemented for all types with a notion of equality, based on the abstract value
+that an instance represents. For example, all numeric types are compared by numeric value,
+ignoring type. Strings are compared as sequences of characters, ignoring encoding.
+
+Follows IEEE semantics for floating-point numbers.
+
+Collections should generally implement `==` by calling `==` recursively on all contents.
+
+New numeric types should implement this function for two arguments of the new type, and
+handle comparison to other types via promotion rules where possible.
+"""
 ==(x, y) = x === y
 
 """
@@ -94,6 +109,17 @@ signless(x, y) = signbit(x)::Bool & !signbit(y)::Bool
 isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
 isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
 isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
+
+"""
+    isless(x, y)
+
+Test whether `x` is less than `y`, according to a canonical total order. Values that are
+normally unordered, such as `NaN`, are ordered in an arbitrary but consistent fashion. This
+is the default comparison used by [`sort`](@ref). Non-numeric types with a canonical total order
+should implement this function. Numeric types only need to implement it if they have special
+values such as `NaN`.
+"""
+function isless end
 
 isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
@@ -714,7 +740,7 @@ fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 # transpose
 
 """
-    ctranspose(A)
+    adjoint(A)
 
 The conjugate transposition operator (`'`).
 
@@ -725,13 +751,13 @@ julia> A =  [3+2im 9+2im; 8+7im  4+6im]
  3+2im  9+2im
  8+7im  4+6im
 
-julia> ctranspose(A)
+julia> adjoint(A)
 2×2 Array{Complex{Int64},2}:
  3-2im  8-7im
  9-2im  4-6im
 ```
 """
-ctranspose(x) = conj(transpose(x))
+adjoint(x) = conj(transpose(x))
 conj(x) = x
 
 # transposed multiply
@@ -741,21 +767,21 @@ conj(x) = x
 
 For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ⋅B``.
 """
-Ac_mul_B(a,b)  = ctranspose(a)*b
+Ac_mul_B(a,b)  = adjoint(a)*b
 
 """
     A_mul_Bc(A, B)
 
 For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᴴ``.
 """
-A_mul_Bc(a,b)  = a*ctranspose(b)
+A_mul_Bc(a,b)  = a*adjoint(b)
 
 """
     Ac_mul_Bc(A, B)
 
 For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ Bᴴ``.
 """
-Ac_mul_Bc(a,b) = ctranspose(a)*ctranspose(b)
+Ac_mul_Bc(a,b) = adjoint(a)*adjoint(b)
 
 """
     At_mul_B(A, B)
@@ -785,21 +811,21 @@ At_mul_Bt(a,b) = transpose(a)*transpose(b)
 
 For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / B``.
 """
-Ac_rdiv_B(a,b)  = ctranspose(a)/b
+Ac_rdiv_B(a,b)  = adjoint(a)/b
 
 """
     A_rdiv_Bc(A, B)
 
 For matrices or vectors ``A`` and ``B``, calculates ``A / Bᴴ``.
 """
-A_rdiv_Bc(a,b)  = a/ctranspose(b)
+A_rdiv_Bc(a,b)  = a/adjoint(b)
 
 """
     Ac_rdiv_Bc(A, B)
 
 For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / Bᴴ``.
 """
-Ac_rdiv_Bc(a,b) = ctranspose(a)/ctranspose(b)
+Ac_rdiv_Bc(a,b) = adjoint(a)/adjoint(b)
 
 """
     At_rdiv_B(A, B)
@@ -827,21 +853,21 @@ At_rdiv_Bt(a,b) = transpose(a)/transpose(b)
 
 For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``B``.
 """
-Ac_ldiv_B(a,b)  = ctranspose(a)\b
+Ac_ldiv_B(a,b)  = adjoint(a)\b
 
 """
     A_ldiv_Bc(A, B)
 
 For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᴴ``.
 """
-A_ldiv_Bc(a,b)  = a\ctranspose(b)
+A_ldiv_Bc(a,b)  = a\adjoint(b)
 
 """
     Ac_ldiv_Bc(A, B)
 
 For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᴴ``.
 """
-Ac_ldiv_Bc(a,b) = ctranspose(a)\ctranspose(b)
+Ac_ldiv_Bc(a,b) = adjoint(a)\adjoint(b)
 
 """
     At_ldiv_B(A, B)

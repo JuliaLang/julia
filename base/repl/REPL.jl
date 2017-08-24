@@ -507,7 +507,8 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
 end
 
 history_first(s::LineEdit.MIState, hist::REPLHistoryProvider) =
-    history_prev(s, hist, hist.cur_idx - 1)
+    history_prev(s, hist, hist.cur_idx - 1 -
+                 (hist.cur_idx > hist.start_idx+1 ? hist.start_idx : 0))
 
 history_last(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_next(s, hist, length(hist.history) - hist.cur_idx + 1)
@@ -807,7 +808,7 @@ function setup_interface(
         extra_repl_keymap = [extra_repl_keymap]
     end
 
-    const repl_keymap = AnyDict(
+    repl_keymap = AnyDict(
         ';' => function (s,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 buf = copy(LineEdit.buffer(s))
@@ -888,6 +889,9 @@ function setup_interface(
                         # (avoids modifying the user's current leading wip line)
                         tail = lstrip(tail)
                     end
+                    if isprompt_paste # remove indentation spaces corresponding to the prompt
+                        tail = replace(tail, r"^ {7}"m, "") # 7: jl_prompt_len
+                    end
                     LineEdit.replace_line(s, tail)
                     LineEdit.refresh_line(s)
                     break
@@ -895,6 +899,9 @@ function setup_interface(
                 # get the line and strip leading and trailing whitespace
                 line = strip(input[oldpos:prevind(input, pos)])
                 if !isempty(line)
+                    if isprompt_paste # remove indentation spaces corresponding to the prompt
+                        line = replace(line, r"^ {7}"m, "") # 7: jl_prompt_len
+                    end
                     # put the line on the screen and history
                     LineEdit.replace_line(s, line)
                     LineEdit.commit_line(s)
