@@ -242,7 +242,7 @@ julia> strides(A)
 ```
 """
 strides(A::AbstractArray) = size_to_strides(1, size(A)...)
-@inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
+size_to_strides(s, d, sz...) = (@_inline_meta; (s, size_to_strides(s * d, sz...)...))
 size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
 
