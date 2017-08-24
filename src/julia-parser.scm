@@ -1611,7 +1611,18 @@
 
 ;; as above, but allows both "i=r" and "i in r"
 (define (parse-iteration-spec s)
-  (let* ((lhs (parse-pipes s))
+  (let* ((outer? (if (eq? (peek-token s) 'outer)
+                     (begin
+                       (take-token s)
+                       (let ((nxt (peek-token s)))
+                         (if (or (memq nxt '(= in ∈))
+                                 (not (symbol? nxt))
+                                 (operator? nxt))
+                             (begin (ts:put-back! s 'outer #t)
+                                    #f)
+                             #t)))
+                     #f))
+         (lhs (parse-pipes s))
          (t   (peek-token s)))
     (cond ((memq t '(= in ∈))
            (take-token s)
@@ -1621,7 +1632,9 @@
                  ;; should be: (error "invalid iteration specification")
                  (syntax-deprecation s (string "for " (deparse `(= ,lhs ,rhs)) " " t)
                                      (string "for " (deparse `(= ,lhs ,rhs)) "; " t)))
-             `(= ,lhs ,rhs)))
+             (if outer?
+                 `(= (outer ,lhs) ,rhs)
+                 `(= ,lhs ,rhs))))
           ((and (eq? lhs ':) (closing-token? t))
            ':)
           (else (error "invalid iteration specification")))))

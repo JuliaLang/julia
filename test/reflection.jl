@@ -495,7 +495,7 @@ end
 tracefoo(x, y) = x+y
 didtrace = false
 tracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
-ccall(:jl_register_method_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, (Ptr{Void},)))
+ccall(:jl_register_method_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, Tuple{Ptr{Void}}))
 meth = which(tracefoo,Tuple{Any,Any})
 ccall(:jl_trace_method, Void, (Any,), meth)
 @test tracefoo(1, 2) == 3
@@ -508,7 +508,7 @@ ccall(:jl_register_method_tracer, Void, (Ptr{Void},), C_NULL)
 
 # Method Tracing test
 methtracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
-ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), cfunction(methtracer, Void, (Ptr{Void},)))
+ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), cfunction(methtracer, Void, Tuple{Ptr{Void}}))
 tracefoo2(x, y) = x*y
 @test didtrace
 didtrace = false

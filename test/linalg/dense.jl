@@ -582,6 +582,29 @@ end
     end
 end
 
+@testset "issue #23366 (Int Matrix to Int power)" begin
+    @testset "Tests for $elty" for elty in (Int128, Int16, Int32, Int64, Int8,
+                                            UInt128, UInt16, UInt32, UInt64, UInt8,
+                                            BigInt)
+        @test_throws DomainError elty[1 1;1 0]^-2
+        @test (@inferred elty[1 1;1 0]^2) == elty[2 1;1 1]
+        I_ = elty[1 0;0 1]
+        @test I_^-1 == I_
+        if !(elty<:Unsigned)
+            @test (@inferred (-I_)^-1) == -I_
+            @test (@inferred (-I_)^-2) == I_
+        end
+        # make sure that type promotion for ^(::Matrix{<:Integer}, ::Integer)
+        # is analogous to type promotion for ^(::Integer, ::Integer)
+        # e.g. [1 1;1 0]^big(10000) should return Matrix{BigInt}, the same
+        # way as 2^big(10000) returns BigInt
+        for elty2 = (Int64, BigInt)
+            TT = Base.promote_op(^, elty, elty2)
+            @test (@inferred elty[1 1;1 0]^elty2(1))::Matrix{TT} == [1 1;1 0]
+        end
+    end
+end
+
 @testset "Least squares solutions" begin
     a = [ones(20) 1:20 1:20]
     b = reshape(eye(8, 5), 20, 2)

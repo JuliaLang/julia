@@ -3,7 +3,7 @@
 # For curmod_*
 include("testenv.jl")
 
-replstr(x) = sprint((io,x) -> show(IOContext(io, limit=true, displaysize=(24, 80)), MIME("text/plain"), x), x)
+replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
 
 @test replstr(Array{Any}(2)) == "2-element Array{Any,1}:\n #undef\n #undef"
 @test replstr(Array{Any}(2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
@@ -343,6 +343,7 @@ end"
 
 # issue #9474
 for s in ("(1::Int64 == 1::Int64)::Bool", "(1:2:3) + 4", "x = 1:2:3")
+    local s
     @test sprint(show, parse(s)) == ":("*s*")"
 end
 
@@ -874,7 +875,7 @@ end
                    (Pair{Integer,Int64}(1, 2) => 3)       => "Pair{Integer,Int64}(1, 2) => 3",
                    ((1+2im) => (3+4im))                   => "1+2im => 3+4im",
                    (1 => 2 => Pair{Real,Int64}(3, 4))     => "1 => (2=>Pair{Real,Int64}(3, 4))")
-
+        local s
         @test sprint(show, p) == s
     end
     # - when the context has :compact=>false, print pair's member non-compactly
@@ -923,7 +924,7 @@ end
 @testset "Array printing with limited rows" begin
     arrstr = let buf = IOBuffer()
         function (A, rows)
-            Base.showarray(IOContext(buf, displaysize=(rows, 80), limit=true),
+            Base.showarray(IOContext(buf, :displaysize => (rows, 80), :limit => true),
                            A, false, header=true)
             String(take!(buf))
         end

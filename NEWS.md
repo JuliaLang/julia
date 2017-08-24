@@ -70,6 +70,11 @@ Language changes
     warning, so that this syntax can be disallowed or given a new meaning in a
     future version ([#5148]).
 
+  * In `for i = ...`, if a local variable `i` already existed it would be overwritten
+    during the loop. This behavior is deprecated, and in the future `for` loop variables
+    will always be new variables local to the loop ([#22314]).
+    The old behavior of overwriting an existing variable is available via `for outer i = ...`.
+
   * In `for i in x`, `x` used to be evaluated in a new scope enclosing the `for` loop.
     Now it is evaluated in the scope outside the `for` loop.
 
@@ -150,6 +155,19 @@ This section lists changes that do not have deprecation warnings.
   * Worker-worker connections are setup lazily for an `:all_to_all` topology. Use keyword
     arg `lazy=false` to force all connections to be setup during a `addprocs` call. ([#22814])
 
+  * In `joinpath(a, b)` on Windows, if the drive specifications of `a` and `b` do not match,
+    `joinpath` now returns `b` instead of throwing an `ArgumentError`. `joinpath(path...)` is
+    defined to be left associative, so if any argument has a drive path which does not match
+    the drive of the join of the preceding paths, the prior ones are dropped. ([#20912])
+
+  * `^(A::AbstractMatrix{<:Integer}, p::Integer)` now throws a `DomainError`
+    if `p < 0`, unless `A == one(A)` or `A == -one(A)` (same as for
+    `^(A::Integer, p::Integer)`) ([#23366]).
+
+  * `^(A::AbstractMatrix{<:Integer}, p::Integer)` now promotes the element type in the same
+    way as `^(A::Integer, p::Integer)`. This means, for instance, that `[1 1; 0 1]^big(1)`
+    will return a `Matrix{BigInt}` instead of a `Matrix{Int}` ([#23366]).
+
 Library improvements
 --------------------
 
@@ -207,6 +225,8 @@ Library improvements
 
   * Mutating versions of `randperm` and `randcycle` have been added:
     `randperm!` and `randcycle!` ([#22723]).
+
+  * `BigFloat` random numbers can now be generated ([#22720]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -328,6 +348,9 @@ Deprecated or removed
     argument function, instead of two arguments ([#17886]).
 
   * `Base.SparseArrays.SpDiagIterator` has been removed ([#23261]).
+
+  * The tuple-of-types form of `cfunction`, `cfunction(f, returntype, (types...))`, has been deprecated
+    in favor of the tuple-type form `cfunction(f, returntype, Tuple{types...})` ([#23066]).
 
   * `diagm(A::SparseMatrixCSC)` has been deprecated in favor of
     `spdiagm(sparsevec(A))` ([#23341]).

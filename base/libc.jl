@@ -170,13 +170,13 @@ library.
 strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
 function strftime(fmt::AbstractString, tm::TmStruct)
-    timestr = Vector{UInt8}(128)
+    timestr = Base.StringVector(128)
     n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ptr{TmStruct}),
               timestr, length(timestr), fmt, &tm)
     if n == 0
         return ""
     end
-    return String(timestr[1:n])
+    return String(resize!(timestr,n))
 end
 
 """

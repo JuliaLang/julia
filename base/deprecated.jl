@@ -88,7 +88,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     lkup = StackTraces.UNKNOWN
     for frame in bt
         lkups = StackTraces.lookup(frame)
-        for lkup in lkups
+        for outer lkup in lkups
             if lkup == StackTraces.UNKNOWN
                 continue
             end
@@ -1067,7 +1067,7 @@ function partial_linear_indexing_warning_lookup(nidxs_remaining)
         caller = StackTraces.UNKNOWN
         for frame in bt
             lkups = StackTraces.lookup(frame)
-            for caller in lkups
+            for outer caller in lkups
                 if caller == StackTraces.UNKNOWN
                     continue
                 end
@@ -1713,6 +1713,9 @@ export hex2num
 # issue #17886
 # deprecations for filter[!] with 2-arg functions are in associative.jl
 
+# PR #23066
+@deprecate cfunction(f, r, a::Tuple) cfunction(f, r, Tuple{a...})
+
 # PR 23341
 @deprecate diagm(A::SparseMatrixCSC) spdiagm(sparsevec(A))
 
@@ -1726,6 +1729,14 @@ export hex2num
 @eval GMP @Base.deprecate_binding GMP_BITS_PER_LIMB BITS_PER_LIMB false
 @eval MPFR @deprecate get_version() version() false
 @eval LinAlg.LAPACK @deprecate laver() version() false
+
+# PR #23271
+function IOContext(io::IO; kws...)
+    depwarn("IOContext(io, k=v, ...) is deprecated, use IOContext(io, :k => v, ...) instead.", :IOContext)
+    IOContext(io, (k=>v for (k, v) in kws)...)
+end
+
+@deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)
 
 # END 0.7 deprecations
 

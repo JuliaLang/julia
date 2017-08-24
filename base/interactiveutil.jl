@@ -330,8 +330,13 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
     if packages || verbose
         println(io, "Packages:")
         println(io, "  Package Directory: ", Pkg.dir())
-        println(io, "  Package Status:")
-        Pkg.status(io)
+        print(io, "  Package Status:")
+        if isdir(Pkg.dir())
+            println(io, "")
+            Pkg.status(io)
+        else
+            println(io, " no packages installed")
+        end
     end
 end
 
@@ -384,8 +389,7 @@ function code_warntype(io::IO, f, @nospecialize(t))
         body.args = src.code
         body.typ = rettype
         # Fix slot names and types in function body
-        show_unquoted(IOContext(IOContext(emph_io, :SOURCEINFO => src),
-                                          :SOURCE_SLOTNAMES => slotnames),
+        show_unquoted(IOContext(emph_io, :SOURCEINFO => src, :SOURCE_SLOTNAMES => slotnames),
                       body, 2)
         print(emph_io, '\n')
     end

@@ -2,13 +2,14 @@
 
 module BLAS
 
-import ..axpy!
+import ..axpy!, ..axpby!
 import Base: copy!
 
 export
 # Level 1
     asum,
     axpy!,
+    axpby!,
     blascopy!,
     dot,
     dotc,

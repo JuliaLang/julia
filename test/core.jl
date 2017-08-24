@@ -4404,7 +4404,7 @@ end
 function f18054()
     return Cint(0)
 end
-cfunction(f18054, Cint, ())
+cfunction(f18054, Cint, Tuple{})
 
 # issue #18986: the ccall optimization of cfunction leaves JL_TRY stack in bad state
 dummy18996() = return nothing
@@ -5277,6 +5277,7 @@ x.u = initvalue(Base.uniontypes(U)[2])
 @test x.u === initvalue(Base.uniontypes(U)[2])
 
 for U in boxedunions
+    local U
     for N in (1, 2, 3, 4)
         A = Array{U}(ntuple(x->0, N)...)
         @test isempty(A)
@@ -5296,6 +5297,7 @@ A5 = [1 2 3; 4 5 6]
 @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A5)), 6)
 
 for U in unboxedunions
+    local U
     for N in (1, 2, 3, 4)
         A = Array{U}(ntuple(x->0, N)...)
         @test isempty(A)
