@@ -155,6 +155,11 @@ This section lists changes that do not have deprecation warnings.
   * Worker-worker connections are setup lazily for an `:all_to_all` topology. Use keyword
     arg `lazy=false` to force all connections to be setup during a `addprocs` call. ([#22814])
 
+  * In `joinpath(a, b)` on Windows, if the drive specifications of `a` and `b` do not match,
+    `joinpath` now returns `b` instead of throwing an `ArgumentError`. `joinpath(path...)` is
+    defined to be left associative, so if any argument has a drive path which does not match
+    the drive of the join of the preceding paths, the prior ones are dropped. ([#20912])
+
   * `^(A::AbstractMatrix{<:Integer}, p::Integer)` now throws a `DomainError`
     if `p < 0`, unless `A == one(A)` or `A == -one(A)` (same as for
     `^(A::Integer, p::Integer)`) ([#23366]).
