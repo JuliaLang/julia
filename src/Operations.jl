@@ -9,62 +9,6 @@ using TerminalMenus
 using Pkg3: user_depot, depots
 using Pkg3.Types
 
-function registries(depot::String)
-    d = joinpath(depot, "registries")
-    regs = filter!(readdir(d)) do r
-        isfile(joinpath(d, r, "registry.toml"))
-    end
-    return map(reg->joinpath(depot, "registries", reg), regs)
-end
-registries() = [r for d in depots() for r in registries(d)]
-
-const line_re = r"""
-    ^ \s*
-    ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})
-    \s* = \s* \{
-    \s* name \s* = \s* "([^"]*)" \s*,
-    \s* path \s* = \s* "([^"]*)" \s*,?
-    \s* \} \s* $
-"""x
-
-function find_registered(names::Vector{String})
-    # name --> uuid --> paths
-    paths = Dict{String,Dict{UUID,Vector{String}}}()
-    isempty(names) && return paths
-    names_re = let p = "\\bname\\s*=\\s*\"(?:$(names[1])"
-        for i in 2:length(names)
-            p *= "|$(names[i])"
-        end
-        p *= ")\""
-        Regex(p)
-    end
-    for registry in registries()
-        packages_file = joinpath(registry, "registry.toml")
-        open(packages_file) do io
-            for line in eachline(io)
-                ismatch(r"^\s*\[\s*packages\s*\]\s*$", line) && break
-            end
-            for line in eachline(io)
-                ismatch(names_re, line) || continue
-                m = match(line_re, line)
-                m == nothing && error("misformated packages.toml file: $line")
-                uuid = UUID(m.captures[1])
-                name = Base.unescape_string(m.captures[2])
-                path = Base.unescape_string(m.captures[3])
-                if !haskey(paths, name)
-                    paths[name] = Dict{UUID,Vector{String}}()
-                end
-                if !haskey(paths[name], uuid)
-                    paths[name][uuid] = String[]
-                end
-                push!(paths[name][uuid], abspath(registry, path))
-            end
-        end
-    end
-    return paths
-end
-find_registered(name::String) = find_registered([name])[name]
-
 function find_installed(uuid::UUID, sha1::SHA1)
     for depot in depots()
         path = abspath(depot, "packages", string(uuid), string(sha1))

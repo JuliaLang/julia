@@ -192,6 +192,9 @@ struct EnvCache
     function EnvCache(env::Union{Void,String})
         project_file = find_project(env)
         project = parse_toml(project_file, fakeit=true)
+        if !haskey(project, "deps")
+            project["deps"] = Dict{String,Any}()
+        end
         if haskey(project, "manifest")
             manifest_file = abspath(project["manifest"])
         else
@@ -222,7 +225,7 @@ EnvCache() = EnvCache(get(ENV, "JULIA_ENV", nothing))
 
 include("libgit2_discover.jl")
 
-function find_local_project(start_path::String = pwd())
+function find_local_env(start_path::String = pwd())
     path = LibGit2.discover(start_path, ceiling = homedir())
     repo = LibGit2.GitRepo(path)
     work = LibGit2.workdir(repo)
@@ -233,7 +236,7 @@ function find_local_project(start_path::String = pwd())
     return abspath(work, project_names[end])
 end
 
-function find_named_project()
+function find_named_env()
     for depot in depots(), env in default_envs, name in project_names
         path = abspath(depot, "environments", env, name)
         isfile(path) && return path
@@ -246,9 +249,9 @@ function find_project(env::String)
     if isempty(env)
         error("invalid environment name: \"\"")
     elseif env == "/"
-        return find_named_project()
+        return find_named_env()
     elseif env == "."
-        return find_local_project()
+        return find_local_env()
     elseif startswith(env, "/") || startswith(env, "./")
         # path to project file or project directory
         splitext(env)[2] == ".toml" && return abspath(env)
@@ -268,27 +271,124 @@ end
 
 function find_project(::Void)
     try
-        return find_local_project()
+        return find_local_env()
     catch err
         err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
     end
-    return find_named_project()
+    return find_named_env()
 end
 
 ## resolving packages from name or uuid ##
 
-function resolve_packages!(env::EnvCache, pkgs::AbstractVector{Package}; new::Bool=false)
+# package reslution only pays attention to the project file and registries:
+#   - if a name or uuid is in the project file, use that mapping
+#   - if a name or uuid is not in the project, use the registry
+# this completely ignores the manifest since the manifest doesn't generally
+# provide unambiguous names <=> uuid mapping; moreover, considering the
+# manifest makes command idempotency challenging/impossible.
+
+function resolve_packages!(env::EnvCache, pkgs::AbstractVector{Package})
+    deps = env.project["deps"]
+    depr = Dict(uuid => name for (uuid, name) in deps)
+    length(deps) == length(depr) || # TODO: handle this somehow?
+        warn("duplicate UUID found in project file [deps] section")
+    # names & uuids to lookup in registry
     names = String[]
     uuids = UUID[]
     for pkg in pkgs
-        if pkg.uuid != UUID(zero(UInt128))
-            pkg.uuid in uuids || push!(uuids, pkg.uuid)
+        has_uuid = pkg.uuid != UUID(zero(UInt128))
+        has_name = !isemtpy(pkg.name)
+        @assert has_uuid || has_name
+        if has_name && !has_uuid
+            if pkg.name in keys(deps)
+                pkg.uuid = deps[pkg.name]
+            else
+                push!(names, pkg.name)
+            end
         end
-        if !isemtpy(pkg.name)
-            pkg.name in names || push!(names, pkg.name)
+        if has_uuid && !has_name
+            if pkg.uuid in keys(depr)
+                pkg.name = depr[pkg.uuid]
+            else
+                push!(uuids, pkg.uuid)
+            end
         end
     end
 
+end
+
+function registries(depot::String)
+    d = joinpath(depot, "registries")
+    regs = filter!(readdir(d)) do r
+        isfile(joinpath(d, r, "registry.toml"))
+    end
+    return map(reg->joinpath(depot, "registries", reg), regs)
+end
+registries() = [r for d in depots() for r in registries(d)]
+
+const line_re = r"""
+    ^ \s*
+    ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})
+    \s* = \s* \{
+    \s* name \s* = \s* "([^"]*)" \s*,
+    \s* path \s* = \s* "([^"]*)" \s*,?
+    \s* \} \s* $
+"""x
+
+function find_registered!(env::EnvCache, names::Vector{String}, uuids::Vector{UUID})
+    # don't look if there's nothing new to see
+    names = filter(name->!haskey(env.uuids, name), names)
+    uuids = filter(uuid->!haskey(env.paths, uuid), uuids)
+    isempty(names) && isempty(uuids) && return paths
+
+    # initialize env entries for names and uuids
+    for name in names; env.uuids[name] = UUID[]; end
+    for uuid in uuids; env.paths[uuid] = String[]; end
+
+    # build regexs for names and uuids
+    uuid_re = sprint() do io
+        if !isempty(uuids)
+            print(io, raw"^( ")
+            for (i, uuid) in enumerate(uuids)
+                1 < i && print(io, " | ")
+                print(io, raw"\Q", uuid, raw"\E")
+            end
+            print(io, raw" )\b")
+        end
+    end
+    name_re = sprint() do io
+        if !isempty(names)
+            print(io, raw"\bname \s* = \s* \"( ")
+            for (i, name) in enumerate(names)
+                1 < i && print(io, " | ")
+                print(io, raw"\Q", name, raw"\E")
+            end
+            print(io, raw" )\"")
+        end
+    end
+    regex = Regex("( $uuid_re | $name_re )", "x")
+
+    # search through all registries
+    for registry in registries()
+        open(joinpath(registry, "registry.toml")) do io
+            # skip forward until [packages] section
+            for line in eachline(io)
+                ismatch(r"^ \s* \[ \s* packages \s* \] \s* $"x, line) && break
+            end
+            # fine lines with uuid or name we're looking for
+            for line in eachline(io)
+                ismatch(regex, line) || continue
+                m = match(line_re, line)
+                m == nothing &&
+                    error("misformated registry.toml package entry: $line")
+                uuid = UUID(m.captures[1])
+                name = Base.unescape_string(m.captures[2])
+                path = abspath(registry, Base.unescape_string(m.captures[3]))
+                push!(get!(env.uuids, name, typeof(uuid)[]), uuid)
+                push!(get!(env.paths, uuid, typeof(path)[]), path)
+            end
+        end
+    end
 end
 
 end # module
