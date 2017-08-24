@@ -1,5 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    GitAnnotated(repo::GitRepo, commit_id::GitHash)
+    GitAnnotated(repo::GitRepo, ref::GitReference)
+    GitAnnotated(repo::GitRepo, fh::FetchHead)
+    GitAnnotated(repo::GitRepo, comittish::AbstractString)
+
+An annotated git commit carries with it information about how it was looked up and
+why, so that rebase or merge operations have more information about the context of
+the commit. Conflict files contain information about the source/target branches in
+the merge which are conflicting, for instance. An annotated commit can refer to the
+tip of a remote branch, for instance when a [`FetchHead`](@ref) is passed, or to a
+branch head described using `GitReference`.
+"""
 function GitAnnotated(repo::GitRepo, commit_id::GitHash)
     ann_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_annotated_commit_lookup, :libgit2), Cint,
@@ -140,6 +153,12 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
     return merge_result
 end
 
+"""
+    merge_base(repo::GitRepo, one::AbstractString, two::AbstractString) -> GitHash
+
+Find a merge base (a common ancestor) between the commits `one` and `two`.
+`one` and `two` may both be in string form. Return the `GitHash` of the merge base.
+"""
 function merge_base(repo::GitRepo, one::AbstractString, two::AbstractString)
     oid1_ptr = Ref(GitHash(one))
     oid2_ptr = Ref(GitHash(two))

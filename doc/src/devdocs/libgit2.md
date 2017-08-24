@@ -73,6 +73,7 @@ Base.LibGit2.fetch
 Base.LibGit2.fetchheads
 Base.LibGit2.fetch_refspecs
 Base.LibGit2.fetchhead_foreach_cb
+Base.LibGit2.merge_base
 Base.LibGit2.merge!(::Base.LibGit2.GitRepo; ::Any...)
 Base.LibGit2.ffmerge!
 Base.LibGit2.fullname
