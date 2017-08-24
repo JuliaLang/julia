@@ -170,7 +170,7 @@ module Consts
                                 MERGE_PREFERENCE_NO_FASTFORWARD   = 1,
                                 MERGE_PREFERENCE_FASTFORWARD_ONLY = 2)
     """ Result of analysis on merge possibilities.
-    * `MERGE_ANALYSIS_NONE`: it is not possible to merge the elements of `anns`.
+    * `MERGE_ANALYSIS_NONE`: it is not possible to merge the elements of the input commits.
     * `MERGE_ANALYSIS_NORMAL`: a regular merge, when HEAD and the commits that the
       user wishes to merge have all diverged from a common ancestor. In this case the
       changes have to be resolved and conflicts may occur.
