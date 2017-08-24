@@ -156,6 +156,16 @@ end
     repr(x)
 
 Create a string from any value using the [`show`](@ref) function.
+
+#Examples
+```jldoctest
+julia> repr(1)
+"1"
+
+julia> repr(-1.0)
+"-1.0"
+
+```
 """
 function repr(x)
     s = IOBuffer()
