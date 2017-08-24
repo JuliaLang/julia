@@ -342,6 +342,21 @@ strwidth(s::AbstractString) = (w=0; for c in s; w += charwidth(c); end; w)
 
 Tests whether a character belongs to the ASCII character set, or whether this is true for
 all elements of a string.
+
+#Examples
+```jldoctest
+julia> isascii('a')
+true
+
+julia> isascii('α')
+false
+
+julia> isascii("abc")
+true
+
+julia> isascii("αβγ")
+false
+```
 """
 isascii(c::Char) = c < Char(0x80)
 isascii(s::AbstractString) = all(isascii, s)
