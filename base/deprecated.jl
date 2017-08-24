@@ -88,7 +88,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     lkup = StackTraces.UNKNOWN
     for frame in bt
         lkups = StackTraces.lookup(frame)
-        for lkup in lkups
+        for outer lkup in lkups
             if lkup == StackTraces.UNKNOWN
                 continue
             end
@@ -1067,7 +1067,7 @@ function partial_linear_indexing_warning_lookup(nidxs_remaining)
         caller = StackTraces.UNKNOWN
         for frame in bt
             lkups = StackTraces.lookup(frame)
-            for caller in lkups
+            for outer caller in lkups
                 if caller == StackTraces.UNKNOWN
                     continue
                 end
@@ -1721,6 +1721,14 @@ export hex2num
 
 # PR #23373
 @deprecate diagm(A::BitMatrix) diagm(vec(A))
+
+# PR #23271
+function IOContext(io::IO; kws...)
+    depwarn("IOContext(io, k=v, ...) is deprecated, use IOContext(io, :k => v, ...) instead.", :IOContext)
+    IOContext(io, (k=>v for (k, v) in kws)...)
+end
+
+@deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)
 
 # END 0.7 deprecations
 

@@ -841,9 +841,9 @@ end
 
 @noinline function _accumulate!(op, B, A, R1, ind, R2)
     # Copy the initial element in each 1d vector along dimension `axis`
-    i = first(ind)
+    ii = first(ind)
     @inbounds for J in R2, I in R1
-        B[I, i, J] = A[I, i, J]
+        B[I, ii, J] = A[I, ii, J]
     end
     # Accumulate
     @inbounds for J in R2, i in first(ind)+1:last(ind), I in R1

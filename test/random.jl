@@ -292,6 +292,7 @@ let mt = MersenneTwister(0)
     c = unsafe_wrap(Array, Ptr{Float64}(pc8), 1000) # Int(pointer(c)) % 16 == 8
 
     for A in (a, b, c)
+        local A
         srand(mt, 0)
         rand(mt) # this is to fill mt.vals, cf. #9040
         rand!(mt, A) # must not segfault even if Int(pointer(A)) % 16 != 0
@@ -376,6 +377,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         for T in functypes[f!]
             X = T == Bool ? T[0,1] : T[0,1,2]
             for A in (Array{T}(5), Array{T}(2, 3), GenericArray{T}(5), GenericArray{T}(2, 3))
+                local A
                 f!(rng..., A)                    ::typeof(A)
                 if f! === rand!
                     f!(rng..., A, X)             ::typeof(A)
@@ -396,6 +398,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
 
     # Test that you cannot call randn or randexp with non-Float types.
     for r in [randn, randexp, randn!, randexp!]
+        local r
         @test_throws MethodError r(Int)
         @test_throws MethodError r(Int32)
         @test_throws MethodError r(Bool)

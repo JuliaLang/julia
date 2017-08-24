@@ -1740,13 +1740,12 @@ module RetTypeDecl
 end
 
 # range, range ops
-A = 1:5
-B = 1.5:5.5
-@test A + B == 2.5:2.0:10.5
+@test (1:5) + (1.5:5.5) == 2.5:2.0:10.5
 
 @testset "slicedim" begin
     for A in (reshape(collect(1:20), 4, 5),
               reshape(1:20, 4, 5))
+        local A
         @test slicedim(A, 1, 2) == collect(2:4:20)
         @test slicedim(A, 2, 2) == collect(5:8)
         @test_throws ArgumentError slicedim(A,0,1)
@@ -1784,9 +1783,11 @@ S = view(A, :, :)
 @test isequal(B, A)
 
 for (a,b) in zip(A, B)
+    local a,b
     @test a == b
 end
 for (a,s) in zip(A, S)
+    local a,s
     @test a == s
 end
 

@@ -3618,9 +3618,9 @@ end
 function type_annotate!(sv::InferenceState)
     # remove all unused ssa values
     gt = sv.src.ssavaluetypes
-    for i = 1:length(gt)
-        if gt[i] === NF
-            gt[i] = Union{}
+    for j = 1:length(gt)
+        if gt[j] === NF
+            gt[j] = Union{}
         end
     end
 
@@ -3671,9 +3671,9 @@ function type_annotate!(sv::InferenceState)
     end
 
     # finish marking used-undef variables
-    for i = 1:nslots
-        if undefs[i]
-            src.slotflags[i] |= Slot_UsedUndef
+    for j = 1:nslots
+        if undefs[j]
+            src.slotflags[j] |= Slot_UsedUndef
         end
     end
     nothing
@@ -4650,10 +4650,10 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     if !isempty(stmts) && !propagate_inbounds
         # avoid redundant inbounds annotations
         s_1, s_end = stmts[1], stmts[end]
-        i = 2
-        while length(stmts) > i && ((isa(s_1,Expr)&&s_1.head===:line) || isa(s_1,LineNumberNode))
-            s_1 = stmts[i]
-            i += 1
+        si = 2
+        while length(stmts) > si && ((isa(s_1,Expr)&&s_1.head===:line) || isa(s_1,LineNumberNode))
+            s_1 = stmts[si]
+            si += 1
         end
         if isa(s_1, Expr) && s_1.head === :inbounds && s_1.args[1] === false &&
             isa(s_end, Expr) && s_end.head === :inbounds && s_end.args[1] === :pop
