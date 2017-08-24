@@ -1726,6 +1726,14 @@ export hex2num
 # PR #23373
 @deprecate diagm(A::BitMatrix) diagm(vec(A))
 
+# PR 23341
+@eval GMP @deprecate gmp_version() version() false
+@eval GMP @Base.deprecate_binding GMP_VERSION VERSION false
+@eval GMP @deprecate gmp_bits_per_limb() bits_per_limb() false
+@eval GMP @Base.deprecate_binding GMP_BITS_PER_LIMB BITS_PER_LIMB false
+@eval MPFR @deprecate get_version() version() false
+@eval LinAlg.LAPACK @deprecate laver() version() false
+
 # PR #23271
 function IOContext(io::IO; kws...)
     depwarn("IOContext(io, k=v, ...) is deprecated, use IOContext(io, :k => v, ...) instead.", :IOContext)
