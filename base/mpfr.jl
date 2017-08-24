@@ -234,8 +234,8 @@ ceil(::Type{Integer}, x::BigFloat) = ceil(BigInt, x)
 round(::Type{Integer}, x::BigFloat) = round(BigInt, x)
 
 function convert(::Type{Bool}, x::BigFloat)
-    iszero(x) && return false
-    isone(x) && return true
+    x == 0 && return false
+    x == 1 && return true
     throw(InexactError(:convert, Bool, x))
 end
 function convert(::Type{BigInt},x::BigFloat)
