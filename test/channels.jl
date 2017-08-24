@@ -49,8 +49,8 @@ c=Channel(32)
 results=[]
 @sync begin
     for i in 1:20
-        @async for i in c
-            push!(results, i)
+        @async for ii in c
+            push!(results, ii)
         end
     end
     sleep(1.0)

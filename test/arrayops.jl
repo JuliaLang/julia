@@ -1685,12 +1685,12 @@ end
     d = ones(Complex,6)
     @test_throws DimensionMismatch transpose!(a,d)
     @test_throws DimensionMismatch transpose!(d,a)
-    @test_throws DimensionMismatch ctranspose!(a,d)
-    @test_throws DimensionMismatch ctranspose!(d,a)
+    @test_throws DimensionMismatch adjoint!(a,d)
+    @test_throws DimensionMismatch adjoint!(d,a)
     @test_throws DimensionMismatch transpose!(b,c)
-    @test_throws DimensionMismatch ctranspose!(b,c)
+    @test_throws DimensionMismatch adjoint!(b,c)
     @test_throws DimensionMismatch transpose!(c,b)
-    @test_throws DimensionMismatch ctranspose!(c,b)
+    @test_throws DimensionMismatch adjoint!(c,b)
     transpose!(b,a)
     @test b == ones(Complex,5)
     b = ones(Complex,5)
@@ -1698,10 +1698,10 @@ end
     transpose!(a,b)
     @test a == ones(Complex,1,5)
     b = zeros(Complex,5)
-    ctranspose!(b,a)
+    adjoint!(b,a)
     @test b == ones(Complex,5)
     a = zeros(Complex,1,5)
-    ctranspose!(a,b)
+    adjoint!(a,b)
     @test a == ones(Complex,1,5)
 end
 
@@ -1740,13 +1740,12 @@ module RetTypeDecl
 end
 
 # range, range ops
-A = 1:5
-B = 1.5:5.5
-@test A + B == 2.5:2.0:10.5
+@test (1:5) + (1.5:5.5) == 2.5:2.0:10.5
 
 @testset "slicedim" begin
     for A in (reshape(collect(1:20), 4, 5),
               reshape(1:20, 4, 5))
+        local A
         @test slicedim(A, 1, 2) == collect(2:4:20)
         @test slicedim(A, 2, 2) == collect(5:8)
         @test_throws ArgumentError slicedim(A,0,1)
@@ -1784,9 +1783,11 @@ S = view(A, :, :)
 @test isequal(B, A)
 
 for (a,b) in zip(A, B)
+    local a,b
     @test a == b
 end
 for (a,s) in zip(A, S)
+    local a,s
     @test a == s
 end
 
@@ -2020,6 +2021,10 @@ end # module AutoRetType
         @test isa(hvcat((2,), densearray, densearray), Array)
         @test isa(cat((1,2), densearray, densearray), Array)
     end
+    @test isa([[1,2,3]'; [1,2,3]'], Matrix{Int})
+    @test isa([[1,2,3]' [1,2,3]'], RowVector{Int, Vector{Int}})
+    @test isa([Any[1.0, 2]'; Any[2.0, 2]'], Matrix{Any})
+    @test isa([Any[1.0, 2]' Any[2.0, 2']'], RowVector{Any, Vector{Any}})
     # Test that concatenations of heterogeneous Matrix-Vector pairs yield dense matrices
     @test isa(hcat(densemat, densevec), Array)
     @test isa(hcat(densevec, densemat), Array)

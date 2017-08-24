@@ -815,8 +815,8 @@ function _cmp_(x::Union{Int64,UInt64}, y::Float64)
     error("invalid: _cmp_($x,$y)")
 end
 
-for x=Int64(2)^53-2:Int64(2)^53+5,
-    y=[2.0^53-2 2.0^53-1 2.0^53 2.0^53+2 2.0^53+4]
+for x = Int64(2)^53-2:Int64(2)^53+5,
+    y = [2.0^53-2 2.0^53-1 2.0^53 2.0^53+2 2.0^53+4]
     u = UInt64(x)
     @test y == Float64(trunc(Int64,y))
 
@@ -1991,34 +1991,38 @@ for x in (12345.6789, 0, -12345.6789)
     @test y == floor(x, 1000)
     @test y == ceil(x, 1000)
 end
-x = 12345.6789
-@test 0.0 == trunc(x, -1000)
-@test 0.0 == round(x, -1000)
-@test 0.0 == floor(x, -1000)
-@test Inf == ceil(x, -1000)
-x = -12345.6789
-@test -0.0 == trunc(x, -1000)
-@test -0.0 == round(x, -1000)
-@test -Inf == floor(x, -1000)
-@test -0.0 == ceil(x, -1000)
-x = 0.0
-@test 0.0 == trunc(x, -1000)
-@test 0.0 == round(x, -1000)
-@test 0.0 == floor(x, -1000)
-@test 0.0 == ceil(x, -1000)
+let x = 12345.6789
+    @test 0.0 == trunc(x, -1000)
+    @test 0.0 == round(x, -1000)
+    @test 0.0 == floor(x, -1000)
+    @test Inf == ceil(x, -1000)
+end
+let x = -12345.6789
+    @test -0.0 == trunc(x, -1000)
+    @test -0.0 == round(x, -1000)
+    @test -Inf == floor(x, -1000)
+    @test -0.0 == ceil(x, -1000)
+end
+let x = 0.0
+    @test 0.0 == trunc(x, -1000)
+    @test 0.0 == round(x, -1000)
+    @test 0.0 == floor(x, -1000)
+    @test 0.0 == ceil(x, -1000)
+end
 # rounding in other bases
 @test approx_eq(round(pi,2,2), 3.25)
 @test approx_eq(round(pi,3,2), 3.125)
 @test approx_eq(round(pi,3,5), 3.144)
 # vectorized trunc/round/floor/ceil with digits/base argument
-a = rand(2, 2, 2)
-for f in (round, trunc, floor, ceil)
-    @test f.(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
-    @test f.(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
-    @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
-    @test f.(a[:, 1, 1], 9, 2) == map(x->f(x, 9, 2), a[:, 1, 1])
-    @test f.(a[:, :, 1], 9, 2) == map(x->f(x, 9, 2), a[:, :, 1])
-    @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
+let a = rand(2, 2, 2)
+    for f in (round, trunc, floor, ceil)
+        @test f.(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
+        @test f.(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
+        @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
+        @test f.(a[:, 1, 1], 9, 2) == map(x->f(x, 9, 2), a[:, 1, 1])
+        @test f.(a[:, :, 1], 9, 2) == map(x->f(x, 9, 2), a[:, :, 1])
+        @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
+    end
 end
 # significant digits (would be nice to have a smart vectorized
 # version of signif)
@@ -3022,4 +3026,11 @@ end
             end
         end
     end
+end
+
+@testset "compact NaN printing" begin
+    @test sprint(io->show(IOContext(io, :compact => true), NaN16)) == "NaN"
+    @test sprint(io->show(IOContext(io, :compact => true), NaN32)) == "NaN"
+    @test sprint(io->show(IOContext(io, :compact => true), NaN64)) == "NaN"
+    @test_broken sprint(io->show(IOContext(io, :compact => true), big(NaN))) == "NaN"
 end

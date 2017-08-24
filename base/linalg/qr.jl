@@ -595,7 +595,7 @@ for (f1, f2) in ((:A_mul_Bc, :A_mul_B!),
         function ($f1)(Q::AbstractQ, B::StridedVecOrMat)
             TQB = promote_type(eltype(Q), eltype(B))
             Bc = similar(B, TQB, (size(B, 2), size(B, 1)))
-            ctranspose!(Bc, B)
+            adjoint!(Bc, B)
             return ($f2)(convert(AbstractMatrix{TQB}, Q), Bc)
         end
     end
@@ -678,7 +678,7 @@ function A_mul_Bc(A::StridedMatrix, B::AbstractQ)
         throw(DimensionMismatch("matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(B))"))
     end
 end
-@inline A_mul_Bc(rowvec::RowVector, B::AbstractQ) = ctranspose(B*ctranspose(rowvec))
+@inline A_mul_Bc(rowvec::RowVector, B::AbstractQ) = adjoint(B*adjoint(rowvec))
 
 
 ### AcQ/AcQc
@@ -688,7 +688,7 @@ for (f1, f2) in ((:Ac_mul_B, :A_mul_B!),
         function ($f1)(A::StridedVecOrMat, Q::AbstractQ)
             TAQ = promote_type(eltype(A), eltype(Q))
             Ac = similar(A, TAQ, (size(A, 2), size(A, 1)))
-            ctranspose!(Ac, A)
+            adjoint!(Ac, A)
             return ($f2)(Ac, convert(AbstractMatrix{TAQ}, Q))
         end
     end

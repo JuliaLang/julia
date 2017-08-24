@@ -1422,10 +1422,6 @@ extern "C" JL_DLLEXPORT
 void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 {
     JL_GC_PUSH1(&argt);
-    if (jl_is_tuple(argt)) {
-        // TODO: maybe deprecation warning, better checking
-        argt = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(argt), jl_nfields(argt));
-    }
     JL_LOCK(&codegen_lock);
     Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt);
     JL_GC_POP();
@@ -2718,12 +2714,14 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             auto len = emit_arraylen(ctx, obj, ary_ex);
             jl_value_t *ety = jl_tparam0(sty);
             Value *elsize;
+            size_t elsz = 0, al = 0;
+            bool isboxed = !jl_islayout_inline(ety, &elsz, &al);
             if (!jl_has_free_typevars(ety)) {
-                if (!jl_array_store_unboxed(ety)) {
+                if (isboxed) {
                     elsize = ConstantInt::get(T_size, sizeof(void*));
                 }
                 else {
-                    elsize = ConstantInt::get(T_size, jl_datatype_size(ety));
+                    elsize = ConstantInt::get(T_size, elsz);
                 }
             }
             else {

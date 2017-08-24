@@ -71,11 +71,13 @@ function complete_symbol(sym, ffunc)
         end
     else
         # Looking for a member of a type
-        fields = fieldnames(t)
-        for field in fields
-            s = string(field)
-            if startswith(s, name)
-                push!(suggestions, s)
+        if t isa DataType && t != Any
+            fields = fieldnames(t)
+            for field in fields
+                s = string(field)
+                if startswith(s, name)
+                    push!(suggestions, s)
+                end
             end
         end
     end

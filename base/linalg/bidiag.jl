@@ -153,8 +153,10 @@ promote_rule(::Type{Matrix{T}}, ::Type{Bidiagonal{S}}) where {T,S} = Matrix{prom
 #Converting from Bidiagonal to Tridiagonal
 Tridiagonal(M::Bidiagonal{T}) where {T} = convert(Tridiagonal{T}, M)
 function convert(::Type{Tridiagonal{T}}, A::Bidiagonal) where T
-    z = zeros(T, size(A)[1]-1)
-    A.uplo == 'U' ? Tridiagonal(z, convert(Vector{T},A.dv), convert(Vector{T},A.ev)) : Tridiagonal(convert(Vector{T},A.ev), convert(Vector{T},A.dv), z)
+    dv = convert(AbstractVector{T}, A.dv)
+    ev = convert(AbstractVector{T}, A.ev)
+    z = fill!(similar(ev), zero(T))
+    A.uplo == 'U' ? Tridiagonal(z, dv, ev) : Tridiagonal(ev, dv, z)
 end
 promote_rule(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}}) where {T,S} = Tridiagonal{promote_type(T,S)}
 
@@ -221,7 +223,7 @@ broadcast(::typeof(floor), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiag
 broadcast(::typeof(ceil), ::Type{T}, M::Bidiagonal) where {T<:Integer} = Bidiagonal(ceil.(T, M.dv), ceil.(T, M.ev), M.uplo)
 
 transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, M.uplo == 'U' ? :L : :U)
-ctranspose(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), M.uplo == 'U' ? :L : :U)
+adjoint(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), M.uplo == 'U' ? :L : :U)
 
 istriu(M::Bidiagonal) = M.uplo == 'U' || iszero(M.ev)
 istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)
@@ -456,7 +458,7 @@ end
 #Linear solvers
 A_ldiv_B!(A::Union{Bidiagonal, AbstractTriangular}, b::AbstractVector) = naivesub!(A, b)
 At_ldiv_B!(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!(transpose(A), b)
-Ac_ldiv_B!(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!(ctranspose(A), b)
+Ac_ldiv_B!(A::Bidiagonal, b::AbstractVector) = A_ldiv_B!(adjoint(A), b)
 function A_ldiv_B!(A::Union{Bidiagonal,AbstractTriangular}, B::AbstractMatrix)
     nA,mA = size(A)
     tmp = similar(B,size(B,1))

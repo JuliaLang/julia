@@ -60,7 +60,7 @@ srand(1)
             @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
         end
         if relty <: BlasFloat
-            for func in (expm,)
+            for func in (exp,)
                 @test func(D) ≈ func(DM) atol=n^3*eps(relty)
             end
             @test logm(Diagonal(abs.(D.diag))) ≈ logm(abs.(DM)) atol=n^3*eps(relty)
@@ -100,7 +100,7 @@ srand(1)
                     @test A_ldiv_B!(D, copy(U)) ≈ DM\U atol=atol_three
                     @test At_ldiv_B!(D, copy(U)) ≈ DM\U atol=atol_three
                     @test Ac_ldiv_B!(conj(D), copy(U)) ≈ DM\U atol=atol_three
-                    Uc = ctranspose(U)
+                    Uc = adjoint(U)
                     target = scale!(Uc, inv.(D.diag))
                     @test A_rdiv_B!(Uc, D) ≈ target atol=atol_three
                     @test_throws DimensionMismatch A_rdiv_B!(eye(elty, n-1), D)
@@ -222,7 +222,7 @@ srand(1)
         @test transpose(D) == D
         if elty <: BlasComplex
             @test Array(conj(D)) ≈ conj(DM)
-            @test ctranspose(D) == conj(D)
+            @test adjoint(D) == conj(D)
         end
         # Translates to Ac/t_mul_B, which is specialized after issue 21286
         @test(D' * v == conj(D) * v)
@@ -381,7 +381,7 @@ end
     @test ishermitian(Dherm) == true
     @test ishermitian(Dsym) == false
 
-    @test expm(D) == Diagonal([expm([1 2; 3 4]), expm([1 2; 3 4])])
+    @test exp(D) == Diagonal([exp([1 2; 3 4]), exp([1 2; 3 4])])
     @test logm(D) == Diagonal([logm([1 2; 3 4]), logm([1 2; 3 4])])
     @test sqrtm(D) == Diagonal([sqrtm([1 2; 3 4]), sqrtm([1 2; 3 4])])
 end

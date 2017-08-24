@@ -36,15 +36,31 @@ cartesian, rather than linear, indexing.
 
 Consider making 2d slices of a 3d array:
 
-```julia
-S1 = view(A, :, 5, 2:6)
-S2 = view(A, 5, :, 2:6)
+```@meta
+DocTestSetup = :(srand(1234))
+```
+```jldoctest subarray
+julia> A = rand(2,3,4);
+
+julia> S1 = view(A, :, 1, 2:3)
+2×2 SubArray{Float64,2,Array{Float64,3},Tuple{Base.Slice{Base.OneTo{Int64}},Int64,UnitRange{Int64}},false}:
+ 0.200586  0.066423
+ 0.298614  0.956753
+
+julia> S2 = view(A, 1, :, 2:3)
+3×2 SubArray{Float64,2,Array{Float64,3},Tuple{Int64,Base.Slice{Base.OneTo{Int64}},UnitRange{Int64}},true}:
+ 0.200586  0.066423
+ 0.246837  0.646691
+ 0.648882  0.276021
+```
+```@meta
+DocTestSetup = nothing
 ```
 
 `view` drops "singleton" dimensions (ones that are specified by an `Int`), so both `S1` and `S2`
 are two-dimensional `SubArray`s. Consequently, the natural way to index these is with `S1[i,j]`.
- To extract the value from the parent array `A`, the natural approach is to replace `S1[i,j]`
-with `A[i,5,(2:6)[j]]` and `S2[i,j]` with `A[5,i,(2:6)[j]]`.
+To extract the value from the parent array `A`, the natural approach is to replace `S1[i,j]`
+with `A[i,1,(2:3)[j]]` and `S2[i,j]` with `A[1,i,(2:3)[j]]`.
 
 The key feature of the design of SubArrays is that this index replacement can be performed without
 any runtime overhead.
@@ -71,13 +87,14 @@ a `Tuple` of the types of the indices for each dimension. The final one, `L`, is
 as a convenience for dispatch; it's a boolean that represents whether the index types support
 fast linear indexing. More on that later.
 
-If in our example above `A` is a `Array{Float64, 3}`, our `S1` case above would be a `SubArray{Int64,2,Array{Int64,3},Tuple{Colon,Int64,UnitRange{Int64}},false}`.
+If in our example above `A` is a `Array{Float64, 3}`, our `S1` case above would be a
+`SubArray{Float64,2,Array{Float64,3},Tuple{Base.Slice{Base.OneTo{Int64}},Int64,UnitRange{Int64}},false}`.
 Note in particular the tuple parameter, which stores the types of the indices used to create
-`S1`.  Likewise,
+`S1`. Likewise,
 
-```julia-repl
+```jldoctest subarray
 julia> S1.indexes
-(Colon(),5,2:6)
+(Base.Slice(Base.OneTo(2)), 1, 2:3)
 ```
 
 Storing these values allows index replacement, and having the types encoded as parameters allows
@@ -138,7 +155,7 @@ For `SubArray` types, the availability of efficient linear indexing is based pur
 of the indices, and does not depend on values like the size of the parent array. You can ask whether
 a given set of indices supports fast linear indexing with the internal `Base.viewindexing` function:
 
-```julia-repl
+```jldoctest subarray
 julia> Base.viewindexing(S1.indexes)
 IndexCartesian()
 

@@ -6,7 +6,7 @@ abstract type Factorization{T} end
 
 eltype(::Type{Factorization{T}}) where {T} = T
 transpose(F::Factorization) = error("transpose not implemented for $(typeof(F))")
-ctranspose(F::Factorization) = error("ctranspose not implemented for $(typeof(F))")
+adjoint(F::Factorization) = error("adjoint not implemented for $(typeof(F))")
 
 macro assertposdef(A, info)
    :($(esc(info)) == 0 ? $(esc(A)) : throw(PosDefException($(esc(info)))))

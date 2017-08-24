@@ -178,9 +178,9 @@ for (op, T) in ((:fac_ui, Culong), (:set_ui, Culong), (:set_si, Clong), (:set_d,
     end
 end
 
-popcount(a::BigInt) = ccall((:__gmpz_popcount, :libgmp), Culong, (mpz_t,), &a) % Int
+popcount(a::BigInt) = Int(ccall((:__gmpz_popcount, :libgmp), Culong, (mpz_t,), &a))
 
-mpn_popcount(d::Ptr{Limb}, s::Integer) = ccall((:__gmpn_popcount, :libgmp), Culong, (Ptr{Limb}, Csize_t), d, s) % Int
+mpn_popcount(d::Ptr{Limb}, s::Integer) = Int(ccall((:__gmpn_popcount, :libgmp), Culong, (Ptr{Limb}, Csize_t), d, s))
 mpn_popcount(a::BigInt) = mpn_popcount(a.d, abs(a.size))
 
 function tdiv_qr!(x::BigInt, y::BigInt, a::BigInt, b::BigInt)
@@ -201,16 +201,16 @@ function gcdext!(x::BigInt, y::BigInt, z::BigInt, a::BigInt, b::BigInt)
 end
 gcdext(a::BigInt, b::BigInt) = gcdext!(BigInt(), BigInt(), BigInt(), a, b)
 
-cmp(a::BigInt, b::BigInt) = ccall((:__gmpz_cmp, :libgmp), Cint, (mpz_t, mpz_t), &a, &b) % Int
-cmp_si(a::BigInt, b) = ccall((:__gmpz_cmp_si, :libgmp), Cint, (mpz_t, Clong), &a, b) % Int
-cmp_ui(a::BigInt, b) = ccall((:__gmpz_cmp_ui, :libgmp), Cint, (mpz_t, Culong), &a, b) % Int
-cmp_d(a::BigInt, b) = ccall((:__gmpz_cmp_d, :libgmp), Cint, (mpz_t, Cdouble), &a, b) % Int
+cmp(a::BigInt, b::BigInt) = Int(ccall((:__gmpz_cmp, :libgmp), Cint, (mpz_t, mpz_t), &a, &b))
+cmp_si(a::BigInt, b) = Int(ccall((:__gmpz_cmp_si, :libgmp), Cint, (mpz_t, Clong), &a, b))
+cmp_ui(a::BigInt, b) = Int(ccall((:__gmpz_cmp_ui, :libgmp), Cint, (mpz_t, Culong), &a, b))
+cmp_d(a::BigInt, b) = Int(ccall((:__gmpz_cmp_d, :libgmp), Cint, (mpz_t, Cdouble), &a, b))
 
 mpn_cmp(a::Ptr{Limb}, b::Ptr{Limb}, c) = ccall((:__gmpn_cmp, :libgmp), Cint, (Ptr{Limb}, Ptr{Limb}, Clong), a, b, c)
 mpn_cmp(a::BigInt, b::BigInt, c) = mpn_cmp(a.d, b.d, c)
 
 get_str!(x, a, b::BigInt) = (ccall((:__gmpz_get_str,:libgmp), Ptr{Cchar}, (Ptr{Cchar}, Cint, mpz_t), x, a, &b); x)
-set_str!(x::BigInt, a, b) = ccall((:__gmpz_set_str, :libgmp), Cint, (mpz_t, Ptr{UInt8}, Cint), &x, a, b) % Int
+set_str!(x::BigInt, a, b) = Int(ccall((:__gmpz_set_str, :libgmp), Cint, (mpz_t, Ptr{UInt8}, Cint), &x, a, b))
 get_d(a::BigInt) = ccall((:__gmpz_get_d, :libgmp), Cdouble, (mpz_t,), &a)
 
 limbs_write!(x::BigInt, a) = ccall((:__gmpz_limbs_write, :libgmp), Ptr{Limb}, (mpz_t, Clong), &x, a)
