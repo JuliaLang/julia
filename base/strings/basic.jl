@@ -153,7 +153,39 @@ function cmp(a::AbstractString, b::AbstractString)
     done(b,j) ? 0 : -1
 end
 
+"""
+    ==(a::AbstractString, b::AbstractString) = cmp(a,b) == 0
+
+Tests whether two strings are equal character by character.
+
+#Examples
+```jldoctest
+julia> "abc" == "abc"
+true
+
+julia> "abc" == "αβγ"
+false
+```
+"""
 ==(a::AbstractString, b::AbstractString) = cmp(a,b) == 0
+
+"""
+    isless(a::AbstractString, b::AbstractString) = cmp(a,b) < 0
+
+Tests whether string `a` comes before string `b` in alphabetical order.
+
+#Examples
+```jldoctest
+julia> isless("a", "b")
+true
+
+julia> isless("β", "α")
+false
+
+julia> isless("a", "a")
+false
+```
+"""
 isless(a::AbstractString, b::AbstractString) = cmp(a,b) < 0
 
 # faster comparisons for symbols
