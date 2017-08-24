@@ -100,7 +100,40 @@ function length(s::AbstractString)
 end
 
 ## string comparison functions ##
+"""
+    cmp(a::AbstractString, b::AbstractString)
 
+Compares two strings for equality. Returns `0` if both strings have the same
+length and the character at each index is the same in both strings.
+Returns `-1` if string `a` is a substring of `b` or `a` comes before
+`b` in alphabetical order.
+Returns `1` if string `b` is a substring of `a` or `b` comes before
+`a` in alphabetical order.
+
+# Examples
+```jldoctest
+julia> cmp("abc", "abc")
+0
+
+julia> cmp("ab", "abc")
+-1
+
+julia> cmp("abc", "ab")
+1
+
+julia> cmp("ab", "ac")
+-1
+
+julia> cmp("ac", "ab")
+1
+
+julia> cmp("α", "a")
+1
+
+julia> cmp("b", "β")
+-1
+```
+"""
 function cmp(a::AbstractString, b::AbstractString)
     if a === b
         return 0
