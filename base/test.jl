@@ -1219,7 +1219,7 @@ false
 macro isinferred(ex)
     quote
         try
-            @inferred $ex
+            @inferred $(esc(ex))
             true
         catch err
             isa(err, ErrorException) ? false : rethrow(err)
