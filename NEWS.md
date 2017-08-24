@@ -155,6 +155,14 @@ This section lists changes that do not have deprecation warnings.
   * Worker-worker connections are setup lazily for an `:all_to_all` topology. Use keyword
     arg `lazy=false` to force all connections to be setup during a `addprocs` call. ([#22814])
 
+  * `^(A::AbstractMatrix{<:Integer}, p::Integer)` now throws a `DomainError`
+    if `p < 0`, unless `A == one(A)` or `A == -one(A)` (same as for
+    `^(A::Integer, p::Integer)`) ([#23366]).
+
+  * `^(A::AbstractMatrix{<:Integer}, p::Integer)` now promotes the element type in the same
+    way as `^(A::Integer, p::Integer)`. This means, for instance, that `[1 1; 0 1]^big(1)`
+    will return a `Matrix{BigInt}` instead of a `Matrix{Int}` ([#23366]).
+
 Library improvements
 --------------------
 
