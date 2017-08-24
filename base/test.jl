@@ -18,7 +18,7 @@ module Test
 export @test, @test_throws, @test_broken, @test_skip, @test_warn, @test_nowarn
 export @testset
 # Legacy approximate testing functions, yet to be included
-export @inferred
+export @inferred, @isinferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray
 
@@ -1176,6 +1176,56 @@ macro inferred(ex)
             result
         end
     end)
+end
+
+"""
+    @isinferred f(x)
+
+Checks whether the call expression `f(x)` is type stable and returns a
+boolean value. `@isinferred` is similar to `@inferred`,
+but returns a boolean rather than throwing an exception.
+This macro is useful for unit tests (`@test @isinferred f(x)`).
+
+`f(x)` can be any call expression.
+
+```jldoctest
+julia> using Base.Test
+
+julia> f(a,b,c) = b > 1 ? 1 : 1.0
+f (generic function with 1 method)
+
+julia> @code_warntype f(1,2,3)
+Variables:
+  #self#::#f
+  a::Int64
+  b::Int64
+  c::Int64
+
+Body:
+  begin
+      unless (Base.slt_int)(1, b::Int64)::Bool goto 3
+      return 1
+      3:
+      return 1.0
+  end::UNION{FLOAT64, INT64}
+
+julia> @isinferred f(1,2,3)
+false
+
+julia> @isinferred max(1,2)
+false
+```
+"""
+macro isinferred(ex)
+    quote
+        try
+            @inferred $ex
+            true
+        catch err
+            isa(err, ErrorException) ? false : rethrow(err)
+            false
+        end
+    end
 end
 
 # Test approximate equality of vectors or columns of matrices modulo floating
