@@ -59,7 +59,8 @@ function test_jl_dump_compiles()
         test_jl_dump_compiles_internal(1)
         ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
 
-        @test stat(io).size == 0
+        flush(io)
+        @test stat(io).size != 0
     end
 end
 
@@ -73,6 +74,7 @@ function test_jl_dump_compiles_toplevel_thunks()
         eval(expand(Main, :(for i in 1:10 end)))
         ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
 
+        flush(io)
         @test stat(io).size == 0
     end
 end
