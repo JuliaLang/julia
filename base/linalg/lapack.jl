@@ -1205,7 +1205,6 @@ for (gelsd, gelsy, elty) in
             end
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             s     = similar(A, $elty, min(m, n))
-            rrcond = Ref{$elty}($elty(rcond))
             rnk   = Ref{BlasInt}()
             info  = Ref{BlasInt}()
             work  = Vector{$elty}(1)
@@ -1219,7 +1218,7 @@ for (gelsd, gelsy, elty) in
                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, &size(B,2),
                       A, &max(1,stride(A,2)), newB, &max(1,stride(B,2),n),
-                      s, rrcond, rnk, work,
+                      s, $elty(rcond), rnk, work,
                       &lwork, iwork, info)
                 chklapackerror(info[])
                 if i == 1
@@ -1252,7 +1251,6 @@ for (gelsd, gelsy, elty) in
             lda = max(1, m)
             ldb = max(1, m, n)
             jpvt = zeros(BlasInt, n)
-            rrcond = Ref{$elty}($elty(rcond))
             rnk = Ref{BlasInt}()
             work = Vector{$elty}(1)
             lwork = BlasInt(-1)
@@ -1265,7 +1263,7 @@ for (gelsd, gelsy, elty) in
                      Ptr{BlasInt}),
                     &m, &n, &nrhs, A,
                     &lda, newB, &ldb, jpvt,
-                    rrcond, rnk, work, &lwork,
+                    $elty(rcond), rnk, work, &lwork,
                     info)
                 chklapackerror(info[])
                 if i == 1
@@ -1300,7 +1298,6 @@ for (gelsd, gelsy, elty, relty) in
             end
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             s     = similar(A, $relty, min(m, n))
-            rrcond = Ref{$relty}($relty(rcond))
             rnk   = Ref{BlasInt}()
             info  = Ref{BlasInt}()
             work  = Vector{$elty}(1)
@@ -1315,7 +1312,7 @@ for (gelsd, gelsy, elty, relty) in
                        Ptr{$relty}, Ref{BlasInt}, Ref{BlasInt}),
                       &m, &n, &size(B,2), A,
                       &max(1,stride(A,2)), newB, &max(1,stride(B,2),n), s,
-                      rrcond, rnk, work, &lwork,
+                      $relty(rcond), rnk, work, &lwork,
                       rwork, iwork, info)
                 chklapackerror(info[])
                 if i == 1
@@ -1349,7 +1346,6 @@ for (gelsd, gelsy, elty, relty) in
             lda = max(1, m)
             ldb = max(1, m, n)
             jpvt = zeros(BlasInt, n)
-            rrcond = Ref{$relty}($relty(rcond))
             rnk = Ref{BlasInt}(1)
             work = Vector{$elty}(1)
             lwork = BlasInt(-1)
@@ -1363,7 +1359,7 @@ for (gelsd, gelsy, elty, relty) in
                      Ptr{$relty}, Ptr{BlasInt}),
                     &m, &n, &nrhs, A,
                     &lda, newB, &ldb, jpvt,
-                    rrcond, rnk, work, &lwork,
+                    $relty(rcond), rnk, work, &lwork,
                     rwork, info)
                 chklapackerror(info[])
                 if i == 1
