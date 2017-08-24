@@ -141,6 +141,17 @@ module Consts
     const INDEX_STAGE_ANY = Cint(-1)
 
     # merge
+    """ Option flags for git merge.
+    * `MERGE_FIND_RENAMES`: detect if a file has been renamed between the common
+      ancestor and the "ours" or "theirs" side of the merge. Allows merges where
+      a file has been renamed.
+    * `MERGE_FAIL_ON_CONFLICT`: exit immediately if a conflict is found rather
+      than trying to resolve it.
+    * `MERGE_SKIP_REUC`: do not write the REUC extension on the index resulting
+      from the merge.
+    * `MERGE_NO_RECURSIVE`: if the commits being merged have multiple merge bases,
+      use the first one, rather than trying to recursively merge the bases.
+    """
     @enum(GIT_MERGE, MERGE_FIND_RENAMES     = 1 << 0,
                      MERGE_FAIL_ON_CONFLICT = 1 << 1,
                      MERGE_SKIP_REUC        = 1 << 2,
@@ -155,7 +166,18 @@ module Consts
                           MERGE_FILE_IGNORE_WHITESPACE_EOL    = 1 << 5,  # Ignore whitespace at end of line
                           MERGE_FILE_DIFF_PATIENCE            = 1 << 6,  # Use the "patience diff" algorithm
                           MERGE_FILE_DIFF_MINIMAL             = 1 << 7)  # Take extra time to find minimal diff
-
+    """ Option flags for git merge file favortism.
+      * `MERGE_FILE_FAVOR_NORMAL`: if both sides of the merge have changes to a section,
+        make a note of the conflict in the index which `git checkout` will use to create
+        a merge file, which the user can then reference to resolve the conflicts. This is
+        the default.
+      * `MERGE_FILE_FAVOR_OURS`: if both sides of the merge have changes to a section,
+        use the version in the "ours" side of the merge in the index.
+      * `MERGE_FILE_FAVOR_THEIRS`: if both sides of the merge have changes to a section,
+        use the version in the "theirs" side of the merge in the index.
+      * `MERGE_FILE_FAVOR_UNION`: if both sides of the merge have changes to a section,
+        include each unique line from both sides in the file which is put into the index.
+    """
     @enum(GIT_MERGE_FILE_FAVOR, MERGE_FILE_FAVOR_NORMAL = 0,
                                 MERGE_FILE_FAVOR_OURS   = 1,
                                 MERGE_FILE_FAVOR_THEIRS = 2,
