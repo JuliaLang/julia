@@ -242,7 +242,8 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     if isa(ex.val, AbstractArray)
         compact = get(io, :compact, true)
         limit = get(io, :limit, true)
-        print(IOContext(io, compact=compact, limit=limit), "DomainError with ", ex.val)
+        print(IOContext(io, :compact => compact, :limit => limit),
+              "DomainError with ", ex.val)
     else
         print(io, "DomainError with ", ex.val)
     end
@@ -360,7 +361,7 @@ function showerror(io::IO, ex::MethodError)
             print(io, "; ")
             for (i, (k, v)) in enumerate(kwargs)
                 print(io, k, "=")
-                show(IOContext(io, :limit=>true), v)
+                show(IOContext(io, :limit => true), v)
                 i == length(kwargs) || print(io, ", ")
             end
         end
