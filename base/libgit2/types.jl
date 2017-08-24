@@ -275,9 +275,9 @@ The fields represent:
   * `download_tags`: whether to download tags present at the remote or not. The default
      is to request the tags for objects which are being downloaded anyway from the server.
   * `proxy_opts`: options for connecting to the remote through a proxy. See [`ProxyOptions`](@ref).
-     Only present on libgit2 versions newer than 0.25.
+     Only present on libgit2 versions newer than or equal to 0.25.0.
   * `custom_headers`: any extra headers needed for the fetch. Only present on libgit2 versions
-     newer than 0.24.
+     newer than or equal to 0.24.0.
 """
 @kwdef struct FetchOptions
     version::Cuint                  = 1
@@ -583,11 +583,11 @@ The fields represent:
     should be done "quietly". Used for interoperability. The default is `1`.
   * `inmemory`: start an in-memory rebase. Callers working on the rebase can go through its
     steps and commit any changes, but cannot rewind HEAD or update the repository. The
-    [`workdir`](@ref) will not be modified. Only present on libgit2 versions newer than 0.24.0.
+    [`workdir`](@ref) will not be modified. Only present on libgit2 versions newer than or equal to 0.24.0.
   * `rewrite_notes_ref`: name of the reference to notes to use to rewrite the commit notes as
     the rebase is finished.
   * `merge_opts`: merge options controlling how the trees will be merged at each rebase step.
-     Only present on libgit2 versions newer than 0.24.0.
+     Only present on libgit2 versions newer than or equal to 0.24.0.
   * `checkout_opts`: checkout options for writing files when initializing the rebase, stepping
     through it, and aborting it. See [`CheckoutOptions`](@ref) for more information.
 """
