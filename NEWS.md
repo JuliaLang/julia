@@ -223,7 +223,7 @@ Library improvements
 
   * `BigFloat` random numbers can now be generated ([#22720]).
 
-  * The new `@isinferred` macro does the same way as `@inferred` but returns a boolean
+  * The new `@isinferred` macro does the same as `@inferred` but returns a boolean
     rather than throwing an exception.
 
 Compiler/Runtime improvements
