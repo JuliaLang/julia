@@ -8365,7 +8365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -9605,7 +9605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Random Numbers",
     "category": "section",
-    "text": "Random number generation in Julia uses the Mersenne Twister library via MersenneTwister objects. Julia has a global RNG, which is used by default. Other RNG types can be plugged in by inheriting the AbstractRNG type; they can then be used to have multiple streams of random numbers. Besides MersenneTwister, Julia also provides the RandomDevice RNG type, which is a wrapper over the OS provided entropy.Most functions related to random generation accept an optional AbstractRNG as the first argument, rng , which defaults to the global one if not provided. Morever, some of them accept optionally dimension specifications dims... (which can be given as a tuple) to generate arrays of random values.A MersenneTwister or RandomDevice RNG can generate random numbers of the following types: Float16, Float32, Float64, Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt (or complex numbers of those types). Random floating point numbers are generated uniformly in 0 1). As BigInt represents unbounded integers, the interval must be specified (e.g. rand(big(1:6))).Base.Random.srand\nBase.Random.MersenneTwister\nBase.Random.RandomDevice\nBase.Random.rand\nBase.Random.rand!\nBase.Random.bitrand\nBase.Random.randn\nBase.Random.randn!\nBase.Random.randexp\nBase.Random.randexp!\nBase.Random.randjump"
+    "text": "Random number generation in Julia uses the Mersenne Twister library via MersenneTwister objects. Julia has a global RNG, which is used by default. Other RNG types can be plugged in by inheriting the AbstractRNG type; they can then be used to have multiple streams of random numbers. Besides MersenneTwister, Julia also provides the RandomDevice RNG type, which is a wrapper over the OS provided entropy.Most functions related to random generation accept an optional AbstractRNG as the first argument, rng , which defaults to the global one if not provided. Morever, some of them accept optionally dimension specifications dims... (which can be given as a tuple) to generate arrays of random values.A MersenneTwister or RandomDevice RNG can generate random numbers of the following types: Float16, Float32, Float64, BigFloat, Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt (or complex numbers of those types). Random floating point numbers are generated uniformly in 0 1). As BigInt represents unbounded integers, the interval must be specified (e.g. rand(big(1:6))).Base.Random.srand\nBase.Random.MersenneTwister\nBase.Random.RandomDevice\nBase.Random.rand\nBase.Random.rand!\nBase.Random.bitrand\nBase.Random.randn\nBase.Random.randn!\nBase.Random.randexp\nBase.Random.randexp!\nBase.Random.randjump"
 },
 
 {
@@ -20033,6 +20033,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "devdocs/libgit2/#Base.LibGit2.add!",
+    "page": "Base.LibGit2",
+    "title": "Base.LibGit2.add!",
+    "category": "Function",
+    "text": "add!(repo::GitRepo, files::AbstractString...; flags::Cuint = Consts.INDEX_ADD_DEFAULT)\nadd!(idx::GitIndex, files::AbstractString...; flags::Cuint = Consts.INDEX_ADD_DEFAULT)\n\nAdd all the files with paths specified by files to the index idx (or the index of the repo). If the file already exists, the index entry will be updated. If the file does not exist already, it will be newly added into the index. files may contain glob patterns which will be expanded and any matching files will be added (unless INDEX_ADD_DISABLE_PATHSPEC_MATCH is set, see below). If a file has been ignored (in .gitignore or in the config), it will not be added, unless it is already being tracked in the index, in which case it will be updated. The keyword argument flags is a set of bit-flags which control the behavior with respect to ignored files:\n\nConsts.INDEX_ADD_DEFAULT - default, described above.\nConsts.INDEX_ADD_FORCE - disregard the existing ignore rules and force addition of the file to the index even if it is already ignored.\nConsts.INDEX_ADD_CHECK_PATHSPEC - cannot be used at the same time as INDEX_ADD_FORCE. Check that each file in files which exists on disk is not in the ignore list. If one of the files is ignored, the function will return EINVALIDSPEC.\nConsts.INDEX_ADD_DISABLE_PATHSPEC_MATCH - turn off glob matching, and only add files to the index which exactly match the paths specified in files.\n\n\n\n"
+},
+
+{
     "location": "devdocs/libgit2/#Base.LibGit2.add_fetch!",
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.add_fetch!",
@@ -20465,6 +20473,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "devdocs/libgit2/#Base.LibGit2.remove!",
+    "page": "Base.LibGit2",
+    "title": "Base.LibGit2.remove!",
+    "category": "Function",
+    "text": "remove!(repo::GitRepo, files::AbstractString...)\nremove!(idx::GitIndex, files::AbstractString...)\n\nRemove all the files with paths specified by files in the index idx (or the index of the repo).\n\n\n\n"
+},
+
+{
     "location": "devdocs/libgit2/#Base.LibGit2.reset!",
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.reset!",
@@ -20577,6 +20593,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "devdocs/libgit2/#Base.LibGit2.update!",
+    "page": "Base.LibGit2",
+    "title": "Base.LibGit2.update!",
+    "category": "Function",
+    "text": "update!(repo::GitRepo, files::AbstractString...)\nupdate!(idx::GitIndex, files::AbstractString...)\n\nUpdate all the files with paths specified by files in the index idx (or the index of the repo). Match the state of each file in the index with the current state on disk, removing it if it has been removed on disk, or updating its entry in the object database.\n\n\n\n"
+},
+
+{
     "location": "devdocs/libgit2/#Base.LibGit2.url",
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.url",
@@ -20605,7 +20629,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Functionality",
     "category": "section",
-    "text": "Some of this documentation assumes some prior knowledge of the libgit2 API. For more information on some of the objects and methods referenced here, consult the upstream libgit2 API reference.Base.LibGit2.AbstractCredentials\nBase.LibGit2.Buffer\nBase.LibGit2.CachedCredentials\nBase.LibGit2.CheckoutOptions\nBase.LibGit2.CloneOptions\nBase.LibGit2.DiffDelta\nBase.LibGit2.DiffFile\nBase.LibGit2.DiffOptionsStruct\nBase.LibGit2.FetchHead\nBase.LibGit2.FetchOptions\nBase.LibGit2.GitBlob\nBase.LibGit2.GitCommit\nBase.LibGit2.GitHash\nBase.LibGit2.GitObject\nBase.LibGit2.GitRemote\nBase.LibGit2.GitRemoteAnon\nBase.LibGit2.GitRepo\nBase.LibGit2.GitRepoExt\nBase.LibGit2.GitShortHash\nBase.LibGit2.GitSignature\nBase.LibGit2.GitStatus\nBase.LibGit2.GitTag\nBase.LibGit2.GitTree\nBase.LibGit2.IndexEntry\nBase.LibGit2.IndexTime\nBase.LibGit2.MergeOptions\nBase.LibGit2.ProxyOptions\nBase.LibGit2.PushOptions\nBase.LibGit2.RebaseOperation\nBase.LibGit2.RebaseOptions\nBase.LibGit2.RemoteCallbacks\nBase.LibGit2.SSHCredentials\nBase.LibGit2.SignatureStruct\nBase.LibGit2.StatusEntry\nBase.LibGit2.StatusOptions\nBase.LibGit2.StrArrayStruct\nBase.LibGit2.TimeStruct\nBase.LibGit2.UserPasswordCredentials\nBase.LibGit2.add_fetch!\nBase.LibGit2.add_push!\nBase.LibGit2.addblob!\nBase.LibGit2.author\nBase.LibGit2.authors\nBase.LibGit2.branch\nBase.LibGit2.branch!\nBase.LibGit2.checkout!\nBase.LibGit2.checkused!\nBase.LibGit2.clone\nBase.LibGit2.commit\nBase.LibGit2.committer\nBase.LibGit2.create_branch\nBase.LibGit2.credentials_callback\nBase.LibGit2.credentials_cb\nBase.LibGit2.default_signature\nBase.LibGit2.delete_branch\nBase.LibGit2.diff_files\nBase.LibGit2.fetch\nBase.LibGit2.fetch_refspecs\nBase.LibGit2.fetchhead_foreach_cb\nBase.LibGit2.merge!(::Base.LibGit2.GitRepo; ::Any...)\nBase.LibGit2.ffmerge!\nBase.LibGit2.fullname\nBase.LibGit2.get_creds!\nBase.LibGit2.gitdir\nBase.LibGit2.head\nBase.LibGit2.head!\nBase.LibGit2.head_oid\nBase.LibGit2.headname\nBase.LibGit2.init\nBase.LibGit2.is_ancestor_of\nBase.LibGit2.isbinary\nBase.LibGit2.iscommit\nBase.LibGit2.isdiff\nBase.LibGit2.isdirty\nBase.LibGit2.isorphan\nBase.LibGit2.lookup_branch\nBase.LibGit2.mirror_callback\nBase.LibGit2.mirror_cb\nBase.LibGit2.message\nBase.LibGit2.name\nBase.LibGit2.need_update\nBase.LibGit2.objtype\nBase.LibGit2.path\nBase.LibGit2.peel\nBase.LibGit2.posixpath\nBase.LibGit2.push\nBase.LibGit2.push_refspecs\nBase.LibGit2.read_tree!\nBase.LibGit2.rebase!\nBase.LibGit2.ref_list\nBase.LibGit2.reftype\nBase.LibGit2.remotes\nBase.LibGit2.reset!\nBase.LibGit2.restore\nBase.LibGit2.revcount\nBase.LibGit2.set_remote_url\nBase.LibGit2.shortname\nBase.LibGit2.snapshot\nBase.LibGit2.status\nBase.LibGit2.stage\nBase.LibGit2.tag_create\nBase.LibGit2.tag_delete\nBase.LibGit2.tag_list\nBase.LibGit2.target\nBase.LibGit2.treewalk\nBase.LibGit2.upstream\nBase.LibGit2.url\nBase.LibGit2.with\nBase.LibGit2.workdir"
+    "text": "Some of this documentation assumes some prior knowledge of the libgit2 API. For more information on some of the objects and methods referenced here, consult the upstream libgit2 API reference.Base.LibGit2.AbstractCredentials\nBase.LibGit2.Buffer\nBase.LibGit2.CachedCredentials\nBase.LibGit2.CheckoutOptions\nBase.LibGit2.CloneOptions\nBase.LibGit2.DiffDelta\nBase.LibGit2.DiffFile\nBase.LibGit2.DiffOptionsStruct\nBase.LibGit2.FetchHead\nBase.LibGit2.FetchOptions\nBase.LibGit2.GitBlob\nBase.LibGit2.GitCommit\nBase.LibGit2.GitHash\nBase.LibGit2.GitObject\nBase.LibGit2.GitRemote\nBase.LibGit2.GitRemoteAnon\nBase.LibGit2.GitRepo\nBase.LibGit2.GitRepoExt\nBase.LibGit2.GitShortHash\nBase.LibGit2.GitSignature\nBase.LibGit2.GitStatus\nBase.LibGit2.GitTag\nBase.LibGit2.GitTree\nBase.LibGit2.IndexEntry\nBase.LibGit2.IndexTime\nBase.LibGit2.MergeOptions\nBase.LibGit2.ProxyOptions\nBase.LibGit2.PushOptions\nBase.LibGit2.RebaseOperation\nBase.LibGit2.RebaseOptions\nBase.LibGit2.RemoteCallbacks\nBase.LibGit2.SSHCredentials\nBase.LibGit2.SignatureStruct\nBase.LibGit2.StatusEntry\nBase.LibGit2.StatusOptions\nBase.LibGit2.StrArrayStruct\nBase.LibGit2.TimeStruct\nBase.LibGit2.UserPasswordCredentials\nBase.LibGit2.add!\nBase.LibGit2.add_fetch!\nBase.LibGit2.add_push!\nBase.LibGit2.addblob!\nBase.LibGit2.author\nBase.LibGit2.authors\nBase.LibGit2.branch\nBase.LibGit2.branch!\nBase.LibGit2.checkout!\nBase.LibGit2.checkused!\nBase.LibGit2.clone\nBase.LibGit2.commit\nBase.LibGit2.committer\nBase.LibGit2.create_branch\nBase.LibGit2.credentials_callback\nBase.LibGit2.credentials_cb\nBase.LibGit2.default_signature\nBase.LibGit2.delete_branch\nBase.LibGit2.diff_files\nBase.LibGit2.fetch\nBase.LibGit2.fetch_refspecs\nBase.LibGit2.fetchhead_foreach_cb\nBase.LibGit2.merge!(::Base.LibGit2.GitRepo; ::Any...)\nBase.LibGit2.ffmerge!\nBase.LibGit2.fullname\nBase.LibGit2.get_creds!\nBase.LibGit2.gitdir\nBase.LibGit2.head\nBase.LibGit2.head!\nBase.LibGit2.head_oid\nBase.LibGit2.headname\nBase.LibGit2.init\nBase.LibGit2.is_ancestor_of\nBase.LibGit2.isbinary\nBase.LibGit2.iscommit\nBase.LibGit2.isdiff\nBase.LibGit2.isdirty\nBase.LibGit2.isorphan\nBase.LibGit2.lookup_branch\nBase.LibGit2.mirror_callback\nBase.LibGit2.mirror_cb\nBase.LibGit2.message\nBase.LibGit2.name\nBase.LibGit2.need_update\nBase.LibGit2.objtype\nBase.LibGit2.path\nBase.LibGit2.peel\nBase.LibGit2.posixpath\nBase.LibGit2.push\nBase.LibGit2.push_refspecs\nBase.LibGit2.read_tree!\nBase.LibGit2.rebase!\nBase.LibGit2.ref_list\nBase.LibGit2.reftype\nBase.LibGit2.remotes\nBase.LibGit2.remove!\nBase.LibGit2.reset!\nBase.LibGit2.restore\nBase.LibGit2.revcount\nBase.LibGit2.set_remote_url\nBase.LibGit2.shortname\nBase.LibGit2.snapshot\nBase.LibGit2.status\nBase.LibGit2.stage\nBase.LibGit2.tag_create\nBase.LibGit2.tag_delete\nBase.LibGit2.tag_list\nBase.LibGit2.target\nBase.LibGit2.treewalk\nBase.LibGit2.upstream\nBase.LibGit2.update!\nBase.LibGit2.url\nBase.LibGit2.with\nBase.LibGit2.workdir"
 },
 
 {
