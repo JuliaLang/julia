@@ -271,7 +271,7 @@ refresh_multi_line(s::ModeState) = refresh_multi_line(terminal(s), s)
 refresh_multi_line(termbuf::TerminalBuffer, s::ModeState) = refresh_multi_line(termbuf, terminal(s), s)
 refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState) = (@assert term == terminal(s); refresh_multi_line(termbuf,s))
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf, state::InputAreaState, prompt = ""; indent = 0)
-    lock(REFRESH_LOCK)
+    while !trylock(REFRESH_LOCK) sleep(.01) end
     _clear_input_area(termbuf, state)
 
     cols = width(terminal)
