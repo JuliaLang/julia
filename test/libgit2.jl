@@ -1825,7 +1825,6 @@ mktempdir() do dir
                 # User provides an empty private key which triggers a re-prompt
                 challenges = [
                     "Private key location for 'git@github.com':" => "\n",
-                    "Public key location for 'git@github.com':" => "\n",
                     "Private key location for 'git@github.com':" => "\x04",
                 ]
                 err, auth_attempts = challenge_prompt(ssh_ex, challenges)
