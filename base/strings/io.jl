@@ -372,6 +372,8 @@ macro raw_str(s); s; end
 ## multiline strings ##
 
 """
+    indentation(str::AbstractString; tabwidth=8)
+
 Calculate the width of leading blank space, and also return if string is blank
 
 Returns:
@@ -393,6 +395,8 @@ function indentation(str::AbstractString; tabwidth=8)
 end
 
 """
+    unindent(str::AbstractString, indent::Int; tabwidth=8)
+
 Removes leading indentation from string
 
 Returns:
