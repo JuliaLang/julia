@@ -1147,35 +1147,13 @@ julia> @inferred max(1,2)
 ```
 """
 macro inferred(ex)
-    if Meta.isexpr(ex, :ref)
-        ex = Expr(:call, :getindex, ex.args...)
-    end
-    Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
-
-    Base.remove_linenums!(quote
-        let
-            $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
-                # Has keywords
-                args = gensym()
-                kwargs = gensym()
-                quote
-                    $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                    inftypes = $(Base.gen_call_with_extracted_types(__module__, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
-                end
-            else
-                # No keywords
-                quote
-                    args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
-                    result = $(esc(ex.args[1]))(args...)
-                    inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
-                end
-            end)
-            @assert length(inftypes) == 1
-            rettype = isa(result, Type) ? Type{result} : typeof(result)
+    inference = _inferred_impl(ex, __module__)
+    quote
+        let (rettype, inftypes, result) = $inference
             rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
             result
         end
-    end)
+    end
 end
 
 """
@@ -1217,15 +1195,43 @@ false
 ```
 """
 macro isinferred(ex)
+    inference = _inferred_impl(ex, __module__)
     quote
-        try
-            @inferred $(esc(ex))
-            true
-        catch err
-            isa(err, ErrorException) ? false : rethrow(err)
-            false
+        let (rettype, inftypes, result) = $inference
+            rettype == inftypes[1]
         end
     end
+end
+
+function _inferred_impl(ex, __module__)
+    if Meta.isexpr(ex, :ref)
+        ex = Expr(:call, :getindex, ex.args...)
+    end
+    Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
+
+    Base.remove_linenums!(quote
+        let
+            $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
+                # Has keywords
+                args = gensym()
+                kwargs = gensym()
+                quote
+                    $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
+                    inftypes = $(Base.gen_call_with_extracted_types(__module__, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                end
+            else
+                # No keywords
+                quote
+                    args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
+                    result = $(esc(ex.args[1]))(args...)
+                    inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
+                end
+            end)
+            @assert length(inftypes) == 1
+            rettype = isa(result, Type) ? Type{result} : typeof(result)
+            rettype, inftypes, result
+        end
+    end)
 end
 
 # Test approximate equality of vectors or columns of matrices modulo floating
