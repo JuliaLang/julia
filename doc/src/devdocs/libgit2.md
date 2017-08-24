@@ -119,6 +119,7 @@ Base.LibGit2.tag_create
 Base.LibGit2.tag_delete
 Base.LibGit2.tag_list
 Base.LibGit2.target
+Base.LibGit2.transact
 Base.LibGit2.treewalk
 Base.LibGit2.upstream
 Base.LibGit2.update!
