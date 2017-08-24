@@ -158,7 +158,7 @@ end
 
 Tests whether two strings are equal character by character.
 
-#Examples
+# Examples
 ```jldoctest
 julia> "abc" == "abc"
 true
@@ -174,7 +174,7 @@ false
 
 Tests whether string `a` comes before string `b` in alphabetical order.
 
-#Examples
+# Examples
 ```jldoctest
 julia> isless("a", "b")
 true
