@@ -6505,7 +6505,7 @@ static void init_julia_llvm_env(Module *m)
                                          "julia.gc_use");
     add_named_global(gc_use_func, (void*)NULL, /*dllimport*/false);
 
-    pointer_from_objref_func = Function::Create(FunctionType::get(T_pjlvalue,
+    pointer_from_objref_func = Function::Create(FunctionType::get(T_size,
                                          ArrayRef<Type*>(PointerType::get(T_jlvalue, AddressSpace::Derived)), false),
                                          Function::ExternalLinkage,
                                          "julia.pointer_from_objref");
