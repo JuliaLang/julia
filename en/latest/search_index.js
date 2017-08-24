@@ -7165,7 +7165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\n"
 },
 
 {
@@ -8365,7 +8365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -15645,7 +15645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.IOContext",
     "category": "Method",
-    "text": "IOContext(io::IO, KV::Pair)\n\nCreate an IOContext that wraps a given stream, adding the specified key=>value pair to the properties of that stream (note that io can itself be an IOContext).\n\nuse (key => value) in dict to see if this particular combination is in the properties set\nuse get(dict, key, default) to retrieve the most recent value for a particular key\n\nThe following properties are in common use:\n\n:compact: Boolean specifying that small values should be printed more compactly, e.g. that numbers should be printed with fewer digits. This is set when printing array elements.\n:limit: Boolean specifying that containers should be truncated, e.g. showing … in place of most elements.\n:displaysize: A Tuple{Int,Int} giving the size in rows and columns to use for text output. This can be used to override the display size for called functions, but to get the size of the screen use the displaysize function.\n\njulia> function f(io::IO)\n           if get(io, :short, false)\n               print(io, \"short\")\n           else\n               print(io, \"loooooong\")\n           end\n       end\nf (generic function with 1 method)\n\njulia> f(STDOUT)\nloooooong\njulia> f(IOContext(STDOUT, :short => true))\nshort\n\n\n\n"
+    "text": "IOContext(io::IO, KV::Pair...)\n\nCreate an IOContext that wraps a given stream, adding the specified key=>value pairs to the properties of that stream (note that io can itself be an IOContext).\n\nuse (key => value) in dict to see if this particular combination is in the properties set\nuse get(dict, key, default) to retrieve the most recent value for a particular key\n\nThe following properties are in common use:\n\n:compact: Boolean specifying that small values should be printed more compactly, e.g. that numbers should be printed with fewer digits. This is set when printing array elements.\n:limit: Boolean specifying that containers should be truncated, e.g. showing … in place of most elements.\n:displaysize: A Tuple{Int,Int} giving the size in rows and columns to use for text output. This can be used to override the display size for called functions, but to get the size of the screen use the displaysize function.\n\njulia> function f(io::IO)\n           if get(io, :short, false)\n               print(io, \"short\")\n           else\n               print(io, \"loooooong\")\n           end\n       end\nf (generic function with 1 method)\n\njulia> f(STDOUT)\nloooooong\njulia> f(IOContext(STDOUT, :short => true))\nshort\n\n\n\n"
 },
 
 {
