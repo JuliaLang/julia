@@ -160,11 +160,29 @@ module Consts
                                 MERGE_FILE_FAVOR_OURS   = 1,
                                 MERGE_FILE_FAVOR_THEIRS = 2,
                                 MERGE_FILE_FAVOR_UNION  = 3)
-
+    """ The user's instructions for how to perform a possible merge.
+    * `MERGE_PREFERENCE_NONE`: the user has no preference.
+    * `MERGE_PREFERENCE_NO_FASTFORWARD`: do not allow any fast-forward merges.
+    * `MERGE_PREFERENCE_FASTFORWARD_ONLY`: allow only fast-forward merges and no
+      other type (which may introduce conflicts).
+    """
     @enum(GIT_MERGE_PREFERENCE, MERGE_PREFERENCE_NONE             = 0,
                                 MERGE_PREFERENCE_NO_FASTFORWARD   = 1,
                                 MERGE_PREFERENCE_FASTFORWARD_ONLY = 2)
-
+    """ Result of analysis on merge possibilities.
+    * `MERGE_ANALYSIS_NONE`: it is not possible to merge the elements of `anns`.
+    * `MERGE_ANALYSIS_NORMAL`: a regular merge, when HEAD and the commits that the
+      user wishes to merge have all diverged from a common ancestor. In this case the
+      changes have to be resolved and conflicts may occur.
+    * `MERGE_ANALYSIS_UP_TO_DATE`: all the input commits the user wishes to merge can
+      be reached from HEAD, so no merge needs to be performed.
+    * `MERGE_ANALYSIS_FASTFORWARD`: the input commit is a descendant of HEAD and so no
+      merge needs to be performed - instead, the user can simply checkout the
+      input commit(s).
+    * `MERGE_ANALYSIS_UNBORN`: the HEAD of the repository refers to a commit which does not
+      exist. It is not possible to merge, but it may be possible to checkout the input
+      commits.
+    """
     @enum(GIT_MERGE_ANALYSIS, MERGE_ANALYSIS_NONE        = 0,
                               MERGE_ANALYSIS_NORMAL      = 1 << 0,
                               MERGE_ANALYSIS_UP_TO_DATE  = 1 << 1,

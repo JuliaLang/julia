@@ -93,6 +93,7 @@ Base.LibGit2.lookup_branch
 Base.LibGit2.mirror_callback
 Base.LibGit2.mirror_cb
 Base.LibGit2.message
+Base.LibGit2.merge_analysis
 Base.LibGit2.name
 Base.LibGit2.need_update
 Base.LibGit2.objtype
