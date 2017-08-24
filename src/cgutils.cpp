@@ -1674,8 +1674,8 @@ static Value *emit_array_nd_index(jl_codectx_t &ctx,
         bool linear_indexing = nd == -1 || nidxs < (size_t)nd;
         if (linear_indexing && nidxs == 1) {
             // Check against the entire linear span of the array
-            Value *alen = emit_arraylen(ainfo, ex, ctx);
-            builder.CreateCondBr(builder.CreateICmpULT(i, alen), endBB, failBB);
+            Value *alen = emit_arraylen(ctx, ainfo, ex);
+            ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(i, alen), endBB, failBB);
         } else {
             // Compare the last index of the access against the last dimension of
             // the accessed array, i.e. `if !(last_index < last_dimension) goto error`.
