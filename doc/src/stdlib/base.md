@@ -83,7 +83,7 @@ Base.widen
 Base.identity
 ```
 
-## Types
+## Dealing with Types
 
 ```@docs
 Base.supertype
@@ -109,9 +109,20 @@ Base.isbits
 Base.isleaftype
 Base.typejoin
 Base.typeintersect
-Base.Val
-Base.Enums.@enum
 Base.instances
+```
+
+## Special Types
+
+```@docs
+Core.Any
+Base.Enums.@enum
+Core.Union
+Union{}
+Core.UnionAll
+Core.Tuple
+Base.Val
+Core.Vararg
 ```
 
 ## Generic Functions

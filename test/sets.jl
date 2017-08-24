@@ -233,6 +233,8 @@ u = unique([1,1,2])
 # issue 20105
 @test @inferred(unique(x for x in 1:1)) == [1]
 @test unique(x for x in Any[1,1.0])::Vector{Real} == [1]
+@test unique(x for x in Real[1,1.0])::Vector{Real} == [1]
+@test unique(Integer[1,1,2])::Vector{Integer} == [1,2]
 
 # unique!
 @testset "unique!" begin
