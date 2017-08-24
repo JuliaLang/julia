@@ -1731,6 +1731,15 @@ export hex2num
 @eval MPFR @deprecate get_version() version() false
 @eval LinAlg.LAPACK @deprecate laver() version() false
 
+# PR #23427
+@deprecate_binding e          ℯ
+@deprecate_binding eu         ℯ
+@deprecate_binding γ          MathConstants.γ
+@deprecate_binding eulergamma MathConstants.eulergamma
+@deprecate_binding catalan    MathConstants.catalan
+@deprecate_binding φ          MathConstants.φ
+@deprecate_binding golden     MathConstants.golden
+
 # PR #23271
 function IOContext(io::IO; kws...)
     depwarn("IOContext(io, k=v, ...) is deprecated, use IOContext(io, :k => v, ...) instead.", :IOContext)

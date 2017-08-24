@@ -69,12 +69,12 @@ Base.bytes2hex
 Base.one
 Base.oneunit
 Base.zero
-Base.pi
 Base.im
-Base.eu
-Base.catalan
-Base.eulergamma
-Base.golden
+Base.MathConstants.pi
+Base.MathConstants.ℯ
+Base.MathConstants.catalan
+Base.MathConstants.eulergamma
+Base.MathConstants.golden
 Base.Inf
 Base.Inf32
 Base.Inf16

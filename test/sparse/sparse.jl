@@ -428,7 +428,7 @@ end
 
 @testset "exp" begin
     A = sprandn(5,5,0.2)
-    @test e.^A ≈ e.^Array(A)
+    @test ℯ.^A ≈ ℯ.^Array(A)
 end
 
 @testset "reductions" begin

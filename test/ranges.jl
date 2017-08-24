@@ -1152,7 +1152,7 @@ end
     # test default values; n = 50, base = 10
     @test logspace(a, b) == logspace(a, b, 50) == 10 .^ linspace(a, b, 50)
     @test logspace(a, b, n) == 10 .^ linspace(a, b, n)
-    for base in (10, 2, e)
+    for base in (10, 2, ℯ)
         @test logspace(a, b, base=base) == logspace(a, b, 50, base=base) == base.^linspace(a, b, 50)
         @test logspace(a, b, n, base=base) == base.^linspace(a, b, n)
     end

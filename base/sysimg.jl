@@ -323,6 +323,8 @@ include("hashing2.jl")
 
 # irrational mathematical constants
 include("irrationals.jl")
+include("mathconstants.jl")
+using .MathConstants: ℯ, π, pi
 
 # random number generation
 include("random/dSFMT.jl")
