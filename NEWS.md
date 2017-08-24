@@ -168,6 +168,10 @@ This section lists changes that do not have deprecation warnings.
     way as `^(A::Integer, p::Integer)`. This means, for instance, that `[1 1; 0 1]^big(1)`
     will return a `Matrix{BigInt}` instead of a `Matrix{Int}` ([#23366]).
 
+  * The element type of the input is now preserved in `unique`. Previously the element type
+    of the output was shrunk to fit the union of the type of each element in the input.
+    ([#22696])
+
 Library improvements
 --------------------
 
@@ -1204,6 +1208,7 @@ Command-line option changes
 [#22588]: https://github.com/JuliaLang/julia/issues/22588
 [#22605]: https://github.com/JuliaLang/julia/issues/22605
 [#22666]: https://github.com/JuliaLang/julia/issues/22666
+[#22696]: https://github.com/JuliaLang/julia/issues/22696
 [#22703]: https://github.com/JuliaLang/julia/issues/22703
 [#22712]: https://github.com/JuliaLang/julia/issues/22712
 [#22718]: https://github.com/JuliaLang/julia/issues/22718

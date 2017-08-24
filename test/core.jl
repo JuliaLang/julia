@@ -5382,7 +5382,8 @@ for U in unboxedunions
             # deleteat!
             F = Base.uniontypes(U)[2]
             A = U[rand(F(1):F(len)) for i = 1:len]
-            deleteat!(A, map(Int, sort!(unique(A[1:4]))))
+            # The 2-arg `unique` method works around #22688
+            deleteat!(A, map(Int, sort!(unique(identity, A[1:4]))))
             A = U[initvalue2(F2) for i = 1:len]
             deleteat!(A, 1:2)
             @test length(A) == len - 2
