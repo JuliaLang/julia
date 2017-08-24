@@ -51,6 +51,19 @@ end
 
 Print (using [`print`](@ref)) `xs` followed by a newline.
 If `io` is not supplied, prints to [`STDOUT`](@ref).
+
+# Examples
+```jldoctest
+julia> println("Hello, world")
+Hello, world
+
+julia> io = IOBuffer();
+
+julia> println(io, "Hello, world")
+
+julia> String(take!(io))
+"Hello, world\n"
+```
 """
 println(io::IO, xs...) = print(io, xs..., '\n')
 
