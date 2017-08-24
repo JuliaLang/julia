@@ -11,18 +11,22 @@ struct LAPACKException <: Exception
 end
 
 struct ARPACKException <: Exception
-    info::String
+    info::BlasInt
 end
 
-function ARPACKException(i::Integer)
-    if i == -8
-        return ARPACKException("error return from calculation of a real Schur form.")
-    elseif i == -9
-        return ARPACKException("error return from calculation of eigenvectors.")
-    elseif i == -14
-        return ARPACKException("did not find any eigenvalues to sufficient accuracy. Try with a different starting vector or more Lanczos vectors by increasing the value of ncv.")
+function Base.showerror(io::IO, ex::ARPACKException)
+    print(io, "ARPACKException: ")
+    if ex.info == -8
+        print(io, "error return from calculation of a real Schur form.")
+    elseif ex.info == -9
+        print(io, "error return from calculation of eigenvectors.")
+    elseif ex.info == -14
+        print(io, string("did not find any eigenvalues to sufficient accuracy. ",
+            "Try with a different starting vector or more Lanczos vectors ",
+            "by increasing the value of ncv."))
+    else
+        print(io, "unspecified ARPACK error: $(ex.info)")
     end
-    return ARPACKException("unspecified ARPACK error: $i")
 end
 
 struct SingularException <: Exception
@@ -31,6 +35,15 @@ end
 
 struct PosDefException <: Exception
     info::BlasInt
+end
+function Base.showerror(io::IO, ex::PosDefException)
+    print(io, "PosDefException: matrix is not ")
+    if ex.info == -1
+        print(io, "Hermitian")
+    else
+        print(io, "positive definite")
+    end
+    print(io, "; Cholesky factorization failed.")
 end
 
 struct RankDeficientException <: Exception

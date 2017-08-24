@@ -177,7 +177,7 @@ function copy!(dest::Hermitian, src::Hermitian)
     if src.uplo == dest.uplo
         copy!(dest.data, src.data)
     else
-        ctranspose!(dest.data, src.data)
+        adjoint!(dest.data, src.data)
     end
     return dest
 end
@@ -212,16 +212,16 @@ issymmetric(A::Hermitian{<:Complex}) = isreal(A)
 issymmetric(A::Symmetric) = true
 transpose(A::Symmetric) = A
 transpose(A::Hermitian{<:Real}) = A
-ctranspose(A::Symmetric{<:Real}) = A
-function ctranspose(A::Symmetric)
-    AC = ctranspose(A.data)
+adjoint(A::Symmetric{<:Real}) = A
+function adjoint(A::Symmetric)
+    AC = adjoint(A.data)
     return Symmetric(AC, ifelse(A.uplo == 'U', :L, :U))
 end
 function transpose(A::Hermitian)
     AT = transpose(A.data)
     return Hermitian(AT, ifelse(A.uplo == 'U', :L, :U))
 end
-ctranspose(A::Hermitian) = A
+adjoint(A::Hermitian) = A
 trace(A::Hermitian) = real(trace(A.data))
 
 Base.conj(A::HermOrSym) = typeof(A)(conj(A.data), A.uplo)
@@ -307,7 +307,7 @@ A_mul_B!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatri
 At_mul_B(A::RealHermSymComplexSym, B::AbstractVector) = A*B
 At_mul_B(A::RealHermSymComplexSym, B::AbstractMatrix) = A*B
 A_mul_Bt(A::AbstractMatrix, B::RealHermSymComplexSym) = A*B
-## Hermitian{<:Number} and Symmetric{<:Real} are invariant to ctranspose; peel off the c
+## Hermitian{<:Number} and Symmetric{<:Real} are invariant to adjoint; peel off the c
 Ac_mul_B(A::RealHermSymComplexHerm, B::AbstractVector) = A*B
 Ac_mul_B(A::RealHermSymComplexHerm, B::AbstractMatrix) = A*B
 A_mul_Bc(A::AbstractMatrix, B::RealHermSymComplexHerm) = A*B

@@ -114,16 +114,19 @@ let s="lorem ipsum",
                SubString(s,12,14)=>""
                )
     for (ss,s) in sdict
+        local ss
         for i in -1:12
             @test isvalid(ss,i)==isvalid(s,i)
         end
     end
     for (ss,s) in sdict
+        local ss
         for i in 1:length(ss)
             @test ind2chr(ss,i)==ind2chr(s,i)
         end
     end
     for (ss,s) in sdict
+        local ss
         for i in 1:length(ss)
             @test chr2ind(ss,i)==chr2ind(s,i)
         end

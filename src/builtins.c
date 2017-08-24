@@ -259,6 +259,10 @@ JL_CALLABLE(jl_f_sizeof)
     jl_value_t *x = args[0];
     if (jl_is_unionall(x) || jl_is_uniontype(x)) {
         x = jl_unwrap_unionall(x);
+        size_t elsize = 0, al = 0;
+        int isinline = jl_islayout_inline(x, &elsize, &al);
+        if (isinline)
+            return jl_box_long(elsize);
         if (!jl_is_datatype(x))
             jl_error("argument is an abstract type; size is indeterminate");
     }
@@ -270,8 +274,9 @@ JL_CALLABLE(jl_f_sizeof)
             jl_error("type does not have a fixed size");
         return jl_box_long(jl_datatype_size(x));
     }
-    if (jl_is_array(x))
+    if (jl_is_array(x)) {
         return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
+    }
     if (jl_is_string(x))
         return jl_box_long(jl_string_len(x));
     if (jl_is_symbol(x))

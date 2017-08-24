@@ -305,6 +305,13 @@
 (define (eq-sym? a b)
   (or (eq? a b) (and (ssavalue? a) (ssavalue? b) (eqv? (cdr a) (cdr b)))))
 
+(define (blockify e)
+  (if (and (pair? e) (eq? (car e) 'block))
+      (if (null? (cdr e))
+          `(block (null))
+          e)
+      `(block ,e)))
+
 (define (make-var-info name) (list name '(core Any) 0))
 (define vinfo:name car)
 (define vinfo:type cadr)

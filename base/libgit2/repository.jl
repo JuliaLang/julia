@@ -307,6 +307,13 @@ function Base.show(io::IO, result::GitDescribeResult)
     println(io, fmt_desc)
 end
 
+"""
+    checkout_tree(repo::GitRepo, obj::GitObject; options::CheckoutOptions = CheckoutOptions())
+
+Update the working tree and index of `repo` to match the tree pointed to by `obj`.
+`obj` can be a commit, a tag, or a tree. `options` controls how the checkout will
+be performed. See [`CheckoutOptions`](@ref) for more information.
+"""
 function checkout_tree(repo::GitRepo, obj::GitObject;
                        options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_tree, :libgit2), Cint,
@@ -314,6 +321,13 @@ function checkout_tree(repo::GitRepo, obj::GitObject;
                  repo.ptr, obj.ptr, Ref(options))
 end
 
+"""
+    checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitIndex}(); options::CheckoutOptions = CheckoutOptions())
+
+Update the working tree of `repo` to match the index `idx`. If `idx` is null, the
+index of `repo` will be used. `options` controls how the checkout will be performed.
+See [`CheckoutOptions`](@ref) for more information.
+"""
 function checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitIndex}();
                         options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_index, :libgit2), Cint,
@@ -323,6 +337,16 @@ function checkout_index(repo::GitRepo, idx::Nullable{GitIndex} = Nullable{GitInd
                  Ref(options))
 end
 
+"""
+    checkout_head(repo::GitRepo; options::CheckoutOptions = CheckoutOptions())
+
+Update the index and working tree of `repo` to match the commit pointed to by HEAD.
+`options` controls how the checkout will be performed. See [`CheckoutOptions`](@ref) for more information.
+
+!!! warning
+    *Do not* use this function to switch branches! Doing so will cause checkout
+    conflicts.
+"""
 function checkout_head(repo::GitRepo; options::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_checkout_head, :libgit2), Cint,
                  (Ptr{Void}, Ptr{CheckoutOptions}),
@@ -365,6 +389,19 @@ function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
     return head_oid(repo)
 end
 
+"""
+    clone(repo_url::AbstractString, repo_path::AbstractString, clone_opts::CloneOptions)
+
+Clone the remote repository at `repo_url` (which can be a remote URL or a path on the local
+filesystem) to `repo_path` (which must be a path on the local filesystem). Options for the
+clone, such as whether to perform a bare clone or not, are set by [`CloneOptions`](@ref).
+
+# Examples
+```julia
+repo_url = "https://github.com/JuliaLang/Example.jl"
+repo = LibGit2.clone(repo_url, "/home/me/projects/Example")
+```
+"""
 function clone(repo_url::AbstractString, repo_path::AbstractString,
                clone_opts::CloneOptions)
     clone_opts_ref = Ref(clone_opts)
@@ -375,6 +412,29 @@ function clone(repo_url::AbstractString, repo_path::AbstractString,
     return GitRepo(repo_ptr_ptr[])
 end
 
+"""
+    fetchheads(repo::GitRepo) -> Vector{FetchHead}
+
+Return the list of all the fetch heads for `repo`, each represented as a [`FetchHead`](@ref),
+including their names, URLs, and merge statuses.
+
+# Examples
+```julia-repl
+julia> fetch_heads = LibGit2.fetchheads(repo);
+
+julia> fetch_heads[1].name
+"refs/heads/master"
+
+julia> fetch_heads[1].ismerge
+true
+
+julia> fetch_heads[2].name
+"refs/heads/test_branch"
+
+julia> fetch_heads[2].ismerge
+false
+```
+"""
 function fetchheads(repo::GitRepo)
     fhr = Ref{Vector{FetchHead}}(FetchHead[])
     ffcb = fetchhead_foreach_cb()

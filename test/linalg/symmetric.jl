@@ -131,16 +131,16 @@ end
                 end
             end
 
-            @testset "transpose, ctranspose" begin
+            @testset "transpose, adjoint" begin
                 S = Symmetric(asym)
                 H = Hermitian(aherm)
                 @test  transpose(S) === S == asym
-                @test ctranspose(H) === H == aherm
+                @test adjoint(H) === H == aherm
                 if eltya <: Real
-                    @test ctranspose(S) === S == asym
+                    @test adjoint(S) === S == asym
                     @test  transpose(H) === H == aherm
                 else
-                    @test ctranspose(S) ==  Symmetric(conj(asym))
+                    @test adjoint(S) ==  Symmetric(conj(asym))
                     @test  transpose(H) ==  Hermitian(transpose(aherm))
                 end
             end
@@ -245,10 +245,18 @@ end
                 @testset "pow" begin
                     # Integer power
                     @test (asym)^2   ≈ (Symmetric(asym)^2)::Symmetric
-                    @test (asym)^-2  ≈ (Symmetric(asym)^-2)::Symmetric
+                    if eltya <: Integer && !isone(asym) && !isone(-asym)
+                        @test_throws DomainError (asym)^-2
+                    else
+                        @test (asym)^-2  ≈ (Symmetric(asym)^-2)::Symmetric
+                    end
                     @test (aposs)^2  ≈ (Symmetric(aposs)^2)::Symmetric
                     @test (aherm)^2  ≈ (Hermitian(aherm)^2)::Hermitian
-                    @test (aherm)^-2 ≈ (Hermitian(aherm)^-2)::Hermitian
+                    if eltya <: Integer && !isone(aherm) && !isone(-aherm)
+                        @test_throws DomainError (aherm)^-2
+                    else
+                        @test (aherm)^-2 ≈ (Hermitian(aherm)^-2)::Hermitian
+                    end
                     @test (apos)^2   ≈ (Hermitian(apos)^2)::Hermitian
                     # integer floating point power
                     @test (asym)^2.0   ≈ (Symmetric(asym)^2.0)::Symmetric

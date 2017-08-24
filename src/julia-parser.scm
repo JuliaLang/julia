@@ -337,13 +337,20 @@
                               (write-char (read-char port) str)
                               (read-digs #t #f)
                               (disallow-dot))
-                       (io.ungetc port c))))
+                       (io.ungetc port c)))))
+      (if (and (char? c)
+               (or (eq? pred char-bin?) (eq? pred char-oct?)
+                   (and (eq? pred char-hex?) (not is-hex-float-literal)))
+               (or (char-numeric? c)
+                   (and (identifier-start-char? c)
+                        (syntax-deprecation port  ;; remove after v0.7
+                                            (string (get-output-string str) c)
+                                            (string (get-output-string str) " * " c))
+                        #f)))  ;; remove after v0.7
           ;; disallow digits after binary or octal literals, e.g., 0b12
-          (if (and (or (eq? pred char-bin?) (eq? pred char-oct?))
-                   (not (eof-object? c))
-                   (char-numeric? c))
-              (error (string "invalid numeric constant \""
-                             (get-output-string str) c "\"")))))
+          ;; and disallow identifier chars after hex literals.
+          (error (string "invalid numeric constant \""
+                         (get-output-string str) c "\""))))
     (let* ((s (get-output-string str))
            (r (cond ((eq? pred char-hex?) 16)
                     ((eq? pred char-oct?) 8)
@@ -1604,7 +1611,18 @@
 
 ;; as above, but allows both "i=r" and "i in r"
 (define (parse-iteration-spec s)
-  (let* ((lhs (parse-pipes s))
+  (let* ((outer? (if (eq? (peek-token s) 'outer)
+                     (begin
+                       (take-token s)
+                       (let ((nxt (peek-token s)))
+                         (if (or (memq nxt '(= in ∈))
+                                 (not (symbol? nxt))
+                                 (operator? nxt))
+                             (begin (ts:put-back! s 'outer #t)
+                                    #f)
+                             #t)))
+                     #f))
+         (lhs (parse-pipes s))
          (t   (peek-token s)))
     (cond ((memq t '(= in ∈))
            (take-token s)
@@ -1614,7 +1632,9 @@
                  ;; should be: (error "invalid iteration specification")
                  (syntax-deprecation s (string "for " (deparse `(= ,lhs ,rhs)) " " t)
                                      (string "for " (deparse `(= ,lhs ,rhs)) "; " t)))
-             `(= ,lhs ,rhs)))
+             (if outer?
+                 `(= (outer ,lhs) ,rhs)
+                 `(= ,lhs ,rhs))))
           ((and (eq? lhs ':) (closing-token? t))
            ':)
           (else (error "invalid iteration specification")))))

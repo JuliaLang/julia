@@ -159,12 +159,19 @@ end
 invmod(n::Integer, m::Integer) = invmod(promote(n,m)...)
 
 # ^ for any x supporting *
-to_power_type(x::Number) = oftype(x*x, x)
-to_power_type(x) = x
-@noinline throw_domerr_powbysq(p) = throw(DomainError(p,
+to_power_type(x) = convert(promote_op(*, typeof(x), typeof(x)), x)
+@noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p,
     string("Cannot raise an integer x to a negative power ", p, '.',
-           "\nMake x a float by adding a zero decimal (e.g., 2.0^$p instead ",
-           "of 2^$p), or write 1/x^$(-p), float(x)^$p, or (x//1)^$p")))
+           "\nConvert input to float.")))
+@noinline throw_domerr_powbysq(::Integer, p) = throw(DomainError(p,
+   string("Cannot raise an integer x to a negative power ", p, '.',
+          "\nMake x a float by adding a zero decimal (e.g., 2.0^$p instead ",
+          "of 2^$p), or write 1/x^$(-p), float(x)^$p, or (x//1)^$p")))
+@noinline throw_domerr_powbysq(::AbstractMatrix, p) = throw(DomainError(p,
+   string("Cannot raise an integer matrix x to a negative power ", p, '.',
+          "\nMake x a float matrix by adding a zero decimal ",
+          "(e.g., [2.0 1.0;1.0 0.0]^$p instead ",
+          "of [2 1;1 0]^$p), or write float(x)^$p or Rational.(x)^$p")))
 function power_by_squaring(x_, p::Integer)
     x = to_power_type(x_)
     if p == 1
@@ -174,9 +181,9 @@ function power_by_squaring(x_, p::Integer)
     elseif p == 2
         return x*x
     elseif p < 0
-        x == 1 && return copy(x)
-        x == -1 && return iseven(p) ? one(x) : copy(x)
-        throw_domerr_powbysq(p)
+        isone(x) && return copy(x)
+        isone(-x) && return iseven(p) ? one(x) : copy(x)
+        throw_domerr_powbysq(x, p)
     end
     t = trailing_zeros(p) + 1
     p >>= t
@@ -196,7 +203,7 @@ function power_by_squaring(x_, p::Integer)
 end
 power_by_squaring(x::Bool, p::Unsigned) = ((p==0) | x)
 function power_by_squaring(x::Bool, p::Integer)
-    p < 0 && !x && throw_domerr_powbysq(p)
+    p < 0 && !x && throw_domerr_powbysq(x, p)
     return (p==0) | x
 end
 
@@ -833,9 +840,8 @@ end
 
 function factorial(n::Integer)
     n < 0 && throw(DomainError(n, "`n` must be nonnegative."))
-    local f::typeof(n*n), i::typeof(n*n)
-    f = 1
-    for i = 2:n
+    f::typeof(n*n) = 1
+    for i::typeof(n*n) = 2:n
         f *= i
     end
     return f

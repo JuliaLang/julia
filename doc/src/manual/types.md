@@ -69,7 +69,7 @@ an exception is thrown, otherwise, the left-hand value is returned:
 
 ```jldoctest
 julia> (1+2)::AbstractFloat
-ERROR: TypeError: typeassert: expected AbstractFloat, got Int64
+ERROR: TypeError: in typeassert, expected AbstractFloat, got Int64
 
 julia> (1+2)::Int
 3
@@ -345,7 +345,7 @@ must be convertible to `Int`:
 julia> Foo((), 23.5, 1)
 ERROR: InexactError: convert(Int64, 23.5)
 Stacktrace:
- [1] convert at ./float.jl:681 [inlined]
+ [1] convert at ./float.jl:701 [inlined]
  [2] Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
 ```
 
@@ -483,7 +483,7 @@ argument types, constructed using the special `Union` function:
 
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
-Union{AbstractString, Int64}
+Union{Int64, AbstractString}
 
 julia> 1 :: IntOrString
 1
@@ -492,7 +492,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: typeassert: expected Union{AbstractString, Int64}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
 ```
 
 The compilers for many languages have an internal union construct for reasoning about types; Julia
@@ -651,7 +651,7 @@ ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of t
 This may have arisen from a call to the constructor Point{Float64}(...),
 since type constructors fall back to convert methods.
 Stacktrace:
- [1] Point{Float64}(::Float64) at ./sysimg.jl:102
+ [1] Point{Float64}(::Float64) at ./sysimg.jl:103
 
 julia> Point{Float64}(1.0,2.0,3.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
@@ -801,10 +801,10 @@ julia> Pointy{Real}
 Pointy{Real}
 
 julia> Pointy{AbstractString}
-ERROR: TypeError: Pointy: in T, expected T<:Real, got Type{AbstractString}
+ERROR: TypeError: in Pointy, in T, expected T<:Real, got Type{AbstractString}
 
 julia> Pointy{1}
-ERROR: TypeError: Pointy: in T, expected T<:Real, got Int64
+ERROR: TypeError: in Pointy, in T, expected T<:Real, got Int64
 ```
 
 Type parameters for parametric composite types can be restricted in the same manner:
@@ -1163,8 +1163,8 @@ is raised:
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
 Closest candidates are:
-  supertype(!Matched::DataType) at operators.jl:41
-  supertype(!Matched::UnionAll) at operators.jl:46
+  supertype(!Matched::DataType) at operators.jl:42
+  supertype(!Matched::UnionAll) at operators.jl:47
 ```
 
 ## Custom pretty-printing
@@ -1423,7 +1423,7 @@ You can safely access the value of a `Nullable` object using [`get()`](@ref):
 julia> get(Nullable{Float64}())
 ERROR: NullException()
 Stacktrace:
- [1] get(::Nullable{Float64}) at ./nullable.jl:92
+ [1] get(::Nullable{Float64}) at ./nullable.jl:118
 
 julia> get(Nullable(1.0))
 1.0

@@ -401,11 +401,11 @@ end
             fullAt = transpose(Array(A))
             @test transpose(A) == fullAt
             @test transpose!(similar(At), A) == fullAt
-            # ctranspose[!]
+            # adjoint[!]
             C = A + im*A/2
-            fullCh = ctranspose(Array(C))
-            @test ctranspose(C) == fullCh
-            @test ctranspose!(similar(sparse(fullCh)), C) == fullCh
+            fullCh = adjoint(Array(C))
+            @test adjoint(C) == fullCh
+            @test adjoint!(similar(sparse(fullCh)), C) == fullCh
             # permute[!]
             p = randperm(m)
             q = randperm(n)
@@ -423,7 +423,7 @@ end
 @testset "transpose of SubArrays" begin
     A = view(sprandn(10, 10, 0.3), 1:4, 1:4)
     @test  transpose(Array(A)) == Array(transpose(A))
-    @test ctranspose(Array(A)) == Array(ctranspose(A))
+    @test adjoint(Array(A)) == Array(adjoint(A))
 end
 
 @testset "exp" begin
@@ -1095,14 +1095,14 @@ end
     N=2^3
     Irand = randperm(M)
     Jrand = randperm(N)
-    I = sort([Irand; Irand; Irand])
+    II = sort([Irand; Irand; Irand])
     J = [Jrand; Jrand]
 
     SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]]
     for S in SA
         res = Any[1,2,3]
         for searchtype in [0, 1, 2]
-            res[searchtype+1] = test_getindex_algs(S, I, J, searchtype)
+            res[searchtype+1] = test_getindex_algs(S, II, J, searchtype)
         end
 
         @test res[1] == res[2] == res[3]
@@ -1110,12 +1110,12 @@ end
 
     M = 2^14
     N=2^4
-    I = randperm(M)
+    II = randperm(M)
     J = randperm(N)
     Jsorted = sort(J)
 
     SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]]
-    IA = [I[1:round(Int,n)] for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]]
+    IA = [II[1:round(Int,n)] for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]]
     debug = false
     if debug
         @printf("         |         |         |        times        |        memory       |\n")
@@ -1316,11 +1316,32 @@ end
     @test trace(speye(5)) == 5
 end
 
-@testset "diagm on a matrix" begin
-    @test_throws DimensionMismatch diagm(sparse(ones(5,2)))
-    @test_throws DimensionMismatch diagm(sparse(ones(2,5)))
-    @test diagm(sparse(ones(1,5))) == speye(5)
-    @test diagm(sparse(ones(5,1))) == speye(5)
+@testset "spdiagm" begin
+    v = sprand(10, 0.4)
+    @test spdiagm(v)::SparseMatrixCSC                == diagm(Vector(v))
+    @test spdiagm(sparse(ones(5)))::SparseMatrixCSC  == speye(5)
+    @test spdiagm(sparse(zeros(5)))::SparseMatrixCSC == spzeros(5,5)
+end
+
+@testset "diag" begin
+    for T in (Float64, Complex128)
+        S1 = sprand(T,  5,  5, 0.5)
+        S2 = sprand(T, 10,  5, 0.5)
+        S3 = sprand(T,  5, 10, 0.5)
+        for S in (S1, S2, S3)
+            A = Matrix(S)
+            @test diag(S)::SparseVector{T,Int} == diag(A)
+            for k in -size(S,1):size(S,2)
+                @test diag(S, k)::SparseVector{T,Int} == diag(A, k)
+            end
+            @test_throws ArgumentError diag(S, -size(S,1)-1)
+            @test_throws ArgumentError diag(S,  size(S,2)+1)
+        end
+    end
+    # test that stored zeros are still stored zeros in the diagonal
+    S = sparse([1,3],[1,3],[0.0,0.0]); V = diag(S)
+    @test V.nzind == [1,3]
+    @test V.nzval == [0.0,0.0]
 end
 
 @testset "expandptr" begin
@@ -1773,14 +1794,14 @@ end
     show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
     @test String(take!(io)) == "2×2 SparseMatrixCSC{Float32,Int64} with 0 stored entries"
 
-    ioc = IOContext(io, displaysize = (5, 80), limit = true)
+    ioc = IOContext(io, :displaysize => (5, 80), :limit => true)
     show(ioc, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
     @test String(take!(io)) == "1×1 SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
     show(ioc, MIME"text/plain"(), sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0]))
     @test String(take!(io)) == "1×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  ⋮"
 
     # even number of rows
-    ioc = IOContext(io, displaysize = (8, 80), limit = true)
+    ioc = IOContext(io, :displaysize => (8, 80), :limit => true)
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4], Int64[1,1,2,2], [1.0,2.0,3.0,4.0]))
     @test String(take!(io)) == string("4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]",
                                       "  =  1.0\n  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0")
@@ -1794,7 +1815,7 @@ end
                                        "  =  1.0\n  ⋮\n  [5, 3]  =  1.0")
 
     # odd number of rows
-    ioc = IOContext(io, displaysize = (9, 80), limit = true)
+    ioc = IOContext(io, :displaysize => (9, 80), :limit => true)
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
     @test String(take!(io)) == string("5×3 SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
                                       "  =  1.0\n  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0")
@@ -1807,7 +1828,7 @@ end
     @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,$Int} with 18 stored entries:\n  [1, 1]",
                                        "  =  1.0\n  [2, 1]  =  1.0\n  ⋮\n  [5, 3]  =  1.0\n  [6, 3]  =  1.0")
 
-    ioc = IOContext(io, displaysize = (9, 80))
+    ioc = IOContext(io, :displaysize => (9, 80))
     show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5,6], Int64[1,1,2,2,3,3], [1.0,2.0,3.0,4.0,5.0,6.0]))
     @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]  =  1.0\n",
         "  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")

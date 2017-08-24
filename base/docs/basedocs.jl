@@ -808,19 +808,19 @@ julia> A = ones(7);
 julia> A[8]
 ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
 Stacktrace:
- [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:586
+ [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:763
 
 julia> B = ones(2, 3);
 
 julia> B[2, 4]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:587
+ [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:764
 
 julia> B[9]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [9]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:586
+ [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:763
 ```
 """
 BoundsError
@@ -982,7 +982,7 @@ Inf
 julia> div(2, 0)
 ERROR: DivideError: integer division error
 Stacktrace:
- [1] div(::Int64, ::Int64) at ./int.jl:183
+ [1] div(::Int64, ::Int64) at ./int.jl:220
 ```
 """
 DivideError

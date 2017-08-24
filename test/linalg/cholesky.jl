@@ -261,14 +261,14 @@ end
     end
 end
 
-@testset "throw if non-Hermitian" begin
+@testset "handling of non-Hermitian" begin
     R = randn(5, 5)
     C = complex.(R, R)
     for A in (R, C)
-        @test_throws ArgumentError cholfact(A)
-        @test_throws ArgumentError cholfact!(copy(A))
-        @test_throws ArgumentError chol(A)
-        @test_throws ArgumentError Base.LinAlg.chol!(copy(A))
+        @test !LinAlg.issuccess(cholfact(A))
+        @test !LinAlg.issuccess(cholfact!(copy(A)))
+        @test_throws PosDefException chol(A)
+        @test_throws PosDefException Base.LinAlg.chol!(copy(A))
     end
 end
 

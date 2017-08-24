@@ -30,6 +30,10 @@ SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
+SubString{T}(s::T) where {T<:AbstractString} = SubString(s, 1, endof(s))
+
+String(p::SubString{String}) =
+    unsafe_string(pointer(p.string, p.offset+1), nextind(p, p.endof)-1)
 
 sizeof(s::SubString{String}) = s.endof == 0 ? 0 : nextind(s, s.endof) - 1
 
@@ -72,11 +76,6 @@ chr2ind(s::SubString{<:DirectIndexString}, i::Integer) = begin checkbounds(s,i);
 
 nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
-
-convert(::Type{SubString{T}}, s::T) where {T<:AbstractString} = SubString(s, 1, endof(s))
-
-String(p::SubString{String}) =
-    unsafe_string(pointer(p.string, p.offset+1), nextind(p, p.endof)-1)
 
 function getindex(s::AbstractString, r::UnitRange{Int})
     checkbounds(s, r) || throw(BoundsError(s, r))

@@ -889,6 +889,9 @@ function setup_interface(
                         # (avoids modifying the user's current leading wip line)
                         tail = lstrip(tail)
                     end
+                    if isprompt_paste # remove indentation spaces corresponding to the prompt
+                        tail = replace(tail, r"^ {7}"m, "") # 7: jl_prompt_len
+                    end
                     LineEdit.replace_line(s, tail)
                     LineEdit.refresh_line(s)
                     break
@@ -896,6 +899,9 @@ function setup_interface(
                 # get the line and strip leading and trailing whitespace
                 line = strip(input[oldpos:prevind(input, pos)])
                 if !isempty(line)
+                    if isprompt_paste # remove indentation spaces corresponding to the prompt
+                        line = replace(line, r"^ {7}"m, "") # 7: jl_prompt_len
+                    end
                     # put the line on the screen and history
                     LineEdit.replace_line(s, line)
                     LineEdit.commit_line(s)

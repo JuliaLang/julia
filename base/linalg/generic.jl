@@ -794,6 +794,19 @@ function inv(A::AbstractMatrix{T}) where T
     A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S0, checksquare(A)))
 end
 
+function pinv(v::AbstractVector{T}, tol::Real=real(zero(T))) where T
+    res = similar(v, typeof(zero(T) / (abs2(one(T)) + abs2(one(T)))))'
+    den = sum(abs2, v)
+    # as tol is the threshold relative to the maximum singular value, for a vector with
+    # single singular value σ=√den, σ ≦ tol*σ is equivalent to den=0 ∨ tol≥1
+    if iszero(den) || tol >= one(tol)
+        fill!(res, zero(eltype(res)))
+    else
+        res .= v' ./ den
+    end
+    return res
+end
+
 """
     \\(A, B)
 
@@ -841,10 +854,11 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
     return qrfact(A,Val(true)) \ B
 end
 
-(\)(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
+(\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
 (/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)
+/(x::Number, v::AbstractVector) = x*pinv(v)
 
 cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)
@@ -942,7 +956,7 @@ function ishermitian(A::AbstractMatrix)
         return false
     end
     for i = indsn, j = i:last(indsn)
-        if A[i,j] != ctranspose(A[j,i])
+        if A[i,j] != adjoint(A[j,i])
             return false
         end
     end
@@ -1151,6 +1165,16 @@ function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractAr
     end
     for (IY, IX) in zip(eachindex(ry), eachindex(rx))
         @inbounds y[ry[IY]] += x[rx[IX]]*α
+    end
+    y
+end
+
+function axpby!(α, x::AbstractArray, β, y::AbstractArray)
+    if _length(x) != _length(y)
+        throw(DimensionMismatch("x has length $(_length(x)), but y has length $(_length(y))"))
+    end
+    for (IX, IY) in zip(eachindex(x), eachindex(y))
+        @inbounds y[IY] = x[IX]*α + y[IY]*β
     end
     y
 end
