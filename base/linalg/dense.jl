@@ -426,12 +426,12 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Otherwise, use Schur decomposition
     return schurpow(A, p)
 end
-(^)(A::AbstractMatrix, p::Number) = expm(p*logm(A))
+(^)(A::AbstractMatrix, p::Number) = exp(p*logm(A))
 
 # Matrix exponential
 
 """
-    expm(A)
+    exp(A::AbstractMatrix)
 
 Compute the matrix exponential of `A`, defined by
 
@@ -451,22 +451,21 @@ julia> A = eye(2, 2)
  1.0  0.0
  0.0  1.0
 
-julia> expm(A)
+julia> exp(A)
 2×2 Array{Float64,2}:
  2.71828  0.0
  0.0      2.71828
 ```
 """
-expm(A::StridedMatrix{<:BlasFloat}) = expm!(copy(A))
-expm(A::StridedMatrix{<:Integer}) = expm!(float(A))
-expm(x::Number) = exp(x)
+exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
+exp(A::StridedMatrix{<:Integer}) = exp!(float(A))
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
-function expm!(A::StridedMatrix{T}) where T<:BlasFloat
+function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     n = checksquare(A)
     if ishermitian(A)
-        return full(expm(Hermitian(A)))
+        return full(exp(Hermitian(A)))
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = norm(A, 1)

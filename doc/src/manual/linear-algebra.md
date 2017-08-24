@@ -177,8 +177,8 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 
 | Matrix type               | `+` | `-` | `*` | `\` | Other functions with optimized methods                              |
 |:------------------------- |:--- |:--- |:--- |:--- |:------------------------------------------------------------------- |
-| [`Symmetric`](@ref)       |     |     |     | MV  | [`inv()`](@ref), [`sqrtm()`](@ref), [`expm()`](@ref)                |
-| [`Hermitian`](@ref)       |     |     |     | MV  | [`inv()`](@ref), [`sqrtm()`](@ref), [`expm()`](@ref)                |
+| [`Symmetric`](@ref)       |     |     |     | MV  | [`inv()`](@ref), [`sqrtm()`](@ref), [`exp()`](@ref)                |
+| [`Hermitian`](@ref)       |     |     |     | MV  | [`inv()`](@ref), [`sqrtm()`](@ref), [`exp()`](@ref)                |
 | [`UpperTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
 | [`LowerTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
 | [`SymTridiagonal`](@ref)  | M   | M   | MS  | MV  | [`eigmax()`](@ref), [`eigmin()`](@ref)                              |

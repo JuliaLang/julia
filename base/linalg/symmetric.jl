@@ -589,11 +589,11 @@ function ^(A::Hermitian{T}, p::Real) where T
     end
 end
 
-function expm(A::Symmetric)
+function exp(A::Symmetric)
     F = eigfact(A)
     return Symmetric((F.vectors * Diagonal(exp.(F.values))) * F.vectors')
 end
-function expm(A::Hermitian{T}) where T
+function exp(A::Hermitian{T}) where T
     n = checksquare(A)
     F = eigfact(A)
     retmat = (F.vectors * Diagonal(exp.(F.values))) * F.vectors'

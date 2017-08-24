@@ -12,16 +12,16 @@ end
 @testset "Hermitian matrix exponential/log" begin
     A1 = randn(4,4) + im*randn(4,4)
     A2 = A1 + A1'
-    @test expm(A2) ≈ expm(Hermitian(A2))
+    @test exp(A2) ≈ exp(Hermitian(A2))
     @test logm(A2) ≈ logm(Hermitian(A2))
     A3 = A1 * A1' # posdef
-    @test expm(A3) ≈ expm(Hermitian(A3))
+    @test exp(A3) ≈ exp(Hermitian(A3))
     @test logm(A3) ≈ logm(Hermitian(A3))
 
     A1 = randn(4,4)
     A3 = A1 * A1'
     A4 = A1 + A1.'
-    @test expm(A4) ≈ expm(Symmetric(A4))
+    @test exp(A4) ≈ exp(Symmetric(A4))
     @test logm(A3) ≈ logm(Symmetric(A3))
     @test logm(A3) ≈ logm(Hermitian(A3))
 end

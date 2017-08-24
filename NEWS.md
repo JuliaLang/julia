@@ -332,6 +332,8 @@ Deprecated or removed
     full path if you need access to executables or libraries in the `JULIA_HOME` directory, e.g.
     `joinpath(JULIA_HOME, "7z.exe")` for `7z.exe` ([#21540]).
 
+  * `expm` has been deprecated in favor of `exp` ([#23233]).
+
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).
 
@@ -1221,4 +1223,5 @@ Command-line option changes
 [#23157]: https://github.com/JuliaLang/julia/issues/23157
 [#23187]: https://github.com/JuliaLang/julia/issues/23187
 [#23207]: https://github.com/JuliaLang/julia/issues/23207
+[#23233]: https://github.com/JuliaLang/julia/issues/23233
 [#23342]: https://github.com/JuliaLang/julia/issues/23342

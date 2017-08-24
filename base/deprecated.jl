@@ -220,7 +220,7 @@ for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
         :tan, :tanh, :tand, :atan, :atanh, :atand,
         :sinpi, :cosc, :ceil, :floor, :trunc, :round,
         :log1p, :expm1, :abs, :abs2,
-        :log, :log2, :log10, :exp, :exp2, :exp10, :sinc, :cospi,
+        :log, :log2, :log10, :exp2, :exp10, :sinc, :cospi,
         :cos, :cosh, :cosd, :acos, :acosd,
         :cot, :coth, :cotd, :acot, :acotd,
         :sec, :sech, :secd, :asech,
@@ -251,7 +251,7 @@ for f in (
         # base/special/gamma.jl
         :gamma, :lfact,
         # base/math.jl
-        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :exp2,
+        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2,
         :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh,
         #=:log,=# :log2, :log10, :lgamma, #=:log1p,=# :sqrt,
         # base/floatfuncs.jl
@@ -1659,6 +1659,10 @@ function Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::Abstract
         "where {Tl, Td, Tu} is deprecated; convert all vectors to the same type instead."), :Tridiagonal)
     Tridiagonal(map(v->convert(Vector{promote_type(Tl,Td,Tu)}, v), (dl, d, du))...)
 end
+
+# deprecate expm in favor of exp
+@deprecate expm! exp!
+@deprecate expm exp
 
 # PR #23092
 @eval LibGit2 begin

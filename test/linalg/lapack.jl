@@ -613,7 +613,7 @@ end
 
 # Issue 13976
 let A = [NaN 0.0 NaN; 0 0 0; NaN 0 NaN]
-    @test_throws ArgumentError expm(A)
+    @test_throws ArgumentError exp(A)
 end
 
 # Issue 14065 (and 14220)
