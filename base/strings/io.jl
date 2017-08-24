@@ -397,7 +397,7 @@ end
 """
     unindent(str::AbstractString, indent::Int; tabwidth=8)
 
-Removes leading indentation from string
+Remove leading indentation from string
 
 Returns:
 

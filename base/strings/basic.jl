@@ -103,7 +103,7 @@ end
 """
     cmp(a::AbstractString, b::AbstractString)
 
-Compares two strings for equality. Returns `0` if both strings have the same
+Compare two strings for equality. Returns `0` if both strings have the same
 length and the character at each index is the same in both strings.
 Returns `-1` if string `a` is a substring of `b` or `a` comes before
 `b` in alphabetical order.
@@ -156,7 +156,7 @@ end
 """
     ==(a::AbstractString, b::AbstractString) = cmp(a,b) == 0
 
-Tests whether two strings are equal character by character.
+Test whether two strings are equal character by character.
 
 # Examples
 ```jldoctest
@@ -172,7 +172,7 @@ false
 """
     isless(a::AbstractString, b::AbstractString) = cmp(a,b) < 0
 
-Tests whether string `a` comes before string `b` in alphabetical order.
+Test whether string `a` comes before string `b` in alphabetical order.
 
 # Examples
 ```jldoctest
@@ -201,7 +201,7 @@ isvalid(s::DirectIndexString, i::Integer) = (start(s) <= i <= endof(s))
 """
     isvalid(str::AbstractString, i::Integer)
 
-Tells whether index `i` is valid for the given string.
+Tell whether index `i` is valid for the given string.
 
 # Examples
 ```jldoctest
@@ -392,7 +392,7 @@ eltype(::Type{EachStringIndex}) = Int
 """
     strwidth(s::AbstractString)
 
-Gives the number of columns needed to print a string.
+Give the number of columns needed to print a string.
 
 # Examples
 ```jldoctest
@@ -405,7 +405,7 @@ strwidth(s::AbstractString) = (w=0; for c in s; w += charwidth(c); end; w)
 """
     isascii(c::Union{Char,AbstractString}) -> Bool
 
-Tests whether a character belongs to the ASCII character set, or whether this is true for
+Test whether a character belongs to the ASCII character set, or whether this is true for
 all elements of a string.
 
 #Examples
@@ -433,7 +433,7 @@ promote_rule(::Type{<:AbstractString}, ::Type{<:AbstractString}) = String
 """
     isxdigit(c::Char) -> Bool
 
-Tests whether a character is a valid hexadecimal digit. Note that this does not
+Test whether a character is a valid hexadecimal digit. Note that this does not
 include `x` (as in the standard `0x` prefix).
 
 # Examples
@@ -452,7 +452,7 @@ isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 """
     uppercase(s::AbstractString)
 
-Returns `s` with all characters converted to uppercase.
+Return `s` with all characters converted to uppercase.
 
 # Examples
 ```jldoctest
@@ -465,7 +465,7 @@ uppercase(s::AbstractString) = map(uppercase, s)
 """
     lowercase(s::AbstractString)
 
-Returns `s` with all characters converted to lowercase.
+Return `s` with all characters converted to lowercase.
 
 # Examples
 ```jldoctest
@@ -478,7 +478,7 @@ lowercase(s::AbstractString) = map(lowercase, s)
 """
     titlecase(s::AbstractString)
 
-Capitalizes the first character of each word in `s`.
+Capitalize the first character of each word in `s`.
 See also [`ucfirst`](@ref) to capitalize only the first
 character in `s`.
 
@@ -506,7 +506,7 @@ end
 """
     ucfirst(s::AbstractString)
 
-Returns `string` with the first character converted to uppercase
+Return `string` with the first character converted to uppercase
 (technically "title case" for Unicode).
 See also [`titlecase`](@ref) to capitalize the first character of
 every word in `s`.
@@ -527,7 +527,7 @@ end
 """
     lcfirst(s::AbstractString)
 
-Returns `string` with the first character converted to lowercase.
+Return `string` with the first character converted to lowercase.
 
 # Examples
 ```jldoctest
