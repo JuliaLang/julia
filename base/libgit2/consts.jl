@@ -166,7 +166,7 @@ module Consts
                           MERGE_FILE_IGNORE_WHITESPACE_EOL    = 1 << 5,  # Ignore whitespace at end of line
                           MERGE_FILE_DIFF_PATIENCE            = 1 << 6,  # Use the "patience diff" algorithm
                           MERGE_FILE_DIFF_MINIMAL             = 1 << 7)  # Take extra time to find minimal diff
-    """ Option flags for git merge file favortism.
+    """ Option flags for git merge file favoritism.
       * `MERGE_FILE_FAVOR_NORMAL`: if both sides of the merge have changes to a section,
         make a note of the conflict in the index which `git checkout` will use to create
         a merge file, which the user can then reference to resolve the conflicts. This is
