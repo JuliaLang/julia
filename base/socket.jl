@@ -551,8 +551,8 @@ function _send(sock::UDPSocket, ipaddr::IPv4, port::UInt16, buf)
 end
 
 function _send(sock::UDPSocket, ipaddr::IPv6, port::UInt16, buf)
-    ccall(:jl_udp_send6, Cint, (Ptr{Void}, UInt16, Ptr{UInt128}, Ptr{UInt8}, Csize_t, Ptr{Void}),
-          sock.handle, hton(port), &hton(ipaddr.host), buf, sizeof(buf), uv_jl_sendcb::Ptr{Void})
+    ccall(:jl_udp_send6, Cint, (Ptr{Void}, UInt16, Ref{UInt128}, Ptr{UInt8}, Csize_t, Ptr{Void}),
+          sock.handle, hton(port), hton(ipaddr.host), buf, sizeof(buf), uv_jl_sendcb::Ptr{Void})
 end
 
 """
@@ -726,8 +726,8 @@ function connect!(sock::TCPSocket, host::IPv6, port::Integer)
     if !(0 <= port <= typemax(UInt16))
         throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
     end
-    uv_error("connect", ccall(:jl_tcp6_connect, Int32, (Ptr{Void}, Ptr{UInt128}, UInt16, Ptr{Void}),
-                             sock.handle, &hton(host.host), hton(UInt16(port)), uv_jl_connectcb::Ptr{Void}))
+    uv_error("connect", ccall(:jl_tcp6_connect, Int32, (Ptr{Void}, Ref{UInt128}, UInt16, Ptr{Void}),
+                              sock.handle, hton(host.host), hton(UInt16(port)), uv_jl_connectcb::Ptr{Void}))
     sock.status = StatusConnecting
     nothing
 end
