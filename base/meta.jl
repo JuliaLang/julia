@@ -62,19 +62,19 @@ end
 """
     leaftypes(t::Type) -> Vector{Union{DataType, UnionAll}}
 
-Return an array of all concrete subtypes of `t`, including `t` if it is concrete.
+Return an array containing all concrete subtypes of `t`, or only `t` if it is concrete.
 """
 function leaftypes(t::Type)::Vector{Union{DataType, UnionAll}}
-    return isleaftype(t) ? [t] : vcat(leaftypes.(subtypes(t))...)
+    isleaftype(t) ? [t] : vcat(leaftypes.(subtypes(t))...)
 end
 
 """
     abstracts(t::Type) -> Vector{Union{DataType, UnionAll}}
 
-Return an array of all abstract subtypes of `t`, including `t` if it is abstract.
+Return an array containing all abstract subtypes of `t`, which may include `t`.
 """
 function abstracts(t::Type)::Vector{Union{DataType, UnionAll}}
-    return isleaftype(t) ? DataType[] : vcat(t, abstracts.(subtypes(t))...)
+    isleaftype(t) ? DataType[] : vcat(t, abstracts.(subtypes(t))...)
 end
 
 end # module
