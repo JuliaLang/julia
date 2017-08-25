@@ -6413,7 +6413,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.unique",
     "category": "Function",
-    "text": "unique(itr)\n\nReturn an array containing only the unique elements of collection itr, as determined by isequal, in the order that the first of each set of equivalent elements originally appears.\n\nExamples\n\njulia> unique([1, 2, 6, 2])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\n\n\nunique(f, itr)\n\nReturns an array containing one value from itr for each unique value produced by f applied to elements of itr.\n\nExamples\n\njulia> unique(x -> x^2, [1, -1, 3, -3, 4])\n3-element Array{Int64,1}:\n 1\n 3\n 4\n\n\n\nunique(A::AbstractArray, dim::Int)\n\nReturn unique regions of A along dimension dim.\n\nExamples\n\njulia> A = map(isodd, reshape(collect(1:8), (2,2,2)))\n2×2×2 Array{Bool,3}:\n[:, :, 1] =\n  true   true\n false  false\n\n[:, :, 2] =\n  true   true\n false  false\n\njulia> unique(A)\n2-element Array{Bool,1}:\n  true\n false\n\njulia> unique(A, 2)\n2×1×2 Array{Bool,3}:\n[:, :, 1] =\n  true\n false\n\n[:, :, 2] =\n  true\n false\n\njulia> unique(A, 3)\n2×2×1 Array{Bool,3}:\n[:, :, 1] =\n  true   true\n false  false\n\n\n\n"
+    "text": "unique(itr)\n\nReturn an array containing only the unique elements of collection itr, as determined by isequal, in the order that the first of each set of equivalent elements originally appears. The element type of the input is preserved.\n\nExamples\n\njulia> unique([1, 2, 6, 2])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\njulia> unique(Real[1, 1.0, 2])\n2-element Array{Real,1}:\n 1\n 2\n\n\n\nunique(f, itr)\n\nReturns an array containing one value from itr for each unique value produced by f applied to elements of itr.\n\nExamples\n\njulia> unique(x -> x^2, [1, -1, 3, -3, 4])\n3-element Array{Int64,1}:\n 1\n 3\n 4\n\n\n\nunique(A::AbstractArray, dim::Int)\n\nReturn unique regions of A along dimension dim.\n\nExamples\n\njulia> A = map(isodd, reshape(collect(1:8), (2,2,2)))\n2×2×2 Array{Bool,3}:\n[:, :, 1] =\n  true   true\n false  false\n\n[:, :, 2] =\n  true   true\n false  false\n\njulia> unique(A)\n2-element Array{Bool,1}:\n  true\n false\n\njulia> unique(A, 2)\n2×1×2 Array{Bool,3}:\n[:, :, 1] =\n  true\n false\n\n[:, :, 2] =\n  true\n false\n\njulia> unique(A, 3)\n2×2×1 Array{Bool,3}:\n[:, :, 1] =\n  true   true\n false  false\n\n\n\n"
 },
 
 {
@@ -8477,7 +8477,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
