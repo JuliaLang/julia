@@ -420,9 +420,10 @@ static int subtype_ufirst(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, int param)
 {
     if (vb != NULL && param) {
-        if (param == 2 && e->invdepth > vb->depth0)
+        // saturate counters at 2; we don't need values bigger than that
+        if (param == 2 && e->invdepth > vb->depth0 && vb->occurs_inv < 2)
             vb->occurs_inv++;
-        else
+        else if (vb->occurs_cov < 2)
             vb->occurs_cov++;
     }
 }

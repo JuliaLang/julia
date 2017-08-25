@@ -1130,3 +1130,22 @@ end
 @testintersect(Tuple{DataType, Any},
                Tuple{Type{T}, Int} where T,
                Tuple{DataType, Int})
+
+# issue #23430
+@test [0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.;
+       0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.;
+       0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.;
+       0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.;
+       0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.;
+       0 0.; 0 0.; 0 0.; 0 0.] isa Matrix{Float64}
+@test !(Tuple{Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64} <: (Tuple{Vararg{T}} where T<:Number))
