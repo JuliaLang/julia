@@ -3,9 +3,13 @@ module Types
 using Base.Random: UUID
 using Base.Pkg.Types: VersionSet, Available
 using Pkg3: user_depot, depots
-using TOML
+using TOML, TerminalMenus
 
-export SHA1, VersionRange, VersionSpec, Package, PackageVersion, UpgradeLevel, EnvCache
+export SHA1, VersionRange, VersionSpec,
+    Package, PackageVersion, UpgradeLevel, EnvCache,
+    project_resolve!, registry_resolve!,
+    registered_uuids, registered_paths,
+    registered_uuid, registered_name
 
 ## ordering of UUIDs ##
 
@@ -291,7 +295,7 @@ function project_resolve!(env::EnvCache, pkgs::AbstractVector{Package})
     deps = env.project["deps"]
     depr = Dict(uuid => name for (uuid, name) in deps)
     length(deps) == length(depr) || # TODO: handle this somehow?
-        warn("duplicate UUID found in project file [deps] section")
+        warn("duplicate UUID found in project file's [deps] section")
     for pkg in pkgs
         if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(deps)
             pkg.uuid = deps[pkg.name]
@@ -302,6 +306,8 @@ function project_resolve!(env::EnvCache, pkgs::AbstractVector{Package})
     end
     return pkgs
 end
+project_resolve!(env::EnvCache, pkgs::AbstractVector{PackageVersion}) =
+    project_resolve!(env, [v.package for v in pkgs])
 
 """
 Disambiguate name-only and uuid-only package specifications using only
@@ -310,11 +316,23 @@ information from registries.
 function registry_resolve!(env::EnvCache, pkgs::AbstractVector{Package})
     # if there are no ambiuous packages, return early
     any(pkg->has_name(pkg) ⊻ has_uuid(pkg), pkgs) || return
-    # collect /all/ names and uuids since we're looking anyway
+    # collect all names and uuids since we're looking anyway
     names = [pkg.name for pkg in pkgs if has_name(pkg)]
     uuids = [pkg.uuid for pkg in pkgs if has_uuid(pkg)]
     find_registered!(env, names, uuids)
+    for pkg in pkgs
+        @assert has_name(pkg) || has_uuid(pkg)
+        if has_name(pkg) && !has_uuid(pkg)
+            pkg.uuid = registered_uuid(env, pkg.name)
+        end
+        if has_uuid(pkg) && !has_name(pkg)
+            pkg.name = registered_name(env, pkg.uuid)
+        end
+    end
+    return pkgs
 end
+registry_resolve!(env::EnvCache, pkgs::AbstractVector{PackageVersion}) =
+    registry_resolve!(env, [v.package for v in pkgs])
 
 "Return paths of all registries in a depot"
 function registries(depot::String)
@@ -437,15 +455,37 @@ find_registered!(env::EnvCache)::Void =
     find_registered!(env, String[], UUID[], force=true)
 
 "Get registered uuids associated with a package name"
-function uuids(env::EnvCache, name::String)::Vector{UUID}
+function registered_uuids(env::EnvCache, name::String)::Vector{UUID}
     find_registered!(env, [name], UUID[])
     return env.uuids[name]
 end
 
 "Get registered paths associated with a package uuid"
-function paths(env::EnvCache, uuid::UUID)::Vector{String}
+function registered_paths(env::EnvCache, uuid::UUID)::Vector{String}
     find_registered!(env, String[], [uuid])
     return env.paths[uuid]
+end
+
+"Get registered names associated with a package uuid"
+function registered_names(env::EnvCache, uuid::UUID)::Vector{String}
+    find_registered!(env, String[], [uuid])
+    String[n for (n, uuids) in env.uuids for u in uuids if u == uuid]
+end
+
+"Determine a single UUID for a given name, prompting if needed"
+function registered_uuid(env::EnvCache, name::String)::UUID
+    uuids = registered_uuids(env, name)
+    length(uuids) == 0 && return UUID(zero(UInt128))
+    length(uuids) == 1 && return uuids[1]
+    error("TODO: UUID prompt for `$name`")
+end
+
+"Determine current name for a given package UUID"
+function registered_name(env::EnvCache, uuid::UUID)::String
+    names = registered_names(env, uuid)
+    length(names) == 0 && return ""
+    length(names) == 1 && return names[1]
+    error("TODO: find current name for `$uuid`")
 end
 
 end # module

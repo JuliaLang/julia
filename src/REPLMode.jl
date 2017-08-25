@@ -85,8 +85,8 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
     disp = REPL.REPLDisplay(repl)
     try
         tokens = tokenize(input)
-        env = EnvCache()
         local cmd::Symbol
+        local env_opt::Union{String,Void} = nothing
         while !isempty(tokens)
             token = shift!(tokens)
             if token[1] == :cmd
@@ -96,7 +96,7 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
                 if token[2] == :env
                     length(token) == 3 ||
                         error("the `--env` option requires a value")
-                    env.env = token[3]
+                    env_opt = token[3]
                 else
                     error("unrecognized option: `--$(token[2])`")
                 end
@@ -104,6 +104,7 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
                 error("misplaced token: ", token)
             end
         end
+        env = EnvCache(env_opt)
         ret =
         cmd == :rm  ?  do_rm!(env, tokens) :
         cmd == :add ? do_add!(env, tokens) :
@@ -129,6 +130,7 @@ function do_rm!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
             error("`rm` only accepts package names and/or UUIDs")
         push!(pkgs, Package(token[2:end]...))
     end
+    project_resolve!(env, pkgs)
     return pkgs
     Pkg3.Operations.rm(env, pkgs)
 end
@@ -152,6 +154,8 @@ function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
             error("`add` doesn't take options: --$(join(token[2:end], '='))\ninvalid command: $input")
         end
     end
+    project_resolve!(env, pkgs)
+    registry_resolve!(env, pkgs)
     return pkgs
     Pkg3.Operations.add(env, pkgs)
 end
@@ -186,6 +190,7 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
             end
         end
     end
+    project_resolve!(env, pkgs)
     return pkgs, rest
     Pkg3.Operations.up(env, pkgs, rest)
 end
