@@ -1,11 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool = false)
+    treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool=false)
 
-Traverse the entries in `tree` and its subtrees in post or pre order.
+Traverse the entries in `tree` and its subtrees in post or pre order. Preorder
+means beginning at the root and then traversing the leftmost subtree (and
+recursively on down through that subtree's leftmost subtrees) and moving right
+through the subtrees. Postorder means beginning at the bottom of the leftmost
+subtree, traversing upwards through it, then traversing the next right subtree
+(again beginning at the bottom) and finally visiting the tree root last of all.
 
-Function parameter should have following signature:
+The function parameter `f` should have following signature:
 
     (Cstring, Ptr{Void}, Ptr{Void}) -> Cint
 
