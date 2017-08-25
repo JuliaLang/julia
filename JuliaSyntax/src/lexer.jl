@@ -513,7 +513,7 @@ function lex_xor(l::Lexer)
     return emit(l, Tokens.XOR)
 end
 
-function accept_number{F}(l::Lexer, f::F)
+function accept_number(l::Lexer, f::F) where F
     !f(peekchar(l)) && return false
     while true
         if !accept(l, f)
