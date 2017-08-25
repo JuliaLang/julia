@@ -27,7 +27,7 @@ import Base.Math.lgamma_r
 
 import Base.FastMath.sincos_fast
 
-function get_version()
+function version()
     version = unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ()))
     build = replace(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())), ' ', '.')
     isempty(build) ? VersionNumber(version) : VersionNumber(version * '+' * build)
@@ -234,8 +234,8 @@ ceil(::Type{Integer}, x::BigFloat) = ceil(BigInt, x)
 round(::Type{Integer}, x::BigFloat) = round(BigInt, x)
 
 function convert(::Type{Bool}, x::BigFloat)
-    x == 0 && return false
-    x == 1 && return true
+    iszero(x) && return false
+    isone(x) && return true
     throw(InexactError(:convert, Bool, x))
 end
 function convert(::Type{BigInt},x::BigFloat)
@@ -276,7 +276,7 @@ big(::Type{<:AbstractFloat}) = BigFloat
 function convert(::Type{Rational{BigInt}}, x::AbstractFloat)
     isnan(x) && return zero(BigInt) // zero(BigInt)
     isinf(x) && return copysign(one(BigInt),x) // zero(BigInt)
-    x == 0 && return zero(BigInt) // one(BigInt)
+    iszero(x) && return zero(BigInt) // one(BigInt)
     s = max(precision(x) - exponent(x), 0)
     BigInt(ldexp(x,s)) // (BigInt(1) << s)
 end
@@ -784,7 +784,7 @@ function copysign(x::BigFloat, y::BigFloat)
 end
 
 function exponent(x::BigFloat)
-    if x == 0 || !isfinite(x)
+    if iszero(x) || !isfinite(x)
         throw(DomainError(x, "`x` must be non-zero and finite."))
     end
     # The '- 1' is to make it work as Base.exponent
@@ -912,7 +912,7 @@ function string(x::BigFloat)
         buf = Base.StringVector(lng + 1)
         lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...), buf, lng + 1, "%.Re", x)
     end
-    n = (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng
+    n = (1 <= x < 10 || -10 < x <= -1 || iszero(x)) ? lng - 4 : lng
     return String(resize!(buf,n))
 end
 

@@ -60,7 +60,7 @@ srand(1)
             @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
         end
         if relty <: BlasFloat
-            for func in (expm,)
+            for func in (exp,)
                 @test func(D) ≈ func(DM) atol=n^3*eps(relty)
             end
             @test logm(Diagonal(abs.(D.diag))) ≈ logm(abs.(DM)) atol=n^3*eps(relty)
@@ -381,7 +381,7 @@ end
     @test ishermitian(Dherm) == true
     @test ishermitian(Dsym) == false
 
-    @test expm(D) == Diagonal([expm([1 2; 3 4]), expm([1 2; 3 4])])
+    @test exp(D) == Diagonal([exp([1 2; 3 4]), exp([1 2; 3 4])])
     @test logm(D) == Diagonal([logm([1 2; 3 4]), logm([1 2; 3 4])])
     @test sqrtm(D) == Diagonal([sqrtm([1 2; 3 4]), sqrtm([1 2; 3 4])])
 end

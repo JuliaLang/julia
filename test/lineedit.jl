@@ -565,4 +565,24 @@ end
     @test bufferdata(s) == "for x=1:10\n    é = 1\n     b = 2\n     \n     \n"
     LineEdit.edit_insert_newline(s, 2)
     @test bufferdata(s) == "for x=1:10\n    é = 1\n     b = 2\n     \n     \n\n  "
+    # test when point before first letter of the line
+    for i=6:10
+        LineEdit.edit_clear(s)
+        LineEdit.edit_insert(s, "begin\n    x")
+        seek(LineEdit.buffer(s), i)
+        LineEdit.edit_insert_newline(s)
+        @test bufferdata(s) == "begin\n" * ' '^(i-6) * "\n    x"
+    end
+end
+
+@testset "change case on the right" begin
+    buf = IOBuffer()
+    LineEdit.edit_insert(buf, "aa bb CC")
+    seekstart(buf)
+    LineEdit.edit_upper_case(buf)
+    LineEdit.edit_title_case(buf)
+    @test String(take!(copy(buf))) == "AA Bb CC"
+    @test position(buf) == 5
+    LineEdit.edit_lower_case(buf)
+    @test String(take!(copy(buf))) == "AA Bb cc"
 end

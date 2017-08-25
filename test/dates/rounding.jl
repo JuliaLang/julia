@@ -114,6 +114,7 @@ dt = Dates.DateTime(-1, 12, 29, 19, 19, 19, 19)
 
 # Test rounding for dates that should not need rounding
 for dt in [Dates.DateTime(2016, 1, 1), Dates.DateTime(-2016, 1, 1)]
+    local dt
     for p in [Dates.Year, Dates.Month, Dates.Day, Dates.Hour, Dates.Minute, Dates.Second]
         @test floor(dt, p) == dt
         @test ceil(dt, p) == dt

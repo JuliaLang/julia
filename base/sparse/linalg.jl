@@ -301,8 +301,8 @@ function A_rdiv_B!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
         if iszero(ddj)
             throw(LinAlg.SingularException(j))
         end
-        for k in nzrange(A, j)
-            nonz[k] /= ddj
+        for i in nzrange(A, j)
+            nonz[i] /= ddj
         end
     end
     A

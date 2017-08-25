@@ -120,9 +120,9 @@ let
 end
 
 # start, done, next
-for data_in in ((7,8,4,5),
-                ("hello", 23, 2.7, (), [], (1,8)))
-    s = Set(data_in)
+for data_ in ((7,8,4,5),
+              ("hello", 23, 2.7, (), [], (1,8)))
+    s = Set(data_)
 
     s_new = Set()
     for el in s
@@ -233,6 +233,8 @@ u = unique([1,1,2])
 # issue 20105
 @test @inferred(unique(x for x in 1:1)) == [1]
 @test unique(x for x in Any[1,1.0])::Vector{Real} == [1]
+@test unique(x for x in Real[1,1.0])::Vector{Real} == [1]
+@test unique(Integer[1,1,2])::Vector{Integer} == [1,2]
 
 # unique!
 @testset "unique!" begin

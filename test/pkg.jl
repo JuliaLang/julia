@@ -65,14 +65,6 @@ temp_pkg_dir() do
     @test_throws PkgError Pkg.installed("MyFakePackage")
     @test Pkg.installed("Example") === nothing
 
-    # check that versioninfo(io; verbose=true) doesn't error and produces some output
-    # (done here since it calls Pkg.status which might error or clone metadata)
-    buf = PipeBuffer()
-    versioninfo(buf, verbose=true)
-    ver = read(buf, String)
-    @test startswith(ver, "Julia Version $VERSION")
-    @test contains(ver, "Environment:")
-
     # Check that setprotocol! works.
     begin
         try

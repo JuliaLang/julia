@@ -326,8 +326,7 @@ end
 eye(::Type{Diagonal{T}}, n::Int) where {T} = Diagonal(ones(T,n))
 
 # Matrix functions
-expm(D::Diagonal) = Diagonal(exp.(D.diag))
-expm(D::Diagonal{<:AbstractMatrix}) = Diagonal(expm.(D.diag))
+exp(D::Diagonal) = Diagonal(exp.(D.diag))
 logm(D::Diagonal) = Diagonal(log.(D.diag))
 logm(D::Diagonal{<:AbstractMatrix}) = Diagonal(logm.(D.diag))
 sqrtm(D::Diagonal) = Diagonal(sqrt.(D.diag))

@@ -333,14 +333,16 @@ import Base: *, transpose
 transpose(x::RootInt) = x
 @test Base.promote_op(*, RootInt, RootInt) === Int
 
-a = [RootInt(3)]
-C = [0]
-A_mul_Bt!(C, a, a)
-@test C[1] == 9
-a = [RootInt(2),RootInt(10)]
-@test a*a' == [4 20; 20 100]
-A = [RootInt(3) RootInt(5)]
-@test A*a == [56]
+let
+    a = [RootInt(3)]
+    C = [0]
+    A_mul_Bt!(C, a, a)
+    @test C[1] == 9
+    a = [RootInt(2),RootInt(10)]
+    @test a*a' == [4 20; 20 100]
+    A = [RootInt(3) RootInt(5)]
+    @test A*a == [56]
+end
 
 function test_mul(C, A, B)
     A_mul_B!(C, A, B)

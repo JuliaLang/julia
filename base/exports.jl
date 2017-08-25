@@ -572,7 +572,6 @@ export
     eigvals,
     eigvals!,
     eigvecs,
-    expm,
     eye,
     factorize,
     givens,

@@ -67,7 +67,7 @@ end
 # Test that non-ambiguous cases work
 io = IOBuffer()
 @test precompile(ambig, (Int, Int)) == true
-cfunction(ambig, Int, (Int, Int))
+cfunction(ambig, Int, Tuple{Int, Int})
 @test length(code_lowered(ambig, (Int, Int))) == 1
 @test length(code_typed(ambig, (Int, Int))) == 1
 code_llvm(io, ambig, (Int, Int))
@@ -75,7 +75,7 @@ code_native(io, ambig, (Int, Int))
 
 # Test that ambiguous cases fail appropriately
 @test precompile(ambig, (UInt8, Int)) == false
-cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
+cfunction(ambig, Int, Tuple{UInt8, Int})  # test for a crash (doesn't throw an error)
 @test_throws ErrorException which(ambig, (UInt8, Int))
 @test_throws ErrorException code_llvm(io, ambig, (UInt8, Int))
 @test_throws ErrorException code_native(io, ambig, (UInt8, Int))

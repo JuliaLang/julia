@@ -464,6 +464,7 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 
 # issue #18280: next/nextind must return past String's underlying data
 for s in ("Hello", "Σ", "こんにちは", "😊😁")
+    local s
     @test next(s, endof(s))[2] > sizeof(s)
     @test nextind(s, endof(s)) > sizeof(s)
 end

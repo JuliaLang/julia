@@ -480,7 +480,8 @@ function edit_insert_newline(s::PromptState, align=-1)
     buf = buffer(s)
     if align < 0
         beg = beginofline(buf)
-        align = findnext(_notspace, buf.data[beg+1:buf.size], 1) - 1
+        align = min(findnext(_notspace, buf.data[beg+1:buf.size], 1) - 1,
+                    position(buf) - beg) # indentation must not increase
         align < 0 && (align = buf.size-beg)
     end
     edit_insert(buf, '\n' * ' '^align)
@@ -634,6 +635,25 @@ function edit_transpose_words(buf::IOBuffer, mode=:emacs)
     true
 end
 
+
+edit_upper_case(s) = edit_replace_word_right(s, uppercase)
+edit_lower_case(s) = edit_replace_word_right(s, lowercase)
+edit_title_case(s) = edit_replace_word_right(s, ucfirst)
+
+edit_replace_word_right(s, replace::Function) =
+    edit_replace_word_right(buffer(s), replace) && refresh_line(s)
+
+function edit_replace_word_right(buf::IOBuffer, replace::Function)
+    # put the cursor at the beginning of the next word
+    skipchars(buf, is_non_word_char)
+    b = position(buf)
+    char_move_word_right(buf)
+    e = position(buf)
+    e == b && return false
+    newstr = replace(String(buf.data[b+1:e]))
+    splice_buffer!(buf, b:e-1, newstr)
+    true
+end
 
 edit_clear(buf::IOBuffer) = truncate(buf, 0)
 
@@ -1530,6 +1550,9 @@ AnyDict(
     end,
     "^T" => (s,o...)->edit_transpose_chars(s),
     "\et" => (s,o...)->edit_transpose_words(s),
+    "\eu" => (s,o...)->edit_upper_case(s),
+    "\el" => (s,o...)->edit_lower_case(s),
+    "\ec" => (s,o...)->edit_title_case(s),
 )
 
 const history_keymap = AnyDict(

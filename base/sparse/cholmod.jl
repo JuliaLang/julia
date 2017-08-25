@@ -487,21 +487,21 @@ function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
 end
 function free_sparse!(ptr::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
     @isok ccall((@cholmod_name("free_sparse", SuiteSparse_long), :libcholmod), Cint,
-            (Ptr{Ptr{C_Sparse{Tv}}}, Ptr{UInt8}),
-                &ptr, common())
+            (Ref{Ptr{C_Sparse{Tv}}}, Ptr{UInt8}),
+                ptr, common())
 end
 
 function free_sparse!(ptr::Ptr{C_SparseVoid})
     @isok ccall((@cholmod_name("free_sparse", SuiteSparse_long), :libcholmod), Cint,
-            (Ptr{Ptr{C_SparseVoid}}, Ptr{UInt8}),
-                &ptr, common())
+            (Ref{Ptr{C_SparseVoid}}, Ptr{UInt8}),
+                ptr, common())
 end
 
 function free_factor!(ptr::Ptr{C_Factor{Tv}}) where Tv<:VTypes
     # Warning! Important that finalizer doesn't modify the global Common struct.
     @isok ccall((@cholmod_name("free_factor", SuiteSparse_long), :libcholmod), Cint,
-            (Ptr{Ptr{C_Factor{Tv}}}, Ptr{Void}),
-                &ptr, common())
+            (Ref{Ptr{C_Factor{Tv}}}, Ptr{Void}),
+                ptr, common())
 end
 
 function aat(A::Sparse{Tv}, fset::Vector{SuiteSparse_long}, mode::Integer) where Tv<:VRealTypes
@@ -1725,7 +1725,7 @@ function logdet(F::Factor{Tv}) where Tv<:VTypes
     f = unsafe_load(pointer(F))
     res = zero(Tv)
     for d in diag(F); res += log(abs(d)) end
-    f.is_ll!=0 ? 2res : res
+    f.is_ll != 0 ? 2res : res
 end
 
 det(L::Factor) = exp(logdet(L))

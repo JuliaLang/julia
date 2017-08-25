@@ -143,24 +143,25 @@ end
 # TwicePrecision test. These routines lose accuracy if you form
 # intermediate subnormals; with Float16, this happens so frequently,
 # let's only test Float32.
-T = Float32
-Tw = widen(T)
-slopbits = (Base.Math.significand_bits(Tw) + 1) -
-    2*(Base.Math.significand_bits(T) + 1)
-for i = 1:10^5
-    x = Base.TwicePrecision{T}(rand())
-    y = Base.TwicePrecision{T}(rand())
-    xw, yw = asww(x), asww(y)
-    @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
-    @test cmp_sn2(Tw(xw-yw), astuple(x-y)..., slopbits)
-    @test cmp_sn2(Tw(xw*yw), astuple(x*y)..., slopbits)
-    @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits)
-    y = rand(T)
-    yw = widen(widen(y))
-    @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
-    @test cmp_sn2(Tw(xw-yw), astuple(x-y)..., slopbits)
-    @test cmp_sn2(Tw(xw*yw), astuple(x*y)..., slopbits)
-    @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits)
+let T = Float32
+    Tw = widen(T)
+    slopbits = (Base.Math.significand_bits(Tw) + 1) -
+        2*(Base.Math.significand_bits(T) + 1)
+    for i = 1:10^5
+        x = Base.TwicePrecision{T}(rand())
+        y = Base.TwicePrecision{T}(rand())
+        xw, yw = asww(x), asww(y)
+        @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
+        @test cmp_sn2(Tw(xw-yw), astuple(x-y)..., slopbits)
+        @test cmp_sn2(Tw(xw*yw), astuple(x*y)..., slopbits)
+        @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits)
+        y = rand(T)
+        yw = widen(widen(y))
+        @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
+        @test cmp_sn2(Tw(xw-yw), astuple(x-y)..., slopbits)
+        @test cmp_sn2(Tw(xw*yw), astuple(x*y)..., slopbits)
+        @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits)
+    end
 end
 
 x1 = Base.TwicePrecision{Float64}(1)
@@ -518,8 +519,9 @@ end
 @test [0.0:prevfloat(0.1):0.3;] == [0.0, prevfloat(0.1), prevfloat(0.2), 0.3]
 @test [0.0:nextfloat(0.1):0.3;] == [0.0, nextfloat(0.1), nextfloat(0.2)]
 
-for T = (Float32, Float64,),# BigFloat),
-    a = -5:25, s = [-5:-1;1:25;], d = 1:25, n = -1:15
+for T = (Float32, Float64,)# BigFloat),
+    local T
+    for a = -5:25, s = [-5:-1;1:25;], d = 1:25, n = -1:15
     denom = convert(T,d)
     strt = convert(T,a)/denom
     Δ     = convert(T,s)/denom
@@ -536,6 +538,7 @@ for T = (Float32, Float64,),# BigFloat),
     @test [r[2:2:n];] == [r;][2:2:n]
     @test [r[n:-1:2];] == [r;][n:-1:2]
     @test [r[n:-2:1];] == [r;][n:-2:1]
+    end
 end
 
 # issue #20373 (unliftable ranges with exact end points)
@@ -650,6 +653,7 @@ let
                0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
                linspace(0, 1, 20), map(Float32, linspace(0, 1, 20))]
     for r in Rs
+        local r
         ar = collect(r)
         @test r != ar
         @test !isequal(r,ar)
@@ -732,6 +736,7 @@ r7484 = 0.1:0.1:1
 
 # issue #7387
 for r in (0:1, 0.0:1.0)
+    local r
     @test [r+im;] == [r;]+im
     @test [r-im;] == [r;]-im
     @test [r*im;] == [r;]*im
@@ -850,7 +855,7 @@ end
 
 # stringmime/show should display the range or linspace nicely
 # to test print_range in range.jl
-replstrmime(x) = sprint((io,x) -> show(IOContext(io, limit=true, displaysize=(24, 80)), MIME("text/plain"), x), x)
+replstrmime(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
 @test replstrmime(1:4) == "1:4"
 @test stringmime("text/plain", 1:4) == "1:4"
 @test stringmime("text/plain", linspace(1,5,7)) == "1.0:0.6666666666666666:5.0"
@@ -991,6 +996,7 @@ end
 
 # Issue #13738
 for r in (big(1):big(2), UInt128(1):UInt128(2), 0x1:0x2)
+    local r
     rr = r[r]
     @test typeof(rr) == typeof(r)
     @test r[r] == r
@@ -1044,6 +1050,7 @@ r = Base.OneTo(3)
 @test r+r === 2:2:6
 k = 0
 for i in r
+    local i
     @test i == (k+=1)
 end
 @test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
@@ -1074,6 +1081,7 @@ a, b = rand(10), rand(10)
 r = linspace(a, b, 5)
 @test r[1] == a && r[5] == b
 for i = 2:4
+    local i
     x = ((5-i)//4)*a + ((i-1)//4)*b
     @test r[i] == x
 end
@@ -1089,6 +1097,7 @@ r = @inferred(colon(big(1.0),big(2.0),big(5.0)))
 
 # issue #14420
 for r in (linspace(0.10000000000000045, 1), 0.10000000000000045:(1-0.10000000000000045)/49:1)
+    local r
     @test r[1] === 0.10000000000000045
     @test r[end] === 1.0
 end

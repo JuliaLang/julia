@@ -88,7 +88,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     lkup = StackTraces.UNKNOWN
     for frame in bt
         lkups = StackTraces.lookup(frame)
-        for lkup in lkups
+        for outer lkup in lkups
             if lkup == StackTraces.UNKNOWN
                 continue
             end
@@ -220,7 +220,7 @@ for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
         :tan, :tanh, :tand, :atan, :atanh, :atand,
         :sinpi, :cosc, :ceil, :floor, :trunc, :round,
         :log1p, :expm1, :abs, :abs2,
-        :log, :log2, :log10, :exp, :exp2, :exp10, :sinc, :cospi,
+        :log, :log2, :log10, :exp2, :exp10, :sinc, :cospi,
         :cos, :cosh, :cosd, :acos, :acosd,
         :cot, :coth, :cotd, :acot, :acotd,
         :sec, :sech, :secd, :asech,
@@ -251,7 +251,7 @@ for f in (
         # base/special/gamma.jl
         :gamma, :lfact,
         # base/math.jl
-        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :exp2,
+        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2,
         :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh,
         #=:log,=# :log2, :log10, :lgamma, #=:log1p,=# :sqrt,
         # base/floatfuncs.jl
@@ -1067,7 +1067,7 @@ function partial_linear_indexing_warning_lookup(nidxs_remaining)
         caller = StackTraces.UNKNOWN
         for frame in bt
             lkups = StackTraces.lookup(frame)
-            for caller in lkups
+            for outer caller in lkups
                 if caller == StackTraces.UNKNOWN
                     continue
                 end
@@ -1660,6 +1660,10 @@ function Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::Abstract
     Tridiagonal(map(v->convert(Vector{promote_type(Tl,Td,Tu)}, v), (dl, d, du))...)
 end
 
+# deprecate expm in favor of exp
+@deprecate expm! exp!
+@deprecate expm exp
+
 # PR #23092
 @eval LibGit2 begin
     function prompt(msg::AbstractString; default::AbstractString="", password::Bool=false)
@@ -1713,8 +1717,30 @@ export hex2num
 # issue #17886
 # deprecations for filter[!] with 2-arg functions are in associative.jl
 
+# PR #23066
+@deprecate cfunction(f, r, a::Tuple) cfunction(f, r, Tuple{a...})
+
 # PR 23341
 @deprecate diagm(A::SparseMatrixCSC) spdiagm(sparsevec(A))
+
+# PR #23373
+@deprecate diagm(A::BitMatrix) diagm(vec(A))
+
+# PR 23341
+@eval GMP @deprecate gmp_version() version() false
+@eval GMP @Base.deprecate_binding GMP_VERSION VERSION false
+@eval GMP @deprecate gmp_bits_per_limb() bits_per_limb() false
+@eval GMP @Base.deprecate_binding GMP_BITS_PER_LIMB BITS_PER_LIMB false
+@eval MPFR @deprecate get_version() version() false
+@eval LinAlg.LAPACK @deprecate laver() version() false
+
+# PR #23271
+function IOContext(io::IO; kws...)
+    depwarn("IOContext(io, k=v, ...) is deprecated, use IOContext(io, :k => v, ...) instead.", :IOContext)
+    IOContext(io, (k=>v for (k, v) in kws)...)
+end
+
+@deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)
 
 # END 0.7 deprecations
 

@@ -120,6 +120,34 @@ end
     LibGit2.CheckoutOptions
 
 Matches the [`git_checkout_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_checkout_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `checkout_strategy`: determine how to handle conflicts and whether to force the
+     checkout/recreate missing files.
+  * `disable_filters`: if nonzero, do not apply filters like CLRF (to convert file newlines between UNIX and DOS).
+  * `dir_mode`: read/write/access mode for any directories involved in the checkout. Default is `0755`.
+  * `file_mode`: read/write/access mode for any files involved in the checkout.
+     Default is `0755` or `0644`, depeding on the blob.
+  * `file_open_flags`: bitflags used to open any files during the checkout.
+  * `notify_flags`: Flags for what sort of conflicts the user should be notified about.
+  * `notify_cb`: An optional callback function to notify the user if a checkout conflict occurs.
+     If this function returns a non-zero value, the checkout will be cancelled.
+  * `notify_payload`: Payload for the notify callback function.
+  * `progress_cb`: An optional callback function to display checkout progress.
+  * `progress_payload`: Payload for the progress callback.
+  * `paths`: If not empty, describes which paths to search during the checkout.
+     If empty, the checkout will occur over all files in the repository.
+  * `baseline`: Expected content of the [`workdir`](@ref), captured in a (pointer to a)
+     [`GitTree`](@ref). Defaults to the state of the tree at HEAD.
+  * `baseline_index`: Expected content of the [`workdir`](@ref), captured in a (pointer to a)
+     `GitIndex`. Defaults to the state of the index at HEAD.
+  * `target_directory`: If not empty, checkout to this directory instead of the `workdir`.
+  * `ancestor_label`: In case of conflicts, the name of the common ancestor side.
+  * `our_label`: In case of conflicts, the name of "our" side.
+  * `their_label`: In case of conflicts, the name of "their" side.
+  * `perfdata_cb`: An optional callback function to display performance data.
+  * `perfdata_payload`: Payload for the performance callback.
 """
 @kwdef struct CheckoutOptions
     version::Cuint = 1
@@ -236,6 +264,20 @@ end
     LibGit2.FetchOptions
 
 Matches the [`git_fetch_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_fetch_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `callbacks`: remote callbacks to use during the fetch.
+  * `prune`: whether to perform a prune after the fetch or not. The default is to
+     use the setting from the `GitConfig`.
+  * `update_fetchhead`: whether to update the [`FetchHead`](@ref) after the fetch.
+     The default is to perform the update, which is the normal git behavior.
+  * `download_tags`: whether to download tags present at the remote or not. The default
+     is to request the tags for objects which are being downloaded anyway from the server.
+  * `proxy_opts`: options for connecting to the remote through a proxy. See [`ProxyOptions`](@ref).
+     Only present on libgit2 versions newer than 0.25.
+  * `custom_headers`: any extra headers needed for the fetch. Only present on libgit2 versions
+     newer than 0.24.
 """
 @kwdef struct FetchOptions
     version::Cuint                  = 1
@@ -255,6 +297,23 @@ end
     LibGit2.CloneOptions
 
 Matches the [`git_clone_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_clone_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `checkout_opts`: The options for performing the checkout of the remote as part of the clone.
+  * `fetch_opts`: The options for performing the pre-checkout fetch of the remote as part of the clone.
+  * `bare`: If `0`, clone the full remote repository. If non-zero, perform a bare clone, in which
+     there is no local copy of the source files in the repository and the [`gitdir`](@ref) and [`workdir`](@ref)
+     are the same.
+  * `localclone`: Flag whether to clone a local object database or do a fetch. The default is to let git decide.
+     It will not use the git-aware transport for a local clone, but will use it for URLs which begin with `file://`.
+  * `checkout_branch`: The name of the branch to checkout. If an empty string, the default branch of the
+     remote will be checked out.
+  * `repository_cb`: An optional callback which will be used to create the *new* repository into which
+     the clone is made.
+  * `repository_cb_payload`: The payload for the repository callback.
+  * `remote_cb`: An optional callback used to create the [`GitRemote`](@ref) before making the clone from it.
+  * `remote_cb_payload`: The payload for the remote callback.
 """
 @kwdef struct CloneOptions
     version::Cuint                      = 1
@@ -582,6 +641,15 @@ end
 Contains the information about HEAD during a fetch, including the name and URL
 of the branch fetched from, the oid of the HEAD, and whether the fetched HEAD
 has been merged locally.
+
+The fields represent:
+  * `name`: The name in the local reference database of the fetch head, for example,
+     `"refs/heads/master"`.
+  * `url`: The URL of the fetch head.
+  * `oid`: The [`GitHash`](@ref) of the tip of the fetch head.
+  * `ismerge`: Boolean flag indicating whether the changes at the
+     remote have been merged into the local copy yet or not. If `true`, the local
+     copy is up to date with the remote fetch head.
 """
 struct FetchHead
     name::String

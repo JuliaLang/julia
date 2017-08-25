@@ -441,12 +441,17 @@ scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 A_mul_B!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
 A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = A_mul_B!(C, full(A), B)
 A_mul_B!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = A_mul_B!(C, A, full(B))
-A_mul_B!(C::AbstractVector, A::AbstractTriangular, B::AbstractVector) = A_mul_B!(A, copy!(C, B))
-A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
-A_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
 A_mul_Bt!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, transpose!(C, B))
 A_mul_Bc!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, adjoint!(C, B))
 A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, adjoint!(C, B))
+# The three methods are neceesary to avoid ambiguities with definitions in matmul.jl
+for f in (:A_mul_B!, :Ac_mul_B!, :At_mul_B!)
+    @eval begin
+        ($f)(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = ($f)(A, copy!(C, B))
+        ($f)(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = ($f)(A, copy!(C, B))
+        ($f)(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = ($f)(A, copy!(C, B))
+    end
+end
 
 for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitLowerTriangular, 'L', 'U'),
@@ -1831,7 +1836,8 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
         d4 = norm(AmI^4, 1)^(1/4)
         alpha3 = max(d3, d4)
         if alpha3 <= theta[tmax]
-            for j = 3:tmax
+            local j
+            for outer j = 3:tmax
                 if alpha3 <= theta[j]
                     break
                 end
@@ -1851,7 +1857,7 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
             eta = min(alpha3, alpha4)
             if eta <= theta[tmax]
                 j = 0
-                for j = 6:tmax
+                for outer j = 6:tmax
                     if eta <= theta[j]
                         m = j
                         break
@@ -2030,7 +2036,8 @@ function invsquaring(A0::UpperTriangular, theta)
         d4 = norm(AmI^4, 1)^(1/4)
         alpha3 = max(d3, d4)
         if alpha3 <= theta[tmax]
-            for j = 3:tmax
+            local j
+            for outer j = 3:tmax
                 if alpha3 <= theta[j]
                     break
                 elseif alpha3 / 2 <= theta[5] && p < 2
@@ -2054,7 +2061,7 @@ function invsquaring(A0::UpperTriangular, theta)
             eta = min(alpha3, alpha4)
             if eta <= theta[tmax]
                 j = 0
-                for j = 6:tmax
+                for outer j = 6:tmax
                     if eta <= theta[j]
                         m = j
                         break

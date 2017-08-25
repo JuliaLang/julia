@@ -57,7 +57,7 @@ function parse(s::AbstractString)
     i = 1
     while i < length(list)
         if isa(list[i],AbstractString)
-            for j = i+1:length(list)
+            for outer j = i+1:length(list)
                 if !isa(list[j],AbstractString)
                     j -= 1
                     break
@@ -1102,7 +1102,7 @@ ini_hex(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::In
 ini_HEX(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
 ini_hex(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
 ini_HEX(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-function bigfloat_printf(out, d, flags::String, width::Int, precision::Int, c::Char)
+function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char)
     fmt_len = sizeof(flags)+4
     if width > 0
         fmt_len += ndigits(width)
@@ -1130,8 +1130,8 @@ function bigfloat_printf(out, d, flags::String, width::Int, precision::Int, c::C
     @assert length(printf_fmt) == fmt_len
     bufsiz = length(DIGITS)
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32,
-                (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...),
-                DIGITS, bufsiz, printf_fmt, &d)
+                (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...),
+                DIGITS, bufsiz, printf_fmt, d)
     lng > 0 || error("invalid printf formatting for BigFloat")
     unsafe_write(out, pointer(DIGITS), min(lng, bufsiz-1))
     return (false, ())

@@ -174,9 +174,9 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test B == viewA1.'
         end
 
-        #expm/logm
+        #exp/logm
         if (elty1 == Float64 || elty1 == Complex128) && (t1 == UpperTriangular || t1 == LowerTriangular)
-            @test expm(full(logm(A1))) ≈ full(A1)
+            @test exp(full(logm(A1))) ≈ full(A1)
         end
 
         # scale
@@ -342,9 +342,11 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test B'A1' ≈ B'full(A1)'
 
             if eltyB == elty1
-                @test A_mul_B!(zeros(B),A1,B) ≈ A1*B
+                @test A_mul_B!(zeros(B),A1,B)  ≈ A1*B
                 @test A_mul_Bc!(zeros(B),A1,B) ≈ A1*B'
                 @test A_mul_Bt!(zeros(B),A1,B) ≈ A1*B.'
+                @test Ac_mul_B!(zeros(B),A1,B) ≈ A1'*B
+                @test At_mul_B!(zeros(B),A1,B) ≈ A1.'*B
             end
             #error handling
             @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(A1, ones(eltyB,n+1))
