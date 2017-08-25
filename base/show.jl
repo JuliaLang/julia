@@ -172,10 +172,15 @@ end
 function show(io::IO, f::Function)
     ft = typeof(f)
     mt = ft.name.mt
-    if !isdefined(mt, :module) || is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
-        print(io, mt.name)
+    if isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
+        getfield(mt.module, mt.name) === f
+        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
+            print(io, mt.name)
+        else
+            print(io, mt.module, ".", mt.name)
+        end
     else
-        print(io, mt.module, ".", mt.name)
+        show_default(io, f)
     end
 end
 
@@ -199,16 +204,88 @@ function print_without_params(@nospecialize(x))
     return false
 end
 
+has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v)!=0
+
+function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
+    for (key, val) in io.dict
+        if key === :unionall_env && val isa TypeVar && val.name === name && has_typevar(x, val)
+            return true
+        end
+    end
+    return false
+end
+io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
+
 function show(io::IO, x::UnionAll)
     if print_without_params(x)
         return show(io, unwrap_unionall(x).name)
     end
+
+    if x.var.name == :_ || io_has_tvar_name(io, x.var.name, x)
+        counter = 1
+        while true
+            newname = Symbol(x.var.name, counter)
+            if !io_has_tvar_name(io, newname, x)
+                newtv = TypeVar(newname, x.var.lb, x.var.ub)
+                x = UnionAll(newtv, x{newtv})
+                break
+            end
+            counter += 1
+        end
+    end
+
     show(IOContext(io, :unionall_env => x.var), x.body)
     print(io, " where ")
     show(io, x.var)
 end
 
 show(io::IO, x::DataType) = show_datatype(io, x)
+
+function show_type_name(io::IO, tn::TypeName)
+    globname = isdefined(tn, :mt) ? tn.mt.name : nothing
+    globfunc = false
+    if globname !== nothing
+        globname_str = string(globname)
+        if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
+            isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
+            isa(getfield(tn.module, globname), tn.wrapper) && isleaftype(tn.wrapper))
+            globfunc = true
+        end
+    end
+    sym = globfunc ? globname : tn.name
+    sym_str = string(sym)
+    hidden = !globfunc && '#' ∈ sym_str
+    quo = false
+    if hidden
+        print(io, "getfield(")
+    elseif globfunc
+        print(io, "typeof(")
+    end
+    if isdefined(tn, :module) && !(is_exported_from_stdlib(sym, tn.module) || (tn.module === Main && !hidden))
+        show(io, tn.module)
+        if !hidden
+            print(io, ".")
+            if globfunc && !is_id_start_char(first(sym_str))
+                print(io, ":")
+                if sym == :(==)
+                    print(io, "(")
+                    quo = true
+                end
+            end
+        end
+    end
+    if hidden
+        print(io, ", Symbol(\"", sym_str, "\"))")
+    else
+        print(io, sym_str)
+        if globfunc
+            print(io, ")")
+            if quo
+                print(io, ")")
+            end
+        end
+    end
+end
 
 function show_datatype(io::IO, x::DataType)
     istuple = x.name === Tuple.name
@@ -219,7 +296,7 @@ function show_datatype(io::IO, x::DataType)
         if istuple && n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
             print(io, "NTuple{", n, ',', x.parameters[1], "}")
         else
-            show(io, x.name)
+            show_type_name(io, x.name)
             # Do not print the type parameters for the primary type if we are
             # printing a method signature or type parameter.
             # Always print the type parameter if we are printing the type directly
@@ -232,7 +309,7 @@ function show_datatype(io::IO, x::DataType)
             print(io, '}')
         end
     else
-        show(io, x.name)
+        show_type_name(io, x.name)
     end
 end
 
@@ -263,11 +340,7 @@ macro show(exs...)
 end
 
 function show(io::IO, tn::TypeName)
-    if is_exported_from_stdlib(tn.name, tn.module) || tn.module === Main
-        print(io, tn.name)
-    else
-        print(io, tn.module, '.', tn.name)
-    end
+    show_type_name(io, tn)
 end
 
 show(io::IO, ::Void) = print(io, "nothing")

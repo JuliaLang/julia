@@ -508,7 +508,7 @@ function f13127()
     show(buf, f)
     String(take!(buf))
 end
-@test f13127() == "$(curmod_prefix)f"
+@test startswith(f13127(), "getfield($(@__MODULE__), Symbol(\"")
 
 #test methodshow.jl functions
 @test Base.inbase(Base)
@@ -737,7 +737,7 @@ let sv = Core.svec(:a, :b, :c)
     @test repr == "SimpleVector\n  1: Symbol a\n  2: Symbol b\n  3: #undef\n"
 end
 let repr = sprint(dump, sin)
-    @test repr == "sin (function of type Base.#sin)\n"
+    @test repr == "sin (function of type typeof(sin))\n"
 end
 let repr = sprint(dump, Base.Test)
     @test repr == "Module Base.Test\n"
@@ -947,4 +947,34 @@ end
               string("4×30 Array{Float64,2}:\n",
                      " 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  …  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n",
                      " ⋮                        ⋮              ⋱            ⋮                      ")
+end
+
+module UnexportedOperators
+function + end
+function == end
+end
+
+@testset "Parseable printing of types" begin
+    @test repr(typeof(print)) == "typeof(print)"
+    @test repr(typeof(Base.show_default)) == "typeof(Base.show_default)"
+    @test repr(typeof(UnexportedOperators.:+)) == "typeof($(curmod_prefix)UnexportedOperators.:+)"
+    @test repr(typeof(UnexportedOperators.:(==))) == "typeof($(curmod_prefix)UnexportedOperators.:(==))"
+    anonfn = x->2x
+    modname = string(@__MODULE__)
+    anonfn_type_repr = "getfield($modname, Symbol(\"$(typeof(anonfn).name.name)\"))"
+    @test repr(typeof(anonfn)) == anonfn_type_repr
+    @test repr(anonfn) == anonfn_type_repr * "()"
+    @test stringmime("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
+    mkclosure = x->y->x+y
+    clo = mkclosure(10)
+    @test stringmime("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
+end
+
+let x = TypeVar(:_), y = TypeVar(:_)
+    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1,_2} where _2 where _1"
+    @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref{_1} where _1,_1} where _1"
+    x = TypeVar(:a)
+    y = TypeVar(:a)
+    z = TypeVar(:a)
+    @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z})))) == "Tuple{a1,a2,a} where a2 where a1 where a"
 end
