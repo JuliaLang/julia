@@ -680,12 +680,12 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
 Return a partial permutation of the vector `v`, according to the order specified by
 `by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
-if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index
-(Integer), an array of the first `k` indices is returned; if `k` is a range, an array of
-those indices is returned. Note that the handling of integer values for `k` is different
-from [`select`](@ref) in that it returns a vector of `k` elements instead of just the `k` th
-element. Also note that this is equivalent to, but more efficient than, calling
-`sortperm(...)[k]`.
+if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index,
+the index in `v` of the value which would be sorted at position `k` is returned;
+if `k` is a range, an array with the indices in `v` of the values which would be sorted in
+these positions is returned.
+
+Note that this is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
 """
 partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(similar(Vector{eltype(k)}, indices(v,1)), v, k; kwargs..., initialized=false)
@@ -694,7 +694,7 @@ partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
 
 Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix`. If `initialized` is `false`
-(the default), ix is initialized to contain the values `1:length(ix)`.
+(the default), `ix` is initialized to contain the values `1:length(ix)`.
 """
 function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                           k::Union{Int, OrdinalRange};
