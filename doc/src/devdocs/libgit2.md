@@ -74,6 +74,8 @@ Base.LibGit2.credentials_cb
 Base.LibGit2.default_signature
 Base.LibGit2.delete_branch
 Base.LibGit2.diff_files
+Base.LibGit2.entryid
+Base.LibGit2.entrytype
 Base.LibGit2.fetch
 Base.LibGit2.fetchheads
 Base.LibGit2.fetch_refspecs
@@ -83,6 +85,8 @@ Base.LibGit2.merge!(::Base.LibGit2.GitRepo; ::Any...)
 Base.LibGit2.ffmerge!
 Base.LibGit2.fullname
 Base.LibGit2.features
+Base.LibGit2.filename
+Base.LibGit2.filemode
 Base.LibGit2.get_creds!
 Base.LibGit2.gitdir
 Base.LibGit2.head
@@ -140,4 +144,5 @@ Base.LibGit2.url
 Base.LibGit2.version
 Base.LibGit2.with
 Base.LibGit2.workdir
+Base.LibGit2.GitObject(::Base.LibGit2.GitTreeEntry)
 ```
