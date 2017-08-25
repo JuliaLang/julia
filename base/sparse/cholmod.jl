@@ -26,6 +26,15 @@ include("cholmod_h.jl")
 
 const CHOLMOD_MIN_VERSION = v"2.1.1"
 
+const commonStruct = Vector{UInt8}()
+const common_supernodal = Ref{Ptr{Cint}}()
+const common_final_ll = Ref{Ptr{Cint}}()
+const common_print = Ref{Ptr{Cint}}()
+const common_itype = Ref{Ptr{Cint}}()
+const common_dtype = Ref{Ptr{Cint}}()
+const common_nmethods = Ref{Ptr{Cint}}()
+const common_postorder = Ref{Ptr{Cint}}()
+
 ### These offsets are defined in SuiteSparse_wrapper.c
 const common_size = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
 
@@ -76,6 +85,7 @@ function __init__()
 
         if current_version < CHOLMOD_MIN_VERSION
             warn("""
+
                 CHOLMOD version incompatibility
 
                 Julia was compiled with CHOLMOD version $build_version. It is
@@ -88,9 +98,10 @@ function __init__()
                 of CHOLMOD, or download the generic binaries
                 from www.julialang.org, which ship with the correct
                 versions of all dependencies.
-                """)
+            """)
         elseif build_version_array[1] != current_version_array[1]
             warn("""
+
                 CHOLMOD version incompatibility
 
                 Julia was compiled with CHOLMOD version $build_version. It is
@@ -103,12 +114,13 @@ function __init__()
                 version of CHOLMOD as the one used during the build, or
                 download the generic binaries from www.julialang.org,
                 which ship with the correct versions of all dependencies.
-                """)
+            """)
         end
 
         intsize = Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,()))
         if intsize != 4length(IndexTypes)
             warn("""
+
                  CHOLMOD integer size incompatibility
 
                  Julia was compiled with a version of CHOLMOD that
@@ -122,28 +134,22 @@ function __init__()
                  configuration or by downloading the OS X or generic
                  Linux binary from www.julialang.org, which include
                  the correct versions of all dependencies.
-                 """)
+            """)
         end
 
         ### Initiate CHOLMOD
         ### The common struct. Controls the type of factorization and keeps pointers
         ### to temporary memory.
-        global commonStruct = fill(0xff, common_size)
+        resize!(commonStruct, common_size)
+        fill!(commonStruct, 0xff)
 
-        global common_supernodal =
-            convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[4] + 1))
-        global common_final_ll =
-            convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[7] + 1))
-        global common_print =
-            convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[13] + 1))
-        global common_itype =
-            convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[18] + 1))
-        global common_dtype =
-            convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[19] + 1))
-        global common_nmethods =
-            convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[15] + 1))
-        global common_postorder =
-            convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[17] + 1))
+        common_supernodal[] = pointer(commonStruct, cholmod_com_offsets[4] + 1)
+        common_final_ll[] = pointer(commonStruct, cholmod_com_offsets[7] + 1)
+        common_print[] = pointer(commonStruct, cholmod_com_offsets[13] + 1)
+        common_itype[] = pointer(commonStruct, cholmod_com_offsets[18] + 1)
+        common_dtype[] = pointer(commonStruct, cholmod_com_offsets[19] + 1)
+        common_nmethods[] = pointer(commonStruct, cholmod_com_offsets[15] + 1)
+        common_postorder[] = pointer(commonStruct, cholmod_com_offsets[17] + 1)
 
         start(commonStruct)              # initializes CHOLMOD
         set_print_level(commonStruct, 0) # no printing from CHOLMOD by default
@@ -163,9 +169,8 @@ function __init__()
     end
 end
 
-function set_print_level(cm::Array{UInt8}, lev::Integer)
-    global common_print
-    unsafe_store!(common_print, lev)
+function set_print_level(cm::Vector{UInt8}, lev::Integer)
+    unsafe_store!(common_print[], lev)
 end
 
 ####################
@@ -1308,14 +1313,14 @@ function fact_(A::Sparse{<:VTypes}, cm::Array{UInt8};
     sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
 
     if !postorder
-        unsafe_store!(common_postorder, 0)
+        unsafe_store!(common_postorder[], 0)
     end
 
     if isempty(perm)
         F = analyze(A, cm)
     else # user permutation provided
         if userperm_only # use perm even if it is worse than AMD
-            unsafe_store!(common_nmethods, 1)
+            unsafe_store!(common_nmethods[], 1)
         end
         F = analyze_p(A, SuiteSparse_long[p-1 for p in perm], cm)
     end
@@ -1327,7 +1332,7 @@ function cholfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
     cm = common()
 
     # Makes it an LLt
-    unsafe_store!(common_final_ll, 1)
+    unsafe_store!(common_final_ll[], 1)
 
     # Compute the numerical factorization
     factorize_p!(A, shift, F, cm)
@@ -1419,9 +1424,9 @@ function ldltfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
     set_print_level(cm, 0)
 
     # Makes it an LDLt
-    unsafe_store!(common_final_ll, 0)
+    unsafe_store!(common_final_ll[], 0)
     # Really make sure it's an LDLt by avoiding supernodal factorization
-    unsafe_store!(common_supernodal, 0)
+    unsafe_store!(common_supernodal[], 0)
 
     # Compute the numerical factorization
     factorize_p!(A, shift, F, cm)
@@ -1460,9 +1465,9 @@ function ldltfact(A::Sparse; shift::Real=0.0,
     set_print_level(cm, 0)
 
     # Makes it an LDLt
-    unsafe_store!(common_final_ll, 0)
+    unsafe_store!(common_final_ll[], 0)
     # Really make sure it's an LDLt by avoiding supernodal factorization
-    unsafe_store!(common_supernodal, 0)
+    unsafe_store!(common_supernodal[], 0)
 
     # Compute the symbolic factorization
     F = fact_(A, cm; perm = perm)
