@@ -237,7 +237,7 @@ floor(::Type{Integer}, x::BigFloat) = floor(BigInt, x)
 ceil(::Type{Integer}, x::BigFloat) = ceil(BigInt, x)
 round(::Type{Integer}, x::BigFloat) = round(BigInt, x)
 
-convert(::Type{Bool}, x::BigFloat) = x==0 ? false : x==1 ? true :
+convert(::Type{Bool}, x::BigFloat) = iszero(x) ? false : isone(x) ? true :
     throw(InexactError(:convert, Bool, x))
 function convert(::Type{BigInt},x::BigFloat)
     isinteger(x) || throw(InexactError(:convert, BigInt, x))
@@ -278,7 +278,7 @@ big(::Type{<:AbstractFloat}) = BigFloat
 function convert(::Type{Rational{BigInt}}, x::AbstractFloat)
     if isnan(x); return zero(BigInt)//zero(BigInt); end
     if isinf(x); return copysign(one(BigInt),x)//zero(BigInt); end
-    if x == 0;   return zero(BigInt) // one(BigInt); end
+    if iszero(x);   return zero(BigInt) // one(BigInt); end
     s = max(precision(x) - exponent(x), 0)
     BigInt(ldexp(x,s)) // (BigInt(1) << s)
 end
@@ -798,7 +798,7 @@ function copysign(x::BigFloat, y::BigFloat)
 end
 
 function exponent(x::BigFloat)
-    if x == 0 || !isfinite(x)
+    if iszero(x) || !isfinite(x)
         throw(DomainError(x, "`x` must be non-zero and finite."))
     end
     # The '- 1' is to make it work as Base.exponent
@@ -926,7 +926,7 @@ function string(x::BigFloat)
         buf = Base.StringVector(lng + 1)
         lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), buf, lng + 1, "%.Re", &x)
     end
-    n = (1 <= x < 10 || -10 < x <= -1 || x == 0) ? lng - 4 : lng
+    n = (1 <= x < 10 || -10 < x <= -1 || iszero(x)) ? lng - 4 : lng
     return String(resize!(buf,n))
 end
 
