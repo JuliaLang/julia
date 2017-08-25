@@ -28,6 +28,9 @@ function include(path::AbstractString)
     end
     result
 end
+
+include(path::AbstractString...) = include(joinpath(path...))
+
 let SOURCE_PATH = ""
     # simple, race-y TLS, relative include
     global _include
