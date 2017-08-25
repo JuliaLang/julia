@@ -23,7 +23,8 @@ mktempdir() do dir
                 repo_path = joinpath(dir, "Example2")
                 # credentials are required because github tries to authenticate on unknown repo
                 cred = LibGit2.UserPasswordCredentials("JeffBezanson", "hunter2") # make sure Jeff is using a good password :)
-                LibGit2.clone(repo_url*randstring(10), repo_path, payload=Nullable(cred))
+                payload = LibGit2.CredentialPayload(cred)
+                LibGit2.clone(repo_url*randstring(10), repo_path, payload=payload)
                 error("unexpected")
             catch ex
                 @test isa(ex, LibGit2.Error.GitError)
@@ -36,7 +37,8 @@ mktempdir() do dir
                 repo_path = joinpath(dir, "Example3")
                 # credentials are required because github tries to authenticate on unknown repo
                 cred = LibGit2.UserPasswordCredentials("","") # empty credentials cause authentication error
-                LibGit2.clone(repo_url*randstring(10), repo_path, payload=Nullable(cred))
+                payload = LibGit2.CredentialPayload(cred)
+                LibGit2.clone(repo_url*randstring(10), repo_path, payload=payload)
                 error("unexpected")
             catch ex
                 @test isa(ex, LibGit2.Error.GitError)

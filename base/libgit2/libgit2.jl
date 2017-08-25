@@ -250,22 +250,22 @@ The keyword arguments are:
   * `remoteurl::AbstractString=""`: the URL of `remote`. If not specified,
     will be assumed based on the given name of `remote`.
   * `refspecs=AbstractString[]`: determines properties of the fetch.
-  * `payload=Nullable{AbstractCredentials}()`: provides credentials, if necessary,
-    for instance if `remote` is a private repository.
+  * `payload=CredentialPayload()`: provides credentials and/or settings when authenticating
+    against a private `remote`.
 
 Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
 """
 function fetch(repo::GitRepo; remote::AbstractString="origin",
                remoteurl::AbstractString="",
                refspecs::Vector{<:AbstractString}=AbstractString[],
-               payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
+               payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}=CredentialPayload())
+    p = deprecate_nullable_creds(:fetch, "repo", payload)
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        p = CredentialPayload(payload)
         fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), p))
         fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
     finally
@@ -284,8 +284,8 @@ The keyword arguments are:
   * `refspecs=AbstractString[]`: determines properties of the push.
   * `force::Bool=false`: determines if the push will be a force push,
      overwriting the remote branch.
-  * `payload=Nullable{AbstractCredentials}()`: provides credentials, if necessary,
-    for instance if `remote` is a private repository.
+  * `payload=CredentialPayload()`: provides credentials and/or settings when authenticating
+    against a private `remote`.
 
 Equivalent to `git push [<remoteurl>|<repo>] [<refspecs>]`.
 """
@@ -293,14 +293,14 @@ function push(repo::GitRepo; remote::AbstractString="origin",
               remoteurl::AbstractString="",
               refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
-              payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
+              payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}=CredentialPayload())
+    p = deprecate_nullable_creds(:push, "repo", payload)
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        p = CredentialPayload(payload)
         push_opts = PushOptions(callbacks=RemoteCallbacks(credentials_cb(), p))
         push(rmt, refspecs, force=force, options=push_opts)
     finally
@@ -484,9 +484,8 @@ The keyword arguments are:
   * `remote_cb::Ptr{Void}=C_NULL`: a callback which will be used to create the remote
     before it is cloned. If `C_NULL` (the default), no attempt will be made to create
     the remote - it will be assumed to already exist.
-  * `payload::Nullable{P<:AbstractCredentials}=Nullable{AbstractCredentials}()`:
-    provides credentials if necessary, for instance if the remote is a private
-    repository.
+  * `payload::CredentialPayload=CredentialPayload()`: provides credentials and/or settings
+    when authenticating against a private repository.
 
 Equivalent to `git clone [-b <branch>] [--bare] <repo_url> <repo_path>`.
 
@@ -503,10 +502,10 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Void} = C_NULL,
-               payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
+               payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}=CredentialPayload())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
-    p = CredentialPayload(payload)
+    p = deprecate_nullable_creds(:clone, "repo_url, repo_path", payload)
     fetch_opts = FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), p))
     clone_opts = CloneOptions(
                 bare = Cint(isbare),

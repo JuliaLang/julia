@@ -1149,14 +1149,6 @@ mutable struct CredentialPayload <: Payload
     end
 end
 
-function CredentialPayload(credential::Nullable{<:AbstractCredentials})
-    CredentialPayload(credential, Nullable{CachedCredentials}())
-end
-
-function CredentialPayload(cache::Nullable{CachedCredentials})
-    CredentialPayload(Nullable{AbstractCredentials}(), cache)
-end
-
 function CredentialPayload(credential::AbstractCredentials)
     CredentialPayload(Nullable(credential), Nullable{CachedCredentials}())
 end
