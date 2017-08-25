@@ -79,6 +79,7 @@ Base.LibGit2.merge_base
 Base.LibGit2.merge!(::Base.LibGit2.GitRepo; ::Any...)
 Base.LibGit2.ffmerge!
 Base.LibGit2.fullname
+Base.LibGit2.features
 Base.LibGit2.get_creds!
 Base.LibGit2.gitdir
 Base.LibGit2.head
@@ -92,6 +93,7 @@ Base.LibGit2.iscommit
 Base.LibGit2.isdiff
 Base.LibGit2.isdirty
 Base.LibGit2.isorphan
+Base.LibGit2.isset
 Base.LibGit2.lookup_branch
 Base.LibGit2.map(::Function, ::Base.LibGit2.GitRevWalker; ::Base.LibGit2.GitHash, ::Cint, ::Bool)
 Base.LibGit2.mirror_callback
@@ -113,6 +115,7 @@ Base.LibGit2.ref_list
 Base.LibGit2.reftype
 Base.LibGit2.remotes
 Base.LibGit2.remove!
+Base.LibGit2.reset
 Base.LibGit2.reset!
 Base.LibGit2.restore
 Base.LibGit2.revcount
@@ -125,11 +128,13 @@ Base.LibGit2.tag_create
 Base.LibGit2.tag_delete
 Base.LibGit2.tag_list
 Base.LibGit2.target
+Base.LibGit2.toggle
 Base.LibGit2.transact
 Base.LibGit2.treewalk
 Base.LibGit2.upstream
 Base.LibGit2.update!
 Base.LibGit2.url
+Base.LibGit2.version
 Base.LibGit2.with
 Base.LibGit2.workdir
 ```
