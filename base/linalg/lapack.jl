@@ -148,7 +148,7 @@ for (gbtrf, gbtrs, elty) in
             end
             ccall((@blasfunc($gbtrs), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
-                   Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},   Ptr{BlasInt},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}),
                   &trans, &n, &kl, &ku, &size(B,2), AB, &max(1,stride(AB,2)), ipiv,
                   B, &max(1,stride(B,2)), info)
@@ -1040,7 +1040,7 @@ for (gesvx, elty) in
             ldaf = stride(AF,2)
             nrhs = size(B,2)
             ldb  = stride(B,2)
-            rcond = Vector{$elty}(1)
+            rcond = Ref{$elty}()
             ferr  = similar(A, $elty, nrhs)
             berr  = similar(A, $elty, nrhs)
             work  = Vector{$elty}(4n)
@@ -1062,7 +1062,7 @@ for (gesvx, elty) in
                 chknonsingular(info[])
             end
             #WORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
-            X, equed, R, C, B, rcond[1], ferr, berr, work[1]
+            X, equed, R, C, B, rcond[], ferr, berr, work[1]
         end
 
         function gesvx!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
@@ -1109,7 +1109,7 @@ for (gesvx, elty, relty) in
             ldaf = stride(AF,2)
             nrhs = size(B,2)
             ldb = stride(B,2)
-            rcond = Vector{$relty}(1)
+            rcond = Ref{$relty}()
             ferr  = similar(A, $relty, nrhs)
             berr  = similar(A, $relty, nrhs)
             work  = Vector{$elty}(2n)
@@ -1131,7 +1131,7 @@ for (gesvx, elty, relty) in
                 chknonsingular(info[])
             end
             #RWORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
-            X, equed, R, C, B, rcond[1], ferr, berr, rwork[1]
+            X, equed, R, C, B, rcond[], ferr, berr, rwork[1]
         end
 
         #Wrapper for the no-equilibration, no-transpose calculation
@@ -1205,8 +1205,7 @@ for (gelsd, gelsy, elty) in
             end
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             s     = similar(A, $elty, min(m, n))
-            rcond = convert($elty, rcond)
-            rnk   = Vector{BlasInt}(1)
+            rnk   = Ref{BlasInt}()
             info  = Ref{BlasInt}()
             work  = Vector{$elty}(1)
             lwork = BlasInt(-1)
@@ -1215,10 +1214,12 @@ for (gelsd, gelsy, elty) in
                 ccall((@blasfunc($gelsd), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                       Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                       Ptr{$elty}, Ref{$elty}, Ref{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &m, &n, &size(B,2), A, &max(1,stride(A,2)),
-                      newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, iwork, info)
+                      &m, &n, &size(B,2),
+                      A, &max(1,stride(A,2)), newB, &max(1,stride(B,2),n),
+                      s, $elty(rcond), rnk, work,
+                      &lwork, iwork, info)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -1226,7 +1227,7 @@ for (gelsd, gelsy, elty) in
                     resize!(iwork, iwork[1])
                 end
             end
-            subsetrows(B, newB, n), rnk[1]
+            subsetrows(B, newB, n), rnk[]
         end
 
         #       SUBROUTINE DGELSY( M, N, NRHS, A, LDA, B, LDB, JPVT, RCOND, RANK,
@@ -1250,8 +1251,7 @@ for (gelsd, gelsy, elty) in
             lda = max(1, m)
             ldb = max(1, m, n)
             jpvt = zeros(BlasInt, n)
-            rcond = convert($elty, rcond)
-            rnk = Vector{BlasInt}(1)
+            rnk = Ref{BlasInt}()
             work = Vector{$elty}(1)
             lwork = BlasInt(-1)
             info = Ref{BlasInt}()
@@ -1259,11 +1259,11 @@ for (gelsd, gelsy, elty) in
                 ccall((@blasfunc($gelsy), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
-                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                     Ref{$elty}, Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{BlasInt}),
                     &m, &n, &nrhs, A,
                     &lda, newB, &ldb, jpvt,
-                    &rcond, rnk, work, &lwork,
+                    $elty(rcond), rnk, work, &lwork,
                     info)
                 chklapackerror(info[])
                 if i == 1
@@ -1271,7 +1271,7 @@ for (gelsd, gelsy, elty) in
                     resize!(work, lwork)
                 end
             end
-            subsetrows(B, newB, n), rnk[1]
+            subsetrows(B, newB, n), rnk[]
         end
     end
 end
@@ -1298,8 +1298,7 @@ for (gelsd, gelsy, elty, relty) in
             end
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             s     = similar(A, $relty, min(m, n))
-            rcond = convert($relty, rcond)
-            rnk   = Vector{BlasInt}(1)
+            rnk   = Ref{BlasInt}()
             info  = Ref{BlasInt}()
             work  = Vector{$elty}(1)
             lwork = BlasInt(-1)
@@ -1309,10 +1308,12 @@ for (gelsd, gelsy, elty, relty) in
                 ccall((@blasfunc($gelsd), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty},
-                       Ptr{$relty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                       Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &m, &n, &size(B,2), A, &max(1,stride(A,2)),
-                      newB, &max(1,stride(B,2),n), s, &rcond, rnk, work, &lwork, rwork, iwork, info)
+                       Ref{$relty}, Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{$relty}, Ref{BlasInt}, Ref{BlasInt}),
+                      &m, &n, &size(B,2), A,
+                      &max(1,stride(A,2)), newB, &max(1,stride(B,2),n), s,
+                      $relty(rcond), rnk, work, &lwork,
+                      rwork, iwork, info)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -1321,7 +1322,7 @@ for (gelsd, gelsy, elty, relty) in
                     resize!(iwork, iwork[1])
                 end
             end
-            subsetrows(B, newB, n), rnk[1]
+            subsetrows(B, newB, n), rnk[]
         end
 
         #       SUBROUTINE ZGELSY( M, N, NRHS, A, LDA, B, LDB, JPVT, RCOND, RANK,
@@ -1345,8 +1346,7 @@ for (gelsd, gelsy, elty, relty) in
             lda = max(1, m)
             ldb = max(1, m, n)
             jpvt = zeros(BlasInt, n)
-            rcond = convert($relty, rcond)
-            rnk = Vector{BlasInt}(1)
+            rnk = Ref{BlasInt}(1)
             work = Vector{$elty}(1)
             lwork = BlasInt(-1)
             rwork = Vector{$relty}(2n)
@@ -1355,11 +1355,11 @@ for (gelsd, gelsy, elty, relty) in
                 ccall((@blasfunc($gelsy), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
-                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                     Ref{$relty}, Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$relty}, Ptr{BlasInt}),
                     &m, &n, &nrhs, A,
                     &lda, newB, &ldb, jpvt,
-                    &rcond, rnk, work, &lwork,
+                    $relty(rcond), rnk, work, &lwork,
                     rwork, info)
                 chklapackerror(info[])
                 if i == 1
@@ -1367,7 +1367,7 @@ for (gelsd, gelsy, elty, relty) in
                     resize!(work, lwork)
                 end
             end
-            subsetrows(B, newB, n), rnk[1]
+            subsetrows(B, newB, n), rnk[]
         end
     end
 end
@@ -3334,17 +3334,17 @@ for (trcon, trevc, trrfs, elty) in
             chkdiag(diag)
             n = checksquare(A)
             chkuplo(uplo)
-            rcond = Vector{$elty}(1)
+            rcond = Ref{$elty}()
             work  = Vector{$elty}(3n)
             iwork = Vector{BlasInt}(n)
             info  = Ref{BlasInt}()
             ccall((@blasfunc($trcon), liblapack), Void,
                   (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt},
-                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                   Ptr{$elty}, Ptr{BlasInt}, Ref{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &norm, &uplo, &diag, &n,
                   A, &max(1,stride(A,2)), rcond, work, iwork, info)
             chklapackerror(info[])
-            rcond[1]
+            rcond[]
         end
 
         # SUBROUTINE DTREVC( SIDE, HOWMNY, SELECT, N, T, LDT, VL, LDVL, VR,
@@ -3462,17 +3462,17 @@ for (trcon, trevc, trrfs, elty, relty) in
             n = checksquare(A)
             chkuplo(uplo)
             chkdiag(diag)
-            rcond = Vector{$relty}(1)
+            rcond = Ref{$relty}(1)
             work  = Vector{$elty}(2n)
             rwork = Vector{$relty}(n)
             info  = Ref{BlasInt}()
             ccall((@blasfunc($trcon), liblapack), Void,
                   (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt},
-                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+                   Ptr{$elty}, Ptr{BlasInt}, Ref{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
                   &norm, &uplo, &diag, &n,
                   A, &max(1,stride(A,2)), rcond, work, rwork, info)
             chklapackerror(info[])
-            rcond[1]
+            rcond[]
         end
 
         # SUBROUTINE ZTREVC( SIDE, HOWMNY, SELECT, N, T, LDT, VL, LDVL, VR,
@@ -5337,18 +5337,18 @@ for (gecon, elty) in
             chkstride1(A)
             n = checksquare(A)
             lda = max(1, stride(A, 2))
-            rcond = Vector{$elty}(1)
+            rcond = Ref{$elty}()
             work = Vector{$elty}(4n)
             iwork = Vector{BlasInt}(n)
             info = Ref{BlasInt}()
             ccall((@blasfunc($gecon), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                   Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{$elty}, Ref{$elty}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}),
                   &normtype, &n, A, &lda, &anorm, rcond, work, iwork,
                   info)
             chklapackerror(info[])
-            rcond[1]
+            rcond[]
         end
     end
 end
@@ -5371,18 +5371,18 @@ for (gecon, elty, relty) in
             chkstride1(A)
             n = checksquare(A)
             lda = max(1, stride(A, 2))
-            rcond = Vector{$relty}(1)
+            rcond = Ref{$relty}()
             work = Vector{$elty}(2n)
             rwork = Vector{$relty}(2n)
             info = Ref{BlasInt}()
             ccall((@blasfunc($gecon), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                   Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty},
+                   Ptr{$relty}, Ref{$relty}, Ptr{$elty}, Ptr{$relty},
                    Ptr{BlasInt}),
                   &normtype, &n, A, &lda, &anorm, rcond, work, rwork,
                   info)
             chklapackerror(info[])
-            rcond[1]
+            rcond[]
         end
     end
 end
