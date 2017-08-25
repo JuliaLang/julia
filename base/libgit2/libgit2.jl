@@ -522,7 +522,7 @@ function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractSt
 end
 
 """
-    reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED)
+    reset!(repo::GitRepo, id::GitHash, mode::Cint=Consts.RESET_MIXED)
 
 Reset the repository `repo` to its state at `id`, using one of three modes
 set by `mode`:
@@ -861,6 +861,14 @@ function restore(s::State, repo::GitRepo)
     reset!(repo, s.head, Consts.RESET_SOFT) # restore head
 end
 
+"""
+    transact(f::Function, repo::GitRepo)
+
+Apply function `f` to the git repository `repo`, taking a [`snapshot`](@ref) before
+applying `f`. If an error occurs within `f`, `repo` will be returned to its snapshot
+state using [`restore`](@ref). The error which occurred will be rethrown, but the
+state of `repo` will not be corrupted.
+"""
 function transact(f::Function, repo::GitRepo)
     state = snapshot(repo)
     try f(repo) catch
