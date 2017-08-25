@@ -252,7 +252,6 @@ function process_options(opts::JLOptions)
     end
     repl                  = true
     quiet                 = (opts.quiet != 0)
-    banner                = (opts.banner == 1 || opts.banner != 0 && opts.isinteractive != 0)
     startup               = (opts.startupfile != 2)
     history_file          = (opts.historyfile != 0)
     color_set             = (opts.color != 0)
@@ -318,7 +317,7 @@ function process_options(opts::JLOptions)
         break
     end
     repl |= is_interactive
-    return (quiet,banner,repl,startup,color_set,history_file)
+    return (quiet,repl,startup,color_set,history_file)
 end
 
 function load_juliarc()
@@ -381,7 +380,8 @@ function _start()
     opts = JLOptions()
     @eval Main include(x) = $include(Main, x)
     try
-        (quiet,banner,repl,startup,color_set,history_file) = process_options(opts)
+        (quiet,repl,startup,color_set,history_file) = process_options(opts)
+        banner = opts.banner == 1
 
         local term
         global active_repl
@@ -389,10 +389,13 @@ function _start()
         if repl
             if !isa(STDIN,TTY)
                 global is_interactive |= !isa(STDIN, Union{File, IOStream})
+                banner |= opts.banner != 0 && is_interactive
                 color_set || (global have_color = false)
             else
-                term = Terminals.TTYTerminal(get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
+                term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+                term = Terminals.TTYTerminal(term_env, STDIN, STDOUT, STDERR)
                 global is_interactive = true
+                banner |= opts.banner != 0
                 color_set || (global have_color = Terminals.hascolor(term))
                 banner && REPL.banner(term,term)
                 if term.term_type == "dumb"
@@ -407,6 +410,8 @@ function _start()
                 # REPLDisplay
                 pushdisplay(REPL.REPLDisplay(active_repl))
             end
+        else
+            banner |= opts.banner != 0 && is_interactive
         end
 
         if repl
