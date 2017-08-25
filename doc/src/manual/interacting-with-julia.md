@@ -173,6 +173,9 @@ to do so).
 | `^K`                | "Kill" to end of line, placing the text in a buffer                                                        |
 | `^Y`                | "Yank" insert the text from the kill buffer                                                                |
 | `^T`                | Transpose the characters about the cursor                                                                  |
+| `meta-u`            | Change the next word to uppercase                                                                          |
+| `meta-c`            | Change the next word to titlecase                                                                          |
+| `meta-l`            | Change the next word to lowercase                                                                          |
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
 
 
