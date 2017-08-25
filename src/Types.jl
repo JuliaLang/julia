@@ -141,6 +141,9 @@ end
 Package(name::AbstractString) = Package(name, UUID(zero(UInt128)))
 Package(uuid::UUID) = Package("", uuid)
 
+has_name(pkg::Package) = !isempty(pkg.name)
+has_uuid(pkg::Package) = pkg.uuid != UUID(zero(UInt128))
+
 @enum UpgradeLevel fixed=0 patch=1 minor=2 major=3
 
 function Base.convert(::Type{UpgradeLevel}, s::Symbol)
@@ -280,43 +283,40 @@ end
 
 ## resolving packages from name or uuid ##
 
-# package reslution only pays attention to the project file and registries:
-#   - if a name or uuid is in the project file, use that mapping
-#   - if a name or uuid is not in the project, use the registry
-# this completely ignores the manifest since the manifest doesn't generally
-# provide unambiguous names <=> uuid mapping; moreover, considering the
-# manifest makes command idempotency challenging/impossible.
-
-function resolve_packages!(env::EnvCache, pkgs::AbstractVector{Package})
+"""
+Disambiguate name-only and uuid-only package specifications using only
+information in the project file.
+"""
+function project_resolve!(env::EnvCache, pkgs::AbstractVector{Package})
     deps = env.project["deps"]
     depr = Dict(uuid => name for (uuid, name) in deps)
     length(deps) == length(depr) || # TODO: handle this somehow?
         warn("duplicate UUID found in project file [deps] section")
-    # names & uuids to lookup in registry
-    names = String[]
-    uuids = UUID[]
     for pkg in pkgs
-        has_uuid = pkg.uuid != UUID(zero(UInt128))
-        has_name = !isemtpy(pkg.name)
-        @assert has_uuid || has_name
-        if has_name && !has_uuid
-            if pkg.name in keys(deps)
-                pkg.uuid = deps[pkg.name]
-            else
-                push!(names, pkg.name)
-            end
+        if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(deps)
+            pkg.uuid = deps[pkg.name]
         end
-        if has_uuid && !has_name
-            if pkg.uuid in keys(depr)
-                pkg.name = depr[pkg.uuid]
-            else
-                push!(uuids, pkg.uuid)
-            end
+        if has_uuid(pkg) && !has_name(pkg) && pkg.uuid in keys(depr)
+            pkg.name = depr[pkg.uuid]
         end
     end
-
+    return pkgs
 end
 
+"""
+Disambiguate name-only and uuid-only package specifications using only
+information from registries.
+"""
+function registry_resolve!(env::EnvCache, pkgs::AbstractVector{Package})
+    # if there are no ambiuous packages, return early
+    any(pkg->has_name(pkg) ⊻ has_uuid(pkg), pkgs) || return
+    # collect /all/ names and uuids since we're looking anyway
+    names = [pkg.name for pkg in pkgs if has_name(pkg)]
+    uuids = [pkg.uuid for pkg in pkgs if has_uuid(pkg)]
+    find_registered!(env, names, uuids)
+end
+
+"Return paths of all registries in a depot"
 function registries(depot::String)
     d = joinpath(depot, "registries")
     regs = filter!(readdir(d)) do r
@@ -324,6 +324,7 @@ function registries(depot::String)
     end
     return map(reg->joinpath(depot, "registries", reg), regs)
 end
+"Return paths of all registries in all depots"
 registries() = [r for d in depots() for r in registries(d)]
 
 const line_re = r"""
@@ -335,15 +336,41 @@ const line_re = r"""
     \s* \} \s* $
 """x
 
-function find_registered!(env::EnvCache, names::Vector{String}, uuids::Vector{UUID})
-    # don't look if there's nothing new to see
+"""
+In a single pass through registries, lookup a set of names & uuids
+"""
+function find_registered!(
+    env::EnvCache,
+    names::Vector{String},
+    uuids::Vector{UUID};
+    force::Bool = false,
+)::Void
+    # only look if there's something new to see (or force == true)
     names = filter(name->!haskey(env.uuids, name), names)
     uuids = filter(uuid->!haskey(env.paths, uuid), uuids)
-    isempty(names) && isempty(uuids) && return paths
+    !force && isempty(names) && isempty(uuids) && return
 
-    # initialize env entries for names and uuids
-    for name in names; env.uuids[name] = UUID[]; end
-    for uuid in uuids; env.paths[uuid] = String[]; end
+    # since we're looking anyway, look for everything
+    save(name::String) =
+        name in names || haskey(env.uuids, name) || push!(names, name)
+    save(uuid::UUID) =
+        uuid in uuids || haskey(env.paths, uuid) || push!(uuids, uuid)
+
+    # lookup any dependency in the project file
+    for (name, uuid) in env.project["deps"]
+        save(name); save(UUID(uuid))
+    end
+    # lookup anything mentioned in the manifest file
+    for (name, infos) in env.manifest, info in infos
+        save(name)
+        haskey(info, "uuid") && save(UUID(info["uuid"]))
+        haskey(info, "deps") || continue
+        for (n, u) in info["deps"]
+            save(n); save(UUID(u))
+        end
+    end
+    # if there's still nothing to look for, return early
+    isempty(names) && isempty(uuids) && return
 
     # build regexs for names and uuids
     uuid_re = sprint() do io
@@ -366,7 +393,20 @@ function find_registered!(env::EnvCache, names::Vector{String}, uuids::Vector{UU
             print(io, raw" )\"")
         end
     end
-    regex = Regex("( $uuid_re | $name_re )", "x")
+    regex = if !isempty(uuids) && !isempty(names)
+        Regex("( $uuid_re | $name_re )", "x")
+    elseif !isempty(uuids)
+        Regex(uuid_re, "x")
+    elseif !isempty(names)
+        Regex(name_re, "x")
+    else
+        error("this sholdn't happen")
+    end
+
+    # initialize env entries for names and uuids
+    for name in names; env.uuids[name] = UUID[]; end
+    for uuid in uuids; env.paths[uuid] = String[]; end
+    # note: empty vectors will be left for names & uuids that aren't found
 
     # search through all registries
     for registry in registries()
@@ -381,6 +421,7 @@ function find_registered!(env::EnvCache, names::Vector{String}, uuids::Vector{UU
                 m = match(line_re, line)
                 m == nothing &&
                     error("misformated registry.toml package entry: $line")
+                println(line)
                 uuid = UUID(m.captures[1])
                 name = Base.unescape_string(m.captures[2])
                 path = abspath(registry, Base.unescape_string(m.captures[3]))
@@ -389,6 +430,22 @@ function find_registered!(env::EnvCache, names::Vector{String}, uuids::Vector{UU
             end
         end
     end
+end
+
+"Lookup whatever's in project & manifest files"
+find_registered!(env::EnvCache)::Void =
+    find_registered!(env, String[], UUID[], force=true)
+
+"Get registered uuids associated with a package name"
+function uuids(env::EnvCache, name::String)::Vector{UUID}
+    find_registered!(env, [name], UUID[])
+    return env.uuids[name]
+end
+
+"Get registered paths associated with a package uuid"
+function paths(env::EnvCache, uuid::UUID)::Vector{String}
+    find_registered!(env, String[], [uuid])
+    return env.paths[uuid]
 end
 
 end # module
