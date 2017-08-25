@@ -8,7 +8,10 @@ module Meta
 export quot,
        isexpr,
        show_sexpr,
-       @dump
+       @dump,
+       leaftypes,
+       abstracts
+
 
 quot(ex) = Expr(:quote, ex)
 
@@ -57,17 +60,21 @@ macro dump(expr)
 end
 
 """
-    leaftypes(t::Type) -> Vector{DataType}
+    leaftypes(t::Type) -> Vector{Union{DataType, UnionAll}}
 
 Return an array of all concrete subtypes of `t`, including `t` if it is concrete.
 """
-leaftypes(t::Type) = isleaftype(t) ? [t] : vcat(leaftypes.(subtypes(t))...)
+function leaftypes(t::Type)::Vector{Union{DataType, UnionAll}}
+    return isleaftype(t) ? [t] : vcat(leaftypes.(subtypes(t))...)
+end
 
 """
-    abstracts(t::Type) -> Vector{DataType}
+    abstracts(t::Type) -> Vector{Union{DataType, UnionAll}}
 
 Return an array of all abstract subtypes of `t`, including `t` if it is abstract.
 """
-abstracts(t::Type) = isleaftype(t) ? DataType[] : vcat(t, abstracts.(subtypes(t))...)
+function abstracts(t::Type)::Vector{Union{DataType, UnionAll}}
+    return isleaftype(t) ? DataType[] : vcat(t, abstracts.(subtypes(t))...)
+end
 
 end # module

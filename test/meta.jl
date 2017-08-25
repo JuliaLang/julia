@@ -191,7 +191,7 @@ end
 
 @testset "leaftypes/abstracts" begin
     abstract type Foo end
-    abstract type Bar
+    abstract type Bar end
     abstract type Baz <: Bar end
     abstract type Qux <: Baz end
     abstract type Quux <: Qux end
