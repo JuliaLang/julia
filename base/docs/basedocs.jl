@@ -697,6 +697,13 @@ DevNull
 # doc strings for code in boot.jl and built-ins
 
 """
+    Void
+
+A type with no fields that is the type [`nothing`](@ref).
+"""
+Void
+
+"""
     nothing
 
 The singleton instance of type `Void`, used by convention when there is no value to return
