@@ -259,7 +259,7 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
                remoteurl::AbstractString="",
                refspecs::Vector{<:AbstractString}=AbstractString[],
                payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}=CredentialPayload())
-    p = deprecate_nullable_creds(:fetch, "repo", payload)
+    p = reset!(deprecate_nullable_creds(:fetch, "repo", payload))
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
@@ -294,7 +294,7 @@ function push(repo::GitRepo; remote::AbstractString="origin",
               refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
               payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}=CredentialPayload())
-    p = deprecate_nullable_creds(:push, "repo", payload)
+    p = reset!(deprecate_nullable_creds(:push, "repo", payload))
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
@@ -505,7 +505,7 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}=CredentialPayload())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
-    p = deprecate_nullable_creds(:clone, "repo_url, repo_path", payload)
+    p = reset!(deprecate_nullable_creds(:clone, "repo_url, repo_path", payload))
     fetch_opts = FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), p))
     clone_opts = CloneOptions(
                 bare = Cint(isbare),
