@@ -275,9 +275,9 @@ The fields represent:
   * `download_tags`: whether to download tags present at the remote or not. The default
      is to request the tags for objects which are being downloaded anyway from the server.
   * `proxy_opts`: options for connecting to the remote through a proxy. See [`ProxyOptions`](@ref).
-     Only present on libgit2 versions newer than 0.25.
+     Only present on libgit2 versions newer than or equal to 0.25.0.
   * `custom_headers`: any extra headers needed for the fetch. Only present on libgit2 versions
-     newer than 0.24.
+     newer than or equal to 0.24.0.
 """
 @kwdef struct FetchOptions
     version::Cuint                  = 1
@@ -576,6 +576,20 @@ Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
     LibGit2.RebaseOptions
 
 Matches the `git_rebase_options` struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `quiet`: inform other git clients helping with/working on the rebase that the rebase
+    should be done "quietly". Used for interoperability. The default is `1`.
+  * `inmemory`: start an in-memory rebase. Callers working on the rebase can go through its
+    steps and commit any changes, but cannot rewind HEAD or update the repository. The
+    [`workdir`](@ref) will not be modified. Only present on libgit2 versions newer than or equal to 0.24.0.
+  * `rewrite_notes_ref`: name of the reference to notes to use to rewrite the commit notes as
+    the rebase is finished.
+  * `merge_opts`: merge options controlling how the trees will be merged at each rebase step.
+     Only present on libgit2 versions newer than or equal to 0.24.0.
+  * `checkout_opts`: checkout options for writing files when initializing the rebase, stepping
+    through it, and aborting it. See [`CheckoutOptions`](@ref) for more information.
 """
 @kwdef struct RebaseOptions
     version::Cuint                 = 1
@@ -595,6 +609,23 @@ end
 
 Describes a single instruction/operation to be performed during the rebase.
 Matches the [`git_rebase_operation`](https://libgit2.github.com/libgit2/#HEAD/type/git_rebase_operation_t) struct.
+
+The fields represent:
+  * `optype`: the type of rebase operation currently being performed. The options are:
+      - `REBASE_OPERATION_PICK`: cherry-pick the commit in question.
+      - `REBASE_OPERATION_REWORD`: cherry-pick the commit in question, but rewrite its
+        message using the prompt.
+      - `REBASE_OPERATION_EDIT`: cherry-pick the commit in question, but allow the user
+        to edit the commit's contents and its message.
+      - `REBASE_OPERATION_SQUASH`: squash the commit in question into the previous commit.
+        The commit messages of the two commits will be merged.
+      - `REBASE_OPERATION_FIXUP`: squash the commit in question into the previous commit.
+        Only the commit message of the previous commit will be used.
+      - `REBASE_OPERATION_EXEC`: do not cherry-pick a commit. Run a command and continue if
+        the command exits successfully.
+  * `id`: the [`GitHash`](@ref) of the commit being worked on during this rebase step.
+  * `exec`: in case `REBASE_OPERATION_EXEC` is used, the command to run during this step
+    (for instance, running the test suite after each commit).
 """
 struct RebaseOperation
     optype::Cint
