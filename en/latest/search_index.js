@@ -5041,11 +5041,27 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/base/#Base.Val",
+    "location": "stdlib/base/#Base.instances",
     "page": "Essentials",
-    "title": "Base.Val",
+    "title": "Base.instances",
+    "category": "Function",
+    "text": "instances(T::Type)\n\nReturn a collection of all instances of the given type, if applicable. Mostly used for enumerated types (see @enum).\n\nExample\n\njulia> @enum Colors Red Blue Green\n\njulia> instances(Colors)\n(Red::Colors = 0, Blue::Colors = 1, Green::Colors = 2)\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Dealing-with-Types-1",
+    "page": "Essentials",
+    "title": "Dealing with Types",
+    "category": "section",
+    "text": "Base.supertype\nCore.:(<:)\nBase.:(>:)\nBase.subtypes\nBase.typemin\nBase.typemax\nBase.realmin\nBase.realmax\nBase.maxintfloat\nBase.sizeof(::Type)\nBase.eps(::Type{<:AbstractFloat})\nBase.eps(::AbstractFloat)\nBase.promote_type\nBase.promote_rule\nCore.getfield\nCore.setfield!\nBase.fieldoffset\nCore.fieldtype\nBase.isimmutable\nBase.isbits\nBase.isleaftype\nBase.typejoin\nBase.typeintersect\nBase.instances"
+},
+
+{
+    "location": "stdlib/base/#Core.Any",
+    "page": "Essentials",
+    "title": "Core.Any",
     "category": "Type",
-    "text": "Val(c)\n\nReturn Val{c}(), which contains no run-time data. Types like this can be used to pass the information between functions through the value c, which must be an isbits value. The intent of this construct is to be able to dispatch on constants directly (at compile time) without having to test the value of the constant at run time.\n\nExamples\n\njulia> f(::Val{true}) = \"Good\"\nf (generic function with 1 method)\n\njulia> f(::Val{false}) = \"Bad\"\nf (generic function with 2 methods)\n\njulia> f(Val(true))\n\"Good\"\n\n\n\n"
+    "text": "Any::DataType\n\nAny is the union of all types. It has the defining property isa(x, Any) == true for any x. Any therefore describes the entire universe of possible values. For example Integer is a subset of Any that includes Int, Int8, and other integer types.\n\n\n\n"
 },
 
 {
@@ -5057,19 +5073,59 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/base/#Base.instances",
+    "location": "stdlib/base/#Core.Union",
     "page": "Essentials",
-    "title": "Base.instances",
-    "category": "Function",
-    "text": "instances(T::Type)\n\nReturn a collection of all instances of the given type, if applicable. Mostly used for enumerated types (see @enum).\n\nExample\n\njulia> @enum Colors Red Blue Green\n\njulia> instances(Colors)\n(Red::Colors = 0, Blue::Colors = 1, Green::Colors = 2)\n\n\n\n"
+    "title": "Core.Union",
+    "category": "Type",
+    "text": "Union{Types...}\n\nA type union is an abstract type which includes all instances of any of its argument types. The empty union Union{} is the bottom type of Julia.\n\nExamples\n\njulia> IntOrString = Union{Int,AbstractString}\nUnion{AbstractString, Int64}\n\njulia> 1 :: IntOrString\n1\n\njulia> \"Hello!\" :: IntOrString\n\"Hello!\"\n\njulia> 1.0 :: IntOrString\nERROR: TypeError: typeassert: expected Union{AbstractString, Int64}, got Float64\n\n\n\n"
 },
 
 {
-    "location": "stdlib/base/#Types-1",
+    "location": "stdlib/base/#Union{}",
     "page": "Essentials",
-    "title": "Types",
+    "title": "Union{}",
+    "category": "Keyword",
+    "text": "Union{}\n\nUnion{}, the empty Union of types, is the type that has no values. That is, it has the defining property isa(x, Union{}) == false for any x. Base.Bottom is defined as its alias and the type of Union{} is Core.TypeofBottom.\n\nExamples\n\njulia> isa(nothing, Union{})\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Core.UnionAll",
+    "page": "Essentials",
+    "title": "Core.UnionAll",
+    "category": "Type",
+    "text": "UnionAll\n\nA union of types over all values of a type parameter. UnionAll is used to describe parametric types where the values of some parameters are not known.\n\nExamples\n\njulia> typeof(Vector)\nUnionAll\n\njulia> typeof(Vector{Int})\nDataType\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Core.Tuple",
+    "page": "Essentials",
+    "title": "Core.Tuple",
+    "category": "Type",
+    "text": "Tuple{Types...}\n\nTuples are an abstraction of the arguments of a function – without the function itself. The salient aspects of a function's arguments are their order and their types. Therefore a tuple type is similar to a parameterized immutable type where each parameter is the type of one field. Tuple types may have any number of parameters.\n\nTuple types are covariant in their parameters: Tuple{Int} is a subtype of Tuple{Any}. Therefore Tuple{Any} is considered an abstract type, and tuple types are only concrete if their parameters are. Tuples do not have field names; fields are only accessed by index.\n\nSee the manual section on Tuple Types.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Val",
+    "page": "Essentials",
+    "title": "Base.Val",
+    "category": "Type",
+    "text": "Val(c)\n\nReturn Val{c}(), which contains no run-time data. Types like this can be used to pass the information between functions through the value c, which must be an isbits value. The intent of this construct is to be able to dispatch on constants directly (at compile time) without having to test the value of the constant at run time.\n\nExamples\n\njulia> f(::Val{true}) = \"Good\"\nf (generic function with 1 method)\n\njulia> f(::Val{false}) = \"Bad\"\nf (generic function with 2 methods)\n\njulia> f(Val(true))\n\"Good\"\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Core.Vararg",
+    "page": "Essentials",
+    "title": "Core.Vararg",
+    "category": "Type",
+    "text": "Vararg{T,N}\n\nThe last parameter of a tuple type Tuple can be the special type Vararg, which denotes any number of trailing elements. The type Vararg{T,N} corresponds to exactly N elements of type T. Vararg{T} corresponds to zero or more elements of type T. Vararg tuple types are used to represent the arguments accepted by varargs methods (see the section on Varargs Functions in the manual.)\n\nExamples\n\njulia> mytupletype = Tuple{AbstractString,Vararg{Int}}\nTuple{AbstractString,Vararg{Int64,N} where N}\n\njulia> isa((\"1\",), mytupletype)\ntrue\n\njulia> isa((\"1\",1), mytupletype)\ntrue\n\njulia> isa((\"1\",1,2), mytupletype)\ntrue\n\njulia> isa((\"1\",1,2,3.0), mytupletype)\nfalse\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Special-Types-1",
+    "page": "Essentials",
+    "title": "Special Types",
     "category": "section",
-    "text": "Base.supertype\nCore.:(<:)\nBase.:(>:)\nBase.subtypes\nBase.typemin\nBase.typemax\nBase.realmin\nBase.realmax\nBase.maxintfloat\nBase.sizeof(::Type)\nBase.eps(::Type{<:AbstractFloat})\nBase.eps(::AbstractFloat)\nBase.promote_type\nBase.promote_rule\nCore.getfield\nCore.setfield!\nBase.fieldoffset\nCore.fieldtype\nBase.isimmutable\nBase.isbits\nBase.isleaftype\nBase.typejoin\nBase.typeintersect\nBase.Val\nBase.Enums.@enum\nBase.instances"
+    "text": "Core.Any\nBase.Enums.@enum\nCore.Union\nUnion{}\nCore.UnionAll\nCore.Tuple\nBase.Val\nCore.Vararg"
 },
 
 {
@@ -8421,7 +8477,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -12741,7 +12797,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact",
     "category": "Function",
-    "text": "cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\ncholfact(A, Val(false)) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, det, logdet and isposdef.\n\nExamples\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\nsuccessful: true\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\n"
+    "text": "cholfact(A, Val(false)) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, det, logdet and isposdef.\n\nExamples\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\nsuccessful: true\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\ncholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
 },
 
 {
@@ -12749,7 +12805,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact!",
     "category": "Function",
-    "text": "cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/ Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\ncholfact!(A, Val(false)) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError: convert(Int64, 6.782329983125268)\n\n\n\ncholfact!(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\n"
+    "text": "cholfact!(A, Val(false)) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError: convert(Int64, 6.782329983125268)\n\n\n\ncholfact!(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\ncholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/ Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
 },
 
 {
@@ -12789,7 +12845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact",
     "category": "Function",
-    "text": "ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, logdet, and inv. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\nldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of a real symmetric tridiagonal matrix such that A = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(A) is to solve the linear system of equations Ax = b with F\\b.\n\n\n\n"
+    "text": "ldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of a real symmetric tridiagonal matrix such that A = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(A) is to solve the linear system of equations Ax = b with F\\b.\n\n\n\nldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, logdet, and inv. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
 },
 
 {
@@ -12797,7 +12853,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact!",
     "category": "Function",
-    "text": "ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\n"
+    "text": "ldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\nldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
 },
 
 {
