@@ -1643,7 +1643,7 @@ mktempdir() do dir
             "No errors")
 
         abort_prompt = LibGit2.GitError(
-            LibGit2.Error.Callback, LibGit2.Error.EAUTH,
+            LibGit2.Error.Callback, LibGit2.Error.EUSER,
             "Aborting, user cancelled credential request.")
 
         incompatible_error = LibGit2.GitError(

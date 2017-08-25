@@ -45,7 +45,7 @@ function user_abort()
           (Cint, Cstring),
           Cint(Error.Callback), "Aborting, user cancelled credential request.")
 
-    return Cint(Error.EAUTH)
+    return Cint(Error.EUSER)
 end
 
 function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, username_ptr)
