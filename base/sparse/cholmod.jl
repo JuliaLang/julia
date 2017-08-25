@@ -76,7 +76,6 @@ function __init__()
 
         if current_version < CHOLMOD_MIN_VERSION
             warn("""
-
                 CHOLMOD version incompatibility
 
                 Julia was compiled with CHOLMOD version $build_version. It is
@@ -89,10 +88,9 @@ function __init__()
                 of CHOLMOD, or download the generic binaries
                 from www.julialang.org, which ship with the correct
                 versions of all dependencies.
-            """)
+                """)
         elseif build_version_array[1] != current_version_array[1]
             warn("""
-
                 CHOLMOD version incompatibility
 
                 Julia was compiled with CHOLMOD version $build_version. It is
@@ -105,13 +103,12 @@ function __init__()
                 version of CHOLMOD as the one used during the build, or
                 download the generic binaries from www.julialang.org,
                 which ship with the correct versions of all dependencies.
-            """)
+                """)
         end
 
         intsize = Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,()))
         if intsize != 4length(IndexTypes)
             warn("""
-
                  CHOLMOD integer size incompatibility
 
                  Julia was compiled with a version of CHOLMOD that
@@ -125,27 +122,27 @@ function __init__()
                  configuration or by downloading the OS X or generic
                  Linux binary from www.julialang.org, which include
                  the correct versions of all dependencies.
-             """)
+                 """)
         end
 
         ### Initiate CHOLMOD
         ### The common struct. Controls the type of factorization and keeps pointers
         ### to temporary memory.
-        global const commonStruct = fill(0xff, common_size)
+        global commonStruct = fill(0xff, common_size)
 
-        global const common_supernodal =
+        global common_supernodal =
             convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[4] + 1))
-        global const common_final_ll =
+        global common_final_ll =
             convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[7] + 1))
-        global const common_print =
+        global common_print =
             convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[13] + 1))
-        global const common_itype =
+        global common_itype =
             convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[18] + 1))
-        global const common_dtype =
+        global common_dtype =
             convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[19] + 1))
-        global const common_nmethods =
+        global common_nmethods =
             convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[15] + 1))
-        global const common_postorder =
+        global common_postorder =
             convert(Ptr{Cint}, pointer(commonStruct, cholmod_com_offsets[17] + 1))
 
         start(commonStruct)              # initializes CHOLMOD
