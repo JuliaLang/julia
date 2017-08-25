@@ -189,17 +189,17 @@ let oldout = STDOUT
     end
 end
 
-@testset "leaftypes/abstracts" begin
-    abstract type Foo end
-    abstract type Bar end
-    abstract type Baz <: Bar end
-    abstract type Qux <: Baz end
-    abstract type Quux <: Qux end
-    struct Corge <: Baz end
-    struct Uier <: Baz end
-    struct Grault <: Qux end
-    struct Waldo end
+abstract type Foo end
+abstract type Bar end
+abstract type Baz <: Bar end
+abstract type Qux <: Baz end
+abstract type Quux <: Qux end
+struct Corge <: Baz end
+struct Uier <: Baz end
+struct Grault <: Qux end
+struct Waldo end
 
+@testset "leaftypes/abstracts" begin
     @test isempty(leaftypes(Foo))
     @test leaftypes(Waldo) == [Waldo]
     @test Set(leaftypes(Bar)) == Set([Corge, Uier, Grault])
