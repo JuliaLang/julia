@@ -1139,9 +1139,26 @@ end
 "Obtain the cached credentials for the given host+protocol (credid), or return and store the default if not found"
 get_creds!(collection::CachedCredentials, credid, default) = get!(collection.cred, credid, default)
 
+get(cache::CachedCredentials, credid, default) = Base.get(cache.cred, credid, default)
+
 function securezero!(p::CachedCredentials)
     foreach(securezero!, values(p.cred))
     return p
+end
+
+function approve(cache::CachedCredentials, cred::AbstractCredentials, url::AbstractString)
+    cred_id = credential_identifier(url)
+    cache.cred[cred_id] = cred
+    nothing
+end
+
+function reject(cache::CachedCredentials, cred::AbstractCredentials, url::AbstractString)
+    cred_id = credential_identifier(url)
+    if haskey(cache.cred, cred_id)
+        securezero!(cache.cred[cred_id])  # Wipe out invalid credentials
+        delete!(cache.cred, cred_id)
+    end
+    nothing
 end
 
 """
@@ -1200,4 +1217,24 @@ function reset!(p::CredentialPayload)
     p.path = ""
 
     return p
+end
+
+function approve(p::CredentialPayload)
+    isnull(p.credential) && return  # No credentials were used
+    cred = unsafe_get(p.credential)
+
+    if !isnull(p.cache)
+        url = git_url(scheme=p.scheme, host=p.host, username=p.username, path=p.path)
+        approve(unsafe_get(p.cache), cred, url)
+    end
+end
+
+function reject(p::CredentialPayload)
+    isnull(p.credential) && return  # No credentials were used
+    cred = unsafe_get(p.credential)
+
+    if !isnull(p.cache)
+        url = git_url(scheme=p.scheme, host=p.host, username=p.username, path=p.path)
+        reject(unsafe_get(p.cache), cred, url)
+    end
 end

@@ -266,7 +266,8 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
             creds = SSHCredentials(p.username)
             if !isnull(p.cache)
                 credid = "ssh://$(p.host)"
-                creds = get_creds!(unsafe_get(p.cache), credid, creds)
+                # Perform a copy as we do not want to mutate approved credentials
+                creds = deepcopy(get(unsafe_get(p.cache), credid, creds))
             end
             p.credential = Nullable(creds)
         end
@@ -279,7 +280,8 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
             creds = UserPasswordCredentials(p.username)
             if !isnull(p.cache)
                 credid = "$(isempty(p.scheme) ? "ssh" : p.scheme)://$(p.host)"
-                creds = get_creds!(unsafe_get(p.cache), credid, creds)
+                # Perform a copy as we do not want to mutate approved credentials
+                creds = deepcopy(get(unsafe_get(p.cache), credid, creds))
             end
             p.credential = Nullable(creds)
         end

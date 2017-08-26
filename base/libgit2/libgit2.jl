@@ -265,12 +265,19 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
     else
         GitRemoteAnon(repo, remoteurl)
     end
-    try
+    result = try
         fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), p))
         fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
+    catch err
+        if isa(err, GitError) && err.code == Error.EAUTH
+            reject(payload)
+        end
+        rethrow()
     finally
         close(rmt)
     end
+    approve(payload)
+    return result
 end
 
 """
@@ -300,12 +307,19 @@ function push(repo::GitRepo; remote::AbstractString="origin",
     else
         GitRemoteAnon(repo, remoteurl)
     end
-    try
+    result = try
         push_opts = PushOptions(callbacks=RemoteCallbacks(credentials_cb(), p))
         push(rmt, refspecs, force=force, options=push_opts)
+    catch err
+        if isa(err, GitError) && err.code == Error.EAUTH
+            reject(payload)
+        end
+        rethrow()
     finally
         close(rmt)
     end
+    approve(payload)
+    return result
 end
 
 """
@@ -513,7 +527,16 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                 fetch_opts = fetch_opts,
                 remote_cb = remote_cb
             )
-    return clone(repo_url, repo_path, clone_opts)
+    repo = try
+        clone(repo_url, repo_path, clone_opts)
+    catch err
+        if isa(err, GitError) && err.code == Error.EAUTH
+            reject(payload)
+        end
+        rethrow()
+    end
+    approve(payload)
+    return repo
 end
 
 """ git reset [<committish>] [--] <pathspecs>... """
