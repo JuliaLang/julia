@@ -3153,6 +3153,10 @@ function typeinf_work(frame::InferenceState)
                     # directly forward changes to an SSAValue to the applicable line
                     record_ssa_assign(changes_var.id + 1, changes.vtype.typ, frame)
                 end
+            elseif isa(stmt, NewvarNode)
+                sn = slot_id(stmt.slot)
+                changes = changes::VarTable
+                changes[sn] = VarState(Bottom, true)
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
             elseif isa(stmt, Expr)
