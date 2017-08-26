@@ -1153,6 +1153,7 @@ instances will be used when the URL has changed.
 mutable struct CredentialPayload <: Payload
     explicit::Nullable{AbstractCredentials}
     cache::Nullable{CachedCredentials}
+    allow_ssh_agent::Bool
     allow_prompt::Bool
 
     # Ephemeral state fields
@@ -1167,8 +1168,9 @@ mutable struct CredentialPayload <: Payload
     function CredentialPayload(
             credential::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}(),
             cache::Nullable{CachedCredentials}=Nullable{CachedCredentials}();
+            allow_ssh_agent::Bool=true,
             allow_prompt::Bool=true)
-        payload = new(credential, cache, allow_prompt)
+        payload = new(credential, cache, allow_ssh_agent, allow_prompt)
         return reset!(payload)
     end
 end
@@ -1190,7 +1192,7 @@ the credential callback.
 function reset!(p::CredentialPayload)
     p.credential = Nullable{AbstractCredentials}()
     p.first_pass = true
-    p.use_ssh_agent = 'Y'
+    p.use_ssh_agent = p.allow_ssh_agent ? 'Y' : 'N'
     p.scheme = ""
     p.username = ""
     p.host = ""
