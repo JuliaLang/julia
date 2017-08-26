@@ -196,7 +196,7 @@ The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issu
 
 Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the [Julia Discourse forum](https://discourse.julialang.org) or in a GitHub issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
 
-Add new code to Julia's base libraries as follows:
+Add new code to Julia's base libraries as follows (this is the "basic" approach; see a more efficient approach in the next section):
 
  1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `ui/`.
 
@@ -217,6 +217,55 @@ or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.
     ./usr/bin/julia test/runtests.jl bitarray math
 
 Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](http://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome).
+
+#### Modifying base more efficiently with Revise.jl
+
+[Revise](https://github.com/timholy/Revise.jl) is a package that
+tracks changes in source files and automatically updates function
+definitions in your running Julia session. Using it, you can make
+extensive changes to Base without needing to rebuild in order to test
+your changes.
+
+Here is the standard procedure:
+
+1. If you are planning changes to any types or macros, make those
+   changes, commit them, and build julia using `make`. (This is
+   necessary because `Revise` cannot handle changes to type
+   definitions or macros.) By making a git commit, you "shield" these
+   changes from the `git stash` procedure described below. Unless it's
+   required to get Julia to build, you do not have to add any
+   functionality based on the new types, just the type definitions
+   themselves.
+
+2. Start a Julia REPL session. Then issue the following commands:
+
+```julia
+using Revise    # if you aren't launching it in your .juliarc.jl
+Revise.track(Base)
+```
+
+3. Edit files in `base/`, save your edits, and test the
+   functionality. Once you are satisfied that things work as desired,
+   make another commit and rebuild julia.
+
+Should you for some reason need to quit and restart your REPL session
+before finishing your changes, the procedure above will fail because
+`Revise.track`
+[cannot detect changes in source files that occurred after Julia was built](https://github.com/JuliaLang/julia/issues/23448)---it
+will only detect changes to source files that occur after tracking is
+initiated.  Consequently, any changes made prior to
+`Revise.track(Base)` will not be incorporated into your new REPL
+session. You can work around this by temporarily reverting all source
+files to their original state. From somewhere in the `julia`
+directory, start your REPL session and do the following:
+
+```julia
+shell> git stash  # ensure that the code in `base/` matches its state when you built julia
+
+julia> Revise.track(Base)  # Revise's source code cache is synchronized with what's running
+
+shell> git stash pop  # restore any in-progress changes (will now be tracked)
+```
 
 ### Code Formatting Guidelines
 
