@@ -1147,6 +1147,13 @@ julia> @inferred max(1,2)
 ```
 """
 macro inferred(ex)
+    # @inferred performs almost the same checks as @code_warntype except for some
+    # corner cases in which the return value is a type and is not inferred
+    # correctly, e.g.
+    # f() = [DataType][1]
+    # g() = [Int64][1]
+    # @inferred throws an exception for f and g, but @code_warntype
+    # does not complain
     inference = _inferred_impl(ex, __module__)
     quote
         let (rettype, inftypes, result) = $inference
@@ -1195,6 +1202,7 @@ false
 ```
 """
 macro isinferred(ex)
+    # @isinferred performs the same checks as @inferred
     inference = _inferred_impl(ex, __module__)
     quote
         let (rettype, inftypes, result) = $inference
