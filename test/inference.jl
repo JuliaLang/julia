@@ -256,6 +256,7 @@ end
 
 # make sure none of the slottypes are left as Core.Inference.Const objects
 function f18679()
+    local a
     for i = 1:2
         if i == 1
             a = ((),)
@@ -265,7 +266,7 @@ function f18679()
     end
 end
 g18679(x::Tuple) = ()
-g18679() = g18679(any_undef_global::Union{Int,Tuple{}})
+g18679() = g18679(any_undef_global::Union{Int, Tuple{}})
 for code in Any[
         @code_typed(f18679())[1]
         @code_typed(g18679())[1]]
@@ -281,6 +282,8 @@ for code in Any[
     for e in code.code
         notconst(e)
     end
+    @test f18679() === ()
+    @test_throws UndefVarError(:any_undef_global) g18679()
 end
 
 # branching based on inferrable conditions
@@ -472,7 +475,10 @@ end
 
 function g19348(x)
     a, b = x
-    return a + b
+    g = 1
+    g = 2
+    c = Base.indexed_next(x, g, g)
+    return a + b + c[1]
 end
 test_inferred_static(@code_typed g19348((1, 2.0)))
 
