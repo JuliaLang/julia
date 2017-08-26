@@ -535,6 +535,7 @@ show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
 
 const indent_width = 4
 const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(!=),:(===),:(!==),:(=>),:(>=),:(<=)])
+const uni_syms = Set{Symbol}([:(::), :(<:), :(>:)])
 const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
 const expr_infix_wide = Set{Symbol}([
     :(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(^=), :(&=), :(|=), :(÷=), :(%=), :(>>>=), :(>>=), :(<<=),
@@ -994,8 +995,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head)
 
     # type annotation (i.e. "::Int")
-    elseif head === Symbol("::") && nargs == 1
-        print(io, "::")
+    elseif head in uni_syms && nargs == 1
+        print(io, head)
         show_unquoted(io, args[1], indent)
 
     # var-arg declaration or expansion

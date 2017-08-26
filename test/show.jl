@@ -415,6 +415,8 @@ end
 @test_repr "a::b where T"
 @test_repr "X where (T=1)"
 @test_repr "X where T = 1"
+@test_repr "Array{<:Real}"
+@test_repr "Array{>:Real}"
 
 let oldout = STDOUT, olderr = STDERR
     local rdout, wrout, rderr, wrerr, out, err, rd, wr
