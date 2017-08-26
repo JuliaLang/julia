@@ -128,7 +128,7 @@ The fields represent:
   * `disable_filters`: if nonzero, do not apply filters like CLRF (to convert file newlines between UNIX and DOS).
   * `dir_mode`: read/write/access mode for any directories involved in the checkout. Default is `0755`.
   * `file_mode`: read/write/access mode for any files involved in the checkout.
-     Default is `0755` or `0644`, depeding on the blob.
+     Default is `0755` or `0644`, depending on the blob.
   * `file_open_flags`: bitflags used to open any files during the checkout.
   * `notify_flags`: Flags for what sort of conflicts the user should be notified about.
   * `notify_cb`: An optional callback function to notify the user if a checkout conflict occurs.
@@ -651,6 +651,14 @@ end
 
 Options to control how `git_status_foreach_ext()` will issue callbacks.
 Matches the [`git_status_opt_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_status_opt_t) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `show`: a flag for which files to examine and in which order.
+    The default is `Consts.STATUS_SHOW_INDEX_AND_WORKDIR`.
+  * `flags`: flags for controlling any callbacks used in a status call.
+  * `pathspec`: an array of paths to use for path-matching. The behavior of the path-matching
+    will vary depending on the values of `show` and `flags`.
 """
 @kwdef struct StatusOptions
     version::Cuint           = 1
