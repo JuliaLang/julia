@@ -8077,7 +8077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.exp",
     "category": "Function",
-    "text": "exp(A::AbstractMatrix)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExamples\n\njulia> A = eye(2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> exp(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\nexp(x)\n\nCompute the natural base exponential of x, in other words e^x.\n\njulia> exp(1.0)\n2.718281828459045\n\n\n\n"
+    "text": "exp(x)\n\nCompute the natural base exponential of x, in other words e^x.\n\njulia> exp(1.0)\n2.718281828459045\n\n\n\nexp(A::AbstractMatrix)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExamples\n\njulia> A = eye(2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> exp(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\n"
 },
 
 {
