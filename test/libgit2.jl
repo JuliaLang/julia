@@ -2057,7 +2057,7 @@ mktempdir() do dir
                 quote
                     include($LIBGIT2_HELPER_PATH)
                     cache = CachedCredentials()
-                    $(cached_cred !== nothing && :(LibGit2.get_creds!(cache, $cred_id, $cached_cred)))
+                    $(cached_cred !== nothing && :(LibGit2.approve(cache, $cached_cred, $url)))
                     payload = CredentialPayload(cache)
                     err, auth_attempts = credential_loop($valid_cred, $url, "", payload)
                     (err, auth_attempts, cache)

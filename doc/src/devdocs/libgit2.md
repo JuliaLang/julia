@@ -91,7 +91,6 @@ Base.LibGit2.fullname
 Base.LibGit2.features
 Base.LibGit2.filename
 Base.LibGit2.filemode
-Base.LibGit2.get_creds!
 Base.LibGit2.gitdir
 Base.LibGit2.@githash_str
 Base.LibGit2.head

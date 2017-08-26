@@ -1136,11 +1136,9 @@ struct CachedCredentials <: AbstractCredentials
     CachedCredentials() = new(Dict{String,AbstractCredentials}())
 end
 
-"Obtain the cached credentials for the given host+protocol (credid), or return and store the default if not found"
-get_creds!(collection::CachedCredentials, credid, default) = get!(collection.cred, credid, default)
-
 Base.haskey(cache::CachedCredentials, cred_id) = Base.haskey(cache.cred, cred_id)
 Base.getindex(cache::CachedCredentials, cred_id) = Base.getindex(cache.cred, cred_id)
+Base.get!(cache::CachedCredentials, cred_id, default) = Base.get!(cache.cred, cred_id, default)
 
 function securezero!(p::CachedCredentials)
     foreach(securezero!, values(p.cred))
