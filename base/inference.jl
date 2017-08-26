@@ -3925,12 +3925,19 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
                 return false
             end
         elseif head === :new
-            if !allow_volatile
-                a = ea[1]
-                typ = widenconst(exprtype(a, src, mod))
-                if !isType(typ) || !isa((typ::Type).parameters[1],DataType) || ((typ::Type).parameters[1]::DataType).mutable
-                    return false
-                end
+            a = ea[1]
+            typ = exprtype(a, src, mod)
+            # `Expr(:new)` of unknown type could raise arbitrary TypeError.
+            typ, isexact = instanceof_tfunc(typ)
+            isexact || return false
+            (isleaftype(typ) && !iskindtype(typ)) || return false
+            typ = typ::DataType
+            if !allow_volatile && typ.mutable
+                return false
+            end
+            fieldcount(typ) >= length(ea) - 1 || return false
+            for fld_idx in 1:(length(ea) - 1)
+                exprtype(ea[fld_idx + 1], src, mod) ⊑ fieldtype(typ, fld_idx) || return false
             end
             # fall-through
         elseif head === :return
