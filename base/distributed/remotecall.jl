@@ -551,7 +551,7 @@ end
     take!(rr::RemoteChannel, args...)
 
 Fetch value(s) from a [`RemoteChannel`](@ref) `rr`,
-removing the value(s) in the processs.
+removing the value(s) in the process.
 """
 take!(rr::RemoteChannel, args...) = call_on_owner(take_ref, rr, myid(), args...)
 
