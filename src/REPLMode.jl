@@ -1,6 +1,8 @@
 module REPLMode
 
+import Pkg3
 using Pkg3.Types
+using Pkg3.Operations
 
 import Base: LineEdit, REPL, REPLCompletions
 import Base.Random: UUID
@@ -82,7 +84,6 @@ function tokenize(cmd::String)::Vector{Tuple{Symbol,Vararg{Any}}}
 end
 
 function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
-    disp = REPL.REPLDisplay(repl)
     try
         tokens = tokenize(input)
         local cmd::Symbol
@@ -105,15 +106,10 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
             end
         end
         env = EnvCache(env_opt)
-        ret =
         cmd == :rm  ?  do_rm!(env, tokens) :
         cmd == :add ? do_add!(env, tokens) :
         cmd == :up  ?  do_up!(env, tokens) :
             error("`$cmd` command not yet implemented")
-        ret isa Tuple || (ret = (ret,))
-        for x in ret
-            display(disp, x)
-        end
     catch exc
         Base.display_error(repl.t.err_stream, exc, Base.catch_backtrace())
     end
@@ -131,7 +127,7 @@ function do_rm!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         push!(pkgs, Package(token[2:end]...))
     end
     project_resolve!(env, pkgs)
-    return pkgs
+    ensure_resolved(env, pkgs, :rm)
     Pkg3.Operations.rm(env, pkgs)
 end
 
@@ -147,7 +143,7 @@ function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         if token[1] == :pkg
             push!(pkgs, PackageVersion(Package(token[2:end]...)))
         elseif token[1] == :ver
-            pkgs[end].version = token[2]
+            pkgs[end].version = VersionSpec(token[2])
             isempty(tokens) || tokens[1][1] == :pkg ||
                 error("package name/uuid must precede version spec `@$(tokens[1][2])`")
         elseif token[1] == :opt
@@ -156,7 +152,7 @@ function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     end
     project_resolve!(env, pkgs)
     registry_resolve!(env, pkgs)
-    return pkgs
+    ensure_resolved(env, pkgs, :add)
     Pkg3.Operations.add(env, pkgs)
 end
 
@@ -175,7 +171,7 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         if token[1] == :pkg
             push!(pkgs, PackageVersion(Package(token[2:end]...), level))
         elseif token[1] == :ver
-            pkgs[end].version = token[2]
+            pkgs[end].version = VersionSpec(token[2])
             isempty(tokens) || tokens[1][1] == :pkg ||
                 error("package name/uuid must precede version spec `@$(tokens[1][2])`")
         elseif token[1] == :opt
@@ -191,7 +187,7 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         end
     end
     project_resolve!(env, pkgs)
-    return pkgs, rest
+    ensure_resolved(env, pkgs, :up)
     Pkg3.Operations.up(env, pkgs, rest)
 end
 

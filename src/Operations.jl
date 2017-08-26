@@ -17,22 +17,6 @@ function find_installed(uuid::UUID, sha1::SHA1)
     return abspath(user_depot(), "packages", string(uuid), string(sha1))
 end
 
-load_project(project_file::String = find_project()) =
-    parse_toml(project_file, fakeit=true)
-
-function write_manifest(manifest::Dict, manifest_file::String = find_manifest())
-    uniques = sort!(collect(keys(manifest)), by=lowercase)
-    filter!(p->length(manifest[p]) == 1, uniques)
-    for (_, infos) in manifest, info in infos
-        haskey(info, "deps") || continue
-        all(d in uniques for d in keys(info["deps"])) || continue
-        info["deps"] = sort!(collect(keys(info["deps"])))
-    end
-    open(manifest_file, "w") do io
-        TOML.print(io, manifest, sorted=true)
-    end
-end
-
 function package_env_info(
     pkg::String,
     project::Dict = load_project(),
@@ -105,191 +89,72 @@ end
 load_package_data(f::Base.Callable, path::String, version::VersionNumber) =
     get(load_package_data(f, path, [version]), version, nothing)
 
-function update_project(project::Dict, project_file::String = find_project())
-    isempty(project) && !ispath(project_file) && return
-    mkpath(dirname(project_file))
-    info("Updating project file $project_file")
-    open(project_file, "w") do io
-        TOML.print(io, project, sorted=true)
-    end
-end
-
-function update_manifest(manifest::Dict, manifest_file::String = find_manifest())
-    isempty(manifest) && !ispath(manifest_file) && return
-    info("Updating manifest file $manifest_file")
-    write_manifest(manifest, manifest_file)
-end
-
-function add(names...; kwargs...)
-    pkgs = Dict{String,Union{VersionNumber,VersionRange}}()
-    for name in names
-        pkgs[string(name)] = VersionRange("*")
-    end
-    for (key, val) in kwargs
-        pkgs[string(key)] = val
-    end
-    return add(pkgs)
-end
-
-function resolve_names(names::Vector{String}, project::Dict, manifest::Dict, reg::Dict)::Vector{UUID}
-    info("Resolving package UUIDs")
-    regs = find_registered(names)
-    for name in names
-        haskey(uuids, name) && continue
-        if haskey(uuids, name)
-            uuid = uuids[name]
-            if haskey(regs, name)
-                for uuid′ in collect(keys(regs[name]))
-                    uuid′ == uuid || delete!(regs[name], uuid)
+function deps_graph(env::EnvCache, pkgs::Vector{PackageVersion})
+    deps = Dict{UUID,Dict{VersionNumber,Tuple{SHA1,Dict{UUID,VersionSpec}}}}()
+    uuids = [pkg.package.uuid for pkg in pkgs]
+    seen = UUID[]
+    while true
+        unseen = setdiff(uuids, seen)
+        isempty(unseen) && break
+        for uuid in unseen
+            push!(seen, uuid)
+            deps[uuid] = valtype(deps)()
+            for path in registered_paths(env, uuid)
+                version_info = load_versions(path)
+                versions = sort!(collect(keys(version_info)))
+                dependencies = load_package_data(UUID, joinpath(path, "dependencies.toml"), versions)
+                compatibility = load_package_data(VersionSpec, joinpath(path, "compatibility.toml"), versions)
+                for (v, h) in version_info
+                    d = get_or_make(Dict{String,UUID}, dependencies, v)
+                    r = get_or_make(Dict{String,VersionSpec}, compatibility, v)
+                    q = Dict(u => get_or_make(VersionSpec, r, p) for (p, u) in d)
+                    VERSION in get_or_make(VersionSpec, r, "julia") || continue
+                    deps[uuid][v] = (h, q)
+                    for (p, u) in d
+                        u in uuids || push!(uuids, u)
+                    end
                 end
             end
-            haskey(regs, name) && !isempty(regs[name]) && continue
-            warn("$name/$uuid found in project but not in registries;")
-        elseif !haskey(regs, name) || length(regs[name]) == 0
-            error("No registered package named $(repr(name)) found")
-        elseif length(regs[name]) == 1
-            uuids[name] = first(first(regs[name]))
-        else
-            uuids′ = UUID[]
-            options = String[]
-            for (i, (uuid, paths)) in enumerate(sort!(collect(regs[name]), by=first))
-                option = "$uuid"
-                for path in paths
-                    info = parse_toml(path, "package.toml")
-                    option *= " – $(info["repo"])"
-                    break
-                end
-                push!(uuids′, uuid)
-                push!(options, option)
-            end
-            menu = RadioMenu(options)
-            choice = request("Which $name package do you want to add:", menu)
-            choice == -1 && return warn("Package add aborted")
-            uuids[name] = uuids′[choice]
         end
+        find_registered!(env, uuids)
     end
+    return deps
 end
 
-function add(pkgs::Dict{String})
-    orig_pkgs = copy(pkgs)
-    names = sort!(collect(keys(pkgs)))
-    regs = find_registered(names)
-    project = load_project()
-    uuids = get_or_make(Dict{String,UUID}, project, "deps")
-
-    # disambiguate package names
-    info("Resolving package UUIDs")
-    for name in names
-        if haskey(uuids, name)
-            uuid = uuids[name]
-            if haskey(regs, name)
-                for uuid′ in collect(keys(regs[name]))
-                    uuid′ == uuid || delete!(regs[name], uuid)
-                end
-            end
-            haskey(regs, name) && !isempty(regs[name]) && continue
-            error("""
-            $name/$uuid found in project but not in registries;
-            To install a different $name package `pkg rm $name` and then do `pkg add $name` again.
-            """)
-        elseif !haskey(regs, name) || length(regs[name]) == 0
-            error("No registered package named $(repr(name)) found")
-        elseif length(regs[name]) == 1
-            uuids[name] = first(first(regs[name]))
-        else
-            uuids′ = UUID[]
-            options = String[]
-            for (i, (uuid, paths)) in enumerate(sort!(collect(regs[name]), by=first))
-                option = "$uuid"
-                for path in paths
-                    info = parse_toml(path, "package.toml")
-                    option *= " – $(info["repo"])"
-                    break
-                end
-                push!(uuids′, uuid)
-                push!(options, option)
-            end
-            menu = RadioMenu(options)
-            choice = request("Which $name package do you want to add:", menu)
-            choice == -1 && return warn("Package add aborted")
-            uuids[name] = uuids′[choice]
-        end
-    end
-    merge!(regs, find_registered(setdiff(keys(uuids), names)))
-    names = sort!(collect(keys(uuids)))
-    paths = isempty(regs) ? Dict{UUID,Vector{String}}() :
-        Dict(uuids[name] => info[uuids[name]] for (name, info) in regs)
-
-    # copy manifest versions to pkgs
-    # if already in specified version set, leave as installed
-    manifest_file = find_manifest()
-    manifest = load_manifest(manifest_file)
-    for (name, infos) in manifest, info in infos
-        info["uuid"] == get(uuids, name, "") || continue
-        ver = VersionNumber(info["version"])
-        if !haskey(pkgs, name) || ver in pkgs[name]
-            pkgs[name] = ver
-        end
-    end
-
+"Resolve a set of versions given package version specs"
+function resolve_versions(env::EnvCache, pkgs::Vector{PackageVersion})
     info("Resolving package versions")
-    # compute reqs & deps for Pkg.Resolve.resolve
-    #   reqs: what we need to choose versions for
-    #     UUID --> VersionSet
-    #   deps: relevant portion of dependency graph
-    #     UUID --> VersionNumber --> (SHA1, String --> VersionSet)
-    reqs = Dict{UUID,VersionSet}(uuids[name] => vers for (name, vers) in pkgs)
-    deps = Dict{UUID,Dict{VersionNumber,Tuple{SHA1,Dict{UUID,VersionSet}}}}()
-    ruuids = collect(map(reverse, uuids))
-    for (uuid, name) in ruuids
-        deps[uuid] = valtype(deps)()
-        for path in paths[uuid]
-            versions = load_versions(path)
-            vs = sort!(collect(keys(versions)))
-            dependencies = load_package_data(UUID, joinpath(path, "dependencies.toml"), vs)
-            compatibility = load_package_data(VersionSet, joinpath(path, "compatibility.toml"), vs)
-            for (v, h) in versions
-                d = get_or_make(Dict{String,UUID}, dependencies, v)
-                r = get_or_make(Dict{String,VersionSet}, compatibility, v)
-                q = Dict(u => get_or_make(VersionSet, r, p) for (p, u) in d)
-                VERSION in get_or_make(VersionSet, r, "julia") || continue
-                deps[uuid][v] = (h, q)
-                for (p, u) in d
-                    u in first.(ruuids) && continue
-                    reg = find_registered(p)
-                    haskey(reg, u) ||
-                        error("$p = $u found in $name's dependencies but not in registries")
-                    push!(ruuids, u => p)
-                    paths[u] = reg[u]
-                end
-            end
-        end
-    end
+    reqs = Dict{String,Pkg.Types.VersionSet}(string(pkg.package.uuid) => pkg.version for pkg in pkgs)
+    deps = convert(Dict{String,Dict{VersionNumber,Pkg.Types.Available}}, deps_graph(env, pkgs))
+    deps = Pkg.Query.prune_dependencies(reqs, deps)
+    vers = Pkg.Resolve.resolve(reqs, deps)
+    return convert(Dict{UUID,VersionNumber}, vers)
+end
 
-    # actually do the version resloution
-    vers = let reqs = convert(Dict{String,Pkg.Types.VersionSet}, reqs),
-        deps = convert(Dict{String,Dict{VersionNumber,Pkg.Types.Available}}, deps)
-        deps = Pkg.Query.prune_dependencies(reqs, deps)
-        vers = Pkg.Resolve.resolve(reqs, deps)
-        convert(Dict{UUID,VersionNumber}, vers)
-    end
-
-    # find repos and hashes for each package & version
-    rud = Dict(ruuids)
-    repos = Dict{UUID,Vector{String}}()
+"Find names, repos and hashes for each package UUID & version"
+function version_data(env::EnvCache, versions::Dict{UUID,VersionNumber})
+    names = Dict{UUID,String}()
     hashes = Dict{UUID,SHA1}()
-    for (uuid, ver) in vers
-        repos[uuid] = String[]
-        for path in paths[uuid]
-            package = parse_toml(path, "package.toml")
-            repo = package["repo"]
-            repo in repos[uuid] || push!(repos[uuid], repo)
-            versions = load_versions(path)
-            if haskey(versions, ver)
-                h = versions[ver]
+    upstreams = Dict{UUID,Vector{String}}()
+    for (uuid, ver) in versions
+        upstreams[uuid] = String[]
+        for path in registered_paths(env, uuid)
+            info = parse_toml(path, "package.toml")
+            if haskey(names, uuid)
+                names[uuid] == info["name"] ||
+                    error("$uuid: name mismatch between registries: ",
+                          "$(names[uuid]) vs. $(info["name"])")
+            else
+                names[uuid] = info["name"]
+            end
+            repo = info["repo"]
+            repo in upstreams[uuid] || push!(upstreams[uuid], repo)
+            vers = load_versions(path)
+            if haskey(vers, ver)
+                h = vers[ver]
                 if haskey(hashes, uuid)
                     h == hashes[uuid] ||
-                        warn("$(rud[uuid]): hash mismatch for version $ver!")
+                        warn("$uuid: hash mismatch for version $ver!")
                 else
                     hashes[uuid] = h
                 end
@@ -297,145 +162,169 @@ function add(pkgs::Dict{String})
         end
         @assert haskey(hashes, uuid)
     end
-    foreach(sort!, values(repos))
-
-    # clone or update repos and find or create source trees
-    refspecs = ["+refs/*:refs/remotes/cache/*"]
-    for (uuid, hash) in hashes
-        name = rud[uuid]
-        version_path = find_installed(uuid, hash)
-        ispath(version_path) && continue
-        repo_path = joinpath(user_depot(), "upstream", string(uuid))
-        urls = copy(repos[uuid])
-        git_hash = LibGit2.GitHash(hash.bytes)
-        repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
-            info("Cloning [$uuid] $name")
-            LibGit2.clone(shift!(urls), repo_path, isbare=true)
-        end
-        while !isempty(urls)
-            try
-                LibGit2.GitObject(repo, git_hash)
-                break
-            catch err
-                err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-            end
-            info("Updating $name from $(urls[1])")
-            LibGit2.fetch(repo, remoteurl=shift!(urls), refspecs=refspecs)
-        end
-        tree = try
-            LibGit2.GitObject(repo, git_hash)
-        catch err
-            err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-            error("$name: git object $(string(hash)) could not be found")
-        end
-        tree isa LibGit2.GitTree ||
-            error("$name: git object $(string(hash)) should be a tree, not $(typeof(tree))")
-        mkpath(version_path)
-        opts = LibGit2.CheckoutOptions(
-            checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
-            target_directory = Base.unsafe_convert(Cstring, version_path)
-        )
-        info("Installing $name at $(string(hash))")
-        LibGit2.checkout_tree(repo, tree, options=opts)
-    end
-
-    # update project and manifest files
-    project_file = find_project()
-    project = parse_toml(project_file, fakeit=true)
-    if !haskey(project, "deps")
-        project["deps"] = Dict{String,String}()
-    end
-    for (name, uuid) in uuids
-        project["deps"][name] = string(uuid)
-    end
-    isempty(project["deps"]) && delete!(project, "deps")
-
-    for (uuid, ver) in vers
-        name = rud[uuid]
-        info = nothing
-        a = get!(manifest, name, Dict{String,Any}[])
-        for i in a
-            UUID(i["uuid"]) == uuid || continue
-            info = i
-            break
-        end
-        if info == nothing
-            info = Dict{String,Any}("uuid" => string(uuid))
-            push!(a, info)
-        end
-        info["version"] = string(vers[uuid])
-        info["hash-sha1"] = string(hashes[uuid])
-        for path in paths[uuid]
-            d = load_package_data(UUID, joinpath(path, "dependencies.toml"), ver)
-            d == nothing && continue
-            info["deps"] = convert(Dict{String,String}, d)
-            break
-        end
-    end
-
-    update_project(project, project_file)
-    update_manifest(manifest, manifest_file)
+    foreach(sort!, values(upstreams))
+    return names, hashes, upstreams
 end
 
-function rm(pkgs::Vector{String})
-    project_file = find_project()
-    project = load_project(project_file)
-    manifest_file = find_manifest()
-    manifest = load_manifest(manifest_file)
-    # drop named packages
-    drop = String[]
-    for pkg in pkgs
-        info = package_env_info(pkg, project, manifest, verb = "delete")
-        info == nothing && error("$pkg not found in environment")
-        push!(drop, info["uuid"])
+const refspecs = ["+refs/*:refs/remotes/cache/*"]
+
+function install(env::EnvCache, uuid::UUID, name::String, hash::SHA1, urls::Vector{String})
+    version_path = find_installed(uuid, hash)
+    ispath(version_path) && return nothing
+    repo_path = joinpath(user_depot(), "upstream", string(uuid))
+    git_hash = LibGit2.GitHash(hash.bytes)
+    repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
+        info("Cloning [$uuid] $name")
+        LibGit2.clone(urls[1], repo_path, isbare=true)
     end
-    # also drop reverse dependencies
+    for i = 2:length(urls)
+        try LibGit2.GitObject(repo, git_hash)
+            break # object was found, we can stop
+        catch err
+            err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+        end
+        url = urls[i]
+        info("Updating $name from $url")
+        LibGit2.fetch(repo, remoteurl=url, refspecs=refspecs)
+    end
+    tree = try
+        LibGit2.GitObject(repo, git_hash)
+    catch err
+        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+        error("$name: git object $(string(hash)) could not be found")
+    end
+    tree isa LibGit2.GitTree ||
+        error("$name: git object $(string(hash)) should be a tree, not $(typeof(tree))")
+    mkpath(version_path)
+    opts = LibGit2.CheckoutOptions(
+        checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
+        target_directory = Base.unsafe_convert(Cstring, version_path)
+    )
+    info("Installing $name at $(string(hash))")
+    LibGit2.checkout_tree(repo, tree, options=opts)
+    return nothing
+end
+
+function update_project(env::EnvCache, pkgs::Vector{PackageVersion})
+    for pkg in pkgs
+        env.project["deps"][pkg.package.name] = string(pkg.package.uuid)
+    end
+end
+
+function update_manifest(env::EnvCache, uuid::UUID, name::String, hash::SHA1, version::VersionNumber)
+    infos = get!(env.manifest, name, Dict{String,Any}[])
+    info = nothing
+    for i in infos
+        UUID(i["uuid"]) == uuid || continue
+        info = i
+        break
+    end
+    if info == nothing
+        info = Dict{String,Any}("uuid" => string(uuid))
+        push!(infos, info)
+    end
+    info["version"] = string(version)
+    info["hash-sha1"] = string(hash)
+    delete!(info, "deps")
+    for path in registered_paths(env, uuid)
+        data = load_package_data(UUID, joinpath(path, "dependencies.toml"), version)
+        data == nothing && continue
+        info["deps"] = convert(Dict{String,String}, data)
+        break
+    end
+    return info
+end
+
+function add(env::EnvCache, pkgs::Vector{PackageVersion})
+    # if a package is in the project file and
+    # the manifest version in the specified version set
+    # then leave the package as is at the installed version
+    for (name::String, uuid::UUID) in env.project["deps"]
+        info = manifest_info(env, uuid)
+        info != nothing && haskey(info, "version") || continue
+        version = VersionNumber(info["version"])
+        for pkg in pkgs
+            pkg.package.uuid == uuid && version ∈ pkg.version || continue
+            pkg.version = version
+        end
+    end
+
+    # resolve package versions
+    versions = resolve_versions(env, pkgs)
+    names, hashes, urls = version_data(env, versions)
+
+    # clone or update repos and find or create source trees
+    for (uuid, hash) in hashes
+        install(env, uuid, names[uuid], hashes[uuid], urls[uuid])
+    end
+
+    # update project data
+    update_project(env, pkgs)
+
+    # update manifest data
+    for (uuid, version) in versions
+        name, hash = names[uuid], hashes[uuid]
+        update_manifest(env, uuid, name, hash, version)
+    end
+
+    # write out updated project & manifest files
+    write_env(env)
+end
+
+function rm(env::EnvCache, pkgs::Vector{Package})
+    # drop the indicated packages
+    drop = UUID[]
+    for pkg in pkgs
+        info = manifest_info(env, pkg.uuid)
+        if info == nothing
+            str = has_name(pkg) ? pkg.name : string(pkg.uuid)
+            warn("`$str` not in environemnt, ignoring")
+        else
+            push!(drop, pkg.uuid)
+        end
+    end
+    # drop reverse dependencies
     while !isempty(drop)
         clean = true
-        for (pkg, infos) in manifest, info in infos
-            haskey(info, "deps") || continue
-            isempty(drop ∩ values(info["deps"])) && continue
-            haskey(info, "uuid") && info["uuid"] ∉ drop || continue
-            push!(drop, info["uuid"])
+        manifest_info(env) do name, info
+            haskey(info, "uuid") && haskey(info, "deps") || return
+            deps = map(UUID, values(info["deps"]))
+            isempty(drop ∩ deps) && return
+            uuid = UUID(info["uuid"])
+            uuid ∉ drop || return
+            push!(drop, uuid)
             clean = false
         end
         clean && break
     end
-    # keep forward dependencies
-    keep = setdiff(values(get(project, "deps", Dict())), drop)
+    # keep undropped top-levels and their dependenices
+    keep = setdiff(map(UUID, values(env.project["deps"])), drop)
     while !isempty(keep)
         clean = true
-        for (pkg, infos) in manifest
-            for (pkg, infos) in manifest, info in infos
-                haskey(info, "uuid") && haskey(info, "deps") || continue
-                info["uuid"] in keep || continue
-                for dep in values(info["deps"])
-                    dep in keep && continue
-                    push!(keep, dep)
-                    clean = false
-                end
+        manifest_info(env) do name, info
+            haskey(info, "uuid") && haskey(info, "deps") || return
+            UUID(info["uuid"]) ∈ keep || return
+            for dep::UUID in values(info["deps"])
+                dep ∈ keep && continue
+                push!(keep, dep)
+                clean = false
             end
         end
         clean && break
     end
     # filter project & manifest
-    if haskey(project, "deps")
-        filter!(project["deps"]) do _, uuid
-            uuid in keep
-        end
-        isempty(project["deps"]) && delete!(project, "deps")
+    filter!(env.project["deps"]) do _, uuid
+        UUID(uuid) ∈ keep
     end
-    filter!(manifest) do pkg, infos
+    filter!(env.manifest) do _, infos
         filter!(infos) do info
-            haskey(info, "uuid") && info["uuid"] in keep
+            haskey(info, "uuid") && UUID(info["uuid"]) ∈ keep
         end
         !isempty(infos)
     end
     # update project & manifest files
-    update_project(project, project_file)
-    update_manifest(manifest, manifest_file)
+    update_env(env)
 end
-rm(pkgs::String...) = rm(String[pkgs...])
 
 function up(
     pkgs::Vector{String};

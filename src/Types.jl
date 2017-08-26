@@ -5,11 +5,10 @@ using Base.Pkg.Types: VersionSet, Available
 using Pkg3: user_depot, depots
 using TOML, TerminalMenus
 
-export SHA1, VersionRange, VersionSpec,
-    Package, PackageVersion, UpgradeLevel, EnvCache,
-    project_resolve!, registry_resolve!,
-    registered_uuids, registered_paths,
-    registered_uuid, registered_name
+export SHA1, VersionRange, VersionSpec, Package, PackageVersion, UpgradeLevel,
+    EnvCache, has_name, has_uuid, write_env, parse_toml, find_registered!,
+    project_resolve!, registry_resolve!, ensure_resolved, manifest_info,
+    registered_uuids, registered_paths, registered_uuid, registered_name
 
 ## ordering of UUIDs ##
 
@@ -148,6 +147,14 @@ Package(uuid::UUID) = Package("", uuid)
 has_name(pkg::Package) = !isempty(pkg.name)
 has_uuid(pkg::Package) = pkg.uuid != UUID(zero(UInt128))
 
+function Base.show(io::IO, pkg::Package)
+    print(io, "Package(")
+    has_name(pkg) && show(io, pkg.name)
+    has_name(pkg) && has_uuid(pkg) && print(io, ", ")
+    has_uuid(pkg) && show(io, pkg.uuid)
+    print(io, ")")
+end
+
 @enum UpgradeLevel fixed=0 patch=1 minor=2 major=3
 
 function Base.convert(::Type{UpgradeLevel}, s::Symbol)
@@ -162,7 +169,7 @@ Base.convert(::Type{Union{VersionSpec,UpgradeLevel}}, v::VersionRange) = Version
 
 mutable struct PackageVersion
     package::Package
-    version::Union{VersionSpec,UpgradeLevel}
+    version::Union{VersionNumber,VersionSpec,UpgradeLevel}
 end
 PackageVersion(pkg::Package) = PackageVersion(pkg, VersionSpec("*"))
 
@@ -227,6 +234,34 @@ struct EnvCache
     end
 end
 EnvCache() = EnvCache(get(ENV, "JULIA_ENV", nothing))
+
+function write_env(env::EnvCache)
+    # update the project file
+    if !isempty(env.project) || ispath(env.project_file)
+        info("Updating project file $(env.project_file)")
+        project = deepcopy(env.project)
+        isempty(project["deps"]) && delete!(project, "deps")
+        mkpath(dirname(env.project_file))
+        open(env.project_file, "w") do io
+            TOML.print(io, project, sorted=true)
+        end
+    end
+    # update the manifest file
+    if !isempty(env.manifest) || ispath(env.manifest_file)
+        info("Updating manifest file $(env.manifest_file)")
+        manifest = deepcopy(env.manifest)
+        uniques = sort!(collect(keys(manifest)), by=lowercase)
+        filter!(p->length(manifest[p]) == 1, uniques)
+        for (name, infos) in manifest, info in infos
+            haskey(info, "deps") || continue
+            all(d in uniques for d in keys(info["deps"])) || continue
+            info["deps"] = sort!(collect(keys(info["deps"])))
+        end
+        open(env.manifest_file, "w") do io
+            TOML.print(io, manifest, sorted=true)
+        end
+    end
+end
 
 # finding the current project file
 
@@ -314,7 +349,7 @@ Disambiguate name-only and uuid-only package specifications using only
 information from registries.
 """
 function registry_resolve!(env::EnvCache, pkgs::AbstractVector{Package})
-    # if there are no ambiuous packages, return early
+    # if there are no half-specified packages, return early
     any(pkg->has_name(pkg) ⊻ has_uuid(pkg), pkgs) || return
     # collect all names and uuids since we're looking anyway
     names = [pkg.name for pkg in pkgs if has_name(pkg)]
@@ -333,6 +368,40 @@ function registry_resolve!(env::EnvCache, pkgs::AbstractVector{Package})
 end
 registry_resolve!(env::EnvCache, pkgs::AbstractVector{PackageVersion}) =
     registry_resolve!(env, [v.package for v in pkgs])
+
+"Ensure that all packages are fully resolved"
+function ensure_resolved(env::EnvCache, pkgs::AbstractVector{Package}, op::Symbol)::Void
+    unresolved = Dict{String,Vector{UUID}}()
+    for pkg in pkgs
+        has_uuid(pkg) && continue
+        uuids = UUID[]
+        for (name, infos) in env.manifest, info in infos
+            name == pkg.name && haskey(info, "uuid") || continue
+            uuid = UUID(info["uuid"])
+            uuid in uuids || push!(uuids, uuid)
+        end
+        sort!(uuids, by=uuid->uuid.value)
+        unresolved[pkg.name] = uuids
+    end
+    isempty(unresolved) && return
+    msg = sprint() do io
+        println(io, "The following package names could not be resolved:")
+        for (name, uuids) in sort!(collect(unresolved), by=lowercase∘first)
+            print(io, " * $name (")
+            if length(uuids) == 0
+                print(io, "not in environment")
+            else
+                join(io, uuids, ", ", " or ")
+                print(io, " in manifest but not in project")
+            end
+            println(io, ")")
+        end
+        print(io, "Please specify by `name=uuid`")
+    end
+    error(msg)
+end
+ensure_resolved(env::EnvCache, pkgs::AbstractVector{PackageVersion}, op::Symbol)::Void =
+    ensure_resolved(env, [v.package for v in pkgs], op)
 
 "Return paths of all registries in a depot"
 function registries(depot::String)
@@ -355,12 +424,12 @@ const line_re = r"""
 """x
 
 """
-In a single pass through registries, lookup a set of names & uuids
+Lookup package names & uuids in a single pass through registries
 """
 function find_registered!(
     env::EnvCache,
     names::Vector{String},
-    uuids::Vector{UUID};
+    uuids::Vector{UUID} = UUID[];
     force::Bool = false,
 )::Void
     # only look if there's something new to see (or force == true)
@@ -439,7 +508,6 @@ function find_registered!(
                 m = match(line_re, line)
                 m == nothing &&
                     error("misformated registry.toml package entry: $line")
-                println(line)
                 uuid = UUID(m.captures[1])
                 name = Base.unescape_string(m.captures[2])
                 path = abspath(registry, Base.unescape_string(m.captures[3]))
@@ -449,8 +517,10 @@ function find_registered!(
         end
     end
 end
+find_registered!(env::EnvCache, uuids::Vector{UUID}; force::Bool=false)::Void =
+    find_registered!(env, String[], uuids, force=force)
 
-"Lookup whatever's in project & manifest files"
+"Lookup all packages in project & manifest files"
 find_registered!(env::EnvCache)::Void =
     find_registered!(env, String[], UUID[], force=true)
 
@@ -477,7 +547,12 @@ function registered_uuid(env::EnvCache, name::String)::UUID
     uuids = registered_uuids(env, name)
     length(uuids) == 0 && return UUID(zero(UInt128))
     length(uuids) == 1 && return uuids[1]
-    error("TODO: UUID prompt for `$name`")
+    # prompt for which UUID was intended:
+    choices = ["$uuid – $(registered_info(env, uuid, "repo"))" for uuid in uuids]
+    menu = RadioMenu(choices)
+    choice = request("There are multiple registered `$name` packages, choose one:", menu)
+    choice == -1 && return UUID(zero(UInt128))
+    return uuids[choice]
 end
 
 "Determine current name for a given package UUID"
@@ -485,7 +560,38 @@ function registered_name(env::EnvCache, uuid::UUID)::String
     names = registered_names(env, uuid)
     length(names) == 0 && return ""
     length(names) == 1 && return names[1]
-    error("TODO: find current name for `$uuid`")
+    return registered_info(env, uuid, "name")
+end
+
+"Return most current package info for a registered UUID"
+function registered_info(env::EnvCache, uuid::UUID, key::String)
+    paths = env.paths[uuid]
+    isempty(paths) && error("`$uuid` is not registered")
+    values = []
+    for path in paths
+        info = parse_toml(paths[1], "package.toml")
+        value = get(info, key, nothing)
+        value in values || push!(values, value)
+    end
+    length(values) > 1 &&
+        error("package `$uuid` has multiple registered `$key` values: ", join(values, ", "))
+    return values[1]
+end
+
+"Iterate each info block in manifest file"
+function manifest_info(f::Function, env::EnvCache)
+    for (name, infos) in env.manifest, info in infos
+        f(name, info)
+    end
+end
+
+"Find package by UUID in the manifest file"
+function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Void}
+    for (name, infos) in env.manifest, info in infos
+        haskey(info, "uuid") && uuid == UUID(info["uuid"]) || continue
+        return convert(Dict{String,Any}, info)
+    end
+    return nothing
 end
 
 end # module
