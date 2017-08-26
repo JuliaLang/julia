@@ -7,8 +7,9 @@ module SimdLoop
 export @simd, simd_outer_range, simd_inner_length, simd_index
 
 # Error thrown from ill-formed uses of @simd
-mutable struct SimdError <: Exception
+struct SimdError <: Exception
     msg::String
+    SimdError(msg::AbstractString) = new(msg)
 end
 
 # Parse iteration space expression

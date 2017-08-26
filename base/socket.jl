@@ -582,9 +582,10 @@ end
 
 ##
 
-mutable struct DNSError <: Exception
-    host::AbstractString
+struct DNSError <: Exception
+    host::String
     code::Int32
+    DNSError(host::AbstractString, code::Integer) = new(host,code)
 end
 
 function show(io::IO, err::DNSError)

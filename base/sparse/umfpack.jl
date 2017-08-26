@@ -11,8 +11,9 @@ using ..SparseArrays
 import ..SparseArrays: increment, increment!, decrement, decrement!, nnz
 
 include("umfpack_h.jl")
-mutable struct MatrixIllConditionedException <: Exception
-    message::AbstractString
+struct MatrixIllConditionedException <: Exception
+    msg::String
+    MatrixIllConditionedException(msg::AbstractString) = new(msg)
 end
 
 function umferror(status::Integer)

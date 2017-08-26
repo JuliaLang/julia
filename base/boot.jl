@@ -195,8 +195,8 @@ end
 Expr(@nospecialize args...) = _expr(args...)
 
 abstract type Exception end
-mutable struct ErrorException <: Exception
-    msg::AbstractString
+struct ErrorException <: Exception
+    msg::String
     ErrorException(msg::AbstractString) = new(msg)
 end
 
@@ -204,32 +204,32 @@ macro _noinline_meta()
     Expr(:meta, :noinline)
 end
 
-struct BoundsError        <: Exception
+struct BoundsError <: Exception
     a::Any
     i::Any
     BoundsError() = new()
     BoundsError(@nospecialize(a)) = (@_noinline_meta; new(a))
     BoundsError(@nospecialize(a), i) = (@_noinline_meta; new(a,i))
 end
-struct DivideError        <: Exception end
-struct OutOfMemoryError   <: Exception end
-struct ReadOnlyMemoryError<: Exception end
-struct SegmentationFault  <: Exception end
-struct StackOverflowError <: Exception end
-struct UndefRefError      <: Exception end
-struct UndefVarError      <: Exception
+struct DivideError         <: Exception end
+struct OutOfMemoryError    <: Exception end
+struct ReadOnlyMemoryError <: Exception end
+struct SegmentationFault   <: Exception end
+struct StackOverflowError  <: Exception end
+struct UndefRefError       <: Exception end
+struct UndefVarError <: Exception
     var::Symbol
 end
 struct InterruptException <: Exception end
 struct DomainError <: Exception
     val
-    msg
-    DomainError(@nospecialize(val)) = (@_noinline_meta; new(val))
+    msg::String
+    DomainError(@nospecialize(val)) = (@_noinline_meta; new(val, ""))
     DomainError(@nospecialize(val), @nospecialize(msg)) = (@_noinline_meta; new(val, msg))
 end
-mutable struct TypeError <: Exception
+struct TypeError <: Exception
     func::Symbol
-    context::AbstractString
+    context::String
     expected::Type
     got
 end
@@ -237,18 +237,19 @@ struct InexactError <: Exception
     func::Symbol
     T::Type
     val
-
     InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@_noinline_meta; new(f, T, val))
 end
 struct OverflowError <: Exception
-    msg
+    msg::String
+    OverflowError(msg::AbstractString) = new(msg)
 end
 
-mutable struct ArgumentError <: Exception
-    msg::AbstractString
+struct ArgumentError <: Exception
+    msg::String
+    ArgumentError(msg::AbstractString) = new(msg)
 end
 
-mutable struct MethodError <: Exception
+struct MethodError <: Exception
     f
     args
     world::UInt
@@ -257,23 +258,24 @@ end
 const typemax_UInt = ccall(:jl_typemax_uint, Any, (Any,), UInt)
 MethodError(@nospecialize(f), @nospecialize(args)) = MethodError(f, args, typemax_UInt)
 
-mutable struct AssertionError <: Exception
-    msg::AbstractString
+struct AssertionError <: Exception
+    msg::String
     AssertionError() = new("")
-    AssertionError(msg) = new(msg)
+    AssertionError(msg::AbstractString) = new(msg)
 end
 
 #Generic wrapping of arbitrary exceptions
 #Subtypes should put the exception in an 'error' field
 abstract type WrappedException <: Exception end
 
-mutable struct LoadError <: WrappedException
-    file::AbstractString
+struct LoadError <: WrappedException
+    file::String
     line::Int
     error
+    LoadError(file::AbstractString, line::Integer, error) = new(file,line,error)
 end
 
-mutable struct InitError <: WrappedException
+struct InitError <: WrappedException
     mod::Symbol
     error
 end

@@ -46,9 +46,10 @@ const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames t
 struct InvalidCodeError <: Exception
     kind::String
     meta::Any
+    InvalidCodeError(kind::AbstractString) = new(kind, nothing)
+    InvalidCodeError(kind::AbstractString, meta) = new(kind, meta)
 end
 
-InvalidCodeError(kind) = InvalidCodeError(kind, nothing)
 
 """
     validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)

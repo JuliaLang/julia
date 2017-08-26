@@ -53,10 +53,10 @@ unpreserve_handle(x) = (v = uvhandles[x]::Int; v == 1 ? pop!(uvhandles,x) : (uvh
 
 ## Libuv error handling ##
 
-mutable struct UVError <: Exception
-    prefix::AbstractString
+struct UVError <: Exception
+    prefix::String
     code::Int32
-    UVError(p::AbstractString,code::Integer)=new(p,code)
+    UVError(p::AbstractString, code::Integer) = new(p,code)
 end
 
 struverror(err::Int32) = unsafe_string(ccall(:uv_strerror,Cstring,(Int32,),err))

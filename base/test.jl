@@ -569,7 +569,7 @@ function finish end
 
 Thrown when a test set finishes and not all tests passed.
 """
-mutable struct TestSetException <: Exception
+struct TestSetException <: Exception
     pass::Int
     fail::Int
     error::Int
@@ -596,12 +596,12 @@ end
 
 A simple fallback test set that throws immediately on a failure.
 """
-struct FallbackTestSet <: AbstractTestSet
-end
+struct FallbackTestSet <: AbstractTestSet end
 fallback_testset = FallbackTestSet()
 
-mutable struct FallbackTestSetException <: Exception
+struct FallbackTestSetException <: Exception
     msg::String
+    FallbackTestSetException(msg::AbstractString) = new(msg)
 end
 
 function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)

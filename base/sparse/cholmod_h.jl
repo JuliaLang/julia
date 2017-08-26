@@ -70,8 +70,9 @@ end
 const VTypes = Union{Complex128, Float64}
 const VRealTypes = Union{Float64}
 
-mutable struct CHOLMODException <: Exception
-    msg::AbstractString
+struct CHOLMODException <: Exception
+    msg::String
+    CHOLMODException(msg::AbstractString) = new(msg)
 end
 
 macro isok(A)

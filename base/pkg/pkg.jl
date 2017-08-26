@@ -20,11 +20,12 @@ export dir, init, rm, add, available, installed, status, clone, checkout,
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
 
-mutable struct PkgError <: Exception
-    msg::AbstractString
+struct PkgError <: Exception
+    msg::String
     ex::Nullable{Exception}
+    PkgError(msg::AbstractString) = new(msg, Nullable{Exception}())
+    PkgError(msg::AbstractString, ex::Nullable{Exception}) = new(msg, ex)
 end
-PkgError(msg::AbstractString) = PkgError(msg, Nullable{Exception}())
 function Base.showerror(io::IO, pkgerr::PkgError)
     print(io, pkgerr.msg)
     if !isnull(pkgerr.ex)
