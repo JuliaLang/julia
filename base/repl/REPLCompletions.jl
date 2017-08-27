@@ -467,7 +467,7 @@ function completions(string, pos)
         m = match(r"[\t\n\r\"><=*?|]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
-        
+
         expanded = complete_expanduser(replace(string[r], r"\\ ", " "), startpos:pos)
         expanded[3] && return expanded  # If user expansion available, return it
 

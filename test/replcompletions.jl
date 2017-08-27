@@ -568,10 +568,11 @@ if Sys.isunix()
         path = homedir()
         dir = joinpath(path, "tmpfoobar")
         mkdir(dir)
-        s = "\"~/tmpfoob"
+        s = "\"" * path * "/tmpfoob"
         c,r = test_complete(s)
         @test "tmpfoobar/" in c
-        @test r == 4:10
+        l = 3 + length(path)
+        @test r == l:l+6
         @test s[r] == "tmpfoob"
         s = "\"~"
         @test "tmpfoobar/" in c
