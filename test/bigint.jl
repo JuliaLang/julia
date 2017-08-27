@@ -371,3 +371,6 @@ end
 @test typeof(tan(a)) == BigFloat
 @test typeof(cos(a)) == BigFloat
 @test typeof(sin(a)) == BigFloat
+
+@test BigInt <: Signed
+@test big(1) isa Signed
