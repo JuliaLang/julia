@@ -592,16 +592,16 @@ end
 @test_throws DomainError DSFMT.DSFMT_state(zeros(Int32, rand(0:DSFMT.JN32-1)))
 
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, 10), zeros(UInt128, MT_CACHE_I>>4), 0, 0)
+                                         zeros(Float64, 10), zeros(UInt128, MT_CACHE_I>>4), 0, 0, 0, 0, -1, -1, -1, -1)
 
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), -1, 0)
+                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), -1, 0, 0, 0, -1, -1, -1, -1)
 
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>3), 0, 0)
+                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>3), 0, 0, 0, 0, -1, -1, -1, -1)
 
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), 0, -1)
+                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), 0, -1, 0, 0, -1, -1, -1, -1)
 
 # seed is private to MersenneTwister
 let seed = rand(UInt32, 10)
