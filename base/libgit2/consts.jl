@@ -27,6 +27,14 @@ module Consts
     const REF_SYMBOLIC = Cint(2)
     const REF_LISTALL  = REF_OID | REF_SYMBOLIC
 
+    # blame
+    const BLAME_NORMAL                          = Cuint(0)
+    const BLAME_TRACK_COPIES_SAME_FILE          = Cuint(1 << 0)
+    const BLAME_TRACK_COPIES_SAME_COMMIT_MOVES  = Cuint(1 << 1)
+    const BLAME_TRACK_COPIES_SAME_COMMIT_COPIES = Cuint(1 << 2)
+    const BLAME_TRACK_COPIES_ANY_COMMIT_COPIES  = Cuint(1 << 3)
+    const BLAME_FIRST_PARENT                    = Cuint(1 << 4)
+
     # checkout
     const CHECKOUT_NONE                    = Cuint(0)
     const CHECKOUT_SAFE                    = Cuint(1 << 0)

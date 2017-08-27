@@ -22,6 +22,7 @@ Base.LibGit2.DiffFile
 Base.LibGit2.DiffOptionsStruct
 Base.LibGit2.FetchHead
 Base.LibGit2.FetchOptions
+Base.LibGit2.GitBlame
 Base.LibGit2.GitBlob
 Base.LibGit2.GitCommit
 Base.LibGit2.GitHash
@@ -38,6 +39,7 @@ Base.LibGit2.GitTag
 Base.LibGit2.GitTree
 Base.LibGit2.IndexEntry
 Base.LibGit2.IndexTime
+Base.LibGit2.BlameOptions
 Base.LibGit2.MergeOptions
 Base.LibGit2.ProxyOptions
 Base.LibGit2.PushOptions
@@ -65,6 +67,7 @@ Base.LibGit2.clone
 Base.LibGit2.commit
 Base.LibGit2.committer
 Base.LibGit2.count(::Function, ::Base.LibGit2.GitRevWalker; ::Base.LibGit2.GitHash, ::Cint, ::Bool)
+Base.LibGit2.counthunks
 Base.LibGit2.create_branch
 Base.LibGit2.credentials_callback
 Base.LibGit2.credentials_cb
