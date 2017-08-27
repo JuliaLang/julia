@@ -679,6 +679,18 @@ let #test that it can auto complete with spaces in file/path
     rm(dir, recursive=true)
 end
 
+let  # Test tilde path completion
+    c, r, res = test_complete("\"~/julia")
+    if !Sys.iswindows()
+        @test res && c == String[homedir() * "/julia"]
+    else
+        @test !res
+    end
+
+    c, r, res = test_complete("\"foo~bar")
+    @test !res
+end
+
 # Test the completion returns nothing when the folder do not exist
 c,r = test_complete("cd(\"folder_do_not_exist_77/file")
 @test length(c) == 0
