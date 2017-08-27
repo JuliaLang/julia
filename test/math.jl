@@ -703,3 +703,29 @@ end
         @test asin(T(NaN)) === T(NaN)
     end
 end
+
+@testset "atan #23383" begin
+    for T in (Float32, Float64)
+        @test atan(T(NaN)) === T(NaN)
+        @test atan(-T(Inf)) === -T(pi)/2
+        @test atan(T(Inf)) === T(pi)/2
+        # no reduction needed |x| < 7/16
+        @test atan(zero(T)) === zero(T)
+        @test atan(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test atan(nextfloat(zero(T))) === nextfloat(zero(T))
+        for x in (T(7/16), (T(7/16)+T(11/16))/2, T(11/16),
+                  (T(11/16)+T(19/16))/2, T(19/16),
+                  (T(19/16)+T(39/16))/2, T(39/16),
+                  (T(39/16)+T(2)^23)/2, T(2)^23)
+            x = T(7/16)
+            by = T(asin(big(x)))
+            @test abs(asin(x) - by)/eps(by) <= one(T)
+            x = prevfloat(T(7/16))
+            by = T(asin(big(x)))
+            @test abs(asin(x) - by)/eps(by) <= one(T)
+            x = nextfloat(T(7/16))
+            by = T(asin(big(x)))
+            @test abs(asin(x) - by)/eps(by) <= one(T)
+        end
+    end
+end
