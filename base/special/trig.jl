@@ -295,20 +295,21 @@ end
         #     tan(y) = 1 - 2*(tan(y) - (tan(y)^2)/(1+tan(y)))
         #            ≈ 1 - 2*(P(z) - (P(z)^2)/(1+P(z)))
         # where z = y-π/4.
-        return (signbit(y.hi) ? -1.0 : 1.0)*(k - 2*(yhi-(Px^2)/(k+Px)-r))
+        return (signbit(y.hi) ? -1.0 : 1.0)*(k - 2*(yhi-(Px^2/(k+Px)-r)))
     end
     if k == 1
         # Else, we simply return w = P(y) if k == 1 (integer multiple from argument
         # reduction was even)...
         return Px
     else
-        # ...or tan(y) ≈ -1.0+/(y+r) if !(k == 1) (integer multiple from argument
-        # reduction was odd).
+        # ...or tan(y) ≈ -1.0/(y+r) if !(k == 1) (integer multiple from argument
+        # reduction was odd). If 2ulp error is allowed, simply return the frac-
+        # tion directly. Instead, we calculate it accurately.
 
         # Px0 is w with zeroed out low word
         Px0 = reinterpret(Float64, (reinterpret(UInt64, Px) >> 32) << 32)
         v = r - (Px0 - yhi) # Px0+v = r+y
-        t = a = -1.0 / Px # a = -1.0/w
+        t = a = -1.0 / Px
         # zero out low word of t
         t = reinterpret(Float64, (reinterpret(UInt64, t) >> 32) << 32)
         s = 1.0 + t * Px0
