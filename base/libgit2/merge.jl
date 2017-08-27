@@ -47,6 +47,34 @@ function GitHash(ann::GitAnnotated)
     unsafe_load(ccall((:git_annotated_commit_id, :libgit2), Ptr{GitHash}, (Ptr{Void},), ann.ptr))
 end
 
+"""
+    merge_analysis(repo::GitRepo, anns::Vector{GitAnnotated}) -> analysis, preference
+
+Run analysis on the branches pointed to by the annotated branch tips `anns` and
+determine under what circumstances they can be merged. For instance, if `anns[1]`
+is simply an ancestor of `ann[2]`, then `merge_analysis` will report that a
+fast-forward merge is possible.
+
+`merge_analysis` returns two outputs. `analysis` has several possible values:
+    * `MERGE_ANALYSIS_NONE`: it is not possible to merge the elements of `anns`.
+    * `MERGE_ANALYSIS_NORMAL`: a regular merge, when HEAD and the commits that the
+      user wishes to merge have all diverged from a common ancestor. In this case the
+      changes have to be resolved and conflicts may occur.
+    * `MERGE_ANALYSIS_UP_TO_DATE`: all the input commits the user wishes to merge can
+      be reached from HEAD, so no merge needs to be performed.
+    * `MERGE_ANALYSIS_FASTFORWARD`: the input commit is a descendant of HEAD and so no
+      merge needs to be performed - instead, the user can simply checkout the
+      input commit(s).
+    * `MERGE_ANALYSIS_UNBORN`: the HEAD of the repository refers to a commit which does not
+      exist. It is not possible to merge, but it may be possible to checkout the input
+      commits.
+`preference` also has several possible values:
+    * `MERGE_PREFERENCE_NONE`: the user has no preference.
+    * `MERGE_PREFERENCE_NO_FASTFORWARD`: do not allow any fast-forward merges.
+    * `MERGE_PREFERENCE_FASTFORWARD_ONLY`: allow only fast-forward merges and no
+      other type (which may introduce conflicts).
+`preference` can be controlled through the repository or global git configuration.
+"""
 function merge_analysis(repo::GitRepo, anns::Vector{GitAnnotated})
     analysis = Ref{Cint}(0)
     preference = Ref{Cint}(0)
@@ -61,7 +89,9 @@ end
 """
     ffmerge!(repo::GitRepo, ann::GitAnnotated)
 
-Fastforward merge changes into current head
+Fastforward merge changes into current HEAD. This is only possible if the commit
+referred to by `ann` is descended from the current HEAD (e.g. if pulling changes
+from a remote branch which is simply ahead of the local branch tip).
 """
 function ffmerge!(repo::GitRepo, ann::GitAnnotated)
     cmt = GitCommit(repo, GitHash(ann))
