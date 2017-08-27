@@ -599,9 +599,9 @@ function median!(v::AbstractVector)
     n = length(inds)
     mid = div(first(inds)+last(inds),2)
     if isodd(n)
-        return middle(select!(v,mid))
+        return middle(partialsort!(v,mid))
     else
-        m = select!(v, mid:mid+1)
+        m = partialsort!(v, mid:mid+1)
         return middle(m[1], m[2])
     end
 end
