@@ -704,7 +704,7 @@ end
     end
 end
 
-@testset "sin, cos, sincos, tan, rem_pio2 #23088" begin
+@testset "sin, cos, sincos, tan #23088" begin
     for T in (Float32, Float64)
         @test sin(zero(T)) === zero(T)
         @test sin(-zero(T)) === -zero(T)
@@ -731,5 +731,17 @@ end
         @test sin(T(NaN)) === T(NaN)
         @test cos(T(NaN)) === T(NaN)
         @test tan(T(NaN)) === T(NaN)
+    end
+end
+
+@testset "rem_pio2 #23088" begin
+    vals = (2.356194490192345f0, 3.9269908169872414f0, 7.0685834705770345f0,
+              5.497787143782138f0, 4.216574282663131f8, 4.216574282663131f12)
+    for (i, x) in enumerate(vals)
+        for op in (prevfloat, nextfloat)
+            Ty = Float32(Base.Math.rem_pio2_kernel(op(vals[i]))[2].hi)
+            By = Float32(rem(big(op(x)), pi/2))
+            @test Ty ≈ By || Ty ≈ By-Float32(pi)/2
+        end
     end
 end

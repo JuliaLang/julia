@@ -299,10 +299,10 @@ end
     pio2_1t = 1.58932547735281966916e-08
     inv_pio2 = 6.36619772367581382433e-01
     xd = convert(Float64, x)
-    xp = abs(xd)
-    # Assumptions: NaN and Infs have been checked
-    if xp <= pi*5/4 #0x407b53d1 # |x| ~<= 5*pi/4 */
-        if xp <= pi*3/4 #0x4016cbe3 # |x| ~<= 3pi/4 */
+    absxd = abs(xd)
+    # it is assumed that NaN and Infs have been checked
+    if absxd <= pi*5/4
+        if absxd <= pi*3/4
             if x > 0
                 return 1, DoubleFloat32(xd - pi/2)
             else
@@ -314,8 +314,8 @@ end
         else
             return -2, DoubleFloat32(xd + pi)
         end
-    elseif xp <= pi*9/4 #0x40e231d5 # |x| ~<= 9*pi/4 */
-        if xp <= pi*7/4 #0x40afeddf # |x| ~<= 7*pi/4 */
+    elseif absxd <= pi*9/4
+        if absxd <= pi*7/4
             if x > 0
                 return 3, DoubleFloat32(xd - pi*3/2)
             else
@@ -329,7 +329,7 @@ end
         end
     end
     #/* 33+53 bit pi is good enough for medium size */
-    if xp < Float32(pi)/2*2.0f0^28 # medium size */
+    if absxd < Float32(pi)/2*2.0f0^28 # medium size */
         # use Cody Waite reduction with two coefficients
         fn = round(xd*inv_pio2)
         r  = xd-fn*pio2_1
