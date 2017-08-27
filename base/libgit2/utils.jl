@@ -21,6 +21,11 @@ const URL_REGEX = r"""
 $
 """x
 
+"""
+    version() -> VersionNumber
+
+Return the version of libgit2 in use, as a [`VersionNumber`](@ref man-version-number-literals).
+"""
 function version()
     major = Ref{Cint}(0)
     minor = Ref{Cint}(0)
@@ -31,10 +36,34 @@ function version()
 end
 const VERSION = version()
 
+"""
+    isset(val::Integer, flag::Integer)
+
+Test whether the bits of `val` indexed by `flag` are set (`1`) or unset (`0`).
+"""
 isset(val::Integer, flag::Integer) = (val & flag == flag)
+
+"""
+    reset(val::Integer, flag::Integer)
+
+Unset the bits of `val` indexed by `flag`, returning them to `0`.
+"""
 reset(val::Integer, flag::Integer) = (val &= ~flag)
+
+"""
+    toggle(val::Integer, flag::Integer)
+
+Flip the bits of `val` indexed by `flag`, so that if a bit is `0` it
+will be `1` after the toggle, and vice-versa.
+"""
 toggle(val::Integer, flag::Integer) = (val |= flag)
 
+"""
+    features()
+
+Return a list of git features the current version of libgit2 supports, such as
+threading or using HTTPS or SSH.
+"""
 function features()
     feat = ccall((:git_libgit2_features, :libgit2), Cint, ())
     res = Consts.GIT_FEATURE[]
