@@ -689,56 +689,56 @@ end
 
 @testset "setindex" begin
     a = spzeros(Int, 10, 10)
-    @test countnz(a) == 0
+    @test count(!iszero, a) == 0
     a[1,:] = 1
-    @test countnz(a) == 10
+    @test count(!iszero, a) == 10
     @test a[1,:] == sparse(ones(Int,10))
     a[:,2] = 2
-    @test countnz(a) == 19
+    @test count(!iszero, a) == 19
     @test a[:,2] == 2*sparse(ones(Int,10))
     b = copy(a)
 
     # Zero-assignment behavior of setindex!(A, v, i, j)
     a[1,3] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 18
+    @test count(!iszero, a) == 18
     a[2,1] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 18
+    @test count(!iszero, a) == 18
 
     # Zero-assignment behavior of setindex!(A, v, I, J)
     a[1,:] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 9
+    @test count(!iszero, a) == 9
     a[2,:] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 8
+    @test count(!iszero, a) == 8
     a[:,1] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 8
+    @test count(!iszero, a) == 8
     a[:,2] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 0
+    @test count(!iszero, a) == 0
     a = copy(b)
     a[:,:] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 0
+    @test count(!iszero, a) == 0
 
     # Zero-assignment behavior of setindex!(A, B::SparseMatrixCSC, I, J)
     a = copy(b)
     a[1:2,:] = spzeros(2, 10)
     @test nnz(a) == 19
-    @test countnz(a) == 8
+    @test count(!iszero, a) == 8
     a[1:2,1:3] = sparse([1 0 1; 0 0 1])
     @test nnz(a) == 20
-    @test countnz(a) == 11
+    @test count(!iszero, a) == 11
     a = copy(b)
     a[1:2,:] = let c = sparse(ones(2,10)); fill!(c.nzval, 0); c; end
     @test nnz(a) == 19
-    @test countnz(a) == 8
+    @test count(!iszero, a) == 8
     a[1:2,1:3] = let c = sparse(ones(2,3)); c[1,2] = c[2,1] = c[2,2] = 0; c; end
     @test nnz(a) == 20
-    @test countnz(a) == 11
+    @test count(!iszero, a) == 11
 
     a[1,:] = 1:10
     @test a[1,:] == sparse([1:10;])
@@ -782,34 +782,34 @@ end
     A = spzeros(Int, 10, 20)
     A[1:5,1:10] = 10
     A[1:5,1:10] = 10
-    @test countnz(A) == 50
+    @test count(!iszero, A) == 50
     @test A[1:5,1:10] == 10 * ones(Int, 5, 10)
     A[6:10,11:20] = 0
-    @test countnz(A) == 50
+    @test count(!iszero, A) == 50
     A[6:10,11:20] = 20
-    @test countnz(A) == 100
+    @test count(!iszero, A) == 100
     @test A[6:10,11:20] == 20 * ones(Int, 5, 10)
     A[4:8,8:16] = 15
-    @test countnz(A) == 121
+    @test count(!iszero, A) == 121
     @test A[4:8,8:16] == 15 * ones(Int, 5, 9)
 
     ASZ = 1000
     TSZ = 800
     A = sprand(ASZ, 2*ASZ, 0.0001)
     B = copy(A)
-    nA = countnz(A)
+    nA = count(!iszero, A)
     x = A[1:TSZ, 1:(2*TSZ)]
-    nx = countnz(x)
+    nx = count(!iszero, x)
     A[1:TSZ, 1:(2*TSZ)] = 0
-    nB = countnz(A)
+    nB = count(!iszero, A)
     @test nB == (nA - nx)
     A[1:TSZ, 1:(2*TSZ)] = x
-    @test countnz(A) == nA
+    @test count(!iszero, A) == nA
     @test A == B
     A[1:TSZ, 1:(2*TSZ)] = 10
-    @test countnz(A) == nB + 2*TSZ*TSZ
+    @test count(!iszero, A) == nB + 2*TSZ*TSZ
     A[1:TSZ, 1:(2*TSZ)] = x
-    @test countnz(A) == nA
+    @test count(!iszero, A) == nA
     @test A == B
 
     A = speye(Int, 5)
@@ -820,17 +820,17 @@ end
     @test A[I] == A[X] == collect(1:10)
     A[I] = zeros(Int, 10)
     @test nnz(A) == 13
-    @test countnz(A) == 3
+    @test count(!iszero, A) == 3
     @test A[I] == A[X] == zeros(Int, 10)
     c = collect(11:20); c[1] = c[3] = 0
     A[I] = c
     @test nnz(A) == 13
-    @test countnz(A) == 11
+    @test count(!iszero, A) == 11
     @test A[I] == A[X] == c
     A = speye(Int, 5)
     A[I] = c
     @test nnz(A) == 12
-    @test countnz(A) == 11
+    @test count(!iszero, A) == 11
     @test A[I] == A[X] == c
 
     S = sprand(50, 30, 0.5, x -> round.(Int, rand(x) * 100))
@@ -839,14 +839,14 @@ end
     FI = Array(I)
     @test sparse(FS[FI]) == S[I] == S[FI]
     @test sum(S[FI]) + sum(S[.!FI]) == sum(S)
-    @test countnz(I) == count(I)
+    @test count(!iszero, I) == count(I)
 
     sumS1 = sum(S)
     sumFI = sum(S[FI])
     nnzS1 = nnz(S)
     S[FI] = 0
     sumS2 = sum(S)
-    cnzS2 = countnz(S)
+    cnzS2 = count(!iszero, S)
     @test sum(S[FI]) == 0
     @test nnz(S) == nnzS1
     @test (sum(S) + sumFI) == sumS1
@@ -857,7 +857,7 @@ end
     S[FI] = 0
     @test sum(S) == sumS2
     @test nnz(S) == nnzS3
-    @test countnz(S) == cnzS2
+    @test count(!iszero, S) == cnzS2
 
     S[FI] = [1:sum(FI);]
     @test sum(S) == sumS2 + sum(1:sum(FI))
@@ -1148,11 +1148,11 @@ end
     sm = sparse(D)
     sv = sparsevec(D)
 
-    @test countnz(sm) == 10
-    @test countnz(sv) == 10
+    @test count(!iszero, sm) == 10
+    @test count(!iszero, sv) == 10
 
-    @test countnz(sparse(Diagonal(Int[]))) == 0
-    @test countnz(sparsevec(Diagonal(Int[]))) == 0
+    @test count(!iszero, sparse(Diagonal(Int[]))) == 0
+    @test count(!iszero, sparsevec(Diagonal(Int[]))) == 0
 end
 
 @testset "explicit zeros" begin

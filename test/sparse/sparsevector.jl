@@ -20,7 +20,7 @@ let x = spv_x1
     @test size(x,2) == 1
     @test !isempty(x)
 
-    @test countnz(x) == 3
+    @test count(!iszero, x) == 3
     @test nnz(x) == 3
     @test SparseArrays.nonzeroinds(x) == [2, 5, 6]
     @test nonzeros(x) == [1.25, -0.75, 3.5]

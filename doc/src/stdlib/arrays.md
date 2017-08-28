@@ -42,7 +42,6 @@ Base.length(::AbstractArray)
 Base.eachindex
 Base.linearindices
 Base.IndexStyle
-Base.countnz
 Base.conj!
 Base.stride
 Base.strides

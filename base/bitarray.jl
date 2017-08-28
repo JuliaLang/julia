@@ -1614,9 +1614,9 @@ julia> ror(A,5)
 """
 ror(B::BitVector, i::Integer) = ror!(similar(B), B, i)
 
-## countnz & find ##
+## count & find ##
 
-function countnz(B::BitArray)
+function count(B::BitArray)
     n = 0
     Bc = B.chunks
     @inbounds for i = 1:length(Bc)
@@ -1624,7 +1624,6 @@ function countnz(B::BitArray)
     end
     return n
 end
-count(B::BitArray) = countnz(B)
 
 # returns the index of the next non-zero element, or 0 if all zeros
 function findnext(B::BitArray, start::Integer)
@@ -1778,7 +1777,7 @@ end
 
 function find(B::BitArray)
     l = length(B)
-    nnzB = countnz(B)
+    nnzB = count(B)
     I = Vector{Int}(nnzB)
     nnzB == 0 && return I
     Bc = B.chunks
@@ -1812,15 +1811,15 @@ end
 findn(B::BitVector) = find(B)
 
 function findn(B::BitMatrix)
-    nnzB = countnz(B)
+    nnzB = count(B)
     I = Vector{Int}(nnzB)
     J = Vector{Int}(nnzB)
-    count = 1
+    cnt = 1
     for j = 1:size(B,2), i = 1:size(B,1)
         if B[i,j]
-            I[count] = i
-            J[count] = j
-            count += 1
+            I[cnt] = i
+            J[cnt] = j
+            cnt += 1
         end
     end
     return I, J
@@ -1834,7 +1833,7 @@ end
 ## Reductions ##
 
 sum(A::BitArray, region) = reducedim(+, A, region)
-sum(B::BitArray) = countnz(B)
+sum(B::BitArray) = count(B)
 
 function all(B::BitArray)
     isempty(B) && return true
