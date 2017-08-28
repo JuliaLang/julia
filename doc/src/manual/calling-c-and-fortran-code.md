@@ -878,7 +878,7 @@ ccall(@dlsym("myfunc", mylibvar), Void, ())
 It is sometimes useful to close (unload) a library so that it can be reloaded.
 For instance, when developing C code for use with Julia, one may need to compile,
 call the C code from Julia, then close the library, make an edit, recompile,
-and load in the new changes. One could either restart Julia, or one can use the
+and load in the new changes. One can either restart Julia or use the
 `Libdl` functions to manage the library explicitly, such as:
 
 ```julia
