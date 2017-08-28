@@ -1,5 +1,5 @@
-#ifndef OPCODES_H
-#define OPCODES_H
+#ifndef JL_OPCODES_H
+#define JL_OPCODES_H
 
 enum {
     OP_NOP=0, OP_DUP, OP_POP, OP_CALL, OP_TCALL, OP_JMP, OP_BRF, OP_BRT,

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const ≣ = isequal # convenient for comparing NaNs
 
@@ -53,6 +53,7 @@ const ≣ = isequal # convenient for comparing NaNs
 @test_throws InexactError Bool(1//2)
 
 @test iszero(false) && !iszero(true)
+@test isone(true) && !isone(false)
 
 # basic arithmetic
 @test 2 + 3 == 5
@@ -385,20 +386,6 @@ end
     "101100201022001010121000102002120122110122221010202000122201220121120010200022001"
 @test base(12,typemin(Int128)) == "-2a695925806818735399a37a20a31b3534a8"
 @test base(12,typemax(Int128)) == "2a695925806818735399a37a20a31b3534a7"
-
-@test hex2num("3ff0000000000000") == 1.
-@test hex2num("bff0000000000000") == -1.
-@test hex2num("4000000000000000") == 2.
-@test hex2num("7ff0000000000000") == Inf
-@test hex2num("fff0000000000000") == -Inf
-@test isnan(hex2num("7ff8000000000000"))
-@test isnan(hex2num("fff8000000000000"))
-@test hex2num("3f800000") == 1.0f0
-@test hex2num("bf800000") == -1.0f0
-@test hex2num("7f800000") == Inf32
-@test hex2num("ff800000") == -Inf32
-@test isnan(hex2num("7fc00000"))
-@test isnan(hex2num("ffc00000"))
 
 # floating-point printing
 @test repr(1.0) == "1.0"
@@ -828,8 +815,8 @@ function _cmp_(x::Union{Int64,UInt64}, y::Float64)
     error("invalid: _cmp_($x,$y)")
 end
 
-for x=Int64(2)^53-2:Int64(2)^53+5,
-    y=[2.0^53-2 2.0^53-1 2.0^53 2.0^53+2 2.0^53+4]
+for x = Int64(2)^53-2:Int64(2)^53+5,
+    y = [2.0^53-2 2.0^53-1 2.0^53 2.0^53+2 2.0^53+4]
     u = UInt64(x)
     @test y == Float64(trunc(Int64,y))
 
@@ -2004,34 +1991,38 @@ for x in (12345.6789, 0, -12345.6789)
     @test y == floor(x, 1000)
     @test y == ceil(x, 1000)
 end
-x = 12345.6789
-@test 0.0 == trunc(x, -1000)
-@test 0.0 == round(x, -1000)
-@test 0.0 == floor(x, -1000)
-@test Inf == ceil(x, -1000)
-x = -12345.6789
-@test -0.0 == trunc(x, -1000)
-@test -0.0 == round(x, -1000)
-@test -Inf == floor(x, -1000)
-@test -0.0 == ceil(x, -1000)
-x = 0.0
-@test 0.0 == trunc(x, -1000)
-@test 0.0 == round(x, -1000)
-@test 0.0 == floor(x, -1000)
-@test 0.0 == ceil(x, -1000)
+let x = 12345.6789
+    @test 0.0 == trunc(x, -1000)
+    @test 0.0 == round(x, -1000)
+    @test 0.0 == floor(x, -1000)
+    @test Inf == ceil(x, -1000)
+end
+let x = -12345.6789
+    @test -0.0 == trunc(x, -1000)
+    @test -0.0 == round(x, -1000)
+    @test -Inf == floor(x, -1000)
+    @test -0.0 == ceil(x, -1000)
+end
+let x = 0.0
+    @test 0.0 == trunc(x, -1000)
+    @test 0.0 == round(x, -1000)
+    @test 0.0 == floor(x, -1000)
+    @test 0.0 == ceil(x, -1000)
+end
 # rounding in other bases
 @test approx_eq(round(pi,2,2), 3.25)
 @test approx_eq(round(pi,3,2), 3.125)
 @test approx_eq(round(pi,3,5), 3.144)
 # vectorized trunc/round/floor/ceil with digits/base argument
-a = rand(2, 2, 2)
-for f in (round, trunc, floor, ceil)
-    @test f.(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
-    @test f.(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
-    @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
-    @test f.(a[:, 1, 1], 9, 2) == map(x->f(x, 9, 2), a[:, 1, 1])
-    @test f.(a[:, :, 1], 9, 2) == map(x->f(x, 9, 2), a[:, :, 1])
-    @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
+let a = rand(2, 2, 2)
+    for f in (round, trunc, floor, ceil)
+        @test f.(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
+        @test f.(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
+        @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
+        @test f.(a[:, 1, 1], 9, 2) == map(x->f(x, 9, 2), a[:, 1, 1])
+        @test f.(a[:, :, 1], 9, 2) == map(x->f(x, 9, 2), a[:, :, 1])
+        @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
+    end
 end
 # significant digits (would be nice to have a smart vectorized
 # version of signif)
@@ -2491,6 +2482,13 @@ end
 @test reinterpret(Float32,bswap(0x0000c03f)) === 1.5f0
 @test bswap(reinterpret(Float64,0x000000000000f03f)) === 1.0
 @test bswap(reinterpret(Float32,0x0000c03f)) === 1.5f0
+zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
+                 0x40, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                 0xc0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+z1 = read(zbuf, Complex64)
+z2 = read(zbuf, Complex128)
+@test bswap(z1) === -1.5f0 + 2.5f0im
+@test bswap(z2) ===  3.5 - 4.5im
 
 #isreal(x::Real) = true
 for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
@@ -2801,6 +2799,7 @@ testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
 @test indices(1,1) == 1:1
 @test_throws BoundsError indices(1,-1)
 @test isinteger(Integer(2)) == true
+@test !isinteger(π)
 @test size(1) == ()
 @test length(1) == 1
 @test endof(1) == 1
@@ -2908,7 +2907,7 @@ struct PR20889; x; end
 ^(::PR20530, p::Int) = 1
 ^(t::PR20889, b) = t.x + b
 ^(t::PR20889, b::Integer) = t.x + b
-Base.literal_pow{p}(::typeof(^), ::PR20530, ::Type{Val{p}}) = 2
+Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
 @testset "literal powers" begin
     x = PR20530()
     p = 2
@@ -2934,23 +2933,104 @@ module M20889 # do we get the expected behavior without importing Base.^?
     Base.Test.@test PR20889(2)^3 == 5
 end
 
-@testset "iszero" begin
+@testset "iszero & isone" begin
     # Numeric scalars
     for T in [Float16, Float32, Float64, BigFloat,
               Int8, Int16, Int32, Int64, Int128, BigInt,
               UInt8, UInt16, UInt32, UInt64, UInt128]
         @test iszero(T(0))
+        @test isone(T(1))
         @test iszero(Complex{T}(0))
+        @test isone(Complex{T}(1))
         if T <: Integer
             @test iszero(Rational{T}(0))
+            @test isone(Rational{T}(1))
         elseif T <: AbstractFloat
             @test iszero(T(-0.0))
             @test iszero(Complex{T}(-0.0))
         end
     end
     @test !iszero(nextfloat(BigFloat(0)))
+    @test !isone(nextfloat(BigFloat(1)))
+    for x in (π, e, γ, catalan, φ)
+        @test !iszero(x)
+        @test !isone(x)
+    end
 
     # Array reduction
     @test !iszero([0, 1, 2, 3])
     @test iszero(zeros(Int, 5))
+    @test !isone(tril(ones(Int, 5, 5)))
+    @test !isone(triu(ones(Int, 5, 5)))
+    @test !isone(zeros(Int, 5, 5))
+    @test isone(eye(Int, 5, 5))
+    @test isone(eye(Int, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
+end
+
+f20065(B, i) = UInt8(B[i])
+@testset "issue 20065" begin
+    # f20065 must be called from global scope to exhibit the buggy behavior
+    for B in (Array{Bool}(10), Array{Bool}(10,10), reinterpret(Bool, rand(UInt8, 10)))
+        @test all(x-> x <= 1, (f20065(B, i) for i in eachindex(B)))
+        for i in 1:length(B)
+            @test (@eval f20065($B, $i) <= 1)
+        end
+    end
+end
+
+@test inv(3//4) === 4//3 === 1 / (3//4) === 1 // (3//4)
+
+# issues #23244 & #23250
+@testset "convert preserves NaN payloads" begin
+    @testset "smallest NaNs" begin
+        @test convert(Float32,  NaN16) ===  NaN32
+        @test convert(Float32, -NaN16) === -NaN32
+        @test convert(Float64,  NaN16) ===  NaN64
+        @test convert(Float64, -NaN16) === -NaN64
+        @test convert(Float16,  NaN32) ===  NaN16
+        @test convert(Float16, -NaN32) === -NaN16
+        @test convert(Float64,  NaN32) ===  NaN64
+        @test convert(Float64, -NaN32) === -NaN64
+        @test convert(Float32,  NaN64) ===  NaN32
+        @test convert(Float32, -NaN64) === -NaN32
+        @test convert(Float16,  NaN64) ===  NaN16
+        @test convert(Float16, -NaN64) === -NaN16
+    end
+
+    @testset "largest NaNs" begin
+        @test convert(Float32, reinterpret(Float16, typemax(UInt16))) ===
+              reinterpret(Float32, typemax(UInt32) >> 13 << 13)
+        @test convert(Float64, reinterpret(Float16, typemax(UInt16))) ===
+              reinterpret(Float64, typemax(UInt64) >> 42 << 42)
+        @test convert(Float16, reinterpret(Float32, typemax(UInt32))) ===
+              reinterpret(Float16, typemax(UInt16) >> 00 << 00)
+        @test convert(Float64, reinterpret(Float32, typemax(UInt32))) ===
+              reinterpret(Float64, typemax(UInt64) >> 29 << 29)
+        @test convert(Float32, reinterpret(Float64, typemax(UInt64))) ===
+              reinterpret(Float32, typemax(UInt32) >> 00 << 00)
+        @test convert(Float16, reinterpret(Float64, typemax(UInt64))) ===
+              reinterpret(Float16, typemax(UInt16) >> 00 << 00)
+    end
+
+    @testset "random NaNs" begin
+        nans = AbstractFloat[NaN16, NaN32, NaN64]
+        F = [Float16, Float32, Float64]
+        U = [UInt16, UInt32, UInt64]
+        sig = [11, 24, 53]
+        for i = 1:length(F), j = 1:length(F)
+            for _ = 1:100
+                nan = reinterpret(F[i], rand(U[i]) | reinterpret(U[i], nans[i]))
+                z = sig[i] - sig[j]
+                nan′ = i <= j ? nan : reinterpret(F[i], reinterpret(U[i], nan) >> z << z)
+                @test convert(F[i], convert(F[j], nan)) === nan′
+            end
+        end
+    end
+end
+
+@testset "compact NaN printing" begin
+    @test sprint(io->show(IOContext(io, :compact => true), NaN16)) == "NaN"
+    @test sprint(io->show(IOContext(io, :compact => true), NaN32)) == "NaN"
+    @test sprint(io->show(IOContext(io, :compact => true), NaN64)) == "NaN"
+    @test_broken sprint(io->show(IOContext(io, :compact => true), big(NaN))) == "NaN"
 end

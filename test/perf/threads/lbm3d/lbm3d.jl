@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # 3D Lattice Boltzmann (BGK) model of a fluid.
 # (http://exolete.com/lbm/)
@@ -119,11 +119,11 @@ end
 precompile(calc_equi!, (Array{Float64,4}, Array{Float64,4}, Array{Float64,3}, Array{Float64,3}, Array{Float64,3}, Array{Float64,2}, Array{Float64,3}, Array{Float64,3}, Array{Float64,3}, Array{Float64,3}, Int64, Int64, Int64, Float64))
 
 function lbm3d(n)
-    const nx = n
-    const ny = nx
-    const nz = nx
-    const omega = 1.0
-    const density = 1.0
+    nx = n
+    ny = nx
+    nz = nx
+    omega = 1.0
+    density = 1.0
 
     # Implementation note: setting nchunk to nthreads() is a hack
     # to simulate the previous implementation's use of parallel regions.

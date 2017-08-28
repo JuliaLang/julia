@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 file = tempname()
 write(file, "Hello World\n")
@@ -52,7 +52,7 @@ m = Mmap.mmap(file,Vector{UInt8},12)
 m[:] = b"Hello World\n"
 Mmap.sync!(m)
 finalize(m); m=nothing; gc()
-@test open(readstring,file) == "Hello World\n"
+@test open(x->read(x, String),file) == "Hello World\n"
 
 s = open(file, "r")
 close(s)

@@ -1,13 +1,13 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Methods operating on different special matrix types
 
 # Interconversion between special matrix types
-convert{T}(::Type{Bidiagonal}, A::Diagonal{T}) =
-    Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), true)
-convert{T}(::Type{SymTridiagonal}, A::Diagonal{T}) =
+convert(::Type{Bidiagonal}, A::Diagonal{T}) where {T} =
+    Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), :U)
+convert(::Type{SymTridiagonal}, A::Diagonal{T}) where {T} =
     SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
-convert{T}(::Type{Tridiagonal}, A::Diagonal{T}) =
+convert(::Type{Tridiagonal}, A::Diagonal{T}) where {T} =
     Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
 
 function convert(::Type{Diagonal}, A::Union{Bidiagonal, SymTridiagonal})
@@ -24,15 +24,15 @@ function convert(::Type{SymTridiagonal}, A::Bidiagonal)
     SymTridiagonal(A.dv, A.ev)
 end
 
-convert{T}(::Type{Tridiagonal}, A::Bidiagonal{T}) =
-    Tridiagonal(A.isupper ? zeros(T, size(A.dv,1)-1) : A.ev, A.dv,
-                A.isupper ? A.ev:zeros(T, size(A.dv,1)-1))
+convert(::Type{Tridiagonal}, A::Bidiagonal{T}) where {T} =
+    Tridiagonal(A.uplo == 'U' ? zeros(T, size(A.dv,1)-1) : A.ev, A.dv,
+                A.uplo == 'U' ? A.ev : zeros(T, size(A.dv,1)-1))
 
 function convert(::Type{Bidiagonal}, A::SymTridiagonal)
     if !iszero(A.ev)
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
     end
-    Bidiagonal(A.dv, A.ev, true)
+    Bidiagonal(A.dv, A.ev, :U)
 end
 
 function convert(::Type{Diagonal}, A::Tridiagonal)
@@ -44,9 +44,9 @@ end
 
 function convert(::Type{Bidiagonal}, A::Tridiagonal)
     if iszero(A.dl)
-        return Bidiagonal(A.d, A.du, true)
+        return Bidiagonal(A.d, A.du, :U)
     elseif iszero(A.du)
-        return Bidiagonal(A.d, A.dl, false)
+        return Bidiagonal(A.d, A.dl, :L)
     else
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
     end
@@ -73,9 +73,9 @@ end
 function convert(::Type{Bidiagonal}, A::AbstractTriangular)
     fA = full(A)
     if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1)
-        return Bidiagonal(diag(A), diag(fA,1), true)
+        return Bidiagonal(diag(A), diag(fA,1), :U)
     elseif fA == diagm(diag(A)) + diagm(diag(fA, -1), -1)
-        return Bidiagonal(diag(A), diag(fA,-1), false)
+        return Bidiagonal(diag(A), diag(fA,-1), :L)
     else
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
     end
@@ -94,9 +94,9 @@ function convert(::Type{Tridiagonal}, A::AbstractTriangular)
 end
 
 # Constructs two method definitions taking into account (assumed) commutativity
-# e.g. @commutative f{S,T}(x::S, y::T) = x+y is the same is defining
-#     f{S,T}(x::S, y::T) = x+y
-#     f{S,T}(y::T, x::S) = f(x, y)
+# e.g. @commutative f(x::S, y::T) where {S,T} = x+y is the same is defining
+#     f(x::S, y::T) where {S,T} = x+y
+#     f(y::T, x::S) where {S,T} = f(x, y)
 macro commutative(myexpr)
     @assert myexpr.head===:(=) || myexpr.head===:function # Make sure it is a function definition
     y = copy(myexpr.args[1].args[2:end])

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Pair
 p = Pair(10,20)
@@ -161,7 +161,7 @@ end
 let
     local bar
     bestkey(d, key) = key
-    bestkey{K<:AbstractString,V}(d::Associative{K,V}, key) = string(key)
+    bestkey(d::Associative{K,V}, key) where {K<:AbstractString,V} = string(key)
     bar(x) = bestkey(x, :y)
     @test bar(Dict(:x => [1,2,5])) == :y
     @test bar(Dict("x" => [1,2,5])) == "y"
@@ -268,7 +268,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
         s = IOBuffer()
-        io = Base.IOContext(Base.IOContext(s, :limit => true), :displaysize => (rows, cols))
+        io = Base.IOContext(s, :limit => true, :displaysize => (rows, cols))
         Base.show(io, MIME("text/plain"), d)
         out = split(String(take!(s)),'\n')
         for line in out[2:end]
@@ -278,7 +278,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
 
         for f in (keys, values)
             s = IOBuffer()
-            io = Base.IOContext(Base.IOContext(s, :limit => true), :displaysize => (rows, cols))
+            io = Base.IOContext(s, :limit => true, :displaysize => (rows, cols))
             Base.show(io, MIME("text/plain"), f(d))
             out = split(String(take!(s)),'\n')
             for line in out[2:end]
@@ -301,7 +301,7 @@ let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
 
     # Check explicitly for the expected strings, since the CPU bitness effects
     # dictionary ordering.
-    result = String(buf)
+    result = String(take!(buf))
     @test contains(result, "Dict")
     @test contains(result, "(1=>2)=>(3=>45)")
     @test contains(result, "(3=>10)=>(10=>11)")
@@ -311,11 +311,12 @@ end
 mutable struct Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
 let sbuff = IOBuffer(),
-    io = Base.IOContext(Base.IOContext(sbuff, :limit => true), :displaysize => (10, 20))
+    io = Base.IOContext(sbuff, :limit => true, :displaysize => (10, 20))
 
     Base.show(io, MIME("text/plain"), Dict(Alpha()=>1))
-    @test !contains(String(sbuff), "…")
-    @test endswith(String(sbuff), "α => 1")
+    local str = String(take!(sbuff))
+    @test !contains(str, "…")
+    @test endswith(str, "α => 1")
 end
 
 # issue #2540
@@ -394,6 +395,9 @@ let
     ca = empty!(ca)
     @test length(ca) == 0
     @test length(a) == 2
+
+    d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
+    @test a != d
 end
 
 @test length(ObjectIdDict(1=>2, 1.0=>3)) == 2
@@ -484,7 +488,7 @@ let d = ImmutableDict{String, String}(),
     @test (k1 => v2) in d3
     @test (k1 => v1) in d4
     @test (k1 => v2) in d4
-    @test !in(k2 => "value2", d4, ===)
+    @test in(k2 => "value2", d4, ===)
     @test in(k2 => v2, d4, ===)
     @test in(k2 => NaN, dnan, isequal)
     @test in(k2 => NaN, dnan, ===)
@@ -507,7 +511,7 @@ let d = ImmutableDict{String, String}(),
 end
 
 # filtering
-let d = Dict(zip(1:1000,1:1000)), f = (k,v) -> iseven(k)
+let d = Dict(zip(1:1000,1:1000)), f = p -> iseven(p.first)
     @test filter(f, d) == filter!(f, copy(d)) ==
           invoke(filter!, Tuple{Function,Associative}, f, copy(d)) ==
           Dict(zip(2:2:1000, 2:2:1000))
@@ -615,11 +619,13 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     wkd[C] = 4
     dd = convert(Dict{Any,Any},wkd)
     @test WeakKeyDict(dd) == wkd
+    @test convert(WeakKeyDict{Any, Any}, dd) == wkd
     @test isa(WeakKeyDict(dd), WeakKeyDict{Any,Any})
     @test WeakKeyDict(A=>2, B=>3, C=>4) == wkd
     @test isa(WeakKeyDict(A=>2, B=>3, C=>4), WeakKeyDict{Array{Int,1},Int})
     @test WeakKeyDict(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
     @test WeakKeyDict([(A,2), (B,3), (C,4)]) == wkd
+    @test WeakKeyDict(Pair(A,2), Pair(B,3), Pair(C,4)) == wkd
     @test copy(wkd) == wkd
 
     @test length(wkd) == 3
@@ -630,10 +636,11 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test 4 ∉ values(wkd)
     @test length(wkd) == 2
     @test !isempty(wkd)
-    wkd = filter!( (k,v) -> k != B, wkd)
+    wkd = filter!( p -> p.first != B, wkd)
     @test B ∉ keys(wkd)
     @test 3 ∉ values(wkd)
     @test length(wkd) == 1
+    @test WeakKeyDict(Pair(A, 2)) == wkd
     @test !isempty(wkd)
 
     wkd = empty!(wkd)
@@ -642,6 +649,8 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test length(wkd) == 0
     @test isempty(wkd)
     @test isa(wkd, WeakKeyDict)
+
+    @test_throws ArgumentError WeakKeyDict([1, 2, 3])
 end
 
 @testset "issue #19995, hash of dicts" begin
@@ -705,4 +714,22 @@ end
     @test d1 == Dict("A" => 1, "B" => 18, "C" => 32)
     @inferred merge!(-, d1, d2)
     @test d1 == Dict("A" => 1, "B" => 15, "C" => 28)
+end
+
+@testset "misc error/io" begin
+    d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
+    @test_throws ErrorException 'a' in d
+    key_str = sprint(show, keys(d))
+    @test 'a' ∈ key_str
+    @test 'b' ∈ key_str
+    @test 'c' ∈ key_str
+end
+
+@testset "Dict pop!" begin
+    d = Dict(1=>2, 3=>4)
+    @test pop!(d, 1) == 2
+    @test_throws KeyError pop!(d, 1)
+    @test pop!(d, 1, 0) == 0
+    @test pop!(d) == (3=>4)
+    @test_throws ArgumentError pop!(d)
 end

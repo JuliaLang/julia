@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 mutable struct BatchProcessingError <: Exception
     data
@@ -30,7 +30,7 @@ pgenerate(f, c) = pgenerate(default_worker_pool(), f, c)
 pgenerate(f, c1, c...) = pgenerate(a->f(a...), zip(c1, c...))
 
 """
-    pmap([::AbstractWorkerPool], f, c...; distributed=true, batch_size=1, on_error=nothing, retry_delays=[]), retry_check=nothing) -> collection
+    pmap([::AbstractWorkerPool], f, c...; distributed=true, batch_size=1, on_error=nothing, retry_delays=[], retry_check=nothing) -> collection
 
 Transform collection `c` by applying `f` to each element using available
 workers and tasks.
@@ -60,7 +60,7 @@ which is then returned inline with the results to the caller.
 
 Consider the following two examples. The first one returns the exception object inline,
 the second a 0 in place of any exception:
-```julia
+```julia-repl
 julia> pmap(x->iseven(x) ? error("foo") : x, 1:4; on_error=identity)
 4-element Array{Any,1}:
  1

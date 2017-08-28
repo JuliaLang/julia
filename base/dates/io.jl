@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
     AbstractDateToken
@@ -74,13 +74,13 @@ end
 @inline min_width(d::DatePart) = d.fixed ? d.width : 1
 @inline max_width(d::DatePart) = d.fixed ? d.width : 0
 
-function _show_content{c}(io::IO, d::DatePart{c})
+function _show_content(io::IO, d::DatePart{c}) where c
     for i = 1:d.width
         write(io, c)
     end
 end
 
-function Base.show{c}(io::IO, d::DatePart{c})
+function Base.show(io::IO, d::DatePart{c}) where c
     write(io, "DatePart(")
     _show_content(io, d)
     write(io, ")")
@@ -108,10 +108,21 @@ for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to
     end
 end
 
+# 3-digit (base 10) number following a decimal point. For InexactError below.
+struct Decimal3 end
+
 @inline function tryparsenext(d::DatePart{'s'}, str, i, len)
     ms, ii = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
     if !isnull(ms)
-        ms = Nullable{Int64}(get(ms) * 10 ^ (3 - (ii - i)))
+        val0 = val = get(ms)
+        len = ii - i
+        if len > 3
+            val, r = divrem(val, Int64(10) ^ (len - 3))
+            r == 0 || throw(InexactError(:convert, Decimal3, val0))
+        else
+            val *= Int64(10) ^ (3 - len)
+        end
+        ms = Nullable{Int64}(val)
     end
     return ms, ii
 end
@@ -174,7 +185,7 @@ end
 Delim(d::Char) = Delim{Char, 1}(d)
 Delim(d::String) = Delim{String, length(d)}(d)
 
-@inline function tryparsenext{N}(d::Delim{Char, N}, str, i::Int, len)
+@inline function tryparsenext(d::Delim{Char, N}, str, i::Int, len) where N
     R = Nullable{Bool}
     for j=1:N
         i > len && return (R(), i)
@@ -184,7 +195,7 @@ Delim(d::String) = Delim{String, length(d)}(d)
     return R(true), i
 end
 
-@inline function tryparsenext{N}(d::Delim{String, N}, str, i::Int, len)
+@inline function tryparsenext(d::Delim{String, N}, str, i::Int, len) where N
     R = Nullable{Bool}
     i1 = i
     i2 = start(d.d)
@@ -205,7 +216,7 @@ end
     write(io, d.d)
 end
 
-function _show_content{N}(io::IO, d::Delim{Char, N})
+function _show_content(io::IO, d::Delim{Char, N}) where N
     if d.d in keys(CONVERSION_SPECIFIERS)
         for i = 1:N
             write(io, '\\', d.d)
@@ -265,6 +276,8 @@ const CONVERSION_DEFAULTS = Dict{Type, Any}(
     Minute => Int64(0),
     Second => Int64(0),
     Millisecond => Int64(0),
+    Microsecond => Int64(0),
+    Nanosecond => Int64(0),
 )
 
 # Specifies the required fields in order to parse a TimeType
@@ -272,6 +285,7 @@ const CONVERSION_DEFAULTS = Dict{Type, Any}(
 const CONVERSION_TRANSLATIONS = Dict{Type{<:TimeType}, Tuple}(
     Date => (Year, Month, Day),
     DateTime => (Year, Month, Day, Hour, Minute, Second, Millisecond),
+    Time => (Hour, Minute, Second, Millisecond, Microsecond, Nanosecond),
 )
 
 """
@@ -380,10 +394,12 @@ end
 # Standard formats
 const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
 const ISODateFormat = DateFormat("yyyy-mm-dd")
+const ISOTimeFormat = DateFormat("HH:MM:SS.s")
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
 default_format(::Type{DateTime}) = ISODateTimeFormat
 default_format(::Type{Date}) = ISODateFormat
+default_format(::Type{Time}) = ISOTimeFormat
 
 ### API
 
@@ -392,12 +408,12 @@ const Locale = Union{DateLocale, String}
 """
     DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
-Construct a `DateTime` by parsing the `dt` date string following the pattern given in
-the `format` string.
+Construct a `DateTime` by parsing the `dt` date time string following the
+pattern given in the `format` string.
 
-This method creates a `DateFormat` object each time it is called. If you are parsing many
-date strings of the same format, consider creating a [`DateFormat`](@ref) object once and using
-that as the second argument instead.
+This method creates a `DateFormat` object each time it is called. If you are
+parsing many date time strings of the same format, consider creating a
+[`DateFormat`](@ref) object once and using that as the second argument instead.
 """
 function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     parse(DateTime, dt, DateFormat(format, locale))
@@ -406,33 +422,58 @@ end
 """
     DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
-Construct a `DateTime` by parsing the `dt` date string following the pattern given in
-the [`DateFormat`](@ref) object. Similar to
-`DateTime(::AbstractString, ::AbstractString)` but more efficient when repeatedly parsing
-similarly formatted date strings with a pre-created `DateFormat` object.
+Construct a `DateTime` by parsing the `dt` date time string following the
+pattern given in the [`DateFormat`](@ref) object. Similar to
+`DateTime(::AbstractString, ::AbstractString)` but more efficient when
+repeatedly parsing similarly formatted date time strings with a pre-created
+`DateFormat` object.
 """
 DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) = parse(DateTime, dt, df)
 
 """
-    Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
+    Date(d::AbstractString, format::AbstractString; locale="english") -> Date
 
-Construct a `Date` object by parsing a `dt` date string following the pattern given in the
-`format` string. Follows the same conventions as
-`DateTime(::AbstractString, ::AbstractString)`.
+Construct a `Date` by parsing the `d` date string following the pattern given
+in the `format` string.
+
+This method creates a `DateFormat` object each time it is called. If you are
+parsing many date strings of the same format, consider creating a
+[`DateFormat`](@ref) object once and using that as the second argument instead.
 """
-function Date(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    parse(Date, dt, DateFormat(format, locale))
+function Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
+    parse(Date, d, DateFormat(format, locale))
 end
 
 """
-    Date(dt::AbstractString, df::DateFormat) -> Date
+    Date(d::AbstractString, df::DateFormat) -> Date
 
-Parse a date from a date string `dt` using a `DateFormat` object `df`.
+Parse a date from a date string `d` using a `DateFormat` object `df`.
 """
-Date(dt::AbstractString,df::DateFormat=ISODateFormat) = parse(Date, dt, df)
+Date(d::AbstractString, df::DateFormat=ISODateFormat) = parse(Date, d, df)
 
-@generated function format{S, T}(io::IO, dt::TimeType, fmt::DateFormat{S, T})
-    N = nfields(T)
+"""
+    Time(t::AbstractString, format::AbstractString; locale="english") -> Time
+
+Construct a `Time` by parsing the `t` time string following the pattern given
+in the `format` string.
+
+This method creates a `DateFormat` object each time it is called. If you are
+parsing many time strings of the same format, consider creating a
+[`DateFormat`](@ref) object once and using that as the second argument instead.
+"""
+function Time(t::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
+    parse(Time, t, DateFormat(format, locale))
+end
+
+"""
+    Time(t::AbstractString, df::DateFormat) -> Time
+
+Parse a time from a time string `t` using a `DateFormat` object `df`.
+"""
+Time(t::AbstractString, df::DateFormat=ISOTimeFormat) = parse(Time, t, df)
+
+@generated function format(io::IO, dt::TimeType, fmt::DateFormat{<:Any,T}) where T
+    N = fieldcount(T)
     quote
         ts = fmt.tokens
         loc = fmt.locale
@@ -515,25 +556,4 @@ function Base.string(dt::Date)
     mm = lpad(m, 2, "0")
     dd = lpad(d, 2, "0")
     return "$yy-$mm-$dd"
-end
-
-# vectorized
-function DateTime(Y::AbstractArray{<:AbstractString}, f::AbstractString; locale::Locale=ENGLISH)
-    DateTime(Y, DateFormat(f, locale))
-end
-function DateTime(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateTimeFormat)
-    return reshape(DateTime[parse(DateTime, y, df) for y in Y], size(Y))
-end
-function Date(Y::AbstractArray{<:AbstractString}, f::AbstractString; locale::Locale=ENGLISH)
-    Date(Y, DateFormat(f, locale))
-end
-function Date(Y::AbstractArray{<:AbstractString}, df::DateFormat=ISODateFormat)
-    return reshape(Date[Date(parse(Date, y, df)) for y in Y], size(Y))
-end
-
-function format(Y::AbstractArray{<:TimeType}, f::AbstractString; locale::Locale=ENGLISH)
-    format(Y, DateFormat(f, locale))
-end
-function format{T<:TimeType}(Y::AbstractArray{T}, df::DateFormat=default_format(T))
-    return reshape([format(y, df) for y in Y], size(Y))
 end

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const Chars = Union{Char,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
 
@@ -16,6 +16,7 @@ value is a range of indexes where the matching sequence is found, such that `s[s
 
 `search(string, 'c')` = `index` such that `string[index] == 'c'`, or `0` if unmatched.
 
+# Examples
 ```jldoctest
 julia> search("Hello to the world", "z")
 0:-1
@@ -75,6 +76,8 @@ function _searchindex(s, t, i)
         i = ii
     end
 end
+
+_searchindex(s, t::Char, i) = search(s, t, i)
 
 function _search_bloom_mask(c)
     UInt64(1) << (c & 63)
@@ -152,6 +155,7 @@ searchindex(s::ByteArray, t::ByteArray, i) = _searchindex(s,t,i)
 Similar to [`search`](@ref), but return only the start index at which
 the substring is found, or `0` if it is not.
 
+# Examples
 ```jldoctest
 julia> searchindex("Hello to the world", "z")
 0
@@ -202,6 +206,7 @@ end
 Similar to [`search`](@ref), but returning the last occurrence of the given characters within the
 given string, searching in reverse from `start`.
 
+# Examples
 ```jldoctest
 julia> rsearch("aaabbb","b")
 6:6
@@ -316,6 +321,7 @@ rsearchindex(s::ByteArray, t::ByteArray, i::Integer) = _rsearchindex(s,t,i)
 
 Similar to [`rsearch`](@ref), but return only the start index at which the substring is found, or `0` if it is not.
 
+# Examples
 ```jldoctest
 julia> rsearchindex("aaabbb","b")
 6
@@ -366,15 +372,16 @@ rsearch(s::AbstractString, t::AbstractString, i::Integer=endof(s)) = _rsearch(s,
 rsearch(s::ByteArray, t::ByteArray, i::Integer=endof(s)) = _rsearch(s, t, i)
 
 """
-    contains(haystack::AbstractString, needle::AbstractString)
+    contains(haystack::AbstractString, needle::Union{AbstractString,Char})
 
 Determine whether the second argument is a substring of the first.
 
+# Examples
 ```jldoctest
 julia> contains("JuliaLang is pretty cool!", "Julia")
 true
 ```
 """
-contains(haystack::AbstractString, needle::AbstractString) = searchindex(haystack,needle)!=0
+contains(haystack::AbstractString, needle::Union{AbstractString,Char}) = searchindex(haystack,needle)!=0
 
 in(::AbstractString, ::AbstractString) = error("use contains(x,y) for string containment")

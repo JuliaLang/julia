@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test conversion to and from unix
 @test Dates.unix2datetime(Dates.datetime2unix(DateTime(2000, 1, 1))) == DateTime(2000, 1, 1)
@@ -48,7 +48,7 @@
 @test typeof(Dates.today()) <: Dates.Date
 @test typeof(Dates.now(Dates.UTC)) <: Dates.DateTime
 
-if is_apple()
+if Sys.isapple()
     withenv("TZ" => "UTC") do
         @test abs(Dates.now() - now(Dates.UTC)) < Dates.Second(1)
     end

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Cache
 
@@ -18,7 +18,7 @@ function mkcachedir()
         return
     end
 
-    @static if is_unix()
+    @static if Sys.isunix()
         if Dir.isversioned(pwd())
             rootcache = joinpath(realpath(".."), ".cache")
             if !isdir(rootcache)
@@ -57,7 +57,7 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
         end
     end
     try
-        LibGit2.set_remote_url(repo, normalized_url)
+        LibGit2.set_remote_url(repo, "origin", normalized_url)
         in_cache = BitArray(map(sha1->LibGit2.iscommit(sha1, repo), sha1s))
         if !all(in_cache)
             info("Updating cache of $pkg...")

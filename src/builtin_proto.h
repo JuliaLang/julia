@@ -1,7 +1,7 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef BUILTIN_PROTO_H
-#define BUILTIN_PROTO_H
+#ifndef JL_BUILTIN_PROTO_H
+#define JL_BUILTIN_PROTO_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,6 +23,7 @@ DECLARE_BUILTIN(throw);      DECLARE_BUILTIN(is);
 DECLARE_BUILTIN(typeof);     DECLARE_BUILTIN(sizeof);
 DECLARE_BUILTIN(issubtype);  DECLARE_BUILTIN(isa);
 DECLARE_BUILTIN(_apply);     DECLARE_BUILTIN(_apply_pure);
+DECLARE_BUILTIN(_apply_latest);
 DECLARE_BUILTIN(isdefined);  DECLARE_BUILTIN(nfields);
 DECLARE_BUILTIN(tuple);      DECLARE_BUILTIN(svec);
 DECLARE_BUILTIN(getfield);   DECLARE_BUILTIN(setfield);

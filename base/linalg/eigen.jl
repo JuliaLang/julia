@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Eigendecomposition
 struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
@@ -35,7 +35,7 @@ isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0,
 Same as [`eigfact`](@ref), but saves space by overwriting the input `A` (and
 `B`), instead of creating a copy.
 """
-function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
+function eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasReal
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     issymmetric(A) && return eigfact!(Symmetric(A))
@@ -58,7 +58,7 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::B
     return Eigen(complex.(WR, WI), evec)
 end
 
-function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
+function eigfact!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T<:BlasComplex
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     ishermitian(A) && return eigfact!(Hermitian(A))
@@ -79,8 +79,7 @@ before the eigenvector calculation. The option `permute=true` permutes the matri
 closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
 make rows and columns more equal in norm. The default is `true` for both options.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> F = eigfact([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
@@ -98,7 +97,7 @@ julia> F[:vectors]
  0.0  0.0  1.0
 ```
 """
-function eigfact{T}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
+function eigfact(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
     eigfact!(copy_oftype(A, S), permute = permute, scale = scale)
 end
@@ -117,13 +116,12 @@ end
 Computes eigenvalues (`D`) and eigenvectors (`V`) of `A`.
 See [`eigfact`](@ref) for details on the
 `irange`, `vl`, and `vu` arguments
-(for [`SymTridiagonal`](@ref), `Hermitian`, and
-`Symmetric` matrices)
+(for [`SymTridiagonal`](@ref), [`Hermitian`](@ref), and
+[`Symmetric`](@ref) matrices)
 and the `permute` and `scale` keyword arguments.
 The eigenvectors are returned columnwise.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 ([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
@@ -144,8 +142,7 @@ Returns a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigen
 be obtained from the slice `M[:, k]`.) The `permute` and `scale` keywords are the same as
 for [`eigfact`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> eigvecs([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 3×3 Array{Float64,2}:
@@ -156,9 +153,9 @@ julia> eigvecs([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 """
 eigvecs(A::Union{Number, AbstractMatrix}; permute::Bool=true, scale::Bool=true) =
     eigvecs(eigfact(A, permute=permute, scale=scale))
-eigvecs{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:vectors]::S
+eigvecs(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) where {T,V,S,U} = F[:vectors]::S
 
-eigvals{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:values]::U
+eigvals(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) where {T,V,S,U} = F[:values]::U
 
 """
     eigvals!(A; permute::Bool=true, scale::Bool=true) -> values
@@ -189,11 +186,11 @@ become closer to upper triangular, and `scale=true` scales the matrix by its dia
 elements to make rows and columns more equal in norm. The default is `true` for both
 options.
 """
-function eigvals{T}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
+function eigvals(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) where T
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
     return eigvals!(copy_oftype(A, S), permute = permute, scale = scale)
 end
-function eigvals{T<:Number}(x::T; kwargs...)
+function eigvals(x::T; kwargs...) where T<:Number
     val = convert(promote_type(Float32, typeof(one(T)/norm(one(T)))), x)
     return imag(val) == 0 ? [real(val)] : [val]
 end
@@ -209,8 +206,7 @@ Note that if the eigenvalues of `A` are complex,
 this method will fail, since complex numbers cannot
 be sorted.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [0 im; -im 0]
 2×2 Array{Complex{Int64},2}:
@@ -226,16 +222,17 @@ julia> A = [0 im; -1 0]
  -1+0im  0+0im
 
 julia> eigmax(A)
-ERROR: DomainError:
+ERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:
+`A` cannot have complex eigenvalues.
 Stacktrace:
- [1] #eigmax#40(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:238
+ [1] #eigmax#52(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:238
  [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:236
 ```
 """
 function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
     if eltype(v)<:Complex
-        throw(DomainError())
+        throw(DomainError(A, "`A` cannot have complex eigenvalues."))
     end
     maximum(v)
 end
@@ -251,8 +248,7 @@ Note that if the eigenvalues of `A` are complex,
 this method will fail, since complex numbers cannot
 be sorted.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [0 im; -im 0]
 2×2 Array{Complex{Int64},2}:
@@ -268,16 +264,17 @@ julia> A = [0 im; -1 0]
  -1+0im  0+0im
 
 julia> eigmin(A)
-ERROR: DomainError:
+ERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:
+`A` cannot have complex eigenvalues.
 Stacktrace:
- [1] #eigmin#41(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:280
+ [1] #eigmin#53(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:280
  [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:278
 ```
 """
 function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
     if eltype(v)<:Complex
-        throw(DomainError())
+        throw(DomainError(A, "`A` cannot have complex eigenvalues."))
     end
     minimum(v)
 end
@@ -286,7 +283,7 @@ inv(A::Eigen) = A.vectors * inv(Diagonal(A.values)) / A.vectors
 det(A::Eigen) = prod(A.values)
 
 # Generalized eigenproblem
-function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
+function eigfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasReal
     issymmetric(A) && isposdef(B) && return eigfact!(Symmetric(A), Symmetric(B))
     n = size(A, 1)
     alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
@@ -309,7 +306,7 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
     return GeneralizedEigen(complex.(alphar, alphai)./beta, vecs)
 end
 
-function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
+function eigfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasComplex
     ishermitian(A) && isposdef(B) && return eigfact!(Hermitian(A), Hermitian(B))
     alpha, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
     return GeneralizedEigen(alpha./beta, vr)
@@ -323,7 +320,7 @@ Computes the generalized eigenvalue decomposition of `A` and `B`, returning a
 `F[:values]` and the generalized eigenvectors in the columns of the matrix `F[:vectors]`.
 (The `k`th generalized eigenvector can be obtained from the slice `F[:vectors][:, k]`.)
 """
-function eigfact{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB})
+function eigfact(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
     return eigfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
@@ -338,8 +335,7 @@ Computes generalized eigenvalues (`D`) and vectors (`V`) of `A` with respect to 
 `eig` is a wrapper around [`eigfact`](@ref), extracting all parts of the
 factorization to a tuple; where possible, using [`eigfact`](@ref) is recommended.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 0; 0 -1]
 2×2 Array{Int64,2}:
@@ -369,12 +365,12 @@ end
 
 Same as [`eigvals`](@ref), but saves space by overwriting the input `A` (and `B`), instead of creating copies.
 """
-function eigvals!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
+function eigvals!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasReal
     issymmetric(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))
     alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
     return (iszero(alphai) ? alphar : complex.(alphar, alphai))./beta
 end
-function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
+function eigvals!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasComplex
     ishermitian(A) && isposdef(B) && return eigvals!(Hermitian(A), Hermitian(B))
     alpha, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
     alpha./beta
@@ -385,8 +381,7 @@ end
 
 Computes the generalized eigenvalues of `A` and `B`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 0; 0 -1]
 2×2 Array{Int64,2}:
@@ -404,7 +399,7 @@ julia> eigvals(A,B)
  0.0-1.0im
 ```
 """
-function eigvals{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB})
+function eigvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
     return eigvals!(copy_oftype(A, S), copy_oftype(B, S))
 end
@@ -415,8 +410,7 @@ end
 Returns a matrix `M` whose columns are the generalized eigenvectors of `A` and `B`. (The `k`th eigenvector can
 be obtained from the slice `M[:, k]`.)
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 0; 0 -1]
 2×2 Array{Int64,2}:

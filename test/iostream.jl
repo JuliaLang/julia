@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test skipchars for IOStreams
 mktemp() do path, file
@@ -39,3 +39,10 @@ mktemp() do path, file
     end
 end
 
+# issue #18755
+mktemp() do path, io
+    write(io, zeros(UInt8, 131073))
+    @test position(io) == 131073
+    write(io, zeros(UInt8, 131073))
+    @test position(io) == 262146
+end

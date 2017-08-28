@@ -1,5 +1,5 @@
 #!/bin/sh
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # build-time mini version of WinRPM, usage:
 # ./winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.2/ mingw64-zlib1

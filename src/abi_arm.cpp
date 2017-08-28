@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 //===----------------------------------------------------------------------===//
 //
@@ -27,6 +27,8 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
     return false;
 }
+
+#define jl_is_floattype(v)   jl_subtype(v,(jl_value_t*)jl_floatingpoint_type)
 
 Type *get_llvm_fptype(jl_datatype_t *dt) const
 {
@@ -268,7 +270,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
     //   For a Composite Type, the alignment of the copy will have 4-byte
     //   alignment if its natural alignment is <= 4 and 8-byte alignment if
     //   its natural alignment is >= 8
-    size_t align = dt->layout->alignment;
+    size_t align = jl_datatype_align(dt);
     if (align < 4)
         align = 4;
     if (align > 8)

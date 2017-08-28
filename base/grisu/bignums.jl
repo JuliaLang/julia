@@ -47,14 +47,14 @@ const kBigitSize = 28
 const kBigitMask = Chunk((1 << kBigitSize) - 1)
 # Every instance allocates kBigitLength chunks on the stack. Bignums cannot
 # grow. There are no checks if the stack-allocated space is sufficient.
-const kBigitCapacity = div(kMaxSignificantBits,kBigitSize)
+const kBigitCapacity = div(kMaxSignificantBits, kBigitSize)
 
 mutable struct Bignum
-    bigits::Array{UInt32,1}
+    bigits::Vector{UInt32}
     used_digits::Int32
     exponent::Int32
     function Bignum()
-        bigits = Array{UInt32}(kBigitCapacity)
+        bigits = Vector{UInt32}(kBigitCapacity)
         @inbounds for i = 1:kBigitCapacity
             bigits[i] = 0
         end

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Sort
 
@@ -15,18 +15,18 @@ import
 export # also exported by Base
     # order-only:
     issorted,
-    select,
-    select!,
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
     # order & algorithm:
     sort,
     sort!,
-    selectperm,
-    selectperm!,
     sortperm,
     sortperm!,
+    partialsort,
+    partialsort!,
+    partialsortperm,
+    partialsortperm!,
     sortrows,
     sortcols,
     # algorithms:
@@ -63,6 +63,7 @@ end
 Test whether a vector is in sorted order. The `lt`, `by` and `rev` keywords modify what
 order is considered to be sorted just as they do for [`sort`](@ref).
 
+# Examples
 ```jldoctest
 julia> issorted([1, 2, 3])
 true
@@ -81,16 +82,80 @@ issorted(itr;
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
-function select!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
+function partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
     inds = indices(v, 1)
     sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
-    v[k]
-end
-select!(v::AbstractVector, k::Union{Int,OrdinalRange};
-    lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
-    select!(v, k, ord(lt,by,rev,order))
 
-select(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) = select!(copymutable(v), k; kws...)
+    if k isa Integer
+        return v[k]
+    else
+        return view(v, k)
+    end
+end
+
+"""
+    partialsort!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Partially sort the vector `v` in place, according to the order specified by `by`, `lt` and
+`rev` so that the value at index `k` (or range of adjacent values if `k` is a range) occurs
+at the position where it would appear if the array were fully sorted via a non-stable
+algorithm. If `k` is a single index, that value is returned; if `k` is a range, an array of
+values at those indices is returned. Note that `partialsort!` does not fully sort the input
+array.
+
+# Examples
+```jldoctest
+julia> a = [1, 2, 4, 3, 4]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 3
+ 4
+
+julia> partialsort!(a, 4)
+4
+
+julia> a
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 4
+
+julia> a = [1, 2, 4, 3, 4]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 3
+ 4
+
+julia> partialsort!(a, 4, rev=true)
+2
+
+julia> a
+5-element Array{Int64,1}:
+ 4
+ 4
+ 3
+ 2
+ 1
+```
+"""
+partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange};
+             lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
+    partialsort!(v, k, ord(lt,by,rev,order))
+
+"""
+    partialsort(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Variant of [`partialsort!`](@ref) which copies `v` before partially sorting it, thereby returning the
+same thing as `partialsort!` but leaving `v` unmodified.
+"""
+partialsort(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) =
+    partialsort!(copymutable(v), k; kws...)
 
 
 # reference on sorted binary search:
@@ -217,6 +282,72 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
         $s(v::AbstractVector, x) = $s(v, x, Forward)
     end
 end
+
+"""
+    searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Return the range of indices of `a` which compare as equal to `x` (using binary search)
+according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
+is already sorted in that order. Return an empty range located at the insertion point
+if `a` does not contain values equal to `x`.
+
+# Examples
+```jldoctest
+julia> a = [4, 3, 2, 1]
+4-element Array{Int64,1}:
+ 4
+ 3
+ 2
+ 1
+
+julia> searchsorted(a, 4)
+5:4
+
+julia> searchsorted(a, 4, rev=true)
+1:1
+```
+""" searchsorted
+
+"""
+    searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Return the index of the first value in `a` greater than or equal to `x`, according to the
+specified order. Return `length(a) + 1` if `x` is greater than all values in `a`.
+`a` is assumed to be sorted.
+
+# Examples
+```jldoctest
+julia> searchsortedfirst([1, 2, 4, 5, 14], 4)
+3
+
+julia> searchsortedfirst([1, 2, 4, 5, 14], 4, rev=true)
+1
+
+julia> searchsortedfirst([1, 2, 4, 5, 14], 15)
+6
+```
+""" searchsortedfirst
+
+"""
+    searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Return the index of the last value in `a` less than or equal to `x`, according to the
+specified order. Return `0` if `x` is less than all values in `a`. `a` is assumed to
+be sorted.
+
+# Examples
+```jldoctest
+julia> searchsortedlast([1, 2, 4, 5, 14], 4)
+3
+
+julia> searchsortedlast([1, 2, 4, 5, 14], 4, rev=true)
+5
+
+julia> searchsortedlast([1, 2, 4, 5, 14], -1)
+0
+```
+""" searchsortedlast
+
 
 ## sorting algorithms ##
 
@@ -447,6 +578,7 @@ options are independent and can be used together in all possible combinations: i
 and `lt` are specified, the `lt` function is applied to the result of the `by` function;
 `rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
 
+# Examples
 ```jldoctest
 julia> v = [3, 1, 2]; sort!(v); v
 3-element Array{Int64,1}:
@@ -522,6 +654,7 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
+# Examples
 ```jldoctest
 julia> v = [3, 1, 2];
 
@@ -540,18 +673,36 @@ julia> v
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
-## selectperm: the permutation to sort the first k elements of an array ##
+## partialsortperm: the permutation to sort the first k elements of an array ##
 
-selectperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
-    selectperm!(similar(Vector{eltype(k)}, indices(v,1)), v, k; kwargs..., initialized=false)
+"""
+    partialsortperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-function selectperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
-                     k::Union{Int, OrdinalRange};
-                     lt::Function=isless,
-                     by::Function=identity,
-                     rev::Bool=false,
-                     order::Ordering=Forward,
-                     initialized::Bool=false)
+Return a partial permutation of the vector `v`, according to the order specified by
+`by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
+if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index,
+the index in `v` of the value which would be sorted at position `k` is returned;
+if `k` is a range, an array with the indices in `v` of the values which would be sorted in
+these positions is returned.
+
+Note that this is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
+"""
+partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
+    partialsortperm!(similar(Vector{eltype(k)}, indices(v,1)), v, k; kwargs..., initialized=false)
+
+"""
+    partialsortperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
+
+Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix`. If `initialized` is `false`
+(the default), `ix` is initialized to contain the values `1:length(ix)`.
+"""
+function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
+                          k::Union{Int, OrdinalRange};
+                          lt::Function=isless,
+                          by::Function=identity,
+                          rev::Bool=false,
+                          order::Ordering=Forward,
+                          initialized::Bool=false)
     if !initialized
         @inbounds for i = indices(ix,1)
             ix[i] = i
@@ -560,7 +711,12 @@ function selectperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
 
     # do partial quicksort
     sort!(ix, PartialQuickSort(k), Perm(ord(lt, by, rev, order), v))
-    return ix[k]
+
+    if k isa Integer
+        return ix[k]
+    else
+        return view(ix, k)
+    end
 end
 
 ## sortperm: the permutation to sort an array ##
@@ -578,6 +734,7 @@ specified using the same keywords as `sort!`.
 
 See also [`sortperm!`](@ref).
 
+# Examples
 ```jldoctest
 julia> v = [3, 1, 2];
 
@@ -626,6 +783,7 @@ end
 Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
 (the default), `ix` is initialized to contain the values `1:length(v)`.
 
+# Examples
 ```jldoctest
 julia> v = [3, 1, 2]; p = zeros(Int, 3);
 
@@ -691,6 +849,7 @@ Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
 
+# Examples
 ```jldoctest
 julia> A = [4 3; 1 2]
 2×2 Array{Int64,2}:
@@ -747,7 +906,6 @@ See [`sort!`](@ref) for a description of possible
 keyword arguments.
 
 # Examples
-
 ```jldoctest
 julia> sortrows([7 3 5; -1 6 4; 9 -2 8])
 3×3 Array{Int64,2}:
@@ -787,7 +945,6 @@ See [`sort!`](@ref) for a description of possible
 keyword arguments.
 
 # Examples
-
 ```jldoctest
 julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8])
 3×3 Array{Int64,2}:
@@ -819,13 +976,13 @@ function sortcols(A::AbstractMatrix; kws...)
     A[:,p]
 end
 
-function slicetypeof{T}(A::AbstractArray{T}, i1, i2)
+function slicetypeof(A::AbstractArray{T}, i1, i2) where T
     I = map(slice_dummy, to_indices(A, (i1, i2)))
     fast = isa(IndexStyle(viewindexing(I), IndexStyle(A)), IndexLinear)
     SubArray{T,1,typeof(A),typeof(I),fast}
 end
 slice_dummy(S::Slice) = S
-slice_dummy{T}(::AbstractUnitRange{T}) = oneunit(T)
+slice_dummy(::AbstractUnitRange{T}) where {T} = oneunit(T)
 
 ## fast clever sorting for floats ##
 
@@ -848,8 +1005,8 @@ right(::DirectOrdering) = Right()
 left(o::Perm) = Perm(left(o.order), o.data)
 right(o::Perm) = Perm(right(o.order), o.data)
 
-lt{T<:Floats}(::Left, x::T, y::T) = slt_int(y, x)
-lt{T<:Floats}(::Right, x::T, y::T) = slt_int(x, y)
+lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
+lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
 
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])

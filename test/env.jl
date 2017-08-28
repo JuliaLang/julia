@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @test !("f=a=k=e=n=a=m=e" ∈ keys(ENV))
 
@@ -30,6 +30,7 @@ key = randstring(25)
 @test !haskey(ENV,key)
 @test_throws KeyError ENV[key]
 @test get(ENV,key,"default") == "default"
+@test get(() -> "default", ENV, key) == "default"
 
 # Test for #17956
 @test length(ENV) > 1

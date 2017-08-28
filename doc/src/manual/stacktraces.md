@@ -7,7 +7,7 @@ easy to use programmatically.
 
 The primary function used to obtain a stack trace is [`stacktrace()`](@ref):
 
-```julia
+```julia-repl
 julia> stacktrace()
 4-element Array{StackFrame,1}:
  eval(::Module, ::Any) at boot.jl:236
@@ -20,7 +20,7 @@ Calling [`stacktrace()`](@ref) returns a vector of [`StackFrame`](@ref) s. For e
 alias [`StackTrace`](@ref) can be used in place of `Vector{StackFrame}`. (Examples with `[...]`
 indicate that output may vary depending on how the code is run.)
 
-```julia
+```julia-repl
 julia> example() = stacktrace()
 example (generic function with 1 method)
 
@@ -51,7 +51,7 @@ Note that when calling [`stacktrace()`](@ref) you'll typically see a frame with 
 When calling [`stacktrace()`](@ref) from the REPL you'll also have a few extra frames in the stack
 from `REPL.jl`, usually looking something like this:
 
-```julia
+```julia-repl
 julia> example() = stacktrace()
 example (generic function with 1 method)
 
@@ -71,7 +71,7 @@ indicating whether the frame has been inlined, a flag indicating whether it is a
 default C functions do not appear in the stack trace), and an integer representation of the pointer
 returned by [`backtrace()`](@ref):
 
-```julia
+```julia-repl
 julia> top_frame = stacktrace()[1]
 eval(::Module, ::Any) at boot.jl:236
 
@@ -94,7 +94,7 @@ julia> top_frame.from_c
 false
 ```
 
-```julia
+```julia-repl
 julia> top_frame.pointer
 0x00007f390d152a59
 ```
@@ -107,7 +107,7 @@ more.
 While having easy access to information about the current state of the callstack can be helpful
 in many places, the most obvious application is in error handling and debugging.
 
-```julia
+```julia-repl
 julia> @noinline bad_function() = undeclared_variable
 bad_function (generic function with 1 method)
 
@@ -135,7 +135,7 @@ This can be remedied by calling [`catch_stacktrace()`](@ref) instead of [`stackt
 Instead of returning callstack information for the current context, [`catch_stacktrace()`](@ref)
 returns stack information for the context of the most recent exception:
 
-```julia
+```julia-repl
 julia> @noinline bad_function() = undeclared_variable
 bad_function (generic function with 1 method)
 
@@ -155,7 +155,7 @@ julia> example()
 
 Notice that the stack trace now indicates the appropriate line number and the missing frame.
 
-```julia
+```julia-repl
 julia> @noinline child() = error("Whoops!")
 child (generic function with 1 method)
 
@@ -186,7 +186,7 @@ ERROR: Whoops!
 A call to [`backtrace()`](@ref) returns a vector of `Ptr{Void}`, which may then be passed into
 [`stacktrace()`](@ref) for translation:
 
-```julia
+```julia-repl
 julia> trace = backtrace()
 21-element Array{Ptr{Void},1}:
  Ptr{Void} @0x00007f10049d5b2f
@@ -225,7 +225,7 @@ by [`stacktrace()`](@ref) only has 5. This is because, by default, [`stacktrace(
 any lower-level C functions from the stack. If you want to include stack frames from C calls,
 you can do it like this:
 
-```julia
+```julia-repl
 julia> stacktrace(trace, true)
 27-element Array{StackFrame,1}:
  jl_backtrace_from_here at stackwalk.c:103
@@ -260,7 +260,7 @@ julia> stacktrace(trace, true)
 Individual pointers returned by [`backtrace()`](@ref) can be translated into [`StackFrame`](@ref)
 s by passing them into [`StackTraces.lookup()`](@ref):
 
-```julia
+```julia-repl
 julia> pointer = backtrace()[1];
 
 julia> frame = StackTraces.lookup(pointer)

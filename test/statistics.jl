@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -113,6 +113,18 @@ X = [2 3 1 -1; 7 4 5 -4]
 @test isnan(var(1:1))
 @test isnan(var(1:-1))
 
+@test @inferred(var(1.0:8.0)) == 6.
+@test varm(1.0:8.0,1.0) == varm(collect(1.0:8.0),1)
+@test isnan(varm(1.0:1.0,1.0))
+@test isnan(var(1.0:1.0))
+@test isnan(var(1.0:-1.0))
+
+@test @inferred(var(1.0f0:8.0f0)) === 6.f0
+@test varm(1.0f0:8.0f0,1.0f0) == varm(collect(1.0f0:8.0f0),1)
+@test isnan(varm(1.0f0:1.0f0,1.0f0))
+@test isnan(var(1.0f0:1.0f0))
+@test isnan(var(1.0f0:-1.0f0))
+
 @test varm([1,2,3], 2) ≈ 1.
 @test var([1,2,3]) ≈ 1.
 @test var([1,2,3]; corrected=false) ≈ 2.0/3
@@ -186,50 +198,50 @@ for vd in [1, 2], zm in [true, false], cr in [true, false]
         y1 = vec(Y[1,:])
     end
 
-    c = zm ? Base.covm(x1, 0, cr) :
-             cov(x1, cr)
+    c = zm ? Base.covm(x1, 0, corrected=cr) :
+             cov(x1, corrected=cr)
     @test isa(c, Float64)
     @test c ≈ Cxx[1,1]
-    @inferred cov(x1, cr)
+    @inferred cov(x1, corrected=cr)
 
     @test cov(X) == Base.covm(X, mean(X, 1))
-    C = zm ? Base.covm(X, 0, vd, cr) :
-             cov(X, vd, cr)
+    C = zm ? Base.covm(X, 0, vd, corrected=cr) :
+             cov(X, vd, corrected=cr)
     @test size(C) == (k, k)
     @test C ≈ Cxx
-    @inferred cov(X, vd, cr)
+    @inferred cov(X, vd, corrected=cr)
 
     @test cov(x1, y1) == Base.covm(x1, mean(x1), y1, mean(y1))
-    c = zm ? Base.covm(x1, 0, y1, 0, cr) :
-             cov(x1, y1, cr)
+    c = zm ? Base.covm(x1, 0, y1, 0, corrected=cr) :
+             cov(x1, y1, corrected=cr)
     @test isa(c, Float64)
     @test c ≈ Cxy[1,1]
-    @inferred cov(x1, y1, cr)
+    @inferred cov(x1, y1, corrected=cr)
 
     if vd == 1
         @test cov(x1, Y) == Base.covm(x1, mean(x1), Y, mean(Y, 1))
     end
-    C = zm ? Base.covm(x1, 0, Y, 0, vd, cr) :
-             cov(x1, Y, vd, cr)
+    C = zm ? Base.covm(x1, 0, Y, 0, vd, corrected=cr) :
+             cov(x1, Y, vd, corrected=cr)
     @test size(C) == (1, k)
     @test vec(C) ≈ Cxy[1,:]
-    @inferred cov(x1, Y, vd, cr)
+    @inferred cov(x1, Y, vd, corrected=cr)
 
     if vd == 1
         @test cov(X, y1) == Base.covm(X, mean(X, 1), y1, mean(y1))
     end
-    C = zm ? Base.covm(X, 0, y1, 0, vd, cr) :
-             cov(X, y1, vd, cr)
+    C = zm ? Base.covm(X, 0, y1, 0, vd, corrected=cr) :
+             cov(X, y1, vd, corrected=cr)
     @test size(C) == (k, 1)
     @test vec(C) ≈ Cxy[:,1]
-    @inferred cov(X, y1, vd, cr)
+    @inferred cov(X, y1, vd, corrected=cr)
 
     @test cov(X, Y) == Base.covm(X, mean(X, 1), Y, mean(Y, 1))
-    C = zm ? Base.covm(X, 0, Y, 0, vd, cr) :
-             cov(X, Y, vd, cr)
+    C = zm ? Base.covm(X, 0, Y, 0, vd, corrected=cr) :
+             cov(X, Y, vd, corrected=cr)
     @test size(C) == (k, k)
     @test C ≈ Cxy
-    @inferred cov(X, Y, vd, cr)
+    @inferred cov(X, Y, vd, corrected=cr)
 end
 
 # test correlation
@@ -326,6 +338,10 @@ end
 @test quantile([Inf,Inf],0.5) == Inf
 @test quantile([-Inf,1],0.5) == -Inf
 @test quantile([0,1],1e-18) == 1e-18
+@test quantile([1, 2, 3, 4],[]) == []
+@test quantile([1, 2, 3, 4], (0.5,)) == (2.5,)
+@test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11], (0.1, 0.2, 0.4, 0.9)) == (2.0, 3.0, 5.0, 11.0)
+@test quantile([1, 2, 3, 4], ()) == ()
 
 # StatsBase issue 164
 y = [0.40003674665581906,0.4085630862624367,0.41662034698690303,0.41662034698690303,0.42189053966652057,0.42189053966652057,0.42553514344518345,0.43985732442991354]
@@ -390,10 +406,47 @@ end
 # dimensional correctness
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
 using TestHelpers.Furlong
-let r = Furlong(1):Furlong(1):Furlong(2), a = collect(r)
+@testset "Unitful elements" begin
+    r = Furlong(1):Furlong(1):Furlong(2)
+    a = collect(r)
     @test sum(r) == sum(a) == Furlong(3)
     @test cumsum(r) == Furlong.([1,3])
     @test mean(r) == mean(a) == median(a) == median(r) == Furlong(1.5)
     @test var(r) == var(a) == Furlong{2}(0.5)
     @test std(r) == std(a) == Furlong{1}(sqrt(0.5))
+
+    # Issue #21786
+    A = [Furlong{1}(rand(-5:5)) for i in 1:2, j in 1:2]
+    @test mean(mean(A, 1), 2)[1] === mean(A)
+    @test var(A, 1)[1] === var(A[:, 1])
+    @test_broken std(A, 1)[1] === std(A[:, 1])
+end
+
+# Issue #22901
+@testset "var and quantile of Any arrays" begin
+    x = Any[1, 2, 4, 10]
+    y = Any[1, 2, 4, 10//1]
+    @test var(x) === 16.25
+    @test var(y) === 65//4
+    @test std(x) === sqrt(16.25)
+    @test quantile(x, 0.5)  === 3.0
+    @test quantile(x, 1//2) === 3//1
+end
+
+@testset "Promotion in covzm. Issue #8080" begin
+    A = [1 -1 -1; -1 1 1; -1 1 -1; 1 -1 -1; 1 -1 1]
+    @test Base.covzm(A) - mean(A, 1)'*mean(A, 1)*size(A, 1)/(size(A, 1) - 1) ≈ cov(A)
+    A = [1//1 -1 -1; -1 1 1; -1 1 -1; 1 -1 -1; 1 -1 1]
+    @test (A'A - size(A, 1)*Base.mean(A, 1)'*Base.mean(A, 1))/4 == cov(A)
+end
+
+@testset "Mean along dimension of empty array" begin
+    a0  = zeros(0)
+    a00 = zeros(0, 0)
+    a01 = zeros(0, 1)
+    a10 = zeros(1, 0)
+    @test isequal(mean(a0, 1)      , fill(NaN, 1))
+    @test isequal(mean(a00, (1, 2)), fill(NaN, 1, 1))
+    @test isequal(mean(a01, 1)     , fill(NaN, 1, 1))
+    @test isequal(mean(a10, 2)     , fill(NaN, 1, 1))
 end

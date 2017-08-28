@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function collect_eachmatch(re, str, overlap=false)
     [m.match for m in collect(eachmatch(re, str, overlap))]
@@ -29,7 +29,7 @@ match(pat, target)
 # Issue 9545 (32 bit)
 buf = PipeBuffer()
 show(buf, r"")
-@test readstring(buf) == "r\"\""
+@test read(buf, String) == "r\"\""
 
 # see #10994, #11447: PCRE2 allows NUL chars in the pattern
 @test ismatch(Regex("^a\0b\$"), "a\0b")

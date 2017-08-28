@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -37,6 +37,15 @@ aimg  = randn(n,n)/2
         @test istriu(f[:Schur]) || eltype(a)<:Real
         @test AbstractArray(f) ≈ a
         @test_throws KeyError f[:A]
+
+        sch, vecs, vals = schur(UpperTriangular(triu(a)))
+        @test vecs*sch*vecs' ≈ triu(a)
+        sch, vecs, vals = schur(LowerTriangular(tril(a)))
+        @test vecs*sch*vecs' ≈ tril(a)
+        sch, vecs, vals = schur(Hermitian(asym))
+        @test vecs*sch*vecs' ≈ asym
+        sch, vecs, vals = schur(Symmetric(a+a.'))
+        @test vecs*sch*vecs' ≈ a + a.'
 
         tstring = sprint(show,f[:T])
         zstring = sprint(show,f[:Z])
@@ -99,5 +108,11 @@ aimg  = randn(n,n)/2
             @test NS[:S] ≈ sS
             @test NS[:Z] ≈ sZ
         end
+    end
+    @testset "0x0 matrix" for A in (zeros(eltya, 0, 0), view(rand(eltya, 2, 2), 1:0, 1:0))
+        T, Z, λ = Base.LinAlg.schur(A)
+        @test T == A
+        @test Z == A
+        @test λ == zeros(0)
     end
 end

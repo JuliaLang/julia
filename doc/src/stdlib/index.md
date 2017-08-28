@@ -14,7 +14,7 @@
   * [Punctuation](@ref)
   * [Sorting and Related Functions](@ref)
   * [Package Manager Functions](@ref)
-  * [Dates and Time](@ref)
+  * [Dates and Time](@ref stdlib-dates)
   * [Iteration utilities](@ref)
   * [Unit Testing](@ref)
   * [C Interface](@ref)

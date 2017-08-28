@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # ––––––––––
 # Paragraphs
@@ -77,7 +77,7 @@ function setextheader(stream::IO, md::MD)
     withstream(stream) do
         eatindent(stream) || return false
         header = strip(readline(stream))
-        header == "" && return false
+        isempty(header) && return false
 
         eatindent(stream) || return false
         underline = strip(readline(stream))

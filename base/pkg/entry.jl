@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Entry
 
@@ -125,7 +125,7 @@ function installed(pkg::AbstractString)
 end
 
 function status(io::IO; pkgname::AbstractString = "")
-    showpkg(pkg) = (pkgname == "") ? (true) : (pkg == pkgname)
+    showpkg(pkg) = isempty(pkgname) ? true : (pkg == pkgname)
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
     required = sort!(collect(keys(reqs)))
@@ -193,7 +193,7 @@ function clone(url::AbstractString, pkg::AbstractString)
     ispath(pkg) && throw(PkgError("$pkg already exists"))
     try
         LibGit2.with(LibGit2.clone(url, pkg)) do repo
-            LibGit2.set_remote_url(repo, url)
+            LibGit2.set_remote_url(repo, "origin", url)
         end
     catch err
         isdir(pkg) && Base.rm(pkg, recursive=true)
@@ -541,7 +541,7 @@ function resolve(
                 info("$(up)grading $pkg: v$ver1 => v$ver2")
                 Write.update(pkg, Read.sha1(pkg,ver2))
                 pkgsym = Symbol(pkg)
-                if isdefined(Main, pkgsym) && isa(getfield(Main, pkgsym), Module)
+                if Base.isbindingresolved(Main, pkgsym) && isa(getfield(Main, pkgsym), Module)
                     push!(imported, "- $pkg")
                 end
             end
@@ -572,33 +572,17 @@ end
 
 function warnbanner(msg...; label="[ WARNING ]", prefix="")
     cols = Base.displaysize(STDERR)[2]
-    warn(prefix="", Base.cpad(label,cols,"="))
+    str = rpad(lpad(label, div(cols+strwidth(label), 2), "="), cols, "=")
+    warn(prefix="", str)
     println(STDERR)
     warn(prefix=prefix, msg...)
     println(STDERR)
     warn(prefix="", "="^cols)
 end
 
-function build!(pkgs::Vector, buildstream::IO, seen::Set)
-    for pkg in pkgs
-        pkg == "julia" && continue
-        pkg in seen ? continue : push!(seen,pkg)
-        Read.isinstalled(pkg) || throw(PkgError("$pkg is not an installed package"))
-        build!(Read.requires_list(pkg),buildstream,seen)
-        path = abspath(pkg,"deps","build.jl")
-        isfile(path) || continue
-        println(buildstream, path) # send to build process for evalfile
-        flush(buildstream)
-    end
-end
-
-function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
-    # To isolate the build from the running Julia process, we
-    # execute the build.jl files in a separate process that
-    # is sitting there waiting for paths to evaluate.   Errors
-    # are serialized to errfile for later retrieval into errs[pkg]
-    errfile = tempname()
-    close(open(errfile, "w")) # create empty file
+function build(pkg::AbstractString, build_file::AbstractString, errfile::AbstractString)
+    # To isolate the build from the running Julia process, we execute each build.jl file in
+    # a separate process. Errors are serialized to errfile for later reporting.
     # TODO: serialize the same way the load cache does, not with strings
     LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
     code = """
@@ -609,31 +593,48 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
         empty!(Base.DL_LOAD_PATH)
         append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
         open("$(escape_string(errfile))", "a") do f
-            for path in eachline(STDIN)
-                pkg = basename(dirname(dirname(path)))
-                try
-                    info("Building \$pkg")
-                    cd(dirname(path)) do
-                        evalfile(path)
-                    end
-                catch err
-                    Base.Pkg.Entry.warnbanner(err, label="[ ERROR: \$pkg ]")
-                    serialize(f, pkg)
-                    serialize(f, err)
+            pkg, build_file = "$pkg", "$(escape_string(build_file))"
+            try
+                info("Building \$pkg")
+                cd(dirname(build_file)) do
+                    evalfile(build_file)
                 end
+            catch err
+                Base.Pkg.Entry.warnbanner(err, label="[ ERROR: \$pkg ]")
+                serialize(f, pkg)
+                serialize(f, err)
             end
         end
-    """
-    io, pobj = open(pipeline(detach(`$(Base.julia_cmd()) -O0
-                                    --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
-                                    --history-file=no
-                                    --color=$(Base.have_color ? "yes" : "no")
-                                    --eval $code`), stderr=STDERR), "w", STDOUT)
+        """
+    cmd = ```
+        $(Base.julia_cmd()) -O0
+        --color=$(Base.have_color ? "yes" : "no")
+        --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
+        --history-file=no
+        --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
+        --eval $code
+        ```
+
+    success(pipeline(cmd, stderr=STDERR))
+end
+
+function build!(pkgs::Vector, seen::Set, errfile::AbstractString)
+    for pkg in pkgs
+        pkg == "julia" && continue
+        pkg in seen ? continue : push!(seen,pkg)
+        Read.isinstalled(pkg) || throw(PkgError("$pkg is not an installed package"))
+        build!(Read.requires_list(pkg), seen, errfile)
+        path = abspath(pkg,"deps","build.jl")
+        isfile(path) || continue
+        build(pkg, path, errfile) || error("Build process failed.")
+    end
+end
+
+function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
+    errfile = tempname()
+    touch(errfile)  # create empty file
     try
-        build!(pkgs, io, seen)
-        close(io)
-        wait(pobj)
-        success(pobj) || error("Build process failed.")
+        build!(pkgs, seen, errfile)
         open(errfile, "r") do f
             while !eof(f)
                 pkg = deserialize(f)
@@ -641,10 +642,6 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
                 errs[pkg] = err
             end
         end
-    catch err
-        close(io)
-        isa(err, PkgError) ? wait(pobj) : kill(pobj)
-        rethrow(err)
     finally
         isfile(errfile) && Base.rm(errfile)
     end
@@ -716,11 +713,17 @@ function test!(pkg::AbstractString,
         info("Testing $pkg")
         cd(dirname(test_path)) do
             try
-                color = Base.have_color? "--color=yes" : "--color=no"
-                codecov = coverage? ["--code-coverage=user"] : ["--code-coverage=none"]
-                compilecache = "--compilecache=" * (Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
-                julia_exe = Base.julia_cmd()
-                run(`$julia_exe --check-bounds=yes $codecov $color $compilecache $test_path`)
+                cmd = ```
+                    $(Base.julia_cmd())
+                    --code-coverage=$(coverage ? "user" : "none")
+                    --color=$(Base.have_color ? "yes" : "no")
+                    --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
+                    --check-bounds=yes
+                    --warn-overwrite=yes
+                    --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
+                    $test_path
+                    ```
+                run(cmd)
                 info("$pkg tests passed")
             catch err
                 warnbanner(err, label="[ ERROR: $pkg ]")

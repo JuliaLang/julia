@@ -1,4 +1,4 @@
-# Dates and Time
+# [Dates and Time](@id stdlib-dates)
 
 ## Dates and Time Types
 

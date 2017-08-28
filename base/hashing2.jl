@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## efficient value-based hashing of integers ##
 
@@ -136,7 +136,7 @@ function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
     s = BigInt()
     s.size = cld(x.prec, 8*sizeof(GMP.Limb)) # limbs
     b = s.size * sizeof(GMP.Limb)            # bytes
-    ccall((:__gmpz_realloc2, :libgmp), Void, (Ptr{BigInt}, Culong), &s, 8b) # bits
+    ccall((:__gmpz_realloc2, :libgmp), Void, (Ref{BigInt}, Culong), s, 8b) # bits
     ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t), s.d, x.d, b) # bytes
     s, x.exp - 8b, x.sign
 end

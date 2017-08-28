@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Order
 
@@ -19,7 +19,7 @@ struct ReverseOrdering{Fwd<:Ordering} <: Ordering
 end
 
 ReverseOrdering(rev::ReverseOrdering) = rev.fwd
-ReverseOrdering{Fwd}(fwd::Fwd) = ReverseOrdering{Fwd}(fwd)
+ReverseOrdering(fwd::Fwd) where {Fwd} = ReverseOrdering{Fwd}(fwd)
 
 const DirectOrdering = Union{ForwardOrdering,ReverseOrdering{ForwardOrdering}}
 

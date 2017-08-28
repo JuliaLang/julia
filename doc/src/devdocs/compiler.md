@@ -1,9 +1,5 @@
 # High-level Overview of the Native-Code Generation Process
 
-
-    <placeholder>
-
-
 ## Representation of Pointers
 
 When emitting code to an object file, pointers will be emitted as relocations.
@@ -24,10 +20,10 @@ Function pointers are handled similarly.
 They are stored as values in a large `fvals` table.
 Like globals, this allows the deserializer to reference them by index.
 
-Note that extern functions are handled separately,
+Note that `extern` functions are handled separately,
 with names, via the usual symbol resolution mechanism in the linker.
 
-Note too that ccall functions are also handled separately,
+Note too that `ccall` functions are also handled separately,
 via a manual GOT and Procedure Linkage Table (PLT).
 
 

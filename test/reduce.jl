@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # fold(l|r) & mapfold(l|r)
 @test foldl(+, Int64[]) === Int64(0) # In reference to issues #7465/#20144 (PR #20160)
@@ -22,6 +22,7 @@
 @test foldr(+, Int16[]) === Int32(0)
 @test foldr(-, 1:5) == 3
 @test foldr(-, 10, 1:5) == -7
+@test foldr(+, [1]) == 1 # Issue #21493
 
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 10, 2:5) == -4
@@ -43,6 +44,13 @@
 @test mapreduce(abs2, +, [-9, -3]) == 81 + 9
 @test mapreduce(-, +, [-9, -3, -4, 8, -2]) == (9 + 3 + 4 - 8 + 2)
 @test mapreduce(-, +, collect(linspace(1.0, 10000.0, 10000))) == -50005000.0
+# empty mr
+@test mapreduce(abs2, +, Float64[]) === 0.0
+@test mapreduce(abs2, Base.scalarmax, Float64[]) === 0.0
+@test mapreduce(abs, max, Float64[]) === 0.0
+@test mapreduce(abs2, &, Float64[]) === true
+@test mapreduce(abs2, |, Float64[]) === false
+
 # mapreduce() type stability
 @test typeof(mapreduce(*, +, Int8[10])) ===
       typeof(mapreduce(*, +, Int8[10, 11])) ===
@@ -196,9 +204,17 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test maximum(collect(Int16(1):Int16(100))) === Int16(100)
 @test maximum(Int32[1,2]) === Int32(2)
 
-@test extrema(reshape(1:24,2,3,4),1) == reshape([(1,2),(3,4),(5,6),(7,8),(9,10),(11,12),(13,14),(15,16),(17,18),(19,20),(21,22),(23,24)],1,3,4)
-@test extrema(reshape(1:24,2,3,4),2) == reshape([(1,5),(2,6),(7,11),(8,12),(13,17),(14,18),(19,23),(20,24)],2,1,4)
-@test extrema(reshape(1:24,2,3,4),3) == reshape([(1,19),(2,20),(3,21),(4,22),(5,23),(6,24)],2,3,1)
+A = circshift(reshape(1:24,2,3,4), (0,1,1))
+@test extrema(A,1) == reshape([(23,24),(19,20),(21,22),(5,6),(1,2),(3,4),(11,12),(7,8),(9,10),(17,18),(13,14),(15,16)],1,3,4)
+@test extrema(A,2) == reshape([(19,23),(20,24),(1,5),(2,6),(7,11),(8,12),(13,17),(14,18)],2,1,4)
+@test extrema(A,3) == reshape([(5,23),(6,24),(1,19),(2,20),(3,21),(4,22)],2,3,1)
+@test extrema(A,(1,2)) == reshape([(19,24),(1,6),(7,12),(13,18)],1,1,4)
+@test extrema(A,(1,3)) == reshape([(5,24),(1,20),(3,22)],1,3,1)
+@test extrema(A,(2,3)) == reshape([(1,23),(2,24)],2,1,1)
+@test extrema(A,(1,2,3)) == reshape([(1,24)],1,1,1)
+@test size(extrema(A,1)) == size(maximum(A,1))
+@test size(extrema(A,(1,2))) == size(maximum(A,(1,2)))
+@test size(extrema(A,(1,2,3))) == size(maximum(A,(1,2,3)))
 
 # any & all
 
@@ -361,3 +377,6 @@ end
 test18695(r) = sum( t^2 for t in r )
 @test @inferred(test18695([1.0,2.0,3.0,4.0])) == 30.0
 @test_throws ArgumentError test18695(Any[])
+
+# issue #21107
+@test foldr(-,2:2) == 2

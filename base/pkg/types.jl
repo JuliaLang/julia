@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Types
 
@@ -82,8 +82,8 @@ VersionSet(versions::VersionNumber...) = VersionSet(VersionNumber[versions...])
 const empty_versionset = VersionSet(VersionInterval[])
 
 # Windows console doesn't like Unicode
-const _empty_symbol = @static is_windows() ? "empty" : "∅"
-const _union_symbol = @static is_windows() ? " or " : " ∪ "
+const _empty_symbol = @static Sys.iswindows() ? "empty" : "∅"
+const _union_symbol = @static Sys.iswindows() ? " or " : " ∪ "
 show(io::IO, s::VersionSet) = isempty(s) ? print(io, _empty_symbol) :
                                            join(io, s.intervals, _union_symbol)
 isempty(s::VersionSet) = all(isempty, s.intervals)

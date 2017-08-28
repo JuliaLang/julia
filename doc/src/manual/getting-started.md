@@ -1,7 +1,7 @@
 # Getting Started
 
 Julia installation is straightforward, whether using precompiled binaries or compiling from source.
-Download and install Julia by following the instructions at [http://julialang.org/downloads/](http://julialang.org/downloads/).
+Download and install Julia by following the instructions at [https://julialang.org/downloads/](https://julialang.org/downloads/).
 
 The easiest way to learn and experiment with Julia is by starting an interactive session (also
 known as a read-eval-print loop or "repl") by double-clicking the Julia executable or running
@@ -11,7 +11,7 @@ known as a read-eval-print loop or "repl") by double-clicking the Julia executab
 $ julia
                _
    _       _ _(_)_     |  A fresh approach to technical computing
-  (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
+  (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
    _ _   _| |_  __ _   |  Type "?help" for help.
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  Version 0.5.0-dev+2440 (2016-02-01 02:22 UTC)
@@ -114,7 +114,7 @@ julia [switches] -- [programfile] [args...]
  --machinefile <file>      Run processes on hosts listed in <file>
 
  -i                        Interactive mode; REPL runs and isinteractive() is true
- -q, --quiet               Quiet startup (no banner)
+ --banner={yes|no}         Enable or disable startup banner
  --color={yes|no}          Enable or disable color text
  --history-file={yes|no}   Load or save history
 
@@ -127,6 +127,7 @@ julia [switches] -- [programfile] [args...]
  --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)
 
  --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings ("error" turns warnings into errors)
+ --warn-overwrite={yes|no} Enable or disable method overwrite warnings
 
  --output-o name           Generate an object file (including system image data)
  --output-ji name          Generate a system image data file (.ji)
@@ -151,5 +152,5 @@ with Julia:
   * [Hands-on Julia](https://github.com/dpsanders/hands_on_julia)
   * [Tutorial for Homer Reid's numerical analysis class](http://homerreid.dyndns.org/teaching/18.330/JuliaProgramming.shtml)
   * [An introductory presentation](https://raw.githubusercontent.com/ViralBShah/julia-presentations/master/Fifth-Elephant-2013/Fifth-Elephant-2013.pdf)
-  * [Videos from the Julia tutorial at MIT](http://julialang.org/blog/2013/03/julia-tutorial-MIT)
+  * [Videos from the Julia tutorial at MIT](https://julialang.org/blog/2013/03/julia-tutorial-MIT)
   * [YouTube videos from the JuliaCons](https://www.youtube.com/user/JuliaLanguage/playlists)

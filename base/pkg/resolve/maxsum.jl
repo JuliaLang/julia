@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module MaxSum
 
@@ -170,6 +170,9 @@ mutable struct Messages
     #                 fields are not normalized
     fld::Vector{Field}
 
+    # backup of the initial value of fld, to be used when resetting
+    initial_fld::Vector{Field}
+
     # keep track of which variables have been decimated
     decimated::BitVector
     num_nondecimated::Int
@@ -221,11 +224,13 @@ mutable struct Messages
             end
         end
 
+        initial_fld = deepcopy(fld)
+
         # initialize cavity messages to 0
         gadj = graph.gadj
         msg = [[zeros(FieldValue, spp[p0]) for p1 = 1:length(gadj[p0])] for p0 = 1:np]
 
-        return new(msg, fld, falses(np), np)
+        return new(msg, fld, initial_fld, falses(np), np)
     end
 end
 
@@ -235,7 +240,7 @@ function getsolution(msgs::Messages)
 
     fld = msgs.fld
     np = length(fld)
-    sol = Array{Int}(np)
+    sol = Vector{Int}(np)
     for p0 = 1:np
         fld0 = fld[p0]
         s0 = indmax(fld0)
@@ -380,12 +385,25 @@ function decimate1(p0::Int, graph::Graph, msgs::Messages)
     #println("DECIMATING $p0 ($(packages()[p0]) s0=$s0)")
     for v0 = 1:length(fld0)
         if v0 != s0
-            fld0[v0] -= FieldValue(1)
+            fld0[v0] = FieldValue(-1)
         end
     end
-    update(p0, graph, msgs)
     msgs.decimated[p0] = true
     msgs.num_nondecimated -= 1
+end
+
+function reset_messages!(msgs::Messages)
+    msg = msgs.msg
+    fld = msgs.fld
+    initial_fld = msgs.initial_fld
+    decimated = msgs.decimated
+    np = length(fld)
+    for p0 = 1:np
+        map(m->fill!(m, zero(FieldValue)), msg[p0])
+        decimated[p0] && continue
+        fld[p0] = copy(initial_fld[p0])
+    end
+    return msgs
 end
 
 # If normal convergence fails (or is too slow) fix the most
@@ -403,6 +421,7 @@ function decimate(n::Int, graph::Graph, msgs::Messages)
         n == 0 && break
     end
     @assert n == 0
+    reset_messages!(msgs)
     return
 end
 
@@ -449,7 +468,7 @@ function maxsum(graph::Graph, msgs::Messages)
         end
         if it >= params.nondec_iterations &&
            (it - params.nondec_iterations) % params.dec_interval == 0
-            numdec = clamp(floor(Int, params.dec_fraction * graph.np),  1, msgs.num_nondecimated)
+            numdec = clamp(floor(Int, params.dec_fraction * graph.np), 1, msgs.num_nondecimated)
             decimate(numdec, graph, msgs)
             msgs.num_nondecimated == 0 && break
         end

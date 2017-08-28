@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const InnerConfig = Dict{Char, Vector{Function}}
 
@@ -25,7 +25,7 @@ triggers(f) = get(meta(f), :triggers, Set{Char}())
 # Macros
 
 isexpr(x::Expr, ts...) = x.head in ts
-isexpr{T}(x::T, ts...) = T in ts
+isexpr(x::T, ts...) where {T} = T in ts
 
 macro breaking(ex)
     isexpr(ex, :->) || error("invalid @breaking form, use ->")

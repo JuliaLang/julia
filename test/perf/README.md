@@ -29,7 +29,7 @@ Tests generally go into one of the following suites:
 
 - `micro`: A set of micro-benchmarks commonly used to compare
   programming languages; these results are shown on
-    [http://julialang.org/](http://julialang.org/).
+    [https://julialang.org/](https://julialang.org/).
 - `blas`, `lapack`: Performance tests for linear algebra tasks from
   low-level operations such as matrix multiplies to higher-level
   operations like eigenvalue problems.

@@ -1,14 +1,17 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module BLAS
 
+import ..axpy!, ..axpby!
 import Base: copy!
-import Base.LinAlg: axpy!, dot
 
 export
 # Level 1
     asum,
+    axpy!,
+    axpby!,
     blascopy!,
+    dot,
     dotc,
     dotu,
     scal!,
@@ -103,7 +106,7 @@ function set_num_threads(n::Integer)
     end
 
     # OSX BLAS looks at an environment variable
-    @static if is_apple()
+    @static if Sys.isapple()
         ENV["VECLIB_MAXIMUM_THREADS"] = n
     end
 
@@ -140,11 +143,11 @@ function check()
     (_, info) = LinAlg.LAPACK.potrf!('U', [1.0 0.0; 0.0 -1.0])
     if info != 2 # mangled info code
         if info == 2^33
-            error("""BLAS and LAPACK are compiled with 32-bit integer support, but Julia expects 64-bit integers. Please build Julia with USE_BLAS64=0.""")
+            error("BLAS and LAPACK are compiled with 32-bit integer support, but Julia expects 64-bit integers. Please build Julia with USE_BLAS64=0.")
         elseif info == 0
-            error("""BLAS and LAPACK are compiled with 64-bit integer support but Julia expects 32-bit integers. Please build Julia with USE_BLAS64=1.""")
+            error("BLAS and LAPACK are compiled with 64-bit integer support but Julia expects 32-bit integers. Please build Julia with USE_BLAS64=1.")
         else
-            error("""The LAPACK library produced an undefined error code. Please verify the installation of BLAS and LAPACK.""")
+            error("The LAPACK library produced an undefined error code. Please verify the installation of BLAS and LAPACK.")
         end
     end
 
@@ -216,7 +219,7 @@ scal(n, DA, DX, incx) = scal!(n, DA, copy(DX), incx)
 Dot product of two vectors consisting of `n` elements of array `X` with stride `incx` and
 `n` elements of array `Y` with stride `incy`.
 
-# Example:
+# Examples
 ```jldoctest
 julia> dot(10, ones(10), 1, ones(20), 2)
 10.0
@@ -231,7 +234,7 @@ Dot function for two complex vectors, consisting of `n` elements of array `X`
 with stride `incx` and `n` elements of array `U` with stride `incy`,
 conjugating the first vector.
 
-# Example:
+# Examples
 ```jldoctest
 julia> Base.BLAS.dotc(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)
 10.0 - 10.0im
@@ -245,7 +248,7 @@ function dotc end
 Dot function for two complex vectors consisting of `n` elements of array `X`
 with stride `incx` and `n` elements of array `Y` with stride `incy`.
 
-# Example:
+# Examples
 ```jldoctest
 julia> Base.BLAS.dotu(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)
 -10.0 + 10.0im
@@ -279,11 +282,11 @@ for (fname, elty) in ((:cblas_zdotc_sub,:Complex128),
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotc(n::Integer, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},DenseArray{$elty}}, incy::Integer)
-            result = Array{$elty}(1)
+            result = Ref{$elty}()
             ccall((@blasfunc($fname), libblas), Void,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
                  n, DX, incx, DY, incy, result)
-            result[1]
+            result[]
         end
     end
 end
@@ -297,29 +300,29 @@ for (fname, elty) in ((:cblas_zdotu_sub,:Complex128),
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotu(n::Integer, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},DenseArray{$elty}}, incy::Integer)
-            result = Array{$elty}(1)
+            result = Ref{$elty}()
             ccall((@blasfunc($fname), libblas), Void,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
                  n, DX, incx, DY, incy, result)
-            result[1]
+            result[]
         end
     end
 end
-function dot{T<:BlasReal}(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T},StridedVector{T}})
+function dot(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T},StridedVector{T}}) where T<:BlasReal
     n = length(DX)
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
     dot(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
-function dotc{T<:BlasComplex}(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T},StridedVector{T}})
+function dotc(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T},StridedVector{T}}) where T<:BlasComplex
     n = length(DX)
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
     dotc(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
-function dotu{T<:BlasComplex}(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T},StridedVector{T}})
+function dotu(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T},StridedVector{T}}) where T<:BlasComplex
     n = length(DX)
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
@@ -329,12 +332,15 @@ end
 
 ## nrm2
 
+stride1(x) = stride(x,1)
+stride1(x::Array) = 1
+
 """
     nrm2(n, X, incx)
 
 2-norm of a vector consisting of `n` elements of array `X` with stride `incx`.
 
-# Example:
+# Examples
 ```jldoctest
 julia> Base.BLAS.nrm2(4, ones(8), 2)
 2.0
@@ -358,8 +364,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
         end
     end
 end
-nrm2(x::StridedVector) = nrm2(length(x), pointer(x), stride(x,1))
-nrm2(x::Array) = nrm2(length(x), pointer(x), 1)
+nrm2(x::Union{StridedVector,Array}) = nrm2(length(x), pointer(x), stride1(x))
 
 ## asum
 
@@ -368,7 +373,7 @@ nrm2(x::Array) = nrm2(length(x), pointer(x), 1)
 
 Sum of the absolute values of the first `n` elements of array `X` with stride `incx`.
 
-# Example:
+# Examples
 ```jldoctest
 julia> Base.BLAS.asum(5, im*ones(10), 2)
 5.0
@@ -392,8 +397,7 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
         end
     end
 end
-asum(x::StridedVector) = asum(length(x), pointer(x), stride(x,1))
-asum(x::Array) = asum(length(x), pointer(x), 1)
+asum(x::Union{StridedVector,Array}) = asum(length(x), pointer(x), stride1(x))
 
 ## axpy
 
@@ -402,7 +406,7 @@ asum(x::Array) = asum(length(x), pointer(x), 1)
 
 Overwrite `Y` with `a*X + Y`, where `a` is a scalar. Returns `Y`.
 
-# Example:
+# Examples
 ```jldoctest
 julia> x = [1; 2; 3];
 
@@ -437,7 +441,7 @@ for (fname, elty) in ((:daxpy_,:Float64),
         end
     end
 end
-function axpy!{T<:BlasFloat}(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}})
+function axpy!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where T<:BlasFloat
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
@@ -445,9 +449,8 @@ function axpy!{T<:BlasFloat}(alpha::Number, x::Union{DenseArray{T},StridedVector
     y
 end
 
-function axpy!{T<:BlasFloat,Ti<:Integer}(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},Range{Ti}},
-                                         y::Array{T}, ry::Union{UnitRange{Ti},Range{Ti}})
-
+function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},Range{Ti}},
+               y::Array{T}, ry::Union{UnitRange{Ti},Range{Ti}}) where {T<:BlasFloat,Ti<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("ranges of differing lengths"))
     end
@@ -458,6 +461,55 @@ function axpy!{T<:BlasFloat,Ti<:Integer}(alpha::Number, x::Array{T}, rx::Union{U
         throw(ArgumentError("range out of bounds for y, of length $(length(y))"))
     end
     axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    y
+end
+
+"""
+    axpby!(a, X, b, Y)
+
+Overwrite `Y` with `X*a + Y*b`, where `a` and `b` are scalars. Return `Y`.
+
+# Examples
+```jldoctest
+julia> x = [1., 2, 3];
+
+julia> y = [4., 5, 6];
+
+julia> Base.BLAS.axpby!(2., x, 3., y)
+3-element Array{Float64,1}:
+14.0
+19.0
+24.0
+```
+"""
+function axpby! end
+
+for (fname, elty) in ((:daxpby_,:Float64), (:saxpby_,:Float32),
+                      (:zaxpby_,:Complex128), (:caxpby_,:Complex64))
+    @eval begin
+        # SUBROUTINE DAXPBY(N,DA,DX,INCX,DB,DY,INCY)
+        # DY <- DA*DX + DB*DY
+        #*     .. Scalar Arguments ..
+        #      DOUBLE PRECISION DA,DB
+        #      INTEGER INCX,INCY,N
+        #*     .. Array Arguments ..
+        #      DOUBLE PRECISION DX(*),DY(*)
+        function axpby!(n::Integer, alpha::($elty), dx::Union{Ptr{$elty},
+                        DenseArray{$elty}}, incx::Integer, beta::($elty),
+                        dy::Union{Ptr{$elty}, DenseArray{$elty}}, incy::Integer)
+            ccall((@blasfunc($fname), libblas), Void, (Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
+                Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}),
+                n, alpha, dx, incx, beta, dy, incy)
+            dy
+        end
+    end
+end
+
+function axpby!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, beta::Number, y::Union{DenseArray{T},StridedVector{T}}) where T<:BlasFloat
+    if length(x) != length(y)
+        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+    end
+    axpby!(length(x), convert(T,alpha), pointer(x), stride(x, 1), convert(T,beta), pointer(y), stride(y, 1))
     y
 end
 
@@ -474,8 +526,7 @@ for (fname, elty) in ((:idamax_,:Float64),
         end
     end
 end
-iamax(dx::StridedVector) = iamax(length(dx), pointer(dx), stride(dx,1))
-iamax(dx::Array) = iamax(length(dx), pointer(dx), 1)
+iamax(dx::Union{StridedVector,Array}) = iamax(length(dx), pointer(dx), stride1(dx))
 
 # Level 2
 ## mv
@@ -555,11 +606,11 @@ sub-diagonals and `ku` super-diagonals. `alpha` and `beta` are scalars. Returns 
 function gbmv! end
 
 """
-    gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
+    gbmv(trans, m, kl, ku, alpha, A, x)
 
 Returns `alpha*A*x` or `alpha*A'*x` according to [`trans`](@ref stdlib-blas-trans).
 The matrix `A` is a general band matrix of dimension `m` by `size(A,2)` with `kl` sub-diagonals and `ku`
-super-diagonals. `alpha` and `beta` are scalars.
+super-diagonals, and `alpha` is a scalar.
 """
 function gbmv end
 
@@ -1464,8 +1515,8 @@ end
 
 end # module
 
-function copy!{T<:BlasFloat,Ti<:Integer}(dest::Array{T}, rdest::Union{UnitRange{Ti},Range{Ti}},
-                                          src::Array{T}, rsrc::Union{UnitRange{Ti},Range{Ti}})
+function copy!(dest::Array{T}, rdest::Union{UnitRange{Ti},Range{Ti}},
+               src::Array{T}, rsrc::Union{UnitRange{Ti},Range{Ti}}) where {T<:BlasFloat,Ti<:Integer}
     if minimum(rdest) < 1 || maximum(rdest) > length(dest)
         throw(ArgumentError("range out of bounds for dest, of length $(length(dest))"))
     end

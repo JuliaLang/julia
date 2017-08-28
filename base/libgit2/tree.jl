@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
 Traverse the entries in a tree and its subtrees in post or pre order.
@@ -8,7 +8,7 @@ Function parameter should have following signature:
     (Cstring, Ptr{Void}, Ptr{Void}) -> Cint
 """
 function treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool = false)
-    cbf = cfunction(f, Cint, (Cstring, Ptr{Void}, Ptr{Void}))
+    cbf = cfunction(f, Cint, Tuple{Cstring, Ptr{Void}, Ptr{Void}})
     cbf_payload = Ref{typeof(payload)}(payload)
     @check ccall((:git_tree_walk, :libgit2), Cint,
                   (Ptr{Void}, Cint, Ptr{Void}, Ptr{Void}),
@@ -53,7 +53,7 @@ function Base.getindex(tree::GitTree, i::Integer)
     return GitTreeEntry(tree, te_ptr, false)
 end
 
-function (::Type{T}){T<:GitObject}(te::GitTreeEntry)
+function (::Type{T})(te::GitTreeEntry) where T<:GitObject
     repo = repository(te)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_tree_entry_to_object, :libgit2), Cint,

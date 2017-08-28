@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 abstract type AbstractChannel end
 
@@ -23,13 +23,13 @@ mutable struct Channel{T} <: AbstractChannel
     state::Symbol
     excp::Nullable{Exception} # Exception to be thrown when state != :open
 
-    data::Array{T,1}
+    data::Vector{T}
     sz_max::Int            # maximum size of channel
 
     # Used when sz_max == 0, i.e., an unbuffered channel.
-    takers::Array{Task}
-    putters::Array{Task}
     waiters::Int
+    takers::Vector{Task}
+    putters::Vector{Task}
 
     function Channel{T}(sz::Float64) where T
         if sz == Inf
@@ -42,7 +42,12 @@ mutable struct Channel{T} <: AbstractChannel
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
-        new(Condition(), Condition(), :open, Nullable{Exception}(), Array{T}(0), sz, Array{Task}(0), Array{Task}(0), 0)
+        ch = new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(0), sz, 0)
+        if sz == 0
+            ch.takers = Vector{Task}(0)
+            ch.putters = Vector{Task}(0)
+        end
+        return ch
     end
 
     # deprecated empty constructor
@@ -70,6 +75,7 @@ keyword argument `taskref`.
 
 Returns a Channel.
 
+# Examples
 ```jldoctest
 julia> chnl = Channel(c->foreach(i->put!(c,i), 1:4));
 
@@ -85,7 +91,7 @@ i = 3
 i = 4
 ```
 
-An example of referencing the created task:
+Referencing the created task:
 
 ```jldoctest
 julia> taskref = Ref{Task}();
@@ -104,10 +110,9 @@ true
 """
 function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
     chnl = Channel{ctype}(csize)
-    task = Task(()->func(chnl))
-    bind(chnl,task)
-    schedule(task)
-    yield()
+    task = Task(() -> func(chnl))
+    bind(chnl, task)
+    yield(task) # immediately start it
 
     isa(taskref, Ref{Task}) && (taskref[] = task)
     return chnl
@@ -158,6 +163,7 @@ When a channel is bound to multiple tasks, the first task to terminate will
 close the channel. When multiple channels are bound to the same task,
 termination of the task will close all of the bound channels.
 
+# Examples
 ```jldoctest
 julia> c = Channel(0);
 
@@ -190,8 +196,8 @@ julia> take!(c)
 julia> put!(c,1);
 ERROR: foo
 Stacktrace:
- [1] check_channel_state(::Channel{Any}) at ./channels.jl:127
- [2] put!(::Channel{Any}, ::Int64) at ./channels.jl:258
+ [1] check_channel_state at ./channels.jl:132 [inlined]
+ [2] put!(::Channel{Any}, ::Int64) at ./channels.jl:263
 ```
 """
 function bind(c::Channel, task::Task)
@@ -215,14 +221,13 @@ function channeled_tasks(n::Int, funcs...; ctypes=fill(Any,n), csizes=fill(0,n))
     @assert length(csizes) == n
     @assert length(ctypes) == n
 
-    chnls = map(i->Channel{ctypes[i]}(csizes[i]), 1:n)
-    tasks=Task[Task(()->f(chnls...)) for f in funcs]
+    chnls = map(i -> Channel{ctypes[i]}(csizes[i]), 1:n)
+    tasks = Task[ Task(() -> f(chnls...)) for f in funcs ]
 
     # bind all tasks to all channels and schedule them
-    foreach(t -> foreach(c -> bind(c,t), chnls), tasks)
+    foreach(t -> foreach(c -> bind(c, t), chnls), tasks)
     foreach(schedule, tasks)
-
-    yield()  # Allow scheduled tasks to run
+    yield() # Allow scheduled tasks to run
 
     return (chnls, tasks)
 end
@@ -283,9 +288,8 @@ function put_unbuffered(c::Channel, v)
         end
     end
     taker = shift!(c.takers)
-    schedule(current_task())
-    yieldto(taker, v)
-    v
+    yield(taker, v) # immediately give taker a chance to run, but don't block the current task
+    return v
 end
 
 push!(c::Channel, v) = put!(c, v)
@@ -328,8 +332,12 @@ function take_unbuffered(c::Channel{T}) where T
     push!(c.takers, current_task())
     try
         if length(c.putters) > 0
-            putter = shift!(c.putters)
-            return yieldto(putter)::T
+            let refputter = Ref(shift!(c.putters))
+                return Base.try_yieldto(refputter) do putter
+                    # if we fail to start putter, put it back in the queue
+                    putter === current_task || unshift!(c.putters, putter)
+                end::T
+            end
         else
             return wait()::T
         end
@@ -375,12 +383,14 @@ function notify_error(c::Channel, err)
     notify_error(c.cond_put, err)
 
     # release tasks on a `wait()/yieldto()` call (on unbuffered channels)
-    waiters = filter!(t->(t.state == :runnable), vcat(c.takers, c.putters))
-    foreach(t->schedule(t, err; error=true), waiters)
+    if !isbuffered(c)
+        waiters = filter!(t->(t.state == :runnable), vcat(c.takers, c.putters))
+        foreach(t->schedule(t, err; error=true), waiters)
+    end
 end
 notify_error(c::Channel) = notify_error(c, get(c.excp))
 
-eltype{T}(::Type{Channel{T}}) = T
+eltype(::Type{Channel{T}}) where {T} = T
 
 show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
 
@@ -390,7 +400,7 @@ mutable struct ChannelIterState{T}
     ChannelIterState{T}(has::Bool) where {T} = new(has)
 end
 
-start{T}(c::Channel{T}) = ChannelIterState{T}(false)
+start(c::Channel{T}) where {T} = ChannelIterState{T}(false)
 function done(c::Channel, state::ChannelIterState)
     try
         # we are waiting either for more data or channel to be closed

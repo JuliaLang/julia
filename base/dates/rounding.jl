@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # The epochs used for date rounding are based ISO 8601's "year zero" notation
 const DATEEPOCH = value(Date(0))
@@ -27,7 +27,7 @@ epochms2datetime(i) = DateTime(UTM(DATETIMEEPOCH + Int64(i)))
     date2epochdays(dt::Date) -> Int64
 
 Takes the given `Date` and returns the number of days since the rounding epoch
-(`0000-01-01T00:00:00`) as an `Int64`.
+(`0000-01-01T00:00:00`) as an [`Int64`](@ref).
 """
 date2epochdays(dt::Date) = value(dt) - DATEEPOCH
 
@@ -35,18 +35,18 @@ date2epochdays(dt::Date) = value(dt) - DATEEPOCH
     datetime2epochms(dt::DateTime) -> Int64
 
 Takes the given `DateTime` and returns the number of milliseconds since the rounding epoch
-(`0000-01-01T00:00:00`) as an `Int64`.
+(`0000-01-01T00:00:00`) as an [`Int64`](@ref).
 """
 datetime2epochms(dt::DateTime) = value(dt) - DATETIMEEPOCH
 
 function Base.floor(dt::Date, p::Year)
-    value(p) < 1 && throw(DomainError())
+    value(p) < 1 && throw(DomainError(p))
     years = year(dt)
     return Date(years - mod(years, value(p)))
 end
 
 function Base.floor(dt::Date, p::Month)
-    value(p) < 1 && throw(DomainError())
+    value(p) < 1 && throw(DomainError(p))
     y, m = yearmonth(dt)
     months_since_epoch = y * 12 + m - 1
     month_offset = months_since_epoch - mod(months_since_epoch, value(p))
@@ -56,14 +56,14 @@ function Base.floor(dt::Date, p::Month)
 end
 
 function Base.floor(dt::Date, p::Week)
-    value(p) < 1 && throw(DomainError())
+    value(p) < 1 && throw(DomainError(p))
     days = value(dt) - WEEKEPOCH
     days = days - mod(days, value(Day(p)))
     return Date(UTD(WEEKEPOCH + Int64(days)))
 end
 
 function Base.floor(dt::Date, p::Day)
-    value(p) < 1 && throw(DomainError())
+    value(p) < 1 && throw(DomainError(p))
     days = date2epochdays(dt)
     return epochdays2date(days - mod(days, value(p)))
 end
@@ -71,7 +71,7 @@ end
 Base.floor(dt::DateTime, p::DatePeriod) = DateTime(Base.floor(Date(dt), p))
 
 function Base.floor(dt::DateTime, p::TimePeriod)
-    value(p) < 1 && throw(DomainError())
+    value(p) < 1 && throw(DomainError(p))
     milliseconds = datetime2epochms(dt)
     return epochms2datetime(milliseconds - mod(milliseconds, value(Millisecond(p))))
 end
@@ -166,7 +166,7 @@ Base.round(dt::TimeType, p::Period, r::RoundingMode{:Up}) = Base.ceil(dt, p)
 # No implementation of other `RoundingMode`s: rounding to nearest "even" is skipped because
 # "even" is not defined for Period; rounding toward/away from zero is skipped because ISO
 # 8601's year 0000 is not really "zero".
-Base.round(::TimeType, ::Period, ::RoundingMode) = throw(DomainError())
+Base.round(::TimeType, p::Period, ::RoundingMode) = throw(DomainError(p))
 
 # Default to RoundNearestTiesUp.
 Base.round(dt::TimeType, p::Period) = Base.round(dt, p, RoundNearestTiesUp)

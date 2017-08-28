@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # padding (lpad and rpad)
 @test lpad("foo", 3) == "foo"
@@ -26,7 +26,7 @@ for s in ("", " ", " abc", "abc ", "  abc  "), f in (lstrip, rstrip, strip)
         ft = f(t)
         @test s == t
         @test fs == ft
-        @test typeof(ft) == typeof(t[1:end])
+        @test typeof(ft) == SubString{T}
 
         b = convert(SubString{T}, t)
         fb = f(b)
@@ -208,6 +208,18 @@ end
 # Issue 13332
 @test replace("abc", 'b', 2.1) == "a2.1c"
 
+# test replace with a count for String and GenericString
+# check that replace is a no-op if count==0
+for s in ["aaa", Base.Test.GenericString("aaa")]
+    # @test replace("aaa", 'a', 'z', 0) == "aaa" # enable when undeprecated
+    @test replace(s, 'a', 'z', 1) == "zaa"
+    @test replace(s, 'a', 'z', 2) == "zza"
+    @test replace(s, 'a', 'z', 3) == "zzz"
+    @test replace(s, 'a', 'z', 4) == "zzz"
+    @test replace(s, 'a', 'z', typemax(Int)) == "zzz"
+    @test replace(s, 'a', 'z')    == "zzz"
+end
+
 # chomp/chop
 @test chomp("foo\n") == "foo"
 @test chop("fooε") == "foo"
@@ -235,3 +247,24 @@ bin_val = hex2bytes("07bf")
 
 #non-hex characters
 @test_throws ArgumentError hex2bytes("0123456789abcdefABCDEFGH")
+
+@testset "Issue 23161" begin
+    arr = b"0123456789abcdefABCDEF"
+    arr1 = Vector{UInt8}(length(arr) >> 1)
+    @test hex2bytes!(arr1, arr) === arr1 # check in-place
+    @test "0123456789abcdefabcdef" == bytes2hex(arr1)
+    @test hex2bytes("0123456789abcdefABCDEF") == hex2bytes(arr)
+    @test_throws ArgumentError hex2bytes!(arr1, b"") # incorrect arr1 length
+    @test hex2bytes(b"") == UInt8[]
+    @test hex2bytes(view(b"012345",1:6)) == UInt8[0x01,0x23,0x45]
+    @test begin
+        s = view(b"012345ab",1:6)
+        d = view(zeros(UInt8, 10),1:3)
+        hex2bytes!(d,s) == UInt8[0x01,0x23,0x45]
+    end
+    # odd size
+    @test_throws ArgumentError hex2bytes(b"0123456789abcdefABCDEF0")
+
+    #non-hex characters
+    @test_throws ArgumentError hex2bytes(b"0123456789abcdefABCDEFGH")
+end

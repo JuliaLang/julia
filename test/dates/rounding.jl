@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test conversion to and from the rounding epoch (ISO 8601 year 0000)
 @test Dates.epochdays2date(-1) == Dates.Date(-1, 12, 31)
@@ -114,6 +114,7 @@ dt = Dates.DateTime(-1, 12, 29, 19, 19, 19, 19)
 
 # Test rounding for dates that should not need rounding
 for dt in [Dates.DateTime(2016, 1, 1), Dates.DateTime(-2016, 1, 1)]
+    local dt
     for p in [Dates.Year, Dates.Month, Dates.Day, Dates.Hour, Dates.Minute, Dates.Second]
         @test floor(dt, p) == dt
         @test ceil(dt, p) == dt

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
     Ptr{T}
@@ -20,18 +20,42 @@ const C_NULL = bitcast(Ptr{Void}, 0)
 # TODO: deprecate these conversions. C doesn't even allow them.
 
 # pointer to integer
-convert{T<:Union{Int,UInt}}(::Type{T}, x::Ptr) = bitcast(T, x)
-convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T, convert(UInt, x))
+convert(::Type{T}, x::Ptr) where {T<:Union{Int,UInt}} = bitcast(T, x)
+convert(::Type{T}, x::Ptr) where {T<:Integer} = convert(T, convert(UInt, x))
 
 # integer to pointer
-convert{T}(::Type{Ptr{T}}, x::UInt) = bitcast(Ptr{T}, x)
-convert{T}(::Type{Ptr{T}}, x::Int) = bitcast(Ptr{T}, x)
+convert(::Type{Ptr{T}}, x::UInt) where {T} = bitcast(Ptr{T}, x)
+convert(::Type{Ptr{T}}, x::Int) where {T} = bitcast(Ptr{T}, x)
 
 # pointer to pointer
-convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
-convert{T}(::Type{Ptr{T}}, p::Ptr) = bitcast(Ptr{T}, p)
+convert(::Type{Ptr{T}}, p::Ptr{T}) where {T} = p
+convert(::Type{Ptr{T}}, p::Ptr) where {T} = bitcast(Ptr{T}, p)
 
 # object to pointer (when used with ccall)
+
+"""
+    unsafe_convert(T, x)
+
+Convert `x` to a C argument of type `T`
+where the input `x` must be the return value of `cconvert(T, ...)`.
+
+In cases where [`convert`](@ref) would need to take a Julia object
+and turn it into a `Ptr`, this function should be used to define and perform
+that conversion.
+
+Be careful to ensure that a Julia reference to `x` exists as long as the result of this
+function will be used. Accordingly, the argument `x` to this function should never be an
+expression, only a variable name or field reference. For example, `x=a.b.c` is acceptable,
+but `x=[a,b,c]` is not.
+
+The `unsafe` prefix on this function indicates that using the result of this function after
+the `x` argument to this function is no longer accessible to the program may cause undefined
+behavior, including program corruption or segfaults, at any later time.
+
+See also [`cconvert`](@ref)
+"""
+function unsafe_convert end
+
 unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
 unsafe_convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
 unsafe_convert(::Type{Ptr{UInt8}}, s::String) = convert(Ptr{UInt8}, pointer_from_objref(s)+sizeof(Int))
@@ -40,9 +64,9 @@ unsafe_convert(::Type{Ptr{Int8}}, s::String) = convert(Ptr{Int8}, pointer_from_o
 cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = String(s)
 cconvert(::Type{Ptr{Int8}}, s::AbstractString) = String(s)
 
-unsafe_convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
-unsafe_convert{S,T}(::Type{Ptr{S}}, a::AbstractArray{T}) = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
-unsafe_convert{T}(::Type{Ptr{T}}, a::AbstractArray{T}) = error("conversion to pointer not defined for $(typeof(a))")
+unsafe_convert(::Type{Ptr{T}}, a::Array{T}) where {T} = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
+unsafe_convert(::Type{Ptr{S}}, a::AbstractArray{T}) where {S,T} = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
+unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("conversion to pointer not defined for $(typeof(a))")
 
 # unsafe pointer to array conversions
 """
@@ -57,17 +81,17 @@ calling `free` on the pointer when the array is no longer referenced.
 This function is labelled "unsafe" because it will crash if `pointer` is not
 a valid memory address to data of the requested length.
 """
-function unsafe_wrap{T,N}(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
-                          p::Ptr{T}, dims::NTuple{N,Int}, own::Bool=false)
+function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
+                     p::Ptr{T}, dims::NTuple{N,Int}, own::Bool=false) where {T,N}
     ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{Void}, Any, Int32),
           Array{T,N}, p, dims, own)
 end
-function unsafe_wrap{T}(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
-                        p::Ptr{T}, d::Integer, own::Bool=false)
+function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
+                     p::Ptr{T}, d::Integer, own::Bool=false) where {T}
     ccall(:jl_ptr_to_array_1d, Array{T,1},
           (Any, Ptr{Void}, Csize_t, Cint), Array{T,1}, p, d, own)
 end
-unsafe_wrap{N}(Atype::Type, p::Ptr, dims::NTuple{N,<:Integer}, own::Bool=false) =
+unsafe_wrap(Atype::Type, p::Ptr, dims::NTuple{N,<:Integer}, own::Bool=false) where {N} =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own)
 
 """
@@ -92,8 +116,8 @@ The `unsafe` prefix on this function indicates that no validation is performed o
 pointer `p` to ensure that it is valid. Incorrect usage may corrupt or segfault your
 program, in the same manner as C.
 """
-unsafe_store!(p::Ptr{Any}, x::ANY, i::Integer=1) = pointerset(p, x, Int(i), 1)
-unsafe_store!{T}(p::Ptr{T}, x, i::Integer=1) = pointerset(p, convert(T,x), Int(i), 1)
+unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, Int(i), 1)
+unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
 
 # convert a raw Ptr to an object reference, and vice-versa
 """
@@ -112,10 +136,10 @@ Get the memory address of a Julia object as a `Ptr`. The existence of the result
 will not protect the object from garbage collection, so you must ensure that the object
 remains referenced for the whole time that the `Ptr` will be used.
 """
-pointer_from_objref(x::ANY) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
-data_pointer_from_objref(x::ANY) = pointer_from_objref(x)::Ptr{Void}
+pointer_from_objref(@nospecialize(x)) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
+data_pointer_from_objref(@nospecialize(x)) = pointer_from_objref(x)::Ptr{Void}
 
-eltype{T}(::Type{Ptr{T}}) = T
+eltype(::Type{Ptr{T}}) where {T} = T
 
 ## limited pointer arithmetic & comparison ##
 

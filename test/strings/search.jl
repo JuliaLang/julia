@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # some test strings
 astr = "Hello, world.\n"
@@ -353,6 +353,10 @@ end
 # string searchindex with a two-char UTF-8 (4 byte) string literal
 @test searchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
 @test searchindex("\U1f596\U1f596", "\U1f596\U1f596", 1) == 1
+
+# contains with a String and Char needle
+@test contains("foo", "o")
+@test contains("foo", 'o')
 
 # string rsearchindex with a two-char UTF-8 (2 byte) string literal
 @test rsearchindex("ééé", "éé") == 3
