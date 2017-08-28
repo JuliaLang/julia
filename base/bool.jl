@@ -95,18 +95,17 @@ isone(x::Bool) = x
 ^(x::Bool, y::Bool) = x | !y
 ^(x::Integer, y::Bool) = ifelse(y, x, one(x))
 
+# preserve -0.0 in `false + -0.0`
 function +(x::Bool, y::T)::promote_type(Bool,T) where T<:AbstractFloat
     return ifelse(x, oneunit(y) + y, y)
 end
 +(y::AbstractFloat, x::Bool) = x + y
 
-function *(x::Bool, y::T)::promote_type(Bool,T) where T<:Number
+# make `false` a "strong zero": false*NaN == 0.0
+function *(x::Bool, y::T)::promote_type(Bool,T) where T<:AbstractFloat
     return ifelse(x, y, copysign(zero(y), y))
 end
-function *(x::Bool, y::T)::promote_type(Bool,T) where T<:Unsigned
-    return ifelse(x, y, zero(y))
-end
-*(y::Number, x::Bool) = x * y
+*(y::AbstractFloat, x::Bool) = x * y
 
 div(x::Bool, y::Bool) = y ? x : throw(DivideError())
 fld(x::Bool, y::Bool) = div(x,y)
