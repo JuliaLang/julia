@@ -356,7 +356,7 @@ Base.Symbol() = throw(ErrorException("1"))
 EightBitType() = throw(ErrorException("3"))
 (::EightBitType)() = throw(ErrorException("4"))
 EightBitTypeT() = throw(ErrorException("5"))
-(::Type{EightBitTypeT{T}})() where {T} = throw(ErrorException("6"))
+EightBitTypeT{T}() where {T} = throw(ErrorException("6"))
 (::EightBitTypeT)() = throw(ErrorException("7"))
 (::FunctionLike)() = throw(ErrorException("8"))
 

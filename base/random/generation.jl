@@ -73,8 +73,8 @@ function rand(rng::AbstractRNG, gen::BigFloatRandGenerator, ::CloseOpen{BigFloat
     z.exp = 0
     randbool &&
         ccall((:mpfr_sub_d, :libmpfr), Int32,
-              (Ptr{BigFloat}, Ptr{BigFloat}, Cdouble, Int32),
-              &z, &z, 0.5, Base.MPFR.ROUNDING_MODE[])
+              (Ref{BigFloat}, Ref{BigFloat}, Cdouble, Int32),
+              z, z, 0.5, Base.MPFR.ROUNDING_MODE[])
     z
 end
 
@@ -82,8 +82,8 @@ end
 # TODO: make an API for requesting full or not-full precision
 function rand(rng::AbstractRNG, gen::BigFloatRandGenerator, ::CloseOpen{BigFloat}, ::Void)
     z = rand(rng, Close1Open2(BigFloat), gen)
-    ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32),
-          &z, &z, 1, Base.MPFR.ROUNDING_MODE[])
+    ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, Int32),
+          z, z, 1, Base.MPFR.ROUNDING_MODE[])
     z
 end
 

@@ -556,7 +556,7 @@ function gen_broadcast_function_sparse(genbody::Function, f::Function, is_first_
     body = genbody(f, is_first_sparse)
     @eval let
         local _F_
-        function _F_{Tv,Ti}(B::SparseMatrixCSC{Tv,Ti}, A_1, A_2)
+        function _F_(B::SparseMatrixCSC{Tv,Ti}, A_1, A_2) where {Tv,Ti}
             $body
         end
         _F_
@@ -1263,11 +1263,11 @@ end
 
 @noinline zero_arg_matrix_constructor(prefix::String) =
     depwarn("$prefix() is deprecated, use $prefix(0, 0) instead.", :zero_arg_matrix_constructor)
-function (::Type{Matrix{T}})() where T
+function Matrix{T}() where T
     zero_arg_matrix_constructor("Matrix{T}")
     return Matrix{T}(0, 0)
 end
-function (::Type{Matrix})()
+function Matrix()
     zero_arg_matrix_constructor("Matrix")
     return Matrix(0, 0)
 end

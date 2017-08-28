@@ -346,7 +346,7 @@ function convert(::Type{T}, x::BigInt) where T<:Signed
 end
 
 
-(::Type{Float64})(n::BigInt, ::RoundingMode{:ToZero}) = MPZ.get_d(n)
+Float64(n::BigInt, ::RoundingMode{:ToZero}) = MPZ.get_d(n)
 
 function (::Type{T})(n::BigInt, ::RoundingMode{:ToZero}) where T<:Union{Float16,Float32}
     T(Float64(n,RoundToZero),RoundToZero)

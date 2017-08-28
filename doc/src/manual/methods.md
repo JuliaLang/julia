@@ -529,7 +529,7 @@ Here is the correct code template for returning the element-type `T`
 of any arbitrary subtype of `AbstractArray`:
 
 ```julia
-abstract AbstractArray{T, N}
+abstract type AbstractArray{T, N} end
 eltype(::Type{<:AbstractArray{T}}) where {T} = T
 ```
 using so-called triangular dispatch.  Note that if `T` is a `UnionAll`
@@ -540,11 +540,11 @@ Another way, which used to be the only correct way before the advent of
 triangular dispatch in Julia v0.6, is:
 
 ```julia
-abstract AbstractArray{T, N}
+abstract type AbstractArray{T, N} end
 eltype(::Type{AbstractArray}) = Any
-eltype{T}(::Type{AbstractArray{T}}) = T
-eltype{T, N}(::Type{AbstractArray{T, N}}) = T
-eltype{A<:AbstractArray}(::Type{A}) = eltype(supertype(A))
+eltype(::Type{AbstractArray{T}}) where {T} = T
+eltype(::Type{AbstractArray{T, N}}) where {T, N} = T
+eltype(::Type{A}) where {A<:AbstractArray} = eltype(supertype(A))
 ```
 
 Another possibility is the following, which could useful to adapt

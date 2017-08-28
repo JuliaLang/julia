@@ -993,7 +993,7 @@ end
 
 convert(::Type{Sparse}, A::Dense) = dense_to_sparse(A, SuiteSparse_long)
 convert(::Type{Sparse}, L::Factor) = factor_to_sparse!(copy(L))
-function (::Type{Sparse})(filename::String)
+function Sparse(filename::String)
     open(filename) do f
         return read_sparse(f, SuiteSparse_long)
     end
