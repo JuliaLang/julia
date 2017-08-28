@@ -563,6 +563,12 @@ convert(::Type{Array{T,n}}, x::AbstractArray{S,n}) where {T,n,S} = copy!(Array{T
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
+# constructors should make copies
+
+if module_name(@__MODULE__) === :Base  # avoid method overwrite
+(::Type{T})(x::T) where {T<:Array} = copy(x)
+end
+
 ## copying iterators to containers
 
 """

@@ -190,6 +190,11 @@ timesofar("utils")
         @test Array(one(BitMatrix(2,2))) == eye(2,2)
         @test_throws DimensionMismatch one(BitMatrix(2,3))
     end
+
+    # constructors should copy
+    a = trues(3)
+    @test BitArray(a) !== a
+    @test BitArray{1}(a) !== a
 end
 
 timesofar("constructors")
