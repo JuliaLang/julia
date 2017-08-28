@@ -69,3 +69,6 @@ for elty in (Float16,Float32,Float64)
     @test [half, nan, half] ≉ [half, nan, half]
     @test [half, nan, half] ≈ [half, nan, half] nans=true
 end
+
+# pull request #23478
+@test 5.0 ≊ 4.999999999999993
