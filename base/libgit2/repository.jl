@@ -251,7 +251,16 @@ contains detailed information about it based on the keyword argument:
 
   * `options::DescribeOptions=DescribeOptions()`
 
-Equivalent to `git describe <commitish>`.
+A git decription of a `commitish` object looks for the tag (by default, annotated,
+although a search of all tags can be performed) which can be reached from `commitish`
+which is most recent. If the tag is pointing to `commitish`, then only the tag is
+included in the description. Otherwise, a suffix is included which contains the
+number of commits between `commitish` and the most recent tag. If there is no such
+tag, the default behavior is for the description to fail, although this can be
+changed through `options`.
+
+Equivalent to `git describe <commitish>`. See [`DescribeOptions`](@ref) for more
+information.
 """
 function GitDescribeResult(commitish::GitObject;
                            options::DescribeOptions=DescribeOptions())
@@ -265,14 +274,19 @@ end
 """
     LibGit2.GitDescribeResult(repo::GitRepo; kwarg...)
 
-Produce a `GitDescribeResult` of the repository `repo`'s working directory,
-which can include all the commits and tags (or, for instance, HEAD only).
+Produce a `GitDescribeResult` of the repository `repo`'s working directory.
 The `GitDescribeResult` contains detailed information about the workdir based
 on the keyword argument:
 
   * `options::DescribeOptions=DescribeOptions()`
 
-Equivalent to `git describe`.
+In this case, the description is run on HEAD, producing the most recent tag
+which is an ancestor of HEAD. Afterwards, a status check on
+the [`workdir`](@ref) is performed and if the `workdir` is dirty
+(see [`isdirty`](@ref)) the description is also considered dirty.
+
+Equivalent to `git describe`. See [`DescribeOptions`](@ref) for more
+information.
 """
 function GitDescribeResult(repo::GitRepo; options::DescribeOptions=DescribeOptions())
     result_ptr_ptr = Ref{Ptr{Void}}(C_NULL)

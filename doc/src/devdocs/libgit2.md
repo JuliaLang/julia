@@ -17,6 +17,8 @@ Base.LibGit2.Buffer
 Base.LibGit2.CachedCredentials
 Base.LibGit2.CheckoutOptions
 Base.LibGit2.CloneOptions
+Base.LibGit2.DescribeOptions
+Base.LibGit2.DescribeFormatOptions
 Base.LibGit2.DiffDelta
 Base.LibGit2.DiffFile
 Base.LibGit2.DiffOptionsStruct
