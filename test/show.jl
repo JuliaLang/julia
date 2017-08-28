@@ -970,6 +970,7 @@ end
     mkclosure = x->y->x+y
     clo = mkclosure(10)
     @test stringmime("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
+    @test repr(UnionAll) == "UnionAll"
 end
 
 let x = TypeVar(:_), y = TypeVar(:_)
