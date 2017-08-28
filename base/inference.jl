@@ -3153,6 +3153,10 @@ function typeinf_work(frame::InferenceState)
                     # directly forward changes to an SSAValue to the applicable line
                     record_ssa_assign(changes_var.id + 1, changes.vtype.typ, frame)
                 end
+            elseif isa(stmt, NewvarNode)
+                sn = slot_id(stmt.slot)
+                changes = changes::VarTable
+                changes[sn] = VarState(Bottom, true)
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
             elseif isa(stmt, Expr)
@@ -3563,7 +3567,7 @@ function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, unde
         elseif isa(subex, Slot)
             id = slot_id(subex)
             s = vtypes[id]
-            vt = widenconst(s.typ)
+            vt = s.typ
             if s.undef
                 # find used-undef variables
                 undefs[id] = true
@@ -3680,28 +3684,39 @@ function type_annotate!(sv::InferenceState)
 end
 
 # widen all Const elements in type annotations
-function _widen_all_consts!(e::Expr, untypedload::Vector{Bool})
+function _widen_all_consts!(e::Expr, untypedload::Vector{Bool}, slottypes::Vector{Any})
     e.typ = widenconst(e.typ)
     for i = 1:length(e.args)
         x = e.args[i]
         if isa(x, Expr)
-            _widen_all_consts!(x, untypedload)
-        elseif isa(x, Slot) && (i != 1 || e.head !== :(=))
-            untypedload[slot_id(x)] = true
+            _widen_all_consts!(x, untypedload, slottypes)
+        elseif isa(x, TypedSlot)
+            vt = widenconst(x.typ)
+            if !(vt === x.typ)
+                if slottypes[x.id] <: vt
+                    x = SlotNumber(x.id)
+                    untypedload[x.id] = true
+                else
+                    x = TypedSlot(x.id, vt)
+                end
+                e.args[i] = x
+            end
+        elseif isa(x, SlotNumber) && (i != 1 || e.head !== :(=))
+            untypedload[x.id] = true
         end
     end
     nothing
 end
+
 function widen_all_consts!(src::CodeInfo)
     for i = 1:length(src.ssavaluetypes)
         src.ssavaluetypes[i] = widenconst(src.ssavaluetypes[i])
     end
     nslots = length(src.slottypes)
     untypedload = fill(false, nslots)
-    for i = 1:length(src.code)
-        x = src.code[i]
-        isa(x, Expr) && _widen_all_consts!(x, untypedload)
-    end
+    e = Expr(:body)
+    e.args = src.code
+    _widen_all_consts!(e, untypedload, src.slottypes)
     for i = 1:nslots
         src.slottypes[i] = widen_slot_type(src.slottypes[i], untypedload[i])
     end
