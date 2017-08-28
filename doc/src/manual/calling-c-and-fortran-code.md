@@ -875,16 +875,22 @@ ccall(@dlsym("myfunc", mylibvar), Void, ())
 
 ## Closing a Library
 
-It is sometimes useful to close (unload) a library so that it can be reloaded. For instance, when developing C code for use with Julia, one may need to compile, call the C code from Julia, then close the library, make an edit, recompile, and load in the new changes. One could either restart Julia, or one can use the `Libdl` functions to manage the library explicitly, such as:
+It is sometimes useful to close (unload) a library so that it can be reloaded.
+For instance, when developing C code for use with Julia, one may need to compile,
+call the C code from Julia, then close the library, make an edit, recompile,
+and load in the new changes. One could either restart Julia, or one can use the
+`Libdl` functions to manage the library explicitly, such as:
 
 ```julia
 lib = Libdl.dlopen("./my_lib.so") # Open the library explicitly.
-sym = Libdl.dlsym(lib, :my_fcn) # Get a symbol for the function to call.
+sym = Libdl.dlsym(lib, :my_fcn)   # Get a symbol for the function to call.
 ccall(sym, ...) # Use the symbol instead of the (symbol, library) tuple (remaining arguments are the same).
 Libdl.dlclose(lib) # Close the library explicitly.
 ```
 
-Note that when using `ccall` with the tuple input (e.g., `ccall((:my_fcn, "./my_lib.so"), ...)`), the library is opened implicitly and it may not be explicitly closed.
+Note that when using `ccall` with the tuple input
+(e.g., `ccall((:my_fcn, "./my_lib.so"), ...)`), the library is opened implicitly
+and it may not be explicitly closed.
 
 ## Calling Convention
 
