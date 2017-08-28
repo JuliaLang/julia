@@ -7285,7 +7285,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
 },
 
 {
@@ -20425,6 +20425,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "devdocs/libgit2/#Base.LibGit2.@githash_str",
+    "page": "Base.LibGit2",
+    "title": "Base.LibGit2.@githash_str",
+    "category": "Macro",
+    "text": "@githash_str -> AbstractGitHash\n\nConstruct a git hash object from the given string, returning a GitShortHash if the string is shorter than 40 hexadecimal digits, otherwise a GitHash.\n\nExamples\n\njulia> LibGit2.githash\"d114feb74ce633\"\nGitShortHash(\"d114feb74ce633\")\n\njulia> LibGit2.githash\"d114feb74ce63307afe878a5228ad014e0289a85\"\nGitHash(\"d114feb74ce63307afe878a5228ad014e0289a85\")\n\n\n\n"
+},
+
+{
     "location": "devdocs/libgit2/#Base.LibGit2.head",
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.head",
@@ -20518,6 +20526,14 @@ var documenterSearchIndex = {"docs": [
     "title": "Base.LibGit2.isset",
     "category": "Function",
     "text": "isset(val::Integer, flag::Integer)\n\nTest whether the bits of val indexed by flag are set (1) or unset (0).\n\n\n\n"
+},
+
+{
+    "location": "devdocs/libgit2/#Base.LibGit2.iszero",
+    "page": "Base.LibGit2",
+    "title": "Base.LibGit2.iszero",
+    "category": "Function",
+    "text": "iszero(id::GitHash) -> Bool\n\nDetermine whether all hexadecimal digits of the given GitHash are zero.\n\n\n\n"
 },
 
 {
@@ -20646,6 +20662,14 @@ var documenterSearchIndex = {"docs": [
     "title": "Base.LibGit2.push_refspecs",
     "category": "Function",
     "text": "push_refspecs(rmt::GitRemote) -> Vector{String}\n\nGet the push refspecs for the specified rmt. These refspecs contain information about which branch(es) to push to.\n\nExamples\n\njulia> remote = LibGit2.get(LibGit2.GitRemote, repo, \"upstream\");\n\njulia> LibGit2.add_push!(repo, remote, \"refs/heads/master\");\n\njulia> close(remote);\n\njulia> remote = LibGit2.get(LibGit2.GitRemote, repo, \"upstream\");\n\njulia> LibGit2.push_refspecs(remote)\nString[\"refs/heads/master\"]\n\n\n\n"
+},
+
+{
+    "location": "devdocs/libgit2/#Base.LibGit2.raw",
+    "page": "Base.LibGit2",
+    "title": "Base.LibGit2.raw",
+    "category": "Function",
+    "text": "raw(id::GitHash) -> Vector{UInt8}\n\nObtain the raw bytes of the GitHash as a vector of length 20.\n\n\n\n"
 },
 
 {
@@ -20877,7 +20901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Functionality",
     "category": "section",
-    "text": "Some of this documentation assumes some prior knowledge of the libgit2 API. For more information on some of the objects and methods referenced here, consult the upstream libgit2 API reference.Base.LibGit2.AbstractCredentials\nBase.LibGit2.Buffer\nBase.LibGit2.CachedCredentials\nBase.LibGit2.CheckoutOptions\nBase.LibGit2.CloneOptions\nBase.LibGit2.DiffDelta\nBase.LibGit2.DiffFile\nBase.LibGit2.DiffOptionsStruct\nBase.LibGit2.FetchHead\nBase.LibGit2.FetchOptions\nBase.LibGit2.GitBlame\nBase.LibGit2.GitBlob\nBase.LibGit2.GitCommit\nBase.LibGit2.GitHash\nBase.LibGit2.GitObject\nBase.LibGit2.GitRemote\nBase.LibGit2.GitRemoteAnon\nBase.LibGit2.GitRepo\nBase.LibGit2.GitRepoExt\nBase.LibGit2.GitRevWalker\nBase.LibGit2.GitShortHash\nBase.LibGit2.GitSignature\nBase.LibGit2.GitStatus\nBase.LibGit2.GitTag\nBase.LibGit2.GitTree\nBase.LibGit2.IndexEntry\nBase.LibGit2.IndexTime\nBase.LibGit2.BlameOptions\nBase.LibGit2.MergeOptions\nBase.LibGit2.ProxyOptions\nBase.LibGit2.PushOptions\nBase.LibGit2.RebaseOperation\nBase.LibGit2.RebaseOptions\nBase.LibGit2.RemoteCallbacks\nBase.LibGit2.SSHCredentials\nBase.LibGit2.SignatureStruct\nBase.LibGit2.StatusEntry\nBase.LibGit2.StatusOptions\nBase.LibGit2.StrArrayStruct\nBase.LibGit2.TimeStruct\nBase.LibGit2.UserPasswordCredentials\nBase.LibGit2.add!\nBase.LibGit2.add_fetch!\nBase.LibGit2.add_push!\nBase.LibGit2.addblob!\nBase.LibGit2.author\nBase.LibGit2.authors\nBase.LibGit2.branch\nBase.LibGit2.branch!\nBase.LibGit2.checkout!\nBase.LibGit2.checkused!\nBase.LibGit2.clone\nBase.LibGit2.commit\nBase.LibGit2.committer\nBase.LibGit2.count(::Function, ::Base.LibGit2.GitRevWalker; ::Base.LibGit2.GitHash, ::Cint, ::Bool)\nBase.LibGit2.counthunks\nBase.LibGit2.create_branch\nBase.LibGit2.credentials_callback\nBase.LibGit2.credentials_cb\nBase.LibGit2.default_signature\nBase.LibGit2.delete_branch\nBase.LibGit2.diff_files\nBase.LibGit2.fetch\nBase.LibGit2.fetchheads\nBase.LibGit2.fetch_refspecs\nBase.LibGit2.fetchhead_foreach_cb\nBase.LibGit2.merge_base\nBase.LibGit2.merge!(::Base.LibGit2.GitRepo; ::Any...)\nBase.LibGit2.ffmerge!\nBase.LibGit2.fullname\nBase.LibGit2.features\nBase.LibGit2.get_creds!\nBase.LibGit2.gitdir\nBase.LibGit2.head\nBase.LibGit2.head!\nBase.LibGit2.head_oid\nBase.LibGit2.headname\nBase.LibGit2.init\nBase.LibGit2.is_ancestor_of\nBase.LibGit2.isbinary\nBase.LibGit2.iscommit\nBase.LibGit2.isdiff\nBase.LibGit2.isdirty\nBase.LibGit2.isorphan\nBase.LibGit2.isset\nBase.LibGit2.lookup_branch\nBase.LibGit2.map(::Function, ::Base.LibGit2.GitRevWalker; ::Base.LibGit2.GitHash, ::Cint, ::Bool)\nBase.LibGit2.mirror_callback\nBase.LibGit2.mirror_cb\nBase.LibGit2.message\nBase.LibGit2.merge_analysis\nBase.LibGit2.name\nBase.LibGit2.need_update\nBase.LibGit2.objtype\nBase.LibGit2.path\nBase.LibGit2.peel\nBase.LibGit2.posixpath\nBase.LibGit2.push\nBase.LibGit2.push!(::Base.LibGit2.GitRevWalker, ::Base.LibGit2.GitHash)\nBase.LibGit2.push_head!\nBase.LibGit2.push_refspecs\nBase.LibGit2.read_tree!\nBase.LibGit2.rebase!\nBase.LibGit2.ref_list\nBase.LibGit2.reftype\nBase.LibGit2.remotes\nBase.LibGit2.remove!\nBase.LibGit2.reset\nBase.LibGit2.reset!\nBase.LibGit2.restore\nBase.LibGit2.revcount\nBase.LibGit2.set_remote_url\nBase.LibGit2.shortname\nBase.LibGit2.snapshot\nBase.LibGit2.status\nBase.LibGit2.stage\nBase.LibGit2.tag_create\nBase.LibGit2.tag_delete\nBase.LibGit2.tag_list\nBase.LibGit2.target\nBase.LibGit2.toggle\nBase.LibGit2.transact\nBase.LibGit2.treewalk\nBase.LibGit2.upstream\nBase.LibGit2.update!\nBase.LibGit2.url\nBase.LibGit2.version\nBase.LibGit2.with\nBase.LibGit2.workdir"
+    "text": "Some of this documentation assumes some prior knowledge of the libgit2 API. For more information on some of the objects and methods referenced here, consult the upstream libgit2 API reference.Base.LibGit2.AbstractCredentials\nBase.LibGit2.Buffer\nBase.LibGit2.CachedCredentials\nBase.LibGit2.CheckoutOptions\nBase.LibGit2.CloneOptions\nBase.LibGit2.DiffDelta\nBase.LibGit2.DiffFile\nBase.LibGit2.DiffOptionsStruct\nBase.LibGit2.FetchHead\nBase.LibGit2.FetchOptions\nBase.LibGit2.GitBlame\nBase.LibGit2.GitBlob\nBase.LibGit2.GitCommit\nBase.LibGit2.GitHash\nBase.LibGit2.GitObject\nBase.LibGit2.GitRemote\nBase.LibGit2.GitRemoteAnon\nBase.LibGit2.GitRepo\nBase.LibGit2.GitRepoExt\nBase.LibGit2.GitRevWalker\nBase.LibGit2.GitShortHash\nBase.LibGit2.GitSignature\nBase.LibGit2.GitStatus\nBase.LibGit2.GitTag\nBase.LibGit2.GitTree\nBase.LibGit2.IndexEntry\nBase.LibGit2.IndexTime\nBase.LibGit2.BlameOptions\nBase.LibGit2.MergeOptions\nBase.LibGit2.ProxyOptions\nBase.LibGit2.PushOptions\nBase.LibGit2.RebaseOperation\nBase.LibGit2.RebaseOptions\nBase.LibGit2.RemoteCallbacks\nBase.LibGit2.SSHCredentials\nBase.LibGit2.SignatureStruct\nBase.LibGit2.StatusEntry\nBase.LibGit2.StatusOptions\nBase.LibGit2.StrArrayStruct\nBase.LibGit2.TimeStruct\nBase.LibGit2.UserPasswordCredentials\nBase.LibGit2.add!\nBase.LibGit2.add_fetch!\nBase.LibGit2.add_push!\nBase.LibGit2.addblob!\nBase.LibGit2.author\nBase.LibGit2.authors\nBase.LibGit2.branch\nBase.LibGit2.branch!\nBase.LibGit2.checkout!\nBase.LibGit2.checkused!\nBase.LibGit2.clone\nBase.LibGit2.commit\nBase.LibGit2.committer\nBase.LibGit2.count(::Function, ::Base.LibGit2.GitRevWalker; ::Base.LibGit2.GitHash, ::Cint, ::Bool)\nBase.LibGit2.counthunks\nBase.LibGit2.create_branch\nBase.LibGit2.credentials_callback\nBase.LibGit2.credentials_cb\nBase.LibGit2.default_signature\nBase.LibGit2.delete_branch\nBase.LibGit2.diff_files\nBase.LibGit2.fetch\nBase.LibGit2.fetchheads\nBase.LibGit2.fetch_refspecs\nBase.LibGit2.fetchhead_foreach_cb\nBase.LibGit2.merge_base\nBase.LibGit2.merge!(::Base.LibGit2.GitRepo; ::Any...)\nBase.LibGit2.ffmerge!\nBase.LibGit2.fullname\nBase.LibGit2.features\nBase.LibGit2.get_creds!\nBase.LibGit2.gitdir\nBase.LibGit2.@githash_str\nBase.LibGit2.head\nBase.LibGit2.head!\nBase.LibGit2.head_oid\nBase.LibGit2.headname\nBase.LibGit2.init\nBase.LibGit2.is_ancestor_of\nBase.LibGit2.isbinary\nBase.LibGit2.iscommit\nBase.LibGit2.isdiff\nBase.LibGit2.isdirty\nBase.LibGit2.isorphan\nBase.LibGit2.isset\nBase.LibGit2.iszero\nBase.LibGit2.lookup_branch\nBase.LibGit2.map(::Function, ::Base.LibGit2.GitRevWalker; ::Base.LibGit2.GitHash, ::Cint, ::Bool)\nBase.LibGit2.mirror_callback\nBase.LibGit2.mirror_cb\nBase.LibGit2.message\nBase.LibGit2.merge_analysis\nBase.LibGit2.name\nBase.LibGit2.need_update\nBase.LibGit2.objtype\nBase.LibGit2.path\nBase.LibGit2.peel\nBase.LibGit2.posixpath\nBase.LibGit2.push\nBase.LibGit2.push!(::Base.LibGit2.GitRevWalker, ::Base.LibGit2.GitHash)\nBase.LibGit2.push_head!\nBase.LibGit2.push_refspecs\nBase.LibGit2.raw\nBase.LibGit2.read_tree!\nBase.LibGit2.rebase!\nBase.LibGit2.ref_list\nBase.LibGit2.reftype\nBase.LibGit2.remotes\nBase.LibGit2.remove!\nBase.LibGit2.reset\nBase.LibGit2.reset!\nBase.LibGit2.restore\nBase.LibGit2.revcount\nBase.LibGit2.set_remote_url\nBase.LibGit2.shortname\nBase.LibGit2.snapshot\nBase.LibGit2.status\nBase.LibGit2.stage\nBase.LibGit2.tag_create\nBase.LibGit2.tag_delete\nBase.LibGit2.tag_list\nBase.LibGit2.target\nBase.LibGit2.toggle\nBase.LibGit2.transact\nBase.LibGit2.treewalk\nBase.LibGit2.upstream\nBase.LibGit2.update!\nBase.LibGit2.url\nBase.LibGit2.version\nBase.LibGit2.with\nBase.LibGit2.workdir"
 },
 
 {
