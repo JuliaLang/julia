@@ -502,6 +502,7 @@ evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
 function create_expr_cache(input::String, output::String, concrete_deps::Vector{Any})
     rm(output, force=true)   # Remove file if it exists
+    (port, sockserver) = listenany(ip"127.0.0.1", UInt16(0))
     code_object = """
         while !eof(STDIN)
             eval(Main, deserialize(STDIN))
@@ -517,7 +518,17 @@ function create_expr_cache(input::String, output::String, concrete_deps::Vector{
     try
         serialize(in, quote
                   empty!(Base.LOAD_PATH)
-                  append!(Base.LOAD_PATH, $LOAD_PATH)
+                  let pathserver = connect(ip"127.0.0.1", $port)
+                      eval(Main, quote
+                          function Base.load_hook(::Void, name::String, ::Any)
+                              serialize($pathserver, name)
+                              p = deserialize($pathserver)
+                              isa(p, Exception) && throw(p)
+                              return p
+                          end
+                      end)
+                  end
+                  push!(Base.LOAD_PATH, nothing)
                   empty!(Base.LOAD_CACHE_PATH)
                   append!(Base.LOAD_CACHE_PATH, $LOAD_CACHE_PATH)
                   empty!(Base.DL_LOAD_PATH)
@@ -525,12 +536,32 @@ function create_expr_cache(input::String, output::String, concrete_deps::Vector{
                   empty!(Base._concrete_dependencies)
                   append!(Base._concrete_dependencies, $concrete_deps)
                   Base._track_dependencies[] = true
-                  end)
+              end)
+        let pathclient = accept(sockserver)
+            @async try
+                while isopen(pathclient)
+                    let r, p = deserialize(pathclient)::String
+                        try
+                            r = find_in_path(p, nothing)
+                        catch ex
+                            r = ErrorException(sprint(Base.showerror, ex, catch_backtrace()))
+                        end
+                        serialize(pathclient, r)
+                    end
+                end
+            catch ex
+                if isopen(pathclient)
+                    close(pathclient)
+                    rethrow(ex)
+                end
+            end
+        end
+        close(sockserver)
         source = source_path(nothing)
         if source !== nothing
             serialize(in, quote
                       task_local_storage()[:SOURCE_PATH] = $(source)
-                      end)
+                  end)
         end
         serialize(in, :(Base.include(Main, $(abspath(input)))))
         if source !== nothing
