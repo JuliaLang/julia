@@ -123,6 +123,10 @@ This section lists changes that do not have deprecation warnings.
     `Bidiagonal{T,V<:AbstractVector{T}}` and `SymTridiagonal{T,V<:AbstractVector{T}}`
     respectively ([#22718], [#22925], [#23035]).
 
+  * When called with an argument that contains `NaN` elements, `findmin` and `findmax` now return the
+    first `NaN` found and its corresponding index. Previously, `NaN` elements were ignored.
+    The new behavior matches that of `min`, `max`, `minimum`, and `maximum`.
+
   * `isapprox(x,y)` now tests `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`
     rather than `norm(x-y) <= atol + ...`, and `rtol` defaults to zero
     if an `atol > 0` is specified ([#22742]).
