@@ -65,25 +65,27 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         err == 0 && return Cint(0)
     end
 
-    cred.prvkey = Base.get(ENV, "SSH_KEY_PATH") do
-        default = joinpath(homedir(), ".ssh", "id_rsa")
-        if isempty(cred.prvkey) && isfile(default)
-            default
-        else
-            cred.prvkey
+    if p.use_env
+        cred.prvkey = Base.get(ENV, "SSH_KEY_PATH") do
+            default = joinpath(homedir(), ".ssh", "id_rsa")
+            if isempty(cred.prvkey) && isfile(default)
+                default
+            else
+                cred.prvkey
+            end
         end
-    end
 
-    cred.pubkey = Base.get(ENV, "SSH_PUB_KEY_PATH") do
-        default = cred.prvkey * ".pub"
-        if isempty(cred.pubkey) && isfile(default)
-            default
-        else
-            cred.pubkey
+        cred.pubkey = Base.get(ENV, "SSH_PUB_KEY_PATH") do
+            default = cred.prvkey * ".pub"
+            if isempty(cred.pubkey) && isfile(default)
+                default
+            else
+                cred.pubkey
+            end
         end
-    end
 
-    cred.pass = Base.get(ENV, "SSH_KEY_PASS", cred.pass)
+        cred.pass = Base.get(ENV, "SSH_KEY_PASS", cred.pass)
+    end
 
     if p.allow_prompt
         # if username is not provided or empty, then prompt for it

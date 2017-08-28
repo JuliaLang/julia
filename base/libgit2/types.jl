@@ -1177,6 +1177,7 @@ mutable struct CredentialPayload <: Payload
     credential::Nullable{AbstractCredentials}
     first_pass::Bool
     use_ssh_agent::Bool
+    use_env::Bool
     url::String
     scheme::String
     username::String
@@ -1211,6 +1212,7 @@ function reset!(p::CredentialPayload)
     p.credential = Nullable{AbstractCredentials}()
     p.first_pass = true
     p.use_ssh_agent = p.allow_ssh_agent
+    p.use_env = true
     p.url = ""
     p.scheme = ""
     p.username = ""
