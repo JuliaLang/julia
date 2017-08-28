@@ -461,6 +461,11 @@ end
 if VERSION < v"0.7.0-DEV.843"
     import Base: Val
     (::Type{Val})(x) = (Base.@_pure_meta; Val{x}())
+    # Also add methods for Val(x) that were previously Val{x}
+    import Base: reshape
+    reshape{N}(parent::AbstractArray, ndims::Val{N}) = reshape(parent, Val{N})
+    import Base: ntuple
+    ntuple{F,N}(f::F, ::Val{N}) = ntuple(f, Val{N})
 end
 
 # https://github.com/JuliaLang/julia/pull/22629
