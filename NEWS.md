@@ -70,6 +70,9 @@ Language changes
     warning, so that this syntax can be disallowed or given a new meaning in a
     future version ([#5148]).
 
+  * Placing an expression after `catch`, as in `catch f(x)`, is deprecated.
+    Use `catch; f(x)` instead ([#19987]).
+
   * In `for i = ...`, if a local variable `i` already existed it would be overwritten
     during the loop. This behavior is deprecated, and in the future `for` loop variables
     will always be new variables local to the loop ([#22314]).

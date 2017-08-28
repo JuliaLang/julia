@@ -565,10 +565,10 @@ add_method_to_glob_fn!()
 @test expand(Main, :(f(d:Int...) = nothing)) == Expr(:error, "\"d:Int\" is not a valid function argument name")
 
 # issue #16517
-@test (try error(); catch 0; end) === 0
-@test (try error(); catch false; end) === false  # false and true are Bool literals, not variables
-@test (try error(); catch true; end) === true
-f16517() = try error(); catch 0; end
+@test (try error(); catch; 0; end) === 0
+@test (try error(); catch; false; end) === false  # false and true are Bool literals, not variables
+@test (try error(); catch; true; end) === true
+f16517() = try error(); catch; 0; end
 @test f16517() === 0
 
 # issue #16671
@@ -592,7 +592,7 @@ end
 
 # issue #16686
 @test parse("try x
-             catch test()
+             catch; test()
                  y
              end") == Expr(:try,
                            Expr(:block,
