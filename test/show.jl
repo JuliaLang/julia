@@ -618,6 +618,8 @@ end
 @test repr(:([x for x = y])) == ":([x for x = y])"
 @test repr(:([x for x = y if z])) == ":([x for x = y if z])"
 @test repr(:(z for z = 1:5, y = 1:5)) == ":((z for z = 1:5, y = 1:5))"
+@test_repr "(x for i in a, b in c)"
+@test_repr "(x for a in b, c in d for e in f)"
 
 for op in (:(.=), :(.+=), :(.&=))
     @test repr(parse("x $op y")) == ":(x $op y)"

@@ -671,23 +671,19 @@ function show_generator(io, ex, indent)
         fg = ex
         ranges = Any[]
         while isa(fg, Expr) && fg.head === :flatten
-            push!(ranges, fg.args[1].args[2])
+            push!(ranges, fg.args[1].args[2:end])
             fg = fg.args[1].args[1]
         end
-        push!(ranges, fg.args[2])
+        push!(ranges, fg.args[2:end])
         show_unquoted(io, fg.args[1], indent)
         for r in ranges
             print(io, " for ")
-            show_unquoted(io, r, indent)
+            show_list(io, r, ", ", indent)
         end
     else
         show_unquoted(io, ex.args[1], indent)
         print(io, " for ")
-        show_unquoted(io, ex.args[2], indent)
-        for i = 3:length(ex.args)
-            print(io, ", ")
-            show_unquoted(io, ex.args[i], indent)
-        end
+        show_list(io, ex.args[2:end], ", ", indent)
     end
 end
 
