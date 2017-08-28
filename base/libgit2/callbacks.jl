@@ -50,10 +50,15 @@ end
 
 function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, username_ptr)
     creds = Base.get(p.credential)::SSHCredentials
+    modified = false
 
     # Reset password on sucessive calls
     if !p.first_pass
         creds.pass = ""
+    end
+
+    if p.first_pass && isfilled(creds)
+        modified = true
     end
 
     # first try ssh-agent if credentials support its usage
@@ -65,7 +70,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         err == 0 && return Cint(0)
     end
 
-    if p.use_env
+    if p.use_env && !modified
         creds.prvkey = Base.get(ENV, "SSH_KEY_PATH") do
             default = joinpath(homedir(), ".ssh", "id_rsa")
             if isempty(creds.prvkey) && isfile(default)
@@ -85,9 +90,16 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         end
 
         creds.pass = Base.get(ENV, "SSH_KEY_PASS", creds.pass)
+
+        p.use_env = false
+        modified = (
+            haskey(ENV, "SSH_KEY_PATH") ||
+            haskey(ENV, "SSH_PUB_KEY_PATH") ||
+            haskey(ENV, "SSH_KEY_PASS")
+        )
     end
 
-    if p.allow_prompt
+    if p.allow_prompt && (!modified || !isfilled(creds))
         # if username is not provided or empty, then prompt for it
         username = username_ptr != Cstring(C_NULL) ? unsafe_string(username_ptr) : ""
         if isempty(username)
@@ -102,7 +114,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         prompt_url = git_url(scheme=p.scheme, host=p.host, username=creds.user)
 
         # For SSH we need a private key location
-        if !isfile(creds.prvkey)
+        if !isfile(creds.prvkey) || !modified
             response = Base.prompt("Private key location for '$prompt_url'",
                 default=creds.prvkey)
             isnull(response) && return user_abort()
@@ -138,7 +150,11 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
                 isempty(creds.pass) && return user_abort()  # Ambiguous if EOF or newline
             end
         end
-    elseif !p.first_pass
+
+        modified = true
+    end
+
+    if !modified
         return Cint(Error.EAUTH)
     end
 
@@ -149,35 +165,42 @@ end
 
 function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload)
     creds = Base.get(p.credential)::UserPasswordCredentials
+    modified = false
 
     # Reset password on sucessive calls
     if !p.first_pass
         creds.pass = ""
     end
 
-    if p.allow_prompt
-        if isempty(creds.user) || isempty(creds.pass)
-            prompt_url = git_url(scheme=p.scheme, host=p.host)
-            if Sys.iswindows()
-                response = Base.winprompt(
-                    "Please enter your credentials for '$prompt_url'", "Credentials required",
-                    isempty(creds.user) ? p.username : creds.user; prompt_username=true)
-                isnull(response) && return user_abort()
-                creds.user, creds.pass = unsafe_get(response)
-            else
-                response = Base.prompt("Username for '$prompt_url'",
-                    default=isempty(creds.user) ? p.username : creds.user)
-                isnull(response) && return user_abort()
-                creds.user = unsafe_get(response)
+    if p.first_pass && isfilled(creds)
+        modified = true
+    end
 
-                prompt_url = git_url(scheme=p.scheme, host=p.host, username=creds.user)
-                response = Base.prompt("Password for '$prompt_url'", password=true)
-                isnull(response) && return user_abort()
-                creds.pass = unsafe_get(response)
-                isempty(creds.pass) && return user_abort()  # Ambiguous if EOF or newline
-            end
+    if p.allow_prompt && (!modified || !isfilled(creds))
+        prompt_url = git_url(scheme=p.scheme, host=p.host)
+        if Sys.iswindows()
+            response = Base.winprompt(
+                "Please enter your credentials for '$prompt_url'", "Credentials required",
+                isempty(creds.user) ? p.username : creds.user; prompt_username=true)
+            isnull(response) && return user_abort()
+            creds.user, creds.pass = unsafe_get(response)
+        else
+            response = Base.prompt("Username for '$prompt_url'",
+                default=isempty(creds.user) ? p.username : creds.user)
+            isnull(response) && return user_abort()
+            creds.user = unsafe_get(response)
+
+            prompt_url = git_url(scheme=p.scheme, host=p.host, username=creds.user)
+            response = Base.prompt("Password for '$prompt_url'", password=true)
+            isnull(response) && return user_abort()
+            creds.pass = unsafe_get(response)
+            isempty(creds.pass) && return user_abort()  # Ambiguous if EOF or newline
         end
-    elseif !p.first_pass
+
+        modified = true
+    end
+
+    if !modified
         return Cint(Error.EAUTH)
     end
 

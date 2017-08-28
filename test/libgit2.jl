@@ -1734,7 +1734,7 @@ mktempdir() do dir
                 # could also just re-call the credential callback like they do for HTTP.
                 challenges = [
                     "Passphrase for $valid_p_key:" => "foo\n",
-                    # "Private key location for 'git@github.com' [$valid_p_key]:" => "\n",
+                    "Private key location for 'git@github.com' [$valid_p_key]:" => "\n",
                     "Passphrase for $valid_p_key:" => "$passphrase\n",
                 ]
                 err, auth_attempts = challenge_prompt(ssh_p_ex, challenges)
@@ -1795,6 +1795,7 @@ mktempdir() do dir
                 challenges = [
                     "Username for 'github.com':" => "foo\n",
                     "Username for 'github.com' [foo]:" => "\n",
+                    "Private key location for 'foo@github.com' [$valid_key]:" => "\n",
                     "Username for 'github.com' [foo]:" => "\x04",  # Need to manually abort
                 ]
                 err, auth_attempts = challenge_prompt(ssh_u_ex, challenges)
@@ -1802,7 +1803,7 @@ mktempdir() do dir
                 @test auth_attempts == 3
 
                 # Credential callback is given an empty string in the `username_ptr`
-                # instead of the typical C_NULL.
+                # instead of the C_NULL in the other missing username tests.
                 ssh_user_empty_ex = gen_ex(valid_cred, username="")
                 challenges = [
                     "Username for 'github.com':" => "$username\n",
@@ -1859,12 +1860,10 @@ mktempdir() do dir
                 @test auth_attempts == 2
             end
 
-            # TODO: Tests are currently broken. Credential callback currently infinite loops
-            # and never prompts user to change private keys.
-            #=
             # Explicitly setting these env variables to an existing but invalid key pair
             # means the user will be given a prompt with that defaults to the given values.
-            withenv("SSH_KEY_PATH" => invalid_key, "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
+            withenv("SSH_KEY_PATH" => invalid_key,
+                    "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
                 challenges = [
                     "Private key location for 'git@github.com' [$invalid_key]:" => "$valid_key\n",
                 ]
@@ -1872,7 +1871,6 @@ mktempdir() do dir
                 @test err == git_ok
                 @test auth_attempts == 2
             end
-            =#
 
             # Explicitly set the public key ENV variable to a non-existent file.
             withenv("SSH_KEY_PATH" => valid_key,
@@ -1903,7 +1901,7 @@ mktempdir() do dir
                 ]
                 err, auth_attempts = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
-                @test auth_attempts == 2
+                @test auth_attempts == 1
             end
             =#
         end
@@ -1994,7 +1992,7 @@ mktempdir() do dir
             ex = gen_ex(username=nothing)
             err, auth_attempts = challenge_prompt(ex, [])
             @test err == eauth_error
-            @test auth_attempts == 2
+            @test auth_attempts == 1
         end
 
         @testset "SSH explicit credentials" begin
