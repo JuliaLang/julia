@@ -347,7 +347,7 @@ Option flags for `GitRepo`.
                    FEATURE_NSEC    = Cuint(1 << 3))
 
 if LibGit2.version() >= v"0.24.0"
-    """
+    @doc """
     Priority level of a config file.
 
     These priority levels correspond to the natural escalation logic (from higher to lower) when searching for config entries in git.
@@ -360,7 +360,7 @@ if LibGit2.version() >= v"0.24.0"
     * `CONFIG_LEVEL_LOCAL` - Repository specific configuration file; `\$WORK_DIR/.git/config` on non-bare repos
     * `CONFIG_LEVEL_APP` - Application specific configuration file; freely defined by applications
     * `CONFIG_HIGHEST_LEVEL` - Represents the highest level available config file (i.e. the most specific config file available that actually is loaded)
-    """
+    """ ->
     @enum(GIT_CONFIG, CONFIG_LEVEL_DEFAULT     = 0,
                       CONFIG_LEVEL_PROGRAMDATA = 1,
                       CONFIG_LEVEL_SYSTEM      = 2,
@@ -370,7 +370,7 @@ if LibGit2.version() >= v"0.24.0"
                       CONFIG_LEVEL_APP         = 6,
                       CONFIG_HIGHEST_LEVEL     =-1)
 else
-    """
+    @doc """
     Priority level of a config file.
 
     These priority levels correspond to the natural escalation logic (from higher to lower) when searching for config entries in git.
@@ -382,7 +382,7 @@ else
     * `CONFIG_LEVEL_LOCAL` - Repository specific configuration file; `\$WORK_DIR/.git/config` on non-bare repos
     * `CONFIG_LEVEL_APP` - Application specific configuration file; freely defined by applications
     * `CONFIG_HIGHEST_LEVEL` - Represents the highest level available config file (i.e. the most specific config file available that actually is loaded)
-    """
+    """ ->
     @enum(GIT_CONFIG, CONFIG_LEVEL_DEFAULT     = 0,
                       CONFIG_LEVEL_SYSTEM      = 1,
                       CONFIG_LEVEL_XDG         = 2,
