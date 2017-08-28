@@ -419,7 +419,6 @@ The following distributions include julia, but the versions may be out of date d
 * [NixOS](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/compilers/julia)
 * Ubuntu
   * [Ubuntu](http://packages.ubuntu.com/search?keywords=julia)
-  * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
 * [MacPorts](https://trac.macports.org/browser/trunk/dports/lang/julia/Portfile)
 * [OS X Homebrew Tap](https://github.com/staticfloat/homebrew-julia/)
 * [FreeBSD Ports](https://www.freshports.org/lang/julia/)
