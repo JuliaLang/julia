@@ -1422,4 +1422,6 @@ Base.size(a::GenericArray) = size(a.a)
 Base.getindex(a::GenericArray, i...) = a.a[i...]
 Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
 
+Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
+
 end # module
