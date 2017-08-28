@@ -189,18 +189,36 @@ ACOS_PI(::Type{Float64}) = 3.14159265358979311600e+00
 
 @noinline acos_domain_error(x) = throw(DomainError(x, "acos(x) not defined for |x| > 1"))
 function acos(x::T) where T <: Union{Float32, Float64}
-    # Mathematically we have that:
-    #     acos(x)  = pi/2 - asin(x)
-    #     acos(-x) = pi/2 + asin(x)
+    # Method :
+    #    acos(x)  = pi/2 - asin(x)
+    #    acos(-x) = pi/2 + asin(x)
     # As a result, we use the same rational approximation (arc_tRt) as in asin.
     # See the comments in asin for more information about this approximation.
+    # 1) For |x| <= 0.5
+    #    acos(x) = pi/2 - (x + x*x^2*R(x^2))
+    # 2) For x < -0.5
+    #    acos(x) = pi - 2asin(sqrt((1 - |x|)/2))
+    #        = pi - 0.5*(s+s*z*R(z))
+    # where z=(1-|x|)/2, s=sqrt(z)
+    # 3) For x > 0.5
+    #     acos(x) = pi/2 - (pi/2 - 2asin(sqrt((1 - x)/2)))
+    #        = 2asin(sqrt((1 - x)/2))
+    #        = 2s + 2s*z*R(z)     ...z=(1 - x)/2, s=sqrt(z)
+    #        = 2f + (2c + 2s*z*R(z))
+    #    where f=hi part of s, and c = (z - f*f)/(s + f) is the correction term
+    #    for f so that f + c ~ sqrt(z).
+
+    # Special cases:
+    #    4) if x is NaN, return x itself;
+    #    5) if |x|>1 throw warning.
+
     absx = abs(x)
     if absx >= T(1.0)
         # acos(-1) = π, acos(1) = 0
         absx == T(1.0) && return x > T(0.0) ? T(0.0) : T(pi)
         # acos(x) is not defined for |x| > 1
-        acos_domain_error(x)
-    elseif absx < T(1.0)/2
+        acos_domain_error(x) # see 5) above
+    elseif absx < T(1.0)/2 # see 1) above
         # if |x| sufficiently small, acos(x) ≈ pi/2
         absx < ACOS_X_MIN_THRESHOLD(T) && return T(pi)/2
         # if |x| < 0.5 we have acos(x) = pi/2 - (x + x*x^2*R(x^2))
@@ -209,13 +227,9 @@ function acos(x::T) where T <: Union{Float32, Float64}
     z = (T(1.0) - absx)*T(0.5)
     zRz = arc_tRt(z)
     s = sqrt_llvm(z)
-    if x < T(0.0) # x < -0.5
-        # if x < -0.5 we have
-        # acos(x) = pi - 2asin(sqrt((1-|x|)/2))
-        #         = pi - 0.5*(s+s*z*R(z))
-        # where z=(1-|x|)/2, s=sqrt(z)
+    if x < T(0.0) # see 2) above
         return ACOS_PI(T) - T(2.0)*(s + (zRz*s - PIO2_LO(T)))
-    else
+    else # see 3) above
         # if x > 0.5 we have
         # acos(x) = pi/2 - (pi/2 - 2asin(sqrt((1-x)/2)))
         #         = 2asin(sqrt((1-x)/2))
