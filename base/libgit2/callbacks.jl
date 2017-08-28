@@ -65,9 +65,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         err == 0 && return Cint(0)
     end
 
-    username = username_ptr != Cstring(C_NULL) ? unsafe_string(username_ptr) : ""
-
-    privatekey = Base.get(ENV, "SSH_KEY_PATH") do
+    cred.prvkey = Base.get(ENV, "SSH_KEY_PATH") do
         default = joinpath(homedir(), ".ssh", "id_rsa")
         if isempty(cred.prvkey) && isfile(default)
             default
@@ -76,8 +74,8 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         end
     end
 
-    publickey = Base.get(ENV, "SSH_PUB_KEY_PATH") do
-        default = privatekey * ".pub"
+    cred.pubkey = Base.get(ENV, "SSH_PUB_KEY_PATH") do
+        default = cred.prvkey * ".pub"
         if isempty(cred.pubkey) && isfile(default)
             default
         else
@@ -85,60 +83,59 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         end
     end
 
-    passphrase = Base.get(ENV, "SSH_KEY_PASS", cred.pass)
+    cred.pass = Base.get(ENV, "SSH_KEY_PASS", cred.pass)
 
     if p.allow_prompt
         # if username is not provided or empty, then prompt for it
+        username = username_ptr != Cstring(C_NULL) ? unsafe_string(username_ptr) : ""
         if isempty(username)
             prompt_url = git_url(scheme=p.scheme, host=p.host)
             response = Base.prompt("Username for '$prompt_url'", default=cred.user)
             isnull(response) && return user_abort()
-            username = unsafe_get(response)
+            cred.user = unsafe_get(response)
+        else
+            cred.user = username
         end
 
-        prompt_url = git_url(scheme=p.scheme, host=p.host, username=username)
+        prompt_url = git_url(scheme=p.scheme, host=p.host, username=cred.user)
 
         # For SSH we need a private key location
-        if !isfile(privatekey)
+        if !isfile(cred.prvkey)
             response = Base.prompt("Private key location for '$prompt_url'",
-                default=privatekey)
+                default=cred.prvkey)
             isnull(response) && return user_abort()
-            privatekey = unsafe_get(response)
+            last_private_key = cred.prvkey
+            cred.prvkey = unsafe_get(response)
 
             # Only update the public key if the private key changed
-            if privatekey != cred.prvkey
-                publickey = privatekey * ".pub"
+            if cred.prvkey != last_private_key
+                cred.pubkey = cred.prvkey * ".pub"
             end
         end
 
         # For SSH we need a public key location. Avoid asking about the public key as
         # typically this will just annoy users.
-        if !isfile(publickey) && isfile(privatekey)
+        if !isfile(cred.pubkey) && isfile(cred.prvkey)
             response = Base.prompt("Public key location for '$prompt_url'",
-                default=publickey)
+                default=cred.pubkey)
             isnull(response) && return user_abort()
-            publickey = unsafe_get(response)
+            cred.pubkey = unsafe_get(response)
         end
 
-        if isempty(passphrase) && is_passphrase_required(privatekey)
+        if isempty(cred.pass) && is_passphrase_required(cred.prvkey)
             if Sys.iswindows()
                 response = Base.winprompt(
                     "Your SSH Key requires a password, please enter it now:",
-                    "Passphrase required", privatekey; prompt_username=false)
+                    "Passphrase required", cred.prvkey; prompt_username=false)
                 isnull(response) && return user_abort()
-                passphrase = unsafe_get(response)[2]
+                cred.pass = unsafe_get(response)[2]
             else
-                response = Base.prompt("Passphrase for $privatekey", password=true)
+                response = Base.prompt("Passphrase for $(cred.prvkey)", password=true)
                 isnull(response) && return user_abort()
-                passphrase = unsafe_get(response)
-                isempty(passphrase) && return user_abort()  # Ambiguous if EOF or newline
+                cred.pass = unsafe_get(response)
+                isempty(cred.pass) && return user_abort()  # Ambiguous if EOF or newline
             end
         end
-
-        cred.user = username # save credentials
-        cred.prvkey = privatekey # save credentials
-        cred.pubkey = publickey # save credentials
-        cred.pass = passphrase
     elseif !p.first_pass
         return Cint(Error.EAUTH)
     end
@@ -157,31 +154,27 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayl
     end
 
     if p.allow_prompt
-        username = cred.user
-        userpass = cred.pass
-        if isempty(username) || isempty(userpass)
+        if isempty(cred.user) || isempty(cred.pass)
             prompt_url = git_url(scheme=p.scheme, host=p.host)
             if Sys.iswindows()
                 response = Base.winprompt(
                     "Please enter your credentials for '$prompt_url'", "Credentials required",
-                    isempty(username) ? p.username : username; prompt_username=true)
+                    isempty(cred.user) ? p.username : cred.user; prompt_username=true)
                 isnull(response) && return user_abort()
-                username, userpass = unsafe_get(response)
+                cred.user, cred.pass = unsafe_get(response)
             else
                 response = Base.prompt("Username for '$prompt_url'",
-                    default=isempty(username) ? p.username : username)
+                    default=isempty(cred.user) ? p.username : cred.user)
                 isnull(response) && return user_abort()
-                username = unsafe_get(response)
+                cred.user = unsafe_get(response)
 
-                prompt_url = git_url(scheme=p.scheme, host=p.host, username=username)
+                prompt_url = git_url(scheme=p.scheme, host=p.host, username=cred.user)
                 response = Base.prompt("Password for '$prompt_url'", password=true)
                 isnull(response) && return user_abort()
-                userpass = unsafe_get(response)
-                isempty(userpass) && return user_abort()  # Ambiguous if EOF or newline
+                cred.pass = unsafe_get(response)
+                isempty(cred.pass) && return user_abort()  # Ambiguous if EOF or newline
             end
         end
-        cred.user = username # save credentials
-        cred.pass = userpass # save credentials
     elseif !p.first_pass
         return Cint(Error.EAUTH)
     end
