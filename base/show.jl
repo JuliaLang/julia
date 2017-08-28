@@ -242,6 +242,11 @@ end
 show(io::IO, x::DataType) = show_datatype(io, x)
 
 function show_type_name(io::IO, tn::TypeName)
+    if tn === UnionAll.name
+        # by coincidence, `typeof(Type)` is a valid representation of the UnionAll type.
+        # intercept this case and print `UnionAll` instead.
+        return print(io, "UnionAll")
+    end
     globname = isdefined(tn, :mt) ? tn.mt.name : nothing
     globfunc = false
     if globname !== nothing
