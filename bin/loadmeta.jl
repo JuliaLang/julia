@@ -154,4 +154,5 @@ end
 ## Load package data ##
 
 const pkgs = load_packages(Pkg.dir("METADATA"))
+delete!(pkgs, "CardinalDicts") # package repo no longer exists
 prune!(pkgs)
