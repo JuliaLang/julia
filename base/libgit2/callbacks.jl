@@ -57,15 +57,12 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
     end
 
     # first try ssh-agent if credentials support its usage
-    if p.use_ssh_agent == 'Y' && username_ptr != Cstring(C_NULL)
+    if p.use_ssh_agent && username_ptr != Cstring(C_NULL)
         err = ccall((:git_cred_ssh_key_from_agent, :libgit2), Cint,
                     (Ptr{Ptr{Void}}, Cstring), libgit2credptr, username_ptr)
-        if err == 0
-            p.use_ssh_agent = 'U'  # used ssh-agent only one time
-            return Cint(0)
-        else
-            p.use_ssh_agent = 'E'
-        end
+
+        p.use_ssh_agent = false  # use ssh-agent only one time
+        err == 0 && return Cint(0)
     end
 
     if p.allow_prompt

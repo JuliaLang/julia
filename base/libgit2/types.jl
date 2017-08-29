@@ -1159,7 +1159,7 @@ mutable struct CredentialPayload <: Payload
     # Ephemeral state fields
     credential::Nullable{AbstractCredentials}
     first_pass::Bool
-    use_ssh_agent::Char
+    use_ssh_agent::Bool
     scheme::String
     username::String
     host::String
@@ -1192,7 +1192,7 @@ the credential callback.
 function reset!(p::CredentialPayload)
     p.credential = Nullable{AbstractCredentials}()
     p.first_pass = true
-    p.use_ssh_agent = p.allow_ssh_agent ? 'Y' : 'N'
+    p.use_ssh_agent = p.allow_ssh_agent
     p.scheme = ""
     p.username = ""
     p.host = ""
