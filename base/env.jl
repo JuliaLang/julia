@@ -77,6 +77,7 @@ similar(::EnvHash) = Dict{String,String}()
 
 getindex(::EnvHash, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
 get(::EnvHash, k::AbstractString, def) = access_env(k->def, k)
+get(f::Callable, ::EnvHash, k::AbstractString) = access_env(k->f(), k)
 in(k::AbstractString, ::KeyIterator{EnvHash}) = _hasenv(k)
 pop!(::EnvHash, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvHash, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def

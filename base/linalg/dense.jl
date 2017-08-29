@@ -357,9 +357,15 @@ kron(a::AbstractMatrix, b::AbstractVector) = kron(a, reshape(b, length(b), 1))
 kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
 
 # Matrix power
-(^)(A::AbstractMatrix, p::Integer) = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
+(^)(A::AbstractMatrix, p::Integer) = p < 0 ? power_by_squaring(inv(A), -p) : power_by_squaring(A, p)
+function (^)(A::AbstractMatrix{T}, p::Integer) where T<:Integer
+    # make sure that e.g. [1 1;1 0]^big(3)
+    # gets promotes in a similar way as 2^big(3)
+    TT = promote_op(^, T, typeof(p))
+    return power_by_squaring(convert(AbstractMatrix{TT}, A), p)
+end
 function integerpow(A::AbstractMatrix{T}, p) where T
-    TT = Base.promote_op(^, T, typeof(p))
+    TT = promote_op(^, T, typeof(p))
     return (TT == T ? A : copy!(similar(A, TT), A))^Integer(p)
 end
 function schurpow(A::AbstractMatrix, p)
@@ -420,12 +426,12 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Otherwise, use Schur decomposition
     return schurpow(A, p)
 end
-(^)(A::AbstractMatrix, p::Number) = expm(p*logm(A))
+(^)(A::AbstractMatrix, p::Number) = exp(p*logm(A))
 
 # Matrix exponential
 
 """
-    expm(A)
+    exp(A::AbstractMatrix)
 
 Compute the matrix exponential of `A`, defined by
 
@@ -445,22 +451,21 @@ julia> A = eye(2, 2)
  1.0  0.0
  0.0  1.0
 
-julia> expm(A)
+julia> exp(A)
 2×2 Array{Float64,2}:
  2.71828  0.0
  0.0      2.71828
 ```
 """
-expm(A::StridedMatrix{<:BlasFloat}) = expm!(copy(A))
-expm(A::StridedMatrix{<:Integer}) = expm!(float(A))
-expm(x::Number) = exp(x)
+exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
+exp(A::StridedMatrix{<:Integer}) = exp!(float(A))
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
-function expm!(A::StridedMatrix{T}) where T<:BlasFloat
+function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     n = checksquare(A)
     if ishermitian(A)
-        return full(expm(Hermitian(A)))
+        return full(exp(Hermitian(A)))
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = norm(A, 1)
@@ -895,7 +900,6 @@ function pinv(A::StridedMatrix{T}) where T
     tol = eps(real(float(one(T))))*maximum(size(A))
     return pinv(A, tol)
 end
-pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
 function pinv(x::Number)
     xi = inv(x)
     return ifelse(isfinite(xi), xi, zero(xi))

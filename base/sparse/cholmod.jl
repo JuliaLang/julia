@@ -3,7 +3,7 @@
 module CHOLMOD
 
 import Base: (*), convert, copy, eltype, getindex, show, size,
-             IndexStyle, IndexLinear, IndexCartesian, ctranspose
+             IndexStyle, IndexLinear, IndexCartesian, adjoint
 
 import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
@@ -487,21 +487,21 @@ function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
 end
 function free_sparse!(ptr::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
     @isok ccall((@cholmod_name("free_sparse", SuiteSparse_long), :libcholmod), Cint,
-            (Ptr{Ptr{C_Sparse{Tv}}}, Ptr{UInt8}),
-                &ptr, common())
+            (Ref{Ptr{C_Sparse{Tv}}}, Ptr{UInt8}),
+                ptr, common())
 end
 
 function free_sparse!(ptr::Ptr{C_SparseVoid})
     @isok ccall((@cholmod_name("free_sparse", SuiteSparse_long), :libcholmod), Cint,
-            (Ptr{Ptr{C_SparseVoid}}, Ptr{UInt8}),
-                &ptr, common())
+            (Ref{Ptr{C_SparseVoid}}, Ptr{UInt8}),
+                ptr, common())
 end
 
 function free_factor!(ptr::Ptr{C_Factor{Tv}}) where Tv<:VTypes
     # Warning! Important that finalizer doesn't modify the global Common struct.
     @isok ccall((@cholmod_name("free_factor", SuiteSparse_long), :libcholmod), Cint,
-            (Ptr{Ptr{C_Factor{Tv}}}, Ptr{Void}),
-                &ptr, common())
+            (Ref{Ptr{C_Factor{Tv}}}, Ptr{Void}),
+                ptr, common())
 end
 
 function aat(A::Sparse{Tv}, fset::Vector{SuiteSparse_long}, mode::Integer) where Tv<:VRealTypes
@@ -993,7 +993,7 @@ end
 
 convert(::Type{Sparse}, A::Dense) = dense_to_sparse(A, SuiteSparse_long)
 convert(::Type{Sparse}, L::Factor) = factor_to_sparse!(copy(L))
-function (::Type{Sparse})(filename::String)
+function Sparse(filename::String)
     open(filename) do f
         return read_sparse(f, SuiteSparse_long)
     end
@@ -1209,15 +1209,15 @@ IndexStyle(::Dense) = IndexLinear()
 size(FC::FactorComponent, i::Integer) = size(FC.F, i)
 size(FC::FactorComponent) = size(FC.F)
 
-ctranspose(FC::FactorComponent{Tv,:L}) where {Tv} = FactorComponent{Tv,:U}(FC.F)
-ctranspose(FC::FactorComponent{Tv,:U}) where {Tv} = FactorComponent{Tv,:L}(FC.F)
-ctranspose(FC::FactorComponent{Tv,:PtL}) where {Tv} = FactorComponent{Tv,:UP}(FC.F)
-ctranspose(FC::FactorComponent{Tv,:UP}) where {Tv} = FactorComponent{Tv,:PtL}(FC.F)
-ctranspose(FC::FactorComponent{Tv,:D}) where {Tv} = FC
-ctranspose(FC::FactorComponent{Tv,:LD}) where {Tv} = FactorComponent{Tv,:DU}(FC.F)
-ctranspose(FC::FactorComponent{Tv,:DU}) where {Tv} = FactorComponent{Tv,:LD}(FC.F)
-ctranspose(FC::FactorComponent{Tv,:PtLD}) where {Tv} = FactorComponent{Tv,:DUP}(FC.F)
-ctranspose(FC::FactorComponent{Tv,:DUP}) where {Tv} = FactorComponent{Tv,:PtLD}(FC.F)
+adjoint(FC::FactorComponent{Tv,:L}) where {Tv} = FactorComponent{Tv,:U}(FC.F)
+adjoint(FC::FactorComponent{Tv,:U}) where {Tv} = FactorComponent{Tv,:L}(FC.F)
+adjoint(FC::FactorComponent{Tv,:PtL}) where {Tv} = FactorComponent{Tv,:UP}(FC.F)
+adjoint(FC::FactorComponent{Tv,:UP}) where {Tv} = FactorComponent{Tv,:PtL}(FC.F)
+adjoint(FC::FactorComponent{Tv,:D}) where {Tv} = FC
+adjoint(FC::FactorComponent{Tv,:LD}) where {Tv} = FactorComponent{Tv,:DU}(FC.F)
+adjoint(FC::FactorComponent{Tv,:DU}) where {Tv} = FactorComponent{Tv,:LD}(FC.F)
+adjoint(FC::FactorComponent{Tv,:PtLD}) where {Tv} = FactorComponent{Tv,:DUP}(FC.F)
+adjoint(FC::FactorComponent{Tv,:DUP}) where {Tv} = FactorComponent{Tv,:PtLD}(FC.F)
 
 function getindex(A::Dense, i::Integer)
     s = unsafe_load(pointer(A))
@@ -1651,8 +1651,8 @@ function (\)(L::FactorComponent, B::SparseVecOrMat)
     sparse(L\Sparse(B,0))
 end
 
-Ac_ldiv_B(L::FactorComponent, B) = ctranspose(L)\B
-Ac_ldiv_B(L::FactorComponent, B::RowVector) = ctranspose(L)\B # ambiguity
+Ac_ldiv_B(L::FactorComponent, B) = adjoint(L)\B
+Ac_ldiv_B(L::FactorComponent, B::RowVector) = adjoint(L)\B # ambiguity
 
 (\)(L::Factor{T}, B::Dense{T}) where {T<:VTypes} = solve(CHOLMOD_A, L, B)
 # Explicit typevars are necessary to avoid ambiguities with defs in linalg/factorizations.jl
@@ -1725,7 +1725,7 @@ function logdet(F::Factor{Tv}) where Tv<:VTypes
     f = unsafe_load(pointer(F))
     res = zero(Tv)
     for d in diag(F); res += log(abs(d)) end
-    f.is_ll!=0 ? 2res : res
+    f.is_ll != 0 ? 2res : res
 end
 
 det(L::Factor) = exp(logdet(L))

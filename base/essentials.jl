@@ -78,7 +78,7 @@ julia> convert(Int, 3.0)
 julia> convert(Int, 3.5)
 ERROR: InexactError: convert(Int64, 3.5)
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:701
 ```
 
 If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
@@ -361,7 +361,7 @@ If `T` does not have a specific size, an error is thrown.
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
 Stacktrace:
- [1] sizeof(::Type{T} where T) at ./essentials.jl:150
+ [1] sizeof(::Type{T} where T) at ./essentials.jl:367
 ```
 """
 sizeof(x) = Core.sizeof(x)

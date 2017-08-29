@@ -2921,6 +2921,13 @@ function f11065()
 end
 @test_throws UndefVarError f11065()
 
+# for loop iterator expression should be evaluated in outer scope
+let
+    for i in (local a = 1:2)
+    end
+    @test a == 1:2
+end
+
 # issue #11295
 function f11295(x...)
     call = Expr(x...)
@@ -3139,6 +3146,37 @@ struct MyType8010_ghost
 end
 @test_throws TypeError MyType8010([3.0;4.0])
 @test_throws TypeError MyType8010_ghost([3.0;4.0])
+
+module TestNewTypeError
+using Base.Test
+
+struct A
+end
+struct B
+    a::A
+end
+@eval function f1()
+    # Emitting this direction is not recommended but it can come from `convert` that does not
+    # return the correct type.
+    $(Expr(:new, B, 1))
+end
+@eval function f2()
+    a = $(Expr(:new, B, 1))
+    a = a
+    return nothing
+end
+@generated function f3()
+    quote
+        $(Expr(:new, B, 1))
+        return nothing
+    end
+end
+@test_throws TypeError f1()
+@test_throws TypeError f2()
+@test_throws TypeError f3()
+@test_throws TypeError eval(Expr(:new, B, 1))
+
+end
 
 # don't allow redefining types if ninitialized changes
 struct NInitializedTestType
@@ -3758,11 +3796,11 @@ end
 
 module M15455
 function rpm_provides(r::T) where T
-    push!([], select(r,T))
+    push!([], partialsort(r,T))
 end
-select(a,b) = 0
+partialsort(a,b) = 0
 end
-@test M15455.select(1,2)==0
+@test M15455.partialsort(1,2)==0
 
 # check that medium-sized array is 64-byte aligned (#15139)
 @test Int(pointer(Vector{Float64}(1024))) % 64 == 0
@@ -4397,7 +4435,7 @@ end
 function f18054()
     return Cint(0)
 end
-cfunction(f18054, Cint, ())
+cfunction(f18054, Cint, Tuple{})
 
 # issue #18986: the ccall optimization of cfunction leaves JL_TRY stack in bad state
 dummy18996() = return nothing
@@ -5117,6 +5155,15 @@ f_isdefined_va(::T...) where {T} = @isdefined T
 @test !f_isdefined_va()
 @test f_isdefined_va(1, 2, 3)
 
+# @isdefined in a loop
+let a = []
+    for i = 1:2
+        push!(a, @isdefined(j))
+        local j = 1
+    end
+    @test a == [false, false]
+end
+
 mutable struct MyStruct22929
     x::MyStruct22929
     MyStruct22929() = new()
@@ -5232,6 +5279,11 @@ const unboxedunions = [Union{Int8, Void}, Union{Int8, Float16, Void},
 @test Base.bitsunionsize(unboxedunions[3]) == 16
 @test Base.bitsunionsize(unboxedunions[4]) == 8
 
+@test sizeof(unboxedunions[1]) == 1
+@test sizeof(unboxedunions[2]) == 2
+@test sizeof(unboxedunions[3]) == 16
+@test sizeof(unboxedunions[4]) == 8
+
 initvalue(::Type{Void}) = nothing
 initvalue(::Type{Char}) = '\0'
 initvalue(::Type{Date}) = Date(0, 12, 31)
@@ -5256,14 +5308,15 @@ x.u = initvalue(Base.uniontypes(U)[2])
 @test x.u === initvalue(Base.uniontypes(U)[2])
 
 for U in boxedunions
+    local U
     for N in (1, 2, 3, 4)
         A = Array{U}(ntuple(x->0, N)...)
         @test isempty(A)
-        @test Core.sizeof(A) == 0
+        @test sizeof(A) == 0
 
         A = Array{U}(ntuple(x->10, N)...)
         @test length(A) == 10^N
-        @test Core.sizeof(A) == sizeof(Int) * (10^N)
+        @test sizeof(A) == sizeof(Int) * (10^N)
         @test !isassigned(A, 1)
     end
 end
@@ -5275,16 +5328,17 @@ A5 = [1 2 3; 4 5 6]
 @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A5)), 6)
 
 for U in unboxedunions
+    local U
     for N in (1, 2, 3, 4)
         A = Array{U}(ntuple(x->0, N)...)
         @test isempty(A)
-        @test Core.sizeof(A) == 0
+        @test sizeof(A) == 0
 
         len = ntuple(x->10, N)
         mxsz = maximum(sizeof, Base.uniontypes(U))
         A = Array{U}(len)
         @test length(A) == prod(len)
-        @test Core.sizeof(A) == prod(len) * mxsz
+        @test sizeof(A) == prod(len) * mxsz
         @test isassigned(A, 1)
         @test isassigned(A, length(A))
 
@@ -5312,7 +5366,7 @@ for U in unboxedunions
 
         # reshape
         A3 = reshape(A, (div(prod(len), 2), 2))
-        @test Core.sizeof(A) == prod(len) * mxsz
+        @test sizeof(A) == prod(len) * mxsz
         @test isassigned(A, 1)
         @test A[1] === initvalue2(F)
 
@@ -5359,7 +5413,8 @@ for U in unboxedunions
             # deleteat!
             F = Base.uniontypes(U)[2]
             A = U[rand(F(1):F(len)) for i = 1:len]
-            deleteat!(A, map(Int, sort!(unique(A[1:4]))))
+            # The 2-arg `unique` method works around #22688
+            deleteat!(A, map(Int, sort!(unique(identity, A[1:4]))))
             A = U[initvalue2(F2) for i = 1:len]
             deleteat!(A, 1:2)
             @test length(A) == len - 2

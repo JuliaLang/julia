@@ -254,35 +254,6 @@ function foo9222()
 end
 @test 0.0 == foo9222()
 
-# make sure none of the slottypes are left as Core.Inference.Const objects
-function f18679()
-    for i = 1:2
-        if i == 1
-            a = ((),)
-        else
-            return a[1]
-        end
-    end
-end
-g18679(x::Tuple) = ()
-g18679() = g18679(any_undef_global::Union{Int,Tuple{}})
-for code in Any[
-        @code_typed(f18679())[1]
-        @code_typed(g18679())[1]]
-    @test all(x->isa(x, Type), code.slottypes)
-    local notconst(@nospecialize(other)) = true
-    notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
-    function notconst(expr::Expr)
-        @test isa(expr.typ, Type)
-        for a in expr.args
-            notconst(a)
-        end
-    end
-    for e in code.code
-        notconst(e)
-    end
-end
-
 # branching based on inferrable conditions
 let f(x) = isa(x,Int) ? 1 : ""
     @test Base.return_types(f, Tuple{Int}) == [Int]
@@ -470,11 +441,62 @@ function test_inferred_static(arrow::Pair)
     end
 end
 
+function f18679()
+    local a
+    for i = 1:2
+        if i == 1
+            a = ((),)
+        else
+            return a[1]
+        end
+    end
+end
+g18679(x::Tuple) = ()
+g18679() = g18679(any_undef_global::Union{Int, Tuple{}})
+function h18679()
+    for i = 1:2
+        local a
+        if i == 1
+            a = ((),)
+        else
+            @isdefined(a) && return "BAD"
+        end
+    end
+end
+
 function g19348(x)
     a, b = x
-    return a + b
+    g = 1
+    g = 2
+    c = Base.indexed_next(x, g, g)
+    return a + b + c[1]
 end
-test_inferred_static(@code_typed g19348((1, 2.0)))
+
+for codetype in Any[
+        @code_typed(f18679()),
+        @code_typed(g18679()),
+        @code_typed(h18679()),
+        @code_typed(g19348((1, 2.0)))]
+    # make sure none of the slottypes are left as Core.Inference.Const objects
+    code = codetype[1]
+    @test all(x->isa(x, Type), code.slottypes)
+    local notconst(@nospecialize(other)) = true
+    notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
+    function notconst(expr::Expr)
+        @test isa(expr.typ, Type)
+        for a in expr.args
+            notconst(a)
+        end
+    end
+    for e in code.code
+        notconst(e)
+    end
+    test_inferred_static(code)
+end
+@test f18679() === ()
+@test_throws UndefVarError(:any_undef_global) g18679()
+@test h18679() === nothing
+
 
 # issue #5575
 f5575() = zeros(Type[Float64][1], 1)
@@ -795,7 +817,7 @@ end
 struct NArray_17003{T,N} <: AArray_17003{Nable_17003{T},N}
 end
 
-(::Type{NArray_17003})(::Array{T,N}) where {T,N} = NArray_17003{T,N}()
+NArray_17003(::Array{T,N}) where {T,N} = NArray_17003{T,N}()
 
 gl_17003 = [1, 2, 3]
 

@@ -600,8 +600,8 @@ it also handles tuples and treats any argument that is not an array, tuple or `R
 ```jldoctest
 julia> convert.(Float32, [1, 2])
 2-element Array{Float32,1}:
- 1.0
- 2.0
+ 1.0f0
+ 2.0f0
 
 julia> ceil.((UInt8,), [1.2 3.4; 5.6 6.7])
 2×2 Array{UInt8,2}:
@@ -745,7 +745,7 @@ In some applications, it is convenient to store explicit zero values in a `Spars
 mutating operations). Such explicitly stored zeros are treated as structural nonzeros by many
 routines. The [`nnz()`](@ref) function returns the number of elements explicitly stored in the
 sparse data structure, including structural nonzeros. In order to count the exact number of
-numerical nonzeros, use [`countnz()`](@ref), which inspects every stored element of a sparse
+numerical nonzeros, use [`count(!iszero, x)`](@ref), which inspects every stored element of a sparse
 matrix. [`dropzeros()`](@ref), and the in-place [`dropzeros!()`](@ref), can be used to
 remove stored zeros from the sparse matrix.
 

@@ -27,6 +27,14 @@ module Consts
     const REF_SYMBOLIC = Cint(2)
     const REF_LISTALL  = REF_OID | REF_SYMBOLIC
 
+    # blame
+    const BLAME_NORMAL                          = Cuint(0)
+    const BLAME_TRACK_COPIES_SAME_FILE          = Cuint(1 << 0)
+    const BLAME_TRACK_COPIES_SAME_COMMIT_MOVES  = Cuint(1 << 1)
+    const BLAME_TRACK_COPIES_SAME_COMMIT_COPIES = Cuint(1 << 2)
+    const BLAME_TRACK_COPIES_ANY_COMMIT_COPIES  = Cuint(1 << 3)
+    const BLAME_FIRST_PARENT                    = Cuint(1 << 4)
+
     # checkout
     const CHECKOUT_NONE                    = Cuint(0)
     const CHECKOUT_SAFE                    = Cuint(1 << 0)
@@ -141,6 +149,17 @@ module Consts
     const INDEX_STAGE_ANY = Cint(-1)
 
     # merge
+    """ Option flags for git merge.
+    * `MERGE_FIND_RENAMES`: detect if a file has been renamed between the common
+      ancestor and the "ours" or "theirs" side of the merge. Allows merges where
+      a file has been renamed.
+    * `MERGE_FAIL_ON_CONFLICT`: exit immediately if a conflict is found rather
+      than trying to resolve it.
+    * `MERGE_SKIP_REUC`: do not write the REUC extension on the index resulting
+      from the merge.
+    * `MERGE_NO_RECURSIVE`: if the commits being merged have multiple merge bases,
+      use the first one, rather than trying to recursively merge the bases.
+    """
     @enum(GIT_MERGE, MERGE_FIND_RENAMES     = 1 << 0,
                      MERGE_FAIL_ON_CONFLICT = 1 << 1,
                      MERGE_SKIP_REUC        = 1 << 2,
@@ -155,16 +174,45 @@ module Consts
                           MERGE_FILE_IGNORE_WHITESPACE_EOL    = 1 << 5,  # Ignore whitespace at end of line
                           MERGE_FILE_DIFF_PATIENCE            = 1 << 6,  # Use the "patience diff" algorithm
                           MERGE_FILE_DIFF_MINIMAL             = 1 << 7)  # Take extra time to find minimal diff
-
+    """ Option flags for git merge file favoritism.
+      * `MERGE_FILE_FAVOR_NORMAL`: if both sides of the merge have changes to a section,
+        make a note of the conflict in the index which `git checkout` will use to create
+        a merge file, which the user can then reference to resolve the conflicts. This is
+        the default.
+      * `MERGE_FILE_FAVOR_OURS`: if both sides of the merge have changes to a section,
+        use the version in the "ours" side of the merge in the index.
+      * `MERGE_FILE_FAVOR_THEIRS`: if both sides of the merge have changes to a section,
+        use the version in the "theirs" side of the merge in the index.
+      * `MERGE_FILE_FAVOR_UNION`: if both sides of the merge have changes to a section,
+        include each unique line from both sides in the file which is put into the index.
+    """
     @enum(GIT_MERGE_FILE_FAVOR, MERGE_FILE_FAVOR_NORMAL = 0,
                                 MERGE_FILE_FAVOR_OURS   = 1,
                                 MERGE_FILE_FAVOR_THEIRS = 2,
                                 MERGE_FILE_FAVOR_UNION  = 3)
-
+    """ The user's instructions for how to perform a possible merge.
+    * `MERGE_PREFERENCE_NONE`: the user has no preference.
+    * `MERGE_PREFERENCE_NO_FASTFORWARD`: do not allow any fast-forward merges.
+    * `MERGE_PREFERENCE_FASTFORWARD_ONLY`: allow only fast-forward merges and no
+      other type (which may introduce conflicts).
+    """
     @enum(GIT_MERGE_PREFERENCE, MERGE_PREFERENCE_NONE             = 0,
                                 MERGE_PREFERENCE_NO_FASTFORWARD   = 1,
                                 MERGE_PREFERENCE_FASTFORWARD_ONLY = 2)
-
+    """ Result of analysis on merge possibilities.
+    * `MERGE_ANALYSIS_NONE`: it is not possible to merge the elements of the input commits.
+    * `MERGE_ANALYSIS_NORMAL`: a regular merge, when HEAD and the commits that the
+      user wishes to merge have all diverged from a common ancestor. In this case the
+      changes have to be resolved and conflicts may occur.
+    * `MERGE_ANALYSIS_UP_TO_DATE`: all the input commits the user wishes to merge can
+      be reached from HEAD, so no merge needs to be performed.
+    * `MERGE_ANALYSIS_FASTFORWARD`: the input commit is a descendant of HEAD and so no
+      merge needs to be performed - instead, the user can simply checkout the
+      input commit(s).
+    * `MERGE_ANALYSIS_UNBORN`: the HEAD of the repository refers to a commit which does not
+      exist. It is not possible to merge, but it may be possible to checkout the input
+      commits.
+    """
     @enum(GIT_MERGE_ANALYSIS, MERGE_ANALYSIS_NONE        = 0,
                               MERGE_ANALYSIS_NORMAL      = 1 << 0,
                               MERGE_ANALYSIS_UP_TO_DATE  = 1 << 1,
@@ -176,7 +224,20 @@ module Consts
     const RESET_MIXED = Cint(2) # SOFT plus reset index to the commit
     const RESET_HARD  = Cint(3) # MIXED plus changes in working tree discarded
 
-    #rebase
+    # rebase
+    """ Options for what rebase operation is currently being performed on a commit.
+    * `REBASE_OPERATION_PICK`: cherry-pick the commit in question.
+    * `REBASE_OPERATION_REWORD`: cherry-pick the commit in question, but rewrite its
+      message using the prompt.
+    * `REBASE_OPERATION_EDIT`: cherry-pick the commit in question, but allow the user
+      to edit the commit's contents and its message.
+    * `REBASE_OPERATION_SQUASH`: squash the commit in question into the previous commit.
+      The commit messages of the two commits will be merged.
+    * `REBASE_OPERATION_FIXUP`: squash the commit in question into the previous commit.
+      Only the commit message of the previous commit will be used.
+    * `REBASE_OPERATION_EXEC`: do not cherry-pick a commit. Run a command and continue if
+      the command exits successfully.
+    """
     @enum(GIT_REBASE_OPERATION, REBASE_OPERATION_PICK   = Cint(0),
                                 REBASE_OPERATION_REWORD = Cint(1),
                                 REBASE_OPERATION_EDIT   = Cint(2),

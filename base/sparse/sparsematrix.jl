@@ -70,9 +70,9 @@ julia> nnz(A)
 3
 ```
 """
-nnz(S::SparseMatrixCSC) = Int(S.colptr[S.n + 1]-1)
-countnz(S::SparseMatrixCSC) = countnz(S.nzval)
-count(S::SparseMatrixCSC) = count(S.nzval)
+nnz(S::SparseMatrixCSC)         = Int(S.colptr[S.n + 1] - 1)
+count(S::SparseMatrixCSC)       = count(S.nzval)
+count(pred, S::SparseMatrixCSC) = count(pred, S.nzval) + pred(zero(eltype(S)))*(prod(size(S)) - nnz(S))
 
 """
     nonzeros(A)
@@ -853,14 +853,14 @@ function ftranspose!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, f::Fu
     halfperm!(X, A, 1:A.n, f)
 end
 transpose!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = ftranspose!(X, A, identity)
-ctranspose!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = ftranspose!(X, A, conj)
+adjoint!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = ftranspose!(X, A, conj)
 
 function ftranspose(A::SparseMatrixCSC{Tv,Ti}, f::Function) where {Tv,Ti}
     X = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m+1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
     halfperm!(X, A, 1:A.n, f)
 end
 transpose(A::SparseMatrixCSC) = ftranspose(A, identity)
-ctranspose(A::SparseMatrixCSC) = ftranspose(A, conj)
+adjoint(A::SparseMatrixCSC) = ftranspose(A, conj)
 
 """
     unchecked_noalias_permute!(X::SparseMatrixCSC{Tv,Ti},
@@ -1946,11 +1946,6 @@ findmax(A::SparseMatrixCSC) = (r=findmax(A,(1,2)); (r[1][1], r[2][1]))
 
 indmin(A::SparseMatrixCSC) = findmin(A)[2]
 indmax(A::SparseMatrixCSC) = findmax(A)[2]
-
-#all(A::SparseMatrixCSC{Bool}, region) = reducedim(all,A,region,true)
-#any(A::SparseMatrixCSC{Bool}, region) = reducedim(any,A,region,false)
-#sum(A::SparseMatrixCSC{Bool}, region) = reducedim(+,A,region,0,Int)
-#sum(A::SparseMatrixCSC{Bool}) = countnz(A)
 
 ## getindex
 function rangesearch(haystack::Range, needle)
@@ -3449,49 +3444,6 @@ function trace(A::SparseMatrixCSC{Tv}) where Tv
     return s
 end
 
-function diagm(v::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
-    if size(v,1) != 1 && size(v,2) != 1
-        throw(DimensionMismatch("input should be nx1 or 1xn"))
-    end
-
-    n = length(v)
-    numnz = nnz(v)
-    colptr = Vector{Ti}(n+1)
-    rowval = Vector{Ti}(numnz)
-    nzval = Vector{Tv}(numnz)
-
-    if size(v,1) == 1
-        copy!(colptr, 1, v.colptr, 1, n+1)
-        ptr = 1
-        for col = 1:n
-            if colptr[col] != colptr[col+1]
-                rowval[ptr] = col
-                nzval[ptr] = v.nzval[ptr]
-                ptr += 1
-            end
-        end
-    else
-        copy!(rowval, 1, v.rowval, 1, numnz)
-        copy!(nzval, 1, v.nzval, 1, numnz)
-        colptr[1] = 1
-        ptr = 1
-        col = 1
-        while col <= n && ptr <= numnz
-            while rowval[ptr] > col
-                colptr[col+1] = colptr[col]
-                col += 1
-            end
-            colptr[col+1] = colptr[col] + 1
-            ptr += 1
-            col += 1
-        end
-        if col <= n
-            colptr[(col+1):(n+1)] = colptr[col]
-        end
-    end
-
-    return SparseMatrixCSC(n, n, colptr, rowval, nzval)
-end
 
 # Sort all the indices in each column of a CSC sparse matrix
 # sortSparseMatrixCSC!(A, sortindices = :sortcols)        # Sort each column with sort()

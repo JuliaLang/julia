@@ -165,7 +165,7 @@ copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
 
 conj(x::Real) = x
 transpose(x::Number) = x
-ctranspose(x::Number) = conj(x)
+adjoint(x::Number) = conj(x)
 angle(z::Real) = atan2(zero(z), z)
 
 """
@@ -306,8 +306,10 @@ julia> factorial(6)
 720
 
 julia> factorial(21)
-ERROR: OverflowError()
-[...]
+ERROR: OverflowError: 21 is too large to look up in the table
+Stacktrace:
+ [1] factorial_lookup at ./combinatorics.jl:19 [inlined]
+ [2] factorial(::Int64) at ./combinatorics.jl:27
 
 julia> factorial(21.0)
 5.109094217170944e19

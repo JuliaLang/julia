@@ -109,7 +109,8 @@ function show(io::IO, ::MIME"text/plain", f::Function)
                  ft == typeof(getfield(ft.name.module, name))
         n = length(methods(f))
         m = n==1 ? "method" : "methods"
-        ns = isself ? string(name) : string("(::", name, ")")
+        sname = string(name)
+        ns = (isself || '#' in sname) ? sname : string("(::", ft, ")")
         what = startswith(ns, '@') ? "macro" : "generic function"
         print(io, ns, " (", what, " with $n $m)")
     end
@@ -242,7 +243,8 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     if isa(ex.val, AbstractArray)
         compact = get(io, :compact, true)
         limit = get(io, :limit, true)
-        print(IOContext(io, compact=compact, limit=limit), "DomainError with ", ex.val)
+        print(IOContext(io, :compact => compact, :limit => limit),
+              "DomainError with ", ex.val)
     else
         print(io, "DomainError with ", ex.val)
     end
@@ -360,7 +362,7 @@ function showerror(io::IO, ex::MethodError)
             print(io, "; ")
             for (i, (k, v)) in enumerate(kwargs)
                 print(io, k, "=")
-                show(IOContext(io, :limit=>true), v)
+                show(IOContext(io, :limit => true), v)
                 i == length(kwargs) || print(io, ", ")
             end
         end

@@ -90,9 +90,10 @@ complete_line(c::EmptyCompletionProvider, s) = [], true, true
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
-for f in [:terminal, :edit_insert, :on_enter, :add_history, :buffer, :edit_backspace, :(Base.isempty),
-        :replace_line, :refresh_multi_line, :input_string, :edit_move_left, :edit_move_right,
-        :edit_move_word_left, :edit_move_word_right, :update_display_buffer]
+for f in [:terminal, :edit_insert, :edit_insert_newline, :on_enter, :add_history,
+          :buffer, :edit_backspace, :(Base.isempty), :replace_line, :refresh_multi_line,
+          :input_string, :edit_move_left, :edit_move_right,
+          :edit_move_word_left, :edit_move_word_right, :update_display_buffer]
     @eval ($f)(s::MIState, args...) = $(f)(s.mode_state[s.current_mode], args...)
 end
 
@@ -448,18 +449,13 @@ end
 
 function edit_insert(s::PromptState, c)
     buf = s.input_buffer
-    function line_size()
-        p = position(buf)
-        seek(buf, rsearch(buf.data, '\n', p))
-        ls = p - position(buf)
-        seek(buf, p)
-        return ls
-    end
     str = string(c)
     edit_insert(buf, str)
-    offset = s.ias.curs_row == 1 ? sizeof(prompt_string(s.p.prompt)) : s.indent
+    offset = s.ias.curs_row == 1 || s.indent < 0 ?
+        sizeof(prompt_string(s.p.prompt)) : s.indent
     if !('\n' in str) && eof(buf) &&
-        ((line_size() + offset + sizeof(str) - 1) < width(terminal(s)))
+        ((position(buf) - beginofline(buf) + # size of current line
+          offset + sizeof(str) - 1) < width(terminal(s)))
         # Avoid full update when appending characters to the end
         # and an update of curs_row isn't necessary (conservatively estimated)
         write(terminal(s), str)
@@ -476,6 +472,20 @@ function edit_insert(buf::IOBuffer, c)
         splice_buffer!(buf, position(buf):position(buf)-1, s)
         return sizeof(s)
     end
+end
+
+# align: number of ' ' to insert after '\n'
+# if align < 0: align like line above
+function edit_insert_newline(s::PromptState, align=-1)
+    buf = buffer(s)
+    if align < 0
+        beg = beginofline(buf)
+        align = min(findnext(_notspace, buf.data[beg+1:buf.size], 1) - 1,
+                    position(buf) - beg) # indentation must not increase
+        align < 0 && (align = buf.size-beg)
+    end
+    edit_insert(buf, '\n' * ' '^align)
+    refresh_line(s)
 end
 
 # align: delete up to 4 spaces to align to a multiple of 4 chars
@@ -587,8 +597,9 @@ function edit_kill_line(s::MIState)
     refresh_line(s)
 end
 
-edit_transpose(s) = edit_transpose(buffer(s)) && refresh_line(s)
-function edit_transpose(buf::IOBuffer)
+edit_transpose_chars(s) = edit_transpose_chars(buffer(s)) && refresh_line(s)
+
+function edit_transpose_chars(buf::IOBuffer)
     position(buf) == 0 && return false
     eof(buf) && char_move_left(buf)
     char_move_left(buf)
@@ -597,6 +608,51 @@ function edit_transpose(buf::IOBuffer)
     seek(buf, pos)
     write(buf, b, a)
     return true
+end
+
+edit_transpose_words(s) = edit_transpose_words(buffer(s)) && refresh_line(s)
+
+function edit_transpose_words(buf::IOBuffer, mode=:emacs)
+    mode in [:readline, :emacs] ||
+        throw(ArgumentError("`mode` must be `:readline` or `:emacs`"))
+    pos = position(buf)
+    if mode == :emacs
+        char_move_word_left(buf)
+        char_move_word_right(buf)
+    end
+    char_move_word_right(buf)
+    e2 = position(buf)
+    char_move_word_left(buf)
+    b2 = position(buf)
+    char_move_word_left(buf)
+    b1 = position(buf)
+    char_move_word_right(buf)
+    e1 = position(buf)
+    e1 >= b2 && (seek(buf, pos); return false)
+    word2 = splice!(buf.data, b2+1:e2, buf.data[b1+1:e1])
+    splice!(buf.data, b1+1:e1, word2)
+    seek(buf, e2)
+    true
+end
+
+
+edit_upper_case(s) = edit_replace_word_right(s, uppercase)
+edit_lower_case(s) = edit_replace_word_right(s, lowercase)
+edit_title_case(s) = edit_replace_word_right(s, ucfirst)
+
+edit_replace_word_right(s, replace::Function) =
+    edit_replace_word_right(buffer(s), replace) && refresh_line(s)
+
+function edit_replace_word_right(buf::IOBuffer, replace::Function)
+    # put the cursor at the beginning of the next word
+    skipchars(buf, is_non_word_char)
+    b = position(buf)
+    char_move_word_right(buf)
+    e = position(buf)
+    e == b && return false
+    newstr = replace(String(buf.data[b+1:e]))
+    splice_buffer!(buf, b:e-1, newstr)
+    true
 end
 
 edit_clear(buf::IOBuffer) = truncate(buf, 0)
@@ -895,7 +951,7 @@ end
 # source is the keymap specified by the user (with normalized keys)
 function keymap_merge(target,source)
     ret = copy(target)
-    direct_keys = filter((k,v) -> isa(v, Union{Function, KeyAlias, Void}), source)
+    direct_keys = filter(p -> isa(p.second, Union{Function, KeyAlias, Void}), source)
     # first direct entries
     for key in keys(direct_keys)
         add_nested_key!(ret, key, source[key]; override = true)
@@ -1416,7 +1472,7 @@ AnyDict(
             commit_line(s)
             return :done
         else
-            edit_insert(s, '\n')
+            edit_insert_newline(s)
         end
     end,
     '\n' => KeyAlias('\r'),
@@ -1450,7 +1506,7 @@ AnyDict(
     # Ctrl-Right Arrow on rxvt
     "\eOc" => "\ef",
     # Meta Enter
-    "\e\r" => (s,o...)->(edit_insert(s, '\n')),
+    "\e\r" => (s,o...)->edit_insert_newline(s),
     "\e\n" => "\e\r",
     # Simply insert it into the buffer by default
     "*" => (s,data,c)->(edit_insert(s, c)),
@@ -1492,7 +1548,11 @@ AnyDict(
         input = bracketed_paste(s)
         edit_insert(s, input)
     end,
-    "^T" => (s,o...)->edit_transpose(s)
+    "^T" => (s,o...)->edit_transpose_chars(s),
+    "\et" => (s,o...)->edit_transpose_words(s),
+    "\eu" => (s,o...)->edit_upper_case(s),
+    "\el" => (s,o...)->edit_lower_case(s),
+    "\ec" => (s,o...)->edit_title_case(s),
 )
 
 const history_keymap = AnyDict(

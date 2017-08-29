@@ -394,7 +394,7 @@ wrapped with `LogicalIndex` upon calling `to_indices`.
 struct LogicalIndex{T, A<:AbstractArray{Bool}} <: AbstractVector{T}
     mask::A
     sum::Int
-    LogicalIndex{T,A}(mask::A) where {T,A<:AbstractArray{Bool}} = new(mask, countnz(mask))
+    LogicalIndex{T,A}(mask::A) where {T,A<:AbstractArray{Bool}} = new(mask, count(mask))
 end
 LogicalIndex(mask::AbstractVector{Bool}) = LogicalIndex{Int, typeof(mask)}(mask)
 LogicalIndex(mask::AbstractArray{Bool, N}) where {N} = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
@@ -574,9 +574,12 @@ end
 
 ##
 
+# small helper function since we cannot use a closure in a generated function
+_countnz(x) = x != 0
+
 @generated function findn(A::AbstractArray{T,N}) where {T,N}
     quote
-        nnzA = countnz(A)
+        nnzA = count(_countnz, A)
         @nexprs $N d->(I_d = Vector{Int}(nnzA))
         k = 1
         @nloops $N i A begin
@@ -841,9 +844,9 @@ end
 
 @noinline function _accumulate!(op, B, A, R1, ind, R2)
     # Copy the initial element in each 1d vector along dimension `axis`
-    i = first(ind)
+    ii = first(ind)
     @inbounds for J in R2, I in R1
-        B[I, i, J] = A[I, i, J]
+        B[I, ii, J] = A[I, ii, J]
     end
     # Accumulate
     @inbounds for J in R2, i in first(ind)+1:last(ind), I in R1
@@ -1301,7 +1304,7 @@ end
 
 @generated function findn(B::BitArray{N}) where N
     quote
-        nnzB = countnz(B)
+        nnzB = count(B)
         I = ntuple(x->Vector{Int}(nnzB), Val($N))
         if nnzB > 0
             count = 1
@@ -1543,26 +1546,23 @@ function extrema(A::AbstractArray, dims)
     return extrema!(B, A)
 end
 
-@generated function extrema!(B, A::AbstractArray{T,N}) where {T,N}
-    return quote
-        sA = size(A)
-        sB = size(B)
-        @nloops $N i B begin
-            AI = @nref $N A i
-            (@nref $N B i) = (AI, AI)
-        end
-        Bmax = sB
-        Istart = Int[sB[i] == 1 != sA[i] ? 2 : 1 for i = 1:ndims(A)]
-        @inbounds @nloops $N i d->(Istart[d]:size(A,d)) begin
-            AI = @nref $N A i
-            @nexprs $N d->(j_d = min(Bmax[d], i_{d}))
-            BJ = @nref $N B j
-            if AI < BJ[1]
-                (@nref $N B j) = (AI, BJ[2])
-            elseif AI > BJ[2]
-                (@nref $N B j) = (BJ[1], AI)
-            end
-        end
-        return B
+@noinline function extrema!(B, A)
+    sA = size(A)
+    sB = size(B)
+    for I in CartesianRange(sB)
+        AI = A[I]
+        B[I] = (AI, AI)
     end
+    Bmax = CartesianIndex(sB)
+    @inbounds @simd for I in CartesianRange(sA)
+        J = min(Bmax,I)
+        BJ = B[J]
+        AI = A[I]
+        if AI < BJ[1]
+            B[J] = (AI, BJ[2])
+        elseif AI > BJ[2]
+            B[J] = (BJ[1], AI)
+        end
+    end
+    return B
 end

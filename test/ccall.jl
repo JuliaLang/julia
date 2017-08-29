@@ -82,7 +82,7 @@ let a, ci_ary, x
     @test x == a + 1 - 2im
     @test a == 20 + 51im
 
-    x = ccall((:cptest_static, libccalltest), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), &a)
+    x = ccall((:cptest_static, libccalltest), Ptr{Complex{Int}}, (Ref{Complex{Int}},), a)
     @test unsafe_load(x) == a
     Libc.free(convert(Ptr{Void}, x))
 end
@@ -791,57 +791,57 @@ for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
         function $fname(s)
             @assert false
         end
-        b = ccall(cfunction($fname1,Ref{$t},(Ref{$t},)),Ref{$t},(Ref{$t},),a)
+        b = ccall(cfunction($fname1, Ref{$t}, Tuple{Ref{$t}}), Ref{$t}, (Ref{$t},), a)
         verbose && println("C: ",b)
         @test b == $v
         @test b === a
         @test b === c
-        b = ccall(cfunction($fname,$t,($t,)),$t,($t,),a)
+        b = ccall(cfunction($fname, $t, Tuple{$t}), $t, ($t,), a)
         verbose && println("C: ",b)
         @test b == $v
         if ($(t).mutable)
             @test !(b === c)
             @test !(b === a)
         end
-        b = ccall(cfunction($fname1,$t,(Ref{$t},)),$t,(Ref{$t},),a)
+        b = ccall(cfunction($fname1, $t, Tuple{Ref{$t}}), $t, (Ref{$t},), a)
         verbose && println("C: ",b)
         @test b == $v
         if ($(t).mutable)
             @test !(b === c)
             @test !(b === a)
         end
-        b = ccall(cfunction($fname,Ref{$t},($t,)),Ref{$t},($t,),a)
+        b = ccall(cfunction($fname, Ref{$t}, Tuple{$t}), Ref{$t}, ($t,), a)
         verbose && println("C: ",b)
         @test b == $v
         @test b === c
         if ($(t).mutable)
             @test !(b === a)
         end
-        b = ccall(cfunction($fname,Any,(Ref{$t},)),Any,(Ref{$t},),$v)
+        b = ccall(cfunction($fname, Any, Tuple{Ref{$t}}), Any, (Ref{$t},), $v)
         verbose && println("C: ",b)
         @test b == $v
         @test b === c
         if ($(t).mutable)
             @test !(b === a)
         end
-        b = ccall(cfunction($fname,Any,(Ref{Any},)),Any,(Ref{Any},),$v)
+        b = ccall(cfunction($fname, Any, Tuple{Ref{Any}}), Any, (Ref{Any},), $v)
         @test b == $v
         @test b === c
         if ($(t).mutable)
             @test !(b === a)
         end
-        @test_throws TypeError ccall(cfunction($fname,Ref{AbstractString},(Ref{Any},)),Any,(Ref{Any},),$v)
-        @test_throws TypeError ccall(cfunction($fname,AbstractString,(Ref{Any},)),Any,(Ref{Any},),$v)
+        @test_throws TypeError ccall(cfunction($fname, Ref{AbstractString}, Tuple{Ref{Any}}), Any, (Ref{Any},), $v)
+        @test_throws TypeError ccall(cfunction($fname, AbstractString, Tuple{Ref{Any}}), Any, (Ref{Any},), $v)
     end
 end
 
 # issue 13031
 foo13031(x) = Cint(1)
-foo13031p = cfunction(foo13031, Cint, (Ref{Tuple{}},))
+foo13031p = cfunction(foo13031, Cint, Tuple{Ref{Tuple{}}})
 ccall(foo13031p, Cint, (Ref{Tuple{}},), ())
 
 foo13031(x,y,z) = z
-foo13031p = cfunction(foo13031, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint))
+foo13031p = cfunction(foo13031, Cint, Tuple{Ref{Tuple{}}, Ref{Tuple{}}, Cint})
 ccall(foo13031p, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint), (), (), 8)
 
 # issue 17219
@@ -993,7 +993,7 @@ if Sys.ARCH === :x86_64
         T = NTuple{4, VecElement{s}}
         @eval function rt_sse(a1::$T, a2::$T, a3::$T, a4::$T)
             return ccall(
-                cfunction(foo_ams, $T, ($T, $T, $T, $T)),
+                cfunction(foo_ams, $T, Tuple{$T, $T, $T, $T}),
                 $T,
                 ($T, $T, $T, $T),
                 a1,  a2,  a3, a4)
@@ -1281,7 +1281,7 @@ end
 evalf_callback_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = ci.f(0.5)::Float64
 
 evalf_callback_c_19805(ci::callinfos_19805{FUNC_FT}) where {FUNC_FT} = cfunction(
-    evalf_callback_19805, Float64, (callinfos_19805{FUNC_FT},))
+    evalf_callback_19805, Float64, Tuple{callinfos_19805{FUNC_FT}})
 
 @test_throws(ErrorException("ccall: the type of argument 1 doesn't correspond to a C type"),
              evalf_callback_c_19805( callinfos_19805(sin) ))

@@ -3153,6 +3153,10 @@ function typeinf_work(frame::InferenceState)
                     # directly forward changes to an SSAValue to the applicable line
                     record_ssa_assign(changes_var.id + 1, changes.vtype.typ, frame)
                 end
+            elseif isa(stmt, NewvarNode)
+                sn = slot_id(stmt.slot)
+                changes = changes::VarTable
+                changes[sn] = VarState(Bottom, true)
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
             elseif isa(stmt, Expr)
@@ -3563,7 +3567,7 @@ function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, unde
         elseif isa(subex, Slot)
             id = slot_id(subex)
             s = vtypes[id]
-            vt = widenconst(s.typ)
+            vt = s.typ
             if s.undef
                 # find used-undef variables
                 undefs[id] = true
@@ -3618,9 +3622,9 @@ end
 function type_annotate!(sv::InferenceState)
     # remove all unused ssa values
     gt = sv.src.ssavaluetypes
-    for i = 1:length(gt)
-        if gt[i] === NF
-            gt[i] = Union{}
+    for j = 1:length(gt)
+        if gt[j] === NF
+            gt[j] = Union{}
         end
     end
 
@@ -3671,37 +3675,48 @@ function type_annotate!(sv::InferenceState)
     end
 
     # finish marking used-undef variables
-    for i = 1:nslots
-        if undefs[i]
-            src.slotflags[i] |= Slot_UsedUndef
+    for j = 1:nslots
+        if undefs[j]
+            src.slotflags[j] |= Slot_UsedUndef
         end
     end
     nothing
 end
 
 # widen all Const elements in type annotations
-function _widen_all_consts!(e::Expr, untypedload::Vector{Bool})
+function _widen_all_consts!(e::Expr, untypedload::Vector{Bool}, slottypes::Vector{Any})
     e.typ = widenconst(e.typ)
     for i = 1:length(e.args)
         x = e.args[i]
         if isa(x, Expr)
-            _widen_all_consts!(x, untypedload)
-        elseif isa(x, Slot) && (i != 1 || e.head !== :(=))
-            untypedload[slot_id(x)] = true
+            _widen_all_consts!(x, untypedload, slottypes)
+        elseif isa(x, TypedSlot)
+            vt = widenconst(x.typ)
+            if !(vt === x.typ)
+                if slottypes[x.id] <: vt
+                    x = SlotNumber(x.id)
+                    untypedload[x.id] = true
+                else
+                    x = TypedSlot(x.id, vt)
+                end
+                e.args[i] = x
+            end
+        elseif isa(x, SlotNumber) && (i != 1 || e.head !== :(=))
+            untypedload[x.id] = true
         end
     end
     nothing
 end
+
 function widen_all_consts!(src::CodeInfo)
     for i = 1:length(src.ssavaluetypes)
         src.ssavaluetypes[i] = widenconst(src.ssavaluetypes[i])
     end
     nslots = length(src.slottypes)
     untypedload = fill(false, nslots)
-    for i = 1:length(src.code)
-        x = src.code[i]
-        isa(x, Expr) && _widen_all_consts!(x, untypedload)
-    end
+    e = Expr(:body)
+    e.args = src.code
+    _widen_all_consts!(e, untypedload, src.slottypes)
     for i = 1:nslots
         src.slottypes[i] = widen_slot_type(src.slottypes[i], untypedload[i])
     end
@@ -3925,12 +3940,19 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
                 return false
             end
         elseif head === :new
-            if !allow_volatile
-                a = ea[1]
-                typ = widenconst(exprtype(a, src, mod))
-                if !isType(typ) || !isa((typ::Type).parameters[1],DataType) || ((typ::Type).parameters[1]::DataType).mutable
-                    return false
-                end
+            a = ea[1]
+            typ = exprtype(a, src, mod)
+            # `Expr(:new)` of unknown type could raise arbitrary TypeError.
+            typ, isexact = instanceof_tfunc(typ)
+            isexact || return false
+            (isleaftype(typ) && !iskindtype(typ)) || return false
+            typ = typ::DataType
+            if !allow_volatile && typ.mutable
+                return false
+            end
+            fieldcount(typ) >= length(ea) - 1 || return false
+            for fld_idx in 1:(length(ea) - 1)
+                exprtype(ea[fld_idx + 1], src, mod) ⊑ fieldtype(typ, fld_idx) || return false
             end
             # fall-through
         elseif head === :return
@@ -4650,10 +4672,10 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     if !isempty(stmts) && !propagate_inbounds
         # avoid redundant inbounds annotations
         s_1, s_end = stmts[1], stmts[end]
-        i = 2
-        while length(stmts) > i && ((isa(s_1,Expr)&&s_1.head===:line) || isa(s_1,LineNumberNode))
-            s_1 = stmts[i]
-            i += 1
+        si = 2
+        while length(stmts) > si && ((isa(s_1,Expr)&&s_1.head===:line) || isa(s_1,LineNumberNode))
+            s_1 = stmts[si]
+            si += 1
         end
         if isa(s_1, Expr) && s_1.head === :inbounds && s_1.args[1] === false &&
             isa(s_end, Expr) && s_end.head === :inbounds && s_end.args[1] === :pop
@@ -5294,7 +5316,7 @@ function find_sa_vars(src::CodeInfo, nargs::Int)
             end
         end
     end
-    filter!((v, _) -> !haskey(av2, v), av)
+    filter!(p -> !haskey(av2, p.first), av)
     return av
 end
 

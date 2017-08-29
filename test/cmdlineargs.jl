@@ -22,8 +22,18 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
         @test startswith(read(`$exename --help`, String), header)
     end
 
-    # --quiet
-    # This flag is indirectly tested in test/repl.jl
+    # --quiet, --banner
+    let t(q,b) = "Base.JLOptions().quiet == $q && Base.JLOptions().banner == $b"
+        @test success(`$exename                 -e $(t(0, -1))`)
+        @test success(`$exename -q              -e $(t(1,  0))`)
+        @test success(`$exename --quiet         -e $(t(1,  0))`)
+        @test success(`$exename --banner=no     -e $(t(0,  0))`)
+        @test success(`$exename --banner=yes    -e $(t(0,  1))`)
+        @test success(`$exename -q --banner=no  -e $(t(1,  0))`)
+        @test success(`$exename -q --banner=yes -e $(t(1,  1))`)
+        @test success(`$exename --banner=no  -q -e $(t(1,  0))`)
+        @test success(`$exename --banner=yes -q -e $(t(1,  1))`)
+    end
 
     # --home
     @test success(`$exename -H $JULIA_HOME`)

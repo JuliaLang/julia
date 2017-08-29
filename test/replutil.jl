@@ -347,7 +347,7 @@ let err_str,
     err_str = @except_str randn(1)() MethodError
     @test contains(err_str, "MethodError: objects of type Array{Float64,1} are not callable")
 end
-@test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 0 methods)"
+@test stringmime("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 0 methods)"
 @test ismatch(r"^@doc \(macro with \d+ method[s]?\)$", stringmime("text/plain", getfield(Base, Symbol("@doc"))))
 
 method_defs_lineno = @__LINE__() + 1
@@ -356,7 +356,7 @@ Base.Symbol() = throw(ErrorException("1"))
 EightBitType() = throw(ErrorException("3"))
 (::EightBitType)() = throw(ErrorException("4"))
 EightBitTypeT() = throw(ErrorException("5"))
-(::Type{EightBitTypeT{T}})() where {T} = throw(ErrorException("6"))
+EightBitTypeT{T}() where {T} = throw(ErrorException("6"))
 (::EightBitTypeT)() = throw(ErrorException("7"))
 (::FunctionLike)() = throw(ErrorException("8"))
 
@@ -385,7 +385,7 @@ let err_str,
                      "@doc(__source__::LineNumberNode, __module__::Module, x...) in Core at boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
                      "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
-    @test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 1 method)"
+    @test stringmime("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
     @test stringmime("text/plain", Core.arraysize) == "arraysize (built-in function)"
 
     err_str = @except_stackframe Symbol() ErrorException
@@ -610,7 +610,7 @@ end
 
 @testset "Dict printing with limited rows" begin
     buf = IOBuffer()
-    io = IOContext(IOContext(buf, :displaysize => (4, 80)), :limit => true)
+    io = IOContext(buf, :displaysize => (4, 80), :limit => true)
     d = Base.ImmutableDict(1=>2)
     show(io, MIME"text/plain"(), d)
     @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"

@@ -20,41 +20,32 @@ struct IOContext{IO_t <: IO} <: AbstractPipe
     end
 end
 
-"""
-    IOContext(io::IO; properties...)
+unwrapcontext(io::IO) = io, ImmutableDict{Symbol,Any}()
+unwrapcontext(io::IOContext) = io.io, io.dict
 
-The same as `IOContext(io::IO, KV::Pair)`, but accepting properties as keyword arguments.
-"""
-IOContext(io::IO; kws...) = IOContext(convert(IOContext, io); kws...)
-function IOContext(io::IOContext; kws...)
-    for (k, v) in kws
-        io = IOContext(io, k, v)
-    end
-    return io
+function IOContext(io::IO, dict::ImmutableDict)
+    io0 = unwrapcontext(io)[1]
+    IOContext{typeof(io0)}(io0, dict)
 end
 
-convert(::Type{IOContext}, io::IOContext) = io
-convert(::Type{IOContext}, io::IO) = IOContext(io, ImmutableDict{Symbol, Any}())
+convert(::Type{IOContext}, io::IO) = IOContext(unwrapcontext(io)...)
 
-IOContext(io::IOContext, dict::ImmutableDict) = typeof(io)(io.io, dict)
-IOContext(io::IO, dict::ImmutableDict) = IOContext{typeof(io)}(io, dict)
-
-IOContext(io::IOContext, key, value) = IOContext(io.io, ImmutableDict{Symbol, Any}(io.dict, key, value))
-IOContext(io::IO, key, value) = IOContext(io, ImmutableDict{Symbol, Any}(key, value))
-
-IOContext(io::IO, context::IO) = convert(IOContext, io)
+function IOContext(io::IO, KV::Pair)
+    io0, d = unwrapcontext(io)
+    IOContext(io0, ImmutableDict{Symbol,Any}(d, KV[1], KV[2]))
+end
 
 """
     IOContext(io::IO, context::IOContext)
 
 Create an `IOContext` that wraps an alternate `IO` but inherits the properties of `context`.
 """
-IOContext(io::IO, context::IOContext) = IOContext(io, context.dict)
+IOContext(io::IO, context::IO) = IOContext(unwrapcontext(io)[1], unwrapcontext(context)[2])
 
 """
-    IOContext(io::IO, KV::Pair)
+    IOContext(io::IO, KV::Pair...)
 
-Create an `IOContext` that wraps a given stream, adding the specified `key=>value` pair to
+Create an `IOContext` that wraps a given stream, adding the specified `key=>value` pairs to
 the properties of that stream (note that `io` can itself be an `IOContext`).
 
  - use `(key => value) in dict` to see if this particular combination is in the properties set
@@ -87,7 +78,7 @@ julia> f(IOContext(STDOUT, :short => true))
 short
 ```
 """
-IOContext(io::IO, KV::Pair) = IOContext(io, KV[1], KV[2])
+IOContext(io::IO, KV::Pair, KVs::Pair...) = IOContext(IOContext(io, KV), KVs...)
 
 show(io::IO, ctx::IOContext) = (print(io, "IOContext("); show(io, ctx.io); print(io, ")"))
 
@@ -181,10 +172,15 @@ end
 function show(io::IO, f::Function)
     ft = typeof(f)
     mt = ft.name.mt
-    if !isdefined(mt, :module) || is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
-        print(io, mt.name)
+    if isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
+        getfield(mt.module, mt.name) === f
+        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
+            print(io, mt.name)
+        else
+            print(io, mt.module, ".", mt.name)
+        end
     else
-        print(io, mt.module, ".", mt.name)
+        show_default(io, f)
     end
 end
 
@@ -208,16 +204,93 @@ function print_without_params(@nospecialize(x))
     return false
 end
 
+has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v)!=0
+
+function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
+    for (key, val) in io.dict
+        if key === :unionall_env && val isa TypeVar && val.name === name && has_typevar(x, val)
+            return true
+        end
+    end
+    return false
+end
+io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
+
 function show(io::IO, x::UnionAll)
     if print_without_params(x)
         return show(io, unwrap_unionall(x).name)
     end
+
+    if x.var.name == :_ || io_has_tvar_name(io, x.var.name, x)
+        counter = 1
+        while true
+            newname = Symbol(x.var.name, counter)
+            if !io_has_tvar_name(io, newname, x)
+                newtv = TypeVar(newname, x.var.lb, x.var.ub)
+                x = UnionAll(newtv, x{newtv})
+                break
+            end
+            counter += 1
+        end
+    end
+
     show(IOContext(io, :unionall_env => x.var), x.body)
     print(io, " where ")
     show(io, x.var)
 end
 
 show(io::IO, x::DataType) = show_datatype(io, x)
+
+function show_type_name(io::IO, tn::TypeName)
+    if tn === UnionAll.name
+        # by coincidence, `typeof(Type)` is a valid representation of the UnionAll type.
+        # intercept this case and print `UnionAll` instead.
+        return print(io, "UnionAll")
+    end
+    globname = isdefined(tn, :mt) ? tn.mt.name : nothing
+    globfunc = false
+    if globname !== nothing
+        globname_str = string(globname)
+        if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
+            isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
+            isa(getfield(tn.module, globname), tn.wrapper) && isleaftype(tn.wrapper))
+            globfunc = true
+        end
+    end
+    sym = globfunc ? globname : tn.name
+    sym_str = string(sym)
+    hidden = !globfunc && '#' ∈ sym_str
+    quo = false
+    if hidden
+        print(io, "getfield(")
+    elseif globfunc
+        print(io, "typeof(")
+    end
+    if isdefined(tn, :module) && !(is_exported_from_stdlib(sym, tn.module) || (tn.module === Main && !hidden))
+        show(io, tn.module)
+        if !hidden
+            print(io, ".")
+            if globfunc && !is_id_start_char(first(sym_str))
+                print(io, ":")
+                if sym == :(==)
+                    print(io, "(")
+                    quo = true
+                end
+            end
+        end
+    end
+    if hidden
+        print(io, ", Symbol(\"", sym_str, "\"))")
+    else
+        print(io, sym_str)
+        if globfunc
+            print(io, ")")
+            if quo
+                print(io, ")")
+            end
+        end
+    end
+end
 
 function show_datatype(io::IO, x::DataType)
     istuple = x.name === Tuple.name
@@ -228,7 +301,7 @@ function show_datatype(io::IO, x::DataType)
         if istuple && n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
             print(io, "NTuple{", n, ',', x.parameters[1], "}")
         else
-            show(io, x.name)
+            show_type_name(io, x.name)
             # Do not print the type parameters for the primary type if we are
             # printing a method signature or type parameter.
             # Always print the type parameter if we are printing the type directly
@@ -241,7 +314,7 @@ function show_datatype(io::IO, x::DataType)
             print(io, '}')
         end
     else
-        show(io, x.name)
+        show_type_name(io, x.name)
     end
 end
 
@@ -272,11 +345,7 @@ macro show(exs...)
 end
 
 function show(io::IO, tn::TypeName)
-    if is_exported_from_stdlib(tn.name, tn.module) || tn.module === Main
-        print(io, tn.name)
-    else
-        print(io, tn.module, '.', tn.name)
-    end
+    show_type_name(io, tn)
 end
 
 show(io::IO, ::Void) = print(io, "nothing")
@@ -471,6 +540,7 @@ show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
 
 const indent_width = 4
 const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(!=),:(===),:(!==),:(=>),:(>=),:(<=)])
+const uni_syms = Set{Symbol}([:(::), :(<:), :(>:)])
 const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
 const expr_infix_wide = Set{Symbol}([
     :(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(^=), :(&=), :(|=), :(÷=), :(%=), :(>>>=), :(>>=), :(<<=),
@@ -712,23 +782,19 @@ function show_generator(io, ex, indent)
         fg = ex
         ranges = Any[]
         while isa(fg, Expr) && fg.head === :flatten
-            push!(ranges, fg.args[1].args[2])
+            push!(ranges, fg.args[1].args[2:end])
             fg = fg.args[1].args[1]
         end
-        push!(ranges, fg.args[2])
+        push!(ranges, fg.args[2:end])
         show_unquoted(io, fg.args[1], indent)
         for r in ranges
             print(io, " for ")
-            show_unquoted(io, r, indent)
+            show_list(io, r, ", ", indent)
         end
     else
         show_unquoted(io, ex.args[1], indent)
         print(io, " for ")
-        show_unquoted(io, ex.args[2], indent)
-        for i = 3:length(ex.args)
-            print(io, ", ")
-            show_unquoted(io, ex.args[i], indent)
-        end
+        show_list(io, ex.args[2:end], ", ", indent)
     end
 end
 
@@ -930,8 +996,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head)
 
     # type annotation (i.e. "::Int")
-    elseif head === Symbol("::") && nargs == 1
-        print(io, "::")
+    elseif head in uni_syms && nargs == 1
+        print(io, head)
         show_unquoted(io, args[1], indent)
 
     # var-arg declaration or expansion
@@ -1335,7 +1401,7 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
                     tp = t
                     while true
                         show(tvar_io, tp.var)
-                        tvar_io = IOContext(tvar_io, :unionall_env, tp.var)
+                        tvar_io = IOContext(tvar_io, :unionall_env => tp.var)
                         tp = tp.body
                         if isa(tp, UnionAll)
                             print(io, ", ")

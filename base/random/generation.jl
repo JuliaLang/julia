@@ -10,25 +10,92 @@
 
 ### random floats
 
-@inline rand(r::AbstractRNG=GLOBAL_RNG) = rand(r, CloseOpen)
+# CloseOpen(T) is the fallback for an AbstractFloat T
+@inline rand(r::AbstractRNG=GLOBAL_RNG, ::Type{T}=Float64) where {T<:AbstractFloat} =
+    rand(r, CloseOpen(T))
 
 # generic random generation function which can be used by RNG implementors
 # it is not defined as a fallback rand method as this could create ambiguities
-@inline rand_generic(r::AbstractRNG, ::Type{Float64}) = rand(r, CloseOpen)
 
-rand_generic(r::AbstractRNG, ::Type{Float16}) =
+rand_generic(r::AbstractRNG, ::CloseOpen{Float16}) =
     Float16(reinterpret(Float32,
                         (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
 
-rand_generic(r::AbstractRNG, ::Type{Float32}) =
+rand_generic(r::AbstractRNG, ::CloseOpen{Float32}) =
     reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
+
+rand_generic(r::AbstractRNG, ::Close1Open2_64) =
+    reinterpret(Float64, 0x3ff0000000000000 | rand(r, UInt64) & 0x000fffffffffffff)
+
+rand_generic(r::AbstractRNG, ::CloseOpen_64) = rand(r, Close1Open2()) - 1.0
+
+#### BigFloat
+
+const bits_in_Limb = sizeof(Limb) << 3
+const Limb_high_bit = one(Limb) << (bits_in_Limb-1)
+
+struct BigFloatRandGenerator
+    prec::Int
+    nlimbs::Int
+    limbs::Vector{Limb}
+    shift::UInt
+
+    function BigFloatRandGenerator(prec::Int=precision(BigFloat))
+        nlimbs = (prec-1) ÷ bits_in_Limb + 1
+        limbs = Vector{Limb}(nlimbs)
+        shift = nlimbs * bits_in_Limb - prec
+        new(prec, nlimbs, limbs, shift)
+    end
+end
+
+function _rand(rng::AbstractRNG, gen::BigFloatRandGenerator)
+    z = BigFloat()
+    limbs = gen.limbs
+    rand!(rng, limbs)
+    @inbounds begin
+        limbs[1] <<= gen.shift
+        randbool = iszero(limbs[end] & Limb_high_bit)
+        limbs[end] |= Limb_high_bit
+    end
+    z.sign = 1
+    unsafe_copy!(z.d, pointer(limbs), gen.nlimbs)
+    (z, randbool)
+end
+
+function rand(rng::AbstractRNG, gen::BigFloatRandGenerator, ::Close1Open2{BigFloat})
+    z = _rand(rng, gen)[1]
+    z.exp = 1
+    z
+end
+
+function rand(rng::AbstractRNG, gen::BigFloatRandGenerator, ::CloseOpen{BigFloat})
+    z, randbool = _rand(rng, gen)
+    z.exp = 0
+    randbool &&
+        ccall((:mpfr_sub_d, :libmpfr), Int32,
+              (Ref{BigFloat}, Ref{BigFloat}, Cdouble, Int32),
+              z, z, 0.5, Base.MPFR.ROUNDING_MODE[])
+    z
+end
+
+# alternative, with 1 bit less of precision
+# TODO: make an API for requesting full or not-full precision
+function rand(rng::AbstractRNG, gen::BigFloatRandGenerator, ::CloseOpen{BigFloat}, ::Void)
+    z = rand(rng, Close1Open2(BigFloat), gen)
+    ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, Int32),
+          z, z, 1, Base.MPFR.ROUNDING_MODE[])
+    z
+end
+
+rand_generic(rng::AbstractRNG, I::FloatInterval{BigFloat}) =
+    rand(rng, BigFloatRandGenerator(), I)
 
 ### random integers
 
 rand_ui10_raw(r::AbstractRNG) = rand(r, UInt16)
 rand_ui23_raw(r::AbstractRNG) = rand(r, UInt32)
 
-@inline rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2))
+@inline rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2()))
 @inline rand_ui52(r::AbstractRNG) = rand_ui52_raw(r) & 0x000fffffffffffff
 
 ### random complex numbers
@@ -72,6 +139,27 @@ rand(                T::Type, d::Integer, dims::Integer...) = rand(T, Dims((d, d
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
+#### arrays of floats
+
+rand!(r::AbstractRNG, A::AbstractArray, ::Type{T}) where {T<:AbstractFloat} =
+    rand!(r, A, CloseOpen{T}())
+
+function rand!(r::AbstractRNG, A::AbstractArray, I::FloatInterval)
+    for i in eachindex(A)
+        @inbounds A[i] = rand(r, I)
+    end
+    A
+end
+
+function rand!(rng::AbstractRNG, A::AbstractArray, I::FloatInterval{BigFloat})
+    gen = BigFloatRandGenerator()
+    for i in eachindex(A)
+        @inbounds A[i] = rand(rng, gen, I)
+    end
+    A
+end
+
+rand!(A::AbstractArray, I::FloatInterval) = rand!(GLOBAL_RNG, A, I)
 
 ## Generate random integer within a range
 

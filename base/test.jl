@@ -1140,7 +1140,7 @@ Body:
 julia> @inferred f(1,2,3)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
 Stacktrace:
- [1] error(::String) at ./error.jl:21
+ [1] error(::String) at ./error.jl:33
 
 julia> @inferred max(1,2)
 2
@@ -1366,7 +1366,6 @@ with string types besides the standard `String` type.
 struct GenericString <: AbstractString
     string::AbstractString
 end
-Base.convert(::Type{GenericString}, s::AbstractString) = GenericString(s)
 Base.endof(s::GenericString) = endof(s.string)
 Base.next(s::GenericString, i::Int) = next(s.string, i)
 
@@ -1422,5 +1421,7 @@ Base.length(a::GenericArray) = length(a.a)
 Base.size(a::GenericArray) = size(a.a)
 Base.getindex(a::GenericArray, i...) = a.a[i...]
 Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
+
+Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 
 end # module

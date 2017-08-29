@@ -121,8 +121,7 @@ macro irrational(sym, val, def)
         function Base.convert(::Type{BigFloat}, ::Irrational{$qsym})
             c = BigFloat()
             ccall(($(string("mpfr_const_", def)), :libmpfr),
-                  Cint, (Ptr{BigFloat}, Int32),
-                  &c, MPFR.ROUNDING_MODE[])
+                  Cint, (Ref{BigFloat}, Int32), c, MPFR.ROUNDING_MODE[])
             return c
         end
     end : quote

@@ -1945,14 +1945,14 @@ julia> find(zeros(3))
 ```
 """
 function find(A)
-    nnzA = countnz(A)
+    nnzA = count(t -> t != 0, A)
     I = Vector{Int}(nnzA)
-    count = 1
+    cnt = 1
     inds = _index_remapper(A)
     for (i,a) in enumerate(A)
         if a != 0
-            I[count] = inds[i]
-            count += 1
+            I[cnt] = inds[i]
+            cnt += 1
         end
     end
     return I
@@ -1991,15 +1991,15 @@ julia> findn(A)
 ```
 """
 function findn(A::AbstractMatrix)
-    nnzA = countnz(A)
+    nnzA = count(t -> t != 0, A)
     I = similar(A, Int, nnzA)
     J = similar(A, Int, nnzA)
-    count = 1
+    cnt = 1
     for j=indices(A,2), i=indices(A,1)
         if A[i,j] != 0
-            I[count] = i
-            J[count] = j
-            count += 1
+            I[cnt] = i
+            J[cnt] = j
+            cnt += 1
         end
     end
     return (I, J)
@@ -2024,19 +2024,19 @@ julia> findnz(A)
 ```
 """
 function findnz(A::AbstractMatrix{T}) where T
-    nnzA = countnz(A)
+    nnzA = count(t -> t != 0, A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
     NZs = Array{T,1}(nnzA)
-    count = 1
+    cnt = 1
     if nnzA > 0
         for j=indices(A,2), i=indices(A,1)
             Aij = A[i,j]
             if Aij != 0
-                I[count] = i
-                J[count] = j
-                NZs[count] = Aij
-                count += 1
+                I[cnt] = i
+                J[cnt] = j
+                NZs[cnt] = Aij
+                cnt += 1
             end
         end
     end

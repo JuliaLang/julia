@@ -116,7 +116,7 @@ end
 
 function Base.show(io::IO, x::Union{Float64,Float32})
     if get(io, :compact, false)
-        _show(io, x, PRECISION, 6, true, true)
+        _show(io, x, PRECISION, 6, x isa Float64, true)
     else
         _show(io, x, SHORTEST, 0, true, false)
     end

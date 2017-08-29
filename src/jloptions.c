@@ -34,6 +34,7 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
 
 
 jl_options_t jl_options = { 0,    // quiet
+                            -1,   // banner
                             NULL, // julia_home
                             NULL, // julia_bin
                             NULL, // eval
@@ -102,7 +103,8 @@ static const char opts[]  =
 
     // interactive options
     " -i                        Interactive mode; REPL runs and isinteractive() is true\n"
-    " -q, --quiet               Quiet startup (no banner)\n"
+    " -q, --quiet               Quiet startup: no banner, suppress REPL warnings\n"
+    " --banner={yes|no}         Enable or disable startup banner\n"
     " --color={yes|no}          Enable or disable color text\n"
     " --history-file={yes|no}   Load or save history\n\n"
 
@@ -170,7 +172,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_output_ji,
            opt_use_precompiled,
            opt_use_compilecache,
-           opt_incremental
+           opt_incremental,
+           opt_banner
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:ip:O:g:";
     static const struct option longopts[] = {
@@ -180,6 +183,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "version",         no_argument,       0, 'v' },
         { "help",            no_argument,       0, 'h' },
         { "quiet",           no_argument,       0, 'q' },
+        { "banner",          required_argument, 0, opt_banner },
         { "home",            required_argument, 0, 'H' },
         { "eval",            required_argument, 0, 'e' },
         { "print",           required_argument, 0, 'E' },
@@ -280,9 +284,6 @@ restart_switch:
         case 'h': // help
             jl_printf(JL_STDOUT, "%s%s", usage, opts);
             jl_exit(0);
-        case 'q': // quiet
-            jl_options.quiet = 1;
-            break;
         case 'g': // debug info
             if (optarg != NULL) {
                 if (!strcmp(optarg,"0"))
@@ -314,6 +315,19 @@ restart_switch:
         case 'J': // sysimage
             jl_options.image_file = strdup(optarg);
             jl_options.image_file_specified = 1;
+            break;
+        case 'q': // quiet
+            jl_options.quiet = 1;
+            if (jl_options.banner < 0)
+                jl_options.banner = 0;
+            break;
+        case opt_banner: // banner
+            if (!strcmp(optarg,"yes"))
+                jl_options.banner = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_options.banner = 0;
+            else
+                jl_errorf("julia: invalid argument to --banner={yes|no} (%s)", optarg);
             break;
         case opt_use_precompiled:
             if (!strcmp(optarg,"yes"))

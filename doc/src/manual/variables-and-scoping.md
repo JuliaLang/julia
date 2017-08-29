@@ -435,7 +435,7 @@ julia> Fs[2]()
 2
 ```
 
-`for` loops will reuse existing variables for its iteration variable:
+A `for` loop or comprehension iteration variable is always a new variable:
 
 ```jldoctest
 julia> i = 0;
@@ -444,18 +444,20 @@ julia> for i = 1:3
        end
 
 julia> i
-3
+0
 ```
 
-However, comprehensions do not do this, and always freshly allocate their iteration variables:
+However, it is occasionally useful to reuse an existing variable as the iteration variable.
+This can be done conveniently by adding the keyword `outer`:
 
 ```jldoctest
-julia> x = 0;
+julia> i = 0;
 
-julia> [ x for x = 1:3 ];
+julia> for outer i = 1:3
+       end
 
-julia> x
-0
+julia> i
+3
 ```
 
 ## Constants

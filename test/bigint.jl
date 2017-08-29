@@ -282,8 +282,8 @@ ndigits(big(rand(Int)), rand(63:typemax(Int)))
 ndigits(big(rand(Int)), big(2)^rand(2:999))
 
 for x in big.([-20:20; rand(Int)])
-    for b in -1:1
-        @test_throws DomainError ndigits(x, b)
+    for _base in -1:1
+        @test_throws DomainError ndigits(x, _base)
     end
 end
 
@@ -344,6 +344,7 @@ end
 
 # respect 0-padding on big(0)
 for f in (bin, oct, dec, hex)
+    local f
     @test f(big(0), 0) == ""
 end
 @test base(rand(2:62), big(0), 0) == ""

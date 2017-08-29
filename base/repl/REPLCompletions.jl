@@ -10,11 +10,19 @@ function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
 end
 
+function appendmacro!(syms, macros, needle, endchar)
+    append!(syms, s[2:end-sizeof(needle)]*endchar for s in filter(x -> endswith(x, needle), macros))
+end
+
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
     ssyms = names(mod, all, imported)
     filter!(ffunc, ssyms)
     syms = String[string(s) for s in ssyms]
+    macros =  filter(x -> startswith(x, "@" * name), syms)
+    appendmacro!(syms, macros, "_str", "\"")
+    appendmacro!(syms, macros, "_cmd", "`")
     filter!(x->completes_global(x, name), syms)
+    return syms
 end
 
 # REPL Symbol Completions
@@ -71,11 +79,13 @@ function complete_symbol(sym, ffunc)
         end
     else
         # Looking for a member of a type
-        fields = fieldnames(t)
-        for field in fields
-            s = string(field)
-            if startswith(s, name)
-                push!(suggestions, s)
+        if t isa DataType && t != Any
+            fields = fieldnames(t)
+            for field in fields
+                s = string(field)
+                if startswith(s, name)
+                    push!(suggestions, s)
+                end
             end
         end
     end

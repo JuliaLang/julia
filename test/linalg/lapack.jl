@@ -172,7 +172,7 @@ end
         @test V' ≈ lVt
         B = rand(elty,10,10)
         # xggsvd3 replaced xggsvd in LAPACK 3.6.0
-        if LAPACK.laver() < (3, 6, 0)
+        if LAPACK.version() < v"3.6.0"
             @test_throws DimensionMismatch LAPACK.ggsvd!('S','S','S',A,B)
         else
             @test_throws DimensionMismatch LAPACK.ggsvd3!('S','S','S',A,B)
@@ -613,7 +613,7 @@ end
 
 # Issue 13976
 let A = [NaN 0.0 NaN; 0 0 0; NaN 0 NaN]
-    @test_throws ArgumentError expm(A)
+    @test_throws ArgumentError exp(A)
 end
 
 # Issue 14065 (and 14220)

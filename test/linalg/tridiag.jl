@@ -41,10 +41,17 @@ B = randn(n,2)
             @test ST == Matrix(ST)
             @test ST.dv === x
             @test ST.ev === y
+            TT = (Tridiagonal(y, x, y))::Tridiagonal{elty, typeof(x)}
+            @test TT == Matrix(TT)
+            @test TT.dl === y
+            @test TT.d  === x
+            @test TT.du === y
         end
         # enable when deprecations for 0.7 are dropped
         # @test_throws MethodError SymTridiagonal(dv, GenericArray(ev))
         # @test_throws MethodError SymTridiagonal(GenericArray(dv), ev)
+        # @test_throws MethodError Tridiagonal(GenericArray(ev), dv, GenericArray(ev))
+        # @test_throws MethodError Tridiagonal(ev, GenericArray(dv), ev)
     end
 
     @testset "size and Array" begin
@@ -58,7 +65,7 @@ B = randn(n,2)
     @testset "elementary operations" begin
         @test conj(T) == Tridiagonal(conj(dl), conj(d), conj(du))
         @test transpose(T) == Tridiagonal(du, d, dl)
-        @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
+        @test adjoint(T) == Tridiagonal(conj(du), conj(d), conj(dl))
 
         @test abs.(T) == Tridiagonal(abs.(dl),abs.(d),abs.(du))
         if elty <: Real
@@ -258,7 +265,7 @@ let n = 12 #Size of matrix problem to test
                 @test_throws ArgumentError diag(A,n+1)
             end
             @testset "Idempotent tests" begin
-                for func in (conj, transpose, ctranspose)
+                for func in (conj, transpose, adjoint)
                     @test func(func(A)) == A
                 end
             end

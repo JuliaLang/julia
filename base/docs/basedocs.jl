@@ -697,6 +697,13 @@ DevNull
 # doc strings for code in boot.jl and built-ins
 
 """
+    Void
+
+A type with no fields that is the type [`nothing`](@ref).
+"""
+Void
+
+"""
     nothing
 
 The singleton instance of type `Void`, used by convention when there is no value to return
@@ -808,19 +815,19 @@ julia> A = ones(7);
 julia> A[8]
 ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
 Stacktrace:
- [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:586
+ [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:763
 
 julia> B = ones(2, 3);
 
 julia> B[2, 4]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:587
+ [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:764
 
 julia> B[9]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [9]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:586
+ [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:763
 ```
 """
 BoundsError
@@ -982,7 +989,7 @@ Inf
 julia> div(2, 0)
 ERROR: DivideError: integer division error
 Stacktrace:
- [1] div(::Int64, ::Int64) at ./int.jl:183
+ [1] div(::Int64, ::Int64) at ./int.jl:220
 ```
 """
 DivideError
@@ -1260,5 +1267,132 @@ An error occurred when running a module's `__init__` function. The actual error 
 available in the `.error` field.
 """
 InitError
+
+"""
+    Any::DataType
+
+`Any` is the union of all types. It has the defining property `isa(x, Any) == true` for any `x`. `Any` therefore
+describes the entire universe of possible values. For example `Integer` is a subset of `Any` that includes `Int`,
+`Int8`, and other integer types.
+"""
+Any
+
+"""
+    Union{}
+
+`Union{}`, the empty [`Union`](@ref) of types, is the type that has no values. That is, it has the defining
+property `isa(x, Union{}) == false` for any `x`. `Base.Bottom` is defined as its alias and the type of `Union{}`
+is `Core.TypeofBottom`.
+
+# Examples
+```jldoctest
+julia> isa(nothing, Union{})
+false
+```
+"""
+kw"Union{}", Base.Bottom
+
+"""
+    Union{Types...}
+
+A type union is an abstract type which includes all instances of any of its argument types. The empty
+union [`Union{}`](@ref) is the bottom type of Julia.
+
+# Examples
+```jldoctest
+julia> IntOrString = Union{Int,AbstractString}
+Union{AbstractString, Int64}
+
+julia> 1 :: IntOrString
+1
+
+julia> "Hello!" :: IntOrString
+"Hello!"
+
+julia> 1.0 :: IntOrString
+ERROR: TypeError: typeassert: expected Union{AbstractString, Int64}, got Float64
+```
+"""
+Union
+
+
+"""
+    UnionAll
+
+A union of types over all values of a type parameter. `UnionAll` is used to describe parametric types
+where the values of some parameters are not known.
+
+# Examples
+```jldoctest
+julia> typeof(Vector)
+UnionAll
+
+julia> typeof(Vector{Int})
+DataType
+```
+"""
+UnionAll
+
+"""
+    ::
+
+With the `::`-operator type annotations are attached to expressions and variables in programs.
+See the manual section on [Type Declarations](@ref).
+
+Outside of declarations `::` is used to assert that expressions and variables in programs have a given type.
+
+# Examples
+```jldoctest
+julia> (1+2)::AbstractFloat
+ERROR: TypeError: typeassert: expected AbstractFloat, got Int64
+
+julia> (1+2)::Int
+3
+```
+"""
+kw"::"
+
+"""
+    Vararg{T,N}
+
+The last parameter of a tuple type [`Tuple`](@ref) can be the special type `Vararg`, which denotes any
+number of trailing elements. The type `Vararg{T,N}` corresponds to exactly `N` elements of type `T`.
+`Vararg{T}` corresponds to zero or more elements of type `T`. `Vararg` tuple types are used to represent the
+arguments accepted by varargs methods (see the section on [Varargs Functions](@ref) in the manual.)
+
+# Examples
+```jldoctest
+julia> mytupletype = Tuple{AbstractString,Vararg{Int}}
+Tuple{AbstractString,Vararg{Int64,N} where N}
+
+julia> isa(("1",), mytupletype)
+true
+
+julia> isa(("1",1), mytupletype)
+true
+
+julia> isa(("1",1,2), mytupletype)
+true
+
+julia> isa(("1",1,2,3.0), mytupletype)
+false
+```
+"""
+Vararg
+
+"""
+    Tuple{Types...}
+
+Tuples are an abstraction of the arguments of a function – without the function itself. The salient aspects of
+a function's arguments are their order and their types. Therefore a tuple type is similar to a parameterized
+immutable type where each parameter is the type of one field. Tuple types may have any number of parameters.
+
+Tuple types are covariant in their parameters: `Tuple{Int}` is a subtype of `Tuple{Any}`. Therefore `Tuple{Any}`
+is considered an abstract type, and tuple types are only concrete if their parameters are. Tuples do not have
+field names; fields are only accessed by index.
+
+See the manual section on [Tuple Types](@ref).
+"""
+Tuple
 
 end

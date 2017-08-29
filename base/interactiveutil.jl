@@ -330,8 +330,13 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
     if packages || verbose
         println(io, "Packages:")
         println(io, "  Package Directory: ", Pkg.dir())
-        println(io, "  Package Status:")
-        Pkg.status(io)
+        print(io, "  Package Status:")
+        if isdir(Pkg.dir())
+            println(io, "")
+            Pkg.status(io)
+        else
+            println(io, " no packages installed")
+        end
     end
 end
 
@@ -347,14 +352,35 @@ problematic for performance, so the results need to be used judiciously.
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
 function code_warntype(io::IO, f, @nospecialize(t))
+    function slots_used(ci, slotnames)
+        used = falses(length(slotnames))
+        scan_exprs!(used, ci.code)
+        return used
+    end
+
+    function scan_exprs!(used, exprs)
+        for ex in exprs
+            if isa(ex, Slot)
+                used[ex.id] = true
+            elseif isa(ex, Expr)
+                scan_exprs!(used, ex.args)
+            end
+        end
+    end
+
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
     for (src, rettype) in code_typed(f, t)
         println(emph_io, "Variables:")
         slotnames = sourceinfo_slotnames(src)
+        used_slotids = slots_used(src, slotnames)
         for i = 1:length(slotnames)
             print(emph_io, "  ", slotnames[i])
-            if isa(src.slottypes, Array)
-                show_expr_type(emph_io, src.slottypes[i], true)
+            if used_slotids[i]
+                if isa(src.slottypes, Array)
+                    show_expr_type(emph_io, src.slottypes[i], true)
+                end
+            else
+                print(emph_io, " <optimized out>")
             end
             print(emph_io, '\n')
         end
@@ -363,8 +389,7 @@ function code_warntype(io::IO, f, @nospecialize(t))
         body.args = src.code
         body.typ = rettype
         # Fix slot names and types in function body
-        show_unquoted(IOContext(IOContext(emph_io, :SOURCEINFO => src),
-                                          :SOURCE_SLOTNAMES => slotnames),
+        show_unquoted(IOContext(emph_io, :SOURCEINFO => src, :SOURCE_SLOTNAMES => slotnames),
                       body, 2)
         print(emph_io, '\n')
     end
@@ -623,7 +648,7 @@ else
                 rethrow()
             end
         elseif downloadcmd == :curl
-            run(`curl -L -f -o $filename $url`)
+            run(`curl -g -L -f -o $filename $url`)
         elseif downloadcmd == :fetch
             run(`fetch -f $filename $url`)
         else

@@ -88,7 +88,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     lkup = StackTraces.UNKNOWN
     for frame in bt
         lkups = StackTraces.lookup(frame)
-        for lkup in lkups
+        for outer lkup in lkups
             if lkup == StackTraces.UNKNOWN
                 continue
             end
@@ -220,7 +220,7 @@ for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
         :tan, :tanh, :tand, :atan, :atanh, :atand,
         :sinpi, :cosc, :ceil, :floor, :trunc, :round,
         :log1p, :expm1, :abs, :abs2,
-        :log, :log2, :log10, :exp, :exp2, :exp10, :sinc, :cospi,
+        :log, :log2, :log10, :exp2, :exp10, :sinc, :cospi,
         :cos, :cosh, :cosd, :acos, :acosd,
         :cot, :coth, :cotd, :acot, :acotd,
         :sec, :sech, :secd, :asech,
@@ -251,7 +251,7 @@ for f in (
         # base/special/gamma.jl
         :gamma, :lfact,
         # base/math.jl
-        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :exp2,
+        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2,
         :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh,
         #=:log,=# :log2, :log10, :lgamma, #=:log1p,=# :sqrt,
         # base/floatfuncs.jl
@@ -556,7 +556,7 @@ function gen_broadcast_function_sparse(genbody::Function, f::Function, is_first_
     body = genbody(f, is_first_sparse)
     @eval let
         local _F_
-        function _F_{Tv,Ti}(B::SparseMatrixCSC{Tv,Ti}, A_1, A_2)
+        function _F_(B::SparseMatrixCSC{Tv,Ti}, A_1, A_2) where {Tv,Ti}
             $body
         end
         _F_
@@ -1067,7 +1067,7 @@ function partial_linear_indexing_warning_lookup(nidxs_remaining)
         caller = StackTraces.UNKNOWN
         for frame in bt
             lkups = StackTraces.lookup(frame)
-            for caller in lkups
+            for outer caller in lkups
                 if caller == StackTraces.UNKNOWN
                     continue
                 end
@@ -1263,11 +1263,11 @@ end
 
 @noinline zero_arg_matrix_constructor(prefix::String) =
     depwarn("$prefix() is deprecated, use $prefix(0, 0) instead.", :zero_arg_matrix_constructor)
-function (::Type{Matrix{T}})() where T
+function Matrix{T}() where T
     zero_arg_matrix_constructor("Matrix{T}")
     return Matrix{T}(0, 0)
 end
-function (::Type{Matrix})()
+function Matrix()
     zero_arg_matrix_constructor("Matrix")
     return Matrix(0, 0)
 end
@@ -1421,7 +1421,7 @@ end
 module Operators
     for op in [:!, :(!=), :(!==), :%, :&, :*, :+, :-, :/, ://, :<, :<:, :<<, :(<=),
                :<|, :(==), :(===), :>, :>:, :(>=), :>>, :>>>, :\, :^, :colon,
-               :ctranspose, :getindex, :hcat, :hvcat, :setindex!, :transpose, :vcat,
+               :adjoint, :getindex, :hcat, :hvcat, :setindex!, :transpose, :vcat,
                :xor, :|, :|>, :~, :×, :÷, :∈, :∉, :∋, :∌, :∘, :√, :∛, :∩, :∪, :≠, :≤,
                :≥, :⊆, :⊈, :⊊, :⊻, :⋅]
         if isdefined(Base, op)
@@ -1652,6 +1652,18 @@ function SymTridiagonal(dv::AbstractVector{T}, ev::AbstractVector{S}) where {T,S
     SymTridiagonal(convert(Vector{R}, dv), convert(Vector{R}, ev))
 end
 
+# PR #23154
+# also uncomment constructor tests in test/linalg/tridiag.jl
+function Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::AbstractVector{Tu}) where {Tl,Td,Tu}
+    depwarn(string("Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::AbstractVector{Tu}) ",
+        "where {Tl, Td, Tu} is deprecated; convert all vectors to the same type instead."), :Tridiagonal)
+    Tridiagonal(map(v->convert(Vector{promote_type(Tl,Td,Tu)}, v), (dl, d, du))...)
+end
+
+# deprecate expm in favor of exp
+@deprecate expm! exp!
+@deprecate expm exp
+
 # PR #23092
 @eval LibGit2 begin
     function prompt(msg::AbstractString; default::AbstractString="", password::Bool=false)
@@ -1684,8 +1696,61 @@ export hex2num
 # PR #22742: change in isapprox semantics
 @deprecate rtoldefault(x,y) rtoldefault(x,y,0) false
 
+# PR #23235
+@deprecate ctranspose adjoint
+@deprecate ctranspose! adjoint!
+
+@deprecate convert(::Type{Vector{UInt8}}, s::AbstractString)  Vector{UInt8}(s)
+@deprecate convert(::Type{Array{UInt8}}, s::AbstractString)   Vector{UInt8}(s)
+@deprecate convert(::Type{Vector{Char}}, s::AbstractString)   Vector{Char}(s)
+@deprecate convert(::Type{Symbol}, s::AbstractString)         Symbol(s)
+@deprecate convert(::Type{String}, s::Symbol)                 String(s)
+@deprecate convert(::Type{String}, v::Vector{UInt8})          String(v)
+@deprecate convert(::Type{S}, g::UTF8proc.GraphemeIterator) where {S<:AbstractString}  convert(S, g.s)
+
 # issue #5148, PR #23259
 # warning for `const` on locals should be changed to an error in julia-syntax.scm
+
+# issue #17886
+# deprecations for filter[!] with 2-arg functions are in associative.jl
+
+# PR #23066
+@deprecate cfunction(f, r, a::Tuple) cfunction(f, r, Tuple{a...})
+
+# PR 23341
+@deprecate diagm(A::SparseMatrixCSC) spdiagm(sparsevec(A))
+
+# PR #23373
+@deprecate diagm(A::BitMatrix) diagm(vec(A))
+
+# PR 23341
+@eval GMP @deprecate gmp_version() version() false
+@eval GMP @Base.deprecate_binding GMP_VERSION VERSION false
+@eval GMP @deprecate gmp_bits_per_limb() bits_per_limb() false
+@eval GMP @Base.deprecate_binding GMP_BITS_PER_LIMB BITS_PER_LIMB false
+@eval MPFR @deprecate get_version() version() false
+@eval LinAlg.LAPACK @deprecate laver() version() false
+
+# PR #23271
+function IOContext(io::IO; kws...)
+    depwarn("IOContext(io, k=v, ...) is deprecated, use IOContext(io, :k => v, ...) instead.", :IOContext)
+    IOContext(io, (k=>v for (k, v) in kws)...)
+end
+
+@deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)
+
+# PR #23485
+export foo
+function countnz(x)
+    depwarn("countnz(x) is deprecated, use either count(!iszero, x) or count(t -> t != 0, x) instead.", :depwarn)
+    return count(t -> t != 0, x)
+end
+
+# issue #22791
+@deprecate select partialsort
+@deprecate select! partialsort!
+@deprecate selectperm partialsortperm
+@deprecate selectperm! partialsortperm!
 
 # END 0.7 deprecations
 

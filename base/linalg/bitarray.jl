@@ -86,8 +86,7 @@ function diag(B::BitMatrix)
     v
 end
 
-function diagm(v::Union{BitVector,BitMatrix})
-    isa(v, BitMatrix) && size(v,1)==1 || size(v,2)==1 || throw(DimensionMismatch())
+function diagm(v::BitVector)
     n = length(v)
     a = falses(n, n)
     for i=1:n
@@ -134,7 +133,7 @@ end
 
 ## Structure query functions
 
-issymmetric(A::BitMatrix) = size(A, 1)==size(A, 2) && countnz(A - A.')==0
+issymmetric(A::BitMatrix) = size(A, 1)==size(A, 2) && count(!iszero, A - A.')==0
 ishermitian(A::BitMatrix) = issymmetric(A)
 
 function nonzero_chunks(chunks::Vector{UInt64}, pos0::Int, pos1::Int)
@@ -295,4 +294,4 @@ function transpose(B::BitMatrix)
     return Bt
 end
 
-ctranspose(B::Union{BitMatrix,BitVector}) = transpose(B)
+adjoint(B::Union{BitMatrix,BitVector}) = transpose(B)

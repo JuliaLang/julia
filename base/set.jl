@@ -240,7 +240,8 @@ const ⊆ = issubset
 
 Return an array containing only the unique elements of collection `itr`,
 as determined by [`isequal`](@ref), in the order that the first of each
-set of equivalent elements originally appears.
+set of equivalent elements originally appears. The element type of the
+input is preserved.
 
 # Examples
 ```jldoctest
@@ -249,6 +250,11 @@ julia> unique([1, 2, 6, 2])
  1
  2
  6
+
+julia> unique(Real[1, 1.0, 2])
+2-element Array{Real,1}:
+ 1
+ 2
 ```
 """
 function unique(itr)
@@ -260,7 +266,7 @@ function unique(itr)
         return out
     end
     x, i = next(itr, i)
-    if !isleaftype(T)
+    if !isleaftype(T) && iteratoreltype(itr) == EltypeUnknown()
         S = typeof(x)
         return _unique_from(itr, S[x], Set{S}((x,)), i)
     end

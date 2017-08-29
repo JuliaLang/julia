@@ -9,9 +9,10 @@ struct DoubleFloat32
     hi::Float64
 end
 
-# *_kernel functions are only valid for |x| < pi/4 = 0.7854
-# translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c
-# which are made available under the following licence:
+# sin_kernel and cos_kernel functions are only valid for |x| < pi/4 = 0.7854
+# translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c.
+# asin functions are based on openlibm code: e_asin.c, e_asinf.c. The above
+# functions are made available under the following licence:
 
 ## Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
 ##
@@ -79,6 +80,111 @@ end
 # fallback methods
 sin_kernel(x::Real) = sin(x)
 cos_kernel(x::Real) = cos(x)
+
+# Inverse trigonometric functions
+
+# asin methods
+ASIN_X_MIN_THRESHOLD(::Type{Float32}) = 2.0f0^-12
+ASIN_X_MIN_THRESHOLD(::Type{Float64}) = sqrt(eps(Float64))
+
+arc_p(t::Float64) =
+    t*@horner(t,
+    1.66666666666666657415e-01,
+    -3.25565818622400915405e-01,
+    2.01212532134862925881e-01,
+    -4.00555345006794114027e-02,
+    7.91534994289814532176e-04,
+    3.47933107596021167570e-05)
+
+arc_q(t::Float64) =
+    @horner(t,
+    1.0,
+    -2.40339491173441421878e+00,
+    2.02094576023350569471e+00,
+    -6.88283971605453293030e-01,
+    7.70381505559019352791e-02)
+
+arc_p(t::Float32) =
+    t*@horner(t,
+    1.6666586697f-01,
+    -4.2743422091f-02,
+    -8.6563630030f-03)
+
+arc_q(t::Float32) = @horner(t, 1.0f0, -7.0662963390f-01)
+
+@inline function asin_kernel(t::Float64, x::Float64)
+    pio2_lo = 6.12323399573676603587e-17
+    s = sqrt_llvm(t)
+    p = arc_p(t) # numerator polynomial
+    q = arc_q(t) # denominator polynomial
+    if abs(x) >= 0.975 # |x| > 0.975
+        Rx = p/q
+        return flipsign(pi/2 - (2.0*(s + s*Rx) - pio2_lo), x)
+    else
+        s0 = reinterpret(Float64, (reinterpret(UInt64, s) >> 32) << 32)
+        c = (t - s0*s0)/(s + s0)
+        Rx = p/q
+        p = 2.0*s*Rx - (pio2_lo - 2.0*c)
+        q = pi/4 - 2.0*s0
+        return flipsign(pi/4 - (p-q), x)
+    end
+end
+@inline function asin_kernel(t::Float32, x::Float32)
+    s = sqrt_llvm(Float64(t))
+    p = arc_p(t) # numerator polynomial
+    q = arc_q(t) # denominator polynomial
+    Rx = p/q # rational approximation
+    flipsign(Float32(pi/2 - 2*(s + s*Rx)), x)
+end
+
+@noinline asin_domain_error(x) = throw(DomainError(x, "asin(x) is not defined for |x|>1."))
+function asin(x::T) where T<:Union{Float32, Float64}
+    # Method :
+    #    Since  asin(x) = x + x^3/6 + x^5*3/40 + x^7*15/336 + ...
+    #    we approximate asin(x) on [0,0.5] by
+    #        asin(x) = x + x*x^2*R(x^2)
+    #    where
+    #        R(x^2) is a rational approximation of (asin(x)-x)/x^3
+    #    and its remez error is bounded by
+    #        |(asin(x)-x)/x^3 - R(x^2)| < 2^(-58.75)
+    #
+    #    For x in [0.5,1]
+    #        asin(x) = pi/2-2*asin(sqrt((1-x)/2))
+    #    Let y = (1-x), z = y/2, s := sqrt(z), and pio2_hi+pio2_lo=pi/2;
+    #    then for x>0.98
+    #        asin(x) = pi/2 - 2*(s+s*z*R(z))
+    #            = pio2_hi - (2*(s+s*z*R(z)) - pio2_lo)
+    #    For x<=0.98, let pio4_hi = pio2_hi/2, then
+    #        f = hi part of s;
+    #        c = sqrt(z) - f = (z-f*f)/(s+f)     ...f+c=sqrt(z)
+    #    and
+    #        asin(x) = pi/2 - 2*(s+s*z*R(z))
+    #            = pio4_hi+(pio4-2s)-(2s*z*R(z)-pio2_lo)
+    #            = pio4_hi+(pio4-2f)-(2s*z*R(z)-(pio2_lo+2c))
+    #
+    # Special cases:
+    #    if |x|>1, throw DomainError
+    absx = abs(x)
+    if absx >= T(1.0) # |x|>= 1
+        if absx == T(1.0)
+            return flipsign(T(pi)/2, x)
+        end
+        asin_domain_error(x)
+    elseif absx < T(1.0)/2
+        # if |x| sufficiently small, |x| is a good approximation
+        if absx < ASIN_X_MIN_THRESHOLD(T)
+            return x
+        end
+        # else if |x|<0.5 we use a rational approximation R(x)=p(x)/q(x) such that
+        # tan(x) ≈ x+x*R(x)
+        x² = x*x
+        Rx = arc_p(x²)/arc_q(x²) # rational approximation
+        return muladd(x, Rx, x)
+    end
+    # else 1/2 <= |x| < 1
+    t = (T(1.0) - absx)/2
+    return asin_kernel(t, x)
+end
 
 # multiply in extended precision
 function mulpi_ext(x::Float64)

@@ -92,6 +92,11 @@ show(iob, expand(Main, :(x -> x^2)))
 str = String(take!(iob))
 @test isempty(search(str, tag))
 
+# Make sure non used variables are not emphasized
+has_unused() = (a = rand(5))
+@test !warntype_hastag(has_unused, Tuple{}, tag)
+@test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
+
 module ImportIntrinsics15819
 # Make sure changing the lookup path of an intrinsic doesn't break
 # the heuristic for type instability warning.
@@ -490,7 +495,7 @@ end
 tracefoo(x, y) = x+y
 didtrace = false
 tracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
-ccall(:jl_register_method_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, (Ptr{Void},)))
+ccall(:jl_register_method_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, Tuple{Ptr{Void}}))
 meth = which(tracefoo,Tuple{Any,Any})
 ccall(:jl_trace_method, Void, (Any,), meth)
 @test tracefoo(1, 2) == 3
@@ -503,7 +508,7 @@ ccall(:jl_register_method_tracer, Void, (Ptr{Void},), C_NULL)
 
 # Method Tracing test
 methtracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
-ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), cfunction(methtracer, Void, (Ptr{Void},)))
+ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), cfunction(methtracer, Void, Tuple{Ptr{Void}}))
 tracefoo2(x, y) = x*y
 @test didtrace
 didtrace = false
@@ -604,7 +609,7 @@ end
 
 mutable struct A18434
 end
-(::Type{A18434})(x; y=1) = 1
+A18434(x; y=1) = 1
 
 global counter18434 = 0
 function get_A18434()
@@ -690,8 +695,8 @@ end
 @test sizeof(Symbol("")) == 0
 @test_throws(ErrorException("argument is an abstract type; size is indeterminate"),
              sizeof(Real))
-@test_throws ErrorException sizeof(Union{Complex64,Complex128})
-@test_throws ErrorException sizeof(Union{Int8,UInt8})
+@test sizeof(Union{Complex64,Complex128}) == 16
+@test sizeof(Union{Int8,UInt8}) == 1
 @test_throws ErrorException sizeof(AbstractArray)
 @test_throws ErrorException sizeof(Tuple)
 @test_throws ErrorException sizeof(Tuple{Any,Any})
@@ -714,3 +719,32 @@ end
 @test_throws ErrorException fieldcount(Real)
 @test_throws ErrorException fieldcount(AbstractArray)
 @test_throws ErrorException fieldcount(Tuple{Any,Vararg{Any}})
+
+# PR #22979
+
+function test_similar_codeinfo(a, b)
+    @test a.code == b.code
+    @test a.slotnames == b.slotnames
+    @test a.slotflags == b.slotflags
+end
+
+@generated f22979(x...) = (y = 1; :(x[1] + x[2]))
+x22979 = (1, 2.0, 3.0 + im)
+T22979 = Tuple{typeof(f22979),typeof.(x22979)...}
+world = typemax(UInt)
+mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[]
+instance = Core.Inference.code_for_method(m, mtypes, msp, world, false)
+cinfo_generated = Core.Inference.get_staged(instance)
+cinfo_ungenerated = Base.uncompressed_ast(m)
+
+test_similar_codeinfo(@code_lowered(f22979(x22979...)), cinfo_generated)
+
+cinfos = code_lowered(f22979, typeof.(x22979), true)
+@test length(cinfos) == 1
+cinfo = cinfos[]
+test_similar_codeinfo(cinfo, cinfo_generated)
+
+cinfos = code_lowered(f22979, typeof.(x22979), false)
+@test length(cinfos) == 1
+cinfo = cinfos[]
+test_similar_codeinfo(cinfo, cinfo_ungenerated)

@@ -3,12 +3,13 @@
 # Methods operating on different special matrix types
 
 # Interconversion between special matrix types
-convert(::Type{Bidiagonal}, A::Diagonal{T}) where {T} =
-    Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), :U)
-convert(::Type{SymTridiagonal}, A::Diagonal{T}) where {T} =
-    SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
-convert(::Type{Tridiagonal}, A::Diagonal{T}) where {T} =
-    Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
+convert(::Type{Bidiagonal}, A::Diagonal) =
+    Bidiagonal(A.diag, fill!(similar(A.diag, length(A.diag)-1), 0), :U)
+convert(::Type{SymTridiagonal}, A::Diagonal) =
+    SymTridiagonal(A.diag, fill!(similar(A.diag, length(A.diag)-1), 0))
+convert(::Type{Tridiagonal}, A::Diagonal) =
+    Tridiagonal(fill!(similar(A.diag, length(A.diag)-1), 0), A.diag,
+                fill!(similar(A.diag, length(A.diag)-1), 0))
 
 function convert(::Type{Diagonal}, A::Union{Bidiagonal, SymTridiagonal})
     if !iszero(A.ev)
@@ -25,8 +26,8 @@ function convert(::Type{SymTridiagonal}, A::Bidiagonal)
 end
 
 convert(::Type{Tridiagonal}, A::Bidiagonal{T}) where {T} =
-    Tridiagonal(A.uplo == 'U' ? zeros(T, size(A.dv,1)-1) : A.ev, A.dv,
-                A.uplo == 'U' ? A.ev : zeros(T, size(A.dv,1)-1))
+    Tridiagonal(A.uplo == 'U' ? fill!(similar(A.ev), 0) : A.ev, A.dv,
+                A.uplo == 'U' ? A.ev : fill!(similar(A.ev), 0))
 
 function convert(::Type{Bidiagonal}, A::SymTridiagonal)
     if !iszero(A.ev)

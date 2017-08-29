@@ -469,7 +469,7 @@ d[5,1:2:4,8] = 19
 AA = rand(4,2)
 A = @inferred(convert(SharedArray, AA))
 B = @inferred(convert(SharedArray, AA'))
-@test B*A == ctranspose(AA)*AA
+@test B*A == adjoint(AA)*AA
 
 d=SharedArray{Int64,2}((10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
 d2 = map(x->1, d)
@@ -525,6 +525,7 @@ function finalize_and_test(r)
 end
 
 for id in [id_me, id_other]
+    local id
     finalize_and_test(Future(id))
     finalize_and_test((r=Future(id); put!(r, 1); r))
     finalize_and_test(RemoteChannel(id))
@@ -536,17 +537,19 @@ finalize(d)
 @test_throws BoundsError d[1]
 
 # Issue 22139
-aorig = a1 = SharedArray{Float64}((3, 3))
-a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-@test object_id(aorig) == object_id(a1)
-id = a1.id
-aorig = nothing
-a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-gc(); gc()
-a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-@test haskey(Base.sa_refs, id)
-finalize(a1)
-@test !haskey(Base.sa_refs, id)
+let
+    aorig = a1 = SharedArray{Float64}((3, 3))
+    a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
+    @test object_id(aorig) == object_id(a1)
+    id = a1.id
+    aorig = nothing
+    a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
+    gc(); gc()
+    a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
+    @test haskey(Base.sa_refs, id)
+    finalize(a1)
+    @test !haskey(Base.sa_refs, id)
+end
 
 # Test @parallel load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
@@ -676,6 +679,7 @@ function test_remoteexception_thrown(expr)
 end
 
 for id in [id_other, id_me]
+    local id
     test_remoteexception_thrown() do
         remotecall_fetch(id) do
             throw(ErrorException("foobar"))
@@ -1248,6 +1252,7 @@ let (p, p2) = filter!(p -> p != myid(), procs())
                 ex = Any[ (ex::CapturedException).ex for ex in (excpt::CompositeException).exceptions ]
             end
             for (p, ex) in zip(procs, ex)
+                local p
                 if procs isa Int || p != myid()
                     @test (ex::RemoteException).pid == p
                     ex = ((ex::RemoteException).captured::CapturedException).ex
@@ -1372,6 +1377,7 @@ end
 
 # Test addprocs/rmprocs from master node only
 for f in [ ()->addprocs(1; exeflags=test_exeflags), ()->rmprocs(workers()) ]
+    local f
     try
         remotecall_fetch(f, id_other)
         error("Unexpected")

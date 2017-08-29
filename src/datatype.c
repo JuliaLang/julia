@@ -717,7 +717,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
     size_t nf = jl_datatype_nfields(type);
     va_start(args, type);
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
-    for(size_t i=0; i < nf; i++) {
+    for (size_t i = 0; i < nf; i++) {
         jl_set_nth_field(jv, i, va_arg(args, jl_value_t*));
     }
     va_end(args);
@@ -731,7 +731,10 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
     if (type->instance != NULL) return type->instance;
     size_t nf = jl_datatype_nfields(type);
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
-    for(size_t i=0; i < na; i++) {
+    for (size_t i = 0; i < na; i++) {
+        jl_value_t *ft = jl_field_type(type, i);
+        if (!jl_isa(args[i], ft))
+            jl_type_error("new", ft, args[i]);
         jl_set_nth_field(jv, i, args[i]);
     }
     for(size_t i=na; i < nf; i++) {

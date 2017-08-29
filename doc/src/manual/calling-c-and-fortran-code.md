@@ -158,7 +158,7 @@ Julia function. Arguments to [`cfunction()`](@ref) are as follows:
 
 1. A Julia Function
 2. Return type
-3. A tuple of input types
+3. A tuple type of input types
 
 Only platform-default C calling convention is supported. `cfunction`-generated pointers cannot
 be used in calls where WINAPI expects `stdcall` function on 32-bit windows, but can be used on WIN64
@@ -192,11 +192,11 @@ a C `int`, so we must be sure to return `Cint` via a call to `convert` and a `ty
 In order to pass this function to C, we obtain its address using the function `cfunction`:
 
 ```jldoctest mycompare
-julia> const mycompare_c = cfunction(mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble}));
+julia> const mycompare_c = cfunction(mycompare, Cint, Tuple{Ref{Cdouble}, Ref{Cdouble}});
 ```
 
 [`cfunction()`](@ref) accepts three arguments: the Julia function (`mycompare`), the return type
-(`Cint`), and a tuple of the argument types, in this case to sort an array of `Cdouble`
+(`Cint`), and a tuple type of the input argument types, in this case to sort an array of `Cdouble`
 ([`Float64`](@ref)) elements.
 
 The final call to `qsort` looks like this:
@@ -687,8 +687,8 @@ function compute_dot(DX::Vector{Float64}, DY::Vector{Float64})
     incx = incy = 1
     product = ccall((:ddot_, "libLAPACK"),
                     Float64,
-                    (Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}),
-                    &n, DX, &incx, DY, &incy)
+                    (Ref{Int32}, Ptr{Float64}, Ref{Int32}, Ptr{Float64}, Ref{Int32}),
+                    n, DX, incx, DY, incy)
     return product
 end
 ```
@@ -872,6 +872,25 @@ end
 mylibvar = Libdl.dlopen("mylib")
 ccall(@dlsym("myfunc", mylibvar), Void, ())
 ```
+
+## Closing a Library
+
+It is sometimes useful to close (unload) a library so that it can be reloaded.
+For instance, when developing C code for use with Julia, one may need to compile,
+call the C code from Julia, then close the library, make an edit, recompile,
+and load in the new changes. One can either restart Julia or use the
+`Libdl` functions to manage the library explicitly, such as:
+
+```julia
+lib = Libdl.dlopen("./my_lib.so") # Open the library explicitly.
+sym = Libdl.dlsym(lib, :my_fcn)   # Get a symbol for the function to call.
+ccall(sym, ...) # Use the symbol instead of the (symbol, library) tuple (remaining arguments are the same).
+Libdl.dlclose(lib) # Close the library explicitly.
+```
+
+Note that when using `ccall` with the tuple input
+(e.g., `ccall((:my_fcn, "./my_lib.so"), ...)`), the library is opened implicitly
+and it may not be explicitly closed.
 
 ## Calling Convention
 

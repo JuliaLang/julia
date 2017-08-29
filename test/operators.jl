@@ -49,8 +49,6 @@ p = 1=>:foo
 @test xor(2) == 2
 @test (⊻)(2) == 2
 
-# @test ctranspose('a') == 'a' # (c)transpose of Chars no longer supported
-
 @test_throws ArgumentError Base.scalarmin(['a','b'],['c','d'])
 @test_throws ArgumentError Base.scalarmin('a',['c','d'])
 @test_throws ArgumentError Base.scalarmin(['a','b'],'c')

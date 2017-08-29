@@ -116,7 +116,7 @@ julia> A = [1 2 3; 2 1 2; 3 2 1]
 julia> F = bkfact(Symmetric(A, :L))
 Base.LinAlg.BunchKaufman{Float64,Array{Float64,2}}
 D factor:
-3×3 Tridiagonal{Float64}:
+3×3 Tridiagonal{Float64,Array{Float64,1}}:
  1.0  3.0    ⋅
  3.0  1.0   0.0
   ⋅   0.0  -1.0

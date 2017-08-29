@@ -3,6 +3,7 @@
 # NOTE: This type needs to be kept in sync with jl_options in src/julia.h
 struct JLOptions
     quiet::Int8
+    banner::Int8
     julia_home::Ptr{UInt8}
     julia_bin::Ptr{UInt8}
     eval::Ptr{UInt8}
