@@ -78,6 +78,9 @@ Language changes
   * In `for i in x`, `x` used to be evaluated in a new scope enclosing the `for` loop.
     Now it is evaluated in the scope outside the `for` loop.
 
+  * Variable bindings local to `while` loop bodies are now freshly allocated on each loop iteration,
+    matching the behavior of `for` loops.
+
 Breaking changes
 ----------------
 
