@@ -325,9 +325,24 @@ function add(env::EnvCache, pkgs::Vector{PackageVersion})
     write_env(env)
 end
 
-function up(env::EnvCache, pkgs::Vector{PackageVersion})
-    # resolve bound levels to version specs
-
+function up(env::EnvCache, pkgs::Vector{PackageVersion}, rest::UpgradeLevel)
+    # resolve upgrade levels to version specs
+    for pkg in pkgs
+        pkg.version isa UpgradeLevel || continue
+        level = pkg.version
+        info = manifest_info(env, pkg.package.uuid)
+        ver = VersionNumber(info["version"])
+        if level == UpgradeLevel(:fixed)
+            pkg.version = VersionNumber(info["version"])
+        else
+            r = level == UpgradeLevel(:patch) ? VersionRange(ver.major, ver.minor) :
+                level == UpgradeLevel(:minor) ? VersionRange(ver.major) :
+                level == UpgradeLevel(:major) ? VersionRange() :
+                    error("unexpected upgrade level")
+            pkg.version = VersionSpec(r)
+        end
+    end
+    @show pkgs
 end
 
 end # module

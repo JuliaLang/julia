@@ -74,6 +74,7 @@ struct VersionRange{m,n}
     # TODO: check non-emptiness of range?
 end
 VersionRange(b::VersionBound=VersionBound()) = VersionRange(b, b)
+VersionRange(t::Integer...) = VersionRange(VersionBound(t...))
 
 Base.convert(::Type{VersionRange}, v::VersionNumber) =
     VersionRange(VersionBound(v))
@@ -587,6 +588,7 @@ end
 
 "Find package by UUID in the manifest file"
 function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Void}
+    uuid in values(env.uuids) || find_registered!(env, [uuid])
     for (name, infos) in env.manifest, info in infos
         haskey(info, "uuid") && uuid == UUID(info["uuid"]) || continue
         return convert(Dict{String,Any}, info)
