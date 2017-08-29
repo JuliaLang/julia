@@ -84,7 +84,15 @@ function _dropdims(A::AbstractArray, dims::Dims)
     end
     reshape(A, d::typeof(_sub(axes(A), dims)))
 end
+
 _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
+
+"""
+    squeeze(f, A, dims)
+
+Compute reduction `f` over dimensions `dims` in array `A` and drop those dimensions from the result.
+"""
+squeeze(f, A::AbstractArray, dims::Union{Dims, Integer}) = squeeze(f(A, dims), dims)
 
 ## Unary operators ##
 

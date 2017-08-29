@@ -303,6 +303,17 @@ end
     @test_throws ArgumentError dropdims(a, dims=4)
     @test_throws ArgumentError dropdims(a, dims=6)
 
+    @test @inferred(squeeze(sum, a, 1)) == @inferred(squeeze(sum, a, (1,))) == reshape(sum(a, 1), (1, 8, 8, 1))
+    @test @inferred(squeeze(sum, a, 3)) == @inferred(squeeze(sum, a, (3,))) == reshape(sum(a, 3), (1, 1, 8, 1))
+    @test @inferred(squeeze(sum, a, 4)) == @inferred(squeeze(sum, a, (4,))) == reshape(sum(a, 4), (1, 1, 8, 1))
+    @test @inferred(squeeze(sum, a, (1, 5))) == squeeze(sum, a, (5, 1)) == reshape(sum(a, (5, 1)), (1, 8, 8))
+    @test @inferred(squeeze(sum, a, (1, 2, 5))) == squeeze(sum, a, (5, 2, 1)) == reshape(sum(a, (5, 2, 1)), (8, 8))
+    @test_throws ArgumentError squeeze(sum, a, 0)
+    @test_throws ArgumentError squeeze(sum, a, (1, 1))
+    @test_throws ArgumentError squeeze(sum, a, (1, 2, 1))
+    @test_throws ArgumentError squeeze(sum, a, (1, 1, 2))
+    @test_throws ArgumentError squeeze(sum, a, 6)
+
     sz = (5,8,7)
     A = reshape(1:prod(sz),sz...)
     @test A[2:6] == [2:6;]
