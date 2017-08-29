@@ -83,6 +83,12 @@ end
 
 squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
 
+"""
+    squeeze(f, A, dims)
+
+Compute reduction `f` over dimensions `dims` in array `A` and drop those dimensions from the result.
+"""
+squeeze(f, A::AbstractArray, dims::Union{Dims, Integer}) = squeeze(f(A, dims), dims)
 
 ## Unary operators ##
 
