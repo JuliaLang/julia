@@ -254,6 +254,14 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
             else
                 allowed_types &= Cuint(0)  # Unhandled credential type
             end
+        elseif !isnull(p.cache)
+            cache = unsafe_get(p.cache)
+            cred_id = credential_identifier(p.scheme, p.host)
+
+            # Perform a deepcopy as we do not want to mutate approved cached credentials
+            if haskey(cache, cred_id)
+                p.credential = Nullable(deepcopy(cache[cred_id]))
+            end
         end
 
         p.first_pass = true
@@ -264,13 +272,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
     # use ssh key or ssh-agent
     if isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY))
         if isnull(p.credential) || !isa(unsafe_get(p.credential), SSHCredentials)
-            creds = SSHCredentials(p.username)
-            if !isnull(p.cache)
-                credid = "ssh://$(p.host)"
-                # Perform a copy as we do not want to mutate approved credentials
-                creds = deepcopy(get(unsafe_get(p.cache), credid, creds))
-            end
-            p.credential = Nullable(creds)
+            p.credential = Nullable(SSHCredentials(p.username))
         end
         err = authenticate_ssh(libgit2credptr, p, username_ptr)
         err == 0 && return err
@@ -278,13 +280,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
         if isnull(p.credential) || !isa(unsafe_get(p.credential), UserPasswordCredentials)
-            creds = UserPasswordCredentials(p.username)
-            if !isnull(p.cache)
-                credid = "$(isempty(p.scheme) ? "ssh" : p.scheme)://$(p.host)"
-                # Perform a copy as we do not want to mutate approved credentials
-                creds = deepcopy(get(unsafe_get(p.cache), credid, creds))
-            end
-            p.credential = Nullable(creds)
+            p.credential = Nullable(UserPasswordCredentials(p.username))
         end
         err = authenticate_userpass(libgit2credptr, p)
         err == 0 && return err
