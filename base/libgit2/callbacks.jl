@@ -231,13 +231,14 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     # Parse URL only during the first call to this function. Future calls will use the
     # information cached inside the payload.
-    if isempty(p.host)
-        url = match(URL_REGEX, unsafe_string(url_ptr))
+    if isempty(p.url)
+        p.url = unsafe_string(url_ptr)
+        m = match(URL_REGEX, p.url)
 
-        p.scheme = url[:scheme] === nothing ? "" : url[:scheme]
-        p.username = url[:user] === nothing ? "" : url[:user]
-        p.host = url[:host]
-        p.path = url[:path]
+        p.scheme = m[:scheme] === nothing ? "" : m[:scheme]
+        p.username = m[:user] === nothing ? "" : m[:user]
+        p.host = m[:host]
+        p.path = m[:path]
 
         # When an explicit credential is supplied we will make sure to use the given
         # credential during the first callback by modifying the allowed types. The
