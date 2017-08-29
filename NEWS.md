@@ -355,6 +355,8 @@ Deprecated or removed
     full path if you need access to executables or libraries in the `JULIA_HOME` directory, e.g.
     `joinpath(JULIA_HOME, "7z.exe")` for `7z.exe` ([#21540]).
 
+  * `sqrtm` has been deprecated in favor of `sqrt` ([#23504]).
+
   * `expm` has been deprecated in favor of `exp` ([#23233]).
 
   * `logm` has been deprecated in favor of `log` ([#23505]).

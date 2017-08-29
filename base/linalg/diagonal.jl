@@ -328,8 +328,7 @@ eye(::Type{Diagonal{T}}, n::Int) where {T} = Diagonal(ones(T,n))
 # Matrix functions
 exp(D::Diagonal) = Diagonal(exp.(D.diag))
 log(D::Diagonal) = Diagonal(log.(D.diag))
-sqrtm(D::Diagonal) = Diagonal(sqrt.(D.diag))
-sqrtm(D::Diagonal{<:AbstractMatrix}) = Diagonal(sqrtm.(D.diag))
+sqrt(D::Diagonal) = Diagonal(sqrt.(D.diag))
 
 #Linear solver
 function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)

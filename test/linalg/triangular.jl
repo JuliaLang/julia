@@ -237,7 +237,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         @test ladb ≈ fladb atol=sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
-        @test sqrtm(A1) |> t -> t*t ≈ A1
+        @test sqrt(A1) |> t -> t*t ≈ A1
 
         # naivesub errors
         @test_throws DimensionMismatch naivesub!(A1,ones(elty1,n+1))
@@ -391,10 +391,10 @@ end
 # Matrix square root
 Atn = UpperTriangular([-1 1 2; 0 -2 2; 0 0 -3])
 Atp = UpperTriangular([1 1 2; 0 2 2; 0 0 3])
-@test sqrtm(Atn) |> t->t*t ≈ Atn
-@test typeof(sqrtm(Atn)[1,1]) <: Complex
-@test sqrtm(Atp) |> t->t*t ≈ Atp
-@test typeof(sqrtm(Atp)[1,1]) <: Real
+@test sqrt(Atn) |> t->t*t ≈ Atn
+@test typeof(sqrt(Atn)[1,1]) <: Complex
+@test sqrt(Atp) |> t->t*t ≈ Atp
+@test typeof(sqrt(Atp)[1,1]) <: Real
 
 Areal   = randn(n, n)/2
 Aimg    = randn(n, n)/2
@@ -511,5 +511,5 @@ end
 isdefined(Main, :TestHelpers) || @eval Main include("../TestHelpers.jl")
 using TestHelpers.Furlong
 let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
-    @test sqrtm(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
+    @test sqrt(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
 end

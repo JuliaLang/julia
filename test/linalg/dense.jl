@@ -115,10 +115,10 @@ bimg  = randn(n,2)/2
         end
 
         @testset "Matrix square root" begin
-            asq = sqrtm(a)
+            asq = sqrt(a)
             @test asq*asq ≈ a
             asym = a'+a # symmetric indefinite
-            asymsq = sqrtm(asym)
+            asymsq = sqrt(asym)
             @test asymsq*asymsq ≈ asym
         end
 
@@ -370,10 +370,10 @@ end
 
 @testset "issue #2246" begin
     A = [1 2 0 0; 0 1 0 0; 0 0 0 0; 0 0 0 0]
-    Asq = sqrtm(A)
+    Asq = sqrt(A)
     @test Asq*Asq ≈ A
     A2 = view(A, 1:2, 1:2)
-    A2sq = sqrtm(A2)
+    A2sq = sqrt(A2)
     @test A2sq*A2sq ≈ A2
 
     N = 3
@@ -569,12 +569,12 @@ end
     end
 
     for A in (Aa, Ab, Ac, Ad, Ah, ADi)
-        @test A^(1/2) ≈ sqrtm(A)
-        @test A^(-1/2) ≈ inv(sqrtm(A))
-        @test A^(3/4) ≈ sqrtm(A) * sqrtm(sqrtm(A))
-        @test A^(-3/4) ≈ inv(A) * sqrtm(sqrtm(A))
-        @test A^(17/8) ≈ A^2 * sqrtm(sqrtm(sqrtm(A)))
-        @test A^(-17/8) ≈ inv(A^2 * sqrtm(sqrtm(sqrtm(A))))
+        @test A^(1/2) ≈ sqrt(A)
+        @test A^(-1/2) ≈ inv(sqrt(A))
+        @test A^(3/4) ≈ sqrt(A) * sqrt(sqrt(A))
+        @test A^(-3/4) ≈ inv(A) * sqrt(sqrt(A))
+        @test A^(17/8) ≈ A^2 * sqrt(sqrt(sqrt(A)))
+        @test A^(-17/8) ≈ inv(A^2 * sqrt(sqrt(sqrt(A))))
         @test (A^0.2)^5 ≈ A
         @test (A^(2/3))*(A^(1/3)) ≈ A
         @test (A^im)^(-im) ≈ A
@@ -680,7 +680,6 @@ end
 @testset "test ops on Numbers for $elty" for elty in [Float32,Float64,Complex64,Complex128]
     a = rand(elty)
     @test isposdef(one(elty))
-    @test sqrtm(a) == sqrt(a)
     @test lyap(one(elty),a) == -a/2
 end
 
