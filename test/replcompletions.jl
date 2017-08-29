@@ -65,6 +65,12 @@ ex = quote
                      contains=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
                      "α"=>12, :α=>13)
     test_customdict = CustomDict(test_dict)
+
+    macro teststr_str(s) end
+    macro tϵsτstρ_str(s) end
+    macro testcmd_cmd(s) end
+    macro tϵsτcmδ_cmd(s) end
+
     end
     test_repl_comp_dict = CompletionFoo.test_dict
     test_repl_comp_customdict = CompletionFoo.test_customdict
@@ -788,3 +794,16 @@ test_dict_completion("test_repl_comp_customdict")
 
 # Issue #23004: this should not throw:
 @test REPLCompletions.dict_identifier_key("test_dict_ℂ[\\", :other) isa Tuple
+
+@testset "completion of string/cmd macros (#22577)" begin
+    c, r, res = test_complete("ra")
+    @test "raw\"" in c
+    c, r, res = test_complete("CompletionFoo.tests")
+    @test "teststr\"" in c
+    c, r, res = test_complete("CompletionFoo.tϵsτs")
+    @test "tϵsτstρ\"" in c
+    c, r, res = test_complete("CompletionFoo.testc")
+    @test "testcmd`" in c
+    c, r, res = test_complete("CompletionFoo.tϵsτc")
+    @test "tϵsτcmδ`" in c
+end
