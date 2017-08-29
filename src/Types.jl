@@ -252,11 +252,13 @@ function write_env(env::EnvCache)
         info("Updating manifest file $(env.manifest_file)")
         manifest = deepcopy(env.manifest)
         uniques = sort!(collect(keys(manifest)), by=lowercase)
-        filter!(p->length(manifest[p]) == 1, uniques)
+        filter!(name->length(manifest[name]) == 1, uniques)
+        uuids = Dict(name => UUID(manifest[name][1]["uuid"]) for name in uniques)
         for (name, infos) in manifest, info in infos
             haskey(info, "deps") || continue
-            all(d in uniques for d in keys(info["deps"])) || continue
-            info["deps"] = sort!(collect(keys(info["deps"])))
+            deps = convert(Dict{String,UUID}, info["deps"])
+            all(d in uniques && uuids[d] == u for (d, u) in deps) || continue
+            info["deps"] = sort!(collect(keys(deps)))
         end
         open(env.manifest_file, "w") do io
             TOML.print(io, manifest, sorted=true)
