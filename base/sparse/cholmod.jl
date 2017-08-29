@@ -133,7 +133,7 @@ function __init__()
                  configuration or by downloading the OS X or generic
                  Linux binary from www.julialang.org, which include
                  the correct versions of all dependencies.
-            """)
+             """)
         end
 
         ### Initiate CHOLMOD
