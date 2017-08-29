@@ -258,39 +258,6 @@ function prune_manifest(env::EnvCache)
     end
 end
 
-function add(env::EnvCache, pkgs::Vector{PackageVersion})
-    # if a package is in the project file and
-    # the manifest version in the specified version set
-    # then leave the package as is at the installed version
-    for (name::String, uuid::UUID) in env.project["deps"]
-        info = manifest_info(env, uuid)
-        info != nothing && haskey(info, "version") || continue
-        version = VersionNumber(info["version"])
-        for pkg in pkgs
-            pkg.package.uuid == uuid && version ∈ pkg.version || continue
-            pkg.version = version
-        end
-    end
-
-    # resolve package versions
-    versions = resolve_versions(env, pkgs)
-    names, hashes, urls = version_data(env, versions)
-
-    # clone or update repos and find or create source trees
-    for (uuid, hash) in hashes
-        install(env, uuid, names[uuid], hashes[uuid], urls[uuid])
-    end
-
-    # update and write project & manifest
-    update_project(env, pkgs)
-    for (uuid, version) in versions
-        name, hash = names[uuid], hashes[uuid]
-        update_manifest(env, uuid, name, hash, version)
-    end
-    prune_manifest(env)
-    write_env(env)
-end
-
 function rm(env::EnvCache, pkgs::Vector{Package})
     # drop the indicated packages
     drop = UUID[]
@@ -325,18 +292,42 @@ function rm(env::EnvCache, pkgs::Vector{Package})
     write_env(env)
 end
 
-function up(
-    pkgs::Vector{String};
-    direct::UpgradeLevel = patch,
-    indirect::UpgradeLevel = major,
-    registries::Bool = true,
-)
-    
+function add(env::EnvCache, pkgs::Vector{PackageVersion})
+    # if a package is in the project file and
+    # the manifest version in the specified version set
+    # then leave the package as is at the installed version
+    for (name::String, uuid::UUID) in env.project["deps"]
+        info = manifest_info(env, uuid)
+        info != nothing && haskey(info, "version") || continue
+        version = VersionNumber(info["version"])
+        for pkg in pkgs
+            pkg.package.uuid == uuid && version ∈ pkg.version || continue
+            pkg.version = version
+        end
+    end
+
+    # resolve package versions
+    versions = resolve_versions(env, pkgs)
+    names, hashes, urls = version_data(env, versions)
+
+    # clone or update repos and find or create source trees
+    for (uuid, hash) in hashes
+        install(env, uuid, names[uuid], hashes[uuid], urls[uuid])
+    end
+
+    # update and write project & manifest
+    update_project(env, pkgs)
+    for (uuid, version) in versions
+        name, hash = names[uuid], hashes[uuid]
+        update_manifest(env, uuid, name, hash, version)
+    end
+    prune_manifest(env)
+    write_env(env)
 end
 
-# upgrage:
-#  * upgrade direct deps, default to all top-levels
-#  * upgrade their indirect dependencies
-#  * clean up orphans
+function up(env::EnvCache, pkgs::Vector{PackageVersion})
+    # resolve bound levels to version specs
+
+end
 
 end # module

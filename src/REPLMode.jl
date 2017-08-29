@@ -188,6 +188,11 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     end
     project_resolve!(env, pkgs)
     ensure_resolved(env, pkgs, :up)
+    if isempty(pkgs)
+        for (name::String, uuid::UUID) in env.project["deps"]
+            push!(pkgs, PackageVersion(Package(name, uuid), level))
+        end
+    end
     Pkg3.Operations.up(env, pkgs, rest)
 end
 
