@@ -401,26 +401,9 @@ On Windows, double-click `usr/bin/julia.exe`.
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](https://julialang.org/manual/getting-started) in the manual.
 
-The following distributions include julia, but the versions may be out of date due to rapid development:
-
-* [Alpine Linux](http://pkgs.alpinelinux.org/package/edge/testing/x86_64/julia)
-* [Arch Linux](https://www.archlinux.org/packages/community/i686/julia/)
-* [Debian GNU/Linux](http://packages.debian.org/sid/julia)
-* [Fedora Linux](https://admin.fedoraproject.org/pkgdb/package/julia/), RHEL/CentOS/OEL/Scientific Linux (EPEL)
-  * [Current stable release for Fedora/EPEL](https://copr.fedoraproject.org/coprs/nalimilan/julia/)
-  * [Nightly builds for Fedora/EPEL](https://copr.fedoraproject.org/coprs/nalimilan/julia-nightlies/)
-* [Gentoo Linux](https://packages.gentoo.org/package/dev-lang/julia)
-  * Git Package in the [Science overlay](https://wiki.gentoo.org/wiki/Project:Science/Overlay)
-* openSUSE
-  * Stable package for openSUSE: [OBS page](https://build.opensuse.org/package/show/science/julia), [1 Click Install](http://software.opensuse.org/download.html?project=science&package=julia)
-  * Git package for openSUSE: [OBS page](https://build.opensuse.org/package/show/science/julia-unstable), [1 Click Install](http://software.opensuse.org/download.html?project=science&package=julia-unstable)
-* [NixOS](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/compilers/julia)
-* Ubuntu
-  * [Ubuntu](http://packages.ubuntu.com/search?keywords=julia)
-  * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
-* [MacPorts](https://trac.macports.org/browser/trunk/dports/lang/julia/Portfile)
-* [OS X Homebrew Tap](https://github.com/staticfloat/homebrew-julia/)
-* [FreeBSD Ports](https://www.freshports.org/lang/julia/)
+**Note**: While some system package managers have Julia installers available,
+these are not maintained nor endorsed by the Julia project. They may be outdated
+and/or unmaintained. We recommend you use the official Julia binaries instead.
 
 ## Editor and Terminal Setup
 
