@@ -10,6 +10,7 @@ srand(1)
     A = Diagonal(a)
     @testset for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Matrix]
        @test full(convert(newtype, A)) == full(A)
+       @test full(convert(newtype, Diagonal(GenericArray(a)))) == full(A)
     end
 
     @testset for isupper in (true, false)
