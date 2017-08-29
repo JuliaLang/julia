@@ -65,11 +65,10 @@ ex = quote
                      "α"=>12, :α=>13)
     test_customdict = CustomDict(test_dict)
 
-    macro colorant_str(s)
-    end
-
-    macro testcmd_cmd(s)
-    end
+    macro teststr_str(s) end
+    macro tϵsτstr_str(s) end
+    macro testcmd_cmd(s) end
+    macro tϵsτcmd_cmd(s) end
 
     end
     test_repl_comp_dict = CompletionFoo.test_dict
@@ -763,8 +762,12 @@ test_dict_completion("test_repl_comp_customdict")
 @testset "completion of string/cmd macros (#22577)" begin
     c, r, res = test_complete("ra")
     @test "raw\"" in c
-    c, r, res = test_complete("CompletionFoo.colora")
-    @test "colorant\"" in c
+    c, r, res = test_complete("CompletionFoo.tests")
+    @test "teststr\"" in c
+    c, r, res = test_complete("CompletionFoo.tϵsτs")
+    @test "tϵsτstr\"" in c
     c, r, res = test_complete("CompletionFoo.testc")
     @test "testcmd`" in c
+    c, r, res = test_complete("CompletionFoo.tϵsτc")
+    @test "tϵsτcmd`" in c
 end
