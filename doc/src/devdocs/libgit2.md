@@ -145,5 +145,6 @@ Base.LibGit2.update!
 Base.LibGit2.url
 Base.LibGit2.version
 Base.LibGit2.with
+Base.LibGit2.with_warn
 Base.LibGit2.workdir
 ```
