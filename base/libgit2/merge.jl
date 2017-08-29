@@ -129,7 +129,6 @@ because the branches have no common ancestor).
 # Examples
 ```julia
 upst_ann = LibGit2.GitAnnotated(repo, "branch/a")
-head_ann = LibGit2.GitAnnotated(repo, "master")
 
 # merge the branch in
 LibGit2.merge!(repo, [upst_ann])
@@ -173,7 +172,6 @@ because the branches have no common ancestor).
 # Examples
 ```julia
 upst_ann_1 = LibGit2.GitAnnotated(repo, "branch/a")
-head_ann = LibGit2.GitAnnotated(repo, "master")
 
 # merge the branch in, fastforward
 LibGit2.merge!(repo, [upst_ann_1], true)
