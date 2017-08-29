@@ -760,12 +760,11 @@ test_dict_completion("test_repl_comp_customdict")
 # Issue #23004: this should not throw:
 @test REPLCompletions.dict_identifier_key("test_dict_ℂ[\\", :other) isa Tuple
 
-# Test for #22577
-c, r, res = test_complete("ra")
-@test "raw\"" in c
-
-c, r, res = test_complete("CompletionFoo.colora")
-@test "colorant\"" in c
-
-c, r, res = test_complete("CompletionFoo.testc")
-@test "testcmd`" in c
+@testset "completion of string/cmd macros (#22577)" begin
+    c, r, res = test_complete("ra")
+    @test "raw\"" in c
+    c, r, res = test_complete("CompletionFoo.colora")
+    @test "colorant\"" in c
+    c, r, res = test_complete("CompletionFoo.testc")
+    @test "testcmd`" in c
+end
