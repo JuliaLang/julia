@@ -24,6 +24,7 @@ Base.LibGit2.DiffFile
 Base.LibGit2.DiffOptionsStruct
 Base.LibGit2.FetchHead
 Base.LibGit2.FetchOptions
+Base.LibGit2.GitAnnotated
 Base.LibGit2.GitBlame
 Base.LibGit2.GitBlob
 Base.LibGit2.GitCommit
@@ -82,6 +83,8 @@ Base.LibGit2.fetch_refspecs
 Base.LibGit2.fetchhead_foreach_cb
 Base.LibGit2.merge_base
 Base.LibGit2.merge!(::Base.LibGit2.GitRepo; ::Any...)
+Base.LibGit2.merge!(::Base.LibGit2.GitRepo, ::Vector{Base.LibGit2.GitAnnotated}; ::Base.LibGit2.MergeOptions, ::Base.LibGit2.CheckoutOptions)
+Base.LibGit2.merge!(::Base.LibGit2.GitRepo, ::Vector{Base.LibGit2.GitAnnotated}, ::Bool; ::Base.LibGit2.MergeOptions, ::Base.LibGit2.CheckoutOptions)
 Base.LibGit2.ffmerge!
 Base.LibGit2.fullname
 Base.LibGit2.features
