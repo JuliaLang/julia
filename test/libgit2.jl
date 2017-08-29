@@ -1673,6 +1673,10 @@ mktempdir() do dir
             LibGit2.Error.Callback, LibGit2.Error.EUSER,
             "Aborting, user cancelled credential request.")
 
+        prompt_limit = LibGit2.GitError(
+            LibGit2.Error.Callback, LibGit2.Error.EAUTH,
+            "Aborting, maximum number of prompts reached.")
+
         incompatible_error = LibGit2.GitError(
             LibGit2.Error.Callback, LibGit2.Error.EAUTH,
             "The explicitly provided credential is incompatible with the requested " *
@@ -1858,6 +1862,17 @@ mktempdir() do dir
                 err, auth_attempts = challenge_prompt(ssh_ex, challenges)
                 @test err == abort_prompt
                 @test auth_attempts == 2
+
+                # User provides an invalid private key until prompt limit reached.
+                # Note: the prompt should not supply an invalid default.
+                challenges = [
+                    "Private key location for 'git@github.com':" => "foo\n",
+                    "Private key location for 'git@github.com' [foo]:" => "foo\n",
+                    "Private key location for 'git@github.com' [foo]:" => "foo\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
+                @test err == prompt_limit
+                @test auth_attempts == 3
             end
 
             # Explicitly setting these env variables to an existing but invalid key pair
@@ -1870,6 +1885,16 @@ mktempdir() do dir
                 err, auth_attempts = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
                 @test auth_attempts == 2
+
+                # User repeatedly chooses the default invalid private key until prompt limit reached
+                challenges = [
+                    "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
+                    "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
+                    "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
+                @test err == prompt_limit
+                @test auth_attempts == 4
             end
 
             # Explicitly set the public key ENV variable to a non-existent file.
@@ -1955,12 +1980,14 @@ mktempdir() do dir
             challenges = [
                 "Username for 'https://github.com':" => "foo\n",
                 "Password for 'https://foo@github.com':" => "bar\n",
-                "Username for 'https://github.com' [foo]:" => "$valid_username\n",
-                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+                "Username for 'https://github.com' [foo]:" => "foo\n",
+                "Password for 'https://foo@github.com':" => "bar\n",
+                "Username for 'https://github.com' [foo]:" => "foo\n",
+                "Password for 'https://foo@github.com':" => "bar\n",
             ]
             err, auth_attempts = challenge_prompt(https_ex, challenges)
-            @test err == git_ok
-            @test auth_attempts == 2
+            @test err == prompt_limit
+            @test auth_attempts == 3
         end
 
         @testset "SSH agent username" begin

@@ -1194,6 +1194,8 @@ mutable struct CredentialPayload <: Payload
     first_pass::Bool
     use_ssh_agent::Bool
     use_env::Bool
+    remaining_prompts::Int
+
     url::String
     scheme::String
     username::String
@@ -1229,6 +1231,7 @@ function reset!(p::CredentialPayload)
     p.first_pass = true
     p.use_ssh_agent = p.allow_ssh_agent
     p.use_env = true
+    p.remaining_prompts = p.allow_prompt ? 3 : 0
     p.url = ""
     p.scheme = ""
     p.username = ""

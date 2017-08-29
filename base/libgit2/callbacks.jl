@@ -42,10 +42,16 @@ end
 function user_abort()
     # Note: Potentially it could be better to just throw a Julia error.
     ccall((:giterr_set_str, :libgit2), Void,
-          (Cint, Cstring),
-          Cint(Error.Callback), "Aborting, user cancelled credential request.")
-
+          (Cint, Cstring), Cint(Error.Callback),
+          "Aborting, user cancelled credential request.")
     return Cint(Error.EUSER)
+end
+
+function prompt_limit()
+    ccall((:giterr_set_str, :libgit2), Void,
+          (Cint, Cstring), Cint(Error.Callback),
+          "Aborting, maximum number of prompts reached.")
+    return Cint(Error.EAUTH)
 end
 
 function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, username_ptr)
@@ -93,7 +99,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         p.use_env = false
     end
 
-    if p.allow_prompt && (!revised || !isfilled(cred))
+    if p.remaining_prompts > 0 && (!revised || !isfilled(cred))
         # if username is not provided or empty, then prompt for it
         username = username_ptr != Cstring(C_NULL) ? unsafe_string(username_ptr) : ""
         if isempty(username)
@@ -148,6 +154,9 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         end
 
         revised = true
+
+        p.remaining_prompts -= 1
+        p.remaining_prompts <= 0 && return prompt_limit()
     end
 
     if !revised
@@ -170,7 +179,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayl
         cred.pass = ""
     end
 
-    if p.allow_prompt && (!revised || !isfilled(cred))
+    if p.remaining_prompts > 0 && (!revised || !isfilled(cred))
         prompt_url = git_url(scheme=p.scheme, host=p.host)
         if Sys.iswindows()
             response = Base.winprompt(
@@ -192,6 +201,9 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayl
         end
 
         revised = true
+
+        p.remaining_prompts -= 1
+        p.remaining_prompts <= 0 && return prompt_limit()
     end
 
     if !revised
