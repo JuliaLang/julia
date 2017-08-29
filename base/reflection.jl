@@ -167,7 +167,7 @@ datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
 """
     Base.datatype_module(t::DataType) -> Module
 
-Determine the module containing the definition of a `DataType`.
+Determine the module containing the definition of a (potentially UnionAll-wrapped) `DataType`.
 
 # Examples
 ```jldoctest
@@ -184,6 +184,7 @@ Foo
 ```
 """
 datatype_module(t::DataType) = t.name.module
+datatype_module(t::UnionAll) = datatype_module(unwrap_unionall(t))
 
 """
     isconst(m::Module, s::Symbol) -> Bool
