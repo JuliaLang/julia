@@ -1147,15 +1147,15 @@ end
 """
     LibGit2.CredentialPayload
 
-Retains state between multiple calls to the credential callback. A single
-`CredentialPayload` instance will be used when authentication fails for a URL but different
-instances will be used when the URL has changed.
+Retains the state between multiple calls to the credential callback for the same URL.
+A `CredentialPayload` instance is expected to be `reset!` whenever it will be used with a
+different URL.
 """
 mutable struct CredentialPayload <: Payload
     explicit::Nullable{AbstractCredentials}
     cache::Nullable{CachedCredentials}
-    allow_ssh_agent::Bool
-    allow_prompt::Bool
+    allow_ssh_agent::Bool  # Allow the use of the SSH agent to get credentials
+    allow_prompt::Bool     # Allow prompting the user for credentials
 
     # Ephemeral state fields
     credential::Nullable{AbstractCredentials}
