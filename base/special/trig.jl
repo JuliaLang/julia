@@ -24,7 +24,7 @@ end
 # Trigonometric functions
 # sin methods
 @noinline sin_domain_error(x) = throw(DomainError(x, "sin(x) is only defined for finite x."))
-@inline function sin{T<:Union{Float32, Float64}}(x::T)
+@inline function sin(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx < T(pi)/4 #|x| ~<= pi/4, no need for reduction
         if absx < sqrt(eps(T))
@@ -93,7 +93,7 @@ end
 
 # cos methods
 @noinline cos_domain_error(x) = throw(DomainError(x, "cos(x) is only defined for finite x."))
-@inline function cos{T<:Union{Float32, Float64}}(x::T)
+@inline function cos(x::T) where T<:Union{Float32, Float64}
     if abs(x) < T(pi)/4
         return cos_kernel(x)
     elseif isnan(x)
