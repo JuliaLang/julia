@@ -235,6 +235,29 @@ function update_manifest(env::EnvCache, uuid::UUID, name::String, hash::SHA1, ve
     return info
 end
 
+function prune_manifest(env::EnvCache)
+    keep = map(UUID, values(env.project["deps"]))
+    while !isempty(keep)
+        clean = true
+        manifest_info(env) do name, info
+            haskey(info, "uuid") && haskey(info, "deps") || return
+            UUID(info["uuid"]) ∈ keep || return
+            for dep::UUID in values(info["deps"])
+                dep ∈ keep && continue
+                push!(keep, dep)
+                clean = false
+            end
+        end
+        clean && break
+    end
+    filter!(env.manifest) do _, infos
+        filter!(infos) do info
+            haskey(info, "uuid") && UUID(info["uuid"]) ∈ keep
+        end
+        !isempty(infos)
+    end
+end
+
 function add(env::EnvCache, pkgs::Vector{PackageVersion})
     # if a package is in the project file and
     # the manifest version in the specified version set
@@ -258,16 +281,13 @@ function add(env::EnvCache, pkgs::Vector{PackageVersion})
         install(env, uuid, names[uuid], hashes[uuid], urls[uuid])
     end
 
-    # update project data
+    # update and write project & manifest
     update_project(env, pkgs)
-
-    # update manifest data
     for (uuid, version) in versions
         name, hash = names[uuid], hashes[uuid]
         update_manifest(env, uuid, name, hash, version)
     end
-
-    # write out updated project & manifest files
+    prune_manifest(env)
     write_env(env)
 end
 
@@ -297,33 +317,12 @@ function rm(env::EnvCache, pkgs::Vector{Package})
         end
         clean && break
     end
-    # keep undropped top-levels and their dependenices
-    keep = setdiff(map(UUID, values(env.project["deps"])), drop)
-    while !isempty(keep)
-        clean = true
-        manifest_info(env) do name, info
-            haskey(info, "uuid") && haskey(info, "deps") || return
-            UUID(info["uuid"]) ∈ keep || return
-            for dep::UUID in values(info["deps"])
-                dep ∈ keep && continue
-                push!(keep, dep)
-                clean = false
-            end
-        end
-        clean && break
-    end
-    # filter project & manifest
     filter!(env.project["deps"]) do _, uuid
-        UUID(uuid) ∈ keep
-    end
-    filter!(env.manifest) do _, infos
-        filter!(infos) do info
-            haskey(info, "uuid") && UUID(info["uuid"]) ∈ keep
-        end
-        !isempty(infos)
+        UUID(uuid) ∉ drop
     end
     # update project & manifest files
-    update_env(env)
+    prune_manifest(env)
+    write_env(env)
 end
 
 function up(
