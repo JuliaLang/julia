@@ -127,7 +127,7 @@ function do_rm!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         push!(pkgs, Package(token[2:end]...))
     end
     project_resolve!(env, pkgs)
-    ensure_resolved(env, pkgs, :rm)
+    ensure_resolved(env, pkgs)
     Pkg3.Operations.rm(env, pkgs)
 end
 
@@ -152,19 +152,17 @@ function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     end
     project_resolve!(env, pkgs)
     registry_resolve!(env, pkgs)
-    ensure_resolved(env, pkgs, :add)
+    ensure_resolved(env, pkgs)
     Pkg3.Operations.add(env, pkgs)
 end
 
 function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     # tokens:
-    #  - upgrade levels as options
-    #  - option --rest=[fixed|patch|minor|major]
+    #  - upgrade levels as options: --[fixed|patch|minor|major]
     #  - package names and/or uuids, optionally followed by version specs
     !isempty(tokens) && tokens[1][1] == :ver &&
         error("package name/uuid must precede version spec `@$(tokens[1][2])`")
     pkgs = PackageVersion[]
-    rest = UpgradeLevel(:major)
     level = UpgradeLevel(:patch)
     while !isempty(tokens)
         token = shift!(tokens)
@@ -175,25 +173,19 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
             isempty(tokens) || tokens[1][1] == :pkg ||
                 error("package name/uuid must precede version spec `@$(tokens[1][2])`")
         elseif token[1] == :opt
-            if token[2] == :rest
-                length(token) == 3 ||
-                    error("the --rest option requires an argument")
-                rest = UpgradeLevel(token[3])
-            else
-                level = UpgradeLevel(token[2])
-                length(token) == 3 &&
-                    error("the --$(token[2]) option does not take an argument")
-            end
+            level = UpgradeLevel(token[2])
+            length(token) == 3 &&
+                error("the --$(token[2]) option does not take an argument")
         end
     end
     project_resolve!(env, pkgs)
-    ensure_resolved(env, pkgs, :up)
+    ensure_resolved(env, pkgs)
     if isempty(pkgs)
         for (name::String, uuid::UUID) in env.project["deps"]
             push!(pkgs, PackageVersion(Package(name, uuid), level))
         end
     end
-    Pkg3.Operations.up(env, pkgs, rest)
+    Pkg3.Operations.up(env, pkgs)
 end
 
 function create_mode(repl, main)

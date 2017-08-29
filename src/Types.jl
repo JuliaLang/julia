@@ -371,7 +371,7 @@ registry_resolve!(env::EnvCache, pkgs::AbstractVector{PackageVersion}) =
     registry_resolve!(env, [v.package for v in pkgs])
 
 "Ensure that all packages are fully resolved"
-function ensure_resolved(env::EnvCache, pkgs::AbstractVector{Package}, op::Symbol)::Void
+function ensure_resolved(env::EnvCache, pkgs::AbstractVector{Package})::Void
     unresolved = Dict{String,Vector{UUID}}()
     for pkg in pkgs
         has_uuid(pkg) && continue
@@ -401,8 +401,8 @@ function ensure_resolved(env::EnvCache, pkgs::AbstractVector{Package}, op::Symbo
     end
     error(msg)
 end
-ensure_resolved(env::EnvCache, pkgs::AbstractVector{PackageVersion}, op::Symbol)::Void =
-    ensure_resolved(env, [v.package for v in pkgs], op)
+ensure_resolved(env::EnvCache, pkgs::AbstractVector{PackageVersion})::Void =
+    ensure_resolved(env, [v.package for v in pkgs])
 
 "Return paths of all registries in a depot"
 function registries(depot::String)

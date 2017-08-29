@@ -122,21 +122,42 @@ function deps_graph(env::EnvCache, pkgs::Vector{PackageVersion})
 end
 
 "Resolve a set of versions given package version specs"
-function resolve_versions(env::EnvCache, pkgs::Vector{PackageVersion})
+function resolve_versions!(env::EnvCache, pkgs::Vector{PackageVersion})::Dict{UUID,VersionNumber}
     info("Resolving package versions")
+    # anything not mentioned is fixed
+    uuids = UUID[pkg.package.uuid for pkg in pkgs]
+    for (name::String, uuid::UUID) in env.project["deps"]
+        uuid in uuids && continue
+        info = manifest_info(env, uuid)
+        haskey(info, "version") || continue
+        ver = VersionNumber(info["version"])
+        push!(pkgs, PackageVersion(Package(name, uuid), ver))
+    end
+    # construct data structures for resolver and call it
     reqs = Dict{String,Pkg.Types.VersionSet}(string(pkg.package.uuid) => pkg.version for pkg in pkgs)
     deps = convert(Dict{String,Dict{VersionNumber,Pkg.Types.Available}}, deps_graph(env, pkgs))
     deps = Pkg.Query.prune_dependencies(reqs, deps)
-    vers = Pkg.Resolve.resolve(reqs, deps)
-    return convert(Dict{UUID,VersionNumber}, vers)
+    vers = convert(Dict{UUID,VersionNumber}, Pkg.Resolve.resolve(reqs, deps))
+    # update vector of package versions
+    for pkg in pkgs
+        pkg.version = vers[pkg.package.uuid]
+    end
+    uuids = UUID[pkg.package.uuid for pkg in pkgs]
+    for (uuid, ver) in vers
+        uuid in uuids && continue
+        push!(pkgs, PackageVersion(Package(uuid), ver))
+    end
+    return vers
 end
 
 "Find names, repos and hashes for each package UUID & version"
-function version_data(env::EnvCache, versions::Dict{UUID,VersionNumber})
+function version_data(env::EnvCache, pkgs::Vector{PackageVersion})
     names = Dict{UUID,String}()
     hashes = Dict{UUID,SHA1}()
     upstreams = Dict{UUID,Vector{String}}()
-    for (uuid, ver) in versions
+    for pkg in pkgs
+        uuid = pkg.package.uuid
+        ver = pkg.version::VersionNumber
         upstreams[uuid] = String[]
         for path in registered_paths(env, uuid)
             info = parse_toml(path, "package.toml")
@@ -205,12 +226,6 @@ function install(env::EnvCache, uuid::UUID, name::String, hash::SHA1, urls::Vect
     return nothing
 end
 
-function update_project(env::EnvCache, pkgs::Vector{PackageVersion})
-    for pkg in pkgs
-        env.project["deps"][pkg.package.name] = string(pkg.package.uuid)
-    end
-end
-
 function update_manifest(env::EnvCache, uuid::UUID, name::String, hash::SHA1, version::VersionNumber)
     infos = get!(env.manifest, name, Dict{String,Any}[])
     info = nothing
@@ -256,6 +271,23 @@ function prune_manifest(env::EnvCache)
         end
         !isempty(infos)
     end
+end
+
+function apply_versions(env::EnvCache, pkgs::Vector{PackageVersion})
+    names, hashes, urls = version_data(env, pkgs)
+    # clone or update repos and find or create source trees
+    for (uuid, hash) in hashes
+        install(env, uuid, names[uuid], hashes[uuid], urls[uuid])
+    end
+    # update and write project & manifest
+    for pkg in pkgs
+        uuid, name = pkg.package.uuid, pkg.package.name
+        version = pkg.version::VersionNumber
+        env.project["deps"][name] = string(uuid)
+        name, hash = names[uuid], hashes[uuid]
+        update_manifest(env, uuid, name, hash, version)
+    end
+    prune_manifest(env)
 end
 
 function rm(env::EnvCache, pkgs::Vector{Package})
@@ -305,27 +337,13 @@ function add(env::EnvCache, pkgs::Vector{PackageVersion})
             pkg.version = version
         end
     end
-
-    # resolve package versions
-    versions = resolve_versions(env, pkgs)
-    names, hashes, urls = version_data(env, versions)
-
-    # clone or update repos and find or create source trees
-    for (uuid, hash) in hashes
-        install(env, uuid, names[uuid], hashes[uuid], urls[uuid])
-    end
-
-    # update and write project & manifest
-    update_project(env, pkgs)
-    for (uuid, version) in versions
-        name, hash = names[uuid], hashes[uuid]
-        update_manifest(env, uuid, name, hash, version)
-    end
-    prune_manifest(env)
+    # resolve & apply package versions
+    resolve_versions!(env, pkgs)
+    apply_versions(env, pkgs)
     write_env(env)
 end
 
-function up(env::EnvCache, pkgs::Vector{PackageVersion}, rest::UpgradeLevel)
+function up(env::EnvCache, pkgs::Vector{PackageVersion})
     # resolve upgrade levels to version specs
     for pkg in pkgs
         pkg.version isa UpgradeLevel || continue
@@ -342,7 +360,10 @@ function up(env::EnvCache, pkgs::Vector{PackageVersion}, rest::UpgradeLevel)
             pkg.version = VersionSpec(r)
         end
     end
-    @show pkgs
+    # resolve & apply package versions
+    resolve_versions!(env, pkgs)
+    apply_versions(env, pkgs)
+    write_env(env)
 end
 
 end # module
