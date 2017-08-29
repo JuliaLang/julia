@@ -1739,6 +1739,13 @@ end
 
 @deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)
 
+# PR #23485
+export foo
+function countnz(x)
+    depwarn("countnz(x) is deprecated, use either count(!iszero, x) or count(t -> t != 0, x) instead.", :depwarn)
+    return count(t -> t != 0, x)
+end
+
 # issue #22791
 @deprecate select partialsort
 @deprecate select! partialsort!

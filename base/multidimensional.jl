@@ -394,7 +394,7 @@ wrapped with `LogicalIndex` upon calling `to_indices`.
 struct LogicalIndex{T, A<:AbstractArray{Bool}} <: AbstractVector{T}
     mask::A
     sum::Int
-    LogicalIndex{T,A}(mask::A) where {T,A<:AbstractArray{Bool}} = new(mask, countnz(mask))
+    LogicalIndex{T,A}(mask::A) where {T,A<:AbstractArray{Bool}} = new(mask, count(mask))
 end
 LogicalIndex(mask::AbstractVector{Bool}) = LogicalIndex{Int, typeof(mask)}(mask)
 LogicalIndex(mask::AbstractArray{Bool, N}) where {N} = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
@@ -574,9 +574,12 @@ end
 
 ##
 
+# small helper function since we cannot use a closure in a generated function
+_countnz(x) = x != 0
+
 @generated function findn(A::AbstractArray{T,N}) where {T,N}
     quote
-        nnzA = countnz(A)
+        nnzA = count(_countnz, A)
         @nexprs $N d->(I_d = Vector{Int}(nnzA))
         k = 1
         @nloops $N i A begin
@@ -1301,7 +1304,7 @@ end
 
 @generated function findn(B::BitArray{N}) where N
     quote
-        nnzB = countnz(B)
+        nnzB = count(B)
         I = ntuple(x->Vector{Int}(nnzB), Val($N))
         if nnzB > 0
             count = 1

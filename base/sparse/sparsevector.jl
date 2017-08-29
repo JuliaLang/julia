@@ -37,11 +37,11 @@ const SparseVectorUnion{T} = Union{SparseVector{T}, SparseColumnView{T}}
 
 ### Basic properties
 
-length(x::SparseVector) = x.n
-size(x::SparseVector) = (x.n,)
-nnz(x::SparseVector) = length(x.nzval)
-countnz(x::SparseVector) = countnz(x.nzval)
-count(x::SparseVector) = count(x.nzval)
+length(x::SparseVector)   = x.n
+size(x::SparseVector)     = (x.n,)
+nnz(x::SparseVector)      = length(x.nzval)
+count(x::SparseVector)    = count(x.nzval)
+count(f, x::SparseVector) = count(f, x.nzval) + f(zero(eltype(x)))*(length(x) - nnz(x))
 
 nonzeros(x::SparseVector) = x.nzval
 function nonzeros(x::SparseColumnView)

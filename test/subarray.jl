@@ -421,7 +421,7 @@ msk = ones(Bool, 2, 2)
 msk[2,1] = false
 sA = view(A, :, :, 1)
 sA[msk] = 1.0
-@test sA[msk] == ones(countnz(msk))
+@test sA[msk] == ones(count(msk))
 
 # bounds checking upon construction; see #4044, #10296
 @test_throws BoundsError view(1:10, 8:11)

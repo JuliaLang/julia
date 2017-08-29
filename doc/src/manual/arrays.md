@@ -745,7 +745,7 @@ In some applications, it is convenient to store explicit zero values in a `Spars
 mutating operations). Such explicitly stored zeros are treated as structural nonzeros by many
 routines. The [`nnz()`](@ref) function returns the number of elements explicitly stored in the
 sparse data structure, including structural nonzeros. In order to count the exact number of
-numerical nonzeros, use [`countnz()`](@ref), which inspects every stored element of a sparse
+numerical nonzeros, use [`count(!iszero, x)`](@ref), which inspects every stored element of a sparse
 matrix. [`dropzeros()`](@ref), and the in-place [`dropzeros!()`](@ref), can be used to
 remove stored zeros from the sparse matrix.
 

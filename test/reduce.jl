@@ -318,7 +318,7 @@ struct SomeFunctor end
 @test contains("quick fox", "fox") == true
 @test contains("quick fox", "lazy dog") == false
 
-# count & countnz
+# count
 
 @test count(x->x>0, Int[]) == count(Bool[]) == 0
 @test count(x->x>0, -3:5) == count((-3:5) .> 0) == 5
@@ -333,10 +333,10 @@ end
 @test count(iseven(x) for x in 1:10 if x < 7) == 3
 @test count(iseven(x) for x in 1:10 if x < -7) == 0
 
-@test countnz(Int[]) == 0
-@test countnz(Int[0]) == 0
-@test countnz(Int[1]) == 1
-@test countnz([1, 0, 2, 0, 3, 0, 4]) == 4
+@test count(!iszero, Int[]) == 0
+@test count(!iszero, Int[0]) == 0
+@test count(!iszero, Int[1]) == 1
+@test count(!iszero, [1, 0, 2, 0, 3, 0, 4]) == 4
 
 
 ## cumsum, cummin, cummax

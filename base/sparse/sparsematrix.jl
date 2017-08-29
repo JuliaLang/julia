@@ -70,9 +70,9 @@ julia> nnz(A)
 3
 ```
 """
-nnz(S::SparseMatrixCSC) = Int(S.colptr[S.n + 1]-1)
-countnz(S::SparseMatrixCSC) = countnz(S.nzval)
-count(S::SparseMatrixCSC) = count(S.nzval)
+nnz(S::SparseMatrixCSC)         = Int(S.colptr[S.n + 1] - 1)
+count(S::SparseMatrixCSC)       = count(S.nzval)
+count(pred, S::SparseMatrixCSC) = count(pred, S.nzval) + pred(zero(eltype(S)))*(prod(size(S)) - nnz(S))
 
 """
     nonzeros(A)
@@ -1910,11 +1910,6 @@ findmax(A::SparseMatrixCSC) = (r=findmax(A,(1,2)); (r[1][1], r[2][1]))
 
 indmin(A::SparseMatrixCSC) = findmin(A)[2]
 indmax(A::SparseMatrixCSC) = findmax(A)[2]
-
-#all(A::SparseMatrixCSC{Bool}, region) = reducedim(all,A,region,true)
-#any(A::SparseMatrixCSC{Bool}, region) = reducedim(any,A,region,false)
-#sum(A::SparseMatrixCSC{Bool}, region) = reducedim(+,A,region,0,Int)
-#sum(A::SparseMatrixCSC{Bool}) = countnz(A)
 
 ## getindex
 function rangesearch(haystack::Range, needle)
