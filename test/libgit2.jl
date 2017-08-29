@@ -1886,9 +1886,6 @@ mktempdir() do dir
                 @test auth_attempts == 1
             end
 
-            # TODO: Tests are currently broken. Credential callback currently infinite loops
-            # and never prompts user to change private keys.
-            #=
             # Explicitly set the public key ENV variable to a public key that doesn't match
             # the private key.
             withenv("SSH_KEY_PATH" => valid_key,
@@ -1901,9 +1898,8 @@ mktempdir() do dir
                 ]
                 err, auth_attempts = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
-                @test auth_attempts == 1
+                @test auth_attempts == 2
             end
-            =#
         end
 
         @testset "HTTPS credential prompt" begin
