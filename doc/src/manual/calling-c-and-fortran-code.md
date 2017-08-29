@@ -687,8 +687,8 @@ function compute_dot(DX::Vector{Float64}, DY::Vector{Float64})
     incx = incy = 1
     product = ccall((:ddot_, "libLAPACK"),
                     Float64,
-                    (Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}),
-                    &n, DX, &incx, DY, &incy)
+                    (Ref{Int32}, Ptr{Float64}, Ref{Int32}, Ptr{Float64}, Ref{Int32}),
+                    n, DX, incx, DY, incy)
     return product
 end
 ```

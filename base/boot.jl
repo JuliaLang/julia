@@ -331,17 +331,17 @@ VecElement(arg::T) where {T} = VecElement{T}(arg)
 # used by lowering of splicing unquote
 splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
 
-_new(typ::Symbol, argty::Symbol) = eval(Core, :((::Type{$typ})(@nospecialize n::$argty) = $(Expr(:new, typ, :n))))
+_new(typ::Symbol, argty::Symbol) = eval(Core, :($typ(@nospecialize n::$argty) = $(Expr(:new, typ, :n))))
 _new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
 _new(:NewvarNode, :SlotNumber)
 _new(:QuoteNode, :Any)
 _new(:SSAValue, :Int)
-eval(Core, :((::Type{LineNumberNode})(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
-eval(Core, :((::Type{LineNumberNode})(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumberNode, :l, :f))))
-eval(Core, :((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
-eval(Core, :((::Type{SlotNumber})(n::Int) = $(Expr(:new, :SlotNumber, :n))))
-eval(Core, :((::Type{TypedSlot})(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
+eval(Core, :(LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
+eval(Core, :(LineNumberNode(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumberNode, :l, :f))))
+eval(Core, :(GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
+eval(Core, :(SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))))
+eval(Core, :(TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 

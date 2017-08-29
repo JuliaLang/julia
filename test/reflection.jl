@@ -609,7 +609,7 @@ end
 
 mutable struct A18434
 end
-(::Type{A18434})(x; y=1) = 1
+A18434(x; y=1) = 1
 
 global counter18434 = 0
 function get_A18434()

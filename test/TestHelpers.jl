@@ -129,8 +129,8 @@ OffsetVector{T,AA<:AbstractArray} = OffsetArray{T,1,AA}
 OffsetArray(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) where {T,N} = OffsetArray{T,N,typeof(A)}(A, offsets)
 OffsetArray(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) where {T,N} = OffsetArray(A, offsets)
 
-(::Type{OffsetArray{T,N}})(inds::Indices{N}) where {T,N} = OffsetArray{T,N,Array{T,N}}(Array{T,N}(map(length, inds)), map(indsoffset, inds))
-(::Type{OffsetArray{T}})(inds::Indices{N}) where {T,N} = OffsetArray{T,N}(inds)
+OffsetArray{T,N}(inds::Indices{N}) where {T,N} = OffsetArray{T,N,Array{T,N}}(Array{T,N}(map(length, inds)), map(indsoffset, inds))
+OffsetArray{T}(inds::Indices{N}) where {T,N} = OffsetArray{T,N}(inds)
 
 Base.IndexStyle(::Type{T}) where {T<:OffsetArray} = Base.IndexStyle(parenttype(T))
 parenttype(::Type{OffsetArray{T,N,AA}}) where {T,N,AA} = AA

@@ -817,7 +817,7 @@ end
 struct NArray_17003{T,N} <: AArray_17003{Nable_17003{T},N}
 end
 
-(::Type{NArray_17003})(::Array{T,N}) where {T,N} = NArray_17003{T,N}()
+NArray_17003(::Array{T,N}) where {T,N} = NArray_17003{T,N}()
 
 gl_17003 = [1, 2, 3]
 

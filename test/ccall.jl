@@ -82,7 +82,7 @@ let a, ci_ary, x
     @test x == a + 1 - 2im
     @test a == 20 + 51im
 
-    x = ccall((:cptest_static, libccalltest), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), &a)
+    x = ccall((:cptest_static, libccalltest), Ptr{Complex{Int}}, (Ref{Complex{Int}},), a)
     @test unsafe_load(x) == a
     Libc.free(convert(Ptr{Void}, x))
 end
