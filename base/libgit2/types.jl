@@ -1200,7 +1200,6 @@ mutable struct CredentialPayload <: Payload
     scheme::String
     username::String
     host::String
-    path::String
 
     function CredentialPayload(
             credential::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}(),
@@ -1236,7 +1235,6 @@ function reset!(p::CredentialPayload)
     p.scheme = ""
     p.username = ""
     p.host = ""
-    p.path = ""
 
     return p
 end

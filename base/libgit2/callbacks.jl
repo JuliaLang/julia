@@ -256,7 +256,6 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
         p.scheme = m[:scheme] === nothing ? "" : m[:scheme]
         p.username = m[:user] === nothing ? "" : m[:user]
         p.host = m[:host]
-        p.path = m[:path]
 
         # When an explicit credential is supplied we will make sure to use the given
         # credential during the first callback by modifying the allowed types. The
