@@ -2101,7 +2101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Multi-dimensional Arrays",
     "title": "Compressed Sparse Column (CSC) Sparse Matrix Storage",
     "category": "section",
-    "text": "In Julia, sparse matrices are stored in the Compressed Sparse Column (CSC) format. Julia sparse matrices have the type SparseMatrixCSC{Tv,Ti}, where Tv is the type of the stored values, and Ti is the integer type for storing column pointers and row indices. The internal representation of SparseMatrixCSC is as follows:struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}\n    m::Int                  # Number of rows\n    n::Int                  # Number of columns\n    colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)\n    rowval::Vector{Ti}      # Row indices of stored values\n    nzval::Vector{Tv}       # Stored values, typically nonzeros\nendThe compressed sparse column storage makes it easy and quick to access the elements in the column of a sparse matrix, whereas accessing the sparse matrix by rows is considerably slower. Operations such as insertion of previously unstored entries one at a time in the CSC structure tend to be slow. This is because all elements of the sparse matrix that are beyond the point of insertion have to be moved one place over.All operations on sparse matrices are carefully implemented to exploit the CSC data structure for performance, and to avoid expensive operations.If you have data in CSC format from a different application or library, and wish to import it in Julia, make sure that you use 1-based indexing. The row indices in every column need to be sorted. If your SparseMatrixCSC object contains unsorted row indices, one quick way to sort them is by doing a double transpose.In some applications, it is convenient to store explicit zero values in a SparseMatrixCSC. These are accepted by functions in Base (but there is no guarantee that they will be preserved in mutating operations). Such explicitly stored zeros are treated as structural nonzeros by many routines. The nnz() function returns the number of elements explicitly stored in the sparse data structure, including structural nonzeros. In order to count the exact number of numerical nonzeros, use countnz(), which inspects every stored element of a sparse matrix. dropzeros(), and the in-place dropzeros!(), can be used to remove stored zeros from the sparse matrix.julia> A = sparse([1, 2, 3], [1, 2, 3], [0, 2, 0])\n3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:\n  [1, 1]  =  0\n  [2, 2]  =  2\n  [3, 3]  =  0\n\njulia> dropzeros(A)\n3×3 SparseMatrixCSC{Int64,Int64} with 1 stored entry:\n  [2, 2]  =  2"
+    "text": "In Julia, sparse matrices are stored in the Compressed Sparse Column (CSC) format. Julia sparse matrices have the type SparseMatrixCSC{Tv,Ti}, where Tv is the type of the stored values, and Ti is the integer type for storing column pointers and row indices. The internal representation of SparseMatrixCSC is as follows:struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}\n    m::Int                  # Number of rows\n    n::Int                  # Number of columns\n    colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)\n    rowval::Vector{Ti}      # Row indices of stored values\n    nzval::Vector{Tv}       # Stored values, typically nonzeros\nendThe compressed sparse column storage makes it easy and quick to access the elements in the column of a sparse matrix, whereas accessing the sparse matrix by rows is considerably slower. Operations such as insertion of previously unstored entries one at a time in the CSC structure tend to be slow. This is because all elements of the sparse matrix that are beyond the point of insertion have to be moved one place over.All operations on sparse matrices are carefully implemented to exploit the CSC data structure for performance, and to avoid expensive operations.If you have data in CSC format from a different application or library, and wish to import it in Julia, make sure that you use 1-based indexing. The row indices in every column need to be sorted. If your SparseMatrixCSC object contains unsorted row indices, one quick way to sort them is by doing a double transpose.In some applications, it is convenient to store explicit zero values in a SparseMatrixCSC. These are accepted by functions in Base (but there is no guarantee that they will be preserved in mutating operations). Such explicitly stored zeros are treated as structural nonzeros by many routines. The nnz() function returns the number of elements explicitly stored in the sparse data structure, including structural nonzeros. In order to count the exact number of numerical nonzeros, use count(!iszero, x), which inspects every stored element of a sparse matrix. dropzeros(), and the in-place dropzeros!(), can be used to remove stored zeros from the sparse matrix.julia> A = sparse([1, 2, 3], [1, 2, 3], [0, 2, 0])\n3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:\n  [1, 1]  =  0\n  [2, 2]  =  2\n  [3, 3]  =  0\n\njulia> dropzeros(A)\n3×3 SparseMatrixCSC{Int64,Int64} with 1 stored entry:\n  [2, 2]  =  2"
 },
 
 {
@@ -7285,7 +7285,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
 },
 
 {
@@ -8085,7 +8085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.exp",
     "category": "Function",
-    "text": "exp(A::AbstractMatrix)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExamples\n\njulia> A = eye(2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> exp(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\nexp(x)\n\nCompute the natural base exponential of x, in other words e^x.\n\njulia> exp(1.0)\n2.718281828459045\n\n\n\n"
+    "text": "exp(x)\n\nCompute the natural base exponential of x, in other words e^x.\n\njulia> exp(1.0)\n2.718281828459045\n\n\n\nexp(A::AbstractMatrix)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExamples\n\njulia> A = eye(2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> exp(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\n"
 },
 
 {
@@ -10625,14 +10625,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays/#Base.countnz",
-    "page": "Arrays",
-    "title": "Base.countnz",
-    "category": "Function",
-    "text": "countnz(A) -> Integer\n\nCounts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use nnz, which returns the number of stored values.\n\njulia> A = [1 2 4; 0 0 1; 1 1 0]\n3×3 Array{Int64,2}:\n 1  2  4\n 0  0  1\n 1  1  0\n\njulia> countnz(A)\n6\n\n\n\n"
-},
-
-{
     "location": "stdlib/arrays/#Base.conj!",
     "page": "Arrays",
     "title": "Base.conj!",
@@ -10685,7 +10677,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Basic functions",
     "category": "section",
-    "text": "Base.ndims\nBase.size\nBase.indices(::Any)\nBase.indices(::AbstractArray, ::Any)\nBase.length(::AbstractArray)\nBase.eachindex\nBase.linearindices\nBase.IndexStyle\nBase.countnz\nBase.conj!\nBase.stride\nBase.strides\nBase.ind2sub\nBase.sub2ind\nBase.LinAlg.checksquare"
+    "text": "Base.ndims\nBase.size\nBase.indices(::Any)\nBase.indices(::AbstractArray, ::Any)\nBase.length(::AbstractArray)\nBase.eachindex\nBase.linearindices\nBase.IndexStyle\nBase.conj!\nBase.stride\nBase.strides\nBase.ind2sub\nBase.sub2ind\nBase.LinAlg.checksquare"
 },
 
 {
