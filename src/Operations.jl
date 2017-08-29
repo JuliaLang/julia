@@ -17,12 +17,9 @@ function find_installed(uuid::UUID, sha1::SHA1)
     return abspath(user_depot(), "packages", string(uuid), string(sha1))
 end
 
-function package_env_info(
-    pkg::String,
-    project::Dict = load_project(),
-    manifest::Dict = load_manifest();
-    verb::String = "choose",
-)
+function package_env_info(pkg::String, env::EnvCache = EnvCache(); verb::String = "choose")
+    project = env.project
+    manifest = env.manifest
     haskey(manifest, pkg) || return nothing
     infos = manifest[pkg]
     isempty(infos) && return nothing
