@@ -1089,24 +1089,29 @@ static void emit_leafcheck(jl_codectx_t &ctx, Value *typ, const std::string &msg
 }
 
 #define CHECK_BOUNDS 1
-static bool bounds_check_enabled(jl_codectx_t &ctx) {
+static bool bounds_check_enabled(jl_codectx_t &ctx, jl_value_t *inbounds) {
 #if CHECK_BOUNDS==1
-    return (!ctx.is_inbounds &&
-         jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_OFF) ||
-         jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_ON;
+    if (jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_ON)
+        return 1;
+    if (jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_OFF)
+        return 0;
+    if (inbounds == jl_false)
+        return 0;
+    return 1;
 #else
     return 0;
 #endif
 }
 
-static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len)
+static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_value_t *boundscheck)
 {
     Value *im1 = ctx.builder.CreateSub(i, ConstantInt::get(T_size, 1));
+    jl_cgval_t ib = emit_expr(ctx, boundscheck);
 #if CHECK_BOUNDS==1
-    if (bounds_check_enabled(ctx)) {
+    if (bounds_check_enabled(ctx, ib.constant)) {
         Value *ok = ctx.builder.CreateICmpULT(im1, len);
-        BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext,"fail",ctx.f);
-        BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext,"pass");
+        BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx.f);
+        BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext, "pass");
         ctx.builder.CreateCondBr(ok, passBB, failBB);
         ctx.builder.SetInsertPoint(failBB);
         if (!ty) { // jl_value_t** tuple (e.g. the vararg)
@@ -1260,12 +1265,12 @@ static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x, Type *astype 
 
 static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         jl_cgval_t *ret, const jl_cgval_t &strct,
-        Value *idx, jl_datatype_t *stt)
+        Value *idx, jl_datatype_t *stt, jl_value_t *inbounds)
 {
     size_t nfields = jl_datatype_nfields(stt);
     if (strct.ispointer()) { // boxed or stack
         if (is_datatype_all_pointers(stt)) {
-            idx = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields));
+            idx = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), inbounds);
             bool maybe_null = (unsigned)stt->ninitialized != nfields;
             size_t minimum_field_size = (size_t)-1;
             for (size_t i = 0; i < nfields; ++i) {
@@ -1288,7 +1293,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         else if (is_tupletype_homogeneous(stt->types)) {
             assert(nfields > 0); // nf == 0 trapped by all_pointers case
             jl_value_t *jt = jl_field_type(stt, 0);
-            idx = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields));
+            idx = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), inbounds);
             Value *ptr = data_pointer(ctx, strct);
             if (!stt->mutabl) {
                 // just compute the pointer and let user load it when necessary
@@ -1312,14 +1317,15 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
     else if (is_tupletype_homogeneous(stt->types)) {
         assert(jl_isbits(stt));
         if (nfields == 0) {
-            idx = emit_bounds_check(ctx, ghostValue(stt),
-                                    (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields));
+            idx = emit_bounds_check(
+                    ctx, ghostValue(stt), (jl_value_t*)stt,
+                    idx, ConstantInt::get(T_size, nfields), inbounds);
             *ret = jl_cgval_t();
             return true;
         }
         assert(!jl_field_isptr(stt, 0));
         jl_value_t *jt = jl_field_type(stt, 0);
-        Value *idx0 = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields));
+        Value *idx0 = emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), inbounds);
         if (strct.isghost) {
             *ret = ghostValue(jt);
             return true;
@@ -1628,23 +1634,23 @@ static Value *emit_arraysize_for_unsafe_dim(jl_codectx_t &ctx,
 }
 
 // `nd == -1` means the dimension is unknown.
-static Value *emit_array_nd_index(jl_codectx_t &ctx,
-        const jl_cgval_t &ainfo, jl_value_t *ex, ssize_t nd, const jl_cgval_t *argv, size_t nidxs)
+static Value *emit_array_nd_index(
+        jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_value_t *ex, ssize_t nd,
+        const jl_cgval_t *argv, size_t nidxs, jl_value_t *inbounds)
 {
     Value *a = boxed(ctx, ainfo);
     Value *i = ConstantInt::get(T_size, 0);
     Value *stride = ConstantInt::get(T_size, 1);
+    jl_cgval_t ib = emit_expr(ctx, inbounds);
 #if CHECK_BOUNDS==1
-    bool bc = (!ctx.is_inbounds &&
-               jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_OFF) ||
-        jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_ON;
-    BasicBlock *failBB=NULL, *endBB=NULL;
+    bool bc = bounds_check_enabled(ctx, ib.constant);
+    BasicBlock *failBB = NULL, *endBB = NULL;
     if (bc) {
         failBB = BasicBlock::Create(jl_LLVMContext, "oob");
         endBB = BasicBlock::Create(jl_LLVMContext, "idxend");
     }
 #endif
-    Value **idxs = (Value**)alloca(sizeof(Value*)*nidxs);
+    Value **idxs = (Value**)alloca(sizeof(Value*) * nidxs);
     for (size_t k = 0; k < nidxs; k++) {
         idxs[k] = emit_unbox(ctx, T_size, argv[k], NULL);
     }

@@ -379,7 +379,7 @@ function append_any(xs...)
                 ccall(:jl_array_grow_end, Void, (Any, UInt), out, 16)
                 l += 16
             end
-            Core.arrayset(out, y, i)
+            Core.arrayset(true, out, y, i)
             i += 1
         end
     end
@@ -388,7 +388,7 @@ function append_any(xs...)
 end
 
 # simple Array{Any} operations needed for bootstrap
-setindex!(A::Array{Any}, @nospecialize(x), i::Int) = Core.arrayset(A, x, i)
+@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = Core.arrayset($(Expr(:boundscheck)), A, x, i)
 
 """
     precompile(f, args::Tuple{Vararg{Any}})
@@ -413,10 +413,7 @@ section of the Metaprogramming chapter of the manual for more details and exampl
 esc(@nospecialize(e)) = Expr(:escape, e)
 
 macro boundscheck(blk)
-    # hack: use this syntax since it avoids introducing line numbers
-    :($(Expr(:boundscheck,true));
-      $(esc(blk));
-      $(Expr(:boundscheck,:pop)))
+    return Expr(:if, Expr(:boundscheck), esc(blk))
 end
 
 """
@@ -424,7 +421,8 @@ end
 
 Eliminates array bounds checking within expressions.
 
-In the example below the bound check of array A is skipped to improve performance.
+In the example below the in-range check for referencing
+element `i` of array `A` is skipped to improve performance.
 
 ```julia
 function sum(A::AbstractArray)
@@ -442,9 +440,10 @@ end
     for out-of-bounds indices. The user is responsible for checking it manually.
 """
 macro inbounds(blk)
-    :($(Expr(:inbounds,true));
-      $(esc(blk));
-      $(Expr(:inbounds,:pop)))
+    return Expr(:block,
+        Expr(:inbounds, true),
+        esc(blk),
+        Expr(:inbounds, :pop))
 end
 
 macro label(name::Symbol)
@@ -565,7 +564,7 @@ function vector_any(@nospecialize xs...)
     n = length(xs)
     a = Vector{Any}(n)
     @inbounds for i = 1:n
-        Core.arrayset(a,xs[i],i)
+        Core.arrayset(false, a, xs[i], i)
     end
     a
 end

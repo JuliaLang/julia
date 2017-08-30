@@ -416,7 +416,7 @@ end
     r = CartesianRange(indices(L.mask))
     return (r, start(r), 1)
 end
-@inline function next(L::LogicalIndex, s)
+@propagate_inbounds function next(L::LogicalIndex, s)
     # We're looking for the n-th true element, using iterator r at state i
     r, i, n = s
     while true

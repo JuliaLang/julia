@@ -170,8 +170,8 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
   * `boundscheck`
 
-    Indicates the beginning or end of a section of code that performs a bounds check. Like `inbounds`,
-    a stack is maintained, and the second argument can be one of: `true`, `false`, or `:pop`.
+    Has the value `false` if inlined into a section of code marked with `@inbounds`,
+    otherwise has the value `true`.
 
   * `copyast`
 

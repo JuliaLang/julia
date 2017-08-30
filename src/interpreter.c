@@ -499,12 +499,15 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             jl_errorf("syntax: %s", jl_string_data(args[0]));
         jl_throw(args[0]);
     }
+    else if (ex->head == boundscheck_sym) {
+        return jl_true;
+    }
     else if (ex->head == boundscheck_sym || ex->head == inbounds_sym || ex->head == fastmath_sym ||
              ex->head == simdloop_sym || ex->head == meta_sym) {
         return jl_nothing;
     }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(ex->head));
-    return (jl_value_t*)jl_nothing;
+    abort();
 }
 
 jl_value_t *jl_toplevel_eval_body(jl_module_t *m, jl_array_t *stmts)

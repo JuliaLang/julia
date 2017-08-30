@@ -609,6 +609,10 @@ JL_CALLABLE(jl_f_svec)
 
 JL_CALLABLE(jl_f_getfield)
 {
+    if (nargs == 3) {
+        JL_TYPECHK(getfield, bool, args[2]);
+        nargs -= 1;
+    }
     JL_NARGS(getfield, 2, 2);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
@@ -700,6 +704,10 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
 
 JL_CALLABLE(jl_f_fieldtype)
 {
+    if (nargs == 3) {
+        JL_TYPECHK(fieldtype, bool, args[2]);
+        nargs -= 1;
+    }
     JL_NARGS(fieldtype, 2, 2);
     jl_datatype_t *st = (jl_datatype_t*)args[0];
     if (st == jl_module_type)
@@ -925,20 +933,20 @@ JL_CALLABLE(jl_f_arraysize)
 static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
                              const char *fname)
 {
-    size_t i=0;
-    size_t k, stride=1;
+    size_t i = 0;
+    size_t k, stride = 1;
     size_t nd = jl_array_ndims(a);
-    for(k=0; k < nidxs; k++) {
+    for (k = 0; k < nidxs; k++) {
         if (!jl_is_long(args[k]))
             jl_type_error(fname, (jl_value_t*)jl_long_type, args[k]);
-        size_t ii = jl_unbox_long(args[k])-1;
+        size_t ii = jl_unbox_long(args[k]) - 1;
         i += ii * stride;
-        size_t d = k>=nd ? 1 : jl_array_dim(a, k);
-        if (k < nidxs-1 && ii >= d)
+        size_t d = (k >= nd) ? 1 : jl_array_dim(a, k);
+        if (k < nidxs - 1 && ii >= d)
             jl_bounds_error_v((jl_value_t*)a, args, nidxs);
         stride *= d;
     }
-    for(; k < nd; k++)
+    for (; k < nd; k++)
         stride *= jl_array_dim(a, k);
     if (i >= stride)
         jl_bounds_error_v((jl_value_t*)a, args, nidxs);
@@ -947,21 +955,23 @@ static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
 
 JL_CALLABLE(jl_f_arrayref)
 {
-    JL_NARGSV(arrayref, 2);
-    JL_TYPECHK(arrayref, array, args[0]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = array_nd_index(a, &args[1], nargs-1, "arrayref");
+    JL_NARGSV(arrayref, 3);
+    JL_TYPECHK(arrayref, bool, args[0]);
+    JL_TYPECHK(arrayref, array, args[1]);
+    jl_array_t *a = (jl_array_t*)args[1];
+    size_t i = array_nd_index(a, &args[2], nargs - 2, "arrayref");
     return jl_arrayref(a, i);
 }
 
 JL_CALLABLE(jl_f_arrayset)
 {
-    JL_NARGSV(arrayset, 3);
-    JL_TYPECHK(arrayset, array, args[0]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = array_nd_index(a, &args[2], nargs-2, "arrayset");
-    jl_arrayset(a, args[1], i);
-    return args[0];
+    JL_NARGSV(arrayset, 4);
+    JL_TYPECHK(arrayset, bool, args[0]);
+    JL_TYPECHK(arrayset, array, args[1]);
+    jl_array_t *a = (jl_array_t*)args[1];
+    size_t i = array_nd_index(a, &args[3], nargs - 3, "arrayset");
+    jl_arrayset(a, args[2], i);
+    return args[1];
 }
 
 // IntrinsicFunctions ---------------------------------------------------------
