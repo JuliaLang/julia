@@ -163,7 +163,7 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     !isempty(tokens) && tokens[1][1] == :ver &&
         error("package name/uuid must precede version spec `@$(tokens[1][2])`")
     pkgs = PackageVersion[]
-    level = UpgradeLevel(:patch)
+    level = UpgradeLevel(:major)
     while !isempty(tokens)
         token = shift!(tokens)
         if token[1] == :pkg
