@@ -302,7 +302,6 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
 julia> C = cholfact(A)
 Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
 [2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]
-successful: true
 
 julia> C[:U]
 3×3 UpperTriangular{Float64,Array{Float64,2}}:
@@ -405,9 +404,12 @@ end
 issuccess(C::Cholesky) = C.info == 0
 
 function show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix})
-    println(io, "$(typeof(C)) with factor:")
-    show(io, C[:UL])
-    print(io, "\nsuccessful: $(issuccess(C))")
+    if issuccess(C)
+        println(io, "$(typeof(C)) with factor:")
+        show(io, C[:UL])
+    else
+        print("Failed factorization of type $(typeof(C))")
+    end
 end
 
 A_ldiv_B!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =

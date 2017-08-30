@@ -78,7 +78,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
                 @test isposdef(capds)
             end
             ulstring = sprint(show,capds[:UL])
-            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring\nsuccessful: true"
+            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
         else
             capdh = cholfact(apdh)
             @test inv(capdh)*apdh ≈ eye(n)
@@ -96,7 +96,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             @test logdet(capdh) ≈ log(det(capdh))
             @test isposdef(capdh)
             ulstring = sprint(show,capdh[:UL])
-            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring\nsuccessful: true"
+            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
         end
 
         # test chol of 2x2 Strang matrix

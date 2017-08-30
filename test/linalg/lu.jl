@@ -68,7 +68,7 @@ dimg  = randn(n)/2
 
             lstring = sprint(show,l)
             ustring = sprint(show,u)
-            @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring\nsuccessful: true"
+            @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
             let Bs = b, Cs = c
                 @testset for atype in ("Array", "SubArray")
                     if atype == "Array"
