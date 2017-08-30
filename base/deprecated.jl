@@ -1740,9 +1740,9 @@ end
 @deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)
 
 # PR #23485
-export foo
+export countnz
 function countnz(x)
-    depwarn("countnz(x) is deprecated, use either count(!iszero, x) or count(t -> t != 0, x) instead.", :depwarn)
+    depwarn("countnz(x) is deprecated, use either count(!iszero, x) or count(t -> t != 0, x) instead.", :countnz)
     return count(t -> t != 0, x)
 end
 
