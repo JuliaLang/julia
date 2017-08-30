@@ -117,7 +117,8 @@ function is_identifier_start_char(c::Char)
 end
 
 
-function peekchar(io::IOBuffer)
+function peekchar(io::(isdefined(Base, :GenericIOBuffer) ?
+                       Base.GenericIOBuffer : Base.AbstractIOBuffer))
     if !io.readable || io.ptr > io.size
         return EOF_CHAR
     end
