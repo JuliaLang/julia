@@ -286,7 +286,9 @@ end
     C = Tridiagonal(rand(Float64,9),rand(Float64,10),rand(Float64,9))
     @test promote_rule(Matrix{Float64}, Bidiagonal{Float64}) == Matrix{Float64}
     @test promote(B,A) == (B, convert(Matrix{Float64}, A))
+    @test promote(B,A) isa Tuple{Matrix{Float64}, Matrix{Float64}}
     @test promote(C,A) == (C,Tridiagonal(zeros(Float64,9),convert(Vector{Float64},A.dv),convert(Vector{Float64},A.ev)))
+    @test promote(C,A) isa Tuple{Tridiagonal, Tridiagonal}
 end
 
 import Base.LinAlg: fillslots!, UnitLowerTriangular
