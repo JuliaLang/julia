@@ -141,6 +141,7 @@ function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
     @assertposdef C info
 end
 function chol!(A::StridedMatrix)
+    checksquare(A)
     C, info = _chol!(A)
     @assertposdef C info
 end
@@ -236,6 +237,7 @@ ERROR: InexactError: convert(Int64, 6.782329983125268)
 ```
 """
 function cholfact!(A::StridedMatrix, ::Val{false}=Val(false))
+    checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         return Cholesky(A, 'U', convert(BlasInt, -1))
     else
@@ -267,6 +269,7 @@ factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
 function cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0)
+    checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         return CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
                                tol, convert(BlasInt, -1))

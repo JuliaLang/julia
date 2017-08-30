@@ -272,6 +272,14 @@ end
     end
 end
 
+@testset "throw for non-square input" begin
+    A = rand(2,3)
+    @test_throws DimensionMismatch chol(A)
+    @test_throws DimensionMismatch Base.LinAlg.chol!(A)
+    @test_throws DimensionMismatch cholfact(A)
+    @test_throws DimensionMismatch cholfact!(A)
+end
+
 @testset "fail for non-BLAS element types" begin
     @test_throws ArgumentError cholfact!(Hermitian(rand(Float16, 5,5)), Val(true))
 end
