@@ -542,5 +542,5 @@ function hash(s::Set, h::UInt)
     hash(hv, h)
 end
 
-convert(::Type{Set{T}}, s::Set{T}) where {T} = s
-convert(::Type{Set{T}}, x::Set) where {T} = Set{T}(x)
+convert(::Type{T}, s::T) where {T<:AbstractSet} = s
+convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)

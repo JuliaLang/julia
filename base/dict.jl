@@ -190,21 +190,6 @@ end
 
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
-# conversion between Dict types
-function convert(::Type{Dict{K,V}},d::AbstractDict) where V where K
-    h = Dict{K,V}()
-    for (k,v) in d
-        ck = convert(K,k)
-        if !haskey(h,ck)
-            h[ck] = convert(V,v)
-        else
-            error("key collision during dictionary conversion")
-        end
-    end
-    return h
-end
-convert(::Type{Dict{K,V}},d::Dict{K,V}) where {K,V} = d
-
 hashindex(key, sz) = (((hash(key)%Int) & (sz-1)) + 1)::Int
 
 @propagate_inbounds isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
