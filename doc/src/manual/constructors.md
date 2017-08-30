@@ -504,29 +504,6 @@ of its arguments are complex integers, it will return an instance of `Complex{Ou
 The interested reader should consider perusing the rest of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
 it is short, self-contained, and implements an entire basic Julia type.
 
-## [Constructors and Conversion](@id constructors-and-conversion)
-
-Constructors `T(args...)` in Julia are implemented like other callable objects: methods are added
-to their types. The type of a type is `Type`, so all constructor methods are stored in the method
-table for the `Type` type. This means that you can declare more flexible constructors, e.g. constructors
-for abstract types, by explicitly defining methods for the appropriate types.
-
-However, in some cases you could consider adding methods to `Base.convert` *instead* of defining
-a constructor, because Julia falls back to calling [`convert`](@ref) if no matching constructor
-is found. For example, if no constructor `T(args...) = ...` exists `Base.convert(::Type{T}, args...) = ...`
-is called.
-
-`convert` is used extensively throughout Julia whenever one type needs to be converted to another
-(e.g. in assignment, [`ccall`](@ref), etcetera), and should generally only be defined (or successful)
-if the conversion is lossless.  For example, `convert(Int, 3.0)` produces `3`, but `convert(Int, 3.2)`
-throws an `InexactError`.  If you want to define a constructor for a lossless conversion from
-one type to another, you should probably define a `convert` method instead.
-
-On the other hand, if your constructor does not represent a lossless conversion, or doesn't represent
-"conversion" at all, it is better to leave it as a constructor rather than a `convert` method.
-For example, the `Array{Int}()` constructor creates a zero-dimensional `Array` of the type `Int`,
-but is not really a "conversion" from `Int` to an `Array`.
-
 ## Outer-only constructors
 
 As we have seen, a typical parametric type has inner constructors that are called when type parameters

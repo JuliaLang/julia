@@ -41,10 +41,17 @@ of promotion rules defining what types they should promote to when mixed with ot
 
 ## Conversion
 
-Conversion of values to various types is performed by the `convert` function. The `convert` function
-generally takes two arguments: the first is a type object while the second is a value to convert
-to that type; the returned value is the value converted to an instance of given type. The simplest
-way to understand this function is to see it in action:
+The standard way to obtain a value of a certain type `T` is to call the type's constructor, `T(x)`.
+However, there are cases where it's convenient to convert a value from one type to another
+without the programmer asking for it explicitly.
+One example is assigning a value into an array: if `A` is a `Vector{Float64}`, the expression
+`A[1] = 2` should work by automatically converting the `2` from `Int` to `Float64`, and
+storing the result in the array.
+This is done via the `convert` function.
+
+The `convert` function generally takes two arguments: the first is a type object and the second is
+a value to convert to that type. The returned value is the value converted to an instance of given type.
+The simplest way to understand this function is to see it in action:
 
 ```jldoctest
 julia> x = 12
@@ -81,9 +88,7 @@ doesn't know how to perform the requested conversion:
 
 ```jldoctest
 julia> convert(AbstractFloat, "foo")
-ERROR: MethodError: Cannot `convert` an object of type String to an object of type AbstractFloat
-This may have arisen from a call to the constructor AbstractFloat(...),
-since type constructors fall back to convert methods.
+ERROR: MethodError: Cannot `convert` an object of type String to an object of type AbstractFloat.
 ```
 
 Some languages consider parsing strings as numbers or formatting numbers as strings to be conversions
@@ -92,93 +97,77 @@ not: even though some strings can be parsed as numbers, most strings are not val
 of numbers, and only a very limited subset of them are. Therefore in Julia the dedicated `parse`
 function must be used to perform this operation, making it more explicit.
 
+### When is `convert` called?
+
+The following language constructs call `convert`:
+
+  * Assigning to an array converts to the array's element type.
+  * Assigning to a field of an object converts to the declared type of the field.
+  * Constructing an object with `new` converts to the object's declared field types.
+  * Assigning to a variable with a declared type (e.g. `local x::T`) converts to that type.
+  * A function with a declared return type converts its return value to that type.
+  * Passing a value to `ccall` converts it to the corresponding argument type.
+
+### Conversion vs. Construction
+
+Note that the behavior of `convert(T, x)` appears to be nearly identical to `T(x)`.
+Indeed, it usually is.
+However, there is a key semantic difference: since `convert` can be called implicitly,
+its methods are restricted to cases that are considered "safe" or "unsurprising".
+`convert` will only convert between types that represent the same basic kind of thing
+(e.g. different representations of numbers, or different string encodings).
+It is also usually lossless; converting a value to a different type and back again
+should result in the exact same value.
+
+Notice that some constructors don't implement the concept of "conversion".
+For example, `Vector{Int}(5)` constructs a 5-element vector, which is not really a
+"conversion" from an integer to a vector.
+
+Finally, `convert(T, x)` is expected to return the original `x` if `x` is already of type `T`.
+In contrast, if `T` is a mutable collection type then `T(x)` should always make a new
+collection (copying elements from `x`).
+
 ### Defining New Conversions
 
-To define a new conversion, simply provide a new method for `convert`. That's really all there
-is to it. For example, the method to convert a real number to a boolean is this:
+When defining a new type, initially all ways of creating it should be defined as
+constructors.
+If it becomes clear that implicit conversion would be useful, and that some
+constructors meet the above "safety" criteria, then `convert` methods can be added.
+These methods are typically quite simple, as they only need to call the appropriate
+constructor.
+Such a definition might look like this:
 
 ```julia
-convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
+convert(::Type{MyType}, x) = MyType(x)
 ```
 
 The type of the first argument of this method is a [singleton type](@ref man-singleton-types),
-`Type{Bool}`, the only instance of which is [`Bool`](@ref). Thus, this method is only invoked
-when the first argument is the type value `Bool`. Notice the syntax used for the first
+`Type{MyType}`, the only instance of which is `MyType`. Thus, this method is only invoked
+when the first argument is the type value `MyType`. Notice the syntax used for the first
 argument: the argument name is omitted prior to the `::` symbol, and only the type is given.
 This is the syntax in Julia for a function argument whose type is specified but whose value
 is never used in the function body. In this example, since the type is a singleton, there
-would never be any reason to use its value within the body. When invoked, the method
-determines whether a numeric value is true or false as a boolean,
-by comparing it to one and zero:
+would never be any reason to use its value within the body.
 
-```jldoctest
-julia> convert(Bool, 1)
-true
-
-julia> convert(Bool, 0)
-false
-
-julia> convert(Bool, 1im)
-ERROR: InexactError: convert(Bool, 0 + 1im)
-Stacktrace:
- [1] convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:37
-
-julia> convert(Bool, 0im)
-false
-```
-
-The method signatures for conversion methods are often quite a bit more involved than this example,
-especially for parametric types. The example above is meant to be pedagogical, and is not the
-actual Julia behaviour. This is the actual implementation in Julia:
+All instances of some abstract types are by default considered "sufficiently similar"
+that a universal `convert` definition is provided in the standard library.
+For example, this definition states that it's valid to `convert` any `Number` type to
+any other by calling a 1-argument constructor:
 
 ```julia
-convert(::Type{T}, z::Complex) where {T<:Real} =
-    (imag(z) == 0 ? convert(T, real(z)) : throw(InexactError()))
+convert(::Type{T}, x::Number) where {T<:Number} = T(x)
 ```
 
-### [Case Study: Rational Conversions](@id man-rational-conversion)
-
-To continue our case study of Julia's [`Rational`](@ref) type, here are the conversions declared in
-[`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
-right after the declaration of the type and its constructors:
+This means that new `Number` types only need to define constructors, since this
+definition will handle `convert` for them.
+An identity conversion is also provided to handle the case where the argument is
+already of the requested type:
 
 ```julia
-convert(::Type{Rational{T}}, x::Rational) where {T<:Integer} = Rational(convert(T,x.num),convert(T,x.den))
-convert(::Type{Rational{T}}, x::Integer) where {T<:Integer} = Rational(convert(T,x), convert(T,1))
-
-function convert(::Type{Rational{T}}, x::AbstractFloat, tol::Real) where T<:Integer
-    if isnan(x); return zero(T)//zero(T); end
-    if isinf(x); return sign(x)//zero(T); end
-    y = x
-    a = d = one(T)
-    b = c = zero(T)
-    while true
-        f = convert(T,round(y)); y -= f
-        a, b, c, d = f*a+c, f*b+d, a, b
-        if y == 0 || abs(a/b-x) <= tol
-            return a//b
-        end
-        y = 1/y
-    end
-end
-convert(rt::Type{Rational{T}}, x::AbstractFloat) where {T<:Integer} = convert(rt,x,eps(x))
-
-convert(::Type{T}, x::Rational) where {T<:AbstractFloat} = convert(T,x.num)/convert(T,x.den)
-convert(::Type{T}, x::Rational) where {T<:Integer} = div(convert(T,x.num),convert(T,x.den))
+convert(::Type{T}, x::T) where {T<:Number} = x
 ```
 
-The initial four convert methods provide conversions to rational types. The first method converts
-one type of rational to another type of rational by converting the numerator and denominator to
-the appropriate integer type. The second method does the same conversion for integers by taking
-the denominator to be 1. The third method implements a standard algorithm for approximating a
-floating-point number by a ratio of integers to within a given tolerance, and the fourth method
-applies it, using machine epsilon at the given value as the threshold. In general, one should
-have `a//b == convert(Rational{Int64}, a/b)`.
-
-The last two convert methods provide conversions from rational types to floating-point and integer
-types. To convert to floating point, one simply converts both numerator and denominator to that
-floating point type and then divides. To convert to integer, one can use the `div` operator for
-truncated integer division (rounded towards zero).
+Similar definitions exist for `AbstractString`, `AbstractArray`, and `Associative`.
 
 ## Promotion
 
@@ -327,8 +316,8 @@ of rational numbers, resulting in a rational of the promotion of their respectiv
 types. The third and final rule dictates that promoting a rational with a float results in the
 same type as promoting the numerator/denominator type with the float.
 
-This small handful of promotion rules, together with the [conversion methods discussed above](@ref man-rational-conversion),
-are sufficient to make rational numbers interoperate completely naturally with all of Julia's
-other numeric types -- integers, floating-point numbers, and complex numbers. By providing appropriate
-conversion methods and promotion rules in the same manner, any user-defined numeric type can interoperate
-just as naturally with Julia's predefined numerics.
+This small handful of promotion rules, together with the type's constructors and the default
+`convert` method for numbers, are sufficient to make rational numbers interoperate completely
+naturally with all of Julia's other numeric types -- integers, floating-point numbers, and complex
+numbers. By providing appropriate conversion methods and promotion rules in the same manner, any
+user-defined numeric type can interoperate just as naturally with Julia's predefined numerics.
