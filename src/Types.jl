@@ -236,10 +236,27 @@ struct EnvCache
 end
 EnvCache() = EnvCache(get(ENV, "JULIA_ENV", nothing))
 
+function info_project_diff(env₀::EnvCache, env₁::EnvCache)
+    clean = true
+    deps₀ = env₀.project["deps"]
+    deps₁ = env₁.project["deps"]
+    for name in sort!(union(keys(deps₀), keys(deps₁)), by=lowercase)
+        uuid₀, uuid₁ = get(deps₀, name, ""), get(deps₁, name, "")
+        uuid₀ == uuid₁ && continue
+        isempty(uuid₀) || info(" [-] $name = $uuid₀")
+        isempty(uuid₁) || info(" [+] $name = $uuid₁")
+        clean = false
+    end
+    clean && info(" [=] no changes")
+end
+
 function write_env(env::EnvCache)
+    # load old environment for comparison
+    old_env = EnvCache(env.env)
     # update the project file
     if !isempty(env.project) || ispath(env.project_file)
         info("Updating project file $(env.project_file)")
+        info_project_diff(old_env, env)
         project = deepcopy(env.project)
         isempty(project["deps"]) && delete!(project, "deps")
         mkpath(dirname(env.project_file))
