@@ -581,6 +581,11 @@ end
     end
 end
 
+@testset "diagonal integer matrix to real power" begin
+    A = Matrix(Diagonal([1, 2, 3]))
+    @test A^2.3 ≈ float(A)^2.3
+end
+
 @testset "issue #23366 (Int Matrix to Int power)" begin
     @testset "Tests for $elty" for elty in (Int128, Int16, Int32, Int64, Int8,
                                             UInt128, UInt16, UInt32, UInt64, UInt8,
