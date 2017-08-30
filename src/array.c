@@ -435,7 +435,7 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 {
     if (a->flags.how == 3 && a->offset == 0 && a->elsize == 1 &&
         (jl_array_ndims(a) != 1 ||
-         !(a->maxsize+sizeof(void*)+1 > GC_MAX_SZCLASS && jl_array_nrows(a)+sizeof(void*)+1 <= GC_MAX_SZCLASS))) {
+         ((a->maxsize + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (jl_array_len(a) + sizeof(void*) + 1 <= GC_MAX_SZCLASS)))) {
         jl_value_t *o = jl_array_data_owner(a);
         if (jl_is_string(o)) {
             a->flags.isshared = 1;
@@ -616,7 +616,8 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
         nbytes++;
         oldnbytes++;
     }
-    if (!a->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(a)))) {
+    int is_discriminated_union = !a->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(a)));
+    if (is_discriminated_union) {
         nbytes += newlen;
         oldnbytes += oldlen;
     }
@@ -627,15 +628,15 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
         a->data = jl_gc_managed_realloc(olddata, nbytes, oldnbytes,
                                         a->flags.isaligned, (jl_value_t*)a);
     }
-    else if (a->flags.how == 3 && jl_is_string(jl_array_data_owner(a))) {
+    else if (a->flags.how == 3 && jl_is_string(jl_array_data_owner(a)) && !is_discriminated_union) {
         // if data is in a String, keep it that way
         jl_value_t *s;
         if (a->flags.isshared) {
-            s = jl_alloc_string(nbytes);
+            s = jl_alloc_string(nbytes - (elsz == 1));
             newbuf = 1;
         }
         else {
-            s = jl_gc_realloc_string(jl_array_data_owner(a), nbytes);
+            s = jl_gc_realloc_string(jl_array_data_owner(a), nbytes - (elsz == 1));
         }
         jl_array_data_owner(a) = s;
         jl_gc_wb(a, s);
