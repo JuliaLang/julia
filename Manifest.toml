@@ -1,7 +1,7 @@
 [[Compat]]
-hash-sha1 = "6e9c90ac34a173c2a2c179735427078b989a3bdc"
+hash-sha1 = "796ab395151ed47df970529c2eb24082aa6f66e8"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "0.26.0"
+version = "0.31.0"
 
 [[SHA]]
 deps = ["Compat"]
