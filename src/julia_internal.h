@@ -1001,6 +1001,8 @@ extern jl_sym_t *isdefined_sym; extern jl_sym_t *nospecialize_sym;
 void jl_register_fptrs(uint64_t sysimage_base, const char *base, const int32_t *offsets,
                        jl_method_instance_t **linfos, size_t n);
 
+extern arraylist_t partial_inst;
+
 #ifdef __cplusplus
 }
 #endif
