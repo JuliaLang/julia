@@ -1977,7 +1977,7 @@ module_binding: {
     }
 
 finlist: {
-        // Scan a finalizer list. see `gc_mark_finlist_t`
+        // Scan a finalizer (or format compatible) list. see `gc_mark_finlist_t`
         gc_mark_finlist_t *finlist = gc_pop_markdata(&sp, gc_mark_finlist_t);
         jl_value_t **begin = finlist->begin;
         jl_value_t **end = finlist->end;
@@ -2276,6 +2276,8 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
     // constants
     gc_mark_queue_obj(gc_cache, sp, jl_typetype_type);
     gc_mark_queue_obj(gc_cache, sp, jl_emptytuple_type);
+
+    gc_mark_queue_finlist(gc_cache, sp, &partial_inst, 0);
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".

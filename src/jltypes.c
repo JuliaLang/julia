@@ -1080,7 +1080,7 @@ static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, si
     JL_GC_POP();
 }
 
-static arraylist_t partial_inst;
+arraylist_t partial_inst;
 int inside_typedef = 0;
 
 static jl_value_t *extract_wrapper(jl_value_t *t)

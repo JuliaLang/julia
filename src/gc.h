@@ -188,7 +188,7 @@ typedef struct {
     uint8_t bits; // GC bits of the module (the bits to mark the binding buffer with)
 } gc_mark_binding_t;
 
-// Finalizer list
+// Finalizer (or object) list
 typedef struct {
     jl_value_t **begin;
     jl_value_t **end;
