@@ -555,6 +555,10 @@ reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
 BitArray(A::AbstractArray{<:Any,N}) where {N} = convert(BitArray{N}, A)
 
+if module_name(@__MODULE__) === :Base  # avoid method overwrite
+(::Type{T})(x::T) where {T<:BitArray} = copy(x)
+end
+
 """
     BitArray(itr)
 

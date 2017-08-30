@@ -90,6 +90,13 @@ using TestHelpers.OAs
     @test ndims(a) == 5
     @test a[2,1,2,2,1] == b[14]
     @test a[2,2,2,2,2] == b[end]
+
+    # issue #23107
+    a = [1,2,3]
+    @test typeof(a)(a) !== a
+    @test Array(a) !== a
+    @test Array{eltype(a)}(a) !== a
+    @test Vector(a) !== a
 end
 @testset "reshaping SubArrays" begin
     a = collect(reshape(1:5, 1, 5))
