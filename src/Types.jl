@@ -373,7 +373,11 @@ registry_resolve!(env::EnvCache, pkgs::AbstractVector{PackageVersion}) =
     registry_resolve!(env, [v.package for v in pkgs])
 
 "Ensure that all packages are fully resolved"
-function ensure_resolved(env::EnvCache, pkgs::AbstractVector{Package})::Void
+function ensure_resolved(
+    env::EnvCache,
+    pkgs::AbstractVector{Package},
+    registry::Bool = false,
+)::Void
     unresolved = Dict{String,Vector{UUID}}()
     for pkg in pkgs
         has_uuid(pkg) && continue
@@ -392,19 +396,25 @@ function ensure_resolved(env::EnvCache, pkgs::AbstractVector{Package})::Void
         for (name, uuids) in sort!(collect(unresolved), by=lowercase∘first)
             print(io, " * $name (")
             if length(uuids) == 0
-                print(io, "not in environment")
+                what = ["project", "manifest"]
+                registry && push!(what, "registry")
+                print(io, "not found in ")
+                join(io, what, ", ", " or ")
             else
                 join(io, uuids, ", ", " or ")
                 print(io, " in manifest but not in project")
             end
             println(io, ")")
         end
-        print(io, "Please specify by `name=uuid`")
+        print(io, "Please specify by known `name=uuid`.")
     end
     error(msg)
 end
-ensure_resolved(env::EnvCache, pkgs::AbstractVector{PackageVersion})::Void =
-    ensure_resolved(env, [v.package for v in pkgs])
+ensure_resolved(
+    env::EnvCache,
+    pkgs::AbstractVector{PackageVersion},
+    registry::Bool = false,
+) = ensure_resolved(env, [v.package for v in pkgs], registry)
 
 "Return paths of all registries in a depot"
 function registries(depot::String)

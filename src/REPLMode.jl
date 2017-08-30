@@ -152,7 +152,7 @@ function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     end
     project_resolve!(env, pkgs)
     registry_resolve!(env, pkgs)
-    ensure_resolved(env, pkgs)
+    ensure_resolved(env, pkgs, true)
     Pkg3.Operations.add(env, pkgs)
 end
 

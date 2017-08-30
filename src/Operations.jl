@@ -314,6 +314,7 @@ function rm(env::EnvCache, pkgs::Vector{Package})
         end
         clean && break
     end
+    # TODO: prompt for removal of other project deps
     filter!(env.project["deps"]) do _, uuid
         UUID(uuid) ∉ drop
     end
