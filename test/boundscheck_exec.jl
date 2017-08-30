@@ -229,4 +229,14 @@ else
     @test inbounds_isassigned(Int[], 2) == false
 end
 
+# Test that @inbounds annotations don't propagate too far for Array; Issue #20469
+struct BadVector20469{T} <: AbstractVector{Int}
+    data::T
+end
+Base.size(X::BadVector20469) = size(X.data)
+Base.getindex(X::BadVector20469, i::Int) = X.data[i-1]
+if bc_opt != bc_off
+    @test_throws BoundsError BadVector20469([1,2,3])[:]
+end
+
 end
