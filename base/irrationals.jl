@@ -141,6 +141,8 @@ end
 big(x::Irrational) = convert(BigFloat,x)
 big(::Type{<:Irrational}) = BigFloat
 
+complex(x::Irrational) = Complex{Real}(x, 0)
+
 ## specific irrational mathematical constants
 
 @irrational π        3.14159265358979323846  pi
