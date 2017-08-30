@@ -3960,21 +3960,16 @@ static void emit_cfunc_invalidate(
     allocate_gc_frame(ctx, b0);
 
     Function::arg_iterator AI = gf_thunk->arg_begin();
-    Value *myargs = new AllocaInst(T_prjlvalue,
-#if JL_LLVM_VERSION >= 50000
-        0,
-#endif
-        ConstantInt::get(T_int32, nargs), "jlcall", ctx.ptlsStates);
+    jl_cgval_t *myargs = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
     if (cc == jl_returninfo_t::SRet || cc == jl_returninfo_t::Union)
         ++AI;
     for (size_t i = 0; i < nargs; i++) {
         jl_value_t *jt = jl_nth_slot_type(lam->specTypes, i);
         bool isboxed;
         Type *et = julia_type_to_llvm(jt, &isboxed);
-        Value *arg_box;
         if (type_is_ghost(et)) {
             assert(jl_is_datatype(jt) && ((jl_datatype_t*)jt)->instance);
-            arg_box = literal_pointer_val(ctx, ((jl_datatype_t*)jt)->instance);
+            myargs[i] = mark_julia_const(((jl_datatype_t*)jt)->instance);
         }
         else {
             Value *arg_v = &*AI;
@@ -3982,23 +3977,20 @@ static void emit_cfunc_invalidate(
             Type *at = arg_v->getType();
             if (isboxed) {
                 assert(at == T_prjlvalue && et == T_pjlvalue);
-                arg_box = arg_v;
+                myargs[i] = mark_julia_type(ctx, arg_v, true, jt);
             }
             else if (et->isAggregateType()) {
-                arg_box = boxed(ctx, mark_julia_slot(arg_v, jt, NULL, tbaa_const), false);
+                myargs[i] = mark_julia_slot(arg_v, jt, NULL, tbaa_const);
             }
             else {
                 assert(at == et);
-                arg_box = boxed(ctx, mark_julia_type(ctx, arg_v, false, jt), false);
+                myargs[i] = mark_julia_type(ctx, arg_v, false, jt);
             }
             (void)at;
         }
-        Value *argn = ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue, myargs, i);
-        ctx.builder.CreateStore(maybe_decay_untracked(arg_box), argn);
     }
     assert(AI == gf_thunk->arg_end());
-    Value *nargs_v = ConstantInt::get(T_int32, nargs);
-    Value *gf_ret = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { myargs, nargs_v });
+    Value *gf_ret = emit_jlcall(ctx, jlapplygeneric_func, NULL, myargs, nargs);
     jl_cgval_t gf_retbox = mark_julia_type(ctx, gf_ret, true, jl_any_type, /*needsroot*/false);
     jl_value_t *astrt = lam->rettype;
     if (cc != jl_returninfo_t::Boxed) {
