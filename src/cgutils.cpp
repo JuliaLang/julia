@@ -1672,33 +1672,10 @@ static Value *emit_array_nd_index(jl_codectx_t &ctx,
         // We have already emitted a bounds check for each index except for
         // the last one which we therefore have to do here.
         bool linear_indexing = nd == -1 || nidxs < (size_t)nd;
-        if (linear_indexing) {
-            // Compare the linearized index `i` against the linearized size of
-            // the accessed array, i.e. `if !(i < alen) goto error`.
-            if (nidxs > 1) {
-                // TODO: REMOVE DEPWARN AND RETURN FALSE AFTER 0.6.
-                // We need to check if this is inside the non-linearized size
-                BasicBlock *partidx = BasicBlock::Create(jl_LLVMContext, "partlinidx");
-                BasicBlock *partidxwarn = BasicBlock::Create(jl_LLVMContext, "partlinidxwarn");
-                Value *d = emit_arraysize_for_unsafe_dim(ctx, ainfo, ex, nidxs, nd);
-                ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(ii, d), endBB, partidx);
-
-                // We failed the normal bounds check; check to see if we're
-                // inside the linearized size (partial linear indexing):
-                ctx.f->getBasicBlockList().push_back(partidx);
-                ctx.builder.SetInsertPoint(partidx);
-                Value *alen = emit_arraylen(ctx, ainfo, ex);
-                ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(i, alen), partidxwarn, failBB);
-
-                // We passed the linearized bounds check; now throw the depwarn:
-                ctx.f->getBasicBlockList().push_back(partidxwarn);
-                ctx.builder.SetInsertPoint(partidxwarn);
-                ctx.builder.CreateCall(prepare_call(jldepwarnpi_func), ConstantInt::get(T_size, nidxs));
-                ctx.builder.CreateBr(endBB);
-            } else {
-                Value *alen = emit_arraylen(ctx, ainfo, ex);
-                ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(i, alen), endBB, failBB);
-            }
+        if (linear_indexing && nidxs == 1) {
+            // Check against the entire linear span of the array
+            Value *alen = emit_arraylen(ctx, ainfo, ex);
+            ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(i, alen), endBB, failBB);
         } else {
             // Compare the last index of the access against the last dimension of
             // the accessed array, i.e. `if !(last_index < last_dimension) goto error`.
