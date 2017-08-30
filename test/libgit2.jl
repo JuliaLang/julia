@@ -7,6 +7,7 @@ const LIBGIT2_MIN_VER = v"0.23.0"
 const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
 
 const KEY_DIR = joinpath(@__DIR__, "libgit2")
+const HOME = Sys.iswindows() ? "USERPROFILE" : "HOME"  # Environment variable name for home
 
 function get_global_dir()
     buf = Ref(LibGit2.Buffer())
@@ -1822,7 +1823,7 @@ mktempdir() do dir
             withenv("SSH_KEY_PATH" => nothing,
                     "SSH_PUB_KEY_PATH" => nothing,
                     "SSH_KEY_PASS" => nothing,
-                    (Sys.iswindows() ? "USERPROFILE" : "HOME") => tempdir()) do
+                    HOME => dir) do
 
                 # Set the USERPROFILE / HOME above to be a directory that does not contain
                 # the "~/.ssh/id_rsa" file. If this file exists the credential callback
@@ -2016,6 +2017,53 @@ mktempdir() do dir
             err, auth_attempts = challenge_prompt(ex, [])
             @test err == eauth_error
             @test auth_attempts == 2
+        end
+
+         @testset "SSH expand tilde" begin
+            url = "git@github.com:test/package.jl"
+
+            valid_key = joinpath(KEY_DIR, "valid")
+            valid_cred = LibGit2.SSHCredentials("git", "", valid_key, valid_key * ".pub")
+
+            invalid_key = joinpath(KEY_DIR, "invalid")
+
+            ssh_ex = quote
+                include($LIBGIT2_HELPER_PATH)
+                payload = CredentialPayload(allow_ssh_agent=false, allow_prompt=true)
+                err, auth_attempts = credential_loop($valid_cred, $url, "git", payload)
+                (err, auth_attempts, payload.credential)
+            end
+
+            withenv("SSH_KEY_PATH" => nothing,
+                    "SSH_PUB_KEY_PATH" => nothing,
+                    "SSH_KEY_PASS" => nothing,
+                    HOME => KEY_DIR) do
+
+                # Expand tilde during the private key prompt
+                challenges = [
+                    "Private key location for 'git@github.com':" => "~/valid\n",
+                ]
+                err, auth_attempts, credential = challenge_prompt(ssh_ex, challenges)
+                @test err == git_ok
+                @test auth_attempts == 1
+                @test get(credential).prvkey == abspath(valid_key)
+            end
+
+            withenv("SSH_KEY_PATH" => valid_key,
+                    "SSH_PUB_KEY_PATH" => invalid_key * ".pub",
+                    "SSH_KEY_PASS" => nothing,
+                    HOME => KEY_DIR) do
+
+                # Expand tilde during the public key prompt
+                challenges = [
+                    "Private key location for 'git@github.com' [$valid_key]:" => "\n",
+                    "Public key location for 'git@github.com' [$invalid_key.pub]:" => "~/valid.pub\n",
+                ]
+                err, auth_attempts, credential = challenge_prompt(ssh_ex, challenges)
+                @test err == git_ok
+                @test auth_attempts == 2
+                @test get(credential).pubkey == abspath(valid_key * ".pub")
+            end
         end
 
         @testset "SSH explicit credentials" begin
