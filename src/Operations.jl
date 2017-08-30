@@ -188,7 +188,14 @@ end
 
 const refspecs = ["+refs/*:refs/remotes/cache/*"]
 
-function install(env::EnvCache, uuid::UUID, name::String, hash::SHA1, urls::Vector{String})
+function install(
+    env::EnvCache,
+    uuid::UUID,
+    name::String,
+    hash::SHA1,
+    urls::Vector{String},
+    version::Union{VersionNumber,Void} = nothing
+)
     version_path = find_installed(uuid, hash)
     ispath(version_path) && return nothing
     repo_path = joinpath(user_depot(), "upstream", string(uuid))
@@ -220,7 +227,11 @@ function install(env::EnvCache, uuid::UUID, name::String, hash::SHA1, urls::Vect
         checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
         target_directory = Base.unsafe_convert(Cstring, version_path)
     )
-    info("Installing $name at $(string(hash))")
+    vstr = sprint() do io
+        version != nothing && print(io, version, " ")
+        print(io, "[", string(hash), "]")
+    end
+    info("Installing $name at $vstr")
     LibGit2.checkout_tree(repo, tree, options=opts)
     return nothing
 end
@@ -274,15 +285,12 @@ end
 
 function apply_versions(env::EnvCache, pkgs::Vector{PackageVersion})
     names, hashes, urls = version_data(env, pkgs)
-    # clone or update repos and find or create source trees
-    for (uuid, hash) in hashes
-        install(env, uuid, names[uuid], hashes[uuid], urls[uuid])
-    end
-    # update and write manifest
+    # install & update manifest
     for pkg in pkgs
         uuid = pkg.package.uuid
         version = pkg.version::VersionNumber
         name, hash = names[uuid], hashes[uuid]
+        install(env, uuid, name, hash, urls[uuid], version)
         update_manifest(env, uuid, name, hash, version)
     end
     prune_manifest(env)
