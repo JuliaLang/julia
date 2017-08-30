@@ -607,7 +607,7 @@ function exp(A::Hermitian{T}) where T
     end
 end
 
-for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
+for (funm, func) in ([:sqrtm,:sqrt],)
     @eval begin
         function ($funm)(A::Symmetric{T}) where T<:Real
             F = eigfact(A)
@@ -620,6 +620,39 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
         end
 
         function ($funm)(A::Hermitian{T}) where T
+            n = checksquare(A)
+            F = eigfact(A)
+            if all(λ -> λ ≥ 0, F.values)
+                retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
+                if T <: Real
+                    return Hermitian(retmat)
+                else
+                    for i = 1:n
+                        retmat[i,i] = real(retmat[i,i])
+                    end
+                    return Hermitian(retmat)
+                end
+            else
+                retmat = (F.vectors * Diagonal(($func).(complex(F.values)))) * F.vectors'
+                return retmat
+            end
+        end
+    end
+end
+
+for func in (:log, #=:sqrtm=#)
+    @eval begin
+        function ($func)(A::Symmetric{T}) where T<:Real
+            F = eigfact(A)
+            if all(λ -> λ ≥ 0, F.values)
+                retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
+            else
+                retmat = (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
+            end
+            return Symmetric(retmat)
+        end
+
+        function ($func)(A::Hermitian{T}) where T
             n = checksquare(A)
             F = eigfact(A)
             if all(λ -> λ ≥ 0, F.values)

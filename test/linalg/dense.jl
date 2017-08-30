@@ -453,20 +453,20 @@ end
                                      1/3 1/4 1/5 1/6;
                                      1/4 1/5 1/6 1/7;
                                      1/5 1/6 1/7 1/8])
-        @test exp(logm(A4)) ≈ A4
+        @test exp(log(A4)) ≈ A4
 
         A5  = convert(Matrix{elty}, [1 1 0 1; 0 1 1 0; 0 0 1 1; 1 0 0 1])
-        @test exp(logm(A5)) ≈ A5
+        @test exp(log(A5)) ≈ A5
 
         A6  = convert(Matrix{elty}, [-5 2 0 0 ; 1/2 -7 3 0; 0 1/3 -9 4; 0 0 1/4 -11])
-        @test exp(logm(A6)) ≈ A6
+        @test exp(log(A6)) ≈ A6
 
         A7  = convert(Matrix{elty}, [1 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1])
-        @test exp(logm(A7)) ≈ A7
+        @test exp(log(A7)) ≈ A7
     end
 
     A8 = 100 * [-1+1im 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1]
-    @test exp(logm(A8)) ≈ A8
+    @test exp(log(A8)) ≈ A8
 end
 
 @testset "issue 5116" begin
@@ -487,28 +487,28 @@ end
 
 @testset "Additional matrix logarithm tests" for elty in (Float64, Complex{Float64})
     A11 = convert(Matrix{elty}, [3 2; -5 -3])
-    @test exp(logm(A11)) ≈ A11
+    @test exp(log(A11)) ≈ A11
 
     A12 = convert(Matrix{elty}, [1 -1; 1 -1])
-    @test typeof(logm(A12)) == Array{Complex{Float64}, 2}
+    @test typeof(log(A12)) == Array{Complex{Float64}, 2}
 
     A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
-    logmA1 = convert(Matrix{elty}, [1.329661349 0.5302876358 -0.06818951543;
+    logA1 = convert(Matrix{elty}, [1.329661349 0.5302876358 -0.06818951543;
                                     0.2310490602 1.295566591 0.2651438179;
                                     0.2310490602 0.1969543025 1.363756107])
-    @test logm(A1) ≈ logmA1
-    @test exp(logm(A1)) ≈ A1
+    @test log(A1) ≈ logA1
+    @test exp(log(A1)) ≈ A1
 
     A4  = convert(Matrix{elty}, [1/2 1/3 1/4 1/5+eps();
                                  1/3 1/4 1/5 1/6;
                                  1/4 1/5 1/6 1/7;
                                  1/5 1/6 1/7 1/8])
-    logmA4 = convert(Matrix{elty}, [-1.73297159 1.857349738 0.4462766564 0.2414170219;
+    logA4 = convert(Matrix{elty}, [-1.73297159 1.857349738 0.4462766564 0.2414170219;
                                     1.857349738 -5.335033737 2.994142974 0.5865285289;
                                     0.4462766564 2.994142974 -7.351095988 3.318413247;
                                     0.2414170219 0.5865285289 3.318413247 -5.444632124])
-    @test logm(A4) ≈ logmA4
-    @test exp(logm(A4)) ≈ A4
+    @test log(A4) ≈ logA4
+    @test exp(log(A4)) ≈ A4
 end
 
 @testset "issue #7181" begin
@@ -674,10 +674,8 @@ end
 
 @testset "test ops on Numbers for $elty" for elty in [Float32,Float64,Complex64,Complex128]
     a = rand(elty)
-    @test exp(a) == exp(a)
     @test isposdef(one(elty))
     @test sqrtm(a) == sqrt(a)
-    @test logm(a) ≈ log(a)
     @test lyap(one(elty),a) == -a/2
 end
 
