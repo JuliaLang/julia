@@ -68,21 +68,6 @@ end
 similar(d::WeakKeyDict{K,V}) where {K,V} = WeakKeyDict{K,V}()
 similar(d::WeakKeyDict, ::Type{Pair{K,V}}) where {K,V} = WeakKeyDict{K,V}()
 
-# conversion between Dict types
-function convert(::Type{WeakKeyDict{K,V}},d::Associative) where V where K
-    h = WeakKeyDict{K,V}()
-    for (k,v) in d
-        ck = convert(K,k)
-        if !haskey(h,ck)
-            h[ck] = convert(V,v)
-        else
-            error("key collision during dictionary conversion")
-        end
-    end
-    return h
-end
-convert(::Type{WeakKeyDict{K,V}},d::WeakKeyDict{K,V}) where {K,V} = d
-
 islocked(wkh::WeakKeyDict) = islocked(wkh.lock)
 lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)
 trylock(f, wkh::WeakKeyDict) = trylock(f, wkh.lock)
