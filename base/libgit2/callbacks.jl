@@ -17,7 +17,7 @@ function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void},
     config = GitConfig(GitRepo(repo_ptr,false))
     name_str = unsafe_string(name)
     err= try set!(config, "remote.$name_str.mirror", true)
-         catch -1
+         catch; -1
          finally close(config)
          end
     err != 0 && return Cint(err)
