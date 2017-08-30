@@ -338,6 +338,7 @@ expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
 else
 function expanduser(path::AbstractString)
     i = start(path)
+    if done(path,i) return path end
     c, i = next(path,i)
     if c != '~' return path end
     if done(path,i) return homedir() end

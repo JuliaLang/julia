@@ -10,6 +10,7 @@ for S in (String, GenericString)
     @test basename(S("foo$(sep)bar")) == "bar"
     @test dirname(S("foo$(sep)bar")) == "foo"
 
+    @test expanduser(S("")) == ""
     @test expanduser(S("x")) == "x"
     @test expanduser(S("~")) == (Sys.iswindows() ? "~" : homedir())
 
