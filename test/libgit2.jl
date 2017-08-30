@@ -1683,9 +1683,9 @@ mktempdir() do dir
             "The explicitly provided credential is incompatible with the requested " *
             "authentication methods.")
 
-        eauth_error = LibGit2.GitError(
-            LibGit2.Error.None, LibGit2.Error.EAUTH,
-            "No errors")
+        exhausted_error = LibGit2.GitError(
+            LibGit2.Error.Callback, LibGit2.Error.EAUTH,
+            "All authentication methods have failed.")
 
         @testset "SSH credential prompt" begin
             url = "git@github.com:test/package.jl"
@@ -2008,14 +2008,14 @@ mktempdir() do dir
             # An empty string username_ptr
             ex = gen_ex(username="")
             err, auth_attempts = challenge_prompt(ex, [])
-            @test err == eauth_error
+            @test err == exhausted_error
             @test auth_attempts == 3
 
             # A null username_ptr passed into `git_cred_ssh_key_from_agent` can cause a
             # segfault.
             ex = gen_ex(username=nothing)
             err, auth_attempts = challenge_prompt(ex, [])
-            @test err == eauth_error
+            @test err == exhausted_error
             @test auth_attempts == 2
         end
 
@@ -2094,7 +2094,7 @@ mktempdir() do dir
             # Explicitly provided credential is incorrect
             ex = gen_ex(invalid_cred, allow_prompt=false)
             err, auth_attempts = challenge_prompt(ex, [])
-            @test err == eauth_error
+            @test err == exhausted_error
             @test auth_attempts == 3
         end
 
@@ -2121,7 +2121,7 @@ mktempdir() do dir
             # Explicitly provided credential is incorrect
             ex = gen_ex(invalid_cred, allow_prompt=false)
             err, auth_attempts = challenge_prompt(ex, [])
-            @test err == eauth_error
+            @test err == exhausted_error
             @test auth_attempts == 2
         end
 
@@ -2193,7 +2193,7 @@ mktempdir() do dir
             # An EAUTH error should remove credentials from the cache
             ex = gen_ex(cached_cred=invalid_cred, allow_prompt=false)
             err, auth_attempts, cache = challenge_prompt(ex, [])
-            @test err == eauth_error
+            @test err == exhausted_error
             @test auth_attempts == 2
             @test typeof(cache) == LibGit2.CachedCredentials
             @test cache.cred == Dict()

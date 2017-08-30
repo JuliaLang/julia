@@ -54,6 +54,13 @@ function prompt_limit()
     return Cint(Error.EAUTH)
 end
 
+function exhausted_abort()
+    ccall((:giterr_set_str, :libgit2), Void,
+          (Cint, Cstring), Cint(Error.Callback),
+          "All authentication methods have failed.")
+    return Cint(Error.EAUTH)
+end
+
 function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, username_ptr)
     cred = Base.get(p.credential)::SSHCredentials
     revised = false
@@ -160,7 +167,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
     end
 
     if !revised
-        return Cint(Error.EAUTH)
+        return exhausted_abort()
     end
 
     return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
@@ -207,7 +214,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayl
     end
 
     if !revised
-        return Cint(Error.EAUTH)
+        return exhausted_abort()
     end
 
     return ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
