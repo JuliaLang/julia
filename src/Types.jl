@@ -243,11 +243,66 @@ function info_project_diff(env₀::EnvCache, env₁::EnvCache)
     for name in sort!(union(keys(deps₀), keys(deps₁)), by=lowercase)
         uuid₀, uuid₁ = get(deps₀, name, ""), get(deps₁, name, "")
         uuid₀ == uuid₁ && continue
-        isempty(uuid₀) || info(" [-] $name = $uuid₀")
-        isempty(uuid₁) || info(" [+] $name = $uuid₁")
+        isempty(uuid₀) || info(" [-] $name = \"$uuid₀\"")
+        isempty(uuid₁) || info(" [+] $name = \"$uuid₁\"")
         clean = false
     end
-    clean && info(" [=] no changes")
+    clean && info(" [no changes]")
+end
+
+function manifest_infos(env::EnvCache)
+    infos = Dict{UUID,Dict}()
+    manifest_info(env) do name, info
+        info = deepcopy(info)
+        info["name"] = name
+        infos[UUID(info["uuid"])] = info
+    end
+    return infos
+end
+
+function info_manifest_diff(env₀::EnvCache, env₁::EnvCache)
+    clean = true
+    infos₀ = manifest_infos(env₀)
+    infos₁ = manifest_infos(env₁)
+    uuids = sort!(union(keys(infos₀), keys(infos₁)), by=uuid->uuid.value)
+    pairs = [(get(infos₀, u, nothing), get(infos₁, u, nothing)) for u in uuids]
+    sort!(pairs, by=pair->lowercase(pair[pair[2] != nothing ? 2 : 1]["name"]))
+    for (info₀, info₁) in pairs
+        if info₀ != nothing && info₁ != nothing
+            name = info₁["name"]
+            uuid = info₁["uuid"][1:8]
+            hash₀ = info₀["hash-sha1"]
+            hash₁ = info₁["hash-sha1"]
+            hash₀ == hash₁ && continue
+            ver₀ = VersionNumber(get(info₀, "version", nothing))
+            ver₁ = VersionNumber(get(info₁, "version", nothing))
+            vstr₀ = ver₀ != nothing ? "v$ver₀" : hash₀[1:16]
+            vstr₁ = ver₁ != nothing ? "v$ver₁" : hash₁[1:16]
+            verb = ver₀ == nothing || ver₁ == nothing ? "→" :
+                   ver₁ > ver₀ ? "↑" : "↓"
+            info(" [$uuid] $verb $name $vstr₀ ⇒ $vstr₁" )
+            clean = false
+        elseif info₀ != nothing
+            name = info₀["name"]
+            uuid = info₀["uuid"][1:8]
+            hash = info₀["hash-sha1"]
+            ver = get(info₀, "version", nothing)
+            vstr = ver != nothing ? "v$ver" : hash[1:16]
+            info(" [$uuid] - $name $vstr" )
+            clean = false
+        elseif info₁ != nothing
+            name = info₁["name"]
+            uuid = info₁["uuid"][1:8]
+            hash = info₁["hash-sha1"]
+            ver = get(info₁, "version", nothing)
+            vstr = ver != nothing ? "v$ver" : hash[1:16]
+            info(" [$uuid] + $name $vstr" )
+            clean = false
+        else
+            error("this should not happen")
+        end
+    end
+    clean && info(" [no changes]")
 end
 
 function write_env(env::EnvCache)
@@ -267,6 +322,7 @@ function write_env(env::EnvCache)
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
         info("Updating manifest file $(env.manifest_file)")
+        info_manifest_diff(old_env, env)
         manifest = deepcopy(env.manifest)
         uniques = sort!(collect(keys(manifest)), by=lowercase)
         filter!(name->length(manifest[name]) == 1, uniques)

@@ -227,11 +227,9 @@ function install(
         checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
         target_directory = Base.unsafe_convert(Cstring, version_path)
     )
-    vstr = sprint() do io
-        version != nothing && print(io, version, " ")
-        print(io, "[", string(hash), "]")
-    end
-    info("Installing $name at $vstr")
+    h = string(hash)[1:16]
+    vstr = version != nothing ? "v$version [$h]" : "[$h]"
+    info("Installing $name $vstr")
     LibGit2.checkout_tree(repo, tree, options=opts)
     return nothing
 end
