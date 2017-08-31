@@ -268,6 +268,9 @@ Deprecated or removed
 
   * The method `srand(rng, filename, n=4)` has been deprecated ([#21359]).
 
+  * `readcsv(io[, T::Type]; opts...)` has been deprecated in favor of
+    `readdlm(io, ','[, T]; opts...)` ([#23530]).
+
   * The `cholfact`/`cholfact!` methods that accepted an `uplo` symbol have been deprecated
     in favor of using `Hermitian` (or `Symmetric`) views ([#22187], [#22188]).
 
