@@ -1503,7 +1503,7 @@ function count(B::BitArray)
     n = 0
     Bc = B.chunks
     @inbounds for i = 1:length(Bc)
-        n += count_ones(Bc[i])
+        n += countones(Bc[i])
     end
     return n
 end

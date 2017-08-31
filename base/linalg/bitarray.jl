@@ -7,7 +7,7 @@ function dot(x::BitVector, y::BitVector)
     xc = x.chunks
     yc = y.chunks
     @inbounds for i = 1:length(xc)
-        s += count_ones(xc[i] & yc[i])
+        s += countones(xc[i] & yc[i])
     end
     s
 end
@@ -33,7 +33,7 @@ end
         #for j = 1:nB
             #for k = 1:col_ch
                 ## TODO: improve
-                #C[i, j] += count_ones(aux_chunksA[k] & aux_chunksB[j][k])
+                #C[i, j] += countones(aux_chunksA[k] & aux_chunksB[j][k])
             #end
         #end
     #end

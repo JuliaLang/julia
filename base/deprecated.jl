@@ -1725,6 +1725,10 @@ function countnz(x)
     return count(t -> t != 0, x)
 end
 
+# deprecate count_ones and count_zeros to countones and countzeros
+@deprecate count_ones countones
+@deprecate count_zeros countzeros
+
 # issue #22791
 @deprecate select partialsort
 @deprecate select! partialsort!

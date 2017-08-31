@@ -319,16 +319,16 @@ bswap(x::Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}) =
     bswap_int(x)
 
 """
-    count_ones(x::Integer) -> Integer
+    countones(x::Integer) -> Integer
 
 Number of ones in the binary representation of `x`.
 
 ```jldoctest
-julia> count_ones(7)
+julia> countones(7)
 3
 ```
 """
-count_ones(x::BitInteger) = Int(ctpop_int(x))
+countones(x::BitInteger) = Int(ctpop_int(x))
 
 """
     leading_zeros(x::Integer) -> Integer
@@ -355,16 +355,16 @@ julia> trailing_zeros(2)
 trailing_zeros(x::BitInteger) = Int(cttz_int(x))
 
 """
-    count_zeros(x::Integer) -> Integer
+    countzeros(x::Integer) -> Integer
 
 Number of zeros in the binary representation of `x`.
 
 ```jldoctest
-julia> count_zeros(Int32(2 ^ 16 - 1))
+julia> countzeros(Int32(2 ^ 16 - 1))
 16
 ```
 """
-count_zeros(x::Integer) = count_ones(~x)
+countzeros(x::Integer) = countones(~x)
 
 """
     leading_ones(x::Integer) -> Integer
