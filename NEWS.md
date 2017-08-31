@@ -7,6 +7,10 @@ New language features
   * Local variables can be tested for being defined
     using the new `@isdefined variable` macro ([#22281]).
 
+  * Destructuring in function arguments: when an expression such as `(x, y)` is used as
+    a function argument name, the argument is unpacked into local variables `x` and `y`
+    as in the assignment `(x, y) = arg` ([#6614]).
+
 Language changes
 ----------------
 

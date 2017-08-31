@@ -5499,3 +5499,29 @@ for U in unboxedunions
 end
 
 end # module UnionOptimizations
+
+# issue #6614, argument destructuring
+f6614((x, y)) = [x, y]
+@test f6614((4, 3)) == [4, 3]
+g6614((x, y), (z,), (a, b)) = (x,y,z,a,b)
+@test g6614((1, 2), (3,), (4, 5)) === (1,2,3,4,5)
+@test_throws MethodError g6614(1, 2)
+@test_throws MethodError g6614((1, 2), (3,))
+@test_throws BoundsError g6614((1, 2), (3,), (1,))
+h6614((x, y) = (5, 6)) = (y, x)
+@test h6614() == (6, 5)
+@test h6614((4, 5)) == (5, 4)
+ff6614((x, y)::Tuple{Int, String}) = (x, y)
+@test ff6614((1, "")) == (1, "")
+@test_throws MethodError ff6614((1, 1))
+gg6614((x, y)::Tuple{Int, String} = (2, " ")) = (x, y)
+@test gg6614() == (2, " ")
+function hh6614()
+    x, y = 1, 2
+    function g((x,y))
+        # make sure x and y are local
+    end
+    g((4,5))
+    x, y
+end
+@test hh6614() == (1, 2)
