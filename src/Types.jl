@@ -278,7 +278,7 @@ function info_manifest_diff(env₀::EnvCache, env₁::EnvCache)
             ver₁ = VersionNumber(get(info₁, "version", nothing))
             vstr₀ = ver₀ != nothing ? "v$ver₀" : hash₀[1:16]
             vstr₁ = ver₁ != nothing ? "v$ver₁" : hash₁[1:16]
-            verb = ver₀ == nothing || ver₁ == nothing ? "→" :
+            verb = ver₀ == nothing || ver₁ == nothing ? "~" :
                    ver₁ > ver₀ ? "↑" : "↓"
             info(" [$uuid] $verb $name $vstr₀ ⇒ $vstr₁" )
             clean = false
