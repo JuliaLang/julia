@@ -253,7 +253,7 @@ for f in (
         # base/math.jl
         :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2,
         :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh,
-        :log2, :log10, :lgamma, #=:log1p,=# :sqrt,
+        :log2, :log10, :lgamma, #=:log1p,=#
         # base/floatfuncs.jl
         :abs, :abs2, :angle, :isnan, :isinf, :isfinite,
         # base/complex.jl
@@ -1619,6 +1619,9 @@ function Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::Abstract
         "where {Tl, Td, Tu} is deprecated; convert all vectors to the same type instead."), :Tridiagonal)
     Tridiagonal(map(v->convert(Vector{promote_type(Tl,Td,Tu)}, v), (dl, d, du))...)
 end
+
+# deprecate sqrtm in favor of sqrt
+@deprecate sqrtm sqrt
 
 # deprecate expm in favor of exp
 @deprecate expm! exp!

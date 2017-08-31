@@ -66,7 +66,7 @@ srand(1)
             @test log(Diagonal(abs.(D.diag))) ≈ log(abs.(DM)) atol=n^3*eps(relty)
         end
         if elty <: BlasComplex
-            for func in (logdet, sqrtm)
+            for func in (logdet, sqrt)
                 @test func(D) ≈ func(DM) atol=n^2*eps(relty)*2
             end
         end
@@ -383,7 +383,7 @@ end
 
     @test exp(D) == Diagonal([exp([1 2; 3 4]), exp([1 2; 3 4])])
     @test log(D) == Diagonal([log([1 2; 3 4]), log([1 2; 3 4])])
-    @test sqrtm(D) == Diagonal([sqrtm([1 2; 3 4]), sqrtm([1 2; 3 4])])
+    @test sqrt(D) == Diagonal([sqrt([1 2; 3 4]), sqrt([1 2; 3 4])])
 end
 
 @testset "multiplication with Symmetric/Hermitian" begin

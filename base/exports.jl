@@ -609,7 +609,6 @@ export
     schur,
     schurfact!,
     schurfact,
-    sqrtm,
     svd,
     svdfact!,
     svdfact,

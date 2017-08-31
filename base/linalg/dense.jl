@@ -374,8 +374,8 @@ function schurpow(A::AbstractMatrix, p)
         retmat = A ^ floor(p)
         # Real part
         if p - floor(p) == 0.5
-            # special case: A^0.5 === sqrtm(A)
-            retmat = retmat * sqrtm(A)
+            # special case: A^0.5 === sqrt(A)
+            retmat = retmat * sqrt(A)
         else
             retmat = retmat * powm!(UpperTriangular(float.(A)), real(p - floor(p)))
         end
@@ -385,8 +385,8 @@ function schurpow(A::AbstractMatrix, p)
         R = S ^ floor(p)
         # Real part
         if p - floor(p) == 0.5
-            # special case: A^0.5 === sqrtm(A)
-            R = R * sqrtm(S)
+            # special case: A^0.5 === sqrt(A)
+            R = R * sqrt(S)
         else
             R = R * powm!(UpperTriangular(float.(S)), real(p - floor(p)))
         end
@@ -618,7 +618,7 @@ function log(A::StridedMatrix{T}) where T
 end
 
 """
-    sqrtm(A)
+    sqrt(A::AbstractMatrix)
 
 If `A` has no negative real eigenvalues, compute the principal matrix square root of `A`,
 that is the unique matrix ``X`` with eigenvalues having positive real part such that
@@ -642,40 +642,38 @@ julia> A = [4 0; 0 4]
  4  0
  0  4
 
-julia> sqrtm(A)
+julia> sqrt(A)
 2×2 Array{Float64,2}:
  2.0  0.0
  0.0  2.0
 ```
 """
-function sqrtm(A::StridedMatrix{<:Real})
+function sqrt(A::StridedMatrix{<:Real})
     if issymmetric(A)
-        return full(sqrtm(Symmetric(A)))
+        return full(sqrt(Symmetric(A)))
     end
     n = checksquare(A)
     if istriu(A)
-        return full(sqrtm(UpperTriangular(A)))
+        return full(sqrt(UpperTriangular(A)))
     else
         SchurF = schurfact(complex(A))
-        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        R = full(sqrt(UpperTriangular(SchurF[:T])))
         return SchurF[:vectors] * R * SchurF[:vectors]'
     end
 end
-function sqrtm(A::StridedMatrix{<:Complex})
+function sqrt(A::StridedMatrix{<:Complex})
     if ishermitian(A)
-        return full(sqrtm(Hermitian(A)))
+        return full(sqrt(Hermitian(A)))
     end
     n = checksquare(A)
     if istriu(A)
-        return full(sqrtm(UpperTriangular(A)))
+        return full(sqrt(UpperTriangular(A)))
     else
         SchurF = schurfact(A)
-        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        R = full(sqrt(UpperTriangular(SchurF[:T])))
         return SchurF[:vectors] * R * SchurF[:vectors]'
     end
 end
-sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
-sqrtm(a::Complex) = sqrt(a)
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)

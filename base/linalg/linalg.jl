@@ -9,7 +9,7 @@ import Base: USE_BLAS64, abs, big, broadcast, ceil, conj, convert, copy, copy!,
     adjoint, eltype, exp, eye, findmax, findmin, fill!, floor, full, getindex,
     hcat, imag, indices, inv, isapprox, isone, IndexStyle, kron, length, log, map,
     ndims, oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round,
-    setindex!, show, similar, size, transpose, trunc, typed_hcat
+    setindex!, show, similar, size, sqrt, transpose, trunc, typed_hcat
 using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_vcat
 # We use `_length` because of non-1 indices; releases after julia 0.5
@@ -124,7 +124,6 @@ export
     schur,
     schurfact!,
     schurfact,
-    sqrtm,
     svd,
     svdfact!,
     svdfact,
