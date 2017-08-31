@@ -93,7 +93,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Variables",
     "title": "Variables",
     "category": "section",
-    "text": "A variable, in Julia, is a name associated (or bound) to a value. It's useful when you want to store a value (that you obtained after some math, for example) for later use. For example:# Assign the value 10 to the variable x\njulia> x = 10\n10\n\n# Doing math with x's value\njulia> x + 1\n11\n\n# Reassign x's value\njulia> x = 1 + 1\n2\n\n# You can assign values of other types, like strings of text\njulia> x = \"Hello World!\"\n\"Hello World!\"Julia provides an extremely flexible system for naming variables. Variable names are case-sensitive, and have no semantic meaning (that is, the language will not treat variables differently based on their names).julia> x = 1.0\n1.0\n\njulia> y = -3\n-3\n\njulia> Z = \"My string\"\n\"My string\"\n\njulia> customary_phrase = \"Hello world!\"\n\"Hello world!\"\n\njulia> UniversalDeclarationOfHumanRightsStart = \"人人生而自由，在尊严和权利上一律平等。\"\n\"人人生而自由，在尊严和权利上一律平等。\"Unicode names (in UTF-8 encoding) are allowed:julia> δ = 0.00001\n1.0e-5\n\njulia> 안녕하세요 = \"Hello\"\n\"Hello\"In the Julia REPL and several other Julia editing environments, you can type many Unicode math symbols by typing the backslashed LaTeX symbol name followed by tab. For example, the variable name δ can be entered by typing \\delta-tab, or even α̂₂ by \\alpha-tab-\\hat- tab-\\_2-tab. (If you find a symbol somewhere, e.g. in someone else's code, that you don't know how to type, the REPL help will tell you: just type ? and then paste the symbol.)Julia will even let you redefine built-in constants and functions if needed (although this is not recommended to avoid potential confusions):julia> pi = 3\n3\n\njulia> pi\n3\n\njulia> sqrt = 4\n4However, if you try to redefine a built-in constant or function already in use, Julia will give you an error:julia> pi\nπ = 3.1415926535897...\n\njulia> pi = 3\nERROR: cannot assign variable Base.pi from module Main\n\njulia> sqrt(100)\n10.0\n\njulia> sqrt = 4\nERROR: cannot assign variable Base.sqrt from module Main"
+    "text": "A variable, in Julia, is a name associated (or bound) to a value. It's useful when you want to store a value (that you obtained after some math, for example) for later use. For example:# Assign the value 10 to the variable x\njulia> x = 10\n10\n\n# Doing math with x's value\njulia> x + 1\n11\n\n# Reassign x's value\njulia> x = 1 + 1\n2\n\n# You can assign values of other types, like strings of text\njulia> x = \"Hello World!\"\n\"Hello World!\"Julia provides an extremely flexible system for naming variables. Variable names are case-sensitive, and have no semantic meaning (that is, the language will not treat variables differently based on their names).julia> x = 1.0\n1.0\n\njulia> y = -3\n-3\n\njulia> Z = \"My string\"\n\"My string\"\n\njulia> customary_phrase = \"Hello world!\"\n\"Hello world!\"\n\njulia> UniversalDeclarationOfHumanRightsStart = \"人人生而自由，在尊严和权利上一律平等。\"\n\"人人生而自由，在尊严和权利上一律平等。\"Unicode names (in UTF-8 encoding) are allowed:julia> δ = 0.00001\n1.0e-5\n\njulia> 안녕하세요 = \"Hello\"\n\"Hello\"In the Julia REPL and several other Julia editing environments, you can type many Unicode math symbols by typing the backslashed LaTeX symbol name followed by tab. For example, the variable name δ can be entered by typing \\delta-tab, or even α̂₂ by \\alpha-tab-\\hat- tab-\\_2-tab. (If you find a symbol somewhere, e.g. in someone else's code, that you don't know how to type, the REPL help will tell you: just type ? and then paste the symbol.)Julia will even let you redefine built-in constants and functions if needed (although this is not recommended to avoid potential confusions):julia> pi = 3\n3\n\njulia> pi\n3\n\njulia> sqrt = 4\n4However, if you try to redefine a built-in constant or function already in use, Julia will give you an error:julia> pi\nπ = 3.1415926535897...\n\njulia> pi = 3\nERROR: cannot assign variable MathConstants.pi from module Main\n\njulia> sqrt(100)\n10.0\n\njulia> sqrt = 4\nERROR: cannot assign variable Base.sqrt from module Main"
 },
 
 {
@@ -8101,7 +8101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.exp",
     "category": "Function",
-    "text": "exp(x)\n\nCompute the natural base exponential of x, in other words e^x.\n\njulia> exp(1.0)\n2.718281828459045\n\n\n\nexp(A::AbstractMatrix)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExamples\n\njulia> A = eye(2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> exp(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\n"
+    "text": "exp(A::AbstractMatrix)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExamples\n\njulia> A = eye(2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> exp(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\nexp(x)\n\nCompute the natural base exponential of x, in other words e^x.\n\njulia> exp(1.0)\n2.718281828459045\n\n\n\n"
 },
 
 {
@@ -8501,7 +8501,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -9257,14 +9257,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/numbers/#Base.pi",
-    "page": "Numbers",
-    "title": "Base.pi",
-    "category": "Constant",
-    "text": "pi\nπ\n\nThe constant pi.\n\njulia> pi\nπ = 3.1415926535897...\n\n\n\n"
-},
-
-{
     "location": "stdlib/numbers/#Base.im",
     "page": "Numbers",
     "title": "Base.im",
@@ -9273,35 +9265,43 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/numbers/#Base.eu",
+    "location": "stdlib/numbers/#Base.MathConstants.pi",
     "page": "Numbers",
-    "title": "Base.eu",
+    "title": "Base.MathConstants.pi",
     "category": "Constant",
-    "text": "e\neu\n\nThe constant e.\n\njulia> e\ne = 2.7182818284590...\n\n\n\n"
+    "text": "π\npi\n\nThe constant pi.\n\njulia> pi\nπ = 3.1415926535897...\n\n\n\n"
 },
 
 {
-    "location": "stdlib/numbers/#Base.catalan",
+    "location": "stdlib/numbers/#Base.MathConstants.ℯ",
     "page": "Numbers",
-    "title": "Base.catalan",
+    "title": "Base.MathConstants.ℯ",
     "category": "Constant",
-    "text": "catalan\n\nCatalan's constant.\n\njulia> catalan\ncatalan = 0.9159655941772...\n\n\n\n"
+    "text": "ℯ\ne\n\nThe constant ℯ.\n\njulia> ℯ\nℯ = 2.7182818284590...\n\n\n\n"
 },
 
 {
-    "location": "stdlib/numbers/#Base.eulergamma",
+    "location": "stdlib/numbers/#Base.MathConstants.catalan",
     "page": "Numbers",
-    "title": "Base.eulergamma",
+    "title": "Base.MathConstants.catalan",
     "category": "Constant",
-    "text": "γ\neulergamma\n\nEuler's constant.\n\njulia> eulergamma\nγ = 0.5772156649015...\n\n\n\n"
+    "text": "catalan\n\nCatalan's constant.\n\njulia> MathConstants.catalan\ncatalan = 0.9159655941772...\n\n\n\n"
 },
 
 {
-    "location": "stdlib/numbers/#Base.golden",
+    "location": "stdlib/numbers/#Base.MathConstants.eulergamma",
     "page": "Numbers",
-    "title": "Base.golden",
+    "title": "Base.MathConstants.eulergamma",
     "category": "Constant",
-    "text": "φ\ngolden\n\nThe golden ratio.\n\njulia> golden\nφ = 1.6180339887498...\n\n\n\n"
+    "text": "γ\neulergamma\n\nEuler's constant.\n\njulia> MathConstants.eulergamma\nγ = 0.5772156649015...\n\n\n\n"
+},
+
+{
+    "location": "stdlib/numbers/#Base.MathConstants.golden",
+    "page": "Numbers",
+    "title": "Base.MathConstants.golden",
+    "category": "Constant",
+    "text": "φ\ngolden\n\nThe golden ratio.\n\njulia> MathConstants.golden\nφ = 1.6180339887498...\n\n\n\n"
 },
 
 {
@@ -9509,7 +9509,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "General Number Functions and Constants",
     "category": "section",
-    "text": "Base.one\nBase.oneunit\nBase.zero\nBase.pi\nBase.im\nBase.eu\nBase.catalan\nBase.eulergamma\nBase.golden\nBase.Inf\nBase.Inf32\nBase.Inf16\nBase.NaN\nBase.NaN32\nBase.NaN16\nBase.issubnormal\nBase.isfinite\nBase.isinf\nBase.isnan\nBase.iszero\nBase.isone\nBase.nextfloat\nBase.prevfloat\nBase.isinteger\nBase.isreal\nCore.Float32(::Any)\nCore.Float64(::Any)\nBase.GMP.BigInt(::Any)\nBase.MPFR.BigFloat(::Any)\nBase.Rounding.rounding\nBase.Rounding.setrounding(::Type, ::Any)\nBase.Rounding.setrounding(::Function, ::Type, ::RoundingMode)\nBase.Rounding.get_zero_subnormals\nBase.Rounding.set_zero_subnormals"
+    "text": "Base.one\nBase.oneunit\nBase.zero\nBase.im\nBase.MathConstants.pi\nBase.MathConstants.ℯ\nBase.MathConstants.catalan\nBase.MathConstants.eulergamma\nBase.MathConstants.golden\nBase.Inf\nBase.Inf32\nBase.Inf16\nBase.NaN\nBase.NaN32\nBase.NaN16\nBase.issubnormal\nBase.isfinite\nBase.isinf\nBase.isnan\nBase.iszero\nBase.isone\nBase.nextfloat\nBase.prevfloat\nBase.isinteger\nBase.isreal\nCore.Float32(::Any)\nCore.Float64(::Any)\nBase.GMP.BigInt(::Any)\nBase.MPFR.BigFloat(::Any)\nBase.Rounding.rounding\nBase.Rounding.setrounding(::Type, ::Any)\nBase.Rounding.setrounding(::Function, ::Type, ::RoundingMode)\nBase.Rounding.get_zero_subnormals\nBase.Rounding.set_zero_subnormals"
 },
 
 {
