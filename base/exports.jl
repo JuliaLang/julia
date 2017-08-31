@@ -1074,7 +1074,6 @@ export
     unmark,
     watch_file,
     write,
-    writecsv,
     writedlm,
     TCPSocket,
     UDPSocket,

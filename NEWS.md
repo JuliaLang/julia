@@ -266,6 +266,9 @@ Deprecated or removed
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
 
+  * `writecsv(io, a; opts...)` has been deprecated in favor of
+    `writedlm(io, a, ','; opts...)` ([#23529]).
+
   * The method `srand(rng, filename, n=4)` has been deprecated ([#21359]).
 
   * The `cholfact`/`cholfact!` methods that accepted an `uplo` symbol have been deprecated
