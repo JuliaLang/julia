@@ -3,7 +3,7 @@ module Lexers
 include("utilities.jl")
 
 import ..Tokens
-import ..Tokens: Token, Kind, TokenError, UNICODE_OPS, EMPTY_TOKEN, isliteral
+import ..Tokens: AbstractToken, Token, RawToken, Kind, TokenError, UNICODE_OPS, EMPTY_TOKEN, isliteral
 
 import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BITSTYPE, BREAK, CATCH, CONST, CONTINUE,
                  DO, ELSE, ELSEIF, END, EXPORT, FALSE, FINALLY, FOR, FUNCTION, GLOBAL, LET, LOCAL, IF, IMMUTABLE,
@@ -18,14 +18,12 @@ isbinary(c::Char) = c == '0' || c == '1'
 isoctal(c::Char) =  '0' ≤ c ≤ '7'
 iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
 
-mutable struct Lexer{IO_t <: IO}
+mutable struct Lexer{IO_t <: IO, T <: AbstractToken}
     io::IO_t
     io_startpos::Int
 
     token_start_row::Int
     token_start_col::Int
-
-    prevpos::Int
     token_startpos::Int
 
     current_row::Int
@@ -34,23 +32,29 @@ mutable struct Lexer{IO_t <: IO}
 
     last_token::Tokens.Kind
     charstore::IOBuffer
+    current_char::Char
+    doread::Bool
 end
 
-Lexer(io) = Lexer(io, position(io), 1, 1, -1, position(io), 1, 1, position(io), Tokens.ERROR, IOBuffer())
-Lexer(str::AbstractString) = Lexer(IOBuffer(str))
+Lexer(io::IO_t, T::Type{TT} = Token) where {IO_t,TT <: AbstractToken} = Lexer{IO_t,T}(io, position(io), 1, 1, position(io), 1, 1, position(io), Tokens.ERROR, IOBuffer(), ' ', false)
+Lexer(str::AbstractString, T::Type{TT} = Token) where TT <: AbstractToken = Lexer(IOBuffer(str), T)
 
 """
-    tokenize(x)
+    tokenize(x, T = Token)
 
 Returns an `Iterable` containing the tokenized input. Can be reverted by e.g.
-`join(untokenize.(tokenize(x)))`.
+`join(untokenize.(tokenize(x)))`. Setting `T` chooses the type of token 
+produced by the lexer (`Token` or `RawToken`).
 """
-tokenize(x) = Lexer(x)
+tokenize(x, ::Type{Token}) = Lexer(x, Token)
+tokenize(x, ::Type{RawToken}) = Lexer(x, RawToken)
+tokenize(x) = Lexer(x, Token)
 
 # Iterator interface
-Base.iteratorsize(::Type{Lexer{IO_t}}) where {IO_t} = Base.SizeUnknown()
-Base.iteratoreltype(::Type{Lexer{IO_t}}) where {IO_t} = Base.HasEltype()
-Base.eltype(::Type{Lexer{IO_t}}) where {IO_t} = Token
+Base.iteratorsize(::Type{Lexer{IO_t,T}}) where {IO_t,T} = Base.SizeUnknown()
+Base.iteratoreltype(::Type{Lexer{IO_t,T}}) where {IO_t,T} = Base.HasEltype()
+Base.eltype(::Type{Lexer{IO_t,T}}) where {IO_t,T} = T
+
 
 function Base.start(l::Lexer)
     seekstart(l)
@@ -89,20 +93,6 @@ Set a new starting position.
 """
 startpos!(l::Lexer, i::Integer) = l.token_startpos = i
 
-"""
-    prevpos(l::Lexer)
-
-Return the lexer's previous position.
-"""
-prevpos(l::Lexer) = l.prevpos
-
-"""
-    prevpos!(l::Lexer, i::Integer)
-
-Set the lexer's previous position.
-"""
-prevpos!(l::Lexer, i::Integer) = l.prevpos = i
-
 Base.seekstart(l::Lexer) = seek(l.io, l.io_startpos)
 
 """
@@ -118,6 +108,13 @@ seek2startpos!(l::Lexer) = seek(l, startpos(l))
 Returns the next character without changing the lexer's state.
 """
 peekchar(l::Lexer) = peekchar(l.io)
+
+"""
+dpeekchar(l::Lexer)
+
+Returns the next two characters without changing the lexer's state.
+"""
+dpeekchar(l::Lexer) = dpeekchar(l.io)
 
 """
     position(l::Lexer)
@@ -148,16 +145,6 @@ function start_token!(l::Lexer)
 end
 
 """
-    prevchar(l::Lexer)
-
-Returns the previous character. Does not change the lexer's state.
-"""
-function prevchar(l::Lexer)
-    backup!(l)
-    return readchar(l)
-end
-
-"""
     readchar(l::Lexer)
 
 Returns the next character and increments the current position.
@@ -165,21 +152,33 @@ Returns the next character and increments the current position.
 function readchar end
 
 function readchar(l::Lexer{I}) where {I <: IO}
-    prevpos!(l, position(l))
-    c = readchar(l.io)
-    return c
+    l.current_char = readchar(l.io)
+    if l.doread
+        write(l.charstore, l.current_char)
+    end
+    if l.current_char == '\n' 
+        l.current_row += 1
+        l.current_col = 1
+    elseif !eof(l.current_char)
+        l.current_col += 1
+    end
+    return l.current_char
 end
 
-"""
-    backup!(l::Lexer)
+readon(l::Lexer{I,RawToken}) where {I <: IO} = l.current_char
+function readon(l::Lexer{I,Token}) where {I <: IO}
+    if l.charstore.size != 0
+        take!(l.charstore)
+    end
+    write(l.charstore, l.current_char)
+    l.doread = true
+    return l.current_char
+end
 
-Decrements the current position and sets the previous position to `-1`, unless
-the previous position already is `-1`.
-"""
-function backup!(l::Lexer)
-    prevpos(l) == -1 && error("prevpos(l) == -1\n Cannot backup! multiple times.")
-    seek(l, prevpos(l))
-    prevpos!(l, -1)
+readoff(l::Lexer{I,RawToken}) where {I <: IO} = l.current_char
+function readoff(l::Lexer{I,Token})  where {I <: IO}
+    l.doread = false
+    return l.current_char
 end
 
 """
@@ -216,19 +215,33 @@ function accept_batch(l::Lexer, f)
 end
 
 """
-    emit(l::Lexer, kind::Kind,
-         str::String=extract_tokenstring(l), err::TokenError=Tokens.NO_ERR)
+    emit(l::Lexer, kind::Kind, err::TokenError=Tokens.NO_ERR)
 
 Returns a `Token` of kind `kind` with contents `str` and starts a new `Token`.
 """
-function emit(l::Lexer, kind::Kind,
-              str::String = extract_tokenstring(l), err::TokenError = Tokens.NO_ERR)
+function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR) where IO_t
+    if (kind == Tokens.IDENTIFIER || isliteral(kind) || kind == Tokens.COMMENT || kind == Tokens.WHITESPACE)
+        str = String(take!(l.charstore))
+    elseif kind == Tokens.ERROR
+        str = String(l.io.data[(l.token_startpos + 1):position(l.io)])
+    else
+        str = ""
+    end
     tok = Token(kind, (l.token_start_row, l.token_start_col),
                 (l.current_row, l.current_col - 1),
                 startpos(l), position(l) - 1,
                 str, err)
     l.last_token = kind
-    start_token!(l)
+    readoff(l)
+    return tok
+end
+
+function emit(l::Lexer{IO_t,RawToken}, kind::Kind, err::TokenError = Tokens.NO_ERR) where IO_t
+    tok = RawToken(kind, (l.token_start_row, l.token_start_col),
+        (l.current_row, l.current_col - 1),
+        startpos(l), position(l) - 1)
+    l.last_token = kind
+    readoff(l)
     return tok
 end
 
@@ -238,31 +251,9 @@ end
 Returns an `ERROR` token with error `err` and starts a new `Token`.
 """
 function emit_error(l::Lexer, err::TokenError = Tokens.UNKNOWN)
-    return emit(l, Tokens.ERROR, extract_tokenstring(l), err)
+    return emit(l, Tokens.ERROR, err)
 end
 
-"""
-    extract_tokenstring(l::Lexer)
-
-Returns all characters since the start of the current `Token` as a `String`.
-"""
-function extract_tokenstring(l::Lexer)
-    charstore = l.charstore
-    curr_pos = position(l)
-    seek2startpos!(l)
-
-    while position(l) < curr_pos
-        c = readchar(l)
-        l.current_col += 1
-        if c == '\n'
-            l.current_row += 1
-            l.current_col = 1
-         end
-        write(charstore, c)
-    end
-    str = String(take!(charstore))
-    return str
-end
 
 """
     next_token(l::Lexer)
@@ -270,47 +261,92 @@ end
 Returns the next `Token`.
 """
 function next_token(l::Lexer)
+    start_token!(l)
     c = readchar(l)
-
-    if eof(c); return emit(l, Tokens.ENDMARKER)
-    elseif iswhitespace(c); return lex_whitespace(l)
-    elseif c == '['; return emit(l, Tokens.LSQUARE)
-    elseif c == ']'; return emit(l, Tokens.RSQUARE)
-    elseif c == '{'; return emit(l, Tokens.LBRACE)
-    elseif c == ';'; return emit(l, Tokens.SEMICOLON)
-    elseif c == '}'; return emit(l, Tokens.RBRACE)
-    elseif c == '('; return emit(l, Tokens.LPAREN)
-    elseif c == ')'; return emit(l, Tokens.RPAREN)
-    elseif c == ','; return emit(l, Tokens.COMMA)
-    elseif c == '*'; return lex_star(l);
-    elseif c == '^'; return lex_circumflex(l);
-    elseif c == '@'; return emit(l, Tokens.AT_SIGN)
-    elseif c == '?'; return emit(l, Tokens.CONDITIONAL)
-    elseif c == '$'; return lex_dollar(l);
-    elseif c == '⊻'; return lex_xor(l);
-    elseif c == '~'; return emit(l, Tokens.APPROX)
-    elseif c == '#'; return lex_comment(l)
-    elseif c == '='; return lex_equal(l)
-    elseif c == '!'; return lex_exclaim(l)
-    elseif c == '>'; return lex_greater(l)
-    elseif c == '<'; return lex_less(l)
-    elseif c == ':'; return lex_colon(l)
-    elseif c == '|'; return lex_bar(l)
-    elseif c == '&'; return lex_amper(l)
-    elseif c == '\''; return lex_prime(l)
-    elseif c == '÷'; return lex_division(l)
-    elseif c == '"'; return lex_quote(l);
-    elseif c == '%'; return lex_percent(l);
-    elseif c == '/'; return lex_forwardslash(l);
-    elseif c == '\\'; return lex_backslash(l);
-    elseif c == '.'; return lex_dot(l);
-    elseif c == '+'; return lex_plus(l);
-    elseif c == '-'; return lex_minus(l);
-    elseif c == '`'; return lex_cmd(l);
-    elseif is_identifier_start_char(c); return lex_identifier(l, c)
-    elseif isdigit(c); return lex_digit(l)
-    elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR; return emit(l, k)
-    else emit_error(l)
+    if eof(c); 
+        return emit(l, Tokens.ENDMARKER)
+    elseif iswhitespace(c)
+        readon(l)
+        return lex_whitespace(l)
+    elseif c == '['
+        return emit(l, Tokens.LSQUARE)
+    elseif c == ']'
+        return emit(l, Tokens.RSQUARE)
+    elseif c == '{'
+        return emit(l, Tokens.LBRACE)
+    elseif c == ';'
+        return emit(l, Tokens.SEMICOLON)
+    elseif c == '}'
+        return emit(l, Tokens.RBRACE)
+    elseif c == '('
+        return emit(l, Tokens.LPAREN)
+    elseif c == ')'
+        return emit(l, Tokens.RPAREN)
+    elseif c == ','
+        return emit(l, Tokens.COMMA)
+    elseif c == '*'
+        return lex_star(l);
+    elseif c == '^'
+        return lex_circumflex(l);
+    elseif c == '@'
+        return emit(l, Tokens.AT_SIGN)
+    elseif c == '?'
+        return emit(l, Tokens.CONDITIONAL)
+    elseif c == '$'
+        return lex_dollar(l);
+    elseif c == '⊻'
+        return lex_xor(l);
+    elseif c == '~'
+        return emit(l, Tokens.APPROX)
+    elseif c == '#'
+        readon(l)
+        return lex_comment(l)
+    elseif c == '='
+        return lex_equal(l)
+    elseif c == '!'
+        return lex_exclaim(l)
+    elseif c == '>'
+        return lex_greater(l)
+    elseif c == '<'
+        return lex_less(l)
+    elseif c == ':'
+        return lex_colon(l)
+    elseif c == '|'
+        return lex_bar(l)
+    elseif c == '&'
+        return lex_amper(l)
+    elseif c == '\''
+         return lex_prime(l)
+    elseif c == '÷'
+         return lex_division(l)
+    elseif c == '"'
+        readon(l)
+        return lex_quote(l);
+    elseif c == '%'
+         return lex_percent(l);
+    elseif c == '/'
+         return lex_forwardslash(l);
+    elseif c == '\\'
+         return lex_backslash(l);
+    elseif c == '.'
+         return lex_dot(l);
+    elseif c == '+'
+         return lex_plus(l);
+    elseif c == '-'
+         return lex_minus(l);
+    elseif c == '`'
+        readon(l)
+        return lex_cmd(l);
+    elseif is_identifier_start_char(c)
+        readon(l)
+        return lex_identifier(l, c)
+    elseif isdigit(c)
+        readon(l)
+        return lex_digit(l, Tokens.INTEGER)
+    elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR
+         return emit(l, k)
+    else 
+        emit_error(l)
     end
 end
 
@@ -324,11 +360,11 @@ end
 function lex_comment(l::Lexer, doemit=true)
     if peekchar(l) != '='
         while true
-            c = readchar(l)
-            if c == '\n' || eof(c)
-                backup!(l)
+            pc = peekchar(l)
+            if pc == '\n' || eof(pc)
                 return doemit ? emit(l, Tokens.COMMENT) : EMPTY_TOKEN
             end
+            readchar(l)
         end
     else
         c = readchar(l) # consume the '='
@@ -513,116 +549,100 @@ function lex_xor(l::Lexer)
     return emit(l, Tokens.XOR)
 end
 
-function accept_number(l::Lexer, f::F) where F
-    !f(peekchar(l)) && return false
+function accept_number(l::Lexer, f::F) where {F}
     while true
-        if !accept(l, f)
-            if accept(l, '_')
-                if !f(peekchar(l))
-                    backup!(l)
-                    return true
-                end
-            else
-                return true
-            end
+        pc, ppc = dpeekchar(l)
+        if pc == '_' && !f(ppc)
+            return
+        elseif f(pc) || pc == '_'
+            readchar(l)
+        else
+            return
         end
     end
 end
 
 # A digit has been consumed
-function lex_digit(l::Lexer)
-    backup!(l)
-    longest, kind = position(l), Tokens.ERROR
-
-    # accept_batch(l, isdigit)
+function lex_digit(l::Lexer, kind)
     accept_number(l, isdigit)
-
-    if accept(l, '.')
-        if peekchar(l) == '.' # 43.. -> [43, ..]
-            backup!(l)
-            return emit(l, Tokens.INTEGER)
-        elseif !(isdigit(peekchar(l)) ||
-            iswhitespace(peekchar(l)) ||
-            is_identifier_start_char(peekchar(l))
-            || peekchar(l) == '('
-            || peekchar(l) == ')'
-            || peekchar(l) == '['
-            || peekchar(l) == ']'
-            || peekchar(l) == '{'
-            || peekchar(l) == '}'
-            || peekchar(l) == ','
-            || peekchar(l) == ';'
-            || peekchar(l) == '@'
-            || peekchar(l) == '`'
-            || peekchar(l) == '"'
-            || peekchar(l) == ':'
-            || peekchar(l) == '?'
-            || eof(l))
-            backup!(l)
-            return emit(l, Tokens.INTEGER)
+    pc,ppc = dpeekchar(l)
+    if pc == '.'
+        if ppc == '.' 
+            return emit(l, kind)
+        elseif (!(isdigit(ppc) ||
+            iswhitespace(ppc) ||
+            is_identifier_start_char(ppc)
+            || ppc == '('
+            || ppc == ')'
+            || ppc == '['
+            || ppc == ']'
+            || ppc == '{'
+            || ppc == '}'
+            || ppc == ','
+            || ppc == ';'
+            || ppc == '@'
+            || ppc == '`'
+            || ppc == '"'
+            || ppc == ':'
+            || ppc == '?'
+            || eof(ppc)))
+            kind = Tokens.INTEGER
+            
+            return emit(l, kind)
         end
+        readchar(l)
+        
+        kind = Tokens.FLOAT
         accept_number(l, isdigit)
-        if accept(l, '.')
-            if peekchar(l) == '.' # 1.23.. -> [1.23, ..]
-                backup!(l)
-                return emit(l, Tokens.FLOAT)
-            elseif !(isdigit(peekchar(l)) || iswhitespace(peekchar(l)) ||
-                        is_identifier_start_char(peekchar(l)) || eof(peekchar(l))) # {1.23a, 1.23␣, 1.23EOF} -> [1.23, ?]
-                backup!(l)
-                return emit(l, Tokens.FLOAT)
-            else # 3213.313.3123 is an error
-                return emit_error(l)
-            end
-        elseif position(l) > longest # 323213.3232 candidate
-            longest, kind = position(l), Tokens.FLOAT
-        end
-        if accept(l, "eEf") # 1313.[0-9]*e
+        pc, ppc = dpeekchar(l)
+        if (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-')
+            kind = Tokens.FLOAT
+            readchar(l)
             accept(l, "+-")
             if accept_batch(l, isdigit)
-                if accept(l, '.' ) # 1.2e2.3 -> [ERROR, 3]
+                if accept(l, '.') # 1.2e2.3 -> [ERROR, 3]
                     return emit_error(l)
-                elseif position(l) > longest
-                    longest, kind = position(l), Tokens.FLOAT
                 end
+            else
+                return emit_error(l)
             end
+        elseif pc == '.' && (is_identifier_start_char(ppc) || eof(ppc))
+            readchar(l)
+            return emit_error(l)
         end
-    elseif accept(l, "eEf")
+        
+    elseif (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-')
+        kind = Tokens.FLOAT
+        readchar(l)
         accept(l, "+-")
         if accept_batch(l, isdigit)
-            if accept(l, '.') # 1e2.3 -> [ERROR, 3]
+            if accept(l, '.') # 1.2e2.3 -> [ERROR, 3]
                 return emit_error(l)
-            elseif position(l) > longest
-                longest, kind = position(l), Tokens.FLOAT
             end
         else
-            backup!(l)
-            return emit(l, Tokens.INTEGER)
+            return emit_error(l)
         end
-    elseif position(l) > longest
-        longest, kind = position(l), Tokens.INTEGER
-    end
-
-    seek2startpos!(l)
-
-    # 0x[0-9A-Fa-f]+
-    if accept(l, '0')
-        if accept(l, 'x')
-            if accept_number(l, ishex) && position(l) > longest
-                longest, kind = position(l), Tokens.INTEGER
+    elseif position(l) - startpos(l) == 1 && l.current_char == '0'
+        kind == Tokens.INTEGER
+        if pc == 'x'
+            readchar(l)
+            accept_number(l, ishex)
+            if accept(l, '.')
+                accept_number(l, ishex)
             end
-        elseif accept(l, 'b')
-            if accept_number(l, isbinary) && position(l) > longest
-                longest, kind = position(l), Tokens.INTEGER
+            if accept(l, "pP")
+                kind = Tokens.FLOAT
+                accept(l, "+-")
+                accept_number(l, isdigit)
             end
-        elseif accept(l, 'o')
-            if accept_number(l, isoctal) && position(l) > longest
-                longest, kind = position(l), Tokens.INTEGER
-            end
+        elseif pc == 'b'
+            readchar(l)
+            accept_number(l, isbinary)
+        elseif pc == 'o'
+            readchar(l)
+            accept_number(l, isoctal)
         end
     end
-
-    seek(l, longest)
-
     return emit(l, kind)
 end
 
@@ -635,6 +655,7 @@ function lex_prime(l)
         l.last_token == Tokens.PRIME || isliteral(l.last_token)
         return emit(l, Tokens.PRIME)
     else
+        readon(l)
         if accept(l, '\'')
             if accept(l, '\'')
                 return emit(l, Tokens.CHAR)
@@ -787,7 +808,8 @@ function lex_dot(l::Lexer)
             return emit(l, Tokens.DDOT)
         end
     elseif Base.isdigit(peekchar(l))
-        return lex_digit(l)
+        readon(l)
+        return lex_digit(l, Tokens.FLOAT)
     else
         return emit(l, Tokens.DOT)
     end
@@ -813,13 +835,14 @@ end
 
 function tryread(l, str, k, c)
     for s in str
-        c = readchar(l)
+        c = peekchar(l)
         if c != s
             if !is_identifier_char(c)
-                backup!(l)
                 return emit(l, IDENTIFIER)
             end
             return readrest(l, c)
+        else
+            readchar(l)
         end
     end
     if is_identifier_char(peekchar(l))
@@ -829,11 +852,9 @@ function tryread(l, str, k, c)
 end
 
 function readrest(l, c)
-    while is_identifier_char(c)
-        if c == '!' && peekchar(l) == '='
-            backup!(l)
-            break
-        elseif !is_identifier_char(peekchar(l))
+    while true
+        pc, ppc = dpeekchar(l)
+        if !is_identifier_char(pc) || (pc == '!' && ppc == '=')
             break
         end
         c = readchar(l)
@@ -845,7 +866,6 @@ end
 
 function _doret(l, c)
     if !is_identifier_char(c)
-        backup!(l)
         return emit(l, IDENTIFIER)
     else
         return readrest(l, c)
@@ -856,29 +876,40 @@ function lex_identifier(l, c)
     if c == 'a'
         return tryread(l, ('b', 's', 't', 'r', 'a', 'c', 't'), ABSTRACT, c)
     elseif c == 'b'
-        c = readchar(l)
+        c = peekchar(l)
         if c == 'a'
+            c = readchar(l)
             return tryread(l, ('r', 'e', 'm', 'o', 'd', 'u', 'l', 'e'), BAREMODULE, c)
         elseif c == 'e'
+            c = readchar(l)
             return tryread(l, ('g', 'i', 'n'), BEGIN, c)
         elseif c == 'i'
+            c = readchar(l)
             return tryread(l, ('t', 's', 't', 'y', 'p', 'e'), BITSTYPE, c)
         elseif c == 'r'
+            c = readchar(l)
             return tryread(l, ('e', 'a', 'k'), BREAK, c)
         else
             return _doret(l, c)
         end
     elseif c == 'c'
-        c = readchar(l)
+        c = peekchar(l)
         if c == 'a'
+            c = readchar(l)
             return tryread(l, ('t', 'c', 'h'), CATCH, c)
         elseif c == 'o'
-            c = readchar(l)
+            readchar(l)
+            c = peekchar(l)
             if c == 'n'
-                c = readchar(l)
+                readchar(l)
+                c = peekchar(l)
                 if c == 's'
+                    readchar(l)
+                    c = peekchar(l)
                     return tryread(l, ('t',), CONST, c)
                 elseif c == 't'
+                    readchar(l)
+                    c = peekchar(l)
                     return tryread(l, ('i', 'n', 'u', 'e'), CONTINUE, c)
                 else
                     return _doret(l, c)
@@ -892,17 +923,20 @@ function lex_identifier(l, c)
     elseif c == 'd'
         return tryread(l, ('o'), DO, c)
     elseif c == 'e'
-        c = readchar(l)
+        c = peekchar(l)
         if c == 'l'
-            c = readchar(l)
+            readchar(l)
+            c = peekchar(l)
             if c == 's'
-                c = readchar(l)
+                readchar(l)
+                c = peekchar(l)
                 if c == 'e'
-                    c = readchar(l)
+                    readchar(l)
+                    c = peekchar(l)
                     if !is_identifier_char(c)
-                        backup!(l)
                         return emit(l, ELSE)
                     elseif c == 'i'
+                        c = readchar(l)
                         return tryread(l, ('f'), ELSEIF ,c)
                     else
                         return _doret(l, c)
@@ -914,21 +948,27 @@ function lex_identifier(l, c)
                 return _doret(l, c)
             end
         elseif c == 'n'
+            c = readchar(l)
             return tryread(l, ('d'), END, c)
         elseif c == 'x'
+            c = readchar(l)
             return tryread(l, ('p', 'o', 'r', 't'), EXPORT, c)
         else
             return _doret(l, c)
         end
     elseif c == 'f'
-        c = readchar(l)
+        c = peekchar(l)
         if c == 'a'
+            c = readchar(l)
             return tryread(l, ('l', 's', 'e'), FALSE, c)
         elseif c == 'i'
+            c = readchar(l)
             return tryread(l, ('n', 'a', 'l', 'l', 'y'), FINALLY, c)
         elseif c == 'o'
+            c = readchar(l)
             return tryread(l, ('r'), FOR, c)
         elseif c == 'u'
+            c = readchar(l)
             return tryread(l, ('n', 'c', 't', 'i', 'o', 'n'), FUNCTION, c)
         else
             return _doret(l, c)
@@ -936,31 +976,37 @@ function lex_identifier(l, c)
     elseif c == 'g'
         return tryread(l, ('l', 'o', 'b', 'a', 'l'), GLOBAL, c)
     elseif c == 'i'
-        c = readchar(l)
+        c = peekchar(l)
         if c == 'f'
-            c = readchar(l)
+            readchar(l)
+            c = peekchar(l)
             if !is_identifier_char(c)
-                backup!(l)
                 return emit(l, IF)
             else
                 return readrest(l, c)
             end
         elseif c == 'm'
-            c = readchar(l)
+            readchar(l)
+            c = peekchar(l)
             if c == 'm'
+                readchar(l)
                 return tryread(l, ('u', 't', 'a', 'b', 'l', 'e'), IMMUTABLE, c)
             elseif c == 'p'
-                c = readchar(l)
+                readchar(l)
+                c = peekchar(l)
                 if c == 'o'
-                    c = readchar(l)
+                    readchar(l)
+                    c = peekchar(l)
                     if c == 'r'
-                        c = readchar(l)
+                        readchar(l)
+                        c = peekchar(l)
                         if c == 't'
-                            c = readchar(l)
+                            readchar(l)
+                            c = peekchar(l)
                             if !is_identifier_char(c)
-                                backup!(l)
                                 return emit(l, IMPORT)
                             elseif c == 'a'
+                                c = readchar(l)
                                 return tryread(l, ('l','l'), IMPORTALL, c)
                             else
                                 return _doret(l, c)
@@ -978,34 +1024,40 @@ function lex_identifier(l, c)
                 return _doret(l, c)
             end
         elseif c == 'n'
-            c = readchar(l)
+            readchar(l)
+            c = peekchar(l)
             if !is_identifier_char(c)
-                backup!(l)
                 return emit(l, IN)
             else
                 return readrest(l, c)
             end
         elseif (@static VERSION >= v"0.6.0-dev.1471" ? true : false) && c == 's'
+            c = readchar(l)
             return tryread(l, ('a'), ISA, c)
         else
             return _doret(l, c)
         end
     elseif c == 'l'
-        c = readchar(l)
+        c = peekchar(l)
         if c == 'e'
+            readchar(l)
             return tryread(l, ('t'), LET, c)
         elseif c == 'o'
+            readchar(l)
             return tryread(l, ('c', 'a', 'l'), LOCAL, c)
         else
             return _doret(l, c)
         end
     elseif c == 'm'
-        c = readchar(l)
+        c = peekchar(l)
         if c == 'a'
+            c = readchar(l)
             return tryread(l, ('c', 'r', 'o'), MACRO, c)
         elseif c == 'o'
+            c = readchar(l)
             return tryread(l, ('d', 'u', 'l', 'e'), MODULE, c)
         elseif c == 'u'
+            c = readchar(l)
             return tryread(l, ('t', 'a', 'b', 'l', 'e'), MUTABLE, c)
         else
             return _doret(l, c)
@@ -1019,34 +1071,41 @@ function lex_identifier(l, c)
     elseif c == 's'
         return tryread(l, ('t', 'r', 'u', 'c', 't'), STRUCT, c)
     elseif c == 't'
-        c = readchar(l)
+        c = peekchar(l)
         if c == 'r'
-            c = readchar(l)
+            readchar(l)
+            c = peekchar(l)
             if c == 'u'
+                c = readchar(l)
                 return tryread(l, ('e'), TRUE, c)
             elseif c == 'y'
-                c = readchar(l)
+                readchar(l)
+                c = peekchar(l)
                 if !is_identifier_char(c)
-                    backup!(l)
                     return emit(l, TRY)
                 else
+                    c = readchar(l)
                     return _doret(l, c)
                 end
             else
                 return _doret(l, c)
             end
         elseif c == 'y'
-            c = readchar(l)
+            readchar(l)
+            c = peekchar(l)
             if c == 'p'
-                c = readchar(l)
+                readchar(l)
+                c = peekchar(l)
                 if c == 'e'
-                    c = readchar(l)
+                    readchar(l)
+                    c = peekchar(l)
                     if !is_identifier_char(c)
-                        backup!(l)
                         return emit(l, TYPE)
                     elseif c == 'a'
+                        c = readchar(l)
                         return tryread(l, ('l', 'i', 'a', 's'), TYPEALIAS, c)
                     else
+                        c = readchar(l)
                         return _doret(l, c)
                     end
                 else
@@ -1061,12 +1120,15 @@ function lex_identifier(l, c)
     elseif c == 'u'
         return tryread(l, ('s', 'i', 'n', 'g'), USING, c)
     elseif c == 'w'
-        c = readchar(l)
+        c = peekchar(l)
         if c == 'h'
-            c = readchar(l)
+            readchar(l)
+            c = peekchar(l)
             if c == 'e'
+                c = readchar(l)
                 return tryread(l, ('r', 'e'), WHERE, c)
             elseif c == 'i'
+                c = readchar(l)
                 return tryread(l, ('l', 'e'), WHILE, c)
             else
                 return _doret(l, c)

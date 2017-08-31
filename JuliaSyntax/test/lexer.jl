@@ -10,17 +10,13 @@ tok(str, i = 1) = collect(tokenize(str))[i]
     for s in ["a", IOBuffer("a")]
         l = tokenize(s)
         @test Lexers.readchar(l) == 'a'
-        @test Lexers.prevpos(l) == 0
 
         @test l.current_pos == 0
         l_old = l
-        @test Lexers.prevchar(l) == 'a'
         @test l == l_old
         @test Lexers.eof(l)
         @test Lexers.readchar(l) == Lexers.EOF_CHAR
 
-        Lexers.backup!(l)
-        @test Lexers.prevpos(l) == -1
         @test l.current_pos == 0
     end
 end # testset
@@ -128,6 +124,9 @@ end # testset
     for (i, n) in enumerate(tokenize(str))
         @test Tokens.kind(n) == kinds[i]
     end
+    for (i, n) in enumerate(tokenize(str, Tokens.RawToken))
+        @test Tokens.kind(n) == kinds[i]
+    end
 
     @testset "roundtrippability" begin
         @test join(untokenize.(collect(tokenize(str)))) == str
@@ -136,7 +135,7 @@ end # testset
         @test_throws ArgumentError untokenize("blabla")
     end
 
-    @test all((t.endbyte - t.startbyte + 1)==sizeof(t.val) for t in tokenize(str))
+    @test all((t.endbyte - t.startbyte + 1)==sizeof(untokenize(t)) for t in tokenize(str))
 end # testset
 
 @testset "issue 5, '..'" begin
@@ -144,7 +143,7 @@ end # testset
 end
 
 @testset "issue 17, >>" begin
-    @test tok(">> ").val==">>"
+    @test untokenize(tok(">> "))==">>"
 end
 
 
@@ -221,7 +220,7 @@ end
     ImageMagick.save(fn, reinterpret(ARGB32, [0xf0884422]''))
     D = ImageMagick.load(fn)
     """))
-    @test tokens[16].val==tokens[17].val=="'"
+    @test string(untokenize(tokens[16]))==string(untokenize(tokens[17]))=="'"
     @test tok("'a'").val == "'a'"
     @test tok("'a'").kind == Tokens.CHAR
     @test tok("''").val == "''"
@@ -274,7 +273,7 @@ end
                     "typealias",
                     "using",
                     "while"]
-
+                    
         @test T.kind(tok(kw)) == T.KEYWORD
     end
 end
@@ -324,6 +323,8 @@ end
 @testset "inferred" begin
     l = tokenize("abc")
     @test Base.Test.@inferred Tokenize.Lexers.next_token(l).kind == T.IDENTIFIER
+    l = tokenize("abc", Tokens.RawToken)
+    @test Base.Test.@inferred typeof(Tokenize.Lexers.next_token(l)) == Tokens.RawToken
 end
 
 @testset "modifying function names (!) followed by operator" begin
@@ -407,6 +408,14 @@ end
     @test tok("2048f0").kind == Tokens.FLOAT
     @test tok("1.:0").kind == Tokens.FLOAT
     @test tok("1.?").kind == Tokens.FLOAT
+    @test tok("0x00p2").kind == Tokens.FLOAT
+    @test tok("0x00P2").kind == Tokens.FLOAT
+    @test tok("0x0.00p23").kind == Tokens.FLOAT
+    @test tok("0x0.0ap23").kind == Tokens.FLOAT
+    @test tok("0x0.0_0p2").kind == Tokens.FLOAT
+    @test tok("0x0_0_0.0_0p2").kind == Tokens.FLOAT
+    @test tok("0x0p+2").kind == Tokens.FLOAT
+    @test tok("0x0p-2").kind == Tokens.FLOAT
 end
 
 @testset "1e1" begin
