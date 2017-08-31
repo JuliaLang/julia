@@ -378,6 +378,15 @@ Deprecated or removed
 
   * `diagm(A::BitMatrix)` has been deprecated, use `diagm(vec(A))` instead ([#23373]).
 
+  * `ℯ` (written as `\mscre<TAB>` or `\euler<TAB>`) is the new default for Euler's
+    number ([#23427]).
+
+  * The mathematical constants `π`, `pi`, `ℯ`, `e`, `γ`, `eulergamma`, `catalan`, `φ` and
+    `golden` have been have been moved from `Base` to a new module; `Base.MathConstants`.
+    Only `π`, `pi` and `ℯ` are now exported by default from `Base` ([#23427]).
+
+  * `eu` (previously an alias for `ℯ`) has been deprecated in favor of `ℯ` (or `MathConstants.e`) ([#23427]).
+
   * `GMP.gmp_version()`, `GMP.GMP_VERSION`, `GMP.gmp_bits_per_limb()`, and `GMP.GMP_BITS_PER_LIBM`
     have been renamed to `GMP.version()`, `GMP.VERSION`, `GMP.bits_per_libm()`, and `GMP.BITS_PER_LIBM`,
     respectively. Similarly, `MPFR.get_version()`, has been renamed to `MPFR.version()` ([#23323]). Also,

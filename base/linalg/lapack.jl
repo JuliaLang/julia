@@ -5299,7 +5299,7 @@ for (bdsdc, elty) in
                 u, ldu, vt, ldvt,
                 q, iq, work, iwork, info)
             chklapackerror(info[])
-            d, e, u, vt, q, iq
+            d, e_, u, vt, q, iq
         end
     end
 end

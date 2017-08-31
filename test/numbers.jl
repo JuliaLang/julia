@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base.MathConstants
 const ≣ = isequal # convenient for comparing NaNs
 
 # basic booleans
@@ -2491,7 +2492,7 @@ z2 = read(zbuf, Complex128)
 @test bswap(z2) ===  3.5 - 4.5im
 
 #isreal(x::Real) = true
-for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
+for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
     @test isreal(x) == true
 end
 
@@ -2526,7 +2527,7 @@ let number_types = Set()
 end
 
 #getindex(x::Number) = x
-for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
+for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
     @test getindex(x) == x
     @test getindex(x, 1, 1) == x
 end
@@ -2537,7 +2538,7 @@ end
 #getindex(x::Array,-1) throws BoundsError
 #getindex(x::Array,0 throws BoundsError
 #getindex(x::Array,length(x::Array)+1) throws BoundsError
-for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
+for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
     @test_throws BoundsError getindex(x,-1)
     @test_throws BoundsError getindex(x,0)
     @test_throws BoundsError getindex(x,2)
@@ -2549,8 +2550,8 @@ end
 
 # copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
 # flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, x)
-for x in [1.23, 7, e, 4//5]
-    for y in [1.23, 7, e, 4//5]
+for x in [1.23, 7, ℯ, 4//5]
+    for y in [1.23, 7, ℯ, 4//5]
         @test copysign(x, y) == x
         @test copysign(x, -y) == -x
         @test copysign(-x, y) == x
@@ -2570,7 +2571,7 @@ end
 #in(x::Number, y::Number) = x == y
 @test in(3,3) == true #Int
 @test in(2.0,2.0) == true #FP
-@test in(e,e) == true #Const
+@test in(ℯ,ℯ) == true #Const
 @test in(4//5,4//5) == true #Rat
 @test in(1+2im, 1+2im) == true #Imag
 @test in(3, 3.0) == true #mixed
@@ -2952,7 +2953,7 @@ end
     end
     @test !iszero(nextfloat(BigFloat(0)))
     @test !isone(nextfloat(BigFloat(1)))
-    for x in (π, e, γ, catalan, φ)
+    for x in (π, ℯ, γ, catalan, φ)
         @test !iszero(x)
         @test !isone(x)
     end
