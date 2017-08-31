@@ -23,7 +23,8 @@ reduced_indices(inds::Indices, d::Int) = reduced_indices(inds, d, OneTo(1))
 function reduced_indices0(inds::Indices{N}, d::Int) where N
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
     if d <= N
-        return reduced_indices(inds, d, (inds[d] == OneTo(0) ? OneTo(0) : OneTo(1)))
+        ind = inds[d]
+        return reduced_indices(inds, d, (isempty(ind) ? ind : OneTo(1)))
     else
         return inds
     end
@@ -51,30 +52,50 @@ function reduced_indices0(inds::Indices{N}, region) where N
         if d < 1
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
         elseif d <= N
-            rinds[d] = oftype(rinds[d], (rinds[d] == OneTo(0) ? OneTo(0) : OneTo(1)))
+            rind = rinds[d]
+            rinds[d] = oftype(rind, (isempty(rind) ? rind : OneTo(1)))
         end
     end
     tuple(rinds...)::typeof(inds)
 end
 
-
 ###### Generic reduction functions #####
 
 ## initialization
 
-for (Op, initfun) in ((:(typeof(+)), :zero), (:(typeof(*)), :one), (:(typeof(scalarmax)), :typemin), (:(typeof(scalarmin)), :typemax), (:(typeof(max)), :typemin), (:(typeof(min)), :typemax))
-    @eval initarray!(a::AbstractArray{T}, ::$(Op), init::Bool) where {T} = (init && fill!(a, $(initfun)(T)); a)
+for (Op, initfun) in ((:(typeof(+)), :zero), (:(typeof(*)), :one))
+    @eval initarray!(a::AbstractArray{T}, ::$(Op), init::Bool, src::AbstractArray) where {T} = (init && fill!(a, $(initfun)(T)); a)
+end
+
+for Op in (:(typeof(scalarmax)), :(typeof(scalarmin)), :(typeof(max)), :(typeof(min)))
+    @eval initarray!(a::AbstractArray{T}, ::$(Op), init::Bool, src::AbstractArray) where {T} = (init && copyfirst!(a, src); a)
 end
 
 for (Op, initval) in ((:(typeof(&)), true), (:(typeof(|)), false))
-    @eval initarray!(a::AbstractArray, ::$(Op), init::Bool) = (init && fill!(a, $initval); a)
+    @eval initarray!(a::AbstractArray, ::$(Op), init::Bool, src::AbstractArray) = (init && fill!(a, $initval); a)
 end
 
 reducedim_initarray(A::AbstractArray, region, v0, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), v0)
 reducedim_initarray(A::AbstractArray, region, v0::T) where {T} = reducedim_initarray(A, region, v0, T)
 
-reducedim_initarray0(A::AbstractArray, region, v0, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices0(A,region)), v0)
-reducedim_initarray0(A::AbstractArray, region, v0::T) where {T} = reducedim_initarray0(A, region, v0, T)
+function reducedim_initarray0(A::AbstractArray{T}, region, f, ops) where T
+    ri = reduced_indices0(A, region)
+    if isempty(A)
+        if prod(map(length, reduced_indices(A, region))) != 0
+            reducedim_initarray0_empty(A, region, f, ops) # ops over empty slice of A
+        else
+            R = f == identity ? T : Core.Inference.return_type(f, (T,))
+            similar(A, R, ri)
+        end
+    else
+        R = f == identity ? T : typeof(f(first(A)))
+        si = similar(A, R, ri)
+        mapfirst!(f, si, A)
+    end
+end
+
+reducedim_initarray0_empty(A::AbstractArray, region, f, ops) = mapslices(x->ops(f.(x)), A, region)
+reducedim_initarray0_empty(A::AbstractArray, region,::typeof(identity), ops) = mapslices(ops, A, region)
 
 # TODO: better way to handle reducedim initialization
 #
@@ -91,7 +112,7 @@ function reducedim_init(f, op::typeof(*), A::AbstractArray, region)
 end
 function _reducedim_init(f, op, fv, fop, A, region)
     T = promote_union(eltype(A))
-    if method_exists(zero, Tuple{Type{T}})
+    if applicable(zero, T)
         x = f(zero(T))
         z = op(fv(x), fv(x))
         Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
@@ -106,8 +127,8 @@ reducedim_init(f, op::typeof(max), A::AbstractArray, region) = reducedim_init(f,
 reducedim_init(f, op::typeof(min), A::AbstractArray, region) = reducedim_init(f, scalarmin, A, region)
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray, region) = reducedim_init(f, scalarmax, A, region)
 
-reducedim_init(f, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, typemin(f(zero(T))))
-reducedim_init(f, op::typeof(scalarmin), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, typemax(f(zero(T))))
+reducedim_init(f, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, maximum)
+reducedim_init(f, op::typeof(scalarmin), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, f, minimum)
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))))
 
@@ -131,7 +152,6 @@ for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (Small
 end
 reducedim_init(f::Union{typeof(identity),typeof(abs),typeof(abs2)}, op::typeof(+), A::AbstractArray{Bool}, region) =
     reducedim_initarray(A, region, 0)
-
 
 ## generic (map)reduction
 
@@ -167,6 +187,23 @@ function check_reducedims(R, A)
         end
     end
     return lsiz
+end
+
+"""
+Extract first entry of slices of array A into existing array R.
+"""
+copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
+
+function mapfirst!(f, R::AbstractArray, A::AbstractArray)
+    lsiz = check_reducedims(R, A)
+    iA = indices(A)
+    iR = indices(R)
+    t = []
+    for i in 1:length(iR)
+        iAi = iA[i]
+        push!(t, iAi == iR[i] ? iAi : first(iAi))
+    end
+    map!(f, R, view(A, t...))
 end
 
 function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArray)
@@ -211,7 +248,7 @@ mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) =
     (_mapreducedim!(f, op, R, A); R)
 
 reducedim!(op, R::AbstractArray{RT}, A::AbstractArray) where {RT} =
-    mapreducedim!(identity, op, R, A, zero(RT))
+    mapreducedim!(identity, op, R, A)
 
 """
     mapreducedim(f, op, A, region[, v0])
@@ -276,7 +313,6 @@ julia> reducedim(max, a, 1)
 """
 reducedim(op, A::AbstractArray, region, v0) = mapreducedim(identity, op, A, region, v0)
 reducedim(op, A::AbstractArray, region) = mapreducedim(identity, op, A, region)
-
 
 ##### Specific reduction functions #####
 """
@@ -577,7 +613,7 @@ for (fname, op) in [(:sum, :+), (:prod, :*),
     fname! = Symbol(fname, '!')
     @eval begin
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
-            mapreducedim!(f, $(op), initarray!(r, $(op), init), A)
+            mapreducedim!(f, $(op), initarray!(r, $(op), init, A), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
         $(fname)(f::Function, A::AbstractArray, region) =
@@ -586,9 +622,9 @@ for (fname, op) in [(:sum, :+), (:prod, :*),
     end
 end
 
-
 ##### findmin & findmax #####
-
+# The initial values of Rval are not used if the correponding indices in Rind are 0.
+#
 function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval) || isempty(A)) && return Rval, Rind
     lsiz = check_reducedims(Rval, A)
@@ -609,7 +645,7 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             for i in indices(A,1)
                 k += 1
                 tmpAv = A[i,IA]
-                if f(tmpAv, tmpRv)
+                if tmpRi == 0 || (tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv)))
                     tmpRv = tmpAv
                     tmpRi = k
                 end
@@ -623,7 +659,9 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             for i in indices(A, 1)
                 k += 1
                 tmpAv = A[i,IA]
-                if f(tmpAv, Rval[i,IR])
+                tmpRv = Rval[i,IR]
+                tmpRi = Rind[i,IR]
+                if tmpRi == 0 || (tmpRv == tmpRv && (tmpAv != tmpAv || f(tmpAv, tmpRv)))
                     Rval[i,IR] = tmpAv
                     Rind[i,IR] = k
                 end
@@ -633,83 +671,96 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     Rval, Rind
 end
 
-
 """
     findmin!(rval, rind, A, [init=true]) -> (minval, index)
 
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
+`NaN` is treated as less than all other values.
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(<, initarray!(rval, scalarmin, init), rind, A)
+    findminmax!(isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,0), A)
 end
 
 """
     findmin(A, region) -> (minval, index)
 
 For an array input, returns the value and index of the minimum over the given region.
+`NaN` is treated as less than all other values.
 
 # Examples
 ```jldoctest
-julia> A = [1 2; 3 4]
+julia> A = [1.0 2; 3 4]
 2×2 Array{Int64,2}:
- 1  2
- 3  4
+ 1.0  2.0
+ 3.0  4.0
 
 julia> findmin(A, 1)
-([1 2], [1 3])
+([1.0 2.0], [1 3])
 
 julia> findmin(A, 2)
-([1; 3], [1; 2])
+([1.0; 3.0], [1; 2])
 ```
 """
 function findmin(A::AbstractArray{T}, region) where T
+    ri = reduced_indices0(A, region)
     if isempty(A)
-        return (similar(A, reduced_indices0(A, region)),
-                similar(dims->zeros(Int, dims), reduced_indices0(A, region)))
+        if prod(map(length, reduced_indices(A, region))) != 0
+            throw(ArgumentError("collection slices must be non-empty"))
+        end
+        (similar(A, ri), similar(dims->zeros(Int, dims), ri))
+    else
+        findminmax!(isless, fill!(similar(A, ri), first(A)),
+                    similar(dims->zeros(Int, dims), ri), A)
     end
-    return findminmax!(<, reducedim_initarray0(A, region, typemax(T)),
-            similar(dims->zeros(Int, dims), reduced_indices0(A, region)), A)
 end
+
+isgreater(a, b) = isless(b,a)
 
 """
     findmax!(rval, rind, A, [init=true]) -> (maxval, index)
 
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
+`NaN` is treated as greater than all other values.
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(>, initarray!(rval, scalarmax, init), rind, A)
+    findminmax!(isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,0), A)
 end
 
 """
     findmax(A, region) -> (maxval, index)
 
 For an array input, returns the value and index of the maximum over the given region.
+`NaN` is treated as greater than all other values.
 
 # Examples
 ```jldoctest
-julia> A = [1 2; 3 4]
+julia> A = [1.0 2; 3 4]
 2×2 Array{Int64,2}:
- 1  2
- 3  4
+ 1.0  2.0
+ 3.0  4.0
 
 julia> findmax(A,1)
-([3 4], [2 4])
+([3.0 4.0], [2 4])
 
 julia> findmax(A,2)
-([2; 4], [3; 4])
+([2.0; 4.0], [3; 4])
 ```
 """
 function findmax(A::AbstractArray{T}, region) where T
+    ri = reduced_indices0(A, region)
     if isempty(A)
-        return (similar(A, reduced_indices0(A,region)),
-                similar(dims->zeros(Int, dims), reduced_indices0(A,region)))
+        if prod(map(length, reduced_indices(A, region))) != 0
+            throw(ArgumentError("collection slices must be non-empty"))
+        end
+        similar(A, ri), similar(dims->zeros(Int, dims), ri)
+    else
+        findminmax!(isgreater, fill!(similar(A, ri), first(A)),
+                    similar(dims->zeros(Int, dims), ri), A)
     end
-    return findminmax!(>, reducedim_initarray0(A, region, typemin(T)),
-            similar(dims->zeros(Int, dims), reduced_indices0(A, region)), A)
 end
 
 reducedim1(R, A) = length(indices1(R)) == 1
