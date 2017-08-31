@@ -1305,6 +1305,9 @@ end
     B = Bidiagonal(randn(5),randn(4),:L)
     S = sparse(B)
     @test norm(Array(B) - Array(S)) == 0.0
+    D = Diagonal(randn(5))
+    S = sparse(D)
+    @test norm(Array(D) - Array(S)) == 0.0
 end
 
 @testset "spdiagm promotion" begin

@@ -763,6 +763,11 @@ function sparse(B::Bidiagonal)
     return sparse([1:m;1:m-1],[1:m;2:m],[B.dv;B.ev], Int(m), Int(m)) # upper bidiagonal
 end
 
+function sparse(D::Diagonal{T}) where T
+    m = length(D.diag)
+    return SparseMatrixCSC(m, m, collect(1:(m+1)), collect(1:m), Vector{T}(D.diag))
+end
+
 ## Transposition and permutation methods
 
 """
