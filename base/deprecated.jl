@@ -220,7 +220,7 @@ for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
         :tan, :tanh, :tand, :atan, :atanh, :atand,
         :sinpi, :cosc, :ceil, :floor, :trunc, :round,
         :log1p, :expm1, :abs, :abs2,
-        :log, :log2, :log10, :exp2, :exp10, :sinc, :cospi,
+        :log2, :log10, :exp2, :exp10, :sinc, :cospi,
         :cos, :cosh, :cosd, :acos, :acosd,
         :cot, :coth, :cotd, :acot, :acotd,
         :sec, :sech, :secd, :asech,
@@ -247,13 +247,13 @@ for f in (
         # base/special/trig.jl
         :sinpi, :cospi, :sinc, :cosc,
         # base/special/log.jl
-        :log, :log1p,
+        :log1p,
         # base/special/gamma.jl
         :gamma, :lfact,
         # base/math.jl
         :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2,
         :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh,
-        #=:log,=# :log2, :log10, :lgamma, #=:log1p,=# :sqrt,
+        :log2, :log10, :lgamma, #=:log1p,=# :sqrt,
         # base/floatfuncs.jl
         :abs, :abs2, :angle, :isnan, :isinf, :isfinite,
         # base/complex.jl
@@ -1623,6 +1623,9 @@ end
 # deprecate expm in favor of exp
 @deprecate expm! exp!
 @deprecate expm exp
+
+# deprecate logm in favor of log
+@deprecate logm log
 
 # PR #23092
 @eval LibGit2 begin

@@ -427,7 +427,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Otherwise, use Schur decomposition
     return schurpow(A, p)
 end
-(^)(A::AbstractMatrix, p::Number) = exp(p*logm(A))
+(^)(A::AbstractMatrix, p::Number) = exp(p*log(A))
 
 # Matrix exponential
 
@@ -557,7 +557,7 @@ function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
 end
 
 """
-    logm(A{T}::StridedMatrix{T})
+    log(A{T}::StridedMatrix{T})
 
 If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
 the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
@@ -581,25 +581,25 @@ julia> A = 2.7182818 * eye(2)
  2.71828  0.0
  0.0      2.71828
 
-julia> logm(A)
+julia> log(A)
 2×2 Symmetric{Float64,Array{Float64,2}}:
  1.0  0.0
  0.0  1.0
 ```
 """
-function logm(A::StridedMatrix{T}) where T
+function log(A::StridedMatrix{T}) where T
     # If possible, use diagonalization
     if issymmetric(A) && T <: Real
-        return logm(Symmetric(A))
+        return log(Symmetric(A))
     end
     if ishermitian(A)
-        return logm(Hermitian(A))
+        return log(Hermitian(A))
     end
 
     # Use Schur decomposition
     n = checksquare(A)
     if istriu(A)
-        return full(logm(UpperTriangular(complex(A))))
+        return full(log(UpperTriangular(complex(A))))
     else
         if isreal(A)
             SchurF = schurfact(real(A))
@@ -608,19 +608,14 @@ function logm(A::StridedMatrix{T}) where T
         end
         if !istriu(SchurF.T)
             SchurS = schurfact(complex(SchurF.T))
-            logT = SchurS.Z * logm(UpperTriangular(SchurS.T)) * SchurS.Z'
+            logT = SchurS.Z * log(UpperTriangular(SchurS.T)) * SchurS.Z'
             return SchurF.Z * logT * SchurF.Z'
         else
-            R = logm(UpperTriangular(complex(SchurF.T)))
+            R = log(UpperTriangular(complex(SchurF.T)))
             return SchurF.Z * R * SchurF.Z'
         end
     end
 end
-function logm(a::Number)
-    b = log(complex(a))
-    return imag(b) == 0 ? real(b) : b
-end
-logm(a::Complex) = log(a)
 
 """
     sqrtm(A)

@@ -63,7 +63,7 @@ srand(1)
             for func in (exp,)
                 @test func(D) ≈ func(DM) atol=n^3*eps(relty)
             end
-            @test logm(Diagonal(abs.(D.diag))) ≈ logm(abs.(DM)) atol=n^3*eps(relty)
+            @test log(Diagonal(abs.(D.diag))) ≈ log(abs.(DM)) atol=n^3*eps(relty)
         end
         if elty <: BlasComplex
             for func in (logdet, sqrtm)
@@ -382,7 +382,7 @@ end
     @test ishermitian(Dsym) == false
 
     @test exp(D) == Diagonal([exp([1 2; 3 4]), exp([1 2; 3 4])])
-    @test logm(D) == Diagonal([logm([1 2; 3 4]), logm([1 2; 3 4])])
+    @test log(D) == Diagonal([log([1 2; 3 4]), log([1 2; 3 4])])
     @test sqrtm(D) == Diagonal([sqrtm([1 2; 3 4]), sqrtm([1 2; 3 4])])
 end
 

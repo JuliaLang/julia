@@ -1789,7 +1789,7 @@ powm(A::LowerTriangular, p::Real) = powm(A.', p::Real).'
 # Based on the code available at http://eprints.ma.man.ac.uk/1851/02/logm.zip,
 # Copyright (c) 2011, Awad H. Al-Mohy and Nicholas J. Higham
 # Julia version relicensed with permission from original authors
-function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
+function log(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
     maxsqrt = 100
     theta = [1.586970738772063e-005,
          2.313807884242979e-003,
@@ -1961,9 +1961,9 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
 
     return UpperTriangular(Y)
 end
-logm(A::LowerTriangular) = logm(A.').'
+log(A::LowerTriangular) = log(A.').'
 
-# Auxiliary functions for logm and matrix power
+# Auxiliary functions for matrix logarithm and matrix power
 
 # Compute accurate diagonal of A = A0^s - I
 #   Al-Mohy, "A more accurate Briggs method for the logarithm",
@@ -2117,7 +2117,7 @@ end
 unw(x::Real) = 0
 unw(x::Number) = ceil((imag(x) - pi) / (2 * pi))
 
-# End of auxiliary functions for logm and matrix power
+# End of auxiliary functions for matrix logarithm and matrix power
 
 function sqrtm(A::UpperTriangular)
     realmatrix = false

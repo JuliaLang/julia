@@ -357,6 +357,8 @@ Deprecated or removed
 
   * `expm` has been deprecated in favor of `exp` ([#23233]).
 
+  * `logm` has been deprecated in favor of `log` ([#23505]).
+
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).
 
