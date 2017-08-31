@@ -1040,21 +1040,20 @@ timesofar("binary comparison")
         @test isequal(b1 >>> m, [ falses(m); b1[1:end-m] ])
         @test isequal(b1 << -m, b1 >> m)
         @test isequal(b1 >>> -m, b1 << m)
-        @test isequal(rol(b1, m), [ b1[m+1:end]; b1[1:m] ])
-        @test isequal(ror(b1, m), [ b1[end-m+1:end]; b1[1:end-m] ])
-        @test isequal(ror(b1, m), rol(b1, -m))
-        @test isequal(rol(b1, m), ror(b1, -m))
+        @test isequal(circshift(b1, -m), [ b1[m+1:end]; b1[1:m] ])
+        @test isequal(circshift(b1, m), [ b1[end-m+1:end]; b1[1:end-m] ])
+        @test isequal(circshift(b1, m), circshift(b1, m - length(b1)))
     end
 
     b = bitrand(v1)
     i = bitrand(v1)
     for m = [rand(1:v1), 63, 64, 65, 191, 192, 193, v1-1]
         j = rand(1:m)
-        b1 = ror!(i, b, j)
-        i1 = ror!(b, j)
+        b1 = circshift!(i, b, j)
+        i1 = circshift!(b, j)
         @test b1 == i1
-        b2 = rol!(i1, b1, j)
-        i2 = rol!(b1, j)
+        b2 = circshift!(i1, b1, -j)
+        i2 = circshift!(b1, -j)
         @test b2 == i2
     end
 end

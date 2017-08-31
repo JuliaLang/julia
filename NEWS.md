@@ -372,6 +372,9 @@ Deprecated or removed
   * `filter` and `filter!` on dictionaries now pass a single `key=>value` pair to the
     argument function, instead of two arguments ([#17886]).
 
+  * `rol`, `rol!`, `ror`, and `ror!` have been deprecated in favor of specialized methods for
+    `circshift`/`circshift!` ([#23404]).
+
   * `Base.SparseArrays.SpDiagIterator` has been removed ([#23261]).
 
   * The tuple-of-types form of `cfunction`, `cfunction(f, returntype, (types...))`, has been deprecated
@@ -1269,3 +1272,4 @@ Command-line option changes
 [#23207]: https://github.com/JuliaLang/julia/issues/23207
 [#23233]: https://github.com/JuliaLang/julia/issues/23233
 [#23342]: https://github.com/JuliaLang/julia/issues/23342
+[#23404]: https://github.com/JuliaLang/julia/issues/23404

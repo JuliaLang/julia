@@ -933,7 +933,7 @@ circshift!(dest::AbstractArray, src, ::Tuple{}) = copy!(dest, src)
 """
     circshift!(dest, src, shifts)
 
-Circularly shift the data in `src`, storing the result in
+Circularly shift, i.e. rotate, the data in `src`, storing the result in
 `dest`. `shifts` specifies the amount to shift in each dimension.
 
 The `dest` array must be distinct from the `src` array (they cannot
