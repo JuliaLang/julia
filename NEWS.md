@@ -182,6 +182,11 @@ This section lists changes that do not have deprecation warnings.
     of the output was shrunk to fit the union of the type of each element in the input.
     ([#22696])
 
+  * The `promote` function now raises an error if its arguments are of different types
+    and if attempting to convert them to a common type fails to change any of their types.
+    This avoids stack overflows in the common case of definitions like
+    `f(x, y) = f(promote(x, y)...)` ([#22801]).
+
 Library improvements
 --------------------
 

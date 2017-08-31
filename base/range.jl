@@ -241,7 +241,7 @@ julia> linspace(1.3,2.9,9)
 1.3:0.2:2.9
 ```
 """
-linspace(start, stop, len::Real=50) = linspace(promote_noncircular(start, stop)..., Int(len))
+linspace(start, stop, len::Real=50) = linspace(promote(start, stop)..., Int(len))
 linspace(start::T, stop::T, len::Real=50) where {T} = linspace(start, stop, Int(len))
 
 linspace(start::Real, stop::Real, len::Integer) = linspace(promote(start, stop)..., len)
@@ -947,7 +947,7 @@ function _define_range_op(@nospecialize f)
 
         $f(r1::Union{StepRangeLen, OrdinalRange, LinSpace},
            r2::Union{StepRangeLen, OrdinalRange, LinSpace}) =
-               $f(promote_noncircular(r1, r2)...)
+               $f(promote(r1, r2)...)
     end
 end
 _define_range_op(:+)
