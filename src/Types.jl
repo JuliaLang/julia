@@ -305,6 +305,36 @@ function info_manifest_diff(env₀::EnvCache, env₁::EnvCache)
     clean && info(" [no changes]")
 end
 
+const indent = "  "
+
+function print_package_tree(
+    io::IO,
+    env::EnvCache,
+    deps::Dict = env.project["deps"],
+    seen::Dict{UUID,Bool} = Dict{UUID,Bool}(),
+    depth::Int = 0,
+)::Void
+    for (name::String, uuid::UUID) in sort!(collect(deps), by=lowercase∘first)
+        print(io, indent^depth, name, " [", string(uuid)[1:8], "]")
+        if haskey(seen, uuid)
+            seen[uuid] && print(io, " ...")
+            println(io)
+        else
+            println(io)
+            seen[uuid] = false # no deps
+            for (name′, infos) in env.manifest, info in infos
+                uuid == UUID(info["uuid"]) || continue
+                haskey(info, "deps") && !isempty(info["deps"]) || continue
+                print_package_tree(io, env, info["deps"], seen, depth+1)
+                seen[uuid] = true # has deps
+                break # stop searching manifest
+            end
+        end
+    end
+end
+print_package_tree(env::EnvCache = EnvCache()) =
+    print_package_tree(STDOUT, env)
+
 function write_env(env::EnvCache)
     # load old environment for comparison
     old_env = EnvCache(env.env)
