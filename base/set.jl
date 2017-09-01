@@ -153,17 +153,7 @@ julia> intersect([1, 4, 4, 5, 6], [4, 6, 6, 7, 8])
 function intersect end
 
 intersect(s) = copymutable(s)
-
-# enable when as fast as the loop:
-# intersect(s::AbstractSet, itr) = IntSet(x for x in itr if x in s)
-function intersect(s::AbstractSet, itr)
-    t = similar(s)
-    for x in itr
-        x in s && push!(t, x)
-    end
-    t
-end
-
+intersect(s::AbstractSet, itr) = mapfilter(x->in(x, s), push!, itr, similar(s))
 intersect(s::AbstractSet, itr, itrs...) = intersect!(intersect(s, itr), itrs...)
 
 const ∩ = intersect
@@ -492,11 +482,19 @@ allunique(::Set) = true
 
 allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
 
-filter(f, s::AbstractSet) = foldl(push!, similar(s), Iterators.filter(f, s))
-
-# it must be safe to delete the current element while iterating over s
-unsafe_filter!(f, s::AbstractSet) = foldl(delete!, s, Iterators.filter(!f, s))
+filter(pred, s::AbstractSet) = mapfilter(pred, push!, s, similar(s))
 filter!(f, s::Set) = unsafe_filter!(f, s)
+
+# it must be safe to delete the current element while iterating over s:
+unsafe_filter!(pred, s::AbstractSet) = mapfilter(!pred, delete!, s, s)
+
+# TODO: delete mapfilter in favor of comprehensions/foldl/filter when competitive
+function mapfilter(pred, f, itr, res)
+    for x in itr
+        pred(x) && f(res, x)
+    end
+    res
+end
 
 const hashs_seed = UInt === UInt64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
 function hash(s::Set, h::UInt)
