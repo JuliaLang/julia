@@ -534,9 +534,18 @@ the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and th
 respectively. The [`BigInt`](@ref) and [`BigFloat`](@ref) types are available in Julia for arbitrary
 precision integer and floating point numbers respectively.
 
-Constructors exist to create these types from primitive numerical types, and the [string literal](@ref non-standard-string-literals) [`@big_str`](@ref) or [`parse`](@ref)
-can be used to construct them from `AbstractString`s.  Once created, they participate in arithmetic
-with all other numeric types thanks to Julia's [type promotion and conversion mechanism](@ref conversion-and-promotion):
+Constructors exist to create these types from primitive numerical types, and the
+[string literal](@ref non-standard-string-literals) [`@big_str`](@ref) or [`parse`](@ref)
+can be used to construct them from `AbstractString`s.
+`BigInt`s can also be input as integer literals when
+they are too big for other built-in integer types. Note that as there
+is no unsigned arbitrary-precision integer type in `Base` (`BigInt` is
+sufficient in most cases), hexadecimal, octal and binary literals can
+be used (in addition to decimal literals).
+
+Once created, they participate in arithmetic
+with all other numeric types thanks to Julia's
+[type promotion and conversion mechanism](@ref conversion-and-promotion):
 
 ```jldoctest
 julia> BigInt(typemax(Int64)) + 1
@@ -548,6 +557,18 @@ julia> big"123456789012345678901234567890" + 1
 julia> parse(BigInt, "123456789012345678901234567890") + 1
 123456789012345678901234567891
 
+julia> string(big"2"^200, base=16)
+"100000000000000000000000000000000000000000000000000"
+
+julia> 0x100000000000000000000000000000000-1 == typemax(UInt128)
+true
+
+julia> 0x000000000000000000000000000000000
+0
+
+julia> typeof(ans)
+BigInt
+
 julia> big"1.23456789012345678901"
 1.234567890123456789010000000000000000000000000000000000000000000000000000000004
 
@@ -556,6 +577,9 @@ julia> parse(BigFloat, "1.23456789012345678901")
 
 julia> BigFloat(2.0^66) / 3
 2.459565876494606882133333333333333333333333333333333333333333333333333333333344e+19
+
+julia> big"1.2"
+1.200000000000000000000000000000000000000000000000000000000000000000000000000007
 
 julia> factorial(BigInt(40))
 815915283247897734345611269596115894272000000000
