@@ -499,7 +499,7 @@ end
 ```
 
 the annotation of `c` harms performance. To write performant code involving types constructed at
-run-time, use the [function-barrier technique](@ref kernal-functions) discussed below, and ensure
+run-time, use the kernel technique (a.k.a. function barrier technique) discussed below, and ensure
 that the constructed type appears among the argument types of the kernel function so that the kernel
 operations are properly specialized by the compiler. For example, in the above snippet, as soon as
 `b` is constructed, it can be passed to another function `k`, the kernel. If, for example, function
