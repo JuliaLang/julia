@@ -809,10 +809,10 @@ function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::B
 end
 
 """
-    code_llvm([io], f, types)
+    code_llvm(io=STDOUT, f, types)
 
 Prints the LLVM bitcodes generated for running the method matching the given generic
-function and type signature to `io` which defaults to `STDOUT`.
+function and type signature to `io`.
 
 All metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.
 """
@@ -822,11 +822,11 @@ code_llvm(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, t
 code_llvm_raw(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, types, false)
 
 """
-    code_native([io], f, types, [syntax])
+    code_native(io=STDOUT, f, types, syntax=att)
 
 Prints the native assembly instructions generated for running the method matching the given
-generic function and type signature to `io` which defaults to `STDOUT`.
-Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax. Output is AT&T syntax by default.
+generic function and type signature to `io`.
+Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax.
 """
 code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple), syntax::Symbol=:att) =
     print(io, _dump_function(f, types, true, false, false, false, syntax))
