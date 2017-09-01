@@ -441,7 +441,7 @@ See also [`zeros`](@ref), [`similar`](@ref).
 """
 function ones end
 
-for (fname, felt) in ((:zeros,:zero), (:ones,:one))
+for (fname, felt) in ((:zeros,:zero), (:ones,:oneunit))
     @eval begin
         # allow signature of similar
         $fname(a::AbstractArray, T::Type, dims::Tuple) = fill!(similar(a, T, dims), $felt(T))
