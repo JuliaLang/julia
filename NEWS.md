@@ -88,6 +88,9 @@ Language changes
   * Variable bindings local to `while` loop bodies are now freshly allocated on each loop iteration,
     matching the behavior of `for` loops.
 
+  * Prefix `&` for by-reference arguments to `ccall` has been deprecated in favor of
+    `Ref` argument types ([#6080]).
+
 Breaking changes
 ----------------
 
