@@ -959,7 +959,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "function ", args[1], " end")
 
     # block with argument
-    elseif head in (:for,:while,:function,:if,:elseif) && nargs==2
+    elseif head in (:for,:while,:function,:if,:elseif,:let) && nargs==2
         show_block(io, head, args[1], args[2], indent)
         print(io, "end")
 
@@ -1042,9 +1042,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             show_block(io, "finally", Any[], args[4], indent)
         end
         print(io, "end")
-
-    elseif head === :let && nargs >= 1
-        show_block(io, "let", args[2:end], args[1], indent); print(io, "end")
 
     elseif head === :block || head === :body
         show_block(io, "begin", ex, indent); print(io, "end")

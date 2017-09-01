@@ -1303,6 +1303,21 @@
           `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
                 ,body)))
 
+       ((let)
+        (let ((binds (if (memv (peek-token s) '(#\newline #\;))
+                         '()
+                         (parse-comma-separated-assignments s))))
+          (if (not (or (eof-object? (peek-token s))
+                       (memv (peek-token s) '(#\newline #\; end))))
+              (error "let variables should end in \";\" or newline"))
+          (let* ((ex (begin0 (parse-block s)
+                             (expect-end s word)))
+                 (ex (if (and (length= ex 2) (pair? (cadr ex)) (eq? (caadr ex) 'line))
+                         `(block)  ;; don't need line info in an empty let block
+                         ex)))
+            `(let ,(if (length= binds 1) (car binds) (cons 'block binds))
+               ,ex))))
+
        ((if elseif)
         (if (newline? (peek-token s))
             (error (string "missing condition in \"if\" at " current-filename
@@ -1331,19 +1346,6 @@
              (begin0 (list word test then (parse-block s))
                      (expect-end s 'if)))
             (else      (error (string "unexpected \"" nxt "\""))))))
-       ((let)
-        (let ((binds (if (memv (peek-token s) '(#\newline #\;))
-                         '()
-                         (parse-comma-separated-assignments s))))
-          (if (not (or (eof-object? (peek-token s))
-                       (memv (peek-token s) '(#\newline #\; end))))
-              (error "let variables should end in \";\" or newline"))
-          (let ((ex (parse-block s)))
-            (expect-end s word)
-            ;; don't need line info in an empty let block
-            (if (and (length= ex 2) (pair? (cadr ex)) (eq? (caadr ex) 'line))
-                `(let (block) ,@binds)
-                `(let ,ex ,@binds)))))
 
        ((global local)
         (let* ((const (and (eq? (peek-token s) 'const)

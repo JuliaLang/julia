@@ -564,8 +564,8 @@ function __dot__(x::Expr)
         Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
     elseif x.head == :$
         x.args[1]
-    elseif x.head == :let # don't add dots to "let x=... assignments
-        Expr(:let, dotargs[1], map(undot, dotargs[2:end])...)
+    elseif x.head == :let # don't add dots to `let x=...` assignments
+        Expr(:let, undot(dotargs[1]), dotargs[2])
     elseif x.head == :for # don't add dots to for x=... assignments
         Expr(:for, undot(dotargs[1]), dotargs[2])
     elseif (x.head == :(=) || x.head == :function || x.head == :macro) &&
