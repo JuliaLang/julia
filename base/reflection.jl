@@ -809,7 +809,7 @@ function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::B
 end
 
 """
-    code_llvm(io=STDOUT, f, types)
+    code_llvm([io=STDOUT,], f, types)
 
 Prints the LLVM bitcodes generated for running the method matching the given generic
 function and type signature to `io`.
@@ -822,7 +822,7 @@ code_llvm(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, t
 code_llvm_raw(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, types, false)
 
 """
-    code_native(io=STDOUT, f, types, syntax=att)
+    code_native([io=STDOUT,], f, types, syntax=:att)
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io`.
