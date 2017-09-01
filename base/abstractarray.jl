@@ -905,8 +905,19 @@ julia> getindex(A, 2:4)
  3
  2
  4
+
+ julia> getindex(A, CartesianRange((2:4,)))
+3-element Array{Int64,1}:
+ 3
+ 2
+ 4
 ```
 """
+function getindex{T,N}(A::AbstractArray{T,N}, cr::CartesianRange{CartesianIndex{N}})
+    # transform cartesian range to unit range
+    ur = map((x,y)->x:y, cr.start.I, cr.stop.I)
+    A[ur...]
+end 
 function getindex(A::AbstractArray, I...)
     @_propagate_inbounds_meta
     error_if_canonical_indexing(IndexStyle(A), A, I...)
@@ -990,6 +1001,11 @@ _unsafe_ind2sub(sz, i) = (@_inline_meta; ind2sub(sz, i))
 
 Store values from array `X` within some subset of `A` as specified by `inds`.
 """
+function setindex!{T,N}(A::AbstractArray{T,N}, v, cr::CartesianRange{CartesianIndex{N}})
+    # transfer cartesian range to unit range
+    ur = map((x,y)->x:y, cr.start.I, cr.stop.I)
+    A[ur...] = v
+end 
 function setindex!(A::AbstractArray, v, I...)
     @_propagate_inbounds_meta
     error_if_canonical_indexing(IndexStyle(A), A, I...)
