@@ -796,7 +796,8 @@ end
 """
     accumulate!(op, B, A, dim=1)
 
-Cumulative operation `op` on `A` along a dimension, storing the result in `B`. See also [`accumulate`](@ref).
+Cumulative operation `op` on `A` along a dimension, storing the result in `B`.
+See also [`accumulate`](@ref).
 """
 function accumulate!(op, B, A, axis::Integer=1)
     axis > 0 || throw(ArgumentError("axis must be a positive integer"))
