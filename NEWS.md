@@ -389,8 +389,9 @@ Deprecated or removed
 
   * `diagm(A::BitMatrix)` has been deprecated, use `diagm(vec(A))` instead ([#23373]).
 
-  * `ℯ` (written as `\mscre<TAB>` or `\euler<TAB>`) is the new default for Euler's
-    number ([#23427]).
+  * `ℯ` (written as `\mscre<TAB>` or `\euler<TAB>`) is now the only (by default) exported
+    name for Euler's number, and the type has changed from `Irrational{:e}` to
+    `Irrational{:ℯ}` ([#23427]).
 
   * The mathematical constants `π`, `pi`, `ℯ`, `e`, `γ`, `eulergamma`, `catalan`, `φ` and
     `golden` have been have been moved from `Base` to a new module; `Base.MathConstants`.
