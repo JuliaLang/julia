@@ -111,6 +111,11 @@ end
     @test checkbounds(Bool, A, [CartesianIndex((5, 5))], 3) == false
     @test checkbounds(Bool, A, [CartesianIndex((5, 4))], 4) == false
 end
+@testset "cartesian range" begin
+    @test A[CartesianRange((1:2, 2:3, 1:2))] == A[1:2, 2:3, 1:2]
+    A[CartesianRange((4:5, 1:2, 1:2))] = reshape(Array(1:8), (2,2,2))
+    @test A[CartesianRange((4:5, 1:2, 1:2))] == reshape(Array(1:8), (2,2,2))
+end 
 
 @testset "sub2ind & ind2sub" begin
     @testset "0-dimensional" begin
