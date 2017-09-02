@@ -192,7 +192,7 @@ define %jl_value_t addrspace(10)* @no_redundant_rerooting(i64 %a, i1 %cond) {
 top:
     %ptls = call %jl_value_t*** @jl_get_ptls_states()
     %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
-; CHECK: store %jl_value_t addrspace(10)* %aboxed 
+; CHECK: store %jl_value_t addrspace(10)* %aboxed
 ; CHECK-NEXT: call void @jl_safepoint()
     call void @jl_safepoint()
     br i1 %cond, label %blocka, label %blockb
@@ -207,3 +207,19 @@ blockb:
     call void @jl_safepoint()
     ret %jl_value_t addrspace(10)* %aboxed
 }
+
+declare void @llvm.memcpy.p064.p10i8.i64(i64*, i8 addrspace(10)*, i64, i32, i1)
+
+define void @memcpy_use(i64 %a, i64 *%aptr) {
+; CHECK-LABEL: @memcpy_use
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+top:
+    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: store %jl_value_t addrspace(10)* %aboxed
+    call void @jl_safepoint()
+    %acast = bitcast %jl_value_t addrspace(10)* %aboxed to i8 addrspace(10)*
+    call void @llvm.memcpy.p064.p10i8.i64(i64* %aptr, i8 addrspace(10)* %acast, i64 8, i32 1, i1 false)
+    ret void
+}
+

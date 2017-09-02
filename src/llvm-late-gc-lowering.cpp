@@ -728,8 +728,16 @@ State LateLowerGCFrame::LocalScan(Function &F) {
             Instruction &I = *it;
             if (CallInst *CI = dyn_cast<CallInst>(&I)) {
                 if (isa<IntrinsicInst>(CI)) {
-                    // Intrinsics are never GC uses/defs
-                    continue;
+                    // Most intrinsics are not gc uses/defs, however some have
+                    // memory operands and could thus be GC uses. To be conservative,
+                    // we only skip processing for those that we know we emit often
+                    // and cannot possibly be GC uses.
+                    IntrinsicInst *II = cast<IntrinsicInst>(CI);
+                    if (isa<DbgInfoIntrinsic>(CI) ||
+                        II->getIntrinsicID() == Intrinsic::lifetime_start ||
+                        II->getIntrinsicID() == Intrinsic::lifetime_end) {
+                        continue;
+                    }
                 }
                 MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
                 NoteOperandUses(S, BBS, I, BBS.UpExposedUses);
@@ -742,6 +750,10 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
                 if (CI->canReturnTwice()) {
                     S.ReturnsTwice.push_back(CI);
+                }
+                if (isa<IntrinsicInst>(CI)) {
+                    // Intrinsics are never safepoints.
+                    continue;
                 }
                 if (auto callee = CI->getCalledFunction()) {
                     // Known functions emitted in codegen that are not safepoints
