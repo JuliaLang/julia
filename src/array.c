@@ -5,12 +5,12 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -157,7 +157,7 @@ jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, 
     return _new_array_(atype, ndims, dims, isunboxed, elsz);
 }
 
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
 static inline int is_ntuple_long(jl_value_t *v)
 {
     if (!jl_is_tuple(v))

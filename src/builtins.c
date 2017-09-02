@@ -10,7 +10,6 @@
 #include <string.h>
 #include <stdarg.h>
 #include <setjmp.h>
-#include <assert.h>
 #include <sys/types.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -25,6 +24,7 @@
 #include "julia_internal.h"
 #include "builtin_proto.h"
 #include "intrinsics.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {

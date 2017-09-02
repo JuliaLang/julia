@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {

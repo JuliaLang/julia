@@ -21,12 +21,12 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -31,7 +31,6 @@
 #include <vector>
 #include <set>
 #include <cstdio>
-#include <cassert>
 #include <iostream>
 #include <functional>
 
@@ -85,7 +84,6 @@
 #include <polly/ScopDetection.h>
 #endif
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
-#include "fix_llvm_assert.h"
 
 using namespace llvm;
 namespace llvm {
@@ -100,6 +98,7 @@ namespace llvm {
 #include "julia_internal.h"
 #include "jitlayers.h"
 #include "codegen_shared.h"
+#include "julia_assert.h"
 
 // LLVM version compatibility macros
 legacy::PassManager *jl_globalPM;

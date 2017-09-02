@@ -21,6 +21,7 @@
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 #define DEBUG_TYPE "late_lower_gcroot"
 

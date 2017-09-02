@@ -63,6 +63,7 @@ typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
 #include "atomics.h"
 #include "tls.h"
 #include "julia_threads.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -997,7 +998,7 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_unwrap_unionall(jl_value_t *v);
 jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
 
-#if defined(NDEBUG) && defined(JL_NDEBUG)
+#if defined(JL_NDEBUG)
 STATIC_INLINE int jl_is_leaf_type_(jl_value_t *v)
 {
     return jl_is_datatype(v) && ((jl_datatype_t*)v)->isleaftype;

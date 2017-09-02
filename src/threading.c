@@ -21,6 +21,7 @@ TODO:
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 // Ref https://www.uclibc.org/docs/tls.pdf
 // For variant 1 JL_ELF_TLS_INIT_SIZE is the size of the thread control block (TCB)

@@ -14,7 +14,6 @@
 #ifndef _MSC_VER
 #include <strings.h>
 #endif
-#include <assert.h>
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_internal.h"
@@ -25,6 +24,7 @@
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 #endif
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
