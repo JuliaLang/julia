@@ -508,7 +508,7 @@ appearing in an assignment statement within `k` of the form:
 
 ```julia
 c = (b + 1.0f0)::Complex{T}
- ```
+```
 
 does not hinder performance (but does not help either) since the compiler can determine the type of `c`
 at the time `k` is compiled.
