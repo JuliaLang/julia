@@ -601,7 +601,7 @@ This should be written as:
 
 ```jldoctest
 julia> function fill_twos!(a)
-           for i=1:length(a)
+           for i=linearindices(a)
                a[i] = 2
            end
        end
@@ -805,36 +805,36 @@ do this in at least four ways (in addition to the recommended call to the built-
 
 ```julia
 function copy_cols(x::Vector{T}) where T
-    n = size(x, 1)
-    out = Array{T}(n, n)
-    for i = 1:n
+    n = indices(x, 1)
+    out = similar(Array{T},n, n)
+    for i = n
         out[:, i] = x
     end
     out
 end
 
 function copy_rows(x::Vector{T}) where T
-    n = size(x, 1)
-    out = Array{T}(n, n)
-    for i = 1:n
+    n = indices(x, 1)
+    out = similar(Array{T},n, n)
+    for i = n
         out[i, :] = x
     end
     out
 end
 
 function copy_col_row(x::Vector{T}) where T
-    n = size(x, 1)
-    out = Array{T}(n, n)
-    for col = 1:n, row = 1:n
+    n = indices(x, 1)
+    out = similar(Array{T},n, n)
+    for col = n, row = n
         out[row, col] = x[row]
     end
     out
 end
 
 function copy_row_col(x::Vector{T}) where T
-    n = size(x, 1)
-    out = Array{T}(n, n)
-    for row = 1:n, col = 1:n
+    n = indices(x, 1)
+    out = similar(Array{T},n, n)
+    for row = n, col = n
         out[row, col] = x[col]
     end
     out
@@ -1103,7 +1103,7 @@ Here is an example with both `@inbounds` and `@simd` markup:
 ```julia
 function inner(x, y)
     s = zero(eltype(x))
-    for i=1:length(x)
+    for i=linearindices(x)
         @inbounds s += x[i]*y[i]
     end
     s
@@ -1111,7 +1111,7 @@ end
 
 function innersimd(x, y)
     s = zero(eltype(x))
-    @simd for i=1:length(x)
+    @simd for i=linearindices(x)
         @inbounds s += x[i]*y[i]
     end
     s
@@ -1174,28 +1174,28 @@ of a one-dimensional array, and then evaluates the L2-norm of the result:
 
 ```julia
 function init!(u)
-    n = length(u)
-    dx = 1.0 / (n-1)
-    @fastmath @inbounds @simd for i in 1:n
+    n = linearindices(u)
+    dx = 1.0 / (length(n)-1)
+    @fastmath @inbounds @simd for i in n
         u[i] = sin(2pi*dx*i)
     end
 end
 
 function deriv!(u, du)
-    n = length(u)
-    dx = 1.0 / (n-1)
-    @fastmath @inbounds du[1] = (u[2] - u[1]) / dx
-    @fastmath @inbounds @simd for i in 2:n-1
+    n = linearindices(u)
+    dx = 1.0 / (length(n)-1)
+    @fastmath @inbounds du[n[1]] = (u[n[2]] - u[n[1]]) / dx
+    @fastmath @inbounds @simd for i in n[2:end-1]
         du[i] = (u[i+1] - u[i-1]) / (2*dx)
     end
-    @fastmath @inbounds du[n] = (u[n] - u[n-1]) / dx
+    @fastmath @inbounds du[end] = (u[end] - u[end-1]) / dx
 end
 
 function norm(u)
-    n = length(u)
+    n = linearindices(u)
     T = eltype(u)
     s = zero(T)
-    @fastmath @inbounds @simd for i in 1:n
+    @fastmath @inbounds @simd for i in n
         s += u[i]^2
     end
     @fastmath @inbounds return sqrt(s/n)
