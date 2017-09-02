@@ -2569,7 +2569,7 @@ function setindex!(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::Abst
     elseif !issortedI
         pI = sortperm(I); @inbounds I = I[pI]
         B = B[pI,:]
-    else !issortedJ
+    elseif !issortedJ
         pJ = sortperm(J); @inbounds J = J[pJ]
         B = B[:, pJ]
     end

@@ -81,7 +81,7 @@ Standardise the path string `path` to use POSIX separators.
 function posixpath end
 if Sys.iswindows()
     posixpath(path) = replace(path,'\\','/')
-else Sys.isunix()
+elseif Sys.isunix()
     posixpath(path) = path
 end
 
