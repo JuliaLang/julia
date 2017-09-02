@@ -343,6 +343,13 @@ let f = i18408()
     @test_throws UndefRefError f(0)
 end
 
+# issue #23558
+c23558(n,k) =
+    let fact(n) = if (n == 0) 1 else n*fact(n-1) end
+        fact(n)/fact(k)/fact(n-k)
+    end
+@test c23558(10, 5) == 252
+
 # variable scope, globals
 glob_x = 23
 function glotest()

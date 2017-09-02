@@ -1105,7 +1105,7 @@
               ;; some kind of assignment
               (cond
                ((eventually-call? (cadar binds))
-                ;; f()=c
+                ;; f() = c
                 (let ((asgn (butlast (expand-forms (car binds))))
                       (name (assigned-name (cadar binds))))
                   (if (not (symbol? name))
@@ -1113,15 +1113,16 @@
                   (loop (cdr binds)
                         `(scope-block
                           (block
-                           (local-def ,name)
+                           ,(if (expr-contains-eq name (caddar binds))
+                                `(local ,name) ;; might need a Box for recursive functions
+                                `(local-def ,name))
                            ,asgn
                            ,blk)))))
                ((or (symbol? (cadar binds))
                     (decl?   (cadar binds)))
                 (let ((vname (decl-var (cadar binds))))
                   (loop (cdr binds)
-                        (if (contains (lambda (x) (eq? x vname))
-                                      (caddar binds))
+                        (if (expr-contains-eq vname (caddar binds))
                             (let ((tmp (make-ssavalue)))
                               `(scope-block
                                 (block (= ,tmp ,(caddar binds))
