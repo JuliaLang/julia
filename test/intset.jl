@@ -90,6 +90,10 @@ end
     # issue #23099 : these tests should not segfault
     @test_throws ArgumentError symdiff!(IntSet(rand(1:100, 30)), 0)
     @test_throws ArgumentError symdiff!(IntSet(rand(1:100, 30)), [0, 2, 4])
+
+    # issue #23557 :
+    @test_throws MethodError symdiff!(IntSet([1]), ['a']) # should no stack-overflow
+    @test_throws MethodError symdiff!(IntSet([1, 2]),  [[1]]) # should not return IntSet([2])
 end
 
 @testset "copy, copy!, similar" begin
