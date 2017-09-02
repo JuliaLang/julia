@@ -272,7 +272,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     `BigInt` type. There are no numeric literal suffixes, such as `L`, `LL`, `U`, `UL`, `ULL` to indicate
     unsigned and/or signed vs. unsigned. Decimal literals are always signed, and hexadecimal literals
     (which start with `0x` like C/C++), are unsigned, unless when they encode more than 128 bits,
-    in which case they are of type ``BigInt``. Hexadecimal literals also, unlike C/C++/Java
+    in which case they are of type `BigInt`. Hexadecimal literals also, unlike C/C++/Java
     and unlike decimal literals in Julia, have a type based on the *length* of the literal, including
     leading 0s. For example, `0x0` and `0x00` have type [`UInt8`](@ref), `0x000` and `0x0000` have type
     [`UInt16`](@ref), then literals with 5 to 8 hex digits have type `UInt32`, 9 to 16 hex digits type
