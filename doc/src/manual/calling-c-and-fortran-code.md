@@ -153,8 +153,8 @@ For example, to match C prototypes of the form:
 typedef returntype (*functiontype)(argumenttype,...)
 ```
 
-The function [`cfunction()`](@ref) generates the C-compatible function pointer for a call to a
-Julia function. Arguments to [`cfunction()`](@ref) are as follows:
+The function [`cfunction`](@ref) generates the C-compatible function pointer for a call to a
+Julia function. Arguments to [`cfunction`](@ref) are as follows:
 
 1. A Julia Function
 2. Return type
@@ -195,7 +195,7 @@ In order to pass this function to C, we obtain its address using the function `c
 julia> const mycompare_c = cfunction(mycompare, Cint, Tuple{Ref{Cdouble}, Ref{Cdouble}});
 ```
 
-[`cfunction()`](@ref) accepts three arguments: the Julia function (`mycompare`), the return type
+[`cfunction`](@ref) accepts three arguments: the Julia function (`mycompare`), the return type
 (`Cint`), and a tuple type of the input argument types, in this case to sort an array of `Cdouble`
 ([`Float64`](@ref)) elements.
 
@@ -239,7 +239,7 @@ Julia code from a C header file.)
 
 ### Auto-conversion:
 
-Julia automatically inserts calls to the [`Base.cconvert()`](@ref) function to convert each argument
+Julia automatically inserts calls to the [`Base.cconvert`](@ref) function to convert each argument
 to the specified type. For example, the following call:
 
 ```julia
@@ -254,12 +254,12 @@ ccall((:foo, "libfoo"), Void, (Int32, Float64),
       Base.unsafe_convert(Float64, Base.cconvert(Float64, y)))
 ```
 
-[`Base.cconvert()`](@ref) normally just calls [`convert()`](@ref), but can be defined to return an
+[`Base.cconvert`](@ref) normally just calls [`convert`](@ref), but can be defined to return an
 arbitrary new object more appropriate for passing to C.
 This should be used to perform all allocations of memory that will be accessed by the C code.
 For example, this is used to convert an `Array` of objects (e.g. strings) to an array of pointers.
 
-[`Base.unsafe_convert()`](@ref) handles conversion to `Ptr` types. It is considered unsafe because
+[`Base.unsafe_convert`](@ref) handles conversion to `Ptr` types. It is considered unsafe because
 converting an object to a native pointer can hide the object from the garbage collector, causing
 it to be freed prematurely.
 
@@ -323,9 +323,9 @@ same:
     (for example, to pass a `Float64` array to a function that operates on uninterpreted bytes), you
     can declare the argument as `Ptr{Void}`.
 
-    If an array of eltype `Ptr{T}` is passed as a `Ptr{Ptr{T}}` argument, [`Base.cconvert()`](@ref)
+    If an array of eltype `Ptr{T}` is passed as a `Ptr{Ptr{T}}` argument, [`Base.cconvert`](@ref)
     will attempt to first make a null-terminated copy of the array with each element replaced by its
-    [`Base.cconvert()`](@ref) version. This allows, for example, passing an `argv` pointer array of type
+    [`Base.cconvert`](@ref) version. This allows, for example, passing an `argv` pointer array of type
     `Vector{String}` to an argument of type `Ptr{Ptr{Cchar}}`.
 
 On all systems we currently support, basic C/C++ value types may be translated to Julia types
@@ -555,7 +555,7 @@ allocated in Julia to be freed by an external library) is equally invalid.
 In Julia code wrapping calls to external C routines, ordinary (non-pointer) data should be declared
 to be of type `T` inside the [`ccall`](@ref), as they are passed by value.  For C code accepting
 pointers, `Ref{T}` should generally be used for the types of input arguments, allowing the use
-of pointers to memory managed by either Julia or C through the implicit call to [`Base.cconvert()`](@ref).
+of pointers to memory managed by either Julia or C through the implicit call to [`Base.cconvert`](@ref).
  In contrast, pointers returned by the C function called should be declared to be of output type
 `Ptr{T}`, reflecting that the memory pointed to is managed by C only. Pointers contained in C
 structs should be represented as fields of type `Ptr{T}` within the corresponding Julia struct
@@ -590,12 +590,12 @@ For translating a C argument list to Julia:
 
       * `Any`
       * argument value must be a valid Julia object
-      * currently unsupported by [`cfunction()`](@ref)
+      * currently unsupported by [`cfunction`](@ref)
   * `jl_value_t**`
 
       * `Ref{Any}`
       * argument value must be a valid Julia object (or `C_NULL`)
-      * currently unsupported by [`cfunction()`](@ref)
+      * currently unsupported by [`cfunction`](@ref)
   * `T*`
 
       * `Ref{T}`, where `T` is the Julia type corresponding to `T`
@@ -603,7 +603,7 @@ For translating a C argument list to Julia:
         object
   * `(T*)(...)` (e.g. a pointer to a function)
 
-      * `Ptr{Void}` (you may need to use [`cfunction()`](@ref) explicitly to create this pointer)
+      * `Ptr{Void}` (you may need to use [`cfunction`](@ref) explicitly to create this pointer)
   * `...` (e.g. a vararg)
 
       * `T...`, where `T` is the Julia type
@@ -654,7 +654,7 @@ For translating a C return type to Julia:
           * `Ptr{T}`, where `T` is the Julia type corresponding to `T`
   * `(T*)(...)` (e.g. a pointer to a function)
 
-      * `Ptr{Void}` (you may need to use [`cfunction()`](@ref) explicitly to create this pointer)
+      * `Ptr{Void}` (you may need to use [`cfunction`](@ref) explicitly to create this pointer)
 
 ### Passing Pointers for Modifying Inputs
 
@@ -728,7 +728,7 @@ end
 
 The [GNU Scientific Library](https://www.gnu.org/software/gsl/) (here assumed to be accessible
 through `:libgsl`) defines an opaque pointer, `gsl_permutation *`, as the return type of the C
-function `gsl_permutation_alloc()`. As user code never has to look inside the `gsl_permutation`
+function `gsl_permutation_alloc`. As user code never has to look inside the `gsl_permutation`
 struct, the corresponding Julia wrapper simply needs a new type declaration, `gsl_permutation`,
 that has no internal fields and whose sole purpose is to be placed in the type parameter of a
 `Ptr` type.  The return type of the [`ccall`](@ref) is declared as `Ptr{gsl_permutation}`, since
@@ -757,7 +757,7 @@ end
 
 Here, the input `p` is declared to be of type `Ref{gsl_permutation}`, meaning that the memory
 that `p` points to may be managed by Julia or by C. A pointer to memory allocated by C should
-be of type `Ptr{gsl_permutation}`, but it is convertable using [`Base.cconvert()`](@ref) and therefore
+be of type `Ptr{gsl_permutation}`, but it is convertable using [`Base.cconvert`](@ref) and therefore
 can be used in the same (covariant) context of the input argument to a [`ccall`](@ref). A pointer
 to memory allocated by Julia must be of type `Ref{gsl_permutation}`, to ensure that the memory
 address pointed to is valid and that Julia's garbage collector manages the chunk of memory pointed
@@ -809,7 +809,7 @@ the C function may end up throwing an invalid memory access exception.
 
 ## Garbage Collection Safety
 
-When passing data to a [`ccall`](@ref), it is best to avoid using the [`pointer()`](@ref) function.
+When passing data to a [`ccall`](@ref), it is best to avoid using the [`pointer`](@ref) function.
 Instead define a convert method and pass the variables directly to the [`ccall`](@ref). [`ccall`](@ref)
 automatically arranges that all of its arguments will be preserved from garbage collection until
 the call returns. If a C API will store a reference to memory allocated by Julia, after the [`ccall`](@ref)
@@ -818,9 +818,9 @@ way to handle this is to make a global variable of type `Array{Ref,1}` to hold t
 the C library notifies you that it is finished with them.
 
 Whenever you have created a pointer to Julia data, you must ensure the original data exists until
-you are done with using the pointer. Many methods in Julia such as [`unsafe_load()`](@ref) and
-[`String()`](@ref) make copies of data instead of taking ownership of the buffer, so that it is
-safe to free (or alter) the original data without affecting Julia. A notable exception is [`unsafe_wrap()`](@ref)
+you are done with using the pointer. Many methods in Julia such as [`unsafe_load`](@ref) and
+[`String`](@ref) make copies of data instead of taking ownership of the buffer, so that it is
+safe to free (or alter) the original data without affecting Julia. A notable exception is [`unsafe_wrap`](@ref)
 which, for performance reasons, shares (or can be told to take ownership of) the underlying buffer.
 
 The garbage collector does not guarantee any order of finalization. That is, if `a` contained
@@ -923,8 +923,8 @@ unlike the equivalent Julia functions exposed by `Core.Intrinsics`.
 
 ## Accessing Global Variables
 
-Global variables exported by native libraries can be accessed by name using the [`cglobal()`](@ref)
-function. The arguments to [`cglobal()`](@ref) are a symbol specification identical to that used
+Global variables exported by native libraries can be accessed by name using the [`cglobal`](@ref)
+function. The arguments to [`cglobal`](@ref) are a symbol specification identical to that used
 by [`ccall`](@ref), and a type describing the value stored in the variable:
 
 ```julia-repl
@@ -933,7 +933,7 @@ Ptr{Int32} @0x00007f418d0816b8
 ```
 
 The result is a pointer giving the address of the value. The value can be manipulated through
-this pointer using [`unsafe_load()`](@ref) and [`unsafe_store!()`](@ref).
+this pointer using [`unsafe_load`](@ref) and [`unsafe_store!`](@ref).
 
 ## Accessing Data through a Pointer
 
@@ -943,7 +943,7 @@ cause Julia to terminate abruptly.
 Given a `Ptr{T}`, the contents of type `T` can generally be copied from the referenced memory
 into a Julia object using `unsafe_load(ptr, [index])`. The index argument is optional (default
 is 1), and follows the Julia-convention of 1-based indexing. This function is intentionally similar
-to the behavior of [`getindex()`](@ref) and [`setindex!()`](@ref) (e.g. `[]` access syntax).
+to the behavior of [`getindex`](@ref) and [`setindex!`](@ref) (e.g. `[]` access syntax).
 
 The return value will be a new object initialized to contain a copy of the contents of the referenced
 memory. The referenced memory can safely be freed or released.

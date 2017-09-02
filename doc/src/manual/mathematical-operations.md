@@ -266,7 +266,7 @@ situations like hash key comparisons:
 | [`isinf(x)`](@ref)      | `x` is infinite           |
 | [`isnan(x)`](@ref)      | `x` is not a number       |
 
-[`isequal()`](@ref) considers `NaN`s equal to each other:
+[`isequal`](@ref) considers `NaN`s equal to each other:
 
 ```jldoctest
 julia> isequal(NaN, NaN)
@@ -279,7 +279,7 @@ julia> isequal(NaN, NaN32)
 true
 ```
 
-`isequal()` can also be used to distinguish signed zeros:
+`isequal` can also be used to distinguish signed zeros:
 
 ```jldoctest
 julia> -0.0 == 0.0
@@ -292,9 +292,9 @@ false
 Mixed-type comparisons between signed integers, unsigned integers, and floats can be tricky. A
 great deal of care has been taken to ensure that Julia does them correctly.
 
-For other types, `isequal()` defaults to calling [`==()`](@ref), so if you want to define
-equality for your own types then you only need to add a [`==()`](@ref) method.  If you define
-your own equality function, you should probably define a corresponding [`hash()`](@ref) method
+For other types, `isequal` defaults to calling [`==`](@ref), so if you want to define
+equality for your own types then you only need to add a [`==`](@ref) method.  If you define
+your own equality function, you should probably define a corresponding [`hash`](@ref) method
 to ensure that `isequal(x,y)` implies `hash(x) == hash(y)`.
 
 ### Chaining comparisons
@@ -462,7 +462,7 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`cld(x,y)`](@ref)    | ceiling division; quotient rounded towards `+Inf`                                                         |
 | [`rem(x,y)`](@ref)    | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
 | [`mod(x,y)`](@ref)    | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
-| [`mod1(x,y)`](@ref)   | `mod()` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
+| [`mod1(x,y)`](@ref)   | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
 | [`mod2pi(x)`](@ref)   | modulus with respect to 2pi;  `0 <= mod2pi(x)    < 2pi`                                                   |
 | [`divrem(x,y)`](@ref) | returns `(div(x,y),rem(x,y))`                                                                             |
 | [`fldmod(x,y)`](@ref) | returns `(fld(x,y),mod(x,y))`                                                                             |
@@ -498,7 +498,7 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`exponent(x)`](@ref)    | binary exponent of `x`                                                     |
 | [`significand(x)`](@ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
 
-For an overview of why functions like [`hypot()`](@ref), [`expm1()`](@ref), and [`log1p()`](@ref)
+For an overview of why functions like [`hypot`](@ref), [`expm1`](@ref), and [`log1p`](@ref)
 are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](https://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),
 and [hypot](https://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/).
 

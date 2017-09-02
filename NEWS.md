@@ -217,7 +217,7 @@ Library improvements
 
   * The `crc32c` function for CRC-32c checksums is now exported ([#22274]).
 
-  * The output of `versioninfo()` is now controlled with keyword arguments ([#21974]).
+  * The output of `versioninfo` is now controlled with keyword arguments ([#21974]).
 
   * The function `LibGit2.set_remote_url` now always sets both the fetch and push URLs for a
     git repo. Additionally, the argument order was changed to be consistent with the git
@@ -889,7 +889,7 @@ Deprecated or removed
     `pop!(ENV, k, def)`. Be aware that `pop!` returns `k` or `def`, whereas `delete!`
     returns `ENV` or `def` ([#18012]).
 
-  * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor()` ([#18977]).
+  * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor` ([#18977]).
 
   * The single-argument form of `write` (`write(x)`, with implicit `STDOUT` output stream),
     has been deprecated in favor of the explicit equivalent `write(STDOUT, x)` ([#17654]).

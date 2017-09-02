@@ -5,7 +5,7 @@ easy to use programmatically.
 
 ## Viewing a stack trace
 
-The primary function used to obtain a stack trace is [`stacktrace()`](@ref):
+The primary function used to obtain a stack trace is [`stacktrace`](@ref):
 
 ```julia-repl
 julia> stacktrace()
@@ -16,7 +16,7 @@ julia> stacktrace()
  (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73
 ```
 
-Calling [`stacktrace()`](@ref) returns a vector of [`StackFrame`](@ref) s. For ease of use, the
+Calling [`stacktrace`](@ref) returns a vector of [`StackFrame`](@ref) s. For ease of use, the
 alias [`StackTrace`](@ref) can be used in place of `Vector{StackFrame}`. (Examples with `[...]`
 indicate that output may vary depending on how the code is run.)
 
@@ -47,8 +47,8 @@ julia> grandparent()
 [...]
 ```
 
-Note that when calling [`stacktrace()`](@ref) you'll typically see a frame with `eval(...) at boot.jl`.
-When calling [`stacktrace()`](@ref) from the REPL you'll also have a few extra frames in the stack
+Note that when calling [`stacktrace`](@ref) you'll typically see a frame with `eval(...) at boot.jl`.
+When calling [`stacktrace`](@ref) from the REPL you'll also have a few extra frames in the stack
 from `REPL.jl`, usually looking something like this:
 
 ```julia-repl
@@ -69,7 +69,7 @@ julia> example()
 Each [`StackFrame`](@ref) contains the function name, file name, line number, lambda info, a flag
 indicating whether the frame has been inlined, a flag indicating whether it is a C function (by
 default C functions do not appear in the stack trace), and an integer representation of the pointer
-returned by [`backtrace()`](@ref):
+returned by [`backtrace`](@ref):
 
 ```julia-repl
 julia> top_frame = stacktrace()[1]
@@ -126,13 +126,13 @@ julia> example()
 ```
 
 You may notice that in the example above the first stack frame points points at line 4, where
-[`stacktrace()`](@ref) is called, rather than line 2, where *bad_function* is called, and `bad_function`'s
-frame is missing entirely. This is understandable, given that [`stacktrace()`](@ref) is called
+[`stacktrace`](@ref) is called, rather than line 2, where *bad_function* is called, and `bad_function`'s
+frame is missing entirely. This is understandable, given that [`stacktrace`](@ref) is called
 from the context of the *catch*. While in this example it's fairly easy to find the actual source
 of the error, in complex cases tracking down the source of the error becomes nontrivial.
 
-This can be remedied by calling [`catch_stacktrace()`](@ref) instead of [`stacktrace()`](@ref).
-Instead of returning callstack information for the current context, [`catch_stacktrace()`](@ref)
+This can be remedied by calling [`catch_stacktrace`](@ref) instead of [`stacktrace`](@ref).
+Instead of returning callstack information for the current context, [`catch_stacktrace`](@ref)
 returns stack information for the context of the most recent exception:
 
 ```julia-repl
@@ -181,10 +181,10 @@ ERROR: Whoops!
 [...]
 ```
 
-## Comparison with [`backtrace()`](@ref)
+## Comparison with [`backtrace`](@ref)
 
-A call to [`backtrace()`](@ref) returns a vector of `Ptr{Void}`, which may then be passed into
-[`stacktrace()`](@ref) for translation:
+A call to [`backtrace`](@ref) returns a vector of `Ptr{Void}`, which may then be passed into
+[`stacktrace`](@ref) for translation:
 
 ```julia-repl
 julia> trace = backtrace()
@@ -220,8 +220,8 @@ julia> stacktrace(trace)
  (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73
 ```
 
-Notice that the vector returned by [`backtrace()`](@ref) had 21 pointers, while the vector returned
-by [`stacktrace()`](@ref) only has 5. This is because, by default, [`stacktrace()`](@ref) removes
+Notice that the vector returned by [`backtrace`](@ref) had 21 pointers, while the vector returned
+by [`stacktrace`](@ref) only has 5. This is because, by default, [`stacktrace`](@ref) removes
 any lower-level C functions from the stack. If you want to include stack frames from C calls,
 you can do it like this:
 
@@ -257,8 +257,8 @@ julia> stacktrace(trace, true)
  ip:0xffffffffffffffff
 ```
 
-Individual pointers returned by [`backtrace()`](@ref) can be translated into [`StackFrame`](@ref)
-s by passing them into [`StackTraces.lookup()`](@ref):
+Individual pointers returned by [`backtrace`](@ref) can be translated into [`StackFrame`](@ref)
+s by passing them into [`StackTraces.lookup`](@ref):
 
 ```julia-repl
 julia> pointer = backtrace()[1];

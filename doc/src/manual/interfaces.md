@@ -31,7 +31,7 @@ to generically build upon those behaviors.
 | `HasEltype()`                                | `eltype(IterType)` |
 | `EltypeUnknown()`                            | (*none*)           |
 
-Sequential iteration is implemented by the methods [`start()`](@ref), [`done()`](@ref), and [`next()`](@ref). Instead
+Sequential iteration is implemented by the methods [`start`](@ref), [`done`](@ref), and [`next`](@ref). Instead
 of mutating objects as they are iterated over, Julia provides these three methods to keep track
 of the iteration state externally from the object. The `start(iter)` method returns the initial
 state for the iterable object `iter`. That state gets passed along to `done(iter, state)`, which
@@ -92,7 +92,7 @@ julia> for i in Squares(7)
 49
 ```
 
-We can use many of the builtin methods that work with iterables, like [`in()`](@ref), [`mean()`](@ref) and [`std()`](@ref):
+We can use many of the builtin methods that work with iterables, like [`in`](@ref), [`mean`](@ref) and [`std`](@ref):
 
 ```jldoctest squaretype
 julia> 25 in Squares(10)
@@ -107,11 +107,11 @@ julia> std(Squares(100))
 
 There are a few more methods we can extend to give Julia more information about this iterable
 collection.  We know that the elements in a `Squares` sequence will always be `Int`. By extending
-the [`eltype()`](@ref) method, we can give that information to Julia and help it make more specialized
+the [`eltype`](@ref) method, we can give that information to Julia and help it make more specialized
 code in the more complicated methods. We also know the number of elements in our sequence, so
-we can extend [`length()`](@ref), too.
+we can extend [`length`](@ref), too.
 
-Now, when we ask Julia to [`collect()`](@ref) all the elements into an array it can preallocate a `Vector{Int}`
+Now, when we ask Julia to [`collect`](@ref) all the elements into an array it can preallocate a `Vector{Int}`
 of the right size instead of blindly [`push!`](@ref)ing each element into a `Vector{Any}`:
 
 ```jldoctest squaretype
@@ -146,7 +146,7 @@ be used in their specific case.
 
 For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
 it.  We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
-simply needs to define [`getindex()`](@ref):
+simply needs to define [`getindex`](@ref):
 
 ```jldoctest squaretype
 julia> function Base.getindex(S::Squares, i::Int)
@@ -158,7 +158,7 @@ julia> Squares(100)[23]
 529
 ```
 
-Additionally, to support the syntax `S[end]`, we must define [`endof()`](@ref) to specify the last valid
+Additionally, to support the syntax `S[end]`, we must define [`endof`](@ref) to specify the last valid
 index:
 
 ```jldoctest squaretype
@@ -168,7 +168,7 @@ julia> Squares(23)[end]
 529
 ```
 
-Note, though, that the above *only* defines [`getindex()`](@ref) with one integer index. Indexing with
+Note, though, that the above *only* defines [`getindex`](@ref) with one integer index. Indexing with
 anything other than an `Int` will throw a [`MethodError`](@ref) saying that there was no matching method.
 In order to support indexing with ranges or vectors of `Int`s, separate methods must be written:
 
@@ -199,10 +199,10 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `setindex!(A, v, i::Int)`                       |                                          | (if `IndexLinear`) Scalar indexed assignment                                           |
 | `setindex!(A, v, I::Vararg{Int, N})`            |                                          | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment       |
 | **Optional methods**                            | **Default definition**                   | **Brief description**                                                                 |
-| `IndexStyle(::Type)`                            | `IndexCartesian()`                       | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
-| `getindex(A, I...)`                             | defined in terms of scalar `getindex()`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
-| `setindex!(A, I...)`                            | defined in terms of scalar `setindex!()` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
-| `start()`/`next()`/`done()`                     | defined in terms of scalar `getindex()`  | Iteration                                                                             |
+| `IndexStyle(::Type)`                            | `IndexCartesian`                       | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
+| `getindex(A, I...)`                             | defined in terms of scalar `getindex`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
+| `setindex!(A, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
+| `start`/`next`/`done`                           | defined in terms of scalar `getindex`  | Iteration                                                                             |
 | `length(A)`                                     | `prod(size(A))`                          | Number of elements                                                                    |
 | `similar(A)`                                    | `similar(A, eltype(A), size(A))`         | Return a mutable array with the same shape and element type                           |
 | `similar(A, ::Type{S})`                         | `similar(A, S, size(A))`                 | Return a mutable array with the same shape and the specified element type             |
@@ -233,7 +233,7 @@ efficiently converts the indices into one linear index and then calls the above 
 arrays, on the other hand, require methods to be defined for each supported dimensionality with
 `ndims(A)` `Int` indices. For example, the built-in [`SparseMatrixCSC`](@ref) type only
 supports two dimensions, so it just defines
-`getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for `setindex!()`.
+`getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for `setindex!`.
 
 Returning to the sequence of squares from above, we could instead define it as a subtype of an
 `AbstractArray{Int, 1}`:
@@ -251,7 +251,7 @@ julia> Base.getindex(S::SquaresVector, i::Int) = i*i
 ```
 
 Note that it's very important to specify the two parameters of the `AbstractArray`; the first
-defines the [`eltype()`](@ref), and the second defines the [`ndims()`](@ref). That supertype and those three
+defines the [`eltype`](@ref), and the second defines the [`ndims`](@ref). That supertype and those three
 methods are all it takes for `SquaresVector` to be an iterable, indexable, and completely functional
 array:
 
@@ -302,8 +302,8 @@ julia> Base.getindex(A::SparseArray{T,N}, I::Vararg{Int,N}) where {T,N} = get(A.
 julia> Base.setindex!(A::SparseArray{T,N}, v, I::Vararg{Int,N}) where {T,N} = (A.data[I] = v)
 ```
 
-Notice that this is an `IndexCartesian` array, so we must manually define [`getindex()`](@ref) and [`setindex!()`](@ref)
-at the dimensionality of the array. Unlike the `SquaresVector`, we are able to define [`setindex!()`](@ref),
+Notice that this is an `IndexCartesian` array, so we must manually define [`getindex`](@ref) and [`setindex!`](@ref)
+at the dimensionality of the array. Unlike the `SquaresVector`, we are able to define [`setindex!`](@ref),
 and so we can mutate the array:
 
 ```jldoctest squarevectype
@@ -327,7 +327,7 @@ julia> A[:] = 1:length(A); A
 ```
 
 The result of indexing an `AbstractArray` can itself be an array (for instance when indexing by
-a `Range`). The `AbstractArray` fallback methods use [`similar()`](@ref) to allocate an `Array` of the
+a `Range`). The `AbstractArray` fallback methods use [`similar`](@ref) to allocate an `Array` of the
 appropriate size and element type, which is filled in using the basic indexing method described
 above. However, when implementing an array wrapper you often want the result to be wrapped as
 well:
@@ -342,8 +342,8 @@ julia> A[1:2,:]
 In this example it is accomplished by defining `Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims)`
 to create the appropriate wrapped array. (Note that while `similar` supports 1- and 2-argument
 forms, in most case you only need to specialize the 3-argument form.) For this to work it's important
-that `SparseArray` is mutable (supports `setindex!`). Defining `similar()`, `getindex()` and
-`setindex!()` for `SparseArray` also makes it possible to [`copy()`](@ref) the array:
+that `SparseArray` is mutable (supports `setindex!`). Defining `similar`, `getindex` and
+`setindex!` for `SparseArray` also makes it possible to [`copy`](@ref) the array:
 
 ```jldoctest squarevectype
 julia> copy(A)

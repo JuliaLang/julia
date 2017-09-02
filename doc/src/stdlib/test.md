@@ -23,7 +23,7 @@ see if your code is correct by checking that the results are what you expect. It
 to ensure your code still works after you make changes, and can be used when developing as a way
 of specifying the behaviors your code should have when complete.
 
-Simple unit testing can be performed with the `@test()` and `@test_throws()` macros:
+Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 
 ```@docs
 Base.Test.@test
@@ -60,7 +60,7 @@ ERROR: There was an error during testing
 ```
 
 If the condition could not be evaluated because an exception was thrown, which occurs in this
-case because `length()` is not defined for symbols, an `Error` object is returned and an exception
+case because `length` is not defined for symbols, an `Error` object is returned and an exception
 is thrown:
 
 ```julia-repl
@@ -79,7 +79,7 @@ Error During Test
 ERROR: There was an error during testing
 ```
 
-If we expect that evaluating an expression *should* throw an exception, then we can use `@test_throws()`
+If we expect that evaluating an expression *should* throw an exception, then we can use `@test_throws`
 to check that this occurs:
 
 ```jldoctest testfoo
@@ -95,7 +95,7 @@ of inputs. In the event a test fails, the default behavior is to throw an except
 However, it is normally preferable to run the rest of the tests first to get a better picture
 of how many errors there are in the code being tested.
 
-The `@testset()` macro can be used to group tests into *sets*. All the tests in a test set will
+The `@testset` macro can be used to group tests into *sets*. All the tests in a test set will
 be run, and at the end of the test set a summary will be printed. If any of the tests failed,
 or could not be evaluated due to an error, the test set will then throw a `TestSetException`.
 
@@ -167,7 +167,7 @@ ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
 
 As calculations on floating-point values can be imprecise, you can perform approximate equality
 checks using either `@test a ≈ b` (where `≈`, typed via tab completion of `\approx`, is the
-[`isapprox()`](@ref) function) or use [`isapprox()`](@ref) directly.
+[`isapprox`](@ref) function) or use [`isapprox`](@ref) directly.
 
 ```jldoctest
 julia> @test 1 ≈ 0.999999999
@@ -188,7 +188,7 @@ Base.Test.@test_nowarn
 
 ## Broken Tests
 
-If a test fails consistently it can be changed to use the `@test_broken()` macro. This will denote
+If a test fails consistently it can be changed to use the `@test_broken` macro. This will denote
 the test as `Broken` if the test continues to fail and alerts the user via an `Error` if the test
 succeeds.
 
@@ -196,7 +196,7 @@ succeeds.
 Base.Test.@test_broken
 ```
 
-`@test_skip()` is also available to skip a test without evaluation, but counting the skipped test
+`@test_skip` is also available to skip a test without evaluation, but counting the skipped test
 in the test set reporting. The test will not run but gives a `Broken` `Result`.
 
 ```@docs

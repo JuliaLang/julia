@@ -361,7 +361,7 @@ code to help the user avoid other wrong-behavior situations:
    emitted when the incremental precompile flag is set.
 2. `global const` statements from local scope after `__init__()` has been started (see issue #12010
    for plans to add an error for this)
-3. Replacing a module (or calling [`workspace()`](@ref)) is a runtime error while doing an incremental precompile.
+3. Replacing a module (or calling [`workspace`](@ref)) is a runtime error while doing an incremental precompile.
 
 A few other points to be aware of:
 
@@ -384,7 +384,7 @@ A few other points to be aware of:
 It is sometimes helpful during module development to turn off incremental precompilation. The
 command line flag `--compilecache={yes|no}` enables you to toggle module precompilation on and
 off. When Julia is started with `--compilecache=no` the serialized modules in the compile cache
-are ignored when loading modules and module dependencies. `Base.compilecache()` can still be called
+are ignored when loading modules and module dependencies. `Base.compilecache` can still be called
 manually and it will respect `__precompile__()` directives for the module. The state of this command
-line flag is passed to [`Pkg.build()`](@ref) to disable automatic precompilation triggering when installing,
+line flag is passed to [`Pkg.build`](@ref) to disable automatic precompilation triggering when installing,
 updating, and explicitly building packages.
