@@ -6261,7 +6261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.code_llvm",
     "category": "Function",
-    "text": "code_llvm([io], f, types)\n\nPrints the LLVM bitcodes generated for running the method matching the given generic function and type signature to io which defaults to STDOUT.\n\nAll metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.\n\n\n\n"
+    "text": "code_llvm([io=STDOUT,], f, types)\n\nPrints the LLVM bitcodes generated for running the method matching the given generic function and type signature to io.\n\nAll metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.\n\n\n\n"
 },
 
 {
@@ -6277,7 +6277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.code_native",
     "category": "Function",
-    "text": "code_native([io], f, types, [syntax])\n\nPrints the native assembly instructions generated for running the method matching the given generic function and type signature to io which defaults to STDOUT. Switch assembly syntax using syntax symbol parameter set to :att for AT&T syntax or :intel for Intel syntax. Output is AT&T syntax by default.\n\n\n\n"
+    "text": "code_native([io=STDOUT,], f, types, syntax=:att)\n\nPrints the native assembly instructions generated for running the method matching the given generic function and type signature to io. Switch assembly syntax using syntax symbol parameter set to :att for AT&T syntax or :intel for Intel syntax.\n\n\n\n"
 },
 
 {
@@ -7301,7 +7301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\n"
 },
 
 {
