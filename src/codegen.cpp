@@ -357,6 +357,7 @@ static GlobalVariable *jlgetworld_global;
 
 // placeholder functions
 static Function *gcroot_flush_func;
+static Function *gc_use_func;
 static Function *except_enter_func;
 static Function *pointer_from_objref_func;
 
@@ -6488,6 +6489,12 @@ static void init_julia_llvm_env(Module *m)
                                          Function::ExternalLinkage,
                                          "julia.gcroot_flush");
     add_named_global(gcroot_flush_func, (void*)NULL, /*dllimport*/false);
+
+    gc_use_func = Function::Create(FunctionType::get(T_void,
+                                         ArrayRef<Type*>(PointerType::get(T_jlvalue, AddressSpace::Derived)), false),
+                                         Function::ExternalLinkage,
+                                         "julia.gc_use");
+    add_named_global(gc_use_func, (void*)NULL, /*dllimport*/false);
 
     pointer_from_objref_func = Function::Create(FunctionType::get(T_pjlvalue,
                                          ArrayRef<Type*>(PointerType::get(T_jlvalue, AddressSpace::Derived)), false),

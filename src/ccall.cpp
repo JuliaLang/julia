@@ -1687,6 +1687,13 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         emit_signal_fence(ctx);
         return ghostValue(jl_void_type);
     }
+    else if (is_libjulia_func(jl_gc_use)) {
+        assert(lrt == T_void);
+        assert(!isVa && !llvmcall && nargt == 1);
+        ctx.builder.CreateCall(prepare_call(gc_use_func), {decay_derived(boxed(ctx, argv[0]))});
+        JL_GC_POP();
+        return ghostValue(jl_void_type);
+    }
     else if (_is_libjulia_func((uintptr_t)ptls_getter, "jl_get_ptls_states")) {
         assert(lrt == T_pint8);
         assert(!isVa && !llvmcall && nargt == 0);

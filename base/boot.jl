@@ -438,4 +438,6 @@ show(@nospecialize a) = show(STDOUT, a)
 print(@nospecialize a...) = print(STDOUT, a...)
 println(@nospecialize a...) = println(STDOUT, a...)
 
+gcuse(@nospecialize a) = ccall(:jl_gc_use, Void, (Any,), a)
+
 ccall(:jl_set_istopmod, Void, (Any, Bool), Core, true)

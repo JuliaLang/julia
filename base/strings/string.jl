@@ -59,6 +59,13 @@ String(s::Symbol) = unsafe_string(Cstring(s))
 pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
 pointer(s::String, i::Integer) = pointer(s)+(i-1)
 
+function unsafe_load(s::String, i::Integer=1)
+    ptr = pointer(s, i)
+    r = unsafe_load(ptr)
+    Core.gcuse(s)
+    r
+end
+
 sizeof(s::String) = Core.sizeof(s)
 
 """
@@ -73,7 +80,7 @@ codeunit(s::AbstractString, i::Integer)
     @boundscheck if (i < 1) | (i > sizeof(s))
         throw(BoundsError(s,i))
     end
-    unsafe_load(pointer(s),i)
+    unsafe_load(s, i)
 end
 
 write(io::IO, s::String) = unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
@@ -160,26 +167,24 @@ const utf8_trailing = [
 ## required core functionality ##
 
 function endof(s::String)
-    p = pointer(s)
     i = sizeof(s)
-    while i > 0 && is_valid_continuation(unsafe_load(p,i))
+    while i > 0 && is_valid_continuation(unsafe_load(s, i))
         i -= 1
     end
     i
 end
 
 function length(s::String)
-    p = pointer(s)
     cnum = 0
     for i = 1:sizeof(s)
-        cnum += !is_valid_continuation(unsafe_load(p,i))
+        cnum += !is_valid_continuation(unsafe_load(s, i))
     end
     cnum
 end
 
-@noinline function slow_utf8_next(p::Ptr{UInt8}, b::UInt8, i::Int, l::Int)
+@noinline function slow_utf8_next(s::String, b::UInt8, i::Int, l::Int)
     if is_valid_continuation(b)
-        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, unsafe_load(p,i)))
+        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, unsafe_load(s, i)))
     end
     trailing = utf8_trailing[b + 1]
     if l < i + trailing
@@ -188,7 +193,7 @@ end
     c::UInt32 = 0
     for j = 1:(trailing + 1)
         c <<= 6
-        c += unsafe_load(p,i)
+        c += unsafe_load(s, i)
         i += 1
     end
     c -= utf8_offset[trailing + 1]
@@ -206,12 +211,11 @@ done(s::String, state) = state > sizeof(s)
     @boundscheck if (i < 1) | (i > sizeof(s))
         throw(BoundsError(s,i))
     end
-    p = pointer(s)
-    b = unsafe_load(p, i)
+    b = unsafe_load(s, i)
     if b < 0x80
         return Char(b), i + 1
     end
-    return slow_utf8_next(p, b, i, sizeof(s))
+    return slow_utf8_next(s, b, i, sizeof(s))
 end
 
 function first_utf8_byte(ch::Char)
@@ -225,8 +229,7 @@ end
 
 function reverseind(s::String, i::Integer)
     j = sizeof(s) + 1 - i
-    p = pointer(s)
-    while is_valid_continuation(unsafe_load(p,j))
+    while is_valid_continuation(unsafe_load(s, j))
         j -= 1
     end
     return j
@@ -235,7 +238,7 @@ end
 ## overload methods for efficiency ##
 
 isvalid(s::String, i::Integer) =
-    (1 <= i <= sizeof(s)) && !is_valid_continuation(unsafe_load(pointer(s),i))
+    (1 <= i <= sizeof(s)) && !is_valid_continuation(unsafe_load(s, i))
 
 function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""
@@ -438,7 +441,7 @@ function repeat(s::String, r::Integer)
     n = sizeof(s)
     out = _string_n(n*r)
     if n == 1 # common case: repeating a single ASCII char
-        ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), out, unsafe_load(pointer(s)), r)
+        ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), out, unsafe_load(s), r)
     else
         for i=1:r
             unsafe_copy!(pointer(out, 1+(i-1)*n), pointer(s), n)

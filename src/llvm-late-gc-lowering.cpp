@@ -320,6 +320,7 @@ private:
     MDNode *tbaa_tag;
     Function *ptls_getter;
     Function *gc_flush_func;
+    Function *gc_use_func;
     Function *pointer_from_objref_func;
     Function *alloc_obj_func;
     Function *pool_alloc_func;
@@ -745,7 +746,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
                 if (auto callee = CI->getCalledFunction()) {
                     // Known functions emitted in codegen that are not safepoints
-                    if (callee == pointer_from_objref_func || callee->getName() == "memcmp") {
+                    if (callee == pointer_from_objref_func || callee == gc_use_func ||
+                        callee->getName() == "memcmp") {
                         continue;
                     }
                 }
@@ -1137,7 +1139,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
             }
             CallingConv::ID CC = CI->getCallingConv();
             auto callee = CI->getCalledValue();
-            if (gc_flush_func != nullptr && callee == gc_flush_func) {
+            if ((gc_flush_func != nullptr && callee == gc_flush_func) ||
+                (gc_use_func != nullptr && callee == gc_use_func)) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
                 auto *ASCI = new AddrSpaceCastInst(CI->getOperand(0),
@@ -1405,6 +1408,7 @@ static void addRetNoAlias(Function *F)
 bool LateLowerGCFrame::doInitialization(Module &M) {
     ptls_getter = M.getFunction("jl_get_ptls_states");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
+    gc_use_func = M.getFunction("julia.gc_use");
     pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
     auto &ctx = M.getContext();
     T_size = M.getDataLayout().getIntPtrType(ctx);
