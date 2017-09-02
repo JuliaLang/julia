@@ -2209,67 +2209,53 @@ function filter!(f, a::AbstractVector)
     return a
 end
 
-function filter(f, a::Vector)
-    r = Vector{eltype(a)}()
-    for ai in a
-        if f(ai)
-            push!(r, ai)
-        end
-    end
-    return r
-end
+filter(f, a::Vector) = mapfilter(f, push!, a, similar(a, 0))
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
 
-function intersect(v1, vs...)
-    ret = Vector{promote_eltype(v1, vs...)}()
-    for v_elem in v1
-        inall = true
-        for vsi in vs
-            if !in(v_elem, vsi)
-                inall=false; break
-            end
-        end
-        if inall
-            push!(ret, v_elem)
-        end
+_unique_filter!(pred, update!, state) = function (x)
+    if pred(x, state)
+        update!(state, x)
+        true
+    else
+        false
     end
-    ret
 end
 
-function union(vs...)
-    ret = Vector{promote_eltype(vs...)}()
-    seen = Set()
-    for v in vs
-        for v_elem in v
-            if !in(v_elem, seen)
-                push!(ret, v_elem)
-                push!(seen, v_elem)
-            end
-        end
-    end
-    ret
-end
-# setdiff only accepts two args
+_grow_filter!(seen) = _unique_filter!(∉, push!, seen)
+_shrink_filter!(keep) = _unique_filter!(∈, pop!, keep)
 
-function setdiff(a, b)
-    args_type = promote_type(eltype(a), eltype(b))
-    bset = Set(b)
-    ret = Vector{args_type}()
-    seen = Set{eltype(a)}()
-    for a_elem in a
-        if !in(a_elem, seen) && !in(a_elem, bset)
-            push!(ret, a_elem)
-            push!(seen, a_elem)
-        end
+function _grow!(pred!, v::AbstractVector, itrs)
+    filter!(pred!, v) # uniquify v
+    foldl(v, itrs) do v, itr
+        mapfilter(pred!, push!, itr, v)
     end
-    ret
 end
-# symdiff is associative, so a relatively clean
-# way to implement this is by using setdiff and union, and
-# recursing. Has the advantage of keeping order, too, but
-# not as fast as other methods that make a single pass and
-# store counts with a Dict.
-symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
-symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
+
+union!(v::AbstractVector{T}, itrs...) where {T} =
+    _grow!(_grow_filter!(sizehint!(Set{T}(), length(v))), v, itrs)
+
+symdiff!(v::AbstractVector{T}, itrs...) where {T} =
+    _grow!(_shrink_filter!(symdiff!(Set{T}(), v, itrs...)), v, itrs)
+
+function _shrink!(shrinker!, v::AbstractVector, itrs)
+    seen = Set{eltype(v)}()
+    filter!(_grow_filter!(seen), v)
+    shrinker!(seen, itrs...)
+    filter!(_in(seen), v)
+end
+
+intersect!(v::AbstractVector, itrs...) = _shrink!(intersect!, v, itrs)
+setdiff!(  v::AbstractVector, itrs...) = _shrink!(setdiff!, v, itrs)
+
+vectorfilter(f, v::AbstractVector) = filter(f, v) # TODO: do we want this special case?
+vectorfilter(f, v) = [x for x in v if f(x)]
+
+function _shrink(shrinker!, itr, itrs)
+    keep = shrinker!(Set(itr), itrs...)
+    vectorfilter(_shrink_filter!(keep), itr)
+end
+
+intersect(itr, itrs...) = _shrink(intersect!, itr, itrs)
+setdiff(  itr, itrs...) = _shrink(setdiff!, itr, itrs)

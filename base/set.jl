@@ -27,8 +27,13 @@ function Set(g::Generator)
     return Set{T}(g)
 end
 
-similar(s::Set{T}) where {T} = Set{T}()
-similar(s::Set, T::Type) = Set{T}()
+similar(s::Set{T}, ::Type{U}=T) where {T,U} = Set{U}()
+
+empty(s::Set{T}, ::Type{U}=T) where {T,U} = Set{U}()
+
+# return an empty set with eltype T, which is mutable (can be grown)
+# by default, a Set is returned
+emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 
 function show(io::IO, s::Set)
     print(io, "Set(")
@@ -88,23 +93,30 @@ julia> union([1, 2], [2, 4])
  2
  4
 
-julia> union([4, 2], [1, 2])
+julia> union([4, 2], 1:2)
 3-element Array{Int64,1}:
  4
  2
  1
+
+julia> union(Set([1, 2]), 2:3)
+Set([2, 3, 1])
 ```
 """
 function union end
 
-union(s::Set, sets...) = union!(Set{join_eltype(s, sets...)}(), s, sets...)
+_in(itr) = x -> x in itr
+
+union(s, sets...) = union!(emptymutable(s, promote_eltype(s, sets...)), s, sets...)
+union(s::AbstractSet) = copy(s)
 
 const ∪ = union
 
 """
-    union!(s::AbstractSet, itrs...)
+    union!(s::Union{AbstractSet,AbstractVector}, itrs...)
 
 Construct the union of passed in sets and overwrite `s` with the result.
+Maintain order with arrays.
 
 # Examples
 ```jldoctest
@@ -116,6 +128,11 @@ julia> a
 Set([7, 4, 3, 5, 1])
 ```
 """
+union!(s::AbstractSet, sets...) = foldl(union!, s, sets)
+
+# default generic 2-args implementation with push!
+union!(s::AbstractSet, itr) = foldl(push!, s, itr)
+
 function union!(s::Set{T}, itr) where T
     haslength(itr) && sizehint!(s, length(itr))
     for x=itr
@@ -125,17 +142,13 @@ function union!(s::Set{T}, itr) where T
     s
 end
 
-union!(s::AbstractSet, sets...) = foldl(union!, s, sets)
-
-join_eltype() = Bottom
-join_eltype(v1, vs...) = typejoin(eltype(v1), join_eltype(vs...))
 
 """
     intersect(s, itrs...)
     ∩(s, itrs...)
 
 Construct the intersection of sets.
-Maintain order and multiplicity of the first argument for arrays and ranges.
+Maintain order with arrays.
 
 # Examples
 ```jldoctest
@@ -144,28 +157,29 @@ julia> intersect([1, 2, 3], [3, 4, 5])
  3
 
 julia> intersect([1, 4, 4, 5, 6], [4, 6, 6, 7, 8])
-3-element Array{Int64,1}:
- 4
+2-element Array{Int64,1}:
  4
  6
+
+julia> intersect(Set([1, 2]), BitSet([2, 3]))
+Set([2])
 ```
 """
-function intersect end
-
-intersect(s) = copymutable(s)
-intersect(s::AbstractSet, itr) = mapfilter(x->in(x, s), push!, itr, similar(s))
 intersect(s::AbstractSet, itr, itrs...) = intersect!(intersect(s, itr), itrs...)
+intersect(s) = union(s)
+intersect(s::AbstractSet, itr) = mapfilter(_in(s), push!, itr, emptymutable(s))
 
 const ∩ = intersect
 
 """
-    intersect!(s::AbstractSet, itrs...)
+    intersect!(s::Union{AbstractSet,AbstractVector}, itrs...)
 
 Intersect all passed in sets and overwrite `s` with the result.
+Maintain order with arrays.
 """
-intersect!(s::AbstractSet, s2::AbstractSet) = filter!(x -> x in s2, s)
-intersect!(s::AbstractSet, itr) = intersect!(s, union!(similar(s), itr))
 intersect!(s::AbstractSet, itrs...) = foldl(intersect!, s, itrs)
+intersect!(s::AbstractSet, s2::AbstractSet) = filter!(_in(s2), s)
+intersect!(s::AbstractSet, itr) = intersect!(s, union!(emptymutable(s), itr))
 
 """
     setdiff(s, itrs...)
@@ -182,12 +196,13 @@ julia> setdiff([1,2,3], [3,4,5])
 ```
 """
 setdiff(s::AbstractSet, itrs...) = setdiff!(copymutable(s), itrs...)
-setdiff(s) = copymutable(s)
+setdiff(s) = union(s)
 
 """
     setdiff!(s, itrs...)
 
 Remove from set `s` (in-place) each element of each iterable from `itrs`.
+Maintain order with arrays.
 
 # Examples
 ```jldoctest
@@ -207,7 +222,8 @@ setdiff!(s::AbstractSet, itr) = foldl(delete!, s, itr)
     symdiff(s, itrs...)
 
 Construct the symmetric difference of elements in the passed in sets.
-Maintains order with arrays.
+When `s` is not an `AbstractSet`, the order is maintained.
+Note that in this case the multiplicity of elements matters.
 
 # Examples
 ```jldoctest
@@ -216,15 +232,25 @@ julia> symdiff([1,2,3], [3,4,5], [4,5,6])
  1
  2
  6
+
+julia> symdiff([1,2,1], [2, 1, 2])
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> symdiff(unique([1,2,1]), unique([2, 1, 2]))
+0-element Array{Int64,1}
 ```
 """
-symdiff(s::AbstractSet, sets...) = symdiff!(copymutable(s), sets...)
-symdiff(s) = copymutable(s) # remove when method above becomes as efficient
+symdiff(s, sets...) = symdiff!(emptymutable(s, promote_eltype(s, sets...)), s, sets...)
+symdiff(s) = symdiff!(copy(s))
 
 """
-    symdiff!(s::AbstractSet, itrs...)
+    symdiff!(s::Union{AbstractSet,AbstractVector}, itrs...)
 
 Construct the symmetric difference of the passed in sets, and overwrite `s` with the result.
+When `s` is an array, the order is maintained.
+Note that in this case the multiplicity of elements matters.
 """
 symdiff!(s::AbstractSet, itrs...) = foldl(symdiff!, s, itrs)
 
@@ -256,7 +282,18 @@ julia> issubset([1, 2, 3], [1, 2])
 false
 ```
 """
-issubset(l, r) = all(x -> x in r, l)
+function issubset(l, r)
+    for elt in l
+        if !in(elt, r)
+            return false
+        end
+    end
+    return true
+end
+
+# use the implementation below when it becoms as efficient
+# issubset(l, r) = all(_in(r), l)
+
 const ⊆ = issubset
 ⊊(l::Set, r::Set) = <(l, r)
 ⊈(l::Set, r::Set) = !⊆(l, r)

@@ -469,6 +469,20 @@ Library improvements
       linear-to-cartesian conversion ([#24715])
     - It has a new constructor taking an array
 
+  * several missing set-like operations have been added ([#23528]):
+    `union`, `intersect`, `symdiff`, `setdiff` are now implemented for
+    all collections with arbitrary many arguments, as well as the
+    mutating counterparts (`union!` etc.). The performance is also
+    much better in many cases. Note that this change is slightly
+    breaking: all the non-mutating functions always return a new
+    object even if only one argument is passed. Moreover the semantics
+    of `intersect` and `symdiff` is changed for vectors:
+    + `intersect` doesn't preserve the multiplicity anymore (use `filter` for
+      the old behavior)
+    + `symdiff` has been made consistent with the corresponding methods for
+      other containers, by taking the multiplicity of the arguments into account.
+      Use `unique` to get the old behavior.
+
   * The type `LinearIndices` has been added, providing conversion from
     cartesian incices to linear indices using the normal indexing operation. ([#24715])
 

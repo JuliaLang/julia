@@ -32,7 +32,12 @@ BitSet(itr) = union!(BitSet(), itr)
 
 eltype(::Type{BitSet}) = Int
 similar(s::BitSet) = BitSet()
+
+empty(s::BitSet, ::Type{Int}=Int) = BitSet()
+emptymutable(s::BitSet, ::Type{Int}=Int) = BitSet()
+
 copy(s1::BitSet) = copy!(BitSet(), s1)
+copymutable(s::BitSet) = copy(s)
 
 """
     copy!(dst, src)
@@ -48,8 +53,6 @@ function copy!(dest::BitSet, src::BitSet)
     dest.offset = src.offset
     dest
 end
-
-copymutable(s::BitSet) = copy(s)
 
 eltype(s::BitSet) = Int
 
@@ -256,7 +259,6 @@ isempty(s::BitSet) = _check0(s.bits, 1, length(s.bits))
 # Mathematical set functions: union!, intersect!, setdiff!, symdiff!
 
 union(s::BitSet, sets...) = union!(copy(s), sets...)
-union!(s::BitSet, ns) = foldl(push!, s, ns)
 union!(s1::BitSet, s2::BitSet) = _matched_map!(|, s1, s2)
 
 intersect(s1::BitSet, s2::BitSet) =
