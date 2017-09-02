@@ -252,9 +252,7 @@ end
 
 @testset "setlike" begin
     p = IntSet([1,2,5,6])
-    resize!(p.bits, 6)
     q = IntSet([1,3,5,7])
-    resize!(q.bits, 8)
     a = Set(p)
     b = Set(q)
     for f in (union, intersect, setdiff, symdiff)
