@@ -10,6 +10,7 @@
 #else
 #include "getopt.h"
 #endif
+#include "julia_assert.h"
 
 #ifdef _OS_WINDOWS_
 char *shlib_ext = ".dll";

@@ -4,6 +4,7 @@
 #ifndef _OS_WINDOWS_
 #  include <sys/resource.h>
 #endif
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -7,7 +7,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 
 #ifdef _OS_WINDOWS_
 #include <ws2tcpip.h>
@@ -27,6 +26,8 @@
 #include <io.h>
 #define write _write
 #endif
+
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 #include <cstring>

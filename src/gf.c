@@ -10,12 +10,12 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include "julia.h"
 #include "julia_internal.h"
 #ifndef _OS_WINDOWS_
 #include <unistd.h>
 #endif
+#include "julia_assert.h"
 
 // @nospecialize has no effect if the number of overlapping methods is greater than this
 #define MAX_UNSPECIALIZED_CONFLICTS 32

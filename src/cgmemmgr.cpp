@@ -5,7 +5,6 @@
 #include "options.h"
 
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
-#include "fix_llvm_assert.h"
 #include "julia.h"
 #include "julia_internal.h"
 
@@ -25,6 +24,7 @@
 #ifdef _OS_FREEBSD_
 #  include <sys/types.h>
 #endif
+#include "julia_assert.h"
 
 namespace {
 

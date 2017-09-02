@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <assert.h>
 #include <fcntl.h>
 
 #include <errno.h>
@@ -24,6 +23,7 @@
 #include "builtin_proto.h"
 #undef DEFINE_BUILTIN_GLOBALS
 #include "threading.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {

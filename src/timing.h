@@ -7,6 +7,8 @@
 #define JL_TIMING(owner)
 #else
 
+#include "julia_assert.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
