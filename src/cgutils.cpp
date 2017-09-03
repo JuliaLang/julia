@@ -2355,6 +2355,7 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
            (a->code_coverage == b->code_coverage) &&
            (a->static_alloc == b->static_alloc) &&
            (a->dynamic_alloc == b->dynamic_alloc) &&
+           (a->prefer_specsig == b->prefer_specsig) &&
            // hooks
            (a->hooks.module_setup == b->hooks.module_setup) &&
            (a->hooks.module_activation == b->hooks.module_activation) &&

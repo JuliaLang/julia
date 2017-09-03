@@ -4596,7 +4596,7 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, const jl_returnin
     return w;
 }
 
-static bool uses_specsig(jl_value_t *sig, jl_value_t *rettype, bool needsparam, bool va, jl_code_info_t *src)
+static bool uses_specsig(jl_value_t *sig, jl_value_t *rettype, bool needsparam, bool va, jl_code_info_t *src, bool prefer_specsig)
 {
     if (va || needsparam)
         return false;
@@ -4609,6 +4609,8 @@ static bool uses_specsig(jl_value_t *sig, jl_value_t *rettype, bool needsparam, 
     if (jl_nparams(sig) == 0)
         return false;
     // not invalid, consider if specialized signature is worthwhile
+    if (prefer_specsig)
+        return true;
     if (isbits_spec(rettype, false))
         return true;
     if (jl_is_uniontype(rettype)) {
@@ -4862,7 +4864,7 @@ static std::unique_ptr<Module> emit_function(
     }
 
     jl_value_t *jlrettype = lam->rettype;
-    bool specsig = uses_specsig(lam->specTypes, jlrettype, needsparams, va, src);
+    bool specsig = uses_specsig(lam->specTypes, jlrettype, needsparams, va, src, params->prefer_specsig);
     if (!specsig)
         ctx.nReqArgs--;  // function not part of argArray in jlcall
 

@@ -745,6 +745,7 @@ struct CodegenParams
     code_coverage::Cint
     static_alloc::Cint
     dynamic_alloc::Cint
+    prefer_specsig::Cint
 
     hooks::CodegenHooks
 
@@ -752,12 +753,12 @@ struct CodegenParams
                    runtime::Bool=true, exceptions::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, dynamic_alloc::Bool=true,
-                   hooks::CodegenHooks=CodegenHooks()) =
+                   prefer_specsig::Bool=false, hooks::CodegenHooks=CodegenHooks()) =
         new(Cint(cached),
             Cint(runtime), Cint(exceptions),
             Cint(track_allocations), Cint(code_coverage),
             Cint(static_alloc), Cint(dynamic_alloc),
-            hooks)
+            Cint(prefer_specsig), hooks)
 end
 
 # Printing code representations in IR and assembly

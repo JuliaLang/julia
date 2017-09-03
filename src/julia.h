@@ -1832,6 +1832,7 @@ typedef struct {
     int code_coverage;      // can we measure coverage (don't if disallowed)?
     int static_alloc;       // is the compiler allowed to allocate statically?
     int dynamic_alloc;      // is the compiler allowed to allocate dynamically (requires runtime)?
+    int prefer_specsig;     // are specialized function signatures preferred?
 
     jl_cghooks_t hooks;
 } jl_cgparams_t;
