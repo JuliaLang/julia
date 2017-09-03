@@ -1267,9 +1267,6 @@ end
      end
 end
 
-# PR #16984
-@deprecate MersenneTwister() MersenneTwister(0)
-
 # #19635
 for fname in (:ones, :zeros)
     @eval @deprecate ($fname)(T::Type, arr) ($fname)(T, size(arr))

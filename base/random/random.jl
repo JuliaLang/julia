@@ -117,13 +117,14 @@ rand!
     srand([rng=GLOBAL_RNG], seed) -> rng
     srand([rng=GLOBAL_RNG]) -> rng
 
-Reseed the random number generator. If a `seed` is provided, the RNG will give a
-reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
-`MersenneTwister`, the `seed` may be a non-negative integer or a vector of [`UInt32`](@ref)
-integers. `RandomDevice` does not support seeding.
+Reseed the random number generator: `rng` will give a reproducible
+sequence of numbers if and only if a `seed` is provided. Some RNGs
+don't accept a seed, like `RandomDevice`.
+After the call to `srand`, `rng` is equivalent to a newly created
+object initialized with the same seed.
 
 # Examples
-```jldoctest
+```julia-repl
 julia> srand(1234);
 
 julia> x1 = rand(2)
@@ -140,8 +141,23 @@ julia> x2 = rand(2)
 
 julia> x1 == x2
 true
+
+julia> rng = MersenneTwister(1234); rand(rng, 2) == x1
+true
+
+julia> MersenneTwister(1) == srand(rng, 1)
+true
+
+julia> rand(srand(rng), Bool) # not reproducible
+true
+
+julia> rand(srand(rng), Bool)
+false
+
+julia> rand(MersenneTwister(), Bool) # not reproducible either
+true
 ```
 """
-srand
+srand(rng::AbstractRNG, ::Void) = srand(rng)
 
 end # module
