@@ -551,9 +551,9 @@ test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 ifeq ($(JULIA_BUILD_MODE),release)
-JULIA_SYSIMG=$(build_private_libdir)/sys$(JULIA_LIBSUFFIX).$(SHLIB_EXT)
+JULIA_SYSIMG=$(build_private_libdir)/sys$(JULIA_LIBSUFFIX)$(CPUID_TAG).$(SHLIB_EXT)
 else
-JULIA_SYSIMG=$(build_private_libdir)/sys-$(JULIA_BUILD_MODE)$(JULIA_LIBSUFFIX).$(SHLIB_EXT)
+JULIA_SYSIMG=$(build_private_libdir)/sys-$(JULIA_BUILD_MODE)$(JULIA_LIBSUFFIX)$(CPUID_TAG).$(SHLIB_EXT)
 endif
 testall: check-whitespace $(JULIA_BUILD_MODE)
 	cp $(JULIA_SYSIMG) $(BUILDROOT)/local.$(SHLIB_EXT) && $(JULIA_EXECUTABLE) -J $(call cygpath_w,$(BUILDROOT)/local.$(SHLIB_EXT)) -e 'true' && rm $(BUILDROOT)/local.$(SHLIB_EXT)

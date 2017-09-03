@@ -683,8 +683,7 @@ static Value *emit_typeptr_addr(jl_codectx_t &ctx, Value *p)
     return emit_nthptr_addr(ctx, p, -offset);
 }
 
-static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v, bool gcooted=true);
-static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v, jl_value_t* type) = delete; // C++11 (temporary to prevent rebase error)
+static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v);
 
 static Value* mask_gc_bits(jl_codectx_t &ctx, Value *tag)
 {
@@ -713,7 +712,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
     if (p.constant)
         return mark_julia_const(jl_typeof(p.constant));
     if (p.isboxed && !jl_is_leaf_type(p.typ)) {
-        return mark_julia_type(ctx, emit_typeof(ctx, p.V), true, jl_datatype_type, /*needsroot*/false);
+        return mark_julia_type(ctx, emit_typeof(ctx, p.V), true, jl_datatype_type);
     }
     if (p.TIndex) {
         Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(T_int8, 0x7f));
@@ -746,7 +745,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
         if (!allunboxed)
             datatype = mask_gc_bits(ctx, datatype);
         datatype = maybe_decay_untracked(datatype);
-        return mark_julia_type(ctx, datatype, true, jl_datatype_type, /*needsroot*/false);
+        return mark_julia_type(ctx, datatype, true, jl_datatype_type);
     }
     jl_value_t *aty = p.typ;
     if (jl_is_type_type(aty)) {
@@ -986,7 +985,7 @@ static void emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type,
     Value *msg_val = stringConstPtr(ctx.builder, msg);
     ctx.builder.CreateCall(prepare_call(jltypeerror_func),
                        { fname_val, msg_val,
-                         maybe_decay_untracked(type), mark_callee_rooted(boxed(ctx, x, false))});
+                         maybe_decay_untracked(type), mark_callee_rooted(boxed(ctx, x))});
 }
 
 static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type, const std::string *msg)
@@ -1080,7 +1079,7 @@ static void emit_typecheck(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *t
 static void emit_leafcheck(jl_codectx_t &ctx, Value *typ, const std::string &msg)
 {
     assert(typ->getType() == T_prjlvalue);
-    emit_typecheck(ctx, mark_julia_type(ctx, typ, true, jl_any_type, false), (jl_value_t*)jl_datatype_type, msg);
+    emit_typecheck(ctx, mark_julia_type(ctx, typ, true, jl_any_type), (jl_value_t*)jl_datatype_type, msg);
     Value *isleaf;
     isleaf = ctx.builder.CreateConstInBoundsGEP1_32(T_int8, emit_bitcast(ctx, decay_derived(typ), T_pint8), offsetof(jl_datatype_t, isleaftype));
     isleaf = ctx.builder.CreateLoad(isleaf, tbaa_const);
@@ -1205,7 +1204,7 @@ static void typed_store(jl_codectx_t &ctx,
         Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
         jl_value_t *jltype, MDNode *tbaa,
         Value *parent,  // for the write barrier, NULL if no barrier needed
-        unsigned alignment = 0, bool root_box = true) // if the value to store needs a box, should we root it ?
+        unsigned alignment = 0)
 {
     bool isboxed;
     Type *elty = julia_type_to_llvm(jltype, &isboxed);
@@ -1216,7 +1215,7 @@ static void typed_store(jl_codectx_t &ctx,
         r = emit_unbox(ctx, elty, rhs, jltype);
     }
     else {
-        r = maybe_decay_untracked(boxed(ctx, rhs, root_box));
+        r = maybe_decay_untracked(boxed(ctx, rhs));
         if (parent != NULL)
             emit_write_barrier(ctx, parent, r);
     }
@@ -1287,7 +1286,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
                     maybe_null,  minimum_field_size));
             if (maybe_null)
                 null_pointer_check(ctx, fld);
-            *ret = mark_julia_type(ctx, fld, true, jl_any_type, strct.gcroot || !strct.isimmutable);
+            *ret = mark_julia_type(ctx, fld, true, jl_any_type);
             return true;
         }
         else if (is_tupletype_homogeneous(stt->types)) {
@@ -1389,7 +1388,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             Value *fldv = tbaa_decorate(strct.tbaa, Load);
             if (maybe_null)
                 null_pointer_check(ctx, fldv);
-            return mark_julia_type(ctx, fldv, true, jfty, strct.gcroot || !strct.isimmutable);
+            return mark_julia_type(ctx, fldv, true, jfty);
         }
         else if (jl_is_uniontype(jfty)) {
             int fsz = jl_field_size(jt, idx);
@@ -1982,7 +1981,7 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
 // this is used to wrap values for generic contexts, where a
 // dynamically-typed value is required (e.g. argument to unknown function).
 // if it's already a pointer it's left alone.
-static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool gcrooted)
+static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
 {
     jl_value_t *jt = vinfo.typ;
     if (jt == jl_bottom_type || jt == NULL)
@@ -2015,12 +2014,6 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool gcrooted)
         else {
             box = maybe_decay_untracked(box);
         }
-    }
-    if (gcrooted) {
-        // make a gcroot for the new box
-        // (unless the caller explicitly said this was unnecessary)
-        Value *froot = emit_local_root(ctx);
-        ctx.builder.CreateStore(box, froot);
     }
     return box;
 }
@@ -2103,7 +2096,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, const jl_cgval_t &src
 static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const std::string &msg)
 {
     Value *t = emit_typeof_boxed(ctx, x);
-    emit_typecheck(ctx, mark_julia_type(ctx, t, true, jl_any_type, false), (jl_value_t*)jl_datatype_type, msg);
+    emit_typecheck(ctx, mark_julia_type(ctx, t, true, jl_any_type), (jl_value_t*)jl_datatype_type, msg);
 
     Value *istype =
         ctx.builder.CreateICmpEQ(mark_callee_rooted(emit_datatype_name(ctx, t)),
@@ -2185,7 +2178,7 @@ static void emit_setfield(jl_codectx_t &ctx,
                 ConstantInt::get(T_size, jl_field_offset(sty, idx0)));
         jl_value_t *jfty = jl_svecref(sty->types, idx0);
         if (jl_field_isptr(sty, idx0)) {
-            Value *r = maybe_decay_untracked(boxed(ctx, rhs, false)); // don't need a temporary gcroot since it'll be rooted by strct
+            Value *r = maybe_decay_untracked(boxed(ctx, rhs)); // don't need a temporary gcroot since it'll be rooted by strct
             tbaa_decorate(strct.tbaa, ctx.builder.CreateStore(r,
                 emit_bitcast(ctx, addr, T_pprjlvalue)));
             if (wb && strct.isboxed)

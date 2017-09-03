@@ -1495,7 +1495,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                         }
                         else {
                             Value *notany = ctx.builder.CreateICmpNE(
-                                    boxed(ctx, runtime_sp, false),
+                                    boxed(ctx, runtime_sp),
                                     maybe_decay_untracked(literal_pointer_val(ctx, (jl_value_t*)jl_any_type)));
                             error_unless(ctx, notany, "ccall: return type Ref{Any} is invalid. use Ptr{Any} instead.");
                             always_error = false;
