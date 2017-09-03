@@ -384,6 +384,9 @@ include("client.jl")
 include("stacktraces.jl")
 using .StackTraces
 
+# logging
+include("logging.jl")
+using .Logging
 # misc useful functions & macros
 include("util.jl")
 
