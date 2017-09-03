@@ -44,7 +44,7 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
                           environment variable)
                        """
             end
-            ## info("ERROR MESSAGE:\n" * msg)
+            ## @info "ERROR MESSAGE:\n" * msg
             throw(PkgError(msg))
         end
 
@@ -101,7 +101,7 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
             sub_deps = Query.prune_dependencies(sub_reqs, deps)
         catch err
             isa(err, PkgError) || rethrow(err)
-            ## info("ERROR MESSAGE:\n" * err.msg)
+            ## @info "ERROR MESSAGE:\n" * err.msg
             for vneq in eq_classes[p][vn]
                 push!(problematic, (p, vneq, ""))
             end
