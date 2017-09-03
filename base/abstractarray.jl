@@ -187,7 +187,7 @@ end
 
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
 accomplished by calling [`endof`](@ref) to get the last index. Returns the end
-point of a `AbstractRange` even if it is empty.
+point of an `AbstractRange` even if it is empty.
 
 # Examples
 ```jldoctest
@@ -882,7 +882,7 @@ end
     getindex(A, inds...)
 
 Return a subset of array `A` as specified by `inds`, where each `ind` may be an
-`Int`, a `AbstractRange`, or a [`Vector`](@ref). See the manual section on
+`Int`, an `AbstractRange`, or a [`Vector`](@ref). See the manual section on
 [array indexing](@ref man-array-indexing) for details.
 
 # Examples
