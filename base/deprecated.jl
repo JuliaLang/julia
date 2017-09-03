@@ -1733,6 +1733,8 @@ end
 
 @deprecate promote_noncircular promote false
 
+@deprecate_binding Range AbstractRange
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
