@@ -2475,3 +2475,7 @@ julia> symdiff([1,2,3],[3,4,5],[4,5,6])
 ```
 """
 symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
+
+# keys and values
+keys(  x::Array) = CartesianRange(size(x))
+values(x::Array) = x
