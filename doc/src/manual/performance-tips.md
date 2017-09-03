@@ -805,36 +805,36 @@ do this in at least four ways (in addition to the recommended call to the built-
 
 ```julia
 function copy_cols(x::Vector{T}) where T
-    n = indices(x, 1)
-    out = similar(Array{T},n, n)
-    for i = n
+    inds = indices(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for i = inds
         out[:, i] = x
     end
     out
 end
 
 function copy_rows(x::Vector{T}) where T
-    n = indices(x, 1)
-    out = similar(Array{T},n, n)
-    for i = n
+    inds = indices(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for i = inds
         out[i, :] = x
     end
     out
 end
 
 function copy_col_row(x::Vector{T}) where T
-    n = indices(x, 1)
-    out = similar(Array{T},n, n)
-    for col = n, row = n
+    inds = indices(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for col = inds, row = inds
         out[row, col] = x[row]
     end
     out
 end
 
 function copy_row_col(x::Vector{T}) where T
-    n = indices(x, 1)
-    out = similar(Array{T},n, n)
-    for row = n, col = n
+    inds = indices(x, 1)
+    out = similar(Array{T}, inds, inds)
+    for row = inds, col = inds
         out[row, col] = x[col]
     end
     out
@@ -1174,31 +1174,31 @@ of a one-dimensional array, and then evaluates the L2-norm of the result:
 
 ```julia
 function init!(u)
-    n = linearindices(u)
-    dx = 1.0 / (length(n)-1)
-    @fastmath @inbounds @simd for i in n
+    inds = linearindices(u)
+    dx = 1.0 / (length(inds)-1)
+    @fastmath @inbounds @simd for i in inds
         u[i] = sin(2pi*dx*i)
     end
 end
 
 function deriv!(u, du)
-    n = linearindices(u)
-    dx = 1.0 / (length(n)-1)
-    @fastmath @inbounds du[n[1]] = (u[n[2]] - u[n[1]]) / dx
-    @fastmath @inbounds @simd for i in n[2:end-1]
+    inds = linearindices(u)
+    dx = 1.0 / (length(inds)-1)
+    @fastmath @inbounds du[inds[1]] = (u[inds[2]] - u[inds[1]]) / dx
+    @fastmath @inbounds @simd for i in inds[2:end-1]
         du[i] = (u[i+1] - u[i-1]) / (2*dx)
     end
     @fastmath @inbounds du[end] = (u[end] - u[end-1]) / dx
 end
 
 function norm(u)
-    n = linearindices(u)
+    inds = linearindices(u)
     T = eltype(u)
     s = zero(T)
-    @fastmath @inbounds @simd for i in n
+    @fastmath @inbounds @simd for i in inds
         s += u[i]^2
     end
-    @fastmath @inbounds return sqrt(s/n)
+    @fastmath @inbounds return sqrt(s/length(inds))
 end
 
 function main()
