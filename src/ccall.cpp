@@ -1583,9 +1583,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         if (jl_is_long(argi_root))
             continue;
         jl_cgval_t arg_root = emit_expr(ctx, argi_root);
-        Value *gcuse = arg_root.gcroot ? ctx.builder.CreateLoad(arg_root.gcroot) : arg_root.V;
-        if (gcuse) {
-            gc_uses.push_back(gcuse);
+        if (arg_root.Vboxed || arg_root.V) {
+            gc_uses.push_back(arg_root.Vboxed ? arg_root.Vboxed : arg_root.V);
         }
     }
 
