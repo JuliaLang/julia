@@ -316,6 +316,15 @@ end
         @test_throws DimensionMismatch LAPACK.ormrq!('R','N',A,zeros(elty,11),rand(elty,10,10))
         @test_throws DimensionMismatch LAPACK.ormrq!('L','N',A,zeros(elty,11),rand(elty,10,10))
 
+        A = rand(elty,10,11)
+        Q = copy(A)
+        Q,tau = LAPACK.gerqf!(Q)
+        R = triu(Q[:,2:11])
+        LAPACK.orgrq!(Q,tau)
+        @test Q*Q' ≈ eye(elty,10)
+        @test R*Q ≈ A
+        @test_throws DimensionMismatch LAPACK.orgrq!(zeros(elty,11,10),zeros(elty,10))
+
         C = rand(elty,10,10)
         V = rand(elty,10,10)
         T = zeros(elty,10,11)
