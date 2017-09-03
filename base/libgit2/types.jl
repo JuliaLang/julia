@@ -1046,7 +1046,7 @@ function with_warn(f::Function, ::Type{T}, args...) where T
     try
         with(f, obj)
     catch err
-        warn("$(string(T)) thrown exception: $err")
+        @warn "$(string(T)) thrown exception:",err
     end
 end
 
