@@ -155,13 +155,15 @@ symdiff(s::IntSet, ns) = symdiff!(copy(s), ns)
 
 For each element in `itr`, destructively toggle its inclusion in set `s`.
 """
-symdiff!(s::IntSet, ns) = (for n in ns; symdiff!(s, n); end; s)
+symdiff!(s::IntSet, ns) = (for n in ns; int_symdiff!(s, n); end; s)
 """
     symdiff!(s, n)
 
 The set `s` is destructively modified to toggle the inclusion of integer `n`.
 """
-function symdiff!(s::IntSet, n::Integer)
+symdiff!(s::IntSet, n::Integer) = int_symdiff!(s, n)
+
+function int_symdiff!(s::IntSet, n::Integer)
     0 < n < typemax(Int) || _throw_intset_bounds_err()
     val = !(n in s)
     _setint!(s, n, val)
