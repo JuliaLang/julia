@@ -389,7 +389,7 @@ export $
 @deprecate is (===)
 
 # midpoints of intervals
-@deprecate midpoints(r::Range) r[1:length(r)-1] + 0.5*step(r)
+@deprecate midpoints(r::AbstractRange) r[1:length(r)-1] + 0.5*step(r)
 @deprecate midpoints(v::AbstractVector) [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
 
 @deprecate_binding Filter    Iterators.Filter
@@ -1141,7 +1141,7 @@ end
 ## the replacement StepRangeLen also has 4 real-valued fields, which
 ## makes deprecation tricky. See #20506.
 
-struct Use_StepRangeLen_Instead{T<:AbstractFloat} <: Range{T}
+struct Use_StepRangeLen_Instead{T<:AbstractFloat} <: AbstractRange{T}
     start::T
     step::T
     len::T

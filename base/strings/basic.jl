@@ -241,7 +241,7 @@ function nextind(s::AbstractString, i::Integer)
 end
 
 checkbounds(s::AbstractString, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError(s, i))
-checkbounds(s::AbstractString, r::Range{<:Integer}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
+checkbounds(s::AbstractString, r::AbstractRange{<:Integer}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
 # The following will end up using a deprecated checkbounds, when the covariant parameter is not Integer
 checkbounds(s::AbstractString, I::AbstractArray{<:Real}) = all(i -> checkbounds(s, i), I)
 checkbounds(s::AbstractString, I::AbstractArray{<:Integer}) = all(i -> checkbounds(s, i), I)

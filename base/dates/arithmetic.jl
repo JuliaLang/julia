@@ -95,4 +95,4 @@ end
 
 # AbstractArray{TimeType}, AbstractArray{TimeType}
 (-)(x::OrdinalRange{T}, y::OrdinalRange{T}) where {T<:TimeType} = collect(x) - collect(y)
-(-)(x::Range{T}, y::Range{T}) where {T<:TimeType} = collect(x) - collect(y)
+(-)(x::AbstractRange{T}, y::AbstractRange{T}) where {T<:TimeType} = collect(x) - collect(y)

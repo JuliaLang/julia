@@ -56,7 +56,7 @@ function compile(x)
     check_body!(x)
 
     var,range = parse_iteration_space(x.args[1])
-    r = gensym("r") # Range value
+    r = gensym("r") # AbstractRange value
     j = gensym("i") # Iteration variable for outer loop
     n = gensym("n") # Trip count for inner loop
     i = gensym("i") # Trip index for inner loop

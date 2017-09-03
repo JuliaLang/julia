@@ -314,7 +314,7 @@ daysinyear(dt::TimeType) = 365 + isleapyear(dt)
 """
     quarterofyear(dt::TimeType) -> Int
 
-Returns the quarter that `dt` resides in. Range of value is 1:4.
+Returns the quarter that `dt` resides in. AbstractRange of value is 1:4.
 """
 function quarterofyear(dt::TimeType)
     m = month(dt)
@@ -325,6 +325,6 @@ const QUARTERDAYS = (0, 90, 181, 273)
 """
     dayofquarter(dt::TimeType) -> Int
 
-Returns the day of the current quarter of `dt`. Range of value is 1:92.
+Returns the day of the current quarter of `dt`. AbstractRange of value is 1:92.
 """
 dayofquarter(dt::TimeType) = dayofyear(dt) - QUARTERDAYS[quarterofyear(dt)]

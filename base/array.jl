@@ -30,7 +30,7 @@ elements of type `T`. Alias for [`AbstractArray{T,2}`](@ref).
 """
 const AbstractMatrix{T} = AbstractArray{T,2}
 const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
-const RangeIndex = Union{Int, Range{Int}, AbstractUnitRange{Int}}
+const RangeIndex = Union{Int, AbstractRange{Int}, AbstractUnitRange{Int}}
 const DimOrInd = Union{Integer, AbstractUnitRange}
 const IntOrInd = Union{Int, AbstractUnitRange}
 const DimsOrInds{N} = NTuple{N,DimOrInd}
@@ -789,7 +789,7 @@ function getindex(A::Array, c::Colon)
 end
 
 # This is redundant with the abstract fallbacks, but needed for bootstrap
-function getindex(A::Array{S}, I::Range{Int}) where S
+function getindex(A::Array{S}, I::AbstractRange{Int}) where S
     return S[ A[i] for i in I ]
 end
 

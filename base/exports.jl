@@ -87,7 +87,7 @@ export
     PermutedDimsArray,
     PollingFileWatcher,
     QuickSort,
-    Range,
+    AbstractRange,
     RangeIndex,
     Rational,
     Regex,

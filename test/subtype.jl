@@ -646,8 +646,8 @@ function test_intersection()
     @testintersect(Tuple{Type{Ptr{UInt8}}, Ptr{Bottom}},
                    (@UnionAll T Tuple{Type{Ptr{T}},Ptr{T}}), Bottom)
 
-    @testintersect(Tuple{Range{Int},Tuple{Int,Int}}, (@UnionAll T Tuple{AbstractArray{T},Dims}),
-                   Tuple{Range{Int},Tuple{Int,Int}})
+    @testintersect(Tuple{AbstractRange{Int},Tuple{Int,Int}}, (@UnionAll T Tuple{AbstractArray{T},Dims}),
+                   Tuple{AbstractRange{Int},Tuple{Int,Int}})
 
     @testintersect((@UnionAll Integer<:T<:Number Array{T}), (@UnionAll T<:Number Array{T}),
                    (@UnionAll Integer<:T<:Number Array{T}))
