@@ -164,7 +164,7 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
         cache_has_head && LibGit2.close(crepo)
     end
     both = sort!(intersect(ancestors,descendants))
-    isempty(both) || warn("$pkg: some versions are both ancestors and descendants of head: $both")
+    isempty(both) || @warn "$pkg: some versions are both ancestors and descendants of head: $both"
     if !isempty(descendants)
         v = minimum(descendants)
         return VersionNumber(v.major, v.minor, v.patch, ("",), ())
