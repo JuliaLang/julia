@@ -658,7 +658,7 @@ static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tinde
     return tagval;
 }
 
-static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isboxed, jl_value_t *typ, bool needsroot = true)
+static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isboxed, jl_value_t *typ)
 {
     if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ)) {
         // no need to explicitly load/store a constant/ghost value
@@ -688,17 +688,12 @@ static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isbox
         }
         return mark_julia_slot(loc, typ, NULL, tbaa_stack);
     }
-    Value *froot = NULL;
-    if (needsroot && isboxed) {
-        froot = emit_local_root(ctx);
-        ctx.builder.CreateStore(v, froot);
-    }
-    return jl_cgval_t(v, froot, isboxed, typ, NULL);
+    return jl_cgval_t(v, NULL, isboxed, typ, NULL);
 }
 
-static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isboxed, jl_datatype_t *typ, bool needsroot = true)
+static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isboxed, jl_datatype_t *typ)
 {
-    return mark_julia_type(ctx, v, isboxed, (jl_value_t*)typ, needsroot);
+    return mark_julia_type(ctx, v, isboxed, (jl_value_t*)typ);
 }
 
 // see if it might be profitable (and cheap) to change the type of v to typ
@@ -1020,13 +1015,7 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
         }
         if (makeboxed) {
             // convert to a simple isboxed value
-            Value *boxv = boxed(ctx, v, false);
-            Value *froot = NULL;
-            if (needsroot) {
-                froot = emit_local_root(ctx);
-                ctx.builder.CreateStore(maybe_decay_untracked(boxv), froot);
-            }
-            return jl_cgval_t(boxv, froot, true, typ, NULL);
+            return jl_cgval_t(boxed(ctx, v), NULL, true, typ, NULL);
         }
     }
     return jl_cgval_t(v, typ, new_tindex);
@@ -2070,8 +2059,7 @@ static jl_cgval_t emit_getfield(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_s
         mark_julia_const((jl_value_t*)name)
     };
     Value *result = emit_jlcall(ctx, jlgetfield_func, maybe_decay_untracked(V_null), myargs_array, 2);
-    bool needsgcroot = true; // !arg1.isimmutable || !jl_is_leaf_type(arg1.typ) || !is_datatype_all_pointers((jl_datatype_t*)arg1.typ); // TODO: probably want this as a llvm pass
-    return mark_julia_type(ctx, result, true, jl_any_type, needsgcroot);
+    return mark_julia_type(ctx, result, true, jl_any_type);
 }
 
 static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
@@ -2166,8 +2154,8 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
         // which is already enough to ensure pointer uniqueness for this test
         // even if the other pointer managed to get garbage collected
         return ctx.builder.CreateICmpEQ(
-            mark_callee_rooted(boxed(ctx, arg1, false)),
-            mark_callee_rooted(boxed(ctx, arg2, false)));
+            mark_callee_rooted(boxed(ctx, arg1)),
+            mark_callee_rooted(boxed(ctx, arg2)));
     }
 
     if (jl_type_intersection(rt1, rt2) == (jl_value_t*)jl_bottom_type) // types are disjoint (exhaustive test)
@@ -2219,7 +2207,7 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
 
     JL_FEAT_REQUIRE(ctx, runtime);
     Value *varg1 = mark_callee_rooted(boxed(ctx, arg1));
-    Value *varg2 = mark_callee_rooted(boxed(ctx, arg2, false)); // potentially unrooted!
+    Value *varg2 = mark_callee_rooted(boxed(ctx, arg2));
     return ctx.builder.CreateTrunc(ctx.builder.CreateCall(prepare_call(jlegal_func), {varg1, varg2}), T_int1);
 }
 
@@ -2323,7 +2311,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     }
 
     else if (f == jl_builtin_throw && nargs == 1) {
-        Value *arg1 = boxed(ctx, argv[1], false); // rooted by throw
+        Value *arg1 = boxed(ctx, argv[1]);
         raise_exception(ctx, arg1);
         *ret = jl_cgval_t();
         return true;
@@ -2521,8 +2509,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                         emit_arrayptr(ctx, ary, ary_ex, isboxed),
                                         idx, val, ety,
                                         !isboxed ? tbaa_arraybuf : tbaa_ptrarraybuf,
-                                        data_owner, 0,
-                                        false); // don't need to root the box if we had to make one since it's being stored in the array immediatly
+                                        data_owner, 0);
                         }
                         *ret = ary;
                         return true;
@@ -2554,7 +2541,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         idx = emit_bounds_check(ctx, va_ary, NULL, idx, valen, boundscheck);
                         idx = ctx.builder.CreateAdd(idx, ConstantInt::get(T_size, ctx.nReqArgs));
                         Value *v = tbaa_decorate(tbaa_value, ctx.builder.CreateLoad(ctx.builder.CreateGEP(ctx.argArray, idx)));
-                        *ret = mark_julia_type(ctx, v, /*boxed*/ true, jl_any_type, /*needsgcroot*/ false);
+                        *ret = mark_julia_type(ctx, v, /*boxed*/ true, jl_any_type);
                         return true;
                     }
                 }
@@ -2813,7 +2800,7 @@ static Value *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
     if (theF)
         theArgs.push_back(theF);
     for (size_t i = 0; i < nargs; i++) {
-        Value *arg = maybe_decay_untracked(boxed(ctx, argv[i], false));
+        Value *arg = maybe_decay_untracked(boxed(ctx, argv[i]));
         theArgs.push_back(arg);
     }
     SmallVector<Type *, 3> argsT;
@@ -2976,7 +2963,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex)
             emit_jlcall(
                 ctx,
                 prepare_call(jlinvoke_func),
-                boxed(ctx, lival, false),
+                boxed(ctx, lival),
                 argv, nargs),
             true,
             rt);
@@ -3137,7 +3124,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
             maybe_decay_untracked(literal_pointer_val(ctx, (jl_value_t*)jl_tvar_type)));
     jl_sym_t *name = (jl_sym_t*)jl_svecref(ctx.linfo->def.method->sparam_syms, i);
     undef_var_error_ifnot(ctx, isnull, name);
-    return mark_julia_type(ctx, sp, true, jl_any_type, false);
+    return mark_julia_type(ctx, sp, true, jl_any_type);
 }
 
 static jl_cgval_t emit_global(jl_codectx_t &ctx, jl_sym_t *sym)
@@ -3305,8 +3292,7 @@ static jl_cgval_t emit_local(jl_codectx_t &ctx, jl_value_t *slotload)
             v = update_julia_type(ctx, v, typ);
         }
         else {
-            v = mark_julia_type(ctx, boxed, true, typ,
-                                /*gc-root*/!vi.isArgument); // if an argument, doesn't need an additional root
+            v = mark_julia_type(ctx, boxed, true, typ);
             if (vi.usedUndef)
                 isnull = box_isnull;
         }
@@ -3447,7 +3433,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
     if (bp != NULL) { // it's a global
         JL_FEAT_REQUIRE(ctx, runtime);
         assert(bnd);
-        Value *rval = mark_callee_rooted(boxed(ctx, emit_expr(ctx, r), false)); // no root needed since this is about to be assigned to a global
+        Value *rval = mark_callee_rooted(boxed(ctx, emit_expr(ctx, r)));
         ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
                            { literal_pointer_val(ctx, bnd),
                              rval });
@@ -3521,7 +3507,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
         }
         else {
             assert(!vi.pTIndex || rval_info.isboxed || rval_info.constant);
-            rval = maybe_decay_untracked(boxed(ctx, rval_info, false));
+            rval = maybe_decay_untracked(boxed(ctx, rval_info));
         }
         ctx.builder.CreateStore(maybe_decay_untracked(rval), vi.boxroot, vi.isVolatile);
     }
@@ -3996,7 +3982,7 @@ static void emit_cfunc_invalidate(
     }
     assert(AI == gf_thunk->arg_end());
     Value *gf_ret = emit_jlcall(ctx, jlapplygeneric_func, NULL, myargs, nargs);
-    jl_cgval_t gf_retbox = mark_julia_type(ctx, gf_ret, true, jl_any_type, /*needsroot*/false);
+    jl_cgval_t gf_retbox = mark_julia_type(ctx, gf_ret, true, jl_any_type);
     jl_value_t *astrt = lam->rettype;
     if (cc != jl_returninfo_t::Boxed) {
         emit_typecheck(ctx, gf_retbox, astrt, "cfunction");
@@ -4363,7 +4349,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     if (toboxed) {
         assert(!sig.sret);
         // return a jl_value_t*
-        r = boxed(ctx, retval, false); // no gcroot since this is on the return path
+        r = boxed(ctx, retval);
     }
     else if (sig.sret && jlfunc_sret) {
         // nothing to do
@@ -4575,10 +4561,10 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, const jl_returnin
     jl_cgval_t retval;
     switch (f.cc) {
     case jl_returninfo_t::Boxed:
-        retval = mark_julia_type(ctx, call, true, jlretty, /*needsroot*/false);
+        retval = mark_julia_type(ctx, call, true, jlretty);
         break;
     case jl_returninfo_t::Register:
-        retval = mark_julia_type(ctx, call, false, jlretty, /*needsroot*/false);
+        retval = mark_julia_type(ctx, call, false, jlretty);
         break;
     case jl_returninfo_t::SRet:
         retval = mark_julia_slot(result, jlretty, NULL, tbaa_stack);
@@ -4597,7 +4583,7 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, const jl_returnin
         retval = mark_julia_slot(NULL, jlretty, call, tbaa_stack);
         break;
     }
-    ctx.builder.CreateRet(boxed(ctx, retval, false)); // no gcroot needed since this on the return path
+    ctx.builder.CreateRet(boxed(ctx, retval));
     assert(!ctx.roots);
     return w;
 }
@@ -5220,17 +5206,17 @@ static std::unique_ptr<Module> emit_function(
                     Argument *Arg = &*AI++;
                     if (isboxed)
                         maybe_mark_argument_dereferenceable(Arg, argType);
-                    theArg = mark_julia_type(ctx, Arg, isboxed, argType, /*needsgcroot*/false);
+                    theArg = mark_julia_type(ctx, Arg, isboxed, argType);
                 }
             }
             else {
                 if (i == 0) {
                     // first (function) arg is separate in jlcall
-                    theArg = mark_julia_type(ctx, fArg, true, vi.value.typ, /*needsgcroot*/false);
+                    theArg = mark_julia_type(ctx, fArg, true, vi.value.typ);
                 }
                 else {
                     Value *argPtr = ctx.builder.CreateGEP(argArray, ConstantInt::get(T_size, i-1));
-                    theArg = mark_julia_type(ctx, ctx.builder.CreateLoad(argPtr), true, vi.value.typ, /*needsgcroot*/false);
+                    theArg = mark_julia_type(ctx, ctx.builder.CreateLoad(argPtr), true, vi.value.typ);
                     if (ctx.debug_enabled && vi.dinfo && !vi.boxroot && !vi.value.V) {
                         SmallVector<uint64_t, 8> addr;
                         addr.push_back(llvm::dwarf::DW_OP_deref);
@@ -5268,7 +5254,7 @@ static std::unique_ptr<Module> emit_function(
                 }
             }
             else {
-                Value *argp = boxed(ctx, theArg, false); // skip the temporary gcroot since it would be folded to argp anyways
+                Value *argp = boxed(ctx, theArg); // skip the temporary gcroot since it would be folded to argp anyways
                 ctx.builder.CreateStore(argp, vi.boxroot);
                 if (!theArg.isboxed)
                     emit_local_root(ctx, &vi); // create a root for vi
@@ -5564,7 +5550,7 @@ static std::unique_ptr<Module> emit_function(
             Type *retty = f->getReturnType();
             switch (returninfo.cc) {
             case jl_returninfo_t::Boxed:
-                retval = boxed(ctx, retvalinfo, false); // skip the gcroot on the return path
+                retval = boxed(ctx, retvalinfo); // skip the gcroot on the return path
                 break;
             case jl_returninfo_t::Register:
                 if (type_is_ghost(retty))
@@ -5608,7 +5594,7 @@ static std::unique_ptr<Module> emit_function(
                     //assert(retvalinfo.isboxed);
                     tindex = compute_tindex_unboxed(ctx, retvalinfo, jlrettype);
                     tindex = ctx.builder.CreateOr(tindex, ConstantInt::get(T_int8, 0x80));
-                    data = maybe_decay_untracked(boxed(ctx, retvalinfo, false)); // skip the gcroot on the return path
+                    data = maybe_decay_untracked(boxed(ctx, retvalinfo));
                     sret = NULL;
                 }
                 retval = UndefValue::get(retty);
