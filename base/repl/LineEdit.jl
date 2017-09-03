@@ -68,6 +68,7 @@ mutable struct PromptState <: ModeState
     p::Prompt
     input_buffer::IOBuffer
     undo_buffers::Vector{IOBuffer}
+    undo_idx::Int
     ias::InputAreaState
     # indentation of lines which do not include the prompt
     # if negative, the width of the prompt is used
@@ -1668,7 +1669,8 @@ AnyDict(
     # Meta Enter
     "\e\r" => (s,o...)->edit_insert_newline(s),
     "\e\n" => "\e\r",
-    "^_" => (s,o...)->(pop_undo(s) ? refresh_line(s) : beep(terminal(s))),
+    "^_" => (s,o...)->edit_undo!(s),
+    "\e_" => (s,o...)->edit_redo!(s),
     # Simply insert it into the buffer by default
     "*" => (s,data,c)->(edit_insert(s, c)),
     "^U" => (s,o...)->edit_clear(s),
@@ -1856,7 +1858,7 @@ end
 run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
-    PromptState(terminal, prompt, IOBuffer(), IOBuffer[], InputAreaState(1, 1),
+    PromptState(terminal, prompt, IOBuffer(), IOBuffer[], 1, InputAreaState(1, 1),
                 #=indent(spaces)=# -1)
 
 function init_state(terminal, m::ModalInterface)
@@ -1895,20 +1897,59 @@ position(s::Union{MIState,ModeState}) = position(buffer(s))
 
 function empty_undo(s::PromptState)
     empty!(s.undo_buffers)
+    s.undo_idx = 1
 end
+
 empty_undo(s) = nothing
 
-function push_undo(s::PromptState)
-    push!(s.undo_buffers, copy(s.input_buffer))
+function push_undo(s::PromptState, advance=true)
+    resize!(s.undo_buffers, s.undo_idx)
+    s.undo_buffers[end] = copy(s.input_buffer)
+    advance && (s.undo_idx += 1)
 end
+
 push_undo(s) = nothing
 
+# must be called after a push_undo
 function pop_undo(s::PromptState)
-    length(s.undo_buffers) > 0 || return false
-    s.input_buffer = pop!(s.undo_buffers)
+    pop!(s.undo_buffers)
+    s.undo_idx -= 1
+end
+
+function edit_undo!(s::MIState)
+    s.last_action ∉ (:edit_redo!, :edit_undo!) && push_undo(s, false)
+    if edit_undo!(state(s))
+        :edit_undo!
+    else
+        beep(terminal(s))
+        :ignore
+    end
+end
+
+function edit_undo!(s::PromptState)
+    s.undo_idx > 1 || return false
+    s.input_buffer = s.undo_buffers[s.undo_idx -=1]
+    refresh_line(s)
     true
 end
-pop_undo(s) = nothing
+edit_undo!(s) = nothing
+
+function edit_redo!(s::MIState)
+    if s.last_action ∈ (:edit_redo!, :edit_undo!) && edit_redo!(state(s))
+        :edit_redo!
+    else
+        beep(terminal(s))
+        :ignore
+    end
+end
+
+function edit_redo!(s::PromptState)
+    s.undo_idx < length(s.undo_buffers) || return false
+    s.input_buffer = s.undo_buffers[s.undo_idx += 1]
+    refresh_line(s)
+    true
+end
+edit_redo!(s) = nothing
 
 keymap(s::PromptState, prompt::Prompt) = prompt.keymap_dict
 keymap_data(s::PromptState, prompt::Prompt) = prompt.keymap_func_data
