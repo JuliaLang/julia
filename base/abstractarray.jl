@@ -48,7 +48,7 @@ Base.OneTo(6)
 """
 function indices(A::AbstractArray{T,N}, d) where {T,N}
     @_inline_meta
-    d <= N ? indices(A)[d] : OneTo(1)
+    d <= N ? indices(A)[d] : one(indicestype(typeof(A),d))
 end
 
 """
@@ -67,6 +67,23 @@ julia> indices(A)
 function indices(A)
     @_inline_meta
     map(OneTo, size(A))
+end
+
+"""
+    indicestype(T, d)
+
+Returns the type of the indices for array type `T` along dimension `d`
+
+```jldoctest
+julia> A = ones(5,6,7);
+
+julia> indicestype(typeof(A), 1)
+Base.OneTo{Int}
+```
+"""
+function indicestype{T <: AbstractArray}(::Type{T}, d)
+    @_inline_meta
+    OneTo{Int}
 end
 
 # Performance optimization: get rid of a branch on `d` in `indices(A,

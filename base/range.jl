@@ -961,3 +961,5 @@ function +(r1::StepRangeLen{T,S}, r2::StepRangeLen{T,S}) where {T,S}
 end
 
 -(r1::StepRangeLen, r2::StepRangeLen) = +(r1, -r2)
+
+one{T, RangeT <: Range{T}}(::Type{RangeT}) = RangeT(one(T))
