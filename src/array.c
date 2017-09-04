@@ -1092,14 +1092,6 @@ static NOINLINE ssize_t jl_array_ptr_copy_backward(jl_value_t *owner,
 JL_DLLEXPORT void jl_array_ptr_copy(jl_array_t *dest, void **dest_p,
                                     jl_array_t *src, void **src_p, ssize_t n)
 {
-    // need to intercept union isbits arrays here since they're unboxed
-    if (!src->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(src))) &&
-        !dest->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(dest)))) {
-        memcpy(dest_p, src_p, n * src->elsize);
-        memcpy((char*)dest->data + jl_array_len(dest) * dest->elsize,
-               (char*)src->data + jl_array_len(src) * src->elsize, n);
-        return;
-    }
     assert(dest->flags.ptrarray && src->flags.ptrarray);
     jl_value_t *owner = jl_array_owner(dest);
     // Destination is old and doesn't refer to any young object
