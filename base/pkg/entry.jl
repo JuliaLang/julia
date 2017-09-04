@@ -539,7 +539,7 @@ function resolve(
                 info("$(up)grading $pkg: v$ver1 => v$ver2")
                 Write.update(pkg, Read.sha1(pkg,ver2))
                 pkgsym = Symbol(pkg)
-                if Base.isbindingresolved(Main, pkgsym) && isa(getfield(Main, pkgsym), Module)
+                if Base.root_module_exists(pkgsym)
                     push!(imported, "- $pkg")
                 end
             end

@@ -56,13 +56,17 @@ julia> fullname(Main)
 ```
 """
 function fullname(m::Module)
-    m === Main && return ()
-    m === Base && return (:Base,)  # issue #10653
     mn = module_name(m)
+    if m === Main || m === Base || m === Core
+        return (mn,)
+    end
     mp = module_parent(m)
     if mp === m
-        # not Main, but is its own parent, means a prior Main module
-        n = ()
+        if mn !== :Main
+            return (mn,)
+        end
+        # top-level module, not Main, called :Main => prior Main module
+        n = (:Main,)
         this = Main
         while this !== m
             if isdefined(this, :LastMain)
@@ -530,14 +534,21 @@ function _subtypes(m::Module, x::Union{DataType,UnionAll},
     end
     return sts
 end
-function subtypes(m::Module, x::Union{DataType,UnionAll})
-    if isabstract(x)
-        sort!(collect(_subtypes(m, x)), by=string)
-    else
+
+function _subtypes_in(mods::Array, x::Union{DataType,UnionAll})
+    if !isabstract(x)
         # Fast path
-        Union{DataType,UnionAll}[]
+        return Union{DataType,UnionAll}[]
     end
+    sts = Set{Union{DataType,UnionAll}}()
+    visited = Set{Module}()
+    for m in mods
+        _subtypes(m, x, sts, visited)
+    end
+    return sort!(collect(sts), by=string)
 end
+
+subtypes(m::Module, x::Union{DataType,UnionAll}) = _subtypes_in([m], x)
 
 """
     subtypes(T::DataType)
@@ -555,7 +566,7 @@ julia> subtypes(Integer)
  Unsigned
 ```
 """
-subtypes(x::Union{DataType,UnionAll}) = subtypes(Main, x)
+subtypes(x::Union{DataType,UnionAll}) = _subtypes_in(loaded_modules_array(), x)
 
 function to_tuple_type(@nospecialize(t))
     @_pure_meta

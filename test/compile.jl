@@ -2,6 +2,8 @@
 
 using Base.Test
 
+import Base: root_module
+
 Foo_module = :Foo4b3a94a1a081a8cb
 Foo2_module = :F2oo4b3a94a1a081a8cb
 FooBase_module = :FooBase4b3a94a1a081a8cb
@@ -149,7 +151,7 @@ try
     # Issue #21307
     Base.require(Foo2_module)
     @eval let Foo2_module = $(QuoteNode(Foo2_module)), # use @eval to see the results of loading the compile
-              Foo = getfield(Main, Foo2_module)
+              Foo = root_module(Foo2_module)
         Foo.override(::Int) = 'a'
         Foo.override(::Float32) = 'b'
     end
@@ -157,7 +159,7 @@ try
     Base.require(Foo_module)
 
     @eval let Foo_module = $(QuoteNode(Foo_module)), # use @eval to see the results of loading the compile
-              Foo = getfield(Main, Foo_module)
+              Foo = root_module(Foo_module)
         @test Foo.foo(17) == 18
         @test Foo.Bar.bar(17) == 19
 
@@ -172,16 +174,18 @@ try
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
     @test_warn "WARNING: replacing module $Foo_module." begin
-        @test isa(Base._require_from_serialized(Foo_module, cachefile), Array{Any,1})
+        ms = Base._require_from_serialized(Foo_module, cachefile)
+        @test isa(ms, Array{Any,1})
+        Base.register_all(ms)
     end
 
-    let Foo = getfield(Main, Foo_module)
+    let Foo = root_module(Foo_module)
         @test_throws MethodError Foo.foo(17) # world shouldn't be visible yet
     end
     @eval let Foo_module = $(QuoteNode(Foo_module)), # use @eval to see the results of loading the compile
               Foo2_module = $(QuoteNode(Foo2_module)),
               FooBase_module = $(QuoteNode(FooBase_module)),
-              Foo = getfield(Main, Foo_module),
+              Foo = root_module(Foo_module),
               dir = $(QuoteNode(dir)),
               cachefile = $(QuoteNode(cachefile)),
               Foo_file = $(QuoteNode(Foo_file))
@@ -291,7 +295,7 @@ try
     @test !Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji"))
 
     @eval using FooBar
-    fb_uuid = Base.module_uuid(Main.FooBar)
+    fb_uuid = Base.module_uuid(FooBar)
     sleep(2); touch(FooBar_file)
     insert!(Base.LOAD_CACHE_PATH, 1, dir2)
     @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
@@ -301,22 +305,22 @@ try
     @test isfile(joinpath(dir2, "FooBar1.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
     @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
-    @test fb_uuid == Base.module_uuid(Main.FooBar)
-    fb_uuid1 = Base.module_uuid(Main.FooBar1)
+    @test fb_uuid == Base.module_uuid(FooBar)
+    fb_uuid1 = Base.module_uuid(FooBar1)
     @test fb_uuid != fb_uuid1
 
-    @test_warn "WARNING: replacing module FooBar." reload("FooBar")
-    @test fb_uuid != Base.module_uuid(Main.FooBar)
-    @test fb_uuid1 == Base.module_uuid(Main.FooBar1)
-    fb_uuid = Base.module_uuid(Main.FooBar)
+    reload("FooBar")
+    @test fb_uuid != Base.module_uuid(root_module(:FooBar))
+    @test fb_uuid1 == Base.module_uuid(FooBar1)
+    fb_uuid = Base.module_uuid(root_module(:FooBar))
     @test isfile(joinpath(dir2, "FooBar.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
     @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
     @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
 
-    @test_warn "WARNING: replacing module FooBar1." reload("FooBar1")
-    @test fb_uuid == Base.module_uuid(Main.FooBar)
-    @test fb_uuid1 != Base.module_uuid(Main.FooBar1)
+    reload("FooBar1")
+    @test fb_uuid == Base.module_uuid(root_module(:FooBar))
+    @test fb_uuid1 != Base.module_uuid(root_module(:FooBar1))
 
     @test isfile(joinpath(dir2, "FooBar.ji"))
     @test isfile(joinpath(dir2, "FooBar1.ji"))
@@ -331,15 +335,16 @@ try
     @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
 
     # test behavior of precompile modules that throw errors
-    write(FooBar_file,
+    FooBar2_file = joinpath(dir, "FooBar2.jl")
+    write(FooBar2_file,
           """
           __precompile__(true)
-          module FooBar
+          module FooBar2
           error("break me")
           end
           """)
     @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
-        Base.require(:FooBar)
+        Base.require(:FooBar2)
         error("\"LoadError: break me\" test failed")
     catch exc
         isa(exc, ErrorException) || rethrow(exc)
@@ -379,7 +384,7 @@ try
           """)
     rm(FooBarT_file)
     @test Base.stale_cachefile(FooBarT2_file, joinpath(dir2, "FooBarT2.ji"))
-    @test Base.require(:FooBarT2) === nothing
+    @test Base.require(:FooBarT2) isa Module
 finally
     splice!(Base.LOAD_CACHE_PATH, 1:2)
     splice!(LOAD_PATH, 1)
@@ -513,7 +518,6 @@ let dir = mktempdir()
         Base.compilecache("$(Test2_module)")
         @test !Base.isbindingresolved(Main, Test2_module)
         Base.require(Test2_module)
-        @test Base.isbindingresolved(Main, Test2_module)
         @test take!(loaded_modules) == Test1_module
         @test take!(loaded_modules) == Test2_module
         write(joinpath(dir, "$(Test3_module).jl"),
@@ -541,7 +545,7 @@ let module_name = string("a",randstring())
         code = """module $(module_name)\nend\n"""
         write(file_name, code)
         reload(module_name)
-        @test isa(getfield(Main, Symbol(module_name)), Module)
+        @test isa(root_module(Symbol(module_name)), Module)
         @test shift!(LOAD_PATH) == path
         rm(file_name)
     end
@@ -586,9 +590,9 @@ let
         end
         try
             @eval using $ModuleB
-            uuid = Base.module_uuid(getfield(Main, ModuleB))
+            uuid = Base.module_uuid(root_module(ModuleB))
             for wid in test_workers
-                @test Base.Distributed.remotecall_eval(Main, wid, :( Base.module_uuid($ModuleB) )) == uuid
+                @test Base.Distributed.remotecall_eval(Main, wid, :( Base.module_uuid(Base.root_module($(QuoteNode(ModuleB)))) )) == uuid
                 if wid != myid() # avoid world-age errors on the local proc
                     @test remotecall_fetch(g, wid) == wid
                 end

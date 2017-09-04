@@ -158,14 +158,14 @@ end
 
 ### Relative and absolute module paths
 
-Given the statement `using Foo`, the system looks for `Foo` within `Main`. If the module does
-not exist, the system attempts to `require("Foo")`, which typically results in loading code from
-an installed package.
+Given the statement `using Foo`, the system consults an internal table of top-level modules
+to look for one named `Foo`. If the module does not exist, the system attempts to `require(:Foo)`,
+which typically results in loading code from an installed package.
 
-However, some modules contain submodules, which means you sometimes need to access a module that
-is not directly available in `Main`. There are two ways to do this. The first is to use an absolute
-path, for example `using Base.Sort`. The second is to use a relative path, which makes it easier
-to import submodules of the current module or any of its enclosing modules:
+However, some modules contain submodules, which means you sometimes need to access a non-top-level
+module. There are two ways to do this. The first is to use an absolute path, for example
+`using Base.Sort`. The second is to use a relative path, which makes it easier to import submodules
+of the current module or any of its enclosing modules:
 
 ```
 module Parent

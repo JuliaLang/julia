@@ -343,9 +343,10 @@ function serialize(s::AbstractSerializer, d::Dict)
 end
 
 function serialize_mod_names(s::AbstractSerializer, m::Module)
-    p = module_parent(m)
-    if m !== p
-        serialize_mod_names(s, p)
+    if Base.is_root_module(m)
+        serialize(s, Base.root_module_key(m))
+    else
+        serialize_mod_names(s, module_parent(m))
         serialize(s, module_name(m))
     end
 end
@@ -772,21 +773,25 @@ function deserialize_svec(s::AbstractSerializer)
 end
 
 function deserialize_module(s::AbstractSerializer)
-    path = deserialize(s)
-    m = Main
-    if isa(path,Tuple) && path !== ()
-        # old version
-        for mname in path
-            m = getfield(m,mname)::Module
+    mkey = deserialize(s)
+    if isa(mkey, Tuple)
+        # old version, TODO: remove
+        if mkey === ()
+            return Main
+        end
+        m = Base.root_module(mkey[1])
+        for i = 2:length(mkey)
+            m = getfield(m, mkey[i])::Module
         end
     else
-        mname = path
+        m = Base.root_module(mkey)
+        mname = deserialize(s)
         while mname !== ()
-            m = getfield(m,mname)::Module
+            m = getfield(m, mname)::Module
             mname = deserialize(s)
         end
     end
-    m
+    return m
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Method})

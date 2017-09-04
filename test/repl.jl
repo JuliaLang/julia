@@ -5,7 +5,7 @@ include("testenv.jl")
 
 # REPL tests
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using TestHelpers
+using Main.TestHelpers
 import Base: REPL, LineEdit
 
 function fake_repl(f)
