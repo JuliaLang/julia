@@ -3512,6 +3512,13 @@ f(x) = yt(x)
             ((call new foreigncall)
              (let* ((args
                      (cond ((eq? (car e) 'foreigncall)
+                            (for-each (lambda (a)
+                                        (if (and (length= a 2) (eq? (car a) '&))
+                                            (deprecation-message
+                                             (string "Syntax \"&argument\"" (linenode-string current-loc)
+                                                     " is deprecated. Remove the \"&\" and use a \"Ref\" argument "
+                                                     "type instead."))))
+                                      (list-tail e 6))
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place
                             ;;       the 1st should be compiled if an atom.
                             (append (if (atom? (cadr e))
