@@ -191,27 +191,27 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 
 ## [Abstract Arrays](@id man-interface-array)
 
-| Methods to implement                            |                                          | Brief description                                                                     |
-|:----------------------------------------------- |:---------------------------------------- |:------------------------------------------------------------------------------------- |
-| `size(A)`                                       |                                          | Returns a tuple containing the dimensions of `A`                                      |
-| `getindex(A, i::Int)`                           |                                          | (if `IndexLinear`) Linear scalar indexing                                              |
-| `getindex(A, I::Vararg{Int, N})`                |                                          | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexing                 |
-| `setindex!(A, v, i::Int)`                       |                                          | (if `IndexLinear`) Scalar indexed assignment                                           |
-| `setindex!(A, v, I::Vararg{Int, N})`            |                                          | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment       |
-| **Optional methods**                            | **Default definition**                   | **Brief description**                                                                 |
-| `IndexStyle(::Type)`                            | `IndexCartesian`                       | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
+| Methods to implement                            |                                        | Brief description                                                                     |
+|:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
+| `size(A)`                                       |                                        | Returns a tuple containing the dimensions of `A`                                      |
+| `getindex(A, i::Int)`                           |                                        | (if `IndexLinear`) Linear scalar indexing                                             |
+| `getindex(A, I::Vararg{Int, N})`                |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexing             |
+| `setindex!(A, v, i::Int)`                       |                                        | (if `IndexLinear`) Scalar indexed assignment                                          |
+| `setindex!(A, v, I::Vararg{Int, N})`            |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment   |
+| **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
+| `IndexStyle(::Type)`                            | `IndexCartesian()`                     | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
 | `getindex(A, I...)`                             | defined in terms of scalar `getindex`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
 | `setindex!(A, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
 | `start`/`next`/`done`                           | defined in terms of scalar `getindex`  | Iteration                                                                             |
-| `length(A)`                                     | `prod(size(A))`                          | Number of elements                                                                    |
-| `similar(A)`                                    | `similar(A, eltype(A), size(A))`         | Return a mutable array with the same shape and element type                           |
-| `similar(A, ::Type{S})`                         | `similar(A, S, size(A))`                 | Return a mutable array with the same shape and the specified element type             |
-| `similar(A, dims::NTuple{Int})`                 | `similar(A, eltype(A), dims)`            | Return a mutable array with the same element type and size *dims*                     |
-| `similar(A, ::Type{S}, dims::NTuple{Int})`      | `Array{S}(dims)`                         | Return a mutable array with the specified element type and size                       |
-| **Non-traditional indices**                     | **Default definition**                   | **Brief description**                                                                 |
-| `indices(A)`                                    | `map(OneTo, size(A))`                    | Return the `AbstractUnitRange` of valid indices                                       |
-| `Base.similar(A, ::Type{S}, inds::NTuple{Ind})` | `similar(A, S, Base.to_shape(inds))`     | Return a mutable array with the specified indices `inds` (see below)                  |
-| `Base.similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`                 | Return an array similar to `T` with the specified indices `inds` (see below)          |
+| `length(A)`                                     | `prod(size(A))`                        | Number of elements                                                                    |
+| `similar(A)`                                    | `similar(A, eltype(A), size(A))`       | Return a mutable array with the same shape and element type                           |
+| `similar(A, ::Type{S})`                         | `similar(A, S, size(A))`               | Return a mutable array with the same shape and the specified element type             |
+| `similar(A, dims::NTuple{Int})`                 | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
+| `similar(A, ::Type{S}, dims::NTuple{Int})`      | `Array{S}(dims)`                       | Return a mutable array with the specified element type and size                       |
+| **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
+| `indices(A)`                                    | `map(OneTo, size(A))`                  | Return the `AbstractUnitRange` of valid indices                                       |
+| `Base.similar(A, ::Type{S}, inds::NTuple{Ind})` | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
+| `Base.similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
 
 If a type is defined as a subtype of `AbstractArray`, it inherits a very large set of rich behaviors
 including iteration and multidimensional indexing built on top of single-element access.  See

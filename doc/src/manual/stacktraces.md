@@ -16,7 +16,7 @@ julia> stacktrace()
  (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:73
 ```
 
-Calling [`stacktrace`](@ref) returns a vector of [`StackFrame`](@ref) s. For ease of use, the
+Calling [`stacktrace()`](@ref) returns a vector of [`StackFrame`](@ref) s. For ease of use, the
 alias [`StackTrace`](@ref) can be used in place of `Vector{StackFrame}`. (Examples with `[...]`
 indicate that output may vary depending on how the code is run.)
 
@@ -47,8 +47,8 @@ julia> grandparent()
 [...]
 ```
 
-Note that when calling [`stacktrace`](@ref) you'll typically see a frame with `eval(...) at boot.jl`.
-When calling [`stacktrace`](@ref) from the REPL you'll also have a few extra frames in the stack
+Note that when calling [`stacktrace()`](@ref) you'll typically see a frame with `eval(...) at boot.jl`.
+When calling [`stacktrace()`](@ref) from the REPL you'll also have a few extra frames in the stack
 from `REPL.jl`, usually looking something like this:
 
 ```julia-repl

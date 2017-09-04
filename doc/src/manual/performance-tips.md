@@ -1208,8 +1208,8 @@ following additional properties:
   * The loop must be an innermost loop.
   * The loop body must be straight-line code. This is why `@inbounds` is currently needed for all
     array accesses. The compiler can sometimes turn short `&&`, `||`, and `?:` expressions into straight-line
-    code, if it is safe to evaluate all operands unconditionally. Consider using [`ifelse`](@ref)
-    instead of `?:` in the loop if it is safe to do so.
+    code, if it is safe to evaluate all operands unconditionally. Consider using the [`ifelse`](@ref)
+    function instead of `?:` in the loop if it is safe to do so.
   * Accesses must have a stride pattern and cannot be "gathers" (random-index reads) or "scatters"
     (random-index writes).
   * The stride should be unit stride.
