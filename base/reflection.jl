@@ -727,12 +727,9 @@ end
 struct CodegenParams
     cached::Cint
 
-    runtime::Cint
-    exceptions::Cint
     track_allocations::Cint
     code_coverage::Cint
     static_alloc::Cint
-    dynamic_alloc::Cint
     prefer_specsig::Cint
 
     module_setup::Any
@@ -740,14 +737,12 @@ struct CodegenParams
     raise_exception::Any
 
     CodegenParams(;cached::Bool=true,
-                   runtime::Bool=true, exceptions::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
-                   static_alloc::Bool=true, dynamic_alloc::Bool=true,
-                   prefer_specsig::Bool=false,
+                   static_alloc::Bool=true, prefer_specsig::Bool=false,
                    module_setup=nothing, module_activation=nothing, raise_exception=nothing) =
         new(Cint(cached),
-            Cint(runtime), Cint(exceptions), Cint(track_allocations), Cint(code_coverage),
-            Cint(static_alloc), Cint(dynamic_alloc), Cint(prefer_specsig),
+            Cint(track_allocations), Cint(code_coverage),
+            Cint(static_alloc), Cint(prefer_specsig),
             module_setup, module_activation, raise_exception)
 end
 

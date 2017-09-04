@@ -97,14 +97,7 @@ static Value *mark_callee_rooted(IRBuilder<> &irbuilder, Value *V)
 
 // --- language feature checks ---
 
-// branch on whether a language feature is enabled or not
 #define JL_FEAT_TEST(ctx, feature) ((ctx).params->feature)
-
-// require a language feature to be enabled
-#define JL_FEAT_REQUIRE(ctx, feature) \
-    if (!JL_FEAT_TEST(ctx, feature)) \
-        jl_errorf("%s for %s:%d requires the " #feature " language feature, which is disabled", \
-                  __FUNCTION__, (ctx).file.str().c_str(), *(ctx).line);
 
 
 // --- hook checks ---
@@ -908,7 +901,6 @@ static void raise_exception(jl_codectx_t &ctx, Value *exc,
                      jl_box_voidpointer(wrap(ctx.builder.GetInsertBlock())),
                      jl_box_voidpointer(wrap(exc)));
     } else {
-        JL_FEAT_REQUIRE(ctx, runtime);
         ctx.builder.CreateCall(prepare_call(jlthrow_func), { mark_callee_rooted(exc) });
     }
     ctx.builder.CreateUnreachable();
@@ -2117,8 +2109,6 @@ static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const std
 // allocation for known size object
 static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
 {
-    JL_FEAT_REQUIRE(ctx, dynamic_alloc);
-    JL_FEAT_REQUIRE(ctx, runtime);
     Value *ptls_ptr = emit_bitcast(ctx, ctx.ptlsStates, T_pint8);
     auto call = ctx.builder.CreateCall(prepare_call(jl_alloc_obj_func),
                                        {ptls_ptr, ConstantInt::get(T_size, static_size),
@@ -2349,12 +2339,9 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
 {
     return (a->cached == b->cached) &&
            // language features
-           (a->runtime == b->runtime) &&
-           (a->exceptions == b->exceptions) &&
            (a->track_allocations == b->track_allocations) &&
            (a->code_coverage == b->code_coverage) &&
            (a->static_alloc == b->static_alloc) &&
-           (a->dynamic_alloc == b->dynamic_alloc) &&
            (a->prefer_specsig == b->prefer_specsig) &&
            // hooks
            (a->module_setup == b->module_setup) &&

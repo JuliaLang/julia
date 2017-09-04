@@ -1806,12 +1806,9 @@ typedef struct {
 typedef struct {
     int cached;             // can the compiler use/populate the compilation cache?
 
-    int runtime;            // can we call into the runtime?
-    int exceptions;         // are exceptions supported (requires runtime)?
-    int track_allocations;  // can we track allocations (don't if disallowed)?
-    int code_coverage;      // can we measure coverage (don't if disallowed)?
+    int track_allocations;  // can we track allocations?
+    int code_coverage;      // can we measure coverage?
     int static_alloc;       // is the compiler allowed to allocate statically?
-    int dynamic_alloc;      // is the compiler allowed to allocate dynamically (requires runtime)?
     int prefer_specsig;     // are specialized function signatures preferred?
 
 

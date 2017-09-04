@@ -127,7 +127,7 @@ jl_value_t *jl_memory_exception;
 jl_value_t *jl_readonlymemory_exception;
 union jl_typemap_t jl_cfunction_list;
 
-jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 1, 1, 1, 0, NULL, NULL, NULL};
+jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0, NULL, NULL, NULL};
 
 // --- type properties and predicates ---
 
