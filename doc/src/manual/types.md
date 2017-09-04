@@ -41,7 +41,7 @@ up front are:
     where the combination of static compilation with polymorphism makes this distinction significant.
   * Only values, not variables, have types -- variables are simply names bound to values.
   * Both abstract and concrete types can be parameterized by other types. They can also be parameterized
-    by symbols, by values of any type for which [`isbits()`](@ref) returns true (essentially, things
+    by symbols, by values of any type for which [`isbits`](@ref) returns true (essentially, things
     like numbers and bools that are stored like C types or structs with no pointers to other objects),
     and also by tuples thereof. Type parameters may be omitted when they do not need to be referenced
     or restricted.
@@ -80,7 +80,7 @@ This allows a type assertion to be attached to any expression in-place.
 When appended to a variable on the left-hand side of an assignment, or as part of a `local` declaration,
 the `::` operator means something a bit different: it declares the variable to always have the
 specified type, like a type declaration in a statically-typed language such as C. Every value
-assigned to the variable will be converted to the declared type using [`convert()`](@ref):
+assigned to the variable will be converted to the declared type using [`convert`](@ref):
 
 ```jldoctest
 julia> function foo()
@@ -334,7 +334,7 @@ Foo
 
 When a type is applied like a function it is called a *constructor*. Two constructors are generated
 automatically (these are called *default constructors*). One accepts any arguments and calls
-[`convert()`](@ref) to convert them to the types of the fields, and the other accepts arguments
+[`convert`](@ref) to convert them to the types of the fields, and the other accepts arguments
 that match the field types exactly. The reason both of these are generated is that this makes
 it easier to add new definitions without inadvertently replacing a default constructor.
 
@@ -1111,7 +1111,7 @@ julia> isa(1, AbstractFloat)
 false
 ```
 
-The [`typeof()`](@ref) function, already used throughout the manual in examples, returns the type
+The [`typeof`](@ref) function, already used throughout the manual in examples, returns the type
 of its argument. Since, as noted above, types are objects, they also have types, and we can ask
 what their types are:
 
@@ -1139,7 +1139,7 @@ DataType
 
 `DataType` is its own type.
 
-Another operation that applies to some types is [`supertype()`](@ref), which reveals a type's
+Another operation that applies to some types is [`supertype`](@ref), which reveals a type's
 supertype. Only declared types (`DataType`) have unambiguous supertypes:
 
 ```jldoctest
@@ -1156,7 +1156,7 @@ julia> supertype(Any)
 Any
 ```
 
-If you apply [`supertype()`](@ref) to other type objects (or non-type objects), a [`MethodError`](@ref)
+If you apply [`supertype`](@ref) to other type objects (or non-type objects), a [`MethodError`](@ref)
 is raised:
 
 ```jldoctest
@@ -1170,7 +1170,7 @@ Closest candidates are:
 ## Custom pretty-printing
 
 Often, one wants to customize how instances of a type are displayed.  This is accomplished by
-overloading the [`show()`](@ref) function.  For example, suppose we define a type to represent
+overloading the [`show`](@ref) function.  For example, suppose we define a type to represent
 complex numbers in polar form:
 
 ```jldoctest polartype
@@ -1202,7 +1202,7 @@ julia> Base.show(io::IO, z::Polar) = print(io, z.r, " * exp(", z.Θ, "im)")
 More fine-grained control over display of `Polar` objects is possible. In particular, sometimes
 one wants both a verbose multi-line printing format, used for displaying a single object in the
 REPL and other interactive environments, and also a more compact single-line format used for
-[`print()`](@ref) or for displaying the object as part of another object (e.g. in an array). Although
+[`print`](@ref) or for displaying the object as part of another object (e.g. in an array). Although
 by default the `show(io, z)` function is called in both cases, you can define a *different* multi-line
 format for displaying an object by overloading a three-argument form of `show` that takes the
 `text/plain` MIME type as its second argument (see [Multimedia I/O](@ref)), for example:
@@ -1227,7 +1227,7 @@ julia> [Polar(3, 4.0), Polar(4.0,5.3)]
 
 where the single-line `show(io, z)` form is still used for an array of `Polar` values.   Technically,
 the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(STDOUT, MIME("text/plain"), z)`,
-which in turn defaults to `show(STDOUT, z)`, but you should *not* define new [`display()`](@ref)
+which in turn defaults to `show(STDOUT, z)`, but you should *not* define new [`display`](@ref)
 methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref)).
 
 Moreover, you can also define `show` methods for other MIME types in order to enable richer display
@@ -1405,7 +1405,7 @@ a single value of type `T` as an argument.
 
 ### Checking if a `Nullable` object has a value
 
-You can check if a `Nullable` object has any value using [`isnull()`](@ref):
+You can check if a `Nullable` object has any value using [`isnull`](@ref):
 
 ```jldoctest
 julia> isnull(Nullable{Float64}())
@@ -1417,7 +1417,7 @@ false
 
 ### Safely accessing the value of a `Nullable` object
 
-You can safely access the value of a `Nullable` object using [`get()`](@ref):
+You can safely access the value of a `Nullable` object using [`get`](@ref):
 
 ```jldoctest
 julia> get(Nullable{Float64}())
@@ -1430,12 +1430,12 @@ julia> get(Nullable(1.0))
 ```
 
 If the value is not present, as it would be for `Nullable{Float64}`, a [`NullException`](@ref)
-error will be thrown. The error-throwing nature of the `get()` function ensures that any
+error will be thrown. The error-throwing nature of the `get` function ensures that any
 attempt to access a missing value immediately fails.
 
 In cases for which a reasonable default value exists that could be used when a `Nullable`
 object's value turns out to be missing, you can provide this default value as a second argument
-to `get()`:
+to `get`:
 
 ```jldoctest
 julia> get(Nullable{Float64}(), 0.0)
@@ -1446,15 +1446,15 @@ julia> get(Nullable(1.0), 0.0)
 ```
 
 !!! tip
-    Make sure the type of the default value passed to `get()` and that of the `Nullable`
-    object match to avoid type instability, which could hurt performance. Use [`convert()`](@ref)
+    Make sure the type of the default value passed to `get` and that of the `Nullable`
+    object match to avoid type instability, which could hurt performance. Use [`convert`](@ref)
     manually if needed.
 
 ### Performing operations on `Nullable` objects
 
 `Nullable` objects represent values that are possibly missing, and it
 is possible to write all code using these objects by first testing to see if
-the value is missing with [`isnull()`](@ref), and then doing an appropriate
+the value is missing with [`isnull`](@ref), and then doing an appropriate
 action. However, there are some common use cases where the code could be more
 concise or clear by using a higher-order function.
 
@@ -1503,7 +1503,7 @@ example, we will assume that the best solution is to propagate the missing
 values forward; that is, if any input is missing, we simply produce a missing
 output.
 
-The `broadcast()` function makes this task easy; we can simply pass the
+The `broadcast` function makes this task easy; we can simply pass the
 `root` function we wrote to `broadcast`:
 
 ```jldoctest nullableroot
@@ -1518,9 +1518,9 @@ Nullable{Float64}()
 ```
 
 If one or more of the inputs is missing, then the output of
-`broadcast()` will be missing.
+`broadcast` will be missing.
 
-There exists special syntactic sugar for the `broadcast()` function
+There exists special syntactic sugar for the `broadcast` function
 using a dot notation:
 
 ```jldoctest nullableroot
@@ -1528,7 +1528,7 @@ julia> root.(Nullable(1), Nullable(-9), Nullable(20))
 Nullable{Float64}(5.0)
 ```
 
-In particular, the regular arithmetic operators can be `broadcast()`
+In particular, the regular arithmetic operators can be `broadcast`
 conveniently using `.`-prefixed operators:
 
 ```jldoctest

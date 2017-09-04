@@ -47,7 +47,7 @@ julia> chomp(a) == "hello"
 true
 ```
 
-More generally, you can use [`open()`](@ref) to read from or write to an external command.
+More generally, you can use [`open`](@ref) to read from or write to an external command.
 
 ```jldoctest
 julia> open(`less`, "w", STDOUT) do io
@@ -245,7 +245,7 @@ hello | sort
 
 This expression invokes the `echo` command with three words as arguments: `hello`, `|`, and `sort`.
 The result is that a single line is printed: `hello | sort`. How, then, does one construct a
-pipeline? Instead of using `'|'` inside of backticks, one uses [`pipeline()`](@ref):
+pipeline? Instead of using `'|'` inside of backticks, one uses [`pipeline`](@ref):
 
 ```jldoctest
 julia> run(pipeline(`echo hello`, `sort`))

@@ -1194,7 +1194,7 @@ end
 """
     @printf([io::IOStream], "%Fmt", args...)
 
-Print `args` using C `printf()` style format specification string, with some caveats:
+Print `args` using C `printf` style format specification string, with some caveats:
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
 `%e`, `%E`, `%f`, `%F`, `%g`, and `%G`. Furthermore, if a floating point number is
 equally close to the numeric values of two possible output strings, the output

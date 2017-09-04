@@ -224,7 +224,7 @@ _maybetail(t::Tuple) = tail(t)
 
 Represent an AbstractUnitRange of indices as a vector of the indices themselves.
 
-Upon calling `to_indices()`, Colons are converted to Slice objects to represent
+Upon calling `to_indices`, Colons are converted to Slice objects to represent
 the indices over which the Colon spans. Slice objects are themselves unit
 ranges with the same indices as those they wrap. This means that indexing into
 Slice objects with an integer always returns that exact integer, and they

@@ -6,8 +6,8 @@ Julia provides a variety of control flow constructs:
   * [Conditional Evaluation](@ref man-conditional-evaluation): `if`-`elseif`-`else` and `?:` (ternary operator).
   * [Short-Circuit Evaluation](@ref): `&&`, `||` and chained comparisons.
   * [Repeated Evaluation: Loops](@ref man-loops): `while` and `for`.
-  * [Exception Handling](@ref): `try`-`catch`, [`error()`](@ref) and [`throw()`](@ref).
-  * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto()`](@ref).
+  * [Exception Handling](@ref): `try`-`catch`, [`error`](@ref) and [`throw`](@ref).
+  * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto`](@ref).
 
 The first five control flow mechanisms are standard to high-level programming languages. [`Task`](@ref)s
 are not so standard: they provide non-local control flow, making it possible to switch between
@@ -565,7 +565,7 @@ below all interrupt the normal flow of control.
 | [`UndefVarError`](@ref)       |
 | `UnicodeError`                |
 
-For example, the [`sqrt()`](@ref) function throws a [`DomainError`](@ref) if applied to a negative
+For example, the [`sqrt`](@ref) function throws a [`DomainError`](@ref) if applied to a negative
 real value:
 
 ```jldoctest
@@ -584,10 +584,10 @@ You may define your own exceptions in the following way:
 julia> struct MyCustomException <: Exception end
 ```
 
-### The [`throw()`](@ref) function
+### The [`throw`](@ref) function
 
-Exceptions can be created explicitly with [`throw()`](@ref). For example, a function defined only
-for nonnegative numbers could be written to [`throw()`](@ref) a [`DomainError`](@ref) if the argument
+Exceptions can be created explicitly with [`throw`](@ref). For example, a function defined only
+for nonnegative numbers could be written to [`throw`](@ref) a [`DomainError`](@ref) if the argument
 is negative:
 
 ```jldoctest
@@ -646,11 +646,11 @@ julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defin
 
 ### Errors
 
-The [`error()`](@ref) function is used to produce an [`ErrorException`](@ref) that interrupts
+The [`error`](@ref) function is used to produce an [`ErrorException`](@ref) that interrupts
 the normal flow of control.
 
 Suppose we want to stop execution immediately if the square root of a negative number is taken.
-To do this, we can define a fussy version of the [`sqrt()`](@ref) function that raises an error
+To do this, we can define a fussy version of the [`sqrt`](@ref) function that raises an error
 if its argument is negative:
 
 ```jldoctest fussy_sqrt
@@ -799,7 +799,7 @@ julia> try error() end # Returns nothing
 The power of the `try/catch` construct lies in the ability to unwind a deeply nested computation
 immediately to a much higher level in the stack of calling functions. There are situations where
 no error has occurred, but the ability to unwind the stack and pass a value to a higher level
-is desirable. Julia provides the [`rethrow()`](@ref), [`backtrace()`](@ref) and [`catch_backtrace()`](@ref)
+is desirable. Julia provides the [`rethrow`](@ref), [`backtrace`](@ref) and [`catch_backtrace`](@ref)
 functions for more advanced error handling.
 
 ### `finally` Clauses
@@ -855,7 +855,7 @@ multiple tasks reading from and writing to it.
 Let's define a producer task, which produces values via the [`put!`](@ref) call.
 To consume values, we need to schedule the producer to run in a new task. A special [`Channel`](@ref)
 constructor which accepts a 1-arg function as an argument can be used to run a task bound to a channel.
-We can then [`take!()`](@ref) values repeatedly from the channel object:
+We can then [`take!`](@ref) values repeatedly from the channel object:
 
 ```jldoctest producer
 julia> function producer(c::Channel)
@@ -888,7 +888,7 @@ julia> take!(chnl)
 ```
 
 One way to think of this behavior is that `producer` was able to return multiple times. Between
-calls to [`put!()`](@ref), the producer's execution is suspended and the consumer has control.
+calls to [`put!`](@ref), the producer's execution is suspended and the consumer has control.
 
 The returned [`Channel`](@ref) can be used as an iterable object in a `for` loop, in which case the
 loop variable takes on all the produced values. The loop is terminated when the channel is closed.
@@ -906,16 +906,16 @@ stop
 ```
 
 Note that we did not have to explicitly close the channel in the producer. This is because
-the act of binding a [`Channel`](@ref) to a [`Task()`](@ref) associates the open lifetime of
+the act of binding a [`Channel`](@ref) to a [`Task`](@ref) associates the open lifetime of
 a channel with that of the bound task. The channel object is closed automatically when the task
 terminates. Multiple channels can be bound to a task, and vice-versa.
 
-While the [`Task()`](@ref) constructor expects a 0-argument function, the [`Channel()`](@ref)
+While the [`Task`](@ref) constructor expects a 0-argument function, the [`Channel`](@ref)
 method which creates a channel bound task expects a function that accepts a single argument of
 type [`Channel`](@ref). A common pattern is for the producer to be parameterized, in which case a partial
 function application is needed to create a 0 or 1 argument [anonymous function](@ref man-anonymous-functions).
 
-For [`Task()`](@ref) objects this can be done either directly or by use of a convenience macro:
+For [`Task`](@ref) objects this can be done either directly or by use of a convenience macro:
 
 ```julia
 function mytask(myarg)
@@ -927,8 +927,8 @@ taskHdl = Task(() -> mytask(7))
 taskHdl = @task mytask(7)
 ```
 
-To orchestrate more advanced work distribution patterns, [`bind()`](@ref) and [`schedule()`](@ref)
-can be used in conjunction with [`Task()`](@ref) and [`Channel()`](@ref)
+To orchestrate more advanced work distribution patterns, [`bind`](@ref) and [`schedule`](@ref)
+can be used in conjunction with [`Task`](@ref) and [`Channel`](@ref)
 constructors to explicitly link a set of channels with a set of producer/consumer tasks.
 
 Note that currently Julia tasks are not scheduled to run on separate CPU cores.
@@ -936,27 +936,27 @@ True kernel threads are discussed under the topic of [Parallel Computing](@ref).
 
 ### Core task operations
 
-Let us explore the low level construct [`yieldto()`](@ref) to underestand how task switching works.
+Let us explore the low level construct [`yieldto`](@ref) to underestand how task switching works.
 `yieldto(task,value)` suspends the current task, switches to the specified `task`, and causes
-that task's last [`yieldto()`](@ref) call to return the specified `value`. Notice that [`yieldto()`](@ref)
+that task's last [`yieldto`](@ref) call to return the specified `value`. Notice that [`yieldto`](@ref)
 is the only operation required to use task-style control flow; instead of calling and returning
 we are always just switching to a different task. This is why this feature is also called "symmetric
 coroutines"; each task is switched to and from using the same mechanism.
 
-[`yieldto()`](@ref) is powerful, but most uses of tasks do not invoke it directly. Consider why
+[`yieldto`](@ref) is powerful, but most uses of tasks do not invoke it directly. Consider why
 this might be. If you switch away from the current task, you will probably want to switch back
 to it at some point, but knowing when to switch back, and knowing which task has the responsibility
-of switching back, can require considerable coordination. For example, [`put!()`](@ref) and [`take!()`](@ref)
+of switching back, can require considerable coordination. For example, [`put!`](@ref) and [`take!`](@ref)
 are blocking operations, which, when used in the context of channels maintain state to remember
-who the consumers are. Not needing to manually keep track of the consuming task is what makes [`put!()`](@ref)
-easier to use than the low-level [`yieldto()`](@ref).
+who the consumers are. Not needing to manually keep track of the consuming task is what makes [`put!`](@ref)
+easier to use than the low-level [`yieldto`](@ref).
 
-In addition to [`yieldto()`](@ref), a few other basic functions are needed to use tasks effectively.
+In addition to [`yieldto`](@ref), a few other basic functions are needed to use tasks effectively.
 
-  * [`current_task()`](@ref) gets a reference to the currently-running task.
-  * [`istaskdone()`](@ref) queries whether a task has exited.
-  * [`istaskstarted()`](@ref) queries whether a task has run yet.
-  * [`task_local_storage()`](@ref) manipulates a key-value store specific to the current task.
+  * [`current_task`](@ref) gets a reference to the currently-running task.
+  * [`istaskdone`](@ref) queries whether a task has exited.
+  * [`istaskstarted`](@ref) queries whether a task has run yet.
+  * [`task_local_storage`](@ref) manipulates a key-value store specific to the current task.
 
 ### Tasks and events
 
@@ -964,23 +964,23 @@ Most task switches occur as a result of waiting for events such as I/O requests,
 by a scheduler included in the standard library. The scheduler maintains a queue of runnable tasks,
 and executes an event loop that restarts tasks based on external events such as message arrival.
 
-The basic function for waiting for an event is [`wait()`](@ref). Several objects implement [`wait()`](@ref);
-for example, given a `Process` object, [`wait()`](@ref) will wait for it to exit. [`wait()`](@ref)
-is often implicit; for example, a [`wait()`](@ref) can happen inside a call to [`read()`](@ref)
+The basic function for waiting for an event is [`wait`](@ref). Several objects implement [`wait`](@ref);
+for example, given a `Process` object, [`wait`](@ref) will wait for it to exit. [`wait`](@ref)
+is often implicit; for example, a [`wait`](@ref) can happen inside a call to [`read`](@ref)
 to wait for data to be available.
 
-In all of these cases, [`wait()`](@ref) ultimately operates on a [`Condition`](@ref) object, which
-is in charge of queueing and restarting tasks. When a task calls [`wait()`](@ref) on a [`Condition`](@ref),
+In all of these cases, [`wait`](@ref) ultimately operates on a [`Condition`](@ref) object, which
+is in charge of queueing and restarting tasks. When a task calls [`wait`](@ref) on a [`Condition`](@ref),
 the task is marked as non-runnable, added to the condition's queue, and switches to the scheduler.
 The scheduler will then pick another task to run, or block waiting for external events. If all
-goes well, eventually an event handler will call [`notify()`](@ref) on the condition, which causes
+goes well, eventually an event handler will call [`notify`](@ref) on the condition, which causes
 tasks waiting for that condition to become runnable again.
 
 A task created explicitly by calling [`Task`](@ref) is initially not known to the scheduler. This
-allows you to manage tasks manually using [`yieldto()`](@ref) if you wish. However, when such
+allows you to manage tasks manually using [`yieldto`](@ref) if you wish. However, when such
 a task waits for an event, it still gets restarted automatically when the event happens, as you
 would expect. It is also possible to make the scheduler run a task whenever it can, without necessarily
-waiting for any events. This is done by calling [`schedule()`](@ref), or using the [`@schedule`](@ref)
+waiting for any events. This is done by calling [`schedule`](@ref), or using the [`@schedule`](@ref)
 or [`@async`](@ref) macros (see [Parallel Computing](@ref) for more details).
 
 ### Task states

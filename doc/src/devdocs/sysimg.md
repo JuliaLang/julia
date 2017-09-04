@@ -24,7 +24,7 @@ Julia session, type:
 include(joinpath(JULIA_HOME, Base.DATAROOTDIR, "julia", "build_sysimg.jl"))
 ```
 
-This will include a `build_sysimg()` function:
+This will include a `build_sysimg` function:
 
 ```@docs
 BuildSysImg.build_sysimg

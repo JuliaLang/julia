@@ -384,7 +384,7 @@ A few other points to be aware of:
 It is sometimes helpful during module development to turn off incremental precompilation. The
 command line flag `--compilecache={yes|no}` enables you to toggle module precompilation on and
 off. When Julia is started with `--compilecache=no` the serialized modules in the compile cache
-are ignored when loading modules and module dependencies. `Base.compilecache()` can still be called
+are ignored when loading modules and module dependencies. `Base.compilecache` can still be called
 manually and it will respect `__precompile__()` directives for the module. The state of this command
-line flag is passed to [`Pkg.build()`](@ref) to disable automatic precompilation triggering when installing,
+line flag is passed to [`Pkg.build`](@ref) to disable automatic precompilation triggering when installing,
 updating, and explicitly building packages.
