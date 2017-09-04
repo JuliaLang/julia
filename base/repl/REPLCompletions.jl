@@ -468,7 +468,7 @@ function completions(string, pos)
         startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
 
-        expanded = complete_expanduser(replace(string[r], r"\\ ", " "), startpos:pos)
+        expanded = complete_expanduser(replace(string[r], r"\\ ", " "), r)
         expanded[3] && return expanded  # If user expansion available, return it
 
         paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
