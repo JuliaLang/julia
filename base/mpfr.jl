@@ -904,15 +904,15 @@ end
 
 function _calculate_buffer_size!(buf, fmt, x::BigFloat)
     ccall((:mpfr_snprintf,:libmpfr),
-        Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...),
-        buf, 0, fmt, &x)
+        Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...),
+        buf, 0, fmt, x)
 end
 
 function _fill_buffer!(buf, fmt, x::BigFloat)
     s = length(buf)
     # we temporarily need one more item in buffer to capture null termination
     resize!(buf, s + 1)
-    n = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ptr{BigFloat}...), buf, fmt, &x)
+    n = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ref{BigFloat}...), buf, fmt, x)
     @assert n + 1 == length(buf)
     @assert last(buf) == 0x00
     resize!(buf, s)
