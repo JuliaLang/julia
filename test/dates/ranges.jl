@@ -502,7 +502,7 @@ end
 lastdaysofmonth = [Dates.Date(2014, i, Dates.daysinmonth(2014, i)) for i=1:12]
 @test [Date(2014, 1, 31):Dates.Month(1):Date(2015);] == lastdaysofmonth
 
-# AbstractRange addition/subtraction:
+# Range addition/subtraction:
 let d = Dates.Day(1)
     @test (Dates.Date(2000):d:Dates.Date(2001)) + d == (Dates.Date(2000) + d:d:Dates.Date(2001) + d)
     @test (Dates.Date(2000):d:Dates.Date(2001)) - d == (Dates.Date(2000) - d:d:Dates.Date(2001) - d)

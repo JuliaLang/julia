@@ -650,8 +650,8 @@ r = LinSpace(1,4,4)
 # comparing and hashing ranges
 let
     Rs = AbstractRange[1:2, map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 17:-3:0,
-               0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
-               linspace(0, 1, 20), map(Float32, linspace(0, 1, 20))]
+                       0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
+                       linspace(0, 1, 20), map(Float32, linspace(0, 1, 20))]
     for r in Rs
         local r
         ar = collect(r)

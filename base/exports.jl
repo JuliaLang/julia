@@ -26,6 +26,7 @@ export
 # Types
     AbstractChannel,
     AbstractMatrix,
+    AbstractRange,
     AbstractSet,
     AbstractUnitRange,
     AbstractVector,
@@ -87,7 +88,6 @@ export
     PermutedDimsArray,
     PollingFileWatcher,
     QuickSort,
-    AbstractRange,
     RangeIndex,
     Rational,
     Regex,

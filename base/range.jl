@@ -39,7 +39,7 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
 """
     :(start, [step], stop)
 
-AbstractRange operator. `a:b` constructs a range from `a` to `b` with a step size of 1, and `a:s:b`
+Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1, and `a:s:b`
 is similar but uses a step size of `s`. These syntaxes call the function `colon`. The colon
 is also used in indexing to select whole dimensions.
 """

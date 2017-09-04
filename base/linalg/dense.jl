@@ -240,7 +240,7 @@ end
 """
     diagind(M, k::Integer=0)
 
-A `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
+An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
 
 # Examples
 ```jldoctest

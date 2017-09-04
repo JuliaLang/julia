@@ -35,7 +35,7 @@ may trip up Julia users accustomed to MATLAB:
     - To construct block matrices (concatenating in the first two dimensions), use either [`hvcat()`](@ref)
       or combine spaces and semicolons (`[a b; c d]`).
   * In Julia, `a:b` and `a:b:c` construct `AbstractRange` objects. To construct a full vector like in MATLAB,
-    use [`collect(a:b)`](@ref). Generally, there is no need to call `collect` though. `AbstractRange` will
+    use [`collect(a:b)`](@ref). Generally, there is no need to call `collect` though. An `AbstractRange` object will
     act like a normal array in most cases but is more efficient because it lazily computes its values.
     This pattern of creating specialized objects instead of full arrays is used frequently, and is
     also seen in functions such as [`linspace`](@ref), or with iterators such as `enumerate`, and
@@ -157,7 +157,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, vectors and matrices are concatenated using [`hcat()`](@ref), [`vcat()`](@ref) and
     [`hvcat()`](@ref), not `c`, `rbind` and `cbind` like in R.
   * In Julia, a range like `a:b` is not shorthand for a vector like in R, but is a specialized `AbstractRange`
-    that is used for iteration without high memory overhead. To convert a range into a vector, use
+    object that is used for iteration without high memory overhead. To convert a range into a vector, use
     [`collect(a:b)`](@ref).
   * Julia's [`max()`](@ref) and [`min()`](@ref) are the equivalent of `pmax` and `pmin` respectively
     in R, but both arguments need to have the same dimensions.  While [`maximum()`](@ref) and [`minimum()`](@ref)
