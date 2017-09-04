@@ -723,18 +723,6 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = type
     return results
 end
 
-# this type mirrors jl_cghooks_t (documented in julia.h)
-struct CodegenHooks
-    module_setup::Ptr{Void}
-    module_activation::Ptr{Void}
-    raise_exception::Ptr{Void}
-
-    CodegenHooks(;module_setup=nothing, module_activation=nothing, raise_exception=nothing) =
-        new(pointer_from_objref(module_setup),
-            pointer_from_objref(module_activation),
-            pointer_from_objref(raise_exception))
-end
-
 # this type mirrors jl_cgparams_t (documented in julia.h)
 struct CodegenParams
     cached::Cint
@@ -747,18 +735,20 @@ struct CodegenParams
     dynamic_alloc::Cint
     prefer_specsig::Cint
 
-    hooks::CodegenHooks
+    module_setup::Any
+    module_activation::Any
+    raise_exception::Any
 
     CodegenParams(;cached::Bool=true,
                    runtime::Bool=true, exceptions::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
                    static_alloc::Bool=true, dynamic_alloc::Bool=true,
-                   prefer_specsig::Bool=false, hooks::CodegenHooks=CodegenHooks()) =
+                   prefer_specsig::Bool=false,
+                   module_setup=nothing, module_activation=nothing, raise_exception=nothing) =
         new(Cint(cached),
-            Cint(runtime), Cint(exceptions),
-            Cint(track_allocations), Cint(code_coverage),
-            Cint(static_alloc), Cint(dynamic_alloc),
-            Cint(prefer_specsig), hooks)
+            Cint(runtime), Cint(exceptions), Cint(track_allocations), Cint(code_coverage),
+            Cint(static_alloc), Cint(dynamic_alloc), Cint(prefer_specsig),
+            module_setup, module_activation, raise_exception)
 end
 
 # Printing code representations in IR and assembly

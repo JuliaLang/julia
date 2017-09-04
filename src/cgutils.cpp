@@ -109,10 +109,10 @@ static Value *mark_callee_rooted(IRBuilder<> &irbuilder, Value *V)
 
 // --- hook checks ---
 
-#define JL_HOOK_TEST(params,hook) ((params)->hooks.hook != jl_nothing)
+#define JL_HOOK_TEST(params,hook) ((params)->hook != jl_nothing)
 
 #define JL_HOOK_CALL(params,hook,argc,...) \
-    _hook_call<argc>((params)->hooks.hook, {{__VA_ARGS__}});
+    _hook_call<argc>((params)->hook, {{__VA_ARGS__}});
 template<int N>
 static inline void _hook_call(jl_value_t *hook, std::array<jl_value_t*,N> args) {
     jl_value_t **argv;
@@ -2357,7 +2357,7 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
            (a->dynamic_alloc == b->dynamic_alloc) &&
            (a->prefer_specsig == b->prefer_specsig) &&
            // hooks
-           (a->hooks.module_setup == b->hooks.module_setup) &&
-           (a->hooks.module_activation == b->hooks.module_activation) &&
-           (a->hooks.raise_exception == b->hooks.raise_exception);
+           (a->module_setup == b->module_setup) &&
+           (a->module_activation == b->module_activation) &&
+           (a->raise_exception == b->raise_exception);
 }

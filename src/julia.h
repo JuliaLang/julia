@@ -1804,7 +1804,18 @@ typedef struct {
 // codegen interface ----------------------------------------------------------
 
 typedef struct {
-    // to disable a hook: set to NULL or nothing
+    int cached;             // can the compiler use/populate the compilation cache?
+
+    int runtime;            // can we call into the runtime?
+    int exceptions;         // are exceptions supported (requires runtime)?
+    int track_allocations;  // can we track allocations (don't if disallowed)?
+    int code_coverage;      // can we measure coverage (don't if disallowed)?
+    int static_alloc;       // is the compiler allowed to allocate statically?
+    int dynamic_alloc;      // is the compiler allowed to allocate dynamically (requires runtime)?
+    int prefer_specsig;     // are specialized function signatures preferred?
+
+
+    // hooks
 
     // module setup: prepare a module for code emission (data layout, DWARF version, ...)
     // parameters: LLVMModuleRef as Ptr{Void}
@@ -1820,21 +1831,6 @@ typedef struct {
     // parameters: LLVMBasicBlockRef as Ptr{Void}, LLVMValueRef as Ptr{Void}
     // return value: none
     jl_value_t *raise_exception;
-} jl_cghooks_t;
-
-typedef struct {
-    int cached;             // can the compiler use/populate the compilation cache?
-
-    // language features (C-style integer booleans)
-    int runtime;            // can we call into the runtime?
-    int exceptions;         // are exceptions supported (requires runtime)?
-    int track_allocations;  // can we track allocations (don't if disallowed)?
-    int code_coverage;      // can we measure coverage (don't if disallowed)?
-    int static_alloc;       // is the compiler allowed to allocate statically?
-    int dynamic_alloc;      // is the compiler allowed to allocate dynamically (requires runtime)?
-    int prefer_specsig;     // are specialized function signatures preferred?
-
-    jl_cghooks_t hooks;
 } jl_cgparams_t;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
 
