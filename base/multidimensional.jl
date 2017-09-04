@@ -704,7 +704,7 @@ cumprod(A::AbstractArray, axis::Integer=1) = accumulate(*, A, axis)
 """
     cumprod!(B, A, dim::Integer=1)
 
-Cumulative product of `A` along a dimension, storing the result in `B`. 
+Cumulative product of `A` along a dimension, storing the result in `B`.
 See also [`cumprod`](@ref).
 """
 cumprod!(B, A, axis::Integer=1) = accumulate!(*, B, A, axis)
