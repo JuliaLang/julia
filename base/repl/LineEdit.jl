@@ -69,6 +69,7 @@ mutable struct PromptState <: ModeState
     terminal::AbstractTerminal
     p::Prompt
     input_buffer::IOBuffer
+    region_active::Bool
     undo_buffers::Vector{IOBuffer}
     undo_idx::Int
     ias::InputAreaState
@@ -82,7 +83,10 @@ end
 
 options(s::PromptState) = isdefined(s.p, :repl) ? s.p.repl.options : Base.REPL.Options()
 
-setmark(s) = mark(buffer(s))
+function setmark(s::MIState)
+    activate_region(s, s.key_repeats > 0)
+    mark(buffer(s))
+end
 
 # the default mark is 0
 getmark(s) = max(0, buffer(s).mark)
@@ -97,6 +101,13 @@ bufend(s) = buffer(s).size
 indexes(reg::Region) = first(reg)+1:last(reg)
 
 content(s, reg::Region = 0=>bufend(s)) = String(buffer(s).data[indexes(reg)])
+
+activate_region(s::PromptState, on=true) = s.region_active = on
+activate_region(s::ModeState, on=true) = false
+deactivate_region(s::ModeState) = activate_region(s, false)
+
+is_region_active(s::PromptState)  = s.region_active
+is_region_active(s::ModeState) = false
 
 const REGION_ANIMATION_DURATION = Ref(0.2)
 
@@ -170,7 +181,8 @@ cancel_beep(::ModeState) = nothing
 
 for f in [:terminal, :on_enter, :add_history, :buffer, :(Base.isempty),
           :replace_line, :refresh_multi_line, :input_string, :update_display_buffer,
-          :empty_undo, :push_undo, :pop_undo, :options, :cancel_beep, :beep]
+          :empty_undo, :push_undo, :pop_undo, :options, :cancel_beep, :beep,
+          :deactivate_region, :is_region_active, :activate_region]
     @eval ($f)(s::MIState, args...) = $(f)(state(s), args...)
 end
 
@@ -198,9 +210,8 @@ const COMMAND_GROUP = Dict(command=>group for (group, commands) in COMMAND_GROUP
 command_group(command) = get(COMMAND_GROUP, command, :nogroup)
 
 function set_action!(s::MIState, command::Symbol)
+    command_group(command) != :movement && deactivate_region(s)
     # if a command is already running, don't update the current_action field
-    # (NOTE: current_action could be made a vector instead, to record the stack
-    # of currently running actions)
     s.current_action == :unknown && (s.current_action = command)
 end
 
@@ -312,7 +323,9 @@ prompt_string(f::Function) = Base.invokelatest(f)
 refresh_multi_line(s::ModeState; kw...) = refresh_multi_line(terminal(s), s; kw...)
 refresh_multi_line(termbuf::TerminalBuffer, s::ModeState; kw...) = refresh_multi_line(termbuf, terminal(s), s; kw...)
 refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState; kw...) = (@assert term == terminal(s); refresh_multi_line(termbuf,s; kw...))
-function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf, state::InputAreaState, prompt = ""; indent = 0)
+
+function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf::IOBuffer, state::InputAreaState, prompt = "";
+                            indent = 0, region_active = false)
     _clear_input_area(termbuf, state)
 
     cols = width(terminal)
@@ -321,6 +334,8 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     cur_row = 0   # count of the number of rows
     buf_pos = position(buf)
     line_pos = buf_pos
+    regstart, regstop = region(buf)
+    written = 0
     # Write out the prompt string
     lindent = write_prompt(termbuf, prompt)
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
@@ -336,13 +351,17 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         llength = textwidth(l)
         slength = sizeof(l)
         cur_row += 1
+        # lwrite: what will be written to termbuf
+        lwrite = region_active ? highlight_region(l, regstart, regstop, written, slength) :
+                                 l
+        written += slength
         cmove_col(termbuf, lindent + 1)
-        write(termbuf, l)
+        write(termbuf, lwrite)
         # We expect to be line after the last valid output line (due to
         # the '\n' at the end of the previous line)
         if curs_row == -1
-            # in this case, we haven't yet written the cursor position
             line_pos -= slength # '\n' gets an extra pos
+            # in this case, we haven't yet written the cursor position
             if line_pos < 0 || !moreinput
                 num_chars = (line_pos >= 0 ? llength : textwidth(l[1:prevind(l, line_pos + slength + 1)]))
                 curs_row, curs_pos = divrem(lindent + num_chars - 1, cols)
@@ -378,6 +397,16 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     cmove_col(termbuf, curs_pos + 1)
     # Updated cur_row,curs_row
     return InputAreaState(cur_row, curs_row)
+end
+
+function highlight_region(lwrite::String, regstart::Int, regstop::Int, written::Int, slength::Int)
+    if written <= regstop <= written+slength
+        lwrite = lwrite[1:regstop-written] * Base.disable_text_style[:reverse] * lwrite[regstop-written+1:end]
+    end
+    if written <= regstart <= written+slength
+        lwrite = lwrite[1:regstart-written] * Base.text_colors[:reverse] * lwrite[regstart-written+1:end]
+    end
+    lwrite
 end
 
 function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
@@ -974,6 +1003,7 @@ end
 function replace_line(s::PromptState, l::IOBuffer)
     empty_undo(s)
     s.input_buffer = copy(l)
+    deactivate_region(s)
 end
 
 function replace_line(s::PromptState, l, keep_undo=false)
@@ -981,6 +1011,7 @@ function replace_line(s::PromptState, l, keep_undo=false)
     s.input_buffer.ptr = 1
     s.input_buffer.size = 0
     write(s.input_buffer, l)
+    deactivate_region(s)
 end
 
 
@@ -1486,7 +1517,9 @@ end
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
                             s::Union{PromptState,PrefixSearchState}; beeping=false)
     beeping || cancel_beep(s)
-    s.ias = refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s, indent = s.indent)
+    s.ias = refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s,
+                               indent = s.indent,
+                               region_active = is_region_active(s))
 end
 
 input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
@@ -1854,6 +1887,7 @@ AnyDict(
     end,
     # Ctrl-Space
     "\0" => (s,o...)->setmark(s),
+    "^G" => (s,o...)->(deactivate_region(s); refresh_line(s)),
     "^X^X" => (s,o...)->edit_exchange_point_and_mark(s),
     "^B" => (s,o...)->edit_move_left(s),
     "^F" => (s,o...)->edit_move_right(s),
@@ -2044,6 +2078,7 @@ function reset_state(s::PromptState)
         s.input_buffer.ptr = 1
     end
     empty_undo(s)
+    deactivate_region(s)
     s.ias = InputAreaState(0, 0)
 end
 
@@ -2073,7 +2108,7 @@ end
 run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
-    PromptState(terminal, prompt, IOBuffer(), IOBuffer[], 1, InputAreaState(1, 1),
+    PromptState(terminal, prompt, IOBuffer(), false, IOBuffer[], 1, InputAreaState(1, 1),
                 #=indent(spaces)=# -1, Threads.SpinLock(), 0.0)
 
 function init_state(terminal, m::ModalInterface)

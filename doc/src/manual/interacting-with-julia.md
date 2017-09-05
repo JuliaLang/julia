@@ -165,7 +165,9 @@ to do so).
 | Page-down, `meta-N` | Change to the next history entry                                                                           |
 | `meta-<`            | Change to the first history entry (of the current session if it is before the current position in history) |
 | `meta->`            | Change to the last history entry                                                                           |
-| `^-Space`           | Set the "mark" in the editing region                                                                       |
+| `^-Space`           | Set the "mark" in the editing region (and de-activate the region if it's active)                           |
+| `^-Space ^-Space`   | Set the "mark" in the editing region and make the region "active", i.e. highlighted                        |
+| `^G`                | De-activate the region (i.e. make it not highlighted)                                                      |
 | `^X^X`              | Exchange the current position with the mark                                                                |
 | **Editing**         |                                                                                                            |
 | Backspace, `^H`     | Delete the previous character                                                                              |
