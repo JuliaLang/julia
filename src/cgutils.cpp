@@ -728,7 +728,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
         else {
             // See note above in emit_typeof(Value*), we can't tell the system
             // about this until we've cleared the GC bits.
-            pdatatype = emit_bitcast(ctx, emit_typeptr_addr(ctx, ctx.builder.CreateLoad(p.gcroot)), T_ppjlvalue);
+            pdatatype = emit_bitcast(ctx, emit_typeptr_addr(ctx, p.Vboxed), T_ppjlvalue);
         }
         counter = 0;
         for_each_uniontype_small(
@@ -1028,7 +1028,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 Value *xtindex = ctx.builder.CreateAnd(x.TIndex, ConstantInt::get(T_int8, 0x7f));
                 return std::make_pair(ctx.builder.CreateICmpEQ(xtindex, ConstantInt::get(T_int8, tindex)), false);
             }
-            else {
+            else if (x.Vboxed) {
                 // test for (x.TIndex == 0x80 && typeof(x.V) == type)
                 Value *isboxed = ctx.builder.CreateICmpEQ(x.TIndex, ConstantInt::get(T_int8, 0x80));
                 BasicBlock *currBB = ctx.builder.GetInsertBlock();
@@ -1036,7 +1036,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_isa", ctx.f);
                 ctx.builder.CreateCondBr(isboxed, isaBB, postBB);
                 ctx.builder.SetInsertPoint(isaBB);
-                Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, x.V),
+                Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, x.Vboxed),
                     maybe_decay_untracked(literal_pointer_val(ctx, type)));
                 ctx.builder.CreateBr(postBB);
                 ctx.builder.SetInsertPoint(postBB);
@@ -1044,6 +1044,9 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 istype->addIncoming(ConstantInt::get(T_int1, 0), currBB);
                 istype->addIncoming(istype_boxed, isaBB);
                 return std::make_pair(istype, false);
+            } else {
+                // handle the case where we know that `x` is unboxed (but of unknown type), but that leaf type `type` cannot be unboxed
+                return std::make_pair(ConstantInt::get(T_int1, 0), false);
             }
         }
         return std::make_pair(ctx.builder.CreateICmpEQ(emit_typeof_boxed(ctx, x),
@@ -1299,7 +1302,6 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
                 Type *fty = julia_type_to_llvm(jt);
                 Value *addr = ctx.builder.CreateGEP(emit_bitcast(ctx, decay_derived(ptr), PointerType::get(fty,0)), idx);
                 *ret = mark_julia_slot(addr, jt, NULL, strct.tbaa);
-                ret->gcroot = strct.gcroot;
                 ret->isimmutable = strct.isimmutable;
                 return true;
             }
@@ -1395,7 +1397,6 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             Value *ptindex = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, addr, T_pint8), ConstantInt::get(T_size, fsz - 1));
             Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), ctx.builder.CreateLoad(ptindex));
             bool isimmutable = strct.isimmutable;
-            Value *gcroot = strct.gcroot;
             if (jt->mutabl) {
                 // move value to an immutable stack slot
                 Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * align), (fsz + align - 2) / align);
@@ -1406,18 +1407,15 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 ctx.builder.CreateMemCpy(lv, addr, nbytes, align);
                 addr = lv;
                 isimmutable = true;
-                gcroot = NULL;
             }
             jl_cgval_t fieldval = mark_julia_slot(addr, jfty, tindex, strct.tbaa);
             fieldval.isimmutable = isimmutable;
-            fieldval.gcroot = gcroot;
             return fieldval;
         }
         else if (!jt->mutabl) {
             // just compute the pointer and let user load it when necessary
             jl_cgval_t fieldval = mark_julia_slot(addr, jfty, NULL, strct.tbaa);
             fieldval.isimmutable = strct.isimmutable;
-            fieldval.gcroot = strct.gcroot;
             return fieldval;
         }
         return typed_load(ctx, addr, ConstantInt::get(T_size, 0), jfty, strct.tbaa, true, align);
@@ -1905,6 +1903,13 @@ static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, j
     return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(T_int8, 0x7f));
 }
 
+/*
+ * Box unboxed values in a union. Optionally, skip certain unboxed values,
+ * returning `V_null` in one of the skipped cases. If `skip` is not empty,
+ * skip[0] (corresponding to unknown boxed) must always be set. In that
+ * case, the calling code must separately deal with the case where
+ * `vinfo` is already an unkown boxed union (union tag 0x80).
+ */
 static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallBitVector &skip)
 {
     // given vinfo::Union{T, S}, emit IR of the form:
@@ -1955,13 +1960,12 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
             vinfo.typ,
             counter);
     ctx.builder.SetInsertPoint(defaultBB);
-    if (skip.size() > 0 && skip[0]) {
-        // skip[0] specifies where to return NULL or the original pointer
-        // if the value was not handled above
+    if (skip.size() > 0) {
+        assert(skip[0]);
         box_merge->addIncoming(maybe_decay_untracked(V_null), defaultBB);
         ctx.builder.CreateBr(postBB);
     }
-    else if ((vinfo.V == NULL || isa<AllocaInst>(vinfo.V)) && !vinfo.gcroot) {
+    else if (!vinfo.Vboxed) {
         Function *trap_func = Intrinsic::getDeclaration(
                 ctx.f->getParent(),
                 Intrinsic::trap);
@@ -1969,9 +1973,7 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
         ctx.builder.CreateUnreachable();
     }
     else {
-        // We're guaranteed here that Load(.gcroot) == .V, because we have determined
-        // that this union is a boxed value, rather than an interior pointer of some sort
-        box_merge->addIncoming(ctx.builder.CreateLoad(vinfo.gcroot), defaultBB);
+        box_merge->addIncoming(vinfo.Vboxed, defaultBB);
         ctx.builder.CreateBr(postBB);
     }
     ctx.builder.SetInsertPoint(postBB);
@@ -1990,10 +1992,8 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
     if (vinfo.constant)
         return maybe_decay_untracked(literal_pointer_val(ctx, vinfo.constant));
     if (vinfo.isboxed) {
-        assert(vinfo.V && "Missing value for box.");
-        // We're guaranteed here that Load(.gcroot) == .V, because we have determined
-        // that this value is a box, so if it has a gcroot, that's where the value is.
-        return vinfo.gcroot ? ctx.builder.CreateLoad(vinfo.gcroot) : vinfo.V;
+        assert(vinfo.V == vinfo.Vboxed);
+        return vinfo.V;
     }
 
     Value *box;
