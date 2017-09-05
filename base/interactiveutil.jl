@@ -700,15 +700,19 @@ end
 # testing
 
 """
-    runtests([tests=["all"] [, numcores=ceil(Int, Sys.CPU_CORES / 2) ]])
+    Base.runtests(tests=["all"], numcores=ceil(Int, Sys.CPU_CORES / 2);
+                  resilient=false)
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
-strings, using `numcores` processors. (not exported)
+strings, using `numcores` processors.
+If one test fails, all remaining tests will be discarded, unless resilient is `true`.
 """
-function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2))
+function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
+                  resilient=false)
     if isa(tests,AbstractString)
         tests = split(tests)
     end
+    resilient && push!(tests, "--resilient")
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     try

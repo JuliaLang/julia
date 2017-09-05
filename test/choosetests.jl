@@ -2,7 +2,7 @@
 
 @doc """
 
-`tests, net_on = choosetests(choices)` selects a set of tests to be
+`tests, net_on, resilient = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
 `["all"]`, all tests are selected.
 
@@ -10,8 +10,10 @@ This function also supports "test collections": specifically, "linalg"
  refers to collections of tests in the correspondingly-named
 directories.
 
-Upon return, `tests` is a vector of fully-expanded test names, and
-`net_on` is true if networking is available (required for some tests).
+Upon return, `tests` is a vector of fully-expanded test names,
+`net_on` is true if networking is available (required for some tests),
+and `resilient` is true if all tests should be run unconditionally
+(.i.e. even when some of them fail).
 """ ->
 function choosetests(choices = [])
     testnames = [
@@ -51,11 +53,14 @@ function choosetests(choices = [])
 
     tests = []
     skip_tests = []
+    resilient = false
 
     for (i, t) in enumerate(choices)
         if t == "--skip"
             skip_tests = choices[i + 1:end]
             break
+        elseif t == "--resilient"
+            resilient = true
         else
             push!(tests, t)
         end
@@ -168,5 +173,5 @@ function choosetests(choices = [])
 
     filter!(x -> !(x in skip_tests), tests)
 
-    tests, net_on
+    tests, net_on, resilient
 end
