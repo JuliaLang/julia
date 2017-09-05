@@ -53,7 +53,7 @@ Ref{T}(x) where {T} = RefValue{T}(x) # Ref{T}(x)
 convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
-    if isbits(T)
+    if isbits(T) || isbitsunion(T)
         return convert(P, pointer_from_objref(b))
     elseif isleaftype(T)
         return convert(P, pointer_from_objref(b.x))

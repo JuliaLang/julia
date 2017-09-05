@@ -181,6 +181,14 @@ the same manner as C.
 function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
+    elseif isbitsunion(T)
+        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+              pointer(dest, doffs), pointer(src, soffs), n * Base.bitsunionsize(T))
+        # copy selector bytes
+        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+              convert(Ptr{UInt8}, pointer(dest)) + length(dest) * Base.bitsunionsize(T) + doffs - 1,
+              convert(Ptr{UInt8}, pointer(src)) + length(src) * Base.bitsunionsize(T) + soffs - 1,
+              n)
     else
         ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
               dest, pointer(dest, doffs), src, pointer(src, soffs), n)
@@ -1561,6 +1569,9 @@ function vcat(arrays::Vector{T}...) where T
     ptr = pointer(arr)
     if isbits(T)
         elsz = Core.sizeof(T)
+    elseif isbitsunion(T)
+        elsz = bitsunionsize(T)
+        selptr = convert(Ptr{UInt8}, ptr) + n * elsz
     else
         elsz = Core.sizeof(Ptr{Void})
     end
@@ -1570,6 +1581,13 @@ function vcat(arrays::Vector{T}...) where T
         if isbits(T)
             ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
                   ptr, a, nba)
+        elseif isbitsunion(T)
+            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+                  ptr, a, nba)
+            # copy selector bytes
+            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+                  selptr, convert(Ptr{UInt8}, pointer(a)) + nba, na)
+            selptr += na
         else
             ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
                   arr, ptr, a, pointer(a), na)
