@@ -160,6 +160,7 @@ Base.listen(::Any)
 Base.listen(::AbstractString)
 Base.getaddrinfo
 Base.getalladdrinfo
+Base.getnameinfo
 Base.getsockname
 Base.getpeername
 Base.IPv4

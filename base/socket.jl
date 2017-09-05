@@ -698,6 +698,88 @@ end
 getaddrinfo(host::AbstractString, T::Type{<:IPAddr}) = getaddrinfo(String(host), T)
 getaddrinfo(host::AbstractString) = getaddrinfo(String(host), IPv4)
 
+function uv_getnameinfocb(req::Ptr{Void}, status::Cint, hostname::Cstring, service::Cstring)
+    data = uv_req_data(req)
+    if data != C_NULL
+        t = unsafe_pointer_to_objref(data)::Task
+        uv_req_set_data(req, C_NULL)
+        if status != 0
+            schedule(t, UVError("getnameinfocb", status))
+        else
+            schedule(t, unsafe_string(hostname))
+        end
+    else
+        # no owner for this req, safe to just free it
+        Libc.free(req)
+    end
+    nothing
+end
+
+"""
+    getnameinfo(host::IPAddr) -> String
+
+Performs a reverse-lookup for IP address to return a hostname and service
+using the operating system's underlying getnameinfo implementation.
+"""
+function getnameinfo(address::Union{IPv4, IPv6})
+    req = Libc.malloc(_sizeof_uv_getnameinfo)
+    uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
+    ev = eventloop()
+    port = hton(UInt16(0))
+    flags = 0
+    uvcb = uv_jl_getnameinfocb::Ptr{Void}
+    status = UV_EINVAL
+    if address isa IPv4
+        status = ccall(:jl_getnameinfo, Int32, (Ptr{Void}, Ptr{Void}, UInt32, UInt16, Cint, Ptr{Void}),
+                       ev, req, hton(address.host), port, flags, uvcb)
+    elseif address isa IPv6
+        status = ccall(:jl_getnameinfo6, Int32, (Ptr{Void}, Ptr{Void}, Ref{UInt128}, UInt16, Cint, Ptr{Void}),
+                       ev, req, hton(address.host), port, flags, uvcb)
+    end
+    if status < 0
+        Libc.free(req)
+        if status == UV_EINVAL
+            throw(ArgumentError("Invalid getnameinfo argument"))
+        elseif status == UV_ENOMEM || status == UV_ENOBUFS
+            throw(OutOfMemoryError())
+        end
+        uv_error("getnameinfo", status)
+    end
+    ct = current_task()
+    preserve_handle(ct)
+    r = try
+        uv_req_set_data(req, ct)
+        wait()
+    finally
+        if uv_req_data(req) != C_NULL
+            # req is still alive,
+            # so make sure we don't get spurious notifications later
+            uv_req_set_data(req, C_NULL)
+            ccall(:uv_cancel, Int32, (Ptr{Void},), req) # try to let libuv know we don't care anymore
+        else
+            # done with req
+            Libc.free(req)
+        end
+        unpreserve_handle(ct)
+    end
+    if isa(r, UVError)
+        code = r.code
+        if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
+                    UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
+                    UV_EAI_FAMILY, UV_EAI_NODATA, UV_EAI_NONAME,
+                    UV_EAI_OVERFLOW, UV_EAI_PROTOCOL, UV_EAI_SERVICE,
+                    UV_EAI_SOCKTYPE)
+            throw(DNSError(repr(address), code))
+        elseif code == UV_EAI_MEMORY
+            throw(OutOfMemoryError())
+        else
+            throw(UVError("getnameinfo", code))
+        end
+    end
+    return r::String
+end
+
+
 const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32,())
 
 """

@@ -724,6 +724,33 @@ JL_DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, uv_getaddrinfo_t *req,
     return uv_getaddrinfo(loop, req, uvcb, host, service, &hints);
 }
 
+JL_DLLEXPORT int jl_getnameinfo(uv_loop_t *loop, uv_getnameinfo_t *req,
+        uint32_t host, uint16_t port, int flags, uv_getnameinfo_cb uvcb)
+{
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = host;
+    addr.sin_port = port;
+
+    req->data = NULL;
+    return uv_getnameinfo(loop, req, uvcb, (struct sockaddr*)&addr, flags);
+}
+
+JL_DLLEXPORT int jl_getnameinfo6(uv_loop_t *loop, uv_getnameinfo_t *req,
+        void *host, uint16_t port, int flags, uv_getnameinfo_cb uvcb)
+{
+    struct sockaddr_in6 addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin6_family = AF_INET6;
+    memcpy(&addr.sin6_addr, host, 16);
+    addr.sin6_port = port;
+
+    req->data = NULL;
+    return uv_getnameinfo(loop, req, uvcb, (struct sockaddr*)&addr, flags);
+}
+
+
 JL_DLLEXPORT struct sockaddr *jl_sockaddr_from_addrinfo(struct addrinfo *addrinfo)
 {
     return addrinfo->ai_addr;
