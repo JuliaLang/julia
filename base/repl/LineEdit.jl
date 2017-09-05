@@ -55,7 +55,7 @@ end
 MIState(i, c, a, m) = MIState(i, c, a, m, String[], 0, Char[], 0, :begin)
 
 function show(io::IO, s::MIState)
-    print(io, "MI State (", s.current_mode, " active)")
+    print(io, "MI State (", mode(s), " active)")
 end
 
 struct InputAreaState
@@ -116,13 +116,13 @@ terminal(s::PromptState) = s.terminal
 for f in [:terminal, :on_enter, :add_history, :buffer, :(Base.isempty),
           :replace_line, :refresh_multi_line, :input_string, :update_display_buffer,
           :empty_undo, :push_undo, :pop_undo]
-    @eval ($f)(s::MIState, args...) = $(f)(s.mode_state[s.current_mode], args...)
+    @eval ($f)(s::MIState, args...) = $(f)(state(s), args...)
 end
 
 for f in [:edit_insert, :edit_insert_newline, :edit_backspace, :edit_move_left,
           :edit_move_right, :edit_move_word_left, :edit_move_word_right]
     @eval function ($f)(s::MIState, args...)
-        $(f)(s.mode_state[s.current_mode], args...)
+        $(f)(state(s), args...)
         return $(Expr(:quote, f))
     end
 end
@@ -172,7 +172,7 @@ end
 
 # Prompt Completions
 function complete_line(s::MIState)
-    complete_line(s.mode_state[s.current_mode], s.key_repeats)
+    complete_line(state(s), s.key_repeats)
     refresh_line(s)
     :complete_line
 end
@@ -1352,8 +1352,8 @@ function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     s.ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(forward-i-search)`")
 end
 
-state(s::MIState, p) = s.mode_state[p]
-state(s::PromptState, p) = (@assert s.p == p; s)
+state(s::MIState, p=mode(s)) = s.mode_state[p]
+state(s::PromptState, p=mode(s)) = (@assert s.p == p; s)
 mode(s::MIState) = s.current_mode
 mode(s::PromptState) = s.p
 mode(s::SearchState) = @assert false
@@ -1791,31 +1791,32 @@ function activate(p::TextInterface, s::ModeState, termbuf, term::TextTerminal)
 end
 
 function activate(p::TextInterface, s::MIState, termbuf, term::TextTerminal)
-    @assert p == s.current_mode
-    activate(p, s.mode_state[s.current_mode], termbuf, term)
+    @assert p == mode(s)
+    activate(p, state(s), termbuf, term)
 end
 activate(m::ModalInterface, s::MIState, termbuf, term::TextTerminal) =
-    activate(s.current_mode, s, termbuf, term)
+    activate(mode(s), s, termbuf, term)
 
 commit_changes(t::UnixTerminal, termbuf) = write(t, take!(termbuf.out_stream))
-function transition(f::Function, s::MIState, mode)
-    if mode === :abort
+
+function transition(f::Function, s::MIState, newmode)
+    if newmode === :abort
         s.aborted = true
         return
     end
-    if mode === :reset
+    if newmode === :reset
         reset_state(s)
         return
     end
-    if !haskey(s.mode_state,mode)
-        s.mode_state[mode] = init_state(terminal(s), mode)
+    if !haskey(s.mode_state, newmode)
+        s.mode_state[newmode] = init_state(terminal(s), newmode)
     end
     termbuf = TerminalBuffer(IOBuffer())
     t = terminal(s)
-    s.mode_state[s.current_mode] = deactivate(s.current_mode, s.mode_state[s.current_mode], termbuf, t)
-    s.current_mode = mode
+    s.mode_state[mode(s)] = deactivate(mode(s), state(s), termbuf, t)
+    s.current_mode = newmode
     f()
-    activate(mode, s.mode_state[mode], termbuf, t)
+    activate(newmode, state(s, newmode), termbuf, t)
     commit_changes(t, termbuf)
 end
 transition(s::MIState, mode) = transition((args...)->nothing, s, mode)
@@ -1830,7 +1831,7 @@ function reset_state(s::PromptState)
 end
 
 function reset_state(s::MIState)
-    for (mode,state) in s.mode_state
+    for (mode, state) in s.mode_state
         reset_state(state)
     end
 end
@@ -1878,7 +1879,7 @@ function run_interface(terminal, m::ModalInterface)
             Expr(:body,
                 Expr(:return,
                      Expr(:call,
-                          QuoteNode(mode(state(s, s.current_mode)).on_done),
+                          QuoteNode(mode(state(s)).on_done),
                           QuoteNode(s),
                           QuoteNode(buf),
                           QuoteNode(ok)))))
@@ -1911,8 +1912,8 @@ pop_undo(s) = nothing
 
 keymap(s::PromptState, prompt::Prompt) = prompt.keymap_dict
 keymap_data(s::PromptState, prompt::Prompt) = prompt.keymap_func_data
-keymap(ms::MIState, m::ModalInterface) = keymap(ms.mode_state[ms.current_mode], ms.current_mode)
-keymap_data(ms::MIState, m::ModalInterface) = keymap_data(ms.mode_state[ms.current_mode], ms.current_mode)
+keymap(ms::MIState, m::ModalInterface) = keymap(state(ms), mode(ms))
+keymap_data(ms::MIState, m::ModalInterface) = keymap_data(state(ms), mode(ms))
 
 function prompt!(term, prompt, s = init_state(term, prompt))
     Base.reseteof(term)
