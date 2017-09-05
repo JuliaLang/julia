@@ -3517,7 +3517,7 @@ f(x) = yt(x)
                                             (deprecation-message
                                              (string "Syntax \"&argument\"" (linenode-string current-loc)
                                                      " is deprecated. Remove the \"&\" and use a \"Ref\" argument "
-                                                     "type instead."))))
+                                                     "type instead." #\newline))))
                                       (list-tail e 6))
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place
                             ;;       the 1st should be compiled if an atom.
