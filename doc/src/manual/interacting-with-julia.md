@@ -179,7 +179,9 @@ to do so).
 | `meta-u`            | Change the next word to uppercase                                                                          |
 | `meta-c`            | Change the next word to titlecase                                                                          |
 | `meta-l`            | Change the next word to lowercase                                                                          |
+| `^/`, `^_`          | Undo previous editing action                                                                               |
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
+
 
 
 ### Customizing keybindings
