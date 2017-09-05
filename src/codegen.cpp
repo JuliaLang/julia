@@ -2204,7 +2204,6 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
                                         decay_derived(varg2));
     }
 
-    JL_FEAT_REQUIRE(ctx, runtime);
     Value *varg1 = mark_callee_rooted(boxed(ctx, arg1));
     Value *varg2 = mark_callee_rooted(boxed(ctx, arg2));
     return ctx.builder.CreateTrunc(ctx.builder.CreateCall(prepare_call(jlegal_func), {varg1, varg2}), T_int1);
@@ -2249,7 +2248,6 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (jl_subtype(ty.typ, (jl_value_t*)jl_type_type)) {
             Value *rt_arg = boxed(ctx, arg);
             Value *rt_ty = boxed(ctx, ty);
-            JL_FEAT_REQUIRE(ctx, runtime);
             ctx.builder.CreateCall(prepare_call(jltypeassert_func), {rt_arg, rt_ty});
             *ret = arg;
             return true;
@@ -2290,7 +2288,6 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 nva = ctx.builder.CreateTrunc(nva, T_int32);
 #endif
                 Value *theArgs = ctx.builder.CreateGEP(ctx.argArray, ConstantInt::get(T_size, ctx.nReqArgs));
-                JL_FEAT_REQUIRE(ctx, runtime);
                 Value *r = ctx.builder.CreateCall(prepare_call(jlapply2va_func), { theF, theArgs, nva });
                 *ret = mark_julia_type(ctx, r, true, jl_any_type);
                 return true;
@@ -2955,7 +2952,6 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex)
             }
         }
     }
-    JL_FEAT_REQUIRE(ctx, runtime);
     jl_cgval_t result = mark_julia_type(ctx,
             emit_jlcall(
                 ctx,
@@ -3007,16 +3003,6 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex)
         }
     }
 
-    if (!JL_FEAT_TEST(ctx, runtime)) {
-        char* name = NULL;
-        if (jl_is_symbol(args[0]))
-            name = jl_symbol_name((jl_sym_t*)args[0]);
-        if (jl_is_globalref(args[0]))
-            name = jl_symbol_name(jl_globalref_name(args[0]));
-        jl_errorf("generic call to %s requires the runtime language feature",
-                  name ? name : "<unknown>");
-    }
-
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs);
     return mark_julia_type(ctx, callval, true, rt);
@@ -3059,7 +3045,6 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         b = jl_get_binding(m, s);
         if (b == NULL) {
             // var not found. switch to delayed lookup.
-            JL_FEAT_REQUIRE(ctx, runtime);
             std::stringstream name;
             name << "delayedvar" << globalUnique++;
             Constant *initnul = V_null;
@@ -3417,7 +3402,6 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
     if (bp == NULL && s != NULL)
         bp = global_binding_pointer(ctx, ctx.module, s, &bnd, true);
     if (bp != NULL) { // it's a global
-        JL_FEAT_REQUIRE(ctx, runtime);
         assert(bnd);
         Value *rval = mark_callee_rooted(boxed(ctx, emit_expr(ctx, r)));
         ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
@@ -3623,7 +3607,6 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr)
     }
     else if (head == leave_sym) {
         assert(jl_is_long(args[0]));
-        JL_FEAT_REQUIRE(ctx, runtime);
         ctx.builder.CreateCall(prepare_call(jlleave_func),
                            ConstantInt::get(T_int32, jl_unbox_long(args[0])));
     }
@@ -3733,7 +3716,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
     else if (head == method_sym) {
         jl_value_t *mn = args[0];
         assert(jl_expr_nargs(ex) != 1 || jl_is_symbol(mn) || jl_is_slot(mn));
-        JL_FEAT_REQUIRE(ctx, runtime);
 
         Value *bp = NULL, *name, *bp_owner = V_null;
         jl_binding_t *bnd = NULL;
@@ -3800,7 +3782,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
             sym = jl_globalref_name(sym);
         }
         if (jl_is_symbol(sym)) {
-            JL_FEAT_REQUIRE(ctx, runtime);
             jl_binding_t *bnd = NULL;
             (void)global_binding_pointer(ctx, mod, sym, &bnd, true); assert(bnd);
             ctx.builder.CreateCall(prepare_call(jldeclareconst_func),
@@ -3830,7 +3811,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
                 true, jl_any_type);
     }
     else if (head == copyast_sym) {
-        JL_FEAT_REQUIRE(ctx, runtime);
         jl_value_t *arg = args[0];
         if (jl_is_quotenode(arg)) {
             jl_value_t *arg1 = jl_fieldref(arg, 0);
@@ -3868,7 +3848,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
             jl_error("syntax: prefix \"$\" in non-quoted expression");
         if (jl_is_toplevel_only_expr(expr) &&
             !jl_is_method(ctx.linfo->def.method)) {
-            JL_FEAT_REQUIRE(ctx, runtime);
             // call interpreter to run a toplevel expr from inside a
             // compiled toplevel thunk.
             Value *args[2] = {
@@ -4563,7 +4542,7 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, const jl_returnin
     return w;
 }
 
-static bool uses_specsig(jl_value_t *sig, jl_value_t *rettype, bool needsparam, bool va, jl_code_info_t *src)
+static bool uses_specsig(jl_value_t *sig, jl_value_t *rettype, bool needsparam, bool va, jl_code_info_t *src, bool prefer_specsig)
 {
     if (va || needsparam)
         return false;
@@ -4576,6 +4555,8 @@ static bool uses_specsig(jl_value_t *sig, jl_value_t *rettype, bool needsparam, 
     if (jl_nparams(sig) == 0)
         return false;
     // not invalid, consider if specialized signature is worthwhile
+    if (prefer_specsig)
+        return true;
     if (isbits_spec(rettype, false))
         return true;
     if (jl_is_uniontype(rettype)) {
@@ -4829,7 +4810,7 @@ static std::unique_ptr<Module> emit_function(
     }
 
     jl_value_t *jlrettype = lam->rettype;
-    bool specsig = uses_specsig(lam->specTypes, jlrettype, needsparams, va, src);
+    bool specsig = uses_specsig(lam->specTypes, jlrettype, needsparams, va, src, params->prefer_specsig);
     if (!specsig)
         ctx.nReqArgs--;  // function not part of argArray in jlcall
 
