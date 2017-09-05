@@ -1094,6 +1094,10 @@ Sometimes you can enable better optimization by promising certain program proper
   * Write `@simd` in front of `for` loops that are amenable to vectorization. **This feature is experimental**
     and could change or disappear in future versions of Julia.
 
+The common ideom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
+and may cause a segmentation fault if bounds checking is turned off. Use `linearindices(x)` instead (see also
+[offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
+
 Note: While `@simd` needs to be placed directly in front of a loop, both `@inbounds` and `@fastmath`
 can be applied to several statements at once, e.g. using `begin` ... `end`, or even to a whole
 function.
