@@ -486,7 +486,8 @@ they are parsed as a block: `(for (block (= v1 iter1) (= v2 iter2)) body)`.
 
 `break` and `continue` are parsed as 0-argument expressions `(break)` and `(continue)`.
 
-`let` is parsed as `(let body (= var1 val1) (= var2 val2) ...)`.
+`let` is parsed as `(let (= var val) body)` or `(let (block (= var1 val1) (= var2 val2) ...) body)`,
+like `for` loops.
 
 A basic function definition is parsed as `(function (call f x) body)`. A more complex example:
 

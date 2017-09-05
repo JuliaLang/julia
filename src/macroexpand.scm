@@ -92,8 +92,8 @@
                    (cons 'varlist (typevar-names vars)))
 
    ;; let
-   (pattern-lambda (let ex . binds)
-                   (let loop ((binds binds)
+   (pattern-lambda (let binds ex)
+                   (let loop ((binds (let-binds __))
                               (vars  '()))
                      (if (null? binds)
                          (cons 'varlist vars)
@@ -360,19 +360,21 @@
 
            ((let)
             (let* ((newenv (new-expansion-env-for e env))
-                   (body   (resolve-expansion-vars- (cadr e) newenv m parent-scope inarg)))
-              `(let ,body
-                 ,@(map
-                    (lambda (bind)
-                      (if (assignment? bind)
-                          (make-assignment
-                           ;; expand binds in old env with dummy RHS
-                           (cadr (resolve-expansion-vars- (make-assignment (cadr bind) 0)
-                                                          newenv m parent-scope inarg))
-                           ;; expand initial values in old env
-                           (resolve-expansion-vars- (caddr bind) env m parent-scope inarg))
-                          bind))
-                    (cddr e)))))
+                   (body   (resolve-expansion-vars- (caddr e) newenv m parent-scope inarg))
+                   (binds  (let-binds e)))
+              `(let (block
+                     ,@(map
+                        (lambda (bind)
+                          (if (assignment? bind)
+                              (make-assignment
+                               ;; expand binds in old env with dummy RHS
+                               (cadr (resolve-expansion-vars- (make-assignment (cadr bind) 0)
+                                                              newenv m parent-scope inarg))
+                               ;; expand initial values in old env
+                               (resolve-expansion-vars- (caddr bind) env m parent-scope inarg))
+                              bind))
+                        binds))
+                 ,body)))
            ((hygienic-scope) ; TODO: move this lowering to resolve-scopes, instead of reimplementing it here badly
              (let ((parent-scope (cons (list env m) parent-scope))
                    (body (cadr e))

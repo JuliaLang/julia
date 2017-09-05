@@ -1188,7 +1188,7 @@ function _printf(macroname, io, fmt, args)
     end
 
     unshift!(blk.args, :(out = $io))
-    Expr(:let, blk)
+    Expr(:let, Expr(:block), blk)
 end
 
 """
@@ -1241,7 +1241,7 @@ macro sprintf(args...)
     isa(args[1], AbstractString) || is_str_expr(args[1]) ||
         throw(ArgumentError("@sprintf: first argument must be a format string"))
     letexpr = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
-    push!(letexpr.args[1].args, :(String(take!(out))))
+    push!(letexpr.args[2].args, :(String(take!(out))))
     letexpr
 end
 
