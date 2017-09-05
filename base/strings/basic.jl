@@ -316,7 +316,7 @@ unsafe_chr2ind(s::AbstractString, i::Integer) = map_chr_ind(s, i, first, last)
 struct EachStringIndex{T<:AbstractString}
     s::T
 end
-eachindex(s::AbstractString) = EachStringIndex(s)
+keys(s::AbstractString) = EachStringIndex(s)
 
 length(e::EachStringIndex) = length(e.s)
 start(e::EachStringIndex) = start(e.s)

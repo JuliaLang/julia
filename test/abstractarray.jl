@@ -835,3 +835,12 @@ end
 @testset "checkbounds_indices method ambiguities #20989" begin
     @test Base.checkbounds_indices(Bool, (1:1,), ([CartesianIndex(1)],))
 end
+
+# keys, values, pairs
+for A in (rand(2), rand(2,3))
+    local A
+    for (i, v) in pairs(A)
+        @test A[i] == v
+    end
+    @test collect(values(A)) == collect(A)
+end

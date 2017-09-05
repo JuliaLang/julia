@@ -1820,7 +1820,7 @@ function _findz(A::SparseMatrixCSC{Tv,Ti}, rows=1:A.m, cols=1:A.n) where {Tv,Ti}
     row = 0
     rowmin = rows[1]; rowmax = rows[end]
     allrows = (rows == 1:A.m)
-    @inbounds for  col in cols
+    @inbounds for col in cols
         r1::Int = colptr[col]
         r2::Int = colptr[col+1] - 1
         if !allrows && (r1 <= r2)
@@ -1828,93 +1828,92 @@ function _findz(A::SparseMatrixCSC{Tv,Ti}, rows=1:A.m, cols=1:A.n) where {Tv,Ti}
             (r1 <= r2 ) && (r2 = searchsortedlast(rowval, rowmax, r1, r2, Forward))
         end
         row = rowmin
-
         while (r1 <= r2) && (row == rowval[r1]) && (nzval[r1] != zval)
             r1 += 1
             row += 1
         end
-        (row <= rowmax) && (return sub2ind(size(A), row, col))
+        (row <= rowmax) && (return CartesianIndex(row, col))
     end
-    return 0
+    return CartesianIndex(0, 0)
 end
 
-macro _findr(op, A, region, Tv, Ti)
-    esc(quote
-    N = nnz($A)
-    L = length($A)
+function _findr(op, A, region, Tv)
+    Ti = eltype(keys(A))
+    i1 = first(keys(A))
+    N = nnz(A)
+    L = length(A)
     if L == 0
-        if prod(map(length, Base.reduced_indices($A, $region))) != 0
+        if prod(map(length, Base.reduced_indices(A, region))) != 0
             throw(ArgumentError("array slices must be non-empty"))
         else
-            ri = Base.reduced_indices0($A, $region)
-            return (similar($A, ri), similar(dims->zeros(Int, dims), ri))
+            ri = Base.reduced_indices0(A, region)
+            return (similar(A, ri), similar(dims->zeros(Ti, dims), ri))
         end
     end
 
-    colptr = $A.colptr; rowval = $A.rowval; nzval = $A.nzval; m = $A.m; n = $A.n
-    zval = zero($Tv)
-    szA = size($A)
+    colptr = A.colptr; rowval = A.rowval; nzval = A.nzval; m = A.m; n = A.n
+    zval = zero(Tv)
+    szA = size(A)
 
-    if $region == 1 || $region == (1,)
-        (N == 0) && (return (fill(zval,1,n), fill(convert($Ti,1),1,n)))
-        S = Vector{$Tv}(n); I = Vector{$Ti}(n)
+    if region == 1 || region == (1,)
+        (N == 0) && (return (fill(zval,1,n), fill(i1,1,n)))
+        S = Vector{Tv}(n); I = Vector{Ti}(n)
         @inbounds for i = 1 : n
-            Sc = zval; Ic = _findz($A, 1:m, i:i)
-            if Ic == 0
+            Sc = zval; Ic = _findz(A, 1:m, i:i)
+            if Ic == CartesianIndex(0, 0)
                 j = colptr[i]
-                Ic = sub2ind(szA, rowval[j], i)
+                Ic = CartesianIndex(rowval[j], i)
                 Sc = nzval[j]
             end
             for j = colptr[i] : colptr[i+1]-1
-                if ($op)(nzval[j], Sc)
+                if op(nzval[j], Sc)
                     Sc = nzval[j]
-                    Ic = sub2ind(szA, rowval[j], i)
+                    Ic = CartesianIndex(rowval[j], i)
                 end
             end
             S[i] = Sc; I[i] = Ic
         end
         return(reshape(S,1,n), reshape(I,1,n))
-    elseif $region == 2 || $region == (2,)
-        (N == 0) && (return (fill(zval,m,1), fill(convert($Ti,1),m,1)))
-        S = Vector{$Tv}(m); I = Vector{$Ti}(m)
+    elseif region == 2 || region == (2,)
+        (N == 0) && (return (fill(zval,m,1), fill(i1,m,1)))
+        S = Vector{Tv}(m); I = Vector{Ti}(m)
         @inbounds for row in 1:m
-            S[row] = zval; I[row] = _findz($A, row:row, 1:n)
-            if I[row] == 0
-                I[row] = sub2ind(szA, row, 1)
+            S[row] = zval; I[row] = _findz(A, row:row, 1:n)
+            if I[row] == CartesianIndex(0, 0)
+                I[row] = CartesianIndex(row, 1)
                 S[row] = A[row,1]
             end
         end
         @inbounds for i = 1 : n, j = colptr[i] : colptr[i+1]-1
             row = rowval[j]
-            if ($op)(nzval[j], S[row])
+            if op(nzval[j], S[row])
                 S[row] = nzval[j]
-                I[row] = sub2ind(szA, row, i)
+                I[row] = CartesianIndex(row, i)
             end
         end
         return (reshape(S,m,1), reshape(I,m,1))
-    elseif $region == (1,2)
-        (N == 0) && (return (fill(zval,1,1), fill(convert($Ti,1),1,1)))
-        hasz = nnz($A) != length($A)
+    elseif region == (1,2)
+        (N == 0) && (return (fill(zval,1,1), fill(i1,1,1)))
+        hasz = nnz(A) != length(A)
         Sv = hasz ? zval : nzval[1]
-        Iv::($Ti) = hasz ? _findz($A) : 1
-        @inbounds for i = 1 : $A.n, j = colptr[i] : (colptr[i+1]-1)
-            if ($op)(nzval[j], Sv)
+        Iv::(Ti) = hasz ? _findz(A) : i1
+        @inbounds for i = 1 : A.n, j = colptr[i] : (colptr[i+1]-1)
+            if op(nzval[j], Sv)
                 Sv = nzval[j]
-                Iv = sub2ind(szA, rowval[j], i)
+                Iv = CartesianIndex(rowval[j], i)
             end
         end
         return (fill(Sv,1,1), fill(Iv,1,1))
     else
         throw(ArgumentError("invalid value for region; must be 1, 2, or (1,2)"))
     end
-    end) #quote
 end
 
 _isless_fm(a, b)    =  b == b && ( a != a || isless(a, b) )
 _isgreater_fm(a, b) =  b == b && ( a != a || isless(b, a) )
 
-findmin(A::SparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = @_findr(_isless_fm, A, region, Tv, Ti)
-findmax(A::SparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = @_findr(_isgreater_fm, A, region, Tv, Ti)
+findmin(A::SparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = _findr(_isless_fm, A, region, Tv)
+findmax(A::SparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = _findr(_isgreater_fm, A, region, Tv)
 findmin(A::SparseMatrixCSC) = (r=findmin(A,(1,2)); (r[1][1], r[2][1]))
 findmax(A::SparseMatrixCSC) = (r=findmax(A,(1,2)); (r[1][1], r[2][1]))
 

@@ -998,8 +998,8 @@ end
 
     S = spzeros(10,8)
     A = Array(S)
-    @test indmax(S) == indmax(A) == 1
-    @test indmin(S) == indmin(A) == 1
+    @test indmax(S) == indmax(A) == CartesianIndex(1,1)
+    @test indmin(S) == indmin(A) == CartesianIndex(1,1)
 
     A = Array{Int}(0,0)
     S = sparse(A)
@@ -1015,15 +1015,15 @@ end
 
 A = sparse([1.0 5.0 6.0;
             5.0 2.0 4.0])
-for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [1 4 6]),
-                          ((2,), reshape([1.0,2.0], 2, 1), reshape([1,4], 2, 1)),
-                          ((1,2), fill(1.0,1,1),fill(1,1,1))]
+for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
+                          ((2,), reshape([1.0,2.0], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,2)], 2, 1)),
+                          ((1,2), fill(1.0,1,1),fill(CartesianIndex(1,1),1,1))]
     @test findmin(A, tup) == (rval, rind)
 end
 
-for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [2 3 5]),
-                          ((2,), reshape([6.0,5.0], 2, 1), reshape([5,2], 2, 1)),
-                          ((1,2), fill(6.0,1,1),fill(5,1,1))]
+for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+                          ((2,), reshape([6.0,5.0], 2, 1), reshape([CartesianIndex(1,3),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(6.0,1,1),fill(CartesianIndex(1,3),1,1))]
     @test findmax(A, tup) == (rval, rind)
 end
 
@@ -1031,43 +1031,43 @@ end
 
 A = sparse([1.0 5.0 6.0;
             NaN 2.0 4.0])
-for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [2 4 6]),
-                          ((2,), reshape([1.0, NaN], 2, 1), reshape([1,2], 2, 1)),
-                          ((1,2), fill(NaN,1,1),fill(2,1,1))]
+for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [CartesianIndex(2,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
+                          ((2,), reshape([1.0, NaN], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
     @test isequal(findmin(A, tup), (rval, rind))
 end
 
-for (tup, rval, rind) in [((1,), [NaN 5.0 6.0], [2 3 5]),
-                          ((2,), reshape([6.0, NaN], 2, 1), reshape([5,2], 2, 1)),
-                          ((1,2), fill(NaN,1,1),fill(2,1,1))]
+for (tup, rval, rind) in [((1,), [NaN 5.0 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+                          ((2,), reshape([6.0, NaN], 2, 1), reshape([CartesianIndex(1,3),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
     @test isequal(findmax(A, tup), (rval, rind))
 end
 
 A = sparse([1.0 NaN 6.0;
             NaN 2.0 4.0])
-for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [2 3 6]),
-                          ((2,), reshape([NaN, NaN], 2, 1), reshape([3,2], 2, 1)),
-                          ((1,2), fill(NaN,1,1),fill(2,1,1))]
+for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(2,3)]),
+                          ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
     @test isequal(findmin(A, tup), (rval, rind))
 end
 
-for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [2 3 5]),
-                          ((2,), reshape([NaN, NaN], 2, 1), reshape([3,2], 2, 1)),
-                          ((1,2), fill(NaN,1,1),fill(2,1,1))]
+for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+                          ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
     @test isequal(findmax(A, tup), (rval, rind))
 end
 
 A = sparse([Inf -Inf Inf  -Inf;
             Inf  Inf -Inf -Inf])
-for (tup, rval, rind) in [((1,), [Inf -Inf -Inf -Inf], [1 3 6 7]),
-                          ((2,), reshape([-Inf -Inf], 2, 1), reshape([3,6], 2, 1)),
-                          ((1,2), fill(-Inf,1,1),fill(3,1,1))]
+for (tup, rval, rind) in [((1,), [Inf -Inf -Inf -Inf], [CartesianIndex(1,1) CartesianIndex(1,2) CartesianIndex(2,3) CartesianIndex(1,4)]),
+                          ((2,), reshape([-Inf -Inf], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,3)], 2, 1)),
+                          ((1,2), fill(-Inf,1,1),fill(CartesianIndex(1,2),1,1))]
     @test isequal(findmin(A, tup), (rval, rind))
 end
 
-for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [1 4 5 7]),
-                          ((2,), reshape([Inf Inf], 2, 1), reshape([1,2], 2, 1)),
-                          ((1,2), fill(Inf,1,1),fill(1,1,1))]
+for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(1,3) CartesianIndex(1,4)]),
+                          ((2,), reshape([Inf Inf], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(Inf,1,1),fill(CartesianIndex(1,1),1,1))]
     @test isequal(findmax(A, tup), (rval, rind))
 end
 
@@ -1090,11 +1090,11 @@ for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
 end
 
 A = sparse([BigInt(10) BigInt(-10)])
-for (tup, rval, rind) in [((2,), reshape([BigInt(-10)], 1, 1), reshape([2], 1, 1))]
+for (tup, rval, rind) in [((2,), reshape([BigInt(-10)], 1, 1), reshape([CartesianIndex(1,2)], 1, 1))]
     @test isequal(findmin(A, tup), (rval, rind))
 end
 
-for (tup, rval, rind) in [((2,), reshape([BigInt(10)], 1, 1), reshape([1], 1, 1))]
+for (tup, rval, rind) in [((2,), reshape([BigInt(10)], 1, 1), reshape([CartesianIndex(1,1)], 1, 1))]
     @test isequal(findmax(A, tup), (rval, rind))
 end
 

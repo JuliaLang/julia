@@ -1733,6 +1733,11 @@ end
 
 @deprecate promote_noncircular promote false
 
+import .Iterators.enumerate
+
+@deprecate enumerate(i::IndexLinear,    A::AbstractArray)  pairs(i, A)
+@deprecate enumerate(i::IndexCartesian, A::AbstractArray)  pairs(i, A)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
