@@ -1173,32 +1173,32 @@ Here is an example with all three kinds of markup. This program first calculates
 of a one-dimensional array, and then evaluates the L2-norm of the result:
 
 ```julia
-function init!(u)
-    inds = linearindices(u)
-    dx = 1.0 / (length(inds)-1)
-    @fastmath @inbounds @simd for i in inds
+function init!(u::Vector)
+    n = length(u)
+    dx = 1.0 / (n-1)
+    @fastmath @inbounds @simd for i in 1:n #by asserting that `u` is a `Vector` we can assume it has 1-based indexing
         u[i] = sin(2pi*dx*i)
     end
 end
 
-function deriv!(u, du)
-    inds = linearindices(u)
-    dx = 1.0 / (length(inds)-1)
-    @fastmath @inbounds du[inds[1]] = (u[inds[2]] - u[inds[1]]) / dx
-    @fastmath @inbounds @simd for i in inds[2:end-1]
+function deriv!(u::Vector, du)
+    n = length(u)
+    dx = 1.0 / (n-1)
+    @fastmath @inbounds du[1] = (u[2] - u[1]) / dx
+    @fastmath @inbounds @simd for i in 2:n-1
         du[i] = (u[i+1] - u[i-1]) / (2*dx)
     end
-    @fastmath @inbounds du[end] = (u[end] - u[end-1]) / dx
+    @fastmath @inbounds du[n] = (u[n] - u[n-1]) / dx
 end
 
-function norm(u)
-    inds = linearindices(u)
+function norm(u::Vector)
+    n = length(u)
     T = eltype(u)
     s = zero(T)
-    @fastmath @inbounds @simd for i in inds
+    @fastmath @inbounds @simd for i in 1:n
         s += u[i]^2
     end
-    @fastmath @inbounds return sqrt(s/length(inds))
+    @fastmath @inbounds return sqrt(s/n)
 end
 
 function main()
