@@ -74,8 +74,8 @@ dimg  = randn(n)/2
                     @test norm(a*(lua\bb) - bb, 1) < ε*κ*n*2 # Two because the right hand side has two columns
                     @test norm(a'*(lua'\bb) - bb, 1) < ε*κ*n*2 # Two because the right hand side has two columns
                     @test norm(a'*(lua'\a') - a', 1) < ε*κ*n^2
-                    @test norm(a*(lua\cc) - cc, 1) < ε*κ*n # c is a vector
-                    @test norm(a'*(lua'\cc) - cc, 1) < ε*κ*n # c is a vector
+                    @test norm(a*(lua\cc) - cc, 1) < ε*κ*n # cc is a vector
+                    @test norm(a'*(lua'\cc) - cc, 1) < ε*κ*n # cc is a vector
                     @test AbstractArray(lua) ≈ a
                     @test norm(a.'*(lua.'\bb) - bb,1) < ε*κ*n*2 # Two because the right hand side has two columns
                     @test norm(a.'*(lua.'\cc) - cc,1) < ε*κ*n

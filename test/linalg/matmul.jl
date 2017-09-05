@@ -23,16 +23,13 @@ let
     BB = [5 6; 7 8]
     AAi = AA+(0.5*im).*BB
     BBi = BB+(2.5*im).*AA[[2,1],[2,1]]
-    for Atype = ["Array", "SubArray"], Btype = ["Array", "SubArray"]
-        A = Atype == "Array" ? AA : view(AA, 1:2, 1:2)
-        B = Btype == "Array" ? BB : view(BB, 1:2, 1:2)
+    for A in (copy(AA), view(AA, 1:2, 1:2)), B in (copy(BB), view(BB, 1:2, 1:2))
         @test A*B == [19 22; 43 50]
         @test At_mul_B(A, B) == [26 30; 38 44]
         @test A_mul_Bt(A, B) == [17 23; 39 53]
         @test At_mul_Bt(A, B) == [23 31; 34 46]
-
-        Ai = Atype == "Array" ? AAi : view(AAi, 1:2, 1:2)
-        Bi = Btype == "Array" ? BBi : view(BBi, 1:2, 1:2)
+    end
+    for Ai in (copy(AAi), view(AAi, 1:2, 1:2)), Bi in (copy(BBi), view(BBi, 1:2, 1:2))
         @test Ai*Bi == [-21+53.5im -4.25+51.5im; -12+95.5im 13.75+85.5im]
         @test Ac_mul_B(Ai, Bi) == [68.5-12im 57.5-28im; 88-3im 76.5-25im]
         @test A_mul_Bc(Ai, Bi) == [64.5+5.5im 43+31.5im; 104-18.5im 80.5+31.5im]
@@ -48,16 +45,13 @@ let
     BB = [1 0 5; 6 -10 3; 2 -4 -1]
     AAi = AA+(0.5*im).*BB
     BBi = BB+(2.5*im).*AA[[2,1,3],[2,3,1]]
-    for Atype = ["Array", "SubArray"], Btype = ["Array", "SubArray"]
-        A = Atype == "Array" ? AA : view(AA, 1:3, 1:3)
-        B = Btype == "Array" ? BB : view(BB, 1:3, 1:3)
+    for A in (copy(AA), view(AA, 1:3, 1:3)), B in (copy(BB), view(BB, 1:3, 1:3))
         @test A*B == [-26 38 -27; 1 -4 -6; 28 -46 15]
         @test Ac_mul_B(A, B) == [-6 2 -25; 3 -12 -18; 12 -26 -11]
         @test A_mul_Bc(A, B) == [-14 0 6; 4 -3 -3; 22 -6 -12]
         @test Ac_mul_Bc(A, B) == [6 -8 -6; 12 -9 -9; 18 -10 -12]
-
-        Ai = Atype == "Array" ? AAi : view(AAi, 1:3, 1:3)
-        Bi = Btype == "Array" ? BBi : view(BBi, 1:3, 1:3)
+    end
+    for Ai in (copy(AAi), view(AAi, 1:3, 1:3)), Bi in (copy(BBi), view(BBi, 1:3, 1:3))
         @test Ai*Bi == [-44.75+13im 11.75-25im -38.25+30im; -47.75-16.5im -51.5+51.5im -56+6im; 16.75-4.5im -53.5+52im -15.5im]
         @test Ac_mul_B(Ai, Bi) == [-21+2im -1.75+49im -51.25+19.5im; 25.5+56.5im -7-35.5im 22+35.5im; -3+12im -32.25+43im -34.75-2.5im]
         @test A_mul_Bc(Ai, Bi) == [-20.25+15.5im -28.75-54.5im 22.25+68.5im; -12.25+13im -15.5+75im -23+27im; 18.25+im 1.5+94.5im -27-54.5im]
@@ -86,26 +80,19 @@ end
 let
     AA = [1 2 3; 4 5 6] .- 3
     BB = [2 -2; 3 -5; -4 7]
-    for Atype = ["Array", "SubArray"], Btype = ["Array", "SubArray"]
-        A = Atype == "Array" ? AA : view(AA, 1:2, 1:3)
-        B = Btype == "Array" ? BB : view(BB, 1:3, 1:2)
+    for A in (copy(AA), view(AA, 1:2, 1:3)), B in (copy(BB), view(BB, 1:3, 1:2))
         @test A*B == [-7 9; -4 9]
         @test At_mul_Bt(A, B) == [-6 -11 15; -6 -13 18; -6 -15 21]
     end
     AA = ones(Int, 2, 100)
     BB = ones(Int, 100, 3)
-    for Atype = ["Array", "SubArray"], Btype = ["Array", "SubArray"]
-        A = Atype == "Array" ? AA : view(AA, 1:2, 1:100)
-        B = Btype == "Array" ? BB : view(BB, 1:100, 1:3)
+    for A in (copy(AA), view(AA, 1:2, 1:100)), B in (copy(BB), view(BB, 1:100, 1:3))
         @test A*B == [100 100 100; 100 100 100]
     end
     AA = rand(1:20, 5, 5) .- 10
     BB = rand(1:20, 5, 5) .- 10
     CC = Array{Int}(size(AA, 1), size(BB, 2))
-    for Atype = ["Array", "SubArray"], Btype = ["Array", "SubArray"], Ctype = ["Array", "SubArray"]
-        A = Atype == "Array" ? AA : view(AA, 1:5, 1:5)
-        B = Btype == "Array" ? BB : view(BB, 1:5, 1:5)
-        C = Btype == "Array" ? CC : view(CC, 1:5, 1:5)
+    for A in (copy(AA), view(AA, 1:5, 1:5)), B in (copy(BB), view(BB, 1:5, 1:5)), C in (copy(CC), view(CC, 1:5, 1:5))
         @test At_mul_B(A, B) == A'*B
         @test A_mul_Bt(A, B) == A*B'
         # Preallocated
@@ -121,9 +108,7 @@ let
     end
     vv = [1,2]
     CC = Array{Int}(2, 2)
-    for vtype = ["Array", "SubArray"], Ctype = ["Array", "SubArray"]
-        v = vtype == "Array" ? vv : view(vv, 1:2)
-        C = Ctype == "Array" ? CC : view(CC, 1:2, 1:2)
+    for v in (copy(vv), view(vv, 1:2)), C in (copy(CC), view(CC, 1:2, 1:2))
         @test @inferred(A_mul_Bc!(C, v, v)) == [1 2; 2 4]
     end
 end
@@ -132,24 +117,18 @@ end
 let
     AA = rand(5,5)
     BB = rand(5)
-    for Atype = ["Array", "SubArray"], Btype = ["Array", "SubArray"]
-        A = Atype == "Array" ? AA : view(AA, 1:5, 1:5)
-        B = Btype == "Array" ? BB : view(BB, 1:5)
+    for A in (copy(AA), view(AA, 1:5, 1:5)), B in (copy(BB), view(BB, 1:5))
         @test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(zeros(6),'N',A,B)
         @test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(B,'N',A,zeros(6))
     end
     vv = [1,2,3]
     CC = Array{Int}(3, 3)
-    for vtype = ["Array", "SubArray"], Ctype = ["Array", "SubArray"]
-        v = vtype == "Array" ? vv : view(vv, 1:3)
-        C = Ctype == "Array" ? CC : view(CC, 1:3, 1:3)
+    for v in (copy(vv), view(vv, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
         @test A_mul_Bt!(C, v, v) == v*v'
     end
     vvf = map(Float64,vv)
     CC = Array{Float64}(3, 3)
-    for vtype = ["Array", "SubArray"], Ctype = ["Array", "SubArray"]
-        vf = vtype == "Array" ? vvf : view(vvf, 1:3)
-        C = Ctype == "Array" ? CC : view(CC, 1:3, 1:3)
+    for vf in (copy(vvf), view(vvf, 1:3)), C in (copy(CC), view(CC, 1:3, 1:3))
         @test A_mul_Bt!(C, vf, vf) == vf*vf'
     end
 end
@@ -159,10 +138,7 @@ let
     AA = rand(Float64,6,6)
     BB = rand(Float64,6,6)
     CC = zeros(Float64,6,6)
-    for Atype = ["Array", "SubArray"], Btype = ["Array", "SubArray"], Ctype = ["Array", "SubArray"]
-        A = Atype == "Array" ? AA : view(AA, 1:6, 1:6)
-        B = Btype == "Array" ? BB : view(BB, 1:6, 1:6)
-        C = Ctype == "Array" ? CC : view(CC, 1:6, 1:6)
+    for A in (copy(AA), view(AA, 1:6, 1:6)), B in (copy(BB), view(BB, 1:6, 1:6)), C in (copy(CC), view(CC, 1:6, 1:6))
         @test Base.LinAlg.At_mul_Bt!(C,A,B) == A.'*B.'
         @test Base.LinAlg.A_mul_Bc!(C,A,B) == A*B.'
         @test Base.LinAlg.Ac_mul_B!(C,A,B) == A.'*B
@@ -202,8 +178,7 @@ end
 let
     AA = reshape(1:1503, 501, 3).-750.0
     res = Float64[135228751 9979252 -115270247; 9979252 10481254 10983256; -115270247 10983256 137236759]
-    for Atype = ["Array", "SubArray"]
-        A = Atype == "Array" ? AA : view(AA, 1:501, 1:3)
+    for A in (copy(AA), view(AA, 1:501, 1:3))
         @test At_mul_B(A, A) == res
         @test A_mul_Bt(A',A') == res
     end
@@ -224,8 +199,7 @@ end
 # matmul for types w/o sizeof (issue #1282)
 let
     AA = fill(complex(1,1), 10, 10)
-    for Atype = ["Array", "SubArray"]
-        A = Atype == "Array" ? AA : view(AA, 1:10, 1:10)
+    for A in (copy(AA), view(AA, 1:10, 1:10))
         A2 = A^2
         @test A2[1,1] == 20im
     end
@@ -235,14 +209,8 @@ let
     AA = zeros(5, 5)
     BB = ones(5)
     CC = rand(5, 6)
-    for Atype = ["Array", "SubArray"],  Btype = ["Array", "SubArray"]
-        for  Ctype = ["Array", "SubArray"]
-            A = Atype == "Array" ? AA : view(AA, 1:5, 1:5)
-            B = Btype == "Array" ? BB : view(BB, 1:5)
-            C = Ctype == "Array" ? CC : view(CC, 1:5, 1:6)
-
-            @test_throws DimensionMismatch scale!(A, B, C)
-        end
+    for A in (copy(AA), view(AA, 1:5, 1:5)), B in (copy(BB), view(BB, 1:5)), C in (copy(CC), view(CC, 1:5, 1:6))
+        @test_throws DimensionMismatch scale!(A, B, C)
     end
 end
 
@@ -265,9 +233,7 @@ end
 
 vecdot_(x,y) = invoke(vecdot, Tuple{Any,Any}, x,y) # generic vecdot
 let AA = [1+2im 3+4im; 5+6im 7+8im], BB = [2+7im 4+1im; 3+8im 6+5im]
-    for Atype = ["Array", "SubArray"],  Btype = ["Array", "SubArray"]
-        A = Atype == "Array" ? AA : view(AA, 1:2, 1:2)
-        B = Btype == "Array" ? BB : view(BB, 1:2, 1:2)
+    for A in (copy(AA), view(AA, 1:2, 1:2)), B in (copy(BB), view(BB, 1:2, 1:2))
         @test vecdot(A,B) == dot(vec(A),vec(B)) == vecdot_(A,B) == vecdot(float.(A),float.(B))
         @test vecdot(Int[], Int[]) == 0 == vecdot_(Int[], Int[])
         @test_throws MethodError vecdot(Any[], Any[])
@@ -315,9 +281,7 @@ end
 let
     aa = rand(3,3)
     bb = rand(3,3)
-    for atype = ["Array", "SubArray"],  btype = ["Array", "SubArray"]
-        a = atype == "Array" ? aa : view(aa, 1:3, 1:3)
-        b = btype == "Array" ? bb : view(bb, 1:3, 1:3)
+    for a in (copy(aa), view(aa, 1:3, 1:3)), b in (copy(bb), view(bb, 1:3, 1:3))
         @test_throws ArgumentError A_mul_B!(a, a, b)
         @test_throws ArgumentError A_mul_B!(a, b, a)
         @test_throws ArgumentError A_mul_B!(a, a, a)
