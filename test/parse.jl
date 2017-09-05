@@ -1319,3 +1319,11 @@ let
     @test f() == 0
     @test f(2) == 2
 end
+
+# issue #18730
+@test expand(Main, quote
+        function f()
+            local Int
+            x::Int -> 2
+        end
+    end) == Expr(:error, "local variable Int cannot be used in closure declaration")
