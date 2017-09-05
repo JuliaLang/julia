@@ -1,8 +1,8 @@
 module Types
 
+using Base.Loading: DEPOTS
 using Base.Random: UUID
 using Base.Pkg.Types: VersionSet, Available
-using Pkg3: user_depot, depots
 using TOML, TerminalMenus
 
 export SHA1, VersionRange, VersionSpec, Package, PackageVersion, UpgradeLevel,
@@ -385,12 +385,12 @@ function find_local_env(start_path::String = pwd())
 end
 
 function find_named_env()
-    for depot in depots(), env in default_envs, name in project_names
+    for depot in DEPOTS, env in default_envs, name in project_names
         path = abspath(depot, "environments", env, name)
         isfile(path) && return path
     end
     env = VERSION.major == 0 ? default_envs[2] : default_envs[3]
-    return abspath(user_depot(), "environments", env, project_names[end])
+    return abspath(DEPOTS[1], "environments", env, project_names[end])
 end
 
 function find_project(env::String)
@@ -409,11 +409,11 @@ function find_project(env::String)
         end
         return abspath(env, project_names[end])
     else # named environment
-        for depot in depots()
+        for depot in DEPOTS
             path = abspath(depot, "environments", env, project_names[end])
             isfile(path) && return path
         end
-        return abspath(user_depot(), "environments", env, project_names[end])
+        return abspath(DEPOTS[1], "environments", env, project_names[end])
     end
 end
 
@@ -519,16 +519,35 @@ ensure_resolved(
     registry::Bool = false,
 ) = ensure_resolved(env, [v.package for v in pkgs], registry)
 
+const DEFAULT_REGISTRIES = Dict(
+    "Uncurated" => "https://github.com/JuliaRegistries/Uncurated.git"
+)
+
 "Return paths of all registries in a depot"
-function registries(depot::String)
+function registries(depot::String)::Vector{String}
     d = joinpath(depot, "registries")
+    ispath(d) || return String[]
     regs = filter!(readdir(d)) do r
         isfile(joinpath(d, r, "registry.toml"))
     end
-    return map(reg->joinpath(depot, "registries", reg), regs)
+    String[joinpath(depot, "registries", r) for r in regs]
 end
+
 "Return paths of all registries in all depots"
-registries() = [r for d in depots() for r in registries(d)]
+function registries()::Vector{String}
+    isempty(DEPOTS) && return String[]
+    user_regs = abspath(DEPOTS[1], "registries")
+    if !ispath(user_regs)
+        mkpath(user_regs)
+        info("Cloning default registries into $user_regs")
+        for (reg, url) in DEFAULT_REGISTRIES
+            info(" [+] $reg = $(repr(url))")
+            path = joinpath(user_regs, reg)
+            LibGit2.clone(url, path)
+        end
+    end
+    return [r for d in DEPOTS for r in registries(d)]
+end
 
 const line_re = r"""
     ^ \s*

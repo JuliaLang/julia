@@ -1,7 +1,6 @@
 module Pkg3
 
-user_depot() = abspath(homedir(), ".julia")
-depots() = Base.Loading.DEPOTS
+@eval Base module Loading; DEPOTS = []; end
 
 include("Types.jl")
 include("Operations.jl")

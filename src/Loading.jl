@@ -2,7 +2,7 @@ module Loading
 
 using TerminalMenus
 
-using Pkg3: user_depot
+using Base.Loading: DEPOTS
 using Pkg3.Operations: package_env_info
 
 abstract type Loader end
@@ -33,8 +33,9 @@ end
 
 empty!(LOAD_PATH)
 ENV["JULIA_PKGDIR"] = tempname()
-@eval Base module Loading; DEPOTS = []; end
-push!(LOAD_PATH, LoadInstalled(user_depot()))
-push!(Base.Loading.DEPOTS, user_depot())
+let user_depot = joinpath(homedir(), ".julia")
+    push!(DEPOTS, user_depot)
+    push!(LOAD_PATH, LoadInstalled(user_depot))
+end
 
 end # module

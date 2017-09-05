@@ -1,20 +1,20 @@
 module Operations
 
+using Base.Loading: DEPOTS
 using Base.Random: UUID
 using Base: LibGit2
 using Base: Pkg
 
 using TerminalMenus
 
-using Pkg3: user_depot, depots
 using Pkg3.Types
 
 function find_installed(uuid::UUID, sha1::SHA1)
-    for depot in depots()
+    for depot in DEPOTS
         path = abspath(depot, "packages", string(uuid), string(sha1))
         ispath(path) && return path
     end
-    return abspath(user_depot(), "packages", string(uuid), string(sha1))
+    return abspath(DEPOTS[1], "packages", string(uuid), string(sha1))
 end
 
 function package_env_info(pkg::String, env::EnvCache = EnvCache(); verb::String = "choose")
@@ -198,7 +198,7 @@ function install(
 )
     version_path = find_installed(uuid, hash)
     ispath(version_path) && return nothing
-    repo_path = joinpath(user_depot(), "upstream", string(uuid))
+    repo_path = joinpath(DEPOTS[1], "upstream", string(uuid))
     git_hash = LibGit2.GitHash(hash.bytes)
     repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
         info("Cloning [$uuid] $name")
