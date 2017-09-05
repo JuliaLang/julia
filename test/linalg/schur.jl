@@ -19,14 +19,10 @@ aimg  = randn(n,n)/2
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     asym = a'+a                  # symmetric indefinite
     apd  = a'*a                 # symmetric positive-definite
-    @testset for atype in ("Array", "SubArray")
-        if atype == "Array"
-            a = a
-        else
-            a = view(a, 1:n, 1:n)
-            asym = view(asym, 1:n, 1:n)
-            apd = view(apd, 1:n, 1:n)
-        end
+    for (a, asym, apd) in ((a, asym, apd),
+                           (view(a, 1:n, 1:n),
+                            view(asym, 1:n, 1:n),
+                            view(apd, 1:n, 1:n)))
         ε = εa = eps(abs(float(one(eltya))))
 
         d,v = eig(a)
@@ -67,7 +63,7 @@ aimg  = randn(n,n)/2
             @test O[:Schur] ≈ SchurNew[:Schur]
         end
 
-        if atype == "Array"
+        if isa(a, Array)
             a1_sf = a[1:n1, 1:n1]
             a2_sf = a[n1+1:n2, n1+1:n2]
         else
