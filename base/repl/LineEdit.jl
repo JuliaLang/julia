@@ -1614,6 +1614,8 @@ AnyDict(
     "^X^X" => (s,o...)->edit_exchange_point_and_mark(s),
     "^B" => (s,o...)->edit_move_left(s),
     "^F" => (s,o...)->edit_move_right(s),
+    "^P" => (s,o...)->edit_move_up(s),
+    "^N" => (s,o...)->edit_move_down(s),
     # Meta B
     "\eb" => (s,o...)->edit_move_word_left(s),
     # Meta F
@@ -1680,8 +1682,10 @@ AnyDict(
 )
 
 const history_keymap = AnyDict(
-    "^P" => (s,o...)->(history_prev(s, mode(s).hist)),
-    "^N" => (s,o...)->(history_next(s, mode(s).hist)),
+    "^P" => (s,o...)->(edit_move_up(s) || history_prev(s, mode(s).hist)),
+    "^N" => (s,o...)->(edit_move_down(s) || history_next(s, mode(s).hist)),
+    "\ep" => (s,o...)->(history_prev(s, mode(s).hist)),
+    "\en" => (s,o...)->(history_next(s, mode(s).hist)),
     # Up Arrow
     "\e[A" => (s,o...)->(edit_move_up(s) || history_prev(s, mode(s).hist)),
     # Down Arrow
@@ -1696,6 +1700,8 @@ const history_keymap = AnyDict(
 
 const prefix_history_keymap = merge!(
     AnyDict(
+        "^P" => (s,data,c)->history_prev_prefix(data, data.histprompt.hp, data.prefix),
+        "^N" => (s,data,c)->history_next_prefix(data, data.histprompt.hp, data.prefix),
         # Up Arrow
         "\e[A" => (s,data,c)->history_prev_prefix(data, data.histprompt.hp, data.prefix),
         # Down Arrow
@@ -1726,6 +1732,8 @@ function setup_prefix_keymap(hp, parent_prompt)
     p = PrefixHistoryPrompt(hp, parent_prompt)
     p.keymap_dict = keymap([prefix_history_keymap])
     pkeymap = AnyDict(
+        "^P" => (s,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
+        "^N" => (s,o...)->(edit_move_down(s) || enter_prefix_search(s, p, false)),
         # Up Arrow
         "\e[A" => (s,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
         # Down Arrow
