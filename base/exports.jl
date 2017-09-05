@@ -1019,6 +1019,7 @@ export
     fdio,
     flush,
     getaddrinfo,
+    getalladdrinfo,
     gethostname,
     getipaddr,
     getpeername,

@@ -132,6 +132,9 @@ mktempdir() do tmpdir
     wait(tsk)
 end
 
+@test !isempty(getalladdrinfo("localhost")::Vector{IPAddr})
+@test getaddrinfo("localhost", IPv4) === ip"127.0.0.1"
+@test getaddrinfo("localhost", IPv6) === ip"::1"
 @test_throws Base.DNSError getaddrinfo(".invalid")
 @test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
 @test_throws Base.UVError connect("localhost", 21452)
