@@ -107,6 +107,9 @@ linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
 keys(a::AbstractArray) = CartesianRange(indices(a))
 keys(a::AbstractVector) = linearindices(a)
 
+prevind(::AbstractArray, i::Integer) = Int(i)-1
+nextind(::AbstractArray, i::Integer) = Int(i)+1
+
 eltype(::Type{<:AbstractArray{E}}) where {E} = E
 elsize(::AbstractArray{T}) where {T} = sizeof(T)
 

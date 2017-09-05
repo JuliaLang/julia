@@ -133,6 +133,12 @@ module IteratorsMD
         return h
     end
 
+    # nextind with CartesianIndex
+    function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
+        _, ni = next(CartesianRange(indices(a)), i)
+        return ni
+    end
+
     # Iteration
     """
         CartesianRange(sz::Dims) -> R

@@ -40,6 +40,9 @@ next(t::Tuple, i::Int) = (t[i], i+1)
 
 keys(t::Tuple) = 1:length(t)
 
+prevind(t::Tuple, i::Integer) = Int(i)-1
+nextind(t::Tuple, i::Integer) = Int(i)+1
+
 function keys(t::Tuple, t2::Tuple...)
     @_inline_meta
     1:_maxlength(t, t2...)
