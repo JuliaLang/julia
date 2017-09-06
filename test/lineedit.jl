@@ -22,9 +22,12 @@ charpos(buf, pos=position(buf)) = Base.unsafe_ind2chr(content(buf), pos+1)-1
 function transform!(f, s, i = -1) # i is char-based (not bytes) buffer position
     buf = buffer(s)
     i >= 0 && charseek(buf, i)
-    action = f(s)
-    if s isa LineEdit.MIState && action isa Symbol
-        s.last_action = action # simulate what happens in LineEdit.prompt!
+    # simulate what happens in LineEdit.set_action!
+    s isa LineEdit.MIState && (s.current_action = :unknown)
+    status = f(s)
+    if s isa LineEdit.MIState && status != :ignore
+        # simulate what happens in LineEdit.prompt!
+        s.last_action = s.current_action
     end
     content(s), charpos(buf), charpos(buf, getmark(buf))
 end
