@@ -1621,10 +1621,13 @@ julia> findnext(A,3)
 ```
 """
 function findnext(A, start::Integer)
-    for i = start:length(A)
+    l = endof(A)
+    i = start
+    while i <= l
         if A[i] != 0
             return i
         end
+        i = nextind(A, i)
     end
     return 0
 end
@@ -1671,10 +1674,13 @@ julia> findnext(A,4,3)
 ```
 """
 function findnext(A, v, start::Integer)
-    for i = start:length(A)
+    l = endof(A)
+    i = start
+    while i <= l
         if A[i] == v
             return i
         end
+        i = nextind(A, i)
     end
     return 0
 end
@@ -1720,10 +1726,13 @@ julia> findnext(isodd, A, 2)
 ```
 """
 function findnext(testf::Function, A, start::Integer)
-    for i = start:length(A)
+    l = endof(A)
+    i = start
+    while i <= l
         if testf(A[i])
             return i
         end
+        i = nextind(A, i)
     end
     return 0
 end
@@ -1770,8 +1779,10 @@ julia> findprev(A,1)
 ```
 """
 function findprev(A, start::Integer)
-    for i = start:-1:1
+    i = start
+    while i >= 1
         A[i] != 0 && return i
+        i = prevind(A, i)
     end
     return 0
 end
@@ -1801,7 +1812,7 @@ julia> findlast(A)
 0
 ```
 """
-findlast(A) = findprev(A, length(A))
+findlast(A) = findprev(A, endof(A))
 
 """
     findprev(A, v, i::Integer)
@@ -1823,8 +1834,10 @@ julia> findprev(A, 1, 1)
 ```
 """
 function findprev(A, v, start::Integer)
-    for i = start:-1:1
+    i = start
+    while i >= 1
         A[i] == v && return i
+        i = prevind(A, i)
     end
     return 0
 end
@@ -1852,7 +1865,7 @@ julia> findlast(A,3)
 0
 ```
 """
-findlast(A, v) = findprev(A, v, length(A))
+findlast(A, v) = findprev(A, v, endof(A))
 
 """
     findprev(predicate::Function, A, i::Integer)
@@ -1875,8 +1888,10 @@ julia> findprev(isodd, A, 3)
 ```
 """
 function findprev(testf::Function, A, start::Integer)
-    for i = start:-1:1
+    i = start
+    while i >= 1
         testf(A[i]) && return i
+        i = prevind(A, i)
     end
     return 0
 end
@@ -1901,7 +1916,7 @@ julia> findlast(x -> x > 5, A)
 0
 ```
 """
-findlast(testf::Function, A) = findprev(testf, A, length(A))
+findlast(testf::Function, A) = findprev(testf, A, endof(A))
 
 """
     find(f::Function, A)

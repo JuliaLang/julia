@@ -844,3 +844,7 @@ for A in (rand(2), rand(2,3))
     end
     @test collect(values(A)) == collect(A)
 end
+
+# nextind
+@test nextind(zeros(4), 2) == 3
+@test nextind(zeros(2,3), CartesianIndex(2,1)) == CartesianIndex(1, 2)
