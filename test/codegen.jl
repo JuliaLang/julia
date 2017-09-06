@@ -245,3 +245,8 @@ let c = [1,2,3]
     len2 = issue22582!(c, true)
     @test len1 == len2
 end
+
+# PR #23595
+@generated f23595(g, args...) = Expr(:call, :g, Expr(:(...), :args))
+x23595 = rand(1)
+@test f23595(Core.arrayref, true, x23595, 1) == x23595[]
