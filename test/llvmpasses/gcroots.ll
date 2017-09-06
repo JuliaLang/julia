@@ -223,3 +223,26 @@ top:
     ret void
 }
 
+declare token @llvm.julia.gc_preserve_begin(...)
+declare void @llvm.julia.gc_preserve_end(token)
+
+define void @gc_preserve(i64 %a) {
+; CHECK-LABEL: @gc_preserve
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
+top:
+    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: store %jl_value_t addrspace(10)* %aboxed
+    call void @jl_safepoint()
+    %tok = call token (...) @llvm.julia.gc_preserve_begin(%jl_value_t addrspace(10)* %aboxed)
+    %aboxed2 = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: store %jl_value_t addrspace(10)* %aboxed2
+    call void @jl_safepoint()
+    call void @llvm.julia.gc_preserve_end(token %tok)
+    %aboxed3 = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: store %jl_value_t addrspace(10)* %aboxed3
+    call void @jl_safepoint()
+    call void @one_arg_boxed(%jl_value_t addrspace(10)* %aboxed2)
+    call void @one_arg_boxed(%jl_value_t addrspace(10)* %aboxed3)
+    ret void
+}

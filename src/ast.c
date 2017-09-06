@@ -60,6 +60,7 @@ jl_sym_t *isdefined_sym; jl_sym_t *nospecialize_sym;
 jl_sym_t *macrocall_sym;
 jl_sym_t *hygienicscope_sym;
 jl_sym_t *escape_sym;
+jl_sym_t *gc_preserve_begin_sym; jl_sym_t *gc_preserve_end_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -340,6 +341,8 @@ void jl_init_frontend(void)
     macrocall_sym = jl_symbol("macrocall");
     escape_sym = jl_symbol("escape");
     hygienicscope_sym = jl_symbol("hygienic-scope");
+    gc_preserve_begin_sym = jl_symbol("gc_preserve_begin");
+    gc_preserve_end_sym = jl_symbol("gc_preserve_end");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)

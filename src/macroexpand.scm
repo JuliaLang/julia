@@ -307,7 +307,7 @@
                                    ,(resolve-expansion-vars-with-new-env (caddr arg) env m inarg))))
                              (else
                               `(global ,(resolve-expansion-vars-with-new-env arg env m inarg))))))
-           ((using import importall export meta line inbounds boundscheck simdloop) (map unescape e))
+           ((using import importall export meta line inbounds boundscheck simdloop gc_preserve gc_preserve_end) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)
