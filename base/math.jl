@@ -201,7 +201,6 @@ log(b::Number, x::Number) = log(promote(b,x)...)
 # type specific math functions
 
 const libm = Base.libm_name
-const openspecfun = "libopenspecfun"
 
 # functions with no domain error
 """
