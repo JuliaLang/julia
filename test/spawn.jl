@@ -458,7 +458,7 @@ if Sys.isunix()
                 Base.link_pipe(p)
                 push!(ps, p)
             end
-            if isnull(ulimit_n)
+            if ulimit_n === nothing
                 @warn "`ulimit -n` is set to unlimited, fd exhaustion cannot be tested"
                 @test_broken false
             else

@@ -59,15 +59,15 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
 
     # Test `tryparse_internal` with part of a string
     let b = "                   "
-        result = @test_throws ArgumentError get(Base.tryparse_internal(Bool, b, 7, 11, 0, true))
+        result = @test_throws ArgumentError Base.tryparse_internal(Bool, b, 7, 11, 0, true)
         exception_bool = result.value
         @test exception_bool.msg == "input string only contains whitespace"
 
-        result = @test_throws ArgumentError get(Base.tryparse_internal(Int, b, 7, 11, 0, true))
+        result = @test_throws ArgumentError Base.tryparse_internal(Int, b, 7, 11, 0, true)
         exception_int = result.value
         @test exception_int.msg == "input string is empty or only contains whitespace"
 
-        result = @test_throws ArgumentError get(Base.tryparse_internal(UInt128, b, 7, 11, 0, true))
+        result = @test_throws ArgumentError Base.tryparse_internal(UInt128, b, 7, 11, 0, true)
         exception_uint = result.value
         @test exception_uint.msg == "input string is empty or only contains whitespace"
     end
@@ -75,7 +75,7 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
     # Test that the entire input string appears in error messages
     let s = "     false    true     "
         result = @test_throws(ArgumentError,
-            get(Base.tryparse_internal(Bool, s, start(s), endof(s), 0, true)))
+            Base.tryparse_internal(Bool, s, start(s), endof(s), 0, true))
         @test result.value.msg == "invalid Bool representation: $(repr(s))"
     end
 
@@ -212,8 +212,8 @@ end
 @test parse(Int, "2") === 2
 @test parse(Bool, "true") === true
 @test parse(Bool, "false") === false
-@test get(tryparse(Bool, "true")) === get(Nullable{Bool}(true))
-@test get(tryparse(Bool, "false")) === get(Nullable{Bool}(false))
+@test tryparse(Bool, "true") === Some(true)
+@test tryparse(Bool, "false") === Some(false)
 @test_throws ArgumentError parse(Int, "2", 1)
 @test_throws ArgumentError parse(Int, "2", 63)
 
@@ -225,9 +225,9 @@ end
 # error throwing branch from #10560
 @test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
 
-@test tryparse(Float64, "1.23") === Nullable(1.23)
-@test tryparse(Float32, "1.23") === Nullable(1.23f0)
-@test tryparse(Float16, "1.23") === Nullable(Float16(1.23))
+@test tryparse(Float64, "1.23") === Some(1.23)
+@test tryparse(Float32, "1.23") === Some(1.23f0)
+@test tryparse(Float16, "1.23") === Some(Float16(1.23))
 
 # parsing complex numbers (#22250)
 @testset "complex parsing" begin

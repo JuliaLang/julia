@@ -139,7 +139,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
     wpid=0          # the worker r_stream is connected to.
     boundary = similar(MSG_BOUNDARY)
     try
-        version = process_hdr(r_stream, incoming)
+        version = Some(process_hdr(r_stream, incoming))
         serializer = ClusterSerializer(r_stream)
 
         # The first message will associate wpid with r_stream
@@ -309,17 +309,17 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
     end
 
     lazy = msg.lazy
-    PGRP.lazy = Nullable{Bool}(lazy)
+    PGRP.lazy = Some(lazy)
 
     wait_tasks = Task[]
     for (connect_at, rpid) in msg.other_workers
         wconfig = WorkerConfig()
-        wconfig.connect_at = connect_at
+        wconfig.connect_at = Some(connect_at)
 
         let rpid=rpid, wconfig=wconfig
             if lazy
                 # The constructor registers the object with a global registry.
-                Worker(rpid, Nullable{Function}(()->connect_to_peer(cluster_manager, rpid, wconfig)))
+                Worker(rpid, Some(()->connect_to_peer(cluster_manager, rpid, wconfig)))
             else
                 t = @async connect_to_peer(cluster_manager, rpid, wconfig)
                 push!(wait_tasks, t)
@@ -350,8 +350,8 @@ function handle_msg(msg::JoinCompleteMsg, header, r_stream, w_stream, version)
     w = map_sock_wrkr[r_stream]
     environ = get(w.config.environ, Dict())
     environ[:cpu_cores] = msg.cpu_cores
-    w.config.environ = environ
-    w.config.ospid = msg.ospid
+    w.config.environ = Some(environ)
+    w.config.ospid = Some(msg.ospid)
     w.version = version
 
     ntfy_channel = lookup_ref(header.notify_oid)

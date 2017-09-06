@@ -1658,20 +1658,20 @@ import .Iterators.enumerate
 
 # PR #23640
 # when this deprecation is deleted, remove all calls to it, and replace all keywords of:
-# `payload::Union{CredentialPayload,Nullable{<:Union{AbstractCredential, CachedCredentials}}}`
+# `payload::Union{CredentialPayload, Union{Some{<:Union{AbstractCredential, CachedCredentials}}, Void}}`
 #  with `payload::CredentialPayload` from base/libgit2/libgit2.jl
 @eval LibGit2 function deprecate_nullable_creds(f, sig, payload)
-    if isa(payload, Nullable{<:Union{AbstractCredential, CachedCredentials}})
+    if isa(payload, Union{Some{<:Union{AbstractCredential, CachedCredentials}}, Void})
         # Note: Be careful not to show the contents of the credentials as it could reveal a
         # password.
-        if isnull(payload)
-            msg = "LibGit2.$f($sig; payload=Nullable()) is deprecated, use "
+        if payload === nothing
+            msg = "LibGit2.$f($sig; payload=nothing) is deprecated, use "
             msg *= "LibGit2.$f($sig; payload=LibGit2.CredentialPayload()) instead."
             p = CredentialPayload()
         else
-            cred = unsafe_get(payload)
+            cred = get(payload)
             C = typeof(cred)
-            msg = "LibGit2.$f($sig; payload=Nullable($C(...))) is deprecated, use "
+            msg = "LibGit2.$f($sig; payload=Some($C(...))) is deprecated, use "
             msg *= "LibGit2.$f($sig; payload=LibGit2.CredentialPayload($C(...))) instead."
             p = CredentialPayload(cred)
         end
@@ -3243,6 +3243,11 @@ end
 # PR #25057
 @deprecate indices(a) axes(a)
 @deprecate indices(a, d) axes(a, d)
+
+@deprecate_moved Nullable "Nullables"
+@deprecate_moved NullException "Nullables"
+@deprecate_moved isnull "Nullables"
+@deprecate_moved unsafe_get "Nullables"
 
 # END 0.7 deprecations
 

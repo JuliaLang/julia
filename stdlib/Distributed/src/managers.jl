@@ -209,15 +209,15 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     write_cookie(io)
 
     wconfig = WorkerConfig()
-    wconfig.io = io.out
-    wconfig.host = host
-    wconfig.tunnel = params[:tunnel]
-    wconfig.sshflags = sshflags
-    wconfig.exeflags = exeflags
-    wconfig.exename = exename
-    wconfig.count = cnt
-    wconfig.max_parallel = params[:max_parallel]
-    wconfig.enable_threaded_blas = params[:enable_threaded_blas]
+    wconfig.io = Some(io.out)
+    wconfig.host = Some(host)
+    wconfig.tunnel = Some(params[:tunnel])
+    wconfig.sshflags = Some(sshflags)
+    wconfig.exeflags = Some(exeflags)
+    wconfig.exename = Some(exename)
+    wconfig.count = Some(cnt)
+    wconfig.max_parallel = Some(params[:max_parallel])
+    wconfig.enable_threaded_blas = Some(params[:enable_threaded_blas])
 
 
     push!(launched, wconfig)
@@ -330,9 +330,9 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
         write_cookie(io)
 
         wconfig = WorkerConfig()
-        wconfig.process = io
-        wconfig.io = io.out
-        wconfig.enable_threaded_blas = params[:enable_threaded_blas]
+        wconfig.process = Some(io)
+        wconfig.io = Some(io.out)
+        wconfig.enable_threaded_blas = Some(params[:enable_threaded_blas])
         push!(launched, wconfig)
     end
 
@@ -387,21 +387,21 @@ ensure that messages are delivered and received completely and in order.
 workers.
 """
 function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
-    if !isnull(config.connect_at)
+    if config.connect_at !== nothing
         # this is a worker-to-worker setup call.
         return connect_w2w(pid, config)
     end
 
     # master connecting to workers
-    if !isnull(config.io)
+    if config.io !== nothing
         (bind_addr, port) = read_worker_host_port(get(config.io))
-        pubhost=get(config.host, bind_addr)
-        config.host = pubhost
-        config.port = port
+        pubhost = get(config.host, bind_addr)
+        config.host = Some(pubhost)
+        config.port = Some(port)
     else
-        pubhost=get(config.host)
-        port=get(config.port)
-        bind_addr=get(config.bind_addr, pubhost)
+        pubhost = get(config.host)
+        port = get(config.port)
+        bind_addr = get(config.bind_addr, pubhost)
     end
 
     tunnel = get(config.tunnel, false)
@@ -437,12 +437,12 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
         (s, bind_addr) = connect_to_worker(bind_addr, port)
     end
 
-    config.bind_addr = bind_addr
+    config.bind_addr = Some(bind_addr)
 
     # write out a subset of the connect_at required for further worker-worker connection setups
-    config.connect_at = (bind_addr, port)
+    config.connect_at = Some((bind_addr, port))
 
-    if !isnull(config.io)
+    if config.io !== nothing
         let pid = pid
             redirect_worker_output(pid, get(config.io))
         end
@@ -453,8 +453,8 @@ end
 
 function connect_w2w(pid::Int, config::WorkerConfig)
     (rhost, rport) = get(config.connect_at)
-    config.host = rhost
-    config.port = rport
+    config.host = Some(rhost)
+    config.port = Some(rport)
     (s, bind_addr) = connect_to_worker(rhost, rport)
     (s,s)
 end

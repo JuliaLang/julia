@@ -46,7 +46,7 @@ function choosetests(choices = [])
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
         "replutil", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
-        "nullable", "meta", "stacktraces", "libgit2", "docs",
+        "some", "meta", "stacktraces", "libgit2", "docs",
         "markdown", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "libdl", "int",
         "checked", "bitset", "floatfuncs", "compile", "inline",

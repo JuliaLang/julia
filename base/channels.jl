@@ -18,13 +18,13 @@ Other constructors:
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 """
 mutable struct Channel{T} <: AbstractChannel
-    cond_take::Condition    # waiting for data to become available
-    cond_put::Condition     # waiting for a writeable slot
+    cond_take::Condition                 # waiting for data to become available
+    cond_put::Condition                  # waiting for a writeable slot
     state::Symbol
-    excp::Nullable{Exception} # Exception to be thrown when state != :open
+    excp::Union{Some{<:Exception}, Void} # Exception to be thrown when state != :open
 
     data::Vector{T}
-    sz_max::Int            # maximum size of channel
+    sz_max::Int                          # maximum size of channel
 
     # Used when sz_max == 0, i.e., an unbuffered channel.
     waiters::Int
@@ -42,7 +42,7 @@ mutable struct Channel{T} <: AbstractChannel
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
-        ch = new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(), sz, 0)
+        ch = new(Condition(), Condition(), :open, nothing, Vector{T}(), sz, 0)
         if sz == 0
             ch.takers = Vector{Task}()
             ch.putters = Vector{Task}()
@@ -129,7 +129,7 @@ isbuffered(c::Channel) = c.sz_max==0 ? false : true
 
 function check_channel_state(c::Channel)
     if !isopen(c)
-        !isnull(c.excp) && throw(get(c.excp))
+        c.excp !== nothing && throw(get(c.excp))
         throw(closed_exception())
     end
 end
@@ -143,7 +143,7 @@ Close a channel. An exception is thrown by:
 """
 function close(c::Channel)
     c.state = :closed
-    c.excp = Nullable{}(closed_exception())
+    c.excp = Some(closed_exception())
     notify_error(c)
     nothing
 end
@@ -237,7 +237,7 @@ function close_chnl_on_taskdone(t::Task, ref::WeakRef)
         !isopen(c) && return
         if istaskfailed(t)
             c.state = :closed
-            c.excp = Nullable{Exception}(task_result(t))
+            c.excp = Some(task_result(t))
             notify_error(c)
         else
             close(c)

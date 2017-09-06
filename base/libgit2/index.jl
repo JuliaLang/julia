@@ -53,7 +53,7 @@ function write_tree!(idx::GitIndex)
 end
 
 function repository(idx::GitIndex)
-    if isnull(idx.owner)
+    if idx.owner === nothing
         throw(GitError(Error.Index, Error.ENOTFOUND, "Index does not have an owning repository."))
     else
         return Base.get(idx.owner)
@@ -182,8 +182,8 @@ function Base.find(path::String, idx::GitIndex)
     pos_ref = Ref{Csize_t}(0)
     ret = ccall((:git_index_find, :libgit2), Cint,
                   (Ref{Csize_t}, Ptr{Void}, Cstring), pos_ref, idx.ptr, path)
-    ret == Cint(Error.ENOTFOUND) && return Nullable{Csize_t}()
-    return Nullable(pos_ref[]+1)
+    ret == Cint(Error.ENOTFOUND) && return nothing
+    return Some(pos_ref[]+1)
 end
 
 """

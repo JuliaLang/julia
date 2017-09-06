@@ -85,7 +85,7 @@ julia> top_frame.line
 236
 
 julia> top_frame.linfo
-Nullable{Core.MethodInstance}(MethodInstance for eval(::Module, ::Any))
+Some(MethodInstance for eval(::Module, ::Any))
 
 julia> top_frame.inlined
 false

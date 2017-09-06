@@ -32,7 +32,7 @@ struct MsgHeader
 end
 
 # Special oid (0,0) uses to indicate a null ID.
-# Used instead of Nullable to decrease wire size of header.
+# Used instead of Union{Some, Void} to decrease wire size of header.
 null_id(id) =  id == RRID(0, 0)
 
 struct CallMsg{Mode} <: AbstractMsg

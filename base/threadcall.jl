@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const max_ccall_threads = parse(Int, get(ENV, "UV_THREADPOOL_SIZE", "4"))
-const thread_notifiers = [Nullable{Condition}() for i in 1:max_ccall_threads]
+const thread_notifiers = Union{Some{Condition}, Void}[nothing for i in 1:max_ccall_threads]
 const threadcall_restrictor = Semaphore(max_ccall_threads)
 
 function notify_fun(idx)
@@ -83,8 +83,8 @@ function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argva
 
     # wait for a worker thread to be available
     acquire(threadcall_restrictor)
-    idx = findfirst(isnull, thread_notifiers)
-    thread_notifiers[idx] = Nullable{Condition}(Condition())
+    idx = findfirst(x -> x === nothing, thread_notifiers)
+    thread_notifiers[idx] = Some(Condition())
 
     # queue up the work to be done
     ccall(:jl_queue_work, Void,
@@ -93,7 +93,7 @@ function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argva
 
     # wait for a result & return it
     wait(get(thread_notifiers[idx]))
-    thread_notifiers[idx] = Nullable{Condition}()
+    thread_notifiers[idx] = nothing
     release(threadcall_restrictor)
 
     unsafe_load(convert(Ptr{rettype}, pointer(ret_arr)))

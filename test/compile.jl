@@ -128,8 +128,8 @@ try
               struct Value18343{T, R}
                   pool::Pool18343{R, Value18343{T, R}}
               end
-              Base.convert(::Type{Nullable{S}}, ::Value18343{Nullable}) where {S} = 2
-              Base.convert(::Type{Nullable{Value18343}}, ::Value18343{Nullable}) = 2
+              Base.convert(::Type{Some{S}}, ::Value18343{Some}) where {S} = 2
+              Base.convert(::Type{Some{Value18343}}, ::Value18343{Some}) = 2
               Base.convert(::Type{Ref}, ::Value18343{T}) where {T} = 3
 
 
@@ -252,7 +252,7 @@ try
                     some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
-        PV = Foo.Value18343{Nullable}.body.types[1]
+        PV = Foo.Value18343{Some}.body.types[1]
         VR = PV.types[1].parameters[1]
         @test PV.types[1] === Array{VR,1}
         @test pointer_from_objref(PV.types[1]) ===

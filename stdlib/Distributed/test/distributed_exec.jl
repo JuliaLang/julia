@@ -83,10 +83,10 @@ end
 function testf(id)
     f=Future(id)
     @test isready(f) == false
-    @test isnull(f.v) == true
+    @test f.v === nothing
     put!(f, :OK)
     @test isready(f) == true
-    @test isnull(f.v) == false
+    @test f.v !== nothing
 
     @test_throws ErrorException put!(f, :OK) # Cannot put! to a already set future
     @test_throws MethodError take!(f) # take! is unsupported on a Future
@@ -104,9 +104,9 @@ function test_futures_dgc(id)
 
     # remote value should be deleted after a fetch
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == true
-    @test isnull(f.v) == true
+    @test f.v === nothing
     @test fetch(f) == id
-    @test isnull(f.v) == false
+    @test f.v !== nothing
     yield(); # flush gc msgs
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
 
@@ -115,7 +115,7 @@ function test_futures_dgc(id)
     f = remotecall(myid, id)
     fid = remoteref_id(f)
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == true
-    @test isnull(f.v) == true
+    @test f.v === nothing
     finalize(f)
     yield(); # flush gc msgs
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
@@ -260,8 +260,8 @@ function test_regular_io_ser(ref::Distributed.AbstractRemoteRef)
         v = getfield(ref2, fld)
         if isa(v, Number)
             @test v === zero(typeof(v))
-        elseif isa(v, Nullable)
-            @test v === Nullable{Any}()
+        elseif isa(v, Union{Some, Void})
+            @test v === nothing
         else
             error(string("Add test for field ", fld))
         end
@@ -1060,8 +1060,8 @@ function launch(manager::ErrorSimulator, params::Dict, launched::Array, c::Condi
     io = open(detach(setenv(cmd, dir=dir)))
 
     wconfig = WorkerConfig()
-    wconfig.process = io
-    wconfig.io = io.out
+    wconfig.process = Some(io)
+    wconfig.io = Some(io.out)
     push!(launched, wconfig)
     notify(c)
 end
@@ -1421,8 +1421,8 @@ function launch(manager::WorkerArgTester, params::Dict, launched::Array, c::Cond
     manager.write_cookie && Distributed.write_cookie(io)
 
     wconfig = WorkerConfig()
-    wconfig.process = io
-    wconfig.io = io.out
+    wconfig.process = Some(io)
+    wconfig.io = Some(io.out)
     push!(launched, wconfig)
 
     notify(c)

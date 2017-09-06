@@ -19,7 +19,8 @@ the argument out in the method definition.
 
 Return a tuple of 2 elements `(res, idx)`, where:
 
-* `res` is a `Nullable{T}` - the result of the parsing, null if parsing failed.
+* `res` is either a [`Some`](@ref) object holding the result of the parsing,
+   or `nothing` if parsing failed.
 * `idx` is an `Int` - if parsing failed, the index at which it failed; if
    parsing succeeded, `idx` is the index _after_ the index at which parsing ended.
 """
@@ -99,11 +100,11 @@ end
 for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         word, i = tryparsenext_word(str, i, len, locale, max_width(d))
-        val = isnull(word) ? 0 : $fn(get(word), locale)
+        val = word === nothing ? 0 : $fn(get(word), locale)
         if val == 0
-            return Nullable{Int64}(), i
+            return nothing, i
         else
-            return Nullable{Int64}(val), i
+            return Some(val), i
         end
     end
 end
@@ -113,7 +114,7 @@ struct Decimal3 end
 
 @inline function tryparsenext(d::DatePart{'s'}, str, i, len)
     ms, ii = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
-    if !isnull(ms)
+    if ms !== nothing
         val0 = val = get(ms)
         len = ii - i
         if len > 3
@@ -122,7 +123,7 @@ struct Decimal3 end
         else
             val *= Int64(10) ^ (3 - len)
         end
-        ms = Nullable{Int64}(val)
+        ms = Some(val)
     end
     return ms, ii
 end
@@ -186,30 +187,28 @@ Delim(d::Char) = Delim{Char, 1}(d)
 Delim(d::String) = Delim{String, length(d)}(d)
 
 @inline function tryparsenext(d::Delim{Char, N}, str, i::Int, len) where N
-    R = Nullable{Bool}
     for j=1:N
-        i > len && return (R(), i)
+        i > len && return (nothing, i)
         c, i = next(str, i)
-        c != d.d && return (R(), i)
+        c != d.d && return (nothing, i)
     end
-    return R(true), i
+    return Some(true), i
 end
 
 @inline function tryparsenext(d::Delim{String, N}, str, i::Int, len) where N
-    R = Nullable{Bool}
     i1 = i
     i2 = start(d.d)
     for j = 1:N
         if i1 > len
-            return R(), i1
+            return nothing, i1
         end
         c1, i1 = next(str, i1)
         c2, i2 = next(d.d, i2)
         if c1 != c2
-            return R(), i1
+            return nothing, i1
         end
     end
-    return R(true), i1
+    return Some(true), i1
 end
 
 @inline function format(io, d::Delim, dt, locale)

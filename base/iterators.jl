@@ -735,7 +735,7 @@ function next(P::ProductIterator, state)
     iter1 = first(iterators)
     value1, state1 = next(iter1, states[1])
     tailstates = tail(states)
-    values = (value1, map(unsafe_get, nvalues)...) # safe if not done(P, state)
+    values = (value1, map(get, nvalues)...) # safe if not done(P, state)
     if done(iter1, state1)
         d, tailstates, nvalues = _prod_next(tail(iterators), tailstates, nvalues)
         if !d # only restart iter1 if not completely done
@@ -753,10 +753,10 @@ function _prod_start(iterators)
     d, tailstates, tailnvalues = _prod_start(tail(iterators))
     if done(iter1, state1)
         d = true
-        nvalue1 = Nullable{eltype(iter1)}()
+        nvalue1 = nothing
     else
         value1, state1 = next(iter1, state1)
-        nvalue1 = Nullable{eltype(iter1)}(value1)
+        nvalue1 = Some{eltype(iter1)}(value1)
     end
     return (d, (state1, tailstates...), (nvalue1, tailnvalues...))
 end
@@ -767,15 +767,15 @@ function _prod_next(iterators, states, nvalues)
     state1 = first(states)
     if !done(iter1, state1)
         value1, state1 = next(iter1, state1)
-        nvalue1 = Nullable{eltype(iter1)}(value1)
+        nvalue1 = Some{eltype(iter1)}(value1)
         return false, (state1, tail(states)...), (nvalue1, tail(nvalues)...)
     else
         d, tailstates, tailnvalues = _prod_next(tail(iterators), tail(states), tail(nvalues))
         if d # all iterators are done
-            nvalue1 = Nullable{eltype(iter1)}()
+            nvalue1 = nothing
         else
             value1, state1 = next(iter1, start(iter1)) # iter cannot be done immediately
-            nvalue1 = Nullable{eltype(iter1)}(value1)
+            nvalue1 = Some{eltype(iter1)}(value1)
         end
         return d, (state1, tailstates...), (nvalue1, tailnvalues...)
     end

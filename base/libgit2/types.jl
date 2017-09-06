@@ -911,27 +911,27 @@ Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
 abstract type GitObject <: AbstractGitObject end
 
 for (typ, owntyp, sup, cname) in [
-    (:GitRepo,           nothing,               :AbstractGitObject, :git_repository),
-    (:GitConfig,         :(Nullable{GitRepo}),  :AbstractGitObject, :git_config),
-    (:GitIndex,          :(Nullable{GitRepo}),  :AbstractGitObject, :git_index),
-    (:GitRemote,         :GitRepo,              :AbstractGitObject, :git_remote),
-    (:GitRevWalker,      :GitRepo,              :AbstractGitObject, :git_revwalk),
-    (:GitReference,      :GitRepo,              :AbstractGitObject, :git_reference),
-    (:GitDescribeResult, :GitRepo,              :AbstractGitObject, :git_describe_result),
-    (:GitDiff,           :GitRepo,              :AbstractGitObject, :git_diff),
-    (:GitDiffStats,      :GitRepo,              :AbstractGitObject, :git_diff_stats),
-    (:GitAnnotated,      :GitRepo,              :AbstractGitObject, :git_annotated_commit),
-    (:GitRebase,         :GitRepo,              :AbstractGitObject, :git_rebase),
-    (:GitBlame,          :GitRepo,              :AbstractGitObject, :git_blame),
-    (:GitStatus,         :GitRepo,              :AbstractGitObject, :git_status_list),
-    (:GitBranchIter,     :GitRepo,              :AbstractGitObject, :git_branch_iterator),
-    (:GitConfigIter,     nothing,               :AbstractGitObject, :git_config_iterator),
-    (:GitUnknownObject,  :GitRepo,              :GitObject,         :git_object),
-    (:GitCommit,         :GitRepo,              :GitObject,         :git_commit),
-    (:GitBlob,           :GitRepo,              :GitObject,         :git_blob),
-    (:GitTree,           :GitRepo,              :GitObject,         :git_tree),
-    (:GitTag,            :GitRepo,              :GitObject,         :git_tag),
-    (:GitTreeEntry,      :GitTree,              :AbstractGitObject, :git_tree_entry),
+    (:GitRepo,           nothing,                       :AbstractGitObject, :git_repository),
+    (:GitConfig,         :(Union{Some{GitRepo}, Void}), :AbstractGitObject, :git_config),
+    (:GitIndex,          :(Union{Some{GitRepo}, Void}), :AbstractGitObject, :git_index),
+    (:GitRemote,         :GitRepo,                      :AbstractGitObject, :git_remote),
+    (:GitRevWalker,      :GitRepo,                      :AbstractGitObject, :git_revwalk),
+    (:GitReference,      :GitRepo,                      :AbstractGitObject, :git_reference),
+    (:GitDescribeResult, :GitRepo,                      :AbstractGitObject, :git_describe_result),
+    (:GitDiff,           :GitRepo,                      :AbstractGitObject, :git_diff),
+    (:GitDiffStats,      :GitRepo,                      :AbstractGitObject, :git_diff_stats),
+    (:GitAnnotated,      :GitRepo,                      :AbstractGitObject, :git_annotated_commit),
+    (:GitRebase,         :GitRepo,                      :AbstractGitObject, :git_rebase),
+    (:GitBlame,          :GitRepo,                      :AbstractGitObject, :git_blame),
+    (:GitStatus,         :GitRepo,                      :AbstractGitObject, :git_status_list),
+    (:GitBranchIter,     :GitRepo,                      :AbstractGitObject, :git_branch_iterator),
+    (:GitConfigIter,     nothing,                       :AbstractGitObject, :git_config_iterator),
+    (:GitUnknownObject,  :GitRepo,                      :GitObject,         :git_object),
+    (:GitCommit,         :GitRepo,                      :GitObject,         :git_commit),
+    (:GitBlob,           :GitRepo,                      :GitObject,         :git_blob),
+    (:GitTree,           :GitRepo,                      :GitObject,         :git_tree),
+    (:GitTag,            :GitRepo,                      :GitObject,         :git_tag),
+    (:GitTreeEntry,      :GitTree,                      :AbstractGitObject, :git_tree_entry),
     ]
 
     if owntyp === nothing
@@ -963,11 +963,11 @@ for (typ, owntyp, sup, cname) in [
                 return obj
             end
         end
-        if isa(owntyp, Expr) && owntyp.args[1] == :Nullable
+        if isa(owntyp, Expr) && owntyp.args[1] == :Union && owntyp.args[2].args[1] == :Some
             @eval begin
-                $typ(ptr::Ptr{Void}, fin::Bool=true) = $typ($owntyp(), ptr, fin)
-                $typ(owner::$(owntyp.args[2]), ptr::Ptr{Void}, fin::Bool=true) =
-                    $typ($owntyp(owner), ptr, fin)
+                $typ(ptr::Ptr{Void}, fin::Bool=true) = $typ(nothing, ptr, fin)
+                $typ(owner::$(owntyp.args[2].args[2]), ptr::Ptr{Void}, fin::Bool=true) =
+                    $typ(Some(owner), ptr, fin)
             end
         end
     end
@@ -1251,8 +1251,8 @@ A `CredentialPayload` instance is expected to be `reset!` whenever it will be us
 different URL.
 """
 mutable struct CredentialPayload <: Payload
-    explicit::Nullable{AbstractCredential}
-    cache::Nullable{CachedCredentials}
+    explicit::Union{Some{<:AbstractCredential}, Void}
+    cache::Union{Some{CachedCredentials}, Void}
     allow_ssh_agent::Bool    # Allow the use of the SSH agent to get credentials
     allow_git_helpers::Bool  # Allow the use of git credential helpers
     allow_prompt::Bool       # Allow prompting the user for credentials
@@ -1260,7 +1260,7 @@ mutable struct CredentialPayload <: Payload
     config::GitConfig
 
     # Ephemeral state fields
-    credential::Nullable{AbstractCredential}
+    credential::Union{Some{<:AbstractCredential}, Void}
     first_pass::Bool
     use_ssh_agent::Bool
     use_env::Bool
@@ -1273,8 +1273,8 @@ mutable struct CredentialPayload <: Payload
     host::String
 
     function CredentialPayload(
-            credential::Nullable{<:AbstractCredential}=Nullable{AbstractCredential}(),
-            cache::Nullable{CachedCredentials}=Nullable{CachedCredentials}(),
+            credential::Union{Some{<:AbstractCredential}, Void}=nothing,
+            cache::Union{Some{CachedCredentials}, Void}=nothing,
             config::GitConfig=GitConfig();
             allow_ssh_agent::Bool=true,
             allow_git_helpers::Bool=true,
@@ -1286,11 +1286,11 @@ mutable struct CredentialPayload <: Payload
 end
 
 function CredentialPayload(credential::AbstractCredential; kwargs...)
-    CredentialPayload(Nullable(credential), Nullable{CachedCredentials}(); kwargs...)
+    CredentialPayload(Some(credential), nothing; kwargs...)
 end
 
 function CredentialPayload(cache::CachedCredentials; kwargs...)
-    CredentialPayload(Nullable{AbstractCredential}(), Nullable(cache); kwargs...)
+    CredentialPayload(nothing, Some(cache); kwargs...)
 end
 
 """
@@ -1301,7 +1301,7 @@ the credential callback. If a `config` is provided the configuration will also b
 """
 function reset!(p::CredentialPayload, config::GitConfig=p.config)
     p.config = config
-    p.credential = Nullable{AbstractCredential}()
+    p.credential = nothing
     p.first_pass = true
     p.use_ssh_agent = p.allow_ssh_agent
     p.use_env = true
@@ -1325,11 +1325,11 @@ The `shred` keyword controls whether sensitive information in the payload creden
 should be destroyed. Should only be set to `false` during testing.
 """
 function approve(p::CredentialPayload; shred::Bool=true)
-    isnull(p.credential) && return  # No credentials were used
-    cred = unsafe_get(p.credential)
+    p.credential === nothing && return  # No credentials were used
+    cred = Base.get(p.credential)
 
-    if !isnull(p.cache)
-        approve(unsafe_get(p.cache), cred, p.url)
+    if p.cache !== nothing
+        approve(Base.get(p.cache), cred, p.url)
         shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
     if p.allow_git_helpers
@@ -1350,11 +1350,11 @@ The `shred` keyword controls whether sensitive information in the payload creden
 should be destroyed. Should only be set to `false` during testing.
 """
 function reject(p::CredentialPayload; shred::Bool=true)
-    isnull(p.credential) && return  # No credentials were used
-    cred = unsafe_get(p.credential)
+    p.credential === nothing && return  # No credentials were used
+    cred = Base.get(p.credential)
 
-    if !isnull(p.cache)
-        reject(unsafe_get(p.cache), cred, p.url)
+    if p.cache !== nothing
+        reject(Base.get(p.cache), cred, p.url)
         shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
     if p.allow_git_helpers

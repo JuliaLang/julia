@@ -77,7 +77,6 @@ export
     MergeSort,
     Missing,
     NTuple,
-    Nullable,
     ObjectIdDict,
     OrdinalRange,
     Pair,
@@ -100,6 +99,7 @@ export
     AbstractSerializer,
     SerializationState,
     Set,
+    Some,
     StepRange,
     StepRangeLen,
     StridedArray,
@@ -150,7 +150,6 @@ export
     InvalidStateException,
     KeyError,
     MissingException,
-    NullException,
     ParseError,
     SystemError,
     StringIndexError,
@@ -1144,10 +1143,6 @@ export
     unsafe_read,
     unsafe_store!,
     unsafe_write,
-
-# nullable types
-    isnull,
-    unsafe_get,
 
 # Macros
     # parser internal

@@ -312,7 +312,7 @@ function pin(pkg::AbstractString, head::AbstractString)
             end
             ref = LibGit2.lookup_branch(repo, branch)
             try
-                if !isnull(ref)
+                if ref !== nothing
                     if LibGit2.revparseid(repo, branch) != id
                         throw(PkgError("Package $pkg: existing branch $branch has " *
                             "been edited and doesn't correspond to its original commit"))
@@ -320,7 +320,7 @@ function pin(pkg::AbstractString, head::AbstractString)
                     @info "Package $pkg: checking out existing branch $branch"
                 else
                     @info "Creating $pkg branch $branch"
-                    ref = Nullable(LibGit2.create_branch(repo, branch, commit))
+                    ref = Some(LibGit2.create_branch(repo, branch, commit))
                 end
 
                 # checkout selected branch

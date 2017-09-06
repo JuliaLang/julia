@@ -357,11 +357,17 @@ create_serialization_stream() do s # user-defined type array
 end
 
 # corner case: undefined inside immutable struct
+struct MyNullable{T}
+    hasvalue::Bool
+    value::T
+
+    MyNullable{T}() where {T} = new(false)
+end
 create_serialization_stream() do s
-    serialize(s, Nullable{Any}())
+    serialize(s, MyNullable{Any}())
     seekstart(s)
     n = deserialize(s)
-    @test isa(n, Nullable)
+    @test isa(n, MyNullable)
     @test !isdefined(n, :value)
 end
 

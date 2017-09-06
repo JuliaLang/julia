@@ -48,10 +48,10 @@ function launch(manager::TopoTestManager, params::Dict, launched::Array, c::Cond
         Distributed.write_cookie(io)
 
         wconfig = WorkerConfig()
-        wconfig.process = io
-        wconfig.io = io.out
-        wconfig.ident = i
-        wconfig.connect_idents = collect(i+2:2:manager.np)
+        wconfig.process = Some(io)
+        wconfig.io = Some(io.out)
+        wconfig.ident = Some(i)
+        wconfig.connect_idents = Some(collect(i+2:2:manager.np))
         push!(launched, wconfig)
     end
 

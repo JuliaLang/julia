@@ -770,6 +770,11 @@ Deprecated or removed
 
   * `Associative` has been deprecated in favor of `AbstractDict` ([#25012]).
 
+  * `Nullable{T}` has been deprecated and moved to the Nullables package:
+    use `Union{T, Void}` or `Union{Some{T}, Void}` instead. `isnull(x)` can be replaced
+    with `x === nothing` and `unsafe_get(x)` with `get(x)`.
+    `NullException` has been removed ([#23642]).
+
 Command-line option changes
 ---------------------------
 

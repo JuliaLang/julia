@@ -152,21 +152,21 @@ daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 # we can validate arguments in tryparse.
 
 """
-    validargs(::Type{<:TimeType}, args...) -> Nullable{ArgumentError}
+    validargs(::Type{<:TimeType}, args...) -> Union{Some{ArgumentError}, Void}
 
 Determine whether the given arguments consitute valid inputs for the given type.
-Returns a `Nullable{ArgumentError}` where null signifies success.
+Returns either a `Some{ArgumentError}` object, or [`nothing`](@ref) in case of success.
 """
 function validargs end
 
 """
-    argerror([msg]) -> Nullable{ArgumentError}
+    argerror([msg]) -> Union{Some{ArgumentError}, Void}
 
-Construct a `Nullable{ArgumentError}` with the given message, or null if no message
-is provided. For use by `validargs`.
+Construct a `Some{ArgumentError}` object wrapping the given message,
+or [`nothing`](@ref) if no message is provided. For use by `validargs`.
 """
-argerror(msg::String) = Nullable(ArgumentError(msg))
-argerror() = Nullable{ArgumentError}()
+argerror(msg::String) = Some(ArgumentError(msg))
+argerror() = nothing
 
 ### CONSTRUCTORS ###
 # Core constructors
@@ -178,7 +178,7 @@ Construct a `DateTime` type by parts. Arguments must be convertible to [`Int64`]
 function DateTime(y::Int64, m::Int64=1, d::Int64=1,
                   h::Int64=0, mi::Int64=0, s::Int64=0, ms::Int64=0)
     err = validargs(DateTime, y, m, d, h, mi, s, ms)
-    isnull(err) || throw(unsafe_get(err))
+    err === nothing || throw(get(err))
     rata = ms + 1000 * (s + 60mi + 3600h + 86400 * totaldays(y, m, d))
     return DateTime(UTM(rata))
 end
@@ -201,7 +201,7 @@ Construct a `Date` type by parts. Arguments must be convertible to [`Int64`](@re
 """
 function Date(y::Int64, m::Int64=1, d::Int64=1)
     err = validargs(Date, y, m, d)
-    isnull(err) || throw(unsafe_get(err))
+    err === nothing || throw(get(err))
     return Date(UTD(totaldays(y, m, d)))
 end
 
@@ -218,7 +218,7 @@ Construct a `Time` type by parts. Arguments must be convertible to [`Int64`](@re
 """
 function Time(h::Int64, mi::Int64=0, s::Int64=0, ms::Int64=0, us::Int64=0, ns::Int64=0)
     err = validargs(Time, h, mi, s, ms, us, ns)
-    isnull(err) || throw(unsafe_get(err))
+    err === nothing || throw(get(err))
     return Time(Nanosecond(ns + 1000us + 1000000ms + 1000000000s + 60000000000mi + 3600000000000h))
 end
 

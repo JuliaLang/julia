@@ -205,7 +205,7 @@ function launch(manager::ZMQCMan, params::Dict, launched::Array, c::Condition)
         io, pobj = open(`$(params[:exename]) worker.jl $i $(cluster_cookie())`, "r")
 
         wconfig = WorkerConfig()
-        wconfig.userdata = Dict(:zid=>i, :io=>io)
+        wconfig.userdata = Some(Dict(:zid=>i, :io=>io))
         push!(launched, wconfig)
         notify(c)
     end
@@ -221,7 +221,7 @@ function connect(manager::ZMQCMan, pid::Int, config::WorkerConfig)
     else
         #println("connect_w2w")
         zid = get(config.connect_at)
-        config.userdata = Dict{Symbol, Any}(:zid=>zid)
+        config.userdata = Some(Dict{Symbol, Any}(:zid=>zid))
     end
 
     streams = setup_connection(zid, SELF_INITIATED)

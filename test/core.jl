@@ -3234,17 +3234,21 @@ f11858(Any[Type{Foo11858}, Type{Bar11858}, typeof(g11858)])
 @test Bar11858(1).x == 1.0
 
 # issue 11904
+struct Nullable11904{T}
+    value::T
+    hasvalue::Bool
+end
 @noinline throw_error() = error()
 foo11904(x::Int) = x
-@inline function foo11904(x::Nullable{S}) where S
+@inline function foo11904(x::Nullable11904{S}) where S
     if isbits(S)
-        Nullable(foo11904(x.value), x.hasvalue)
+        Nullable11904(foo11904(x.value), x.hasvalue)
     else
         throw_error()
     end
 end
 
-@test !isnull(foo11904(Nullable(1)))
+@test foo11904(Nullable11904(1, true)).hasvalue
 
 # issue 11874
 struct Foo11874
@@ -3469,7 +3473,7 @@ call13007(::Type{Array}) = 1
 @test length(Base._methods(call13007, Tuple{Type{x} where x<:Array}, 4, typemax(UInt))) == 2
 
 # detecting cycles during type intersection, e.g. #1631
-cycle_in_solve_tvar_constraints(::Type{Nullable{S}}, x::S) where {S} = 0
+cycle_in_solve_tvar_constraints(::Type{Some{S}}, x::S) where {S} = 0
 cycle_in_solve_tvar_constraints(::Type{T}, x::Val{T}) where {T} = 1
 @test length(methods(cycle_in_solve_tvar_constraints)) == 2
 

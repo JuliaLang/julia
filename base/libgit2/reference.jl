@@ -247,15 +247,15 @@ function head!(repo::GitRepo, ref::GitReference)
 end
 
 """
-    lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=false) -> Nullable{GitReference}
+    lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=false) -> Union{Some{GitReference}, Void}
 
 Determine if the branch specified by `branch_name` exists in the repository `repo`.
 If `remote` is `true`, `repo` is assumed to be a remote git repository. Otherwise, it
 is part of the local filesystem.
 
-Return a [`Nullable`](@ref), which will be null if the requested branch does
-not exist yet. If the branch does exist, the `Nullable` contains a `GitReference` to
-the branch.
+Return either a [`Some`](@ref) object, or [`nothing`](@ref) if
+the requested branch does not exist yet. If the branch does exist, the `Some` wrapper
+contains a `GitReference` to the branch.
 """
 function lookup_branch(repo::GitRepo,
                        branch_name::AbstractString,
@@ -267,23 +267,24 @@ function lookup_branch(repo::GitRepo,
                   ref_ptr_ptr, repo.ptr, branch_name, branch_type)
     if err != Int(Error.GIT_OK)
         if err == Int(Error.ENOTFOUND)
-            return Nullable{GitReference}()
+            return nothing
         end
         if ref_ptr_ptr[] != C_NULL
             close(GitReference(repo, ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return Nullable{GitReference}(GitReference(repo, ref_ptr_ptr[]))
+    return Some(GitReference(repo, ref_ptr_ptr[]))
 end
 
 """
-    upstream(ref::GitReference) -> Nullable{GitReference}
+    upstream(ref::GitReference) -> Union{Some{GitReference}, Void}
 
 Determine if the branch containing `ref` has a specified upstream branch.
 
-Return a [`Nullable`](@ref), which will be null if the requested branch does
-not have an upstream counterpart. If the upstream branch does exist, the `Nullable`
+Return either a [`Some`](@ref) object, or [`nothing`](@ref) if
+the requested branch does not have an upstream counterpart. If
+the upstream branch does exist, the `Some` wrapper
 contains a `GitReference` to the upstream branch.
 """
 function upstream(ref::GitReference)
@@ -293,14 +294,14 @@ function upstream(ref::GitReference)
                   (Ref{Ptr{Void}}, Ptr{Void},), ref_ptr_ptr, ref.ptr)
     if err != Int(Error.GIT_OK)
         if err == Int(Error.ENOTFOUND)
-            return Nullable{GitReference}()
+            return nothing
         end
         if ref_ptr_ptr[] != C_NULL
             close(GitReference(ref.owner, ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
-    return Nullable{GitReference}(GitReference(ref.owner, ref_ptr_ptr[]))
+    return Some(GitReference(ref.owner, ref_ptr_ptr[]))
 end
 
 repository(ref::GitReference) = ref.owner
