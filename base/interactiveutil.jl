@@ -704,8 +704,9 @@ end
                   resilient=false)
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
-strings, using `numcores` processors.
-If one test fails, all remaining tests will be discarded, unless resilient is `true`.
+strings, using `numcores` processors. If `resilient` is `true`, when one test
+fails, all remaining tests in other files will still be run; they are otherwise discarded,
+when `resilient == false`.
 """
 function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
                   resilient=false)
