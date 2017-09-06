@@ -884,23 +884,12 @@ function which(@nospecialize(f), @nospecialize(t))
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)
-    if isleaftype(t)
-        ms = methods(f, t)
-        isempty(ms) && error("no method found for the specified argument types")
-        length(ms)!=1 && error("no unique matching method for the specified argument types")
-        return first(ms)
-    else
-        tt = signature_type(f, t)
-        m = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tt, typemax(UInt))
-        if m === nothing
-            error("no method found for the specified argument types")
-        end
-        meth = m.func::Method
-        if ccall(:jl_has_call_ambiguities, Cint, (Any, Any), tt, meth) != 0
-            error("method match is ambiguous for the specified argument types")
-        end
-        return meth
+    tt = signature_type(f, t)
+    m = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tt, typemax(UInt))
+    if m === nothing
+        error("no unique matching method found for the specified argument types")
     end
+    return m.func::Method
 end
 
 """

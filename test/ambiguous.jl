@@ -65,20 +65,28 @@ end
 
 ## Other ways of accessing functions
 # Test that non-ambiguous cases work
-io = IOBuffer()
-@test precompile(ambig, (Int, Int)) == true
-cfunction(ambig, Int, Tuple{Int, Int})
-@test length(code_lowered(ambig, (Int, Int))) == 1
-@test length(code_typed(ambig, (Int, Int))) == 1
-code_llvm(io, ambig, (Int, Int))
-code_native(io, ambig, (Int, Int))
+let io = IOBuffer()
+    @test precompile(ambig, (Int, Int)) == true
+    cf = cfunction(ambig, Int, Tuple{Int, Int})
+    @test ccall(cf, Int, (Int, Int), 1, 2) == 4
+    @test length(code_lowered(ambig, (Int, Int))) == 1
+    @test length(code_typed(ambig, (Int, Int))) == 1
+    code_llvm(io, ambig, (Int, Int))
+    code_native(io, ambig, (Int, Int))
+end
 
 # Test that ambiguous cases fail appropriately
-@test precompile(ambig, (UInt8, Int)) == false
-cfunction(ambig, Int, Tuple{UInt8, Int})  # test for a crash (doesn't throw an error)
-@test_throws ErrorException which(ambig, (UInt8, Int))
-@test_throws ErrorException code_llvm(io, ambig, (UInt8, Int))
-@test_throws ErrorException code_native(io, ambig, (UInt8, Int))
+let io = IOBuffer()
+    @test precompile(ambig, (UInt8, Int)) == false
+    cf = cfunction(ambig, Int, Tuple{UInt8, Int})  # test for a crash (doesn't throw an error)
+    @test_throws MethodError ccall(cf, Int, (UInt8, Int), 1, 2)
+    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
+                 which(ambig, (UInt8, Int)))
+    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
+                 code_llvm(io, ambig, (UInt8, Int)))
+    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
+                 code_native(io, ambig, (UInt8, Int)))
+end
 
 # Method overwriting doesn't destroy ambiguities
 @test_throws MethodError ambig(2, 0x03)

@@ -1107,7 +1107,7 @@ end
 # issue #2169
 let
     i2169(a::Array{T}) where {T} = typemin(T)
-    @test invoke(i2169, Tuple{Array} ,Int8[1]) === Int8(-128)
+    @test invoke(i2169, Tuple{Array}, Int8[1]) === Int8(-128)
 end
 
 # issue #2365
@@ -4541,15 +4541,22 @@ let x = 1
     @noinline g18444(a) = (x += 1; a[])
     f18444_1(a) = invoke(sin, Tuple{Int}, g18444(a))
     f18444_2(a) = invoke(sin, Tuple{Integer}, g18444(a))
-    @test_throws ErrorException f18444_1(Ref{Any}(1.0))
+    @test_throws ErrorException("invoke: argument type error") f18444_1(Ref{Any}(1.0))
     @test x == 2
-    @test_throws ErrorException f18444_2(Ref{Any}(1.0))
+    @test_throws ErrorException("invoke: argument type error") f18444_2(Ref{Any}(1.0))
     @test x == 3
     @test f18444_1(Ref{Any}(1)) === sin(1)
     @test x == 4
     @test f18444_2(Ref{Any}(1)) === sin(1)
     @test x == 5
 end
+
+f18095(::Int, ::Number) = 0x21
+f18095(::Number, ::Int) = 0x12
+@test_throws MethodError f18095(1, 2)
+@test_throws MethodError invoke(f18095, Tuple{Int, Int}, 1, 2)
+@test_throws MethodError invoke(f18095, Tuple{Int, Any}, 1, 2)
+@test invoke(f18095, Tuple{Int, Real}, 1, 2) === 0x21
 
 # issue #10981, long argument lists
 let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
