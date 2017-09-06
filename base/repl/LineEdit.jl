@@ -122,7 +122,7 @@ function beep(s::PromptState, duration=0.2, blink=0.2, maxduration=1.0;
               colors=[Base.text_colors[:light_black]],
               use_current::Bool=true,
               underline::Bool=false)
-
+    isinteractive() || return
     beeping[] = min(beeping[]+duration, maxduration)
     @async begin
         trylock(BEEP_LOCK) || return
@@ -704,7 +704,7 @@ end
 
 function edit_yank(s::MIState)
     if isempty(s.kill_ring)
-        beep(terminal(s))
+        beep(s)
         return :ignore
     end
     setmark(s) # necessary for edit_yank_pop
@@ -717,7 +717,7 @@ end
 function edit_yank_pop(s::MIState, require_previous_yank=true)
     if require_previous_yank && !(s.last_action in [:edit_yank, :edit_yank_pop]) ||
             isempty(s.kill_ring)
-        beep(terminal(s))
+        beep(s)
         :ignore
     else
         push_undo(s)
@@ -1710,7 +1710,7 @@ AnyDict(
     # Meta Enter
     "\e\r" => (s,o...)->edit_insert_newline(s),
     "\e\n" => "\e\r",
-    "^_" => (s,o...)->(pop_undo(s) ? refresh_line(s) : beep(terminal(s))),
+    "^_" => (s,o...)->(pop_undo(s) ? refresh_line(s) : beep(s)),
     # Simply insert it into the buffer by default
     "*" => (s,data,c)->(edit_insert(s, c)),
     "^U" => (s,o...)->edit_clear(s),
