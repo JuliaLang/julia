@@ -1276,14 +1276,13 @@ let
     @test foo(x) == [1.0, 2.0, 3.0]
 end
 
-# TODO!!
 # issue #4115
-#mutable struct Foo4115
-#end
-#const Foo4115s = NTuple{3,Union{Foo4115,Type{Foo4115}}}
-#baz4115(x::Foo4115s) = x
-#@test baz4115(convert(Tuple{Type{Foo4115},Type{Foo4115},Foo4115},
-#                      (Foo4115,Foo4115,Foo4115()))) == (Foo4115,Foo4115,Foo4115())
+mutable struct Foo4115 end
+const Foo4115s = NTuple{3, Union{Foo4115, Type{Foo4115}}}
+baz4115(x::Foo4115s) = x
+let t = (Foo4115, Foo4115, Foo4115())
+    @test_throws MethodError baz4115(t)
+end
 
 # issue #4129
 mutable struct Foo4129; end
@@ -4857,6 +4856,12 @@ end
 let a = Array{Core.TypeofBottom, 1}(2)
     @test a[1] == Union{}
     @test a == [Union{}, Union{}]
+end
+
+@test_throws TypeError(:T17951, "type definition", Type, Vararg) @eval begin
+    struct T17951
+        x::Vararg
+    end
 end
 
 # issue #21178
