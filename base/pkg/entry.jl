@@ -4,8 +4,7 @@ module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
-import ...LibGit2
-importall ...LibGit2
+using ...LibGit2
 import ...Pkg.PkgError
 using ..Types
 
