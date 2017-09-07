@@ -15,11 +15,11 @@ A = rand(5,4,3)
     @test checkbounds(Bool, A, 61) == false
     @test checkbounds(Bool, A, 2, 2, 2, 1) == true  # extra indices
     @test checkbounds(Bool, A, 2, 2, 2, 2) == false
-    @test checkbounds(Bool, A, 1, 1)  == true       # partial linear indexing (PLI)
-    @test checkbounds(Bool, A, 1, 12) == false
-    @test checkbounds(Bool, A, 5, 12) == false
-    @test checkbounds(Bool, A, 1, 13) == false
-    @test checkbounds(Bool, A, 6, 12) == false
+    # @test checkbounds(Bool, A, 1, 1)  == false       # TODO: partial linear indexing (PLI)
+    # @test checkbounds(Bool, A, 1, 12) == false
+    # @test checkbounds(Bool, A, 5, 12) == false
+    # @test checkbounds(Bool, A, 1, 13) == false
+    # @test checkbounds(Bool, A, 6, 12) == false
 end
 
 @testset "single CartesianIndex" begin
@@ -31,16 +31,16 @@ end
     @test checkbounds(Bool, A, CartesianIndex((6, 4, 3))) == false
     @test checkbounds(Bool, A, CartesianIndex((5, 5, 3))) == false
     @test checkbounds(Bool, A, CartesianIndex((5, 4, 4))) == false
-    @test checkbounds(Bool, A, CartesianIndex((1,))) == true
-    @test checkbounds(Bool, A, CartesianIndex((60,))) == false
-    @test checkbounds(Bool, A, CartesianIndex((61,))) == false
+    # @test checkbounds(Bool, A, CartesianIndex((1,))) == false # TODO: PLI
+    # @test checkbounds(Bool, A, CartesianIndex((60,))) == false
+    # @test checkbounds(Bool, A, CartesianIndex((61,))) == false
     @test checkbounds(Bool, A, CartesianIndex((2, 2, 2, 1,))) == true
     @test checkbounds(Bool, A, CartesianIndex((2, 2, 2, 2,))) == false
-    @test checkbounds(Bool, A, CartesianIndex((1, 1,)))  == true
-    @test checkbounds(Bool, A, CartesianIndex((1, 12,))) == false
-    @test checkbounds(Bool, A, CartesianIndex((5, 12,))) == false
-    @test checkbounds(Bool, A, CartesianIndex((1, 13,))) == false
-    @test checkbounds(Bool, A, CartesianIndex((6, 12,))) == false
+    # @test checkbounds(Bool, A, CartesianIndex((1, 1,)))  == false # TODO: PLI
+    # @test checkbounds(Bool, A, CartesianIndex((1, 12,))) == false
+    # @test checkbounds(Bool, A, CartesianIndex((5, 12,))) == false
+    # @test checkbounds(Bool, A, CartesianIndex((1, 13,))) == false
+    # @test checkbounds(Bool, A, CartesianIndex((6, 12,))) == false
 end
 
 @testset "mix of CartesianIndex and Int" begin
@@ -66,10 +66,10 @@ end
     @test checkbounds(Bool, A, 1:61) == false
     @test checkbounds(Bool, A, 2, 2, 2, 1:1) == true  # extra indices
     @test checkbounds(Bool, A, 2, 2, 2, 1:2) == false
-    @test checkbounds(Bool, A, 1:5, 1:4) == true
-    @test checkbounds(Bool, A, 1:5, 1:12) == false
-    @test checkbounds(Bool, A, 1:5, 1:13) == false
-    @test checkbounds(Bool, A, 1:6, 1:12) == false
+    # @test checkbounds(Bool, A, 1:5, 1:4) == false # TODO: PLI
+    # @test checkbounds(Bool, A, 1:5, 1:12) == false
+    # @test checkbounds(Bool, A, 1:5, 1:13) == false
+    # @test checkbounds(Bool, A, 1:6, 1:12) == false
 end
 
 @testset "logical" begin
@@ -81,9 +81,9 @@ end
     @test checkbounds(Bool, A, trues(61)) == false
     @test checkbounds(Bool, A, 2, 2, 2, trues(1)) == true  # extra indices
     @test checkbounds(Bool, A, 2, 2, 2, trues(2)) == false
-    @test checkbounds(Bool, A, trues(5), trues(12)) == false
-    @test checkbounds(Bool, A, trues(5), trues(13)) == false
-    @test checkbounds(Bool, A, trues(6), trues(12)) == false
+    # @test checkbounds(Bool, A, trues(5), trues(12)) == false # TODO: PLI
+    # @test checkbounds(Bool, A, trues(5), trues(13)) == false
+    # @test checkbounds(Bool, A, trues(6), trues(12)) == false
     @test checkbounds(Bool, A, trues(5, 4, 3)) == true
     @test checkbounds(Bool, A, trues(5, 4, 2)) == false
     @test checkbounds(Bool, A, trues(5, 12)) == false
@@ -258,6 +258,10 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
     B = T(A)
     @test A == B
     # Test indexing up to 5 dimensions
+    trailing5 = CartesianIndex(ntuple(x->1, max(ndims(B)-5, 0)))
+    trailing4 = CartesianIndex(ntuple(x->1, max(ndims(B)-4, 0)))
+    trailing3 = CartesianIndex(ntuple(x->1, max(ndims(B)-3, 0)))
+    trailing2 = CartesianIndex(ntuple(x->1, max(ndims(B)-2, 0)))
     i=0
     for i5 = 1:size(B, 5)
         for i4 = 1:size(B, 4)
@@ -265,9 +269,9 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
                 for i2 = 1:size(B, 2)
                     for i1 = 1:size(B, 1)
                         i += 1
-                        @test A[i1,i2,i3,i4,i5] == B[i1,i2,i3,i4,i5] == i
-                        @test A[i1,i2,i3,i4,i5] ==
-                              Base.unsafe_getindex(B, i1, i2, i3, i4, i5) == i
+                        @test A[i1,i2,i3,i4,i5,trailing5] == B[i1,i2,i3,i4,i5,trailing5] == i
+                        @test A[i1,i2,i3,i4,i5,trailing5] ==
+                              Base.unsafe_getindex(B, i1, i2, i3, i4, i5, trailing5) == i
                     end
                 end
             end
@@ -283,7 +287,7 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
     for i2 = 1:size(B, 2)
         for i1 = 1:size(B, 1)
             i += 1
-            @test A[i1,i2] == B[i1,i2] == i
+            @test A[i1,i2,trailing2] == B[i1,i2,trailing2] == i
         end
     end
     @test A == B
@@ -292,7 +296,7 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         for i2 = 1:size(B, 2)
             for i1 = 1:size(B, 1)
                 i += 1
-                @test A[i1,i2,i3] == B[i1,i2,i3] == i
+                @test A[i1,i2,i3,trailing3] == B[i1,i2,i3,trailing3] == i
             end
         end
     end
@@ -310,20 +314,20 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
                 for i2 = 1:size(B, 2)
                     for i1 = 1:size(B, 1)
                         i += 1
-                        C[i1,i2,i3,i4,i5] = i
+                        C[i1,i2,i3,i4,i5,trailing5] = i
                         # test general unsafe_setindex!
-                        Base.unsafe_setindex!(D1, i, i1,i2,i3,i4,i5)
+                        Base.unsafe_setindex!(D1, i, i1,i2,i3,i4,i5,trailing5)
                         # test for dropping trailing dims
-                        Base.unsafe_setindex!(D2, i, i1,i2,i3,i4,i5, 1, 1, 1)
+                        Base.unsafe_setindex!(D2, i, i1,i2,i3,i4,i5,trailing5, 1, 1, 1)
                         # test for expanding index argument to appropriate dims
-                        Base.unsafe_setindex!(D3, i, i1,i2,i3,i4)
+                        Base.unsafe_setindex!(D3, i, i1,i2,i3,i4,trailing4)
                     end
                 end
             end
         end
     end
     @test D1 == D2 == C == B == A
-    @test D3[:, :, :, :, 1] == D2[:, :, :, :, 1]
+    @test D3[:, :, :, :, 1, trailing5] == D2[:, :, :, :, 1, trailing5]
     # Test linear indexing and partial linear indexing
     C = T(Int, shape)
     fill!(C, 0)
@@ -340,7 +344,7 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
     for i2 = 1:size(C2, 2)
         for i1 = 1:size(C2, 1)
             i += 1
-            C2[i1,i2] = i
+            C2[i1,i2,trailing2] = i
         end
     end
     @test C == B == A
@@ -351,7 +355,7 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         for i2 = 1:size(C3, 2)
             for i1 = 1:size(C3, 1)
                 i += 1
-                C3[i1,i2,i3] = i
+                C3[i1,i2,i3,trailing3] = i
             end
         end
     end
@@ -367,13 +371,17 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         N = prod(shape)
         A = reshape(collect(1:N), shape)
         B = T(A)
+        trailing5 = CartesianIndex(ntuple(x->1, max(ndims(B)-5, 0)))
+        trailing4 = CartesianIndex(ntuple(x->1, max(ndims(B)-4, 0)))
+        trailing3 = CartesianIndex(ntuple(x->1, max(ndims(B)-3, 0)))
+        trailing2 = CartesianIndex(ntuple(x->1, max(ndims(B)-2, 0)))
         idxs = rand(1:N, 3, 3, 3)
         @test B[idxs] == A[idxs] == idxs
         @test B[vec(idxs)] == A[vec(idxs)] == vec(idxs)
         @test B[:] == A[:] == collect(1:N)
         @test B[1:end] == A[1:end] == collect(1:N)
-        @test B[:,:] == A[:,:] == B[:,:,1] == A[:,:,1]
-            B[1:end,1:end] == A[1:end,1:end] == B[1:end,1:end,1] == A[1:end,1:end,1]
+        @test B[:,:,trailing2] == A[:,:,trailing2] == B[:,:,1,trailing3] == A[:,:,1,trailing3]
+            B[1:end,1:end,trailing2] == A[1:end,1:end,trailing2] == B[1:end,1:end,1,trailing3] == A[1:end,1:end,1,trailing3]
 
         @testset "Test with containers that aren't Int[]" begin
             @test B[[]] == A[[]] == []
@@ -383,14 +391,14 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         idx1 = rand(1:size(A, 1), 3)
         idx2 = rand(1:size(A, 2), 4, 5)
         @testset "Test adding dimensions with matrices" begin
-            @test B[idx1, idx2] == A[idx1, idx2] == reshape(A[idx1, vec(idx2)], 3, 4, 5) == reshape(B[idx1, vec(idx2)], 3, 4, 5)
-            @test B[1, idx2] == A[1, idx2] == reshape(A[1, vec(idx2)], 4, 5) == reshape(B[1, vec(idx2)], 4, 5)
+            @test B[idx1, idx2, trailing2] == A[idx1, idx2, trailing2] == reshape(A[idx1, vec(idx2), trailing2], 3, 4, 5) == reshape(B[idx1, vec(idx2), trailing2], 3, 4, 5)
+            @test B[1, idx2, trailing2] == A[1, idx2, trailing2] == reshape(A[1, vec(idx2), trailing2], 4, 5) == reshape(B[1, vec(idx2), trailing2], 4, 5)
         end
             # test removing dimensions with 0-d arrays
         @testset "test removing dimensions with 0-d arrays" begin
             idx0 = reshape([rand(1:size(A, 1))])
-            @test B[idx0, idx2] == A[idx0, idx2] == reshape(A[idx0[], vec(idx2)], 4, 5) == reshape(B[idx0[], vec(idx2)], 4, 5)
-            @test B[reshape([end]), reshape([end])] == A[reshape([end]), reshape([end])] == reshape([A[end,end]]) == reshape([B[end,end]])
+            @test B[idx0, idx2, trailing2] == A[idx0, idx2, trailing2] == reshape(A[idx0[], vec(idx2), trailing2], 4, 5) == reshape(B[idx0[], vec(idx2), trailing2], 4, 5)
+            @test B[reshape([end]), reshape([end]), trailing2] == A[reshape([end]), reshape([end]), trailing2] == reshape([A[end,end,trailing2]]) == reshape([B[end,end,trailing2]])
         end
 
         mask = bitrand(shape)
@@ -399,8 +407,8 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
             @test B[vec(mask)] == A[vec(mask)] == find(mask)
             mask1 = bitrand(size(A, 1))
             mask2 = bitrand(size(A, 2))
-            @test B[mask1, mask2] == A[mask1, mask2] == B[find(mask1), find(mask2)]
-            @test B[mask1, 1] == A[mask1, 1] == find(mask1)
+            @test B[mask1, mask2, trailing2] == A[mask1, mask2, trailing2] == B[find(mask1), find(mask2), trailing2]
+            @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == find(mask1)
         end
     end
 end

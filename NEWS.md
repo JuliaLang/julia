@@ -282,6 +282,11 @@ Deprecated or removed
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
 
+  * Indexing into multidimensional arrays with more than one index but fewer indices than there are
+    dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.
+    Instead, reshape the array or add trailing indices so the dimensionality and number of indices
+    match ([#14770], [#23628]).
+
   * `writecsv(io, a; opts...)` has been deprecated in favor of
     `writedlm(io, a, ','; opts...)` ([#23529]).
 

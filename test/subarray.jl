@@ -132,8 +132,8 @@ function _test_mixed(@nospecialize(A), @nospecialize(B))
     m = size(A, 1)
     n = size(A, 2)
     isgood = true
-    for j = 1:n, i = 1:m
-        if A[i,j] != B[i,j]
+    for J in CartesianRange(size(A)[2:end]), i in 1:m
+        if A[i,J] != B[i,J]
             isgood = false
             break
         end
@@ -149,16 +149,29 @@ end
 function test_bounds(@nospecialize(A))
     @test_throws BoundsError A[0]
     @test_throws BoundsError A[end+1]
-    @test_throws BoundsError A[1, 0]
-    @test_throws BoundsError A[1, end+1]
-    @test_throws BoundsError A[1, 1, 0]
-    @test_throws BoundsError A[1, 1, end+1]
-    @test_throws BoundsError A[0, 1]
-    @test_throws BoundsError A[end+1, 1]
-    @test_throws BoundsError A[0, 1, 1]
-    @test_throws BoundsError A[end+1, 1, 1]
-    @test_throws BoundsError A[1, 0, 1]
-    @test_throws BoundsError A[1, end+1, 1]
+    trailing2 = ntuple(x->1, max(ndims(A)-2, 0))
+    trailing3 = ntuple(x->1, max(ndims(A)-3, 0))
+    @test_throws BoundsError A[1, 0, trailing2...]
+    @test_throws BoundsError A[1, end+1, trailing2...]
+    @test_throws BoundsError A[1, 1, 0, trailing3...]
+    @test_throws BoundsError A[1, 1, end+1, trailing3...]
+    @test_throws BoundsError A[0, 1, trailing2...]
+    @test_throws BoundsError A[end+1, 1, trailing2...]
+    @test_throws BoundsError A[0, 1, 1, trailing3...]
+    @test_throws BoundsError A[end+1, 1, 1, trailing3...]
+    @test_throws BoundsError A[1, 0, 1, trailing3...]
+    @test_throws BoundsError A[1, end+1, 1, trailing3...]
+    # TODO: PLI (re-enable after 0.7)
+    # @test_throws BoundsError A[1, 0]
+    # @test_throws BoundsError A[1, end+1]
+    # @test_throws BoundsError A[1, 1, 0]
+    # @test_throws BoundsError A[1, 1, end+1]
+    # @test_throws BoundsError A[0, 1]
+    # @test_throws BoundsError A[end+1, 1]
+    # @test_throws BoundsError A[0, 1, 1]
+    # @test_throws BoundsError A[end+1, 1, 1]
+    # @test_throws BoundsError A[1, 0, 1]
+    # @test_throws BoundsError A[1, end+1, 1]
 end
 
 function dim_break_linindex(I)
@@ -225,10 +238,23 @@ end
 function runviews(SB::AbstractArray, indexN, indexNN, indexNNN)
     @assert ndims(SB) > 2
     for i3 in indexN, i2 in indexN, i1 in indexN
+        runsubarraytests(SB, i1, i2, i3, ntuple(x->1, max(ndims(SB)-3, 0))...)
+    end
+    for i2 in indexN, i1 in indexN
+        runsubarraytests(SB, i1, i2, ntuple(x->1, max(ndims(SB)-2, 0))...)
+    end
+    for i1 in indexNNN
+        runsubarraytests(SB, i1)
+    end
+end
+
+function runviews(SB::AbstractArray{T, 3} where T, indexN, indexNN, indexNNN)
+    @assert ndims(SB) > 2
+    for i3 in indexN, i2 in indexN, i1 in indexN
         runsubarraytests(SB, i1, i2, i3)
     end
     for i2 in indexN, i1 in indexN
-        runsubarraytests(SB, i1, i2)
+        runsubarraytests(SB, i1, i2, 1)
     end
     for i1 in indexNNN
         runsubarraytests(SB, i1)
@@ -477,7 +503,7 @@ Y = 4:-1:1
 @test X[1:end] == @.(@view X[1:end]) # test compatibility of @. and @view
 @test X[1:end-3] == @view X[1:end-3]
 @test X[1:end,2,2] == @view X[1:end,2,2]
-@test X[1,1:end-2] == @view X[1,1:end-2]
+@test X[1,1:end-2,1] == @view X[1,1:end-2,1]
 @test X[1,2,1:end-2] == @view X[1,2,1:end-2]
 @test X[1,2,Y[2:end]] == @view X[1,2,Y[2:end]]
 @test X[1:end,2,Y[2:end]] == @view X[1:end,2,Y[2:end]]
@@ -528,7 +554,6 @@ end
 @test X[1:end] == @views X[1:end]
 @test X[1:end-3] == @views X[1:end-3]
 @test X[1:end,2,2] == @views X[1:end,2,2]
-@test X[1,1:end-2] == @views X[1,1:end-2]
 @test X[1,2,1:end-2] == @views X[1,2,1:end-2]
 @test X[1,2,Y[2:end]] == @views X[1,2,Y[2:end]]
 @test X[1:end,2,Y[2:end]] == @views X[1:end,2,Y[2:end]]
