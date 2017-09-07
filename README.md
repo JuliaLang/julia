@@ -52,6 +52,7 @@ Julia is built and tested regularly on the following platforms:
 |                  | ARM v7 (32-bit)  |    | ✓        | Official      |
 |                  | ARM v8 (64-bit)  |    | ✓        | Official      |
 |                  | PowerPC (64-bit) |    |          | Community     |
+|                  | PTX (64-bit)     | ✓  |          | Community. [Needs external packages](https://github.com/JuliaGPU/CUDAnative.jl)     |
 | macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 | Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 |                  | i686 (32-bit)    | ✓  | ✓        | Official      |
