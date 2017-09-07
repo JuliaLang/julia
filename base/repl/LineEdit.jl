@@ -726,10 +726,14 @@ function edit_copy_region(s::MIState)
 end
 
 function edit_kill_region(s::MIState)
-    push_kill!(s, edit_splice!(s)) || return :ignore
     push_undo(s)
-    refresh_line(s)
-    :edit_kill_region
+    if push_kill!(s, edit_splice!(s))
+        refresh_line(s)
+        :edit_kill_region
+    else
+        pop_undo(s)
+        :ignore
+    end
 end
 
 function edit_transpose_chars(s::MIState)

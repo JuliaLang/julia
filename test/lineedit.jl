@@ -644,9 +644,14 @@ end
     @test edit!(LineEdit.edit_clear) == ""
     @test edit!(edit_undo!) == "one two three"
 
+    @test edit!(LineEdit.edit_insert_newline) == "one two three\n"
+    @test edit!(edit_undo!) == "one two three"
+
     LineEdit.edit_move_left(s)
     LineEdit.edit_move_left(s)
     @test edit!(LineEdit.edit_transpose_chars) == "one two there"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(LineEdit.edit_transpose_words) == "one three two"
     @test edit!(edit_undo!) == "one two three"
 
     LineEdit.move_line_start(s)
@@ -659,6 +664,15 @@ end
     @test edit!(LineEdit.edit_yank) == "one two threeone two three"
     @test edit!(edit_undo!) == "one two three"
     @test edit!(edit_undo!) == ""
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.setmark(s)
+    LineEdit.edit_move_word_right(s)
+    @test edit!(LineEdit.edit_kill_region) == " two three"
+    @test edit!(LineEdit.edit_yank) == "one two three"
+    @test edit!(LineEdit.edit_yank_pop) == "one two three two three"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_undo!) == " two three"
     @test edit!(edit_undo!) == "one two three"
 
     LineEdit.move_line_end(s)
@@ -691,6 +705,22 @@ end
     @test edit!(edit_redo!) == "one " # nothing more to redo (this "beeps")
     @test edit!(edit_undo!) == "one three"
     @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.move_line_start(s)
+    @test edit!(LineEdit.edit_upper_case) == "ONE two three"
+    LineEdit.move_line_start(s)
+    @test edit!(LineEdit.edit_lower_case) == "one two three"
+    @test edit!(LineEdit.edit_title_case) == "one Two three"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_undo!) == "ONE two three"
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.move_line_end(s)
+    edit_insert(s, "  ")
+    @test edit!(LineEdit.edit_tab) == "one two three   "
+    @test edit!(edit_undo!) == "one two three  "
+    @test edit!(edit_undo!) == "one two three"
+    # TODO: add tests for complete_line, which don't work directly
 
     # pop initial insert of "one two three"
     @test edit!(edit_undo!) == ""
