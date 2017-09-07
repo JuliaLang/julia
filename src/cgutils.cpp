@@ -1100,9 +1100,8 @@ static bool bounds_check_enabled(jl_codectx_t &ctx, jl_value_t *inbounds) {
 static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_value_t *boundscheck)
 {
     Value *im1 = ctx.builder.CreateSub(i, ConstantInt::get(T_size, 1));
-    jl_cgval_t ib = emit_expr(ctx, boundscheck);
 #if CHECK_BOUNDS==1
-    if (bounds_check_enabled(ctx, ib.constant)) {
+    if (bounds_check_enabled(ctx, boundscheck)) {
         Value *ok = ctx.builder.CreateICmpULT(im1, len);
         BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx.f);
         BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext, "pass");
@@ -1630,9 +1629,8 @@ static Value *emit_array_nd_index(
     Value *a = boxed(ctx, ainfo);
     Value *i = ConstantInt::get(T_size, 0);
     Value *stride = ConstantInt::get(T_size, 1);
-    jl_cgval_t ib = emit_expr(ctx, inbounds);
 #if CHECK_BOUNDS==1
-    bool bc = bounds_check_enabled(ctx, ib.constant);
+    bool bc = bounds_check_enabled(ctx, inbounds);
     BasicBlock *failBB = NULL, *endBB = NULL;
     if (bc) {
         failBB = BasicBlock::Create(jl_LLVMContext, "oob");

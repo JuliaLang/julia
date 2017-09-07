@@ -22,8 +22,11 @@ charpos(buf, pos=position(buf)) = Base.unsafe_ind2chr(content(buf), pos+1)-1
 function transform!(f, s, i = -1) # i is char-based (not bytes) buffer position
     buf = buffer(s)
     i >= 0 && charseek(buf, i)
-    f(s)
-    content(buf), charpos(buf), charpos(buf, getmark(buf))
+    action = f(s)
+    if s isa LineEdit.MIState && action isa Symbol
+        s.last_action = action # simulate what happens in LineEdit.prompt!
+    end
+    content(s), charpos(buf), charpos(buf, getmark(buf))
 end
 
 
@@ -297,14 +300,14 @@ seek(buf,0)
 
 buf = IOBuffer("type X\n ")
 seekend(buf)
-@test LineEdit.edit_delete_prev_word(buf)
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test position(buf) == 5
 @test buf.size == 5
 @test content(buf) == "type "
 
 buf = IOBuffer("4 +aaa+ x")
 seek(buf,8)
-@test LineEdit.edit_delete_prev_word(buf)
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test position(buf) == 3
 @test buf.size == 4
 @test content(buf) == "4 +x"
@@ -313,11 +316,11 @@ buf = IOBuffer("x = func(arg1,arg2 , arg3)")
 seekend(buf)
 LineEdit.char_move_word_left(buf)
 @test position(buf) == 21
-@test LineEdit.edit_delete_prev_word(buf)
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test content(buf) == "x = func(arg1,arg3)"
-@test LineEdit.edit_delete_prev_word(buf)
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test content(buf) == "x = func(arg3)"
-@test LineEdit.edit_delete_prev_word(buf)
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test content(buf) == "x = arg3)"
 
 # Unicode combining characters
@@ -604,101 +607,145 @@ end
     @test s.kill_ring[end] == "a ≡ not"
     charseek(buf, 0)
     @test transform!(LineEdit.edit_yank, s) == ("a ≡ notçhing", 7, 0)
+    s.last_action = :unknown
     # next action will fail, as yank-pop doesn't know a yank was just issued
     @test transform!(LineEdit.edit_yank_pop, s) == ("a ≡ notçhing", 7, 0)
     s.last_action = :edit_yank
-    # not this should work:
+    # now this should work:
     @test transform!(LineEdit.edit_yank_pop, s) == ("ça ≡ nothingçhing", 12, 0)
     @test s.kill_idx == 1
     LineEdit.edit_kill_line(s)
     @test s.kill_ring[end] == "çhing"
     @test s.kill_idx == 3
+    # repetition (concatenation of killed strings
+    edit_insert(s, "A B  C")
+    LineEdit.edit_delete_prev_word(s)
+    s.key_repeats = 1
+    LineEdit.edit_delete_prev_word(s)
+    s.key_repeats = 0
+    @test s.kill_ring[end] == "B  C"
+    LineEdit.edit_yank(s)
+    LineEdit.edit_werase(s)
+    @test s.kill_ring[end] == "C"
+    s.key_repeats = 1
+    LineEdit.edit_werase(s)
+    s.key_repeats = 0
+    @test s.kill_ring[end] == "B  C"
+    LineEdit.edit_yank(s)
+    LineEdit.edit_move_word_left(s)
+    LineEdit.edit_move_word_left(s)
+    LineEdit.edit_delete_next_word(s)
+    @test s.kill_ring[end] == "B"
+    s.key_repeats = 1
+    LineEdit.edit_delete_next_word(s)
+    s.key_repeats = 0
+    @test s.kill_ring[end] == "B  C"
 end
 
 @testset "undo" begin
     s = new_state()
+    edit!(f) = transform!(f, s)[1]
+    edit_undo! = LineEdit.edit_undo!
+    edit_redo! = LineEdit.edit_redo!
 
     edit_insert(s, "one two three")
 
-    LineEdit.edit_delete_prev_word(s)
-    @test content(s) == "one two "
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two three"
+    @test edit!(LineEdit.edit_delete_prev_word) == "one two "
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_redo!) == "one two "
+    @test edit!(edit_undo!) == "one two three"
 
     edit_insert(s, " four")
-    edit_insert(s, " five")
-    @test content(s) == "one two three four five"
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two three four"
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two three"
+    @test edit!(s->edit_insert(s, " five")) == "one two three four five"
+    @test edit!(edit_undo!) == "one two three four"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_redo!) == "one two three four"
+    @test edit!(edit_redo!) == "one two three four five"
+    @test edit!(edit_undo!) == "one two three four"
+    @test edit!(edit_undo!) == "one two three"
 
-    LineEdit.edit_clear(s)
-    @test content(s) == ""
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two three"
+    @test edit!(LineEdit.edit_clear) == ""
+    @test edit!(edit_undo!) == "one two three"
+
+    @test edit!(LineEdit.edit_insert_newline) == "one two three\n"
+    @test edit!(edit_undo!) == "one two three"
 
     LineEdit.edit_move_left(s)
     LineEdit.edit_move_left(s)
-    LineEdit.edit_transpose_chars(s)
-    @test content(s) == "one two there"
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two three"
+    @test edit!(LineEdit.edit_transpose_chars) == "one two there"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(LineEdit.edit_transpose_words) == "one three two"
+    @test edit!(edit_undo!) == "one two three"
 
     LineEdit.move_line_start(s)
-    LineEdit.edit_kill_line(s)
-    @test content(s) == ""
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two three"
+    @test edit!(LineEdit.edit_kill_line) == ""
+    @test edit!(edit_undo!) == "one two three"
 
     LineEdit.move_line_start(s)
     LineEdit.edit_kill_line(s)
     LineEdit.edit_yank(s)
-    LineEdit.edit_yank(s)
-    @test content(s) == "one two threeone two three"
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two three"
-    LineEdit.pop_undo(s)
-    @test content(s) == ""
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two three"
+    @test edit!(LineEdit.edit_yank) == "one two threeone two three"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_undo!) == ""
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.setmark(s)
+    LineEdit.edit_move_word_right(s)
+    @test edit!(LineEdit.edit_kill_region) == " two three"
+    @test edit!(LineEdit.edit_yank) == "one two three"
+    @test edit!(LineEdit.edit_yank_pop) == "one two three two three"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_undo!) == " two three"
+    @test edit!(edit_undo!) == "one two three"
 
     LineEdit.move_line_end(s)
     LineEdit.edit_backspace(s)
     LineEdit.edit_backspace(s)
-    LineEdit.edit_backspace(s)
-    @test content(s) == "one two th"
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two thr"
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two thre"
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two three"
+    @test edit!(LineEdit.edit_backspace) == "one two th"
+    @test edit!(edit_undo!) == "one two thr"
+    @test edit!(edit_undo!) == "one two thre"
+    @test edit!(edit_undo!) == "one two three"
 
     LineEdit.push_undo(s) # TODO: incorporate push_undo into edit_splice! ?
     LineEdit.edit_splice!(s, 4 => 7, "stott")
     @test content(s) == "one stott three"
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two three"
+    s.last_action = :not_undo
+    @test edit!(edit_undo!) == "one two three"
 
     LineEdit.edit_move_left(s)
     LineEdit.edit_move_left(s)
     LineEdit.edit_move_left(s)
-    LineEdit.edit_delete(s)
-    @test content(s) == "one two thee"
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two three"
+    @test edit!(LineEdit.edit_delete) == "one two thee"
+    @test edit!(edit_undo!) == "one two three"
 
     LineEdit.edit_move_word_left(s)
     LineEdit.edit_werase(s)
-    LineEdit.edit_delete_next_word(s)
-    @test content(s) == "one "
-    LineEdit.pop_undo(s)
-    @test content(s) == "one three"
-    LineEdit.pop_undo(s)
-    @test content(s) == "one two three"
+    @test edit!(LineEdit.edit_delete_next_word) == "one "
+    @test edit!(edit_undo!) == "one three"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_redo!) == "one three"
+    @test edit!(edit_redo!) == "one "
+    @test edit!(edit_redo!) == "one " # nothing more to redo (this "beeps")
+    @test edit!(edit_undo!) == "one three"
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.move_line_start(s)
+    @test edit!(LineEdit.edit_upper_case) == "ONE two three"
+    LineEdit.move_line_start(s)
+    @test edit!(LineEdit.edit_lower_case) == "one two three"
+    @test edit!(LineEdit.edit_title_case) == "one Two three"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_undo!) == "ONE two three"
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.move_line_end(s)
+    edit_insert(s, "  ")
+    @test edit!(LineEdit.edit_tab) == "one two three   "
+    @test edit!(edit_undo!) == "one two three  "
+    @test edit!(edit_undo!) == "one two three"
+    # TODO: add tests for complete_line, which don't work directly
 
     # pop initial insert of "one two three"
-    LineEdit.pop_undo(s)
-    @test content(s) == ""
+    @test edit!(edit_undo!) == ""
+    @test edit!(edit_undo!) == "" # nothing more to undo (this "beeps")
 end

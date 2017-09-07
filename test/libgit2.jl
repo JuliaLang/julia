@@ -123,7 +123,7 @@ end
         @test m[:password] == "pass"
         @test m[:host] == "server.com"
         @test m[:port] == "80"
-        @test m[:path] == "/org/project.git"
+        @test m[:path] == "org/project.git"
     end
 
     @testset "SSH URL" begin
@@ -133,7 +133,7 @@ end
         @test m[:password] == "pass"
         @test m[:host] == "server"
         @test m[:port] == "22"
-        @test m[:path] == "/project.git"
+        @test m[:path] == "project.git"
     end
 
     @testset "SSH URL, scp-like syntax" begin
@@ -165,7 +165,7 @@ end
         @test m[:password] === nothing
         @test m[:host] == "github.com"
         @test m[:port] === nothing
-        @test m[:path] == "/JuliaLang/Example.jl.git"
+        @test m[:path] == "JuliaLang/Example.jl.git"
     end
 
     @testset "SSH URL, realistic" begin
@@ -216,7 +216,7 @@ end
             password="pass",
             host="server.com",
             port=80,
-            path="/org/project.git")
+            path="org/project.git")
         @test url == "https://user:pass@server.com:80/org/project.git"
     end
 
@@ -227,7 +227,7 @@ end
             password="pass",
             host="server",
             port="22",
-            path="/project.git")
+            path="project.git")
         @test url == "ssh://user:pass@server:22/project.git"
     end
 
@@ -244,7 +244,7 @@ end
         url = LibGit2.git_url(
             scheme="https",
             host="github.com",
-            path="/JuliaLang/Example.jl.git")
+            path="JuliaLang/Example.jl.git")
         @test url == "https://github.com/JuliaLang/Example.jl.git"
     end
 
@@ -273,11 +273,11 @@ end
         @test url == "user@server.com"
     end
 
-    @testset "HTTP URL, path missing slash prefix" begin
+    @testset "HTTP URL, path includes slash prefix" begin
         url = LibGit2.git_url(
             scheme="http",
             host="server.com",
-            path="path")
+            path="/path")
         @test url == "http://server.com/path"
     end
 

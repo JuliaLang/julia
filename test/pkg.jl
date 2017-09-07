@@ -572,6 +572,23 @@ temp_pkg_dir() do
             @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined true")
         end
     end
+
+    let package = "Output"
+        stdout_file = Pkg.dir(package, "stdout.txt")
+        stderr_file = Pkg.dir(package, "stderr.txt")
+        content = """
+            println(STDOUT, "stdout")
+            println(STDERR, "stderr")
+            """
+        write_build(package, content)
+
+        code = "Pkg.build(\"$package\")"
+        msg = run(pipeline(
+            `$(Base.julia_cmd()) --startup-file=no -e $code`,
+            stdout=stdout_file, stderr=stderr_file))
+        @test last(readlines(stdout_file)) == "stdout"
+        @test last(readlines(stderr_file)) == "stderr"
+    end
 end
 
 @testset "Pkg functions with .jl extension" begin
