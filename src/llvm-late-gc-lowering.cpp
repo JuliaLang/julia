@@ -349,7 +349,7 @@ private:
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint);
     void PlaceGCFrameStores(Function &F, State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
     void PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
-    bool doInitialization(Module &M) override;
+    bool DefineFunctions(Module &M);
     bool runOnFunction(Function &F) override;
     Instruction *get_pgcstack(Instruction *ptlsStates);
     bool CleanupIR(Function &F);
@@ -1418,7 +1418,7 @@ static void addRetNoAlias(Function *F)
 #endif
 }
 
-bool LateLowerGCFrame::doInitialization(Module &M) {
+bool LateLowerGCFrame::DefineFunctions(Module &M) {
     ptls_getter = M.getFunction("jl_get_ptls_states");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
     gc_use_func = M.getFunction("julia.gc_use");
@@ -1452,6 +1452,7 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
         T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
         T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
         T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
+        return true;
     }
     else if (ptls_getter) {
         auto functype = ptls_getter->getFunctionType();
@@ -1473,6 +1474,7 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
 
 bool LateLowerGCFrame::runOnFunction(Function &F) {
     DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
+    DefineFunctions(*F.getParent());
     if (!ptls_getter)
         return CleanupIR(F);
     ptlsStates = nullptr;
