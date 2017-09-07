@@ -374,6 +374,13 @@ Array{T}(m::Int, n::Int, o::Int) where {T} = Array{T,3}(m, n, o)
 
 Array{T,1}() where {T} = Array{T,1}(0)
 
+(::Type{Array{T,N} where T})(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
+
+Array(A::AbstractArray{T,N})    where {T,N}   = Array{T,N}(A)
+Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
+
+AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
+
 # primitive Symbol constructors
 function Symbol(s::String)
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
@@ -622,6 +629,7 @@ UInt128(x::BuiltinInts) = toUInt128(x)::UInt128
 UInt32(x::Char) = bitcast(UInt32, x)
 Char(x::UInt32) = bitcast(Char, x)
 Char(x::Number) = Char(UInt32(x))
+Char(x::Char) = x
 (::Type{T})(x::Char) where {T<:Number} = T(UInt32(x))
 
 (::Type{T})(x::T) where {T<:Number} = x

@@ -240,12 +240,15 @@ promote_rule(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) where {R,S} =
 promote_rule(::Type{TwicePrecision{R}}, ::Type{S}) where {R,S} =
     TwicePrecision{promote_type(R,S)}
 
+(::Type{T})(x::TwicePrecision) where {T<:Number} = T(x.hi + x.lo)::T
+TwicePrecision{T}(x::Number) where {T} = TwicePrecision{T}(T(x), zero(T))
+
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision) where {T} =
     TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))
 
-convert(::Type{T}, x::TwicePrecision) where {T<:Number} = convert(T, x.hi + x.lo)
-convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(convert(T, x), zero(T))
+convert(::Type{T}, x::TwicePrecision) where {T<:Number} = T(x)
+convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(x)
 
 float(x::TwicePrecision{<:AbstractFloat}) = x
 float(x::TwicePrecision) = TwicePrecision(float(x.hi), float(x.lo))
@@ -475,19 +478,19 @@ end
 /(r::StepRangeLen{<:Real,<:TwicePrecision}, x::Real) =
     StepRangeLen(r.ref/x, twiceprecision(r.step/x, nbitslen(r)), length(r), r.offset)
 
-convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) where {T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision} = r
+StepRangeLen{T,R,S}(r::StepRangeLen{T,R,S}) where {T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision} = r
 
-convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) where {T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision} =
+StepRangeLen{T,R,S}(r::StepRangeLen) where {T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision} =
     _convertSRL(StepRangeLen{T,R,S}, r)
 
-convert(::Type{StepRangeLen{Float64}}, r::StepRangeLen) =
+(::Type{StepRangeLen{Float64}})(r::StepRangeLen) =
     _convertSRL(StepRangeLen{Float64,TwicePrecision{Float64},TwicePrecision{Float64}}, r)
-convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T<:IEEEFloat} =
+StepRangeLen{T}(r::StepRangeLen) where {T<:IEEEFloat} =
     _convertSRL(StepRangeLen{T,Float64,Float64}, r)
 
-convert(::Type{StepRangeLen{Float64}}, r::AbstractRange) =
+(::Type{StepRangeLen{Float64}})(r::AbstractRange) =
     _convertSRL(StepRangeLen{Float64,TwicePrecision{Float64},TwicePrecision{Float64}}, r)
-convert(::Type{StepRangeLen{T}}, r::AbstractRange) where {T<:IEEEFloat} =
+StepRangeLen{T}(r::AbstractRange) where {T<:IEEEFloat} =
     _convertSRL(StepRangeLen{T,Float64,Float64}, r)
 
 function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{<:Integer}) where {T,R,S}

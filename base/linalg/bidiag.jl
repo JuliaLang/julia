@@ -93,6 +93,8 @@ function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
     Bidiagonal(diag(A, 0), diag(A, uplo == :U ? 1 : -1), uplo)
 end
 
+Bidiagonal(A::Bidiagonal) = A
+
 function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
         throw(BoundsError(A,(i,j)))
@@ -131,7 +133,7 @@ function Base.replace_in_print_matrix(A::Bidiagonal,i::Integer,j::Integer,s::Abs
 end
 
 #Converting from Bidiagonal to dense Matrix
-function convert(::Type{Matrix{T}}, A::Bidiagonal) where T
+function Matrix{T}(A::Bidiagonal) where T
     n = size(A, 1)
     B = zeros(T, n, n)
     for i = 1:n - 1
@@ -145,13 +147,12 @@ function convert(::Type{Matrix{T}}, A::Bidiagonal) where T
     B[n,n] = A.dv[n]
     return B
 end
-convert(::Type{Matrix}, A::Bidiagonal{T}) where {T} = convert(Matrix{T}, A)
-convert(::Type{Array}, A::Bidiagonal) = convert(Matrix, A)
+Matrix(A::Bidiagonal{T}) where {T} = Matrix{T}(A)
+Array(A::Bidiagonal) = Matrix(A)
 promote_rule(::Type{Matrix{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} = Matrix{promote_type(T,S)}
 
 #Converting from Bidiagonal to Tridiagonal
-Tridiagonal(M::Bidiagonal{T}) where {T} = convert(Tridiagonal{T}, M)
-function convert(::Type{Tridiagonal{T}}, A::Bidiagonal) where T
+function Tridiagonal{T}(A::Bidiagonal) where T
     dv = convert(AbstractVector{T}, A.dv)
     ev = convert(AbstractVector{T}, A.ev)
     z = fill!(similar(ev), zero(T))
@@ -160,12 +161,12 @@ end
 promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} = Tridiagonal{promote_type(T,S)}
 
 # No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
-convert(::Type{Bidiagonal{T}}, A::Bidiagonal{T}) where {T} = A
+Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
 # Convert Bidiagonal to Bidiagonal{T} by constructing a new instance with converted elements
-convert(::Type{Bidiagonal{T}}, A::Bidiagonal) where {T} =
+Bidiagonal{T}(A::Bidiagonal) where {T} =
     Bidiagonal(convert(AbstractVector{T}, A.dv), convert(AbstractVector{T}, A.ev), A.uplo)
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
-convert(::Type{AbstractMatrix{T}}, A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
+AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 
 broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.uplo)
 

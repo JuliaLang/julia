@@ -18,7 +18,7 @@ for sets of arbitrary objects.
 """
 Set(itr) = Set{eltype(itr)}(itr)
 function Set(g::Generator)
-    T = @default_eltype(typeof(g))
+    T = @default_eltype(g)
     (_isleaftype(T) || T === Union{}) || return grow_to!(Set{T}(), g)
     return Set{T}(g)
 end
@@ -259,7 +259,7 @@ julia> unique(Real[1, 1.0, 2])
 ```
 """
 function unique(itr)
-    T = @default_eltype(typeof(itr))
+    T = @default_eltype(itr)
     out = Vector{T}()
     seen = Set{T}()
     i = start(itr)

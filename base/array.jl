@@ -531,21 +531,14 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 # arises in similar(dest, Pair{Union{},Union{}}) where dest::Dict:
 convert(::Type{Vector{Union{}}}, a::Vector{Union{}}) = a
 
-convert(::Type{Vector}, x::AbstractVector{T}) where {T} = convert(Vector{T}, x)
-convert(::Type{Matrix}, x::AbstractMatrix{T}) where {T} = convert(Matrix{T}, x)
-
-convert(::Type{Array{T}}, x::Array{T,n}) where {T,n} = x
-convert(::Type{Array{T,n}}, x::Array{T,n}) where {T,n} = x
-
-convert(::Type{Array{T}}, x::AbstractArray{S,n}) where {T,n,S} = convert(Array{T,n}, x)
-convert(::Type{Array{T,n}}, x::AbstractArray{S,n}) where {T,n,S} = copy!(Array{T,n}(size(x)), x)
-
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
-# constructors should make copies
+## Constructors ##
 
 if module_name(@__MODULE__) === :Base  # avoid method overwrite
-(::Type{T})(x::T) where {T<:Array} = copy(x)
+# constructors should make copies
+Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copy!(Array{T,N}(size(x)), x)
+AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copy!(similar(A,T), A)
 end
 
 ## copying iterators to containers
@@ -633,14 +626,26 @@ end
 # gets a chance to see it, so that recursive calls to the caller
 # don't trigger the inference limiter
 if isdefined(Core, :Inference)
-    macro default_eltype(itrt)
+    macro default_eltype(itr)
+        I = esc(itr)
         return quote
-            Core.Inference.return_type(first, Tuple{$(esc(itrt))})
+            if $I isa Generator && ($I).f isa Type
+                ($I).f
+            else
+                Core.Inference.return_type(first, Tuple{typeof($I)})
+            end
         end
     end
 else
-    macro default_eltype(itrt)
-        return :(Any)
+    macro default_eltype(itr)
+        I = esc(itr)
+        return quote
+            if $I isa Generator && ($I).f isa Type
+                ($I).f
+            else
+                Any
+            end
+        end
     end
 end
 
@@ -649,7 +654,7 @@ _array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, indices(itr
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
-    et = @default_eltype(typeof(itr))
+    et = @default_eltype(itr)
     if isa(isz, SizeUnknown)
         return grow_to!(Array{et,1}(0), itr)
     else
@@ -663,12 +668,12 @@ function collect(itr::Generator)
 end
 
 _collect(c, itr, ::EltypeUnknown, isz::SizeUnknown) =
-    grow_to!(_similar_for(c, @default_eltype(typeof(itr)), itr, isz), itr)
+    grow_to!(_similar_for(c, @default_eltype(itr), itr, isz), itr)
 
 function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
     st = start(itr)
     if done(itr,st)
-        return _similar_for(c, @default_eltype(typeof(itr)), itr, isz)
+        return _similar_for(c, @default_eltype(itr), itr, isz)
     end
     v1, st = next(itr, st)
     collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)

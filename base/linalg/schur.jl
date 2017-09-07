@@ -278,10 +278,10 @@ function schur(A::StridedMatrix, B::StridedMatrix)
 end
 
 # Conversion
-convert(::Type{AbstractMatrix}, F::Schur) = (F.Z * F.T) * F.Z'
-convert(::Type{AbstractArray}, F::Schur) = convert(AbstractMatrix, F)
-convert(::Type{Matrix}, F::Schur) = convert(Array, convert(AbstractArray, F))
-convert(::Type{Array}, F::Schur) = convert(Matrix, F)
+AbstractMatrix(F::Schur) = (F.Z * F.T) * F.Z'
+AbstractArray(F::Schur) = AbstractMatrix(F)
+Matrix(F::Schur) = Array(AbstractArray(F))
+Array(F::Schur) = Matrix(F)
 
 copy(F::Schur) = Schur(copy(F.T), copy(F.Z), copy(F.values))
 copy(F::GeneralizedSchur) = GeneralizedSchur(copy(F.S), copy(F.T), copy(F.alpha), copy(F.beta), copy(F.Q), copy(F.Z))

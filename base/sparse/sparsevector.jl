@@ -342,16 +342,14 @@ end
 ### Conversion
 
 # convert SparseMatrixCSC to SparseVector
-function convert(::Type{SparseVector{Tv,Ti}}, s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti<:Integer}
+function SparseVector{Tv,Ti}(s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti<:Integer}
     size(s, 2) == 1 || throw(ArgumentError("The input argument must have a single-column."))
     SparseVector(s.m, s.rowval, s.nzval)
 end
 
-convert(::Type{SparseVector{Tv}}, s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} =
-    convert(SparseVector{Tv,Ti}, s)
+SparseVector{Tv}(s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = SparseVector{Tv,Ti}(s)
 
-convert(::Type{SparseVector}, s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} =
-    convert(SparseVector{Tv,Ti}, s)
+SparseVector(s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = SparseVector{Tv,Ti}(s)
 
 # convert Vector to SparseVector
 
@@ -369,7 +367,7 @@ julia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])
   [5]  =  3.0
 ```
 """
-sparsevec(a::AbstractVector{T}) where {T} = convert(SparseVector{T, Int}, a)
+sparsevec(a::AbstractVector{T}) where {T} = SparseVector{T, Int}(a)
 sparsevec(a::AbstractArray) = sparsevec(vec(a))
 sparsevec(a::AbstractSparseArray) = vec(a)
 sparsevec(a::AbstractSparseVector) = vec(a)
@@ -402,23 +400,21 @@ function _dense2sparsevec(s::AbstractArray{Tv}, initcap::Ti) where {Tv,Ti}
     SparseVector(n, nzind, nzval)
 end
 
-convert(::Type{SparseVector{Tv,Ti}}, s::AbstractVector{Tv}) where {Tv,Ti} =
+SparseVector{Tv,Ti}(s::AbstractVector{Tv}) where {Tv,Ti} =
     _dense2sparsevec(s, convert(Ti, max(8, div(length(s), 8))))
 
-convert(::Type{SparseVector{Tv}}, s::AbstractVector{Tv}) where {Tv} =
-    convert(SparseVector{Tv,Int}, s)
+SparseVector{Tv}(s::AbstractVector{Tv}) where {Tv} = SparseVector{Tv,Int}(s)
 
-convert(::Type{SparseVector}, s::AbstractVector{Tv}) where {Tv} =
-    convert(SparseVector{Tv,Int}, s)
+SparseVector(s::AbstractVector{Tv}) where {Tv} = SparseVector{Tv,Int}(s)
 
 
 # convert between different types of SparseVector
-convert(::Type{SparseVector{Tv}}, s::SparseVector{Tv}) where {Tv} = s
-convert(::Type{SparseVector{Tv,Ti}}, s::SparseVector{Tv,Ti}) where {Tv,Ti} = s
-convert(::Type{SparseVector{Tv,Ti}}, s::SparseVector) where {Tv,Ti} =
+SparseVector{Tv}(s::SparseVector{Tv}) where {Tv} = s
+SparseVector{Tv,Ti}(s::SparseVector{Tv,Ti}) where {Tv,Ti} = s
+SparseVector{Tv,Ti}(s::SparseVector) where {Tv,Ti} =
     SparseVector{Tv,Ti}(s.n, convert(Vector{Ti}, s.nzind), convert(Vector{Tv}, s.nzval))
 
-convert(::Type{SparseVector{Tv}}, s::SparseVector{<:Any,Ti}) where {Tv,Ti} =
+SparseVector{Tv}(s::SparseVector{<:Any,Ti}) where {Tv,Ti} =
     SparseVector{Tv,Ti}(s.n, s.nzind, convert(Vector{Tv}, s.nzval))
 
 
@@ -843,7 +839,7 @@ end
 
 ### Conversion to matrix
 
-function convert(::Type{SparseMatrixCSC{Tv,Ti}}, x::AbstractSparseVector) where {Tv,Ti}
+function SparseMatrixCSC{Tv,Ti}(x::AbstractSparseVector) where {Tv,Ti}
     n = length(x)
     xnzind = nonzeroinds(x)
     xnzval = nonzeros(x)
@@ -856,13 +852,11 @@ function convert(::Type{SparseMatrixCSC{Tv,Ti}}, x::AbstractSparseVector) where 
     SparseMatrixCSC(n, 1, colptr, rowval, nzval)
 end
 
-convert(::Type{SparseMatrixCSC{Tv}}, x::AbstractSparseVector{<:Any,Ti}) where {Tv,Ti} =
-    convert(SparseMatrixCSC{Tv,Ti}, x)
+SparseMatrixCSC{Tv}(x::AbstractSparseVector{<:Any,Ti}) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(x)
 
-convert(::Type{SparseMatrixCSC}, x::AbstractSparseVector{Tv,Ti}) where {Tv,Ti} =
-    convert(SparseMatrixCSC{Tv,Ti}, x)
+SparseMatrixCSC(x::AbstractSparseVector{Tv,Ti}) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(x)
 
-function convert(::Type{Vector}, x::AbstractSparseVector{Tv}) where Tv
+function Vector(x::AbstractSparseVector{Tv}) where Tv
     n = length(x)
     n == 0 && return Vector{Tv}(0)
     nzind = nonzeroinds(x)
@@ -875,7 +869,7 @@ function convert(::Type{Vector}, x::AbstractSparseVector{Tv}) where Tv
     end
     return r
 end
-convert(::Type{Array}, x::AbstractSparseVector) = convert(Vector, x)
+Array(x::AbstractSparseVector) = Vector(x)
 
 ### Array manipulation
 

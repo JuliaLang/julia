@@ -109,10 +109,6 @@ include("refpointer.jl")
 include("checked.jl")
 using .Checked
 
-# buggy handling of ispure in type-inference means this should be
-# after re-defining the basic operations that they might try to call
-(::Type{T})(arg) where {T} = convert(T, arg)::T # Hidden from the REPL.
-
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
 

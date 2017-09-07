@@ -192,13 +192,13 @@ function lu(A::AbstractMatrix, pivot::Union{Val{false}, Val{true}} = Val(true))
     F[:L], F[:U], F[:p]
 end
 
-function convert(::Type{LU{T}}, F::LU) where T
+function LU{T}(F::LU) where T
     M = convert(AbstractMatrix{T}, F.factors)
     LU{T,typeof(M)}(M, F.ipiv, F.info)
 end
-convert(::Type{LU{T,S}}, F::LU) where {T,S} = LU{T,S}(convert(S, F.factors), F.ipiv, F.info)
-convert(::Type{Factorization{T}}, F::LU{T}) where {T} = F
-convert(::Type{Factorization{T}}, F::LU) where {T} = convert(LU{T}, F)
+LU{T,S}(F::LU) where {T,S} = LU{T,S}(convert(S, F.factors), F.ipiv, F.info)
+Factorization{T}(F::LU{T}) where {T} = F
+Factorization{T}(F::LU) where {T} = LU{T}(F)
 
 copy(A::LU{T,S}) where {T,S} = LU{T,S}(copy(A.factors), copy(A.ipiv), A.info)
 
@@ -546,12 +546,12 @@ end
 /(B::AbstractMatrix,A::LU) = At_ldiv_Bt(A,B).'
 
 # Conversions
-convert(::Type{AbstractMatrix}, F::LU) = (F[:L] * F[:U])[invperm(F[:p]),:]
-convert(::Type{AbstractArray}, F::LU) = convert(AbstractMatrix, F)
-convert(::Type{Matrix}, F::LU) = convert(Array, convert(AbstractArray, F))
-convert(::Type{Array}, F::LU) = convert(Matrix, F)
+AbstractMatrix(F::LU) = (F[:L] * F[:U])[invperm(F[:p]),:]
+AbstractArray(F::LU) = AbstractMatrix(F)
+Matrix(F::LU) = Array(AbstractArray(F))
+Array(F::LU) = Matrix(F)
 
-function convert(::Type{Tridiagonal}, F::Base.LinAlg.LU{T,Tridiagonal{T,V}}) where {T,V}
+function Tridiagonal(F::Base.LinAlg.LU{T,Tridiagonal{T,V}}) where {T,V}
     n = size(F, 1)
 
     dl  = copy(F.factors.dl)
@@ -585,11 +585,7 @@ function convert(::Type{Tridiagonal}, F::Base.LinAlg.LU{T,Tridiagonal{T,V}}) whe
     end
     return Tridiagonal(dl, d, du)
 end
-convert(::Type{AbstractMatrix}, F::LU{T,Tridiagonal{T,V}}) where {T,V} =
-    convert(Tridiagonal, F)
-convert(::Type{AbstractArray}, F::LU{T,Tridiagonal{T,V}}) where {T,V} =
-    convert(AbstractMatrix, F)
-convert(::Type{Matrix}, F::LU{T,Tridiagonal{T,V}}) where {T,V} =
-    convert(Array, convert(AbstractArray, F))
-convert(::Type{Array}, F::LU{T,Tridiagonal{T,V}}) where {T,V} =
-    convert(Matrix, F)
+AbstractMatrix(F::LU{T,Tridiagonal{T,V}}) where {T,V} = Tridiagonal(F)
+AbstractArray(F::LU{T,Tridiagonal{T,V}}) where {T,V} = AbstractMatrix(F)
+Matrix(F::LU{T,Tridiagonal{T,V}}) where {T,V} = Array(AbstractArray(F))
+Array(F::LU{T,Tridiagonal{T,V}}) where {T,V} = Matrix(F)

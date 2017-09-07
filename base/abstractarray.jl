@@ -11,6 +11,17 @@ Supertype for `N`-dimensional arrays (or array-like types) with elements of type
 """
 AbstractArray
 
+convert(::Type{T}, a::T) where {T<:AbstractArray} = a
+convert(::Type{T}, a::AbstractArray) where {T<:AbstractArray} = T(a)
+
+if module_name(@__MODULE__) === :Base  # avoid method overwrite
+# catch undefined constructors before the deprecation kicks in
+# TODO: remove when deprecation is removed
+function (::Type{T})(arg) where {T<:AbstractArray}
+    throw(MethodError(T, (arg,)))
+end
+end
+
 """
     size(A::AbstractArray, [dim...])
 
@@ -837,14 +848,6 @@ isempty(a::AbstractArray) = (_length(a) == 0)
 
 # keys with an IndexStyle
 keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
-
-## Conversions ##
-
-convert(::Type{AbstractArray{T,N}}, A::AbstractArray{T,N}) where {T,N  } = A
-convert(::Type{AbstractArray{T,N}}, A::AbstractArray{S,N}) where {T,S,N} = copy!(similar(A,T), A)
-convert(::Type{AbstractArray{T}},   A::AbstractArray{S,N}) where {T,S,N} = convert(AbstractArray{T,N}, A)
-
-convert(::Type{Array}, A::AbstractArray{T,N}) where {T,N} = convert(Array{T,N}, A)
 
 """
    of_indices(x, y)
