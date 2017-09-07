@@ -1725,6 +1725,7 @@
             (= ,state (call (top start) ,coll))
             ;; TODO avoid `local declared twice` error from this
             ;;,@(if outer? `((local ,lhs)) '())
+            ,@(if outer? `((require-existing-local ,lhs)) '())
             ,(expand-forms
               `(,while
                 (call (top !) (call (top done) ,coll ,state))
@@ -2599,10 +2600,14 @@
         ((eq? (car e) 'local) '(null)) ;; remove local decls
         ((eq? (car e) 'local-def) '(null)) ;; remove local decls
         ((eq? (car e) 'implicit-global) '(null)) ;; remove implicit-global decls
+        ((eq? (car e) 'require-existing-local)
+         (if (not (memq (cadr e) env))
+             (error "no outer variable declaration exists for \"for outer\""))
+         '(null))
         ((eq? (car e) 'warn-if-existing)
-	 (if (or (memq (cadr e) outerglobals) (memq (cadr e) implicitglobals))
-	     `(warn-loop-var ,(cadr e))
-	     '(null)))
+         (if (or (memq (cadr e) outerglobals) (memq (cadr e) implicitglobals))
+             `(warn-loop-var ,(cadr e))
+             '(null)))
         ((eq? (car e) 'lambda)
          (let* ((lv (lam:vars e))
                 (env (append lv env))
