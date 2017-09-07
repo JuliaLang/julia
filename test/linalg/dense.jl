@@ -149,6 +149,7 @@ end # for eltya
     ainit = rand(5,7)
     for a in (copy(ainit), view(ainit, 1:size(ainit, 1), 1:size(ainit, 2)))
         @test_throws(ArgumentError,triu(a,-6))
+        @test_throws(ArgumentError,triu(a,8))
         @test_throws(ArgumentError,tril(a,8))
         @test_throws(ArgumentError,tril(a,-6))
     end
