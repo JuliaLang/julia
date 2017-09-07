@@ -451,11 +451,6 @@ exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
 ## "Functions of Matrices: Theory and Computation", SIAM
 function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     n = checksquare(A)
-    if T <: Real
-        if issymmetric(A)
-            return full(exp(Symmetric(A)))
-        end
-    end
     if ishermitian(A)
         return full(exp(Hermitian(A)))
     end
@@ -683,6 +678,116 @@ function inv(A::StridedMatrix{T}) where T
         Ai = convert(typeof(parent(Ai)), Ai)
     end
     return Ai
+end
+
+"""
+    cos(A::Matrix)
+
+Compute the matrix cosine of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
+used to compute the cosine. Otherwise, the cosine is determined by calling
+`exp`.
+
+# Examples
+```jldoctest
+julia> cos(ones(2, 2))
+2×2 Array{Float64,2}:
+  0.291927  -0.708073
+ -0.708073   0.291927
+```
+"""
+function cos(A::StridedMatrix{<:Real})
+    if issymmetric(A)
+        return full(cos(Symmetric(A)))
+    end
+    return real(exp(im*A))
+end
+function cos(A::StridedMatrix{<:Complex})
+    if ishermitian(A)
+        return full(cos(Hermitian(A)))
+    end
+    return 0.5 * (exp(im*A) + exp(-im*A))
+end
+
+"""
+    sin(A::Matrix)
+
+Compute the matrix sine of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
+used to compute the sine. Otherwise, the sine is determined by calling `exp`.
+
+# Examples
+```jldoctest
+julia> sin(ones(2, 2))
+2×2 Array{Float64,2}:
+ 0.454649  0.454649
+ 0.454649  0.454649
+```
+"""
+function sin(A::StridedMatrix{<:Real})
+    if issymmetric(A)
+        return full(sin(Symmetric(A)))
+    end
+    return imag(exp(im*A))
+end
+function sin(A::StridedMatrix{<:Complex})
+    if ishermitian(A)
+        return full(sin(Hermitian(A)))
+    end
+    return im * 0.5 * (exp(-im*A) - exp(im*A))
+end
+
+"""
+    tan(A::Matrix)
+
+Compute the matrix tangent of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
+used to compute the tangent. Otherwise, the tangent is determined by calling
+`exp`.
+
+# Examples
+```jldoctest
+julia> sin(ones(2, 2))
+2×2 Array{Float64,2}:
+ 0.454649  0.454649
+ 0.454649  0.454649
+```
+"""
+function tan(A::StridedMatrix{<:Real})
+    if issymmetric(A)
+        return full(tan(Symmetric(A)))
+    end
+    c, s = reim(exp(im*A))
+    return s / c
+end
+function tan(A::StridedMatrix{<:Complex})
+    if ishermitian(A)
+        return full(tan(Hermitian(A)))
+    end
+    X, Y = exp(im*A), exp(-im*A)
+    return im * (Y - X) / (Y + X)
+end
+
+for (finv, f, finvh, fh, fn) in ((:sec, :cos, :sech, :cosh, "secant"),
+                                 (:csc, :sin, :csch, :sinh, "cosecant"),
+                                 (:cot, :tan, :coth, :tanh, "cotangent"))
+    name = string(finv)
+    hname = string(finvh)
+    @eval begin
+        @doc """
+            $($name)(A::Matrix)
+
+        Compute the matrix $($fn) of a square matrix `A`.
+        """ ($finv)(A::AbstractMatrix{T}) where {T} = inv(($f)(A))
+        @doc """
+            $($hname)(A::Matrix)
+
+        Compute the matrix hyperbolic $($fn) of square matrix `A`.
+        """ ($finvh)(A::AbstractMatrix{T}) where {T} = inv(($fh)(A))
+    end
 end
 
 """

@@ -589,21 +589,25 @@ function ^(A::Hermitian{T}, p::Real) where T
     end
 end
 
-function exp(A::Symmetric)
-    F = eigfact(A)
-    return Symmetric((F.vectors * Diagonal(exp.(F.values))) * F.vectors')
-end
-function exp(A::Hermitian{T}) where T
-    n = checksquare(A)
-    F = eigfact(A)
-    retmat = (F.vectors * Diagonal(exp.(F.values))) * F.vectors'
-    if T <: Real
-        return real(Hermitian(retmat))
-    else
-        for i = 1:n
-            retmat[i,i] = real(retmat[i,i])
+for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh, :sincos)
+    @eval begin
+        function ($func)(A::Symmetric{T}) where T<:Real
+            F = eigfact(A)
+            return Symmetric((F.vectors * Diagonal(($func).(F.values))) * F.vectors')
         end
-        return Hermitian(retmat)
+        function ($func)(A::Hermitian{T}) where T
+            n = checksquare(A)
+            F = eigfact(A)
+            retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
+            if T <: Real
+                return real(Hermitian(retmat))
+            else
+                for i = 1:n
+                    retmat[i,i] = real(retmat[i,i])
+                end
+                return Hermitian(retmat)
+            end
+        end
     end
 end
 
