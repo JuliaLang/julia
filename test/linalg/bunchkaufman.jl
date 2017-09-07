@@ -101,29 +101,27 @@ bimg  = randn(n,2)/2
                 end
             end
         end
-    end
-end
-
-
-@testset "Bunch-Kaufman factors of a singular matrix" begin
-    let As1 = ones(n, n)
-        As2 = complex(ones(n, n))
-        As3 = complex(ones(n, n))
-        As3[end, 1] += im
-        As3[1, end] -= im
-
-        for As = (As1, As2, As3)
-            for As in (As, view(As, 1:n, 1:n))
-                @testset for rook in (false, true)
-                    @testset for uplo in (:L, :U)
-                        F = bkfact(issymmetric(As) ? Symmetric(As, uplo) : Hermitian(As, uplo), rook)
-                        @test !LinAlg.issuccess(F)
-                        # test printing of this as well!
-                        bks = sprint(show, "text/plain", F)
-                        @test bks == "Failed factorization of type $(typeof(F))"
-                        @test det(F) == 0
-                        @test_throws LinAlg.SingularException inv(F)
-                        @test_throws LinAlg.SingularException F \ ones(size(As, 1))
+        if eltya <: Real
+            @testset "Bunch-Kaufman factors of a singular matrix" begin
+                As1 = ones(eltya, n, n)
+                As2 = complex(ones(eltya, n, n))
+                As3 = complex(ones(eltya, n, n))
+                As3[end, 1] += convert(complex(eltya), im)
+                As3[1, end] -= convert(complex(eltya), im)
+                for As = (As1, As2, As3)
+                    for As in (As, view(As, 1:n, 1:n))
+                        @testset for rook in (false, true)
+                            @testset for uplo in (:L, :U)
+                                F = bkfact(issymmetric(As) ? Symmetric(As, uplo) : Hermitian(As, uplo), rook)
+                                @test !LinAlg.issuccess(F)
+                                # test printing of this as well!
+                                bks = sprint(show, "text/plain", F)
+                                @test bks == "Failed factorization of type $(typeof(F))"
+                                @test det(F) == 0
+                                @test_throws LinAlg.SingularException inv(F)
+                                @test_throws LinAlg.SingularException F \ ones(size(As, 1))
+                            end
+                        end
                     end
                 end
             end
