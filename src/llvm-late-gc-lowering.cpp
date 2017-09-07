@@ -1156,10 +1156,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                 (gc_use_func != nullptr && callee == gc_use_func)) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
-                auto *ASCI = new AddrSpaceCastInst(CI->getOperand(0),
-                    CI->getType(), "", CI);
-                ASCI->takeName(CI);
-                CI->replaceAllUsesWith(ASCI);
+                auto *ptr = new PtrToIntInst(CI->getOperand(0), CI->getType(), "", CI);
+                ptr->takeName(CI);
+                CI->replaceAllUsesWith(ptr);
             } else if (alloc_obj_func && callee == alloc_obj_func) {
                 assert(CI->getNumArgOperands() == 3);
                 auto sz = (size_t)cast<ConstantInt>(CI->getArgOperand(1))->getZExtValue();

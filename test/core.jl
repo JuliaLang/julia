@@ -5328,6 +5328,49 @@ x.u = initvalue2(Base.uniontypes(U)[1])
 x.u = initvalue(Base.uniontypes(U)[2])
 @test x.u === initvalue(Base.uniontypes(U)[2])
 
+# PR #23367
+struct A23367
+    x::Union{Int8, Int16, NTuple{7, Int8}, Void}
+end
+struct B23367
+    x::Int8
+    y::A23367
+    z::Int8
+end
+@noinline compare(a, b) = (a === b) # test code-generation of `is`
+@noinline get_x(a::A23367) = a.x
+function constant23367 end
+let
+    b = B23367(91, A23367(ntuple(i -> Int8(i), Val(7))), 23)
+    @eval @noinline constant23367(a, b) = (a ? b : $b)
+    b2 = Ref(b)[] # copy b via field assignment
+    b3 = B23367[b][1] # copy b via array assignment
+    @test pointer_from_objref(b) == pointer_from_objref(b)
+    @test pointer_from_objref(b) != pointer_from_objref(b2)
+    @test pointer_from_objref(b) != pointer_from_objref(b3)
+    @test pointer_from_objref(b2) != pointer_from_objref(b3)
+
+    @test b === b2 === b3
+    @test compare(b, b2)
+    @test compare(b, b3)
+    @test object_id(b) === object_id(b2) == object_id(b3)
+    @test b.x === Int8(91)
+    @test b.z === Int8(23)
+    @test b.y === A23367((Int8(1), Int8(2), Int8(3), Int8(4), Int8(5), Int8(6), Int8(7)))
+    @test sizeof(b) == 12
+    @test A23367(Int8(1)).x === Int8(1)
+    @test A23367(Int8(0)).x === Int8(0)
+    @test A23367(Int16(1)).x === Int16(1)
+    @test A23367(nothing).x === nothing
+    @test sizeof(b.y) == 8
+    @test get_x(A23367(Int8(1))) === Int8(1)
+
+    # test code-generation of constants
+    other = B23367(91, A23367(nothing), 23)
+    @test constant23367(true, other) === other
+    @test constant23367(false, other) === b
+end
+
 for U in boxedunions
     local U
     for N in (1, 2, 3, 4)
@@ -5343,10 +5386,12 @@ for U in boxedunions
 end
 
 # unsafe_wrap
-A4 = [1, 2, 3]
-@test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A4)), 3)
-A5 = [1 2 3; 4 5 6]
-@test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A5)), 6)
+let
+    A4 = [1, 2, 3]
+    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A4)), 3)
+    A5 = [1 2 3; 4 5 6]
+    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A5)), 6)
+end
 
 # copy!
 A23567 = Vector{Union{Float64, Void}}(5)

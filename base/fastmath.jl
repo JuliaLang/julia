@@ -296,34 +296,18 @@ asin_fast(x::FloatTypes) = asin(x)
 
 # explicit implementations
 
-# FIXME: Change to `ccall((:sincos, libm))` when `Ref` calling convention can be
-#        stack allocated.
 @inline function sincos_fast(v::Float64)
-    return Base.llvmcall("""
-    %f = bitcast i8 *%1 to void (double, double *, double *)*
-    %ps = alloca double
-    %pc = alloca double
-    call void %f(double %0, double *%ps, double *%pc)
-    %s = load double, double* %ps
-    %c = load double, double* %pc
-    %res0 = insertvalue [2 x double] undef, double %s, 0
-    %res = insertvalue [2 x double] %res0, double %c, 1
-    ret [2 x double] %res
-    """, Tuple{Float64,Float64}, Tuple{Float64,Ptr{Void}}, v, cglobal((:sincos, libm)))
+     s = Ref{Cdouble}()
+     c = Ref{Cdouble}()
+     ccall((:sincos, libm), Void, (Cdouble, Ptr{Cdouble}, Ptr{Cdouble}), v, s, c)
+     return (s[], c[])
 end
 
 @inline function sincos_fast(v::Float32)
-    return Base.llvmcall("""
-    %f = bitcast i8 *%1 to void (float, float *, float *)*
-    %ps = alloca float
-    %pc = alloca float
-    call void %f(float %0, float *%ps, float *%pc)
-    %s = load float, float* %ps
-    %c = load float, float* %pc
-    %res0 = insertvalue [2 x float] undef, float %s, 0
-    %res = insertvalue [2 x float] %res0, float %c, 1
-    ret [2 x float] %res
-    """, Tuple{Float32,Float32}, Tuple{Float32,Ptr{Void}}, v, cglobal((:sincosf, libm)))
+     s = Ref{Cfloat}()
+     c = Ref{Cfloat}()
+     ccall((:sincosf, libm), Void, (Cfloat, Ptr{Cfloat}, Ptr{Cfloat}), v, s, c)
+     return (s[], c[])
 end
 
 @inline function sincos_fast(v::Float16)
