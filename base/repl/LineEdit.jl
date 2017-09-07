@@ -117,21 +117,29 @@ complete_line(c::EmptyCompletionProvider, s) = [], true, true
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
+# NOTE: this would better be Threads.Atomic(0.0), but not supported on some platforms
 const beeping = Ref(0.0)
 
-function beep(s::PromptState, duration=0.2, blink=0.2, maxduration=1.0;
-              colors=[Base.text_colors[:light_black]],
-              use_current::Bool=true,
-              underline::Bool=false)
-    isinteractive() || return
-    beeping[] = min(beeping[]+duration, maxduration)
+# these may be better stored in Prompt or PromptState
+const BEEP_DURATION = Ref(0.2)
+const BEEP_BLINK = Ref(0.2)
+const BEEP_MAXDURATION = Ref(1.0)
+const BEEP_COLORS = ["\e[90m"] # gray (text_colors not yet available)
+const BEEP_USE_CURRENT = Ref(true)
+
+function beep(s::PromptState, duration::Real=BEEP_DURATION[], blink::Real=BEEP_BLINK[],
+              maxduration::Real=BEEP_MAXDURATION[];
+              colors=BEEP_COLORS, use_current::Bool=BEEP_USE_CURRENT[])
+    isinteractive() || return # some tests fail on some platforms
+    beeping[] = min(beeping[] + duration, maxduration)
     @async begin
         trylock(BEEP_LOCK) || return
         orig_prefix = s.p.prompt_prefix
+        colors = Base.copymutable(colors)
         use_current && push!(colors, orig_prefix)
         i = 0
         while beeping[] > 0.0
-            prefix = colors[mod1(i+=1, end)] * Base.text_colors[:underline]^underline
+            prefix = colors[mod1(i+=1, end)]
             s.p.prompt_prefix = prefix
             refresh_multi_line(s)
             sleep(blink)
@@ -145,14 +153,16 @@ function beep(s::PromptState, duration=0.2, blink=0.2, maxduration=1.0;
 end
 
 function cancel_beep(s::PromptState)
-    beeping[] = 0.0
     # wait till beeping finishes
-    while !trylock(BEEP_LOCK) sleep(.05) end
+    while !trylock(BEEP_LOCK)
+        beeping[] = 0.0
+        sleep(.05)
+    end
     unlock(BEEP_LOCK)
 end
 
-beep(s) = nothing
-cancel_beep(s) = nothing
+beep(::ModeState) = nothing
+cancel_beep(::ModeState) = nothing
 
 for f in [:terminal, :on_enter, :add_history, :buffer, :(Base.isempty),
           :replace_line, :refresh_multi_line, :input_string, :update_display_buffer,
