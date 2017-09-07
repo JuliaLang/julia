@@ -20,6 +20,7 @@ struct GitHash <: AbstractGitHash
     GitHash(val::NTuple{OID_RAWSZ, UInt8}) = new(val)
 end
 GitHash() = GitHash(ntuple(i->zero(UInt8), OID_RAWSZ))
+GitHash(h::GitHash) = h
 
 """
     GitShortHash(hash::GitHash, len::Integer)

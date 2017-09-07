@@ -1566,6 +1566,22 @@ export hex2num
 
 @deprecate convert(dt::Type{<:Integer}, ip::IPAddr)  dt(ip)
 
+function (::Type{T})(arg) where {T}
+    if applicable(convert, T, arg)
+        sig = which(convert, (Type{T}, typeof(arg))).sig
+        if sig == (Tuple{typeof(convert),Type{S},Number} where S<:Number) ||
+           sig == (Tuple{typeof(convert),Type{S},AbstractArray} where S<:AbstractArray)
+            # matches a catch-all converter; will stack overflow
+            throw(MethodError(T, (arg,)))
+        end
+        # if `convert` call would not work, just let the method error happen
+        depwarn("Constructors no longer fall back to `convert`. A constructor `$T(::$(typeof(arg)))` should be defined instead.", :Type)
+    end
+    convert(T, arg)::T
+end
+# related items to remove in: abstractarray.jl, dates/periods.jl, inference.jl
+# also remove all uses of is_default_method
+
 # Issue #19923
 @deprecate ror                  circshift
 @deprecate ror!                 circshift!

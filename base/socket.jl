@@ -4,7 +4,7 @@
 abstract type IPAddr end
 
 Base.isless(a::T, b::T) where {T<:IPAddr} = isless(a.host, b.host)
-(dt::Type{<:Integer})(ip::IPAddr) = dt(ip.host)
+(dt::Type{<:Integer})(ip::IPAddr) = dt(ip.host)::dt
 
 struct IPv4 <: IPAddr
     host::UInt32

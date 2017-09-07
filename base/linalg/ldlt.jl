@@ -7,13 +7,13 @@ end
 size(S::LDLt) = size(S.data)
 size(S::LDLt, i::Integer) = size(S.data, i)
 
-convert(::Type{LDLt{T,S}}, F::LDLt) where {T,S} = LDLt{T,S}(convert(S, F.data))
+LDLt{T,S}(F::LDLt) where {T,S<:AbstractMatrix} = LDLt{T,S}(convert(S, F.data))
 # NOTE: the annotaion <:AbstractMatrix shouldn't be necessary, it is introduced
 #       to avoid an ambiguity warning (see issue #6383)
-convert(::Type{LDLt{T}}, F::LDLt{S,U}) where {T,S,U<:AbstractMatrix} = convert(LDLt{T,U}, F)
+LDLt{T}(F::LDLt{S,U}) where {T,S,U<:AbstractMatrix} = LDLt{T,U}(F)
 
-convert(::Type{Factorization{T}}, F::LDLt{T}) where {T} = F
-convert(::Type{Factorization{T}}, F::LDLt{S,U}) where {T,S,U} = convert(LDLt{T,U}, F)
+Factorization{T}(F::LDLt{T}) where {T} = F
+Factorization{T}(F::LDLt{S,U}) where {T,S,U} = LDLt{T,U}(F)
 
 # SymTridiagonal
 """
@@ -86,7 +86,7 @@ julia> S \\ b
 """
 function ldltfact(M::SymTridiagonal{T}) where T
     S = typeof(zero(T)/one(T))
-    return S == T ? ldltfact!(copy(M)) : ldltfact!(convert(SymTridiagonal{S}, M))
+    return S == T ? ldltfact!(copy(M)) : ldltfact!(SymTridiagonal{S}(M))
 end
 
 factorize(S::SymTridiagonal) = ldltfact(S)
@@ -127,14 +127,14 @@ function logabsdet(F::LDLt{<:Any,<:SymTridiagonal})
 end
 
 # Conversion methods
-function convert(::Type{SymTridiagonal}, F::LDLt)
+function SymTridiagonal(F::LDLt)
     e = copy(F.data.ev)
     d = copy(F.data.dv)
     e .*= d[1:end-1]
     d[2:end] += e .* F.data.ev
     SymTridiagonal(d, e)
 end
-convert(::Type{AbstractMatrix}, F::LDLt) = convert(SymTridiagonal, F)
-convert(::Type{AbstractArray}, F::LDLt) = convert(AbstractMatrix, F)
-convert(::Type{Matrix}, F::LDLt) = convert(Array, convert(AbstractArray, F))
-convert(::Type{Array}, F::LDLt) = convert(Matrix, F)
+AbstractMatrix(F::LDLt) = SymTridiagonal(F)
+AbstractArray(F::LDLt) = AbstractMatrix(F)
+Matrix(F::LDLt) = Array(AbstractArray(F))
+Array(F::LDLt) = Matrix(F)

@@ -412,16 +412,6 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
-    # Give a helpful error message if the user likely called a type constructor
-    # and sees a no method error for convert
-    if (f === Base.convert && !isempty(arg_types_param) && !is_arg_types &&
-        isa(arg_types_param[1], DataType) &&
-        arg_types_param[1].name === Type.body.name)
-        construct_type = arg_types_param[1].parameters[1]
-        println(io)
-        print(io, "This may have arisen from a call to the constructor $construct_type(...),",
-                  "\nsince type constructors fall back to convert methods.")
-    end
     try
         show_method_candidates(io, ex, kwargs)
     catch ex
@@ -712,7 +702,7 @@ Determines whether a method is the default method which is provided to all types
 Such a method is usually undesirable to be displayed to the user in the REPL.
 """
 function is_default_method(m::Method)
-    return m.module == Base && m.file == Symbol("sysimg.jl") && m.sig == Tuple{Type{T},Any} where T
+    return m.module == Base && m.sig == Tuple{Type{T},Any} where T
 end
 
 @noinline function throw_eachindex_mismatch(::IndexLinear, A...)

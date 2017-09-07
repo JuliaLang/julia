@@ -136,14 +136,6 @@ function choosetests(choices = [])
         prepend!(tests, linalgtests)
     end
 
-    # do ambiguous first to avoid failing if ambiguities are introduced by other tests
-    if "ambiguous" in skip_tests
-        filter!(x -> x != "ambiguous", tests)
-    elseif "ambiguous" in tests
-        filter!(x -> x != "ambiguous", tests)
-        prepend!(tests, ["ambiguous"])
-    end
-
     net_required_for = ["socket", "stdlib", "libgit2"]
     net_on = true
     try
@@ -167,6 +159,14 @@ function choosetests(choices = [])
     elseif "stdlib" in tests
         filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
         prepend!(tests, STDLIBS)
+    end
+
+    # do ambiguous first to avoid failing if ambiguities are introduced by other tests
+    if "ambiguous" in skip_tests
+        filter!(x -> x != "ambiguous", tests)
+    elseif "ambiguous" in tests
+        filter!(x -> x != "ambiguous", tests)
+        prepend!(tests, ["ambiguous"])
     end
 
     if startswith(string(Sys.ARCH), "arm")

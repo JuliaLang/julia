@@ -159,7 +159,7 @@ dict_with_eltype(DT_apply, ::Type{Pair{K,V}}) where {K,V} = DT_apply(K, V)()
 dict_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
 dict_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(dict_with_eltype(DT_apply, @default_eltype(typeof(kv))), kv)
 function dict_with_eltype(DT_apply::F, kv::Generator, t) where F
-    T = @default_eltype(typeof(kv))
+    T = @default_eltype(kv)
     if T <: Union{Pair, Tuple{Any, Any}} && _isleaftype(T)
         return dict_with_eltype(DT_apply, kv, T)
     end

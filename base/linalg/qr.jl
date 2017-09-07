@@ -404,23 +404,23 @@ function qr!(v::AbstractVector)
 end
 
 # Conversions
-convert(::Type{QR{T}}, A::QR) where {T} = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
-convert(::Type{Factorization{T}}, A::QR{T}) where {T} = A
-convert(::Type{Factorization{T}}, A::QR) where {T} = convert(QR{T}, A)
-convert(::Type{QRCompactWY{T}}, A::QRCompactWY) where {T} = QRCompactWY(convert(AbstractMatrix{T}, A.factors), convert(AbstractMatrix{T}, A.T))
-convert(::Type{Factorization{T}}, A::QRCompactWY{T}) where {T} = A
-convert(::Type{Factorization{T}}, A::QRCompactWY) where {T} = convert(QRCompactWY{T}, A)
-convert(::Type{AbstractMatrix}, F::Union{QR,QRCompactWY}) = F[:Q] * F[:R]
-convert(::Type{AbstractArray}, F::Union{QR,QRCompactWY}) = convert(AbstractMatrix, F)
-convert(::Type{Matrix}, F::Union{QR,QRCompactWY}) = convert(Array, convert(AbstractArray, F))
-convert(::Type{Array}, F::Union{QR,QRCompactWY}) = convert(Matrix, F)
-convert(::Type{QRPivoted{T}}, A::QRPivoted) where {T} = QRPivoted(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ), A.jpvt)
-convert(::Type{Factorization{T}}, A::QRPivoted{T}) where {T} = A
-convert(::Type{Factorization{T}}, A::QRPivoted) where {T} = convert(QRPivoted{T}, A)
-convert(::Type{AbstractMatrix}, F::QRPivoted) = (F[:Q] * F[:R])[:,invperm(F[:p])]
-convert(::Type{AbstractArray}, F::QRPivoted) = convert(AbstractMatrix, F)
-convert(::Type{Matrix}, F::QRPivoted) = convert(Array, convert(AbstractArray, F))
-convert(::Type{Array}, F::QRPivoted) = convert(Matrix, F)
+QR{T}(A::QR) where {T} = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
+Factorization{T}(A::QR{T}) where {T} = A
+Factorization{T}(A::QR) where {T} = QR{T}(A)
+QRCompactWY{T}(A::QRCompactWY) where {T} = QRCompactWY(convert(AbstractMatrix{T}, A.factors), convert(AbstractMatrix{T}, A.T))
+Factorization{T}(A::QRCompactWY{T}) where {T} = A
+Factorization{T}(A::QRCompactWY) where {T} = QRCompactWY{T}(A)
+AbstractMatrix(F::Union{QR,QRCompactWY}) = F[:Q] * F[:R]
+AbstractArray(F::Union{QR,QRCompactWY}) = AbstractMatrix(F)
+Matrix(F::Union{QR,QRCompactWY}) = Array(AbstractArray(F))
+Array(F::Union{QR,QRCompactWY}) = Matrix(F)
+QRPivoted{T}(A::QRPivoted) where {T} = QRPivoted(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ), A.jpvt)
+Factorization{T}(A::QRPivoted{T}) where {T} = A
+Factorization{T}(A::QRPivoted) where {T} = QRPivoted{T}(A)
+AbstractMatrix(F::QRPivoted) = (F[:Q] * F[:R])[:,invperm(F[:p])]
+AbstractArray(F::QRPivoted) = AbstractMatrix(F)
+Matrix(F::QRPivoted) = Array(AbstractArray(F))
+Array(F::QRPivoted) = Matrix(F)
 
 function show(io::IO, F::Union{QR, QRCompactWY, QRPivoted})
     println(io, "$(typeof(F)) with factors Q and R:")
@@ -502,14 +502,14 @@ struct QRCompactWYQ{S, M<:AbstractMatrix} <: AbstractQ{S}
 end
 QRCompactWYQ(factors::AbstractMatrix{S}, T::Matrix{S}) where {S} = QRCompactWYQ{S,typeof(factors)}(factors, T)
 
-convert(::Type{QRPackedQ{T}}, Q::QRPackedQ) where {T} = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
-convert(::Type{AbstractMatrix{T}}, Q::QRPackedQ{T}) where {T} = Q
-convert(::Type{AbstractMatrix{T}}, Q::QRPackedQ) where {T} = convert(QRPackedQ{T}, Q)
-convert(::Type{QRCompactWYQ{S}}, Q::QRCompactWYQ) where {S} = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
-convert(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ{S}) where {S} = Q
-convert(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ) where {S} = convert(QRCompactWYQ{S}, Q)
-convert(::Type{Matrix}, A::AbstractQ{T}) where {T} = mul!(A, Matrix{T}(I, size(A.factors, 1), min(size(A.factors)...)))
-convert(::Type{Array}, A::AbstractQ) = convert(Matrix, A)
+QRPackedQ{T}(Q::QRPackedQ) where {T} = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
+AbstractMatrix{T}(Q::QRPackedQ{T}) where {T} = Q
+AbstractMatrix{T}(Q::QRPackedQ) where {T} = QRPackedQ{T}(Q)
+QRCompactWYQ{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
+AbstractMatrix{S}(Q::QRCompactWYQ{S}) where {S} = Q
+AbstractMatrix{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ{S}(Q)
+Matrix(A::AbstractQ{T}) where {T} = mul!(A, Matrix{T}(I, size(A.factors, 1), min(size(A.factors)...)))
+Array(A::AbstractQ) = Matrix(A)
 
 size(A::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(A.factors, dim)
 size(A::Union{QR,QRCompactWY,QRPivoted}) = size(A.factors)
@@ -857,7 +857,7 @@ function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat
     m, n = size(A)
     m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
 
-    AA = convert(Factorization{S}, A)
+    AA = Factorization{S}(A)
 
     X = _zeros(S, B, n)
     X[1:size(B, 1), :] = B

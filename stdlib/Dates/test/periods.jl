@@ -252,6 +252,8 @@ struct Beat <: Dates.Period
     value::Int64
 end
 
+Beat(p::Period) = Beat(Dates.toms(p) ÷ 86400)
+
 @testset "comparisons with new subtypes of Period" begin
     # https://en.wikipedia.org/wiki/Swatch_Internet_Time
     Dates.value(b::Beat) = b.value
