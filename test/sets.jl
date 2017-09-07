@@ -101,7 +101,7 @@ s = Set([1])
 @test isequal(empty!(s), Set())
 
 # rehash!
-let
+let s
     # Use a pointer type to have defined behavior for uninitialized
     # array element
     s = Set(["a", "b", "c"])
@@ -120,9 +120,10 @@ let
 end
 
 # start, done, next
-for data_ in ((7,8,4,5),
-              ("hello", 23, 2.7, (), [], (1,8)))
-    s = Set(data_)
+for data_in in ((7, 8, 4, 5),
+              ("hello", 23, 2.7, (), [], (1, 8)))
+    local data_in, s, t
+    s = Set(data_in)
 
     s_new = Set()
     for el in s
@@ -224,17 +225,19 @@ end
 @test symdiff(Set([1,2,3,4]), Set([2,4,5,6])) == Set([1,3,5,6])
 
 # unique
-u = unique([1,1,2])
-@test in(1,u)
-@test in(2,u)
-@test length(u) == 2
-@test unique(iseven, [5,1,8,9,3,4,10,7,2,6]) == [5,8]
-@test unique(n->n % 3, [5,1,8,9,3,4,10,7,2,6]) == [5,1,9]
+let u = unique([1, 1, 2])
+    @test in(1, u)
+    @test in(2, u)
+    @test length(u) == 2
+    @test unique(iseven, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]) == [5, 8]
+    @test unique(n -> n % 3, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6]) == [5, 1, 9]
+end
+
 # issue 20105
 @test @inferred(unique(x for x in 1:1)) == [1]
-@test unique(x for x in Any[1,1.0])::Vector{Real} == [1]
-@test unique(x for x in Real[1,1.0])::Vector{Real} == [1]
-@test unique(Integer[1,1,2])::Vector{Integer} == [1,2]
+@test unique(x for x in Any[1, 1.0])::Vector{Real} == [1]
+@test unique(x for x in Real[1, 1.0])::Vector{Real} == [1]
+@test unique(Integer[1, 1, 2])::Vector{Integer} == [1, 2]
 
 # unique!
 @testset "unique!" begin

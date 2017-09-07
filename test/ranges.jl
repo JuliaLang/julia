@@ -210,12 +210,13 @@ L64 = @inferred(linspace(Int64(1), Int64(4), 4))
 @test L32[4] == 4 && L64[4] == 4
 @test @inferred(linspace(1.0, 2.0, 2.0f0)) === linspace(1.0, 2.0, 2)
 
-r = 5:-1:1
-@test r[1]==5
-@test r[2]==4
-@test r[3]==3
-@test r[4]==2
-@test r[5]==1
+let r = 5:-1:1
+    @test r[1]==5
+    @test r[2]==4
+    @test r[3]==3
+    @test r[4]==2
+    @test r[5]==1
+end
 
 @test length(.1:.1:.3) == 3
 @test length(1.1:1.1:3.3) == 3
@@ -236,13 +237,13 @@ r = 5:-1:1
 @test isempty((1:4)[5:4])
 @test_throws BoundsError (1:10)[8:-1:-2]
 
-r = typemax(Int)-5:typemax(Int)-1
-@test_throws BoundsError r[7]
+let r = typemax(Int)-5:typemax(Int)-1
+    @test_throws BoundsError r[7]
+end
 
 @test findin([5.2, 3.3], 3:20) == findin([5.2, 3.3], collect(3:20))
 
-let
-    span = 5:20
+let span = 5:20,
     r = -7:3:42
     @test findin(r, span) == 5:10
     r = 15:-2:-38
@@ -333,11 +334,13 @@ end
 #@test (3 in 3+0*(1:5))
 #@test !(4 in 3+0*(1:5))
 
-r = 0.0:0.01:1.0
-@test (r[30] in r)
-r = (-4*Int64(maxintfloat(Int === Int32 ? Float32 : Float64))):5
-@test (3 in r)
-@test (3.0 in r)
+let r = 0.0:0.01:1.0
+    @test (r[30] in r)
+end
+let r = (-4*Int64(maxintfloat(Int === Int32 ? Float32 : Float64))):5
+    @test (3 in r)
+    @test (3.0 in r)
+end
 
 @test !(1 in 1:0)
 @test !(1.0 in 1.0:0.0)
@@ -384,7 +387,7 @@ end
 @test_throws OverflowError length(typemin(Int):typemax(Int))
 @test_throws OverflowError length(-1:typemax(Int)-1)
 
-let s = 0
+let s = 0, n
     # loops ending at typemax(Int)
     for i = (typemax(Int)-1):typemax(Int)
         s += 1
@@ -519,14 +522,17 @@ end
 @test [0.0:prevfloat(0.1):0.3;] == [0.0, prevfloat(0.1), prevfloat(0.2), 0.3]
 @test [0.0:nextfloat(0.1):0.3;] == [0.0, nextfloat(0.1), nextfloat(0.2)]
 
-for T = (Float32, Float64,)# BigFloat),
-    local T
-    for a = -5:25, s = [-5:-1;1:25;], d = 1:25, n = -1:15
-    denom = convert(T,d)
-    strt = convert(T,a)/denom
-    Δ     = convert(T,s)/denom
-    stop  = convert(T,(a+(n-1)*s))/denom
-    vals  = T[a:s:a+(n-1)*s;]./denom
+for T = (Float32, Float64,), # BigFloat),
+    a = -5:25,
+    s = [-5:-1; 1:25; ],
+    d = 1:25,
+    n = -1:15
+
+    denom = convert(T, d)
+    strt = convert(T, a)/denom
+    Δ     = convert(T, s)/denom
+    stop  = convert(T, (a + (n - 1) * s)) / denom
+    vals  = T[a:s:(a + (n - 1) * s); ] ./ denom
     r = strt:Δ:stop
     @test [r;] == vals
     @test [linspace(strt, stop, length(r));] == vals
@@ -538,7 +544,6 @@ for T = (Float32, Float64,)# BigFloat),
     @test [r[2:2:n];] == [r;][2:2:n]
     @test [r[n:-1:2];] == [r;][n:-1:2]
     @test [r[n:-2:1];] == [r;][n:-2:1]
-    end
 end
 
 # issue #20373 (unliftable ranges with exact end points)
@@ -637,8 +642,9 @@ for T = (Float32, Float64)
 end
 
 # issue #20380
-r = LinSpace(1,4,4)
-@test isa(r[1:4], LinSpace)
+let r = LinSpace(1,4,4)
+    @test isa(r[1:4], LinSpace)
+end
 
 # linspace with 1 or 0 elements (whose step length is NaN)
 @test issorted(linspace(1,1,0))
@@ -710,42 +716,49 @@ let r1 = 1.0:0.1:2.0, r2 = 1.0f0:0.2f0:3.0f0, r3 = 1:2:21
     @test r3 + r3 == 2 * r3
 end
 
-# issue #7114d
-r = -0.004532318104333742:1.2597349521122731e-5:0.008065031416788989
-@test length(r[1:end-1]) == length(r) - 1
-@test isa(r[1:2:end],AbstractRange) && length(r[1:2:end]) == div(length(r)+1, 2)
-@test r[3:5][2] ≈ r[4]
-@test r[5:-2:1][2] ≈ r[3]
-@test_throws BoundsError r[0:10]
-@test_throws BoundsError r[1:10000]
+# issue #7114
+let r = -0.004532318104333742:1.2597349521122731e-5:0.008065031416788989
+    @test length(r[1:end-1]) == length(r) - 1
+    @test isa(r[1:2:end],AbstractRange) && length(r[1:2:end]) == div(length(r)+1, 2)
+    @test r[3:5][2] ≈ r[4]
+    @test r[5:-2:1][2] ≈ r[3]
+    @test_throws BoundsError r[0:10]
+    @test_throws BoundsError r[1:10000]
+end
 
-r = linspace(1/3,5/7,6)
-@test length(r) == 6
-@test r[1] == 1/3
-@test abs(r[end] - 5/7) <= eps(5/7)
-r = linspace(0.25,0.25,1)
-@test length(r) == 1
-@test_throws ArgumentError linspace(0.25,0.5,1)
+let r = linspace(1/3, 5/7, 6)
+    @test length(r) == 6
+    @test r[1] == 1/3
+    @test abs(r[end] - 5/7) <= eps(5/7)
+end
+
+let r = linspace(0.25, 0.25, 1)
+    @test length(r) == 1
+    @test_throws ArgumentError linspace(0.25,0.5,1)
+end
+
 
 # issue #7426
 @test [typemax(Int):1:typemax(Int);] == [typemax(Int)]
 
 #issue #7484
-r7484 = 0.1:0.1:1
-@test [reverse(r7484);] == reverse([r7484;])
+let r7484 = 0.1:0.1:1
+    @test [reverse(r7484);] == reverse([r7484;])
+end
 
 # issue #7387
 for r in (0:1, 0.0:1.0)
     local r
     @test [r .+ im;] == [r;] .+ im
     @test [r .- im;] == [r;] .- im
-    @test [r*im;] == [r;]*im
-    @test [r/im;] == [r;]/im
+    @test [r * im;] == [r;] * im
+    @test [r / im;] == [r;] / im
 end
 
 # Preservation of high precision upon addition
-r = (-0.1:0.1:0.3) + broadcast(+, -0.3:0.1:0.1, 1e-12)
-@test r[3] == 1e-12
+let r = (-0.1:0.1:0.3) + broadcast(+, -0.3:0.1:0.1, 1e-12)
+    @test r[3] == 1e-12
+end
 
 # issue #7709
 @test length(map(identity, 0x01:0x05)) == 5
@@ -844,14 +857,15 @@ let io = IOBuffer()
 end
 
 # issue 10950
-r = 1//2:3
-@test length(r) == 3
-i = 1
-for x in r
-    @test x == i//2
-    i += 2
+let r = 1//2:3
+    @test length(r) == 3
+    i = 1
+    for x in r
+        @test x == i//2
+        i += 2
+    end
+    @test i == 7
 end
-@test i == 7
 
 # stringmime/show should display the range or linspace nicely
 # to test print_range in range.jl
@@ -1028,72 +1042,80 @@ let r = 1:3, a = [1,2,3]
 end
 
 # OneTo
-r = Base.OneTo(-5)
-@test isempty(r)
-@test length(r) == 0
-@test size(r) == (0,)
-r = Base.OneTo(3)
-@test !isempty(r)
-@test length(r) == 3
-@test size(r) == (3,)
-@test step(r) == 1
-@test first(r) == 1
-@test last(r) == 3
-@test minimum(r) == 1
-@test maximum(r) == 3
-@test r[2] == 2
-@test r[2:3] === 2:3
-@test_throws BoundsError r[4]
-@test_throws BoundsError r[0]
-@test broadcast(+, r, 1) === 2:4
-@test 2*r === 2:2:6
-@test r + r === 2:2:6
-k = 0
-for i in r
-    local i
-    @test i == (k+=1)
+let r = Base.OneTo(-5)
+    @test isempty(r)
+    @test length(r) == 0
+    @test size(r) == (0,)
 end
-@test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
-@test intersect(r, 0:5) == 1:3
-@test intersect(r, 2) === intersect(2, r) === 2:2
-@test findin(r, r) === findin(r, 1:length(r)) === findin(1:length(r), r) === 1:length(r)
-r2 = Base.OneTo(7)
-@test findin(r2, 2:length(r2)-1) === 2:length(r2)-1
-@test findin(2:length(r2)-1, r2) === 1:length(r2)-2
-io = IOBuffer()
-show(io, r)
-str = String(take!(io))
-@test str == "Base.OneTo(3)"
+let r = Base.OneTo(3)
+    @test !isempty(r)
+    @test length(r) == 3
+    @test size(r) == (3,)
+    @test step(r) == 1
+    @test first(r) == 1
+    @test last(r) == 3
+    @test minimum(r) == 1
+    @test maximum(r) == 3
+    @test r[2] == 2
+    @test r[2:3] === 2:3
+    @test_throws BoundsError r[4]
+    @test_throws BoundsError r[0]
+    @test broadcast(+, r, 1) === 2:4
+    @test 2*r === 2:2:6
+    @test r + r === 2:2:6
+    k = 0
+    for i in r
+        @test i == (k += 1)
+    end
+    @test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
+    @test intersect(r, 0:5) == 1:3
+    @test intersect(r, 2) === intersect(2, r) === 2:2
+    @test findin(r, r) === findin(r, 1:length(r)) === findin(1:length(r), r) === 1:length(r)
+    io = IOBuffer()
+    show(io, r)
+    str = String(take!(io))
+    @test str == "Base.OneTo(3)"
+end
+let r = Base.OneTo(7)
+    @test findin(r, 2:(length(r) - 1)) === 2:(length(r) - 1)
+    @test findin(2:(length(r) - 1), r) === 1:(length(r) - 2)
+end
 
 # linspace of other types
-r = linspace(0, 3//10, 4)
-@test eltype(r) == Rational{Int}
-@test r[2] === 1//10
+let r = linspace(0, 3//10, 4)
+    @test eltype(r) == Rational{Int}
+    @test r[2] === 1//10
+end
 
-a, b = 1.0, nextfloat(1.0)
-ba, bb = BigFloat(a), BigFloat(b)
-r = linspace(ba, bb, 3)
-@test eltype(r) == BigFloat
-@test r[1] == a && r[3] == b
-@test r[2] == (ba+bb)/2
+let a = 1.0,
+    b = nextfloat(1.0),
+    ba = BigFloat(a),
+    bb = BigFloat(b),
+    r = linspace(ba, bb, 3)
+    @test eltype(r) == BigFloat
+    @test r[1] == a && r[3] == b
+    @test r[2] == (ba+bb)/2
+end
 
-a, b = rand(10), rand(10)
-r = linspace(a, b, 5)
-@test r[1] == a && r[5] == b
-for i = 2:4
-    local i
-    x = ((5-i)//4)*a + ((i-1)//4)*b
-    @test r[i] == x
+let (a, b) = (rand(10), rand(10)),
+    r = linspace(a, b, 5)
+    @test r[1] == a && r[5] == b
+    for i = 2:4
+        x = ((5 - i) // 4) * a + ((i - 1) // 4) * b
+        @test r[i] == x
+    end
 end
 
 # issue #23178
-r = linspace(Float16(0.1094), Float16(0.9697), 300)
-@test r[1] == Float16(0.1094)
-@test r[end] == Float16(0.9697)
+let r = linspace(Float16(0.1094), Float16(0.9697), 300)
+    @test r[1] == Float16(0.1094)
+    @test r[end] == Float16(0.9697)
+end
 
 # issue #20382
-r = @inferred(colon(big(1.0),big(2.0),big(5.0)))
-@test eltype(r) == BigFloat
+let r = @inferred(colon(big(1.0),big(2.0),big(5.0)))
+    @test eltype(r) == BigFloat
+end
 
 # issue #14420
 for r in (linspace(0.10000000000000045, 1), 0.10000000000000045:(1-0.10000000000000045)/49:1)

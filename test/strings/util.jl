@@ -19,9 +19,13 @@
 @test strip("foobarfoo", ['f','o']) == "bar"
 @test strip("foobarfoo", ('f','o')) == "bar"
 
-for s in ("", " ", " abc", "abc ", "  abc  "), f in (lstrip, rstrip, strip)
+let s, f
+for s in ("", " ", " abc", "abc ", "  abc  "),
+    f in (lstrip, rstrip, strip)
+
     fs = f(s)
     for T = (String, GenericString)
+        local t, b
         t = convert(T,s)
         ft = f(t)
         @test s == t
@@ -34,6 +38,7 @@ for s in ("", " ", " abc", "abc ", "  abc  "), f in (lstrip, rstrip, strip)
         @test fs == fb
         @test typeof(fb) == SubString{T}
     end
+end
 end
 
 # split

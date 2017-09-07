@@ -388,6 +388,7 @@ all(f::typeof(hasvalue), t::Tuple{}) = true
 
 # Note this list does not include sqrt since it can raise a DomainError
 for op in (+, -, abs, abs2)
+    global null_safe_op
     null_safe_op(::typeof(op), ::NullSafeTypes) = true
     null_safe_op(::typeof(op), ::Type{Complex{S}}) where {S} = null_safe_op(op, S)
     null_safe_op(::typeof(op), ::Type{Rational{S}}) where {S} = null_safe_op(op, S)
@@ -404,11 +405,13 @@ null_safe_op(::typeof(!), ::Type{Bool}) = true
 for op in (+, -, *, /, &, |, <<, >>, >>>,
            scalarmin, scalarmax)
     # to fix ambiguities
+    global null_safe_op
     null_safe_op(::typeof(op), ::NullSafeFloats, ::NullSafeFloats) = true
     null_safe_op(::typeof(op), ::NullSafeSignedInts, ::NullSafeSignedInts) = true
     null_safe_op(::typeof(op), ::NullSafeUnsignedInts, ::NullSafeUnsignedInts) = true
 end
 for op in (+, -, *, /)
+    global null_safe_op
     null_safe_op(::typeof(op), ::Type{Complex{S}}, ::Type{T}) where {S,T} =
         null_safe_op(op, T, S)
     null_safe_op(::typeof(op), ::Type{Rational{S}}, ::Type{T}) where {S,T} =

@@ -156,9 +156,10 @@ X = [2 3 1 -1; 7 4 5 -4]
 @test std([1 2 3 4 5; 6 7 8 9 10], 2) ≈ sqrt.([2.5 2.5]')
 @test std([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) ≈ sqrt.([2.0 2.0]')
 
-A = Complex128[exp(i*im) for i in 1:10^4]
-@test varm(A,0.) ≈ sum(map(abs2,A))/(length(A)-1)
-@test varm(A,mean(A)) ≈ var(A)
+let A = Complex128[exp(i*im) for i in 1:10^4]
+    @test varm(A, 0.) ≈ sum(map(abs2, A)) / (length(A) - 1)
+    @test varm(A, mean(A)) ≈ var(A)
+end
 
 # test covariance
 
@@ -344,8 +345,9 @@ end
 @test quantile([1, 2, 3, 4], ()) == ()
 
 # StatsBase issue 164
-y = [0.40003674665581906,0.4085630862624367,0.41662034698690303,0.41662034698690303,0.42189053966652057,0.42189053966652057,0.42553514344518345,0.43985732442991354]
-@test issorted(quantile(y, linspace(0.01, 0.99, 17)))
+let y = [0.40003674665581906, 0.4085630862624367, 0.41662034698690303, 0.41662034698690303, 0.42189053966652057, 0.42189053966652057, 0.42553514344518345, 0.43985732442991354]
+    @test issorted(quantile(y, linspace(0.01, 0.99, 17)))
+end
 
 # variance of complex arrays (#13309)
 let z = rand(Complex128, 10)
@@ -365,27 +367,29 @@ let v = varm([1.0+2.0im], 0; corrected = false)
 end
 
 # cov and cor of complex arrays (issue #21093)
-x = [2.7 - 3.3im, 0.9 + 5.4im, 0.1 + 0.2im, -1.7 - 5.8im, 1.1 + 1.9im]
-y = [-1.7 - 1.6im, -0.2 + 6.5im, 0.8 - 10.0im, 9.1 - 3.4im, 2.7 - 5.5im]
-@test cov(x, y) ≈ 4.8365 - 12.119im
-@test cov(y, x) ≈ 4.8365 + 12.119im
-@test cov(x, reshape(y, :, 1)) ≈ reshape([4.8365 - 12.119im], 1, 1)
-@test cov(reshape(x, :, 1), y) ≈ reshape([4.8365 - 12.119im], 1, 1)
-@test cov(reshape(x, :, 1), reshape(y, :, 1)) ≈ reshape([4.8365 - 12.119im], 1, 1)
-@test cov([x y]) ≈ [21.779 4.8365-12.119im;
-                    4.8365+12.119im 54.548]
-@test cor(x, y) ≈ 0.14032104449218274 - 0.35160772008699703im
-@test cor(y, x) ≈ 0.14032104449218274 + 0.35160772008699703im
-@test cor(x, reshape(y, :, 1)) ≈ reshape([0.14032104449218274 - 0.35160772008699703im], 1, 1)
-@test cor(reshape(x, :, 1), y) ≈ reshape([0.14032104449218274 - 0.35160772008699703im], 1, 1)
-@test cor(reshape(x, :, 1), reshape(y, :, 1)) ≈ reshape([0.14032104449218274 - 0.35160772008699703im], 1, 1)
-@test cor([x y]) ≈ [1.0                                          0.14032104449218274-0.35160772008699703im
-                    0.14032104449218274+0.35160772008699703im  1.0]
+let x = [2.7 - 3.3im, 0.9 + 5.4im, 0.1 + 0.2im, -1.7 - 5.8im, 1.1 + 1.9im],
+    y = [-1.7 - 1.6im, -0.2 + 6.5im, 0.8 - 10.0im, 9.1 - 3.4im, 2.7 - 5.5im]
+    @test cov(x, y) ≈ 4.8365 - 12.119im
+    @test cov(y, x) ≈ 4.8365 + 12.119im
+    @test cov(x, reshape(y, :, 1)) ≈ reshape([4.8365 - 12.119im], 1, 1)
+    @test cov(reshape(x, :, 1), y) ≈ reshape([4.8365 - 12.119im], 1, 1)
+    @test cov(reshape(x, :, 1), reshape(y, :, 1)) ≈ reshape([4.8365 - 12.119im], 1, 1)
+    @test cov([x y]) ≈ [21.779 4.8365-12.119im;
+                        4.8365+12.119im 54.548]
+    @test cor(x, y) ≈ 0.14032104449218274 - 0.35160772008699703im
+    @test cor(y, x) ≈ 0.14032104449218274 + 0.35160772008699703im
+    @test cor(x, reshape(y, :, 1)) ≈ reshape([0.14032104449218274 - 0.35160772008699703im], 1, 1)
+    @test cor(reshape(x, :, 1), y) ≈ reshape([0.14032104449218274 - 0.35160772008699703im], 1, 1)
+    @test cor(reshape(x, :, 1), reshape(y, :, 1)) ≈ reshape([0.14032104449218274 - 0.35160772008699703im], 1, 1)
+    @test cor([x y]) ≈ [1.0                                          0.14032104449218274-0.35160772008699703im
+                        0.14032104449218274+0.35160772008699703im  1.0]
+end
 
 # Issue #17153 and PR #17154
-let a = rand(10,10)
-    b = deepcopy(a)
+let a = rand(10,10),
+    b = deepcopy(a),
     x = median(a, 1)
+
     @test b == a
     x = median(a, 2)
     @test b == a

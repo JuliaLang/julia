@@ -250,21 +250,22 @@ function bigfib(n)
 end
 @test [bigfib(n) for n=0:10] == [0,1,1,2,3,5,8,13,21,34,55]
 
-n = bigfib(1000001)
-@test ndigits(n) == 208988
-@test mod(n,big(10)^15) == 359244926937501
-@test div(n,big(10)^208973) == 316047687386689
+let s, n = bigfib(1000001)
+    @test ndigits(n) == 208988
+    @test mod(n,big(10)^15) == 359244926937501
+    @test div(n,big(10)^208973) == 316047687386689
 
-s = string(n)
-@test length(s) == 208988
-@test endswith(s, "359244926937501")
-@test startswith(s, "316047687386689")
+    s = string(n)
+    @test length(s) == 208988
+    @test endswith(s, "359244926937501")
+    @test startswith(s, "316047687386689")
+end
 
 # serialization (#5133)
-let n = parse(BigInt,"359334085968622831041960188598043661065388726959079837")
+let n = parse(BigInt, "359334085968622831041960188598043661065388726959079837"),
     b = IOBuffer()
-    serialize(b,n)
-    seek(b,0)
+    serialize(b, n)
+    seek(b, 0)
     @test deserialize(b) == n
 end
 

@@ -78,14 +78,20 @@ fill!(r, -1.1)
 @test sum!(abs2, r, Breduc, init=false) ≈ safe_sumabs2(Breduc, 1) .- 1.1
 
 # Small arrays with init=false
-A = reshape(1:15, 3, 5)
-R = ones(Int, 3)
-@test sum!(R, A, init=false) == [36,41,46]
-R = ones(Int, 1, 5)
-@test sum!(R, A, init=false) == [7 16 25 34 43]
-R = [2]
-A = reshape(1:6, 3, 2)
-@test prod!(R, A, init=false) == [1440]
+let A = reshape(1:15, 3, 5)
+    R = ones(Int, 3)
+    @test sum!(R, A, init=false) == [36,41,46]
+    R = ones(Int, 1, 5)
+    @test sum!(R, A, init=false) == [7 16 25 34 43]
+end
+let R = [2]
+    A = reshape(1:6, 3, 2)
+    @test prod!(R, A, init=false) == [1440]
+
+    # min/max
+    @test reducedim(max, A, 1) == [3 6]
+    @test reducedim(min, A, 2) == reshape([1,2,3], 3, 1)
+end
 
 # Small integers
 @test @inferred(sum(Int8[1], 1)) == [1]
@@ -99,23 +105,21 @@ A = reshape(1:6, 3, 2)
 @test typeof(@inferred(Base.prod(abs, [1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(Base.prod(abs2, [1.0+1.0im], 1))) == Vector{Float64}
 
-# min/max
-@test reducedim(max, A, 1) == [3 6]
-@test reducedim(min, A, 2) == reshape([1,2,3], 3, 1)
-
 # Heterogeneously typed arrays
 @test sum(Union{Float32, Float64}[1.0], 1) == [1.0]
 @test prod(Union{Float32, Float64}[1.0], 1) == [1.0]
 
 @test reducedim((a,b) -> a|b, [true false; false false], 1, false) == [true false]
-R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
-@test eltype(R) == Float64
-@test R ≈ [3,7]
+let R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
+    @test eltype(R) == Float64
+    @test R ≈ [3,7]
+end
 @test reducedim((a,b) -> a+b, [1 2; 3 4], 1, 0) == [4 6]
 
 # inferred return types
-rt = Base.return_types(reducedim, Tuple{Function, Array{Float64, 3}, Int, Float64})
-@test length(rt) == 1 && rt[1] == Array{Float64, 3}
+let rt = Base.return_types(reducedim, Tuple{Function, Array{Float64, 3}, Int, Float64})
+    @test length(rt) == 1 && rt[1] == Array{Float64, 3}
+end
 
 @testset "empty cases" begin
     A = Array{Int}(0,1)

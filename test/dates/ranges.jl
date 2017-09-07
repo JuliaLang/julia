@@ -415,8 +415,8 @@ c = Dates.Date(2013, 6, 1)
 @test [c:Dates.Month(-1):a;] == reverse([a:Dates.Month(1):c;])
 
 @test length(range(Date(2000), 366)) == 366
-let n=100000
-    a = Dates.Date(2000)
+let n = 100000
+    local a = Dates.Date(2000)
     for i = 1:n
         @test length(range(a, i)) == i
     end
@@ -453,18 +453,19 @@ b = Dates.Date(2013, 2, 1)
 @test length(Dates.Date(2000, 6, 23):Dates.Year(-10):Dates.Date(1900, 2, 28)) == 11
 @test length(Dates.Date(2000, 1, 1):Dates.Year(1):Dates.Date(2000, 2, 1)) == 1
 
-let n=100000
-    a = b = Dates.Date(0)
+let n = 100000
+    local a, b
+    a= b = Dates.Date(0)
     for i = 1:n
         @test length(a:Dates.Year(1):b) == i
         b += Dates.Year(1)
     end
 end
 
-let n=10000
-    a = Dates.Date(1985, 12, 5)
-    b = Dates.Date(1986, 12, 27)
-    c = Dates.DateTime(1985, 12, 5)
+let n = 10000,
+    a = Dates.Date(1985, 12, 5),
+    b = Dates.Date(1986, 12, 27),
+    c = Dates.DateTime(1985, 12, 5),
     d = Dates.DateTime(1986, 12, 27)
     for i = 1:n
         @test length(a:Dates.Month(1):b) == 13
@@ -474,16 +475,15 @@ let n=10000
         a += Dates.Day(1)
         b += Dates.Day(1)
     end
-    return b
 end
 
-let n=100000
+let n = 100000
+    local a, b
     a = b = Dates.Date(2000)
     for i = 1:n
         @test length(a:Dates.Month(1):b) == i
         b += Dates.Month(1)
     end
-    return b
 end
 
 @test length(Dates.Year(1):Dates.Year(1):Dates.Year(10)) == 10

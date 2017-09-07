@@ -847,8 +847,8 @@ i3 = trunc(Integer,f)
 @test_throws ArgumentError parse(BigFloat, "1\0")
 
 # serialization (issue #12386)
-let b = IOBuffer()
-    x = 2.1*big(pi)
+let b = IOBuffer(),
+    x = 2.1 * big(pi)
     serialize(b, x)
     seekstart(b)
     @test deserialize(b) == x
@@ -860,11 +860,10 @@ end
 # test constructors and `big` with additional precision and rounding mode:
 for prec in (10, 100, 1000)
     for val in ("3.1", pi, "-1.3", 3.1)
-        let
-            a = BigFloat(val)
-            b = BigFloat(val, prec)
-            c = BigFloat(val, RoundUp)
-            d = BigFloat(val, prec, RoundDown)
+        let a = BigFloat(val),
+            b = BigFloat(val, prec),
+            c = BigFloat(val, RoundUp),
+            d = BigFloat(val, prec, RoundDown),
             e = BigFloat(val, prec, RoundUp)
 
             @test precision(a) == precision(BigFloat)

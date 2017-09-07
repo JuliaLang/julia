@@ -11,8 +11,6 @@ n2 = 2*n1
 
 srand(1234321)
 
-a = rand(n,n)
-
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 breal = randn(n,2)/2

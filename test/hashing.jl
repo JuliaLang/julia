@@ -28,14 +28,17 @@ function coerce(T::Type, x)
     end
 end
 
-for T=types[2:end], x=vals
-    a = coerce(T,x)
+for T = types[2:end],
+    x = vals,
+    a = coerce(T, x)
     @test hash(a,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
 end
 
-for T=types, S=types, x=vals
-    a = coerce(T,x)
-    b = coerce(S,x)
+for T = types,
+    S = types,
+    x = vals,
+    a = coerce(T, x),
+    b = coerce(S, x)
     #println("$(typeof(a)) $a")
     #println("$(typeof(b)) $b")
     @test isequal(a,b) == (hash(a)==hash(b))

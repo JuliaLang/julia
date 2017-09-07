@@ -126,9 +126,9 @@ for T in (Int8, Int16, Int32, Int64)
     @test convert(T, max_val) == max_val
     @test_throws InexactError convert(T, max_val+1)
 
-    m = Int128(typemin(T))
-    @test convert(T, m) == m
-    @test_throws InexactError convert(T, m-1)
+    min_val = Int128(typemin(T))
+    @test convert(T, min_val) == min_val
+    @test_throws InexactError convert(T, min_val-1)
 end
 
 for T in (UInt8, UInt16, UInt32, UInt64)

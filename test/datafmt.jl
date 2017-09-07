@@ -132,15 +132,19 @@ end
 @test isequaldlm(readdlm(IOBuffer("1,2,3\n #with leading whitespace\n4,5,6"), ','), [1. 2. 3.;" " "" "";4. 5. 6.], Any)
 
 # test skipstart
-let x = ["a" "b" "c"; "d" "e" "f"; "g" "h" "i"; "A" "B" "C"; 1 2 3; 4 5 6; 7 8 9], io = IOBuffer()
+let x = ["a" "b" "c"; "d" "e" "f"; "g" "h" "i"; "A" "B" "C"; 1 2 3; 4 5 6; 7 8 9],
+    io = IOBuffer()
+
     writedlm(io, x, quotes=false)
     seek(io, 0)
     (data, hdr) = readdlm(io, header=true, skipstart=3)
     @test data == [1 2 3; 4 5 6; 7 8 9]
     @test hdr == ["A" "B" "C"]
 end
-let x = ["a" "b" "\nc"; "d" "\ne" "f"; "g" "h" "i\n"; "A" "B" "C"; 1 2 3; 4 5 6; 7 8 9]
+
+let x = ["a" "b" "\nc"; "d" "\ne" "f"; "g" "h" "i\n"; "A" "B" "C"; 1 2 3; 4 5 6; 7 8 9],
     io = IOBuffer()
+
     writedlm(io, x, quotes=true)
     seek(io, 0)
     (data, hdr) = readdlm(io, header=true, skipstart=6)

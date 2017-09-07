@@ -51,16 +51,17 @@ str = "s\u2200"
 # issue #3597
 @test string(GenericString("Test")[1:1], "X") == "TX"
 
+let b, n
 for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128,BigInt),
-    b = 2:62, _ = 1:10
-    n = T != BigInt ? rand(T) : BigInt(rand(Int128))
-    @test parse(T,base(b,n),b) == n
+        b = 2:62,
+        _ = 1:10
+    n = (T != BigInt) ? rand(T) : BigInt(rand(Int128))
+    @test parse(T, base(b, n), b) == n
+end
 end
 
-# issue #6027
-let
-    # make symbol with invalid char
-    sym = Symbol(Char(0xdcdb))
+# issue #6027 - make symbol with invalid char
+let sym = Symbol(Char(0xdcdb)), res
     @test string(sym) == string(Char(0xdcdb))
     @test String(sym) == string(Char(0xdcdb))
     @test expand(Main, sym) === sym

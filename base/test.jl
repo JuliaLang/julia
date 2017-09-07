@@ -1010,7 +1010,7 @@ function testset_forloop(args, testloop)
     end
     quote
         arr = Array{Any,1}(0)
-        first_iteration = true
+        local first_iteration = true
         local ts
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))

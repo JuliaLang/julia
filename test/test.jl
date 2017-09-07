@@ -56,10 +56,11 @@ let a
     @test a === 1
 end
 
-a = Array{Float64,5}(2, 2, 2, 2, 2)
-a[1,1,1,1,1] = 10
-@test a[1,1,1,1,1] == 10
-@test a[1,1,1,1,1] != 2
+let a = Array{Float64, 5}(2, 2, 2, 2, 2)
+    a[1, 1, 1, 1, 1] = 10
+    @test a[1, 1, 1, 1, 1] == 10
+    @test a[1, 1, 1, 1, 1] != 2
+end
 
 @test rand() != rand()
 
@@ -76,109 +77,125 @@ mutable struct NoThrowTestSet <: Base.Test.AbstractTestSet
 end
 Base.Test.record(ts::NoThrowTestSet, t::Base.Test.Result) = (push!(ts.results, t); t)
 Base.Test.finish(ts::NoThrowTestSet) = ts.results
-fails = @testset NoThrowTestSet begin
-    # Fail - wrong exception
-    @test_throws OverflowError error()
-    # Fail - no exception
-    @test_throws OverflowError 1 + 1
-    # Fail - comparison
-    @test 1+1 == 2+2
-    # Fail - approximate comparison
-    @test 1/1 ≈ 2/1
-    # Fail - chained comparison
-    @test 1+0 == 2+0 == 3+0
-    # Fail - comparison call
-    @test ==(1 - 2, 2 - 1)
-    # Fail - splatting
-    @test ==(1:2...)
-    # Fail - isequal
-    @test isequal(0 / 0, 1 / 0)
-    # Fail - function splatting
-    @test isequal(1:2...)
-    # Fail - isapprox
-    @test isapprox(0 / 1, -1 / 0)
-    # Fail - function with keyword
-    @test isapprox(1 / 2, 2 / 1, atol=1 / 1)
-    @test isapprox(1 - 2, 2 - 1; atol=1 - 1)
-    # Fail - function keyword splatting
-    k = [(:atol, 0), (:nans, true)]
-    @test isapprox(1, 2; k...)
-    # Error - unexpected pass
-    @test_broken true
-    # Error - converting a call into a comparison
-    @test ==(1, 1:2...)
+let fails = @testset NoThrowTestSet begin
+        # Fail - wrong exception
+        @test_throws OverflowError error()
+        # Fail - no exception
+        @test_throws OverflowError 1 + 1
+        # Fail - comparison
+        @test 1+1 == 2+2
+        # Fail - approximate comparison
+        @test 1/1 ≈ 2/1
+        # Fail - chained comparison
+        @test 1+0 == 2+0 == 3+0
+        # Fail - comparison call
+        @test ==(1 - 2, 2 - 1)
+        # Fail - splatting
+        @test ==(1:2...)
+        # Fail - isequal
+        @test isequal(0 / 0, 1 / 0)
+        # Fail - function splatting
+        @test isequal(1:2...)
+        # Fail - isapprox
+        @test isapprox(0 / 1, -1 / 0)
+        # Fail - function with keyword
+        @test isapprox(1 / 2, 2 / 1, atol=1 / 1)
+        @test isapprox(1 - 2, 2 - 1; atol=1 - 1)
+        # Fail - function keyword splatting
+        k = [(:atol, 0), (:nans, true)]
+        @test isapprox(1, 2; k...)
+        # Error - unexpected pass
+        @test_broken true
+        # Error - converting a call into a comparison
+        @test ==(1, 1:2...)
+    end
+    for i in 1:length(fails) - 2
+        @test isa(fails[i], Base.Test.Fail)
+    end
+
+    let str = sprint(show, fails[1])
+        @test contains(str, "Expression: error()")
+        @test contains(str, "Thrown: ErrorException")
+    end
+
+    let str = sprint(show, fails[2])
+        @test contains(str, "Expression: 1 + 1")
+        @test contains(str, "No exception thrown")
+    end
+
+    let str = sprint(show, fails[3])
+        @test contains(str, "Expression: 1 + 1 == 2 + 2")
+        @test contains(str, "Evaluated: 2 == 4")
+    end
+
+    let str = sprint(show, fails[4])
+        @test contains(str, "Expression: 1 / 1 ≈ 2 / 1")
+        @test contains(str, "Evaluated: 1.0 ≈ 2.0")
+    end
+
+    let str = sprint(show, fails[5])
+        @test contains(str, "Expression: 1 + 0 == 2 + 0 == 3 + 0")
+        @test contains(str, "Evaluated: 1 == 2 == 3")
+    end
+
+    let str = sprint(show, fails[6])
+        @test contains(str, "Expression: 1 - 2 == 2 - 1")
+        @test contains(str, "Evaluated: -1 == 1")
+    end
+
+    let str = sprint(show, fails[7])
+        @test contains(str, "Expression: (==)(1:2...)")
+        @test !contains(str, "Evaluated")
+    end
+
+    let str = sprint(show, fails[8])
+        @test contains(str, "Expression: isequal(0 / 0, 1 / 0)")
+        @test contains(str, "Evaluated: isequal(NaN, Inf)")
+    end
+
+    let str = sprint(show, fails[9])
+        @test contains(str, "Expression: isequal(1:2...)")
+        @test contains(str, "Evaluated: isequal(1, 2)")
+    end
+
+    let str = sprint(show, fails[10])
+        @test contains(str, "Expression: isapprox(0 / 1, -1 / 0)")
+        @test contains(str, "Evaluated: isapprox(0.0, -Inf)")
+    end
+
+    let str = sprint(show, fails[11])
+        @test contains(str, "Expression: isapprox(1 / 2, 2 / 1, atol=1 / 1)")
+        @test contains(str, "Evaluated: isapprox(0.5, 2.0; atol=1.0)")
+    end
+
+    let str = sprint(show, fails[12])
+        @test contains(str, "Expression: isapprox(1 - 2, 2 - 1; atol=1 - 1)")
+        @test contains(str, "Evaluated: isapprox(-1, 1; atol=0)")
+    end
+
+    let str = sprint(show, fails[13])
+        @test contains(str, "Expression: isapprox(1, 2; k...)")
+        @test contains(str, "Evaluated: isapprox(1, 2; atol=0, nans=true)")
+    end
+
+    let str = sprint(show, fails[14])
+        @test contains(str, "Unexpected Pass")
+        @test contains(str, "Expression: true")
+    end
+
+    let str = sprint(show, fails[15])
+        @test contains(str, "Expression: ==(1, 1:2...)")
+        @test contains(str, "MethodError: no method matching ==(::$Int, ::$Int, ::$Int)")
+    end
 end
-for i in 1:length(fails) - 2
-    @test isa(fails[i], Base.Test.Fail)
-end
-
-str = sprint(show, fails[1])
-@test contains(str, "Expression: error()")
-@test contains(str, "Thrown: ErrorException")
-
-str = sprint(show, fails[2])
-@test contains(str, "Expression: 1 + 1")
-@test contains(str, "No exception thrown")
-
-str = sprint(show, fails[3])
-@test contains(str, "Expression: 1 + 1 == 2 + 2")
-@test contains(str, "Evaluated: 2 == 4")
-
-str = sprint(show, fails[4])
-@test contains(str, "Expression: 1 / 1 ≈ 2 / 1")
-@test contains(str, "Evaluated: 1.0 ≈ 2.0")
-
-str = sprint(show, fails[5])
-@test contains(str, "Expression: 1 + 0 == 2 + 0 == 3 + 0")
-@test contains(str, "Evaluated: 1 == 2 == 3")
-
-str = sprint(show, fails[6])
-@test contains(str, "Expression: 1 - 2 == 2 - 1")
-@test contains(str, "Evaluated: -1 == 1")
-
-str = sprint(show, fails[7])
-@test contains(str, "Expression: (==)(1:2...)")
-@test !contains(str, "Evaluated")
-
-str = sprint(show, fails[8])
-@test contains(str, "Expression: isequal(0 / 0, 1 / 0)")
-@test contains(str, "Evaluated: isequal(NaN, Inf)")
-
-str = sprint(show, fails[9])
-@test contains(str, "Expression: isequal(1:2...)")
-@test contains(str, "Evaluated: isequal(1, 2)")
-
-str = sprint(show, fails[10])
-@test contains(str, "Expression: isapprox(0 / 1, -1 / 0)")
-@test contains(str, "Evaluated: isapprox(0.0, -Inf)")
-
-str = sprint(show, fails[11])
-@test contains(str, "Expression: isapprox(1 / 2, 2 / 1, atol=1 / 1)")
-@test contains(str, "Evaluated: isapprox(0.5, 2.0; atol=1.0)")
-
-str = sprint(show, fails[12])
-@test contains(str, "Expression: isapprox(1 - 2, 2 - 1; atol=1 - 1)")
-@test contains(str, "Evaluated: isapprox(-1, 1; atol=0)")
-
-str = sprint(show, fails[13])
-@test contains(str, "Expression: isapprox(1, 2; k...)")
-@test contains(str, "Evaluated: isapprox(1, 2; atol=0, nans=true)")
-
-str = sprint(show, fails[14])
-@test contains(str, "Unexpected Pass")
-@test contains(str, "Expression: true")
-
-str = sprint(show, fails[15])
-@test contains(str, "Expression: ==(1, 1:2...)")
-@test contains(str, "MethodError: no method matching ==(::$Int, ::$Int, ::$Int)")
-
 
 # Test printing of a TestSetException
-tse_str = sprint(show, Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}()))
-@test contains(tse_str, "1 passed")
-@test contains(tse_str, "2 failed")
-@test contains(tse_str, "3 errored")
-@test contains(tse_str, "4 broken")
+let tse_str = sprint(show, Test.TestSetException(1, 2, 3, 4, Vector{Union{Base.Test.Error, Base.Test.Fail}}()))
+    @test contains(tse_str, "1 passed")
+    @test contains(tse_str, "2 failed")
+    @test contains(tse_str, "3 errored")
+    @test contains(tse_str, "4 broken")
+end
 
 @test Test.finish(Test.FallbackTestSet()) !== nothing
 
@@ -218,7 +235,7 @@ end
     @test tss[1].n_passed == 1
 end
 @testset "accounting" begin
-    local ts
+    local ts, fails
     try
         ts = @testset "outer" begin
             @testset "inner1" begin
@@ -331,6 +348,7 @@ testset_depth17462 = Test.get_testset_depth()
 counter_17462_pre = 0
 counter_17462_post = 0
 tss17462 = @testset for x in [1,2,3,4]
+    global counter_17462_pre, counter_17462_post
     counter_17462_pre += 1
     if x == 1
         @test counter_17462_pre == x
@@ -515,13 +533,16 @@ end
 @test_throws ErrorException @testset "$(error())" begin
 end
 
-io = IOBuffer()
-@test (print(io, Base.Test.Error(:test_error, "woot", 5, backtrace())); 1) == 1
-str = String(take!(io))
-# NOTE: This test depends on the code generated by @testset getting compiled,
-# to get good backtraces. If it fails, check the implementation of `testset_beginend`.
-@test contains(str, "test.jl")
-@test !contains(str, "client.jl")
+let io = IOBuffer()
+    # calls backtrace() from inside @test
+    @test (print(io, Base.Test.Error(:test_error, "woot", 5, backtrace())); 1) == 1
+    let str = String(take!(io))
+        # NOTE: This test depends on the code generated by @testset getting compiled,
+        # to get good backtraces. If it fails, check the implementation of `testset_beginend`.
+        @test contains(str, "test.jl")
+        @test !contains(str, "client.jl")
+    end
+end
 
 let io = IOBuffer()
     exc = Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}())

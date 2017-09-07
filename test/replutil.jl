@@ -309,8 +309,7 @@ end
 
 
 # issue 11845
-let
-    buf = IOBuffer()
+let buf = IOBuffer()
     showerror(buf, MethodError(convert, (3, 1.0)))
     showerror(buf, MethodError(convert, (Int, 1.0)))
     showerror(buf, MethodError(convert, Tuple{Type, Float64}))
@@ -446,12 +445,12 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
 end
 
 # Issue #14684: `display` should print associative types in full.
-let d = Dict(1 => 2, 3 => 45)
-    buf = IOBuffer()
+let d = Dict(1 => 2, 3 => 45),
+    buf = IOBuffer(),
     td = TextDisplay(buf)
+
     display(td, d)
     result = String(take!(td.io))
-
     @test contains(result, summary(d))
 
     # Is every pair in the string?
@@ -617,6 +616,7 @@ let buf = IOBuffer()
 end
 
 @testset "Dict printing with limited rows" begin
+    local buf
     buf = IOBuffer()
     io = IOContext(buf, :displaysize => (4, 80), :limit => true)
     d = Base.ImmutableDict(1=>2)

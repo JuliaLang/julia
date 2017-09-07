@@ -116,6 +116,7 @@ dt = Dates.DateTime(-1, 12, 29, 19, 19, 19, 19)
 for dt in [Dates.DateTime(2016, 1, 1), Dates.DateTime(-2016, 1, 1)]
     local dt
     for p in [Dates.Year, Dates.Month, Dates.Day, Dates.Hour, Dates.Minute, Dates.Second]
+        local p
         @test floor(dt, p) == dt
         @test ceil(dt, p) == dt
     end
@@ -134,6 +135,7 @@ dt = Dates.DateTime(2016, 2, 28, 12)
 # Test rounding to invalid resolutions
 dt = Dates.DateTime(2016, 2, 28, 12, 15)
 for p in [Dates.Year, Dates.Month, Dates.Week, Dates.Day, Dates.Hour]
+    local p
     for v in [-1, 0]
         @test_throws DomainError floor(dt, p(v))
         @test_throws DomainError ceil(dt, p(v))
