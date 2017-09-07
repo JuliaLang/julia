@@ -4,7 +4,7 @@
 module IteratorsMD
     import Base: eltype, length, size, start, done, next, first, last, in, getindex,
                  setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
-                 ndims, iteratorsize, convert
+                 ndims, iteratorsize, convert, show
 
     import Base: +, -, *
     import Base: simd_outer_range, simd_inner_length, simd_index
@@ -80,6 +80,7 @@ module IteratorsMD
     @inline _flatten(i, I...)                 = (i, _flatten(I...)...)
     @inline _flatten(i::CartesianIndex, I...) = (i.I..., _flatten(I...)...)
     CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
+    show(io::IO, i::CartesianIndex) = (print(io, "CartesianIndex"); show(io, i.I))
 
     # length
     length(::CartesianIndex{N}) where {N} = N
@@ -130,6 +131,12 @@ module IteratorsMD
             h = hash(i, h)
         end
         return h
+    end
+
+    # nextind with CartesianIndex
+    function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
+        _, ni = next(CartesianRange(indices(a)), i)
+        return ni
     end
 
     # Iteration

@@ -38,9 +38,12 @@ start(t::Tuple) = 1
 done(t::Tuple, i::Int) = (length(t) < i)
 next(t::Tuple, i::Int) = (t[i], i+1)
 
-eachindex(t::Tuple) = 1:length(t)
+keys(t::Tuple) = 1:length(t)
 
-function eachindex(t::Tuple, t2::Tuple...)
+prevind(t::Tuple, i::Integer) = Int(i)-1
+nextind(t::Tuple, i::Integer) = Int(i)+1
+
+function keys(t::Tuple, t2::Tuple...)
     @_inline_meta
     1:_maxlength(t, t2...)
 end

@@ -143,7 +143,7 @@ julia> +(1,2,3)
 
 The infix form is exactly equivalent to the function application form -- in fact the former is
 parsed to produce the function call internally. This also means that you can assign and pass around
-operators such as [`+()`](@ref) and [`*()`](@ref) just like you would with other function values:
+operators such as [`+`](@ref) and [`*`](@ref) just like you would with other function values:
 
 ```jldoctest
 julia> f = +;
@@ -160,14 +160,14 @@ A few special expressions correspond to calls to functions with non-obvious name
 
 | Expression        | Calls                  |
 |:----------------- |:---------------------- |
-| `[A B C ...]`     | [`hcat()`](@ref)       |
-| `[A; B; C; ...]`  | [`vcat()`](@ref)       |
-| `[A B; C D; ...]` | [`hvcat()`](@ref)      |
-| `A'`              | [`adjoint()`](@ref) |
-| `A.'`             | [`transpose()`](@ref)  |
-| `1:n`             | [`colon()`](@ref)      |
-| `A[i]`            | [`getindex()`](@ref)   |
-| `A[i]=x`          | [`setindex!()`](@ref)  |
+| `[A B C ...]`     | [`hcat`](@ref)       |
+| `[A; B; C; ...]`  | [`vcat`](@ref)       |
+| `[A B; C D; ...]` | [`hvcat`](@ref)      |
+| `A'`              | [`adjoint`](@ref) |
+| `A.'`             | [`transpose`](@ref)  |
+| `1:n`             | [`colon`](@ref)      |
+| `A[i]`            | [`getindex`](@ref)   |
+| `A[i]=x`          | [`setindex!`](@ref)  |
 
 ## [Anonymous Functions](@id man-anonymous-functions)
 
@@ -192,7 +192,7 @@ This creates a function taking one argument `x` and returning the value of the p
 name based on consecutive numbering.
 
 The primary use for anonymous functions is passing them to functions which take other functions
-as arguments. A classic example is [`map()`](@ref), which applies a function to each value of
+as arguments. A classic example is [`map`](@ref), which applies a function to each value of
 an array and returns a new array containing the resulting values:
 
 ```jldoctest
@@ -204,7 +204,7 @@ julia> map(round, [1.2,3.5,1.7])
 ```
 
 This is fine if a named function effecting the transform already exists to pass as the first argument
-to [`map()`](@ref). Often, however, a ready-to-use, named function does not exist. In these
+to [`map`](@ref). Often, however, a ready-to-use, named function does not exist. In these
 situations, the anonymous function construct allows easy creation of a single-use function object
 without needing a name:
 
@@ -219,7 +219,7 @@ julia> map(x -> x^2 + 2x - 1, [1,3,-1])
 An anonymous function accepting multiple arguments can be written using the syntax `(x,y,z)->2x+y-z`.
 A zero-argument anonymous function is written as `()->3`. The idea of a function with no arguments
 may seem strange, but is useful for "delaying" a computation. In this usage, a block of code is
-wrapped in a zero-argument function, which is later invoked by calling it as `f()`.
+wrapped in a zero-argument function, which is later invoked by calling it as `f`.
 
 ## Multiple Return Values
 
@@ -507,7 +507,7 @@ the `b` in `a=b` refers to a `b` in an outer scope, not the subsequent argument 
 
 Passing functions as arguments to other functions is a powerful technique, but the syntax for
 it is not always convenient. Such calls are especially awkward to write when the function argument
-requires multiple lines. As an example, consider calling [`map()`](@ref) on a function with several
+requires multiple lines. As an example, consider calling [`map`](@ref) on a function with several
 cases:
 
 ```julia
@@ -538,16 +538,16 @@ end
 ```
 
 The `do x` syntax creates an anonymous function with argument `x` and passes it as the first argument
-to [`map()`](@ref). Similarly, `do a,b` would create a two-argument anonymous function, and a
+to [`map`](@ref). Similarly, `do a,b` would create a two-argument anonymous function, and a
 plain `do` would declare that what follows is an anonymous function of the form `() -> ...`.
 
-How these arguments are initialized depends on the "outer" function; here, [`map()`](@ref) will
+How these arguments are initialized depends on the "outer" function; here, [`map`](@ref) will
 sequentially set `x` to `A`, `B`, `C`, calling the anonymous function on each, just as would happen
 in the syntax `map(func, [A, B, C])`.
 
 This syntax makes it easier to use functions to effectively extend the language, since calls look
-like normal code blocks. There are many possible uses quite different from [`map()`](@ref), such
-as managing system state. For example, there is a version of [`open()`](@ref) that runs code ensuring
+like normal code blocks. There are many possible uses quite different from [`map`](@ref), such
+as managing system state. For example, there is a version of [`open`](@ref) that runs code ensuring
 that the opened file is eventually closed:
 
 ```julia
@@ -569,8 +569,8 @@ function open(f::Function, args...)
 end
 ```
 
-Here, [`open()`](@ref) first opens the file for writing and then passes the resulting output stream
-to the anonymous function you defined in the `do ... end` block. After your function exits, [`open()`](@ref)
+Here, [`open`](@ref) first opens the file for writing and then passes the resulting output stream
+to the anonymous function you defined in the `do ... end` block. After your function exits, [`open`](@ref)
 will make sure that the stream is properly closed, regardless of whether your function exited
 normally or threw an exception. (The `try/finally` construct will be described in [Control Flow](@ref).)
 

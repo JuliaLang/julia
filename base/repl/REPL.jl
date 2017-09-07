@@ -849,6 +849,7 @@ function setup_interface(
                 edit_insert(s, input)
                 return
             end
+            LineEdit.push_undo(s)
             edit_insert(sbuffer, input)
             input = String(take!(sbuffer))
             oldpos = start(input)
@@ -892,7 +893,7 @@ function setup_interface(
                     if isprompt_paste # remove indentation spaces corresponding to the prompt
                         tail = replace(tail, r"^ {7}"m, "") # 7: jl_prompt_len
                     end
-                    LineEdit.replace_line(s, tail)
+                    LineEdit.replace_line(s, tail, true)
                     LineEdit.refresh_line(s)
                     break
                 end
@@ -910,6 +911,7 @@ function setup_interface(
                     raw!(terminal, false) && disable_bracketed_paste(terminal)
                     LineEdit.mode(s).on_done(s, LineEdit.buffer(s), true)
                     raw!(terminal, true) && enable_bracketed_paste(terminal)
+                    LineEdit.push_undo(s) # when the last line is incomplete
                 end
                 oldpos = pos
                 firstline = false

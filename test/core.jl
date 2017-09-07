@@ -5336,6 +5336,23 @@ A4 = [1, 2, 3]
 A5 = [1 2 3; 4 5 6]
 @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A5)), 6)
 
+# copy!
+A23567 = Vector{Union{Float64, Void}}(5)
+B23567 = collect(Union{Float64, Void}, 1.0:3.0)
+copy!(A23567, 2, B23567)
+@test A23567[1] === nothing
+@test A23567[2] === 1.0
+@test A23567[3] === 2.0
+@test A23567[4] === 3.0
+
+# vcat
+t2 = deepcopy(A23567)
+t3 = deepcopy(A23567)
+t4 = vcat(A23567, t2, t3)
+@test t4[1:5] == A23567
+@test t4[6:10] == A23567
+@test t4[11:15] == A23567
+
 for U in unboxedunions
     local U
     for N in (1, 2, 3, 4)

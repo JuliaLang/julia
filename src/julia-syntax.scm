@@ -359,9 +359,9 @@
 (define (scopenest names vals expr)
   (if (null? names)
       expr
-      `(let (block
-             ,(scopenest (cdr names) (cdr vals) expr))
-         (= ,(car names) ,(car vals)))))
+      `(let (= ,(car names) ,(car vals))
+         (block
+          ,(scopenest (cdr names) (cdr vals) expr)))))
 
 (define empty-vector-any '(call (core AnyVector) 0))
 
@@ -1120,9 +1120,23 @@
                    `(call ,name ,@argl))
               ,body)))))
 
+(define (let-binds e)
+  (if (and (pair? (cadr e))
+           (eq? (car (cadr e)) 'block))
+      (cdr (cadr e))
+      (list (cadr e))))
+
 (define (expand-let e)
-  (let ((ex (cadr e))
-        (binds (cddr e)))
+  (if (length= e 2)
+      (begin (deprecation-message (string "The form `Expr(:let, ex)` is deprecated. "
+                                          "Use `Expr(:let, Expr(:block), ex)` instead." #\newline))
+             (return (expand-let `(let (block) ,(cadr e))))))
+  (if (length> e 3)
+      (begin (deprecation-message (string "The form `Expr(:let, ex, binds...)` is deprecated. "
+                                          "Use `Expr(:let, Expr(:block, binds...), ex)` instead." #\newline))
+             (return (expand-let `(let (block ,@(cddr e)) ,(cadr e))))))
+  (let ((ex    (caddr e))
+        (binds (let-binds e)))
     (expand-forms
      (if
       (null? binds)
@@ -1803,7 +1817,7 @@
                                                  `(fuse _ ,(cdadr (cadr arg)))
                                                  oldarg))
                                  fargs args)))
-        (let ,fbody ,@(reverse (fuse-lets fargs args '()))))))
+        (let (block ,@(reverse (fuse-lets fargs args '()))) ,fbody))))
   (define (dot-to-fuse e) ; convert e == (. f (tuple args)) to (fuse f args)
     (define (make-fuse f args) ; check for nested (fuse f args) exprs and combine
       (define (split-kwargs args) ; return (cons keyword-args positional-args) extracted from args
@@ -1891,8 +1905,8 @@
 (define (expand-where body var)
   (let* ((bounds (analyze-typevar var))
          (v  (car bounds)))
-    `(let (call (core UnionAll) ,v ,body)
-       (= ,v ,(bounds-to-TypeVar bounds)))))
+    `(let (= ,v ,(bounds-to-TypeVar bounds))
+       (call (core UnionAll) ,v ,body))))
 
 (define (expand-wheres body vars)
   (if (null? vars)
@@ -3261,13 +3275,18 @@ f(x) = yt(x)
                         (capt-vars (diff all-capt-vars capt-sp)) ; remove capt-sp from capt-vars
                         (find-locals-in-method-sig (lambda (methdef)
                                                      (expr-find-all
-                                                      (lambda (e) (and (pair? e) (eq? (car e) 'outerref)
-                                                                       (let ((s (cadr e)))
+                                                      (lambda (e) (and (or (symbol? e) (and (pair? e) (eq? (car e) 'outerref)))
+                                                                       (let ((s (if (symbol? e) e (cadr e))))
                                                                             (and (symbol? s)
                                                                                  (not (eq? name s))
                                                                                  (not (memq s capt-sp))
-                                                                                 (or ;(local? s) ; TODO: error for local variables
-                                                                                   (memq s (lam:sp lam)))))))
+                                                                                 (if (and (local? s) (length> (lam:args lam) 0))
+                                                                                     ; error for local variables except in toplevel thunks
+                                                                                     (error (string "local variable " s
+                                                                                                    " cannot be used in closure declaration"))
+                                                                                     #t)
+                                                                                 ; allow captured variables
+                                                                                 (memq s (lam:sp lam))))))
                                                       (caddr methdef)
                                                       (lambda (e) (cadr e)))))
                         (sig-locals (simple-sort
@@ -3512,6 +3531,13 @@ f(x) = yt(x)
             ((call new foreigncall)
              (let* ((args
                      (cond ((eq? (car e) 'foreigncall)
+                            (for-each (lambda (a)
+                                        (if (and (length= a 2) (eq? (car a) '&))
+                                            (deprecation-message
+                                             (string "Syntax \"&argument\"" (linenode-string current-loc)
+                                                     " is deprecated. Remove the \"&\" and use a \"Ref\" argument "
+                                                     "type instead." #\newline))))
+                                      (list-tail e 6))
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place
                             ;;       the 1st should be compiled if an atom.
                             (append (if (atom? (cadr e))

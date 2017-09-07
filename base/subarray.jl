@@ -422,7 +422,7 @@ function replace_ref_end_!(ex, withex)
             if used_S && S !== ex.args[1]
                 S0 = ex.args[1]
                 ex.args[1] = S
-                ex = Expr(:let, ex, :($S = $S0))
+                ex = Expr(:let, :($S = $S0), ex)
             end
         else
             # recursive search
@@ -471,8 +471,8 @@ macro view(ex)
         if Meta.isexpr(ex, :ref)
             ex = Expr(:call, view, ex.args...)
         else # ex replaced by let ...; foo[...]; end
-            assert(Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[1], :ref))
-            ex.args[1] = Expr(:call, view, ex.args[1].args...)
+            assert(Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[2], :ref))
+            ex.args[2] = Expr(:call, view, ex.args[2].args...)
         end
         Expr(:&&, true, esc(ex))
     else
@@ -532,12 +532,13 @@ function _views(ex::Expr)
             end
 
             Expr(:let,
+                 Expr(:block,
+                      :($a = $(_views(lhs.args[1]))),
+                      [:($(i[k]) = $(_views(lhs.args[k+1]))) for k=1:length(i)]...),
                  Expr(first(h) == '.' ? :(.=) : :(=), :($a[$(I...)]),
                       Expr(:call, Symbol(h[1:end-1]),
                            :($maybeview($a, $(I...))),
-                           _views.(ex.args[2:end])...)),
-                 :($a = $(_views(lhs.args[1]))),
-                 [:($(i[k]) = $(_views(lhs.args[k+1]))) for k=1:length(i)]...)
+                           _views.(ex.args[2:end])...)))
         else
             Expr(ex.head, _views.(ex.args)...)
         end

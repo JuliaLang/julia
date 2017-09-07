@@ -175,17 +175,17 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 
 ### Elementary operations
 
-| Matrix type               | `+` | `-` | `*` | `\` | Other functions with optimized methods                              |
-|:------------------------- |:--- |:--- |:--- |:--- |:------------------------------------------------------------------- |
-| [`Symmetric`](@ref)       |     |     |     | MV  | [`inv()`](@ref), [`sqrt()`](@ref), [`exp()`](@ref)                |
-| [`Hermitian`](@ref)       |     |     |     | MV  | [`inv()`](@ref), [`sqrt()`](@ref), [`exp()`](@ref)                |
-| [`UpperTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
-| [`LowerTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
-| [`SymTridiagonal`](@ref)  | M   | M   | MS  | MV  | [`eigmax()`](@ref), [`eigmin()`](@ref)                              |
-| [`Tridiagonal`](@ref)     | M   | M   | MS  | MV  |                                                                     |
-| [`Bidiagonal`](@ref)      | M   | M   | MS  | MV  |                                                                     |
-| [`Diagonal`](@ref)        | M   | M   | MV  | MV  | [`inv()`](@ref), [`det()`](@ref), [`logdet()`](@ref), [`/()`](@ref) |
-| [`UniformScaling`](@ref)  | M   | M   | MVS | MVS | [`/()`](@ref)                                                       |
+| Matrix type               | `+` | `-` | `*` | `\` | Other functions with optimized methods                      |
+|:------------------------- |:--- |:--- |:--- |:--- |:----------------------------------------------------------- |
+| [`Symmetric`](@ref)       |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
+| [`Hermitian`](@ref)       |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
+| [`UpperTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
+| [`LowerTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
+| [`SymTridiagonal`](@ref)  | M   | M   | MS  | MV  | [`eigmax`](@ref), [`eigmin`](@ref)                          |
+| [`Tridiagonal`](@ref)     | M   | M   | MS  | MV  |                                                             |
+| [`Bidiagonal`](@ref)      | M   | M   | MS  | MV  |                                                             |
+| [`Diagonal`](@ref)        | M   | M   | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref), [`/`](@ref) |
+| [`UniformScaling`](@ref)  | M   | M   | MVS | MVS | [`/`](@ref)                                                 |
 
 Legend:
 
@@ -197,16 +197,16 @@ Legend:
 
 ### Matrix factorizations
 
-| Matrix type               | LAPACK | [`eig()`](@ref) | [`eigvals()`](@ref) | [`eigvecs()`](@ref) | [`svd()`](@ref) | [`svdvals()`](@ref) |
-|:------------------------- |:------ |:--------------- |:------------------- |:------------------- |:--------------- |:------------------- |
-| [`Symmetric`](@ref)       | SY     |                 | ARI                 |                     |                 |                     |
-| [`Hermitian`](@ref)       | HE     |                 | ARI                 |                     |                 |                     |
-| [`UpperTriangular`](@ref) | TR     | A               | A                   | A                   |                 |                     |
-| [`LowerTriangular`](@ref) | TR     | A               | A                   | A                   |                 |                     |
-| [`SymTridiagonal`](@ref)  | ST     | A               | ARI                 | AV                  |                 |                     |
-| [`Tridiagonal`](@ref)     | GT     |                 |                     |                     |                 |                     |
-| [`Bidiagonal`](@ref)      | BD     |                 |                     |                     | A               | A                   |
-| [`Diagonal`](@ref)        | DI     |                 | A                   |                     |                 |                     |
+| Matrix type               | LAPACK | [`eig`](@ref) | [`eigvals`](@ref) | [`eigvecs`](@ref) | [`svd`](@ref) | [`svdvals`](@ref) |
+|:------------------------- |:------ |:------------- |:----------------- |:----------------- |:------------- |:----------------- |
+| [`Symmetric`](@ref)       | SY     |               | ARI               |                   |               |                   |
+| [`Hermitian`](@ref)       | HE     |               | ARI               |                   |               |                   |
+| [`UpperTriangular`](@ref) | TR     | A             | A                 | A                 |               |                   |
+| [`LowerTriangular`](@ref) | TR     | A             | A                 | A                 |               |                   |
+| [`SymTridiagonal`](@ref)  | ST     | A             | ARI               | AV                |               |                   |
+| [`Tridiagonal`](@ref)     | GT     |               |                   |                   |               |                   |
+| [`Bidiagonal`](@ref)      | BD     |               |                   |                   | A             | A                 |
+| [`Diagonal`](@ref)        | DI     |               | A                 |                   |               |                   |
 
 Legend:
 

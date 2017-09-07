@@ -181,6 +181,14 @@ the same manner as C.
 function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
+    elseif isbitsunion(T)
+        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+              pointer(dest, doffs), pointer(src, soffs), n * Base.bitsunionsize(T))
+        # copy selector bytes
+        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+              convert(Ptr{UInt8}, pointer(dest)) + length(dest) * Base.bitsunionsize(T) + doffs - 1,
+              convert(Ptr{UInt8}, pointer(src)) + length(src) * Base.bitsunionsize(T) + soffs - 1,
+              n)
     else
         ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
               dest, pointer(dest, doffs), src, pointer(src, soffs), n)
@@ -1561,6 +1569,9 @@ function vcat(arrays::Vector{T}...) where T
     ptr = pointer(arr)
     if isbits(T)
         elsz = Core.sizeof(T)
+    elseif isbitsunion(T)
+        elsz = bitsunionsize(T)
+        selptr = convert(Ptr{UInt8}, ptr) + n * elsz
     else
         elsz = Core.sizeof(Ptr{Void})
     end
@@ -1570,6 +1581,13 @@ function vcat(arrays::Vector{T}...) where T
         if isbits(T)
             ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
                   ptr, a, nba)
+        elseif isbitsunion(T)
+            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+                  ptr, a, nba)
+            # copy selector bytes
+            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+                  selptr, convert(Ptr{UInt8}, pointer(a)) + nba, na)
+            selptr += na
         else
             ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
                   arr, ptr, a, pointer(a), na)
@@ -1603,10 +1621,13 @@ julia> findnext(A,3)
 ```
 """
 function findnext(A, start::Integer)
-    for i = start:length(A)
+    l = endof(A)
+    i = start
+    while i <= l
         if A[i] != 0
             return i
         end
+        i = nextind(A, i)
     end
     return 0
 end
@@ -1653,10 +1674,13 @@ julia> findnext(A,4,3)
 ```
 """
 function findnext(A, v, start::Integer)
-    for i = start:length(A)
+    l = endof(A)
+    i = start
+    while i <= l
         if A[i] == v
             return i
         end
+        i = nextind(A, i)
     end
     return 0
 end
@@ -1702,10 +1726,13 @@ julia> findnext(isodd, A, 2)
 ```
 """
 function findnext(testf::Function, A, start::Integer)
-    for i = start:length(A)
+    l = endof(A)
+    i = start
+    while i <= l
         if testf(A[i])
             return i
         end
+        i = nextind(A, i)
     end
     return 0
 end
@@ -1752,8 +1779,10 @@ julia> findprev(A,1)
 ```
 """
 function findprev(A, start::Integer)
-    for i = start:-1:1
+    i = start
+    while i >= 1
         A[i] != 0 && return i
+        i = prevind(A, i)
     end
     return 0
 end
@@ -1783,7 +1812,7 @@ julia> findlast(A)
 0
 ```
 """
-findlast(A) = findprev(A, length(A))
+findlast(A) = findprev(A, endof(A))
 
 """
     findprev(A, v, i::Integer)
@@ -1805,8 +1834,10 @@ julia> findprev(A, 1, 1)
 ```
 """
 function findprev(A, v, start::Integer)
-    for i = start:-1:1
+    i = start
+    while i >= 1
         A[i] == v && return i
+        i = prevind(A, i)
     end
     return 0
 end
@@ -1834,7 +1865,7 @@ julia> findlast(A,3)
 0
 ```
 """
-findlast(A, v) = findprev(A, v, length(A))
+findlast(A, v) = findprev(A, v, endof(A))
 
 """
     findprev(predicate::Function, A, i::Integer)
@@ -1857,8 +1888,10 @@ julia> findprev(isodd, A, 3)
 ```
 """
 function findprev(testf::Function, A, start::Integer)
-    for i = start:-1:1
+    i = start
+    while i >= 1
         testf(A[i]) && return i
+        i = prevind(A, i)
     end
     return 0
 end
@@ -1883,7 +1916,7 @@ julia> findlast(x -> x > 5, A)
 0
 ```
 """
-findlast(testf::Function, A) = findprev(testf, A, length(A))
+findlast(testf::Function, A) = findprev(testf, A, endof(A))
 
 """
     find(f::Function, A)
@@ -2072,13 +2105,13 @@ function findmax(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
-    s = start(a)
-    mi = i = 1
-    m, s = next(a, s)
-    while !done(a, s)
+    p = pairs(a)
+    s = start(p)
+    (mi, m), s = next(p, s)
+    i = mi
+    while !done(p, s)
         m != m && break
-        ai, s = next(a, s)
-        i += 1
+        (i, ai), s = next(p, s)
         if ai != ai || isless(m, ai)
             m = ai
             mi = i
@@ -2113,13 +2146,13 @@ function findmin(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
-    s = start(a)
-    mi = i = 1
-    m, s = next(a, s)
-    while !done(a, s)
+    p = pairs(a)
+    s = start(p)
+    (mi, m), s = next(p, s)
+    i = mi
+    while !done(p, s)
         m != m && break
-        ai, s = next(a, s)
-        i += 1
+        (i, ai), s = next(p, s)
         if ai != ai || isless(ai, m)
             m = ai
             mi = i

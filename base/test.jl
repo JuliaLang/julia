@@ -1415,7 +1415,7 @@ end
 GenericArray{T}(args...) where {T} = GenericArray(Array{T}(args...))
 GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(args...))
 
-Base.eachindex(a::GenericArray) = eachindex(a.a)
+Base.keys(a::GenericArray) = keys(a.a)
 Base.indices(a::GenericArray) = indices(a.a)
 Base.length(a::GenericArray) = length(a.a)
 Base.size(a::GenericArray) = size(a.a)

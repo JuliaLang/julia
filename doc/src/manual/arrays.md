@@ -76,7 +76,7 @@ omitted it will default to [`Float64`](@ref).
 
 The syntax `[A, B, C, ...]` constructs a 1-d array (vector) of its arguments. If all
 arguments have a common [promotion type](@ref conversion-and-promotion) then they get
-converted to that type using `convert()`.
+converted to that type using `convert`.
 
 ### Concatenation
 
@@ -94,11 +94,11 @@ The concatenation functions are used so often that they have special syntax:
 
 | Expression        | Calls             |
 |:----------------- |:----------------- |
-| `[A; B; C; ...]`  | [`vcat()`](@ref)  |
-| `[A B C ...]`     | [`hcat()`](@ref)  |
-| `[A B; C D; ...]` | [`hvcat()`](@ref) |
+| `[A; B; C; ...]`  | [`vcat`](@ref)  |
+| `[A B C ...]`     | [`hcat`](@ref)  |
+| `[A B; C D; ...]` | [`hvcat`](@ref) |
 
-[`hvcat()`](@ref) concatenates in both dimension 1 (with semicolons) and dimension 2 (with spaces).
+[`hvcat`](@ref) concatenates in both dimension 1 (with semicolons) and dimension 2 (with spaces).
 
 ### Typed array initializers
 
@@ -278,7 +278,7 @@ julia> x[1, [2 3; 4 1]]
 ```
 
 Empty ranges of the form `n:n-1` are sometimes used to indicate the inter-index location between
-`n-1` and `n`. For example, the [`searchsorted()`](@ref) function uses this convention to indicate
+`n-1` and `n`. For example, the [`searchsorted`](@ref) function uses this convention to indicate
 the insertion point of a value not found in a sorted array:
 
 ```jldoctest
@@ -311,7 +311,7 @@ Just as in [Indexing](@ref man-array-indexing), the `end` keyword may be used
 to represent the last index of each dimension within the indexing brackets, as
 determined by the size of the array being assigned into. Indexed assignment
 syntax without the `end` keyword is equivalent to a call to
-[`setindex!()`](@ref):
+[`setindex!`](@ref):
 
 ```
 setindex!(A, X, I_1, I_2, ..., I_n)
@@ -440,7 +440,7 @@ vector of `CartesianIndex{N}`s where its values are `true`. A logical index
 must be a vector of the same length as the dimension it indexes into, or it
 must be the only index provided and match the size and dimensionality of the
 array it indexes into. It is generally more efficient to use boolean arrays as
-indices directly instead of first calling [`find()`](@ref).
+indices directly instead of first calling [`find`](@ref).
 
 ```jldoctest
 julia> x = reshape(1:16, 4, 4)
@@ -546,7 +546,7 @@ Note that comparisons such as `==` operate on whole arrays, giving a single bool
 answer. Use dot operators like `.==` for elementwise comparisons. (For comparison
 operations like `<`, *only* the elementwise `.<` version is applicable to arrays.)
 
-Also notice the difference between `max.(a,b)`, which `broadcast`s [`max()`](@ref)
+Also notice the difference between `max.(a,b)`, which `broadcast`s [`max`](@ref)
 elementwise over `a` and `b`, and `maximum(a)`, which finds the largest value within
 `a`. The same relationship holds for `min.(a,b)` and `minimum(a)`.
 
@@ -565,7 +565,7 @@ julia> repmat(a,1,3)+A
  1.56851  1.86401  1.67846
 ```
 
-This is wasteful when dimensions get large, so Julia offers [`broadcast()`](@ref), which expands
+This is wasteful when dimensions get large, so Julia offers [`broadcast`](@ref), which expands
 singleton dimensions in array arguments to match the corresponding dimension in the other array
 without using extra memory, and applies the given function elementwise:
 
@@ -587,14 +587,14 @@ julia> broadcast(+, a, b)
 
 [Dotted operators](@ref man-dot-operators) such as `.+` and `.*` are equivalent
 to `broadcast` calls (except that they fuse, as described below). There is also a
-[`broadcast!()`](@ref) function to specify an explicit destination (which can also
-be accessed in a fusing fashion by `.=` assignment), and functions [`broadcast_getindex()`](@ref)
-and [`broadcast_setindex!()`](@ref) that broadcast the indices before indexing. Moreover, `f.(args...)`
+[`broadcast!`](@ref) function to specify an explicit destination (which can also
+be accessed in a fusing fashion by `.=` assignment), and functions [`broadcast_getindex`](@ref)
+and [`broadcast_setindex!`](@ref) that broadcast the indices before indexing. Moreover, `f.(args...)`
 is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broadcast any function
 ([dot syntax](@ref man-vectorized)). Nested "dot calls" `f.(...)` (including calls to `.+` etcetera)
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
 
-Additionally, [`broadcast()`](@ref) is not limited to arrays (see the function documentation),
+Additionally, [`broadcast`](@ref) is not limited to arrays (see the function documentation),
 it also handles tuples and treats any argument that is not an array, tuple or `Ref` (except for `Ptr`) as a "scalar".
 
 ```jldoctest
@@ -627,13 +627,13 @@ The `AbstractArray` type includes anything vaguely array-like, and implementatio
 be quite different from conventional arrays. For example, elements might be computed on request
 rather than stored. However, any concrete `AbstractArray{T,N}` type should generally implement
 at least [`size(A)`](@ref) (returning an `Int` tuple), [`getindex(A,i)`](@ref) and [`getindex(A,i1,...,iN)`](@ref getindex);
-mutable arrays should also implement [`setindex!()`](@ref). It is recommended that these operations
+mutable arrays should also implement [`setindex!`](@ref). It is recommended that these operations
 have nearly constant time complexity, or technically Õ(1) complexity, as otherwise some array
 functions may be unexpectedly slow. Concrete types should also typically provide a [`similar(A,T=eltype(A),dims=size(A))`](@ref)
-method, which is used to allocate a similar array for [`copy()`](@ref) and other out-of-place
+method, which is used to allocate a similar array for [`copy`](@ref) and other out-of-place
 operations. No matter how an `AbstractArray{T,N}` is represented internally, `T` is the type of
 object returned by *integer* indexing (`A[1, ..., 1]`, when `A` is not empty) and `N` should be
-the length of the tuple returned by [`size()`](@ref).
+the length of the tuple returned by [`size`](@ref).
 
 `DenseArray` is an abstract subtype of `AbstractArray` intended to include all arrays that are
 laid out at regular offsets in memory, and which can therefore be passed to external C and Fortran
@@ -650,9 +650,9 @@ basic storage-specific operations are all that have to be implemented for [`Arra
 that the rest of the array library can be implemented in a generic manner.
 
 `SubArray` is a specialization of `AbstractArray` that performs indexing by reference rather than
-by copying. A `SubArray` is created with the [`view()`](@ref) function, which is called the same
-way as [`getindex()`](@ref) (with an array and a series of index arguments). The result of [`view()`](@ref)
-looks the same as the result of [`getindex()`](@ref), except the data is left in place. [`view()`](@ref)
+by copying. A `SubArray` is created with the [`view`](@ref) function, which is called the same
+way as [`getindex`](@ref) (with an array and a series of index arguments). The result of [`view`](@ref)
+looks the same as the result of [`getindex`](@ref), except the data is left in place. [`view`](@ref)
 stores the input index vectors in a `SubArray` object, which can later be used to index the original
 array indirectly.  By putting the [`@views`](@ref) macro in front of an expression or
 block of code, any `array[...]` slice in that expression will be converted to
@@ -743,10 +743,10 @@ them is by doing a double transpose.
 In some applications, it is convenient to store explicit zero values in a `SparseMatrixCSC`. These
 *are* accepted by functions in `Base` (but there is no guarantee that they will be preserved in
 mutating operations). Such explicitly stored zeros are treated as structural nonzeros by many
-routines. The [`nnz()`](@ref) function returns the number of elements explicitly stored in the
+routines. The [`nnz`](@ref) function returns the number of elements explicitly stored in the
 sparse data structure, including structural nonzeros. In order to count the exact number of
 numerical nonzeros, use [`count(!iszero, x)`](@ref), which inspects every stored element of a sparse
-matrix. [`dropzeros()`](@ref), and the in-place [`dropzeros!()`](@ref), can be used to
+matrix. [`dropzeros`](@ref), and the in-place [`dropzeros!`](@ref), can be used to
 remove stored zeros from the sparse matrix.
 
 ```jldoctest
@@ -781,8 +781,8 @@ stored zeros. (See [Sparse Matrix Storage](@ref man-csc).).
 
 ### Sparse Vector and Matrix Constructors
 
-The simplest way to create sparse arrays is to use functions equivalent to the [`zeros()`](@ref)
-and [`eye()`](@ref) functions that Julia provides for working with dense arrays. To produce
+The simplest way to create sparse arrays is to use functions equivalent to the [`zeros`](@ref)
+and [`eye`](@ref) functions that Julia provides for working with dense arrays. To produce
 sparse arrays instead, you can use the same names with an `sp` prefix:
 
 ```jldoctest
@@ -796,7 +796,7 @@ julia> speye(3,5)
   [3, 3]  =  1.0
 ```
 
-The [`sparse()`](@ref) function is often a handy way to construct sparse arrays. For
+The [`sparse`](@ref) function is often a handy way to construct sparse arrays. For
 example, to construct a sparse matrix we can input a vector `I` of row indices, a vector
 `J` of column indices, and a vector `V` of stored values (this is also known as the
 [COO (coordinate) format](https://en.wikipedia.org/wiki/Sparse_matrix#Coordinate_list_.28COO.29)).
@@ -823,8 +823,8 @@ julia> R = sparsevec(I,V)
   [5]  =  3
 ```
 
-The inverse of the [`sparse()`](@ref) and [`sparsevec`](@ref) functions is
-[`findnz()`](@ref), which retrieves the inputs used to create the sparse array.
+The inverse of the [`sparse`](@ref) and [`sparsevec`](@ref) functions is
+[`findnz`](@ref), which retrieves the inputs used to create the sparse array.
 There is also a [`findn`](@ref) function which only returns the index vectors.
 
 ```jldoctest sparse_function
@@ -846,7 +846,7 @@ julia> findn(R)
 ```
 
 Another way to create a sparse array is to convert a dense array into a sparse array using
-the [`sparse()`](@ref) function:
+the [`sparse`](@ref) function:
 
 ```jldoctest
 julia> sparse(eye(5))
@@ -863,7 +863,7 @@ julia> sparse([1.0, 0.0, 1.0])
   [3]  =  1.0
 ```
 
-You can go in the other direction using the [`Array`](@ref) constructor. The [`issparse()`](@ref)
+You can go in the other direction using the [`Array`](@ref) constructor. The [`issparse`](@ref)
 function can be used to query if a matrix is sparse.
 
 ```jldoctest
@@ -876,7 +876,7 @@ true
 Arithmetic operations on sparse matrices also work as they do on dense matrices. Indexing of,
 assignment into, and concatenation of sparse matrices work in the same way as dense matrices.
 Indexing operations, especially assignment, are expensive, when carried out one element at a time.
-In many cases it may be better to convert the sparse matrix into `(I,J,V)` format using [`findnz()`](@ref),
+In many cases it may be better to convert the sparse matrix into `(I,J,V)` format using [`findnz`](@ref),
 manipulate the values or the structure in the dense vectors `(I,J,V)`, and then reconstruct
 the sparse matrix.
 
@@ -894,7 +894,7 @@ section of the standard library reference.
 | Sparse                     | Dense                  | Description                                                                                                                                                           |
 |:-------------------------- |:---------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`spzeros(m,n)`](@ref)     | [`zeros(m,n)`](@ref)   | Creates a *m*-by-*n* matrix of zeros. ([`spzeros(m,n)`](@ref) is empty.)                                                                                              |
-| [`spones(S)`](@ref)        | [`ones(m,n)`](@ref)    | Creates a matrix filled with ones. Unlike the dense version, [`spones()`](@ref) has the same sparsity pattern as *S*.                                                 |
+| [`spones(S)`](@ref)        | [`ones(m,n)`](@ref)    | Creates a matrix filled with ones. Unlike the dense version, [`spones`](@ref) has the same sparsity pattern as *S*.                                                 |
 | [`speye(n)`](@ref)         | [`eye(n)`](@ref)       | Creates a *n*-by-*n* identity matrix.                                                                                                                                 |
 | [`full(S)`](@ref)          | [`sparse(A)`](@ref)    | Interconverts between dense and sparse formats.                                                                                                                       |
 | [`sprand(m,n,d)`](@ref)    | [`rand(m,n)`](@ref)    | Creates a *m*-by-*n* random matrix (of density *d*) with iid non-zero elements distributed uniformly on the half-open interval ``[0, 1)``.                            |

@@ -97,22 +97,15 @@ static Value *mark_callee_rooted(IRBuilder<> &irbuilder, Value *V)
 
 // --- language feature checks ---
 
-// branch on whether a language feature is enabled or not
 #define JL_FEAT_TEST(ctx, feature) ((ctx).params->feature)
-
-// require a language feature to be enabled
-#define JL_FEAT_REQUIRE(ctx, feature) \
-    if (!JL_FEAT_TEST(ctx, feature)) \
-        jl_errorf("%s for %s:%d requires the " #feature " language feature, which is disabled", \
-                  __FUNCTION__, (ctx).file.str().c_str(), *(ctx).line);
 
 
 // --- hook checks ---
 
-#define JL_HOOK_TEST(params,hook) ((params)->hooks.hook != jl_nothing)
+#define JL_HOOK_TEST(params,hook) ((params)->hook != jl_nothing)
 
 #define JL_HOOK_CALL(params,hook,argc,...) \
-    _hook_call<argc>((params)->hooks.hook, {{__VA_ARGS__}});
+    _hook_call<argc>((params)->hook, {{__VA_ARGS__}});
 template<int N>
 static inline void _hook_call(jl_value_t *hook, std::array<jl_value_t*,N> args) {
     jl_value_t **argv;
@@ -728,7 +721,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
         else {
             // See note above in emit_typeof(Value*), we can't tell the system
             // about this until we've cleared the GC bits.
-            pdatatype = emit_bitcast(ctx, emit_typeptr_addr(ctx, ctx.builder.CreateLoad(p.gcroot)), T_ppjlvalue);
+            pdatatype = emit_bitcast(ctx, emit_typeptr_addr(ctx, p.Vboxed), T_ppjlvalue);
         }
         counter = 0;
         for_each_uniontype_small(
@@ -907,7 +900,6 @@ static void raise_exception(jl_codectx_t &ctx, Value *exc,
                      jl_box_voidpointer(wrap(ctx.builder.GetInsertBlock())),
                      jl_box_voidpointer(wrap(exc)));
     } else {
-        JL_FEAT_REQUIRE(ctx, runtime);
         ctx.builder.CreateCall(prepare_call(jlthrow_func), { mark_callee_rooted(exc) });
     }
     ctx.builder.CreateUnreachable();
@@ -1028,7 +1020,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 Value *xtindex = ctx.builder.CreateAnd(x.TIndex, ConstantInt::get(T_int8, 0x7f));
                 return std::make_pair(ctx.builder.CreateICmpEQ(xtindex, ConstantInt::get(T_int8, tindex)), false);
             }
-            else {
+            else if (x.Vboxed) {
                 // test for (x.TIndex == 0x80 && typeof(x.V) == type)
                 Value *isboxed = ctx.builder.CreateICmpEQ(x.TIndex, ConstantInt::get(T_int8, 0x80));
                 BasicBlock *currBB = ctx.builder.GetInsertBlock();
@@ -1036,7 +1028,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 BasicBlock *postBB = BasicBlock::Create(jl_LLVMContext, "post_isa", ctx.f);
                 ctx.builder.CreateCondBr(isboxed, isaBB, postBB);
                 ctx.builder.SetInsertPoint(isaBB);
-                Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, x.V),
+                Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, x.Vboxed),
                     maybe_decay_untracked(literal_pointer_val(ctx, type)));
                 ctx.builder.CreateBr(postBB);
                 ctx.builder.SetInsertPoint(postBB);
@@ -1044,6 +1036,9 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 istype->addIncoming(ConstantInt::get(T_int1, 0), currBB);
                 istype->addIncoming(istype_boxed, isaBB);
                 return std::make_pair(istype, false);
+            } else {
+                // handle the case where we know that `x` is unboxed (but of unknown type), but that leaf type `type` cannot be unboxed
+                return std::make_pair(ConstantInt::get(T_int1, 0), false);
             }
         }
         return std::make_pair(ctx.builder.CreateICmpEQ(emit_typeof_boxed(ctx, x),
@@ -1105,9 +1100,8 @@ static bool bounds_check_enabled(jl_codectx_t &ctx, jl_value_t *inbounds) {
 static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_value_t *boundscheck)
 {
     Value *im1 = ctx.builder.CreateSub(i, ConstantInt::get(T_size, 1));
-    jl_cgval_t ib = emit_expr(ctx, boundscheck);
 #if CHECK_BOUNDS==1
-    if (bounds_check_enabled(ctx, ib.constant)) {
+    if (bounds_check_enabled(ctx, boundscheck)) {
         Value *ok = ctx.builder.CreateICmpULT(im1, len);
         BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx.f);
         BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext, "pass");
@@ -1299,7 +1293,6 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
                 Type *fty = julia_type_to_llvm(jt);
                 Value *addr = ctx.builder.CreateGEP(emit_bitcast(ctx, decay_derived(ptr), PointerType::get(fty,0)), idx);
                 *ret = mark_julia_slot(addr, jt, NULL, strct.tbaa);
-                ret->gcroot = strct.gcroot;
                 ret->isimmutable = strct.isimmutable;
                 return true;
             }
@@ -1395,7 +1388,6 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             Value *ptindex = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, addr, T_pint8), ConstantInt::get(T_size, fsz - 1));
             Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), ctx.builder.CreateLoad(ptindex));
             bool isimmutable = strct.isimmutable;
-            Value *gcroot = strct.gcroot;
             if (jt->mutabl) {
                 // move value to an immutable stack slot
                 Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * align), (fsz + align - 2) / align);
@@ -1406,18 +1398,15 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 ctx.builder.CreateMemCpy(lv, addr, nbytes, align);
                 addr = lv;
                 isimmutable = true;
-                gcroot = NULL;
             }
             jl_cgval_t fieldval = mark_julia_slot(addr, jfty, tindex, strct.tbaa);
             fieldval.isimmutable = isimmutable;
-            fieldval.gcroot = gcroot;
             return fieldval;
         }
         else if (!jt->mutabl) {
             // just compute the pointer and let user load it when necessary
             jl_cgval_t fieldval = mark_julia_slot(addr, jfty, NULL, strct.tbaa);
             fieldval.isimmutable = strct.isimmutable;
-            fieldval.gcroot = strct.gcroot;
             return fieldval;
         }
         return typed_load(ctx, addr, ConstantInt::get(T_size, 0), jfty, strct.tbaa, true, align);
@@ -1640,9 +1629,8 @@ static Value *emit_array_nd_index(
     Value *a = boxed(ctx, ainfo);
     Value *i = ConstantInt::get(T_size, 0);
     Value *stride = ConstantInt::get(T_size, 1);
-    jl_cgval_t ib = emit_expr(ctx, inbounds);
 #if CHECK_BOUNDS==1
-    bool bc = bounds_check_enabled(ctx, ib.constant);
+    bool bc = bounds_check_enabled(ctx, inbounds);
     BasicBlock *failBB = NULL, *endBB = NULL;
     if (bc) {
         failBB = BasicBlock::Create(jl_LLVMContext, "oob");
@@ -1905,6 +1893,13 @@ static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, j
     return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(T_int8, 0x7f));
 }
 
+/*
+ * Box unboxed values in a union. Optionally, skip certain unboxed values,
+ * returning `V_null` in one of the skipped cases. If `skip` is not empty,
+ * skip[0] (corresponding to unknown boxed) must always be set. In that
+ * case, the calling code must separately deal with the case where
+ * `vinfo` is already an unkown boxed union (union tag 0x80).
+ */
 static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallBitVector &skip)
 {
     // given vinfo::Union{T, S}, emit IR of the form:
@@ -1955,13 +1950,12 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
             vinfo.typ,
             counter);
     ctx.builder.SetInsertPoint(defaultBB);
-    if (skip.size() > 0 && skip[0]) {
-        // skip[0] specifies where to return NULL or the original pointer
-        // if the value was not handled above
+    if (skip.size() > 0) {
+        assert(skip[0]);
         box_merge->addIncoming(maybe_decay_untracked(V_null), defaultBB);
         ctx.builder.CreateBr(postBB);
     }
-    else if ((vinfo.V == NULL || isa<AllocaInst>(vinfo.V)) && !vinfo.gcroot) {
+    else if (!vinfo.Vboxed) {
         Function *trap_func = Intrinsic::getDeclaration(
                 ctx.f->getParent(),
                 Intrinsic::trap);
@@ -1969,9 +1963,7 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
         ctx.builder.CreateUnreachable();
     }
     else {
-        // We're guaranteed here that Load(.gcroot) == .V, because we have determined
-        // that this union is a boxed value, rather than an interior pointer of some sort
-        box_merge->addIncoming(ctx.builder.CreateLoad(vinfo.gcroot), defaultBB);
+        box_merge->addIncoming(vinfo.Vboxed, defaultBB);
         ctx.builder.CreateBr(postBB);
     }
     ctx.builder.SetInsertPoint(postBB);
@@ -1990,10 +1982,8 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
     if (vinfo.constant)
         return maybe_decay_untracked(literal_pointer_val(ctx, vinfo.constant));
     if (vinfo.isboxed) {
-        assert(vinfo.V && "Missing value for box.");
-        // We're guaranteed here that Load(.gcroot) == .V, because we have determined
-        // that this value is a box, so if it has a gcroot, that's where the value is.
-        return vinfo.gcroot ? ctx.builder.CreateLoad(vinfo.gcroot) : vinfo.V;
+        assert(vinfo.V == vinfo.Vboxed);
+        return vinfo.V;
     }
 
     Value *box;
@@ -2116,8 +2106,6 @@ static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const std
 // allocation for known size object
 static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
 {
-    JL_FEAT_REQUIRE(ctx, dynamic_alloc);
-    JL_FEAT_REQUIRE(ctx, runtime);
     Value *ptls_ptr = emit_bitcast(ctx, ctx.ptlsStates, T_pint8);
     auto call = ctx.builder.CreateCall(prepare_call(jl_alloc_obj_func),
                                        {ptls_ptr, ConstantInt::get(T_size, static_size),
@@ -2348,14 +2336,12 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
 {
     return (a->cached == b->cached) &&
            // language features
-           (a->runtime == b->runtime) &&
-           (a->exceptions == b->exceptions) &&
            (a->track_allocations == b->track_allocations) &&
            (a->code_coverage == b->code_coverage) &&
            (a->static_alloc == b->static_alloc) &&
-           (a->dynamic_alloc == b->dynamic_alloc) &&
+           (a->prefer_specsig == b->prefer_specsig) &&
            // hooks
-           (a->hooks.module_setup == b->hooks.module_setup) &&
-           (a->hooks.module_activation == b->hooks.module_activation) &&
-           (a->hooks.raise_exception == b->hooks.raise_exception);
+           (a->module_setup == b->module_setup) &&
+           (a->module_activation == b->module_activation) &&
+           (a->raise_exception == b->raise_exception);
 }

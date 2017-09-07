@@ -379,3 +379,9 @@ end
 @test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 1
 
 @test_throws ErrorException "ab" ∈ "abc"
+
+# issue #15723
+@test findfirst("⨳(", '(') == 4
+@test findnext("(⨳(", '(', 2) == 5
+@test findlast("(⨳(", '(') == 5
+@test findprev("(⨳(", '(', 2) == 1

@@ -302,6 +302,7 @@ function lreplace!(str::AbstractString, r::LReplace)
     pat = r.pat_str
     j = start(pat)
     matching = false
+    local istart::Int
     while !done(str, i)
         cstr, i = next(str, i)
         if !matching

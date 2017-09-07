@@ -122,7 +122,6 @@ let a
     a = 2.84 + 5.2im
 
     @test_throws MethodError ccall((:cptest, libccalltest), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), a)
-    @test_throws MethodError ccall((:cptest, libccalltest), Ptr{Complex{Int}}, (Complex{Int},), &a)
 end
 
 

@@ -514,7 +514,7 @@ let b = IOBuffer("""
                  end
                  f()
                  """)
-    @test Base.parse_input_line(b) == Expr(:let, Expr(:block, LineNumberNode(2, :none), :x), Expr(:(=), :x, :x))
+    @test Base.parse_input_line(b) == Expr(:let, Expr(:(=), :x, :x), Expr(:block, LineNumberNode(2, :none), :x))
     @test Base.parse_input_line(b) == Expr(:call, :f)
     @test Base.parse_input_line(b) === nothing
 end
@@ -1319,3 +1319,11 @@ let
     @test f() == 0
     @test f(2) == 2
 end
+
+# issue #18730
+@test expand(Main, quote
+        function f()
+            local Int
+            x::Int -> 2
+        end
+    end) == Expr(:error, "local variable Int cannot be used in closure declaration")

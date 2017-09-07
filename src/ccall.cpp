@@ -1513,12 +1513,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         rt = (jl_value_t*)jl_any_type; // convert return type to jl_value_t*
     }
 
-    // check if we require the runtime
-    // TODO: could be more fine-grained,
-    //       respecting special functions below that don't require the runtime
-    if (!llvmcall && (!f_lib || f_lib == JL_DL_LIBNAME))
-        JL_FEAT_REQUIRE(ctx, runtime);
-
     // some sanity checking and check whether there's a vararg
     bool isVa;
     size_t nargt;
@@ -1583,9 +1577,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         if (jl_is_long(argi_root))
             continue;
         jl_cgval_t arg_root = emit_expr(ctx, argi_root);
-        Value *gcuse = arg_root.gcroot ? ctx.builder.CreateLoad(arg_root.gcroot) : arg_root.V;
-        if (gcuse) {
-            gc_uses.push_back(gcuse);
+        if (arg_root.Vboxed || arg_root.V) {
+            gc_uses.push_back(arg_root.Vboxed ? arg_root.Vboxed : arg_root.V);
         }
     }
 

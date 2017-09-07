@@ -574,10 +574,11 @@ if Sys.isunix()
         path = homedir()
         dir = joinpath(path, "tmpfoobar")
         mkdir(dir)
-        s = "\"~/tmpfoob"
+        s = "\"" * path * "/tmpfoob"
         c,r = test_complete(s)
         @test "tmpfoobar/" in c
-        @test r == 4:10
+        l = 3 + length(path)
+        @test r == l:l+6
         @test s[r] == "tmpfoob"
         s = "\"~"
         @test "tmpfoobar/" in c
@@ -682,6 +683,18 @@ let #test that it can auto complete with spaces in file/path
         end
     end
     rm(dir, recursive=true)
+end
+
+let  # Test tilde path completion
+    c, r, res = test_complete("\"~/julia")
+    if !Sys.iswindows()
+        @test res && c == String[homedir() * "/julia"]
+    else
+        @test !res
+    end
+
+    c, r, res = test_complete("\"foo~bar")
+    @test !res
 end
 
 # Test the completion returns nothing when the folder do not exist

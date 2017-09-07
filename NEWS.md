@@ -42,6 +42,10 @@ Language changes
   * Nested `if` expressions that arise from the keyword `elseif` now use `elseif`
     as their expression head instead of `if` ([#21774]).
 
+  * `let` blocks now parse the same as `for` loops; the first argument is either an
+    assignment or `block` of assignments, and the second argument is a block of
+    statements ([#21774]).
+
   * Parsed and lowered forms of type definitions have been synchronized with their
     new keywords ([#23157]). Expression heads are renamed as follows:
 
@@ -87,6 +91,9 @@ Language changes
 
   * Variable bindings local to `while` loop bodies are now freshly allocated on each loop iteration,
     matching the behavior of `for` loops.
+
+  * Prefix `&` for by-reference arguments to `ccall` has been deprecated in favor of
+    `Ref` argument types ([#6080]).
 
 Breaking changes
 ----------------
@@ -191,6 +198,10 @@ This section lists changes that do not have deprecation warnings.
     This avoids stack overflows in the common case of definitions like
     `f(x, y) = f(promote(x, y)...)` ([#22801]).
 
+  * `findmin`, `findmax`, `indmin`, and `indmax` used to always return linear indices.
+    They now return `CartesianIndex`es for all but 1-d arrays, and in general return
+    the `keys` of indexed collections (e.g. dictionaries) ([#22907]).
+
 Library improvements
 --------------------
 
@@ -217,7 +228,7 @@ Library improvements
 
   * The `crc32c` function for CRC-32c checksums is now exported ([#22274]).
 
-  * The output of `versioninfo()` is now controlled with keyword arguments ([#21974]).
+  * The output of `versioninfo` is now controlled with keyword arguments ([#21974]).
 
   * The function `LibGit2.set_remote_url` now always sets both the fetch and push URLs for a
     git repo. Additionally, the argument order was changed to be consistent with the git
@@ -250,6 +261,8 @@ Library improvements
     `randperm!` and `randcycle!` ([#22723]).
 
   * `BigFloat` random numbers can now be generated ([#22720]).
+
+  * REPL Undo via Ctrl-/ and Ctrl-_
 
 Compiler/Runtime improvements
 -----------------------------
@@ -891,7 +904,7 @@ Deprecated or removed
     `pop!(ENV, k, def)`. Be aware that `pop!` returns `k` or `def`, whereas `delete!`
     returns `ENV` or `def` ([#18012]).
 
-  * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor()` ([#18977]).
+  * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor` ([#18977]).
 
   * The single-argument form of `write` (`write(x)`, with implicit `STDOUT` output stream),
     has been deprecated in favor of the explicit equivalent `write(STDOUT, x)` ([#17654]).

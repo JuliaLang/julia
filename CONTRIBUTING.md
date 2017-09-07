@@ -141,10 +141,6 @@ All docstrings are written inline above the methods or types they are associated
 4. check the output in `doc/_build/html/` to make sure the changes are correct;
 5. commit your changes and open a pull request.
 
-> **Note**
->
-> Currently there are a large number of docstrings found in `base/docs/helpdb/Base.jl`. When any of these docstrings are modified please move them out of this file and place them above the most appropriate definition in one of the `base/` source files.
-
 #### Adding a new docstring to `base/`
 
 The steps required to add a new docstring are listed below:

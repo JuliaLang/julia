@@ -322,7 +322,7 @@ LineEdit.char_move_word_left(buf)
 
 # Unicode combining characters
 let buf = IOBuffer()
-    LineEdit.edit_insert(buf, "â")
+    edit_insert(buf, "â")
     LineEdit.edit_move_left(buf)
     @test position(buf) == 0
     LineEdit.edit_move_right(buf)
@@ -333,7 +333,7 @@ end
 
 ## edit_transpose_chars ##
 let buf = IOBuffer()
-    LineEdit.edit_insert(buf, "abcde")
+    edit_insert(buf, "abcde")
     seek(buf,0)
     LineEdit.edit_transpose_chars(buf)
     @test content(buf) == "abcde"
@@ -350,7 +350,7 @@ let buf = IOBuffer()
 
     seek(buf, 0)
     LineEdit.edit_clear(buf)
-    LineEdit.edit_insert(buf, "αβγδε")
+    edit_insert(buf, "αβγδε")
     seek(buf,0)
     LineEdit.edit_transpose_chars(buf)
     @test content(buf) == "αβγδε"
@@ -373,7 +373,7 @@ end
                                buf, i)[1:2]
 
     mode[] = :readline
-    LineEdit.edit_insert(buf, "àbç def  gh ")
+    edit_insert(buf, "àbç def  gh ")
     @test transpose!(0) == ("àbç def  gh ", 0)
     @test transpose!(1) == ("àbç def  gh ", 1)
     @test transpose!(2) == ("àbç def  gh ", 2)
@@ -384,24 +384,24 @@ end
     @test transpose!(7) == ("àbç gh  def ", 11)
     @test transpose!(10) == ("àbç def  gh ", 11)
     @test transpose!(11) == ("àbç gh   def", 12)
-    LineEdit.edit_insert(buf, " ")
+    edit_insert(buf, " ")
     @test transpose!(13) == ("àbç def    gh", 13)
 
     take!(buf)
     mode[] = :emacs
-    LineEdit.edit_insert(buf, "àbç def  gh ")
+    edit_insert(buf, "àbç def  gh ")
     @test transpose!(0) == ("def àbç  gh ", 7)
     @test transpose!(4) == ("àbç def  gh ", 7)
     @test transpose!(5) == ("àbç gh  def ", 11)
     @test transpose!(10) == ("àbç def   gh", 12)
-    LineEdit.edit_insert(buf, " ")
+    edit_insert(buf, " ")
     @test transpose!(13) == ("àbç gh    def", 13)
 end
 
 let s = new_state()
     buf = buffer(s)
 
-    LineEdit.edit_insert(s,"first line\nsecond line\nthird line")
+    edit_insert(s,"first line\nsecond line\nthird line")
     @test content(buf) == "first line\nsecond line\nthird line"
 
     ## edit_move_line_start/end ##
@@ -487,24 +487,24 @@ end
         LineEdit.edit_move_left(s)
     end
 
-    LineEdit.edit_insert(s, "for x=1:10\n")
+    edit_insert(s, "for x=1:10\n")
     LineEdit.edit_tab(s)
     @test content(s) == "for x=1:10\n    "
     LineEdit.edit_backspace(s, true, false)
     @test content(s) == "for x=1:10\n"
-    LineEdit.edit_insert(s, "  ")
+    edit_insert(s, "  ")
     @test position(s) == 13
     LineEdit.edit_tab(s)
     @test content(s) == "for x=1:10\n    "
-    LineEdit.edit_insert(s, "  ")
+    edit_insert(s, "  ")
     LineEdit.edit_backspace(s, true, false)
     @test content(s) == "for x=1:10\n    "
-    LineEdit.edit_insert(s, "éé=3   ")
+    edit_insert(s, "éé=3   ")
     LineEdit.edit_tab(s)
     @test content(s) == "for x=1:10\n    éé=3    "
     LineEdit.edit_backspace(s, true, false)
     @test content(s) == "for x=1:10\n    éé=3"
-    LineEdit.edit_insert(s, "\n    1∉x  ")
+    edit_insert(s, "\n    1∉x  ")
     LineEdit.edit_tab(s)
     @test content(s) == "for x=1:10\n    éé=3\n    1∉x     "
     LineEdit.edit_backspace(s, false, false)
@@ -532,7 +532,7 @@ end
     @test content(s) == "for x=1:10\n    éé=3\n    1∉x "
     @test position(s) == 22
     LineEdit.edit_kill_line(s)
-    LineEdit.edit_insert(s, ' '^10)
+    edit_insert(s, ' '^10)
     move_left(s, 7)
     @test content(s) == "for x=1:10\n    éé=3\n          "
     @test position(s) == 25
@@ -543,7 +543,7 @@ end
     @test position(s) == 26
     @test content(s) == "for x=1:10\n    éé=3\n    "
     # test again the same, when there is a next line
-    LineEdit.edit_insert(s, "      \nend")
+    edit_insert(s, "      \nend")
     move_left(s, 11)
     @test position(s) == 25
     LineEdit.edit_tab(s, true, false)
@@ -556,10 +556,10 @@ end
 
 @testset "newline alignment feature" begin
     s = new_state()
-    LineEdit.edit_insert(s, "for x=1:10\n    é = 1")
+    edit_insert(s, "for x=1:10\n    é = 1")
     LineEdit.edit_insert_newline(s)
     @test content(s) == "for x=1:10\n    é = 1\n    "
-    LineEdit.edit_insert(s, " b = 2")
+    edit_insert(s, " b = 2")
     LineEdit.edit_insert_newline(s)
     @test content(s) == "for x=1:10\n    é = 1\n     b = 2\n     "
     # after an empty line, should still insert the expected number of spaces
@@ -572,7 +572,7 @@ end
     # test when point before first letter of the line
     for i=6:10
         LineEdit.edit_clear(s)
-        LineEdit.edit_insert(s, "begin\n    x")
+        edit_insert(s, "begin\n    x")
         seek(LineEdit.buffer(s), i)
         LineEdit.edit_insert_newline(s)
         @test content(s) == "begin\n" * ' '^(i-6) * "\n    x"
@@ -581,7 +581,7 @@ end
 
 @testset "change case on the right" begin
     buf = IOBuffer()
-    LineEdit.edit_insert(buf, "aa bb CC")
+    edit_insert(buf, "aa bb CC")
     seekstart(buf)
     LineEdit.edit_upper_case(buf)
     LineEdit.edit_title_case(buf)
@@ -613,4 +613,92 @@ end
     LineEdit.edit_kill_line(s)
     @test s.kill_ring[end] == "çhing"
     @test s.kill_idx == 3
+end
+
+@testset "undo" begin
+    s = new_state()
+
+    edit_insert(s, "one two three")
+
+    LineEdit.edit_delete_prev_word(s)
+    @test content(s) == "one two "
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two three"
+
+    edit_insert(s, " four")
+    edit_insert(s, " five")
+    @test content(s) == "one two three four five"
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two three four"
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two three"
+
+    LineEdit.edit_clear(s)
+    @test content(s) == ""
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two three"
+
+    LineEdit.edit_move_left(s)
+    LineEdit.edit_move_left(s)
+    LineEdit.edit_transpose_chars(s)
+    @test content(s) == "one two there"
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two three"
+
+    LineEdit.move_line_start(s)
+    LineEdit.edit_kill_line(s)
+    @test content(s) == ""
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two three"
+
+    LineEdit.move_line_start(s)
+    LineEdit.edit_kill_line(s)
+    LineEdit.edit_yank(s)
+    LineEdit.edit_yank(s)
+    @test content(s) == "one two threeone two three"
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two three"
+    LineEdit.pop_undo(s)
+    @test content(s) == ""
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two three"
+
+    LineEdit.move_line_end(s)
+    LineEdit.edit_backspace(s)
+    LineEdit.edit_backspace(s)
+    LineEdit.edit_backspace(s)
+    @test content(s) == "one two th"
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two thr"
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two thre"
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two three"
+
+    LineEdit.push_undo(s) # TODO: incorporate push_undo into edit_splice! ?
+    LineEdit.edit_splice!(s, 4 => 7, "stott")
+    @test content(s) == "one stott three"
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two three"
+
+    LineEdit.edit_move_left(s)
+    LineEdit.edit_move_left(s)
+    LineEdit.edit_move_left(s)
+    LineEdit.edit_delete(s)
+    @test content(s) == "one two thee"
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two three"
+
+    LineEdit.edit_move_word_left(s)
+    LineEdit.edit_werase(s)
+    LineEdit.edit_delete_next_word(s)
+    @test content(s) == "one "
+    LineEdit.pop_undo(s)
+    @test content(s) == "one three"
+    LineEdit.pop_undo(s)
+    @test content(s) == "one two three"
+
+    # pop initial insert of "one two three"
+    LineEdit.pop_undo(s)
+    @test content(s) == ""
 end

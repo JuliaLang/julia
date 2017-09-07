@@ -49,6 +49,7 @@ ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
 endof(x::Number) = 1
 iteratorsize(::Type{<:Number}) = HasShape()
+keys(::Number) = OneTo(1)
 
 getindex(x::Number) = x
 function getindex(x::Number, i::Integer)

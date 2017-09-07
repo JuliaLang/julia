@@ -676,3 +676,13 @@ false
 ```
 """
 isempty(itr) = done(itr, start(itr))
+
+"""
+    values(iterator)
+
+For an iterator or collection that has keys and values, return an iterator
+over the values.
+This function simply returns its argument by default, since the elements
+of a general iterator are normally considered its "values".
+"""
+values(itr) = itr

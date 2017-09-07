@@ -98,7 +98,7 @@ noting the transition `"yyyymm"` from one period character to the next.
 Support for text-form month parsing is also supported through the `u` and `U` characters, for
 abbreviated and full-length month names, respectively. By default, only English month names are
 supported, so `u` corresponds to "Jan", "Feb", "Mar", etc. And `U` corresponds to "January", "February",
-"March", etc. Similar to other name=>value mapping functions [`dayname()`](@ref) and [`monthname()`](@ref),
+"March", etc. Similar to other name=>value mapping functions [`dayname`](@ref) and [`monthname`](@ref),
 custom locales can be loaded by passing in the `locale=>Dict{String,Int}` mapping to the `MONTHTOVALUEABBR`
 and `MONTHTOVALUE` dicts for abbreviated and full-name month names, respectively.
 
@@ -296,10 +296,10 @@ julia> Dates.dayofquarter(t)
 31
 ```
 
-The [`dayname()`](@ref) and [`monthname()`](@ref) methods can also take an optional `locale` keyword
+The [`dayname`](@ref) and [`monthname`](@ref) methods can also take an optional `locale` keyword
 that can be used to return the name of the day or month of the year for other languages/locales.
 There are also versions of these functions returning the abbreviated names, namely
-[`dayabbr()`](@ref) and [`monthabbr()`](@ref).
+[`dayabbr`](@ref) and [`monthabbr`](@ref).
 First the mapping is loaded into the `LOCALES` variable:
 
 ```jldoctest tdate2
@@ -328,7 +328,7 @@ julia> Dates.monthabbr(t;locale="french")
 ```
 
 Since the abbreviated versions of the days are not loaded, trying to use the
-function `dayabbr()` will error.
+function `dayabbr` will error.
 
 ```jldoctest tdate2
 julia> Dates.dayabbr(t;locale="french")
@@ -451,7 +451,7 @@ julia> Dates.lastdayofquarter(Date(2014,7,16)) # Adjusts to the last day of the 
 2014-09-30
 ```
 
-The next two higher-order methods, [`tonext()`](@ref), and [`toprev()`](@ref), generalize working
+The next two higher-order methods, [`tonext`](@ref), and [`toprev`](@ref), generalize working
 with temporal expressions by taking a `DateFunction` as first argument, along with a starting
 [`TimeType`](@ref). A `DateFunction` is just a function, usually anonymous, that takes a single
 [`TimeType`](@ref) as input and returns a [`Bool`](@ref), `true` indicating a satisfied
@@ -481,7 +481,7 @@ julia> Dates.tonext(Date(2014,7,13)) do x
 2014-11-27
 ```
 
-The [`Base.filter()`](@ref) method can be used to obtain all valid dates/moments in a specified
+The [`Base.filter`](@ref) method can be used to obtain all valid dates/moments in a specified
 range:
 
 ```jldoctest
@@ -545,7 +545,7 @@ julia> div(y3,3) # mirrors integer division
 ## Rounding
 
 [`Date`](@ref) and [`DateTime`](@ref) values can be rounded to a specified resolution (e.g., 1
-month or 15 minutes) with [`floor()`](@ref), [`ceil()`](@ref), or [`round()`](@ref):
+month or 15 minutes) with [`floor`](@ref), [`ceil`](@ref), or [`round`](@ref):
 
 ```jldoctest
 julia> floor(Date(1985, 8, 16), Dates.Month)
@@ -558,8 +558,8 @@ julia> round(DateTime(2016, 8, 6, 20, 15), Dates.Day)
 2016-08-07T00:00:00
 ```
 
-Unlike the numeric [`round()`](@ref) method, which breaks ties toward the even number by default,
-the [`TimeType`](@ref)[`round()`](@ref) method uses the `RoundNearestTiesUp` rounding mode. (It's
+Unlike the numeric [`round`](@ref) method, which breaks ties toward the even number by default,
+the [`TimeType`](@ref)[`round`](@ref) method uses the `RoundNearestTiesUp` rounding mode. (It's
 difficult to guess what breaking ties to nearest "even" [`TimeType`](@ref) would entail.) Further
 details on the available `RoundingMode` s can be found in the [API reference](@ref stdlib-dates).
 
