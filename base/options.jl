@@ -31,8 +31,8 @@ struct JLOptions
     worker::Int8
     cookie::Ptr{UInt8}
     handle_signals::Int8
-    use_precompiled::Int8
-    use_compilecache::Int8
+    use_sysimage_native_code::Int8
+    use_compiled_modules::Int8
     bindto::Ptr{UInt8}
     outputbc::Ptr{UInt8}
     outputunoptbc::Ptr{UInt8}
