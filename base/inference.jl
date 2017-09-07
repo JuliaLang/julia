@@ -403,7 +403,16 @@ const _Type_name = Type.body.name
 isType(@nospecialize t) = isa(t, DataType) && (t::DataType).name === _Type_name
 
 # true if Type is inlineable as constant (is a singleton)
-isconstType(@nospecialize t) = isType(t) && (isleaftype(t.parameters[1]) || t.parameters[1] === Union{})
+function isconstType(@nospecialize t)
+    isType(t) || return false
+    p1 = t.parameters[1]
+    # typeof(Bottom) is special since even though it is as leaftype,
+    # at runtime, it might be Type{Union{}} instead, so don't attempt inference of it
+    p1 === typeof(Union{}) && return false
+    p1 === Union{} && return true
+    isleaftype(p1) && return true
+    return false
+end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 
@@ -1147,13 +1156,9 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                       rewrap(getfield_tfunc(s.b, name),s00))
     elseif isa(s, Conditional)
         return Bottom # Bool has no fields
-    elseif isa(s, Const) || isType(s)
+    elseif isa(s, Const) || isconstType(s)
         if !isa(s, Const)
-            p1 = s.parameters[1]
-            if !isleaftype(p1)
-                return Any
-            end
-            sv = p1
+            sv = s.parameters[1]
         else
             sv = s.val
         end
@@ -1189,7 +1194,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         end
         s = typeof(sv)
     end
-    if !isa(s,DataType) || s.abstract
+    if isType(s) || !isa(s, DataType) || s.abstract
         return Any
     end
     if s <: Tuple && name ⊑ Symbol
