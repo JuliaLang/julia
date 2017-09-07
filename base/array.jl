@@ -114,27 +114,19 @@ asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1
 
 Return whether a type is an "is-bits" Union type, meaning each type included in a Union is `isbits`.
 """
-function isbitsunion end
-
-function isbitsunion(U::Union)
-    for u in Base.uniontypes(U)
-        isbits(u) || return false
-    end
-    return true
-end
-isbitsunion(T) = false
+isbitsunion(u::Union) = ccall(:jl_array_store_unboxed, Cint, (Any,), u) == Cint(1)
+isbitsunion(x) = false
 
 """
     Base.bitsunionsize(U::Union)
 
-For a Union of `isbits` types, return the size of the largest type.
+For a Union of `isbits` types, return the size of the largest type; assumes `Base.isbitsunion(U) == true`
 """
-function bitsunionsize(U::Union)
-    sz = 0
-    for u in Base.uniontypes(U)
-        sz = max(sz, sizeof(u))
-    end
-    return sz
+function bitsunionsize(u::Union)
+    sz = Ref{Csize_t}(0)
+    algn = Ref{Csize_t}(0)
+    @assert ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), u, sz, algn) == Cint(1)
+    return sz[]
 end
 
 length(a::Array) = arraylen(a)
