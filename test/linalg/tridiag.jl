@@ -42,7 +42,6 @@ let n = 12 #Size of matrix problem to test
                 c += im*convert(Vector{elty}, randn(n - 1))
             end
         end
-        ε = eps(abs2(float(one(elty))))
         @test_throws DimensionMismatch SymTridiagonal(dl, ones(elty, n + 1))
         @test_throws ArgumentError SymTridiagonal(rand(n, n))
         @test_throws ArgumentError Tridiagonal(dl, dl, dl)
@@ -75,7 +74,6 @@ let n = 12 #Size of matrix problem to test
         end
         @testset "interconversion of Tridiagonal and SymTridiagonal" begin
             @test Tridiagonal(dl, d, dl) == SymTridiagonal(d, dl)
-            @test SymTridiagonal(d, dl) == Tridiagonal(dl, d, dl)
             @test Tridiagonal(dl, d, du) + Tridiagonal(du, d, dl) == SymTridiagonal(2d, dl+du)
             @test SymTridiagonal(d, dl) + Tridiagonal(dl, d, du) == Tridiagonal(dl + dl, d+d, dl+du)
             @test convert(SymTridiagonal,Tridiagonal(SymTridiagonal(d, dl))) == SymTridiagonal(d, dl)
@@ -143,16 +141,17 @@ let n = 12 #Size of matrix problem to test
                     @test (A[3, 2] = A[3, 2]; A == fA) # test assignment on the subdiagonal
                     @test (A[2, 3] = A[2, 3]; A == fA) # test assignment on the superdiagonal
                     @test ((A[1, 3] = 0) == 0; A == fA) # test zero assignment off the main/sub/super diagonal
-                else
+                else # mat_type is SymTridiagonal
                     @test ((A[3, 3] = A[3, 3]) == A[3, 3]; A == fA) # test assignment on the main diagonal
                     @test_throws ArgumentError A[3, 2] = 1 # test assignment on the subdiagonal
                     @test_throws ArgumentError A[2, 3] = 1 # test assignment on the superdiagonal
                 end
             end
             @testset "Diagonal extraction" begin
-                @test diag(A, 1) == (mat_type == Tridiagonal ? du : dl)
-                @test diag(A, -1) == dl
-                @test diag(A, 0) == d
+                @test diag(A, 1) === (mat_type == Tridiagonal ? du : dl)
+                @test diag(A, -1) === dl
+                @test diag(A, 0) === d
+                @test diag(A) === d
                 @test diag(A, n - 1) == zeros(elty, 1)
                 @test_throws ArgumentError diag(A, n + 1)
             end
@@ -170,19 +169,17 @@ let n = 12 #Size of matrix problem to test
             end
             ds = mat_type == Tridiagonal ? (dl, d, du) : (d, dl)
             for f in (real, imag)
-                @test f(A) == mat_type(map(f, ds)...)
+                @test f(A)::mat_type == mat_type(map(f, ds)...)
             end
             if elty <: Real
                 for f in (round, trunc, floor, ceil)
                     fds = [f.(d) for d in ds]
-                    @test f.(A) == mat_type(fds...)
-                    @test isa(f.(A), mat_type)
-                    @test f.(Int, A) == f.(Int, fA)
-                    @test isa(f.(Int, A), mat_type)
+                    @test f.(A)::mat_type == mat_type(fds...)
+                    @test f.(Int, A)::mat_type == f.(Int, fA)
                 end
             end
             fds = [abs.(d) for d in ds]
-            @test abs.(A) == mat_type(fds...)
+            @test abs.(A)::mat_type == mat_type(fds...)
             @testset "Multiplication with strided matrix/vector" begin
                 @test A*ones(n) ≈ Array(A)*ones(n)
                 @test A*ones(n, 2) ≈ Array(A)*ones(n, 2)
@@ -219,51 +216,49 @@ let n = 12 #Size of matrix problem to test
                     @test B + A == A + B
                     @test B - A == A - B
                 end
-                if elty <: Real
-                    if elty != Int
-                        @testset "Eigensystems" begin
-                            zero, infinity = convert(elty, 0), convert(elty, Inf)
-                            @testset "stebz! and stein!" begin
-                                w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, b, a)
-                                evecs = LAPACK.stein!(b, a, w)
+                if elty <: Base.LinAlg.BlasReal
+                    @testset "Eigensystems" begin
+                        zero, infinity = convert(elty, 0), convert(elty, Inf)
+                        @testset "stebz! and stein!" begin
+                            w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, b, a)
+                            evecs = LAPACK.stein!(b, a, w)
 
-                                (e, v) = eig(SymTridiagonal(b, a))
-                                @test e ≈ w
-                                test_approx_eq_vecs(v, evecs)
-                            end
-                            @testset "stein! call using iblock and isplit" begin
-                                w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, b, a)
-                                evecs = LAPACK.stein!(b, a, w, iblock, isplit)
-                                test_approx_eq_vecs(v, evecs)
-                            end
-                            @testset "stegr! call with index range" begin
-                                F = eigfact(SymTridiagonal(b, a),1:2)
-                                fF = eigfact(Symmetric(Array(SymTridiagonal(b, a))),1:2)
-                                Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
-                                @test F[:values] ≈ fF[:values]
-                            end
-                            @testset "stegr! call with value range" begin
-                                F = eigfact(SymTridiagonal(b, a),0.0,1.0)
-                                fF = eigfact(Symmetric(Array(SymTridiagonal(b, a))),0.0,1.0)
-                                Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
-                                @test F[:values] ≈ fF[:values]
-                            end
-                            @testset "eigenvalues/eigenvectors of symmetric tridiagonal" begin
-                                if elty === Float32 || elty === Float64
-                                    DT, VT = @inferred eig(A)
-                                    @inferred eig(A, 2:4)
-                                    @inferred eig(A, 1.0, 2.0)
-                                    D, Vecs = eig(fA)
-                                    @test DT ≈ D
-                                    @test abs.(VT'Vecs) ≈ eye(elty, n)
-                                    @test eigvecs(A) ≈ eigvecs(fA)
-                                    #call to LAPACK.stein here
-                                    Test.test_approx_eq_modphase(eigvecs(A,eigvals(A)),eigvecs(A))
-                                elseif elty != Int
-                                    # check that undef is determined accurately even if type inference
-                                    # bails out due to the number of try/catch blocks in this code.
-                                    @test_throws UndefVarError fA
-                                end
+                            (e, v) = eig(SymTridiagonal(b, a))
+                            @test e ≈ w
+                            test_approx_eq_vecs(v, evecs)
+                        end
+                        @testset "stein! call using iblock and isplit" begin
+                            w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, b, a)
+                            evecs = LAPACK.stein!(b, a, w, iblock, isplit)
+                            test_approx_eq_vecs(v, evecs)
+                        end
+                        @testset "stegr! call with index range" begin
+                            F = eigfact(SymTridiagonal(b, a),1:2)
+                            fF = eigfact(Symmetric(Array(SymTridiagonal(b, a))),1:2)
+                            Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
+                            @test F[:values] ≈ fF[:values]
+                        end
+                        @testset "stegr! call with value range" begin
+                            F = eigfact(SymTridiagonal(b, a),0.0,1.0)
+                            fF = eigfact(Symmetric(Array(SymTridiagonal(b, a))),0.0,1.0)
+                            Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
+                            @test F[:values] ≈ fF[:values]
+                        end
+                        @testset "eigenvalues/eigenvectors of symmetric tridiagonal" begin
+                            if elty === Float32 || elty === Float64
+                                DT, VT = @inferred eig(A)
+                                @inferred eig(A, 2:4)
+                                @inferred eig(A, 1.0, 2.0)
+                                D, Vecs = eig(fA)
+                                @test DT ≈ D
+                                @test abs.(VT'Vecs) ≈ eye(elty, n)
+                                @test eigvecs(A) ≈ eigvecs(fA)
+                                #call to LAPACK.stein here
+                                Test.test_approx_eq_modphase(eigvecs(A,eigvals(A)),eigvecs(A))
+                            elseif elty != Int
+                                # check that undef is determined accurately even if type inference
+                                # bails out due to the number of try/catch blocks in this code.
+                                @test_throws UndefVarError fA
                             end
                         end
                     end
