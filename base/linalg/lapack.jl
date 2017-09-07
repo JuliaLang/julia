@@ -5797,7 +5797,7 @@ for (trexc, trsen, tgsen, elty) in
         #       LOGICAL            SELECT( * )
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WI( * ), WORK( * ), WR( * )
-        function trsen!(compq::Char, job::Char, select::StridedVector{BlasInt},
+        function trsen!(job::Char, compq::Char, select::StridedVector{BlasInt},
                         T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
             chkstride1(T, Q, select)
             n = checksquare(T)
@@ -5821,7 +5821,7 @@ for (trexc, trsen, tgsen, elty) in
                     Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ref{$elty},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt},
                     Ptr{BlasInt}),
-                    compq, job, select, n,
+                    job, compq, select, n,
                     T, ldt, Q, ldq,
                     wr, wi, m, s, sep,
                     work, lwork, iwork, liwork,
@@ -5908,9 +5908,9 @@ for (trexc, trsen, tgsen, elty) in
     end
 end
 
-for (trexc, trsen, tgsen, elty) in
-    ((:ztrexc_, :ztrsen_, :ztgsen_, :Complex128),
-     (:ctrexc_, :ctrsen_, :ctgsen_, :Complex64))
+for (trexc, trsen, tgsen, elty, relty) in
+    ((:ztrexc_, :ztrsen_, :ztgsen_, :Complex128, :Float64),
+     (:ctrexc_, :ctrsen_, :ctgsen_, :Complex64, :Float32))
     @eval begin
         #      .. Scalar Arguments ..
         #      CHARACTER          COMPQ
@@ -5947,7 +5947,7 @@ for (trexc, trsen, tgsen, elty) in
         #      .. Array Arguments ..
         #      LOGICAL            SELECT( * )
         #      COMPLEX            Q( LDQ, * ), T( LDT, * ), W( * ), WORK( * )
-        function trsen!(compq::Char, job::Char, select::StridedVector{BlasInt},
+        function trsen!(job::Char, compq::Char, select::StridedVector{BlasInt},
                         T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
             chkstride1(select, T, Q)
             n = checksquare(T)
@@ -5959,16 +5959,18 @@ for (trexc, trsen, tgsen, elty) in
             lwork = BlasInt(-1)
             info = Ref{BlasInt}()
             select = convert(Array{BlasInt}, select)
+            s = Ref{$relty}(zero($relty))
+            sep = Ref{$relty}(zero($relty))
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($trsen), liblapack), Void,
                     (Ref{UInt8}, Ref{UInt8}, Ptr{BlasInt}, Ref{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                    Ptr{$elty}, Ref{BlasInt}, Ptr{Void}, Ptr{Void},
+                    Ptr{$elty}, Ref{BlasInt}, Ref{$relty}, Ref{$relty},
                     Ptr{$elty}, Ref{BlasInt},
                     Ptr{BlasInt}),
-                    compq, job, select, n,
+                    job, compq, select, n,
                     T, ldt, Q, ldq,
-                    w, m, C_NULL, C_NULL,
+                    w, m, s, sep,
                     work, lwork,
                     info)
                 chklapackerror(info[])
@@ -5977,7 +5979,7 @@ for (trexc, trsen, tgsen, elty) in
                     resize!(work, lwork)
                 end
             end
-            T, Q, w
+            T, Q, w, s[], sep[]
         end
         trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) =
             trsen!('N', 'V', select, T, Q)
