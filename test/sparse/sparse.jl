@@ -2044,7 +2044,7 @@ end
 end
 
 @testset "similar for SparseMatrixCSC" begin
-    A = speye(5)
+    local A = speye(5)
     # test similar without specifications (preserves stored-entry structure)
     simA = similar(A)
     @test typeof(simA) == typeof(A)

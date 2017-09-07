@@ -115,7 +115,7 @@ end
     # orthogonal factor (say Q) should be a square matrix of order of A's number of
     # columns independent of factorization form (truncated, square), and L and Q
     # should have multiplication-compatible shapes.
-    m, n = 4, 2
+    local m, n = 4, 2
     A = randn(m, n)
     for thin in (true, false)
         L, Q = lq(A, thin = thin)
@@ -146,6 +146,7 @@ end
 end
 
 @testset "getindex on LQPackedQ (#23733)" begin
+    local m, n
     function getqs(F::Base.LinAlg.LQ)
         implicitQ = F[:Q]
         explicitQ = A_mul_B!(implicitQ, eye(eltype(implicitQ), size(implicitQ.factors, 2)))

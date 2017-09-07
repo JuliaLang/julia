@@ -385,7 +385,7 @@ begin
         global f7234_cnt += -10000
     end
 end
-@test_throws UndefVarError f7234_a()
+@test_throws UndefVarError(:glob_x2) f7234_a()
 @test f7234_cnt == 1
 begin
     global glob_x2 = 24
@@ -395,11 +395,11 @@ begin
         global f7234_cnt += -10000
     end
 end
-@test_throws UndefVarError f7234_b()
+@test_throws UndefVarError(:glob_x2) f7234_b()
 @test f7234_cnt == 2
-# existing globals can be inherited by non-function blocks
+# globals can accessed if declared
 for i = 1:2
-    glob_x2 += 1
+    global glob_x2 += 1
 end
 @test glob_x2 == 26
 # globals declared as such in a non-global scope are inherited
@@ -468,15 +468,15 @@ function const_implies_local()
 end
 @test const_implies_local() === (1, 0)
 
-a = Vector{Any}(3)
-for i=1:3
+a_global_closure_vector = Vector{Any}(3)
+for i = 1:3
     let ii = i
-        a[i] = x->x+ii
+        a_global_closure_vector[i] = x -> x + ii
     end
 end
-@test a[1](10) == 11
-@test a[2](10) == 12
-@test a[3](10) == 13
+@test a_global_closure_vector[1](10) == 11
+@test a_global_closure_vector[2](10) == 12
+@test a_global_closure_vector[3](10) == 13
 
 # issue #22032
 let a = [], fs = []
@@ -513,8 +513,10 @@ end
 @test_throws UndefVarError f21900()
 @test f21900_cnt == 1
 
-@test_throws UndefVarError @eval begin
+# use @eval so this runs as a toplevel scope block
+@test_throws UndefVarError(:foo21900) @eval begin
     for i21900 = 1:10
+        local bar21900
         for j21900 = 1:10
             foo21900 = 10
         end
@@ -525,8 +527,9 @@ end
 @test !@isdefined(foo21900)
 @test !@isdefined(bar21900)
 bar21900 = 0
-@test_throws UndefVarError @eval begin
+@test_throws UndefVarError(:foo21900) @eval begin
     for i21900 = 1:10
+        global bar21900
         for j21900 = 1:10
             foo21900 = 10
         end
@@ -537,8 +540,9 @@ end
 @test bar21900 == -1
 @test !@isdefined foo21900
 foo21900 = 0
-@test nothing === @eval begin
+@test nothing === begin
     for i21900 = 1:10
+        global bar21900, foo21900
         for j21900 = 1:10
             foo21900 = 10
         end
@@ -696,40 +700,47 @@ end
 
 # try/finally
 begin
-    after = 0
-    b = try
+    try_finally_glo_after = 0
+    try_finally_loc_after = 0
+    try_finally_glo_b = try
         1+2
     finally
-        after = 1
+        # try_finally_loc_after = 1 # enable with #19324
+        global try_finally_glo_after = 1
     end
-    @test b == 3
-    @test after == 1
+    @test try_finally_loc_after == 0
+    @test try_finally_glo_b == 3
+    @test try_finally_glo_after == 1
 
-    after = 0
+    try_finally_glo_after = 0
     gothere = 0
     try
         try
             error(" ")
         finally
-            after = 1
+            # try_finally_loc_after = 1 # enable with #19324
+            global try_finally_glo_after = 1
         end
-        gothere = 1
+        global gothere = 1
     end
-    @test after == 1
+    @test try_finally_loc_after == 0
+    @test try_finally_glo_after == 1
     @test gothere == 0
 
-    after = 0
-    b = try
+    try_finally_glo_after = 0
+    try_finally_glo_b = try
         error(" ")
     catch
         42
     finally
-        after = 1
+        # try_finally_loc_after = 1 # enable with #19324
+        global try_finally_glo_after = 1
     end
-    @test b == 42
-    @test after == 1
+    @test try_finally_loc_after == 0
+    @test try_finally_glo_b == 42
+    @test try_finally_glo_after == 1
 
-    glo = 0
+    global glo = 0
     function retfinally()
         try
             return 5
@@ -1384,7 +1395,7 @@ C3729{D} = Vector{Vector{D}}
 # issue #3789
 x3789 = 0
 while(all([false for idx in 1:10]))
-    x3789 = 1
+    global x3789 = 1
 end
 @test x3789 == 0
 
@@ -1607,7 +1618,7 @@ b4688(y) = "not an Int"
 begin
     a4688(y::Int) = "an Int"
     let x = true
-        b4688(y::Int) = x == true ? a4688(y) : a4688(y)
+        global b4688(y::Int) = x == true ? a4688(y) : a4688(y)
     end
 end
 @test b4688(1) == "an Int"
@@ -1701,9 +1712,8 @@ function tupledispatch(a::TupleParam{(1,:a)})
     a.x
 end
 
-let
-    # tuples can be used as type params
-    t1 = TupleParam{(1,:a)}(true)
+# tuples can be used as type params
+let t1 = TupleParam{(1,:a)}(true),
     t2 = TupleParam{(1,:b)}(true)
 
     # tuple type params can't contain invalid type params
@@ -2164,11 +2174,13 @@ function issue7897!(data, arr)
     a = arr[1]
 end
 
-a = ones(UInt8, 10)
-sa = view(a,4:6)
-# This can throw an error, but shouldn't segfault
-try
-    issue7897!(sa, zeros(10))
+let
+    a = ones(UInt8, 10)
+    sa = view(a, 4:6)
+    # This can throw an error, but shouldn't segfault
+    try
+        issue7897!(sa, zeros(10))
+    end
 end
 
 # issue #7582
@@ -3976,7 +3988,8 @@ end
 # issue #15283
 j15283 = 0
 let
-    k15283 = j15283+=1
+    global j15283
+    k15283 = (j15283 += 1)
 end
 @test j15283 == 1
 @test !@isdefined k15283
@@ -4637,12 +4650,12 @@ end
 @test_throws ErrorException main18986()
 
 # issue #18085
-f18085(a,x...) = (0,)
-for (f,g) in ((:asin,:sin), (:acos,:cos))
+f18085(a, x...) = (0, )
+for (f, g) in ((:asin, :sin), (:acos, :cos))
     gx = eval(g)
-    f18085(::Type{Val{f}},x...) = map(x->2gx(x), f18085(Val{g},x...))
+    global f18085(::Type{Val{f}}, x...) = map(x -> 2gx(x), f18085(Val{g}, x...))
 end
-@test f18085(Val{:asin},3) === (0.0,)
+@test f18085(Val{:asin}, 3) === (0.0,)
 
 # issue #18236 constant VecElement in ast triggers codegen assertion/undef
 # VecElement of scalar

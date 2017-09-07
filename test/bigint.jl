@@ -196,11 +196,14 @@ end
     @test binomial(BigInt(-53), 42) == parse(BigInt,"959509335087854414441273718")
     @test binomial(BigInt(113), BigInt(42)) == parse(BigInt,"18672199984318438125634054194360")
 end
-a = rand(1:100, 10000)
-b = map(BigInt, a)
-@test sum(a) == sum(b)
+let a, b
+    a = rand(1:100, 10000)
+    b = map(BigInt, a)
+    @test sum(a) == sum(b)
+end
 
 @testset "Iterated arithmetic" begin
+    local a, b, c, d, f, g
     a = parse(BigInt,"315135")
     b = parse(BigInt,"12412")
     c = parse(BigInt,"3426495623485904783478347")

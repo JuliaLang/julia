@@ -523,7 +523,7 @@ let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
 end
 
 @testset "similar should preserve underlying storage type" begin
-    m, n = 4, 3
+    local m, n = 4, 3
     sparsemat = sprand(m, m, 0.5)
     for TriType in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
         trisparsemat = TriType(sparsemat)

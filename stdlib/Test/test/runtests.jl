@@ -576,41 +576,41 @@ end
     @test !contains(str, "backtrace()")
 end
 
-msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
-using Test
+let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
+        using Test
 
-foo(x) = length(x)^2
+        foo(x) = length(x)^2
 
-@testset "Foo Tests" begin
-    @testset "Animals" begin
-        @testset "Felines" begin
-            @test foo("cat") == 9
-        end
-        @testset "Canines" begin
-            @test foo("dog") == 11
-        end
-    end
-    @testset "Arrays" begin
-        @test foo(zeros(2)) == 4
-        @test foo(ones(4)) == 15
-    end
-end'`), stderr=DevNull), String)
-
-@test contains(msg,
-"""
-Test Summary: | Pass  Fail  Total
-Foo Tests     |    2     2      4
-  Animals     |    1     1      2
-    Felines   |    1            1
-    Canines   |          1      1
-  Arrays      |    1     1      2
-""")
+        @testset "Foo Tests" begin
+            @testset "Animals" begin
+                @testset "Felines" begin
+                    @test foo("cat") == 9
+                end
+                @testset "Canines" begin
+                    @test foo("dog") == 11
+                end
+            end
+            @testset "Arrays" begin
+                @test foo(zeros(2)) == 4
+                @test foo(ones(4)) == 15
+            end
+        end'`), stderr=DevNull), String)
+    @test contains(msg,
+        """
+        Test Summary: | Pass  Fail  Total
+        Foo Tests     |    2     2      4
+          Animals     |    1     1      2
+            Felines   |    1            1
+            Canines   |          1      1
+          Arrays      |    1     1      2
+        """)
+end
 
 # 20489
-msg = split(read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
-Test.print_test_results(Test.DefaultTestSet(""))'`), stderr=DevNull), String), "\n")[1]
-
-@test msg == rstrip(msg)
+let msg = split(read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
+        Test.print_test_results(Test.DefaultTestSet(""))'`), stderr=DevNull), String), "\n")[1]
+    @test msg == rstrip(msg)
+end
 
 @testset "test guarded srand" begin
     seed = rand(UInt)

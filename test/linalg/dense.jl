@@ -139,7 +139,7 @@ bimg  = randn(n,2)/2
 end # for eltya
 
 @testset "test triu/tril bounds checking" begin
-    m, n = 5, 7
+    local m, n = 5, 7
     ainit = rand(m, n)
     for a in (copy(ainit), view(ainit, 1:m, 1:n))
         @test_throws ArgumentError triu(a, -m)
