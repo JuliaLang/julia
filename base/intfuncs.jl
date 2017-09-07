@@ -424,7 +424,7 @@ function ndigits0z(x::UInt128)
     return n + ndigits0z(UInt64(x))
 end
 
-ndigits0z(x::Signed) = ndigits0z(unsigned(abs(x)))
+ndigits0z(x::BitSigned) = ndigits0z(unsigned(abs(x)))
 
 ndigits0z(x::Integer) = ndigits0zpb(x, 10)
 
