@@ -5253,7 +5253,15 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.@inbounds",
     "category": "Macro",
-    "text": "@inbounds(blk)\n\nEliminates array bounds checking within expressions.\n\nIn the example below the in-range check for referencing element i of array A is skipped to improve performance.\n\nfunction sum(A::AbstractArray)\n    r = zero(eltype(A))\n    for i = 1:length(A)\n        @inbounds r += A[i]\n    end\n    return r\nend\n\nwarning: Warning\nUsing @inbounds may return incorrect results/crashes/corruption for out-of-bounds indices. The user is responsible for checking it manually.\n\n\n\n"
+    "text": "@inbounds(blk)\n\nEliminates array bounds checking within expressions.\n\nIn the example below the in-range check for referencing element i of array A is skipped to improve performance.\n\nfunction sum(A::AbstractArray)\n    r = zero(eltype(A))\n    for i = 1:length(A)\n        @inbounds r += A[i]\n    end\n    return r\nend\n\nwarning: Warning\nUsing @inbounds may return incorrect results/crashes/corruption for out-of-bounds indices. The user is responsible for checking it manually. Only use @inbounds when it is certain from the information locally available that all accesses are in bounds.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.@boundscheck",
+    "page": "Essentials",
+    "title": "Base.@boundscheck",
+    "category": "Macro",
+    "text": "@boundscheck(blk)\n\nAnnotates the expression blk as a bounds checking block, allowing it to be elided by @inbounds.\n\nNote that the function in which @boundscheck is written must be inlined into its caller with @inline in order for @inbounds to have effect.\n\njulia> @inline function g(A, i)\n           @boundscheck checkbounds(A, i)\n           return \"accessing ($A)[$i]\"\n       end\n       f1() = return g(1:2, -1)\n       f2() = @inbounds return g(1:2, -1)\nf2 (generic function with 1 method)\n\njulia> f1()\nERROR: BoundsError: attempt to access 2-element UnitRange{Int64} at index [-1]\nStacktrace:\n [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:428\n [2] checkbounds at ./abstractarray.jl:392 [inlined]\n [3] g at ./REPL[20]:2 [inlined]\n [4] f1() at ./REPL[20]:5\n\njulia> f2()\n\"accessing (1:2)[-1]\"\n\nwarning: Warning\nThe @boundscheck annotation allows you, as a library writer, to opt-in to allowing other code to remove your bounds checks with @inbounds. As noted there, the caller must verify—using information they can access—that their accesses are valid before using @inbounds. For indexing into your AbstractArray subclasses, for example, this involves checking the indices against its size. Therefore, @boundscheck annotations should only be added to a getindex or setindex! implementation after you are certain its behavior is correct.\n\n\n\n"
 },
 
 {
@@ -5325,7 +5333,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Syntax",
     "category": "section",
-    "text": "Core.eval\nBase.@eval\nBase.evalfile\nBase.esc\nBase.@inbounds\nBase.@inline\nBase.@noinline\nBase.@nospecialize\nBase.gensym\nBase.@gensym\nBase.@polly\nBase.parse(::AbstractString, ::Int)\nBase.parse(::AbstractString)"
+    "text": "Core.eval\nBase.@eval\nBase.evalfile\nBase.esc\nBase.@inbounds\nBase.@boundscheck\nBase.@inline\nBase.@noinline\nBase.@nospecialize\nBase.gensym\nBase.@gensym\nBase.@polly\nBase.parse(::AbstractString, ::Int)\nBase.parse(::AbstractString)"
 },
 
 {
@@ -7021,7 +7029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nSee also: IndexStyle, indices.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nSee also: IndexStyle, indices.\n\n\n\n"
 },
 
 {
@@ -7309,7 +7317,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\n"
 },
 
 {
