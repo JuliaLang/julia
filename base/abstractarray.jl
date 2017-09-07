@@ -171,7 +171,7 @@ first(a::AbstractArray) = a[first(eachindex(a))]
 """
     first(coll)
 
-Get the first element of an iterable collection. Returns the start point of a
+Get the first element of an iterable collection. Returns the start point of an
 `AbstractRange` even if it is empty.
 
 # Examples
