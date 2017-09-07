@@ -198,12 +198,14 @@ function install(
 )
     version_path = find_installed(uuid, hash)
     ispath(version_path) && return nothing
-    repo_path = joinpath(DEPOTS[1], "upstream", string(uuid))
-    git_hash = LibGit2.GitHash(hash.bytes)
+    upstream_dir = joinpath(DEPOTS[1], "upstream")
+    ispath(upstream_dir) || mkpath(upstream_dir)
+    repo_path = joinpath(upstream_dir, string(uuid))
     repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
         info("Cloning [$uuid] $name")
         LibGit2.clone(urls[1], repo_path, isbare=true)
     end
+    git_hash = LibGit2.GitHash(hash.bytes)
     for i = 2:length(urls)
         try LibGit2.GitObject(repo, git_hash)
             break # object was found, we can stop
