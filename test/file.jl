@@ -1181,3 +1181,65 @@ if !Sys.iswindows()
         test_22566()
     end
 end  # !Sys.iswindows
+
+function test_22922()
+<<<<<<< HEAD
+    def_prefix = "jl_"
+    tst_prefix = "ABCDEF"
+=======
+    const def_prefix = "jl_"
+    const tst_prefix = "ABCDEF"
+>>>>>>> mktempdir() now supports prefix.
+    mktempdir() do tmpdir
+        filename = basename(tmpdir)
+        @test startswith(filename, def_prefix)
+    end
+    mktempdir(; prefix=tst_prefix) do tmpdir
+        filename = basename(tmpdir)
+        @test startswith(filename, tst_prefix)
+    end
+    # Special character prefix tests
+    tst_prefix="#!@%^&()"
+    mktempdir(; prefix=tst_prefix) do tmpdir
+        filename = basename(tmpdir)
+        @test startswith(filename, tst_prefix)
+    end
+
+    # Behavioral differences across OS types
+    if Sys.iswindows()
+        @test_throws Base.UVError mktempdir(; prefix="*")
+        @test_throws Base.UVError mktempdir(; prefix="cdcdccd/")
+
+        # The API accepts "c:/ and c:\\" as valid prefix. The parent directory is ignored.
+	mkdir("c:/mydir")
+
+        mktempdir("c:/mydir"; prefix="c:/") do tmpdir
+            filename = basename(tmpdir)
+            @test length(filename) == 6
+        end
+        mktempdir("c:\\mydir"; prefix="c:\\") do tmpdir
+            filename = basename(tmpdir)
+            @test length(filename) == 6
+        end
+
+        @test_throws Base.UVError mktempdir(; prefix="cdcdccd/")
+    else
+        # '/' is accepted in a prefix but affects the overall path and permissions.
+        @test_throws Base.UVError mktempdir(; prefix="/")
+
+        # The file created will be of format "/tmp/XXXXXX"
+        mktempdir("/"; prefix="tmp/") do tmpdir
+            filename = basename(tmpdir)
+            @test length(filename) == 6
+        end
+    end
+
+    # Unicode test
+    tst_prefix="∃x∀y"
+    mktempdir(; prefix=tst_prefix) do tmpdir
+        filename = basename(tmpdir)
+        @test startswith(filename, tst_prefix)
+    end
+end
+
+test_22922()
