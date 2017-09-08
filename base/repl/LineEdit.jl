@@ -221,16 +221,19 @@ end
 
 # Prompt Completions
 function complete_line(s::MIState)
-    complete_line(state(s), s.key_repeats)
-    refresh_line(s)
-    :complete_line
+    if complete_line(state(s), s.key_repeats)
+        refresh_line(s)
+        :complete_line
+    else
+        beep(s)
+        :ignore
+    end
 end
 
 function complete_line(s::PromptState, repeats)
     completions, partial, should_complete = complete_line(s.p.complete, s)
-    if isempty(completions)
-        beep(s)
-    elseif !should_complete
+    isempty(completions) && return false
+    if !should_complete
         # should_complete is false for cases where we only want to show
         # a list of possible completions but not complete, e.g. foo(\t
         show_completions(s, completions)
@@ -251,6 +254,7 @@ function complete_line(s::PromptState, repeats)
             show_completions(s, completions)
         end
     end
+    true
 end
 
 clear_input_area(terminal, s) = (_clear_input_area(terminal, s.ias); s.ias = InputAreaState(0, 0))
