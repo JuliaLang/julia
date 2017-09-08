@@ -486,7 +486,15 @@ let
     @test (@macroexpand @fastmath 1+2    ) == :(Base.FastMath.add_fast(1,2))
     @test (@macroexpand @fastmath +      ) == :(Base.FastMath.add_fast)
     @test (@macroexpand @fastmath min(1) ) == :(Base.FastMath.min_fast(1))
-    @test (@macroexpand @doc "" f() = @x) == Expr(:error, UndefVarError(Symbol("@x")))
+    let err = try; @macroexpand @doc "" f() = @x; catch ex; ex; end
+        file, line = @__FILE__, @__LINE__() - 1
+        err = err::LoadError
+        @test err.file == file && err.line == line
+        err = err.error::LoadError
+        @test err.file == file && err.line == line
+        err = err.error::UndefVarError
+        @test err == UndefVarError(Symbol("@x"))
+    end
     @test (@macroexpand @seven_dollar $bar) == 7
     x = 2
     @test (@macroexpand @seven_dollar 1+$x) == :(1 + $(Expr(:$, :x)))

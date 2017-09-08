@@ -415,13 +415,12 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...))
         end
     end
-    exret = Expr(:none)
-    is_macro = false
-    ex = expand(__module__, ex0)
     if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
-        is_macro = true
-        exret = Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
-    elseif !isa(ex, Expr)
+        return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
+    end
+    ex = expand(__module__, ex0)
+    exret = Expr(:none)
+    if !isa(ex, Expr)
         exret = Expr(:call, :error, "expression is not a function call or symbol")
     elseif ex.head == :call
         if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
@@ -445,12 +444,12 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
             end
         end
     end
-    if (!is_macro && ex.head == :thunk) || exret.head == :none
+    if ex.head == :thunk || exret.head == :none
         exret = Expr(:call, :error, "expression is not a function call, "
                                   * "or is too complex for @$fcn to analyze; "
                                   * "break it down to simpler parts if possible")
     end
-    exret
+    return exret
 end
 
 for fname in [:which, :less, :edit, :functionloc, :code_warntype,
