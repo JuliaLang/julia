@@ -1218,7 +1218,7 @@ function test_22922()
             filename = basename(tmpdir)
             @test length(filename) == 6
         end
-
+        rm("c:/mydir")
     else
         # '/' is accepted in a prefix but affects the overall path and permissions.
         @test_throws Base.UVError mktempdir(; prefix="/")
