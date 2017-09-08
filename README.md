@@ -52,13 +52,14 @@ Julia is built and tested regularly on the following platforms:
 |                  | ARM v7 (32-bit)  |    | ✓        | Official      |
 |                  | ARM v8 (64-bit)  |    | ✓        | Official      |
 |                  | PowerPC (64-bit) |    |          | Community     |
+|                  | PTX (64-bit)     | [✓](http://ci.maleadt.net:8010/)  |          | [External](https://github.com/JuliaGPU/CUDAnative.jl)     |
 | macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 | Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 |                  | i686 (32-bit)    | ✓  | ✓        | Official      |
 | FreeBSD 11.0+    | x86-64 (64-bit)  | ✓  |          | Community     |
 
 All systems marked with ✓ for CI are tested using continuous integration for every commit.
-Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly.
+Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly. The PTX backend needs a source build and the [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) package.
 The systems listed here with neither CI nor official binaries are known to build and work, but ongoing support for those platforms is dependent on community efforts.
 It's possible that Julia will build and work on other platforms too, and we're always looking to better our platform coverage.
 If you're using Julia on a platform not listed here, let us know!
@@ -255,6 +256,9 @@ Some known issues on FreeBSD are:
 
 * The x86 architecture does not support threading due to lack of compiler runtime library support, so you may need to
   set `JULIA_THREADS=0` in your `Make.user` if you're on a 32-bit system.
+
+* The `Pkg` test suite segfaults on FreeBSD 11.1, likely due to a change in FreeBSD's default handling of stack guarding.
+  See [issue #23328](https://github.com/JuliaLang/julia/issues/23328) for more information.
 
 ### Windows
 

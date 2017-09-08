@@ -53,7 +53,7 @@ function with_fake_pty(f)
     end
 end
 
-function challenge_prompt(code::AbstractString, challenges; timeout::Integer=10, debug::Bool=true)
+function challenge_prompt(code::Expr, challenges; timeout::Integer=10, debug::Bool=true)
     output_file = tempname()
     wrapped_code = """
     result = let

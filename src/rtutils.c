@@ -887,9 +887,12 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                     n += jl_static_show_x(out, *(jl_value_t**)fld_ptr, depth);
                 }
                 else {
-                    n += jl_static_show_x_(out, (jl_value_t*)fld_ptr,
-                                           (jl_datatype_t*)jl_field_type(vt, i),
-                                           depth);
+                    jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(vt, i);
+                    if (jl_is_uniontype(ft)) {
+                        uint8_t sel = ((uint8_t*)fld_ptr)[jl_field_size(vt, i) - 1];
+                        ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, sel);
+                    }
+                    n += jl_static_show_x_(out, (jl_value_t*)fld_ptr, ft, depth);
                 }
                 if (istuple && tlen == 1)
                     n += jl_printf(out, ",");
