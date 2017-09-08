@@ -1871,6 +1871,7 @@ activate(m::ModalInterface, s::MIState, termbuf, term::TextTerminal) =
 commit_changes(t::UnixTerminal, termbuf) = write(t, take!(termbuf.out_stream))
 
 function transition(f::Function, s::MIState, newmode)
+    cancel_beep(s)
     if newmode === :abort
         s.aborted = true
         return
