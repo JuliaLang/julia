@@ -241,15 +241,20 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     dopushdisplay && popdisplay(d)
 end
 
-## Custom Options
+## User Options
 
 mutable struct Options
+    hascolor::Bool
+    extra_keymap::Union{Dict,Vector{<:Dict}}
     backspace_align::Bool
     backspace_adjust::Bool
 end
 
-Options(; backspace_align=true, backspace_adjust=backspace_align) =
-    Options(backspace_align, backspace_adjust)
+Options(;
+        hascolor = true,
+        extra_keymap = AnyDict[],
+        backspace_align = true, backspace_adjust = backspace_align) =
+            Options(hascolor, extra_keymap, backspace_align, backspace_adjust)
 
 ## LineEditREPL ##
 
@@ -714,8 +719,9 @@ enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
 function setup_interface(
     repl::LineEditREPL;
-    hascolor::Bool = repl.hascolor,
-    extra_repl_keymap::Union{Dict,Vector{<:Dict}} = Dict{Any,Any}[]
+    # those keyword arguments may be deprecated eventually in favor of the Options mechanism
+    hascolor::Bool = repl.options.hascolor,
+    extra_repl_keymap::Union{Dict,Vector{<:Dict}} = repl.options.extra_keymap
 )
     ###
     #
