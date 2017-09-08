@@ -117,7 +117,8 @@ complete_line(c::EmptyCompletionProvider, s) = [], true, true
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
-const beeping = Threads.Atomic{Float64}(0.0)
+# NOTE: this would better be Threads.Atomic(0.0), but not supported on some platforms
+const beeping = Ref(0.0)
 
 # these may be better stored in Prompt or PromptState
 const BEEP_DURATION = Ref(0.2)
@@ -130,8 +131,7 @@ function beep(s::PromptState, duration::Real=BEEP_DURATION[], blink::Real=BEEP_B
               maxduration::Real=BEEP_MAXDURATION[];
               colors=BEEP_COLORS, use_current::Bool=BEEP_USE_CURRENT[])
     isinteractive() || return # some tests fail on some platforms
-    Threads.atomic_add!(beeping, duration)
-    Threads.atomic_min!(beeping, maxduration)
+    beeping[] = min(beeping[] + duration, maxduration)
     @async begin
         trylock(BEEP_LOCK) || return
         orig_prefix = s.p.prompt_prefix
@@ -143,11 +143,11 @@ function beep(s::PromptState, duration::Real=BEEP_DURATION[], blink::Real=BEEP_B
             s.p.prompt_prefix = prefix
             refresh_multi_line(s)
             sleep(blink)
-            Threads.atomic_sub!(beeping, blink)
+            beeping[] -= blink
         end
         s.p.prompt_prefix = orig_prefix
         refresh_multi_line(s)
-        Threads.atomic_xchg!(beeping, 0.0)
+        beeping[] = 0.0
         unlock(BEEP_LOCK)
     end
 end
@@ -155,7 +155,7 @@ end
 function cancel_beep(s::PromptState)
     # wait till beeping finishes
     while !trylock(BEEP_LOCK)
-        Threads.atomic_xchg!(beeping, 0.0)
+        beeping[] = 0.0
         sleep(.05)
     end
     unlock(BEEP_LOCK)
