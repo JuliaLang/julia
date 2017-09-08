@@ -1208,17 +1208,15 @@ function test_22922()
         # The API accepts "c:/ and c:\\" as valid prefixes.
         # The parent directory is ignored in that case.
 
-        mkdir("c:/mydir")
         # The temp directory created is of form "C:\\XXXXXX"
-        mktempdir("c:/mydir"; prefix="c:/") do tmpdir
+        mktempdir("C:\\dir_notexisting"; prefix=tempdir()) do tmpdir
             filename = basename(tmpdir)
             @test length(filename) == 6
         end
-        mktempdir("c:\\mydir"; prefix="c:\\") do tmpdir
+        mktempdir("C:/dir_notexisting"; prefix=replace(tempdir(), '\\', '/')) do tmpdir
             filename = basename(tmpdir)
             @test length(filename) == 6
         end
-        rm("c:/mydir")
     else
         # '/' is accepted in a prefix but affects the overall path and permissions.
         @test_throws Base.UVError mktempdir(; prefix="/")
