@@ -1,3 +1,5 @@
+include("monkey_patch.jl")
+
 module Pkg3
 
 @eval Base module Loading; DEPOTS = []; end
