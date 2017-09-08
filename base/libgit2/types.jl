@@ -1157,6 +1157,14 @@ function CredentialPayload(cache::Nullable{CachedCredentials})
     CredentialPayload(Nullable{AbstractCredentials}(), cache)
 end
 
+function CredentialPayload(credential::AbstractCredentials)
+    CredentialPayload(Nullable(credential), Nullable{CachedCredentials}())
+end
+
+function CredentialPayload(cache::CachedCredentials)
+    CredentialPayload(Nullable{AbstractCredentials}(), Nullable(cache))
+end
+
 function CredentialPayload()
     CredentialPayload(Nullable{AbstractCredentials}(), Nullable{CachedCredentials}())
 end
