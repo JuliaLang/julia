@@ -10,7 +10,6 @@
 #include <stdarg.h>
 #include <setjmp.h>
 #include <signal.h>
-#include <assert.h>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -22,6 +21,8 @@
 
 #include "uv.h"
 #include "../src/julia.h"
+#include "../src/julia_assert.h"
+
 JULIA_DEFINE_FAST_TLS()
 
 #ifdef __cplusplus

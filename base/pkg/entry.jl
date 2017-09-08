@@ -4,8 +4,7 @@ module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
-import ...LibGit2
-importall ...LibGit2
+using ...LibGit2
 import ...Pkg.PkgError
 using ..Types
 
@@ -615,7 +614,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
         --eval $code
         ```
 
-    success(pipeline(cmd, stderr=STDERR))
+    success(pipeline(cmd, stdout=STDOUT, stderr=STDERR))
 end
 
 function build!(pkgs::Vector, seen::Set, errfile::AbstractString)

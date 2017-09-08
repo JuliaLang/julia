@@ -1188,13 +1188,13 @@ function _printf(macroname, io, fmt, args)
     end
 
     unshift!(blk.args, :(out = $io))
-    Expr(:let, blk)
+    Expr(:let, Expr(:block), blk)
 end
 
 """
     @printf([io::IOStream], "%Fmt", args...)
 
-Print `args` using C `printf()` style format specification string, with some caveats:
+Print `args` using C `printf` style format specification string, with some caveats:
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
 `%e`, `%E`, `%f`, `%F`, `%g`, and `%G`. Furthermore, if a floating point number is
 equally close to the numeric values of two possible output strings, the output
@@ -1241,7 +1241,7 @@ macro sprintf(args...)
     isa(args[1], AbstractString) || is_str_expr(args[1]) ||
         throw(ArgumentError("@sprintf: first argument must be a format string"))
     letexpr = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
-    push!(letexpr.args[1].args, :(String(take!(out))))
+    push!(letexpr.args[2].args, :(String(take!(out))))
     letexpr
 end
 

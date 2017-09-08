@@ -13,17 +13,17 @@ end
     A1 = randn(4,4) + im*randn(4,4)
     A2 = A1 + A1'
     @test exp(A2) ≈ exp(Hermitian(A2))
-    @test logm(A2) ≈ logm(Hermitian(A2))
+    @test log(A2) ≈ log(Hermitian(A2))
     A3 = A1 * A1' # posdef
     @test exp(A3) ≈ exp(Hermitian(A3))
-    @test logm(A3) ≈ logm(Hermitian(A3))
+    @test log(A3) ≈ log(Hermitian(A3))
 
     A1 = randn(4,4)
     A3 = A1 * A1'
     A4 = A1 + A1.'
     @test exp(A4) ≈ exp(Symmetric(A4))
-    @test logm(A3) ≈ logm(Symmetric(A3))
-    @test logm(A3) ≈ logm(Hermitian(A3))
+    @test log(A3) ≈ log(Symmetric(A3))
+    @test log(A3) ≈ log(Hermitian(A3))
 end
 
 @testset "Core functionality" begin

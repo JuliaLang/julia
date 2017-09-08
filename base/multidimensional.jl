@@ -4,7 +4,7 @@
 module IteratorsMD
     import Base: eltype, length, size, start, done, next, first, last, in, getindex,
                  setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
-                 ndims, iteratorsize, convert
+                 ndims, iteratorsize, convert, show
 
     import Base: +, -, *
     import Base: simd_outer_range, simd_inner_length, simd_index
@@ -80,6 +80,7 @@ module IteratorsMD
     @inline _flatten(i, I...)                 = (i, _flatten(I...)...)
     @inline _flatten(i::CartesianIndex, I...) = (i.I..., _flatten(I...)...)
     CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
+    show(io::IO, i::CartesianIndex) = (print(io, "CartesianIndex"); show(io, i.I))
 
     # length
     length(::CartesianIndex{N}) where {N} = N
@@ -130,6 +131,12 @@ module IteratorsMD
             h = hash(i, h)
         end
         return h
+    end
+
+    # nextind with CartesianIndex
+    function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
+        _, ni = next(CartesianRange(indices(a)), i)
+        return ni
     end
 
     # Iteration
@@ -416,7 +423,7 @@ end
     r = CartesianRange(indices(L.mask))
     return (r, start(r), 1)
 end
-@inline function next(L::LogicalIndex, s)
+@propagate_inbounds function next(L::LogicalIndex, s)
     # We're looking for the n-th true element, using iterator r at state i
     r, i, n = s
     while true
@@ -933,7 +940,7 @@ circshift!(dest::AbstractArray, src, ::Tuple{}) = copy!(dest, src)
 """
     circshift!(dest, src, shifts)
 
-Circularly shift the data in `src`, storing the result in
+Circularly shift, i.e. rotate, the data in `src`, storing the result in
 `dest`. `shifts` specifies the amount to shift in each dimension.
 
 The `dest` array must be distinct from the `src` array (they cannot

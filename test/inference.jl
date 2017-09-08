@@ -1198,3 +1198,6 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 @test Base.return_types(f23024, (DataType, Any)) == Any[Int]
 @test Base.return_types(g23024, (Tuple{DataType},)) == Any[Int]
 @test g23024((UInt8,)) === 2
+
+@test !Core.Inference.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
+@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any]

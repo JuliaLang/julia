@@ -9,14 +9,15 @@ import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
                  issuccess, issymmetric, ldltfact, ldltfact!, logdet
 
-importall ..SparseArrays
+using ..SparseArrays
 
 export
     Dense,
     Factor,
     Sparse
 
-import ..SparseArrays: AbstractSparseMatrix, SparseMatrixCSC, increment, indtype
+import ..SparseArrays: AbstractSparseMatrix, SparseMatrixCSC, increment, indtype, sparse, speye,
+    spzeros, nnz
 
 #########
 # Setup #

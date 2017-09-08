@@ -146,6 +146,7 @@ Base.@eval
 Base.evalfile
 Base.esc
 Base.@inbounds
+Base.@boundscheck
 Base.@inline
 Base.@noinline
 Base.@nospecialize

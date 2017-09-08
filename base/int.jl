@@ -84,7 +84,6 @@ signbit(x::Unsigned) = false
 flipsign(x::T, y::T) where {T<:BitSigned} = flipsign_int(x, y)
 flipsign(x::BitSigned, y::BitSigned) = flipsign_int(promote(x, y)...) % typeof(x)
 
-flipsign(x::Signed, y::Signed)  = convert(typeof(x), flipsign(promote_noncircular(x, y)...))
 flipsign(x::Signed, y::Float16) = flipsign(x, bitcast(Int16, y))
 flipsign(x::Signed, y::Float32) = flipsign(x, bitcast(Int32, y))
 flipsign(x::Signed, y::Float64) = flipsign(x, bitcast(Int64, y))
@@ -125,7 +124,7 @@ abs(x::Signed) = flipsign(x,x)
 
 ~(n::Integer) = -n-1
 
-unsigned(x::Signed) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
+unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 unsigned(x::Bool) = convert(Unsigned, x)
 
 """
@@ -157,11 +156,11 @@ signed without checking for overflow.
 """
 signed(x) = convert(Signed, x)
 
-div(x::Signed, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)
-div(x::Unsigned, y::Signed) = unsigned(flipsign(signed(div(x, unsigned(abs(y)))), y))
+div(x::BitSigned, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)
+div(x::Unsigned, y::BitSigned) = unsigned(flipsign(signed(div(x, unsigned(abs(y)))), y))
 
-rem(x::Signed, y::Unsigned) = flipsign(signed(rem(unsigned(abs(x)), y)), x)
-rem(x::Unsigned, y::Signed) = rem(x, unsigned(abs(y)))
+rem(x::BitSigned, y::Unsigned) = flipsign(signed(rem(unsigned(abs(x)), y)), x)
+rem(x::Unsigned, y::BitSigned) = rem(x, unsigned(abs(y)))
 
 fld(x::Signed, y::Unsigned) = div(x, y) - (signbit(x) & (rem(x, y) != 0))
 fld(x::Unsigned, y::Signed) = div(x, y) - (signbit(y) & (rem(x, y) != 0))
@@ -396,12 +395,12 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 (<=)(x::T, y::T) where {T<:BitSigned}   = sle_int(x, y)
 (<=)(x::T, y::T) where {T<:BitUnsigned} = ule_int(x, y)
 
-==(x::Signed,   y::Unsigned) = (x >= 0) & (unsigned(x) == y)
-==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == unsigned(y))
-<( x::Signed,   y::Unsigned) = (x <  0) | (unsigned(x) <  y)
-<( x::Unsigned, y::Signed  ) = (y >= 0) & (x <  unsigned(y))
-<=(x::Signed,   y::Unsigned) = (x <  0) | (unsigned(x) <= y)
-<=(x::Unsigned, y::Signed  ) = (y >= 0) & (x <= unsigned(y))
+==(x::BitSigned,   y::BitUnsigned) = (x >= 0) & (unsigned(x) == y)
+==(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x == unsigned(y))
+<( x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <  y)
+<( x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <  unsigned(y))
+<=(x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <= y)
+<=(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <= unsigned(y))
 
 ## integer shifts ##
 

@@ -371,3 +371,13 @@ end
 @test typeof(tan(a)) == BigFloat
 @test typeof(cos(a)) == BigFloat
 @test typeof(sin(a)) == BigFloat
+
+@test BigInt <: Signed
+@test big(1) isa Signed
+
+let x = big(1)
+    @test signed(x) === x
+    @test convert(Signed, x) === x
+    @test Signed(x) === x
+    @test_throws MethodError convert(Unsigned, x) # could change in the future
+end

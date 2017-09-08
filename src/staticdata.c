@@ -5,7 +5,6 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -20,6 +19,7 @@
 #else
 #define RUNNING_ON_VALGRIND 0
 #endif
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -821,7 +821,7 @@ static uintptr_t get_reloc_for_item(uintptr_t reloc_item, size_t reloc_offset)
     }
     else {
         // just write the item reloc_id directly
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
         assert(reloc_offset == 0 && "offsets for relocations to builtin objects should be precomposed in the reloc_item");
         size_t offset = (reloc_item & (((uintptr_t)1 << RELOC_TAG_OFFSET) - 1));
         switch (tag) {
@@ -1512,7 +1512,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 // TODO: need to enforce that the alignment of the buffer is suitable for vectors
 JL_DLLEXPORT void jl_restore_system_image(const char *fname)
 {
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
     char *dot = fname ? (char*)strrchr(fname, '.') : NULL;
     int is_ji = (dot && !strcmp(dot, ".ji"));
     assert((is_ji || jl_sysimg_handle) && "System image file not preloaded");

@@ -11,7 +11,7 @@ override CPPFLAGS += $(JCPPFLAGS)
 
 SRCS := repl
 
-HEADERS := $(addprefix $(JULIAHOME)/src/,julia.h julia_threads.h julia_internal.h options.h) \
+HEADERS := $(addprefix $(JULIAHOME)/src/,julia.h julia_assert.h julia_threads.h julia_internal.h options.h) \
 	$(BUILDDIR)/../src/julia_version.h $(wildcard $(JULIAHOME)/src/support/*.h) $(LIBUV_INC)/uv.h
 
 FLAGS := -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)

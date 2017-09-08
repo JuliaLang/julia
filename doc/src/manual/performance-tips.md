@@ -74,7 +74,7 @@ On the first call (`@time f(1)`), `f` gets compiled.  (If you've not yet used [`
 in this session, it will also compile functions needed for timing.)  You should not take the results
 of this run seriously. For the second run, note that in addition to reporting the time, it also
 indicated that a large amount of memory was allocated. This is the single biggest advantage of
-[`@time`](@ref) vs. functions like [`tic()`](@ref) and [`toc()`](@ref), which only report time.
+[`@time`](@ref) vs. functions like [`tic`](@ref) and [`toc`](@ref), which only report time.
 
 Unexpected memory allocation is almost always a sign of some problem with your code, usually a
 problem with type-stability. Consequently, in addition to the allocation itself, it's very likely
@@ -485,6 +485,34 @@ annotation in this context in order to achieve type stability. This is because t
 cannot deduce the type of the return value of a function, even `convert`, unless the types of
 all the function's arguments are known.
 
+Type annotation will not enhance (and can actually hinder) performance if the type is constructed
+at run-time. This is because the compiler cannot use the annotation to specialize the subsequent
+code, and the type-check itself takes time. For example, in the code:
+
+```julia
+function nr(a, prec)
+    ctype = prec == 32 ? Float32 : Float64
+    b = Complex{ctype}(a)
+    c = (b + 1.0f0)::Complex{ctype}
+    abs(c)
+end
+```
+
+the annotation of `c` harms performance. To write performant code involving types constructed at
+run-time, use the [function-barrier technique](@ref kernal-functions) discussed below, and ensure
+that the constructed type appears among the argument types of the kernel function so that the kernel
+operations are properly specialized by the compiler. For example, in the above snippet, as soon as
+`b` is constructed, it can be passed to another function `k`, the kernel. If, for example, function
+`k` declares `b` as an argument of type `Complex{T}`, where `T` is a type parameter, then a type annotation
+appearing in an assignment statement within `k` of the form:
+
+```julia
+c = (b + 1.0f0)::Complex{T}
+```
+
+does not hinder performance (but does not help either) since the compiler can determine the type of `c`
+at the time `k` is compiled.
+
 ### Declare types of keyword arguments
 
 Keyword arguments can have declared types:
@@ -549,7 +577,7 @@ easily be fixed as follows:
 pos(x) = x < 0 ? zero(x) : x
 ```
 
-There is also a [`one()`](@ref) function, and a more general [`oftype(x, y)`](@ref) function, which
+There is also a [`one`](@ref) function, and a more general [`oftype(x, y)`](@ref) function, which
 returns `y` converted to the type of `x`.
 
 ## Avoid changing the type of a variable
@@ -810,7 +838,7 @@ Consider the following contrived example. Imagine we wanted to write a function 
 [`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
 of the input vector. Assume that it is not important whether rows or columns are filled with these
 copies (perhaps the rest of the code can be easily adapted accordingly). We could conceivably
-do this in at least four ways (in addition to the recommended call to the built-in [`repmat()`](@ref)):
+do this in at least four ways (in addition to the recommended call to the built-in [`repmat`](@ref)):
 
 ```julia
 function copy_cols(x::Vector{T}) where T
@@ -997,7 +1025,7 @@ An alternative is to create a "view" of the array, which is
 an array object (a `SubArray`) that actually references the data
 of the original array in-place, without making a copy.  (If you
 write to a view, it modifies the original array's data as well.)
-This can be done for individual slices by calling [`view()`](@ref),
+This can be done for individual slices by calling [`view`](@ref),
 or more simply for a whole expression or block of code by putting
 [`@views`](@ref) in front of that expression.  For example:
 
@@ -1125,7 +1153,7 @@ These are some minor points that might help in tight inner loops.
 
   * Avoid unnecessary arrays. For example, instead of [`sum([x,y,z])`](@ref) use `x+y+z`.
   * Use [`abs2(z)`](@ref) instead of [`abs(z)^2`](@ref) for complex `z`. In general, try to rewrite
-    code to use [`abs2()`](@ref) instead of [`abs()`](@ref) for complex arguments.
+    code to use [`abs2`](@ref) instead of [`abs`](@ref) for complex arguments.
   * Use [`div(x,y)`](@ref) for truncating division of integers instead of [`trunc(x/y)`](@ref), [`fld(x,y)`](@ref)
     instead of [`floor(x/y)`](@ref), and [`cld(x,y)`](@ref) instead of [`ceil(x/y)`](@ref).
 
@@ -1208,8 +1236,8 @@ following additional properties:
   * The loop must be an innermost loop.
   * The loop body must be straight-line code. This is why `@inbounds` is currently needed for all
     array accesses. The compiler can sometimes turn short `&&`, `||`, and `?:` expressions into straight-line
-    code, if it is safe to evaluate all operands unconditionally. Consider using [`ifelse()`](@ref)
-    instead of `?:` in the loop if it is safe to do so.
+    code, if it is safe to evaluate all operands unconditionally. Consider using the [`ifelse`](@ref)
+    function instead of `?:` in the loop if it is safe to do so.
   * Accesses must have a stride pattern and cannot be "gathers" (random-index reads) or "scatters"
     (random-index writes).
   * The stride should be unit stride.
@@ -1295,7 +1323,7 @@ on this particular computer), the main difference is that the expression `1 / (2
 `idx = 1 / (2*dx)`. In the loop, the expression `... / (2*dx)` then becomes `... * idx`, which
 is much faster to evaluate. Of course, both the actual optimization that is applied by the compiler
 as well as the resulting speedup depend very much on the hardware. You can examine the change
-in generated code by using Julia's [`code_native()`](@ref) function.
+in generated code by using Julia's [`code_native`](@ref) function.
 
 ## Treat Subnormal Numbers as Zeros
 
@@ -1359,7 +1387,7 @@ a = rand(Float32,1000) * 1.f-9
 
 ## [[`@code_warntype`](@ref)](@id man-code-warntype)
 
-The macro [`@code_warntype`](@ref) (or its function variant [`code_warntype()`](@ref)) can sometimes
+The macro [`@code_warntype`](@ref) (or its function variant [`code_warntype`](@ref)) can sometimes
 be helpful in diagnosing type-related problems. Here's an example:
 
 ```julia

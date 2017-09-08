@@ -328,6 +328,13 @@ let f = i18408()
     @test_throws UndefRefError f(0)
 end
 
+# issue #23558
+c23558(n,k) =
+    let fact(n) = if (n == 0) 1 else n*fact(n-1) end
+        fact(n)/fact(k)/fact(n-k)
+    end
+@test c23558(10, 5) == 252
+
 # variable scope, globals
 glob_x = 23
 function glotest()
@@ -942,7 +949,7 @@ end
 
 @test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Void}, (Any,Any),
                                      x -> x+1, 314158)) == 314159
-@test unsafe_pointer_to_objref(pointer_from_objref(e+pi)) == e+pi
+@test unsafe_pointer_to_objref(pointer_from_objref(ℯ+pi)) == ℯ+pi
 
 let
     local a, aa
@@ -1100,7 +1107,7 @@ end
 # issue #2169
 let
     i2169(a::Array{T}) where {T} = typemin(T)
-    @test invoke(i2169, Tuple{Array} ,Int8[1]) === Int8(-128)
+    @test invoke(i2169, Tuple{Array}, Int8[1]) === Int8(-128)
 end
 
 # issue #2365
@@ -1269,14 +1276,13 @@ let
     @test foo(x) == [1.0, 2.0, 3.0]
 end
 
-# TODO!!
 # issue #4115
-#mutable struct Foo4115
-#end
-#const Foo4115s = NTuple{3,Union{Foo4115,Type{Foo4115}}}
-#baz4115(x::Foo4115s) = x
-#@test baz4115(convert(Tuple{Type{Foo4115},Type{Foo4115},Foo4115},
-#                      (Foo4115,Foo4115,Foo4115()))) == (Foo4115,Foo4115,Foo4115())
+mutable struct Foo4115 end
+const Foo4115s = NTuple{3, Union{Foo4115, Type{Foo4115}}}
+baz4115(x::Foo4115s) = x
+let t = (Foo4115, Foo4115, Foo4115())
+    @test_throws MethodError baz4115(t)
+end
 
 # issue #4129
 mutable struct Foo4129; end
@@ -3810,7 +3816,7 @@ end
 # `TypeVar`) without crashing
 let
     function arrayset_unknown_dim(::Type{T}, n) where T
-        Base.arrayset(reshape(Vector{T}(1), ones(Int, n)...), 2, 1)
+        Base.arrayset(true, reshape(Vector{T}(1), ones(Int, n)...), 2, 1)
     end
     arrayset_unknown_dim(Any, 1)
     arrayset_unknown_dim(Any, 2)
@@ -4002,16 +4008,13 @@ end
 
 function metadata_matches(ast::CodeInfo)
     inbounds_cnt = Ref(0)
-    boundscheck_cnt = Ref(0)
     for ex in ast.code::Array{Any,1}
         if isa(ex, Expr)
             ex = ex::Expr
             count_expr_push(ex, :inbounds, inbounds_cnt)
-            count_expr_push(ex, :boundscheck, boundscheck_cnt)
         end
     end
     @test inbounds_cnt[] == 0
-    @test boundscheck_cnt[] == 0
 end
 
 function test_metadata_matches(@nospecialize(f), @nospecialize(tt))
@@ -4027,14 +4030,9 @@ function f2()
     end
 end
 # No, don't write code this way...
-@eval function f3()
-    a = $(Expr(:boundscheck, true))
-    return 1
-    b = $(Expr(:boundscheck, :pop))
-end
 @noinline function g(a)
 end
-@eval function f4()
+@eval function f3()
     g($(Expr(:inbounds, true)))
     @goto out
     g($(Expr(:inbounds, :pop)))
@@ -4044,7 +4042,6 @@ end
 test_metadata_matches(f1, Tuple{})
 test_metadata_matches(f2, Tuple{})
 test_metadata_matches(f3, Tuple{})
-test_metadata_matches(f4, Tuple{})
 
 end
 
@@ -4543,15 +4540,22 @@ let x = 1
     @noinline g18444(a) = (x += 1; a[])
     f18444_1(a) = invoke(sin, Tuple{Int}, g18444(a))
     f18444_2(a) = invoke(sin, Tuple{Integer}, g18444(a))
-    @test_throws ErrorException f18444_1(Ref{Any}(1.0))
+    @test_throws ErrorException("invoke: argument type error") f18444_1(Ref{Any}(1.0))
     @test x == 2
-    @test_throws ErrorException f18444_2(Ref{Any}(1.0))
+    @test_throws ErrorException("invoke: argument type error") f18444_2(Ref{Any}(1.0))
     @test x == 3
     @test f18444_1(Ref{Any}(1)) === sin(1)
     @test x == 4
     @test f18444_2(Ref{Any}(1)) === sin(1)
     @test x == 5
 end
+
+f18095(::Int, ::Number) = 0x21
+f18095(::Number, ::Int) = 0x12
+@test_throws MethodError f18095(1, 2)
+@test_throws MethodError invoke(f18095, Tuple{Int, Int}, 1, 2)
+@test_throws MethodError invoke(f18095, Tuple{Int, Any}, 1, 2)
+@test invoke(f18095, Tuple{Int, Real}, 1, 2) === 0x21
 
 # issue #10981, long argument lists
 let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
@@ -4859,6 +4863,12 @@ end
 let a = Array{Core.TypeofBottom, 1}(2)
     @test a[1] == Union{}
     @test a == [Union{}, Union{}]
+end
+
+@test_throws TypeError(:T17951, "type definition", Type, Vararg) @eval begin
+    struct T17951
+        x::Vararg
+    end
 end
 
 # issue #21178
@@ -5318,6 +5328,49 @@ x.u = initvalue2(Base.uniontypes(U)[1])
 x.u = initvalue(Base.uniontypes(U)[2])
 @test x.u === initvalue(Base.uniontypes(U)[2])
 
+# PR #23367
+struct A23367
+    x::Union{Int8, Int16, NTuple{7, Int8}, Void}
+end
+struct B23367
+    x::Int8
+    y::A23367
+    z::Int8
+end
+@noinline compare(a, b) = (a === b) # test code-generation of `is`
+@noinline get_x(a::A23367) = a.x
+function constant23367 end
+let
+    b = B23367(91, A23367(ntuple(i -> Int8(i), Val(7))), 23)
+    @eval @noinline constant23367(a, b) = (a ? b : $b)
+    b2 = Ref(b)[] # copy b via field assignment
+    b3 = B23367[b][1] # copy b via array assignment
+    @test pointer_from_objref(b) == pointer_from_objref(b)
+    @test pointer_from_objref(b) != pointer_from_objref(b2)
+    @test pointer_from_objref(b) != pointer_from_objref(b3)
+    @test pointer_from_objref(b2) != pointer_from_objref(b3)
+
+    @test b === b2 === b3
+    @test compare(b, b2)
+    @test compare(b, b3)
+    @test object_id(b) === object_id(b2) == object_id(b3)
+    @test b.x === Int8(91)
+    @test b.z === Int8(23)
+    @test b.y === A23367((Int8(1), Int8(2), Int8(3), Int8(4), Int8(5), Int8(6), Int8(7)))
+    @test sizeof(b) == 12
+    @test A23367(Int8(1)).x === Int8(1)
+    @test A23367(Int8(0)).x === Int8(0)
+    @test A23367(Int16(1)).x === Int16(1)
+    @test A23367(nothing).x === nothing
+    @test sizeof(b.y) == 8
+    @test get_x(A23367(Int8(1))) === Int8(1)
+
+    # test code-generation of constants
+    other = B23367(91, A23367(nothing), 23)
+    @test constant23367(true, other) === other
+    @test constant23367(false, other) === b
+end
+
 for U in boxedunions
     local U
     for N in (1, 2, 3, 4)
@@ -5333,10 +5386,29 @@ for U in boxedunions
 end
 
 # unsafe_wrap
-A4 = [1, 2, 3]
-@test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A4)), 3)
-A5 = [1 2 3; 4 5 6]
-@test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A5)), 6)
+let
+    A4 = [1, 2, 3]
+    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A4)), 3)
+    A5 = [1 2 3; 4 5 6]
+    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A5)), 6)
+end
+
+# copy!
+A23567 = Vector{Union{Float64, Void}}(5)
+B23567 = collect(Union{Float64, Void}, 1.0:3.0)
+copy!(A23567, 2, B23567)
+@test A23567[1] === nothing
+@test A23567[2] === 1.0
+@test A23567[3] === 2.0
+@test A23567[4] === 3.0
+
+# vcat
+t2 = deepcopy(A23567)
+t3 = deepcopy(A23567)
+t4 = vcat(A23567, t2, t3)
+@test t4[1:5] == A23567
+@test t4[6:10] == A23567
+@test t4[11:15] == A23567
 
 for U in unboxedunions
     local U
@@ -5508,3 +5580,29 @@ for U in unboxedunions
 end
 
 end # module UnionOptimizations
+
+# issue #6614, argument destructuring
+f6614((x, y)) = [x, y]
+@test f6614((4, 3)) == [4, 3]
+g6614((x, y), (z,), (a, b)) = (x,y,z,a,b)
+@test g6614((1, 2), (3,), (4, 5)) === (1,2,3,4,5)
+@test_throws MethodError g6614(1, 2)
+@test_throws MethodError g6614((1, 2), (3,))
+@test_throws BoundsError g6614((1, 2), (3,), (1,))
+h6614((x, y) = (5, 6)) = (y, x)
+@test h6614() == (6, 5)
+@test h6614((4, 5)) == (5, 4)
+ff6614((x, y)::Tuple{Int, String}) = (x, y)
+@test ff6614((1, "")) == (1, "")
+@test_throws MethodError ff6614((1, 1))
+gg6614((x, y)::Tuple{Int, String} = (2, " ")) = (x, y)
+@test gg6614() == (2, " ")
+function hh6614()
+    x, y = 1, 2
+    function g((x,y))
+        # make sure x and y are local
+    end
+    g((4,5))
+    x, y
+end
+@test hh6614() == (1, 2)

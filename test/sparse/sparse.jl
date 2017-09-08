@@ -428,7 +428,7 @@ end
 
 @testset "exp" begin
     A = sprandn(5,5,0.2)
-    @test e.^A ≈ e.^Array(A)
+    @test ℯ.^A ≈ ℯ.^Array(A)
 end
 
 @testset "reductions" begin
@@ -466,11 +466,17 @@ end
         @test_throws ArgumentError maximum(sparse(Int[]))
         @test var(sparse(Int[])) === NaN
 
-        for f in (sum, prod, minimum, maximum, var)
+        for f in (sum, prod, var)
             @test isequal(f(spzeros(0, 1), 1), f(Array{Int}(0, 1), 1))
             @test isequal(f(spzeros(0, 1), 2), f(Array{Int}(0, 1), 2))
             @test isequal(f(spzeros(0, 1), (1, 2)), f(Array{Int}(0, 1), (1, 2)))
             @test isequal(f(spzeros(0, 1), 3), f(Array{Int}(0, 1), 3))
+        end
+        for f in (minimum, maximum, findmin, findmax)
+            @test_throws ArgumentError f(spzeros(0, 1), 1)
+            @test isequal(f(spzeros(0, 1), 2), f(Array{Int}(0,1), 2))
+            @test_throws ArgumentError f(spzeros(0, 1), (1, 2))
+            @test isequal(f(spzeros(0, 1), 3), f(Array{Int}(0,1), 3))
         end
     end
 end
@@ -992,8 +998,8 @@ end
 
     S = spzeros(10,8)
     A = Array(S)
-    @test indmax(S) == indmax(A) == 1
-    @test indmin(S) == indmin(A) == 1
+    @test indmax(S) == indmax(A) == CartesianIndex(1,1)
+    @test indmin(S) == indmin(A) == CartesianIndex(1,1)
 
     A = Array{Int}(0,0)
     S = sparse(A)
@@ -1003,6 +1009,107 @@ end
     iA = try indmin(A) end
     iS = try indmin(S) end
     @test iA === iS === nothing
+end
+
+# findmin/findmax/minumum/maximum
+
+A = sparse([1.0 5.0 6.0;
+            5.0 2.0 4.0])
+for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
+                          ((2,), reshape([1.0,2.0], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,2)], 2, 1)),
+                          ((1,2), fill(1.0,1,1),fill(CartesianIndex(1,1),1,1))]
+    @test findmin(A, tup) == (rval, rind)
+end
+
+for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+                          ((2,), reshape([6.0,5.0], 2, 1), reshape([CartesianIndex(1,3),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(6.0,1,1),fill(CartesianIndex(1,3),1,1))]
+    @test findmax(A, tup) == (rval, rind)
+end
+
+#issue 23209
+
+A = sparse([1.0 5.0 6.0;
+            NaN 2.0 4.0])
+for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [CartesianIndex(2,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
+                          ((2,), reshape([1.0, NaN], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), [NaN 5.0 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+                          ((2,), reshape([6.0, NaN], 2, 1), reshape([CartesianIndex(1,3),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+    @test isequal(findmax(A, tup), (rval, rind))
+end
+
+A = sparse([1.0 NaN 6.0;
+            NaN 2.0 4.0])
+for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(2,3)]),
+                          ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+                          ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+    @test isequal(findmax(A, tup), (rval, rind))
+end
+
+A = sparse([Inf -Inf Inf  -Inf;
+            Inf  Inf -Inf -Inf])
+for (tup, rval, rind) in [((1,), [Inf -Inf -Inf -Inf], [CartesianIndex(1,1) CartesianIndex(1,2) CartesianIndex(2,3) CartesianIndex(1,4)]),
+                          ((2,), reshape([-Inf -Inf], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,3)], 2, 1)),
+                          ((1,2), fill(-Inf,1,1),fill(CartesianIndex(1,2),1,1))]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(1,3) CartesianIndex(1,4)]),
+                          ((2,), reshape([Inf Inf], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(Inf,1,1),fill(CartesianIndex(1,1),1,1))]
+    @test isequal(findmax(A, tup), (rval, rind))
+end
+
+A = sparse([BigInt(10)])
+for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
+    @test isequal(findmax(A, tup), (rval, rind))
+end
+
+A = sparse([BigInt(-10)])
+for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
+    @test isequal(findmax(A, tup), (rval, rind))
+end
+
+A = sparse([BigInt(10) BigInt(-10)])
+for (tup, rval, rind) in [((2,), reshape([BigInt(-10)], 1, 1), reshape([CartesianIndex(1,2)], 1, 1))]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((2,), reshape([BigInt(10)], 1, 1), reshape([CartesianIndex(1,1)], 1, 1))]
+    @test isequal(findmax(A, tup), (rval, rind))
+end
+
+A = sparse(["a", "b"])
+@test_throws MethodError findmin(A, 1)
+
+# Support the case, when user defined `zero` and `isless` for non-numerical type
+#
+Base.zero(::Type{T}) where T<:AbstractString = ""
+for (tup, rval, rind) in [((1,), ["a"], [1])]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), ["b"], [2])]
+    @test isequal(findmax(A, tup), (rval, rind))
 end
 
 @testset "findn" begin
@@ -1198,6 +1305,9 @@ end
     B = Bidiagonal(randn(5),randn(4),:L)
     S = sparse(B)
     @test norm(Array(B) - Array(S)) == 0.0
+    D = Diagonal(randn(5))
+    S = sparse(D)
+    @test norm(Array(D) - Array(S)) == 0.0
 end
 
 @testset "spdiagm promotion" begin

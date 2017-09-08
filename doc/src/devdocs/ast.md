@@ -1,7 +1,7 @@
 # Julia ASTs
 
 Julia has two representations of code. First there is a surface syntax AST returned by the parser
-(e.g. the [`parse()`](@ref) function), and manipulated by macros. It is a structured representation
+(e.g. the [`parse`](@ref) function), and manipulated by macros. It is a structured representation
 of code as it is written, constructed by `julia-parser.scm` from a character stream. Next there
 is a lowered form, or IR (intermediate representation), which is used by type inference and code
 generation. In the lowered form there are fewer types of nodes, all macros are expanded, and all
@@ -170,8 +170,8 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
   * `boundscheck`
 
-    Indicates the beginning or end of a section of code that performs a bounds check. Like `inbounds`,
-    a stack is maintained, and the second argument can be one of: `true`, `false`, or `:pop`.
+    Has the value `false` if inlined into a section of code marked with `@inbounds`,
+    otherwise has the value `true`.
 
   * `copyast`
 
@@ -486,7 +486,8 @@ they are parsed as a block: `(for (block (= v1 iter1) (= v2 iter2)) body)`.
 
 `break` and `continue` are parsed as 0-argument expressions `(break)` and `(continue)`.
 
-`let` is parsed as `(let body (= var1 val1) (= var2 val2) ...)`.
+`let` is parsed as `(let (= var val) body)` or `(let (block (= var1 val1) (= var2 val2) ...) body)`,
+like `for` loops.
 
 A basic function definition is parsed as `(function (call f x) body)`. A more complex example:
 

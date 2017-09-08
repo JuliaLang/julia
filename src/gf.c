@@ -10,12 +10,12 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include "julia.h"
 #include "julia_internal.h"
 #ifndef _OS_WINDOWS_
 #include <unistd.h>
 #endif
+#include "julia_assert.h"
 
 // @nospecialize has no effect if the number of overlapping methods is greater than this
 #define MAX_UNSPECIALIZED_CONFLICTS 32
@@ -1552,7 +1552,7 @@ jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_
         JL_UNLOCK(&mt->writelock);
         return linfo;
     }
-    if (jl_is_leaf_type((jl_value_t*)types))
+    if (jl_is_leaf_type((jl_value_t*)types)) // FIXME: this is the wrong predicate
         cache = 1;
     jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, types, cache, allow_exec, world);
     if (cache) {
@@ -1745,9 +1745,25 @@ JL_DLLEXPORT jl_value_t *jl_get_spec_lambda(jl_tupletype_t *types, size_t world)
     return li ? (jl_value_t*)li : jl_nothing;
 }
 
+// see if a call to m with computed from `types` is ambiguous
+JL_DLLEXPORT int jl_is_call_ambiguous(jl_tupletype_t *types, jl_method_t *m)
+{
+    if (m->ambig == jl_nothing)
+        return 0;
+    for (size_t i = 0; i < jl_array_len(m->ambig); i++) {
+        jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(m->ambig, i);
+        if (jl_subtype((jl_value_t*)types, (jl_value_t*)mambig->sig))
+            return 1;
+    }
+    return 0;
+}
+
+// see if a call to m with a subtype of `types` might be ambiguous
+// if types is from a call signature (approximated by isleaftype), this is the same as jl_is_call_ambiguous above
 JL_DLLEXPORT int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m)
 {
-    if (m->ambig == jl_nothing) return 0;
+    if (m->ambig == jl_nothing)
+        return 0;
     for (size_t i = 0; i < jl_array_len(m->ambig); i++) {
         jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(m->ambig, i);
         if (!jl_has_empty_intersection((jl_value_t*)mambig->sig, (jl_value_t*)types))
@@ -1950,6 +1966,8 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_datatype_t *types, size_t world)
             mt->defs, types, /*env*/&env, /*subtype*/1, /*offs*/0, world);
     JL_GC_POP();
     if (!entry)
+        return jl_nothing;
+    if (jl_is_call_ambiguous(types, entry->func.method))
         return jl_nothing;
     return (jl_value_t*)entry;
 }

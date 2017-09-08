@@ -84,7 +84,7 @@ function add12(x::T, y::T) where {T}
     x, y = ifelse(abs(y) > abs(x), (y, x), (x, y))
     canonicalize2(x, y)
 end
-add12(x, y) = add12(promote_noncircular(x, y)...)
+add12(x, y) = add12(promote(x, y)...)
 
 """
     zhi, zlo = mul12(x, y)
@@ -116,7 +116,7 @@ function mul12(x::T, y::T) where {T<:AbstractFloat}
     ifelse(iszero(h) | !isfinite(h), (h, h), canonicalize2(h, fma(x, y, -h)))
 end
 mul12(x::T, y::T) where {T} = (p = x * y; (p, zero(p)))
-mul12(x, y) = mul12(promote_noncircular(x, y)...)
+mul12(x, y) = mul12(promote(x, y)...)
 
 """
     zhi, zlo = div12(x, y)
@@ -152,7 +152,7 @@ function div12(x::T, y::T) where {T<:AbstractFloat}
     ifelse(iszero(r) | !isfinite(r), (r, r), (ldexp(rh, xe-ye), ldexp(rl, xe-ye)))
 end
 div12(x::T, y::T) where {T} = (p = x / y; (p, zero(p)))
-div12(x, y) = div12(promote_noncircular(x, y)...)
+div12(x, y) = div12(promote(x, y)...)
 
 
 ## TwicePrecision
@@ -269,7 +269,7 @@ function +(x::TwicePrecision{T}, y::TwicePrecision{T}) where T
     s = abs(x.hi) > abs(y.hi) ? (((x.hi - r) + y.hi) + y.lo) + x.lo : (((y.hi - r) + x.hi) + x.lo) + y.lo
     TwicePrecision(canonicalize2(r, s)...)
 end
-+(x::TwicePrecision, y::TwicePrecision) = +(promote_noncircular(x, y)...)
++(x::TwicePrecision, y::TwicePrecision) = +(promote(x, y)...)
 
 -(x::TwicePrecision, y::TwicePrecision) = x + (-y)
 -(x::TwicePrecision, y::Number) = x + (-y)
@@ -292,7 +292,7 @@ function *(x::TwicePrecision{T}, y::TwicePrecision{T}) where {T}
     ret = TwicePrecision{T}(canonicalize2(zh, (x.hi * y.lo + x.lo * y.hi) + zl)...)
     ifelse(iszero(zh) | !isfinite(zh), TwicePrecision{T}(zh, zh), ret)
 end
-*(x::TwicePrecision, y::TwicePrecision) = *(promote_noncircular(x, y)...)
+*(x::TwicePrecision, y::TwicePrecision) = *(promote(x, y)...)
 
 function /(x::TwicePrecision, v::Number)
     x / TwicePrecision{typeof(x.hi/v)}(v)

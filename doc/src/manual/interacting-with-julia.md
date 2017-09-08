@@ -152,31 +152,36 @@ to do so).
 | **Cursor movement** |                                                                                                            |
 | Right arrow, `^F`   | Move right one character                                                                                   |
 | Left arrow, `^B`    | Move left one character                                                                                    |
+| ctrl-Right, `meta-F`| Move right one word                                                                                        |
+| ctrl-Left, `meta-B` | Move left one word                                                                                         |
 | Home, `^A`          | Move to beginning of line                                                                                  |
 | End, `^E`           | Move to end of line                                                                                        |
-| `^P`                | Change to the previous or next history entry                                                               |
-| `^N`                | Change to the next history entry                                                                           |
-| Up arrow            | Move up one line (or to the previous history entry)                                                        |
-| Down arrow          | Move down one line (or to the next history entry)                                                          |
-| Page-up             | Change to the previous history entry that matches the text before the cursor                               |
-| Page-down           | Change to the next history entry that matches the text before the cursor                                   |
-| `meta-F`            | Move right one word                                                                                        |
-| `meta-B`            | Move left one word                                                                                         |
+| Up arrow, `^P`      | Move up one line (or change to the previous history entry that matches the text before the cursor)         |
+| Down arrow, `^N`    | Move down one line (or change to the next history entry that matches the text before the cursor)           |
+| Page-up, `meta-P`   | Change to the previous history entry                                                                       |
+| Page-down, `meta-N` | Change to the next history entry                                                                           |
 | `meta-<`            | Change to the first history entry (of the current session if it is before the current position in history) |
 | `meta->`            | Change to the last history entry                                                                           |
+| `^-Space`           | Set the "mark" in the editing region                                                                       |
+| `^X^X`              | Exchange the current position with the mark                                                                |
 | **Editing**         |                                                                                                            |
 | Backspace, `^H`     | Delete the previous character                                                                              |
 | Delete, `^D`        | Forward delete one character (when buffer has text)                                                        |
 | meta-Backspace      | Delete the previous word                                                                                   |
-| `meta-D`            | Forward delete the next word                                                                               |
+| `meta-d`            | Forward delete the next word                                                                               |
 | `^W`                | Delete previous text up to the nearest whitespace                                                          |
-| `^K`                | "Kill" to end of line, placing the text in a buffer                                                        |
-| `^Y`                | "Yank" insert the text from the kill buffer                                                                |
+| `meta-w`            | Copy the current region in the kill ring                                                                   |
+| `meta-W`            | "Kill" the current region, placing the text in the kill ring                                               |
+| `^K`                | "Kill" to end of line, placing the text in the kill ring                                                   |
+| `^Y`                | "Yank" insert the text from the kill ring                                                                  |
+| `meta-y`            | Replace a previously yanked text with an older entry from the kill ring                                    |
 | `^T`                | Transpose the characters about the cursor                                                                  |
 | `meta-u`            | Change the next word to uppercase                                                                          |
 | `meta-c`            | Change the next word to titlecase                                                                          |
 | `meta-l`            | Change the next word to lowercase                                                                          |
+| `^/`, `^_`          | Undo previous editing action                                                                               |
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
+
 
 
 ### Customizing keybindings

@@ -598,7 +598,7 @@ signed integer, so that `abs(typemin(x)) == typemin(x) < 0`, in which case the r
 `uabs(x)` will be an unsigned integer of the same size.
 """
 uabs(x::Integer) = abs(x)
-uabs(x::Signed) = unsigned(abs(x))
+uabs(x::BitSigned) = unsigned(abs(x))
 
 
 """

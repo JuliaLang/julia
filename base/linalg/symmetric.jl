@@ -607,9 +607,9 @@ function exp(A::Hermitian{T}) where T
     end
 end
 
-for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
+for func in (:log, :sqrt)
     @eval begin
-        function ($funm)(A::Symmetric{T}) where T<:Real
+        function ($func)(A::Symmetric{T}) where T<:Real
             F = eigfact(A)
             if all(λ -> λ ≥ 0, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
@@ -619,7 +619,7 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
             return Symmetric(retmat)
         end
 
-        function ($funm)(A::Hermitian{T}) where T
+        function ($func)(A::Hermitian{T}) where T
             n = checksquare(A)
             F = eigfact(A)
             if all(λ -> λ ≥ 0, F.values)

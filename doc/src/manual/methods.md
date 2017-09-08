@@ -163,7 +163,7 @@ f (generic function with 2 methods)
 ```
 
 This output tells us that `f` is a function object with two methods. To find out what the signatures
-of those methods are, use the [`methods()`](@ref) function:
+of those methods are, use the [`methods`](@ref) function:
 
 ```julia-repl
 julia> methods(f)
@@ -453,7 +453,7 @@ This monotonically increasing value tracks each method definition operation.
 This allows describing "the set of method definitions visible to a given runtime environment"
 as a single number, or "world age".
 It also allows comparing the methods available in two worlds just by comparing their ordinal value.
-In the example above, we see that the "current world" (in which the method `newfun()` exists),
+In the example above, we see that the "current world" (in which the method `newfun` exists),
 is one greater than the task-local "runtime world" that was fixed when the execution of `tryeval` started.
 
 Sometimes it is necessary to get around this (for example, if you are implementing the above REPL).

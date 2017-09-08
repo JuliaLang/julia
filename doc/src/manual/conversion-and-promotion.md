@@ -89,12 +89,12 @@ since type constructors fall back to convert methods.
 Some languages consider parsing strings as numbers or formatting numbers as strings to be conversions
 (many dynamic languages will even perform conversion for you automatically), however Julia does
 not: even though some strings can be parsed as numbers, most strings are not valid representations
-of numbers, and only a very limited subset of them are. Therefore in Julia the dedicated `parse()`
+of numbers, and only a very limited subset of them are. Therefore in Julia the dedicated `parse`
 function must be used to perform this operation, making it more explicit.
 
 ### Defining New Conversions
 
-To define a new conversion, simply provide a new method for `convert()`. That's really all there
+To define a new conversion, simply provide a new method for `convert`. That's really all there
 is to it. For example, the method to convert a real number to a boolean is this:
 
 ```julia

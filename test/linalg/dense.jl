@@ -20,12 +20,7 @@ srand(1234321)
     ainit = rand(n,n)
     @testset "for $elty" for elty in (Float32, Float64, Complex64, Complex128)
         ainit = convert(Matrix{elty}, ainit)
-        for arraytype in ("Array", "SubArray")
-            if arraytype == "Array"
-                a = ainit
-            else
-                a = view(ainit, 1:n, 1:n)
-            end
+        for a in (copy(ainit), view(ainit, 1:n, 1:n))
             @test cond(a,1) ≈ 4.837320054554436e+02 atol=0.01
             @test cond(a,2) ≈ 1.960057871514615e+02 atol=0.01
             @test cond(a,Inf) ≈ 3.757017682707787e+02 atol=0.01
@@ -60,16 +55,7 @@ bimg  = randn(n,2)/2
         binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
-
-        for arraytype in ("Array", "SubArray")
-            if arraytype == "Array"
-                a = ainit
-                b = binit
-            else
-                a = view(ainit, 1:n, 1:n)
-                b = view(binit, 1:n, 1:2)
-            end
-
+        for (a, b) in ((copy(ainit), copy(binit)), (view(ainit, 1:n, 1:n), view(binit, 1:n, 1:2)))
             @testset "Solve square general system of equations" begin
                 κ = cond(a,1)
                 x = a \ b
@@ -90,15 +76,7 @@ bimg  = randn(n,2)/2
         end
     end # for eltyb
 
-    for arraytype in ("Array", "SubArray")
-        if arraytype == "Array"
-            a = ainit
-            a2 = ainit2
-        else
-            a = view(ainit, 1:n, 1:n)
-            a2 = view(ainit2, 1:n, 1:n)
-        end
-
+    for (a, a2) in ((copy(ainit), copy(ainit2)), (view(ainit, 1:n, 1:n), view(ainit2, 1:n, 1:n)))
         @testset "Test pinv" begin
             pinva15 = pinv(a[:,1:n1])
             @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
@@ -115,10 +93,10 @@ bimg  = randn(n,2)/2
         end
 
         @testset "Matrix square root" begin
-            asq = sqrtm(a)
+            asq = sqrt(a)
             @test asq*asq ≈ a
             asym = a'+a # symmetric indefinite
-            asymsq = sqrtm(asym)
+            asymsq = sqrt(asym)
             @test asymsq*asymsq ≈ asym
         end
 
@@ -169,14 +147,9 @@ end # for eltya
 
 @testset "test triu/tril bounds checking" begin
     ainit = rand(5,7)
-    for arraytype in ("Array", "SubArray")
-        if arraytype == "Array"
-            a = ainit
-        else
-            a = view(ainit, 1:size(ainit, 1), 1:size(ainit, 2))
-        end
-        @test_throws(ArgumentError,triu(a,8))
+    for a in (copy(ainit), view(ainit, 1:size(ainit, 1), 1:size(ainit, 2)))
         @test_throws(ArgumentError,triu(a,-6))
+        @test_throws(ArgumentError,triu(a,8))
         @test_throws(ArgumentError,tril(a,8))
         @test_throws(ArgumentError,tril(a,-6))
     end
@@ -253,14 +226,7 @@ end
                 α = elty <: Integer ? randn() :
                     elty <: Complex ? convert(elty, complex(randn(),randn())) :
                     convert(elty, randn())
-                for arraytype in ("Array", "SubArray")
-                    if arraytype == "Array"
-                        x = xinit
-                        y = yinit
-                    else
-                        x = view(xinit,1:2:nnorm)
-                        y = view(yinit,1:2:nnorm)
-                    end
+                for (x, y) in ((copy(xinit), copy(yinit)), (view(xinit,1:2:nnorm), view(yinit,1:2:nnorm)))
                     # Absolute homogeneity
                     @test norm(α*x,-Inf) ≈ abs(α)*norm(x,-Inf)
                     @test norm(α*x,-1) ≈ abs(α)*norm(x,-1)
@@ -309,16 +275,7 @@ end
                 α = elty <: Integer ? randn() :
                     elty <: Complex ? convert(elty, complex(randn(),randn())) :
                     convert(elty, randn())
-
-                for arraytype in ("Array", "SubArray")
-                    if arraytype == "Array"
-                        A = Ainit
-                        B = Binit
-                    else
-                        A = view(Ainit,1:nmat,1:nmat)
-                        B = view(Binit,1:nmat,1:nmat)
-                    end
-
+                for (A, B) in ((copy(Ainit), copy(Binit)), (view(Ainit,1:nmat,1:nmat), view(Binit,1:nmat,1:nmat)))
                     # Absolute homogeneity
                     @test norm(α*A,1) ≈ abs(α)*norm(A,1)
                     elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(α*A) ≈ abs(α)*norm(A) # two is default
@@ -370,10 +327,10 @@ end
 
 @testset "issue #2246" begin
     A = [1 2 0 0; 0 1 0 0; 0 0 0 0; 0 0 0 0]
-    Asq = sqrtm(A)
+    Asq = sqrt(A)
     @test Asq*Asq ≈ A
     A2 = view(A, 1:2, 1:2)
-    A2sq = sqrtm(A2)
+    A2sq = sqrt(A2)
     @test A2sq*A2sq ≈ A2
 
     N = 3
@@ -453,20 +410,20 @@ end
                                      1/3 1/4 1/5 1/6;
                                      1/4 1/5 1/6 1/7;
                                      1/5 1/6 1/7 1/8])
-        @test exp(logm(A4)) ≈ A4
+        @test exp(log(A4)) ≈ A4
 
         A5  = convert(Matrix{elty}, [1 1 0 1; 0 1 1 0; 0 0 1 1; 1 0 0 1])
-        @test exp(logm(A5)) ≈ A5
+        @test exp(log(A5)) ≈ A5
 
         A6  = convert(Matrix{elty}, [-5 2 0 0 ; 1/2 -7 3 0; 0 1/3 -9 4; 0 0 1/4 -11])
-        @test exp(logm(A6)) ≈ A6
+        @test exp(log(A6)) ≈ A6
 
         A7  = convert(Matrix{elty}, [1 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1])
-        @test exp(logm(A7)) ≈ A7
+        @test exp(log(A7)) ≈ A7
     end
 
     A8 = 100 * [-1+1im 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1]
-    @test exp(logm(A8)) ≈ A8
+    @test exp(log(A8)) ≈ A8
 end
 
 @testset "issue 5116" begin
@@ -487,28 +444,28 @@ end
 
 @testset "Additional matrix logarithm tests" for elty in (Float64, Complex{Float64})
     A11 = convert(Matrix{elty}, [3 2; -5 -3])
-    @test exp(logm(A11)) ≈ A11
+    @test exp(log(A11)) ≈ A11
 
     A12 = convert(Matrix{elty}, [1 -1; 1 -1])
-    @test typeof(logm(A12)) == Array{Complex{Float64}, 2}
+    @test typeof(log(A12)) == Array{Complex{Float64}, 2}
 
     A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
-    logmA1 = convert(Matrix{elty}, [1.329661349 0.5302876358 -0.06818951543;
+    logA1 = convert(Matrix{elty}, [1.329661349 0.5302876358 -0.06818951543;
                                     0.2310490602 1.295566591 0.2651438179;
                                     0.2310490602 0.1969543025 1.363756107])
-    @test logm(A1) ≈ logmA1
-    @test exp(logm(A1)) ≈ A1
+    @test log(A1) ≈ logA1
+    @test exp(log(A1)) ≈ A1
 
     A4  = convert(Matrix{elty}, [1/2 1/3 1/4 1/5+eps();
                                  1/3 1/4 1/5 1/6;
                                  1/4 1/5 1/6 1/7;
                                  1/5 1/6 1/7 1/8])
-    logmA4 = convert(Matrix{elty}, [-1.73297159 1.857349738 0.4462766564 0.2414170219;
+    logA4 = convert(Matrix{elty}, [-1.73297159 1.857349738 0.4462766564 0.2414170219;
                                     1.857349738 -5.335033737 2.994142974 0.5865285289;
                                     0.4462766564 2.994142974 -7.351095988 3.318413247;
                                     0.2414170219 0.5865285289 3.318413247 -5.444632124])
-    @test logm(A4) ≈ logmA4
-    @test exp(logm(A4)) ≈ A4
+    @test log(A4) ≈ logA4
+    @test exp(log(A4)) ≈ A4
 end
 
 @testset "issue #7181" begin
@@ -569,16 +526,21 @@ end
     end
 
     for A in (Aa, Ab, Ac, Ad, Ah, ADi)
-        @test A^(1/2) ≈ sqrtm(A)
-        @test A^(-1/2) ≈ inv(sqrtm(A))
-        @test A^(3/4) ≈ sqrtm(A) * sqrtm(sqrtm(A))
-        @test A^(-3/4) ≈ inv(A) * sqrtm(sqrtm(A))
-        @test A^(17/8) ≈ A^2 * sqrtm(sqrtm(sqrtm(A)))
-        @test A^(-17/8) ≈ inv(A^2 * sqrtm(sqrtm(sqrtm(A))))
+        @test A^(1/2) ≈ sqrt(A)
+        @test A^(-1/2) ≈ inv(sqrt(A))
+        @test A^(3/4) ≈ sqrt(A) * sqrt(sqrt(A))
+        @test A^(-3/4) ≈ inv(A) * sqrt(sqrt(A))
+        @test A^(17/8) ≈ A^2 * sqrt(sqrt(sqrt(A)))
+        @test A^(-17/8) ≈ inv(A^2 * sqrt(sqrt(sqrt(A))))
         @test (A^0.2)^5 ≈ A
         @test (A^(2/3))*(A^(1/3)) ≈ A
         @test (A^im)^(-im) ≈ A
     end
+end
+
+@testset "diagonal integer matrix to real power" begin
+    A = Matrix(Diagonal([1, 2, 3]))
+    @test A^2.3 ≈ float(A)^2.3
 end
 
 @testset "issue #23366 (Int Matrix to Int power)" begin
@@ -674,10 +636,7 @@ end
 
 @testset "test ops on Numbers for $elty" for elty in [Float32,Float64,Complex64,Complex128]
     a = rand(elty)
-    @test exp(a) == exp(a)
     @test isposdef(one(elty))
-    @test sqrtm(a) == sqrt(a)
-    @test logm(a) ≈ log(a)
     @test lyap(one(elty),a) == -a/2
 end
 

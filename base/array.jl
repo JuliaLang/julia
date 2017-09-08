@@ -114,27 +114,19 @@ asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1
 
 Return whether a type is an "is-bits" Union type, meaning each type included in a Union is `isbits`.
 """
-function isbitsunion end
-
-function isbitsunion(U::Union)
-    for u in Base.uniontypes(U)
-        isbits(u) || return false
-    end
-    return true
-end
-isbitsunion(T) = false
+isbitsunion(u::Union) = ccall(:jl_array_store_unboxed, Cint, (Any,), u) == Cint(1)
+isbitsunion(x) = false
 
 """
     Base.bitsunionsize(U::Union)
 
-For a Union of `isbits` types, return the size of the largest type.
+For a Union of `isbits` types, return the size of the largest type; assumes `Base.isbitsunion(U) == true`
 """
-function bitsunionsize(U::Union)
-    sz = 0
-    for u in Base.uniontypes(U)
-        sz = max(sz, sizeof(u))
-    end
-    return sz
+function bitsunionsize(u::Union)
+    sz = Ref{Csize_t}(0)
+    algn = Ref{Csize_t}(0)
+    @assert ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), u, sz, algn) == Cint(1)
+    return sz[]
 end
 
 length(a::Array) = arraylen(a)
@@ -181,6 +173,14 @@ the same manner as C.
 function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
+    elseif isbitsunion(T)
+        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+              pointer(dest, doffs), pointer(src, soffs), n * Base.bitsunionsize(T))
+        # copy selector bytes
+        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+              convert(Ptr{UInt8}, pointer(dest)) + length(dest) * Base.bitsunionsize(T) + doffs - 1,
+              convert(Ptr{UInt8}, pointer(src)) + length(src) * Base.bitsunionsize(T) + soffs - 1,
+              n)
     else
         ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
               dest, pointer(dest, doffs), src, pointer(src, soffs), n)
@@ -331,7 +331,6 @@ function fill!(a::Array{T}, x) where T<:Union{Integer,AbstractFloat}
     end
     return a
 end
-
 
 """
     fill(x, dims)
@@ -563,6 +562,12 @@ convert(::Type{Array{T,n}}, x::AbstractArray{S,n}) where {T,n,S} = copy!(Array{T
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
+# constructors should make copies
+
+if module_name(@__MODULE__) === :Base  # avoid method overwrite
+(::Type{T})(x::T) where {T<:Array} = copy(x)
+end
+
 ## copying iterators to containers
 
 """
@@ -760,8 +765,8 @@ julia> getindex(A, "a")
 function getindex end
 
 # This is more complicated than it needs to be in order to get Win64 through bootstrap
-getindex(A::Array, i1::Int) = arrayref(A, i1)
-getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref(A, i1, i2, I...)) # TODO: REMOVE FOR #14770
+@eval getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
+@eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...)) # TODO: REMOVE FOR #14770
 
 # Faster contiguous indexing using copy! for UnitRange and Colon
 function getindex(A::Array, I::UnitRange{Int})
@@ -798,8 +803,9 @@ x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
 """
 function setindex! end
 
-setindex!(A::Array{T}, x, i1::Int) where {T} = arrayset(A, convert(T,x)::T, i1)
-setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} = (@_inline_meta; arrayset(A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
+@eval setindex!(A::Array{T}, x, i1::Int) where {T} = arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1)
+@eval setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
+    (@_inline_meta; arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
@@ -905,7 +911,7 @@ end
 
 function push!(a::Array{Any,1}, @nospecialize item)
     _growend!(a, 1)
-    arrayset(a, item, length(a))
+    arrayset(true, a, item, length(a))
     return a
 end
 
@@ -1012,7 +1018,6 @@ function _prepend!(a, ::IteratorSize, iter)
     reverse!(a, 1, n)
     a
 end
-
 
 """
     resize!(a::Vector, n::Integer) -> Vector
@@ -1532,7 +1537,6 @@ function reverse!(v::AbstractVector, s=first(linearindices(v)), n=last(linearind
     return v
 end
 
-
 # concatenations of homogeneous combinations of vectors, horizontal and vertical
 
 vcat() = Array{Any,1}(0)
@@ -1557,6 +1561,9 @@ function vcat(arrays::Vector{T}...) where T
     ptr = pointer(arr)
     if isbits(T)
         elsz = Core.sizeof(T)
+    elseif isbitsunion(T)
+        elsz = bitsunionsize(T)
+        selptr = convert(Ptr{UInt8}, ptr) + n * elsz
     else
         elsz = Core.sizeof(Ptr{Void})
     end
@@ -1566,6 +1573,13 @@ function vcat(arrays::Vector{T}...) where T
         if isbits(T)
             ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
                   ptr, a, nba)
+        elseif isbitsunion(T)
+            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+                  ptr, a, nba)
+            # copy selector bytes
+            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+                  selptr, convert(Ptr{UInt8}, pointer(a)) + nba, na)
+            selptr += na
         else
             ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
                   arr, ptr, a, pointer(a), na)
@@ -1576,7 +1590,6 @@ function vcat(arrays::Vector{T}...) where T
 end
 
 cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x)))
-
 
 ## find ##
 
@@ -1600,10 +1613,13 @@ julia> findnext(A,3)
 ```
 """
 function findnext(A, start::Integer)
-    for i = start:length(A)
+    l = endof(A)
+    i = start
+    while i <= l
         if A[i] != 0
             return i
         end
+        i = nextind(A, i)
     end
     return 0
 end
@@ -1650,10 +1666,13 @@ julia> findnext(A,4,3)
 ```
 """
 function findnext(A, v, start::Integer)
-    for i = start:length(A)
+    l = endof(A)
+    i = start
+    while i <= l
         if A[i] == v
             return i
         end
+        i = nextind(A, i)
     end
     return 0
 end
@@ -1699,10 +1718,13 @@ julia> findnext(isodd, A, 2)
 ```
 """
 function findnext(testf::Function, A, start::Integer)
-    for i = start:length(A)
+    l = endof(A)
+    i = start
+    while i <= l
         if testf(A[i])
             return i
         end
+        i = nextind(A, i)
     end
     return 0
 end
@@ -1749,8 +1771,10 @@ julia> findprev(A,1)
 ```
 """
 function findprev(A, start::Integer)
-    for i = start:-1:1
+    i = start
+    while i >= 1
         A[i] != 0 && return i
+        i = prevind(A, i)
     end
     return 0
 end
@@ -1780,7 +1804,7 @@ julia> findlast(A)
 0
 ```
 """
-findlast(A) = findprev(A, length(A))
+findlast(A) = findprev(A, endof(A))
 
 """
     findprev(A, v, i::Integer)
@@ -1802,8 +1826,10 @@ julia> findprev(A, 1, 1)
 ```
 """
 function findprev(A, v, start::Integer)
-    for i = start:-1:1
+    i = start
+    while i >= 1
         A[i] == v && return i
+        i = prevind(A, i)
     end
     return 0
 end
@@ -1831,7 +1857,7 @@ julia> findlast(A,3)
 0
 ```
 """
-findlast(A, v) = findprev(A, v, length(A))
+findlast(A, v) = findprev(A, v, endof(A))
 
 """
     findprev(predicate::Function, A, i::Integer)
@@ -1854,8 +1880,10 @@ julia> findprev(isodd, A, 3)
 ```
 """
 function findprev(testf::Function, A, start::Integer)
-    for i = start:-1:1
+    i = start
+    while i >= 1
         testf(A[i]) && return i
+        i = prevind(A, i)
     end
     return 0
 end
@@ -1880,7 +1908,7 @@ julia> findlast(x -> x > 5, A)
 0
 ```
 """
-findlast(testf::Function, A) = findprev(testf, A, length(A))
+findlast(testf::Function, A) = findprev(testf, A, endof(A))
 
 """
     find(f::Function, A)
@@ -2047,8 +2075,9 @@ end
     findmax(itr) -> (x, index)
 
 Returns the maximum element of the collection `itr` and its index. If there are multiple
-maximal elements, then the first one will be returned. `NaN` values are ignored, unless
-all elements are `NaN`. Other than the treatment of `NaN`, the result is in line with `max`.
+maximal elements, then the first one will be returned.
+If any data element is `NaN`, this element is returned.
+The result is in line with `max`.
 
 The collection must not be empty.
 
@@ -2061,21 +2090,21 @@ julia> findmax([1,7,7,6])
 (7, 2)
 
 julia> findmax([1,7,7,NaN])
-(7.0, 2)
+(NaN, 4)
 ```
 """
 function findmax(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
-    s = start(a)
-    mi = i = 1
-    m, s = next(a, s)
-    while !done(a, s)
-        ai, s = next(a, s)
-        i += 1
-        ai != ai && continue # assume x != x => x is a NaN
-        if m != m || isless(m, ai)
+    p = pairs(a)
+    s = start(p)
+    (mi, m), s = next(p, s)
+    i = mi
+    while !done(p, s)
+        m != m && break
+        (i, ai), s = next(p, s)
+        if ai != ai || isless(m, ai)
             m = ai
             mi = i
         end
@@ -2087,8 +2116,9 @@ end
     findmin(itr) -> (x, index)
 
 Returns the minimum element of the collection `itr` and its index. If there are multiple
-minimal elements, then the first one will be returned. `NaN` values are ignored, unless
-all elements are `NaN`. Other than the treatment of `NaN`, the result is in line with `min`.
+minimal elements, then the first one will be returned.
+If any data element is `NaN`, this element is returned.
+The result is in line with `min`.
 
 The collection must not be empty.
 
@@ -2101,21 +2131,21 @@ julia> findmin([7,1,1,6])
 (1, 2)
 
 julia> findmin([7,1,1,NaN])
-(1.0, 2)
+(NaN, 4)
 ```
 """
 function findmin(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
-    s = start(a)
-    mi = i = 1
-    m, s = next(a, s)
-    while !done(a, s)
-        ai, s = next(a, s)
-        i += 1
-        ai != ai && continue
-        if m != m || isless(ai, m)
+    p = pairs(a)
+    s = start(p)
+    (mi, m), s = next(p, s)
+    i = mi
+    while !done(p, s)
+        m != m && break
+        (i, ai), s = next(p, s)
+        if ai != ai || isless(ai, m)
             m = ai
             mi = i
         end
@@ -2127,8 +2157,7 @@ end
     indmax(itr) -> Integer
 
 Returns the index of the maximum element in a collection. If there are multiple maximal
-elements, then the first one will be returned. `NaN` values are ignored, unless all
-elements are `NaN`.
+elements, then the first one will be returned.
 
 The collection must not be empty.
 
@@ -2141,7 +2170,7 @@ julia> indmax([1,7,7,6])
 2
 
 julia> indmax([1,7,7,NaN])
-2
+4
 ```
 """
 indmax(a) = findmax(a)[2]
@@ -2150,8 +2179,7 @@ indmax(a) = findmax(a)[2]
     indmin(itr) -> Integer
 
 Returns the index of the minimum element in a collection. If there are multiple minimal
-elements, then the first one will be returned. `NaN` values are ignored, unless all
-elements are `NaN`.
+elements, then the first one will be returned.
 
 The collection must not be empty.
 
@@ -2164,7 +2192,7 @@ julia> indmin([7,1,1,6])
 2
 
 julia> indmin([7,1,1,NaN])
-2
+4
 ```
 """
 indmin(a) = findmin(a)[2]

@@ -359,9 +359,9 @@
 (define (scopenest names vals expr)
   (if (null? names)
       expr
-      `(let (block
-             ,(scopenest (cdr names) (cdr vals) expr))
-         (= ,(car names) ,(car vals)))))
+      `(let (= ,(car names) ,(car vals))
+         (block
+          ,(scopenest (cdr names) (cdr vals) expr)))))
 
 (define empty-vector-any '(call (core AnyVector) 0))
 
@@ -479,10 +479,10 @@
                  (block
                   ;; ii = i*2 - 1
                   (= ,ii (call (top -) (call (top *) ,i 2) 1))
-                  (= ,elt (call (core arrayref) ,kw ,ii))
+                  (= ,elt (call (core arrayref) true ,kw ,ii))
                   ,(foldl (lambda (kn else)
                             (let* ((k     (car kn))
-                                   (rval0 `(call (core arrayref) ,kw
+                                   (rval0 `(call (core arrayref) true ,kw
                                                  (call (top +) ,ii 1)))
                                    ;; note: if the "declared" type of a KW arg
                                    ;; includes something from keyword-sparams
@@ -522,7 +522,7 @@
                               `(foreigncall 'jl_array_ptr_1d_push (core Void) (call (core svec) Any Any)
                                             'ccall 2
                                             ,rkw (tuple ,elt
-                                                        (call (core arrayref) ,kw
+                                                        (call (core arrayref) true ,kw
                                                               (call (top +) ,ii 1)))))
                           (map (lambda (k temp)
                                  (cons (if (decl? k) `(,(car k) ,temp ,(caddr k)) temp)
@@ -989,6 +989,32 @@
         (loop (cadr ex) (append! (reverse (cddr ex)) vars))
         `(where ,ex ,.(reverse! vars)))))
 
+(define (lower-destructuring-args argl)
+  (define (check-lhs a)
+    (if (expr-contains-p (lambda (e) (or (decl? e) (assignment? e) (kwarg? e)))
+                         a)
+        (error (string "invalid argument destructuring syntax \"" (deparse a) "\""))
+        a))
+  (define (transform-arg a)
+    (cond ((and (pair? a) (eq? (car a) 'tuple))
+           (let ((a2 (gensy)))
+             (cons a2 `(local (= ,(check-lhs a) ,a2)))))
+          ((or (and (decl? a) (length= a 3)) (kwarg? a))
+           (let ((x (transform-arg (cadr a))))
+             (cons `(,(car a) ,(car x) ,(caddr a)) (cdr x))))
+          ((vararg? a)
+           (let ((x (transform-arg (cadr a))))
+             (cons `(... ,(car x)) (cdr x))))
+          (else (cons a #f))))
+  (let loop ((argl  argl)
+             (newa  '())
+             (stmts '()))
+    (if (null? argl)
+        (cons (reverse newa) (reverse stmts))
+        (let ((a (transform-arg (car argl))))
+          (loop (cdr argl) (cons (car a) newa)
+                (if (cdr a) (cons (cdr a) stmts) stmts))))))
+
 (define (expand-function-def- e)
   (let* ((name  (cadr e))
          (where (if (and (pair? name) (eq? (car name) 'where))
@@ -1036,6 +1062,9 @@
                   (farg    (if (decl? name)
                                (adj-decl name)
                                `(|::| |#self#| (call (core Typeof) ,name))))
+                  (argl-stmts (lower-destructuring-args argl))
+                  (argl       (car argl-stmts))
+                  (body       (insert-after-meta body (cdr argl-stmts)))
                   (argl    (fix-arglist
                             (arglist-unshift argl farg)
                             (and (not (any kwarg? argl)) (not (and (pair? argl)
@@ -1091,9 +1120,23 @@
                    `(call ,name ,@argl))
               ,body)))))
 
+(define (let-binds e)
+  (if (and (pair? (cadr e))
+           (eq? (car (cadr e)) 'block))
+      (cdr (cadr e))
+      (list (cadr e))))
+
 (define (expand-let e)
-  (let ((ex (cadr e))
-        (binds (cddr e)))
+  (if (length= e 2)
+      (begin (deprecation-message (string "The form `Expr(:let, ex)` is deprecated. "
+                                          "Use `Expr(:let, Expr(:block), ex)` instead." #\newline))
+             (return (expand-let `(let (block) ,(cadr e))))))
+  (if (length> e 3)
+      (begin (deprecation-message (string "The form `Expr(:let, ex, binds...)` is deprecated. "
+                                          "Use `Expr(:let, Expr(:block, binds...), ex)` instead." #\newline))
+             (return (expand-let `(let (block ,@(cddr e)) ,(cadr e))))))
+  (let ((ex    (caddr e))
+        (binds (let-binds e)))
     (expand-forms
      (if
       (null? binds)
@@ -1115,7 +1158,7 @@
               ;; some kind of assignment
               (cond
                ((eventually-call? (cadar binds))
-                ;; f()=c
+                ;; f() = c
                 (let ((asgn (butlast (expand-forms (car binds))))
                       (name (assigned-name (cadar binds))))
                   (if (not (symbol? name))
@@ -1123,15 +1166,16 @@
                   (loop (cdr binds)
                         `(scope-block
                           (block
-                           (local-def ,name)
+                           ,(if (expr-contains-eq name (caddar binds))
+                                `(local ,name) ;; might need a Box for recursive functions
+                                `(local-def ,name))
                            ,asgn
                            ,blk)))))
                ((or (symbol? (cadar binds))
                     (decl?   (cadar binds)))
                 (let ((vname (decl-var (cadar binds))))
                   (loop (cdr binds)
-                        (if (contains (lambda (x) (eq? x vname))
-                                      (caddar binds))
+                        (if (expr-contains-eq vname (caddar binds))
                             (let ((tmp (make-ssavalue)))
                               `(scope-block
                                 (block (= ,tmp ,(caddar binds))
@@ -1773,7 +1817,7 @@
                                                  `(fuse _ ,(cdadr (cadr arg)))
                                                  oldarg))
                                  fargs args)))
-        (let ,fbody ,@(reverse (fuse-lets fargs args '()))))))
+        (let (block ,@(reverse (fuse-lets fargs args '()))) ,fbody))))
   (define (dot-to-fuse e) ; convert e == (. f (tuple args)) to (fuse f args)
     (define (make-fuse f args) ; check for nested (fuse f args) exprs and combine
       (define (split-kwargs args) ; return (cons keyword-args positional-args) extracted from args
@@ -1861,8 +1905,8 @@
 (define (expand-where body var)
   (let* ((bounds (analyze-typevar var))
          (v  (car bounds)))
-    `(let (call (core UnionAll) ,v ,body)
-       (= ,v ,(bounds-to-TypeVar bounds)))))
+    `(let (= ,v ,(bounds-to-TypeVar bounds))
+       (call (core UnionAll) ,v ,body))))
 
 (define (expand-wheres body vars)
   (if (null? vars)
@@ -3231,13 +3275,18 @@ f(x) = yt(x)
                         (capt-vars (diff all-capt-vars capt-sp)) ; remove capt-sp from capt-vars
                         (find-locals-in-method-sig (lambda (methdef)
                                                      (expr-find-all
-                                                      (lambda (e) (and (pair? e) (eq? (car e) 'outerref)
-                                                                       (let ((s (cadr e)))
+                                                      (lambda (e) (and (or (symbol? e) (and (pair? e) (eq? (car e) 'outerref)))
+                                                                       (let ((s (if (symbol? e) e (cadr e))))
                                                                             (and (symbol? s)
                                                                                  (not (eq? name s))
                                                                                  (not (memq s capt-sp))
-                                                                                 (or ;(local? s) ; TODO: error for local variables
-                                                                                   (memq s (lam:sp lam)))))))
+                                                                                 (if (and (local? s) (length> (lam:args lam) 0))
+                                                                                     ; error for local variables except in toplevel thunks
+                                                                                     (error (string "local variable " s
+                                                                                                    " cannot be used in closure declaration"))
+                                                                                     #t)
+                                                                                 ; allow captured variables
+                                                                                 (memq s (lam:sp lam))))))
                                                       (caddr methdef)
                                                       (lambda (e) (cadr e)))))
                         (sig-locals (simple-sort
@@ -3482,6 +3531,13 @@ f(x) = yt(x)
             ((call new foreigncall)
              (let* ((args
                      (cond ((eq? (car e) 'foreigncall)
+                            (for-each (lambda (a)
+                                        (if (and (length= a 2) (eq? (car a) '&))
+                                            (deprecation-message
+                                             (string "Syntax \"&argument\"" (linenode-string current-loc)
+                                                     " is deprecated. Remove the \"&\" and use a \"Ref\" argument "
+                                                     "type instead." #\newline))))
+                                      (list-tail e 6))
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place
                             ;;       the 1st should be compiled if an atom.
                             (append (if (atom? (cadr e))
@@ -3712,6 +3768,7 @@ f(x) = yt(x)
                           "In the future the variable will be local to the loop instead." #\newline))
                  (put! deprecated-loop-vars (cadr e) #t))
              '(null))
+            ((boundscheck) (if tail (emit-return e) e))
 
             ;; top level expressions returning values
             ((abstract_type primitive_type struct_type thunk toplevel module)

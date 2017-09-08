@@ -705,13 +705,13 @@ dot(x::AbstractVector{<:Number}, y::AbstractVector{<:Number}) = vecdot(x, y)
 ###########################################################################################
 
 """
-    rank(M[, tol::Real])
+    rank(A[, tol::Real])
 
 Compute the rank of a matrix by counting how many singular
-values of `M` have magnitude greater than `tol`.
-By default, the value of `tol` is the largest
-dimension of `M` multiplied by the [`eps`](@ref)
-of the [`eltype`](@ref) of `M`.
+values of `A` have magnitude greater than `tol*σ₁` where `σ₁` is
+`A`'s largest singular values. By default, the value of `tol` is the smallest
+dimension of `A` multiplied by the [`eps`](@ref)
+of the [`eltype`](@ref) of `A`.
 
 # Examples
 ```jldoctest
@@ -728,14 +728,11 @@ julia> rank(diagm([1, 0.001, 2]), 0.00001)
 3
 ```
 """
-rank(A::AbstractMatrix, tol::Real) = mapreduce(x -> x > tol, +, 0, svdvals(A))
-function rank(A::AbstractMatrix)
-    m,n = size(A)
-    (m == 0 || n == 0) && return 0
-    sv = svdvals(A)
-    return sum(sv .> maximum(size(A))*eps(sv[1]))
+function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+    s = svdvals(A)
+    sum(x -> x > tol*s[1], s)
 end
-rank(x::Number) = x==0 ? 0 : 1
+rank(x::Number) = x == 0 ? 0 : 1
 
 """
     trace(M)

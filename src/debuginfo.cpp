@@ -22,7 +22,6 @@
 #include <llvm/Object/MachO.h>
 #include <llvm/Object/COFF.h>
 #include <llvm/Object/ELFObjectFile.h>
-#include "fix_llvm_assert.h"
 
 using namespace llvm;
 
@@ -46,7 +45,7 @@ using llvm_file_magic = sys::fs::file_magic;
 #include <vector>
 #include <set>
 #include <cstdio>
-#include <cassert>
+#include "julia_assert.h"
 
 typedef object::SymbolRef SymRef;
 

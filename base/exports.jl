@@ -186,10 +186,7 @@ export
     NaN64,
     im,
     π, pi,
-    e, eu,
-    γ, eulergamma,
-    catalan,
-    φ, golden,
+    ℯ,
     I,
 
 # Operators
@@ -589,7 +586,6 @@ export
     linreg,
     logabsdet,
     logdet,
-    logm,
     lu,
     lufact!,
     lufact,
@@ -613,7 +609,6 @@ export
     schur,
     schurfact!,
     schurfact,
-    sqrtm,
     svd,
     svdfact!,
     svdfact,
@@ -641,10 +636,6 @@ export
 # bitarrays
     falses,
     flipbits!,
-    rol,
-    rol!,
-    ror,
-    ror!,
     trues,
 
 # dequeues
@@ -697,6 +688,7 @@ export
     mapreducedim,
     merge!,
     merge,
+    pairs,
     #pop!,
     #push!,
     reduce,

@@ -7,6 +7,10 @@ New language features
   * Local variables can be tested for being defined
     using the new `@isdefined variable` macro ([#22281]).
 
+  * Destructuring in function arguments: when an expression such as `(x, y)` is used as
+    a function argument name, the argument is unpacked into local variables `x` and `y`
+    as in the assignment `(x, y) = arg` ([#6614]).
+
 Language changes
 ----------------
 
@@ -37,6 +41,10 @@ Language changes
 
   * Nested `if` expressions that arise from the keyword `elseif` now use `elseif`
     as their expression head instead of `if` ([#21774]).
+
+  * `let` blocks now parse the same as `for` loops; the first argument is either an
+    assignment or `block` of assignments, and the second argument is a block of
+    statements ([#21774]).
 
   * Parsed and lowered forms of type definitions have been synchronized with their
     new keywords ([#23157]). Expression heads are renamed as follows:
@@ -83,6 +91,9 @@ Language changes
 
   * Variable bindings local to `while` loop bodies are now freshly allocated on each loop iteration,
     matching the behavior of `for` loops.
+
+  * Prefix `&` for by-reference arguments to `ccall` has been deprecated in favor of
+    `Ref` argument types ([#6080]).
 
 Breaking changes
 ----------------
@@ -141,6 +152,10 @@ This section lists changes that do not have deprecation warnings.
     `Tridiagonal{T,V<:AbstractVector{T}}` and `SymTridiagonal{T,V<:AbstractVector{T}}`
     respectively ([#22718], [#22925], [#23035], [#23154]).
 
+  * When called with an argument that contains `NaN` elements, `findmin` and `findmax` now return the
+    first `NaN` found and its corresponding index. Previously, `NaN` elements were ignored.
+    The new behavior matches that of `min`, `max`, `minimum`, and `maximum`.
+
   * `isapprox(x,y)` now tests `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`
     rather than `norm(x-y) <= atol + ...`, and `rtol` defaults to zero
     if an `atol > 0` is specified ([#22742]).
@@ -178,6 +193,15 @@ This section lists changes that do not have deprecation warnings.
     of the output was shrunk to fit the union of the type of each element in the input.
     ([#22696])
 
+  * The `promote` function now raises an error if its arguments are of different types
+    and if attempting to convert them to a common type fails to change any of their types.
+    This avoids stack overflows in the common case of definitions like
+    `f(x, y) = f(promote(x, y)...)` ([#22801]).
+
+  * `findmin`, `findmax`, `indmin`, and `indmax` used to always return linear indices.
+    They now return `CartesianIndex`es for all but 1-d arrays, and in general return
+    the `keys` of indexed collections (e.g. dictionaries) ([#22907]).
+
 Library improvements
 --------------------
 
@@ -204,7 +228,7 @@ Library improvements
 
   * The `crc32c` function for CRC-32c checksums is now exported ([#22274]).
 
-  * The output of `versioninfo()` is now controlled with keyword arguments ([#21974]).
+  * The output of `versioninfo` is now controlled with keyword arguments ([#21974]).
 
   * The function `LibGit2.set_remote_url` now always sets both the fetch and push URLs for a
     git repo. Additionally, the argument order was changed to be consistent with the git
@@ -237,6 +261,8 @@ Library improvements
     `randperm!` and `randcycle!` ([#22723]).
 
   * `BigFloat` random numbers can now be generated ([#22720]).
+
+  * REPL Undo via Ctrl-/ and Ctrl-_
 
 Compiler/Runtime improvements
 -----------------------------
@@ -342,7 +368,11 @@ Deprecated or removed
     full path if you need access to executables or libraries in the `JULIA_HOME` directory, e.g.
     `joinpath(JULIA_HOME, "7z.exe")` for `7z.exe` ([#21540]).
 
+  * `sqrtm` has been deprecated in favor of `sqrt` ([#23504]).
+
   * `expm` has been deprecated in favor of `exp` ([#23233]).
+
+  * `logm` has been deprecated in favor of `log` ([#23505]).
 
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).
@@ -359,6 +389,9 @@ Deprecated or removed
   * `filter` and `filter!` on dictionaries now pass a single `key=>value` pair to the
     argument function, instead of two arguments ([#17886]).
 
+  * `rol`, `rol!`, `ror`, and `ror!` have been deprecated in favor of specialized methods for
+    `circshift`/`circshift!` ([#23404]).
+
   * `Base.SparseArrays.SpDiagIterator` has been removed ([#23261]).
 
   * The tuple-of-types form of `cfunction`, `cfunction(f, returntype, (types...))`, has been deprecated
@@ -368,6 +401,16 @@ Deprecated or removed
     `spdiagm(sparsevec(A))` ([#23341]).
 
   * `diagm(A::BitMatrix)` has been deprecated, use `diagm(vec(A))` instead ([#23373]).
+
+  * `ℯ` (written as `\mscre<TAB>` or `\euler<TAB>`) is now the only (by default) exported
+    name for Euler's number, and the type has changed from `Irrational{:e}` to
+    `Irrational{:ℯ}` ([#23427]).
+
+  * The mathematical constants `π`, `pi`, `ℯ`, `e`, `γ`, `eulergamma`, `catalan`, `φ` and
+    `golden` have been have been moved from `Base` to a new module; `Base.MathConstants`.
+    Only `π`, `pi` and `ℯ` are now exported by default from `Base` ([#23427]).
+
+  * `eu` (previously an alias for `ℯ`) has been deprecated in favor of `ℯ` (or `MathConstants.e`) ([#23427]).
 
   * `GMP.gmp_version()`, `GMP.GMP_VERSION`, `GMP.gmp_bits_per_limb()`, and `GMP.GMP_BITS_PER_LIBM`
     have been renamed to `GMP.version()`, `GMP.VERSION`, `GMP.bits_per_libm()`, and `GMP.BITS_PER_LIBM`,
@@ -859,7 +902,7 @@ Deprecated or removed
     `pop!(ENV, k, def)`. Be aware that `pop!` returns `k` or `def`, whereas `delete!`
     returns `ENV` or `def` ([#18012]).
 
-  * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor()` ([#18977]).
+  * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor` ([#18977]).
 
   * The single-argument form of `write` (`write(x)`, with implicit `STDOUT` output stream),
     has been deprecated in favor of the explicit equivalent `write(STDOUT, x)` ([#17654]).
@@ -1247,3 +1290,4 @@ Command-line option changes
 [#23207]: https://github.com/JuliaLang/julia/issues/23207
 [#23233]: https://github.com/JuliaLang/julia/issues/23233
 [#23342]: https://github.com/JuliaLang/julia/issues/23342
+[#23404]: https://github.com/JuliaLang/julia/issues/23404

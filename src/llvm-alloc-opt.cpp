@@ -16,14 +16,14 @@
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 
-#include "fix_llvm_assert.h"
-
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 
 #include <map>
 #include <set>
+
+#include "julia_assert.h"
 
 using namespace llvm;
 
@@ -491,6 +491,7 @@ void AllocOpt::replaceUsesWith(Instruction *orig_inst, Instruction *new_inst,
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             if (ptr_from_objref && ptr_from_objref == call->getCalledFunction()) {
+                new_i = new PtrToIntInst(new_i, T_size, "", call);
                 call->replaceAllUsesWith(new_i);
                 call->eraseFromParent();
                 return;

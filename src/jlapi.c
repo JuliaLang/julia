@@ -10,9 +10,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 #include "julia.h"
 #include "options.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 #include <cfenv>

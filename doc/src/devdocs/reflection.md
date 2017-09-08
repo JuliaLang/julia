@@ -10,7 +10,7 @@ returns symbols for all bindings in `m`, regardless of export status.
 
 ## DataType fields
 
-The names of `DataType` fields may be interrogated using [`fieldnames()`](@ref). For example,
+The names of `DataType` fields may be interrogated using [`fieldnames`](@ref). For example,
 given the following type, `fieldnames(Point)` returns an arrays of [`Symbol`](@ref) elements representing
 the field names:
 
@@ -49,7 +49,7 @@ of these fields is the `types` field observed in the example above.
 
 ## Subtypes
 
-The *direct* subtypes of any `DataType` may be listed using [`subtypes()`](@ref). For example,
+The *direct* subtypes of any `DataType` may be listed using [`subtypes`](@ref). For example,
 the abstract `DataType` [`AbstractFloat`](@ref) has four (concrete) subtypes:
 
 ```jldoctest
@@ -62,7 +62,7 @@ julia> subtypes(AbstractFloat)
 ```
 
 Any abstract subtype will also be included in this list, but further subtypes thereof will not;
-recursive application of [`subtypes()`](@ref) may be used to inspect the full type tree.
+recursive application of [`subtypes`](@ref) may be used to inspect the full type tree.
 
 ## DataType layout
 
@@ -73,12 +73,12 @@ returns the (byte) offset for field *i* relative to the start of the type.
 
 ## Function methods
 
-The methods of any generic function may be listed using [`methods()`](@ref). The method dispatch
-table may be searched for methods accepting a given type using [`methodswith()`](@ref).
+The methods of any generic function may be listed using [`methods`](@ref). The method dispatch
+table may be searched for methods accepting a given type using [`methodswith`](@ref).
 
 ## Expansion and lowering
 
-As discussed in the [Metaprogramming](@ref) section, the [`macroexpand()`](@ref) function gives
+As discussed in the [Metaprogramming](@ref) section, the [`macroexpand`](@ref) function gives
 the unquoted and interpolated expression (`Expr`) form for a given macro. To use `macroexpand`,
 `quote` the expression block itself (otherwise, the macro will be evaluated and the result will
 be passed instead!). For example:
@@ -88,10 +88,10 @@ julia> macroexpand(@__MODULE__, :(@edit println("")) )
 :((Base.edit)(println, (Base.typesof)("")))
 ```
 
-The functions `Base.Meta.show_sexpr()` and [`dump()`](@ref) are used to display S-expr style views
+The functions `Base.Meta.show_sexpr` and [`dump`](@ref) are used to display S-expr style views
 and depth-nested detail views for any expression.
 
-Finally, the [`expand()`](@ref) function gives the `lowered` form of any expression and is of
+Finally, the [`expand`](@ref) function gives the `lowered` form of any expression and is of
 particular interest for understanding both macros and top-level statements such as function declarations
 and variable assignments:
 
@@ -113,7 +113,7 @@ Inspecting the lowered form for functions requires selection of the specific met
 because generic functions may have many methods with different type signatures. For this purpose,
 method-specific code-lowering is available using [`code_lowered(f::Function, (Argtypes...))`](@ref),
 and the type-inferred form is available using [`code_typed(f::Function, (Argtypes...))`](@ref).
-[`code_warntype(f::Function, (Argtypes...))`](@ref) adds highlighting to the output of [`code_typed()`](@ref)
+[`code_warntype(f::Function, (Argtypes...))`](@ref) adds highlighting to the output of [`code_typed`](@ref)
 (see [`@code_warntype`](@ref)).
 
 Closer to the machine, the LLVM intermediate representation of a function may be printed using

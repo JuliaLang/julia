@@ -345,20 +345,23 @@ for typ in atomictypes
     irt = Base.libllvm_version >= v"3.6" ? "$ilt, $ilt*" : "$ilt*"
     @eval getindex(x::Atomic{$typ}) =
         llvmcall($"""
-                 %rv = load atomic $rt %0 acquire, align $(alignment(typ))
+                 %ptr = inttoptr i$WORD_SIZE %0 to $lt*
+                 %rv = load atomic $rt %ptr acquire, align $(alignment(typ))
                  ret $lt %rv
                  """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
     @eval setindex!(x::Atomic{$typ}, v::$typ) =
         llvmcall($"""
-                 store atomic $lt %1, $lt* %0 release, align $(alignment(typ))
+                 %ptr = inttoptr i$WORD_SIZE %0 to $lt*
+                 store atomic $lt %1, $lt* %ptr release, align $(alignment(typ))
                  ret void
-                 """, Void, Tuple{Ptr{$typ},$typ}, unsafe_convert(Ptr{$typ}, x), v)
+                 """, Void, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
 
     # Note: atomic_cas! succeeded (i.e. it stored "new") if and only if the result is "cmp"
     if typ <: Integer
         @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
             llvmcall($"""
-                     %rs = cmpxchg $lt* %0, $lt %1, $lt %2 acq_rel acquire
+                     %ptr = inttoptr i$WORD_SIZE %0 to $lt*
+                     %rs = cmpxchg $lt* %ptr, $lt %1, $lt %2 acq_rel acquire
                      %rv = extractvalue { $lt, i1 } %rs, 0
                      ret $lt %rv
                      """, $typ, Tuple{Ptr{$typ},$typ,$typ},
@@ -366,7 +369,7 @@ for typ in atomictypes
     else
         @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
             llvmcall($"""
-                     %iptr = bitcast $lt* %0 to $ilt*
+                     %iptr = inttoptr i$WORD_SIZE %0 to $ilt*
                      %icmp = bitcast $lt %1 to $ilt
                      %inew = bitcast $lt %2 to $ilt
                      %irs = cmpxchg $ilt* %iptr, $ilt %icmp, $ilt %inew acq_rel acquire
@@ -387,14 +390,15 @@ for typ in atomictypes
         if typ <: Integer
             @eval $fn(x::Atomic{$typ}, v::$typ) =
                 llvmcall($"""
-                         %rv = atomicrmw $rmw $lt* %0, $lt %1 acq_rel
+                         %ptr = inttoptr i$WORD_SIZE %0 to $lt*
+                         %rv = atomicrmw $rmw $lt* %ptr, $lt %1 acq_rel
                          ret $lt %rv
                          """, $typ, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
         else
             rmwop == :xchg || continue
             @eval $fn(x::Atomic{$typ}, v::$typ) =
                 llvmcall($"""
-                         %iptr = bitcast $lt* %0 to $ilt*
+                         %iptr = inttoptr i$WORD_SIZE %0 to $ilt*
                          %ival = bitcast $lt %1 to $ilt
                          %irv = atomicrmw $rmw $ilt* %iptr, $ilt %ival acq_rel
                          %rv = bitcast $ilt %irv to $lt

@@ -50,7 +50,7 @@ $ echo hello | julia -e 'println(typeof((STDIN, STDOUT, STDERR)))' | cat
 Tuple{Base.PipeEndpoint,Base.PipeEndpoint,Base.TTY}
 ```
 
-The [`Base.read()`](@ref) and [`Base.write()`](@ref) methods for these streams use [`ccall`](@ref)
+The [`Base.read`](@ref) and [`Base.write`](@ref) methods for these streams use [`ccall`](@ref)
 to call libuv wrappers in `src/jl_uv.c`, e.g.:
 
 ```

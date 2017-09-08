@@ -88,6 +88,7 @@ const latex_symbols = Dict(
     "\\implies" => "⟹",
     "\\impliedby" => "⟸",
     "\\to" => "→",
+    "\\euler" => "ℯ",
 
     # Superscripts
     "\\^0" => "⁰",

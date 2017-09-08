@@ -22,7 +22,7 @@
 extern legacy::PassManager *jl_globalPM;
 
 #include <llvm/Target/TargetMachine.h>
-#include "fix_llvm_assert.h"
+#include "julia_assert.h"
 
 extern "C" {
     extern int globalUnique;

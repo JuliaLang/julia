@@ -95,7 +95,7 @@ include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
 include("checked.jl")
-importall .Checked
+using .Checked
 
 # buggy handling of ispure in type-inference means this should be
 # after re-defining the basic operations that they might try to call
@@ -132,7 +132,7 @@ Matrix(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
-importall .Rounding
+using .Rounding
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -153,7 +153,7 @@ include("strings/string.jl")
 
 # SIMD loops
 include("simdloop.jl")
-importall .SimdLoop
+using .SimdLoop
 
 # map-reduce operators
 include("reduce.jl")
@@ -219,7 +219,7 @@ using .PermutedDimsArrays
 include("nullable.jl")
 
 include("broadcast.jl")
-importall .Broadcast
+using .Broadcast
 
 # define the real ntuple functions
 @generated function ntuple(f::F, ::Val{N}) where {F,N}
@@ -242,7 +242,7 @@ end
 
 # base64 conversions (need broadcast)
 include("base64.jl")
-importall .Base64
+using .Base64
 
 # version
 include("version.jl")
@@ -267,10 +267,10 @@ include("weakkeydict.jl")
 include("stream.jl")
 include("socket.jl")
 include("filesystem.jl")
-importall .Filesystem
+using .Filesystem
 include("process.jl")
 include("multimedia.jl")
-importall .Multimedia
+using .Multimedia
 include("grisu/grisu.jl")
 import .Grisu.print_shortest
 include("methodshow.jl")
@@ -278,7 +278,8 @@ include("methodshow.jl")
 # core math functions
 include("floatfuncs.jl")
 include("math.jl")
-importall .Math
+using .Math
+import .Math: gamma
 const (√)=sqrt
 const (∛)=cbrt
 
@@ -289,21 +290,21 @@ include("reducedim.jl")  # macros in this file relies on string.jl
 
 # basic data structures
 include("ordering.jl")
-importall .Order
+using .Order
 
 # Combinatorics
 include("sort.jl")
-importall .Sort
+using .Sort
 
 # Fast math
 include("fastmath.jl")
-importall .FastMath
+using .FastMath
 
 function deepcopy_internal end
 
 # BigInts and BigFloats
 include("gmp.jl")
-importall .GMP
+using .GMP
 
 for T in [Signed, Integer, BigInt, Float32, Float64, Real, Complex, Rational]
     @eval flipsign(x::$T, ::Unsigned) = +x
@@ -311,7 +312,7 @@ for T in [Signed, Integer, BigInt, Float32, Float64, Real, Complex, Rational]
 end
 
 include("mpfr.jl")
-importall .MPFR
+using .MPFR
 big(n::Integer) = convert(BigInt,n)
 big(x::AbstractFloat) = convert(BigFloat,x)
 big(q::Rational) = big(numerator(q))//big(denominator(q))
@@ -323,26 +324,30 @@ include("hashing2.jl")
 
 # irrational mathematical constants
 include("irrationals.jl")
+include("mathconstants.jl")
+using .MathConstants: ℯ, π, pi
 
 # random number generation
 include("random/dSFMT.jl")
 include("random/random.jl")
-importall .Random
+using .Random
+import .Random: rand, rand!
 
 # (s)printf macros
 include("printf.jl")
-importall .Printf
+using .Printf
 
 # metaprogramming
 include("meta.jl")
 
 # enums
 include("Enums.jl")
-importall .Enums
+using .Enums
 
 # concurrency and parallelism
 include("serialize.jl")
-importall .Serializer
+using .Serializer
+import .Serializer: serialize, deserialize
 include("channels.jl")
 
 # memory-mapped and shared arrays
@@ -351,7 +356,7 @@ import .Mmap
 
 # utilities - timing, help, edit
 include("datafmt.jl")
-importall .DataFmt
+using .DataFmt
 include("deepcopy.jl")
 include("interactiveutil.jl")
 include("summarysize.jl")
@@ -370,14 +375,14 @@ include("client.jl")
 
 # Stack frames and traces
 include("stacktraces.jl")
-importall .StackTraces
+using .StackTraces
 
 # misc useful functions & macros
 include("util.jl")
 
 # dense linear algebra
 include("linalg/linalg.jl")
-importall .LinAlg
+using .LinAlg
 const ⋅ = dot
 const × = cross
 
@@ -392,7 +397,7 @@ include("pkg/pkg.jl")
 
 # profiler
 include("profile.jl")
-importall .Profile
+using .Profile
 
 # dates
 include("dates/Dates.jl")
@@ -400,12 +405,12 @@ import .Dates: Date, DateTime, DateFormat, @dateformat_str, now
 
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")
-importall .SparseArrays
+using .SparseArrays
 
 include("asyncmap.jl")
 
 include("distributed/Distributed.jl")
-importall .Distributed
+using .Distributed
 include("sharedarray.jl")
 
 # code loading

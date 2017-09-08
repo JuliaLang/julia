@@ -894,30 +894,63 @@ end
 
 setprecision(f::Function, precision::Integer) = setprecision(f, BigFloat, precision)
 
-function string(x::BigFloat)
-    if isnan(x) || isinf(x)
-        return string("BigFloat(", Float64(x), ", ", precision(x), ")")
-    end
-
-    # In general, the number of decimal places needed to read back the number exactly
-    # is, excluding the most significant, ceil(log(10, 2^precision(x)))
-    k = ceil(Int32, precision(x) * 0.3010299956639812)
-    lng = k + Int32(8) # Add space for the sign, the most significand digit, the dot and the exponent
-    buf = Base.StringVector(lng + 1)
-    # format strings are guaranteed to contain no NUL, so we don't use Cstring
-    lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...), buf, lng + 1, "%.Re", x)
-    if lng < k + 5 # print at least k decimal places
-        lng = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ref{BigFloat}...), buf, "%.$(k)Re", x)
-    elseif lng > k + 8
-        buf = Base.StringVector(lng + 1)
-        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...), buf, lng + 1, "%.Re", x)
-    end
-    n = (1 <= x < 10 || -10 < x <= -1 || iszero(x)) ? lng - 4 : lng
-    return String(resize!(buf,n))
+function string_mpfr(x::BigFloat, fmt::String)
+    buf = Base.StringVector(0)
+    s = _calculate_buffer_size!(buf, fmt, x)
+    resize!(buf, s)
+    _fill_buffer!(buf, fmt, x)
+    String(buf)
 end
 
+function _calculate_buffer_size!(buf, fmt, x::BigFloat)
+    ccall((:mpfr_snprintf,:libmpfr),
+        Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...),
+        buf, 0, fmt, x)
+end
+
+function _fill_buffer!(buf, fmt, x::BigFloat)
+    s = length(buf)
+    # we temporarily need one more item in buffer to capture null termination
+    resize!(buf, s + 1)
+    n = ccall((:mpfr_sprintf,:libmpfr), Int32, (Ptr{UInt8}, Ptr{UInt8}, Ref{BigFloat}...), buf, fmt, x)
+    @assert n + 1 == length(buf)
+    @assert last(buf) == 0x00
+    resize!(buf, s)
+end
+
+function _prettify_bigfloat(s::String)::String
+    mantissa, exponent = split(s, 'e')
+    if !contains(mantissa, '.')
+        mantissa = string(mantissa, '.')
+    end
+    mantissa = rstrip(mantissa, '0')
+    if endswith(mantissa, '.')
+        mantissa = string(mantissa, '0')
+    end
+    if exponent == "+00"
+        mantissa
+    else
+        string(mantissa, 'e', exponent)
+    end
+end
+
+function _string(x::BigFloat, fmt::String)::String
+    isfinite(x) || return string(Float64(x))
+    _prettify_bigfloat(string_mpfr(x, fmt))
+end
+_string(x::BigFloat) = _string(x, "%.Re")
+_string(x::BigFloat, k::Integer) = _string(x, "%.$(k)Re")
+
+string(b::BigFloat) = _string(b)
+
 print(io::IO, b::BigFloat) = print(io, string(b))
-show(io::IO, b::BigFloat) = print(io, string(b))
+function show(io::IO, b::BigFloat)
+    if get(io, :compact, false)
+        print(io, _string(b, 5))
+    else
+        print(io, _string(b))
+    end
+end
 
 # get/set exponent min/max
 get_emax() = ccall((:mpfr_get_emax, :libmpfr), Clong, ())
