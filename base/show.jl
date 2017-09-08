@@ -1913,7 +1913,8 @@ function array_eltype_show_how(X)
         str = string(e)
     end
     # Types hard-coded here are those which are created by default for a given syntax
-    isleaftype(e), (!isempty(X) && (e===Float64 || e===Int || e===Char) ? "" : str)
+    (isleaftype(e),
+     (!isempty(X) && (e===Float64 || e===Int || e===Char || e===String) ? "" : str))
 end
 
 function show_vector(io::IO, v, opn, cls)
