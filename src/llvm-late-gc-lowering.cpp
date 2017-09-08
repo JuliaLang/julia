@@ -315,6 +315,7 @@ private:
     Type *T_int8;
     Type *T_int32;
     Type *T_pint8;
+    Type *T_pjlvalue;
     Type *T_pjlvalue_der;
     Type *T_ppjlvalue_der;
     MDNode *tbaa_gcframe;
@@ -1156,7 +1157,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                 (gc_use_func != nullptr && callee == gc_use_func)) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
-                auto *ptr = new PtrToIntInst(CI->getOperand(0), CI->getType(), "", CI);
+                auto *obj = CI->getOperand(0);
+                auto *ASCI = new AddrSpaceCastInst(obj, T_pjlvalue, "", CI);
+                auto *ptr = new PtrToIntInst(ASCI, CI->getType(), "", CI);
                 ptr->takeName(CI);
                 CI->replaceAllUsesWith(ptr);
             } else if (alloc_obj_func && callee == alloc_obj_func) {
@@ -1447,7 +1450,7 @@ bool LateLowerGCFrame::DefineFunctions(Module &M) {
             addRetNoAlias(big_alloc_func);
         }
         auto T_jlvalue = cast<PointerType>(T_prjlvalue)->getElementType();
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
+        T_pjlvalue = PointerType::get(T_jlvalue, 0);
         T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
         T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
         T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
@@ -1456,7 +1459,7 @@ bool LateLowerGCFrame::DefineFunctions(Module &M) {
     else if (ptls_getter) {
         auto functype = ptls_getter->getFunctionType();
         T_ppjlvalue = cast<PointerType>(functype->getReturnType())->getElementType();
-        auto T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
+        T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
         auto T_jlvalue = cast<PointerType>(T_pjlvalue)->getElementType();
         T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
         T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
@@ -1465,6 +1468,7 @@ bool LateLowerGCFrame::DefineFunctions(Module &M) {
     else {
         T_ppjlvalue = nullptr;
         T_prjlvalue = nullptr;
+        T_pjlvalue = nullptr;
         T_pjlvalue_der = nullptr;
         T_ppjlvalue_der = nullptr;
     }
