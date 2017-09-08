@@ -551,7 +551,7 @@ end
 # on the right
 function edit_backspace(s::PromptState, align::Bool=false, adjust=align)
     push_undo(s)
-    if edit_backspace(buffer(s), align)
+    if edit_backspace(buffer(s), align, adjust)
         refresh_line(s)
     else
         pop_undo(s)
