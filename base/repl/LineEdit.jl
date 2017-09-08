@@ -9,9 +9,6 @@ import ..Terminals: raw!, width, height, cmove, getX,
 
 import Base: ensureroom, peek, show, AnyDict, position
 
-const REFRESH_LOCK = Threads.SpinLock()
-const BEEP_LOCK = Threads.SpinLock()
-
 abstract type TextInterface end
 abstract type ModeState end
 
@@ -76,6 +73,9 @@ mutable struct PromptState <: ModeState
     # indentation of lines which do not include the prompt
     # if negative, the width of the prompt is used
     indent::Int
+    refresh_lock::Threads.AbstractLock
+    # this would better be Threads.Atomic{Float64}, but not supported on some platforms
+    beeping::Float64
 end
 
 setmark(s) = mark(buffer(s))
@@ -117,10 +117,8 @@ complete_line(c::EmptyCompletionProvider, s) = [], true, true
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
-# NOTE: this would better be Threads.Atomic(0.0), but not supported on some platforms
-const beeping = Ref(0.0)
 
-# these may be better stored in Prompt or PromptState
+# these may be better stored in Prompt or LineEditREPL
 const BEEP_DURATION = Ref(0.2)
 const BEEP_BLINK = Ref(0.2)
 const BEEP_MAXDURATION = Ref(1.0)
@@ -131,34 +129,34 @@ function beep(s::PromptState, duration::Real=BEEP_DURATION[], blink::Real=BEEP_B
               maxduration::Real=BEEP_MAXDURATION[];
               colors=BEEP_COLORS, use_current::Bool=BEEP_USE_CURRENT[])
     isinteractive() || return # some tests fail on some platforms
-    beeping[] = min(beeping[] + duration, maxduration)
+    s.beeping = min(s.beeping + duration, maxduration)
     @async begin
-        trylock(BEEP_LOCK) || return
+        trylock(s.refresh_lock) || return
         orig_prefix = s.p.prompt_prefix
         colors = Base.copymutable(colors)
         use_current && push!(colors, orig_prefix)
         i = 0
-        while beeping[] > 0.0
+        while s.beeping > 0.0
             prefix = colors[mod1(i+=1, end)]
             s.p.prompt_prefix = prefix
-            refresh_multi_line(s)
+            refresh_multi_line(s, beeping=true)
             sleep(blink)
-            beeping[] -= blink
+            s.beeping -= blink
         end
         s.p.prompt_prefix = orig_prefix
-        refresh_multi_line(s)
-        beeping[] = 0.0
-        unlock(BEEP_LOCK)
+        refresh_multi_line(s, beeping=true)
+        s.beeping = 0.0
+        unlock(s.refresh_lock)
     end
 end
 
 function cancel_beep(s::PromptState)
     # wait till beeping finishes
-    while !trylock(BEEP_LOCK)
-        beeping[] = 0.0
+    while !trylock(s.refresh_lock)
+        s.beeping = 0.0
         sleep(.05)
     end
-    unlock(BEEP_LOCK)
+    unlock(s.refresh_lock)
 end
 
 beep(::ModeState) = nothing
@@ -278,11 +276,10 @@ prompt_string(p::Prompt) = prompt_string(p.prompt)
 prompt_string(s::AbstractString) = s
 prompt_string(f::Function) = Base.invokelatest(f)
 
-refresh_multi_line(s::ModeState) = refresh_multi_line(terminal(s), s)
-refresh_multi_line(termbuf::TerminalBuffer, s::ModeState) = refresh_multi_line(termbuf, terminal(s), s)
-refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState) = (@assert term == terminal(s); refresh_multi_line(termbuf,s))
+refresh_multi_line(s::ModeState; kw...) = refresh_multi_line(terminal(s), s; kw...)
+refresh_multi_line(termbuf::TerminalBuffer, s::ModeState; kw...) = refresh_multi_line(termbuf, terminal(s), s; kw...)
+refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState; kw...) = (@assert term == terminal(s); refresh_multi_line(termbuf,s; kw...))
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf, state::InputAreaState, prompt = ""; indent = 0)
-    while !trylock(REFRESH_LOCK) sleep(.01) end
     _clear_input_area(termbuf, state)
 
     cols = width(terminal)
@@ -346,7 +343,6 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
 
     #columns are 1 based
     cmove_col(termbuf, curs_pos + 1)
-    unlock(REFRESH_LOCK)
     # Updated cur_row,curs_row
     return InputAreaState(cur_row, curs_row)
 end
@@ -1354,9 +1350,11 @@ function show(io::IO, s::PrefixSearchState)
      isdefined(s,:mi) ? s.mi : "no MI")
 end
 
-refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
-    s::Union{PromptState,PrefixSearchState}) = s.ias =
-    refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s, indent = s.indent)
+function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
+                            s::Union{PromptState,PrefixSearchState}; beeping=false)
+    beeping || cancel_beep(s)
+    s.ias = refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s, indent = s.indent)
+end
 
 input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
 
@@ -1929,7 +1927,7 @@ run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), IOBuffer[], 1, InputAreaState(1, 1),
-                #=indent(spaces)=# -1)
+                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0)
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, m.modes[1], false, Dict{Any,Any}())
