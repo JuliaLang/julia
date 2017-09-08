@@ -1225,6 +1225,10 @@ function test_22922()
             filename = basename(tmpdir)
             @test length(filename) == 6
         end
+<<<<<<< HEAD
+=======
+        rm("c:/mydir")
+>>>>>>> 84cb8e01a8... Removing the directory created by the testcase.
     else
         # '/' as the only character as prefix fails.
         @test_throws Base.UVError mktempdir(; prefix="/")
