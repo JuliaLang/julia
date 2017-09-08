@@ -485,20 +485,20 @@ convert(::Type{StepRangeLen{Float64}}, r::StepRangeLen) =
 convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T<:IEEEFloat} =
     _convertSRL(StepRangeLen{T,Float64,Float64}, r)
 
-convert(::Type{StepRangeLen{Float64}}, r::Range) =
+convert(::Type{StepRangeLen{Float64}}, r::AbstractRange) =
     _convertSRL(StepRangeLen{Float64,TwicePrecision{Float64},TwicePrecision{Float64}}, r)
-convert(::Type{StepRangeLen{T}}, r::Range) where {T<:IEEEFloat} =
+convert(::Type{StepRangeLen{T}}, r::AbstractRange) where {T<:IEEEFloat} =
     _convertSRL(StepRangeLen{T,Float64,Float64}, r)
 
 function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{<:Integer}) where {T,R,S}
     StepRangeLen{T,R,S}(R(r.ref), S(r.step), length(r), r.offset)
 end
 
-function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::Range{<:Integer}) where {T,R,S}
+function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::AbstractRange{<:Integer}) where {T,R,S}
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
 end
 
-function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::Range{U}) where {T,R,S,U}
+function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::AbstractRange{U}) where {T,R,S,U}
     # if start and step have a rational approximation in the old type,
     # then we transfer that rational approximation to the new type
     f, s = first(r), step(r)
@@ -521,7 +521,7 @@ end
 function __convertSRL(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{U}) where {T,R,S,U}
     StepRangeLen{T,R,S}(R(r.ref), S(r.step), length(r), r.offset)
 end
-function __convertSRL(::Type{StepRangeLen{T,R,S}}, r::Range{U}) where {T,R,S,U}
+function __convertSRL(::Type{StepRangeLen{T,R,S}}, r::AbstractRange{U}) where {T,R,S,U}
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
 end
 

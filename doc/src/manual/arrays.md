@@ -348,7 +348,7 @@ indices and can be converted to such by [`to_indices`](@ref):
 2. An array of scalar indices. This includes:
     * Vectors and multidimensional arrays of integers
     * Empty arrays like `[]`, which select no elements
-    * `Range`s of the form `a:c` or `a:b:c`, which select contiguous or strided subsections from `a` to `c` (inclusive)
+    * Ranges like `a:c` or `a:b:c`, which select contiguous or strided subsections from `a` to `c` (inclusive)
     * Any custom array of scalar indices that is a subtype of `AbstractArray`
     * Arrays of `CartesianIndex{N}` (see below for more details)
 3. An object that represents an array of scalar indices and can be converted to such by [`to_indices`](@ref). By default this includes:

@@ -409,7 +409,7 @@ julia> for i = 1:5
 5
 ```
 
-Here the `1:5` is a `Range` object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
+Here the `1:5` is a range object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
 loop iterates through these values, assigning each one in turn to the variable `i`. One rather
 important distinction between the previous `while` loop form and the `for` loop form is the scope
 during which the variable is visible. If the variable `i` has not been introduced in an other

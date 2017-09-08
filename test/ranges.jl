@@ -294,7 +294,7 @@ end
 @test intersect(-51:5:100, -33:7:125) == -26:35:79
 @test intersect(-51:5:100, -32:7:125) == -11:35:94
 #@test intersect(0:6:24, 6+0*(0:4:24)) == 6:6:6
-#@test intersect(12+0*(0:6:24), 0:4:24) == Range(12, 0, 5)
+#@test intersect(12+0*(0:6:24), 0:4:24) == AbstractRange(12, 0, 5)
 #@test isempty(intersect(6+0*(0:6:24), 0:4:24))
 @test intersect(-10:3:24, -10:3:24) == -10:3:23
 @test isempty(intersect(-11:3:24, -10:3:24))
@@ -372,7 +372,7 @@ r = (-4*Int64(maxintfloat(Int === Int32 ? Float32 : Float64))):5
 @test_throws BoundsError (0:2:10)[7:7]
 
 # indexing with negative ranges (#8351)
-for a=Range[3:6, 0:2:10], b=Range[0:1, 2:-1:0]
+for a=AbstractRange[3:6, 0:2:10], b=AbstractRange[0:1, 2:-1:0]
     @test_throws BoundsError a[b]
 end
 
@@ -649,9 +649,9 @@ r = LinSpace(1,4,4)
 
 # comparing and hashing ranges
 let
-    Rs = Range[1:2, map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 17:-3:0,
-               0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
-               linspace(0, 1, 20), map(Float32, linspace(0, 1, 20))]
+    Rs = AbstractRange[1:2, map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 17:-3:0,
+                       0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
+                       linspace(0, 1, 20), map(Float32, linspace(0, 1, 20))]
     for r in Rs
         local r
         ar = collect(r)
@@ -713,7 +713,7 @@ end
 # issue #7114
 r = -0.004532318104333742:1.2597349521122731e-5:0.008065031416788989
 @test length(r[1:end-1]) == length(r) - 1
-@test isa(r[1:2:end],Range) && length(r[1:2:end]) == div(length(r)+1, 2)
+@test isa(r[1:2:end],AbstractRange) && length(r[1:2:end]) == div(length(r)+1, 2)
 @test r[3:5][2] ≈ r[4]
 @test r[5:-2:1][2] ≈ r[3]
 @test_throws BoundsError r[0:10]
@@ -896,7 +896,7 @@ test_range_index(linspace(1.0, 1.0, 1), 1:1)
 test_range_index(linspace(1.0, 1.0, 1), 1:0)
 test_range_index(linspace(1.0, 2.0, 0), 1:0)
 
-function test_linspace_identity(r::Range{T}, mr) where T
+function test_linspace_identity(r::AbstractRange{T}, mr) where T
     @test -r == mr
     @test -collect(r) == collect(mr)
     @test isa(-r, typeof(r))
@@ -945,7 +945,7 @@ for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
         @test isa(float_r, typeof(_r))
         @test eltype(big_r) === BigFloat
     else
-        @test isa(float_r, Range)
+        @test isa(float_r, AbstractRange)
         @test eltype(float_r) <: AbstractFloat
         @test eltype(big_r) === BigInt
     end

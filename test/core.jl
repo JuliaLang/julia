@@ -1737,7 +1737,7 @@ mutable struct A6142 <: AbstractMatrix{Float64}; end
 +(x::A6142, y::UniformScaling{TJ}) where {TJ} = "UniformScaling method called"
 +(x::A6142, y::AbstractArray) = "AbstractArray method called"
 @test A6142() + I == "UniformScaling method called"
-+(x::A6142, y::Range) = "Range method called" #16324 ambiguity
++(x::A6142, y::AbstractRange) = "AbstractRange method called" #16324 ambiguity
 
 # issue #6175
 function g6175(); print(""); (); end
@@ -1850,7 +1850,7 @@ end
 # issue #6387
 primitive type Date6387{C} 64 end
 
-mutable struct DateRange6387{C} <: Range{Date6387{C}}
+mutable struct DateRange6387{C} <: AbstractRange{Date6387{C}}
 end
 
 mutable struct ObjMember
@@ -1859,7 +1859,7 @@ end
 
 obj6387 = ObjMember(DateRange6387{Int64}())
 
-function v6387(r::Range{T}) where T
+function v6387(r::AbstractRange{T}) where T
     a = Array{T}(1)
     a[1] = Core.Intrinsics.bitcast(Date6387{Int64}, Int64(1))
     return a

@@ -1921,7 +1921,7 @@ indmin(A::SparseMatrixCSC) = findmin(A)[2]
 indmax(A::SparseMatrixCSC) = findmax(A)[2]
 
 ## getindex
-function rangesearch(haystack::Range, needle)
+function rangesearch(haystack::AbstractRange, needle)
     (i,rem) = divrem(needle - first(haystack), step(haystack))
     (rem==0 && 1<=i+1<=length(haystack)) ? i+1 : 0
 end
@@ -1978,7 +1978,7 @@ end
 getindex_traverse_col(::AbstractUnitRange, lo::Int, hi::Int) = lo:hi
 getindex_traverse_col(I::StepRange, lo::Int, hi::Int) = step(I) > 0 ? (lo:1:hi) : (hi:-1:lo)
 
-function getindex(A::SparseMatrixCSC{Tv,Ti}, I::Range, J::AbstractVector) where {Tv,Ti<:Integer}
+function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractRange, J::AbstractVector) where {Tv,Ti<:Integer}
     # Ranges for indexing rows
     (m, n) = size(A)
     # whole columns:
@@ -2338,10 +2338,10 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractArray) where Tv
 end
 
 # logical getindex
-getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::Range{Bool}, J::AbstractVector{Bool}) = error("Cannot index with Range{Bool}")
-getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::Range{Bool}, J::AbstractVector{<:Integer}) = error("Cannot index with Range{Bool}")
+getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::AbstractRange{Bool}, J::AbstractVector{Bool}) = error("Cannot index with AbstractRange{Bool}")
+getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::AbstractRange{Bool}, J::AbstractVector{<:Integer}) = error("Cannot index with AbstractRange{Bool}")
 
-getindex(A::SparseMatrixCSC, I::Range{<:Integer}, J::AbstractVector{Bool}) = A[I,find(J)]
+getindex(A::SparseMatrixCSC, I::AbstractRange{<:Integer}, J::AbstractVector{Bool}) = A[I,find(J)]
 getindex(A::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = A[I,find(J)]
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = A[find(I),J]
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),find(J)]

@@ -420,6 +420,8 @@ Deprecated or removed
   * `select`, `select!`, `selectperm` and `selectperm!` have been renamed respectively to
     `partialsort`, `partialsort!`, `partialsortperm` and `partialsortperm!` ([#23051]).
 
+  * The `Range` abstract type has been renamed to `AbstractRange` ([#23570]).
+
 Command-line option changes
 ---------------------------
 

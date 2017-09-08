@@ -472,7 +472,7 @@ minimum(a) = mapreduce(identity, scalarmin, a)
 
 ## extrema
 
-extrema(r::Range) = (minimum(r), maximum(r))
+extrema(r::AbstractRange) = (minimum(r), maximum(r))
 extrema(x::Real) = (x, x)
 
 """
