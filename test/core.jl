@@ -2934,6 +2934,22 @@ let
     @test a == 1:2
 end
 
+# `for outer`
+let
+    function forouter()
+        i = 1
+        for outer i = 2:3
+        end
+        return i
+    end
+    @test forouter() == 3
+end
+
+@test_throws ErrorException("syntax: no outer variable declaration exists for \"for outer\"") @eval function f()
+    for outer i = 1:2
+    end
+end
+
 # issue #11295
 function f11295(x...)
     call = Expr(x...)
