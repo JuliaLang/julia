@@ -27,7 +27,7 @@ mutable struct Prompt <: TextInterface
     # Same as prefix except after the prompt
     prompt_suffix::Union{String,Function}
     keymap_dict::Dict{Char}
-    keymap_func_data # ::AbstractREPL
+    repl # ::AbstractREPL
     complete # ::REPLCompletionProvider
     on_enter::Function
     on_done::Function
@@ -75,6 +75,8 @@ mutable struct PromptState <: ModeState
     indent::Int
 end
 
+options(s::PromptState) = isdefined(s.p, :repl) ? s.p.repl.options : Base.REPL.Options()
+
 setmark(s) = mark(buffer(s))
 
 # the default mark is 0
@@ -116,7 +118,7 @@ terminal(s::PromptState) = s.terminal
 
 for f in [:terminal, :on_enter, :add_history, :buffer, :(Base.isempty),
           :replace_line, :refresh_multi_line, :input_string, :update_display_buffer,
-          :empty_undo, :push_undo, :pop_undo]
+          :empty_undo, :push_undo, :pop_undo, :options]
     @eval ($f)(s::MIState, args...) = $(f)(state(s), args...)
 end
 
@@ -549,7 +551,8 @@ end
 # align: delete up to 4 spaces to align to a multiple of 4 chars
 # adjust: also delete spaces on the right of the cursor to try to keep aligned what is
 # on the right
-function edit_backspace(s::PromptState, align::Bool=false, adjust=align)
+function edit_backspace(s::PromptState, align::Bool=options(s).backspace_align,
+                        adjust=options(s).backspace_adjust)
     push_undo(s)
     if edit_backspace(buffer(s), align, adjust)
         refresh_line(s)
@@ -571,7 +574,7 @@ function endofline(buf, pos=position(buf))
     eol == 0 ? buf.size : pos + eol - 1
 end
 
-function edit_backspace(buf::IOBuffer, align::Bool=false, adjust::Bool=align)
+function edit_backspace(buf::IOBuffer, align::Bool=false, adjust::Bool=false)
     !align && adjust &&
         throw(DomainError((align, adjust),
                           "if `adjust` is `true`, `align` must be `true`"))
@@ -1649,7 +1652,7 @@ AnyDict(
     end,
     '\n' => KeyAlias('\r'),
     # Backspace/^H
-    '\b' => (s,o...)->edit_backspace(s, true),
+    '\b' => (s,o...)->edit_backspace(s),
     127 => KeyAlias('\b'),
     # Meta Backspace
     "\e\b" => (s,o...)->edit_delete_prev_word(s),
@@ -1860,14 +1863,14 @@ function Prompt(prompt;
     prompt_prefix = "",
     prompt_suffix = "",
     keymap_dict = default_keymap_dict,
-    keymap_func_data = nothing,
+    repl = nothing,
     complete = EmptyCompletionProvider(),
     on_enter = default_enter_cb,
     on_done = ()->nothing,
     hist = EmptyHistoryProvider(),
     sticky = false)
 
-    Prompt(prompt, prompt_prefix, prompt_suffix, keymap_dict, keymap_func_data,
+    Prompt(prompt, prompt_prefix, prompt_suffix, keymap_dict, repl,
         complete, on_enter, on_done, hist, sticky)
 end
 
@@ -1968,7 +1971,7 @@ end
 edit_redo!(s) = nothing
 
 keymap(s::PromptState, prompt::Prompt) = prompt.keymap_dict
-keymap_data(s::PromptState, prompt::Prompt) = prompt.keymap_func_data
+keymap_data(s::PromptState, prompt::Prompt) = prompt.repl
 keymap(ms::MIState, m::ModalInterface) = keymap(state(ms), mode(ms))
 keymap_data(ms::MIState, m::ModalInterface) = keymap_data(state(ms), mode(ms))
 

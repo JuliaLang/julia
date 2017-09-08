@@ -330,7 +330,7 @@ let buf = IOBuffer()
     @test position(buf) == 0
     LineEdit.edit_move_right(buf)
     @test nb_available(buf) == 0
-    LineEdit.edit_backspace(buf)
+    LineEdit.edit_backspace(buf, false, false)
     @test content(buf) == "a"
 end
 
@@ -699,9 +699,9 @@ end
     @test edit!(edit_undo!) == "one two three"
 
     LineEdit.move_line_end(s)
-    LineEdit.edit_backspace(s)
-    LineEdit.edit_backspace(s)
-    @test edit!(LineEdit.edit_backspace) == "one two th"
+    LineEdit.edit_backspace(s, false, false)
+    LineEdit.edit_backspace(s, false, false)
+    @test edit!(s->LineEdit.edit_backspace(s, false, false)) == "one two th"
     @test edit!(edit_undo!) == "one two thr"
     @test edit!(edit_undo!) == "one two thre"
     @test edit!(edit_undo!) == "one two three"
