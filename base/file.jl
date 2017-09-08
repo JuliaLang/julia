@@ -352,8 +352,8 @@ function mktempdir(parent=tempdir(); prefix="$temp_prefix")
     req = Libc.malloc(_sizeof_uv_fs)
     try
         ret = ccall(:uv_fs_mkdtemp, Int32,
-            (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}),
-            eventloop(), req, tpath, C_NULL)
+                    (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}),
+                    eventloop(), req, tpath, C_NULL)
         if ret < 0
             ccall(:uv_fs_req_cleanup, Void, (Ptr{Void},), req)
             uv_error("mktempdir", ret)
@@ -366,7 +366,6 @@ function mktempdir(parent=tempdir(); prefix="$temp_prefix")
         Libc.free(req)
     end
 end
-
 
 """
     mktemp(f::Function, parent=tempdir())
