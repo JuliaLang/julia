@@ -300,14 +300,14 @@ seek(buf,0)
 
 buf = IOBuffer("type X\n ")
 seekend(buf)
-@test LineEdit.edit_delete_prev_word(buf)
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test position(buf) == 5
 @test buf.size == 5
 @test content(buf) == "type "
 
 buf = IOBuffer("4 +aaa+ x")
 seek(buf,8)
-@test LineEdit.edit_delete_prev_word(buf)
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test position(buf) == 3
 @test buf.size == 4
 @test content(buf) == "4 +x"
@@ -316,11 +316,11 @@ buf = IOBuffer("x = func(arg1,arg2 , arg3)")
 seekend(buf)
 LineEdit.char_move_word_left(buf)
 @test position(buf) == 21
-@test LineEdit.edit_delete_prev_word(buf)
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test content(buf) == "x = func(arg1,arg3)"
-@test LineEdit.edit_delete_prev_word(buf)
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test content(buf) == "x = func(arg3)"
-@test LineEdit.edit_delete_prev_word(buf)
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test content(buf) == "x = arg3)"
 
 # Unicode combining characters
@@ -617,6 +617,29 @@ end
     LineEdit.edit_kill_line(s)
     @test s.kill_ring[end] == "çhing"
     @test s.kill_idx == 3
+    # repetition (concatenation of killed strings
+    edit_insert(s, "A B  C")
+    LineEdit.edit_delete_prev_word(s)
+    s.key_repeats = 1
+    LineEdit.edit_delete_prev_word(s)
+    s.key_repeats = 0
+    @test s.kill_ring[end] == "B  C"
+    LineEdit.edit_yank(s)
+    LineEdit.edit_werase(s)
+    @test s.kill_ring[end] == "C"
+    s.key_repeats = 1
+    LineEdit.edit_werase(s)
+    s.key_repeats = 0
+    @test s.kill_ring[end] == "B  C"
+    LineEdit.edit_yank(s)
+    LineEdit.edit_move_word_left(s)
+    LineEdit.edit_move_word_left(s)
+    LineEdit.edit_delete_next_word(s)
+    @test s.kill_ring[end] == "B"
+    s.key_repeats = 1
+    LineEdit.edit_delete_next_word(s)
+    s.key_repeats = 0
+    @test s.kill_ring[end] == "B  C"
 end
 
 @testset "undo" begin
