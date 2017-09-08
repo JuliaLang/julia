@@ -1207,7 +1207,6 @@ function test_22922()
 
         # The API accepts "c:/ and c:\\" as valid prefixes.
         # The parent directory is ignored in that case.
-
         # The temp directory created is of form "C:\\XXXXXX"
         mktempdir("C:\\dir_notexisting"; prefix=tempdir()) do tmpdir
             @test startswith(tmpdir, tempdir())
