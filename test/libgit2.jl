@@ -1588,16 +1588,10 @@ mktempdir() do dir
         creds_user = "USER"
         creds_pass = "PASS"
         creds = LibGit2.UserPasswordCredentials(creds_user, creds_pass)
-        @test !LibGit2.checkused!(creds)
-        @test !LibGit2.checkused!(creds)
-        @test !LibGit2.checkused!(creds)
-        @test LibGit2.checkused!(creds)
         @test creds.user == creds_user
         @test creds.pass == creds_pass
         creds2 = LibGit2.UserPasswordCredentials(creds_user, creds_pass)
         @test creds == creds2
-        LibGit2.reset!(creds)
-        @test !LibGit2.checkused!(creds)
         sshcreds = LibGit2.SSHCredentials(creds_user, creds_pass)
         @test sshcreds.user == creds_user
         @test sshcreds.pass == creds_pass
@@ -1687,7 +1681,7 @@ mktempdir() do dir
                 ]
                 err, auth_attempts = challenge_prompt(ssh_p_ex, challenges)
                 @test err == git_ok
-                @test auth_attempts == 5
+                @test auth_attempts == 2
 
                 # User sends EOF in passphrase prompt which aborts the credential request
                 challenges = [
@@ -1737,7 +1731,7 @@ mktempdir() do dir
                 ]
                 err, auth_attempts = challenge_prompt(ssh_u_ex, challenges)
                 @test err == abort_prompt
-                @test auth_attempts == 5  # Should ideally be <= 2
+                @test auth_attempts == 2
 
                 # User repeatedly chooses an invalid username
                 challenges = [
@@ -1747,7 +1741,7 @@ mktempdir() do dir
                 ]
                 err, auth_attempts = challenge_prompt(ssh_u_ex, challenges)
                 @test err == abort_prompt
-                @test auth_attempts == 6
+                @test auth_attempts == 3
 
                 # Credential callback is given an empty string in the `username_ptr`
                 # instead of the typical C_NULL.
@@ -1904,7 +1898,7 @@ mktempdir() do dir
             ]
             err, auth_attempts = challenge_prompt(https_ex, challenges)
             @test err == git_ok
-            @test auth_attempts == 5
+            @test auth_attempts == 2
         end
 
         @testset "SSH explicit credentials" begin
@@ -1940,7 +1934,7 @@ mktempdir() do dir
             # TODO: Unless the SSH agent is disabled we may get caught in an infinite loop
             err, auth_attempts = challenge_prompt(invalid_ex, [])
             @test err == eauth_error
-            @test auth_attempts == 4
+            @test auth_attempts == 2
         end
 
         @testset "HTTPS explicit credentials" begin
@@ -1974,7 +1968,7 @@ mktempdir() do dir
             # Explicitly provided credential is incorrect
             err, auth_attempts = challenge_prompt(invalid_ex, [])
             @test err == eauth_error
-            @test auth_attempts == 4
+            @test auth_attempts == 2
         end
 
         @testset "Cached credentials" begin
@@ -2040,7 +2034,7 @@ mktempdir() do dir
             expected_cred = LibGit2.UserPasswordCredentials(valid_username, valid_password)
             err, auth_attempts, cache = challenge_prompt(replace_ex, challenges)
             @test err == git_ok
-            @test auth_attempts == 4
+            @test auth_attempts == 2
             @test typeof(cache) == LibGit2.CachedCredentials
             @test cache.cred == Dict(cred_id => expected_cred)
         end

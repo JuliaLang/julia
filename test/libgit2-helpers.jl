@@ -71,7 +71,7 @@ function credential_loop(
         cache = get(payload.cache)
 
         m = match(LibGit2.URL_REGEX, url)
-        default_cred = LibGit2.reset!(SSHCredentials(true), -1)
+        default_cred = SSHCredentials(true)
         default_cred.usesshagent = "N"
         LibGit2.get_creds!(cache, "ssh://$(m[:host])", default_cred)
     end
