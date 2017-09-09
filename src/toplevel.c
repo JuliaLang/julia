@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <setjmp.h>
-#include <assert.h>
 #include <sys/types.h>
 #include <errno.h>
 #if defined(_OS_WINDOWS_)
@@ -19,6 +18,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "uv.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {

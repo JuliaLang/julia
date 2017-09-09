@@ -47,14 +47,7 @@ a2img  = randn(n,n)/2
     aa2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     asym = aa'+aa                  # symmetric indefinite
     apd  = aa'*aa                 # symmetric positive-definite
-    @testset for atype in ("Array", "SubArray")
-        if atype == "Array"
-            a = aa
-            a2 = aa2
-        else
-            a = view(aa, 1:n, 1:n)
-            a2 = view(aa2, 1:n, 1:n)
-        end
+    for (a, a2) in ((aa, aa2), (view(aa, 1:n, 1:n), view(aa2, 1:n, 1:n)))
         ε = εa = eps(abs(float(one(eltya))))
 
         usv = svdfact(a)

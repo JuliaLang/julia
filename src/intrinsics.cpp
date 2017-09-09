@@ -146,99 +146,113 @@ static Value *uint_cnvt(jl_codectx_t &ctx, Type *to, Value *x)
     return ctx.builder.CreateZExt(x, to);
 }
 
-#if JL_LLVM_VERSION >= 40000
-#define LLVM_FP(a,b) APFloat(a(),b)
-#else
-#define LLVM_FP(a,b) APFloat(a,b)
-#endif
-static Constant *julia_const_to_llvm(void *ptr, jl_value_t *bt)
+static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
 {
     // assumes `jl_isbits(bt)`.
     // `ptr` can point to a inline field, do not read the tag from it.
     // make sure to return exactly the type specified by
     // julia_type_to_llvm as this will be assumed by the callee.
-    if (bt == (jl_value_t*)jl_bool_type)
-        return ConstantInt::get(T_int8, (*(uint8_t*)ptr) ? 1 : 0);
+    if (bt == jl_bool_type)
+        return ConstantInt::get(T_int8, (*(const uint8_t*)ptr) ? 1 : 0);
 
-    if (bt == (jl_value_t*)jl_ssavalue_type)
-        return NULL;
+    if (jl_is_vecelement_type((jl_value_t*)bt))
+        bt = (jl_datatype_t*)jl_tparam0(bt);
 
-    if (jl_is_vecelement_type(bt))
-        bt = jl_tparam0(bt);
+    Type *lt = julia_struct_to_llvm((jl_value_t*)bt, NULL, NULL);
 
-    if (jl_is_cpointer_type(bt))
-        return ConstantExpr::getIntToPtr(ConstantInt::get(T_size, *(uintptr_t*)ptr), julia_type_to_llvm(bt));
+    if (type_is_ghost(lt))
+        return UndefValue::get(NoopType);
+
     if (jl_is_primitivetype(bt)) {
+        if (lt->isFloatTy()) {
+            uint32_t data32 = *(const uint32_t*)ptr;
+            return ConstantFP::get(jl_LLVMContext,
+                    APFloat(lt->getFltSemantics(), APInt(32, data32)));
+        }
+        if (lt->isDoubleTy()) {
+            uint64_t data64 = *(const uint64_t*)ptr;
+            return ConstantFP::get(jl_LLVMContext,
+                    APFloat(lt->getFltSemantics(), APInt(64, data64)));
+        }
         int nb = jl_datatype_size(bt);
-        // TODO: non-power-of-2 size datatypes may not be interpreted correctly on big-endian systems
-        switch (nb) {
-        case 1: {
-            uint8_t data8 = *(uint8_t*)ptr;
-            return ConstantInt::get(T_int8, data8);
+        APInt val(8 * nb, 0);
+        void *bits = const_cast<uint64_t*>(val.getRawData());
+        assert(sys::IsLittleEndianHost);
+        memcpy(bits, ptr, nb);
+        if (lt->isFloatingPointTy()) {
+            return ConstantFP::get(jl_LLVMContext,
+                    APFloat(lt->getFltSemantics(), val));
         }
-        case 2: {
-            uint16_t data16 = *(uint16_t*)ptr;
-            return ConstantInt::get(T_int16, data16);
-        }
-        case 4: {
-            uint32_t data32 = *(uint32_t*)ptr;
-            if (bt == (jl_value_t*)jl_float32_type)
-                return ConstantFP::get(jl_LLVMContext,
-                        LLVM_FP(APFloat::IEEEsingle,
-                            APInt(32, data32)));
-            return ConstantInt::get(T_int32, data32);
-        }
-        case 8: {
-            uint64_t data64 = *(uint64_t*)ptr;
-            if (bt == (jl_value_t*)jl_float64_type)
-                return ConstantFP::get(jl_LLVMContext,
-                        LLVM_FP(APFloat::IEEEdouble,
-                            APInt(64, data64)));
-            return ConstantInt::get(T_int64, data64);
-        }
-        default:
-            size_t nw = (nb+sizeof(uint64_t)-1)/sizeof(uint64_t);
-            uint64_t *data = (uint64_t*)ptr;
-            APInt val;
-#if !defined(_P64)
-            // malloc may not be 16-byte aligned on P32,
-            // but we must ensure that llvm's uint64_t reads don't fall
-            // off the end of a page
-            // where 16-byte alignment requirement == (8-byte typetag) % (uint64_t ArrayRef access)
-            if (nb % 16 != 0) {
-                uint64_t *data_a64 = (uint64_t*)alloca(sizeof(uint64_t)*nw);
-                memcpy(data_a64, data, nb);
-                val = APInt(8*nb, ArrayRef<uint64_t>(data_a64, nw));
-            }
-            else
-#endif
-            val = APInt(8*nb, ArrayRef<uint64_t>(data, nw));
-            return ConstantInt::get(IntegerType::get(jl_LLVMContext,8*nb),val);
-        }
+        assert(cast<IntegerType>(lt)->getBitWidth() == 8u * nb);
+        return ConstantInt::get(lt, val);
     }
+
+    CompositeType *lct = cast<CompositeType>(lt);
     size_t nf = jl_datatype_nfields(bt);
-    Constant **fields = (Constant**)alloca(nf * sizeof(Constant*));
+    std::vector<Constant*> fields(nf);
     for (size_t i = 0; i < nf; i++) {
-        size_t offs = jl_field_offset((jl_datatype_t*)bt, i);
+        size_t offs = jl_field_offset(bt, i);
+        assert(!jl_field_isptr(bt, i));
         jl_value_t *ft = jl_field_type(bt, i);
-        Constant *val = julia_const_to_llvm((char*)ptr + offs, ft);
-        if (val == NULL)
-            return NULL;
+        Type *lft = lct->getTypeAtIndex(i);
+        const uint8_t *ov = (const uint8_t*)ptr + offs;
+        Constant *val;
+        if (jl_is_uniontype(ft)) {
+            // compute the same type layout as julia_struct_to_llvm
+            size_t fsz = jl_field_size(bt, i);
+            size_t al = jl_field_align(bt, i);
+            uint8_t sel = ((const uint8_t*)ptr)[offs + fsz - 1];
+            jl_value_t *active_ty = jl_nth_union_component(ft, sel);
+            size_t active_sz = jl_datatype_size(active_ty);
+            ArrayType *aty = cast<ArrayType>(cast<StructType>(lft)->getTypeAtIndex(0u));
+            assert(aty->getElementType() == IntegerType::get(jl_LLVMContext, 8 * al) &&
+                   aty->getNumElements() == (fsz - 1) / al);
+            std::vector<Constant*> ArrayElements(0);
+            for (unsigned j = 0; j < aty->getNumElements(); j++) {
+                APInt Elem(8 * al, 0);
+                void *bits = const_cast<uint64_t*>(Elem.getRawData());
+                if (active_sz > al) {
+                    memcpy(bits, ov, al);
+                    active_sz -= al;
+                }
+                else if (active_sz > 0) {
+                    memcpy(bits, ov, active_sz);
+                    active_sz = 0;
+                }
+                ov += al;
+                ArrayElements.push_back(ConstantInt::get(aty->getElementType(), Elem));
+            }
+            std::vector<Constant*> Elements(0);
+            Elements.push_back(ConstantArray::get(aty, ArrayElements));
+            unsigned remainder = (fsz - 1) % al;
+            while (remainder--) {
+                uint8_t byte;
+                if (active_sz > 0) {
+                    byte = *ov;
+                    active_sz -= 1;
+                }
+                else {
+                    byte = 0;
+                }
+                ov += 1;
+                APInt Elem(8, byte);
+                Elements.push_back(ConstantInt::get(T_int8, Elem));
+            }
+            Elements.push_back(ConstantInt::get(T_int8, sel));
+            val = ConstantStruct::get(cast<StructType>(lft), Elements);
+        }
+        else {
+            val = julia_const_to_llvm(ov, (jl_datatype_t*)ft);
+        }
         fields[i] = val;
     }
 
-    Type *t = julia_struct_to_llvm(bt, NULL, NULL);
-    if (type_is_ghost(t))
-        return UndefValue::get(NoopType);
-    if (t->isVectorTy())
-        return ConstantVector::get(ArrayRef<Constant*>(fields, nf));
-    if (StructType *st = dyn_cast<StructType>(t)) {
-        return ConstantStruct::get(st, ArrayRef<Constant*>(fields, nf));
-    }
-    else {
-        ArrayType *at = cast<ArrayType>(t);
-        return ConstantArray::get(at, ArrayRef<Constant*>(fields, nf));
-    }
+    if (lct->isVectorTy())
+        return ConstantVector::get(fields);
+    if (StructType *st = dyn_cast<StructType>(lct))
+        return ConstantStruct::get(st, fields);
+    ArrayType *at = cast<ArrayType>(lct);
+    return ConstantArray::get(at, fields);
 }
 
 static Constant *julia_const_to_llvm(jl_value_t *e)
@@ -250,7 +264,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
     jl_value_t *bt = jl_typeof(e);
     if (!jl_isbits(bt))
         return NULL;
-    return julia_const_to_llvm(e, bt);
+    return julia_const_to_llvm(e, (jl_datatype_t*)bt);
 }
 
 static jl_cgval_t ghostValue(jl_value_t *ty);
@@ -577,15 +591,15 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     Value *idx = emit_unbox(ctx, T_size, i, (jl_value_t*)jl_long_type);
     Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(T_size, 1));
 
-    if (!jl_isbits(ety)) {
-        if (ety == (jl_value_t*)jl_any_type) {
-            Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
-            return mark_julia_type(
-                    ctx,
-                    ctx.builder.CreateAlignedLoad(ctx.builder.CreateGEP(thePtr, im1), align_nb),
-                    true,
-                    ety);
-        }
+    if (ety == (jl_value_t*)jl_any_type) {
+        Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
+        return mark_julia_type(
+                ctx,
+                ctx.builder.CreateAlignedLoad(ctx.builder.CreateGEP(T_prjlvalue, thePtr, im1), align_nb),
+                true,
+                ety);
+    }
+    else if (!jl_isbits(ety)) {
         if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
             emit_error(ctx, "pointerref: invalid pointer type");
             return jl_cgval_t();
@@ -597,16 +611,17 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         Value *thePtr = emit_unbox(ctx, T_pint8, e, e.typ);
-        thePtr = ctx.builder.CreateGEP(emit_bitcast(ctx, thePtr, T_pint8), im1);
+        thePtr = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, thePtr, T_pint8), im1);
         ctx.builder.CreateMemCpy(emit_bitcast(ctx, strct, T_pint8), thePtr, size, 1);
         return mark_julia_type(ctx, strct, true, ety);
     }
-
-    bool isboxed;
-    Type *ptrty = julia_type_to_llvm(e.typ, &isboxed);
-    assert(!isboxed);
-    Value *thePtr = emit_unbox(ctx, ptrty, e, e.typ);
-    return typed_load(ctx, thePtr, im1, ety, tbaa_data, true, align_nb);
+    else {
+        bool isboxed;
+        Type *ptrty = julia_type_to_llvm(ety, &isboxed);
+        assert(!isboxed);
+        Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+        return typed_load(ctx, thePtr, im1, ety, tbaa_data, true, align_nb);
+    }
 }
 
 static jl_cgval_t emit_runtime_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
@@ -644,7 +659,15 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
     Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(T_size, 1));
 
     Value *thePtr;
-    if (!jl_isbits(ety) && ety != (jl_value_t*)jl_any_type) {
+    if (ety == (jl_value_t*)jl_any_type) {
+        // unsafe_store to Ptr{Any} is allowed to implicitly drop GC roots.
+        thePtr = emit_unbox(ctx, T_psize, e, e.typ);
+        Instruction *store = ctx.builder.CreateAlignedStore(
+          emit_pointer_from_objref(ctx, boxed(ctx, x)),
+            ctx.builder.CreateGEP(T_size, thePtr, im1), align_nb);
+        tbaa_decorate(tbaa_data, store);
+    }
+    else if (!jl_isbits(ety)) {
         if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
             emit_error(ctx, "pointerset: invalid pointer type");
             return jl_cgval_t();
@@ -653,23 +676,15 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
-        ctx.builder.CreateMemCpy(ctx.builder.CreateGEP(thePtr, im1),
+        ctx.builder.CreateMemCpy(ctx.builder.CreateGEP(T_int8, thePtr, im1),
                              data_pointer(ctx, x, T_pint8), size, align_nb);
     }
     else {
         bool isboxed;
-        Type *ptrty = julia_type_to_llvm(e.typ, &isboxed);
+        Type *ptrty = julia_type_to_llvm(ety, &isboxed);
         assert(!isboxed);
-        thePtr = emit_unbox(ctx, ptrty, e, e.typ);
-        if (ety == (jl_value_t*)jl_any_type) {
-            // unsafe_store to Ptr{Any} is allowed to implicitly drop GC roots.
-            Instruction *store = ctx.builder.CreateAlignedStore(
-              emit_pointer_from_objref(ctx, boxed(ctx, x, false)),
-                ctx.builder.CreateGEP(thePtr, im1), align_nb);
-            tbaa_decorate(tbaa_data, store);
-        } else {
-            typed_store(ctx, thePtr, im1, x, ety, tbaa_data, NULL, align_nb);
-        }
+        thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+        typed_store(ctx, thePtr, im1, x, ety, tbaa_data, NULL, align_nb);
     }
     return mark_julia_type(ctx, thePtr, false, aty);
 }

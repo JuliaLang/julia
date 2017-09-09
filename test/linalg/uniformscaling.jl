@@ -76,15 +76,7 @@ B = bitrand(2,2)
 @testset "binary ops with matrices" begin
     let AA = randn(2, 2)
         for SS in (sprandn(3,3, 0.5), speye(Int, 3))
-            @testset for atype in ("Array", "SubArray")
-                if atype == "Array"
-                    A = AA
-                    S = SS
-                else
-                    A = view(AA, 1:2, 1:2)
-                    S = view(SS, 1:3, 1:3)
-                end
-
+            for (A, S) in ((AA, SS), (view(AA, 1:2, 1:2), view(SS, 1:3, 1:3)))
                 @test @inferred(A + I) == A + eye(A)
                 @test @inferred(I + A) == A + eye(A)
                 @test @inferred(I - I) === UniformScaling(0)
@@ -113,7 +105,7 @@ B = bitrand(2,2)
                 @test @inferred(I/λ) === UniformScaling(1/λ)
                 @test @inferred(I\J) === J
 
-                if atype == "Array"
+                if isa(A, Array)
                     T = LowerTriangular(randn(3,3))
                 else
                     T = LowerTriangular(view(randn(3,3), 1:3, 1:3))
@@ -124,7 +116,7 @@ B = bitrand(2,2)
                 @test @inferred(J - T) == J - full(T)
                 @test @inferred(T\I) == inv(T)
 
-                if atype == "Array"
+                if isa(A, Array)
                     T = LinAlg.UnitLowerTriangular(randn(3,3))
                 else
                     T = LinAlg.UnitLowerTriangular(view(randn(3,3), 1:3, 1:3))
@@ -135,7 +127,7 @@ B = bitrand(2,2)
                 @test @inferred(J - T) == J - full(T)
                 @test @inferred(T\I) == inv(T)
 
-                if atype == "Array"
+                if isa(A, Array)
                     T = UpperTriangular(randn(3,3))
                 else
                     T = UpperTriangular(view(randn(3,3), 1:3, 1:3))
@@ -146,7 +138,7 @@ B = bitrand(2,2)
                 @test @inferred(J - T) == J - full(T)
                 @test @inferred(T\I) == inv(T)
 
-                if atype == "Array"
+                if isa(A, Array)
                     T = LinAlg.UnitUpperTriangular(randn(3,3))
                 else
                     T = LinAlg.UnitUpperTriangular(view(randn(3,3), 1:3, 1:3))

@@ -137,7 +137,7 @@ function show(io::IO, ::MIME"text/plain", t::Task)
 end
 
 show(io::IO, ::MIME"text/plain", X::AbstractArray) = showarray(io, X, false)
-show(io::IO, ::MIME"text/plain", r::Range) = show(io, r) # always use the compact form for printing ranges
+show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
 # display something useful even for strings containing arbitrary
 # (non-UTF8) binary data:
@@ -186,7 +186,7 @@ function showerror(io::IO, ex::BoundsError)
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
-            if isa(ex.i, Range)
+            if isa(ex.i, AbstractRange)
                 print(io, ex.i)
             else
                 join(io, ex.i, ", ")

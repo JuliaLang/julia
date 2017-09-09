@@ -573,7 +573,7 @@ function _logical_index(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool}) where Tv
     SparseVector(n, rowvalB, nzvalB)
 end
 
-# TODO: further optimizations are available for ::Colon and other types of Range
+# TODO: further optimizations are available for ::Colon and other types of AbstractRange
 getindex(A::SparseMatrixCSC, ::Colon) = A[1:end]
 
 function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv

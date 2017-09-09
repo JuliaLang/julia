@@ -114,7 +114,6 @@ widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 
 Approximate floating point number `x` as a [`Rational`](@ref) number with components
 of the given integer type. The result will differ from `x` by no more than `tol`.
-If `T` is not provided, it defaults to `Int`.
 
 ```jldoctest
 julia> rationalize(5.6)
@@ -232,7 +231,7 @@ typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
 isinteger(x::Rational) = x.den == 1
 
 -(x::Rational) = (-x.num) // x.den
-function -(x::Rational{T}) where T<:Signed
+function -(x::Rational{T}) where T<:BitSigned
     x.num == typemin(T) && throw(OverflowError("rational numerator is typemin(T)"))
     (-x.num) // x.den
 end

@@ -170,9 +170,7 @@ end
 ## Generic indexing functions ##
 
 prevind(s::DirectIndexString, i::Integer) = Int(i)-1
-prevind(s::AbstractArray    , i::Integer) = Int(i)-1
 nextind(s::DirectIndexString, i::Integer) = Int(i)+1
-nextind(s::AbstractArray    , i::Integer) = Int(i)+1
 
 """
     prevind(str::AbstractString, i::Integer)
@@ -241,7 +239,7 @@ function nextind(s::AbstractString, i::Integer)
 end
 
 checkbounds(s::AbstractString, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError(s, i))
-checkbounds(s::AbstractString, r::Range{<:Integer}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
+checkbounds(s::AbstractString, r::AbstractRange{<:Integer}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
 # The following will end up using a deprecated checkbounds, when the covariant parameter is not Integer
 checkbounds(s::AbstractString, I::AbstractArray{<:Real}) = all(i -> checkbounds(s, i), I)
 checkbounds(s::AbstractString, I::AbstractArray{<:Integer}) = all(i -> checkbounds(s, i), I)
@@ -316,7 +314,7 @@ unsafe_chr2ind(s::AbstractString, i::Integer) = map_chr_ind(s, i, first, last)
 struct EachStringIndex{T<:AbstractString}
     s::T
 end
-eachindex(s::AbstractString) = EachStringIndex(s)
+keys(s::AbstractString) = EachStringIndex(s)
 
 length(e::EachStringIndex) = length(e.s)
 start(e::EachStringIndex) = start(e.s)

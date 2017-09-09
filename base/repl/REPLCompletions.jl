@@ -194,6 +194,11 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
     return matchList, startpos:pos, !isempty(matchList)
 end
 
+function complete_expanduser(path::AbstractString, r)
+    expanded = expanduser(path)
+    return String[expanded], r, path != expanded
+end
+
 # Determines whether method_complete should be tried. It should only be done if
 # the string endswiths ',' or '(' when disregarding whitespace_chars
 function should_method_complete(s::AbstractString)
@@ -470,13 +475,19 @@ function completions(string, pos)
         m = match(r"[\t\n\r\"><=*?|]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
+
+        expanded = complete_expanduser(replace(string[r], r"\\ ", " "), r)
+        expanded[3] && return expanded  # If user expansion available, return it
+
         paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
+
         if inc_tag == :string &&
            length(paths) == 1 &&                              # Only close if there's a single choice,
            !isdir(expanduser(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " "))) &&  # except if it's a directory
            (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
             paths[1] *= "\""
         end
+
         #Latex symbols can be completed for strings
         (success || inc_tag==:cmd) && return sort!(paths), r, success
     end

@@ -1,8 +1,34 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.LineEdit
+using Base.LineEdit: edit_insert, buffer, content, setmark, getmark
+
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers
+
+# no need to have animation in tests
+LineEdit.REGION_ANIMATION_DURATION[] = 0.001
+
+## helper functions
+
+function new_state()
+    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    LineEdit.init_state(term, ModalInterface([Prompt("test> ")]))
+end
+
+charseek(buf, i) = seek(buf, Base.unsafe_chr2ind(content(buf), i+1)-1)
+charpos(buf, pos=position(buf)) = Base.unsafe_ind2chr(content(buf), pos+1)-1
+
+function transform!(f, s, i = -1) # i is char-based (not bytes) buffer position
+    buf = buffer(s)
+    i >= 0 && charseek(buf, i)
+    action = f(s)
+    if s isa LineEdit.MIState && action isa Symbol
+        s.last_action = action # simulate what happens in LineEdit.prompt!
+    end
+    content(s), charpos(buf), charpos(buf, getmark(buf))
+end
+
 
 function run_test(d,buf)
     global a_foo, b_foo, a_bar, b_bar
@@ -274,87 +300,83 @@ seek(buf,0)
 
 buf = IOBuffer("type X\n ")
 seekend(buf)
-@test LineEdit.edit_delete_prev_word(buf)
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test position(buf) == 5
 @test buf.size == 5
-@test String(buf.data[1:buf.size]) == "type "
+@test content(buf) == "type "
 
 buf = IOBuffer("4 +aaa+ x")
 seek(buf,8)
-@test LineEdit.edit_delete_prev_word(buf)
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test position(buf) == 3
 @test buf.size == 4
-@test String(buf.data[1:buf.size]) == "4 +x"
+@test content(buf) == "4 +x"
 
 buf = IOBuffer("x = func(arg1,arg2 , arg3)")
 seekend(buf)
 LineEdit.char_move_word_left(buf)
 @test position(buf) == 21
-@test LineEdit.edit_delete_prev_word(buf)
-@test String(buf.data[1:buf.size]) == "x = func(arg1,arg3)"
-@test LineEdit.edit_delete_prev_word(buf)
-@test String(buf.data[1:buf.size]) == "x = func(arg3)"
-@test LineEdit.edit_delete_prev_word(buf)
-@test String(buf.data[1:buf.size]) == "x = arg3)"
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
+@test content(buf) == "x = func(arg1,arg3)"
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
+@test content(buf) == "x = func(arg3)"
+@test !isempty(LineEdit.edit_delete_prev_word(buf))
+@test content(buf) == "x = arg3)"
 
 # Unicode combining characters
 let buf = IOBuffer()
-    LineEdit.edit_insert(buf, "â")
+    edit_insert(buf, "â")
     LineEdit.edit_move_left(buf)
     @test position(buf) == 0
     LineEdit.edit_move_right(buf)
     @test nb_available(buf) == 0
     LineEdit.edit_backspace(buf)
-    @test String(buf.data[1:buf.size]) == "a"
+    @test content(buf) == "a"
 end
 
 ## edit_transpose_chars ##
 let buf = IOBuffer()
-    LineEdit.edit_insert(buf, "abcde")
+    edit_insert(buf, "abcde")
     seek(buf,0)
     LineEdit.edit_transpose_chars(buf)
-    @test String(buf.data[1:buf.size]) == "abcde"
+    @test content(buf) == "abcde"
     LineEdit.char_move_right(buf)
     LineEdit.edit_transpose_chars(buf)
-    @test String(buf.data[1:buf.size]) == "bacde"
+    @test content(buf) == "bacde"
     LineEdit.edit_transpose_chars(buf)
-    @test String(buf.data[1:buf.size]) == "bcade"
+    @test content(buf) == "bcade"
     seekend(buf)
     LineEdit.edit_transpose_chars(buf)
-    @test String(buf.data[1:buf.size]) == "bcaed"
+    @test content(buf) == "bcaed"
     LineEdit.edit_transpose_chars(buf)
-    @test String(buf.data[1:buf.size]) == "bcade"
+    @test content(buf) == "bcade"
 
     seek(buf, 0)
     LineEdit.edit_clear(buf)
-    LineEdit.edit_insert(buf, "αβγδε")
+    edit_insert(buf, "αβγδε")
     seek(buf,0)
     LineEdit.edit_transpose_chars(buf)
-    @test String(buf.data[1:buf.size]) == "αβγδε"
+    @test content(buf) == "αβγδε"
     LineEdit.char_move_right(buf)
     LineEdit.edit_transpose_chars(buf)
-    @test String(buf.data[1:buf.size]) == "βαγδε"
+    @test content(buf) == "βαγδε"
     LineEdit.edit_transpose_chars(buf)
-    @test String(buf.data[1:buf.size]) == "βγαδε"
+    @test content(buf) == "βγαδε"
     seekend(buf)
     LineEdit.edit_transpose_chars(buf)
-    @test String(buf.data[1:buf.size]) == "βγαεδ"
+    @test content(buf) == "βγαεδ"
     LineEdit.edit_transpose_chars(buf)
-    @test String(buf.data[1:buf.size]) == "βγαδε"
+    @test content(buf) == "βγαδε"
 end
 
 @testset "edit_word_transpose" begin
     buf = IOBuffer()
     mode = Ref{Symbol}()
-    function transpose!(i) # i: char indice
-        seek(buf, Base.unsafe_chr2ind(String(take!(copy(buf))), i+1)-1)
-        LineEdit.edit_transpose_words(buf, mode[])
-        str = String(take!(copy(buf)))
-        str, Base.unsafe_ind2chr(str, position(buf)+1)-1
-    end
+    transpose!(i) = transform!(buf -> LineEdit.edit_transpose_words(buf, mode[]),
+                               buf, i)[1:2]
 
     mode[] = :readline
-    LineEdit.edit_insert(buf, "àbç def  gh ")
+    edit_insert(buf, "àbç def  gh ")
     @test transpose!(0) == ("àbç def  gh ", 0)
     @test transpose!(1) == ("àbç def  gh ", 1)
     @test transpose!(2) == ("àbç def  gh ", 2)
@@ -365,27 +387,25 @@ end
     @test transpose!(7) == ("àbç gh  def ", 11)
     @test transpose!(10) == ("àbç def  gh ", 11)
     @test transpose!(11) == ("àbç gh   def", 12)
-    LineEdit.edit_insert(buf, " ")
+    edit_insert(buf, " ")
     @test transpose!(13) == ("àbç def    gh", 13)
 
     take!(buf)
     mode[] = :emacs
-    LineEdit.edit_insert(buf, "àbç def  gh ")
+    edit_insert(buf, "àbç def  gh ")
     @test transpose!(0) == ("def àbç  gh ", 7)
     @test transpose!(4) == ("àbç def  gh ", 7)
     @test transpose!(5) == ("àbç gh  def ", 11)
     @test transpose!(10) == ("àbç def   gh", 12)
-    LineEdit.edit_insert(buf, " ")
+    edit_insert(buf, " ")
     @test transpose!(13) == ("àbç gh    def", 13)
 end
 
-let
-    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
-    s = LineEdit.init_state(term, ModalInterface([Prompt("test> ")]))
-    buf = LineEdit.buffer(s)
+let s = new_state()
+    buf = buffer(s)
 
-    LineEdit.edit_insert(s,"first line\nsecond line\nthird line")
-    @test String(buf.data[1:buf.size]) == "first line\nsecond line\nthird line"
+    edit_insert(s,"first line\nsecond line\nthird line")
+    @test content(buf) == "first line\nsecond line\nthird line"
 
     ## edit_move_line_start/end ##
     seek(buf, 0)
@@ -414,11 +434,11 @@ let
     s.key_repeats = 1 # Manually flag a repeated keypress
     LineEdit.edit_kill_line(s)
     s.key_repeats = 0
-    @test String(buf.data[1:buf.size]) == "second line\nthird line"
+    @test content(buf) == "second line\nthird line"
     LineEdit.move_line_end(s)
     LineEdit.edit_move_right(s)
     LineEdit.edit_yank(s)
-    @test String(buf.data[1:buf.size]) == "second line\nfirst line\nthird line"
+    @test content(buf) == "second line\nfirst line\nthird line"
 end
 
 # Issue 7845
@@ -439,16 +459,16 @@ let
 end
 
 @testset "function prompt indentation" begin
-    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer(), false)
+    s = new_state()
+    term = Base.LineEdit.terminal(s)
     # default prompt: PromptState.indent should not be set to a final fixed value
-    s = LineEdit.init_state(term, ModalInterface([Prompt("julia> ")]))
     ps::LineEdit.PromptState = s.mode_state[s.current_mode]
     @test ps.indent == -1
     # the prompt is modified afterwards to a function
     ps.p.prompt = let i = 0
         () -> ["Julia is Fun! > ", "> "][mod1(i+=1, 2)] # lengths are 16 and 2
     end
-    buf = LineEdit.buffer(ps)
+    buf = buffer(ps)
     write(buf, "begin\n    julia = :fun\nend")
     outbuf = IOBuffer()
     termbuf = Base.Terminals.TerminalBuffer(outbuf)
@@ -458,126 +478,113 @@ end
         "\r\e[16C    julia = :fun\n" *
         "\r\e[16Cend\r\e[19C"
     LineEdit.refresh_multi_line(termbuf, term, ps)
-    @test String(take!(copy(outbuf))) ==
+    @test String(take!(outbuf)) ==
         "\r\e[0K\e[1A\r\e[0K\e[1A\r\e[0K\e[1m> \e[0m\r\e[2Cbegin\n" *
         "\r\e[2C    julia = :fun\n" *
         "\r\e[2Cend\r\e[5C"
 end
 
 @testset "tab/backspace alignment feature" begin
-    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
-    s = LineEdit.init_state(term, ModalInterface([Prompt("test> ")]))
-    function bufferdata(s)
-        buf = LineEdit.buffer(s)
-        String(buf.data[1:buf.size])
-    end
+    s = new_state()
     move_left(s, n) = for x = 1:n
         LineEdit.edit_move_left(s)
     end
 
-    bufpos(s::Base.LineEdit.MIState) = position(LineEdit.buffer(s))
-
-    LineEdit.edit_insert(s, "for x=1:10\n")
+    edit_insert(s, "for x=1:10\n")
     LineEdit.edit_tab(s)
-    @test bufferdata(s) == "for x=1:10\n    "
+    @test content(s) == "for x=1:10\n    "
     LineEdit.edit_backspace(s, true, false)
-    @test bufferdata(s) == "for x=1:10\n"
-    LineEdit.edit_insert(s, "  ")
-    @test bufpos(s) == 13
+    @test content(s) == "for x=1:10\n"
+    edit_insert(s, "  ")
+    @test position(s) == 13
     LineEdit.edit_tab(s)
-    @test bufferdata(s) == "for x=1:10\n    "
-    LineEdit.edit_insert(s, "  ")
+    @test content(s) == "for x=1:10\n    "
+    edit_insert(s, "  ")
     LineEdit.edit_backspace(s, true, false)
-    @test bufferdata(s) == "for x=1:10\n    "
-    LineEdit.edit_insert(s, "éé=3   ")
+    @test content(s) == "for x=1:10\n    "
+    edit_insert(s, "éé=3   ")
     LineEdit.edit_tab(s)
-    @test bufferdata(s) == "for x=1:10\n    éé=3    "
+    @test content(s) == "for x=1:10\n    éé=3    "
     LineEdit.edit_backspace(s, true, false)
-    @test bufferdata(s) == "for x=1:10\n    éé=3"
-    LineEdit.edit_insert(s, "\n    1∉x  ")
+    @test content(s) == "for x=1:10\n    éé=3"
+    edit_insert(s, "\n    1∉x  ")
     LineEdit.edit_tab(s)
-    @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x     "
+    @test content(s) == "for x=1:10\n    éé=3\n    1∉x     "
     LineEdit.edit_backspace(s, false, false)
-    @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x    "
+    @test content(s) == "for x=1:10\n    éé=3\n    1∉x    "
     LineEdit.edit_backspace(s, true, false)
-    @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x "
+    @test content(s) == "for x=1:10\n    éé=3\n    1∉x "
     LineEdit.edit_move_word_left(s)
     LineEdit.edit_tab(s)
-    @test bufferdata(s) == "for x=1:10\n    éé=3\n        1∉x "
+    @test content(s) == "for x=1:10\n    éé=3\n        1∉x "
     LineEdit.move_line_start(s)
-    @test bufpos(s) == 22
+    @test position(s) == 22
     LineEdit.edit_tab(s, true)
-    @test bufferdata(s) == "for x=1:10\n    éé=3\n        1∉x "
-    @test bufpos(s) == 30
+    @test content(s) == "for x=1:10\n    éé=3\n        1∉x "
+    @test position(s) == 30
     LineEdit.edit_move_left(s)
-    @test bufpos(s) == 29
+    @test position(s) == 29
     LineEdit.edit_backspace(s, true, true)
-    @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x "
-    @test bufpos(s) == 26
+    @test content(s) == "for x=1:10\n    éé=3\n    1∉x "
+    @test position(s) == 26
     LineEdit.edit_tab(s, false) # same as edit_tab(s, true) here
-    @test bufpos(s) == 30
+    @test position(s) == 30
     move_left(s, 6)
-    @test bufpos(s) == 24
+    @test position(s) == 24
     LineEdit.edit_backspace(s, true, true)
-    @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x "
-    @test bufpos(s) == 22
+    @test content(s) == "for x=1:10\n    éé=3\n    1∉x "
+    @test position(s) == 22
     LineEdit.edit_kill_line(s)
-    LineEdit.edit_insert(s, ' '^10)
+    edit_insert(s, ' '^10)
     move_left(s, 7)
-    @test bufferdata(s) == "for x=1:10\n    éé=3\n          "
-    @test bufpos(s) == 25
+    @test content(s) == "for x=1:10\n    éé=3\n          "
+    @test position(s) == 25
     LineEdit.edit_tab(s, true, false)
-    @test bufpos(s) == 32
+    @test position(s) == 32
     move_left(s, 7)
     LineEdit.edit_tab(s, true, true)
-    @test bufpos(s) == 26
-    @test bufferdata(s) == "for x=1:10\n    éé=3\n    "
+    @test position(s) == 26
+    @test content(s) == "for x=1:10\n    éé=3\n    "
     # test again the same, when there is a next line
-    LineEdit.edit_insert(s, "      \nend")
+    edit_insert(s, "      \nend")
     move_left(s, 11)
-    @test bufpos(s) == 25
+    @test position(s) == 25
     LineEdit.edit_tab(s, true, false)
-    @test bufpos(s) == 32
+    @test position(s) == 32
     move_left(s, 7)
     LineEdit.edit_tab(s, true, true)
-    @test bufpos(s) == 26
-    @test bufferdata(s) == "for x=1:10\n    éé=3\n    \nend"
+    @test position(s) == 26
+    @test content(s) == "for x=1:10\n    éé=3\n    \nend"
 end
 
 @testset "newline alignment feature" begin
-    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
-    s = LineEdit.init_state(term, ModalInterface([Prompt("test> ")]))
-    function bufferdata(s)
-        buf = LineEdit.buffer(s)
-        String(buf.data[1:buf.size])
-    end
-
-    LineEdit.edit_insert(s, "for x=1:10\n    é = 1")
+    s = new_state()
+    edit_insert(s, "for x=1:10\n    é = 1")
     LineEdit.edit_insert_newline(s)
-    @test bufferdata(s) == "for x=1:10\n    é = 1\n    "
-    LineEdit.edit_insert(s, " b = 2")
+    @test content(s) == "for x=1:10\n    é = 1\n    "
+    edit_insert(s, " b = 2")
     LineEdit.edit_insert_newline(s)
-    @test bufferdata(s) == "for x=1:10\n    é = 1\n     b = 2\n     "
+    @test content(s) == "for x=1:10\n    é = 1\n     b = 2\n     "
     # after an empty line, should still insert the expected number of spaces
     LineEdit.edit_insert_newline(s)
-    @test bufferdata(s) == "for x=1:10\n    é = 1\n     b = 2\n     \n     "
+    @test content(s) == "for x=1:10\n    é = 1\n     b = 2\n     \n     "
     LineEdit.edit_insert_newline(s, 0)
-    @test bufferdata(s) == "for x=1:10\n    é = 1\n     b = 2\n     \n     \n"
+    @test content(s) == "for x=1:10\n    é = 1\n     b = 2\n     \n     \n"
     LineEdit.edit_insert_newline(s, 2)
-    @test bufferdata(s) == "for x=1:10\n    é = 1\n     b = 2\n     \n     \n\n  "
+    @test content(s) == "for x=1:10\n    é = 1\n     b = 2\n     \n     \n\n  "
     # test when point before first letter of the line
     for i=6:10
         LineEdit.edit_clear(s)
-        LineEdit.edit_insert(s, "begin\n    x")
+        edit_insert(s, "begin\n    x")
         seek(LineEdit.buffer(s), i)
         LineEdit.edit_insert_newline(s)
-        @test bufferdata(s) == "begin\n" * ' '^(i-6) * "\n    x"
+        @test content(s) == "begin\n" * ' '^(i-6) * "\n    x"
     end
 end
 
 @testset "change case on the right" begin
     buf = IOBuffer()
-    LineEdit.edit_insert(buf, "aa bb CC")
+    edit_insert(buf, "aa bb CC")
     seekstart(buf)
     LineEdit.edit_upper_case(buf)
     LineEdit.edit_title_case(buf)
@@ -585,4 +592,160 @@ end
     @test position(buf) == 5
     LineEdit.edit_lower_case(buf)
     @test String(take!(copy(buf))) == "AA Bb cc"
+end
+
+@testset "kill ring" begin
+    s = new_state()
+    buf = buffer(s)
+    edit_insert(s, "ça ≡ nothing")
+    @test transform!(LineEdit.edit_copy_region, s) == ("ça ≡ nothing", 12, 0)
+    @test s.kill_ring[end] == "ça ≡ nothing"
+    @test transform!(LineEdit.edit_exchange_point_and_mark, s)[2:3] == (0, 12)
+    charseek(buf, 8); setmark(s)
+    charseek(buf, 1)
+    @test transform!(LineEdit.edit_kill_region, s) == ("çhing", 1, 1)
+    @test s.kill_ring[end] == "a ≡ not"
+    charseek(buf, 0)
+    @test transform!(LineEdit.edit_yank, s) == ("a ≡ notçhing", 7, 0)
+    s.last_action = :unknown
+    # next action will fail, as yank-pop doesn't know a yank was just issued
+    @test transform!(LineEdit.edit_yank_pop, s) == ("a ≡ notçhing", 7, 0)
+    s.last_action = :edit_yank
+    # now this should work:
+    @test transform!(LineEdit.edit_yank_pop, s) == ("ça ≡ nothingçhing", 12, 0)
+    @test s.kill_idx == 1
+    LineEdit.edit_kill_line(s)
+    @test s.kill_ring[end] == "çhing"
+    @test s.kill_idx == 3
+    # repetition (concatenation of killed strings
+    edit_insert(s, "A B  C")
+    LineEdit.edit_delete_prev_word(s)
+    s.key_repeats = 1
+    LineEdit.edit_delete_prev_word(s)
+    s.key_repeats = 0
+    @test s.kill_ring[end] == "B  C"
+    LineEdit.edit_yank(s)
+    LineEdit.edit_werase(s)
+    @test s.kill_ring[end] == "C"
+    s.key_repeats = 1
+    LineEdit.edit_werase(s)
+    s.key_repeats = 0
+    @test s.kill_ring[end] == "B  C"
+    LineEdit.edit_yank(s)
+    LineEdit.edit_move_word_left(s)
+    LineEdit.edit_move_word_left(s)
+    LineEdit.edit_delete_next_word(s)
+    @test s.kill_ring[end] == "B"
+    s.key_repeats = 1
+    LineEdit.edit_delete_next_word(s)
+    s.key_repeats = 0
+    @test s.kill_ring[end] == "B  C"
+end
+
+@testset "undo" begin
+    s = new_state()
+    edit!(f) = transform!(f, s)[1]
+    edit_undo! = LineEdit.edit_undo!
+    edit_redo! = LineEdit.edit_redo!
+
+    edit_insert(s, "one two three")
+
+    @test edit!(LineEdit.edit_delete_prev_word) == "one two "
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_redo!) == "one two "
+    @test edit!(edit_undo!) == "one two three"
+
+    edit_insert(s, " four")
+    @test edit!(s->edit_insert(s, " five")) == "one two three four five"
+    @test edit!(edit_undo!) == "one two three four"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_redo!) == "one two three four"
+    @test edit!(edit_redo!) == "one two three four five"
+    @test edit!(edit_undo!) == "one two three four"
+    @test edit!(edit_undo!) == "one two three"
+
+    @test edit!(LineEdit.edit_clear) == ""
+    @test edit!(edit_undo!) == "one two three"
+
+    @test edit!(LineEdit.edit_insert_newline) == "one two three\n"
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.edit_move_left(s)
+    LineEdit.edit_move_left(s)
+    @test edit!(LineEdit.edit_transpose_chars) == "one two there"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(LineEdit.edit_transpose_words) == "one three two"
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.move_line_start(s)
+    @test edit!(LineEdit.edit_kill_line) == ""
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.move_line_start(s)
+    LineEdit.edit_kill_line(s)
+    LineEdit.edit_yank(s)
+    @test edit!(LineEdit.edit_yank) == "one two threeone two three"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_undo!) == ""
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.setmark(s)
+    LineEdit.edit_move_word_right(s)
+    @test edit!(LineEdit.edit_kill_region) == " two three"
+    @test edit!(LineEdit.edit_yank) == "one two three"
+    @test edit!(LineEdit.edit_yank_pop) == "one two three two three"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_undo!) == " two three"
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.move_line_end(s)
+    LineEdit.edit_backspace(s)
+    LineEdit.edit_backspace(s)
+    @test edit!(LineEdit.edit_backspace) == "one two th"
+    @test edit!(edit_undo!) == "one two thr"
+    @test edit!(edit_undo!) == "one two thre"
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.push_undo(s) # TODO: incorporate push_undo into edit_splice! ?
+    LineEdit.edit_splice!(s, 4 => 7, "stott")
+    @test content(s) == "one stott three"
+    s.last_action = :not_undo
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.edit_move_left(s)
+    LineEdit.edit_move_left(s)
+    LineEdit.edit_move_left(s)
+    @test edit!(LineEdit.edit_delete) == "one two thee"
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.edit_move_word_left(s)
+    LineEdit.edit_werase(s)
+    @test edit!(LineEdit.edit_delete_next_word) == "one "
+    @test edit!(edit_undo!) == "one three"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_redo!) == "one three"
+    @test edit!(edit_redo!) == "one "
+    @test edit!(edit_redo!) == "one " # nothing more to redo (this "beeps")
+    @test edit!(edit_undo!) == "one three"
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.move_line_start(s)
+    @test edit!(LineEdit.edit_upper_case) == "ONE two three"
+    LineEdit.move_line_start(s)
+    @test edit!(LineEdit.edit_lower_case) == "one two three"
+    @test edit!(LineEdit.edit_title_case) == "one Two three"
+    @test edit!(edit_undo!) == "one two three"
+    @test edit!(edit_undo!) == "ONE two three"
+    @test edit!(edit_undo!) == "one two three"
+
+    LineEdit.move_line_end(s)
+    edit_insert(s, "  ")
+    @test edit!(LineEdit.edit_tab) == "one two three   "
+    @test edit!(edit_undo!) == "one two three  "
+    @test edit!(edit_undo!) == "one two three"
+    # TODO: add tests for complete_line, which don't work directly
+
+    # pop initial insert of "one two three"
+    @test edit!(edit_undo!) == ""
+    @test edit!(edit_undo!) == "" # nothing more to undo (this "beeps")
 end

@@ -21,6 +21,7 @@
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 #define DEBUG_TYPE "late_lower_gcroot"
 
@@ -314,12 +315,14 @@ private:
     Type *T_int8;
     Type *T_int32;
     Type *T_pint8;
+    Type *T_pjlvalue;
     Type *T_pjlvalue_der;
     Type *T_ppjlvalue_der;
     MDNode *tbaa_gcframe;
     MDNode *tbaa_tag;
     Function *ptls_getter;
     Function *gc_flush_func;
+    Function *gc_use_func;
     Function *pointer_from_objref_func;
     Function *alloc_obj_func;
     Function *pool_alloc_func;
@@ -347,7 +350,7 @@ private:
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint);
     void PlaceGCFrameStores(Function &F, State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
     void PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
-    bool doInitialization(Module &M) override;
+    bool DefineFunctions(Module &M);
     bool runOnFunction(Function &F) override;
     Instruction *get_pgcstack(Instruction *ptlsStates);
     bool CleanupIR(Function &F);
@@ -728,8 +731,16 @@ State LateLowerGCFrame::LocalScan(Function &F) {
             Instruction &I = *it;
             if (CallInst *CI = dyn_cast<CallInst>(&I)) {
                 if (isa<IntrinsicInst>(CI)) {
-                    // Intrinsics are never GC uses/defs
-                    continue;
+                    // Most intrinsics are not gc uses/defs, however some have
+                    // memory operands and could thus be GC uses. To be conservative,
+                    // we only skip processing for those that we know we emit often
+                    // and cannot possibly be GC uses.
+                    IntrinsicInst *II = cast<IntrinsicInst>(CI);
+                    if (isa<DbgInfoIntrinsic>(CI) ||
+                        II->getIntrinsicID() == Intrinsic::lifetime_start ||
+                        II->getIntrinsicID() == Intrinsic::lifetime_end) {
+                        continue;
+                    }
                 }
                 MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
                 NoteOperandUses(S, BBS, I, BBS.UpExposedUses);
@@ -743,9 +754,14 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 if (CI->canReturnTwice()) {
                     S.ReturnsTwice.push_back(CI);
                 }
+                if (isa<IntrinsicInst>(CI)) {
+                    // Intrinsics are never safepoints.
+                    continue;
+                }
                 if (auto callee = CI->getCalledFunction()) {
                     // Known functions emitted in codegen that are not safepoints
-                    if (callee == pointer_from_objref_func || callee->getName() == "memcmp") {
+                    if (callee == pointer_from_objref_func || callee == gc_use_func ||
+                        callee->getName() == "memcmp") {
                         continue;
                     }
                 }
@@ -1137,13 +1153,15 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
             }
             CallingConv::ID CC = CI->getCallingConv();
             auto callee = CI->getCalledValue();
-            if (gc_flush_func != nullptr && callee == gc_flush_func) {
+            if ((gc_flush_func != nullptr && callee == gc_flush_func) ||
+                (gc_use_func != nullptr && callee == gc_use_func)) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
-                auto *ASCI = new AddrSpaceCastInst(CI->getOperand(0),
-                    CI->getType(), "", CI);
-                ASCI->takeName(CI);
-                CI->replaceAllUsesWith(ASCI);
+                auto *obj = CI->getOperand(0);
+                auto *ASCI = new AddrSpaceCastInst(obj, T_pjlvalue, "", CI);
+                auto *ptr = new PtrToIntInst(ASCI, CI->getType(), "", CI);
+                ptr->takeName(CI);
+                CI->replaceAllUsesWith(ptr);
             } else if (alloc_obj_func && callee == alloc_obj_func) {
                 assert(CI->getNumArgOperands() == 3);
                 auto sz = (size_t)cast<ConstantInt>(CI->getArgOperand(1))->getZExtValue();
@@ -1402,9 +1420,10 @@ static void addRetNoAlias(Function *F)
 #endif
 }
 
-bool LateLowerGCFrame::doInitialization(Module &M) {
+bool LateLowerGCFrame::DefineFunctions(Module &M) {
     ptls_getter = M.getFunction("jl_get_ptls_states");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
+    gc_use_func = M.getFunction("julia.gc_use");
     pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
     auto &ctx = M.getContext();
     T_size = M.getDataLayout().getIntPtrType(ctx);
@@ -1431,15 +1450,16 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
             addRetNoAlias(big_alloc_func);
         }
         auto T_jlvalue = cast<PointerType>(T_prjlvalue)->getElementType();
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
+        T_pjlvalue = PointerType::get(T_jlvalue, 0);
         T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
         T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
         T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
+        return true;
     }
     else if (ptls_getter) {
         auto functype = ptls_getter->getFunctionType();
         T_ppjlvalue = cast<PointerType>(functype->getReturnType())->getElementType();
-        auto T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
+        T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
         auto T_jlvalue = cast<PointerType>(T_pjlvalue)->getElementType();
         T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
         T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
@@ -1448,6 +1468,7 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
     else {
         T_ppjlvalue = nullptr;
         T_prjlvalue = nullptr;
+        T_pjlvalue = nullptr;
         T_pjlvalue_der = nullptr;
         T_ppjlvalue_der = nullptr;
     }
@@ -1456,6 +1477,7 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
 
 bool LateLowerGCFrame::runOnFunction(Function &F) {
     DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
+    DefineFunctions(*F.getParent());
     if (!ptls_getter)
         return CleanupIR(F);
     ptlsStates = nullptr;

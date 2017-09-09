@@ -269,7 +269,7 @@ order to throw an error if Julia attempts to precompile it.
 using `__precompile__()`. Failure to do so can result in a runtime error when loading the module.
 """
 function __precompile__(isprecompilable::Bool=true)
-    if (JLOptions().use_compilecache != 0 &&
+    if (JLOptions().use_compiled_modules != 0 &&
         isprecompilable != (0 != ccall(:jl_generating_output, Cint, ())) &&
         !(isprecompilable && toplevel_load[]))
         throw(PrecompilableError(isprecompilable))
@@ -361,7 +361,7 @@ function _require(mod::Symbol)
 
         # attempt to load the module file via the precompile cache locations
         doneprecompile = false
-        if JLOptions().use_compilecache != 0
+        if JLOptions().use_compiled_modules != 0
             doneprecompile = _require_search_from_serialized(mod, path)
             if !isa(doneprecompile, Bool)
                 return # success
@@ -400,7 +400,7 @@ function _require(mod::Symbol)
         try
             Base.include_relative(Main, path)
         catch ex
-            if doneprecompile === true || JLOptions().use_compilecache == 0 || !precompilableerror(ex, true)
+            if doneprecompile === true || JLOptions().use_compiled_modules == 0 || !precompilableerror(ex, true)
                 rethrow() # rethrow non-precompilable=true errors
             end
             # the file requested `__precompile__`, so try to build a cache file and use that

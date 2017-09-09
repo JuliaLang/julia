@@ -60,13 +60,14 @@ namespace llvm {
 #include <llvm/ADT/StringSet.h>
 #include <llvm/ADT/SmallSet.h>
 #include "codegen_shared.h"
-#include "fix_llvm_assert.h"
 
 using namespace llvm;
 
 #include "julia.h"
 #include "julia_internal.h"
 #include "jitlayers.h"
+#include "julia_assert.h"
+
 RTDyldMemoryManager* createRTDyldMemoryManager(void);
 
 static Type *T_void;

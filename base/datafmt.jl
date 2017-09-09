@@ -6,7 +6,7 @@ module DataFmt
 
 import Base: _default_delims, tryparse_internal, show
 
-export countlines, readdlm, writedlm, writecsv
+export countlines, readdlm, writedlm
 
 invalid_dlm(::Type{Char})   = reinterpret(Char, 0xfffffffe)
 invalid_dlm(::Type{UInt8})  = 0xfe
@@ -694,13 +694,6 @@ For example, two vectors `x` and `y` of the same length can be written as two co
 tab-delimited text to `f` by either `writedlm(f, [x y])` or by `writedlm(f, zip(x, y))`.
 """
 writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)
-
-"""
-    writecsv(filename, A; opts)
-
-Equivalent to [`writedlm`](@ref) with `delim` set to comma.
-"""
-writecsv(io, a; opts...) = writedlm(io, a, ','; opts...)
 
 show(io::IO, ::MIME"text/csv", a) = writedlm(io, a, ',')
 show(io::IO, ::MIME"text/tab-separated-values", a) = writedlm(io, a, '\t')

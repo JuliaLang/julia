@@ -40,8 +40,12 @@ end # os-test
 
 Create a `RandomDevice` RNG object.
 Two such objects will always generate different streams of random numbers.
+The entropy is obtained from the operating system.
 """
 RandomDevice
+
+RandomDevice(::Void) = RandomDevice()
+srand(rng::RandomDevice) = rng
 
 ### generation of floats
 
@@ -71,10 +75,17 @@ MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
 
 """
     MersenneTwister(seed)
+    MersenneTwister()
 
 Create a `MersenneTwister` RNG object. Different RNG objects can have
 their own seeds, which may be useful for generating different streams
 of random numbers.
+The `seed` may be a non-negative integer or a vector of
+`UInt32` integers. If no seed is provided, a randomly generated one
+is created (using entropy from the system).
+See the [`srand`](@ref) function for reseeding an already existing
+`MersenneTwister` object.
+
 
 # Examples
 ```jldoctest
@@ -96,7 +107,8 @@ julia> x1 == x2
 true
 ```
 """
-MersenneTwister(seed) = srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
+MersenneTwister(seed=nothing) =
+    srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
 
 function copy!(dst::MersenneTwister, src::MersenneTwister)
     copy!(resize!(dst.seed, length(src.seed)), src.seed)

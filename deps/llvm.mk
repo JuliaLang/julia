@@ -440,6 +440,7 @@ $(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
 $(eval $(call LLVM_PATCH,llvm-D27609-AArch64-UABS_G3)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model))
 # patches for NVPTX
+$(eval $(call LLVM_PATCH,llvm-NVPTX-addrspaces))
 $(eval $(call LLVM_PATCH,llvm-D9168_argument_alignment)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D23597_sdag_names)) # Dep for D24300, remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D24300_ptx_intrinsics)) # Remove for 4.0

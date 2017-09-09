@@ -115,7 +115,7 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
 stride1(x::Array) = 1
 stride1(x::StridedVector) = stride(x, 1)::Int
 
-function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},Range{TI}}) where {T<:BlasFloat,TI<:Integer}
+function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
     end
@@ -240,7 +240,7 @@ end
 """
     diagind(M, k::Integer=0)
 
-A `Range` giving the indices of the `k`th diagonal of the matrix `M`.
+An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
 
 # Examples
 ```jldoctest
@@ -374,8 +374,8 @@ function schurpow(A::AbstractMatrix, p)
         retmat = A ^ floor(p)
         # Real part
         if p - floor(p) == 0.5
-            # special case: A^0.5 === sqrtm(A)
-            retmat = retmat * sqrtm(A)
+            # special case: A^0.5 === sqrt(A)
+            retmat = retmat * sqrt(A)
         else
             retmat = retmat * powm!(UpperTriangular(float.(A)), real(p - floor(p)))
         end
@@ -385,8 +385,8 @@ function schurpow(A::AbstractMatrix, p)
         R = S ^ floor(p)
         # Real part
         if p - floor(p) == 0.5
-            # special case: A^0.5 === sqrtm(A)
-            R = R * sqrtm(S)
+            # special case: A^0.5 === sqrt(A)
+            R = R * sqrt(S)
         else
             R = R * powm!(UpperTriangular(float.(S)), real(p - floor(p)))
         end
@@ -427,7 +427,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Otherwise, use Schur decomposition
     return schurpow(A, p)
 end
-(^)(A::AbstractMatrix, p::Number) = exp(p*logm(A))
+(^)(A::AbstractMatrix, p::Number) = exp(p*log(A))
 
 # Matrix exponential
 
@@ -557,7 +557,7 @@ function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
 end
 
 """
-    logm(A{T}::StridedMatrix{T})
+    log(A{T}::StridedMatrix{T})
 
 If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
 the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
@@ -581,25 +581,25 @@ julia> A = 2.7182818 * eye(2)
  2.71828  0.0
  0.0      2.71828
 
-julia> logm(A)
+julia> log(A)
 2×2 Symmetric{Float64,Array{Float64,2}}:
  1.0  0.0
  0.0  1.0
 ```
 """
-function logm(A::StridedMatrix{T}) where T
+function log(A::StridedMatrix{T}) where T
     # If possible, use diagonalization
     if issymmetric(A) && T <: Real
-        return logm(Symmetric(A))
+        return log(Symmetric(A))
     end
     if ishermitian(A)
-        return logm(Hermitian(A))
+        return log(Hermitian(A))
     end
 
     # Use Schur decomposition
     n = checksquare(A)
     if istriu(A)
-        return full(logm(UpperTriangular(complex(A))))
+        return full(log(UpperTriangular(complex(A))))
     else
         if isreal(A)
             SchurF = schurfact(real(A))
@@ -608,22 +608,17 @@ function logm(A::StridedMatrix{T}) where T
         end
         if !istriu(SchurF.T)
             SchurS = schurfact(complex(SchurF.T))
-            logT = SchurS.Z * logm(UpperTriangular(SchurS.T)) * SchurS.Z'
+            logT = SchurS.Z * log(UpperTriangular(SchurS.T)) * SchurS.Z'
             return SchurF.Z * logT * SchurF.Z'
         else
-            R = logm(UpperTriangular(complex(SchurF.T)))
+            R = log(UpperTriangular(complex(SchurF.T)))
             return SchurF.Z * R * SchurF.Z'
         end
     end
 end
-function logm(a::Number)
-    b = log(complex(a))
-    return imag(b) == 0 ? real(b) : b
-end
-logm(a::Complex) = log(a)
 
 """
-    sqrtm(A)
+    sqrt(A::AbstractMatrix)
 
 If `A` has no negative real eigenvalues, compute the principal matrix square root of `A`,
 that is the unique matrix ``X`` with eigenvalues having positive real part such that
@@ -647,40 +642,38 @@ julia> A = [4 0; 0 4]
  4  0
  0  4
 
-julia> sqrtm(A)
+julia> sqrt(A)
 2×2 Array{Float64,2}:
  2.0  0.0
  0.0  2.0
 ```
 """
-function sqrtm(A::StridedMatrix{<:Real})
+function sqrt(A::StridedMatrix{<:Real})
     if issymmetric(A)
-        return full(sqrtm(Symmetric(A)))
+        return full(sqrt(Symmetric(A)))
     end
     n = checksquare(A)
     if istriu(A)
-        return full(sqrtm(UpperTriangular(A)))
+        return full(sqrt(UpperTriangular(A)))
     else
         SchurF = schurfact(complex(A))
-        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        R = full(sqrt(UpperTriangular(SchurF[:T])))
         return SchurF[:vectors] * R * SchurF[:vectors]'
     end
 end
-function sqrtm(A::StridedMatrix{<:Complex})
+function sqrt(A::StridedMatrix{<:Complex})
     if ishermitian(A)
-        return full(sqrtm(Hermitian(A)))
+        return full(sqrt(Hermitian(A)))
     end
     n = checksquare(A)
     if istriu(A)
-        return full(sqrtm(UpperTriangular(A)))
+        return full(sqrt(UpperTriangular(A)))
     else
         SchurF = schurfact(A)
-        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        R = full(sqrt(UpperTriangular(SchurF[:T])))
         return SchurF[:vectors] * R * SchurF[:vectors]'
     end
 end
-sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
-sqrtm(a::Complex) = sqrt(a)
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
@@ -898,7 +891,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv(A::StridedMatrix{T}) where T
-    tol = eps(real(float(one(T))))*maximum(size(A))
+    tol = eps(real(float(one(T))))*min(size(A)...)
     return pinv(A, tol)
 end
 function pinv(x::Number)

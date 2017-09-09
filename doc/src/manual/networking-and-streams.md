@@ -8,7 +8,7 @@ functionality.
 
 ## Basic Stream I/O
 
-All Julia streams expose at least a [`read()`](@ref) and a [`write()`](@ref) method, taking the
+All Julia streams expose at least a [`read`](@ref) and a [`write`](@ref) method, taking the
 stream as their first argument, e.g.:
 
 ```julia-repl
@@ -19,11 +19,11 @@ julia> read(STDIN,Char)
 '\n': ASCII/Unicode U+000a (category Cc: Other, control)
 ```
 
-Note that [`write()`](@ref) returns 11, the number of bytes (in `"Hello World"`) written to [`STDOUT`](@ref),
+Note that [`write`](@ref) returns 11, the number of bytes (in `"Hello World"`) written to [`STDOUT`](@ref),
 but this return value is suppressed with the `;`.
 
 Here Enter was pressed again so that Julia would read the newline. Now, as you can see from this
-example, [`write()`](@ref) takes the data to write as its second argument, while [`read()`](@ref)
+example, [`write`](@ref) takes the data to write as its second argument, while [`read`](@ref)
 takes the type of the data to be read as the second argument.
 
 For example, to read a simple byte array, we could do:
@@ -69,7 +69,7 @@ abcd
 Note that depending on your terminal settings, your TTY may be line buffered and might thus require
 an additional enter before the data is sent to Julia.
 
-To read every line from [`STDIN`](@ref) you can use [`eachline()`](@ref):
+To read every line from [`STDIN`](@ref) you can use [`eachline`](@ref):
 
 ```julia
 for line in eachline(STDIN)
@@ -77,7 +77,7 @@ for line in eachline(STDIN)
 end
 ```
 
-or [`read()`](@ref) if you wanted to read by character instead:
+or [`read`](@ref) if you wanted to read by character instead:
 
 ```julia
 while !eof(STDIN)
@@ -88,7 +88,7 @@ end
 
 ## Text I/O
 
-Note that the [`write()`](@ref) method mentioned above operates on binary streams. In particular,
+Note that the [`write`](@ref) method mentioned above operates on binary streams. In particular,
 values do not get converted to any canonical text representation but are written out as is:
 
 ```jldoctest
@@ -96,10 +96,10 @@ julia> write(STDOUT,0x61);  # suppress return value 1 with ;
 a
 ```
 
-Note that `a` is written to [`STDOUT`](@ref) by the [`write()`](@ref) function and that the returned
+Note that `a` is written to [`STDOUT`](@ref) by the [`write`](@ref) function and that the returned
 value is `1` (since `0x61` is one byte).
 
-For text I/O, use the [`print()`](@ref) or [`show()`](@ref) methods, depending on your needs (see
+For text I/O, use the [`print`](@ref) or [`show`](@ref) methods, depending on your needs (see
 the standard library reference for a detailed discussion of the difference between the two):
 
 ```jldoctest
@@ -116,7 +116,7 @@ should print a shorter output (if applicable).
 
 ## Working with Files
 
-Like many other environments, Julia has an [`open()`](@ref) function, which takes a filename and
+Like many other environments, Julia has an [`open`](@ref) function, which takes a filename and
 returns an `IOStream` object that you can use to read and write things from the file. For example
 if we have a file, `hello.txt`, whose contents are `Hello, World!`:
 
@@ -150,7 +150,7 @@ julia> close(f)
 Examining `hello.txt` again will show its contents have been changed.
 
 Opening a file, doing something to its contents, and closing it again is a very common pattern.
-To make this easier, there exists another invocation of [`open()`](@ref) which takes a function
+To make this easier, there exists another invocation of [`open`](@ref) which takes a function
 as its first argument and filename as its second, opens the file, calls the function with the
 file as an argument, and then closes it again. For example, given a function:
 
@@ -196,7 +196,7 @@ Task (runnable) @0x00007fd31dc11ae0
 ```
 
 To those familiar with the Unix socket API, the method names will feel familiar, though their
-usage is somewhat simpler than the raw Unix socket API. The first call to [`listen()`](@ref) will
+usage is somewhat simpler than the raw Unix socket API. The first call to [`listen`](@ref) will
 create a server waiting for incoming connections on the specified port (2000) in this case. The
 same function may also be used to create various other kinds of servers:
 
@@ -228,12 +228,12 @@ listen on TCP, but rather on a named pipe (Windows) or UNIX domain socket. Also 
 named pipe format has to be a specific pattern such that the name prefix (`\\.\pipe\`) uniquely
 identifies the [file type](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365783(v=vs.85).aspx).
 The difference between TCP and named pipes or
-UNIX domain sockets is subtle and has to do with the [`accept()`](@ref) and [`connect()`](@ref)
-methods. The [`accept()`](@ref) method retrieves a connection to the client that is connecting on
-the server we just created, while the [`connect()`](@ref) function connects to a server using the
-specified method. The [`connect()`](@ref) function takes the same arguments as [`listen()`](@ref),
+UNIX domain sockets is subtle and has to do with the [`accept`](@ref) and [`connect`](@ref)
+methods. The [`accept`](@ref) method retrieves a connection to the client that is connecting on
+the server we just created, while the [`connect`](@ref) function connects to a server using the
+specified method. The [`connect`](@ref) function takes the same arguments as [`listen`](@ref),
 so, assuming the environment (i.e. host, cwd, etc.) is the same you should be able to pass the same
-arguments to [`connect()`](@ref) as you did to listen to establish the connection. So let's try that
+arguments to [`connect`](@ref) as you did to listen to establish the connection. So let's try that
 out (after having created the server above):
 
 ```julia-repl
@@ -244,13 +244,13 @@ julia> Hello World
 ```
 
 As expected we saw "Hello World" printed. So, let's actually analyze what happened behind the
-scenes. When we called [`connect()`](@ref), we connect to the server we had just created. Meanwhile,
+scenes. When we called [`connect`](@ref), we connect to the server we had just created. Meanwhile,
 the accept function returns a server-side connection to the newly created socket and prints "Hello
 World" to indicate that the connection was successful.
 
 A great strength of Julia is that since the API is exposed synchronously even though the I/O is
 actually happening asynchronously, we didn't have to worry callbacks or even making sure that
-the server gets to run. When we called [`connect()`](@ref) the current task waited for the connection
+the server gets to run. When we called [`connect`](@ref) the current task waited for the connection
 to be established and only continued executing after that was done. In this pause, the server
 task resumed execution (because a connection request was now available), accepted the connection,
 printed the message and waited for the next client. Reading and writing works in the same way.
@@ -280,7 +280,7 @@ julia> println(clientside,"Hello World from the Echo Server")
 Hello World from the Echo Server
 ```
 
-As with other streams, use [`close()`](@ref) to disconnect the socket:
+As with other streams, use [`close`](@ref) to disconnect the socket:
 
 ```julia-repl
 julia> close(clientside)
@@ -288,7 +288,7 @@ julia> close(clientside)
 
 ## Resolving IP Addresses
 
-One of the [`connect()`](@ref) methods that does not follow the [`listen()`](@ref) methods is
+One of the [`connect`](@ref) methods that does not follow the [`listen`](@ref) methods is
 `connect(host::String,port)`, which will attempt to connect to the host given by the `host` parameter
 on the port given by the port parameter. It allows you to do things like:
 
@@ -297,7 +297,7 @@ julia> connect("google.com",80)
 TCPSocket(RawFD(30) open, 0 bytes waiting)
 ```
 
-At the base of this functionality is [`getaddrinfo()`](@ref), which will do the appropriate address
+At the base of this functionality is [`getaddrinfo`](@ref), which will do the appropriate address
 resolution:
 
 ```julia-repl

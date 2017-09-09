@@ -2,7 +2,7 @@
 
 module Iterators
 
-import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, indices, ndims
+import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, indices, ndims, pairs
 
 using Base: tail, tuple_type_head, tuple_type_tail, tuple_type_cons, SizeUnknown, HasLength, HasShape,
             IsInfinite, EltypeUnknown, HasEltype, OneTo, @propagate_inbounds
@@ -78,14 +78,16 @@ struct IndexValue{I,A<:AbstractArray}
 end
 
 """
-    enumerate(IndexLinear(), A)
-    enumerate(IndexCartesian(), A)
-    enumerate(IndexStyle(A), A)
+    pairs(IndexLinear(), A)
+    pairs(IndexCartesian(), A)
+    pairs(IndexStyle(A), A)
 
 An iterator that accesses each element of the array `A`, returning
-`(i, x)`, where `i` is the index for the element and `x = A[i]`.  This
-is similar to `enumerate(A)`, except `i` will always be a valid index
-for `A`.
+`i => x`, where `i` is the index for the element and `x = A[i]`.
+Identical to `pairs(A)`, except that the style of index can be selected.
+Also similar to `enumerate(A)`, except `i` will be a valid index
+for `A`, while `enumerate` always counts from 1 regardless of the indices
+of `A`.
 
 Specifying `IndexLinear()` ensures that `i` will be an integer;
 specifying `IndexCartesian()` ensures that `i` will be a
@@ -96,7 +98,7 @@ been defined as the native indexing style for array `A`.
 ```jldoctest
 julia> A = ["a" "d"; "b" "e"; "c" "f"];
 
-julia> for (index, value) in enumerate(IndexStyle(A), A)
+julia> for (index, value) in pairs(IndexStyle(A), A)
            println("\$index \$value")
        end
 1 a
@@ -108,7 +110,7 @@ julia> for (index, value) in enumerate(IndexStyle(A), A)
 
 julia> S = view(A, 1:2, :);
 
-julia> for (index, value) in enumerate(IndexStyle(S), S)
+julia> for (index, value) in pairs(IndexStyle(S), S)
            println("\$index \$value")
        end
 CartesianIndex{2}((1, 1)) a
@@ -117,15 +119,14 @@ CartesianIndex{2}((1, 2)) d
 CartesianIndex{2}((2, 2)) e
 ```
 
-Note that `enumerate(A)` returns `i` as a *counter* (always starting
-at 1), whereas `enumerate(IndexLinear(), A)` returns `i` as an *index*
-(starting at the first linear index of `A`, which may or may not be
-1).
-
 See also: [`IndexStyle`](@ref), [`indices`](@ref).
 """
-enumerate(::IndexLinear,    A::AbstractArray) = IndexValue(A, linearindices(A))
-enumerate(::IndexCartesian, A::AbstractArray) = IndexValue(A, CartesianRange(indices(A)))
+pairs(::IndexLinear,    A::AbstractArray) = IndexValue(A, linearindices(A))
+pairs(::IndexCartesian, A::AbstractArray) = IndexValue(A, CartesianRange(indices(A)))
+
+# faster than zip(keys(a), values(a)) for arrays
+pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
+pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 
 length(v::IndexValue)  = length(v.itr)
 indices(v::IndexValue) = indices(v.itr)
@@ -134,11 +135,11 @@ size(v::IndexValue)    = size(v.itr)
 @propagate_inbounds function next(v::IndexValue, state)
     indx, n = next(v.itr, state)
     item = v.data[indx]
-    (indx, item), n
+    (indx => item), n
 end
 @inline done(v::IndexValue, state) = done(v.itr, state)
 
-eltype(::Type{IndexValue{I,A}}) where {I,A} = Tuple{eltype(I), eltype(A)}
+eltype(::Type{IndexValue{I,A}}) where {I,A} = Pair{eltype(I), eltype(A)}
 
 iteratorsize(::Type{IndexValue{I}}) where {I} = iteratorsize(I)
 iteratoreltype(::Type{IndexValue{I}}) where {I} = iteratoreltype(I)

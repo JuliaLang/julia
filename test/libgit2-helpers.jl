@@ -39,7 +39,14 @@ function credential_loop(
         end
     end
 
-    return err, num_authentications
+    # Note: LibGit2.GitError(0) will not work if an error message has been set.
+    git_error = if err == 0
+        LibGit2.GitError(LibGit2.Error.None, LibGit2.Error.GIT_OK, "No errors")
+    else
+        LibGit2.GitError(err)
+    end
+
+    return git_error, num_authentications
 end
 
 function credential_loop(

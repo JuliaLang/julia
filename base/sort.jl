@@ -214,7 +214,7 @@ function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
     return (lo + 1) : (hi - 1)
 end
 
-function searchsortedlast(a::Range{<:Real}, x::Real, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -223,7 +223,7 @@ function searchsortedlast(a::Range{<:Real}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedfirst(a::Range{<:Real}, x::Real, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
@@ -232,7 +232,7 @@ function searchsortedfirst(a::Range{<:Real}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedlast(a::Range{<:Integer}, x::Real, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -240,7 +240,7 @@ function searchsortedlast(a::Range{<:Integer}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedfirst(a::Range{<:Integer}, x::Real, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
@@ -248,7 +248,7 @@ function searchsortedfirst(a::Range{<:Integer}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedfirst(a::Range{<:Integer}, x::Unsigned, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
     if lt(o, first(a), x)
         if step(a) == 0
             length(a) + 1
@@ -260,7 +260,7 @@ function searchsortedfirst(a::Range{<:Integer}, x::Unsigned, o::DirectOrdering)
     end
 end
 
-function searchsortedlast(a::Range{<:Integer}, x::Unsigned, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
     if lt(o, x, first(a))
         0
     elseif step(a) == 0
@@ -270,7 +270,7 @@ function searchsortedlast(a::Range{<:Integer}, x::Unsigned, o::DirectOrdering)
     end
 end
 
-searchsorted(a::Range{<:Real}, x::Real, o::DirectOrdering) =
+searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
     searchsortedfirst(a, x, o) : searchsortedlast(a, x, o)
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]

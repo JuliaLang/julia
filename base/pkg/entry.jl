@@ -4,8 +4,7 @@ module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
-import ...LibGit2
-importall ...LibGit2
+using ...LibGit2
 import ...Pkg.PkgError
 using ..Types
 
@@ -609,13 +608,13 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
     cmd = ```
         $(Base.julia_cmd()) -O0
         --color=$(Base.have_color ? "yes" : "no")
-        --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
+        --compiled-modules=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
         --history-file=no
         --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
         --eval $code
         ```
 
-    success(pipeline(cmd, stderr=STDERR))
+    success(pipeline(cmd, stdout=STDOUT, stderr=STDERR))
 end
 
 function build!(pkgs::Vector, seen::Set, errfile::AbstractString)
@@ -717,7 +716,7 @@ function test!(pkg::AbstractString,
                     $(Base.julia_cmd())
                     --code-coverage=$(coverage ? "user" : "none")
                     --color=$(Base.have_color ? "yes" : "no")
-                    --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
+                    --compiled-modules=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
                     --check-bounds=yes
                     --warn-overwrite=yes
                     --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")

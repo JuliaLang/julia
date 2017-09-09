@@ -53,7 +53,7 @@ function with_fake_pty(f)
     end
 end
 
-function challenge_prompt(code::AbstractString, challenges; timeout::Integer=10, debug::Bool=true)
+function challenge_prompt(code::Expr, challenges; timeout::Integer=10, debug::Bool=true)
     output_file = tempname()
     wrapped_code = """
     result = let
@@ -221,7 +221,7 @@ offset(offsets::NTuple{N,Int}, inds::NTuple{N,Int}) where {N} = _offset((), offs
 _offset(out, ::Tuple{}, ::Tuple{}) = out
 @inline _offset(out, offsets, inds) = _offset((out..., inds[1]-offsets[1]), Base.tail(offsets), Base.tail(inds))
 
-indsoffset(r::Range) = first(r) - 1
+indsoffset(r::AbstractRange) = first(r) - 1
 indsoffset(i::Integer) = 0
 
 Base.resize!(A::OffsetVector, nl::Integer) = (resize!(A.parent, nl); A)

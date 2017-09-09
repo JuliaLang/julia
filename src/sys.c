@@ -4,15 +4,15 @@
   sys.c
   I/O and operating system utility functions
 */
-#include "julia.h"
-#include "julia_internal.h"
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
+
+#include "julia.h"
+#include "julia_internal.h"
 
 #ifdef _OS_WINDOWS_
 #include <psapi.h>
@@ -55,6 +55,8 @@
 #ifdef JL_MSAN_ENABLED
 #include <sanitizer/msan_interface.h>
 #endif
+
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {

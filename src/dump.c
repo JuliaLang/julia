@@ -5,7 +5,6 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -20,6 +19,7 @@
 #else
 #define RUNNING_ON_VALGRIND 0
 #endif
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -2240,7 +2240,6 @@ JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names)
     }
     else {
         uint8_t *d = (uint8_t*)data->data;
-#ifndef NDEBUG
         assert(jl_typeis(data, jl_array_uint8_type));
         int b3 = d[1];
         int b2 = d[2];
@@ -2248,7 +2247,7 @@ JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names)
         int b0 = d[4];
         int nslots = b0 | (b1<<8) | (b2<<16) | (b3<<24);
         assert(nslots >= nargs);
-#endif
+        (void)nslots;
         char *namestr = (char*)d + 5;
         for (i = 0; i < nargs; i++) {
             size_t namelen = strlen(namestr);
@@ -2312,7 +2311,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     return 0;
 }
 
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
 // skip the performance optimizations of jl_types_equal and just use subtyping directly
 // one of these types is invalid - that's why we're doing the recache type operation
 static int jl_invalid_types_equal(jl_datatype_t *a, jl_datatype_t *b)

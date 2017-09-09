@@ -3029,9 +3029,14 @@ end
     end
 end
 
-@testset "compact NaN printing" begin
-    @test sprint(io->show(IOContext(io, :compact => true), NaN16)) == "NaN"
-    @test sprint(io->show(IOContext(io, :compact => true), NaN32)) == "NaN"
-    @test sprint(io->show(IOContext(io, :compact => true), NaN64)) == "NaN"
-    @test_broken sprint(io->show(IOContext(io, :compact => true), big(NaN))) == "NaN"
+@testset "printing non finite floats" for T in subtypes(AbstractFloat)
+    for (x, sx) in [(T(NaN), "NaN"),
+                    (-T(NaN), "NaN"),
+                    (T(Inf), "Inf"),
+                    (-T(Inf), "-Inf")]
+        @assert x isa T
+        @test string(x) == sx
+        @test sprint(io -> show(IOContext(io, :compact => true), x)) == sx
+        @test sprint(print, x) == sx
+    end
 end

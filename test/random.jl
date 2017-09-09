@@ -38,8 +38,7 @@ A = zeros(UInt128, 2, 2)
 @test_throws BoundsError rand!(MersenneTwister(0), A, 5)
 
 # rand from AbstractArray
-let mt = MersenneTwister(0)
-    srand(mt)
+let mt = MersenneTwister()
     @test rand(mt, 0:3:1000) in 0:3:1000
     @test issubset(rand!(mt, Array{Int}(100), 0:3:1000), 0:3:1000)
     coll = Any[2, UInt128(128), big(619), "string"]
@@ -424,7 +423,7 @@ function hist(X, n)
 end
 
 # test uniform distribution of floats
-for rng in [srand(MersenneTwister(0)), RandomDevice()],
+for rng in [MersenneTwister(), RandomDevice()],
     T in [Float16, Float32, Float64, BigFloat],
         prec in (T == BigFloat ? [3, 53, 64, 100, 256, 1000] : [256])
     setprecision(BigFloat, prec) do
@@ -589,3 +588,32 @@ end
 
 # this shouldn't crash (#22403)
 @test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3])
+
+@testset "$RNG() & srand(rng::$RNG) initializes randomly" for RNG in (MersenneTwister, RandomDevice)
+    m = RNG()
+    a = rand(m, Int)
+    m = RNG()
+    @test rand(m, Int) != a
+    # passing `nothing` is equivalent to passing nothing
+    m = RNG(nothing)
+    b = rand(m, Int)
+    @test b != a
+    srand(m)
+    c = rand(m, Int)
+    @test c ∉ (a, b)
+    srand(m)
+    @test rand(m, Int) ∉ (a, b, c)
+    srand(m, nothing)
+    d = rand(m, Int)
+    @test d ∉ (a, b, c)
+    srand(m, nothing)
+    @test rand(m, Int) ∉ (a, b, c, d)
+end
+
+@testset "MersenneTwister($seed_) & srand(m::MersenneTwister, $seed_) produce the same stream" for seed_ in [0:5; 10000:10005]
+    # "seed_" instead of "seed" because `seed` is a global variable in this file, and there is an "overwriting" warning
+    m = MersenneTwister(seed_)
+    a = [rand(m) for _=1:100]
+    srand(m, seed_)
+    @test a == [rand(m) for _=1:100]
+end

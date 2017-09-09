@@ -328,6 +328,13 @@ let f = i18408()
     @test_throws UndefRefError f(0)
 end
 
+# issue #23558
+c23558(n,k) =
+    let fact(n) = if (n == 0) 1 else n*fact(n-1) end
+        fact(n)/fact(k)/fact(n-k)
+    end
+@test c23558(10, 5) == 252
+
 # variable scope, globals
 glob_x = 23
 function glotest()
@@ -1100,7 +1107,7 @@ end
 # issue #2169
 let
     i2169(a::Array{T}) where {T} = typemin(T)
-    @test invoke(i2169, Tuple{Array} ,Int8[1]) === Int8(-128)
+    @test invoke(i2169, Tuple{Array}, Int8[1]) === Int8(-128)
 end
 
 # issue #2365
@@ -1269,14 +1276,13 @@ let
     @test foo(x) == [1.0, 2.0, 3.0]
 end
 
-# TODO!!
 # issue #4115
-#mutable struct Foo4115
-#end
-#const Foo4115s = NTuple{3,Union{Foo4115,Type{Foo4115}}}
-#baz4115(x::Foo4115s) = x
-#@test baz4115(convert(Tuple{Type{Foo4115},Type{Foo4115},Foo4115},
-#                      (Foo4115,Foo4115,Foo4115()))) == (Foo4115,Foo4115,Foo4115())
+mutable struct Foo4115 end
+const Foo4115s = NTuple{3, Union{Foo4115, Type{Foo4115}}}
+baz4115(x::Foo4115s) = x
+let t = (Foo4115, Foo4115, Foo4115())
+    @test_throws MethodError baz4115(t)
+end
 
 # issue #4129
 mutable struct Foo4129; end
@@ -1731,7 +1737,7 @@ mutable struct A6142 <: AbstractMatrix{Float64}; end
 +(x::A6142, y::UniformScaling{TJ}) where {TJ} = "UniformScaling method called"
 +(x::A6142, y::AbstractArray) = "AbstractArray method called"
 @test A6142() + I == "UniformScaling method called"
-+(x::A6142, y::Range) = "Range method called" #16324 ambiguity
++(x::A6142, y::AbstractRange) = "AbstractRange method called" #16324 ambiguity
 
 # issue #6175
 function g6175(); print(""); (); end
@@ -1844,7 +1850,7 @@ end
 # issue #6387
 primitive type Date6387{C} 64 end
 
-mutable struct DateRange6387{C} <: Range{Date6387{C}}
+mutable struct DateRange6387{C} <: AbstractRange{Date6387{C}}
 end
 
 mutable struct ObjMember
@@ -1853,7 +1859,7 @@ end
 
 obj6387 = ObjMember(DateRange6387{Int64}())
 
-function v6387(r::Range{T}) where T
+function v6387(r::AbstractRange{T}) where T
     a = Array{T}(1)
     a[1] = Core.Intrinsics.bitcast(Date6387{Int64}, Int64(1))
     return a
@@ -2928,6 +2934,22 @@ let
     @test a == 1:2
 end
 
+# `for outer`
+let
+    function forouter()
+        i = 1
+        for outer i = 2:3
+        end
+        return i
+    end
+    @test forouter() == 3
+end
+
+@test_throws ErrorException("syntax: no outer variable declaration exists for \"for outer\"") @eval function f()
+    for outer i = 1:2
+    end
+end
+
 # issue #11295
 function f11295(x...)
     call = Expr(x...)
@@ -3484,8 +3506,16 @@ macro m8846(a, b=0)
     a, b
 end
 @test @m8846(a) === (:a, 0)
-@test @m8846(a,1) === (:a, 1)
-@test_throws MethodError @eval @m8846(a,b,c)
+@test @m8846(a, 1) === (:a, 1)
+let nometh = try; @eval @m8846(a, b, c); false; catch ex; ex; end
+    __source__ = LineNumberNode(@__LINE__() -  1, Symbol(@__FILE__))
+    nometh::LoadError
+    @test nometh.file === string(__source__.file)
+    @test nometh.line === __source__.line
+    e = nometh.error::MethodError
+    @test e.f === getfield(@__MODULE__, Symbol("@m8846"))
+    @test e.args === (__source__, @__MODULE__, :a, :b, :c)
+ end
 
 # a simple case of parametric dispatch with unions
 let foo(x::Union{T, Void}, y::Union{T, Void}) where {T} = 1
@@ -4534,15 +4564,22 @@ let x = 1
     @noinline g18444(a) = (x += 1; a[])
     f18444_1(a) = invoke(sin, Tuple{Int}, g18444(a))
     f18444_2(a) = invoke(sin, Tuple{Integer}, g18444(a))
-    @test_throws ErrorException f18444_1(Ref{Any}(1.0))
+    @test_throws ErrorException("invoke: argument type error") f18444_1(Ref{Any}(1.0))
     @test x == 2
-    @test_throws ErrorException f18444_2(Ref{Any}(1.0))
+    @test_throws ErrorException("invoke: argument type error") f18444_2(Ref{Any}(1.0))
     @test x == 3
     @test f18444_1(Ref{Any}(1)) === sin(1)
     @test x == 4
     @test f18444_2(Ref{Any}(1)) === sin(1)
     @test x == 5
 end
+
+f18095(::Int, ::Number) = 0x21
+f18095(::Number, ::Int) = 0x12
+@test_throws MethodError f18095(1, 2)
+@test_throws MethodError invoke(f18095, Tuple{Int, Int}, 1, 2)
+@test_throws MethodError invoke(f18095, Tuple{Int, Any}, 1, 2)
+@test invoke(f18095, Tuple{Int, Real}, 1, 2) === 0x21
 
 # issue #10981, long argument lists
 let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
@@ -4852,6 +4889,12 @@ let a = Array{Core.TypeofBottom, 1}(2)
     @test a == [Union{}, Union{}]
 end
 
+@test_throws TypeError(:T17951, "type definition", Type, Vararg) @eval begin
+    struct T17951
+        x::Vararg
+    end
+end
+
 # issue #21178
 struct F21178{A,B} end
 b21178(::F1,::F2) where {B1,B2,F1<:F21178{B1,<:Any},F2<:F21178{B2}} = F1,F2,B1,B2
@@ -5123,8 +5166,13 @@ f_isdefined_unionvar(y, t) = (t > 0 && (x = (t == 1 ? 1 : y)); @isdefined x)
 @test !f_isdefined_unionvar(1, 0)
 f_isdefined_splat(x...) = @isdefined x
 @test f_isdefined_splat(1, 2, 3)
-@test let err = @macroexpand @isdefined :x
-    isa(err, Expr) && err.head === :error && isa(err.args[1], MethodError)
+let err = try; @macroexpand @isdefined :x; false; catch ex; ex; end,
+    __source__ = LineNumberNode(@__LINE__() - 1, Symbol(@__FILE__))
+    @test err.file === string(__source__.file)
+    @test err.line === __source__.line
+    e = err.error::MethodError
+    @test e.f === getfield(@__MODULE__, Symbol("@isdefined"))
+    @test e.args === (__source__, @__MODULE__, :(:x))
 end
 f_isdefined_cl_1(y) = (local x; for i = 1:y; x = 2; end; () -> x; @isdefined x)
 f_isdefined_cl_2(y) = (local x; for i = 1:y; x = 2; end; () -> @isdefined x)
@@ -5309,6 +5357,49 @@ x.u = initvalue2(Base.uniontypes(U)[1])
 x.u = initvalue(Base.uniontypes(U)[2])
 @test x.u === initvalue(Base.uniontypes(U)[2])
 
+# PR #23367
+struct A23367
+    x::Union{Int8, Int16, NTuple{7, Int8}, Void}
+end
+struct B23367
+    x::Int8
+    y::A23367
+    z::Int8
+end
+@noinline compare(a, b) = (a === b) # test code-generation of `is`
+@noinline get_x(a::A23367) = a.x
+function constant23367 end
+let
+    b = B23367(91, A23367(ntuple(i -> Int8(i), Val(7))), 23)
+    @eval @noinline constant23367(a, b) = (a ? b : $b)
+    b2 = Ref(b)[] # copy b via field assignment
+    b3 = B23367[b][1] # copy b via array assignment
+    @test pointer_from_objref(b) == pointer_from_objref(b)
+    @test pointer_from_objref(b) != pointer_from_objref(b2)
+    @test pointer_from_objref(b) != pointer_from_objref(b3)
+    @test pointer_from_objref(b2) != pointer_from_objref(b3)
+
+    @test b === b2 === b3
+    @test compare(b, b2)
+    @test compare(b, b3)
+    @test object_id(b) === object_id(b2) == object_id(b3)
+    @test b.x === Int8(91)
+    @test b.z === Int8(23)
+    @test b.y === A23367((Int8(1), Int8(2), Int8(3), Int8(4), Int8(5), Int8(6), Int8(7)))
+    @test sizeof(b) == 12
+    @test A23367(Int8(1)).x === Int8(1)
+    @test A23367(Int8(0)).x === Int8(0)
+    @test A23367(Int16(1)).x === Int16(1)
+    @test A23367(nothing).x === nothing
+    @test sizeof(b.y) == 8
+    @test get_x(A23367(Int8(1))) === Int8(1)
+
+    # test code-generation of constants
+    other = B23367(91, A23367(nothing), 23)
+    @test constant23367(true, other) === other
+    @test constant23367(false, other) === b
+end
+
 for U in boxedunions
     local U
     for N in (1, 2, 3, 4)
@@ -5324,10 +5415,29 @@ for U in boxedunions
 end
 
 # unsafe_wrap
-A4 = [1, 2, 3]
-@test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A4)), 3)
-A5 = [1 2 3; 4 5 6]
-@test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A5)), 6)
+let
+    A4 = [1, 2, 3]
+    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A4)), 3)
+    A5 = [1 2 3; 4 5 6]
+    @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Void}}, pointer(A5)), 6)
+end
+
+# copy!
+A23567 = Vector{Union{Float64, Void}}(5)
+B23567 = collect(Union{Float64, Void}, 1.0:3.0)
+copy!(A23567, 2, B23567)
+@test A23567[1] === nothing
+@test A23567[2] === 1.0
+@test A23567[3] === 2.0
+@test A23567[4] === 3.0
+
+# vcat
+t2 = deepcopy(A23567)
+t3 = deepcopy(A23567)
+t4 = vcat(A23567, t2, t3)
+@test t4[1:5] == A23567
+@test t4[6:10] == A23567
+@test t4[11:15] == A23567
 
 for U in unboxedunions
     local U

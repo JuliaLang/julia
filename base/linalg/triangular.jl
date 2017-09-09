@@ -1789,7 +1789,7 @@ powm(A::LowerTriangular, p::Real) = powm(A.', p::Real).'
 # Based on the code available at http://eprints.ma.man.ac.uk/1851/02/logm.zip,
 # Copyright (c) 2011, Awad H. Al-Mohy and Nicholas J. Higham
 # Julia version relicensed with permission from original authors
-function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
+function log(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
     maxsqrt = 100
     theta = [1.586970738772063e-005,
          2.313807884242979e-003,
@@ -1815,7 +1815,7 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
     end
     s0 = s
     for k = 1:min(s, maxsqrt)
-        A = sqrtm(A)
+        A = sqrt(A)
     end
 
     AmI = A - I
@@ -1871,7 +1871,7 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
             m = tmax
             break
         end
-        A = sqrtm(A)
+        A = sqrt(A)
         AmI = A - I
         s = s + 1
     end
@@ -1961,9 +1961,9 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
 
     return UpperTriangular(Y)
 end
-logm(A::LowerTriangular) = logm(A.').'
+log(A::LowerTriangular) = log(A.').'
 
-# Auxiliary functions for logm and matrix power
+# Auxiliary functions for matrix logarithm and matrix power
 
 # Compute accurate diagonal of A = A0^s - I
 #   Al-Mohy, "A more accurate Briggs method for the logarithm",
@@ -2015,7 +2015,7 @@ function invsquaring(A0::UpperTriangular, theta)
     end
     s0 = s
     for k = 1:min(s, maxsqrt)
-        A = sqrtm(A)
+        A = sqrt(A)
     end
 
     AmI = A - I
@@ -2073,7 +2073,7 @@ function invsquaring(A0::UpperTriangular, theta)
                 m = tmax
                 break
             end
-            A = sqrtm(A)
+            A = sqrt(A)
             AmI = A - I
             s = s + 1
         end
@@ -2117,9 +2117,9 @@ end
 unw(x::Real) = 0
 unw(x::Number) = ceil((imag(x) - pi) / (2 * pi))
 
-# End of auxiliary functions for logm and matrix power
+# End of auxiliary functions for matrix logarithm and matrix power
 
-function sqrtm(A::UpperTriangular)
+function sqrt(A::UpperTriangular)
     realmatrix = false
     if isreal(A)
         realmatrix = true
@@ -2131,9 +2131,9 @@ function sqrtm(A::UpperTriangular)
             end
         end
     end
-    sqrtm(A,Val(realmatrix))
+    sqrt(A,Val(realmatrix))
 end
-function sqrtm(A::UpperTriangular{T},::Val{realmatrix}) where {T,realmatrix}
+function sqrt(A::UpperTriangular{T},::Val{realmatrix}) where {T,realmatrix}
     B = A.data
     n = checksquare(B)
     t = realmatrix ? typeof(sqrt(zero(T))) : typeof(sqrt(complex(zero(T))))
@@ -2151,7 +2151,7 @@ function sqrtm(A::UpperTriangular{T},::Val{realmatrix}) where {T,realmatrix}
     end
     return UpperTriangular(R)
 end
-function sqrtm(A::UnitUpperTriangular{T}) where T
+function sqrt(A::UnitUpperTriangular{T}) where T
     B = A.data
     n = checksquare(B)
     t = typeof(sqrt(zero(T)))
@@ -2169,8 +2169,8 @@ function sqrtm(A::UnitUpperTriangular{T}) where T
     end
     return UnitUpperTriangular(R)
 end
-sqrtm(A::LowerTriangular) = sqrtm(A.').'
-sqrtm(A::UnitLowerTriangular) = sqrtm(A.').'
+sqrt(A::LowerTriangular) = sqrt(A.').'
+sqrt(A::UnitLowerTriangular) = sqrt(A.').'
 
 # Generic eigensystems
 eigvals(A::AbstractTriangular) = diag(A)

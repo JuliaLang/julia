@@ -10,6 +10,7 @@
 #else
 #include "getopt.h"
 #endif
+#include "julia_assert.h"
 
 #ifdef _OS_WINDOWS_
 char *shlib_ext = ".dll";
@@ -66,8 +67,8 @@ jl_options_t jl_options = { 0,    // quiet
                             0,    // worker
                             NULL, // cookie
                             JL_OPTIONS_HANDLE_SIGNALS_ON,
-                            JL_OPTIONS_USE_PRECOMPILED_YES,
-                            JL_OPTIONS_USE_COMPILECACHE_YES,
+                            JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES,
+                            JL_OPTIONS_USE_COMPILED_MODULES_YES,
                             NULL, // bind-to
                             NULL, // output-bc
                             NULL, // output-unopt-bc
@@ -85,11 +86,13 @@ static const char opts[]  =
 
     // startup options
     " -J, --sysimage <file>     Start up with the given system image file\n"
-    " --precompiled={yes|no}    Use precompiled code from system image if available\n"
-    " --compilecache={yes|no}   Enable/disable incremental precompilation of modules\n"
     " -H, --home <dir>          Set location of `julia` executable\n"
     " --startup-file={yes|no}   Load ~/.juliarc.jl\n"
-    " --handle-signals={yes|no} Enable or disable Julia's default signal handlers\n\n"
+    " --handle-signals={yes|no} Enable or disable Julia's default signal handlers\n"
+    " --sysimage-native-code={yes|no}\n"
+    "                           Use native code from system image if available\n"
+    " --compiled-modules={yes|no}\n"
+    "                           Enable or disable incremental precompilation of modules\n\n"
 
     // actions
     " -e, --eval <expr>         Evaluate <expr>\n"
@@ -108,6 +111,10 @@ static const char opts[]  =
     " --color={yes|no}          Enable or disable color text\n"
     " --history-file={yes|no}   Load or save history\n\n"
 
+    // error and warning options
+    " --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings (\"error\" turns warnings into errors)\n"
+    " --warn-overwrite={yes|no} Enable or disable method overwrite warnings\n\n"
+
     // code generation options
     " --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive compilation\n"
     " -C, --cpu-target <target> Limit usage of cpu features up to <target>; set to \"help\" to see the available options\n"
@@ -124,10 +131,6 @@ static const char opts[]  =
     " --polly={yes|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
     " --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)\n\n"
-
-    // error and warning options
-    " --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings (\"error\" turns warnings into errors)\n\n"
-    " --warn-overwrite={yes|no} Enable or disable method overwrite warnings"
 
     // compiler output options
     " --output-o name           Generate an object file (including system image data)\n"
@@ -173,7 +176,9 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_use_precompiled,
            opt_use_compilecache,
            opt_incremental,
-           opt_banner
+           opt_banner,
+           opt_sysimage_native_code,
+           opt_compiled_modules
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:ip:O:g:";
     static const struct option longopts[] = {
@@ -189,8 +194,10 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "print",           required_argument, 0, 'E' },
         { "load",            required_argument, 0, 'L' },
         { "sysimage",        required_argument, 0, 'J' },
-        { "precompiled",     required_argument, 0, opt_use_precompiled },
-        { "compilecache",    required_argument, 0, opt_use_compilecache },
+        { "precompiled",     required_argument, 0, opt_use_precompiled },   // deprecated
+        { "sysimage-native-code", required_argument, 0, opt_sysimage_native_code },
+        { "compilecache",    required_argument, 0, opt_use_compilecache },  // deprecated
+        { "compiled-modules",    required_argument, 0, opt_compiled_modules },
         { "cpu-target",      required_argument, 0, 'C' },
         { "procs",           required_argument, 0, 'p' },
         { "machinefile",     required_argument, 0, opt_machinefile },
@@ -330,20 +337,26 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --banner={yes|no} (%s)", optarg);
             break;
         case opt_use_precompiled:
+            jl_printf(JL_STDOUT, "WARNING: julia --precompiled option is deprecated, use --sysimage-native-code instead.\n");
+            // fall through
+        case opt_sysimage_native_code:
             if (!strcmp(optarg,"yes"))
-                jl_options.use_precompiled = JL_OPTIONS_USE_PRECOMPILED_YES;
+                jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES;
             else if (!strcmp(optarg,"no"))
-                jl_options.use_precompiled = JL_OPTIONS_USE_PRECOMPILED_NO;
+                jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_NO;
             else
-                jl_errorf("julia: invalid argument to --precompiled={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --sysimage-native-code={yes|no} (%s)", optarg);
             break;
         case opt_use_compilecache:
+            jl_printf(JL_STDOUT, "WARNING: julia --compilecache option is deprecated, use --compiled-modules instead.\n");
+            // fall through
+        case opt_compiled_modules:
             if (!strcmp(optarg,"yes"))
-                jl_options.use_compilecache = JL_OPTIONS_USE_COMPILECACHE_YES;
+                jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_YES;
             else if (!strcmp(optarg,"no"))
-                jl_options.use_compilecache = JL_OPTIONS_USE_COMPILECACHE_NO;
+                jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_NO;
             else
-                jl_errorf("julia: invalid argument to --compilecache={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --compiled-modules={yes|no} (%s)", optarg);
             break;
         case 'C': // cpu-target
             jl_options.cpu_target = strdup(optarg);

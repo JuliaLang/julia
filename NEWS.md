@@ -42,6 +42,10 @@ Language changes
   * Nested `if` expressions that arise from the keyword `elseif` now use `elseif`
     as their expression head instead of `if` ([#21774]).
 
+  * `let` blocks now parse the same as `for` loops; the first argument is either an
+    assignment or `block` of assignments, and the second argument is a block of
+    statements ([#21774]).
+
   * Parsed and lowered forms of type definitions have been synchronized with their
     new keywords ([#23157]). Expression heads are renamed as follows:
 
@@ -87,6 +91,9 @@ Language changes
 
   * Variable bindings local to `while` loop bodies are now freshly allocated on each loop iteration,
     matching the behavior of `for` loops.
+
+  * Prefix `&` for by-reference arguments to `ccall` has been deprecated in favor of
+    `Ref` argument types ([#6080]).
 
 Breaking changes
 ----------------
@@ -191,6 +198,10 @@ This section lists changes that do not have deprecation warnings.
     This avoids stack overflows in the common case of definitions like
     `f(x, y) = f(promote(x, y)...)` ([#22801]).
 
+  * `findmin`, `findmax`, `indmin`, and `indmax` used to always return linear indices.
+    They now return `CartesianIndex`es for all but 1-d arrays, and in general return
+    the `keys` of indexed collections (e.g. dictionaries) ([#22907]).
+
 Library improvements
 --------------------
 
@@ -217,7 +228,7 @@ Library improvements
 
   * The `crc32c` function for CRC-32c checksums is now exported ([#22274]).
 
-  * The output of `versioninfo()` is now controlled with keyword arguments ([#21974]).
+  * The output of `versioninfo` is now controlled with keyword arguments ([#21974]).
 
   * The function `LibGit2.set_remote_url` now always sets both the fetch and push URLs for a
     git repo. Additionally, the argument order was changed to be consistent with the git
@@ -251,6 +262,8 @@ Library improvements
 
   * `BigFloat` random numbers can now be generated ([#22720]).
 
+  * REPL Undo via Ctrl-/ and Ctrl-_
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -265,6 +278,9 @@ Deprecated or removed
 
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
+
+  * `writecsv(io, a; opts...)` has been deprecated in favor of
+    `writedlm(io, a, ','; opts...)` ([#23529]).
 
   * The method `srand(rng, filename, n=4)` has been deprecated ([#21359]).
 
@@ -358,7 +374,11 @@ Deprecated or removed
     full path if you need access to executables or libraries in the `JULIA_HOME` directory, e.g.
     `joinpath(JULIA_HOME, "7z.exe")` for `7z.exe` ([#21540]).
 
+  * `sqrtm` has been deprecated in favor of `sqrt` ([#23504]).
+
   * `expm` has been deprecated in favor of `exp` ([#23233]).
+
+  * `logm` has been deprecated in favor of `log` ([#23505]).
 
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).
@@ -388,8 +408,9 @@ Deprecated or removed
 
   * `diagm(A::BitMatrix)` has been deprecated, use `diagm(vec(A))` instead ([#23373]).
 
-  * `ℯ` (written as `\mscre<TAB>` or `\euler<TAB>`) is the new default for Euler's
-    number ([#23427]).
+  * `ℯ` (written as `\mscre<TAB>` or `\euler<TAB>`) is now the only (by default) exported
+    name for Euler's number, and the type has changed from `Irrational{:e}` to
+    `Irrational{:ℯ}` ([#23427]).
 
   * The mathematical constants `π`, `pi`, `ℯ`, `e`, `γ`, `eulergamma`, `catalan`, `φ` and
     `golden` have been have been moved from `Base` to a new module; `Base.MathConstants`.
@@ -405,6 +426,8 @@ Deprecated or removed
   * `select`, `select!`, `selectperm` and `selectperm!` have been renamed respectively to
     `partialsort`, `partialsort!`, `partialsortperm` and `partialsortperm!` ([#23051]).
 
+  * The `Range` abstract type has been renamed to `AbstractRange` ([#23570]).
+
 Command-line option changes
 ---------------------------
 
@@ -415,6 +438,10 @@ Command-line option changes
     startup banner, overriding the default behavior (banner in REPL, no banner otherwise).
     The `--quiet` option implies `--banner=no` even in REPL mode but can be overridden by
     passing `--quiet` together with `--banner=yes` ([#23342]).
+
+  * The option `--precompiled` has been renamed to `--sysimage-native-code` ([#23054]).
+
+  * The option `--compilecache` has been renamed to `--compiled-modules` ([#23054]).
 
 Julia v0.6.0 Release Notes
 ==========================
@@ -887,7 +914,7 @@ Deprecated or removed
     `pop!(ENV, k, def)`. Be aware that `pop!` returns `k` or `def`, whereas `delete!`
     returns `ENV` or `def` ([#18012]).
 
-  * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor()` ([#18977]).
+  * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor` ([#18977]).
 
   * The single-argument form of `write` (`write(x)`, with implicit `STDOUT` output stream),
     has been deprecated in favor of the explicit equivalent `write(STDOUT, x)` ([#17654]).

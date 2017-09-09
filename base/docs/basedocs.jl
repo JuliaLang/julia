@@ -132,7 +132,7 @@ kw"primitive type"
 """
 `macro` defines a method to include generated code in the final body of a program. A
 macro maps a tuple of arguments to a returned expression, and the resulting expression
-is compiled directly rather than requiring a runtime `eval()` call. Macro arguments may
+is compiled directly rather than requiring a runtime `eval` call. Macro arguments may
 include expressions, literal values, and symbols. For example:
 
     macro sayhello(name)
@@ -189,7 +189,7 @@ modify the global variable `z`:
     julia> z
     6
 
-Without the `global` declaration in `foo()`, a new local variable would have been
+Without the `global` declaration in `foo`, a new local variable would have been
 created inside foo(), and the `z` in the global scope would have remained equal to `3`.
 """
 kw"global"

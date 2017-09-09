@@ -5,12 +5,12 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -157,7 +157,7 @@ jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, 
     return _new_array_(atype, ndims, dims, isunboxed, elsz);
 }
 
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
 static inline int is_ntuple_long(jl_value_t *v)
 {
     if (!jl_is_tuple(v))
@@ -1092,14 +1092,6 @@ static NOINLINE ssize_t jl_array_ptr_copy_backward(jl_value_t *owner,
 JL_DLLEXPORT void jl_array_ptr_copy(jl_array_t *dest, void **dest_p,
                                     jl_array_t *src, void **src_p, ssize_t n)
 {
-    // need to intercept union isbits arrays here since they're unboxed
-    if (!src->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(src))) &&
-        !dest->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(dest)))) {
-        memcpy(dest_p, src_p, n * src->elsize);
-        memcpy((char*)dest->data + jl_array_len(dest) * dest->elsize,
-               (char*)src->data + jl_array_len(src) * src->elsize, n);
-        return;
-    }
     assert(dest->flags.ptrarray && src->flags.ptrarray);
     jl_value_t *owner = jl_array_owner(dest);
     // Destination is old and doesn't refer to any young object

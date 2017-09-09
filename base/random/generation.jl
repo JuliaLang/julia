@@ -290,13 +290,10 @@ end
 
 ### random values from UnitRange
 
-rand(rng::AbstractRNG, r::UnitRange{<:Union{Signed,Unsigned,BigInt,Bool}}) =
-    rand(rng, RangeGenerator(r))
+rand(rng::AbstractRNG, r::UnitRange{<:Integer}) = rand(rng, RangeGenerator(r))
 
-rand!(rng::AbstractRNG, A::AbstractArray,
-      r::UnitRange{<:Union{Signed,Unsigned,BigInt,Bool,Char}}) =
-          rand!(rng, A, RangeGenerator(r))
-
+rand!(rng::AbstractRNG, A::AbstractArray, r::UnitRange{<:Integer}) =
+    rand!(rng, A, RangeGenerator(r))
 
 ## random values from AbstractArray
 

@@ -6,10 +6,10 @@
 */
 
 #include <stdlib.h>
-#include <assert.h>
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -304,8 +304,8 @@ julia> odd(3)
 true
 ```
 
-Julia provides built-in, efficient functions to test for oddness and evenness called [`iseven()`](@ref)
-and [`isodd()`](@ref) so the above definitions should only be taken as examples.
+Julia provides built-in, efficient functions to test for oddness and evenness called [`iseven`](@ref)
+and [`isodd`](@ref) so the above definitions should only be taken as examples.
 
 ### Hard vs. Soft Local Scope
 
