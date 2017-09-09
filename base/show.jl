@@ -1888,6 +1888,12 @@ function showarg(io::IO, r::ReshapedArray, toplevel)
     toplevel && print(io, " with eltype ", eltype(r))
 end
 
+function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
+    print(io, "reinterpret($T, ")
+    showarg(io, parent(r), false)
+    print(io, ')')
+end
+
 # n-dimensional arrays
 function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
     limit::Bool = get(io, :limit, false)

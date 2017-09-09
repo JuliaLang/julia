@@ -267,15 +267,16 @@ readlines(s=STDIN; chomp::Bool=true) = collect(eachline(s, chomp=chomp))
 
 ## byte-order mark, ntoh & hton ##
 
-let endian_boms = reinterpret(UInt8, UInt32[0x01020304])
+let a = UInt32[0x01020304]
+    endian_bom = @gc_preserve a unsafe_load(convert(Ptr{UInt8}, pointer(a)))
     global ntoh, hton, ltoh, htol
-    if endian_boms == UInt8[1:4;]
+    if endian_bom == 0x01
         ntoh(x) = x
         hton(x) = x
         ltoh(x) = bswap(x)
         htol(x) = bswap(x)
         const global ENDIAN_BOM = 0x01020304
-    elseif endian_boms == UInt8[4:-1:1;]
+    elseif endian_bom == 0x04
         ntoh(x) = bswap(x)
         hton(x) = bswap(x)
         ltoh(x) = x

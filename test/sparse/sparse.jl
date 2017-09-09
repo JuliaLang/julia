@@ -964,7 +964,7 @@ end
     ACPY = copy(A)
     B = reshape(A,25,1)
     @test A == ACPY
-    C = reinterpret(Int64, A, (25, 1))
+    C = reshape(reinterpret(Int64, A), (25, 1))
     @test A == ACPY
     D = reinterpret(Int64, copy(B))
     @test C == D
@@ -1319,8 +1319,6 @@ end
 @testset "error conditions for reinterpret, reshape, and squeeze" begin
     local A = sprand(Bool, 5, 5, 0.2)
     @test_throws ArgumentError reinterpret(Complex128, A)
-    @test_throws ArgumentError reinterpret(Complex128, A,(5, 5))
-    @test_throws DimensionMismatch reinterpret(Int8, A,(20,))
     @test_throws DimensionMismatch reshape(A,(20, 2))
     @test_throws ArgumentError squeeze(A,(1, 1))
 end

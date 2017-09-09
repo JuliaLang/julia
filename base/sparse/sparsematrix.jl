@@ -212,17 +212,6 @@ end
 
 ## Reinterpret and Reshape
 
-function reinterpret(::Type{T}, a::SparseMatrixCSC{Tv}) where {T,Tv}
-    if sizeof(T) != sizeof(Tv)
-        throw(ArgumentError("SparseMatrixCSC reinterpret is only supported for element types of the same size"))
-    end
-    mA, nA = size(a)
-    colptr = copy(a.colptr)
-    rowval = copy(a.rowval)
-    nzval  = reinterpret(T, a.nzval)
-    return SparseMatrixCSC(mA, nA, colptr, rowval, nzval)
-end
-
 function sparse_compute_reshaped_colptr_and_rowval(colptrS::Vector{Ti}, rowvalS::Vector{Ti},
                                                    mS::Int, nS::Int, colptrA::Vector{Ti},
                                                    rowvalA::Vector{Ti}, mA::Int, nA::Int) where Ti
@@ -255,25 +244,6 @@ function sparse_compute_reshaped_colptr_and_rowval(colptrS::Vector{Ti}, rowvalS:
         colptrS[colS+1] = ptr
         colS += 1
     end
-end
-
-function reinterpret(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{N,Int}) where {T,Tv,Ti,N}
-    if sizeof(T) != sizeof(Tv)
-        throw(ArgumentError("SparseMatrixCSC reinterpret is only supported for element types of the same size"))
-    end
-    if prod(dims) != length(a)
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
-    end
-    mS,nS = dims
-    mA,nA = size(a)
-    numnz = nnz(a)
-    colptr = Vector{Ti}(nS+1)
-    rowval = similar(a.rowval)
-    nzval = reinterpret(T, a.nzval)
-
-    sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
-
-    return SparseMatrixCSC(mS, nS, colptr, rowval, nzval)
 end
 
 function copy(ra::ReshapedArray{<:Any,2,<:SparseMatrixCSC})

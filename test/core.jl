@@ -3953,9 +3953,6 @@ f = unsafe_wrap(Array, pointer(d), length(d))
 @test !check_nul(f)
 f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, true)
 @test !check_nul(f)
-g = reinterpret(UInt8, UInt16[0x1, 0x2])
-@test !check_nul(g)
-@test check_nul(copy(g))
 end
 
 # Copy of `#undef`
@@ -5006,23 +5003,6 @@ mutable struct T21719{V}
 end
 g21719(f, goal; tol = 1e-6) = T21719(f, tol, goal)
 @test isa(g21719(identity, 1.0; tol=0.1), T21719)
-
-# reinterpret alignment requirement
-let arr8 = zeros(UInt8, 16),
-    arr64 = zeros(UInt64, 2),
-    arr64_8 = reinterpret(UInt8, arr64),
-    arr64_i
-
-    # Not allowed to reinterpret arrays allocated as UInt8 array to a Int32 array
-    res = @test_throws ArgumentError reinterpret(Int32, arr8)
-    @test res.value.msg == "reinterpret from alignment 1 bytes to alignment 4 bytes not allowed"
-    # OK to reinterpret arrays allocated as UInt64 array to a Int64 array even though
-    # it is passed as a UInt8 array
-    arr64_i = reinterpret(Int64, arr64_8)
-    @test arr8 == arr64_8
-    arr64_i[2] = 1234
-    @test arr64[2] == 1234
-end
 
 # Alignment of perm boxes
 for i in 1:10

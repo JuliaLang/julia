@@ -14,7 +14,7 @@ import Base.LinAlg: promote_to_array_type, promote_to_arrays_
 
 Vector type for storing sparse vectors.
 """
-struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
+struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseArray{Tv,Ti,1}
     n::Int              # Length of the sparse vector
     nzind::Vector{Ti}   # Indices of stored values
     nzval::Vector{Tv}   # Stored values, typically nonzeros
@@ -855,12 +855,6 @@ full(x::AbstractSparseVector) = convert(Array, x)
 vec(x::AbstractSparseVector) = x
 copy(x::AbstractSparseVector) =
     SparseVector(length(x), copy(nonzeroinds(x)), copy(nonzeros(x)))
-
-function reinterpret(::Type{T}, x::AbstractSparseVector{Tv}) where {T,Tv}
-    sizeof(T) == sizeof(Tv) ||
-        throw(ArgumentError("reinterpret of sparse vectors only supports element types of the same size."))
-    SparseVector(length(x), copy(nonzeroinds(x)), reinterpret(T, nonzeros(x)))
-end
 
 float(x::AbstractSparseVector{<:AbstractFloat}) = x
 float(x::AbstractSparseVector) =

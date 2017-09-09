@@ -233,6 +233,8 @@ This section lists changes that do not have deprecation warnings.
   * All command line arguments passed via `-e`, `-E`, and `-L` will be executed in the order
     given on the command line ([#23665]).
 
+  * The return type of `reinterpret` has changed to `ReinterpretArray`.
+
 Library improvements
 --------------------
 
@@ -299,6 +301,10 @@ Library improvements
 
   * New function `equalto(x)`, which returns a function that compares its argument to `x`
     using `isequal` ([#23812]).
+
+  * `reinterpret` now works on any AbstractArray using the new `ReinterpretArray` type.
+    This supersedes the old behavior of reinterpret on Arrays. As a result, reinterpreting
+    arrays with different alignment requirements (removed in 0.6) is once again allowed ([#23750]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -497,6 +503,11 @@ Deprecated or removed
 
   * `find` functions now operate only on booleans by default. To look for non-zeros, use
     `x->x!=0` or `!iszero` ([#23120]).
+
+  * The ability of `reinterpret` to yield `Array`s of different type than the underlying storage
+    has been removed. The `reinterpret` function is still available, but now returns a
+    `ReinterpretArray`. The three argument form of `reinterpret` that implicitly reshapes
+    has been deprecated ([#23750]).
 
 Command-line option changes
 ---------------------------
