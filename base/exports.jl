@@ -26,6 +26,7 @@ export
 # Types
     AbstractChannel,
     AbstractMatrix,
+    AbstractRange,
     AbstractSet,
     AbstractUnitRange,
     AbstractVector,
@@ -87,7 +88,6 @@ export
     PermutedDimsArray,
     PollingFileWatcher,
     QuickSort,
-    Range,
     RangeIndex,
     Rational,
     Regex,
@@ -1073,7 +1073,6 @@ export
     unmark,
     watch_file,
     write,
-    writecsv,
     writedlm,
     TCPSocket,
     UDPSocket,

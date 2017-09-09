@@ -163,7 +163,7 @@ static void jl_load_sysimg_so(void)
 #endif
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
     // in --build mode only use sysimg data, not precompiled native code
-    if (!imaging_mode && jl_options.use_precompiled==JL_OPTIONS_USE_PRECOMPILED_YES) {
+    if (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
         sysimg_gvars_base = (uintptr_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_base");
         sysimg_gvars_offsets = (const int32_t*)jl_dlsym(jl_sysimg_handle,
                                                         "jl_sysimg_gvars_offsets");

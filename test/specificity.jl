@@ -96,7 +96,7 @@ end
 # a method specificity issue
 c99991(::Type{T},x::T) where {T} = 0
 c99991(::Type{UnitRange{T}},x::StepRangeLen{T}) where {T} = 1
-c99991(::Type{UnitRange{T}},x::Range{T}) where {T} = 2
+c99991(::Type{UnitRange{T}},x::AbstractRange{T}) where {T} = 2
 @test c99991(UnitRange{Float64}, 1.0:2.0) == 1
 @test c99991(UnitRange{Int}, 1:2) == 2
 

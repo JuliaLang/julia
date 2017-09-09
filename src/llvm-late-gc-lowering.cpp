@@ -315,6 +315,7 @@ private:
     Type *T_int8;
     Type *T_int32;
     Type *T_pint8;
+    Type *T_pjlvalue;
     Type *T_pjlvalue_der;
     Type *T_ppjlvalue_der;
     MDNode *tbaa_gcframe;
@@ -349,7 +350,7 @@ private:
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint);
     void PlaceGCFrameStores(Function &F, State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
     void PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
-    bool doInitialization(Module &M) override;
+    bool DefineFunctions(Module &M);
     bool runOnFunction(Function &F) override;
     Instruction *get_pgcstack(Instruction *ptlsStates);
     bool CleanupIR(Function &F);
@@ -1156,7 +1157,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                 (gc_use_func != nullptr && callee == gc_use_func)) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
-                auto *ptr = new PtrToIntInst(CI->getOperand(0), CI->getType(), "", CI);
+                auto *obj = CI->getOperand(0);
+                auto *ASCI = new AddrSpaceCastInst(obj, T_pjlvalue, "", CI);
+                auto *ptr = new PtrToIntInst(ASCI, CI->getType(), "", CI);
                 ptr->takeName(CI);
                 CI->replaceAllUsesWith(ptr);
             } else if (alloc_obj_func && callee == alloc_obj_func) {
@@ -1417,7 +1420,7 @@ static void addRetNoAlias(Function *F)
 #endif
 }
 
-bool LateLowerGCFrame::doInitialization(Module &M) {
+bool LateLowerGCFrame::DefineFunctions(Module &M) {
     ptls_getter = M.getFunction("jl_get_ptls_states");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
     gc_use_func = M.getFunction("julia.gc_use");
@@ -1447,15 +1450,16 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
             addRetNoAlias(big_alloc_func);
         }
         auto T_jlvalue = cast<PointerType>(T_prjlvalue)->getElementType();
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
+        T_pjlvalue = PointerType::get(T_jlvalue, 0);
         T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
         T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
         T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
+        return true;
     }
     else if (ptls_getter) {
         auto functype = ptls_getter->getFunctionType();
         T_ppjlvalue = cast<PointerType>(functype->getReturnType())->getElementType();
-        auto T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
+        T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
         auto T_jlvalue = cast<PointerType>(T_pjlvalue)->getElementType();
         T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
         T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
@@ -1464,6 +1468,7 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
     else {
         T_ppjlvalue = nullptr;
         T_prjlvalue = nullptr;
+        T_pjlvalue = nullptr;
         T_pjlvalue_der = nullptr;
         T_ppjlvalue_der = nullptr;
     }
@@ -1472,6 +1477,7 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
 
 bool LateLowerGCFrame::runOnFunction(Function &F) {
     DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
+    DefineFunctions(*F.getParent());
     if (!ptls_getter)
         return CleanupIR(F);
     ptlsStates = nullptr;

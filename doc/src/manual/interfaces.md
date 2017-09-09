@@ -327,8 +327,8 @@ julia> A[:] = 1:length(A); A
 ```
 
 The result of indexing an `AbstractArray` can itself be an array (for instance when indexing by
-a `Range`). The `AbstractArray` fallback methods use [`similar`](@ref) to allocate an `Array` of the
-appropriate size and element type, which is filled in using the basic indexing method described
+an `AbstractRange`). The `AbstractArray` fallback methods use [`similar`](@ref) to allocate an `Array`
+of the appropriate size and element type, which is filled in using the basic indexing method described
 above. However, when implementing an array wrapper you often want the result to be wrapped as
 well:
 

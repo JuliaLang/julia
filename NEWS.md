@@ -279,6 +279,9 @@ Deprecated or removed
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
 
+  * `writecsv(io, a; opts...)` has been deprecated in favor of
+    `writedlm(io, a, ','; opts...)` ([#23529]).
+
   * The method `srand(rng, filename, n=4)` has been deprecated ([#21359]).
 
   * The `cholfact`/`cholfact!` methods that accepted an `uplo` symbol have been deprecated
@@ -420,6 +423,8 @@ Deprecated or removed
   * `select`, `select!`, `selectperm` and `selectperm!` have been renamed respectively to
     `partialsort`, `partialsort!`, `partialsortperm` and `partialsortperm!` ([#23051]).
 
+  * The `Range` abstract type has been renamed to `AbstractRange` ([#23570]).
+
 Command-line option changes
 ---------------------------
 
@@ -430,6 +435,10 @@ Command-line option changes
     startup banner, overriding the default behavior (banner in REPL, no banner otherwise).
     The `--quiet` option implies `--banner=no` even in REPL mode but can be overridden by
     passing `--quiet` together with `--banner=yes` ([#23342]).
+
+  * The option `--precompiled` has been renamed to `--sysimage-native-code` ([#23054]).
+
+  * The option `--compilecache` has been renamed to `--compiled-modules` ([#23054]).
 
 Julia v0.6.0 Release Notes
 ==========================

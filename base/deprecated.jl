@@ -395,7 +395,7 @@ export $
 @deprecate is (===)
 
 # midpoints of intervals
-@deprecate midpoints(r::Range) r[1:length(r)-1] + 0.5*step(r)
+@deprecate midpoints(r::AbstractRange) r[1:length(r)-1] + 0.5*step(r)
 @deprecate midpoints(v::AbstractVector) [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
 
 @deprecate_binding Filter    Iterators.Filter
@@ -1149,7 +1149,7 @@ end
 ## the replacement StepRangeLen also has 4 real-valued fields, which
 ## makes deprecation tricky. See #20506.
 
-struct Use_StepRangeLen_Instead{T<:AbstractFloat} <: Range{T}
+struct Use_StepRangeLen_Instead{T<:AbstractFloat} <: AbstractRange{T}
     start::T
     step::T
     len::T
@@ -1726,6 +1726,9 @@ import .LinAlg: diagm
 @deprecate_binding φ          MathConstants.φ
 @deprecate_binding golden     MathConstants.golden
 
+# deprecate writecsv
+@deprecate writecsv(io, a; opts...) writedlm(io, a, ','; opts...)
+
 # PR #23271
 function IOContext(io::IO; kws...)
     depwarn("IOContext(io, k=v, ...) is deprecated, use IOContext(io, :k => v, ...) instead.", :IOContext)
@@ -1753,6 +1756,8 @@ import .Iterators.enumerate
 
 @deprecate enumerate(i::IndexLinear,    A::AbstractArray)  pairs(i, A)
 @deprecate enumerate(i::IndexCartesian, A::AbstractArray)  pairs(i, A)
+
+@deprecate_binding Range AbstractRange
 
 # END 0.7 deprecations
 

@@ -35,7 +35,7 @@ Base.iteratoreltype
 
 Fully implemented by:
 
-  * `Range`
+  * `AbstractRange`
   * `UnitRange`
   * `Tuple`
   * `Number`
@@ -58,7 +58,7 @@ Base.length
 
 Fully implemented by:
 
-  * `Range`
+  * `AbstractRange`
   * `UnitRange`
   * `Tuple`
   * `Number`
@@ -151,7 +151,7 @@ Fully implemented by:
 
 Partially implemented by:
 
-  * `Range`
+  * `AbstractRange`
   * `UnitRange`
   * `Tuple`
   * `AbstractString`

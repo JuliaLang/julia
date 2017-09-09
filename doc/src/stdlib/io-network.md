@@ -84,7 +84,6 @@ Base.DataFmt.readdlm(::Any, ::Type)
 Base.DataFmt.readdlm(::Any)
 Base.DataFmt.writedlm
 Base.DataFmt.readcsv
-Base.DataFmt.writecsv
 Base.Base64.Base64EncodePipe
 Base.Base64.Base64DecodePipe
 Base.Base64.base64encode

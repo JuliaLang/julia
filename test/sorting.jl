@@ -95,7 +95,7 @@ end
 @test searchsortedlast(500:1.0:600, 1.0e20) == 101
 
 # exercise the codepath in searchsorted* methods for ranges that check for zero step range
-struct ConstantRange{T} <: Range{T}
+struct ConstantRange{T} <: AbstractRange{T}
    val::T
    len::Int
 end

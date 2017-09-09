@@ -446,7 +446,7 @@ end
 
 allunique(::Set) = true
 
-allunique(r::Range{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
+allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
 
 function filter(f, s::Set)
     u = similar(s)

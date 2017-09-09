@@ -1702,8 +1702,8 @@ typedef struct {
     int8_t worker;
     const char *cookie;
     int8_t handle_signals;
-    int8_t use_precompiled;
-    int8_t use_compilecache;
+    int8_t use_sysimage_native_code;
+    int8_t use_compiled_modules;
     const char *bindto;
     const char *outputbc;
     const char *outputunoptbc;
@@ -1769,11 +1769,11 @@ JL_DLLEXPORT int jl_generating_output(void);
 #define JL_OPTIONS_HANDLE_SIGNALS_ON 1
 #define JL_OPTIONS_HANDLE_SIGNALS_OFF 0
 
-#define JL_OPTIONS_USE_PRECOMPILED_YES 1
-#define JL_OPTIONS_USE_PRECOMPILED_NO 0
+#define JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES 1
+#define JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_NO 0
 
-#define JL_OPTIONS_USE_COMPILECACHE_YES 1
-#define JL_OPTIONS_USE_COMPILECACHE_NO 0
+#define JL_OPTIONS_USE_COMPILED_MODULES_YES 1
+#define JL_OPTIONS_USE_COMPILED_MODULES_NO 0
 
 // Version information
 #include "julia_version.h"

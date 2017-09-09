@@ -69,23 +69,16 @@ dimg  = randn(n)/2
             lstring = sprint(show,l)
             ustring = sprint(show,u)
             @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring\nsuccessful: true"
-            let Bs = b, Cs = c
-                @testset for atype in ("Array", "SubArray")
-                    if atype == "Array"
-                        b = Bs
-                        c = Cs
-                    else
-                        b = view(Bs, 1:n, 1)
-                        c = view(Cs, 1:n)
-                    end
-                    @test norm(a*(lua\b) - b, 1) < ε*κ*n*2 # Two because the right hand side has two columns
-                    @test norm(a'*(lua'\b) - b, 1) < ε*κ*n*2 # Two because the right hand side has two columns
+            let Bs = copy(b), Cs = copy(c)
+                for (bb, cc) in ((Bs, Cs), (view(Bs, 1:n, 1), view(Cs, 1:n)))
+                    @test norm(a*(lua\bb) - bb, 1) < ε*κ*n*2 # Two because the right hand side has two columns
+                    @test norm(a'*(lua'\bb) - bb, 1) < ε*κ*n*2 # Two because the right hand side has two columns
                     @test norm(a'*(lua'\a') - a', 1) < ε*κ*n^2
-                    @test norm(a*(lua\c) - c, 1) < ε*κ*n # c is a vector
-                    @test norm(a'*(lua'\c) - c, 1) < ε*κ*n # c is a vector
+                    @test norm(a*(lua\cc) - cc, 1) < ε*κ*n # cc is a vector
+                    @test norm(a'*(lua'\cc) - cc, 1) < ε*κ*n # cc is a vector
                     @test AbstractArray(lua) ≈ a
-                    @test norm(a.'*(lua.'\b) - b,1) < ε*κ*n*2 # Two because the right hand side has two columns
-                    @test norm(a.'*(lua.'\c) - c,1) < ε*κ*n
+                    @test norm(a.'*(lua.'\bb) - bb,1) < ε*κ*n*2 # Two because the right hand side has two columns
+                    @test norm(a.'*(lua.'\cc) - cc,1) < ε*κ*n
                 end
 
                 # Test whether Ax_ldiv_B!(y, LU, x) indeed overwrites y
@@ -128,23 +121,17 @@ dimg  = randn(n)/2
             @test_throws DimensionMismatch lud.'\f
             @test_throws DimensionMismatch lud'\f
             @test_throws DimensionMismatch Base.LinAlg.At_ldiv_B!(lud, f)
-            let Bs = b
-                @testset for atype in ("Array", "SubArray")
-                    if atype == "Array"
-                        b = Bs
-                    else
-                        b = view(Bs, 1:n, 1)
-                    end
-
-                    @test norm(d*(lud\b) - b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+            let Bs = copy(b)
+                for bb in (Bs, view(Bs, 1:n, 1))
+                    @test norm(d*(lud\bb) - bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                     if eltya <: Real
-                        @test norm((lud.'\b) - Array(d.')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+                        @test norm((lud.'\bb) - Array(d.')\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                         if eltya != Int && eltyb != Int
-                            @test norm(Base.LinAlg.At_ldiv_B!(lud, copy(b)) - Array(d.')\b, 1) < ε*κd*n*2
+                            @test norm(Base.LinAlg.At_ldiv_B!(lud, copy(bb)) - Array(d.')\bb, 1) < ε*κd*n*2
                         end
                     end
                     if eltya <: Complex
-                        @test norm((lud'\b) - Array(d')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+                        @test norm((lud'\bb) - Array(d')\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                     end
                 end
             end
@@ -201,12 +188,7 @@ end
     @test l[invperm(p),:]*u ≈ a
     @test a*inv(lua) ≈ eye(n)
     let Bs = b
-        for atype in ("Array", "SubArray")
-            if atype == "Array"
-                b = Bs
-            else
-                b = view(Bs, 1:n, 1)
-            end
+        for b in (Bs, view(Bs, 1:n, 1))
             @test a*(lua\b) ≈ b
         end
     end

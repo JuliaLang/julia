@@ -449,8 +449,8 @@ function axpy!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union
     y
 end
 
-function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},Range{Ti}},
-               y::Array{T}, ry::Union{UnitRange{Ti},Range{Ti}}) where {T<:BlasFloat,Ti<:Integer}
+function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange{Ti}},
+               y::Array{T}, ry::Union{UnitRange{Ti},AbstractRange{Ti}}) where {T<:BlasFloat,Ti<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("ranges of differing lengths"))
     end
@@ -1515,8 +1515,8 @@ end
 
 end # module
 
-function copy!(dest::Array{T}, rdest::Union{UnitRange{Ti},Range{Ti}},
-               src::Array{T}, rsrc::Union{UnitRange{Ti},Range{Ti}}) where {T<:BlasFloat,Ti<:Integer}
+function copy!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
+               src::Array{T}, rsrc::Union{UnitRange{Ti},AbstractRange{Ti}}) where {T<:BlasFloat,Ti<:Integer}
     if minimum(rdest) < 1 || maximum(rdest) > length(dest)
         throw(ArgumentError("range out of bounds for dest, of length $(length(dest))"))
     end

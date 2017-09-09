@@ -617,6 +617,10 @@ end
     LineEdit.edit_kill_line(s)
     @test s.kill_ring[end] == "çhing"
     @test s.kill_idx == 3
+    # check that edit_yank_pop works when passing require_previous_yank=false (#23635)
+    s.last_action = :unknown
+    @test transform!(s->LineEdit.edit_yank_pop(s, false), s) == ("ça ≡ nothinga ≡ not", 19, 12)
+
     # repetition (concatenation of killed strings
     edit_insert(s, "A B  C")
     LineEdit.edit_delete_prev_word(s)

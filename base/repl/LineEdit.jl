@@ -735,11 +735,12 @@ function edit_yank(s::MIState)
 end
 
 function edit_yank_pop(s::MIState, require_previous_yank=true)
-    if require_previous_yank && !(s.last_action in [:edit_yank, :edit_yank_pop]) ||
-            isempty(s.kill_ring)
+    repeat = s.last_action ∈ (:edit_yank, :edit_yank_pop)
+    if require_previous_yank && !repeat || isempty(s.kill_ring)
         beep(s)
         :ignore
     else
+        require_previous_yank || repeat || setmark(s)
         push_undo(s)
         edit_splice!(s, s.kill_ring[mod1(s.kill_idx-=1, end)])
         refresh_line(s)

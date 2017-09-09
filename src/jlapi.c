@@ -26,19 +26,24 @@ JL_DLLEXPORT char * __cdecl dirname(char *);
 #else
 #include <libgen.h>
 #endif
+#ifndef _OS_WINDOWS_
+#include <dlfcn.h>
+#endif
 
-JL_DLLEXPORT int jl_is_initialized(void) { return jl_main_module!=NULL; }
+JL_DLLEXPORT int jl_is_initialized(void)
+{
+    return jl_main_module != NULL;
+}
 
-// First argument is the usr/lib directory where libjulia is, or NULL to guess.
-// if that doesn't work, try the full path to the "lib" directory that
-// contains lib/julia/sys.ji
+// First argument is the usr/bin directory where the julia binary is, or NULL to guess.
 // Second argument is the path of a system image file (*.ji) relative to the
-// first argument path, or relative to the default julia home dir. The default
-// is something like ../lib/julia/sys.ji
+// first argument path, or relative to the default julia home dir.
+// The default is something like ../lib/julia/sys.ji
 JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
                                      const char *image_relative_path)
 {
-    if (jl_is_initialized()) return;
+    if (jl_is_initialized())
+        return;
     libsupport_init();
     jl_options.julia_home = julia_home_dir;
     if (image_relative_path != NULL)
@@ -51,17 +56,30 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
 
 JL_DLLEXPORT void jl_init(void)
 {
-    char *libjldir = NULL;
-
+    char *libbindir = NULL;
+#ifdef _OS_WINDOWS_
     void *hdl = (void*)jl_load_dynamic_library_e(NULL, JL_RTLD_DEFAULT);
-    if (hdl)
-        libjldir = dirname((char*)jl_pathname_for_handle(hdl));
-    if (libjldir)
-        jl_init_with_image(libjldir, jl_get_default_sysimg_path());
-    else {
+    if (hdl) {
+        char *to_free = (char*)jl_pathname_for_handle(hdl);
+        if (to_free) {
+            libbindir = strdup(dirname(to_free));
+            free(to_free);
+        }
+    }
+#else
+    Dl_info dlinfo;
+    if (dladdr((void*)jl_init, &dlinfo) != 0 && dlinfo.dli_fname) {
+        char *to_free = strdup(dlinfo.dli_fname);
+        (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", dirname(to_free), "bin");
+        free(to_free);
+    }
+#endif
+    if (!libbindir) {
         printf("jl_init unable to find libjulia!\n");
         abort();
     }
+    jl_init_with_image(libbindir, jl_get_default_sysimg_path());
+    free(libbindir);
 }
 
 JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)

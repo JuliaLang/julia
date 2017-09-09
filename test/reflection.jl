@@ -246,26 +246,27 @@ let
     @test TestMod7648.TestModSub9475 == @which a9475
 end
 
-@test_throws ArgumentError which(===, Tuple{Int, Int})
-@test_throws ArgumentError code_typed(===, Tuple{Int, Int})
-@test_throws ArgumentError code_llvm(===, Tuple{Int, Int})
-@test_throws ArgumentError code_native(===, Tuple{Int, Int})
-@test_throws ArgumentError Base.return_types(===, Tuple{Int, Int})
+@test_throws ArgumentError("argument is not a generic function") which(===, Tuple{Int, Int})
+@test_throws ArgumentError("argument is not a generic function") code_typed(===, Tuple{Int, Int})
+@test_throws ArgumentError("argument is not a generic function") code_llvm(===, Tuple{Int, Int})
+@test_throws ArgumentError("argument is not a generic function") code_native(===, Tuple{Int, Int})
+@test_throws ArgumentError("argument is not a generic function") Base.return_types(===, Tuple{Int, Int})
 
 module TestingExported
 using Base.Test
+include("testenv.jl") # for curmod_str
 import Base.isexported
 global this_is_not_defined
 export this_is_not_defined
-@test_throws ErrorException which(:this_is_not_defined)
-@test_throws ErrorException @which this_is_not_defined
-@test_throws ErrorException which(:this_is_not_exported)
+@test_throws ErrorException("\"this_is_not_defined\" is not defined in module Main") which(:this_is_not_defined)
+@test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
+@test_throws ErrorException("\"this_is_not_exported\" is not defined in module Main") which(:this_is_not_exported)
 @test isexported(@__MODULE__, :this_is_not_defined)
 @test !isexported(@__MODULE__, :this_is_not_exported)
 const a_value = 1
 @test Base.which_module(@__MODULE__, :a_value) === @__MODULE__
 @test @which(a_value) === @__MODULE__
-@test_throws ErrorException which(:a_value)
+@test_throws ErrorException("\"a_value\" is not defined in module Main") which(:a_value)
 @test which(:Core) === Main
 @test !isexported(@__MODULE__, :a_value)
 end
@@ -668,7 +669,8 @@ let
     @test @inferred wrapperT(ReflectionExample{T, Int64} where T) == ReflectionExample
     @test @inferred wrapperT(ReflectionExample) == ReflectionExample
     @test @inferred wrapperT(Union{ReflectionExample{Union{},1},ReflectionExample{Float64,1}}) == ReflectionExample
-    @test_throws ErrorException Base.typename(Union{Int, Float64})
+    @test_throws(ErrorException("typename does not apply to unions whose components have different typenames"),
+                 Base.typename(Union{Int, Float64}))
 end
 
 # Issue #20086

@@ -3870,18 +3870,14 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
                 true, jl_any_type);
     }
     else if (head == copyast_sym) {
-        jl_value_t *arg = args[0];
-        if (jl_is_quotenode(arg)) {
-            jl_value_t *arg1 = jl_fieldref(arg, 0);
-            if (!(jl_is_expr(arg1) || jl_typeis(arg1, jl_array_any_type) || jl_is_quotenode(arg1))) {
-                // elide call to jl_copy_ast when possible
-                return emit_expr(ctx, arg);
-            }
+        jl_cgval_t ast = emit_expr(ctx, args[0]);
+        if (ast.typ != (jl_value_t*)jl_expr_type && ast.typ != (jl_value_t*)jl_any_type) {
+            // elide call to jl_copy_ast when possible
+            return ast;
         }
-        jl_cgval_t ast = emit_expr(ctx, arg);
         return mark_julia_type(ctx,
                 ctx.builder.CreateCall(prepare_call(jlcopyast_func),
-                    maybe_decay_untracked(boxed(ctx, ast))), true, ast.typ);
+                    maybe_decay_untracked(boxed(ctx, ast))), true, jl_expr_type);
     }
     else if (head == simdloop_sym) {
         llvm::annotateSimdLoop(ctx.builder.GetInsertBlock());

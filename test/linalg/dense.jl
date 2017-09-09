@@ -20,12 +20,7 @@ srand(1234321)
     ainit = rand(n,n)
     @testset "for $elty" for elty in (Float32, Float64, Complex64, Complex128)
         ainit = convert(Matrix{elty}, ainit)
-        for arraytype in ("Array", "SubArray")
-            if arraytype == "Array"
-                a = ainit
-            else
-                a = view(ainit, 1:n, 1:n)
-            end
+        for a in (copy(ainit), view(ainit, 1:n, 1:n))
             @test cond(a,1) ≈ 4.837320054554436e+02 atol=0.01
             @test cond(a,2) ≈ 1.960057871514615e+02 atol=0.01
             @test cond(a,Inf) ≈ 3.757017682707787e+02 atol=0.01
@@ -60,16 +55,7 @@ bimg  = randn(n,2)/2
         binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
-
-        for arraytype in ("Array", "SubArray")
-            if arraytype == "Array"
-                a = ainit
-                b = binit
-            else
-                a = view(ainit, 1:n, 1:n)
-                b = view(binit, 1:n, 1:2)
-            end
-
+        for (a, b) in ((copy(ainit), copy(binit)), (view(ainit, 1:n, 1:n), view(binit, 1:n, 1:2)))
             @testset "Solve square general system of equations" begin
                 κ = cond(a,1)
                 x = a \ b
@@ -90,15 +76,7 @@ bimg  = randn(n,2)/2
         end
     end # for eltyb
 
-    for arraytype in ("Array", "SubArray")
-        if arraytype == "Array"
-            a = ainit
-            a2 = ainit2
-        else
-            a = view(ainit, 1:n, 1:n)
-            a2 = view(ainit2, 1:n, 1:n)
-        end
-
+    for (a, a2) in ((copy(ainit), copy(ainit2)), (view(ainit, 1:n, 1:n), view(ainit2, 1:n, 1:n)))
         @testset "Test pinv" begin
             pinva15 = pinv(a[:,1:n1])
             @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
@@ -169,14 +147,9 @@ end # for eltya
 
 @testset "test triu/tril bounds checking" begin
     ainit = rand(5,7)
-    for arraytype in ("Array", "SubArray")
-        if arraytype == "Array"
-            a = ainit
-        else
-            a = view(ainit, 1:size(ainit, 1), 1:size(ainit, 2))
-        end
-        @test_throws(ArgumentError,triu(a,8))
+    for a in (copy(ainit), view(ainit, 1:size(ainit, 1), 1:size(ainit, 2)))
         @test_throws(ArgumentError,triu(a,-6))
+        @test_throws(ArgumentError,triu(a,8))
         @test_throws(ArgumentError,tril(a,8))
         @test_throws(ArgumentError,tril(a,-6))
     end
@@ -253,14 +226,7 @@ end
                 α = elty <: Integer ? randn() :
                     elty <: Complex ? convert(elty, complex(randn(),randn())) :
                     convert(elty, randn())
-                for arraytype in ("Array", "SubArray")
-                    if arraytype == "Array"
-                        x = xinit
-                        y = yinit
-                    else
-                        x = view(xinit,1:2:nnorm)
-                        y = view(yinit,1:2:nnorm)
-                    end
+                for (x, y) in ((copy(xinit), copy(yinit)), (view(xinit,1:2:nnorm), view(yinit,1:2:nnorm)))
                     # Absolute homogeneity
                     @test norm(α*x,-Inf) ≈ abs(α)*norm(x,-Inf)
                     @test norm(α*x,-1) ≈ abs(α)*norm(x,-1)
@@ -309,16 +275,7 @@ end
                 α = elty <: Integer ? randn() :
                     elty <: Complex ? convert(elty, complex(randn(),randn())) :
                     convert(elty, randn())
-
-                for arraytype in ("Array", "SubArray")
-                    if arraytype == "Array"
-                        A = Ainit
-                        B = Binit
-                    else
-                        A = view(Ainit,1:nmat,1:nmat)
-                        B = view(Binit,1:nmat,1:nmat)
-                    end
-
+                for (A, B) in ((copy(Ainit), copy(Binit)), (view(Ainit,1:nmat,1:nmat), view(Binit,1:nmat,1:nmat)))
                     # Absolute homogeneity
                     @test norm(α*A,1) ≈ abs(α)*norm(A,1)
                     elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(α*A) ≈ abs(α)*norm(A) # two is default

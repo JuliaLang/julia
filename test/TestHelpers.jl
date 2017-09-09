@@ -221,7 +221,7 @@ offset(offsets::NTuple{N,Int}, inds::NTuple{N,Int}) where {N} = _offset((), offs
 _offset(out, ::Tuple{}, ::Tuple{}) = out
 @inline _offset(out, offsets, inds) = _offset((out..., inds[1]-offsets[1]), Base.tail(offsets), Base.tail(inds))
 
-indsoffset(r::Range) = first(r) - 1
+indsoffset(r::AbstractRange) = first(r) - 1
 indsoffset(i::Integer) = 0
 
 Base.resize!(A::OffsetVector, nl::Integer) = (resize!(A.parent, nl); A)
