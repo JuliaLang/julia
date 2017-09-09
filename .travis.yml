@@ -120,8 +120,8 @@ script:
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - pushd /tmp/julia/share/julia/test
     - export JULIA_CPU_CORES=2 && export JULIA_TEST_MAXRSS_MB=600 &&
-        /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
-        /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online download pkg
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl --resilient $TESTSTORUN &&
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl --resilient libgit2-online download pkg
     - popd
     # test that the embedding code works on our installation
     - mkdir /tmp/embedding-test &&
