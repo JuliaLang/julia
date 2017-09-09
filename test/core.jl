@@ -4611,11 +4611,6 @@ end
 gc_enable(true)
 
 # issue #18710
-bad_tvars() where {T} = 1
-@test isa(@which(bad_tvars()), Method)
-@test bad_tvars() === 1
-bad_tvars2() where {T} = T
-@test_throws UndefVarError(:T) bad_tvars2()
 missing_tvar(::T...) where {T} = T
 @test_throws UndefVarError(:T) missing_tvar()
 @test missing_tvar(1) === Int
@@ -5635,3 +5630,5 @@ function hh6614()
     x, y
 end
 @test hh6614() == (1, 2)
+
+@test !success(`$(Base.julia_cmd()) -e 'f_17319(x) where {T} = x'`)
