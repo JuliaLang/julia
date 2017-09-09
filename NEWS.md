@@ -433,6 +433,10 @@ Command-line option changes
     The `--quiet` option implies `--banner=no` even in REPL mode but can be overridden by
     passing `--quiet` together with `--banner=yes` ([#23342]).
 
+  * The option `--precompiled` has been renamed to `--sysimage-native-code` ([#23054]).
+
+  * The option `--compilecache` has been renamed to `--compiled-modules` ([#23054]).
+
 Julia v0.6.0 Release Notes
 ==========================
 

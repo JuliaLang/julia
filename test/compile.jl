@@ -387,7 +387,7 @@ finally
     rm(dir2, recursive=true)
 end
 
-# test --compilecache=no command line option
+# test --compiled-modules=no command line option
 let dir = mktempdir(),
     Time_module = :Time4b3a94a1a081a8cb
 
@@ -406,7 +406,7 @@ let dir = mktempdir(),
             Base.compilecache(:Time4b3a94a1a081a8cb)
         end)
 
-        exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
+        exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`
 
         testcode = """
             insert!(LOAD_PATH, 1, $(repr(dir)))
@@ -415,12 +415,12 @@ let dir = mktempdir(),
             getfield($Time_module, :time)
         """
 
-        t1_yes = readchomp(`$exename --compilecache=yes -E $(testcode)`)
-        t2_yes = readchomp(`$exename --compilecache=yes -E $(testcode)`)
+        t1_yes = readchomp(`$exename --compiled-modules=yes -E $(testcode)`)
+        t2_yes = readchomp(`$exename --compiled-modules=yes -E $(testcode)`)
         @test t1_yes == t2_yes
 
-        t1_no = readchomp(`$exename --compilecache=no -E $(testcode)`)
-        t2_no = readchomp(`$exename --compilecache=no -E $(testcode)`)
+        t1_no = readchomp(`$exename --compiled-modules=no -E $(testcode)`)
+        t2_no = readchomp(`$exename --compiled-modules=no -E $(testcode)`)
         @test t1_no != t2_no
         @test parse(Float64, t1_no) < parse(Float64, t2_no)
 
