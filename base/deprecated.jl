@@ -1735,6 +1735,10 @@ function IOContext(io::IO; kws...)
     IOContext(io, (k=>v for (k, v) in kws)...)
 end
 
+# deprecate readcsv
+@deprecate readcsv(io; opts...) readdlm(io, ','; opts...)
+@deprecate readcsv(io, T::Type; opts...) readdlm(io, ',', T; opts...)
+
 @deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)
 
 # PR #23485

@@ -1049,7 +1049,6 @@ export
     readavailable,
     readbytes!,
     readchomp,
-    readcsv,
     readdir,
     readdlm,
     readline,
