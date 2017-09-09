@@ -428,6 +428,9 @@ Deprecated or removed
 
   * The `Range` abstract type has been renamed to `AbstractRange` ([#23570]).
 
+  * `map` on dictionaries previously operated on `key=>value` pairs. This behavior is deprecated,
+    and in the future `map` will operate only on values ([#5794]).
+
 Command-line option changes
 ---------------------------
 

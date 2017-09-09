@@ -429,9 +429,8 @@ d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
 
 # generators, similar
 d = Dict(:a=>"a")
-@test @inferred(map(identity, d)) == d
-@test @inferred(map(p->p.first=>p.second[1], d)) == Dict(:a=>'a')
-@test_throws ArgumentError map(p->p.second, d)
+# TODO: restore when 0.7 deprecation is removed
+#@test @inferred(map(identity, d)) == d
 
 # Issue 12451
 @test_throws ArgumentError Dict(0)
