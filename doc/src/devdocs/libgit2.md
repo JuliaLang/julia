@@ -65,7 +65,6 @@ Base.LibGit2.authors
 Base.LibGit2.branch
 Base.LibGit2.branch!
 Base.LibGit2.checkout!
-Base.LibGit2.checkused!
 Base.LibGit2.clone
 Base.LibGit2.commit
 Base.LibGit2.committer

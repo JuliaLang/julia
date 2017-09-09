@@ -1066,11 +1066,6 @@ import Base.securezero!
 "Abstract credentials payload"
 abstract type AbstractCredentials end
 
-"Checks if credentials were used"
-checkused!(p::AbstractCredentials) = true
-"Resets credentials for another use"
-reset!(p::AbstractCredentials, cnt::Int=3) = nothing
-
 "Credentials that support only `user` and `password` parameters"
 mutable struct UserPasswordCredentials <: AbstractCredentials
     user::String
