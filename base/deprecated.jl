@@ -1726,6 +1726,9 @@ import .LinAlg: diagm
 @deprecate_binding φ          MathConstants.φ
 @deprecate_binding golden     MathConstants.golden
 
+# deprecate writecsv
+@deprecate writecsv(io, a; opts...) writedlm(io, a, ','; opts...)
+
 # PR #23271
 function IOContext(io::IO; kws...)
     depwarn("IOContext(io, k=v, ...) is deprecated, use IOContext(io, :k => v, ...) instead.", :IOContext)
