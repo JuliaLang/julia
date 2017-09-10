@@ -188,7 +188,7 @@ cd(dirname(@__FILE__)) do
     else
         println("    \033[31;1mFAILURE\033[0m\n")
         skipped > 0 &&
-            println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure\n")
+            println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.\n")
         Base.Test.print_test_errors(o_ts)
         throw(Test.FallbackTestSetException("Test run finished with errors"))
     end
