@@ -601,6 +601,20 @@ end
 
 Val(x) = (@_pure_meta; Val{x}())
 
+eltype(::Val{T}) where T = T
+
+(&)(v1::Val{true}, v2::Val{true}) = Val{true}()
+(&)(v1::Val, v2::Val) = Val{false}()
+
+(|)(v1::Val{false}, v2::Val{false}) = Val{false}()
+(|)(v1::Val, v2::Val) = Val{true}()
+
+!(::Val{false}) = Val{true}()
+!(::Val{true}) = Val{false}()
+
+ifelse(switch::Val{false}, new, old) = old
+ifelse(switch::Val{true}, new, old) = new
+
 # used by interpolating quote and some other things in the front end
 function vector_any(@nospecialize xs...)
     n = length(xs)
