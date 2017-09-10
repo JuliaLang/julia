@@ -1517,12 +1517,12 @@ function setup_search_keymap(hp)
                         update_display_buffer(s, data) : beep(s)),
         127       => KeyAlias('\b'),
         # Meta Backspace
-        "\e\b"    => (s,data,c)->(edit_delete_prev_word(data.query_buffer) ?
-                        update_display_buffer(s, data) : beep(s)),
+        "\e\b"    => (s,data,c)->(isempty(edit_delete_prev_word(data.query_buffer)) ?
+                                  beep(s) : update_display_buffer(s, data)),
         "\e\x7f"  => "\e\b",
         # Word erase to whitespace
-        "^W"      => (s,data,c)->(edit_werase(data.query_buffer) ?
-                        update_display_buffer(s, data) : beep(s)),
+        "^W"      => (s,data,c)->(isempty(edit_werase(data.query_buffer)) ?
+                                  beep(s) : update_display_buffer(s, data)),
         # ^C and ^D
         "^C"      => (s,data,c)->(edit_clear(data.query_buffer);
                        edit_clear(data.response_buffer);
