@@ -322,9 +322,9 @@ end
 # until the heuristics can be improved
 @inline nan_dom_err(out, x) = isnan(out) & !isnan(x) ? throw(DomainError(x, "NaN result for non-NaN input.")) : out
 
-# utility for reporting error when a function is evaluated outside its domain TOOD: lower bound and double bound
-@noinline throw_dom_err(f, x, high) = throw(DomainError(x, "$f(x) called with x < $high"))
-@inline f_dom_err(out, f, x, high) = x < high ? throw_dom_err(f, x, high) : out
+# utility for reporting error when a function is evaluated outside its domain TOOD: upper bound and double bound
+@noinline throw_dom_err(f, x, low) = throw(DomainError(x, "$f(x) called with x < $low"))
+@inline f_dom_err(out, f, x, low) = x < low ? throw_dom_err(f, x, low) : out
 
 # functions that return NaN on non-NaN argument for domain error
 """
