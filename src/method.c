@@ -764,17 +764,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                           m->line);
     }
 
-    int ishidden = !!strchr(jl_symbol_name(name), '#');
-    if (!ishidden) {
-        jl_value_t *atemp = argtype;
-        while (jl_is_unionall(atemp)) {
-            jl_unionall_t *ua = (jl_unionall_t*)atemp;
-            jl_tvar_t *tv = ua->var;
-            atemp = ua->body;
-        }
-    }
     jl_check_static_parameter_conflicts(m, f, tvars);
-
     jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
