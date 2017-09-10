@@ -669,6 +669,7 @@ end
     @test edit!(edit_undo!) == "one two three"
 
     @test edit!(LineEdit.edit_clear) == ""
+    @test edit!(LineEdit.edit_clear) == "" # should not be saved twice
     @test edit!(edit_undo!) == "one two three"
 
     @test edit!(LineEdit.edit_insert_newline) == "one two three\n"
@@ -683,6 +684,11 @@ end
 
     LineEdit.move_line_start(s)
     @test edit!(LineEdit.edit_kill_line) == ""
+    @test edit!(edit_undo!) == "one two three"
+    # undo stack not updated if killing nothing:
+    LineEdit.move_line_start(s)
+    LineEdit.edit_kill_line(s)
+    LineEdit.edit_kill_line(s) # no effect
     @test edit!(edit_undo!) == "one two three"
 
     LineEdit.move_line_start(s)
@@ -747,6 +753,11 @@ end
     @test edit!(LineEdit.edit_tab) == "one two three   "
     @test edit!(edit_undo!) == "one two three  "
     @test edit!(edit_undo!) == "one two three"
+    LineEdit.move_line_start(s)
+    edit_insert(s, "  ")
+    LineEdit.move_line_start(s)
+    @test edit!(s->LineEdit.edit_tab(s, true, true)) == "  one two three" # tab moves cursor to position 2
+    @test edit!(edit_undo!) == "one two three" # undo didn't record cursor movement
     # TODO: add tests for complete_line, which don't work directly
 
     # pop initial insert of "one two three"
