@@ -1936,7 +1936,7 @@ function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
 end
 
 # map on collections
-map(f, A::Union{AbstractArray,AbstractSet,Associative}) = collect_similar(A, Generator(f,A))
+map(f, A::Union{AbstractArray,AbstractSet}) = collect_similar(A, Generator(f,A))
 
 # default to returning an Array for `map` on general iterators
 """

@@ -1763,6 +1763,9 @@ import .Iterators.enumerate
 
 @deprecate_binding Range AbstractRange
 
+# issue #5794
+@deprecate map(f, d::T) where {T<:Associative}  T( f(p) for p in pairs(d) )
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
