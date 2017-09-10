@@ -4,7 +4,7 @@ using Base.Test
 include("choosetests.jl")
 include("testenv.jl")
 
-tests, net_on, resilient = choosetests(ARGS)
+tests, net_on, exit_on_error = choosetests(ARGS)
 tests = unique(tests)
 
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
@@ -61,7 +61,7 @@ cd(dirname(@__FILE__)) do
                     end
                     push!(results, (test, resp))
                     if resp[1] isa Exception
-                        if !resilient
+                        if exit_on_error
                             skipped = length(tests)
                             empty!(tests)
                         end
@@ -188,8 +188,7 @@ cd(dirname(@__FILE__)) do
     else
         println("    \033[31;1mFAILURE\033[0m\n")
         skipped > 0 &&
-            println("$skipped test", skipped > 1 ? "s were" : " was",
-                    """ skipped due to failure (use the "resilient" option to run all tests unconditionally)\n""")
+            println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure\n")
         Base.Test.print_test_errors(o_ts)
         throw(Test.FallbackTestSetException("Test run finished with errors"))
     end

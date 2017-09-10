@@ -2,7 +2,7 @@
 
 @doc """
 
-`tests, net_on, resilient = choosetests(choices)` selects a set of tests to be
+`tests, net_on, exit_on_error = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
 `["all"]`, all tests are selected.
 
@@ -12,8 +12,12 @@ directories.
 
 Upon return, `tests` is a vector of fully-expanded test names,
 `net_on` is true if networking is available (required for some tests),
-and `resilient` is true if all tests should be run unconditionally
-(.i.e. even when some of them fail).
+and `exit_on_error` is true if an error in one test should cancel
+remaining tests to be run (otherwise, all tests are run unconditionally).
+
+Two options can be passed to `choosetests` by including a special token
+in the `choices` argument: "--skip", which makes all tests coming after
+be skipped, and "--exit-on-error" which sets the value of `exit_on_error`.
 """ ->
 function choosetests(choices = [])
     testnames = [
@@ -53,14 +57,14 @@ function choosetests(choices = [])
 
     tests = []
     skip_tests = []
-    resilient = false
+    exit_on_error = false
 
     for (i, t) in enumerate(choices)
         if t == "--skip"
             skip_tests = choices[i + 1:end]
             break
-        elseif t == "--resilient"
-            resilient = true
+        elseif t ∈ ["--exit-on-error", "--eoe"]
+            exit_on_error = true
         else
             push!(tests, t)
         end
@@ -173,5 +177,5 @@ function choosetests(choices = [])
 
     filter!(x -> !(x in skip_tests), tests)
 
-    tests, net_on, resilient
+    tests, net_on, exit_on_error
 end
