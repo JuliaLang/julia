@@ -601,7 +601,7 @@ This should be written as:
 
 ```jldoctest
 julia> function fill_twos!(a)
-           for i=linearindices(a)
+           for i=eachindex(a)
                a[i] = 2
            end
        end
@@ -1095,8 +1095,8 @@ Sometimes you can enable better optimization by promising certain program proper
     and could change or disappear in future versions of Julia.
 
 The common idiom of using 1:n to index into an AbstractArray is not safe if the Array uses unconventional indexing,
-and may cause a segmentation fault if bounds checking is turned off. Use `linearindices(x)` instead (see also
-[offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
+and may cause a segmentation fault if bounds checking is turned off. Use `linearindices(x)` or `eachindex(x)` 
+instead (see also [offset-arrays](https://docs.julialang.org/en/latest/devdocs/offset-arrays)).
 
 Note: While `@simd` needs to be placed directly in front of a loop, both `@inbounds` and `@fastmath`
 can be applied to several statements at once, e.g. using `begin` ... `end`, or even to a whole
@@ -1107,7 +1107,7 @@ Here is an example with both `@inbounds` and `@simd` markup:
 ```julia
 function inner(x, y)
     s = zero(eltype(x))
-    for i=linearindices(x)
+    for i=eachindex(x)
         @inbounds s += x[i]*y[i]
     end
     s
@@ -1115,7 +1115,7 @@ end
 
 function innersimd(x, y)
     s = zero(eltype(x))
-    @simd for i=linearindices(x)
+    @simd for i=eachindex(x)
         @inbounds s += x[i]*y[i]
     end
     s
