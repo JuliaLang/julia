@@ -322,6 +322,10 @@ end
 # until the heuristics can be improved
 @inline nan_dom_err(out, x) = isnan(out) & !isnan(x) ? throw(DomainError(x, "NaN result for non-NaN input.")) : out
 
+# utility for reporting error when a function is evaluated outside its domain TOOD: lower bound and double bound
+@noinline throw_dom_err(f, x, high) = throw(DomainError(x, "$f(x) called with x < $high"))
+@inline f_dom_err(out, f, x, high) = x < high ? throw_dom_err(f, x, high) : out
+
 # functions that return NaN on non-NaN argument for domain error
 """
     sin(x)
@@ -436,11 +440,18 @@ julia> log1p(0)
 ```
 """
 log1p(x)
-for f in (:sin, :cos, :tan, :acos, :acosh, :atanh, :log, :log2, :log10,
-          :lgamma, :log1p)
+for f in (:sin, :cos, :tan, :acos, :acosh, :atanh, :lgamma)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
         @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
+        @inline ($f)(x::Real) = ($f)(float(x))
+    end
+end
+
+for (f, v) in ((:log, 0), (:log2, 0), (:log10, 0), (:log1p, -1))
+    @eval begin
+        @inline ($f)(x::Float64) = f_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), $f, x, $v)
+        @inline ($f)(x::Float32) = f_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), $f, x, $v)
         @inline ($f)(x::Real) = ($f)(float(x))
     end
 end
