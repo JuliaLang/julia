@@ -231,6 +231,13 @@ guaranteed left or right associativity and invocation of `f` for every value.
 """
 mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
 
+mapreduce(mapper, reducer, args::Tuple{}) = _empty_reduce_error()
+mapreduce(mapper, reducer, args::Tuple) =
+    mapreduce(mapper, reducer, mapper(first(args)), tail(args))
+mapreduce(mapper, reducer, default, args::Tuple{}) = default
+mapreduce(mapper, reducer, default, args::Tuple) =
+    reducer(mapper(first(args)), mapreduce(mapper, reducer, default, tail(args)))
+
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
 pairwise_blocksize(f, op) = 1024
