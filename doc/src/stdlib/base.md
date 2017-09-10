@@ -152,6 +152,8 @@ Base.@noinline
 Base.@nospecialize
 Base.gensym
 Base.@gensym
+Base.@goto
+Base.@label
 Base.@polly
 Base.parse(::AbstractString, ::Int)
 Base.parse(::AbstractString)
