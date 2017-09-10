@@ -50,7 +50,11 @@ end
 
 function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, username_ptr)
     creds = Base.get(p.credential)::SSHCredentials
-    isusedcreds = checkused!(creds)
+
+    # Reset password on sucessive calls
+    if !p.first_pass
+        creds.pass = ""
+    end
 
     # Note: The same SSHCredentials can be used to authenticate separate requests using the
     # same credential cache. e.g. using Pkg.update when there are two private packages.
@@ -74,15 +78,10 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         # if username is not provided or empty, then prompt for it
         username = username_ptr != Cstring(C_NULL) ? unsafe_string(username_ptr) : ""
         if isempty(username)
-            uname = creds.user # check if credentials were already used
             prompt_url = git_url(scheme=p.scheme, host=p.host)
-            if !isusedcreds
-                username = uname
-            else
-                response = Base.prompt("Username for '$prompt_url'", default=uname)
-                isnull(response) && return user_abort()
-                username = unsafe_get(response)
-            end
+            response = Base.prompt("Username for '$prompt_url'", default=creds.user)
+            isnull(response) && return user_abort()
+            username = unsafe_get(response)
         end
 
         prompt_url = git_url(scheme=p.scheme, host=p.host, username=username)
@@ -92,7 +91,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
             ENV["SSH_KEY_PATH"]
         else
             keydefpath = creds.prvkey # check if credentials were already used
-            if isempty(keydefpath) || isusedcreds
+            if isempty(keydefpath)
                 defaultkeydefpath = joinpath(homedir(),".ssh","id_rsa")
                 if isempty(keydefpath) && isfile(defaultkeydefpath)
                     keydefpath = defaultkeydefpath
@@ -117,7 +116,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
             ENV["SSH_PUB_KEY_PATH"]
         else
             keydefpath = creds.pubkey # check if credentials were already used
-            if isempty(keydefpath) || isusedcreds
+            if isempty(keydefpath)
                 if isempty(keydefpath)
                     keydefpath = privatekey*".pub"
                 end
@@ -135,7 +134,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
             ENV["SSH_KEY_PASS"]
         else
             passdef = creds.pass # check if credentials were already used
-            if (isempty(passdef) || isusedcreds) && is_passphrase_required(privatekey)
+            if isempty(passdef) && is_passphrase_required(privatekey)
                 if Sys.iswindows()
                     response = Base.winprompt(
                         "Your SSH Key requires a password, please enter it now:",
@@ -151,15 +150,13 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
             end
             passdef
         end
-        ((creds.user != username) || (creds.pass != passphrase) ||
-            (creds.prvkey != privatekey) || (creds.pubkey != publickey)) && reset!(creds)
 
         creds.user = username # save credentials
         creds.prvkey = privatekey # save credentials
         creds.pubkey = publickey # save credentials
         creds.pass = passphrase
-    else
-        isusedcreds && return Cint(Error.EAUTH)
+    elseif !p.first_pass
+        return Cint(Error.EAUTH)
     end
 
     return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
@@ -169,37 +166,39 @@ end
 
 function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload)
     creds = Base.get(p.credential)::UserPasswordCredentials
-    isusedcreds = checkused!(creds)
+
+    # Reset password on sucessive calls
+    if !p.first_pass
+        creds.pass = ""
+    end
 
     if creds.prompt_if_incorrect
         username = creds.user
         userpass = creds.pass
-        prompt_url = git_url(scheme=p.scheme, host=p.host)
-        if Sys.iswindows()
-            if isempty(username) || isempty(userpass) || isusedcreds
+        if isempty(username) || isempty(userpass)
+            prompt_url = git_url(scheme=p.scheme, host=p.host)
+            if Sys.iswindows()
                 response = Base.winprompt("Please enter your credentials for '$prompt_url'", "Credentials required",
                     isempty(username) ? p.username : username; prompt_username = true)
                 isnull(response) && return user_abort()
                 username, userpass = unsafe_get(response)
+            else
+                response = Base.prompt("Username for '$prompt_url'",
+                    default=isempty(username) ? p.username : username)
+                isnull(response) && return user_abort()
+                username = unsafe_get(response)
+
+                prompt_url = git_url(scheme=p.scheme, host=p.host, username=username)
+                response = Base.prompt("Password for '$prompt_url'", password=true)
+                isnull(response) && return user_abort()
+                userpass = unsafe_get(response)
+                isempty(userpass) && return user_abort()  # Ambiguous if EOF or newline
             end
-        elseif isusedcreds
-            response = Base.prompt("Username for '$prompt_url'",
-                default=isempty(username) ? p.username : username)
-            isnull(response) && return user_abort()
-            username = unsafe_get(response)
-
-            prompt_url = git_url(scheme=p.scheme, host=p.host, username=username)
-            response = Base.prompt("Password for '$prompt_url'", password=true)
-            isnull(response) && return user_abort()
-            userpass = unsafe_get(response)
-            isempty(userpass) && return user_abort()  # Ambiguous if EOF or newline
         end
-
-        ((creds.user != username) || (creds.pass != userpass)) && reset!(creds)
         creds.user = username # save credentials
         creds.pass = userpass # save credentials
-    else
-        isusedcreds && return Cint(Error.EAUTH)
+    elseif !p.first_pass
+        return Cint(Error.EAUTH)
     end
 
     return ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
@@ -228,11 +227,7 @@ Credentials are checked in the following order (if supported):
 **Note**: Due to the specifics of the `libgit2` authentication procedure, when
 authentication fails, this function is called again without any indication whether
 authentication was successful or not. To avoid an infinite loop from repeatedly
-using the same faulty credentials, the `checkused!` function can be called. This
-function returns `true` if the credentials were used.
-Using credentials triggers a user prompt for (re)entering required information.
-`UserPasswordCredentials` and `CachedCredentials` are implemented using a call
-counting strategy that prevents repeated usage of faulty credentials.
+using the same faulty credentials, we will keep track of state using the payload.
 """
 function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
                               username_ptr::Cstring,
@@ -269,12 +264,16 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
                 allowed_types &= Cuint(0)  # Unhandled credential type
             end
         end
+
+        p.first_pass = true
+    else
+        p.first_pass = false
     end
 
     # use ssh key or ssh-agent
     if isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY))
         if isnull(p.credential) || !isa(unsafe_get(p.credential), SSHCredentials)
-            creds = reset!(SSHCredentials(p.username, "", true), -1)
+            creds = SSHCredentials(p.username, "", true)
             if !isnull(p.cache)
                 credid = "ssh://$(p.host)"
                 creds = get_creds!(unsafe_get(p.cache), credid, creds)
@@ -287,7 +286,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
         if isnull(p.credential) || !isa(unsafe_get(p.credential), UserPasswordCredentials)
-            creds = reset!(UserPasswordCredentials(p.username, "", true), -1)
+            creds = UserPasswordCredentials(p.username, "", true)
             if !isnull(p.cache)
                 credid = "$(isempty(p.scheme) ? "ssh" : p.scheme)://$(p.host)"
                 creds = get_creds!(unsafe_get(p.cache), credid, creds)

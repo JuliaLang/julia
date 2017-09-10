@@ -1076,9 +1076,8 @@ mutable struct UserPasswordCredentials <: AbstractCredentials
     user::String
     pass::String
     prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
-    count::Int                   # authentication failure protection count
     function UserPasswordCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,prompt_if_incorrect,3)
+        c = new(u,p,prompt_if_incorrect)
         finalizer(c, securezero!)
         return c
     end
@@ -1088,7 +1087,6 @@ end
 function securezero!(cred::UserPasswordCredentials)
     securezero!(cred.user)
     securezero!(cred.pass)
-    cred.count = 0
     return cred
 end
 
@@ -1104,9 +1102,8 @@ mutable struct SSHCredentials <: AbstractCredentials
     pubkey::String
     usesshagent::String  # used for ssh-agent authentication
     prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
-    count::Int
     function SSHCredentials(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,prvkey,pubkey,"Y",prompt_if_incorrect,3)
+        c = new(u,p,prvkey,pubkey,"Y",prompt_if_incorrect)
         finalizer(c, securezero!)
         return c
     end
@@ -1119,7 +1116,6 @@ function securezero!(cred::SSHCredentials)
     securezero!(cred.pass)
     securezero!(cred.prvkey)
     securezero!(cred.pubkey)
-    cred.count = 0
     return cred
 end
 
@@ -1128,20 +1124,10 @@ function Base.:(==)(a::SSHCredentials, b::SSHCredentials)
 end
 
 "Credentials that support caching"
-mutable struct CachedCredentials <: AbstractCredentials
+struct CachedCredentials <: AbstractCredentials
     cred::Dict{String,AbstractCredentials}
-    count::Int            # authentication failure protection count
-    CachedCredentials() = new(Dict{String,AbstractCredentials}(),3)
+    CachedCredentials() = new(Dict{String,AbstractCredentials}())
 end
-
-"Checks if credentials were used or failed authentication, see `LibGit2.credentials_callback`"
-function checkused!(p::Union{UserPasswordCredentials, SSHCredentials})
-    p.count <= 0 && return true
-    p.count -= 1
-    return false
-end
-reset!(p::Union{UserPasswordCredentials, SSHCredentials}, cnt::Int=3) = (p.count = cnt; p)
-reset!(p::CachedCredentials) = (foreach(reset!, values(p.cred)); p)
 
 "Obtain the cached credentials for the given host+protocol (credid), or return and store the default if not found"
 get_creds!(collection::CachedCredentials, credid, default) = get!(collection.cred, credid, default)
@@ -1161,13 +1147,14 @@ instances will be used when the URL has changed.
 mutable struct CredentialPayload <: Payload
     credential::Nullable{AbstractCredentials}
     cache::Nullable{CachedCredentials}
+    first_pass::Bool
     scheme::String
     username::String
     host::String
     path::String
 
     function CredentialPayload(credential::Nullable{<:AbstractCredentials}, cache::Nullable{CachedCredentials})
-        new(credential, cache, "", "", "", "")
+        new(credential, cache, true, "", "", "", "")
     end
 end
 

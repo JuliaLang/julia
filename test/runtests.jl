@@ -59,14 +59,14 @@ cd(dirname(@__FILE__)) do
                         resp = [e]
                     end
                     push!(results, (test, resp))
-                    if (isa(resp[end], Integer) && (resp[end] > max_worker_rss)) || isa(resp, Exception)
+                    if resp[1] isa Exception || resp[end] > max_worker_rss
                         if n > 1
                             rmprocs(wrkr, waitfor=30)
                             p = addprocs_with_testenv(1)[1]
                             remotecall_fetch(include, p, "testdefs.jl")
                         else
-                            # single process testing, bail if mem limit reached, or, on an exception.
-                            isa(resp, Exception) ? rethrow(resp) : error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
+                            # single process testing, bail if mem limit reached
+                            resp[1] isa Exception || error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                         end
                     end
                     if !isa(resp[1], Exception)

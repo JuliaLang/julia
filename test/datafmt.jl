@@ -18,18 +18,18 @@ isequaldlm(m1, m2, t) = isequal(m1, m2) && (eltype(m1) == eltype(m2) == t)
 @test isequaldlm(readdlm(IOBuffer("1\t2\n3\t4\n5\t6\n")), [1. 2; 3 4; 5 6], Float64)
 @test isequaldlm(readdlm(IOBuffer("1\t2\n3\t4\n5\t6\n"), Int), [1 2; 3 4; 5 6], Int)
 
-@test size(readcsv(IOBuffer("1,2,3,4"))) == (1,4)
-@test size(readcsv(IOBuffer("1,2,3,"))) == (1,4)
-@test size(readcsv(IOBuffer("1,2,3,4\n"))) == (1,4)
-@test size(readcsv(IOBuffer("1,2,3,\n"))) == (1,4)
-@test size(readcsv(IOBuffer("1,2,3,4\n1,2,3,4"))) == (2,4)
-@test size(readcsv(IOBuffer("1,2,3,4\n1,2,3,"))) == (2,4)
-@test size(readcsv(IOBuffer("1,2,3,4\n1,2,3"))) == (2,4)
+@test size(readdlm(IOBuffer("1,2,3,4"), ',')) == (1,4)
+@test size(readdlm(IOBuffer("1,2,3,"), ',')) == (1,4)
+@test size(readdlm(IOBuffer("1,2,3,4\n"), ',')) == (1,4)
+@test size(readdlm(IOBuffer("1,2,3,\n"), ',')) == (1,4)
+@test size(readdlm(IOBuffer("1,2,3,4\n1,2,3,4"), ',')) == (2,4)
+@test size(readdlm(IOBuffer("1,2,3,4\n1,2,3,"), ',')) == (2,4)
+@test size(readdlm(IOBuffer("1,2,3,4\n1,2,3"), ',')) == (2,4)
 
-@test size(readcsv(IOBuffer("1,2,3,4\r\n"))) == (1,4)
-@test size(readcsv(IOBuffer("1,2,3,4\r\n1,2,3\r\n"))) == (2,4)
-@test size(readcsv(IOBuffer("1,2,3,4\r\n1,2,3,4\r\n"))) == (2,4)
-@test size(readcsv(IOBuffer("1,2,3,\"4\"\r\n1,2,3,4\r\n"))) == (2,4)
+@test size(readdlm(IOBuffer("1,2,3,4\r\n"), ',')) == (1,4)
+@test size(readdlm(IOBuffer("1,2,3,4\r\n1,2,3\r\n"), ',')) == (2,4)
+@test size(readdlm(IOBuffer("1,2,3,4\r\n1,2,3,4\r\n"), ',')) == (2,4)
+@test size(readdlm(IOBuffer("1,2,3,\"4\"\r\n1,2,3,4\r\n"), ',')) == (2,4)
 
 @test size(readdlm(IOBuffer("1 2 3 4\n1 2 3"))) == (2,4)
 @test size(readdlm(IOBuffer("1\t2 3 4\n1 2 3"))) == (2,4)
@@ -73,11 +73,11 @@ let result1 = reshape(Any["t", "c", "", "c"], 2, 2),
     @test isequaldlm(readdlm(IOBuffer("t t \n\"\"\"c\" c")), result2, Any)
 end
 
-@test isequaldlm(readcsv(IOBuffer("\n1,2,3\n4,5,6\n\n\n"), skipblanks=false),
+@test isequaldlm(readdlm(IOBuffer("\n1,2,3\n4,5,6\n\n\n"), ',', skipblanks=false),
                  reshape(Any["",1.0,4.0,"","","",2.0,5.0,"","","",3.0,6.0,"",""], 5, 3), Any)
-@test isequaldlm(readcsv(IOBuffer("\n1,2,3\n4,5,6\n\n\n"), skipblanks=true), reshape([1.0,4.0,2.0,5.0,3.0,6.0], 2, 3), Float64)
-@test isequaldlm(readcsv(IOBuffer("1,2\n\n4,5"), skipblanks=false), reshape(Any[1.0,"",4.0,2.0,"",5.0], 3, 2), Any)
-@test isequaldlm(readcsv(IOBuffer("1,2\n\n4,5"), skipblanks=true), reshape([1.0,4.0,2.0,5.0], 2, 2), Float64)
+@test isequaldlm(readdlm(IOBuffer("\n1,2,3\n4,5,6\n\n\n"), ',', skipblanks=true), reshape([1.0,4.0,2.0,5.0,3.0,6.0], 2, 3), Float64)
+@test isequaldlm(readdlm(IOBuffer("1,2\n\n4,5"), ',', skipblanks=false), reshape(Any[1.0,"",4.0,2.0,"",5.0], 3, 2), Any)
+@test isequaldlm(readdlm(IOBuffer("1,2\n\n4,5"), ',', skipblanks=true), reshape([1.0,4.0,2.0,5.0], 2, 2), Float64)
 
 let x = bitrand(5, 10), io = IOBuffer()
     writedlm(io, x)
@@ -88,7 +88,7 @@ end
 let x = [1,2,3], y = [4,5,6], io = IOBuffer()
     writedlm(io, zip(x,y), ",  ")
     seek(io, 0)
-    @test readcsv(io) == [x y]
+    @test readdlm(io, ',') == [x y]
 end
 
 let x = [0.1 0.3 0.5], io = IOBuffer()
@@ -100,13 +100,13 @@ end
 let x = [0.1 0.3 0.5], io = IOBuffer()
     writedlm(io, x, ", ")
     seek(io, 0)
-    @test readcsv(io) == [0.1 0.3 0.5]
+    @test readdlm(io, ',') == [0.1 0.3 0.5]
 end
 
 let x = ["abc", "def\"ghi", "jk\nl"], y = [1, ",", "\"quoted\""], io = IOBuffer()
     writedlm(io, zip(x,y), ',')
     seek(io, 0)
-    @test readcsv(io) == [x y]
+    @test readdlm(io, ',') == [x y]
 end
 
 let x = ["a" "b"; "d" ""], io = IOBuffer()
@@ -124,12 +124,12 @@ let x = ["\"hello\"", "world\""], io = IOBuffer()
 end
 
 # test comments
-@test isequaldlm(readcsv(IOBuffer("#this is comment\n1,2,3\n#one more comment\n4,5,6")), [1. 2. 3.;4. 5. 6.], Float64)
-@test isequaldlm(readcsv(IOBuffer("#this is \n#comment\n1,2,3\n#one more \n#comment\n4,5,6")), [1. 2. 3.;4. 5. 6.], Float64)
-@test isequaldlm(readcsv(IOBuffer("1,2,#3\n4,5,6")), [1. 2. "";4. 5. 6.], Any)
-@test isequaldlm(readcsv(IOBuffer("1#,2,3\n4,5,6")), [1. "" "";4. 5. 6.], Any)
-@test isequaldlm(readcsv(IOBuffer("1,2,\"#3\"\n4,5,6")), [1. 2. "#3";4. 5. 6.], Any)
-@test isequaldlm(readcsv(IOBuffer("1,2,3\n #with leading whitespace\n4,5,6")), [1. 2. 3.;" " "" "";4. 5. 6.], Any)
+@test isequaldlm(readdlm(IOBuffer("#this is comment\n1,2,3\n#one more comment\n4,5,6"), ','), [1. 2. 3.;4. 5. 6.], Float64)
+@test isequaldlm(readdlm(IOBuffer("#this is \n#comment\n1,2,3\n#one more \n#comment\n4,5,6"), ','), [1. 2. 3.;4. 5. 6.], Float64)
+@test isequaldlm(readdlm(IOBuffer("1,2,#3\n4,5,6"), ','), [1. 2. "";4. 5. 6.], Any)
+@test isequaldlm(readdlm(IOBuffer("1#,2,3\n4,5,6"), ','), [1. "" "";4. 5. 6.], Any)
+@test isequaldlm(readdlm(IOBuffer("1,2,\"#3\"\n4,5,6"), ','), [1. 2. "#3";4. 5. 6.], Any)
+@test isequaldlm(readdlm(IOBuffer("1,2,3\n #with leading whitespace\n4,5,6"), ','), [1. 2. 3.;" " "" "";4. 5. 6.], Any)
 
 # test skipstart
 let x = ["a" "b" "c"; "d" "e" "f"; "g" "h" "i"; "A" "B" "C"; 1 2 3; 4 5 6; 7 8 9], io = IOBuffer()
@@ -213,21 +213,21 @@ let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name 
     i18n_arr = permutedims(reshape(i18n_data, 4, Int(floor(length(i18n_data)/4))), [2, 1])
     i18n_buff = PipeBuffer()
     writedlm(i18n_buff, i18n_arr, ',')
-    @test i18n_arr == readcsv(i18n_buff)
+    @test i18n_arr == readdlm(i18n_buff, ',')
 
     hdr = i18n_arr[1:1, :]
     data = i18n_arr[2:end, :]
     writedlm(i18n_buff, i18n_arr, ',')
-    @test (data, hdr) == readcsv(i18n_buff, header=true)
+    @test (data, hdr) == readdlm(i18n_buff, ',', header=true)
 
     writedlm(i18n_buff, i18n_arr, '\t')
     @test (data, hdr) == readdlm(i18n_buff, '\t', header=true)
 end
 
-@test isequaldlm(readcsv(IOBuffer("1,22222222222222222222222222222222222222,0x3,10e6\n2000.1,true,false,-10.34"), Any),
+@test isequaldlm(readdlm(IOBuffer("1,22222222222222222222222222222222222222,0x3,10e6\n2000.1,true,false,-10.34"), ',', Any),
     reshape(Any[1,2000.1,Float64(22222222222222222222222222222222222222),true,0x3,false,10e6,-10.34], 2, 4), Any)
 
-@test isequaldlm(readcsv(IOBuffer("-9223355253176920979,9223355253176920979"), Int64), Int64[-9223355253176920979  9223355253176920979], Int64)
+@test isequaldlm(readdlm(IOBuffer("-9223355253176920979,9223355253176920979"), ',', Int64), Int64[-9223355253176920979  9223355253176920979], Int64)
 
 # fix #13028
 for data in ["A B C", "A B C\n"]
@@ -253,13 +253,13 @@ for writefunc in ((io,x) -> show(io, "text/csv", x),
     let x = [(1,2), (3,4)], io = IOBuffer()
         writefunc(io, x)
         seek(io, 0)
-        @test readcsv(io) == [1 2; 3 4]
+        @test readdlm(io, ',') == [1 2; 3 4]
     end
     # vectors of strings:
     let x = ["foo", "bar"], io = IOBuffer()
         writefunc(io, x)
         seek(io, 0)
-        @test vec(readcsv(io)) == x
+        @test vec(readdlm(io, ',')) == x
     end
 end
 
@@ -275,12 +275,12 @@ end
 
 # issue #21180
 let data = "\"721\",\"1438\",\"1439\",\"…\",\"1\""
-    @test readcsv(IOBuffer(data)) == Any[721  1438  1439  "…"  1]
+    @test readdlm(IOBuffer(data), ',') == Any[721  1438  1439  "…"  1]
 end
 
 # issue #21207
 let data = "\"1\",\"灣\"\"灣灣灣灣\",\"3\""
-    @test readcsv(IOBuffer(data)) == Any[1 "灣\"灣灣灣灣" 3]
+    @test readdlm(IOBuffer(data), ',') == Any[1 "灣\"灣灣灣灣" 3]
 end
 
 # issue #11484: useful error message for invalid readdlm filepath arguments

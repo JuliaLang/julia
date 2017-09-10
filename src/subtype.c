@@ -64,6 +64,9 @@ typedef struct _varbinding {
     int8_t occurs_inv;  // occurs in invariant position
     int8_t occurs_cov;  // # of occurrences in covariant position
     int8_t concrete;    // 1 if another variable has a constraint forcing this one to be concrete
+    // set if this variable's bounds contain a free variable that's been removed from
+    // the environment.
+    int8_t hasfree;
     // in covariant position, we need to try constraining a variable in different ways:
     // 0 - unconstrained
     // 1 - less than
@@ -139,7 +142,7 @@ static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
         v = v->prev;
     }
     *root = (jl_value_t*)jl_alloc_svec(len*3);
-    se->buf = (int8_t*)(len ? malloc(len*2) : NULL);
+    se->buf = (int8_t*)(len ? malloc(len*3) : NULL);
     int i=0, j=0; v = e->vars;
     while (v != NULL) {
         jl_svecset(*root, i++, v->lb);
@@ -147,6 +150,7 @@ static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
         jl_svecset(*root, i++, (jl_value_t*)v->innervars);
         se->buf[j++] = v->occurs_inv;
         se->buf[j++] = v->occurs_cov;
+        se->buf[j++] = v->hasfree;
         v = v->prev;
     }
     se->rdepth = e->Runions.depth;
@@ -165,6 +169,7 @@ static void restore_env(jl_stenv_t *e, jl_value_t *root, jl_savedenv_t *se)
         i++;
         v->occurs_inv = se->buf[j++];
         v->occurs_cov = se->buf[j++];
+        v->hasfree = se->buf[j++];
         v = v->prev;
     }
     e->Runions.depth = se->rdepth;
@@ -562,7 +567,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         }
         btemp = btemp->prev;
     }
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0, e->invdepth, 0, NULL, e->vars };
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0, 0, e->invdepth, 0, NULL, e->vars };
     JL_GC_PUSH3(&u, &vb.lb, &vb.ub);
     e->vars = &vb;
     int ans;
@@ -599,6 +604,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     else {
         ans = subtype(u->body, t, e, param);
     }
+    if (vb.hasfree) ans = 0;
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
     // than once, and only in covariant position, is constrained to concrete types. E.g.
@@ -638,14 +644,16 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     e->vars = vb.prev;
 
     btemp = e->vars;
-    while (btemp != NULL) {
-        jl_value_t *vi = btemp->ub;
-        // TODO: this takes a significant amount of time
-        if (vi != (jl_value_t*)vb.var && btemp->var->ub != vi && jl_has_typevar(vi, vb.var)) {
-            btemp->ub = jl_new_struct(jl_unionall_type, vb.var, vi);
-            btemp->lb = jl_bottom_type;
+    if (vb.lb != vb.ub) {
+        while (btemp != NULL) {
+            jl_value_t *vu = btemp->ub;
+            jl_value_t *vl = btemp->lb;
+            // TODO: this takes a significant amount of time
+            if ((vu != (jl_value_t*)vb.var && btemp->var->ub != vu && jl_has_typevar(vu, vb.var)) ||
+                (vl != (jl_value_t*)vb.var && btemp->var->lb != vl && jl_has_typevar(vl, vb.var)))
+                btemp->hasfree = 1;
+            btemp = btemp->prev;
         }
-        btemp = btemp->prev;
     }
 
     JL_GC_POP();
@@ -1548,7 +1556,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 {
     jl_value_t *res=NULL, *res2=NULL, *save=NULL, *save2=NULL;
     jl_savedenv_t se, se2;
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0, e->invdepth, 0, NULL, e->vars };
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0, 0, e->invdepth, 0, NULL, e->vars };
     JL_GC_PUSH6(&res, &save2, &vb.lb, &vb.ub, &save, &vb.innervars);
     save_env(e, &save, &se);
     res = intersect_unionall_(t, u, e, R, param, &vb);
