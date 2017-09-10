@@ -269,7 +269,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
         cp(testfile, joinpath(dir, ".juliarc.jl"))
 
         withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => dir) do
-            output = "String[\"foo\", \"-bar\", \"--baz\"]"
+            output = "[\"foo\", \"-bar\", \"--baz\"]"
             @test readchomp(`$exename $testfile foo -bar --baz`) == output
             @test readchomp(`$exename $testfile -- foo -bar --baz`) == output
             @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) ==
@@ -283,7 +283,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
 
             @test !success(`$exename --foo $testfile`)
             @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) ==
-                "String[\"foo\", \"-bar\", \"--\", \"baz\"]"
+                "[\"foo\", \"-bar\", \"--\", \"baz\"]"
         end
     end
 
@@ -330,7 +330,7 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     end
 
     # issue #10562
-    @test readchomp(`$exename -e 'println(ARGS);' ''`) == "String[\"\"]"
+    @test readchomp(`$exename -e 'println(ARGS);' ''`) == "[\"\"]"
 
     # issue #12679
     @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --compile=yes -ioo`),
