@@ -770,14 +770,6 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
         while (jl_is_unionall(atemp)) {
             jl_unionall_t *ua = (jl_unionall_t*)atemp;
             jl_tvar_t *tv = ua->var;
-            if (!jl_has_typevar(ua->body, tv)) {
-                jl_exceptionf(jl_argumenterror_type,
-                              "static parameter %s does not occur in signature for %s defined at %s:%d",
-                              jl_symbol_name(tv->name),
-                              jl_symbol_name(name),
-                              jl_symbol_name(m->file),
-                              m->line);
-            }
             atemp = ua->body;
         }
     }
