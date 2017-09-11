@@ -63,7 +63,7 @@ function choosetests(choices = [])
         if t == "--skip"
             skip_tests = choices[i + 1:end]
             break
-        elseif t ∈ ["--exit-on-error", "--eoe"]
+        elseif t == "--exit-on-error"
             exit_on_error = true
         else
             push!(tests, t)
