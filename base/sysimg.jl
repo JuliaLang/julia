@@ -42,6 +42,11 @@ let SOURCE_PATH = ""
 end
 INCLUDE_STATE = 1 # include = Core.include
 
+baremodule MainInclude
+export include
+include(fname::AbstractString) = Main.Base.include(Main, fname)
+end
+
 include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)

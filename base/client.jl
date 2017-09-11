@@ -378,7 +378,7 @@ function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     opts = JLOptions()
-    @eval Main include(x) = $include(Main, x)
+    @eval Main using Base.MainInclude
     try
         (quiet,repl,startup,color_set,history_file) = process_options(opts)
         banner = opts.banner == 1

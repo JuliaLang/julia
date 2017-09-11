@@ -821,3 +821,6 @@ let flags = Cmd(filter(a->!contains(a, "depwarn"), collect(test_exeflags)))
         error("Deprecation test failed, cmd : $cmd")
     end
 end
+
+# PR #23664, make sure names don't get added to the default `Main` workspace
+@test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
