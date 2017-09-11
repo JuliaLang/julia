@@ -32,3 +32,7 @@ TerminalMenus.writeLine(buf, radio_menu, 1, true)
 TerminalMenus.config(charset=:unicode)
 TerminalMenus.writeLine(buf, radio_menu, 1, true)
 @test String(take!(buf)) == string(CONFIG[:cursor], " 1")
+
+# Test using STDIN
+radio_menu = RadioMenu(string.(1:10))
+@test simulateInput(radio_menu, :down, :down, :enter) == 3

@@ -29,3 +29,7 @@ TerminalMenus.writeLine(buf, multi_menu, 1, true)
 TerminalMenus.config(charset=:unicode)
 TerminalMenus.writeLine(buf, multi_menu, 1, true)
 @test String(take!(buf)) == string(CONFIG[:cursor], " ", CONFIG[:unchecked], " 1")
+
+# Test SDTIN
+multi_menu = MultiSelectMenu(string.(1:10))
+@test simulateInput(multi_menu, :enter, :down, :enter, 'd') == Set([1,2])

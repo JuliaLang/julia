@@ -1,6 +1,23 @@
 using TerminalMenus
 using Base.Test
 
+TerminalMenus.config(supress_output=true)
+
+function simulateInput(menu::TerminalMenus.AbstractMenu, keys...)
+    keydict =  Dict(:up => "\e[A",
+                    :down => "\e[B",
+                    :enter => "\r")
+    for key in keys
+        if isa(key, Symbol)
+            write(STDIN.buffer, keydict[key])
+        else
+            write(STDIN.buffer, "$key")
+        end
+    end
+
+    request(menu)
+end
+
 include("radio_menu.jl")
 include("multiselect_menu.jl")
 
