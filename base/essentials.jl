@@ -503,8 +503,8 @@ end
 
 `@goto name` unconditionally jumps to the statement at the location [`@label name`](@ref).
 
-`@label` and `@goto` cannot create jumps to top-level statements. Attempts cause an
-error. To use `@goto` at the top-level, enclose the `@label` and `@goto` in a block.
+`@label` and `@goto` cannot create jumps to different top-level statements. Attempts cause an
+error. To still use `@goto`, enclose the `@label` and `@goto` in a block.
 """
 macro goto(name::Symbol)
     return esc(Expr(:symbolicgoto, name))
