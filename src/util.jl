@@ -14,10 +14,27 @@
 terminal = Base.Terminals.TTYTerminal(get(ENV, "TERM", @static is_windows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
 
 # Enable raw mode. Allows us to process keyboard inputs directly.
-enableRawMode() = Base.Terminals.raw!(terminal, true)
+function enableRawMode()
+    try
+        Base.Terminals.raw!(terminal, true)
+        return true
+    catch Exception
+        warn("TerminalMenus: Unable to enter raw mode")
+    end
+    return false
+end
 
 # Disable raw mode. Give control back to Julia REPL if interactive session.
-disableRawMode() = Base.Terminals.raw!(terminal, false)
+function disableRawMode()
+    try
+        Base.Terminals.raw!(terminal, false)
+        return true
+    catch Exception
+        warn("TerminalMenus: Unable to disable raw mode")
+    end
+    return false
+end
+
 
 # Reads a single byte from STDIN
 readNextChar() = Char(read(STDIN,1)[1])
