@@ -287,7 +287,6 @@ end
         @test any((true,true,false)) === true
         @test any((true,true,true)) === true
     end
-    
     #PR 23659
     @testset "type-unstable" begin
         @inferred reduce(string, (1, "a"))
