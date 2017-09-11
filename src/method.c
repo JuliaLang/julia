@@ -764,23 +764,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                           m->line);
     }
 
-    int ishidden = !!strchr(jl_symbol_name(name), '#');
-    if (!ishidden) {
-        jl_value_t *atemp = argtype;
-        while (jl_is_unionall(atemp)) {
-            jl_unionall_t *ua = (jl_unionall_t*)atemp;
-            jl_tvar_t *tv = ua->var;
-            if (!jl_has_typevar(ua->body, tv)) {
-                jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
-                          jl_symbol_name(tv->name), jl_symbol_name(name));
-                print_func_loc(JL_STDERR, m);
-                jl_printf(JL_STDERR, ".\n");
-            }
-            atemp = ua->body;
-        }
-    }
     jl_check_static_parameter_conflicts(m, f, tvars);
-
     jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
