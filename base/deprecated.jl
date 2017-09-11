@@ -1651,7 +1651,7 @@ end
 end
 
 # PR #23187
-@deprecate cpad(s, n::Integer, p=" ") rpad(lpad(s, div(n+strwidth(s), 2), p), n, p) false
+@deprecate cpad(s, n::Integer, p=" ") rpad(lpad(s, div(n+textwidth(s), 2), p), n, p) false
 
 # PR #22088
 function hex2num(s::AbstractString)
@@ -1876,6 +1876,10 @@ end
     end
     nothing
 end
+
+# issue #20816
+@deprecate strwidth textwidth
+@deprecate charwidth textwidth
 
 # END 0.7 deprecations
 
