@@ -282,7 +282,7 @@ function log(x::Float64)
     elseif isnan(x)
         NaN
     else
-        throw(DomainError())
+        throw_complex_domainerror(x, :log)
     end
 end
 
@@ -318,7 +318,7 @@ function log(x::Float32)
     elseif isnan(x)
         NaN32
     else
-        throw(DomainError())
+        throw_complex_domainerror(x, :log)
     end
 end
 
@@ -353,7 +353,7 @@ function log1p(x::Float64)
     elseif isnan(x)
         NaN
     else
-        throw(DomainError())
+        throw_complex_domainerror(x, :log1p)
     end
 end
 
@@ -386,7 +386,7 @@ function log1p(x::Float32)
     elseif isnan(x)
         NaN32
     else
-        throw(DomainError())
+        throw_complex_domainerror(x, :log1p)
     end
 end
 

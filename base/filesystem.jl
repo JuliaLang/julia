@@ -44,7 +44,7 @@ import Base:
     skip, stat, unsafe_read, unsafe_write, transcode, uv_error, uvhandle,
     uvtype, write
 
-if is_windows()
+if Sys.iswindows()
     import Base: cwstring
 end
 
@@ -52,7 +52,7 @@ include("path.jl")
 include("stat.jl")
 include("file.jl")
 include("poll.jl")
-include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
+include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
 
 ## Operations with File (fd) objects ##
 

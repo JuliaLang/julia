@@ -74,24 +74,37 @@ import Base.SimdLoop.SimdError
 
 # Test that @simd rejects inner loop body with invalid control flow statements
 # issue #8613
-@test_throws SimdError eval(:(begin
+macro test_throws(ty, ex)
+    return quote
+        Test.@test_throws $(esc(ty)) try
+            $(esc(ex))
+        catch err
+            @test err isa LoadError
+            @test err.file === $(string(__source__.file))
+            @test err.line === $(__source__.line + 1)
+            rethrow(err.error)
+        end
+    end
+end
+
+@test_throws SimdError("break is not allowed inside a @simd loop body") @macroexpand begin
     @simd for x = 1:10
         x == 1 && break
     end
-end))
+end
 
-@test_throws SimdError eval(:(begin
+@test_throws SimdError("continue is not allowed inside a @simd loop body") @macroexpand begin
     @simd for x = 1:10
         x < 5 && continue
     end
-end))
+end
 
-@test_throws SimdError eval(:(begin
+@test_throws SimdError("@goto is not allowed inside a @simd loop body") @macroexpand begin
     @simd for x = 1:10
         x == 1 || @goto exit_loop
     end
     @label exit_loop
-end))
+end
 
 # @simd with cartesian iteration
 function simd_cartesian_range!(indexes, crng)
@@ -101,28 +114,23 @@ function simd_cartesian_range!(indexes, crng)
     indexes
 end
 
-crng = CartesianRange(CartesianIndex{4}(2,0,1,3),
-                      CartesianIndex{4}(4,1,1,5))
+crng = CartesianRange(2:4, 0:1, 1:1, 3:5)
 indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
 @test indexes == vec(collect(crng))
 
-crng = CartesianRange(CartesianIndex{2}(-1,1),
-                      CartesianIndex{2}(1,3))
+crng = CartesianRange(-1:1, 1:3)
 indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
 @test indexes == vec(collect(crng))
 
-crng = CartesianRange(CartesianIndex{2}(-1,1),
-                      CartesianIndex{2}(-1,3))
+crng = CartesianRange(-1:-1, 1:3)
 indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
 @test indexes == vec(collect(crng))
 
-crng = CartesianRange(CartesianIndex{1}(2),
-                      CartesianIndex{1}(4))
+crng = CartesianRange(2:4)
 indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
 @test indexes == collect(crng)
 
-crng = CartesianRange(CartesianIndex{0}(),
-                      CartesianIndex{0}())
+crng = CartesianRange()
 indexes = simd_cartesian_range!(Array{eltype(crng)}(0), crng)
 @test indexes == vec(collect(crng))
 

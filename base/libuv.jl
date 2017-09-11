@@ -2,19 +2,19 @@
 
 # Core definitions for interacting with the libuv library from Julia
 
-include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
+include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
 
 # convert UV handle data to julia object, checking for null
 function uv_sizeof_handle(handle)
     if !(UV_UNKNOWN_HANDLE < handle < UV_HANDLE_TYPE_MAX)
-        throw(DomainError())
+        throw(DomainError(handle))
     end
     ccall(:uv_handle_size,Csize_t,(Int32,),handle)
 end
 
 function uv_sizeof_req(req)
     if !(UV_UNKNOWN_REQ < req < UV_REQ_TYPE_MAX)
-        throw(DomainError())
+        throw(DomainError(req))
     end
     ccall(:uv_req_size,Csize_t,(Int32,),req)
 end
@@ -39,7 +39,7 @@ macro handle_as(hand, typ)
     end
 end
 
-associate_julia_struct(handle::Ptr{Void}, jlobj::ANY) =
+associate_julia_struct(handle::Ptr{Void}, @nospecialize(jlobj)) =
     ccall(:jl_uv_associate_julia_struct, Void, (Ptr{Void}, Any), handle, jlobj)
 disassociate_julia_struct(uv) = disassociate_julia_struct(uv.handle)
 disassociate_julia_struct(handle::Ptr{Void}) =
@@ -86,17 +86,17 @@ function process_events(block::Bool)
 end
 
 function reinit_stdio()
-    global uv_jl_alloc_buf     = cfunction(uv_alloc_buf, Void, (Ptr{Void}, Csize_t, Ptr{Void}))
-    global uv_jl_readcb        = cfunction(uv_readcb, Void, (Ptr{Void}, Cssize_t, Ptr{Void}))
-    global uv_jl_connectioncb  = cfunction(uv_connectioncb, Void, (Ptr{Void}, Cint))
-    global uv_jl_connectcb     = cfunction(uv_connectcb, Void, (Ptr{Void}, Cint))
-    global uv_jl_writecb_task  = cfunction(uv_writecb_task, Void, (Ptr{Void}, Cint))
-    global uv_jl_getaddrinfocb = cfunction(uv_getaddrinfocb, Void, (Ptr{Void},Cint,Ptr{Void}))
-    global uv_jl_recvcb        = cfunction(uv_recvcb, Void, (Ptr{Void}, Cssize_t, Ptr{Void}, Ptr{Void}, Cuint))
-    global uv_jl_sendcb        = cfunction(uv_sendcb, Void, (Ptr{Void}, Cint))
-    global uv_jl_return_spawn  = cfunction(uv_return_spawn, Void, (Ptr{Void}, Int64, Int32))
-    global uv_jl_asynccb       = cfunction(uv_asynccb, Void, (Ptr{Void},))
-    global uv_jl_timercb       = cfunction(uv_timercb, Void, (Ptr{Void},))
+    global uv_jl_alloc_buf     = cfunction(uv_alloc_buf, Void, Tuple{Ptr{Void}, Csize_t, Ptr{Void}})
+    global uv_jl_readcb        = cfunction(uv_readcb, Void, Tuple{Ptr{Void}, Cssize_t, Ptr{Void}})
+    global uv_jl_connectioncb  = cfunction(uv_connectioncb, Void, Tuple{Ptr{Void}, Cint})
+    global uv_jl_connectcb     = cfunction(uv_connectcb, Void, Tuple{Ptr{Void}, Cint})
+    global uv_jl_writecb_task  = cfunction(uv_writecb_task, Void, Tuple{Ptr{Void}, Cint})
+    global uv_jl_getaddrinfocb = cfunction(uv_getaddrinfocb, Void, Tuple{Ptr{Void}, Cint, Ptr{Void}})
+    global uv_jl_recvcb        = cfunction(uv_recvcb, Void, Tuple{Ptr{Void}, Cssize_t, Ptr{Void}, Ptr{Void}, Cuint})
+    global uv_jl_sendcb        = cfunction(uv_sendcb, Void, Tuple{Ptr{Void}, Cint})
+    global uv_jl_return_spawn  = cfunction(uv_return_spawn, Void, Tuple{Ptr{Void}, Int64, Int32})
+    global uv_jl_asynccb       = cfunction(uv_asynccb, Void, Tuple{Ptr{Void}})
+    global uv_jl_timercb       = cfunction(uv_timercb, Void, Tuple{Ptr{Void}})
 
     global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Void}, ())
     global STDIN = init_stdio(ccall(:jl_stdin_stream, Ptr{Void}, ()))

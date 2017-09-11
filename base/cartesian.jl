@@ -75,6 +75,7 @@ end
 Generate expressions like `A[i_1, i_2, ...]`. `indexexpr` can either be an iteration-symbol
 prefix, or an anonymous-function expression.
 
+# Examples
 ```jldoctest
 julia> @macroexpand Base.Cartesian.@nref 3 A i
 :(A[i_1, i_2, i_3])
@@ -120,6 +121,7 @@ end
 
 Generate `N` expressions. `expr` should be an anonymous-function expression.
 
+# Examples
 ```jldoctest
 julia> @macroexpand Base.Cartesian.@nexprs 4 i -> y[i] = A[i+j]
 quote
@@ -300,6 +302,7 @@ function lreplace!(str::AbstractString, r::LReplace)
     pat = r.pat_str
     j = start(pat)
     matching = false
+    local istart::Int
     while !done(str, i)
         cstr, i = next(str, i)
         if !matching
@@ -417,7 +420,7 @@ function exprresolve(ex::Expr)
     if ex.head == :if
         can_eval, tf = exprresolve_conditional(ex.args[1])
         if can_eval
-            ex = tf?ex.args[2]:ex.args[3]
+            ex = tf ? ex.args[2] : ex.args[3]
         end
     end
     ex

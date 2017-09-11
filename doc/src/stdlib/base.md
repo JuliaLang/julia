@@ -59,8 +59,7 @@ ans
 ```@docs
 Core.:(===)
 Core.isa
-Base.isequal(::Any, ::Any)
-Base.isequal(::Nullable, ::Nullable)
+Base.isequal
 Base.isless
 Base.isless(::Nullable, ::Nullable)
 Base.ifelse
@@ -76,6 +75,7 @@ Base.finalize
 Base.copy
 Base.deepcopy
 Core.isdefined
+Base.@isdefined
 Base.convert
 Base.promote
 Base.oftype
@@ -83,12 +83,11 @@ Base.widen
 Base.identity
 ```
 
-## Types
+## Dealing with Types
 
 ```@docs
 Base.supertype
-Core.issubtype
-Base.:(<:)
+Core.:(<:)
 Base.:(>:)
 Base.subtypes
 Base.typemin
@@ -110,14 +109,27 @@ Base.isbits
 Base.isleaftype
 Base.typejoin
 Base.typeintersect
-Base.Val
-Base.Enums.@enum
 Base.instances
+```
+
+## Special Types
+
+```@docs
+Core.Void
+Core.Any
+Base.Enums.@enum
+Core.Union
+Union{}
+Core.UnionAll
+Core.Tuple
+Base.Val
+Core.Vararg
 ```
 
 ## Generic Functions
 
 ```@docs
+Core.Function
 Base.method_exists
 Core.applicable
 Core.invoke
@@ -134,13 +146,15 @@ Base.@eval
 Base.evalfile
 Base.esc
 Base.@inbounds
+Base.@boundscheck
 Base.@inline
 Base.@noinline
+Base.@nospecialize
 Base.gensym
 Base.@gensym
 Base.@polly
-Base.parse(::Any, ::Any)
-Base.parse(::Any)
+Base.parse(::AbstractString, ::Int)
+Base.parse(::AbstractString)
 ```
 
 ## Nullables
@@ -187,11 +201,11 @@ Base.@elapsed
 Base.@allocated
 Base.EnvHash
 Base.ENV
-Base.is_unix
-Base.is_apple
-Base.is_linux
-Base.is_bsd
-Base.is_windows
+Base.Sys.isunix
+Base.Sys.isapple
+Base.Sys.islinux
+Base.Sys.isbsd
+Base.Sys.iswindows
 Base.Sys.windows_version
 Base.@static
 ```
@@ -249,12 +263,13 @@ Base.AsyncCondition(::Function)
 ```@docs
 Base.module_name
 Base.module_parent
-Base.current_module
+Base.@__MODULE__
 Base.fullname
 Base.names
 Core.nfields
 Base.fieldnames
 Base.fieldname
+Base.fieldcount
 Base.datatype_module
 Base.datatype_name
 Base.isconst
@@ -273,6 +288,7 @@ Base.gc
 Base.gc_enable
 Base.macroexpand
 Base.@macroexpand
+Base.@macroexpand1
 Base.expand
 Base.code_lowered
 Base.@code_lowered

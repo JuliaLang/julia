@@ -2,6 +2,11 @@
 
 ## general machinery for irrational mathematical constants
 
+"""
+    Irrational <: Real
+
+Irrational number type.
+"""
 struct Irrational{sym} <: Real end
 
 show(io::IO, x::Irrational{sym}) where {sym} = print(io, "$sym = $(string(float(x))[1:15])...")
@@ -36,6 +41,8 @@ convert(::Type{Rational{BigInt}}, x::Irrational) = throw(ArgumentError("Cannot c
         T(BigFloat(x), r)
     end
 end
+
+float(::Type{<:Irrational}) = Float64
 
 ==(::Irrational{s}, ::Irrational{s}) where {s} = true
 ==(::Irrational, ::Irrational) = false
@@ -95,7 +102,9 @@ end
 <=(x::Rational, y::Irrational) = x < y
 
 isfinite(::Irrational) = true
+isinteger(::Irrational) = false
 iszero(::Irrational) = false
+isone(::Irrational) = false
 
 hash(x::Irrational, h::UInt) = 3*object_id(x) - h
 
@@ -112,8 +121,7 @@ macro irrational(sym, val, def)
         function Base.convert(::Type{BigFloat}, ::Irrational{$qsym})
             c = BigFloat()
             ccall(($(string("mpfr_const_", def)), :libmpfr),
-                  Cint, (Ptr{BigFloat}, Int32),
-                  &c, MPFR.ROUNDING_MODE[])
+                  Cint, (Ref{BigFloat}, Int32), c, MPFR.ROUNDING_MODE[])
             return c
         end
     end : quote
@@ -131,91 +139,7 @@ macro irrational(sym, val, def)
 end
 
 big(x::Irrational) = convert(BigFloat,x)
-
-## specific irrational mathematical constants
-
-@irrational π        3.14159265358979323846  pi
-@irrational e        2.71828182845904523536  exp(big(1))
-@irrational γ        0.57721566490153286061  euler
-@irrational catalan  0.91596559417721901505  catalan
-@irrational φ        1.61803398874989484820  (1+sqrt(big(5)))/2
-
-# aliases
-"""
-    pi
-    π
-
-The constant pi.
-
-```jldoctest
-julia> pi
-π = 3.1415926535897...
-```
-"""
-const pi = π
-
-"""
-    e
-    eu
-
-The constant e.
-
-```jldoctest
-julia> e
-e = 2.7182818284590...
-```
-"""
-const eu = e
-
-"""
-    γ
-    eulergamma
-
-Euler's constant.
-
-```jldoctest
-julia> eulergamma
-γ = 0.5772156649015...
-```
-"""
-const eulergamma = γ
-
-"""
-    φ
-    golden
-
-The golden ratio.
-
-```jldoctest
-julia> golden
-φ = 1.6180339887498...
-```
-"""
-const golden = φ
-
-"""
-    catalan
-
-Catalan's constant.
-
-```jldoctest
-julia> catalan
-catalan = 0.9159655941772...
-```
-"""
-catalan
-
-# special behaviors
-
-# use exp for e^x or e.^x, as in
-#    ^(::Irrational{:e}, x::Number) = exp(x)
-# but need to loop over types to prevent ambiguity with generic rules for ^(::Number, x) etc.
-for T in (Irrational, Rational, Integer, Number)
-    ^(::Irrational{:e}, x::T) = exp(x)
-end
-
-log(::Irrational{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
-log(::Irrational{:e}, x::Number) = log(x)
+big(::Type{<:Irrational}) = BigFloat
 
 # align along = for nice Array printing
 function alignment(io::IO, x::Irrational)

@@ -1,6 +1,6 @@
 # SubArrays
 
-Julia's `SubArray` type is a container encoding a "view" of a parent `AbstractArray`.  This page
+Julia's `SubArray` type is a container encoding a "view" of a parent [`AbstractArray`](@ref).  This page
 documents some of the design principles and implementation of `SubArray`s.
 
 ## Indexing: cartesian vs. linear indexing
@@ -17,9 +17,10 @@ allows you to combine these styles of indexing: for example, a 3d array `A3` can
 For `Array`s, linear indexing appeals to the underlying storage format: an array is laid out as
 a contiguous block of memory, and hence the linear index is just the offset (+1) of the corresponding
 entry relative to the beginning of the array.  However, this is not true for many other `AbstractArray`
-types: examples include `SparseMatrixCSC`, arrays that require some kind of computation (such
-as interpolation), and the type under discussion here, `SubArray`.  For these types, the underlying
-information is more naturally described in terms of cartesian indexes.
+types: examples include [`SparseMatrixCSC`](@ref), arrays that require some kind of
+computation (such as interpolation), and the type under discussion here, `SubArray`.
+For these types, the underlying information is more naturally described in terms of
+cartesian indexes.
 
 You can manually convert from a cartesian index to a linear index with `sub2ind`, and vice versa
 using `ind2sub`.  `getindex` and `setindex!` functions for `AbstractArray` types may include similar
@@ -35,15 +36,31 @@ cartesian, rather than linear, indexing.
 
 Consider making 2d slices of a 3d array:
 
-```julia
-S1 = view(A, :, 5, 2:6)
-S2 = view(A, 5, :, 2:6)
+```@meta
+DocTestSetup = :(srand(1234))
+```
+```jldoctest subarray
+julia> A = rand(2,3,4);
+
+julia> S1 = view(A, :, 1, 2:3)
+2×2 SubArray{Float64,2,Array{Float64,3},Tuple{Base.Slice{Base.OneTo{Int64}},Int64,UnitRange{Int64}},false}:
+ 0.200586  0.066423
+ 0.298614  0.956753
+
+julia> S2 = view(A, 1, :, 2:3)
+3×2 SubArray{Float64,2,Array{Float64,3},Tuple{Int64,Base.Slice{Base.OneTo{Int64}},UnitRange{Int64}},true}:
+ 0.200586  0.066423
+ 0.246837  0.646691
+ 0.648882  0.276021
+```
+```@meta
+DocTestSetup = nothing
 ```
 
 `view` drops "singleton" dimensions (ones that are specified by an `Int`), so both `S1` and `S2`
 are two-dimensional `SubArray`s. Consequently, the natural way to index these is with `S1[i,j]`.
- To extract the value from the parent array `A`, the natural approach is to replace `S1[i,j]`
-with `A[i,5,(2:6)[j]]` and `S2[i,j]` with `A[5,i,(2:6)[j]]`.
+To extract the value from the parent array `A`, the natural approach is to replace `S1[i,j]`
+with `A[i,1,(2:3)[j]]` and `S2[i,j]` with `A[1,i,(2:3)[j]]`.
 
 The key feature of the design of SubArrays is that this index replacement can be performed without
 any runtime overhead.
@@ -54,7 +71,7 @@ any runtime overhead.
 
 The strategy adopted is first and foremost expressed in the definition of the type:
 
-```
+```julia
 struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     parent::P
     indexes::I
@@ -70,13 +87,14 @@ a `Tuple` of the types of the indices for each dimension. The final one, `L`, is
 as a convenience for dispatch; it's a boolean that represents whether the index types support
 fast linear indexing. More on that later.
 
-If in our example above `A` is a `Array{Float64, 3}`, our `S1` case above would be a `SubArray{Int64,2,Array{Int64,3},Tuple{Colon,Int64,UnitRange{Int64}},false}`.
+If in our example above `A` is a `Array{Float64, 3}`, our `S1` case above would be a
+`SubArray{Float64,2,Array{Float64,3},Tuple{Base.Slice{Base.OneTo{Int64}},Int64,UnitRange{Int64}},false}`.
 Note in particular the tuple parameter, which stores the types of the indices used to create
-`S1`.  Likewise,
+`S1`. Likewise,
 
-```julia
+```jldoctest subarray
 julia> S1.indexes
-(Colon(),5,2:6)
+(Base.Slice(Base.OneTo(2)), 1, 2:3)
 ```
 
 Storing these values allows index replacement, and having the types encoded as parameters allows
@@ -89,7 +107,7 @@ types.  For example, for `S1`, one needs to apply the `i,j` indices to the first
 of the parent array, whereas for `S2` one needs to apply them to the second and third.  The simplest
 approach to indexing would be to do the type-analysis at runtime:
 
-```
+```julia
 parentindexes = Array{Any}(0)
 for thisindex in S.indexes
     ...
@@ -137,7 +155,7 @@ For `SubArray` types, the availability of efficient linear indexing is based pur
 of the indices, and does not depend on values like the size of the parent array. You can ask whether
 a given set of indices supports fast linear indexing with the internal `Base.viewindexing` function:
 
-```julia
+```jldoctest subarray
 julia> Base.viewindexing(S1.indexes)
 IndexCartesian()
 
@@ -152,7 +170,7 @@ we can define dispatch directly on `SubArray{T,N,A,I,true}` without any intermed
 Since this computation doesn't depend on runtime values, it can miss some cases in which the stride
 happens to be uniform:
 
-```julia
+```jldoctest
 julia> A = reshape(1:4*2, 4, 2)
 4×2 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
  1  5
@@ -171,7 +189,7 @@ A view constructed as `view(A, 2:2:4, :)` happens to have uniform stride, and th
 indexing indeed could be performed efficiently.  However, success in this case depends on the
 size of the array: if the first dimension instead were odd,
 
-```julia
+```jldoctest
 julia> A = reshape(1:5*2, 5, 2)
 5×2 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
  1   6

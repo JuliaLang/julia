@@ -25,8 +25,7 @@ that no copying occurs (`B` shares storage with `A`).
 
 See also: [`permutedims`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = rand(3,5,4);
 
@@ -60,7 +59,7 @@ Base.pointer(A::PermutedDimsArray, i::Integer) = throw(ArgumentError("pointer(A,
 
 function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
     s = strides(parent(A))
-    ntuple(d->s[perm[d]], Val{N})
+    ntuple(d->s[perm[d]], Val(N))
 end
 
 @inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
@@ -74,10 +73,7 @@ end
     val
 end
 
-# For some reason this is faster than ntuple(d->I[perm[d]], Val{N}) (#15276?)
-@inline genperm(I::NTuple{N,Any}, perm::Dims{N}) where {N} = _genperm((), I, perm...)
-_genperm(out, I) = out
-@inline _genperm(out, I, p, perm...) = _genperm((out..., I[p]), I, perm...)
+@inline genperm(I::NTuple{N,Any}, perm::Dims{N}) where {N} = ntuple(d -> I[perm[d]], Val(N))
 @inline genperm(I, perm::AbstractVector{Int}) = genperm(I, (perm...,))
 
 """
@@ -89,6 +85,7 @@ equivalent to `permutedims(A, [2,1])`.
 
 See also: [`PermutedDimsArray`](@ref).
 
+# Examples
 ```jldoctest
 julia> A = reshape(collect(1:8), (2,2,2))
 2×2×2 Array{Int64,3}:
@@ -124,6 +121,8 @@ vector specifying a permutation of length `ndims(src)`. The preallocated array `
 have `size(dest) == size(src)[perm]` and is completely overwritten. No in-place permutation
 is supported and unexpected results will happen if `src` and `dest` have overlapping memory
 regions.
+
+See also [`permutedims`](@ref).
 """
 function Base.permutedims!(dest, src::AbstractArray, perm)
     Base.checkdims_perm(dest, src, perm)
@@ -157,7 +156,7 @@ function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
     return P
 end
 
-@noinline function _permutedims!(P::PermutedDimsArray, src, R1::CartesianRange{CartesianIndex{0}}, R2, R3, ds, dp)
+@noinline function _permutedims!(P::PermutedDimsArray, src, R1::CartesianRange{0}, R2, R3, ds, dp)
     ip, is = indices(src, dp), indices(src, ds)
     for jo in first(ip):8:last(ip), io in first(is):8:last(is)
         for I3 in R3, I2 in R2

@@ -200,7 +200,7 @@ end
 
 function showrest(io::IO)
     start = position(io)
-    show(readstring(io))
+    show(read(io, String))
     println()
     seek(io, start)
 end

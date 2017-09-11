@@ -17,7 +17,7 @@ struct TTNode
     typ # ::Type
     subtypes::Dict{Binding, TTNode}
 
-    TTNode(t::ANY) = new(t, Dict{Binding, TTNode}())
+    TTNode(@nospecialize t) = new(t, Dict{Binding, TTNode}())
 end
 
 # Add a node to a dict if not added
@@ -44,7 +44,7 @@ function store_type(sname::Binding, t::Union)
 
     return tnode.subtypes
 end
-function store_union(sname::Binding, tnode::TTNode, t::ANY)
+function store_union(sname::Binding, tnode::TTNode, @nospecialize t)
     t = Base.unwrap_unionall(t)
     if isa(t, Union)
         store_union(sname, tnode, t.a)

@@ -53,7 +53,7 @@ end
     datetime2unix(dt::DateTime) -> Float64
 
 Takes the given `DateTime` and returns the number of seconds
-since the unix epoch `1970-01-01T00:00:00` as a `Float64`.
+since the unix epoch `1970-01-01T00:00:00` as a [`Float64`](@ref).
 """
 datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH) / 1000.0
 
@@ -116,6 +116,6 @@ end
     datetime2julian(dt::DateTime) -> Float64
 
 Takes the given `DateTime` and returns the number of Julian calendar days since the julian
-epoch `-4713-11-24T12:00:00` as a `Float64`.
+epoch `-4713-11-24T12:00:00` as a [`Float64`](@ref).
 """
 datetime2julian(dt::DateTime) = (value(dt) - JULIANEPOCH) / 86400000.0

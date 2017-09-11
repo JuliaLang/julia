@@ -354,6 +354,10 @@ end
 @test searchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
 @test searchindex("\U1f596\U1f596", "\U1f596\U1f596", 1) == 1
 
+# contains with a String and Char needle
+@test contains("foo", "o")
+@test contains("foo", 'o')
+
 # string rsearchindex with a two-char UTF-8 (2 byte) string literal
 @test rsearchindex("ééé", "éé") == 3
 @test rsearchindex("ééé", "éé", endof("ééé")) == 3
@@ -375,3 +379,9 @@ end
 @test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 1
 
 @test_throws ErrorException "ab" ∈ "abc"
+
+# issue #15723
+@test findfirst("⨳(", '(') == 4
+@test findnext("(⨳(", '(', 2) == 5
+@test findlast("(⨳(", '(') == 5
+@test findprev("(⨳(", '(', 2) == 1

@@ -31,13 +31,13 @@ Compute the logarithmic factorial of a nonnegative integer `x`.
 Equivalent to [`lgamma`](@ref) of `x + 1`, but `lgamma` extends this function
 to non-integer `x`.
 """
-lfact(x::Integer) = x < 0 ? throw(DomainError()) : lgamma(x + oneunit(x))
+lfact(x::Integer) = x < 0 ? throw(DomainError(x, "`x` must be non-negative.")) : lgamma(x + oneunit(x))
 
 """
     lgamma(x)
 
 Compute the logarithm of the absolute value of [`gamma`](@ref) for
-`Real` `x`, while for `Complex` `x` it computes the
+[`Real`](@ref) `x`, while for [`Complex`](@ref) `x` compute the
 principal branch cut of the logarithm of `gamma(x)` (defined for negative `real(x)`
 by analytic continuation from positive `real(x)`).
 """

@@ -2,7 +2,7 @@
 
 using HTTPClient.HTTPC
 
-env_name = chomp(readstring(`hostname`))
+env_name = chomp(read(`hostname`, String))
 commit = Base.GIT_VERSION_INFO.commit
 flavor = ENV["JULIA_FLAVOR"]
 json = "{\"env\": \"$env_name\", \"blas\":\"$flavor\", \"commit\":\"$commit\"}"

@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <sys/stat.h>
 
 #include "platform.h"
@@ -16,6 +15,7 @@
 #include <unistd.h>
 #include <dlfcn.h>
 #endif
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -134,13 +134,13 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
     if (modname == NULL) {
 #ifdef _OS_WINDOWS_
         if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                                (LPCWSTR)(&jl_load_dynamic_library),
+                                (LPCWSTR)(uintptr_t)(&jl_load_dynamic_library),
                                 (HMODULE*)&handle)) {
             jl_error("could not load base module");
         }
 #else
         Dl_info info;
-        if (!dladdr(&jl_load_dynamic_library, &info) || !info.dli_fname)
+        if (!dladdr((void*)(uintptr_t)&jl_load_dynamic_library, &info) || !info.dli_fname)
             jl_error("could not load base module");
         handle = dlopen(info.dli_fname, RTLD_NOW);
 #endif

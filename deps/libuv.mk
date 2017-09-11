@@ -1,7 +1,7 @@
 ## LIBUV ##
 LIBUV_GIT_URL:=git://github.com/JuliaLang/libuv.git
 LIBUV_TAR_URL=https://api.github.com/repos/JuliaLang/libuv/tarball/$1
-$(eval $(call git-external,libuv,LIBUV,configure,,$(SRCDIR)/srccache))
+$(eval $(call git-external,libuv,LIBUV,configure,,$(SRCCACHE)))
 
 UV_CFLAGS := -D_GNU_SOURCE
 ifeq ($(USEMSVC), 1)
@@ -24,10 +24,10 @@ else
 UV_FLAGS := --disable-shared $(UV_MFLAGS)
 endif
 
-$(BUILDDIR)/$(LIBUV_SRC_DIR)/build-configured: $(SRCDIR)/srccache/$(LIBUV_SRC_DIR)/source-extracted
-	touch -c $(SRCDIR)/srccache/$(LIBUV_SRC_DIR)/aclocal.m4 # touch a few files to prevent autogen from getting called
-	touch -c $(SRCDIR)/srccache/$(LIBUV_SRC_DIR)/Makefile.in
-	touch -c $(SRCDIR)/srccache/$(LIBUV_SRC_DIR)/configure
+$(BUILDDIR)/$(LIBUV_SRC_DIR)/build-configured: $(SRCCACHE)/$(LIBUV_SRC_DIR)/source-extracted
+	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/aclocal.m4 # touch a few files to prevent autogen from getting called
+	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/Makefile.in
+	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/configure
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure --with-pic $(CONFIGURE_COMMON) $(UV_FLAGS)
@@ -54,7 +54,7 @@ clean-libuv:
 
 
 get-libuv: $(LIBUV_SRC_FILE)
-extract-libuv: $(SRCDIR)/srccache/$(LIBUV_SRC_DIR)/source-extracted
+extract-libuv: $(SRCCACHE)/$(LIBUV_SRC_DIR)/source-extracted
 configure-libuv: $(BUILDDIR)/$(LIBUV_SRC_DIR)/build-configured
 compile-libuv: $(BUILDDIR)/$(LIBUV_SRC_DIR)/build-compiled
 fastcheck-libuv: #none

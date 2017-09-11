@@ -4,6 +4,35 @@
 
 import Core.Intrinsics: cglobal, bitcast
 
+"""
+    cglobal((symbol, library) [, type=Void])
+
+Obtain a pointer to a global variable in a C-exported shared library, specified exactly as
+in [`ccall`](@ref).
+Returns a `Ptr{Type}`, defaulting to `Ptr{Void}` if no `Type` argument is
+supplied.
+The values can be read or written by [`unsafe_load`](@ref) or [`unsafe_store!`](@ref),
+respectively.
+"""
+cglobal
+
+"""
+    cfunction(f::Function, returntype::Type, argtypes::Type) -> Ptr{Void}
+
+Generate C-callable function pointer from the Julia function `f`. Type annotation of the return
+value in the callback function is a must for situations where Julia cannot infer the return
+type automatically.
+
+# Examples
+```julia-repl
+julia> function foo(x::Int, y::Int)
+           return x + y
+       end
+
+julia> cfunction(foo, Int, Tuple{Int,Int})
+Ptr{Void} @0x000000001b82fcd0
+```
+"""
 cfunction(f, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
@@ -18,7 +47,8 @@ Equivalent to the native `char` c-type.
 """
 Cchar
 
-if is_windows()
+# The ccall here is equivalent to Sys.iswindows(), but that's not defined yet
+@static if ccall(:jl_get_UNAME, Any, ()) === :NT
     const Clong = Int32
     const Culong = UInt32
     const Cwchar_t = UInt16
@@ -45,11 +75,11 @@ Culong
 """
     Cwchar_t
 
-Equivalent to the native `wchar_t` c-type (`Int32`).
+Equivalent to the native `wchar_t` c-type ([`Int32`](@ref)).
 """
 Cwchar_t
 
-if !is_windows()
+@static if ccall(:jl_get_UNAME, Any, ()) !== :NT
     const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
     if sizeof_mode_t == 2
         const Cmode_t = Int16
@@ -68,6 +98,17 @@ convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = bitcast(Ptr{Cwchar_t}, p)
 
 # construction from untyped pointers
 convert(::Type{T}, p::Ptr{Void}) where {T<:Union{Cstring,Cwstring}} = bitcast(T, p)
+
+"""
+    pointer(array [, index])
+
+Get the native address of an array or string element. Be careful to ensure that a Julia
+reference to `a` exists as long as this pointer will be used. This function is "unsafe" like
+`unsafe_convert`.
+
+Calling `Ref(array[, index])` is generally preferable to this function.
+"""
+function pointer end
 
 pointer(p::Cstring) = convert(Ptr{UInt8}, p)
 pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
@@ -118,7 +159,7 @@ end
 # symbols are guaranteed not to contain embedded NUL
 convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 
-if is_windows()
+@static if ccall(:jl_get_UNAME, Any, ()) === :NT
 """
     Base.cwstring(s)
 
@@ -158,9 +199,9 @@ Only conversion to/from UTF-8 is currently supported.
 """
 function transcode end
 
-transcode{T<:Union{UInt8,UInt16,UInt32,Int32}}(::Type{T}, src::Vector{T}) = src
-transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::String) = T[T(c) for c in src]
-transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::Vector{UInt8}) = transcode(T, String(src))
+transcode(::Type{T}, src::Vector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
+transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
+transcode(::Type{T}, src::Vector{UInt8}) where {T<:Union{Int32,UInt32}} = transcode(T, String(src))
 function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
     for c in src; print(buf, Char(c)); end
@@ -344,9 +385,18 @@ function ccallable(f::Function, rt::Type, argt::Type, name::Union{AbstractString
     ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring), f, rt, argt, name)
 end
 
-macro ccallable(rt, def)
+function expand_ccallable(rt, def)
     if isa(def,Expr) && (def.head === :(=) || def.head === :function)
         sig = def.args[1]
+        if sig.head === :(::)
+            if rt === nothing
+                rt = sig.args[2]
+            end
+            sig = sig.args[1]
+        end
+        if rt === nothing
+            error("@ccallable requires a return type")
+        end
         if sig.head === :call
             name = sig.args[1]
             at = map(sig.args[2:end]) do a
@@ -363,4 +413,11 @@ macro ccallable(rt, def)
         end
     end
     error("expected method definition in @ccallable")
+end
+
+macro ccallable(def)
+    expand_ccallable(nothing, def)
+end
+macro ccallable(rt, def)
+    expand_ccallable(rt, def)
 end

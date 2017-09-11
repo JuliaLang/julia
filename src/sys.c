@@ -4,15 +4,15 @@
   sys.c
   I/O and operating system utility functions
 */
-#include "julia.h"
-#include "julia_internal.h"
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
+
+#include "julia.h"
+#include "julia_internal.h"
 
 #ifdef _OS_WINDOWS_
 #include <psapi.h>
@@ -55,6 +55,8 @@
 #ifdef JL_MSAN_ENABLED
 #include <sanitizer/msan_interface.h>
 #endif
+
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -768,11 +770,13 @@ JL_DLLEXPORT size_t jl_maxrss(void)
     GetProcessMemoryInfo( GetCurrentProcess( ), &counter, sizeof(counter) );
     return (size_t)counter.PeakWorkingSetSize;
 
+// FIXME: `rusage` is available on OpenBSD, DragonFlyBSD and NetBSD as well.
+//        All of them return `ru_maxrss` in kilobytes.
 #elif defined(_OS_LINUX_) || defined(_OS_DARWIN_) || defined (_OS_FREEBSD_)
     struct rusage rusage;
     getrusage( RUSAGE_SELF, &rusage );
 
-#if defined(_OS_LINUX_)
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
     return (size_t)(rusage.ru_maxrss * 1024);
 #else
     return (size_t)rusage.ru_maxrss;

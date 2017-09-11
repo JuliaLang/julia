@@ -50,6 +50,49 @@ LowerTriangular(U::UpperTriangular) = throw(ArgumentError(
 UpperTriangular(U::LowerTriangular) = throw(ArgumentError(
     "cannot create an UpperTriangular matrix from a LowerTriangular input"))
 
+"""
+    LowerTriangular(A::AbstractMatrix)
+
+Construct a `LowerTriangular` view of the the matrix `A`.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+3×3 Array{Float64,2}:
+ 1.0  2.0  3.0
+ 4.0  5.0  6.0
+ 7.0  8.0  9.0
+
+julia> LowerTriangular(A)
+3×3 LowerTriangular{Float64,Array{Float64,2}}:
+ 1.0   ⋅    ⋅
+ 4.0  5.0   ⋅
+ 7.0  8.0  9.0
+```
+"""
+LowerTriangular
+"""
+    UpperTriangular(A::AbstractMatrix)
+
+Construct an `UpperTriangular` view of the the matrix `A`.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+3×3 Array{Float64,2}:
+ 1.0  2.0  3.0
+ 4.0  5.0  6.0
+ 7.0  8.0  9.0
+
+julia> UpperTriangular(A)
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 1.0  2.0  3.0
+  ⋅   5.0  6.0
+  ⋅    ⋅   9.0
+```
+"""
+UpperTriangular
+
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
 imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
@@ -286,19 +329,19 @@ transpose(A::LowerTriangular) = UpperTriangular(transpose(A.data))
 transpose(A::UnitLowerTriangular) = UnitUpperTriangular(transpose(A.data))
 transpose(A::UpperTriangular) = LowerTriangular(transpose(A.data))
 transpose(A::UnitUpperTriangular) = UnitLowerTriangular(transpose(A.data))
-ctranspose(A::LowerTriangular) = UpperTriangular(ctranspose(A.data))
-ctranspose(A::UnitLowerTriangular) = UnitUpperTriangular(ctranspose(A.data))
-ctranspose(A::UpperTriangular) = LowerTriangular(ctranspose(A.data))
-ctranspose(A::UnitUpperTriangular) = UnitLowerTriangular(ctranspose(A.data))
+adjoint(A::LowerTriangular) = UpperTriangular(adjoint(A.data))
+adjoint(A::UnitLowerTriangular) = UnitUpperTriangular(adjoint(A.data))
+adjoint(A::UpperTriangular) = LowerTriangular(adjoint(A.data))
+adjoint(A::UnitUpperTriangular) = UnitLowerTriangular(adjoint(A.data))
 
 transpose!(A::LowerTriangular) = UpperTriangular(copytri!(A.data, 'L'))
 transpose!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L'))
 transpose!(A::UpperTriangular) = LowerTriangular(copytri!(A.data, 'U'))
 transpose!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U'))
-ctranspose!(A::LowerTriangular) = UpperTriangular(copytri!(A.data, 'L' , true))
-ctranspose!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L' , true))
-ctranspose!(A::UpperTriangular) = LowerTriangular(copytri!(A.data, 'U' , true))
-ctranspose!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U' , true))
+adjoint!(A::LowerTriangular) = UpperTriangular(copytri!(A.data, 'L' , true))
+adjoint!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L' , true))
+adjoint!(A::UpperTriangular) = LowerTriangular(copytri!(A.data, 'U' , true))
+adjoint!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U' , true))
 
 diag(A::LowerTriangular) = diag(A.data)
 diag(A::UnitLowerTriangular) = ones(eltype(A), size(A,1))
@@ -327,7 +370,7 @@ end
 function copy!(A::T, B::T) where T<:Union{UpperTriangular,UnitUpperTriangular}
     n = size(B,1)
     for j = 1:n
-        for i = 1:(isa(B, UnitUpperTriangular)?j-1:j)
+        for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
             @inbounds A[i,j] = B[i,j]
         end
     end
@@ -336,7 +379,7 @@ end
 function copy!(A::T, B::T) where T<:Union{LowerTriangular,UnitLowerTriangular}
     n = size(B,1)
     for j = 1:n
-        for i = (isa(B, UnitLowerTriangular)?j+1:j):n
+        for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
             @inbounds A[i,j] = B[i,j]
         end
     end
@@ -349,7 +392,7 @@ function scale!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular
         if isa(B, UnitUpperTriangular)
             @inbounds A[j,j] = c
         end
-        for i = 1:(isa(B, UnitUpperTriangular)?j-1:j)
+        for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
             @inbounds A[i,j] = c * B[i,j]
         end
     end
@@ -361,7 +404,7 @@ function scale!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular
         if isa(B, UnitLowerTriangular)
             @inbounds A[j,j] = c
         end
-        for i = (isa(B, UnitLowerTriangular)?j+1:j):n
+        for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
             @inbounds A[i,j] = c * B[i,j]
         end
     end
@@ -398,12 +441,17 @@ scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 A_mul_B!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
 A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = A_mul_B!(C, full(A), B)
 A_mul_B!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = A_mul_B!(C, A, full(B))
-A_mul_B!(C::AbstractVector, A::AbstractTriangular, B::AbstractVector) = A_mul_B!(A, copy!(C, B))
-A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
-A_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
 A_mul_Bt!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, transpose!(C, B))
-A_mul_Bc!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, ctranspose!(C, B))
-A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, ctranspose!(C, B))
+A_mul_Bc!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, adjoint!(C, B))
+A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, adjoint!(C, B))
+# The three methods are neceesary to avoid ambiguities with definitions in matmul.jl
+for f in (:A_mul_B!, :Ac_mul_B!, :At_mul_B!)
+    @eval begin
+        ($f)(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = ($f)(A, copy!(C, B))
+        ($f)(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = ($f)(A, copy!(C, B))
+        ($f)(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = ($f)(A, copy!(C, B))
+    end
+end
 
 for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitLowerTriangular, 'L', 'U'),
@@ -1624,9 +1672,9 @@ end
 # below might compute an unnecessary copy. Eliminating the copy requires adding
 # all the promotion logic here once again. Since these methods are probably relatively
 # rare, we chose not to bother for now.
-Ac_mul_B(A::AbstractMatrix, B::AbstractTriangular) = (*)(ctranspose(A), B)
+Ac_mul_B(A::AbstractMatrix, B::AbstractTriangular) = (*)(adjoint(A), B)
 At_mul_B(A::AbstractMatrix, B::AbstractTriangular) = (*)(transpose(A), B)
-A_mul_Bc(A::AbstractTriangular, B::AbstractMatrix) = (*)(A, ctranspose(B))
+A_mul_Bc(A::AbstractTriangular, B::AbstractMatrix) = (*)(A, adjoint(B))
 A_mul_Bt(A::AbstractTriangular, B::AbstractMatrix) = (*)(A, transpose(B))
 Ac_mul_Bc(A::AbstractTriangular, B::AbstractTriangular) = Ac_mul_B(A, B')
 Ac_mul_Bc(A::AbstractTriangular, B::AbstractMatrix) = Ac_mul_B(A, B')
@@ -1640,9 +1688,9 @@ At_mul_Bt(A::AbstractMatrix, B::AbstractTriangular) = A_mul_Bt(A.', B)
 @inline A_mul_Bt(rowvec::RowVector, A::AbstractTriangular) = transpose(A * transpose(rowvec))
 @inline A_mul_Bt(A::AbstractTriangular, rowvec::RowVector) = A * transpose(rowvec)
 @inline At_mul_Bt(A::AbstractTriangular, rowvec::RowVector) = A.' * transpose(rowvec)
-@inline A_mul_Bc(rowvec::RowVector, A::AbstractTriangular) = ctranspose(A * ctranspose(rowvec))
-@inline A_mul_Bc(A::AbstractTriangular, rowvec::RowVector) = A * ctranspose(rowvec)
-@inline Ac_mul_Bc(A::AbstractTriangular, rowvec::RowVector) = A' * ctranspose(rowvec)
+@inline A_mul_Bc(rowvec::RowVector, A::AbstractTriangular) = adjoint(A * adjoint(rowvec))
+@inline A_mul_Bc(A::AbstractTriangular, rowvec::RowVector) = A * adjoint(rowvec)
+@inline Ac_mul_Bc(A::AbstractTriangular, rowvec::RowVector) = A' * adjoint(rowvec)
 
 @inline /(rowvec::RowVector, A::Union{UpperTriangular,LowerTriangular}) = transpose(transpose(A) \ transpose(rowvec))
 @inline /(rowvec::RowVector, A::Union{UnitUpperTriangular,UnitLowerTriangular}) = transpose(transpose(A) \ transpose(rowvec))
@@ -1650,8 +1698,8 @@ At_mul_Bt(A::AbstractMatrix, B::AbstractTriangular) = A_mul_Bt(A.', B)
 @inline A_rdiv_Bt(rowvec::RowVector, A::Union{UpperTriangular,LowerTriangular}) = transpose(A \ transpose(rowvec))
 @inline A_rdiv_Bt(rowvec::RowVector, A::Union{UnitUpperTriangular,UnitLowerTriangular}) = transpose(A \ transpose(rowvec))
 
-@inline A_rdiv_Bc(rowvec::RowVector, A::Union{UpperTriangular,LowerTriangular}) = ctranspose(A \ ctranspose(rowvec))
-@inline A_rdiv_Bc(rowvec::RowVector, A::Union{UnitUpperTriangular,UnitLowerTriangular}) = ctranspose(A \ ctranspose(rowvec))
+@inline A_rdiv_Bc(rowvec::RowVector, A::Union{UpperTriangular,LowerTriangular}) = adjoint(A \ adjoint(rowvec))
+@inline A_rdiv_Bc(rowvec::RowVector, A::Union{UnitUpperTriangular,UnitLowerTriangular}) = adjoint(A \ adjoint(rowvec))
 
 \(::Union{UpperTriangular,LowerTriangular}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 \(::Union{UnitUpperTriangular,UnitLowerTriangular}, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
@@ -1741,7 +1789,7 @@ powm(A::LowerTriangular, p::Real) = powm(A.', p::Real).'
 # Based on the code available at http://eprints.ma.man.ac.uk/1851/02/logm.zip,
 # Copyright (c) 2011, Awad H. Al-Mohy and Nicholas J. Higham
 # Julia version relicensed with permission from original authors
-function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
+function log(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
     maxsqrt = 100
     theta = [1.586970738772063e-005,
          2.313807884242979e-003,
@@ -1757,24 +1805,17 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
     m = 0
 
     # Compute repeated roots
-    d = diag(A)
-    dm1 = Vector{T}(n)
+    d = complex(diag(A))
+    dm1 = d .- 1
     s = 0
-    for i = 1:n
-        dm1[i] = d[i] - 1.
-    end
-    while norm(dm1, Inf) > theta[tmax]
-        for i = 1:n
-            d[i] = sqrt(d[i])
-        end
-        for i = 1:n
-            dm1[i] = d[i] - 1
-        end
+    while norm(dm1, Inf) > theta[tmax] && s < maxsqrt
+        d .= sqrt.(d)
+        dm1 .= d .- 1
         s = s + 1
     end
     s0 = s
     for k = 1:min(s, maxsqrt)
-        A = sqrtm(A)
+        A = sqrt(A)
     end
 
     AmI = A - I
@@ -1783,7 +1824,7 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
     alpha2 = max(d2, d3)
     foundm = false
     if alpha2 <= theta[2]
-        m = alpha2<=theta[1]?1:2
+        m = alpha2 <= theta[1] ? 1 : 2
         foundm = true
     end
 
@@ -1795,7 +1836,8 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
         d4 = norm(AmI^4, 1)^(1/4)
         alpha3 = max(d3, d4)
         if alpha3 <= theta[tmax]
-            for j = 3:tmax
+            local j
+            for outer j = 3:tmax
                 if alpha3 <= theta[j]
                     break
                 end
@@ -1815,7 +1857,7 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
             eta = min(alpha3, alpha4)
             if eta <= theta[tmax]
                 j = 0
-                for j = 6:tmax
+                for outer j = 6:tmax
                     if eta <= theta[j]
                         m = j
                         break
@@ -1829,7 +1871,7 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
             m = tmax
             break
         end
-        A = sqrtm(A)
+        A = sqrt(A)
         AmI = A - I
         s = s + 1
     end
@@ -1919,9 +1961,9 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
 
     return UpperTriangular(Y)
 end
-logm(A::LowerTriangular) = logm(A.').'
+log(A::LowerTriangular) = log(A.').'
 
-# Auxiliary functions for logm and matrix power
+# Auxiliary functions for matrix logarithm and matrix power
 
 # Compute accurate diagonal of A = A0^s - I
 #   Al-Mohy, "A more accurate Briggs method for the logarithm",
@@ -1964,21 +2006,16 @@ function invsquaring(A0::UpperTriangular, theta)
 
     # Compute repeated roots
     d = complex(diag(A))
-    dm1 = similar(d, n)
+    dm1 = d .- 1
     s = 0
-    for i = 1:n
-        dm1[i] = d[i] - 1
-    end
-    while norm(dm1, Inf) > theta[tmax]
-        for i = 1:n
-            d[i] = sqrt(d[i])
-            dm1[i] = d[i] - 1
-        end
+    while norm(dm1, Inf) > theta[tmax] && s < maxsqrt
+        d .= sqrt.(d)
+        dm1 .= d .- 1
         s = s + 1
     end
     s0 = s
     for k = 1:min(s, maxsqrt)
-        A = sqrtm(A)
+        A = sqrt(A)
     end
 
     AmI = A - I
@@ -1999,7 +2036,8 @@ function invsquaring(A0::UpperTriangular, theta)
         d4 = norm(AmI^4, 1)^(1/4)
         alpha3 = max(d3, d4)
         if alpha3 <= theta[tmax]
-            for j = 3:tmax
+            local j
+            for outer j = 3:tmax
                 if alpha3 <= theta[j]
                     break
                 elseif alpha3 / 2 <= theta[5] && p < 2
@@ -2023,7 +2061,7 @@ function invsquaring(A0::UpperTriangular, theta)
             eta = min(alpha3, alpha4)
             if eta <= theta[tmax]
                 j = 0
-                for j = 6:tmax
+                for outer j = 6:tmax
                     if eta <= theta[j]
                         m = j
                         break
@@ -2035,7 +2073,7 @@ function invsquaring(A0::UpperTriangular, theta)
                 m = tmax
                 break
             end
-            A = sqrtm(A)
+            A = sqrt(A)
             AmI = A - I
             s = s + 1
         end
@@ -2079,9 +2117,9 @@ end
 unw(x::Real) = 0
 unw(x::Number) = ceil((imag(x) - pi) / (2 * pi))
 
-# End of auxiliary functions for logm and matrix power
+# End of auxiliary functions for matrix logarithm and matrix power
 
-function sqrtm(A::UpperTriangular)
+function sqrt(A::UpperTriangular)
     realmatrix = false
     if isreal(A)
         realmatrix = true
@@ -2093,9 +2131,9 @@ function sqrtm(A::UpperTriangular)
             end
         end
     end
-    sqrtm(A,Val{realmatrix})
+    sqrt(A,Val(realmatrix))
 end
-function sqrtm(A::UpperTriangular{T},::Type{Val{realmatrix}}) where {T,realmatrix}
+function sqrt(A::UpperTriangular{T},::Val{realmatrix}) where {T,realmatrix}
     B = A.data
     n = checksquare(B)
     t = realmatrix ? typeof(sqrt(zero(T))) : typeof(sqrt(complex(zero(T))))
@@ -2113,7 +2151,7 @@ function sqrtm(A::UpperTriangular{T},::Type{Val{realmatrix}}) where {T,realmatri
     end
     return UpperTriangular(R)
 end
-function sqrtm(A::UnitUpperTriangular{T}) where T
+function sqrt(A::UnitUpperTriangular{T}) where T
     B = A.data
     n = checksquare(B)
     t = typeof(sqrt(zero(T)))
@@ -2131,8 +2169,8 @@ function sqrtm(A::UnitUpperTriangular{T}) where T
     end
     return UnitUpperTriangular(R)
 end
-sqrtm(A::LowerTriangular) = sqrtm(A.').'
-sqrtm(A::UnitLowerTriangular) = sqrtm(A.').'
+sqrt(A::LowerTriangular) = sqrt(A.').'
+sqrt(A::UnitLowerTriangular) = sqrt(A.').'
 
 # Generic eigensystems
 eigvals(A::AbstractTriangular) = diag(A)

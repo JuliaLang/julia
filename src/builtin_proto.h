@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef BUILTIN_PROTO_H
-#define BUILTIN_PROTO_H
+#ifndef JL_BUILTIN_PROTO_H
+#define JL_BUILTIN_PROTO_H
 
 #ifdef __cplusplus
 extern "C" {

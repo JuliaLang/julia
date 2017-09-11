@@ -6,15 +6,14 @@
   . pool-allocates small objects, keeps big objects on a simple list
 */
 
-#ifndef JULIA_GC_H
-#define JULIA_GC_H
+#ifndef JL_GC_H
+#define JL_GC_H
 
 #include <stdlib.h>
 #include <string.h>
 #ifndef _MSC_VER
 #include <strings.h>
 #endif
-#include <assert.h>
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_internal.h"
@@ -25,6 +24,7 @@
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 #endif
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,7 +32,7 @@ extern "C" {
 
 #define GC_PAGE_LG2 14 // log2(size of a page)
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
-#define GC_PAGE_OFFSET (JL_SMALL_BYTE_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_SMALL_BYTE_ALIGNMENT))
+#define GC_PAGE_OFFSET (JL_HEAP_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_HEAP_ALIGNMENT))
 
 #define jl_malloc_tag ((void*)0xdeadaa01)
 #define jl_singleton_tag ((void*)0xdeadaa02)
@@ -74,9 +74,144 @@ typedef struct {
     int         full_sweep;
 } jl_gc_num_t;
 
+typedef struct {
+    void **pc; // Current stack address for the pc (up growing)
+    char *data; // Current stack address for the data (up growing)
+    void **pc_start; // Cached value of `gc_cache->pc_stack`
+    void **pc_end; // Cached value of `gc_cache->pc_stack_end`
+} gc_mark_sp_t;
+
+enum {
+    GC_MARK_L_marked_obj,
+    GC_MARK_L_scan_only,
+    GC_MARK_L_finlist,
+    GC_MARK_L_objarray,
+    GC_MARK_L_obj8,
+    GC_MARK_L_obj16,
+    GC_MARK_L_obj32,
+    GC_MARK_L_stack,
+    GC_MARK_L_module_binding,
+    _GC_MARK_L_MAX
+};
+
+// Pop a data struct from the mark data stack (i.e. decrease the stack pointer)
+// This should be used after dispatch and therefore the pc stack pointer is already popped from
+// the stack.
+STATIC_INLINE void *gc_pop_markdata_(gc_mark_sp_t *sp, size_t size)
+{
+    char *data = sp->data - size;
+    sp->data = data;
+    return data;
+}
+#define gc_pop_markdata(sp, type) ((type*)gc_pop_markdata_(sp, sizeof(type)))
+
+// Re-push a frame to the mark stack (both data and pc)
+// The data and pc are expected to be on the stack (or updated in place) already.
+// Mainly useful to pause the current scanning in order to scan an new object.
+STATIC_INLINE void *gc_repush_markdata_(gc_mark_sp_t *sp, size_t size)
+{
+    char *data = sp->data;
+    sp->pc++;
+    sp->data = data + size;
+    return data;
+}
+#define gc_repush_markdata(sp, type) ((type*)gc_repush_markdata_(sp, sizeof(type)))
+
+/**
+ * The `nptr` member of marking data records the number of pointers slots referenced by
+ * an object to be used in the full collection heuristics as well as whether the object
+ * references young objects.
+ * `nptr >> 2` is the number of pointers fields referenced by the object.
+ * The lowest bit of `nptr` is set if the object references young object.
+ * The 2nd lowest bit of `nptr` is the GC old bits of the object after marking.
+ * A `0x3` in the low bits means that the object needs to be in the remset.
+ */
+
+// An generic object that's marked and needs to be scanned
+// The metadata might need update too (depend on the PC)
+typedef struct {
+    jl_value_t *obj; // The object
+    uintptr_t tag; // The tag with the GC bits masked out
+    uint8_t bits; // The GC bits after tagging (`bits & 1 == 1`)
+} gc_mark_marked_obj_t;
+
+// An object array. This can come from an array, svec, or the using array or a module
+typedef struct {
+    jl_value_t *parent; // The parent object to trigger write barrier on.
+    jl_value_t **begin; // The first slot to be scanned.
+    jl_value_t **end; // The end address (after the last slot to be scanned)
+    uintptr_t nptr; // See notes about `nptr` above.
+} gc_mark_objarray_t;
+
+// A normal object with 8bits field descriptors
+typedef struct {
+    jl_value_t *parent; // The parent object to trigger write barrier on.
+    jl_fielddesc8_t *begin; // Current field descriptor.
+    jl_fielddesc8_t *end; // End of field descriptor.
+    uintptr_t nptr; // See notes about `nptr` above.
+} gc_mark_obj8_t;
+
+// A normal object with 16bits field descriptors
+typedef struct {
+    jl_value_t *parent; // The parent object to trigger write barrier on.
+    jl_fielddesc16_t *begin; // Current field descriptor.
+    jl_fielddesc16_t *end; // End of field descriptor.
+    uintptr_t nptr; // See notes about `nptr` above.
+} gc_mark_obj16_t;
+
+// A normal object with 32bits field descriptors
+typedef struct {
+    jl_value_t *parent; // The parent object to trigger write barrier on.
+    jl_fielddesc32_t *begin; // Current field descriptor.
+    jl_fielddesc32_t *end; // End of field descriptor.
+    uintptr_t nptr; // See notes about `nptr` above.
+} gc_mark_obj32_t;
+
+// Stack frame
+typedef struct {
+    jl_gcframe_t *s; // The current stack frame
+    uint32_t i; // The current slot index in the frame
+    uint32_t nroots; // `nroots` fields in the frame
+    // Parameters to mark the copy_stack range.
+    uintptr_t offset;
+    uintptr_t lb;
+    uintptr_t ub;
+} gc_mark_stackframe_t;
+
+// Module bindings. This is also the beginning of module scanning.
+// The loop will start marking other references in a module after the bindings are marked
+typedef struct {
+    jl_module_t *parent; // The parent module to trigger write barrier on.
+    jl_binding_t **begin; // The first slot to be scanned.
+    jl_binding_t **end; // The end address (after the last slot to be scanned)
+    uintptr_t nptr; // See notes about `nptr` above.
+    uint8_t bits; // GC bits of the module (the bits to mark the binding buffer with)
+} gc_mark_binding_t;
+
+// Finalizer (or object) list
+typedef struct {
+    jl_value_t **begin;
+    jl_value_t **end;
+} gc_mark_finlist_t;
+
+// This is used to determine the max size of the data objects on the data stack.
+// We'll use this size to determine the size of the data stack corresponding to a
+// PC stack size. Since the data objects are not all of the same size, we'll waste
+// some memory on the data stack this way but that size is unlikely going to be significant.
+typedef union {
+    gc_mark_marked_obj_t marked;
+    gc_mark_objarray_t objarray;
+    gc_mark_obj8_t obj8;
+    gc_mark_obj16_t obj16;
+    gc_mark_obj32_t obj32;
+    gc_mark_stackframe_t stackframe;
+    gc_mark_binding_t binding;
+    gc_mark_finlist_t finlist;
+} gc_mark_data_t;
+
 // layout for big (>2k) objects
 
-typedef struct _bigval_t {
+JL_EXTENSION typedef struct _bigval_t {
     struct _bigval_t *next;
     struct _bigval_t **prev; // pointer to the next field of the prev entry
     union {
@@ -343,11 +478,21 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list)
     *list = hdr;
 }
 
-void mark_all_roots(jl_ptls_t ptls);
-void gc_mark_object_list(jl_ptls_t ptls, arraylist_t *list, size_t start);
-void visit_mark_stack(jl_ptls_t ptls);
+STATIC_INLINE void gc_mark_sp_init(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
+{
+    sp->pc = gc_cache->pc_stack;
+    sp->data = gc_cache->data_stack;
+    sp->pc_start = gc_cache->pc_stack;
+    sp->pc_end = gc_cache->pc_stack_end;
+}
+
+void gc_mark_queue_all_roots(jl_ptls_t ptls, gc_mark_sp_t *sp);
+void gc_mark_queue_finlist(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp,
+                           arraylist_t *list, size_t start);
+void gc_mark_loop(jl_ptls_t ptls, gc_mark_sp_t sp);
 void gc_debug_init(void);
-void jl_mark_box_caches(jl_ptls_t ptls);
+
+extern void *gc_mark_label_addrs[_GC_MARK_L_MAX];
 
 // GC pages
 
@@ -377,6 +522,7 @@ void gc_final_pause_end(int64_t t0, int64_t tend);
 void gc_time_pool_start(void);
 void gc_time_count_page(int freedall, int pg_skpd);
 void gc_time_pool_end(int sweep_full);
+void gc_time_sysimg_end(uint64_t t0);
 
 void gc_time_big_start(void);
 void gc_time_count_big(int old_bits, int bits);
@@ -398,7 +544,8 @@ STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd)
     (void)freedall;
     (void)pg_skpd;
 }
-#define gc_time_pool_end(sweep_full)
+#define gc_time_pool_end(sweep_full) (void)(sweep_full)
+#define gc_time_sysimg_end(t0) (void)(t0)
 #define gc_time_big_start()
 STATIC_INLINE void gc_time_count_big(int old_bits, int bits)
 {
@@ -461,10 +608,13 @@ extern int gc_verifying;
 #else
 #define gc_verify(ptls)
 #define verify_val(v)
-#define verify_parent1(ty,obj,slot,arg1)
-#define verify_parent2(ty,obj,slot,arg1,arg2)
+#define verify_parent1(ty,obj,slot,arg1) do {} while (0)
+#define verify_parent2(ty,obj,slot,arg1,arg2) do {} while (0)
 #define gc_verifying (0)
 #endif
+int gc_slot_to_fieldidx(void *_obj, void *slot);
+int gc_slot_to_arrayidx(void *_obj, void *begin);
+NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset);
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;

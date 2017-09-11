@@ -3,7 +3,7 @@
 ## IP ADDRESS HANDLING ##
 abstract type IPAddr end
 
-Base.isless{T<:IPAddr}(a::T, b::T) = isless(a.host, b.host)
+Base.isless(a::T, b::T) where {T<:IPAddr} = isless(a.host, b.host)
 Base.convert(dt::Type{<:Integer}, ip::IPAddr) = dt(ip.host)
 
 struct IPv4 <: IPAddr
@@ -24,7 +24,7 @@ end
 """
     IPv4(host::Integer) -> IPv4
 
-Returns an IPv4 object from ip address `host` formatted as an `Integer`.
+Returns an IPv4 object from ip address `host` formatted as an [`Integer`](@ref).
 
 ```jldoctest
 julia> IPv4(3223256218)
@@ -76,7 +76,7 @@ end
 """
     IPv6(host::Integer) -> IPv6
 
-Returns an IPv6 object from ip address `host` formatted as an `Integer`.
+Returns an IPv6 object from ip address `host` formatted as an [`Integer`](@ref).
 
 ```jldoctest
 julia> IPv6(3223256218)
@@ -282,10 +282,14 @@ mutable struct TCPSocket <: LibuvStream
         return tcp
     end
 end
-function TCPSocket()
+
+# kw arg "delay": if true, libuv delays creation of the socket fd till the first bind call
+function TCPSocket(; delay=true)
     tcp = TCPSocket(Libc.malloc(_sizeof_uv_tcp), StatusUninit)
-    err = ccall(:uv_tcp_init, Cint, (Ptr{Void}, Ptr{Void}),
-                eventloop(), tcp.handle)
+    af_spec = delay ? 0 : 2   # AF_UNSPEC is 0, AF_INET is 2
+
+    err = ccall(:uv_tcp_init_ex, Cint, (Ptr{Void}, Ptr{Void}, Cuint),
+                eventloop(), tcp.handle, af_spec)
     uv_error("failed to create tcp socket", err)
     tcp.status = StatusInit
     return tcp
@@ -329,6 +333,13 @@ _jl_sockaddr_from_addrinfo(addrinfo::Ptr{Void}) =
 _jl_sockaddr_set_port(ptr::Ptr{Void}, port::UInt16) =
     ccall(:jl_sockaddr_set_port, Void, (Ptr{Void}, UInt16), ptr, port)
 
+"""
+    accept(server[,client])
+
+Accepts a connection on the given server and returns a connection to the client. An
+uninitialized client stream may be provided, in which case it will be used instead of
+creating a new stream.
+"""
 accept(server::TCPServer) = accept(server, TCPSocket())
 
 # Libuv will internally reset the readable and writable flags on
@@ -451,8 +462,8 @@ Set UDP socket options.
 
 * `multicast_loop`: loopback for multicast packets (default: `true`).
 * `multicast_ttl`: TTL for multicast packets (default: `nothing`).
-* `enable_broadcast`: flag must be set to `true` if socket will be used for broadcast messages,
-  or else the UDP system will return an access error (default: `false`).
+* `enable_broadcast`: flag must be set to `true` if socket will be used for broadcast
+  messages, or else the UDP system will return an access error (default: `false`).
 * `ttl`: Time-to-live of packets sent on the socket (default: `nothing`).
 """
 function setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
@@ -540,8 +551,8 @@ function _send(sock::UDPSocket, ipaddr::IPv4, port::UInt16, buf)
 end
 
 function _send(sock::UDPSocket, ipaddr::IPv6, port::UInt16, buf)
-    ccall(:jl_udp_send6, Cint, (Ptr{Void}, UInt16, Ptr{UInt128}, Ptr{UInt8}, Csize_t, Ptr{Void}),
-          sock.handle, hton(port), &hton(ipaddr.host), buf, sizeof(buf), uv_jl_sendcb::Ptr{Void})
+    ccall(:jl_udp_send6, Cint, (Ptr{Void}, UInt16, Ref{UInt128}, Ptr{UInt8}, Csize_t, Ptr{Void}),
+          sock.handle, hton(port), hton(ipaddr.host), buf, sizeof(buf), uv_jl_sendcb::Ptr{Void})
 end
 
 """
@@ -715,8 +726,8 @@ function connect!(sock::TCPSocket, host::IPv6, port::Integer)
     if !(0 <= port <= typemax(UInt16))
         throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
     end
-    uv_error("connect", ccall(:jl_tcp6_connect, Int32, (Ptr{Void}, Ptr{UInt128}, UInt16, Ptr{Void}),
-                             sock.handle, &hton(host.host), hton(UInt16(port)), uv_jl_connectcb::Ptr{Void}))
+    uv_error("connect", ccall(:jl_tcp6_connect, Int32, (Ptr{Void}, Ref{UInt128}, UInt16, Ptr{Void}),
+                              sock.handle, hton(host.host), hton(UInt16(port)), uv_jl_connectcb::Ptr{Void}))
     sock.status = StatusConnecting
     nothing
 end
@@ -822,6 +833,10 @@ function listenany(host::IPAddr, default_port)
     while true
         sock = TCPServer()
         if bind(sock, addr) && trylisten(sock) == 0
+            if default_port == 0
+                _addr, port = getsockname(sock)
+                return (port, sock)
+            end
             return (addr.port, sock)
         end
         close(sock)
@@ -837,28 +852,39 @@ listenany(default_port) = listenany(IPv4(UInt32(0)), default_port)
 """
     getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)
 
-Get the IP address and the port that the given `TCPSocket` is connected to
-(or bound to, in the case of `TCPServer`).
+Get the IP address and port that the given socket is bound to.
 """
-function getsockname(sock::Union{TCPServer,TCPSocket})
+getsockname(sock::Union{TCPSocket, TCPServer}) = _sockname(sock, true)
+
+
+"""
+    getpeername(sock::TCPSocket) -> (IPAddr, UInt16)
+
+Get the IP address and port of the remote endpoint that the given
+socket is connected to. Valid only for connected TCP sockets.
+"""
+getpeername(sock::TCPSocket) = _sockname(sock, false)
+
+function _sockname(sock, self=true)
     rport = Ref{Cushort}(0)
     raddress = zeros(UInt8, 16)
     rfamily = Ref{Cuint}(0)
-    r = if isa(sock, TCPServer)
-        ccall(:jl_tcp_getsockname, Int32,
+
+    if self
+        r = ccall(:jl_tcp_getsockname, Int32,
                 (Ptr{Void}, Ref{Cushort}, Ptr{Void}, Ref{Cuint}),
                 sock.handle, rport, raddress, rfamily)
     else
-        ccall(:jl_tcp_getpeername, Int32,
+        r = ccall(:jl_tcp_getpeername, Int32,
                 (Ptr{Void}, Ref{Cushort}, Ptr{Void}, Ref{Cuint}),
                 sock.handle, rport, raddress, rfamily)
     end
     uv_error("cannot obtain socket name", r)
     if r == 0
         port = ntoh(rport[])
-        af_inet6 = @static if is_windows() # AF_INET6 in <sys/socket.h>
+        af_inet6 = @static if Sys.iswindows() # AF_INET6 in <sys/socket.h>
             23
-        elseif is_apple()
+        elseif Sys.isapple()
             30
         elseif Sys.KERNEL ∈ (:FreeBSD, :DragonFly)
             28
@@ -876,7 +902,7 @@ function getsockname(sock::Union{TCPServer,TCPSocket})
             naddr = ntoh(unsafe_load(Ptr{UInt128}(pointer(raddress)), 1))
             addr = IPv6(naddr)
         else
-            error("unsupported address family: $(getindex(rfamily))")
+            error(string("unsupported address family: ", getindex(rfamily)))
         end
     else
         error("cannot obtain socket name")

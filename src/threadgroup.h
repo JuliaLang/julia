@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef THREADGROUP_H
-#define THREADGROUP_H
+#ifndef JL_THREADGROUP_H
+#define JL_THREADGROUP_H
 
 #include <stdint.h>
 #include "uv.h"

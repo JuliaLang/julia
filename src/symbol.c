@@ -7,15 +7,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-#include <assert.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-static jl_sym_t *volatile symtab = NULL;
+static jl_sym_t *symtab = NULL;
 
 static uintptr_t hash_symbol(const char *str, size_t len)
 {
@@ -32,9 +32,9 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
     jl_sym_t *sym;
     size_t nb = symbol_nbytes(len);
 
-    jl_taggedvalue_t *tag = (jl_taggedvalue_t*)jl_gc_perm_alloc_nolock(nb, 0);
+    jl_taggedvalue_t *tag = (jl_taggedvalue_t*)jl_gc_perm_alloc_nolock(nb, 0, sizeof(void*), 0);
     sym = (jl_sym_t*)jl_valueof(tag);
-    // set to old marked since we don't need write barrier on it.
+    // set to old marked so that we won't look at it in the GC or write barrier.
     tag->header = ((uintptr_t)jl_sym_type) | GC_OLD_MARKED;
     sym->left = sym->right = NULL;
     sym->hash = hash_symbol(str, len);
@@ -43,10 +43,9 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
     return sym;
 }
 
-static jl_sym_t *symtab_lookup(jl_sym_t *volatile *ptree, const char *str,
-                               size_t len, jl_sym_t *volatile **slot)
+static jl_sym_t *symtab_lookup(jl_sym_t **ptree, const char *str, size_t len, jl_sym_t ***slot)
 {
-    jl_sym_t *node = jl_atomic_load_acquire(ptree);
+    jl_sym_t *node = jl_atomic_load_acquire(ptree); // consume
     uintptr_t h = hash_symbol(str, len);
 
     // Tree nodes sorted by major key of (int(hash)) and minor key of (str).
@@ -64,7 +63,7 @@ static jl_sym_t *symtab_lookup(jl_sym_t *volatile *ptree, const char *str,
             ptree = &node->left;
         else
             ptree = &node->right;
-        node = jl_atomic_load_acquire(ptree);
+        node = jl_atomic_load_acquire(ptree); // consume
     }
     if (slot != NULL)
         *slot = ptree;
@@ -73,7 +72,7 @@ static jl_sym_t *symtab_lookup(jl_sym_t *volatile *ptree, const char *str,
 
 static jl_sym_t *_jl_symbol(const char *str, size_t len)
 {
-    jl_sym_t *volatile *slot;
+    jl_sym_t **slot;
     jl_sym_t *node = symtab_lookup(&symtab, str, len, &slot);
     if (node == NULL) {
         JL_LOCK_NOGC(&gc_perm_lock);

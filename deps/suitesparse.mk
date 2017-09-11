@@ -24,10 +24,10 @@ SUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(R
 	  INSTALL_LIB="$(build_libdir)" INSTALL_INCLUDE="$(build_includedir)" LIB="$(SUITE_SPARSE_LIB)" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)"
 
-$(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz: | $(SRCDIR)/srccache
+$(SRCCACHE)/SuiteSparse-$(SUITESPARSE_VER).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ http://faculty.cse.tamu.edu/davis/SuiteSparse/$(notdir $@)
 
-$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted: $(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz
+$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted: $(SRCCACHE)/SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@)
 	$(TAR) -C $(dir $@) --strip-components 1 -zxf $<
@@ -87,10 +87,10 @@ clean-suitesparse: clean-suitesparse-wrapper
 	-$(MAKE) -C $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER) clean
 
 distclean-suitesparse: clean-suitesparse-wrapper
-	-rm -rf $(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz \
+	-rm -rf $(SRCCACHE)/SuiteSparse-$(SUITESPARSE_VER).tar.gz \
 		$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)
 
-get-suitesparse: $(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz
+get-suitesparse: $(SRCCACHE)/SuiteSparse-$(SUITESPARSE_VER).tar.gz
 extract-suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted
 configure-suitesparse: extract-suitesparse
 compile-suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled

@@ -94,8 +94,11 @@ show(io,v"4.3.2+1.a")
 
 # typemin and typemax
 @test typemin(VersionNumber) == v"0-"
-@test typemax(VersionNumber) ==
-  VersionNumber(typemax(Int), typemax(Int), typemax(Int), (), ("",))
+@test typemax(VersionNumber) == v"∞"
+let ∞ = typemax(UInt32)
+    @test typemin(VersionNumber) == VersionNumber(0, 0, 0, ("",), ())
+    @test typemax(VersionNumber) == VersionNumber(∞, ∞, ∞, (), ("",))
+end
 
 # issupbuild
 import Base.issupbuild
@@ -274,5 +277,23 @@ for t = 1:1_000
         v = VersionNumber(vM, vm)
         @test (v ∈ a || v ∈ b) ? (v ∈ u) : (v ∉ u)
         @test (v ∈ a && v ∈ b) ? (v ∈ i) : (v ∉ i)
+    end
+end
+
+# PR #23075
+@testset "versioninfo" begin
+    # check that versioninfo(io; verbose=true) doesn't error, produces some output
+    # and doesn't invoke Pkg.status which will error if JULIA_PKGDIR is set
+    mktempdir() do dir
+        withenv("JULIA_PKGDIR" => dir) do
+            buf = PipeBuffer()
+            versioninfo(buf, verbose=true)
+            ver = read(buf, String)
+            @test startswith(ver, "Julia Version $VERSION")
+            @test contains(ver, "Environment:")
+            @test contains(ver, "Package Status:")
+            @test contains(ver, "no packages installed")
+            @test isempty(readdir(dir))
+        end
     end
 end

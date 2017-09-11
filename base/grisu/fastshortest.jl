@@ -55,7 +55,7 @@ const SmallPowersOfTen = [
         1000000, 10000000, 100000000, 1000000000]
 
 function bigpowten(n,n_bits)
-    guess = (n_bits + 1) * 1233 >> 12
+    guess = ((n_bits + 1) * 1233) >> 12
     guess += 1
     i = SmallPowersOfTen[guess+1]
     return n < i ? (SmallPowersOfTen[guess], guess-1) : (i,guess)

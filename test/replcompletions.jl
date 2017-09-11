@@ -29,9 +29,9 @@ ex = quote
     Base.keys(d::CustomDict) = collect(keys(d.mydict))
     Base.length(d::CustomDict) = length(d.mydict)
 
-    test{T<:Real}(x::T, y::T) = pass
+    test(x::T, y::T) where {T<:Real} = pass
     test(x::Real, y::Real) = pass
-    test{T<:Real}(x::AbstractArray{T}, y) = pass
+    test(x::AbstractArray{T}, y) where {T<:Real} = pass
     test(args...) = pass
 
     test1(x::Type{Float64}) = pass
@@ -51,7 +51,8 @@ ex = quote
     test5(x::Float64) = pass
     const a=x->x
     test6()=[a, a]
-
+    test7() = rand() > 0.5 ? 1 : 1.0
+    test8() = Any[1][1]
     kwtest(; x=1, y=2, w...) = pass
 
     array = [1, 1]
@@ -64,9 +65,16 @@ ex = quote
                      contains=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
                      "α"=>12, :α=>13)
     test_customdict = CustomDict(test_dict)
+
+    macro teststr_str(s) end
+    macro tϵsτstρ_str(s) end
+    macro testcmd_cmd(s) end
+    macro tϵsτcmδ_cmd(s) end
+
     end
     test_repl_comp_dict = CompletionFoo.test_dict
     test_repl_comp_customdict = CompletionFoo.test_customdict
+    test_dict_ℂ = Dict(1=>2)
 end
 ex.head = :toplevel
 eval(Main, ex)
@@ -75,7 +83,7 @@ function temp_pkg_dir_noinit(fn::Function)
     # Used in tests below to set up and tear down a sandboxed package directory
     # Unlike the version in test/pkg.jl, this does not run Pkg.init so does not
     # clone METADATA (only pkg and libgit2-online tests should need internet access)
-    const tmpdir = joinpath(tempdir(),randstring())
+    tmpdir = joinpath(tempdir(),randstring())
     withenv("JULIA_PKGDIR" => tmpdir) do
         @test !isdir(Pkg.dir())
         try
@@ -160,6 +168,21 @@ c,r = test_complete(s)
 @test "getindex" in c
 @test r == 19:23
 @test s[r] == "getin"
+
+# issue #23193: after `using`, identifiers can be prefixed by module names
+s = "using Base.Test, Base.Random"
+c,r = test_complete(s)
+@test !("RandomDevice" in c)
+
+# issue #23226: identifiers must be separated by a comma (not a newline)
+s = "using Base\nusi"
+c,r = test_complete(s)
+@test "using" in c
+
+# issue 23292
+@test_nowarn test_complete("test7().")
+c,r = test_complete("test8().")
+@test isempty(c)
 
 # inexistent completion inside a string
 s = "Pkg.add(\"lol"
@@ -359,17 +382,17 @@ c, r, res = test_complete(s)
 @test contains(c[1], "x, y, w...")
 
 # Test of inference based getfield completion
-s = "\"\"."
+s = "(1+2im)."
 c,r = test_complete(s)
-@test length(c)==1
+@test length(c)==2
 @test r == (endof(s)+1):endof(s)
-@test c[1] == "len"
+@test c == ["im","re"]
 
-s = "(\"\"*\"\")."
+s = "((1+2im))."
 c,r = test_complete(s)
-@test length(c)==1
+@test length(c)==2
 @test r == (endof(s)+1):endof(s)
-@test c[1] == "len"
+@test c == ["im","re"]
 
 s = "CompletionFoo.test_y_array[1]."
 c,r = test_complete(s)
@@ -471,7 +494,7 @@ c, r, res = test_scomplete(s)
 # which would raise an error in the repl code.
 @test (String[], 0:-1, false) == test_scomplete("\$a")
 
-if is_unix()
+if Sys.isunix()
     #Assume that we can rely on the existence and accessibility of /tmp
 
     # Tests path in Julia code and closing " if it's a file
@@ -551,10 +574,11 @@ if is_unix()
         path = homedir()
         dir = joinpath(path, "tmpfoobar")
         mkdir(dir)
-        s = "\"~/tmpfoob"
+        s = "\"" * path * "/tmpfoob"
         c,r = test_complete(s)
         @test "tmpfoobar/" in c
-        @test r == 4:10
+        l = 3 + length(path)
+        @test r == l:l+6
         @test s[r] == "tmpfoob"
         s = "\"~"
         @test "tmpfoobar/" in c
@@ -622,12 +646,12 @@ let #test that it can auto complete with spaces in file/path
     mkdir(dir)
     cd(path) do
         open(joinpath(space_folder, "space .file"),"w") do f
-            s = is_windows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
+            s = Sys.iswindows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
             c,r = test_scomplete(s)
             @test r == endof(s)-4:endof(s)
             @test "space\\ .file" in c
 
-            s = is_windows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
+            s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
             c,r = test_complete(s)
             @test r == endof(s)-4:endof(s)
             @test "space\\ .file\"" in c
@@ -637,15 +661,47 @@ let #test that it can auto complete with spaces in file/path
         c,r = test_complete(s)
         @test r == 5:15
         @test s[r] ==  dir_space
+
+        #Test for #18479
+        for c in "'`@\$;&"
+            test_dir = "test$(c)test"
+            mkdir(joinpath(path, test_dir))
+            try
+                if !(c in ['\'','$']) # As these characters hold special meaning
+                    # in shell commands the shell path completion cannot complete
+                    # paths with these characters
+                    c,r,res = test_scomplete(test_dir)
+                    @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
+                    @test res
+                end
+                c,r,res  = test_complete("\""*test_dir)
+                @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
+                @test res
+            finally
+                rm(joinpath(path, test_dir), recursive=true)
+            end
+        end
     end
     rm(dir, recursive=true)
+end
+
+let  # Test tilde path completion
+    c, r, res = test_complete("\"~/julia")
+    if !Sys.iswindows()
+        @test res && c == String[homedir() * "/julia"]
+    else
+        @test !res
+    end
+
+    c, r, res = test_complete("\"foo~bar")
+    @test !res
 end
 
 # Test the completion returns nothing when the folder do not exist
 c,r = test_complete("cd(\"folder_do_not_exist_77/file")
 @test length(c) == 0
 
-if is_windows()
+if Sys.iswindows()
     tmp = tempname()
     path = dirname(tmp)
     file = basename(tmp)
@@ -748,3 +804,19 @@ test_dict_completion("CompletionFoo.test_dict")
 test_dict_completion("CompletionFoo.test_customdict")
 test_dict_completion("test_repl_comp_dict")
 test_dict_completion("test_repl_comp_customdict")
+
+# Issue #23004: this should not throw:
+@test REPLCompletions.dict_identifier_key("test_dict_ℂ[\\", :other) isa Tuple
+
+@testset "completion of string/cmd macros (#22577)" begin
+    c, r, res = test_complete("ra")
+    @test "raw\"" in c
+    c, r, res = test_complete("CompletionFoo.tests")
+    @test "teststr\"" in c
+    c, r, res = test_complete("CompletionFoo.tϵsτs")
+    @test "tϵsτstρ\"" in c
+    c, r, res = test_complete("CompletionFoo.testc")
+    @test "testcmd`" in c
+    c, r, res = test_complete("CompletionFoo.tϵsτc")
+    @test "tϵsτcmδ`" in c
+end

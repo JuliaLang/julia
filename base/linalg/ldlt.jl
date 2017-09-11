@@ -21,7 +21,7 @@ convert(::Type{Factorization{T}}, F::LDLt{S,U}) where {T,S,U} = convert(LDLt{T,U
 
 Same as [`ldltfact`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
 """
-function ldltfact!(S::SymTridiagonal{T}) where T<:Real
+function ldltfact!(S::SymTridiagonal{T,V}) where {T<:Real,V}
     n = size(S,1)
     d = S.dv
     e = S.ev
@@ -29,7 +29,7 @@ function ldltfact!(S::SymTridiagonal{T}) where T<:Real
         e[i] /= d[i]
         d[i+1] -= abs2(e[i])*d[i]
     end
-    return LDLt{T,SymTridiagonal{T}}(S)
+    return LDLt{T,SymTridiagonal{T,V}}(S)
 end
 
 """
@@ -46,7 +46,7 @@ end
 
 factorize(S::SymTridiagonal) = ldltfact(S)
 
-function A_ldiv_B!(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T}) where T
+function A_ldiv_B!(S::LDLt{T,M}, B::AbstractVecOrMat{T}) where {T,M<:SymTridiagonal{T}}
     n, nrhs = size(B, 1), size(B, 2)
     if size(S,1) != n
         throw(DimensionMismatch("Matrix has dimensions $(size(S)) but right hand side has first dimension $n"))

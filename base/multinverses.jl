@@ -11,7 +11,7 @@ unsigned(::Type{Int16}) = UInt16
 unsigned(::Type{Int32}) = UInt32
 unsigned(::Type{Int64}) = UInt64
 unsigned(::Type{Int128}) = UInt128
-unsigned{T<:Unsigned}(::Type{T}) = T
+unsigned(::Type{T}) where {T<:Unsigned} = T
 
 abstract type  MultiplicativeInverse{T} end
 
@@ -135,12 +135,12 @@ end
 UnsignedMultiplicativeInverse(x::Unsigned) = UnsignedMultiplicativeInverse{typeof(x)}(x)
 
 function div(a::T, b::SignedMultiplicativeInverse{T}) where T
-    x = ((widen(a)*b.multiplier) >>> sizeof(a)*8) % T
+    x = ((widen(a)*b.multiplier) >>> (sizeof(a)*8)) % T
     x += (a*b.addmul) % T
     ifelse(abs(b.divisor) == 1, a*b.divisor, (signbit(x) + (x >> b.shift)) % T)
 end
 function div(a::T, b::UnsignedMultiplicativeInverse{T}) where T
-    x = ((widen(a)*b.multiplier) >>> sizeof(a)*8) % T
+    x = ((widen(a)*b.multiplier) >>> (sizeof(a)*8)) % T
     x = ifelse(b.add, convert(T, convert(T, (convert(T, a - x) >>> 1)) + x), x)
     ifelse(b.divisor == 1, a, x >>> b.shift)
 end

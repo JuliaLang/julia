@@ -61,15 +61,15 @@ end
 # Threaded version
 function pstockcorr(n)
     ## Correlated asset information
-    const CurrentPrice = [78. 102.]     # Initial Prices of the two stocks
-    const Corr = [1. 0.4; 0.4 1.]       # Correlation Matrix
-    const T = 500                       # Number of days to simulate = 2years = 500days
-    const dt = 1/250                    # Time step (1year = 250days)
-    const Div=[0.01 0.01]               # Dividend
-    const Vol=[0.2 0.3]                 # Volatility
+    CurrentPrice = [78. 102.]     # Initial Prices of the two stocks
+    Corr = [1. 0.4; 0.4 1.]       # Correlation Matrix
+    T = 500                       # Number of days to simulate = 2years = 500days
+    dt = 1/250                    # Time step (1year = 250days)
+    Div=[0.01 0.01]               # Dividend
+    Vol=[0.2 0.3]                 # Volatility
 
     ## Market Information
-    const r = 0.03                      # Risk-free rate
+    r = 0.03                      # Risk-free rate
 
     ## Define storages
     SimulPriceA = zeros(T,n)            # Simulated Price of Asset A
@@ -78,7 +78,7 @@ function pstockcorr(n)
     SimulPriceB[1,:] = CurrentPrice[2]
 
     ## Generating the paths of stock prices by Geometric Brownian Motion
-    const UpperTriangle = full(chol(Corr))    # UpperTriangle Matrix by Cholesky decomposition
+    UpperTriangle = full(chol(Corr))    # UpperTriangle Matrix by Cholesky decomposition
 
     # Optimization: pre-allocate these for performance
     # NOTE: the new GC will hopefully fix this, but currently GC time

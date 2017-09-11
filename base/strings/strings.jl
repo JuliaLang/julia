@@ -7,4 +7,4 @@ include("strings/search.jl")
 include("strings/util.jl")
 include("strings/io.jl")
 include("strings/utf8proc.jl")
-importall .UTF8proc
+using .UTF8proc

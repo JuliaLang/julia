@@ -33,6 +33,8 @@
 // Should also be enough for parallel GC when we have it =)
 #define sig_stack_size (8 * 1024 * 1024)
 
+#include "julia_assert.h"
+
 static bt_context_t *jl_to_bt_context(void *sigctx)
 {
 #ifdef __APPLE__
@@ -177,6 +179,8 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
     jl_ptls_t ptls = jl_get_ptls_states();
     sigset_t sset;
     uv_tty_reset_mode();
+    if (sig == SIGILL)
+        jl_show_sigill(context);
     jl_critical_error(sig, jl_to_bt_context(context),
                       ptls->bt_data, &ptls->bt_size);
     sigfillset(&sset);
@@ -282,6 +286,7 @@ static void allocate_segv_handler(void)
     }
 }
 
+#if !defined(JL_DISABLE_LIBUNWIND)
 static unw_context_t *volatile signal_context;
 static pthread_mutex_t in_signal_lock;
 static pthread_cond_t exit_signal_cond;
@@ -308,6 +313,7 @@ static void jl_thread_resume(int tid, int sig)
     assert(jl_atomic_load_acquire(&ptls2->signal_request) == 0);
     pthread_mutex_unlock(&in_signal_lock);
 }
+#endif
 
 // Throw jl_interrupt_exception if the master thread is in a signal async region
 // or if SIGINT happens too often.
@@ -358,6 +364,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, 0);
+#if !defined(JL_DISABLE_LIBUNWIND)
     if (request == 1) {
         signal_context = jl_to_bt_context(ctx);
 
@@ -370,7 +377,9 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
         pthread_cond_broadcast(&signal_caught_cond);
         pthread_mutex_unlock(&in_signal_lock);
     }
-    else if (request == 2) {
+    else
+#endif
+    if (request == 2) {
         jl_unblock_signal(sig);
         int force = jl_check_force_sigint();
         if (force || (!ptls->defer_signal && ptls->io_wait)) {
@@ -524,9 +533,7 @@ static void *signal_listener(void *arg)
     static uintptr_t bt_data[JL_MAX_BT_SIZE + 1];
     static size_t bt_size = 0;
     sigset_t sset;
-    unw_context_t *signal_context;
     int sig, critical, profile;
-    int i;
     jl_sigsetset(&sset);
     while (1) {
         profile = 0;
@@ -589,9 +596,11 @@ static void *signal_listener(void *arg)
 #endif
 
         bt_size = 0;
+#if !defined(JL_DISABLE_LIBUNWIND)
+        unw_context_t *signal_context;
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
-        for (i = jl_n_threads; i-- > 0; ) {
+        for (int i = jl_n_threads; i-- > 0; ) {
             // notify thread to stop
             jl_thread_suspend_and_get_state(i, &signal_context);
 
@@ -622,6 +631,7 @@ static void *signal_listener(void *arg)
             // notify thread to resume
             jl_thread_resume(i, sig);
         }
+#endif
 
         // this part is async with the running of the rest of the program
         // and must be thread-safe, but not necessarily signal-handler safe
@@ -645,7 +655,7 @@ void restore_signals(void)
     jl_sigsetset(&sset);
     sigprocmask(SIG_SETMASK, &sset, 0);
 
-#if !defined(HAVE_MACH)
+#if !defined(HAVE_MACH) && !defined(JL_DISABLE_LIBUNWIND)
     if (pthread_mutex_init(&in_signal_lock, NULL) != 0 ||
         pthread_cond_init(&exit_signal_cond, NULL) != 0 ||
         pthread_cond_init(&signal_caught_cond, NULL) != 0) {

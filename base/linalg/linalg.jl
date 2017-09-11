@@ -6,12 +6,12 @@ import Base: \, /, *, ^, +, -, ==
 import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac_mul_B,
     Ac_ldiv_B, Ac_ldiv_Bc, At_mul_Bt, A_rdiv_Bt, At_mul_B
 import Base: USE_BLAS64, abs, big, broadcast, ceil, conj, convert, copy, copy!,
-    ctranspose, eltype, eye, findmax, findmin, fill!, floor, full, getindex,
-    hcat, imag, indices, inv, isapprox, kron, length, IndexStyle, map,
+    adjoint, eltype, exp, eye, findmax, findmin, fill!, floor, full, getindex,
+    hcat, imag, indices, inv, isapprox, isone, IndexStyle, kron, length, log, map,
     ndims, oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round,
-    setindex!, show, similar, size, transpose, trunc, typed_hcat
-using Base: promote_op, _length, iszero, @pure, @propagate_inbounds, IndexLinear,
-    reduce, hvcat_fill, typed_vcat, promote_typeof
+    setindex!, show, similar, size, sqrt, transpose, trunc, typed_hcat
+using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
+    @propagate_inbounds, @pure, reduce, typed_vcat
 # We use `_length` because of non-1 indices; releases after julia 0.5
 # can go back to `length`. `_length(A)` is equivalent to `length(linearindices(A))`.
 
@@ -53,6 +53,7 @@ export
 
 # Functions
     axpy!,
+    axpby!,
     bkfact,
     bkfact!,
     chol,
@@ -63,8 +64,8 @@ export
     copy!,
     copy_transpose!,
     cross,
-    ctranspose,
-    ctranspose!,
+    adjoint,
+    adjoint!,
     det,
     diag,
     diagind,
@@ -80,7 +81,6 @@ export
     eigvals,
     eigvals!,
     eigvecs,
-    expm,
     eye,
     factorize,
     givens,
@@ -91,6 +91,7 @@ export
     ishermitian,
     isposdef,
     isposdef!,
+    issuccess,
     issymmetric,
     istril,
     istriu,
@@ -100,7 +101,6 @@ export
     linreg,
     logabsdet,
     logdet,
-    logm,
     lu,
     lufact,
     lufact!,
@@ -124,7 +124,6 @@ export
     schur,
     schurfact!,
     schurfact,
-    sqrtm,
     svd,
     svdfact!,
     svdfact,
@@ -201,8 +200,7 @@ end
 Check that a matrix is square, then return its common dimension.
 For multiple arguments, return a vector.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = ones(4,4); B = zeros(5,5);
 
@@ -248,7 +246,6 @@ include("exceptions.jl")
 include("generic.jl")
 
 include("blas.jl")
-import .BLAS: gemv! # consider renaming gemv! in matmul
 include("matmul.jl")
 include("lapack.jl")
 

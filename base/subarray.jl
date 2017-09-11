@@ -46,7 +46,7 @@ viewindexing(I::Tuple{Slice, Slice, Vararg{Any}}) = (@_inline_meta; viewindexing
 # A UnitRange can follow Slices, but only if all other indices are scalar
 viewindexing(I::Tuple{Slice, UnitRange, Vararg{ScalarIndex}}) = IndexLinear()
 # In general, ranges are only fast if all other indices are scalar
-viewindexing(I::Tuple{Union{Range, Slice}, Vararg{ScalarIndex}}) = IndexLinear()
+viewindexing(I::Tuple{Union{AbstractRange, Slice}, Vararg{ScalarIndex}}) = IndexLinear()
 # All other index combinations are slow
 viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 # Of course, all other array types are slow
@@ -57,6 +57,30 @@ size(V::SubArray) = (@_inline_meta; map(n->Int(unsafe_length(n)), indices(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
+"""
+    parent(A)
+
+Returns the "parent array" of an array view type (e.g., `SubArray`), or the array itself if
+it is not a view.
+
+# Examples
+```jldoctest
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> s_a = Symmetric(a)
+2×2 Symmetric{Int64,Array{Int64,2}}:
+ 1  2
+ 2  4
+
+julia> parent(s_a)
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+```
+"""
 parent(V::SubArray) = V.parent
 parentindexes(V::SubArray) = V.indexes
 
@@ -73,10 +97,10 @@ parentindexes(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 # indices that end up getting passed to it, so we store the parent as a
 # ReshapedArray view if necessary. The trouble is that arrays of `CartesianIndex`
 # can make the number of effective indices not equal to length(I).
-_maybe_reshape_parent(A::AbstractArray, ::NTuple{1, Bool}) = reshape(A, Val{1})
-_maybe_reshape_parent(A::AbstractArray{<:Any,1}, ::NTuple{1, Bool}) = reshape(A, Val{1})
+_maybe_reshape_parent(A::AbstractArray, ::NTuple{1, Bool}) = reshape(A, Val(1))
+_maybe_reshape_parent(A::AbstractArray{<:Any,1}, ::NTuple{1, Bool}) = reshape(A, Val(1))
 _maybe_reshape_parent(A::AbstractArray{<:Any,N}, ::NTuple{N, Bool}) where {N} = A
-_maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A, Val{N}) # TODO: DEPRECATE FOR #14770
+_maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A, Val(N)) # TODO: DEPRECATE FOR #14770
 """
     view(A, inds...)
 
@@ -107,14 +131,14 @@ julia> A # Note A has changed even though we modified b
  0  4
 ```
 """
-function view(A::AbstractArray, I...)
+function view(A::AbstractArray, I::Vararg{Any,N}) where {N}
     @_inline_meta
     J = to_indices(A, I)
     @boundscheck checkbounds(A, J...)
     unsafe_view(_maybe_reshape_parent(A, index_ndims(J...)), J...)
 end
 
-function unsafe_view(A::AbstractArray, I::ViewIndex...)
+function unsafe_view(A::AbstractArray, I::Vararg{ViewIndex,N}) where {N}
     @_inline_meta
     SubArray(A, I)
 end
@@ -124,7 +148,8 @@ end
 # might span multiple parent indices, making the reindex calculation very hard.
 # So we use _maybe_reindex to figure out if there are any arrays of
 # `CartesianIndex`, and if so, we punt and keep two layers of indirection.
-unsafe_view(V::SubArray, I::ViewIndex...) = (@_inline_meta; _maybe_reindex(V, I))
+unsafe_view(V::SubArray, I::Vararg{ViewIndex,N}) where {N} =
+    (@_inline_meta; _maybe_reindex(V, I))
 _maybe_reindex(V, I) = (@_inline_meta; _maybe_reindex(V, I, I))
 _maybe_reindex(V, I, ::Tuple{AbstractArray{<:AbstractCartesianIndex}, Vararg{Any}}) =
     (@_inline_meta; SubArray(V, I))
@@ -232,17 +257,17 @@ substrides(parent, I::Tuple) = substrides(1, parent, 1, I)
 substrides(s, parent, dim, ::Tuple{}) = ()
 substrides(s, parent, dim, I::Tuple{ScalarIndex, Vararg{Any}}) = (substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
 substrides(s, parent, dim, I::Tuple{Slice, Vararg{Any}}) = (s, substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
-substrides(s, parent, dim, I::Tuple{Range, Vararg{Any}}) = (s*step(I[1]), substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
+substrides(s, parent, dim, I::Tuple{AbstractRange, Vararg{Any}}) = (s*step(I[1]), substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
 substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(I[1]))"))
 
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
 compute_stride1(parent::AbstractArray, I::NTuple{N,Any}) where {N} =
-    (@_inline_meta; compute_stride1(1, fill_to_length(indices(parent), OneTo(1), Val{N}), I))
+    (@_inline_meta; compute_stride1(1, fill_to_length(indices(parent), OneTo(1), Val(N)), I))
 compute_stride1(s, inds, I::Tuple{}) = s
 compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
     (@_inline_meta; compute_stride1(s*unsafe_length(inds[1]), tail(inds), tail(I)))
-compute_stride1(s, inds, I::Tuple{Range, Vararg{Any}}) = s*step(I[1])
+compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s*step(I[1])
 compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
 
@@ -264,7 +289,7 @@ end
 # indexing uses the indices along the given dimension. Otherwise
 # linear indexing always starts with 1.
 compute_offset1(parent, stride1::Integer, I::Tuple) =
-    (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(I)..., I))
+    (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(1, I...), find_extended_inds(I...), I))
 compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, I::Tuple) =
     (@_inline_meta; compute_linindex(parent, I) - stride1*first(indices(parent, dims[1])))  # index-preserving case
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
@@ -272,7 +297,7 @@ compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
 
 function compute_linindex(parent, I::NTuple{N,Any}) where N
     @_inline_meta
-    IP = fill_to_length(indices(parent), OneTo(1), Val{N})
+    IP = fill_to_length(indices(parent), OneTo(1), Val(N))
     compute_linindex(1, 1, IP, I)
 end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{ScalarIndex, Vararg{Any}})
@@ -287,12 +312,12 @@ function compute_linindex(f, s, IP::Tuple, I::Tuple{Any, Vararg{Any}})
 end
 compute_linindex(f, s, IP::Tuple, I::Tuple{}) = f
 
-find_extended_dims(I) = (@_inline_meta; _find_extended_dims((), (), 1, I...))
-_find_extended_dims(dims, inds, dim) = dims, inds
-_find_extended_dims(dims, inds, dim, ::ScalarIndex, I...) =
-    (@_inline_meta; _find_extended_dims(dims, inds, dim+1, I...))
-_find_extended_dims(dims, inds, dim, i1, I...) =
-    (@_inline_meta; _find_extended_dims((dims..., dim), (inds..., i1), dim+1, I...))
+find_extended_dims(dim, ::ScalarIndex, I...) = (@_inline_meta; find_extended_dims(dim + 1, I...))
+find_extended_dims(dim, i1, I...) = (@_inline_meta; (dim, find_extended_dims(dim + 1, I...)...))
+find_extended_dims(dim) = ()
+find_extended_inds(::ScalarIndex, I...) = (@_inline_meta; find_extended_inds(I...))
+find_extended_inds(i1, I...) = (@_inline_meta; (i1, find_extended_inds(I...)...))
+find_extended_inds() = ()
 
 unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
@@ -333,7 +358,7 @@ function parentdims(s::SubArray)
     j = 1
     for i = 1:ndims(s.parent)
         r = s.indexes[i]
-        if j <= nd && (isa(r,Union{Slice,Range}) ? sp[i]*step(r) : sp[i]) == sv[j]
+        if j <= nd && (isa(r,Union{Slice,AbstractRange}) ? sp[i]*step(r) : sp[i]) == sv[j]
             dimindex[j] = i
             j += 1
         end
@@ -345,7 +370,7 @@ end
     replace_ref_end!(ex)
 
 Recursively replace occurrences of the symbol :end in a "ref" expression (i.e. A[...]) `ex`
-with the appropriate function calls (`endof`, `size` or `trailingsize`). Replacement uses
+with the appropriate function calls (`endof` or `size`). Replacement uses
 the closest enclosing ref, so
 
     A[B[end]]
@@ -377,7 +402,7 @@ function replace_ref_end_!(ex, withex)
             else
                 n = 1
                 J = endof(ex.args)
-                for j = 2:J-1
+                for j = 2:J
                     exj, used = replace_ref_end_!(ex.args[j],:($size($S,$n)))
                     used_S |= used
                     ex.args[j] = exj
@@ -393,13 +418,11 @@ function replace_ref_end_!(ex, withex)
                         n += 1
                     end
                 end
-                ex.args[J], used = replace_ref_end_!(ex.args[J],:($trailingsize($S,$n)))
-                used_S |= used
             end
             if used_S && S !== ex.args[1]
                 S0 = ex.args[1]
                 ex.args[1] = S
-                ex = Expr(:let, ex, :($S = $S0))
+                ex = Expr(:let, :($S = $S0), ex)
             end
         else
             # recursive search
@@ -448,8 +471,8 @@ macro view(ex)
         if Meta.isexpr(ex, :ref)
             ex = Expr(:call, view, ex.args...)
         else # ex replaced by let ...; foo[...]; end
-            assert(Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[1], :ref))
-            ex.args[1] = Expr(:call, view, ex.args[1].args...)
+            assert(Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[2], :ref))
+            ex.args[2] = Expr(:call, view, ex.args[2].args...)
         end
         Expr(:&&, true, esc(ex))
     else
@@ -509,12 +532,13 @@ function _views(ex::Expr)
             end
 
             Expr(:let,
+                 Expr(:block,
+                      :($a = $(_views(lhs.args[1]))),
+                      [:($(i[k]) = $(_views(lhs.args[k+1]))) for k=1:length(i)]...),
                  Expr(first(h) == '.' ? :(.=) : :(=), :($a[$(I...)]),
                       Expr(:call, Symbol(h[1:end-1]),
                            :($maybeview($a, $(I...))),
-                           _views.(ex.args[2:end])...)),
-                 :($a = $(_views(lhs.args[1]))),
-                 [:($(i[k]) = $(_views(lhs.args[k+1]))) for k=1:length(i)]...)
+                           _views.(ex.args[2:end])...)))
         else
             Expr(ex.head, _views.(ex.args)...)
         end

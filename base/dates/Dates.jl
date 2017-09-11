@@ -32,7 +32,7 @@ for more information.
 """
 module Dates
 
-importall ..Base.Operators
+import ..Base: ==, div, fld, mod, rem, gcd, lcm, +, -, *, /, %
 import ..Base.broadcast
 
 using Base.Iterators
@@ -78,6 +78,6 @@ export Period, DatePeriod, TimePeriod,
        firstdayofquarter, lastdayofquarter,
        adjust, tonext, toprev, tofirst, tolast,
        # io.jl
-       ISODateTimeFormat, ISODateFormat, DateFormat, RFC1123Format, @dateformat_str
+       ISODateTimeFormat, ISODateFormat, ISOTimeFormat, DateFormat, RFC1123Format, @dateformat_str
 
 end # module

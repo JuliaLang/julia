@@ -11,7 +11,7 @@ function notify_fun(idx)
 end
 
 function init_threadcall()
-    global c_notify_fun = cfunction(notify_fun, Void, (Cint,))
+    global c_notify_fun = cfunction(notify_fun, Void, Tuple{Cint})
 end
 
 """
@@ -64,7 +64,7 @@ end
 
 function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argvals::Vector)
     # generate function pointer
-    fun_ptr = cfunction(wrapper, Int, (Ptr{Void}, Ptr{Void}))
+    fun_ptr = cfunction(wrapper, Int, Tuple{Ptr{Void}, Ptr{Void}})
 
     # cconvert, root and unsafe_convert arguments
     roots = Any[]

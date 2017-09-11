@@ -39,18 +39,22 @@
 
 struct ABI_x86Layout : AbiLayout {
 
+STATIC_INLINE bool is_complex_type(jl_datatype_t *dt)
+{
+    static jl_sym_t *Complex_sym = NULL;
+    if (Complex_sym == NULL)
+        Complex_sym = jl_symbol("Complex");
+    return jl_is_datatype(dt) && dt->name->name == Complex_sym && dt->name->module == jl_base_module;
+}
+
 inline bool is_complex64(jl_datatype_t *dt) const
 {
-    return jl_complex_type != NULL && jl_is_datatype(dt) &&
-        ((jl_datatype_t*)dt)->name == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_complex_type))->name &&
-        jl_tparam0(dt) == (jl_value_t*)jl_float32_type;
+    return is_complex_type(dt) && jl_tparam0(dt) == (jl_value_t*)jl_float32_type;
 }
 
 inline bool is_complex128(jl_datatype_t *dt) const
 {
-    return jl_complex_type != NULL && jl_is_datatype(dt) &&
-        ((jl_datatype_t*)dt)->name == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_complex_type))->name &&
-        jl_tparam0(dt) == (jl_value_t*)jl_float64_type;
+    return is_complex_type(dt) && jl_tparam0(dt) == (jl_value_t*)jl_float64_type;
 }
 
 bool use_sret(jl_datatype_t *dt) override

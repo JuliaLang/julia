@@ -3,6 +3,7 @@
 # NOTE: This type needs to be kept in sync with jl_options in src/julia.h
 struct JLOptions
     quiet::Int8
+    banner::Int8
     julia_home::Ptr{UInt8}
     julia_bin::Ptr{UInt8}
     eval::Ptr{UInt8}
@@ -23,25 +24,35 @@ struct JLOptions
     debug_level::Int8
     check_bounds::Int8
     depwarn::Int8
+    warn_overwrite::Int8
     can_inline::Int8
     polly::Int8
     fast_math::Int8
-    worker::Ptr{UInt8}
+    worker::Int8
+    cookie::Ptr{UInt8}
     handle_signals::Int8
-    use_precompiled::Int8
-    use_compilecache::Int8
+    use_sysimage_native_code::Int8
+    use_compiled_modules::Int8
     bindto::Ptr{UInt8}
     outputbc::Ptr{UInt8}
+    outputunoptbc::Ptr{UInt8}
+    outputjitbc::Ptr{UInt8}
     outputo::Ptr{UInt8}
     outputji::Ptr{UInt8}
     incremental::Int8
+end
+
+# This runs early in the sysimage != is not defined yet
+if sizeof(JLOptions) === ccall(:jl_sizeof_jl_options, Int, ())
+else
+    ccall(:jl_throw, Void, (Any,), "Option structure mismatch")
 end
 
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))
 
 function show(io::IO, opt::JLOptions)
     print(io, "JLOptions(")
-    fields = fieldnames(opt)
+    fields = fieldnames(JLOptions)
     nfields = length(fields)
     for (i, f) in enumerate(fields)
         v = getfield(opt, i)

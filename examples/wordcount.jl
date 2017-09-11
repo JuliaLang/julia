@@ -75,7 +75,7 @@ end
 function wordcount_files(result_file,inputs...)
     text = ""
     for file in inputs
-        text *= readstring(file)
+        text *= read(file, String)
     end
     wc = parallel_wordcount(text)
     open(result_file,"w") do f

@@ -43,7 +43,7 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
     metadata_dir = joinpath(dir, "METADATA")
     if isdir(metadata_dir)
         info("Package directory $dir is already initialized.")
-        LibGit2.set_remote_url(metadata_dir, meta)
+        LibGit2.set_remote_url(metadata_dir, "origin", meta)
         return
     end
     local temp_dir = ""
@@ -53,7 +53,7 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         Base.cd(temp_dir) do
             info("Cloning METADATA from $meta")
             with(LibGit2.clone(meta, "METADATA", branch = branch)) do metadata_repo
-                LibGit2.set_remote_url(metadata_repo, meta)
+                LibGit2.set_remote_url(metadata_repo, "origin", meta)
             end
             touch("REQUIRE")
             touch("META_BRANCH")

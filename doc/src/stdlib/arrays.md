@@ -1,33 +1,23 @@
 # [Arrays](@id lib-arrays)
 
-## Basic functions
+## Constructors and Types
 
 ```@docs
-Base.ndims
-Base.size
-Base.indices(::Any)
-Base.indices(::AbstractArray, ::Any)
-Base.length(::AbstractArray)
-Base.eachindex
-Base.linearindices
-Base.IndexStyle
-Base.countnz
-Base.conj!
-Base.stride
-Base.strides
-Base.ind2sub
-Base.sub2ind
-Base.LinAlg.checksquare
-```
-
-## Constructors
-
-```@docs
+Core.AbstractArray
+Base.AbstractVector
+Base.AbstractMatrix
 Core.Array
+Core.Array(::Any)
+Base.Vector
+Base.Vector(::Any)
+Base.Matrix
+Base.Matrix(::Any, ::Any)
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
 Base.BitArray
+Base.BitArray(::Integer...)
+Base.BitArray(::Any)
 Base.trues
 Base.falses
 Base.fill
@@ -39,6 +29,25 @@ Base.linspace
 Base.logspace
 Base.Random.randsubseq
 Base.Random.randsubseq!
+```
+
+## Basic functions
+
+```@docs
+Base.ndims
+Base.size
+Base.indices(::Any)
+Base.indices(::AbstractArray, ::Any)
+Base.length(::AbstractArray)
+Base.eachindex
+Base.linearindices
+Base.IndexStyle
+Base.conj!
+Base.stride
+Base.strides
+Base.ind2sub
+Base.sub2ind
+Base.LinAlg.checksquare
 ```
 
 ## Broadcast and vectorization
@@ -130,8 +139,10 @@ Base.cumprod!
 Base.cumsum
 Base.cumsum!
 Base.cumsum_kbn
+Base.crc32c
 Base.LinAlg.diff
 Base.LinAlg.gradient
+Base.repeat(::AbstractArray)
 Base.rot180
 Base.rotl90
 Base.rotr90
@@ -145,11 +156,13 @@ Base.sum_kbn
 
 ```@docs
 Base.Random.randperm
+Base.Random.randperm!
 Base.invperm
 Base.isperm
 Base.permute!(::Any, ::AbstractVector)
 Base.ipermute!
 Base.Random.randcycle
+Base.Random.randcycle!
 Base.Random.shuffle
 Base.Random.shuffle!
 Base.reverse
@@ -159,24 +172,22 @@ Base.reverse!
 
 ## BitArrays
 
-`BitArray`s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
- They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
+[`BitArray`](@ref)s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
+They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
 and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
 
 ```@docs
 Base.flipbits!
-Base.rol!
-Base.rol
-Base.ror!
-Base.ror
 ```
 
-## Sparse Vectors and Matrices
+## [Sparse Vectors and Matrices](@id stdlib-sparse-arrays)
 
 Sparse vectors and matrices largely support the same set of operations as their dense counterparts.
 The following functions are specific to sparse arrays.
 
 ```@docs
+Base.SparseArrays.SparseVector
+Base.SparseArrays.SparseMatrixCSC
 Base.SparseArrays.sparse
 Base.SparseArrays.sparsevec
 Base.SparseArrays.issparse

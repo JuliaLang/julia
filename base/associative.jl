@@ -2,6 +2,16 @@
 
 # generic operations on associative collections
 
+"""
+    KeyError(key)
+
+An indexing operation into an `Associative` (`Dict`) or `Set` like object tried to access or
+delete a non-existent element.
+"""
+mutable struct KeyError <: Exception
+    key
+end
+
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::Associative, k) = in(k,keys(d))
@@ -32,7 +42,7 @@ struct ValueIterator{T<:Associative}
     dict::T
 end
 
-summary{T<:Union{KeyIterator,ValueIterator}}(iter::T) =
+summary(iter::T) where {T<:Union{KeyIterator,ValueIterator}} =
     string(T.name, " for a ", summary(iter.dict))
 
 show(io::IO, iter::Union{KeyIterator,ValueIterator}) = show(io, collect(iter))
@@ -59,17 +69,25 @@ end
 
 in(k, v::KeyIterator) = get(v.dict, k, secret_table_token) !== secret_table_token
 
+"""
+    keys(iterator)
+
+For an iterator or collection that has keys and values (e.g. arrays and dictionaries),
+return an iterator over the keys.
+"""
+function keys end
 
 """
     keys(a::Associative)
 
-Return an iterator over all keys in a collection.
+Return an iterator over all keys in an associative collection.
 `collect(keys(a))` returns an array of keys.
 Since the keys are stored internally in a hash table,
 the order in which they are returned may vary.
 But `keys(a)` and `values(a)` both iterate `a` and
 return the elements in the same order.
 
+# Examples
 ```jldoctest
 julia> a = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
@@ -83,7 +101,6 @@ julia> collect(keys(a))
 ```
 """
 keys(a::Associative) = KeyIterator(a)
-eachindex(a::Associative) = KeyIterator(a)
 
 """
     values(a::Associative)
@@ -95,6 +112,7 @@ the order in which they are returned may vary.
 But `keys(a)` and `values(a)` both iterate `a` and
 return the elements in the same order.
 
+# Examples
 ```jldoctest
 julia> a = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
@@ -108,6 +126,15 @@ julia> collect(values(a))
 ```
 """
 values(a::Associative) = ValueIterator(a)
+
+"""
+    pairs(collection)
+
+Return an iterator over `key => value` pairs for any
+collection that maps a set of keys to a set of values.
+This includes arrays, where the keys are the array indices.
+"""
+pairs(collection) = Generator(=>, keys(collection), values(collection))
 
 function copy(a::Associative)
     b = similar(a)
@@ -123,6 +150,7 @@ end
 Update collection with pairs from the other collections.
 See also [`merge`](@ref).
 
+# Examples
 ```jldoctest
 julia> d1 = Dict(1 => 2, 3 => 4);
 
@@ -153,6 +181,7 @@ Update collection with pairs from the other collections.
 Values with the same key will be combined using the
 combiner function.
 
+# Examples
 ```jldoctest
 julia> d1 = Dict(1 => 2, 3 => 4);
 
@@ -198,6 +227,7 @@ end
 
 Get the key type of an associative collection type. Behaves similarly to [`eltype`](@ref).
 
+# Examples
 ```jldoctest
 julia> keytype(Dict(Int32(1) => "foo"))
 Int32
@@ -212,13 +242,14 @@ keytype(::Type{A}) where {A<:Associative} = keytype(supertype(A))
 
 Get the value type of an associative collection type. Behaves similarly to [`eltype`](@ref).
 
+# Examples
 ```jldoctest
 julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
 valtype(::Type{Associative{K,V}}) where {K,V} = V
-valtype{A<:Associative}(::Type{A}) = valtype(supertype(A))
+valtype(::Type{A}) where {A<:Associative} = valtype(supertype(A))
 valtype(a::Associative) = valtype(typeof(a))
 
 """
@@ -229,6 +260,7 @@ types of the resulting collection will be promoted to accommodate the types of
 the merged collections. If the same key is present in another collection, the
 value for that key will be the value it has in the last collection listed.
 
+# Examples
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String,Float64} with 2 entries:
@@ -264,6 +296,7 @@ types of the resulting collection will be promoted to accommodate the types of
 the merged collections. Values with the same key will be combined using the
 combiner function.
 
+# Examples
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String,Float64} with 2 entries:
@@ -295,24 +328,98 @@ function emptymergedict(d::Associative, others::Associative...)
     Dict{K,V}()
 end
 
+"""
+    filter!(f, d::Associative)
+
+Update `d`, removing elements for which `f` is `false`.
+The function `f` is passed `key=>value` pairs.
+
+# Example
+```jldoctest
+julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
+Dict{Int64,String} with 3 entries:
+  2 => "b"
+  3 => "c"
+  1 => "a"
+
+julia> filter!(p->isodd(p.first), d)
+Dict{Int64,String} with 2 entries:
+  3 => "c"
+  1 => "a"
+```
+"""
 function filter!(f, d::Associative)
     badkeys = Vector{keytype(d)}(0)
-    for (k,v) in d
-        # don't delete!(d, k) here, since associative types
-        # may not support mutation during iteration
-        f(k,v) || push!(badkeys, k)
+    try
+        for (k,v) in d
+            # don't delete!(d, k) here, since associative types
+            # may not support mutation during iteration
+            f(k => v) || push!(badkeys, k)
+        end
+    catch e
+        return filter!_dict_deprecation(e, f, d)
     end
     for k in badkeys
         delete!(d, k)
     end
     return d
 end
+
+function filter!_dict_deprecation(e, f, d::Associative)
+    if isa(e, MethodError) && e.f === f
+        depwarn("In `filter!(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter!)
+        badkeys = Vector{keytype(d)}(0)
+        for (k,v) in d
+            # don't delete!(d, k) here, since associative types
+            # may not support mutation during iteration
+            f(k, v) || push!(badkeys, k)
+        end
+        for k in badkeys
+            delete!(d, k)
+        end
+    else
+        rethrow(e)
+    end
+    return d
+end
+
+"""
+    filter(f, d::Associative)
+
+Return a copy of `d`, removing elements for which `f` is `false`.
+The function `f` is passed `key=>value` pairs.
+
+# Examples
+```jldoctest
+julia> d = Dict(1=>"a", 2=>"b")
+Dict{Int64,String} with 2 entries:
+  2 => "b"
+  1 => "a"
+
+julia> filter(p->isodd(p.first), d)
+Dict{Int64,String} with 1 entry:
+  1 => "a"
+```
+"""
 function filter(f, d::Associative)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
     df = similar(d)
-    for (k,v) in d
-        if f(k,v)
-            df[k] = v
+    try
+        for (k, v) in d
+            if f(k => v)
+                df[k] = v
+            end
+        end
+    catch e
+        if isa(e, MethodError) && e.f === f
+            depwarn("In `filter(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter)
+            for (k, v) in d
+                if f(k, v)
+                    df[k] = v
+                end
+            end
+        else
+            rethrow(e)
         end
     end
     return df
@@ -412,7 +519,17 @@ function rehash!(t::ObjectIdDict, newsz = length(t.ht))
     t
 end
 
-function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
+function sizehint!(t::ObjectIdDict, newsz)
+    newsz = _tablesz(newsz*2)  # *2 for keys and values in same array
+    oldsz = length(t.ht)
+    # grow at least 25%
+    if newsz < (oldsz*5)>>2
+        return t
+    end
+    rehash!(t, newsz)
+end
+
+function setindex!(t::ObjectIdDict, @nospecialize(v), @nospecialize(k))
     if t.ndel >= ((3*length(t.ht))>>2)
         rehash!(t, max(length(t.ht)>>1, 32))
         t.ndel = 0
@@ -421,22 +538,22 @@ function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
     return t
 end
 
-get(t::ObjectIdDict, key::ANY, default::ANY) =
+get(t::ObjectIdDict, @nospecialize(key), @nospecialize(default)) =
     ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
 
-function pop!(t::ObjectIdDict, key::ANY, default::ANY)
+function pop!(t::ObjectIdDict, @nospecialize(key), @nospecialize(default))
     val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any), t.ht, key, default)
     # TODO: this can underestimate `ndel`
     val === default || (t.ndel += 1)
     return val
 end
 
-function pop!(t::ObjectIdDict, key::ANY)
+function pop!(t::ObjectIdDict, @nospecialize(key))
     val = pop!(t, key, secret_table_token)
     val !== secret_table_token ? val : throw(KeyError(key))
 end
 
-function delete!(t::ObjectIdDict, key::ANY)
+function delete!(t::ObjectIdDict, @nospecialize(key))
     pop!(t, key, secret_table_token)
     t
 end

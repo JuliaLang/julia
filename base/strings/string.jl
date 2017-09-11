@@ -42,16 +42,24 @@ end
 
 _string_n(n::Integer) = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), n)
 
-convert(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
-convert(::Type{String}, s::String) = s
-convert(::Type{String}, v::Vector{UInt8}) = String(v)
+"""
+    String(s::AbstractString)
+
+Convert a string to a contiguous byte array representation encoded as UTF-8 bytes.
+This representation is often appropriate for passing strings to C.
+"""
+String(s::AbstractString) = print_to_string(s)
+
+String(s::Symbol) = unsafe_string(Cstring(s))
+
+(::Type{Vector{UInt8}})(s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
 ## low-level functions ##
 
 pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
 pointer(s::String, i::Integer) = pointer(s)+(i-1)
 
-sizeof(s::String) = s.len
+sizeof(s::String) = Core.sizeof(s)
 
 """
     codeunit(s::AbstractString, i::Integer)
@@ -62,31 +70,36 @@ returns the `i`th byte of the representation of a UTF-8 string.
 codeunit(s::AbstractString, i::Integer)
 
 @inline function codeunit(s::String, i::Integer)
-    @boundscheck if (i < 1) | (i > s.len)
+    @boundscheck if (i < 1) | (i > sizeof(s))
         throw(BoundsError(s,i))
     end
-    unsafe_load(pointer(s),i)
+    ptr = pointer(s, i)
+    r = unsafe_load(ptr)
+    Core.gcuse(s)
+    r
 end
 
-write(io::IO, s::String) = unsafe_write(io, pointer(s), reinterpret(UInt, s.len))
+write(io::IO, s::String) = unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
 
 ## comparison ##
 
 function cmp(a::String, b::String)
+    al, bl = sizeof(a), sizeof(b)
     c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
-              a, b, min(a.len,b.len))
-    return c < 0 ? -1 : c > 0 ? +1 : cmp(a.len,b.len)
+              a, b, min(al,bl))
+    return c < 0 ? -1 : c > 0 ? +1 : cmp(al,bl)
 end
 
 function ==(a::String, b::String)
-    a.len == b.len && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, a.len)
+    al = sizeof(a)
+    al == sizeof(b) && 0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, al)
 end
 
 ## prevind and nextind ##
 
 function prevind(s::String, i::Integer)
     j = Int(i)
-    e = s.len
+    e = sizeof(s)
     if j > e
         return endof(s)
     end
@@ -102,7 +115,7 @@ function nextind(s::String, i::Integer)
     if j < 1
         return 1
     end
-    e = s.len
+    e = sizeof(s)
     j += 1
     @inbounds while j <= e && is_valid_continuation(codeunit(s,j))
         j += 1
@@ -115,7 +128,7 @@ end
 byte_string_classify(data::Vector{UInt8}) =
     ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), data, length(data))
 byte_string_classify(s::String) =
-    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, s.len)
+    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, sizeof(s))
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
@@ -150,35 +163,33 @@ const utf8_trailing = [
 ## required core functionality ##
 
 function endof(s::String)
-    p = pointer(s)
-    i = s.len
-    while i > 0 && is_valid_continuation(unsafe_load(p,i))
+    i = sizeof(s)
+    @inbounds while i > 0 && is_valid_continuation(codeunit(s, i))
         i -= 1
     end
     i
 end
 
 function length(s::String)
-    p = pointer(s)
     cnum = 0
-    for i = 1:s.len
-        cnum += !is_valid_continuation(unsafe_load(p,i))
+    @inbounds for i = 1:sizeof(s)
+        cnum += !is_valid_continuation(codeunit(s, i))
     end
     cnum
 end
 
-@noinline function slow_utf8_next(p::Ptr{UInt8}, b::UInt8, i::Int, l::Int)
-    if is_valid_continuation(b)
-        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, unsafe_load(p,i)))
+@noinline function slow_utf8_next(s::String, b::UInt8, i::Int, l::Int)
+    @inbounds if is_valid_continuation(b)
+        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s, i)))
     end
     trailing = utf8_trailing[b + 1]
     if l < i + trailing
         return '\ufffd', i+1
     end
     c::UInt32 = 0
-    for j = 1:(trailing + 1)
+    @inbounds for j = 1:(trailing + 1)
         c <<= 6
-        c += unsafe_load(p,i)
+        c += codeunit(s, i)
         i += 1
     end
     c -= utf8_offset[trailing + 1]
@@ -187,21 +198,20 @@ end
 
 # This implementation relies on `next` returning a value past the end of the
 # String's underlying data, which is true for valid Strings
-done(s::String, state) = state > s.len
+done(s::String, state) = state > sizeof(s)
 
 @inline function next(s::String, i::Int)
     # function is split into this critical fast-path
     # for pure ascii data, such as parsing numbers,
     # and a longer function that can handle any utf8 data
-    @boundscheck if (i < 1) | (i > s.len)
+    @boundscheck if (i < 1) | (i > sizeof(s))
         throw(BoundsError(s,i))
     end
-    p = pointer(s)
-    b = unsafe_load(p, i)
+    @inbounds b = codeunit(s, i)
     if b < 0x80
         return Char(b), i + 1
     end
-    return slow_utf8_next(p, b, i, s.len)
+    return slow_utf8_next(s, b, i, sizeof(s))
 end
 
 function first_utf8_byte(ch::Char)
@@ -214,9 +224,8 @@ function first_utf8_byte(ch::Char)
 end
 
 function reverseind(s::String, i::Integer)
-    j = s.len + 1 - i
-    p = pointer(s)
-    while is_valid_continuation(unsafe_load(p,j))
+    j = sizeof(s) + 1 - i
+    @inbounds while is_valid_continuation(codeunit(s, j))
         j -= 1
     end
     return j
@@ -225,12 +234,12 @@ end
 ## overload methods for efficiency ##
 
 isvalid(s::String, i::Integer) =
-    (1 <= i <= s.len) && !is_valid_continuation(unsafe_load(pointer(s),i))
+    (1 <= i <= sizeof(s)) && ((@inbounds b = codeunit(s, i)); !is_valid_continuation(b))
 
 function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""
     i, j = first(r), last(r)
-    l = s.len
+    l = sizeof(s)
     if i < 1 || i > l
         throw(BoundsError(s, i))
     end
@@ -250,7 +259,7 @@ function search(s::String, c::Char, i::Integer = 1)
         i == sizeof(s) + 1 && return 0
         throw(BoundsError(s, i))
     end
-    if is_valid_continuation(codeunit(s,i))
+    @inbounds if is_valid_continuation(codeunit(s,i))
         throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s,i)))
     end
     c < Char(0x80) && return search(s, c%UInt8, i)
@@ -282,7 +291,7 @@ function search(a::ByteArray, b::Char, i::Integer = 1)
     end
 end
 
-function rsearch(s::String, c::Char, i::Integer = s.len)
+function rsearch(s::String, c::Char, i::Integer = sizeof(s))
     c < Char(0x80) && return rsearch(s, c%UInt8, i)
     b = first_utf8_byte(c)
     while true
@@ -292,7 +301,7 @@ function rsearch(s::String, c::Char, i::Integer = s.len)
     end
 end
 
-function rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = s.len)
+function rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(s))
     if i < 1
         return i == 0 ? 0 : throw(BoundsError(a, i))
     end
@@ -321,13 +330,13 @@ function string(a::String...)
     end
     n = 0
     for str in a
-        n += str.len
+        n += sizeof(str)
     end
     out = _string_n(n)
     offs = 1
     for str in a
-        unsafe_copy!(pointer(out,offs), pointer(str), str.len)
-        offs += str.len
+        unsafe_copy!(pointer(out,offs), pointer(str), sizeof(str))
+        offs += sizeof(str)
     end
     return out
 end
@@ -353,7 +362,7 @@ function string(a::Union{String,Char}...)
         if isa(d,Char)
             n += codelen(d::Char)
         else
-            n += (d::String).len
+            n += sizeof(d::String)
         end
     end
     out = _string_n(n)
@@ -383,7 +392,7 @@ function string(a::Union{String,Char}...)
                 unsafe_store!(p, 0xbd, offs); offs += 1
             end
         else
-            l = (d::String).len
+            l = sizeof(d::String)
             unsafe_copy!(pointer(out,offs), pointer(d::String), l)
             offs += l
         end
@@ -392,7 +401,7 @@ function string(a::Union{String,Char}...)
 end
 
 function reverse(s::String)
-    dat = convert(Vector{UInt8},s)
+    dat = Vector{UInt8}(s)
     n = length(dat)
     n <= 1 && return s
     buf = StringVector(n)
@@ -425,10 +434,36 @@ end
 
 function repeat(s::String, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
-    n = s.len
+    n = sizeof(s)
     out = _string_n(n*r)
-    for i=1:r
-        unsafe_copy!(pointer(out, 1+(i-1)*n), pointer(s), n)
+    if n == 1 # common case: repeating a single ASCII char
+        @inbounds ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), out, codeunit(s, 1), r)
+    else
+        for i=1:r
+            unsafe_copy!(pointer(out, 1+(i-1)*n), pointer(s), n)
+        end
     end
     return out
+end
+
+"""
+    repeat(c::Char, r::Integer) -> String
+
+Repeat a character `r` times. This can equivalently be accomplished by calling [`c^r`](@ref ^).
+
+# Examples
+```jldoctest
+julia> repeat('A', 3)
+"AAA"
+```
+"""
+function repeat(c::Char, r::Integer)
+    if isascii(c)
+        r < 0 && throw(ArgumentError("can't repeat a character $r times"))
+        out = _string_n(r)
+        ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), out, c, r)
+        return out
+    else
+        return repeat(string(c), r)
+    end
 end

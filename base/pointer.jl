@@ -32,6 +32,30 @@ convert(::Type{Ptr{T}}, p::Ptr{T}) where {T} = p
 convert(::Type{Ptr{T}}, p::Ptr) where {T} = bitcast(Ptr{T}, p)
 
 # object to pointer (when used with ccall)
+
+"""
+    unsafe_convert(T, x)
+
+Convert `x` to a C argument of type `T`
+where the input `x` must be the return value of `cconvert(T, ...)`.
+
+In cases where [`convert`](@ref) would need to take a Julia object
+and turn it into a `Ptr`, this function should be used to define and perform
+that conversion.
+
+Be careful to ensure that a Julia reference to `x` exists as long as the result of this
+function will be used. Accordingly, the argument `x` to this function should never be an
+expression, only a variable name or field reference. For example, `x=a.b.c` is acceptable,
+but `x=[a,b,c]` is not.
+
+The `unsafe` prefix on this function indicates that using the result of this function after
+the `x` argument to this function is no longer accessible to the program may cause undefined
+behavior, including program corruption or segfaults, at any later time.
+
+See also [`cconvert`](@ref)
+"""
+function unsafe_convert end
+
 unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
 unsafe_convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
 unsafe_convert(::Type{Ptr{UInt8}}, s::String) = convert(Ptr{UInt8}, pointer_from_objref(s)+sizeof(Int))
@@ -92,7 +116,7 @@ The `unsafe` prefix on this function indicates that no validation is performed o
 pointer `p` to ensure that it is valid. Incorrect usage may corrupt or segfault your
 program, in the same manner as C.
 """
-unsafe_store!(p::Ptr{Any}, x::ANY, i::Integer=1) = pointerset(p, x, Int(i), 1)
+unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, Int(i), 1)
 unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
 
 # convert a raw Ptr to an object reference, and vice-versa
@@ -112,8 +136,8 @@ Get the memory address of a Julia object as a `Ptr`. The existence of the result
 will not protect the object from garbage collection, so you must ensure that the object
 remains referenced for the whole time that the `Ptr` will be used.
 """
-pointer_from_objref(x::ANY) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
-data_pointer_from_objref(x::ANY) = pointer_from_objref(x)::Ptr{Void}
+pointer_from_objref(@nospecialize(x)) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
+data_pointer_from_objref(@nospecialize(x)) = pointer_from_objref(x)::Ptr{Void}
 
 eltype(::Type{Ptr{T}}) where {T} = T
 

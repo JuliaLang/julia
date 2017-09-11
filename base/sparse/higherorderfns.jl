@@ -10,7 +10,7 @@ import Base.Broadcast: _containertype, promote_containertype,
 
 using Base: front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
-                      AbstractSparseMatrix, AbstractSparseArray, indtype
+                      AbstractSparseMatrix, AbstractSparseArray, indtype, nnz, nzrange
 
 # This module is organized as follows:
 # (1) Define a common interface to SparseVectors and SparseMatrixCSCs sufficient for
@@ -325,10 +325,6 @@ function _map_zeropres!(f::Tf, C::SparseVecOrMat, As::Vararg{SparseVecOrMat,N}) 
         rows = _rowforind_all(rowsentinel, ks, stopks, As)
         activerow = min(rows...)
         while activerow < rowsentinel
-            # activerows = _isactiverow_all(activerow, rows)
-            # Cx = f(_gatherargs(activerows, ks, As)...)
-            # ks = _updateind_all(activerows, ks)
-            # rows = _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As)
             vals, ks, rows = _fusedupdate_all(rowsentinel, activerow, rows, ks, stopks, As)
             Cx = f(vals...)
             if !_iszero(Cx)
@@ -359,10 +355,6 @@ function _map_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, As::Vararg{Spars
         rows = _rowforind_all(rowsentinel, ks, stopks, As)
         activerow = min(rows...)
         while activerow < rowsentinel
-            # activerows = _isactiverow_all(activerow, rows)
-            # Cx = f(_gatherargs(activerows, ks, As)...)
-            # ks = _updateind_all(activerows, ks)
-            # rows = _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As)
             vals, ks, rows = _fusedupdate_all(rowsentinel, activerow, rows, ks, stopks, As)
             Cx = f(vals...)
             Cx != fillvalue && (storedvals(C)[jo + activerow] = Cx)
@@ -371,6 +363,7 @@ function _map_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, As::Vararg{Spars
     end
     return C
 end
+
 # helper methods for map/map! methods just above
 @inline _colstartind(j, A) = colstartind(A, j)
 @inline _colstartind_all(j, ::Tuple{}) = ()
@@ -388,28 +381,7 @@ end
 @inline _rowforind_all(rowsentinel, ks, stopks, As) = (
     _rowforind(rowsentinel, first(ks), first(stopks), first(As)),
     _rowforind_all(rowsentinel, tail(ks), tail(stopks), tail(As))...)
-# fusing the following defs. avoids a few branches, yielding 5-30% runtime reduction
-# @inline _isactiverow(activerow, row) = row == activerow
-# @inline _isactiverow_all(activerow, ::Tuple{}) = ()
-# @inline _isactiverow_all(activerow, rows) = (
-#     _isactiverow(activerow, first(rows)),
-#     _isactiverow_all(activerow, tail(rows))...)
-# @inline _gatherarg(isactiverow, k, A) = isactiverow ? storedvals(A)[k] : zero(eltype(A))
-# @inline _gatherargs(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
-# @inline _gatherargs(activerows, ks, As) = (
-#     _gatherarg(first(activerows), first(ks), first(As)),
-#     _gatherargs(tail(activerows), tail(ks), tail(As))...)
-# @inline _updateind(isactiverow, k) = isactiverow ? (k + oneunit(k)) : k
-# @inline _updateind_all(::Tuple{}, ::Tuple{}) = ()
-# @inline _updateind_all(activerows, ks) = (
-#     _updateind(first(activerows), first(ks)),
-#     _updateind_all(tail(activerows), tail(ks))...)
-# @inline _updaterow(rowsentinel, isrowactive, presrow, k, stopk, A) =
-#     isrowactive ? (k < stopk ? storedinds(A)[k] : oftype(presrow, rowsentinel)) : presrow
-# @inline _updaterow_all(rowsentinel, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
-# @inline _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As) = (
-#     _updaterow(rowsentinel, first(activerows), first(rows), first(ks), first(stopks), first(As)),
-#     _updaterow_all(rowsentinel, tail(activerows), tail(rows), tail(ks), tail(stopks), tail(As))...)
+
 @inline function _fusedupdate(rowsentinel, activerow, row, k, stopk, A)
     # returns (val, nextk, nextrow)
     if row == activerow
@@ -419,14 +391,11 @@ end
         (zero(eltype(A)), k, row)
     end
 end
-@inline _fusedupdate_all(rowsentinel, activerow, rows, ks, stopks, As) =
-    _fusedupdate_all((#=vals=#), (#=nextks=#), (#=nextrows=#), rowsentinel, activerow, rows, ks, stopks, As)
-@inline _fusedupdate_all(vals, nextks, nextrows, rowsent, activerow, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) =
-    (vals, nextks, nextrows)
-@inline function _fusedupdate_all(vals, nextks, nextrows, rowsentinel, activerow, rows, ks, stopks, As)
+@inline _fusedupdate_all(rowsentinel, activerow, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ((#=vals=#), (#=nextks=#), (#=nextrows=#))
+@inline function _fusedupdate_all(rowsentinel, activerow, rows, ks, stopks, As)
     val, nextk, nextrow = _fusedupdate(rowsentinel, activerow, first(rows), first(ks), first(stopks), first(As))
-    return _fusedupdate_all((vals..., val), (nextks..., nextk), (nextrows..., nextrow),
-                        rowsentinel, activerow, tail(rows), tail(ks), tail(stopks), tail(As))
+    vals, nextks, nextrows = _fusedupdate_all(rowsentinel, activerow, tail(rows), tail(ks), tail(stopks), tail(As))
+    return ((val, vals...), (nextk, nextks...), (nextrow, nextrows...))
 end
 
 
@@ -803,10 +772,6 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, As::Vararg{SparseVecOrMa
         activerow = min(rows...)
         if _iszero(defaultCx) # zero-preserving column scan
             while activerow < rowsentinel
-                # activerows = _isactiverow_all(activerow, rows)
-                # Cx = f(_gatherbcargs(activerows, defargs, ks, As)...)
-                # ks = _updateind_all(activerows, ks)
-                # rows = _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As)
                 args, ks, rows = _fusedupdatebc_all(rowsentinel, activerow, rows, defargs, ks, stopks, As)
                 Cx = f(args...)
                 if !_iszero(Cx)
@@ -820,10 +785,6 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, As::Vararg{SparseVecOrMa
         else # zero-non-preserving column scan
             for Ci in 1:numrows(C)
                 if Ci == activerow
-                    # activerows = _isactiverow_all(activerow, rows)
-                    # Cx = f(_gatherbcargs(activerows, defargs, ks, As)...)
-                    # ks = _updateind_all(activerows, ks)
-                    # rows = _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As)
                     args, ks, rows = _fusedupdatebc_all(rowsentinel, activerow, rows, defargs, ks, stopks, As)
                     Cx = f(args...)
                     activerow = min(rows...)
@@ -864,10 +825,6 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, As::Vararg
         activerow = min(rows...)
         if defaultCx == fillvalue # fillvalue-preserving column scan
             while activerow < rowsentinel
-                # activerows = _isactiverow_all(activerow, rows)
-                # Cx = f(_gatherbcargs(activerows, defargs, ks, As)...)
-                # ks = _updateind_all(activerows, ks)
-                # rows = _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As)
                 args, ks, rows = _fusedupdatebc_all(rowsentinel, activerow, rows, defargs, ks, stopks, As)
                 Cx = f(args...)
                 Cx != fillvalue && (storedvals(C)[jo + activerow] = Cx)
@@ -876,10 +833,6 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, As::Vararg
         else # fillvalue-non-preserving column scan
             for Ci in 1:numrows(C)
                 if Ci == activerow
-                    # activerows = _isactiverow_all(activerow, rows)
-                    # Cx = f(_gatherbcargs(activerows, defargs, ks, As)...)
-                    # ks = _updateind_all(activerows, ks)
-                    # rows = _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As)
                     args, ks, rows = _fusedupdatebc_all(rowsentinel, activerow, rows, defargs, ks, stopks, As)
                     Cx = f(args...)
                     activerow = min(rows...)
@@ -892,6 +845,7 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, As::Vararg
     end
     return C
 end
+
 # helper method for broadcast/broadcast! methods just above
 @inline _expandsvert(C, A) = numrows(A) != numrows(C)
 @inline _expandsvert_all(C, ::Tuple{}) = ()
@@ -926,28 +880,6 @@ end
 @inline _defargforcol_all(j, isemptys, expandsverts, ks, As) = (
     _defargforcol(j, first(isemptys), first(expandsverts), first(ks), first(As)),
     _defargforcol_all(j, tail(isemptys), tail(expandsverts), tail(ks), tail(As))...)
-# fusing the following defs. avoids a few branches and construction of a tuple, yielding 1-20% runtime reduction
-# @inline _isactiverow(activerow, row) = row == activerow
-# @inline _isactiverow_all(activerow, ::Tuple{}) = ()
-# @inline _isactiverow_all(activerow, rows) = (
-#     _isactiverow(activerow, first(rows)),
-#     _isactiverow_all(activerow, tail(rows))...)
-# @inline _gatherbcarg(isactiverow, defarg, k, A) = isactiverow ? storedvals(A)[k] : defarg
-# @inline _gatherbcargs(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
-# @inline _gatherbcargs(activerows, defargs, ks, As) = (
-#     _gatherbcarg(first(activerows), first(defargs), first(ks), first(As)),
-#     _gatherbcargs(tail(activerows), tail(defargs), tail(ks), tail(As))...)
-# @inline _updateind(isactiverow, k) = isactiverow ? (k + oneunit(k)) : k
-# @inline _updateind_all(::Tuple{}, ::Tuple{}) = ()
-# @inline _updateind_all(activerows, ks) = (
-#     _updateind(first(activerows), first(ks)),
-#     _updateind_all(tail(activerows), tail(ks))...)
-# @inline _updaterow(rowsentinel, isrowactive, presrow, k, stopk, A) =
-#     isrowactive ? (k < stopk ? storedinds(A)[k] : oftype(presrow, rowsentinel)) : presrow
-# @inline _updaterow_all(rowsentinel, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
-# @inline _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As) = (
-#     _updaterow(rowsentinel, first(activerows), first(rows), first(ks), first(stopks), first(As)),
-#     _updaterow_all(rowsentinel, tail(activerows), tail(rows), tail(ks), tail(stopks), tail(As))...)
 @inline function _fusedupdatebc(rowsentinel, activerow, row, defarg, k, stopk, A)
     # returns (val, nextk, nextrow)
     if row == activerow
@@ -957,14 +889,11 @@ end
         (defarg, k, row)
     end
 end
-@inline _fusedupdatebc_all(rowsentinel, activerow, rows, defargs, ks, stopks, As) =
-    _fusedupdatebc_all((#=vals=#), (#=nextks=#), (#=nextrows=#), rowsentinel, activerow, rows, defargs, ks, stopks, As)
-@inline _fusedupdatebc_all(vals, nextks, nextrows, rowsent, activerow, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) =
-    (vals, nextks, nextrows)
-@inline function _fusedupdatebc_all(vals, nextks, nextrows, rowsentinel, activerow, rows, defargs, ks, stopks, As)
+@inline _fusedupdatebc_all(rowsent, activerow, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ((#=vals=#), (#=nextks=#), (#=nextrows=#))
+@inline function _fusedupdatebc_all(rowsentinel, activerow, rows, defargs, ks, stopks, As)
     val, nextk, nextrow = _fusedupdatebc(rowsentinel, activerow, first(rows), first(defargs), first(ks), first(stopks), first(As))
-    return _fusedupdatebc_all((vals..., val), (nextks..., nextk), (nextrows..., nextrow),
-                        rowsentinel, activerow, tail(rows), tail(defargs), tail(ks), tail(stopks), tail(As))
+    vals, nextks, nextrows = _fusedupdatebc_all(rowsentinel, activerow, tail(rows), tail(defargs), tail(ks), tail(stopks), tail(As))
+    return ((val, vals...), (nextk, nextks...), (nextrow, nextrows...))
 end
 
 
@@ -996,22 +925,38 @@ end
 # evaluated f) and a reduced argument tuple (passedargstup) containing only the sparse
 # vectors/matrices in mixedargs in their orginal order, and such that the result of
 # broadcast(parevalf, passedargstup...) is broadcast(f, mixedargs...)
-@inline capturescalars(f, mixedargs) =
-    capturescalars((passed, tofill) -> f(tofill...), (), mixedargs...)
-# Recursion cases for capturescalars
-@inline capturescalars(f, passedargstup, scalararg, mixedargs...) =
-    capturescalars(capturescalar(f, scalararg), passedargstup, mixedargs...)
-@inline capturescalars(f, passedargstup, nonscalararg::SparseVecOrMat, mixedargs...) =
-    capturescalars(passnonscalar(f), (passedargstup..., nonscalararg), mixedargs...)
-@inline passnonscalar(f) = (passed, tofill) -> f(Base.front(passed), (last(passed), tofill...))
-@inline capturescalar(f, scalararg) = (passed, tofill) -> f(passed, (scalararg, tofill...))
-# Base cases for capturescalars
-@inline capturescalars(f, passedargstup, scalararg) =
-    (capturelastscalar(f, scalararg), passedargstup)
-@inline capturescalars(f, passedargstup, nonscalararg::SparseVecOrMat) =
-    (passlastnonscalar(f), (passedargstup..., nonscalararg))
-@inline passlastnonscalar(f) = (passed...) -> f(Base.front(passed), (last(passed),))
-@inline capturelastscalar(f, scalararg) = (passed...) -> f(passed, (scalararg,))
+@inline function capturescalars(f, mixedargs)
+    let makeargs = _capturescalars(mixedargs...),
+        parevalf = (passed...) -> f(makeargs(passed...)...),
+        passedsrcargstup = _capturenonscalars(mixedargs...)
+        return (parevalf, passedsrcargstup)
+    end
+end
+
+@inline _capturenonscalars(nonscalararg::SparseVecOrMat, mixedargs...) =
+    (nonscalararg, _capturenonscalars(mixedargs...)...)
+@inline _capturenonscalars(scalararg, mixedargs...) =
+    _capturenonscalars(mixedargs...)
+@inline _capturenonscalars() = ()
+
+@inline _capturescalars(nonscalararg::SparseVecOrMat, mixedargs...) =
+    let f = _capturescalars(mixedargs...)
+        (head, tail...) -> (head, f(tail...)...) # pass-through
+    end
+@inline _capturescalars(scalararg, mixedargs...) =
+    let f = _capturescalars(mixedargs...)
+        (tail...) -> (scalararg, f(tail...)...) # add scalararg
+    end
+# TODO: use the implicit version once inference can handle it
+# handle too-many-arguments explicitly
+@inline function _capturescalars()
+    too_many_arguments() = ()
+    too_many_arguments(tail...) = throw(ArgumentError("too many"))
+end
+#@inline _capturescalars(nonscalararg::SparseVecOrMat) =
+#    (head,) -> (head,) # pass-through
+#@inline _capturescalars(scalararg) =
+#    () -> (scalararg,) # add scalararg
 
 # NOTE: The following two method definitions work around #19096.
 broadcast(f::Tf, ::Type{T}, A::SparseMatrixCSC) where {Tf,T} = broadcast(y -> f(T, y), A)

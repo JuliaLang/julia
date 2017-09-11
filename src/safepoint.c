@@ -9,6 +9,7 @@
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 #endif
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -110,6 +111,10 @@ void jl_safepoint_init(void)
 int jl_safepoint_start_gc(void)
 {
 #ifdef JULIA_ENABLE_THREADING
+    if (jl_n_threads == 1) {
+        jl_gc_running = 1;
+        return 1;
+    }
     // The thread should have set this already
     assert(jl_get_ptls_states()->gc_state == JL_GC_STATE_WAITING);
     jl_mutex_lock_nogc(&safepoint_lock);
@@ -139,6 +144,10 @@ void jl_safepoint_end_gc(void)
 {
     assert(jl_gc_running);
 #ifdef JULIA_ENABLE_THREADING
+    if (jl_n_threads == 1) {
+        jl_gc_running = 0;
+        return;
+    }
     jl_mutex_lock_nogc(&safepoint_lock);
     // Need to reset the page protection before resetting the flag since
     // the thread will trigger a segfault immediately after returning from

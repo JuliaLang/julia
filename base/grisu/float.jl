@@ -28,6 +28,8 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import Base: -, *
+
 struct Float
     s::UInt64
     e::Int32
@@ -113,7 +115,7 @@ function _significand(d::T) where T<:AbstractFloat
   s = uint_t(d) & SignificandMask(T)
   return !isdenormal(d) ? s + HiddenBit(T) : s
 end
-isdenormal{T<:AbstractFloat}(d::T) = (uint_t(d) & ExponentMask(T)) == 0
+isdenormal(d::T) where {T<:AbstractFloat} = (uint_t(d) & ExponentMask(T)) == 0
 
 function normalizedbound(f::AbstractFloat)
     v = Float(_significand(f),_exponent(f))

@@ -41,7 +41,7 @@ up front are:
     where the combination of static compilation with polymorphism makes this distinction significant.
   * Only values, not variables, have types -- variables are simply names bound to values.
   * Both abstract and concrete types can be parameterized by other types. They can also be parameterized
-    by symbols, by values of any type for which [`isbits()`](@ref) returns true (essentially, things
+    by symbols, by values of any type for which [`isbits`](@ref) returns true (essentially, things
     like numbers and bools that are stored like C types or structs with no pointers to other objects),
     and also by tuples thereof. Type parameters may be omitted when they do not need to be referenced
     or restricted.
@@ -69,7 +69,7 @@ an exception is thrown, otherwise, the left-hand value is returned:
 
 ```jldoctest
 julia> (1+2)::AbstractFloat
-ERROR: TypeError: typeassert: expected AbstractFloat, got Int64
+ERROR: TypeError: in typeassert, expected AbstractFloat, got Int64
 
 julia> (1+2)::Int
 3
@@ -80,7 +80,7 @@ This allows a type assertion to be attached to any expression in-place.
 When appended to a variable on the left-hand side of an assignment, or as part of a `local` declaration,
 the `::` operator means something a bit different: it declares the variable to always have the
 specified type, like a type declaration in a statically-typed language such as C. Every value
-assigned to the variable will be converted to the declared type using [`convert()`](@ref):
+assigned to the variable will be converted to the declared type using [`convert`](@ref):
 
 ```jldoctest
 julia> function foo()
@@ -133,18 +133,19 @@ system: they form the conceptual hierarchy which makes Julia's type system more 
 of object implementations.
 
 Recall that in [Integers and Floating-Point Numbers](@ref), we introduced a variety of concrete
-types of numeric values: `Int8`, `UInt8`, `Int16`, `UInt16`, `Int32`, `UInt32`, `Int64`, `UInt64`,
-`Int128`, `UInt128`, `Float16`, [`Float32`](@ref), and [`Float64`](@ref).  Although they have
-different representation sizes, `Int8`, `Int16`, `Int32`, `Int64`  and `Int128` all have in common
-that they are signed integer types. Likewise `UInt8`, `UInt16`, `UInt32`, `UInt64` and `UInt128`
-are all unsigned integer types, while `Float16`, [`Float32`](@ref) and [`Float64`](@ref) are distinct
-in being floating-point types rather than integers. It is common for a piece of code to make sense,
-for example, only if its arguments are some kind of integer, but not really depend on what particular
-*kind* of integer.  For example, the greatest common denominator algorithm works for all kinds
-of integers, but will not work for floating-point numbers.  Abstract types allow the construction
-of a hierarchy of types, providing a context into which concrete types can fit.  This allows you,
-for example, to easily program to any type that is an integer, without restricting an algorithm
-to a specific type of integer.
+types of numeric values: [`Int8`](@ref), [`UInt8`](@ref), [`Int16`](@ref), [`UInt16`](@ref),
+[`Int32`](@ref), [`UInt32`](@ref), [`Int64`](@ref), [`UInt64`](@ref), [`Int128`](@ref),
+[`UInt128`](@ref), [`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref). Although
+they have different representation sizes, `Int8`, `Int16`, `Int32`, `Int64` and `Int128`
+all have in common that they are signed integer types. Likewise `UInt8`, `UInt16`, `UInt32`,
+`UInt64` and `UInt128` are all unsigned integer types, while `Float16`, `Float32` and
+`Float64` are distinct in being floating-point types rather than integers. It is common for
+a piece of code to make sense, for example, only if its arguments are some kind of integer,
+but not really depend on what particular *kind* of integer. For example, the greatest common
+denominator algorithm works for all kinds of integers, but will not work for floating-point
+numbers. Abstract types allow the construction of a hierarchy of types, providing a context
+into which concrete types can fit. This allows you, for example, to easily program to any type
+that is an integer, without restricting an algorithm to a specific type of integer.
 
 Abstract types are declared using the `abstract type` keyword. The general syntaxes for declaring an
 abstract type are:
@@ -175,13 +176,14 @@ abstract type Signed   <: Integer end
 abstract type Unsigned <: Integer end
 ```
 
-The `Number` type is a direct child type of `Any`, and `Real` is its child. In turn, `Real` has
-two children (it has more, but only two are shown here; we'll get to the others later): `Integer`
-and `AbstractFloat`, separating the world into representations of integers and representations
-of real numbers. Representations of real numbers include, of course, floating-point types, but
-also include other types, such as rationals. Hence, `AbstractFloat` is a proper subtype of `Real`,
-including only floating-point representations of real numbers. Integers are further subdivided
-into `Signed` and `Unsigned` varieties.
+The [`Number`](@ref) type is a direct child type of `Any`, and [`Real`](@ref) is its child.
+In turn, `Real` has two children (it has more, but only two are shown here; we'll get to
+the others later): [`Integer`](@ref) and [`AbstractFloat`](@ref), separating the world into
+representations of integers and representations of real numbers. Representations of real
+numbers include, of course, floating-point types, but also include other types, such as
+rationals. Hence, `AbstractFloat` is a proper subtype of `Real`, including only
+floating-point representations of real numbers. Integers are further subdivided into
+[`Signed`](@ref) and [`Unsigned`](@ref) varieties.
 
 The `<:` operator in general means "is a subtype of", and, used in declarations like this, declares
 the right-hand type to be an immediate supertype of the newly declared type. It can also be used
@@ -268,19 +270,21 @@ primitive type «name» <: «supertype» «bits» end
 The number of bits indicates how much storage the type requires and the name gives the new type
 a name. A primitive type can optionally be declared to be a subtype of some supertype. If a supertype
 is omitted, then the type defaults to having `Any` as its immediate supertype. The declaration
-of `Bool` above therefore means that a boolean value takes eight bits to store, and has `Integer`
-as its immediate supertype. Currently, only sizes that are multiples of 8 bits are supported.
-Therefore, boolean values, although they really need just a single bit, cannot be declared to
-be any smaller than eight bits.
+of [`Bool`](@ref) above therefore means that a boolean value takes eight bits to store, and has
+[`Integer`](@ref) as its immediate supertype. Currently, only sizes that are multiples of
+8 bits are supported. Therefore, boolean values, although they really need just a single bit,
+cannot be declared to be any smaller than eight bits.
 
-The types `Bool`, `Int8` and `UInt8` all have identical representations: they are eight-bit chunks
-of memory. Since Julia's type system is nominative, however, they are not interchangeable despite
-having identical structure. A fundamental difference between them is that they have different
-supertypes: `Bool`'s direct supertype is `Integer`, `Int8`'s is `Signed`, and `UInt8`'s is `Unsigned`.
-All other differences between `Bool`, `Int8`, and `UInt8` are matters of behavior -- the way functions
-are defined to act when given objects of these types as arguments. This is why a nominative type
-system is necessary: if structure determined type, which in turn dictates behavior, then it would
-be impossible to make `Bool` behave any differently than `Int8` or `UInt8`.
+The types [`Bool`](@ref), [`Int8`](@ref) and [`UInt8`](@ref) all have identical representations:
+they are eight-bit chunks of memory. Since Julia's type system is nominative, however, they
+are not interchangeable despite having identical structure. A fundamental difference between
+them is that they have different supertypes: [`Bool`](@ref)'s direct supertype is [`Integer`](@ref),
+[`Int8`](@ref)'s is [`Signed`](@ref), and [`UInt8`](@ref)'s is [`Unsigned`](@ref). All other
+differences between [`Bool`](@ref), [`Int8`](@ref), and [`UInt8`](@ref) are matters of
+behavior -- the way functions are defined to act when given objects of these types as
+arguments. This is why a nominative type system is necessary: if structure determined type,
+which in turn dictates behavior, then it would be impossible to make [`Bool`](@ref) behave
+any differently than [`Int8`](@ref) or [`UInt8`](@ref).
 
 ## Composite Types
 
@@ -330,7 +334,7 @@ Foo
 
 When a type is applied like a function it is called a *constructor*. Two constructors are generated
 automatically (these are called *default constructors*). One accepts any arguments and calls
-[`convert()`](@ref) to convert them to the types of the fields, and the other accepts arguments
+[`convert`](@ref) to convert them to the types of the fields, and the other accepts arguments
 that match the field types exactly. The reason both of these are generated is that this makes
 it easier to add new definitions without inadvertently replacing a default constructor.
 
@@ -339,16 +343,16 @@ must be convertible to `Int`:
 
 ```jldoctest footype
 julia> Foo((), 23.5, 1)
-ERROR: InexactError()
+ERROR: InexactError: convert(Int64, 23.5)
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:679
+ [1] convert at ./float.jl:701 [inlined]
  [2] Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
 ```
 
 You may find a list of field names using the `fieldnames` function.
 
 ```jldoctest footype
-julia> fieldnames(foo)
+julia> fieldnames(Foo)
 3-element Array{Symbol,1}:
  :bar
  :baz
@@ -467,7 +471,7 @@ DataType
 ```
 
 A `DataType` may be abstract or concrete. If it is concrete, it has a specified size, storage
-layout, and (optionally) field names. Thus a bits type is a `DataType` with nonzero size, but
+layout, and (optionally) field names. Thus a primitive type is a `DataType` with nonzero size, but
 no field names. A composite type is a `DataType` that has field names or is empty (zero size).
 
 Every concrete value in the system is an instance of some `DataType`.
@@ -479,7 +483,7 @@ argument types, constructed using the special `Union` function:
 
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
-Union{AbstractString, Int64}
+Union{Int64, AbstractString}
 
 julia> 1 :: IntOrString
 1
@@ -488,7 +492,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: typeassert: expected Union{AbstractString, Int64}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
 ```
 
 The compilers for many languages have an internal union construct for reasoning about types; Julia
@@ -513,7 +517,7 @@ easily handled.
 
 All declared types (the `DataType` variety) can be parameterized, with the same syntax in each
 case. We will discuss them in the following order: first, parametric composite types, then parametric
-abstract types, and finally parametric bits types.
+abstract types, and finally parametric primitive types.
 
 ### Parametric Composite Types
 
@@ -586,14 +590,16 @@ have different representations in memory:
 
   * An instance of `Point{Float64}` can be represented compactly and efficiently as an immediate pair
     of 64-bit values;
-  * An instance of `Point{Real}` must be able to hold any pair of instances of `Real`. Since objects
-    that are instances of `Real` can be of arbitrary size and structure, in practice an instance of
-    `Point{Real}` must be represented as a pair of pointers to individually allocated `Real` objects.
+  * An instance of `Point{Real}` must be able to hold any pair of instances of [`Real`](@ref).
+    Since objects that are instances of `Real` can be of arbitrary size and structure, in
+    practice an instance of `Point{Real}` must be represented as a pair of pointers to
+    individually allocated `Real` objects.
 
 The efficiency gained by being able to store `Point{Float64}` objects with immediate values is
 magnified enormously in the case of arrays: an `Array{Float64}` can be stored as a contiguous
 memory block of 64-bit floating-point values, whereas an `Array{Real}` must be an array of pointers
-to individually allocated `Real` objects -- which may well be [boxed](https://en.wikipedia.org/wiki/Object_type_%28object-oriented_programming%29#Boxing)
+to individually allocated [`Real`](@ref) objects -- which may well be
+[boxed](https://en.wikipedia.org/wiki/Object_type_%28object-oriented_programming%29#Boxing)
 64-bit floating-point values, but also might be arbitrarily large, complex objects, which are
 declared to be implementations of the `Real` abstract type.
 
@@ -607,7 +613,7 @@ end
 ```
 
 A correct way to define a method that accepts all arguments of type `Point{T}` where `T` is
-a subtype of `Real` is:
+a subtype of [`Real`](@ref) is:
 
 ```julia
 function norm(p::Point{<:Real})
@@ -645,7 +651,7 @@ ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of t
 This may have arisen from a call to the constructor Point{Float64}(...),
 since type constructors fall back to convert methods.
 Stacktrace:
- [1] Point{Float64}(::Float64) at ./sysimg.jl:24
+ [1] Point{Float64}(::Float64) at ./sysimg.jl:103
 
 julia> Point{Float64}(1.0,2.0,3.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
@@ -784,8 +790,8 @@ possible types. In such situations, one can constrain the range of `T` like so:
 julia> abstract type Pointy{T<:Real} end
 ```
 
-With such a declaration, it is acceptable to use any type that is a subtype of `Real` in place
-of `T`, but not types that are not subtypes of `Real`:
+With such a declaration, it is acceptable to use any type that is a subtype of
+[`Real`](@ref) in place of `T`, but not types that are not subtypes of `Real`:
 
 ```jldoctest realpointytype
 julia> Pointy{Float64}
@@ -795,10 +801,10 @@ julia> Pointy{Real}
 Pointy{Real}
 
 julia> Pointy{AbstractString}
-ERROR: TypeError: Pointy: in T, expected T<:Real, got Type{AbstractString}
+ERROR: TypeError: in Pointy, in T, expected T<:Real, got Type{AbstractString}
 
 julia> Pointy{1}
-ERROR: TypeError: Pointy: in T, expected T<:Real, got Int64
+ERROR: TypeError: in Pointy, in T, expected T<:Real, got Int64
 ```
 
 Type parameters for parametric composite types can be restricted in the same manner:
@@ -811,8 +817,8 @@ end
 ```
 
 To give a real-world example of how all this parametric type machinery can be useful, here is
-the actual definition of Julia's `Rational` immutable type (except that we omit the constructor
-here for simplicity), representing an exact ratio of integers:
+the actual definition of Julia's [`Rational`](@ref) immutable type (except that we omit the
+constructor here for simplicity), representing an exact ratio of integers:
 
 ```julia
 struct Rational{T<:Integer} <: Real
@@ -822,8 +828,8 @@ end
 ```
 
 It only makes sense to take ratios of integer values, so the parameter type `T` is restricted
-to being a subtype of `Integer`, and a ratio of integers represents a value on the real number
-line, so any `Rational` is an instance of the `Real` abstraction.
+to being a subtype of [`Integer`](@ref), and a ratio of integers represents a value on the
+real number line, so any [`Rational`](@ref) is an instance of the [`Real`](@ref) abstraction.
 
 ### Tuple Types
 
@@ -1008,21 +1014,22 @@ Using explicit `where` syntax, any subset of parameters can be fixed. For exampl
 1-dimensional arrays can be written as `Array{T,1} where T`.
 
 Type variables can be restricted with subtype relations.
-`Array{T} where T<:Integer` refers to all arrays whose element type is some kind of `Integer`.
+`Array{T} where T<:Integer` refers to all arrays whose element type is some kind of
+[`Integer`](@ref).
 The syntax `Array{<:Integer}` is a convenient shorthand for `Array{T} where T<:Integer`.
 Type variables can have both lower and upper bounds.
-`Array{T} where Int<:T<:Number` refers to all arrays of `Number`s that are able to contain `Int`s
-(since `T` must be at least as big as `Int`).
+`Array{T} where Int<:T<:Number` refers to all arrays of [`Number`](@ref)s that are able to
+contain `Int`s (since `T` must be at least as big as `Int`).
 The syntax `where T>:Int` also works to specify only the lower bound of a type variable,
 and `Array{>:Int}` is equivalent to `Array{T} where T>:Int`.
 
 Since `where` expressions nest, type variable bounds can refer to outer type variables.
-For example `Tuple{T,Array{S}} where S<:AbstractArray{T} where T<:Real` refers to 2-tuples whose first
-element is some `Real`, and whose second element is an `Array` of any kind of array whose element type
-contains the type of the first tuple element.
+For example `Tuple{T,Array{S}} where S<:AbstractArray{T} where T<:Real` refers to 2-tuples
+whose first element is some [`Real`](@ref), and whose second element is an `Array` of any
+kind of array whose element type contains the type of the first tuple element.
 
-The `where` keyword itself can be nested inside a more complex declaration.  For example, consider the
-two types created by the following declarations:
+The `where` keyword itself can be nested inside a more complex declaration. For example,
+consider the two types created by the following declarations:
 
 ```jldoctest
 julia> const T1 = Array{Array{T,1} where T, 1}
@@ -1056,10 +1063,10 @@ element type.
 
 Sometimes it is convenient to introduce a new name for an already expressible type.
 This can be done with a simple assignment statement.
-For example, `UInt` is aliased to either `UInt32` or `UInt64` as is appropriate
-for the size of pointers on the system:
+For example, `UInt` is aliased to either [`UInt32`](@ref) or [`UInt64`](@ref) as is
+appropriate for the size of pointers on the system:
 
-```julia
+```julia-repl
 # 32-bit system:
 julia> UInt
 UInt32
@@ -1080,11 +1087,12 @@ end
 ```
 
 Of course, this depends on what `Int` is aliased to -- but that is predefined to be the correct
-type -- either `Int32` or `Int64`.
+type -- either [`Int32`](@ref) or [`Int64`](@ref).
 
-(Note that unlike `Int`, `Float` does not exist as a type alias for a specific sized `AbstractFloat`.
-Unlike with integer registers, the floating point register sizes are specified by the IEEE-754 standard.
-Whereas the size of `Int` reflects the size of a native pointer on that machine.)
+(Note that unlike `Int`, `Float` does not exist as a type alias for a specific sized
+[`AbstractFloat`](@ref). Unlike with integer registers, the floating point register sizes
+are specified by the IEEE-754 standard. Whereas the size of `Int` reflects the size of a
+native pointer on that machine.)
 
 ## Operations on Types
 
@@ -1103,7 +1111,7 @@ julia> isa(1, AbstractFloat)
 false
 ```
 
-The [`typeof()`](@ref) function, already used throughout the manual in examples, returns the type
+The [`typeof`](@ref) function, already used throughout the manual in examples, returns the type
 of its argument. Since, as noted above, types are objects, they also have types, and we can ask
 what their types are:
 
@@ -1131,7 +1139,7 @@ DataType
 
 `DataType` is its own type.
 
-Another operation that applies to some types is [`supertype()`](@ref), which reveals a type's
+Another operation that applies to some types is [`supertype`](@ref), which reveals a type's
 supertype. Only declared types (`DataType`) have unambiguous supertypes:
 
 ```jldoctest
@@ -1148,21 +1156,21 @@ julia> supertype(Any)
 Any
 ```
 
-If you apply [`supertype()`](@ref) to other type objects (or non-type objects), a [`MethodError`](@ref)
+If you apply [`supertype`](@ref) to other type objects (or non-type objects), a [`MethodError`](@ref)
 is raised:
 
 ```jldoctest
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
 Closest candidates are:
-  supertype(!Matched::DataType) at operators.jl:41
-  supertype(!Matched::UnionAll) at operators.jl:46
+  supertype(!Matched::DataType) at operators.jl:42
+  supertype(!Matched::UnionAll) at operators.jl:47
 ```
 
 ## Custom pretty-printing
 
 Often, one wants to customize how instances of a type are displayed.  This is accomplished by
-overloading the [`show()`](@ref) function.  For example, suppose we define a type to represent
+overloading the [`show`](@ref) function.  For example, suppose we define a type to represent
 complex numbers in polar form:
 
 ```jldoctest polartype
@@ -1175,11 +1183,13 @@ julia> Polar(r::Real,Θ::Real) = Polar(promote(r,Θ)...)
 Polar
 ```
 
-Here, we've added a custom constructor function so that it can take arguments of different `Real`
-types and promote them to a common type (see [Constructors](@ref man-constructors) and [Conversion and Promotion](@ref conversion-and-promotion)).
-(Of course, we would have to define lots of other methods, too, to make it act like a `Number`,
-e.g. `+`, `*`, `one`, `zero`, promotion rules and so on.) By default, instances of this type display
-rather simply, with information about the type name and the field values, as e.g. `Polar{Float64}(3.0,4.0)`.
+Here, we've added a custom constructor function so that it can take arguments of different
+[`Real`](@ref) types and promote them to a common type (see [Constructors](@ref man-constructors)
+and [Conversion and Promotion](@ref conversion-and-promotion)).
+(Of course, we would have to define lots of other methods, too, to make it act like a
+[`Number`](@ref), e.g. `+`, `*`, `one`, `zero`, promotion rules and so on.) By default,
+instances of this type display rather simply, with information about the type name and
+the field values, as e.g. `Polar{Float64}(3.0,4.0)`.
 
 If we want it to display instead as `3.0 * exp(4.0im)`, we would define the following method to
 print the object to a given output object `io` (representing a file, terminal, buffer, etcetera;
@@ -1192,13 +1202,13 @@ julia> Base.show(io::IO, z::Polar) = print(io, z.r, " * exp(", z.Θ, "im)")
 More fine-grained control over display of `Polar` objects is possible. In particular, sometimes
 one wants both a verbose multi-line printing format, used for displaying a single object in the
 REPL and other interactive environments, and also a more compact single-line format used for
-[`print()`](@ref) or for displaying the object as part of another object (e.g. in an array). Although
+[`print`](@ref) or for displaying the object as part of another object (e.g. in an array). Although
 by default the `show(io, z)` function is called in both cases, you can define a *different* multi-line
 format for displaying an object by overloading a three-argument form of `show` that takes the
 `text/plain` MIME type as its second argument (see [Multimedia I/O](@ref)), for example:
 
 ```jldoctest polartype
-julia> Base.show{T}(io::IO, ::MIME"text/plain", z::Polar{T}) =
+julia> Base.show(io::IO, ::MIME"text/plain", z::Polar{T}) where{T} =
            print(io, "Polar{$T} complex number:\n   ", z)
 ```
 
@@ -1217,7 +1227,7 @@ julia> [Polar(3, 4.0), Polar(4.0,5.3)]
 
 where the single-line `show(io, z)` form is still used for an array of `Polar` values.   Technically,
 the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(STDOUT, MIME("text/plain"), z)`,
-which in turn defaults to `show(STDOUT, z)`, but you should *not* define new [`display()`](@ref)
+which in turn defaults to `show(STDOUT, z)`, but you should *not* define new [`display`](@ref)
 methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref)).
 
 Moreover, you can also define `show` methods for other MIME types in order to enable richer display
@@ -1225,7 +1235,7 @@ Moreover, you can also define `show` methods for other MIME types in order to en
 we can define formatted HTML display of `Polar` objects, with superscripts and italics, via:
 
 ```jldoctest polartype
-julia> Base.show{T}(io::IO, ::MIME"text/html", z::Polar{T}) =
+julia> Base.show(io::IO, ::MIME"text/html", z::Polar{T}) where {T} =
            println(io, "<code>Polar{$T}</code> complex number: ",
                    z.r, " <i>e</i><sup>", z.Θ, " <i>i</i></sup>")
 ```
@@ -1242,45 +1252,97 @@ julia> show(STDOUT, "text/html", Polar(3.0,4.0))
 <p>An HTML renderer would display this as: <code>Polar{Float64}</code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup></p>
 ```
 
+As a rule of thumb, the single-line `show` method should print a valid Julia expression for creating
+the shown object.  When this `show` method contains infix operators, such as the multiplication
+operator (`*`) in our single-line `show` method for `Polar` above, it may not parse correctly when
+printed as part of another object.  To see this, consider the expression object (see [Program
+representation](@ref)) which takes the square of a specific instance of our `Polar` type:
+
+```jldoctest polartype
+julia> a = Polar(3, 4.0)
+Polar{Float64} complex number:
+   3.0 * exp(4.0im)
+
+julia> print(:($a^2))
+3.0 * exp(4.0im) ^ 2
+```
+
+Because the operator `^` has higher precedence than `*` (see [Operator Precedence](@ref)), this
+output does not faithfully represent the expression `a ^ 2` which should be equal to `(3.0 *
+exp(4.0im)) ^ 2`.  To solve this issue, we must make a custom method for `Base.show_unquoted(io::IO,
+z::Polar, indent::Int, precedence::Int)`, which is called internally by the expression object when
+printing:
+
+```jldoctest polartype
+julia> function Base.show_unquoted(io::IO, z::Polar, ::Int, precedence::Int)
+           if Base.operator_precedence(:*) <= precedence
+               print(io, "(")
+               show(io, z)
+               print(io, ")")
+           else
+               show(io, z)
+           end
+       end
+
+julia> :($a^2)
+:((3.0 * exp(4.0im)) ^ 2)
+```
+
+The method defined above adds parentheses around the call to `show` when the precedence of the
+calling operator is higher than or equal to the precedence of multiplication.  This check allows
+expressions which parse correctly without the parentheses (such as `:($a + 2)` and `:($a == 2)`) to
+omit them when printing:
+
+```jldoctest polartype
+julia> :($a + 2)
+:(3.0 * exp(4.0im) + 2)
+
+julia> :($a == 2)
+:(3.0 * exp(4.0im) == 2)
+```
+
 ## "Value types"
 
 In Julia, you can't dispatch on a *value* such as `true` or `false`. However, you can dispatch
 on parametric types, and Julia allows you to include "plain bits" values (Types, Symbols, Integers,
 floating-point numbers, tuples, etc.) as type parameters.  A common example is the dimensionality
-parameter in `Array{T,N}`, where `T` is a type (e.g., `Float64`) but `N` is just an `Int`.
+parameter in `Array{T,N}`, where `T` is a type (e.g., [`Float64`](@ref)) but `N` is just an `Int`.
 
 You can create your own custom types that take values as parameters, and use them to control dispatch
-of custom types. By way of illustration of this idea, let's introduce a parametric type, `Val{T}`,
-which serves as a customary way to exploit this technique for cases where you don't need a more
-elaborate hierarchy.
+of custom types. By way of illustration of this idea, let's introduce a parametric type, `Val{x}`,
+and a constructor `Val(x) = Val{x}()`, which serves as a customary way to exploit this technique
+for cases where you don't need a more elaborate hierarchy.
 
 `Val` is defined as:
 
 ```jldoctest valtype
-julia> struct Val{T}
+julia> struct Val{x}
        end
+
+julia> Base.@pure Val(x) = Val{x}()
+Val
 ```
 
 There is no more to the implementation of `Val` than this.  Some functions in Julia's standard
-library accept `Val` types as arguments, and you can also use it to write your own functions.
+library accept `Val` instances as arguments, and you can also use it to write your own functions.
  For example:
 
 ```jldoctest valtype
-julia> firstlast(::Type{Val{true}}) = "First"
+julia> firstlast(::Val{true}) = "First"
 firstlast (generic function with 1 method)
 
-julia> firstlast(::Type{Val{false}}) = "Last"
+julia> firstlast(::Val{false}) = "Last"
 firstlast (generic function with 2 methods)
 
-julia> firstlast(Val{true})
+julia> firstlast(Val(true))
 "First"
 
-julia> firstlast(Val{false})
+julia> firstlast(Val(false))
 "Last"
 ```
 
-For consistency across Julia, the call site should always pass a `Val`*type* rather than creating
-an *instance*, i.e., use `foo(Val{:bar})` rather than `foo(Val{:bar}())`.
+For consistency across Julia, the call site should always pass a `Val`*instance* rather than using
+a *type*, i.e., use `foo(Val(:bar))` rather than `foo(Val{:bar})`.
 
 It's worth noting that it's extremely easy to mis-use parametric "value" types, including `Val`;
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.
@@ -1343,7 +1405,7 @@ a single value of type `T` as an argument.
 
 ### Checking if a `Nullable` object has a value
 
-You can check if a `Nullable` object has any value using [`isnull()`](@ref):
+You can check if a `Nullable` object has any value using [`isnull`](@ref):
 
 ```jldoctest
 julia> isnull(Nullable{Float64}())
@@ -1355,25 +1417,25 @@ false
 
 ### Safely accessing the value of a `Nullable` object
 
-You can safely access the value of a `Nullable` object using [`get()`](@ref):
+You can safely access the value of a `Nullable` object using [`get`](@ref):
 
 ```jldoctest
 julia> get(Nullable{Float64}())
 ERROR: NullException()
 Stacktrace:
- [1] get(::Nullable{Float64}) at ./nullable.jl:92
+ [1] get(::Nullable{Float64}) at ./nullable.jl:118
 
 julia> get(Nullable(1.0))
 1.0
 ```
 
 If the value is not present, as it would be for `Nullable{Float64}`, a [`NullException`](@ref)
-error will be thrown. The error-throwing nature of the `get()` function ensures that any
+error will be thrown. The error-throwing nature of the `get` function ensures that any
 attempt to access a missing value immediately fails.
 
 In cases for which a reasonable default value exists that could be used when a `Nullable`
 object's value turns out to be missing, you can provide this default value as a second argument
-to `get()`:
+to `get`:
 
 ```jldoctest
 julia> get(Nullable{Float64}(), 0.0)
@@ -1384,15 +1446,15 @@ julia> get(Nullable(1.0), 0.0)
 ```
 
 !!! tip
-    Make sure the type of the default value passed to `get()` and that of the `Nullable`
-    object match to avoid type instability, which could hurt performance. Use [`convert()`](@ref)
+    Make sure the type of the default value passed to `get` and that of the `Nullable`
+    object match to avoid type instability, which could hurt performance. Use [`convert`](@ref)
     manually if needed.
 
 ### Performing operations on `Nullable` objects
 
 `Nullable` objects represent values that are possibly missing, and it
 is possible to write all code using these objects by first testing to see if
-the value is missing with [`isnull()`](@ref), and then doing an appropriate
+the value is missing with [`isnull`](@ref), and then doing an appropriate
 action. However, there are some common use cases where the code could be more
 concise or clear by using a higher-order function.
 
@@ -1441,7 +1503,7 @@ example, we will assume that the best solution is to propagate the missing
 values forward; that is, if any input is missing, we simply produce a missing
 output.
 
-The `broadcast()` function makes this task easy; we can simply pass the
+The `broadcast` function makes this task easy; we can simply pass the
 `root` function we wrote to `broadcast`:
 
 ```jldoctest nullableroot
@@ -1456,9 +1518,9 @@ Nullable{Float64}()
 ```
 
 If one or more of the inputs is missing, then the output of
-`broadcast()` will be missing.
+`broadcast` will be missing.
 
-There exists special syntactic sugar for the `broadcast()` function
+There exists special syntactic sugar for the `broadcast` function
 using a dot notation:
 
 ```jldoctest nullableroot
@@ -1466,7 +1528,7 @@ julia> root.(Nullable(1), Nullable(-9), Nullable(20))
 Nullable{Float64}(5.0)
 ```
 
-In particular, the regular arithmetic operators can be `broadcast()`
+In particular, the regular arithmetic operators can be `broadcast`
 conveniently using `.`-prefixed operators:
 
 ```jldoctest

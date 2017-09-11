@@ -22,7 +22,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
                         (UnitLowerTriangular, :L))
 
         # Construct test matrix
-        A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't) |> t -> uplo1 == :U ? t : ctranspose(t)))
+        A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't) |> t -> uplo1 == :U ? t : adjoint(t)))
 
 
         debug && println("elty1: $elty1, A1: $t1")
@@ -132,15 +132,15 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             # transpose
             @test full(A1.') == full(A1).'
             @test full(viewA1.') == full(viewA1).'
-            # ctranspose
+            # adjoint
             @test full(A1') == full(A1)'
             @test full(viewA1') == full(viewA1)'
             # transpose!
             @test transpose!(copy(A1)) == A1.'
             @test transpose!(t1(view(copy(A1).data, vrange, vrange))) == viewA1.'
-            # ctranspose!
-            @test ctranspose!(copy(A1)) == A1'
-            @test ctranspose!(t1(view(copy(A1).data, vrange, vrange))) == viewA1'
+            # adjoint!
+            @test adjoint!(copy(A1)) == A1'
+            @test adjoint!(t1(view(copy(A1).data, vrange, vrange))) == viewA1'
         end
 
         # diag
@@ -174,9 +174,9 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test B == viewA1.'
         end
 
-        #expm/logm
+        #exp/log
         if (elty1 == Float64 || elty1 == Complex128) && (t1 == UpperTriangular || t1 == LowerTriangular)
-            @test expm(full(logm(A1))) ≈ full(A1)
+            @test exp(full(log(A1))) ≈ full(A1)
         end
 
         # scale
@@ -237,7 +237,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         @test ladb ≈ fladb atol=sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
-        @test sqrtm(A1) |> t -> t*t ≈ A1
+        @test sqrt(A1) |> t -> t*t ≈ A1
 
         # naivesub errors
         @test_throws DimensionMismatch naivesub!(A1,ones(elty1,n+1))
@@ -274,7 +274,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
 
                 debug && println("elty1: $elty1, A1: $t1, elty2: $elty2")
 
-                A2 = t2(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't) |> t -> uplo2 == :U ? t : ctranspose(t)))
+                A2 = t2(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't) |> t -> uplo2 == :U ? t : adjoint(t)))
 
                 # Convert
                 if elty1 <: Real && !(elty2 <: Integer)
@@ -342,9 +342,11 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test B'A1' ≈ B'full(A1)'
 
             if eltyB == elty1
-                @test A_mul_B!(zeros(B),A1,B) ≈ A1*B
+                @test A_mul_B!(zeros(B),A1,B)  ≈ A1*B
                 @test A_mul_Bc!(zeros(B),A1,B) ≈ A1*B'
                 @test A_mul_Bt!(zeros(B),A1,B) ≈ A1*B.'
+                @test Ac_mul_B!(zeros(B),A1,B) ≈ A1'*B
+                @test At_mul_B!(zeros(B),A1,B) ≈ A1.'*B
             end
             #error handling
             @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(A1, ones(eltyB,n+1))
@@ -389,10 +391,10 @@ end
 # Matrix square root
 Atn = UpperTriangular([-1 1 2; 0 -2 2; 0 0 -3])
 Atp = UpperTriangular([1 1 2; 0 2 2; 0 0 3])
-@test sqrtm(Atn) |> t->t*t ≈ Atn
-@test typeof(sqrtm(Atn)[1,1]) <: Complex
-@test sqrtm(Atp) |> t->t*t ≈ Atp
-@test typeof(sqrtm(Atp)[1,1]) <: Real
+@test sqrt(Atn) |> t->t*t ≈ Atn
+@test typeof(sqrt(Atn)[1,1]) <: Complex
+@test sqrt(Atp) |> t->t*t ≈ Atp
+@test typeof(sqrt(Atp)[1,1]) <: Real
 
 Areal   = randn(n, n)/2
 Aimg    = randn(n, n)/2
@@ -509,5 +511,5 @@ end
 isdefined(Main, :TestHelpers) || @eval Main include("../TestHelpers.jl")
 using TestHelpers.Furlong
 let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
-    @test sqrtm(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
+    @test sqrt(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
 end

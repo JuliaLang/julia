@@ -59,7 +59,8 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     pointer::UInt64  # Large enough to be read losslessly on 32- and 64-bit machines.
 end
 
-StackFrame(func, file, line) = StackFrame(func, file, line, Nullable{Core.MethodInstance}(), false, false, 0)
+StackFrame(func, file, line) = StackFrame(Symbol(func), Symbol(file), line,
+                                          Nullable{Core.MethodInstance}(), false, false, 0)
 
 """
     StackTrace
@@ -136,6 +137,10 @@ end
 
 lookup(pointer::UInt) = lookup(convert(Ptr{Void}, pointer))
 
+# allow lookup on already-looked-up data for easier handling of pre-processed frames
+lookup(s::StackFrame) = StackFrame[s]
+lookup(s::Tuple{StackFrame,Int}) = StackFrame[s[1]]
+
 """
     stacktrace([trace::Vector{Ptr{Void}},] [c_funcs::Bool=false]) -> StackTrace
 
@@ -209,7 +214,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         end
     else
         linfo = get(frame.linfo)
-        if isdefined(linfo, :def)
+        if isa(linfo.def, Method)
             Base.show_tuple_as_call(io, linfo.def.name, linfo.specTypes)
         else
             Base.show(io, linfo)
@@ -246,7 +251,8 @@ function from(frame::StackFrame, m::Module)
     result = false
 
     if !isnull(finfo)
-        frame_m = get(finfo).def.module
+        frame_m = get(finfo).def
+        isa(frame_m, Method) && (frame_m = frame_m.module)
         result = module_name(frame_m) === module_name(m)
     end
 

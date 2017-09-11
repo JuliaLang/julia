@@ -33,7 +33,7 @@ julia> typeof(ex1)
 Expr
 ```
 
-`Expr` objects contain three parts:
+`Expr` objects contain two parts:
 
   * a `Symbol` identifying the kind of expression. A symbol is an [interned string](https://en.wikipedia.org/wiki/String_interning)
     identifier (more discussion below).
@@ -53,14 +53,6 @@ julia> ex1.args
  1
 ```
 
-  * finally, the expression result type, which may be annotated by the user or inferred by the compiler
-    (and may be ignored completely for the purposes of this chapter):
-
-```jldoctest prog
-julia> ex1.typ
-Any
-```
-
 Expressions may also be constructed directly in [prefix notation](https://en.wikipedia.org/wiki/Polish_notation):
 
 ```jldoctest prog
@@ -78,7 +70,7 @@ true
 **The key point here is that Julia code is internally represented as a data structure that is accessible
 from the language itself.**
 
-The [`dump()`](@ref) function provides indented and annotated display of `Expr` objects:
+The [`dump`](@ref) function provides indented and annotated display of `Expr` objects:
 
 ```jldoctest prog
 julia> dump(ex2)
@@ -165,10 +157,10 @@ julia> typeof(ex)
 Expr
 ```
 
-(to view the structure of this expression, try `ex.head` and `ex.args`, or use [`dump()`](@ref)
-as above)
+(to view the structure of this expression, try `ex.head` and `ex.args`, or use [`dump`](@ref)
+as above or [`Meta.@dump`](@ref))
 
-Note that equivalent expressions may be constructed using [`parse()`](@ref) or the direct `Expr`
+Note that equivalent expressions may be constructed using [`parse`](@ref) or the direct `Expr`
 form:
 
 ```jldoctest
@@ -194,9 +186,12 @@ julia> ex = quote
            y = 2
            x + y
        end
-quote  # none, line 2:
-    x = 1 # none, line 3:
-    y = 2 # none, line 4:
+quote
+    #= none:2 =#
+    x = 1
+    #= none:3 =#
+    y = 2
+    #= none:4 =#
     x + y
 end
 
@@ -238,7 +233,7 @@ julia> ex = :(a in $:((1,2,3)) )
 Interpolating symbols into a nested expression requires enclosing each symbol in an enclosing
 quote block:
 
-```julia
+```julia-repl
 julia> :( :a in $( :(:a + :b) ) )
                    ^^^^^^^^^^
                    quoted inner expression
@@ -248,10 +243,10 @@ The use of `$` for expression interpolation is intentionally reminiscent of [str
 and [command interpolation](@ref command-interpolation). Expression interpolation allows convenient, readable programmatic
 construction of complex Julia expressions.
 
-### [`eval()`](@ref) and effects
+### [`eval`](@ref) and effects
 
 Given an expression object, one can cause Julia to evaluate (execute) it at global scope using
-[`eval()`](@ref):
+[`eval`](@ref):
 
 ```jldoctest interp1
 julia> :(1 + 2)
@@ -273,8 +268,8 @@ julia> eval(ex)
 3
 ```
 
-Every [module](@ref modules) has its own [`eval()`](@ref) function that evaluates expressions in its global
-scope. Expressions passed to [`eval()`](@ref) are not limited to returning values -- they can
+Every [module](@ref modules) has its own [`eval`](@ref) function that evaluates expressions in its global
+scope. Expressions passed to [`eval`](@ref) are not limited to returning values -- they can
 also have side-effects that alter the state of the enclosing module's environment:
 
 ```jldoctest
@@ -295,10 +290,10 @@ Here, the evaluation of an expression object causes a value to be assigned to th
 `x`.
 
 Since expressions are just `Expr` objects which can be constructed programmatically and then evaluated,
-it is possible to dynamically generate arbitrary code which can then be run using [`eval()`](@ref).
+it is possible to dynamically generate arbitrary code which can then be run using [`eval`](@ref).
 Here is a simple example:
 
-```julia
+```julia-repl
 julia> a = 1;
 
 julia> ex = Expr(:call, :+, a, :b)
@@ -325,7 +320,7 @@ value 1 and the variable `b`. Note the important distinction between the way `a`
 
 As hinted above, one extremely useful feature of Julia is the capability to generate and manipulate
 Julia code within Julia itself. We have already seen one example of a function returning `Expr`
-objects: the [`parse()`](@ref) function, which takes a string of Julia code and returns the corresponding
+objects: the [`parse`](@ref) function, which takes a string of Julia code and returns the corresponding
 `Expr`. A function can also take one or more `Expr` objects as arguments, and return another
 `Expr`. Here is a simple, motivating example:
 
@@ -368,7 +363,7 @@ julia> eval(ex)
 
 Macros provide a method to include generated code in the final body of a program. A macro maps
 a tuple of arguments to a returned *expression*, and the resulting expression is compiled directly
-rather than requiring a runtime [`eval()`](@ref) call. Macro arguments may include expressions,
+rather than requiring a runtime [`eval`](@ref) call. Macro arguments may include expressions,
 literal values, and symbols.
 
 ### Basics
@@ -415,12 +410,12 @@ julia> @sayhello("human")
 Hello, human
 ```
 
-We can view the quoted return expression using the function [`macroexpand()`](@ref) (**important note:**
+We can view the quoted return expression using the function [`macroexpand`](@ref) (**important note:**
 this is an extremely useful tool for debugging macros):
 
-```jldoctest sayhello2
-julia> ex = macroexpand( :(@sayhello("human")) )
-:((println)("Hello, ", "human"))
+```julia-repl sayhello2
+julia> ex = macroexpand(Main, :(@sayhello("human")) )
+:((Main.println)("Hello, ", "human"))
 
 julia> typeof(ex)
 Expr
@@ -438,28 +433,28 @@ julia> @macroexpand @sayhello "human"
 
 ### Hold up: why macros?
 
-We have already seen a function `f(::Expr...) -> Expr` in a previous section. In fact, [`macroexpand()`](@ref)
+We have already seen a function `f(::Expr...) -> Expr` in a previous section. In fact, [`macroexpand`](@ref)
 is also such a function. So, why do macros exist?
 
 Macros are necessary because they execute when code is parsed, therefore, macros allow the programmer
 to generate and include fragments of customized code *before* the full program is run. To illustrate
 the difference, consider the following example:
 
-```jldoctest whymacros
+```julia-repl whymacros
 julia> macro twostep(arg)
            println("I execute at parse time. The argument is: ", arg)
            return :(println("I execute at runtime. The argument is: ", $arg))
        end
 @twostep (macro with 1 method)
 
-julia> ex = macroexpand( :(@twostep :(1, 2, 3)) );
+julia> ex = macroexpand(Main, :(@twostep :(1, 2, 3)) );
 I execute at parse time. The argument is: $(Expr(:quote, :((1, 2, 3))))
 ```
 
-The first call to [`println()`](@ref) is executed when [`macroexpand()`](@ref) is called. The
+The first call to [`println`](@ref) is executed when [`macroexpand`](@ref) is called. The
 resulting expression contains *only* the second `println`:
 
-```jldoctest whymacros
+```julia-repl whymacros
 julia> typeof(ex)
 Expr
 
@@ -489,7 +484,7 @@ above; it passes the tuple `(expr1, expr2, ...)` as one argument to the macro:
 ```
 
 It is important to emphasize that macros receive their arguments as expressions, literals, or
-symbols. One way to explore macro arguments is to call the [`show()`](@ref) function within the
+symbols. One way to explore macro arguments is to call the [`show`](@ref) function within the
 macro body:
 
 ```jldoctest
@@ -508,6 +503,35 @@ julia> @showarg(1+1)
 julia> @showarg(println("Yo!"))
 :(println("Yo!"))
 ```
+
+In addition to the given argument list, every macro is passed extra arguments named `__source__` and `__module__`.
+
+The argument `__source__` provides information (in the form of a `LineNumberNode` object) about the parser location
+of the `@` sign from the macro invocation.
+This allows macros to include better error diagnostic information,
+and is commonly used by logging, string-parser macros, and docs, for example,
+as well as to implement the `@__LINE__`, `@__FILE__`, and `@__DIR__` macros.
+
+The location information can be accessed by referencing `__source__.line` and `__source__.file`:
+
+```jldoctest
+julia> macro __LOCATION__(); return QuoteNode(__source__); end
+@__LOCATION__ (macro with 1 method)
+
+julia> dump(
+            @__LOCATION__(
+       ))
+LineNumberNode
+  line: Int64 2
+  file: Symbol none
+```
+
+The argument `__module__` provides information (in the form of a `Module` object)
+about the expansion context of the macro invocation.
+This allows macros to look up contextual information, such as existing bindings,
+or to insert the value as an extra argument to a runtime function call doing self-reflection
+in the current module.
+
 
 ### Building an advanced macro
 
@@ -564,21 +588,21 @@ Now `@assert` has two modes of operation, depending upon the number of arguments
 If there's only one argument, the tuple of expressions captured by `msgs` will be empty and it
 will behave the same as the simpler definition above. But now if the user specifies a second argument,
 it is printed in the message body instead of the failing expression. You can inspect the result
-of a macro expansion with the aptly named [`macroexpand()`](@ref) function:
+of a macro expansion with the aptly named [`@macroexpand`](@ref) macro:
 
-```jldoctest assert2
-julia> macroexpand(:(@assert a == b))
-:(if a == b
-        nothing
+```julia-repl assert2
+julia> @macroexpand @assert a == b
+:(if Main.a == Main.b
+        Main.nothing
     else
-        (throw)((AssertionError)("a == b"))
+        (Main.throw)((Main.AssertionError)("a == b"))
     end)
 
-julia> macroexpand(:(@assert a==b "a should equal b!"))
-:(if a == b
-        nothing
+julia> @macroexpand @assert a==b "a should equal b!"
+:(if Main.a == Main.b
+        Main.nothing
     else
-        (throw)((AssertionError)("a should equal b!"))
+        (Main.throw)((Main.AssertionError)("a should equal b!"))
     end)
 ```
 
@@ -586,7 +610,7 @@ There is yet another case that the actual `@assert` macro handles: what if, in a
 "a should equal b," we wanted to print their values? One might naively try to use string interpolation
 in the custom message, e.g., `@assert a==b "a ($a) should equal b ($b)!"`, but this won't work
 as expected with the above macro. Can you see why? Recall from [string interpolation](@ref string-interpolation) that
-an interpolated string is rewritten to a call to [`string()`](@ref). Compare:
+an interpolated string is rewritten to a call to [`string`](@ref). Compare:
 
 ```jldoctest
 julia> typeof(:("a should equal b"))
@@ -609,7 +633,7 @@ Expr
 
 So now instead of getting a plain string in `msg_body`, the macro is receiving a full expression
 that will need to be evaluated in order to display as expected. This can be spliced directly into
-the returned expression as an argument to the [`string()`](@ref) call; see [`error.jl`](https://github.com/JuliaLang/julia/blob/master/base/error.jl)
+the returned expression as an argument to the [`string`](@ref) call; see [`error.jl`](https://github.com/JuliaLang/julia/blob/master/base/error.jl)
 for the complete implementation.
 
 The `@assert` macro makes great use of splicing into quoted expressions to simplify the manipulation
@@ -646,7 +670,7 @@ end
 ```
 
 Here, we want `t0`, `t1`, and `val` to be private temporary variables, and we want `time` to refer
-to the [`time()`](@ref) function in the standard library, not to any `time` variable the user
+to the [`time`](@ref) function in the standard library, not to any `time` variable the user
 might have (the same applies to `println`). Imagine the problems that could occur if the user
 expression `ex` also contained assignments to a variable called `t0`, or defined its own `time`
 variable. We might get errors, or mysteriously incorrect behavior.
@@ -654,7 +678,7 @@ variable. We might get errors, or mysteriously incorrect behavior.
 Julia's macro expander solves these problems in the following way. First, variables within a macro
 result are classified as either local or global. A variable is considered local if it is assigned
 to (and not declared global), declared local, or used as a function argument name. Otherwise,
-it is considered global. Local variables are then renamed to be unique (using the [`gensym()`](@ref)
+it is considered global. Local variables are then renamed to be unique (using the [`gensym`](@ref)
 function, which generates new symbols), and global variables are resolved within the macro definition
 environment. Therefore both of the above concerns are handled; the macro's locals will not conflict
 with any user variables, and `time` and `println` will refer to the standard library definitions.
@@ -673,7 +697,7 @@ end
 
 Here the user expression `ex` is a call to `time`, but not the same `time` function that the macro
 uses. It clearly refers to `MyModule.time`. Therefore we must arrange for the code in `ex` to
-be resolved in the macro call environment. This is done by "escaping" the expression with [`esc()`](@ref):
+be resolved in the macro call environment. This is done by "escaping" the expression with [`esc`](@ref):
 
 ```julia
 macro time(ex)
@@ -708,12 +732,38 @@ julia> foo()
 
 This kind of manipulation of variables should be used judiciously, but is occasionally quite handy.
 
+Getting the hygiene rules correct can be a formidable challenge.
+Before using a macro, you might want to consider whether a function closure
+would be sufficient. Another useful strategy is to defer as much work as possible to runtime.
+For example, many macros simply wrap their arguments in a QuoteNode or other similar Expr.
+Some examples of this include `@task body` which simply returns `schedule(Task(() -> $body))`,
+and `@eval expr`, which simply returns `eval(QuoteNode(expr))`.
+
+To demonstrate, we might rewrite the `@time` example above as:
+
+```julia
+macro time(expr)
+    return :(timeit(() -> $(esc(expr))))
+end
+function timeit(f)
+    t0 = time()
+    val = f()
+    t1 = time()
+    println("elapsed time: ", t1-t0, " seconds")
+    return val
+end
+```
+
+However, we don't do this for a good reason: wrapping the `expr` in a new scope block (the anonymous function)
+also slightly changes the meaning of the expression (the scope of any variables in it),
+while we want `@time` to be usable with minimum impact on the wrapped code.
+
 ## Code Generation
 
 When a significant amount of repetitive boilerplate code is required, it is common to generate
 it programmatically to avoid redundancy. In most languages, this requires an extra build step,
 and a separate program to generate the repetitive code. In Julia, expression interpolation and
-[`eval()`](@ref) allow such code generation to take place in the normal course of program execution.
+[`eval`](@ref) allow such code generation to take place in the normal course of program execution.
 For example, the following code defines a series of operators on three arguments in terms of their
 2-argument forms:
 
@@ -920,12 +970,12 @@ we returned from the definition, now with the *value* of `x`.
 
 What happens if we evaluate `foo` again with a type that we have already used?
 
-```julia generated
+```jldoctest generated
 julia> foo(4)
 16
 ```
 
-Note that there is no printout of `Int64`. We can see that the body of the generated function
+Note that there is no printout of [`Int64`](@ref). We can see that the body of the generated function
 was only executed once here, for the specific set of argument types, and the result was cached.
 After that, for this example, the expression returned from the generated function on the first
 invocation was re-used as the method body. However, the actual caching behavior is an implementation-defined
@@ -934,9 +984,9 @@ performance optimization, so it is invalid to depend too closely on this behavio
 The number of times a generated function is generated *might* be only once, but it *might* also
 be more often, or appear to not happen at all. As a consequence, you should *never* write a generated
 function with side effects - when, and how often, the side effects occur is undefined. (This is
-true for macros too - and just like for macros, the use of [`eval()`](@ref) in a generated function
+true for macros too - and just like for macros, the use of [`eval`](@ref) in a generated function
 is a sign that you're doing something the wrong way.) However, unlike macros, the runtime system
-cannot correctly handle a call to [`eval()`](@ref), so it is disallowed.
+cannot correctly handle a call to [`eval`](@ref), so it is disallowed.
 
 It is also important to see how `@generated` functions interact with method redefinition.
 Following the principle that a correct `@generated` function must not observe any
@@ -1069,7 +1119,7 @@ to build some more advanced (and valid) functionality...
 
 ### An advanced example
 
-Julia's base library has a [`sub2ind()`](@ref) function to calculate a linear index into an n-dimensional
+Julia's base library has a [`sub2ind`](@ref) function to calculate a linear index into an n-dimensional
 array, based on a set of n multilinear indices - in other words, to calculate the index `i` that
 can be used to index into an array `A` using `A[i]`, instead of `A[x,y,z,...]`. One possible implementation
 is the following:

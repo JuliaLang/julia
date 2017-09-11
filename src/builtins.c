@@ -10,7 +10,6 @@
 #include <string.h>
 #include <stdarg.h>
 #include <setjmp.h>
-#include <assert.h>
 #include <sys/types.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -25,6 +24,7 @@
 #include "julia_internal.h"
 #include "builtin_proto.h"
 #include "intrinsics.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -77,30 +77,40 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b)
 // See comment above for an explanation of NOINLINE.
 static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *dt)
 {
-    size_t nf = jl_datatype_nfields(dt);
-    for (size_t f=0; f < nf; f++) {
+    size_t f, nf = jl_datatype_nfields(dt);
+    for (f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *ao = (char*)jl_data_ptr(a) + offs;
         char *bo = (char*)jl_data_ptr(b) + offs;
-        int eq;
         if (jl_field_isptr(dt, f)) {
             jl_value_t *af = *(jl_value_t**)ao;
             jl_value_t *bf = *(jl_value_t**)bo;
-            if (af == bf) eq = 1;
-            else if (af==NULL || bf==NULL) eq = 0;
-            else eq = jl_egal(af, bf);
+            if (af != bf) {
+                if (af == NULL || bf == NULL)
+                    return 0;
+                if (!jl_egal(af, bf))
+                    return 0;
+            }
         }
         else {
             jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(dt, f);
+            if (jl_is_uniontype(ft)) {
+                uint8_t asel = ((uint8_t*)ao)[jl_field_size(dt, f) - 1];
+                uint8_t bsel = ((uint8_t*)bo)[jl_field_size(dt, f) - 1];
+                if (asel != bsel)
+                    return 0;
+                ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, asel);
+            }
             if (!ft->layout->haspadding) {
-                eq = bits_equal(ao, bo, jl_field_size(dt, f));
+                if (!bits_equal(ao, bo, jl_field_size(dt, f)))
+                    return 0;
             }
             else {
                 assert(jl_datatype_nfields(ft) > 0);
-                eq = compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft);
+                if (!compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft))
+                    return 0;
             }
         }
-        if (!eq) return 0;
     }
     return 1;
 }
@@ -121,9 +131,17 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
         jl_datatype_t *dtb = (jl_datatype_t*)b;
         return dta->name == dtb->name && compare_svec(dta->parameters, dtb->parameters);
     }
-    if (dt->mutabl) return 0;
+    if (dt == jl_string_type) {
+        size_t l = jl_string_len(a);
+        if (jl_string_len(b) != l)
+            return 0;
+        return !memcmp(jl_string_data(a), jl_string_data(b), l);
+    }
+    if (dt->mutabl)
+        return 0;
     size_t sz = jl_datatype_size(dt);
-    if (sz == 0) return 1;
+    if (sz == 0)
+        return 1;
     size_t nf = jl_datatype_nfields(dt);
     if (nf == 0)
         return bits_equal(jl_data_ptr(a), jl_data_ptr(b), sz);
@@ -155,10 +173,10 @@ static uintptr_t bits_hash(void *b, size_t sz)
 static uintptr_t NOINLINE hash_svec(jl_svec_t *v)
 {
     uintptr_t h = 0;
-    size_t l = jl_svec_len(v);
-    for(size_t i = 0; i < l; i++) {
-        jl_value_t *x = jl_svecref(v,i);
-        uintptr_t u = x==NULL ? 0 : jl_object_id(x);
+    size_t i, l = jl_svec_len(v);
+    for (i = 0; i < l; i++) {
+        jl_value_t *x = jl_svecref(v, i);
+        uintptr_t u = (x == NULL) ? 0 : jl_object_id(x);
         h = bitmix(h, u);
     }
     return h;
@@ -182,28 +200,42 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     if (dt == jl_typename_type)
         return ((jl_typename_t*)v)->hash;
 #ifdef _P64
-    if (v == jl_ANY_flag) return 0x31c472f68ee30bddULL;
+    if (v == jl_ANY_flag)
+        return 0x31c472f68ee30bddULL;
 #else
-    if (v == jl_ANY_flag) return 0x8ee30bdd;
+    if (v == jl_ANY_flag)
+        return 0x8ee30bdd;
 #endif
-    if (dt->mutabl) return inthash((uintptr_t)v);
+    if (dt == jl_string_type) {
+#ifdef _P64
+        return memhash_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
+#else
+        return memhash32_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
+#endif
+    }
+    if (dt->mutabl)
+        return inthash((uintptr_t)v);
     size_t sz = jl_datatype_size(tv);
     uintptr_t h = jl_object_id(tv);
-    if (sz == 0) return ~h;
-    size_t nf = jl_datatype_nfields(dt);
-    if (nf == 0) {
+    if (sz == 0)
+        return ~h;
+    size_t f, nf = jl_datatype_nfields(dt);
+    if (nf == 0)
         return bits_hash(jl_data_ptr(v), sz) ^ h;
-    }
-    for (size_t f=0; f < nf; f++) {
+    for (f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *vo = (char*)jl_data_ptr(v) + offs;
         uintptr_t u;
         if (jl_field_isptr(dt, f)) {
             jl_value_t *f = *(jl_value_t**)vo;
-            u = f==NULL ? 0 : jl_object_id(f);
+            u = (f == NULL) ? 0 : jl_object_id(f);
         }
         else {
             jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type(dt, f);
+            if (jl_is_uniontype(fieldtype)) {
+                uint8_t sel = ((uint8_t*)vo)[jl_field_size(dt, f) - 1];
+                fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
+            }
             assert(jl_is_datatype(fieldtype) && !fieldtype->abstract && !fieldtype->mutabl);
             if (fieldtype->layout->haspadding)
                 u = jl_object_id_((jl_value_t*)fieldtype, (jl_value_t*)vo);
@@ -231,7 +263,7 @@ JL_CALLABLE(jl_f_is)
     JL_NARGS(===, 2, 2);
     if (args[0] == args[1])
         return jl_true;
-    return jl_egal(args[0],args[1]) ? jl_true : jl_false;
+    return jl_egal(args[0], args[1]) ? jl_true : jl_false;
 }
 
 JL_CALLABLE(jl_f_typeof)
@@ -244,45 +276,46 @@ JL_CALLABLE(jl_f_sizeof)
 {
     JL_NARGS(sizeof, 1, 1);
     jl_value_t *x = args[0];
-    if (jl_is_unionall(x)) {
+    if (jl_is_unionall(x) || jl_is_uniontype(x)) {
         x = jl_unwrap_unionall(x);
+        size_t elsize = 0, al = 0;
+        int isinline = jl_islayout_inline(x, &elsize, &al);
+        if (isinline)
+            return jl_box_long(elsize);
         if (!jl_is_datatype(x))
             jl_error("argument is an abstract type; size is indeterminate");
     }
     if (jl_is_datatype(x)) {
         jl_datatype_t *dx = (jl_datatype_t*)x;
-        if (dx->name == jl_array_typename || dx == jl_symbol_type || dx == jl_simplevector_type ||
-            dx == jl_string_type)
-            jl_error("type does not have a canonical binary representation");
-        if (!(dx->name->names == jl_emptysvec && jl_datatype_size(dx) > 0)) {
-            // names===() and size > 0  =>  bitstype, size always known
-            if (dx->abstract || !jl_is_leaf_type(x))
-                jl_error("argument is an abstract type; size is indeterminate");
-        }
+        if (dx->layout == NULL)
+            jl_error("argument is an abstract type; size is indeterminate");
+        if (jl_is_layout_opaque(dx->layout))
+            jl_error("type does not have a fixed size");
         return jl_box_long(jl_datatype_size(x));
     }
-    if (jl_is_array(x))
+    if (jl_is_array(x)) {
         return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
+    }
     if (jl_is_string(x))
         return jl_box_long(jl_string_len(x));
+    if (jl_is_symbol(x))
+        return jl_box_long(strlen(jl_symbol_name((jl_sym_t*)x)));
+    if (jl_is_svec(x))
+        return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->abstract);
-    if (dt == jl_symbol_type)
-        jl_error("value does not have a canonical binary representation");
-    if (dt == jl_simplevector_type)
-        return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
     return jl_box_long(jl_datatype_size(dt));
 }
 
 JL_CALLABLE(jl_f_issubtype)
 {
-    JL_NARGS(issubtype, 2, 2);
+    JL_NARGS(<:, 2, 2);
     jl_value_t *a = args[0], *b = args[1];
     if (jl_is_typevar(a)) a = ((jl_tvar_t*)a)->ub; // TODO should we still allow this?
     if (jl_is_typevar(b)) b = ((jl_tvar_t*)b)->ub;
-    JL_TYPECHK(issubtype, type, a);
-    JL_TYPECHK(issubtype, type, b);
+    JL_TYPECHK(<:, type, a);
+    JL_TYPECHK(<:, type, b);
     return (jl_subtype(a,b) ? jl_true : jl_false);
 }
 
@@ -493,7 +526,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     JL_TRY {
         ptls->current_task->current_module = ptls->current_module = m;
         ptls->world_age = jl_world_counter;
-        v = jl_toplevel_eval(ex);
+        v = jl_toplevel_eval(m, ex);
     }
     JL_CATCH {
         jl_lineno = last_lineno;
@@ -511,9 +544,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 
 JL_CALLABLE(jl_f_isdefined)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_module_t *m = ptls->current_module;
-    jl_sym_t *s=NULL;
+    jl_module_t *m = NULL;
+    jl_sym_t *s = NULL;
     JL_NARGSV(isdefined, 1);
     if (jl_is_array(args[0])) {
         return jl_array_isdefined(args, nargs) ? jl_true : jl_false;
@@ -524,13 +556,16 @@ JL_CALLABLE(jl_f_isdefined)
     }
     if (nargs != 2) {
         JL_NARGS(isdefined, 1, 1);
+        jl_depwarn("`isdefined(:symbol)` is deprecated, "
+                   "use `@isdefined symbol` instead",
+                   (jl_value_t*)jl_symbol("isdefined"));
+        jl_ptls_t ptls = jl_get_ptls_states();
+        m = ptls->current_module;
     }
     else {
         if (!jl_is_module(args[0])) {
             jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(args[0]);
-            if (!jl_is_datatype(vt)) {
-                jl_type_error("isdefined", (jl_value_t*)jl_datatype_type, args[0]);
-            }
+            assert(jl_is_datatype(vt));
             size_t idx;
             if (jl_is_long(args[1])) {
                 idx = jl_unbox_long(args[1])-1;
@@ -589,10 +624,14 @@ JL_CALLABLE(jl_f_svec)
     return (jl_value_t*)t;
 }
 
-// composite types ------------------------------------------------------------
+// struct operations ------------------------------------------------------------
 
 JL_CALLABLE(jl_f_getfield)
 {
+    if (nargs == 3) {
+        JL_TYPECHK(getfield, bool, args[2]);
+        nargs -= 1;
+    }
     JL_NARGS(getfield, 2, 2);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
@@ -684,6 +723,10 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
 
 JL_CALLABLE(jl_f_fieldtype)
 {
+    if (nargs == 3) {
+        JL_TYPECHK(fieldtype, bool, args[2]);
+        nargs -= 1;
+    }
     JL_NARGS(fieldtype, 2, 2);
     jl_datatype_t *st = (jl_datatype_t*)args[0];
     if (st == jl_module_type)
@@ -695,7 +738,10 @@ JL_CALLABLE(jl_f_nfields)
 {
     JL_NARGS(nfields, 1, 1);
     jl_value_t *x = args[0];
-    if (!jl_is_datatype(x))
+    if (jl_is_datatype(x))
+        jl_depwarn("`nfields(::DataType)` is deprecated, use `fieldcount` instead",
+                   (jl_value_t*)jl_symbol("nfields"));
+    else
         x = jl_typeof(x);
     return jl_box_long(jl_field_count(x));
 }
@@ -906,20 +952,20 @@ JL_CALLABLE(jl_f_arraysize)
 static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
                              const char *fname)
 {
-    size_t i=0;
-    size_t k, stride=1;
+    size_t i = 0;
+    size_t k, stride = 1;
     size_t nd = jl_array_ndims(a);
-    for(k=0; k < nidxs; k++) {
+    for (k = 0; k < nidxs; k++) {
         if (!jl_is_long(args[k]))
             jl_type_error(fname, (jl_value_t*)jl_long_type, args[k]);
-        size_t ii = jl_unbox_long(args[k])-1;
+        size_t ii = jl_unbox_long(args[k]) - 1;
         i += ii * stride;
-        size_t d = k>=nd ? 1 : jl_array_dim(a, k);
-        if (k < nidxs-1 && ii >= d)
+        size_t d = (k >= nd) ? 1 : jl_array_dim(a, k);
+        if (k < nidxs - 1 && ii >= d)
             jl_bounds_error_v((jl_value_t*)a, args, nidxs);
         stride *= d;
     }
-    for(; k < nd; k++)
+    for (; k < nd; k++)
         stride *= jl_array_dim(a, k);
     if (i >= stride)
         jl_bounds_error_v((jl_value_t*)a, args, nidxs);
@@ -928,21 +974,23 @@ static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
 
 JL_CALLABLE(jl_f_arrayref)
 {
-    JL_NARGSV(arrayref, 2);
-    JL_TYPECHK(arrayref, array, args[0]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = array_nd_index(a, &args[1], nargs-1, "arrayref");
+    JL_NARGSV(arrayref, 3);
+    JL_TYPECHK(arrayref, bool, args[0]);
+    JL_TYPECHK(arrayref, array, args[1]);
+    jl_array_t *a = (jl_array_t*)args[1];
+    size_t i = array_nd_index(a, &args[2], nargs - 2, "arrayref");
     return jl_arrayref(a, i);
 }
 
 JL_CALLABLE(jl_f_arrayset)
 {
-    JL_NARGSV(arrayset, 3);
-    JL_TYPECHK(arrayset, array, args[0]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = array_nd_index(a, &args[2], nargs-2, "arrayset");
-    jl_arrayset(a, args[1], i);
-    return args[0];
+    JL_NARGSV(arrayset, 4);
+    JL_TYPECHK(arrayset, bool, args[0]);
+    JL_TYPECHK(arrayset, array, args[1]);
+    jl_array_t *a = (jl_array_t*)args[1];
+    size_t i = array_nd_index(a, &args[3], nargs - 3, "arrayset");
+    jl_arrayset(a, args[2], i);
+    return args[1];
 }
 
 // IntrinsicFunctions ---------------------------------------------------------
@@ -1069,7 +1117,7 @@ void jl_init_primitives(void)
     add_builtin_func("===", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);
     add_builtin_func("sizeof", jl_f_sizeof);
-    add_builtin_func("issubtype", jl_f_issubtype);
+    add_builtin_func("<:", jl_f_issubtype);
     add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("throw", jl_f_throw);
@@ -1151,6 +1199,10 @@ void jl_init_primitives(void)
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
 
+    add_builtin("Bool", (jl_value_t*)jl_bool_type);
+    add_builtin("UInt8", (jl_value_t*)jl_uint8_type);
+    add_builtin("Int32", (jl_value_t*)jl_int32_type);
+    add_builtin("Int64", (jl_value_t*)jl_int64_type);
 #ifdef _P64
     add_builtin("Int", (jl_value_t*)jl_int64_type);
 #else

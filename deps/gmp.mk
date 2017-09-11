@@ -5,23 +5,23 @@ GMP_CONFIGURE_OPTS += --disable-assembly
 endif
 
 ifeq ($(BUILD_OS),WINNT)
-GMP_CONFIGURE_OPTS += --srcdir="$(subst \,/,$(call mingw_to_dos,$(SRCDIR)/srccache/gmp-$(GMP_VER)))"
+GMP_CONFIGURE_OPTS += --srcdir="$(subst \,/,$(call mingw_to_dos,$(SRCCACHE)/gmp-$(GMP_VER)))"
 endif
 
-$(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2: | $(SRCDIR)/srccache
+$(SRCCACHE)/gmp-$(GMP_VER).tar.bz2: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://gmplib.org/download/gmp/$(notdir $@)
 
-$(SRCDIR)/srccache/gmp-$(GMP_VER)/source-extracted: $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2
+$(SRCCACHE)/gmp-$(GMP_VER)/source-extracted: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) -jxf $<
-	touch -c $(SRCDIR)/srccache/gmp-$(GMP_VER)/configure # old target
+	touch -c $(SRCCACHE)/gmp-$(GMP_VER)/configure # old target
 	echo 1 > $@
 
-$(SRCDIR)/srccache/gmp-$(GMP_VER)/build-patched: $(SRCDIR)/srccache/gmp-$(GMP_VER)/source-extracted
+$(SRCCACHE)/gmp-$(GMP_VER)/build-patched: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
 	cd $(dir $@) && patch < $(SRCDIR)/patches/gmp-exception.patch
 	echo 1 > $@
 
-$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCDIR)/srccache/gmp-$(GMP_VER)/source-extracted $(SRCDIR)/srccache/gmp-$(GMP_VER)/build-patched
+$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted $(SRCCACHE)/gmp-$(GMP_VER)/build-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static $(GMP_CONFIGURE_OPTS)
@@ -55,12 +55,12 @@ clean-gmp:
 	-$(MAKE) -C $(BUILDDIR)/gmp-$(GMP_VER) clean
 
 distclean-gmp:
-	-rm -rf $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2 \
-		$(SRCDIR)/srccache/gmp-$(GMP_VER) \
+	-rm -rf $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2 \
+		$(SRCCACHE)/gmp-$(GMP_VER) \
 		$(BUILDDIR)/gmp-$(GMP_VER)
 
-get-gmp: $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2
-extract-gmp: $(SRCDIR)/srccache/gmp-$(GMP_VER)/source-extracted
+get-gmp: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
+extract-gmp: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
 configure-gmp: $(BUILDDIR)/gmp-$(GMP_VER)/build-configured
 compile-gmp: $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled
 fastcheck-gmp: check-gmp

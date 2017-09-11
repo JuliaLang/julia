@@ -73,7 +73,7 @@ end
 end
 
 @testset "Bidiagonal ambiguity methods" begin
-    bd = Bidiagonal([1,2,3], [0,0], true)
+    bd = Bidiagonal([1,2,3], [0,0], :U)
     v = [2,3,4]
     rv = v.'
 
@@ -236,6 +236,14 @@ end
     @test_throws DimensionMismatch ut\rv
 end
 
+@testset "Symmetric/Hermitian ambiguity methods" begin
+    S = Symmetric(rand(3, 3))
+    H = Hermitian(rand(3, 3))
+    v = (rand(3)')::RowVector
+    @test_throws DimensionMismatch S\v
+    @test_throws DimensionMismatch H\v
+end
+
 # issue #20389
 @testset "1 row/col vec*mat" begin
     let x=[1,2,3], A=ones(1,4), y=x', B=A', C=x.*A
@@ -267,4 +275,20 @@ end
 
 @testset "ambiguity between * methods with RowVectors and ConjRowVectors (#20971)" begin
     @test RowVector(ConjArray(ones(4))) * ones(4) == 4
+end
+
+@testset "setindex!/getindex" begin
+    v = [2, 3, 4]
+    rv = v.'
+    @test_throws BoundsError setindex!(rv, 5, CartesianIndex((5, 4, 3)))
+    rv[CartesianIndex((1, 1, 1))] = 5
+    @test_throws BoundsError getindex(rv, CartesianIndex((5, 4, 3)))
+    @test rv[1] == 5
+
+    v = [1]
+    rv = v.'
+    rv[CartesianIndex()] = 2
+    @test rv[CartesianIndex()] == 2
+    rv[CartesianIndex(1)] = 1
+    @test rv[CartesianIndex(1)] == 1
 end

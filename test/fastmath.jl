@@ -4,11 +4,12 @@
 
 # check expansions
 
-@test macroexpand(:(@fastmath 1+2)) == :(Base.FastMath.add_fast(1,2))
-@test macroexpand(:(@fastmath +)) == :(Base.FastMath.add_fast)
-@test macroexpand(:(@fastmath min(1))) == :(Base.FastMath.min_fast(1))
-@test macroexpand(:(@fastmath min)) == :(Base.FastMath.min_fast)
-@test macroexpand(:(@fastmath x.min)) == :(x.min)
+@test macroexpand(Main, :(@fastmath 1+2)) == :(Base.FastMath.add_fast(1,2))
+@test macroexpand(Main, :(@fastmath +)) == :(Base.FastMath.add_fast)
+@test macroexpand(Main, :(@fastmath min(1))) == :(Base.FastMath.min_fast(1))
+@test macroexpand(Main, :(@fastmath min)) == :(Base.FastMath.min_fast)
+@test macroexpand(Main, :(@fastmath x.min)) == :(x.min)
+@test macroexpand(Main, :(@fastmath sincos(x))) == :(Base.FastMath.sincos_fast(x))
 
 # basic arithmetic
 
@@ -200,4 +201,10 @@ let a = ones(2,2), b = ones(2,2)
     # test fallthrough for unsupported ops
     local c = 0
     @test @fastmath(c |= 1) == 1
+end
+
+# issue #23218
+let a = zeros(1), b = ones(1), idx = (1,)
+    @fastmath a[idx...] += b[idx...]
+    @test a == b
 end

@@ -10,8 +10,9 @@ for S in (String, GenericString)
     @test basename(S("foo$(sep)bar")) == "bar"
     @test dirname(S("foo$(sep)bar")) == "foo"
 
+    @test expanduser(S("")) == ""
     @test expanduser(S("x")) == "x"
-    @test expanduser(S("~")) == (is_windows() ? "~" : homedir())
+    @test expanduser(S("~")) == (Sys.iswindows() ? "~" : homedir())
 
     @test isabspath(S(homedir()))
     @test !isabspath(S("foo"))
@@ -26,6 +27,16 @@ for S in (String, GenericString)
     @test joinpath(S("foo"), S("bar")) == "foo$(sep)bar"
     @test joinpath(S("foo"), S(homedir())) == homedir()
     @test joinpath(S(abspath("foo")), S(homedir())) == homedir()
+
+    if Sys.iswindows()
+        @test joinpath(S("foo"),S("bar:baz")) == "bar:baz"
+        @test joinpath(S("C:"),S("foo"),S("D:"),S("bar")) == "D:bar"
+        @test joinpath(S("C:"),S("foo"),S("D:bar"),S("baz")) == "D:bar$(sep)baz"
+    elseif Sys.isunix()
+        @test joinpath(S("foo"),S("bar:baz")) == "foo$(sep)bar:baz"
+        @test joinpath(S("C:"),S("foo"),S("D:"),S("bar")) == "C:$(sep)foo$(sep)D:$(sep)bar"
+        @test joinpath(S("C:"),S("foo"),S("D:"),S("bar"),S("baz")) == "C:$(sep)foo$(sep)D:$(sep)bar$(sep)baz"
+    end
 
     @test normpath(S(joinpath("."))) == "."
     @test normpath(S(joinpath(".."))) == ".."
@@ -68,7 +79,7 @@ for S in (String, GenericString)
     @test joinpath(splitdir(S(homedir()))...) == homedir()
     @test string(splitdrive(S(homedir()))...) == homedir()
 
-    if is_windows()
+    if Sys.iswindows()
         @test splitdrive(S("\\\\servername\\hello.world\\filename.ext")) ==
             ("\\\\servername\\hello.world","\\filename.ext")
         @test splitdrive(S("\\\\servername.com\\hello.world\\filename.ext")) ==
@@ -95,8 +106,8 @@ end
 
 @test isabspath("~") == false
 @test isabspath("/") == true # on windows, this is relatively absolute
-@test isabspath("A:/") == is_windows()
-@test isabspath("B:\\") == is_windows()
+@test isabspath("A:/") == Sys.iswindows()
+@test isabspath("B:\\") == Sys.iswindows()
 @test isabspath("./") == false
 @test isabspath("C:") == false
 @test isabspath("C:.") == false
@@ -104,8 +115,8 @@ end
 @test isabspath(".:/") == false
 #@test isabspath("_:/") == false # FIXME?
 #@test isabspath("AB:/") == false # FIXME?
-@test isabspath("\\\\") == is_windows()
-if is_unix()
+@test isabspath("\\\\") == Sys.iswindows()
+if Sys.isunix()
     @test isabspath(expanduser("~")) == true
     @test startswith(expanduser("~"), homedir())
 else
@@ -197,3 +208,15 @@ test_relpath()
 # Test type stability
 @test isa(joinpath("a", "b"), String)
 @test isa(joinpath(abspath("a"), "b"), String)
+
+# homedir
+let var = Sys.iswindows() ? "USERPROFILE" : "HOME",
+    MAX_PATH = Sys.iswindows() ? 240 : 1020
+    for i = 0:9
+        local home = " "^MAX_PATH * "123456789"[1:i]
+        @test withenv(var => home) do
+            homedir()
+        end == home
+    end
+    @test isabspath(withenv(homedir, var => nothing))
+end

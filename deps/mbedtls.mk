@@ -15,30 +15,21 @@ ifeq ($(BUILD_OS),WINNT)
 MBEDTLS_OPTS += -G"MSYS Makefiles"
 endif
 
-ifeq ($(OS),Linux)
+ifneq (,$(findstring $(OS),Linux FreeBSD))
 MBEDTLS_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
-ifeq ($(OS),FreeBSD)
-MBEDTLS_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
-endif
-
-$(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz: | $(SRCDIR)/srccache
+$(SRCCACHE)/$(MBEDTLS_SRC).tgz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ $(MBEDTLS_URL)
 
-$(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted: $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz
+$(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted: $(SRCCACHE)/$(MBEDTLS_SRC).tgz
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@) && \
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
-	touch -c $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt # old target
+	touch -c $(SRCCACHE)/$(MBEDTLS_SRC)/CMakeLists.txt # old target
 	echo 1 > $@
 
-$(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted
-	cd $(SRCDIR)/srccache/$(MBEDTLS_SRC)/include/mbedtls && patch -p0 -f < $(SRCDIR)/patches/mbedtls-ssl.h.patch
-	echo 1 > $@
-$(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied
-
-$(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted
+$(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(MBEDTLS_OPTS)
@@ -83,13 +74,13 @@ clean-mbedtls:
 	-$(MAKE) -C $(BUILDDIR)/$(MBEDTLS_SRC) clean
 
 distclean-mbedtls:
-	-rm -rf $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz \
-		$(SRCDIR)/srccache/$(MBEDTLS_SRC) \
+	-rm -rf $(SRCCACHE)/$(MBEDTLS_SRC).tgz \
+		$(SRCCACHE)/$(MBEDTLS_SRC) \
 		$(BUILDDIR)/$(MBEDTLS_SRC)
 
 
-get-mbedtls: $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz
-extract-mbedtls: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted
+get-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC).tgz
+extract-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
 configure-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured
 compile-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled
 # tests disabled since they are known to fail

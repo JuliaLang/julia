@@ -37,7 +37,7 @@ Currently supported rounding modes are:
 - [`RoundNearestTiesAway`](@ref)
 - [`RoundNearestTiesUp`](@ref)
 - [`RoundToZero`](@ref)
-- `RoundFromZero` (`BigFloat` only)
+- `RoundFromZero` ([`BigFloat`](@ref) only)
 - [`RoundUp`](@ref)
 - [`RoundDown`](@ref)
 """
@@ -118,9 +118,9 @@ arithmetic functions ([`+`](@ref), [`-`](@ref), [`*`](@ref),
 functions may give incorrect or invalid values when using rounding modes other than the
 default `RoundNearest`.
 
-Note that this may affect other types, for instance changing the rounding mode of `Float64`
-will change the rounding mode of `Float32`. See [`RoundingMode`](@ref) for
-available modes.
+Note that this may affect other types, for instance changing the rounding mode of
+[`Float64`](@ref) will change the rounding mode of [`Float32`](@ref).
+See [`RoundingMode`](@ref) for available modes.
 
 !!! warning
 

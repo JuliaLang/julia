@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef APINT_C_H
-#define APINT_C_H
+#ifndef JL_APINT_C_H
+#define JL_APINT_C_H
 
 #ifdef __cplusplus
 extern "C" {

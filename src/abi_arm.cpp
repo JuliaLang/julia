@@ -270,7 +270,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
     //   For a Composite Type, the alignment of the copy will have 4-byte
     //   alignment if its natural alignment is <= 4 and 8-byte alignment if
     //   its natural alignment is >= 8
-    size_t align = dt->layout->alignment;
+    size_t align = jl_datatype_align(dt);
     if (align < 4)
         align = 4;
     if (align > 8)

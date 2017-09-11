@@ -26,7 +26,7 @@ const _htmlescape_chars = Dict('<'=>"&lt;",   '>'=>"&gt;",
                                '"'=>"&quot;", '&'=>"&amp;",
                                # ' '=>"&nbsp;",
                                )
-for ch in "'`!\$\%()=+{}[]"
+for ch in "'`!\$%()=+{}[]"
     _htmlescape_chars[ch] = "&#$(Int(ch));"
 end
 
@@ -59,7 +59,7 @@ end
 
 html(io::IO, md::MD) = html(io, md.content)
 
-function html{l}(io::IO, header::Header{l})
+function html(io::IO, header::Header{l}) where l
     withtag(io, "h$l") do
         htmlinline(io, header.text)
     end

@@ -9,6 +9,11 @@ const DOT_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
 
+# Generic cross-over constant based on benchmarking on a single thread with an i7 CPU @ 2.5GHz
+# L1 cache: 32K, L2 cache: 256K, L3 cache: 6144K
+# This constant should ideally be determined by the actual CPU cache size
+const ISONE_CUTOFF = 2^21 # 2M
+
 function scale!(X::Array{T}, s::T) where T<:BlasFloat
     s == 0 && return fill!(X, zero(T))
     s == 1 && return X
@@ -29,16 +34,49 @@ function scale!(X::Array{T}, s::Real) where T<:BlasComplex
     X
 end
 
-# Test whether a matrix is positive-definite
-isposdef!(A::StridedMatrix{<:BlasFloat}, UL::Symbol) = LAPACK.potrf!(char_uplo(UL), A)[2] == 0
+
+function isone(A::StridedMatrix)
+    m, n = size(A)
+    m != n && return false # only square matrices can satisfy x == one(x)
+    if sizeof(A) < ISONE_CUTOFF
+        _isone_triacheck(A, m)
+    else
+        _isone_cachefriendly(A, m)
+    end
+end
+
+@inline function _isone_triacheck(A::StridedMatrix, m::Int)
+    @inbounds for i in 1:m, j in i:m
+        if i == j
+            isone(A[i,i]) || return false
+        else
+            iszero(A[i,j]) && iszero(A[j,i]) || return false
+        end
+    end
+    return true
+end
+
+# Inner loop over rows to be friendly to the CPU cache
+@inline function _isone_cachefriendly(A::StridedMatrix, m::Int)
+    @inbounds for i in 1:m, j in 1:m
+        if i == j
+            isone(A[i,i]) || return false
+        else
+            iszero(A[j,i]) || return false
+        end
+    end
+    return true
+end
+
 
 """
     isposdef!(A) -> Bool
 
-Test whether a matrix is positive definite, overwriting `A` in the process.
+Test whether a matrix is positive definite by trying to perform a
+Cholesky factorization of `A`, overwriting `A` in the process.
+See also [`isposdef`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1. 2.; 2. 50.];
 
@@ -51,19 +89,16 @@ julia> A
  2.0  6.78233
 ```
 """
-isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
+isposdef!(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact!(Hermitian(A)))
 
-function isposdef(A::AbstractMatrix{T}, UL::Symbol) where T
-    S = typeof(sqrt(one(T)))
-    isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL)
-end
 """
     isposdef(A) -> Bool
 
-Test whether a matrix is positive definite.
+Test whether a matrix is positive definite by trying to perform a
+Cholesky factorization of `A`.
+See also [`isposdef!`](@ref)
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 2; 2 50]
 2×2 Array{Int64,2}:
@@ -74,16 +109,13 @@ julia> isposdef(A)
 true
 ```
 """
-function isposdef(A::AbstractMatrix{T}) where T
-    S = typeof(sqrt(one(T)))
-    isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A))
-end
+isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact(Hermitian(A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 stride1(x::Array) = 1
 stride1(x::StridedVector) = stride(x, 1)::Int
 
-function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},Range{TI}}) where {T<:BlasFloat,TI<:Integer}
+function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
     end
@@ -102,7 +134,7 @@ vecnorm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
 Returns the upper triangle of `M` starting from the `k`th superdiagonal,
 overwriting `M` in the process.
 
-# Example
+# Examples
 ```jldoctest
 julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
 5×5 Array{Int64,2}:
@@ -145,8 +177,7 @@ triu(M::Matrix, k::Integer) = triu!(copy(M), k)
 Returns the lower triangle of `M` starting from the `k`th superdiagonal, overwriting `M` in
 the process.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
 5×5 Array{Int64,2}:
@@ -209,10 +240,9 @@ end
 """
     diagind(M, k::Integer=0)
 
-A `Range` giving the indices of the `k`th diagonal of the matrix `M`.
+An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
 3×3 Array{Int64,2}:
@@ -232,8 +262,7 @@ diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
 The `k`th diagonal of a matrix, as a vector.
 Use [`diagm`](@ref) to construct a diagonal matrix.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
 3×3 Array{Int64,2}:
@@ -252,10 +281,10 @@ diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 """
     diagm(v, k::Integer=0)
 
-Construct a matrix by placing `v` on the `k`th diagonal.
+Construct a matrix by placing `v` on the `k`th diagonal. This constructs a full matrix; if
+you want a storage-efficient version with fast arithmetic, use [`Diagonal`](@ref) instead.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> diagm([1,2,3],1)
 4×4 Array{Int64,2}:
@@ -288,8 +317,7 @@ end
 
 Kronecker tensor product of two vectors or two matrices.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -329,41 +357,25 @@ kron(a::AbstractMatrix, b::AbstractVector) = kron(a, reshape(b, length(b), 1))
 kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
 
 # Matrix power
-(^)(A::AbstractMatrix{T}, p::Integer) where {T} = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
-function (^)(A::AbstractMatrix{T}, p::Real) where T
-    # For integer powers, use repeated squaring
-    if isinteger(p)
-        TT = Base.promote_op(^, eltype(A), typeof(p))
-        return (TT == eltype(A) ? A : copy!(similar(A, TT), A))^Integer(p)
-    end
-
-    # If possible, use diagonalization
-    if T <: Real && issymmetric(A)
-        return (Symmetric(A)^p)
-    end
-    if ishermitian(A)
-        return (Hermitian(A)^p)
-    end
-
-    n = checksquare(A)
-
-    # Quicker return if A is diagonal
-    if isdiag(A)
-        retmat = copy(A)
-        for i in 1:n
-            retmat[i, i] = retmat[i, i] ^ p
-        end
-        return retmat
-    end
-
-    # Otherwise, use Schur decomposition
+(^)(A::AbstractMatrix, p::Integer) = p < 0 ? power_by_squaring(inv(A), -p) : power_by_squaring(A, p)
+function (^)(A::AbstractMatrix{T}, p::Integer) where T<:Integer
+    # make sure that e.g. [1 1;1 0]^big(3)
+    # gets promotes in a similar way as 2^big(3)
+    TT = promote_op(^, T, typeof(p))
+    return power_by_squaring(convert(AbstractMatrix{TT}, A), p)
+end
+function integerpow(A::AbstractMatrix{T}, p) where T
+    TT = promote_op(^, T, typeof(p))
+    return (TT == T ? A : copy!(similar(A, TT), A))^Integer(p)
+end
+function schurpow(A::AbstractMatrix, p)
     if istriu(A)
         # Integer part
         retmat = A ^ floor(p)
         # Real part
         if p - floor(p) == 0.5
-            # special case: A^0.5 === sqrtm(A)
-            retmat = retmat * sqrtm(A)
+            # special case: A^0.5 === sqrt(A)
+            retmat = retmat * sqrt(A)
         else
             retmat = retmat * powm!(UpperTriangular(float.(A)), real(p - floor(p)))
         end
@@ -373,8 +385,8 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
         R = S ^ floor(p)
         # Real part
         if p - floor(p) == 0.5
-            # special case: A^0.5 === sqrtm(A)
-            R = R * sqrtm(S)
+            # special case: A^0.5 === sqrt(A)
+            R = R * sqrt(S)
         else
             R = R * powm!(UpperTriangular(float.(S)), real(p - floor(p)))
         end
@@ -388,12 +400,39 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
         return retmat
     end
 end
-(^)(A::AbstractMatrix, p::Number) = expm(p*logm(A))
+function (^)(A::AbstractMatrix{T}, p::Real) where T
+    n = checksquare(A)
+
+    # Quicker return if A is diagonal
+    if isdiag(A)
+        TT = promote_op(^, T, typeof(p))
+        retmat = copy_oftype(A, TT)
+        for i in 1:n
+            retmat[i, i] = retmat[i, i] ^ p
+        end
+        return retmat
+    end
+
+    # For integer powers, use power_by_squaring
+    isinteger(p) && return integerpow(A, p)
+
+    # If possible, use diagonalization
+    if issymmetric(A)
+        return (Symmetric(A)^p)
+    end
+    if ishermitian(A)
+        return (Hermitian(A)^p)
+    end
+
+    # Otherwise, use Schur decomposition
+    return schurpow(A, p)
+end
+(^)(A::AbstractMatrix, p::Number) = exp(p*log(A))
 
 # Matrix exponential
 
 """
-    expm(A)
+    exp(A::AbstractMatrix)
 
 Compute the matrix exponential of `A`, defined by
 
@@ -406,30 +445,28 @@ used, otherwise the scaling and squaring algorithm (see [^H05]) is chosen.
 
 [^H05]: Nicholas J. Higham, "The squaring and scaling method for the matrix exponential revisited", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. [doi:10.1137/090768539](http://dx.doi.org/10.1137/090768539)
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = eye(2, 2)
 2×2 Array{Float64,2}:
  1.0  0.0
  0.0  1.0
 
-julia> expm(A)
+julia> exp(A)
 2×2 Array{Float64,2}:
  2.71828  0.0
  0.0      2.71828
 ```
 """
-expm(A::StridedMatrix{<:BlasFloat}) = expm!(copy(A))
-expm(A::StridedMatrix{<:Integer}) = expm!(float(A))
-expm(x::Number) = exp(x)
+exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
+exp(A::StridedMatrix{<:Integer}) = exp!(float(A))
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
-function expm!(A::StridedMatrix{T}) where T<:BlasFloat
+function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     n = checksquare(A)
     if ishermitian(A)
-        return full(expm(Hermitian(A)))
+        return full(exp(Hermitian(A)))
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = norm(A, 1)
@@ -520,7 +557,7 @@ function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
 end
 
 """
-    logm(A{T}::StridedMatrix{T})
+    log(A{T}::StridedMatrix{T})
 
 If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
 the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
@@ -537,63 +574,51 @@ triangular factor.
 
 [^AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, "Computing the Fréchet derivative of the matrix logarithm and estimating the condition number", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. [doi:10.1137/120885991](http://dx.doi.org/10.1137/120885991)
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = 2.7182818 * eye(2)
 2×2 Array{Float64,2}:
  2.71828  0.0
  0.0      2.71828
 
-julia> logm(A)
-2×2 Array{Float64,2}:
+julia> log(A)
+2×2 Symmetric{Float64,Array{Float64,2}}:
  1.0  0.0
  0.0  1.0
 ```
 """
-function logm(A::StridedMatrix{T}) where T
+function log(A::StridedMatrix{T}) where T
     # If possible, use diagonalization
     if issymmetric(A) && T <: Real
-        return full(logm(Symmetric(A)))
+        return log(Symmetric(A))
     end
     if ishermitian(A)
-        return full(logm(Hermitian(A)))
+        return log(Hermitian(A))
     end
 
     # Use Schur decomposition
     n = checksquare(A)
     if istriu(A)
-        retmat = full(logm(UpperTriangular(complex(A))))
-        d = diag(A)
+        return full(log(UpperTriangular(complex(A))))
     else
-        S,Q,d = schur(complex(A))
-        R = logm(UpperTriangular(S))
-        retmat = Q * R * Q'
-    end
-
-    # Check whether the matrix has nonpositive real eigs
-    np_real_eigs = false
-    for i = 1:n
-        if imag(d[i]) < eps() && real(d[i]) <= 0
-            np_real_eigs = true
-            break
+        if isreal(A)
+            SchurF = schurfact(real(A))
+        else
+            SchurF = schurfact(A)
+        end
+        if !istriu(SchurF.T)
+            SchurS = schurfact(complex(SchurF.T))
+            logT = SchurS.Z * log(UpperTriangular(SchurS.T)) * SchurS.Z'
+            return SchurF.Z * logT * SchurF.Z'
+        else
+            R = log(UpperTriangular(complex(SchurF.T)))
+            return SchurF.Z * R * SchurF.Z'
         end
     end
-
-    if isreal(A) && !np_real_eigs
-        return real(retmat)
-    else
-        return retmat
-    end
 end
-function logm(a::Number)
-    b = log(complex(a))
-    return imag(b) == 0 ? real(b) : b
-end
-logm(a::Complex) = log(a)
 
 """
-    sqrtm(A)
+    sqrt(A::AbstractMatrix)
 
 If `A` has no negative real eigenvalues, compute the principal matrix square root of `A`,
 that is the unique matrix ``X`` with eigenvalues having positive real part such that
@@ -610,48 +635,45 @@ and then the complex square root of the triangular factor.
     Linear Algebra and its Applications, 52-53, 1983, 127-140.
     [doi:10.1016/0024-3795(83)80010-X](http://dx.doi.org/10.1016/0024-3795(83)80010-X)
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [4 0; 0 4]
 2×2 Array{Int64,2}:
  4  0
  0  4
 
-julia> sqrtm(A)
+julia> sqrt(A)
 2×2 Array{Float64,2}:
  2.0  0.0
  0.0  2.0
 ```
 """
-function sqrtm(A::StridedMatrix{<:Real})
+function sqrt(A::StridedMatrix{<:Real})
     if issymmetric(A)
-        return full(sqrtm(Symmetric(A)))
+        return full(sqrt(Symmetric(A)))
     end
     n = checksquare(A)
     if istriu(A)
-        return full(sqrtm(UpperTriangular(A)))
+        return full(sqrt(UpperTriangular(A)))
     else
         SchurF = schurfact(complex(A))
-        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        R = full(sqrt(UpperTriangular(SchurF[:T])))
         return SchurF[:vectors] * R * SchurF[:vectors]'
     end
 end
-function sqrtm(A::StridedMatrix{<:Complex})
+function sqrt(A::StridedMatrix{<:Complex})
     if ishermitian(A)
-        return full(sqrtm(Hermitian(A)))
+        return full(sqrt(Hermitian(A)))
     end
     n = checksquare(A)
     if istriu(A)
-        return full(sqrtm(UpperTriangular(A)))
+        return full(sqrt(UpperTriangular(A)))
     else
         SchurF = schurfact(A)
-        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        R = full(sqrt(UpperTriangular(SchurF[:T])))
         return SchurF[:vectors] * R * SchurF[:vectors]'
     end
 end
-sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
-sqrtm(a::Complex) = sqrt(a)
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
@@ -659,12 +681,15 @@ function inv(A::StridedMatrix{T}) where T
     AA = convert(AbstractArray{S}, A)
     if istriu(AA)
         Ai = inv(UpperTriangular(AA))
+        Ai = convert(typeof(parent(Ai)), Ai)
     elseif istril(AA)
         Ai = inv(LowerTriangular(AA))
+        Ai = convert(typeof(parent(Ai)), Ai)
     else
-        Ai = inv(lufact(AA))
+        Ai = inv!(lufact(AA))
+        Ai = convert(typeof(parent(Ai)), Ai)
     end
-    return convert(typeof(parent(Ai)), Ai)
+    return Ai
 end
 
 """
@@ -693,10 +718,9 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 If `factorize` is called on a Hermitian positive-definite matrix, for instance, then `factorize`
 will return a Cholesky factorization.
 
-# Example
-
+# Examples
 ```jldoctest
-julia> A = Array(Bidiagonal(ones(5, 5), true))
+julia> A = Array(Bidiagonal(ones(5, 5), :U))
 5×5 Array{Float64,2}:
  1.0  1.0  0.0  0.0  0.0
  0.0  1.0  1.0  0.0  0.0
@@ -756,12 +780,12 @@ function factorize(A::StridedMatrix{T}) where T
                     return Diagonal(A)
                 end
                 if utri1
-                    return Bidiagonal(diag(A), diag(A, -1), false)
+                    return Bidiagonal(diag(A), diag(A, -1), :L)
                 end
                 return LowerTriangular(A)
             end
             if utri
-                return Bidiagonal(diag(A), diag(A, 1), true)
+                return Bidiagonal(diag(A), diag(A, 1), :U)
             end
             if utri1
                 if (herm & (T <: Complex)) | sym
@@ -776,17 +800,19 @@ function factorize(A::StridedMatrix{T}) where T
             return UpperTriangular(A)
         end
         if herm
-            try
-                return cholfact(A)
+            cf = cholfact(A)
+            if cf.info == 0
+                return cf
+            else
+                return factorize(Hermitian(A))
             end
-            return factorize(Hermitian(A))
         end
         if sym
             return factorize(Symmetric(A))
         end
         return lufact(A)
     end
-    qrfact(A, Val{true})
+    qrfact(A, Val(true))
 end
 
 ## Moore-Penrose pseudoinverse
@@ -809,8 +835,7 @@ inverting dense ill-conditioned matrices in a least-squares sense,
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 
-# Example
-
+# Examples
 ```jldoctest
 julia> M = [1.5 1.3; 1.2 1.9]
 2×2 Array{Float64,2}:
@@ -866,10 +891,9 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv(A::StridedMatrix{T}) where T
-    tol = eps(real(float(one(T))))*maximum(size(A))
+    tol = eps(real(float(one(T))))*min(size(A)...)
     return pinv(A, tol)
 end
-pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
 function pinv(x::Number)
     xi = inv(x)
     return ifelse(isfinite(xi), xi, zero(xi))
@@ -882,8 +906,7 @@ end
 
 Basis for nullspace of `M`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> M = [1 0 0; 0 1 0; 0 0 0]
 3×3 Array{Int64,2}:
@@ -920,10 +943,12 @@ function cond(A::AbstractMatrix, p::Real=2)
         return maxv == 0.0 ? oftype(real(A[1,1]),Inf) : maxv / minimum(v)
     elseif p == 1 || p == Inf
         checksquare(A)
-        return cond(lufact(A), p)
+        return _cond1Inf(A, p)
     end
     throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
 end
+_cond1Inf(A::StridedMatrix{<:BlasFloat}, p::Real) = _cond1Inf(lufact(A), p, norm(A, p))
+_cond1Inf(A::AbstractMatrix, p::Real)             = norm(A, p)*norm(inv(A), p)
 
 ## Lyapunov and Sylvester equation
 

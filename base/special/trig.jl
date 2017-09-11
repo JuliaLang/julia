@@ -9,9 +9,10 @@ struct DoubleFloat32
     hi::Float64
 end
 
-# *_kernel functions are only valid for |x| < pi/4 = 0.7854
-# translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c
-# which are made available under the following licence:
+# sin_kernel and cos_kernel functions are only valid for |x| < pi/4 = 0.7854
+# translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c.
+# asin functions are based on openlibm code: e_asin.c, e_asinf.c. The above
+# functions are made available under the following licence:
 
 ## Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
 ##
@@ -80,6 +81,111 @@ end
 sin_kernel(x::Real) = sin(x)
 cos_kernel(x::Real) = cos(x)
 
+# Inverse trigonometric functions
+
+# asin methods
+ASIN_X_MIN_THRESHOLD(::Type{Float32}) = 2.0f0^-12
+ASIN_X_MIN_THRESHOLD(::Type{Float64}) = sqrt(eps(Float64))
+
+arc_p(t::Float64) =
+    t*@horner(t,
+    1.66666666666666657415e-01,
+    -3.25565818622400915405e-01,
+    2.01212532134862925881e-01,
+    -4.00555345006794114027e-02,
+    7.91534994289814532176e-04,
+    3.47933107596021167570e-05)
+
+arc_q(t::Float64) =
+    @horner(t,
+    1.0,
+    -2.40339491173441421878e+00,
+    2.02094576023350569471e+00,
+    -6.88283971605453293030e-01,
+    7.70381505559019352791e-02)
+
+arc_p(t::Float32) =
+    t*@horner(t,
+    1.6666586697f-01,
+    -4.2743422091f-02,
+    -8.6563630030f-03)
+
+arc_q(t::Float32) = @horner(t, 1.0f0, -7.0662963390f-01)
+
+@inline function asin_kernel(t::Float64, x::Float64)
+    pio2_lo = 6.12323399573676603587e-17
+    s = sqrt_llvm(t)
+    p = arc_p(t) # numerator polynomial
+    q = arc_q(t) # denominator polynomial
+    if abs(x) >= 0.975 # |x| > 0.975
+        Rx = p/q
+        return flipsign(pi/2 - (2.0*(s + s*Rx) - pio2_lo), x)
+    else
+        s0 = reinterpret(Float64, (reinterpret(UInt64, s) >> 32) << 32)
+        c = (t - s0*s0)/(s + s0)
+        Rx = p/q
+        p = 2.0*s*Rx - (pio2_lo - 2.0*c)
+        q = pi/4 - 2.0*s0
+        return flipsign(pi/4 - (p-q), x)
+    end
+end
+@inline function asin_kernel(t::Float32, x::Float32)
+    s = sqrt_llvm(Float64(t))
+    p = arc_p(t) # numerator polynomial
+    q = arc_q(t) # denominator polynomial
+    Rx = p/q # rational approximation
+    flipsign(Float32(pi/2 - 2*(s + s*Rx)), x)
+end
+
+@noinline asin_domain_error(x) = throw(DomainError(x, "asin(x) is not defined for |x|>1."))
+function asin(x::T) where T<:Union{Float32, Float64}
+    # Method :
+    #    Since  asin(x) = x + x^3/6 + x^5*3/40 + x^7*15/336 + ...
+    #    we approximate asin(x) on [0,0.5] by
+    #        asin(x) = x + x*x^2*R(x^2)
+    #    where
+    #        R(x^2) is a rational approximation of (asin(x)-x)/x^3
+    #    and its remez error is bounded by
+    #        |(asin(x)-x)/x^3 - R(x^2)| < 2^(-58.75)
+    #
+    #    For x in [0.5,1]
+    #        asin(x) = pi/2-2*asin(sqrt((1-x)/2))
+    #    Let y = (1-x), z = y/2, s := sqrt(z), and pio2_hi+pio2_lo=pi/2;
+    #    then for x>0.98
+    #        asin(x) = pi/2 - 2*(s+s*z*R(z))
+    #            = pio2_hi - (2*(s+s*z*R(z)) - pio2_lo)
+    #    For x<=0.98, let pio4_hi = pio2_hi/2, then
+    #        f = hi part of s;
+    #        c = sqrt(z) - f = (z-f*f)/(s+f)     ...f+c=sqrt(z)
+    #    and
+    #        asin(x) = pi/2 - 2*(s+s*z*R(z))
+    #            = pio4_hi+(pio4-2s)-(2s*z*R(z)-pio2_lo)
+    #            = pio4_hi+(pio4-2f)-(2s*z*R(z)-(pio2_lo+2c))
+    #
+    # Special cases:
+    #    if |x|>1, throw DomainError
+    absx = abs(x)
+    if absx >= T(1.0) # |x|>= 1
+        if absx == T(1.0)
+            return flipsign(T(pi)/2, x)
+        end
+        asin_domain_error(x)
+    elseif absx < T(1.0)/2
+        # if |x| sufficiently small, |x| is a good approximation
+        if absx < ASIN_X_MIN_THRESHOLD(T)
+            return x
+        end
+        # else if |x|<0.5 we use a rational approximation R(x)=p(x)/q(x) such that
+        # tan(x) ≈ x+x*R(x)
+        x² = x*x
+        Rx = arc_p(x²)/arc_q(x²) # rational approximation
+        return muladd(x, Rx, x)
+    end
+    # else 1/2 <= |x| < 1
+    t = (T(1.0) - absx)/2
+    return asin_kernel(t, x)
+end
+
 # multiply in extended precision
 function mulpi_ext(x::Float64)
     m = 3.141592653589793
@@ -106,7 +212,7 @@ Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large
 function sinpi(x::T) where T<:AbstractFloat
     if !isfinite(x)
         isnan(x) && return x
-        throw(DomainError())
+        throw(DomainError(x, "`x` cannot be infinite."))
     end
 
     ax = abs(x)
@@ -132,11 +238,11 @@ function sinpi(x::T) where T<:AbstractFloat
     end
 end
 
-# Rationals and other Real types
-function sinpi(x::T) where T<:Real
-    Tf = typeof(float(x))
+# Integers and Rationals
+function sinpi(x::T) where T<:Union{Integer,Rational}
+    Tf = float(T)
     if !isfinite(x)
-        throw(DomainError())
+        throw(DomainError(x, "`x` must be finite."))
     end
 
     # until we get an IEEE remainder function (#9283)
@@ -169,7 +275,7 @@ Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large
 function cospi(x::T) where T<:AbstractFloat
     if !isfinite(x)
         isnan(x) && return x
-        throw(DomainError())
+        throw(DomainError(x, "`x` cannot be infinite."))
     end
 
     ax = abs(x)
@@ -191,10 +297,10 @@ function cospi(x::T) where T<:AbstractFloat
     end
 end
 
-# Rationals and other Real types
-function cospi(x::T) where T<:Real
+# Integers and Rationals
+function cospi(x::T) where T<:Union{Integer,Rational}
     if !isfinite(x)
-        throw(DomainError())
+        throw(DomainError(x, "`x` must be finite."))
     end
 
     ax = abs(x)
@@ -217,6 +323,8 @@ end
 
 sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
 cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
+sinpi(x::Real) = sinpi(float(x))
+cospi(x::Real) = cospi(float(x))
 
 function sinpi(z::Complex{T}) where T
     F = float(T)
@@ -292,7 +400,8 @@ Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
 """
 sinc(x::Number) = x==0 ? one(x)  : oftype(x,sinpi(x)/(pi*x))
 sinc(x::Integer) = x==0 ? one(x) : zero(x)
-sinc(x::Complex{T}) where {T<:Integer} = sinc(float(x))
+sinc(x::Complex{<:AbstractFloat}) = x==0 ? one(x) : oftype(x, sinpi(x)/(pi*x))
+sinc(x::Complex) = sinc(float(x))
 sinc(x::Real) = x==0 ? one(x) : isinf(x) ? zero(x) : sinpi(x)/(pi*x)
 
 """
@@ -303,14 +412,32 @@ Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and
 """
 cosc(x::Number) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
 cosc(x::Integer) = cosc(float(x))
-cosc(x::Complex{T}) where {T<:Integer} = cosc(float(x))
+cosc(x::Complex{<:AbstractFloat}) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
+cosc(x::Complex) = cosc(float(x))
 cosc(x::Real) = x==0 || isinf(x) ? zero(x) : (cospi(x)-sinpi(x)/(pi*x))/x
 
-for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
-                  (:sech, :cosh), (:csch, :sinh), (:coth, :tanh),
-                  (:secd, :cosd), (:cscd, :sind), (:cotd, :tand))
+for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :cosd, "secant"),
+                                            (:csc, :sin, :csch, :sinh, :cscd, :sind, "cosecant"),
+                                            (:cot, :tan, :coth, :tanh, :cotd, :tand, "cotangent"))
+    name = string(finv)
+    hname = string(finvh)
+    dname = string(finvd)
     @eval begin
-        ($finv){T<:Number}(z::T) = one(T) / (($f)(z))
+        @doc """
+            $($name)(x)
+
+        Compute the $($fn) of `x`, where `x` is in radians.
+        """ ($finv)(z::T) where {T<:Number} = one(T) / (($f)(z))
+        @doc """
+            $($hname)(x)
+
+        Compute the hyperbolic $($fn) of `x`.
+        """ ($finvh)(z::T) where {T<:Number} = one(T) / (($fh)(z))
+        @doc """
+            $($dname)(x)
+
+        Compute the $($fn) of `x`, where `x` is in degrees.
+        """ ($finvd)(z::T) where {T<:Number} = one(T) / (($fd)(z))
     end
 end
 
@@ -322,10 +449,10 @@ for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
     @eval begin
         @doc """
             $($tname)(x)
-        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa){T<:Number}(y::T) = ($tfainv)(one(T) / y)
+        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa)(y::T) where {T<:Number} = ($tfainv)(one(T) / y)
         @doc """
             $($hname)(x)
-        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa){T<:Number}(y::T) = ($hfainv)(one(T) / y)
+        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa)(y::T) where {T<:Number} = ($hfainv)(one(T) / y)
     end
 end
 
@@ -350,7 +477,7 @@ deg2rad_ext(x::Real) = deg2rad(x) # Fallback
 
 function sind(x::Real)
     if isinf(x)
-        return throw(DomainError())
+        return throw(DomainError(x, "`x` cannot be infinite."))
     elseif isnan(x)
         return oftype(x,NaN)
     end
@@ -381,7 +508,7 @@ end
 
 function cosd(x::Real)
     if isinf(x)
-        return throw(DomainError())
+        return throw(DomainError(x, "`x` cannot be infinite."))
     elseif isnan(x)
         return oftype(x,NaN)
     end

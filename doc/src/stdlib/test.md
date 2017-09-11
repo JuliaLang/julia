@@ -1,5 +1,11 @@
 # Unit Testing
 
+```@meta
+DocTestSetup = quote
+    using Base.Test
+end
+```
+
 ## Testing Base Julia
 
 Julia is under rapid development and has an extensive test suite to verify functionality across
@@ -17,7 +23,7 @@ see if your code is correct by checking that the results are what you expect. It
 to ensure your code still works after you make changes, and can be used when developing as a way
 of specifying the behaviors your code should have when complete.
 
-Simple unit testing can be performed with the `@test()` and `@test_throws()` macros:
+Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 
 ```@docs
 Base.Test.@test
@@ -26,7 +32,7 @@ Base.Test.@test_throws
 
 For example, suppose we want to check our new function `foo(x)` works as expected:
 
-```julia
+```jldoctest testfoo
 julia> using Base.Test
 
 julia> foo(x) = length(x)^2
@@ -35,56 +41,51 @@ foo (generic function with 1 method)
 
 If the condition is true, a `Pass` is returned:
 
-```julia
+```jldoctest testfoo
 julia> @test foo("bar") == 9
 Test Passed
-  Expression: foo("bar") == 9
-   Evaluated: 9 == 9
 
 julia> @test foo("fizz") >= 10
 Test Passed
-  Expression: foo("fizz") >= 10
-   Evaluated: 16 >= 10
 ```
 
 If the condition is false, then a `Fail` is returned and an exception is thrown:
 
-```julia
+```jldoctest testfoo
 julia> @test foo("f") == 20
 Test Failed
   Expression: foo("f") == 20
    Evaluated: 1 == 20
 ERROR: There was an error during testing
- in record at test.jl:268
- in do_test at test.jl:191
 ```
 
 If the condition could not be evaluated because an exception was thrown, which occurs in this
-case because `length()` is not defined for symbols, an `Error` object is returned and an exception
+case because `length` is not defined for symbols, an `Error` object is returned and an exception
 is thrown:
 
-```julia
+```julia-repl
 julia> @test foo(:cat) == 1
 Error During Test
   Test threw an exception of type MethodError
   Expression: foo(:cat) == 1
-  MethodError: `length` has no method matching length(::Symbol)
-   in foo at none:1
-   in anonymous at test.jl:159
-   in do_test at test.jl:180
+  MethodError: no method matching length(::Symbol)
+  Closest candidates are:
+    length(::SimpleVector) at essentials.jl:256
+    length(::Base.MethodList) at reflection.jl:521
+    length(::MethodTable) at reflection.jl:597
+    ...
+  Stacktrace:
+   [...]
 ERROR: There was an error during testing
- in record at test.jl:268
- in do_test at test.jl:191
 ```
 
-If we expect that evaluating an expression *should* throw an exception, then we can use `@test_throws()`
+If we expect that evaluating an expression *should* throw an exception, then we can use `@test_throws`
 to check that this occurs:
 
-```julia
+```jldoctest testfoo
 julia> @test_throws MethodError foo(:cat)
 Test Passed
-  Expression: foo(:cat)
-   Evaluated: MethodError
+      Thrown: MethodError
 ```
 
 ## Working with Test Sets
@@ -94,7 +95,7 @@ of inputs. In the event a test fails, the default behavior is to throw an except
 However, it is normally preferable to run the rest of the tests first to get a better picture
 of how many errors there are in the code being tested.
 
-The `@testset()` macro can be used to group tests into *sets*. All the tests in a test set will
+The `@testset` macro can be used to group tests into *sets*. All the tests in a test set will
 be run, and at the end of the test set a summary will be printed. If any of the tests failed,
 or could not be evaluated due to an error, the test set will then throw a `TestSetException`.
 
@@ -104,19 +105,19 @@ Base.Test.@testset
 
 We can put our tests for the `foo(x)` function in a test set:
 
-```julia
+```jldoctest testfoo
 julia> @testset "Foo Tests" begin
            @test foo("a")   == 1
            @test foo("ab")  == 4
            @test foo("abc") == 9
-       end
+       end;
 Test Summary: | Pass  Total
 Foo Tests     |    3      3
 ```
 
 Test sets can also be nested:
 
-```julia
+```jldoctest testfoo
 julia> @testset "Foo Tests" begin
            @testset "Animals" begin
                @test foo("cat") == 9
@@ -126,7 +127,7 @@ julia> @testset "Foo Tests" begin
                @test foo(zeros(i)) == i^2
                @test foo(ones(i)) == i^2
            end
-       end
+       end;
 Test Summary: | Pass  Total
 Foo Tests     |    8      8
 ```
@@ -134,7 +135,7 @@ Foo Tests     |    8      8
 In the event that a nested test set has no failures, as happened here, it will be hidden in the
 summary. If we do have a test failure, only the details for the failed test sets will be shown:
 
-```julia
+```julia-repl
 julia> @testset "Foo Tests" begin
            @testset "Animals" begin
                @testset "Felines" begin
@@ -153,31 +154,30 @@ julia> @testset "Foo Tests" begin
 Arrays: Test Failed
   Expression: foo(ones(4)) == 15
    Evaluated: 16 == 15
- in record at test.jl:297
- in do_test at test.jl:191
+Stacktrace:
+    [...]
 Test Summary: | Pass  Fail  Total
 Foo Tests     |    3     1      4
   Animals     |    2            2
   Arrays      |    1     1      2
 ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
- in finish at test.jl:362
 ```
 
 ## Other Test Macros
 
 As calculations on floating-point values can be imprecise, you can perform approximate equality
 checks using either `@test a ≈ b` (where `≈`, typed via tab completion of `\approx`, is the
-[`isapprox()`](@ref) function) or use [`isapprox()`](@ref) directly.
+[`isapprox`](@ref) function) or use [`isapprox`](@ref) directly.
 
-```julia
+```jldoctest
 julia> @test 1 ≈ 0.999999999
+Test Passed
 
 julia> @test 1 ≈ 0.999999
-ERROR: test failed: 1 isapprox 0.999999
- in expression: 1 ≈ 0.999999
- in error at error.jl:21
- in default_handler at test.jl:30
- in do_test at test.jl:53
+Test Failed
+  Expression: 1 ≈ 0.999999
+   Evaluated: 1 ≈ 0.999999
+ERROR: There was an error during testing
 ```
 
 ```@docs
@@ -188,7 +188,7 @@ Base.Test.@test_nowarn
 
 ## Broken Tests
 
-If a test fails consistently it can be changed to use the `@test_broken()` macro. This will denote
+If a test fails consistently it can be changed to use the `@test_broken` macro. This will denote
 the test as `Broken` if the test continues to fail and alerts the user via an `Error` if the test
 succeeds.
 
@@ -196,7 +196,7 @@ succeeds.
 Base.Test.@test_broken
 ```
 
-`@test_skip()` is also available to skip a test without evaluation, but counting the skipped test
+`@test_skip` is also available to skip a test without evaluation, but counting the skipped test
 in the test set reporting. The test will not run but gives a `Broken` `Result`.
 
 ```@docs
@@ -263,4 +263,8 @@ And using that testset looks like:
         @test true
     end
 end
+```
+
+```@meta
+DocTestSetup = nothing
 ```

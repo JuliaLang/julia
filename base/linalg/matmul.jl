@@ -7,7 +7,6 @@ matprod(x, y) = x*y + x*y
 # multiply by diagonal matrix as vector
 function scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector)
     m, n = size(A)
-    p, q = size(C)
     if size(A) != size(C)
         throw(DimensionMismatch("size of A, $(size(A)), does not match size of C, $(size(C))"))
     end
@@ -25,7 +24,6 @@ end
 
 function scale!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
     m, n = size(A)
-    p, q = size(C)
     if size(A) != size(C)
         throw(DimensionMismatch("size of A, $(size(A)), does not match size of C, $(size(C))"))
     end
@@ -43,7 +41,7 @@ end
 vecdot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasReal} = BLAS.dot(x, y)
 vecdot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasComplex} = BLAS.dotc(x, y)
 
-function dot(x::Vector{T}, rx::Union{UnitRange{TI},Range{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},Range{TI}}) where {T<:BlasReal,TI<:Integer}
+function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasReal,TI<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
@@ -56,7 +54,7 @@ function dot(x::Vector{T}, rx::Union{UnitRange{TI},Range{TI}}, y::Vector{T}, ry:
     BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 
-function dot(x::Vector{T}, rx::Union{UnitRange{TI},Range{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},Range{TI}}) where {T<:BlasComplex,TI<:Integer}
+function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasComplex,TI<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
@@ -134,8 +132,7 @@ Ac_mul_B!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector) = generic_m
 
 Matrix multiplication.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> [1 1; 0 1] * [1 0; 1 1]
 2×2 Array{Int64,2}:
@@ -166,8 +163,7 @@ Calculates the matrix-matrix or matrix-vector product ``A⋅B`` and stores the r
 overwriting the existing value of `Y`. Note that `Y` must not be aliased with either `A` or
 `B`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);
 
@@ -374,7 +370,7 @@ end
 # blas.jl defines matmul for floats; other integer and mixed precision
 # cases are handled here
 
-lapack_size(t::Char, M::AbstractVecOrMat) = (size(M, t=='N' ? 1:2), size(M, t=='N' ? 2:1))
+lapack_size(t::Char, M::AbstractVecOrMat) = (size(M, t=='N' ? 1 : 2), size(M, t=='N' ? 2 : 1))
 
 function copy!(B::AbstractVecOrMat, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::Char, M::AbstractVecOrMat, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
     if tM == 'N'
@@ -667,14 +663,14 @@ function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
     if tA == 'T'
         A11 = transpose(A[1,1]); A12 = transpose(A[2,1]); A21 = transpose(A[1,2]); A22 = transpose(A[2,2])
     elseif tA == 'C'
-        A11 = ctranspose(A[1,1]); A12 = ctranspose(A[2,1]); A21 = ctranspose(A[1,2]); A22 = ctranspose(A[2,2])
+        A11 = adjoint(A[1,1]); A12 = adjoint(A[2,1]); A21 = adjoint(A[1,2]); A22 = adjoint(A[2,2])
     else
         A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
     end
     if tB == 'T'
         B11 = transpose(B[1,1]); B12 = transpose(B[2,1]); B21 = transpose(B[1,2]); B22 = transpose(B[2,2])
     elseif tB == 'C'
-        B11 = ctranspose(B[1,1]); B12 = ctranspose(B[2,1]); B21 = ctranspose(B[1,2]); B22 = ctranspose(B[2,2])
+        B11 = adjoint(B[1,1]); B12 = adjoint(B[2,1]); B21 = adjoint(B[1,2]); B22 = adjoint(B[2,2])
     else
         B11 = B[1,1]; B12 = B[1,2]; B21 = B[2,1]; B22 = B[2,2]
     end
@@ -701,9 +697,9 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         A21 = transpose(A[1,2]); A22 = transpose(A[2,2]); A23 = transpose(A[3,2])
         A31 = transpose(A[1,3]); A32 = transpose(A[2,3]); A33 = transpose(A[3,3])
     elseif tA == 'C'
-        A11 = ctranspose(A[1,1]); A12 = ctranspose(A[2,1]); A13 = ctranspose(A[3,1])
-        A21 = ctranspose(A[1,2]); A22 = ctranspose(A[2,2]); A23 = ctranspose(A[3,2])
-        A31 = ctranspose(A[1,3]); A32 = ctranspose(A[2,3]); A33 = ctranspose(A[3,3])
+        A11 = adjoint(A[1,1]); A12 = adjoint(A[2,1]); A13 = adjoint(A[3,1])
+        A21 = adjoint(A[1,2]); A22 = adjoint(A[2,2]); A23 = adjoint(A[3,2])
+        A31 = adjoint(A[1,3]); A32 = adjoint(A[2,3]); A33 = adjoint(A[3,3])
     else
         A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3]
         A21 = A[2,1]; A22 = A[2,2]; A23 = A[2,3]
@@ -715,9 +711,9 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         B21 = transpose(B[1,2]); B22 = transpose(B[2,2]); B23 = transpose(B[3,2])
         B31 = transpose(B[1,3]); B32 = transpose(B[2,3]); B33 = transpose(B[3,3])
     elseif tB == 'C'
-        B11 = ctranspose(B[1,1]); B12 = ctranspose(B[2,1]); B13 = ctranspose(B[3,1])
-        B21 = ctranspose(B[1,2]); B22 = ctranspose(B[2,2]); B23 = ctranspose(B[3,2])
-        B31 = ctranspose(B[1,3]); B32 = ctranspose(B[2,3]); B33 = ctranspose(B[3,3])
+        B11 = adjoint(B[1,1]); B12 = adjoint(B[2,1]); B13 = adjoint(B[3,1])
+        B21 = adjoint(B[1,2]); B22 = adjoint(B[2,2]); B23 = adjoint(B[3,2])
+        B31 = adjoint(B[1,3]); B32 = adjoint(B[2,3]); B33 = adjoint(B[3,3])
     else
         B11 = B[1,1]; B12 = B[1,2]; B13 = B[1,3]
         B21 = B[2,1]; B22 = B[2,2]; B23 = B[2,3]

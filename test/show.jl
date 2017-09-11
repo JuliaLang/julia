@@ -1,10 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+# For curmod_*
+include("testenv.jl")
 
-replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true), MIME("text/plain"), x), x)
+replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
 
 @test replstr(Array{Any}(2)) == "2-element Array{Any,1}:\n #undef\n #undef"
 @test replstr(Array{Any}(2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
@@ -14,10 +13,10 @@ replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true), MIME("text/pla
 struct T5589
     names::Vector{String}
 end
-@test replstr(T5589(Array{String,1}(100))) == "$(curmod_prefix)T5589(String[#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
+@test replstr(T5589(Array{String,1}(100))) == "$(curmod_prefix)T5589([#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
 
-@test replstr(parse("mutable struct X end")) == ":(mutable struct X # none, line 1:\n    end)"
-@test replstr(parse("struct X end")) == ":(struct X # none, line 1:\n    end)"
+@test replstr(parse("mutable struct X end")) == ":(mutable struct X\n        #= none:1 =#\n    end)"
+@test replstr(parse("struct X end")) == ":(struct X\n        #= none:1 =#\n    end)"
 s = "ccall(:f, Int, (Ptr{Void},), &x)"
 @test replstr(parse(s)) == ":($s)"
 
@@ -43,12 +42,14 @@ macro test_repr(x)
             local x1 = parse($x)
             local x2 = eval(parse(repr(x1)))
             local x3 = eval(parse(repr(x2)))
-            x3 == x1 ? nothing : error(string(
-                "repr test failed:",
-                "\noriginal: ", $x,
-                "\n\nparsed: ", x2, "\n", sprint(dump, x2),
-                "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
-                ))
+            if x3 != x1
+                error(string(
+                    "repr test failed:",
+                    "\noriginal: ", $x,
+                    "\n\nparsed: ", x2, "\n", sprint(dump, x2),
+                    "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
+                    ))
+            end
         end
     end
 end
@@ -93,80 +94,186 @@ end
 @test_repr "(a / b) / (c / d / e)"
 @test_repr "(a == b == c) != (c == d < e)"
 
+# Exponentiation (>= operator_precedence(:^)) and unary operators
+@test_repr "(-1)^a"
+@test_repr "(-2.1)^-1"
+@test_repr "(-x)^a"
+@test_repr "(-a)^-1"
+@test_repr "(!x)↑!a"
+@test_repr "(!x).a"
+@test_repr "(!x)::a"
+
+# Complex
+
+# parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
+@test iszero(eval(eval(parse(repr(:($(1 + 2im) - $(1 + 2im)))))))
+
+
 # control structures (shamelessly stolen from base/bitarray.jl)
 @test_repr """mutable struct BitArray{N} <: AbstractArray{Bool, N}
+    # line meta
     chunks::Vector{UInt64}
+    # line meta
     len::Int
+    # line meta
     dims::NTuple{N,Int}
+    # line meta
     function BitArray(dims::Int...)
+        # line meta
         if length(dims) != N
+            # line meta
             error(\"number of dimensions must be \$N (got \$(length(dims)))\")
         end
+        # line meta
         n = 1
+        # line meta
         for d in dims
+            # line meta
             if d < 0
+                # line meta
                 error(\"dimension size must be nonnegative (got \$d)\")
             end
+            # line meta
             n *= d
         end
+        # line meta
         nc = num_bit_chunks(n)
+        # line meta
         chunks = Array{UInt64,1}(nc)
+        # line meta
         if nc > 0
+            # line meta
             chunks[end] = UInt64(0)
         end
+        # line meta
         b = new(chunks, n)
+        # line meta
         if N != 1
+            # line meta
             b.dims = dims
         end
+        # line meta
         return b
     end
 end"""
 
 @test_repr """function copy_chunks(dest::Vector{UInt64}, pos_d::Integer, src::Vector{UInt64}, pos_s::Integer, numbits::Integer)
+    # line meta
     if numbits == 0
+        # line meta
         return
     end
+    # line meta
     if dest === src && pos_d > pos_s
+        # line meta
         return copy_chunks_rtol(dest, pos_d, pos_s, numbits)
     end
+    # line meta
     kd0, ld0 = get_chunks_id(pos_d)
+    # line meta
     kd1, ld1 = get_chunks_id(pos_d + numbits - 1)
+    # line meta
     ks0, ls0 = get_chunks_id(pos_s)
+    # line meta
     ks1, ls1 = get_chunks_id(pos_s + numbits - 1)
+    # line meta
     delta_kd = kd1 - kd0
+    # line meta
     delta_ks = ks1 - ks0
+    # line meta
     u = _msk64
+    # line meta
     if delta_kd == 0
+        # line meta
         msk_d0 = ~(u << ld0) | (u << ld1 << 1)
     else
+        # line meta
         msk_d0 = ~(u << ld0)
+        # line meta
         msk_d1 = (u << ld1 << 1)
     end
+    # line meta
     if delta_ks == 0
+        # line meta
         msk_s0 = (u << ls0) & ~(u << ls1 << 1)
     else
+        # line meta
         msk_s0 = (u << ls0)
     end
+    # line meta
     chunk_s0 = glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
+    # line meta
     dest[kd0] = (dest[kd0] & msk_d0) | ((chunk_s0 << ld0) & ~msk_d0)
+    # line meta
     if delta_kd == 0
+        # line meta
         return
     end
+    # line meta
     for i = 1 : kd1 - kd0 - 1
+        # line meta
         chunk_s1 = glue_src_bitchunks(src, ks0 + i, ks1, msk_s0, ls0)
+        # line meta
         chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
+        # line meta
         dest[kd0 + i] = chunk_s
+        # line meta
         chunk_s0 = chunk_s1
     end
+    # line meta
     if ks1 >= ks0 + delta_kd
+        # line meta
         chunk_s1 = glue_src_bitchunks(src, ks0 + delta_kd, ks1, msk_s0, ls0)
     else
+        # line meta
         chunk_s1 = UInt64(0)
     end
+    # line meta
     chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
+    # line meta
     dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & ~msk_d1)
+    # line meta
     return
 end"""
+
+@test_repr """if a
+# line meta
+b
+end
+"""
+
+@test_repr """if a
+# line meta
+b
+elseif c
+# line meta
+d
+end
+"""
+
+@test_repr """if a
+# line meta
+b
+elseif c
+# line meta
+d
+else
+# line meta
+e
+end
+"""
+
+@test_repr """if a
+# line meta
+b
+elseif c
+# line meta
+d
+elseif e
+# line meta
+f
+end
+"""
 
 # issue #7188
 @test sprint(show, :foo) == ":foo"
@@ -202,13 +309,21 @@ end"""
 @test_repr "[1 2 3; 4 5 6; 7 8 9]'"
 
 @test_repr "baremodule X
+# line meta
+# line meta
 importall ..A.b
+# line meta
 import ...B.c
+# line meta
 import D
+# line meta
 import B.C.D.E.F.g
 end"
 @test_repr "baremodule Y
+# line meta
+# line meta
 export A, B, C
+# line meta
 export D, E, F
 end"
 
@@ -228,6 +343,7 @@ end"
 
 # issue #9474
 for s in ("(1::Int64 == 1::Int64)::Bool", "(1:2:3) + 4", "x = 1:2:3")
+    local s
     @test sprint(show, parse(s)) == ":("*s*")"
 end
 
@@ -262,22 +378,22 @@ end
 @test string(:(-{x}))   == "-{x}"
 
 # issue #11393
-@test_repr "@m(x,y) + z"
-@test_repr "(@m(x,y),z)"
-@test_repr "[@m(x,y),z]"
-@test_repr "A[@m(x,y),z]"
-@test_repr "T{@m(x,y),z}"
+@test_repr "@m(x, y) + z"
+@test_repr "(@m(x, y), z)"
+@test_repr "[@m(x, y), z]"
+@test_repr "A[@m(x, y), z]"
+@test_repr "T{@m(x, y), z}"
 @test_repr "@m x @n(y) z"
-@test_repr "f(@m(x,y);z=@n(a))"
-@test_repr "@m(x,y).z"
-@test_repr "::@m(x,y)+z"
+@test_repr "f(@m(x, y); z=@n(a))"
+@test_repr "@m(x, y).z"
+@test_repr "::@m(x, y) + z"
 @test_repr "[@m(x) y z]"
 @test_repr "[@m(x) y; z]"
 @test_repr "let @m(x), y=z; end"
 
-@test repr(:(@m x y))    == ":(@m x y)"
-@test string(:(@m x y))  ==   "@m x y"
-@test string(:(@m x y;)) == "begin \n    @m x y\nend"
+@test repr(:(@m x y))    == ":(#= $(@__FILE__):$(@__LINE__) =# @m x y)"
+@test string(:(@m x y))  ==   "#= $(@__FILE__):$(@__LINE__) =# @m x y"
+@test string(:(@m x y;)) == "begin\n    #= $(@__FILE__):$(@__LINE__) =# @m x y\nend"
 
 # issue #11436
 @test_repr "1 => 2 => 3"
@@ -299,6 +415,8 @@ end
 @test_repr "a::b where T"
 @test_repr "X where (T=1)"
 @test_repr "X where T = 1"
+@test_repr "Array{<:Real}"
+@test_repr "Array{>:Real}"
 
 let oldout = STDOUT, olderr = STDERR
     local rdout, wrout, rderr, wrerr, out, err, rd, wr
@@ -306,12 +424,12 @@ let oldout = STDOUT, olderr = STDERR
         # pr 16917
         rdout, wrout = redirect_stdout()
         @test wrout === STDOUT
-        out = @async readstring(rdout)
+        out = @async read(rdout, String)
         rderr, wrerr = redirect_stderr()
         @test wrerr === STDERR
-        err = @async readstring(rderr)
+        err = @async read(rderr, String)
         @test dump(Int64) === nothing
-        if !is_windows()
+        if !Sys.iswindows()
             close(wrout)
             close(wrerr)
         end
@@ -348,7 +466,7 @@ let filename = tempname()
         end
     end
     @test ret == [1,3]
-    @test chomp(readstring(filename)) == "hello"
+    @test chomp(read(filename, String)) == "hello"
     ret = open(filename, "w") do f
         redirect_stderr(f) do
             warn("hello")
@@ -356,12 +474,19 @@ let filename = tempname()
         end
     end
     @test ret == [2]
-    @test contains(readstring(filename), "WARNING: hello")
-    ret = open(filename) do f
-        redirect_stdin(f) do
-            readline()
+
+    # STDIN is unavailable on the workers. Run test on master.
+    @test contains(read(filename, String), "WARNING: hello")
+    ret = eval(Main, quote
+        remotecall_fetch(1, $filename) do fname
+            open(fname) do f
+                redirect_stdin(f) do
+                    readline()
+                end
+            end
         end
-    end
+    end)
+
     @test contains(ret, "WARNING: hello")
     rm(filename)
 end
@@ -385,14 +510,7 @@ function f13127()
     show(buf, f)
     String(take!(buf))
 end
-@test f13127() == "$(curmod_prefix)f"
-
-let a = Pair(1.0,2.0)
-    @test sprint(show,a) == "1.0=>2.0"
-end
-let a = Pair(Pair(1,2),Pair(3,4))
-    @test sprint(show,a) == "(1=>2)=>(3=>4)"
-end
+@test startswith(f13127(), "getfield($(@__MODULE__), Symbol(\"")
 
 #test methodshow.jl functions
 @test Base.inbase(Base)
@@ -448,34 +566,42 @@ end
 
 
 # issue #15309
-l1, l2, l2n = Expr(:line,42), Expr(:line,42,:myfile), LineNumberNode(42)
-@test string(l2n) == " # line 42:"
-@test string(l2)  == " # myfile, line 42:"
-@test string(l1)  == string(l2n)
-ex = Expr(:block, l1, :x, l2, :y, l2n, :z)
-@test replace(string(ex)," ","") == replace("""
-begin  # line 42:
-    x # myfile, line 42:
-    y # line 42:
-    z
-end""", " ", "")
+let ex,
+    l1 = Expr(:line, 42),
+    l2 = Expr(:line, 42, :myfile),
+    l2n = LineNumberNode(42)
+    @test string(l2n) == "#= line 42 =#"
+    @test string(l2)  == "#= myfile:42 =#"
+    @test string(l1)  == string(l2n)
+    ex = Expr(:block, l1, :x, l2, :y, l2n, :z)
+    @test replace(string(ex)," ","") == replace("""
+    begin
+        #= line 42 =#
+        x
+        #= myfile:42 =#
+        y
+        #= line 42 =#
+        z
+    end""", " ", "")
+end
 # Test the printing of whatever form of line number representation
 # that is used in the arguments to a macro looks the same as for
 # regular quoting
 macro strquote(ex)
-    QuoteNode(string(ex))
+    return QuoteNode(string(ex))
 end
-str_ex2a, str_ex2b = @strquote(begin x end), string(quote x end)
-@test str_ex2a == str_ex2b
+let str_ex2a = @strquote(begin x end), str_ex2b = string(quote x end)
+    @test str_ex2a == str_ex2b
+end
 
 
 # test structured zero matrix printing for select structured types
 A = reshape(1:16,4,4)
-@test replstr(Diagonal(A)) == "4×4 Diagonal{$Int}:\n 1  ⋅   ⋅   ⋅\n ⋅  6   ⋅   ⋅\n ⋅  ⋅  11   ⋅\n ⋅  ⋅   ⋅  16"
-@test replstr(Bidiagonal(A,true)) == "4×4 Bidiagonal{$Int}:\n 1  5   ⋅   ⋅\n ⋅  6  10   ⋅\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
-@test replstr(Bidiagonal(A,false)) == "4×4 Bidiagonal{$Int}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n ⋅  7  11   ⋅\n ⋅  ⋅  12  16"
-@test replstr(SymTridiagonal(A+A')) == "4×4 SymTridiagonal{$Int}:\n 2   7   ⋅   ⋅\n 7  12  17   ⋅\n ⋅  17  22  27\n ⋅   ⋅  27  32"
-@test replstr(Tridiagonal(diag(A,-1),diag(A),diag(A,+1))) == "4×4 Tridiagonal{$Int}:\n 1  5   ⋅   ⋅\n 2  6  10   ⋅\n ⋅  7  11  15\n ⋅  ⋅  12  16"
+@test replstr(Diagonal(A)) == "4×4 Diagonal{$(Int),Array{$(Int),1}}:\n 1  ⋅   ⋅   ⋅\n ⋅  6   ⋅   ⋅\n ⋅  ⋅  11   ⋅\n ⋅  ⋅   ⋅  16"
+@test replstr(Bidiagonal(A,:U)) == "4×4 Bidiagonal{$(Int),Array{$(Int),1}}:\n 1  5   ⋅   ⋅\n ⋅  6  10   ⋅\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
+@test replstr(Bidiagonal(A,:L)) == "4×4 Bidiagonal{$(Int),Array{$(Int),1}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n ⋅  7  11   ⋅\n ⋅  ⋅  12  16"
+@test replstr(SymTridiagonal(A+A')) == "4×4 SymTridiagonal{$(Int),Array{$(Int),1}}:\n 2   7   ⋅   ⋅\n 7  12  17   ⋅\n ⋅  17  22  27\n ⋅   ⋅  27  32"
+@test replstr(Tridiagonal(diag(A,-1),diag(A),diag(A,+1))) == "4×4 Tridiagonal{$(Int),Array{$(Int),1}}:\n 1  5   ⋅   ⋅\n 2  6  10   ⋅\n ⋅  7  11  15\n ⋅  ⋅  12  16"
 @test replstr(UpperTriangular(copy(A))) == "4×4 UpperTriangular{$Int,Array{$Int,2}}:\n 1  5   9  13\n ⋅  6  10  14\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
 @test replstr(LowerTriangular(copy(A))) == "4×4 LowerTriangular{$Int,Array{$Int,2}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n 3  7  11   ⋅\n 4  8  12  16"
 
@@ -494,7 +620,7 @@ show_f1(x...) = [x...]
 show_f2(x::Vararg{Any}) = [x...]
 show_f3(x::Vararg) = [x...]
 show_f4(x::Vararg{Any,3}) = [x...]
-show_f5{T, N}(A::AbstractArray{T,N}, indexes::Vararg{Int,N}) = [indexes...]
+show_f5(A::AbstractArray{T, N}, indexes::Vararg{Int,N}) where {T, N} = [indexes...]
 test_mt(show_f1, "show_f1(x...)")
 test_mt(show_f2, "show_f2(x...)")
 test_mt(show_f3, "show_f3(x...)")
@@ -506,6 +632,22 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indexes::Vararg{$Int,N})")
 @test sprint(show, :([a; b])) == ":([a; b])"
 @test_repr "[a;]"
 @test_repr "[a; b]"
+
+# other brackets and braces
+@test_repr "[a]"
+@test_repr "[a,b]"
+@test_repr "[a;b;c]"
+@test_repr "[a b]"
+@test_repr "[a b;]"
+@test_repr "[a b c]"
+@test_repr "[a b; c d]"
+@test_repr "{a}"
+@test_repr "{a,b}"
+@test_repr "{a;b;c}"
+@test_repr "{a b}"
+@test_repr "{a b;}"
+@test_repr "{a b c}"
+@test_repr "{a b; c d}"
 
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
@@ -597,7 +739,7 @@ let sv = Core.svec(:a, :b, :c)
     @test repr == "SimpleVector\n  1: Symbol a\n  2: Symbol b\n  3: #undef\n"
 end
 let repr = sprint(dump, sin)
-    @test repr == "sin (function of type Base.#sin)\n"
+    @test repr == "sin (function of type typeof(sin))\n"
 end
 let repr = sprint(dump, Base.Test)
     @test repr == "Module Base.Test\n"
@@ -619,6 +761,8 @@ end
 @test repr(:([x for x = y])) == ":([x for x = y])"
 @test repr(:([x for x = y if z])) == ":([x for x = y if z])"
 @test repr(:(z for z = 1:5, y = 1:5)) == ":((z for z = 1:5, y = 1:5))"
+@test_repr "(x for i in a, b in c)"
+@test_repr "(x for a in b, c in d for e in f)"
 
 for op in (:(.=), :(.+=), :(.&=))
     @test repr(parse("x $op y")) == ":(x $op y)"
@@ -670,3 +814,172 @@ let m = which(T20332{Int}(), (Int,)),
 end
 
 @test sprint(show, Main) == "Main"
+
+@test sprint(Base.show_supertypes, Int64) == "Int64 <: Signed <: Integer <: Real <: Number <: Any"
+@test sprint(Base.show_supertypes, Vector{String}) == "Array{String,1} <: DenseArray{String,1} <: AbstractArray{String,1} <: Any"
+
+# static_show
+
+function static_shown(x)
+    p = Pipe()
+    Base.link_pipe(p; julia_only_read=true, julia_only_write=true)
+    ccall(:jl_static_show, Void, (Ptr{Void}, Any), p.in, x)
+    @async close(p.in)
+    return read(p.out, String)
+end
+
+# Test for PR 17803
+@test static_shown(Int128(-1)) == "Int128(0xffffffffffffffffffffffffffffffff)"
+
+# PR #22160
+@test static_shown(:aa) == ":aa"
+@test static_shown(:+) == ":+"
+@test static_shown(://) == "://"
+@test static_shown(://=) == "://="
+@test static_shown(Symbol("")) == "Symbol(\"\")"
+@test static_shown(Symbol("a/b")) == "Symbol(\"a/b\")"
+@test static_shown(Symbol("a-b")) == "Symbol(\"a-b\")"
+
+@test static_shown(QuoteNode(:x)) == ":(:x)"
+
+# Test @show
+let fname = tempname()
+    try
+        open(fname, "w") do fout
+            redirect_stdout(fout) do
+                @show zeros(2, 2)
+            end
+        end
+        @test read(fname, String) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
+    finally
+        rm(fname, force=true)
+    end
+end
+
+struct f_with_params{t} <: Function
+end
+
+(::f_with_params)(x) = 2x
+
+let io = IOBuffer()
+    show(io, MIME"text/html"(), f_with_params.body.name.mt)
+    @test contains(String(take!(io)), "f_with_params")
+end
+
+@testset "printing of Val's" begin
+    @test sprint(show, Val(Float64))  == "Val{Float64}()"  # Val of a type
+    @test sprint(show, Val(:Float64)) == "Val{:Float64}()" # Val of a symbol
+    @test sprint(show, Val(true))     == "Val{true}()"     # Val of a value
+end
+
+@testset "printing of Pair's" begin
+    for (p, s) in (Pair(1.0,2.0)                          => "1.0 => 2.0",
+                   Pair(Pair(1,2), Pair(3,4))             => "(1=>2) => (3=>4)",
+                   Pair{Integer,Int64}(1, 2)              => "Pair{Integer,Int64}(1, 2)",
+                   (Pair{Integer,Int64}(1, 2) => 3)       => "Pair{Integer,Int64}(1, 2) => 3",
+                   ((1+2im) => (3+4im))                   => "1+2im => 3+4im",
+                   (1 => 2 => Pair{Real,Int64}(3, 4))     => "1 => (2=>Pair{Real,Int64}(3, 4))")
+        local s
+        @test sprint(show, p) == s
+    end
+    # - when the context has :compact=>false, print pair's member non-compactly
+    # - if one member is printed as "Pair{...}(...)", no need to put parens around
+    s = IOBuffer()
+    show(IOContext(s, :compact => false), (1=>2) => Pair{Any,Any}(3,4))
+    @test String(take!(s)) == "(1 => 2) => Pair{Any,Any}(3, 4)"
+end
+
+@testset "alignment for pairs" begin  # (#22899)
+    @test replstr([1=>22,33=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n  1 => 22\n 33 => 4 "
+    # first field may have "=>" in its representation
+    @test replstr(Pair[(1=>2)=>3, 4=>5]) ==
+        "2-element Array{Pair,1}:\n (1=>2) => 3\n      4 => 5"
+    @test replstr(Any[Dict(1=>2)=> (3=>4), 1=>2]) ==
+        "2-element Array{Any,1}:\n Dict(1=>2) => (3=>4)\n          1 => 2     "
+    # left-alignment when not using the "=>" symbol
+    @test replstr(Pair{Integer,Int64}[1=>2, 33=>4]) ==
+        "2-element Array{Pair{Integer,Int64},1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
+end
+
+@testset "display arrays non-compactly when size(⋅, 2) == 1" begin
+    # 0-dim
+    @test replstr(zeros(Complex{Int})) == "0-dimensional Array{Complex{$Int},0}:\n0 + 0im"
+    A = Array{Pair}(); A[] = 1=>2
+    @test replstr(A) == "0-dimensional Array{Pair,0}:\n1 => 2"
+    # 1-dim
+    @test replstr(zeros(Complex{Int}, 2)) ==
+        "2-element Array{Complex{$Int},1}:\n 0 + 0im\n 0 + 0im"
+    @test replstr([1=>2, 3=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n 1 => 2\n 3 => 4"
+    # 2-dim
+    @test replstr(zeros(Complex{Int}, 2, 1)) ==
+        "2×1 Array{Complex{$Int},2}:\n 0 + 0im\n 0 + 0im"
+    @test replstr(zeros(Complex{Int}, 1, 2)) ==
+        "1×2 Array{Complex{$Int},2}:\n 0+0im  0+0im"
+    @test replstr([1=>2 3=>4]) == "1×2 Array{Pair{$Int,$Int},2}:\n 1=>2  3=>4"
+    @test replstr([1=>2 for x in 1:2, y in 1:1]) ==
+        "2×1 Array{Pair{$Int,$Int},2}:\n 1 => 2\n 1 => 2"
+    # 3-dim
+    @test replstr(zeros(Complex{Int}, 1, 1, 1)) ==
+        "1×1×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0 + 0im"
+    @test replstr(zeros(Complex{Int}, 1, 2, 1)) ==
+        "1×2×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0+0im  0+0im"
+end
+
+@testset "Array printing with limited rows" begin
+    arrstr = let buf = IOBuffer()
+        function (A, rows)
+            Base.showarray(IOContext(buf, :displaysize => (rows, 80), :limit => true),
+                           A, false, header=true)
+            String(take!(buf))
+        end
+    end
+    A = Int64[1]
+    @test arrstr(A, 4) == "1-element Array{Int64,1}: …"
+    @test arrstr(A, 5) == "1-element Array{Int64,1}:\n 1"
+    push!(A, 2)
+    @test arrstr(A, 5) == "2-element Array{Int64,1}:\n ⋮"
+    @test arrstr(A, 6) == "2-element Array{Int64,1}:\n 1\n 2"
+    push!(A, 3)
+    @test arrstr(A, 6) == "3-element Array{Int64,1}:\n 1\n ⋮"
+
+    @test arrstr(zeros(4, 3), 4)  == "4×3 Array{Float64,2}: …"
+    @test arrstr(zeros(4, 30), 4) == "4×30 Array{Float64,2}: …"
+    @test arrstr(zeros(4, 3), 5)  == "4×3 Array{Float64,2}:\n ⋮      ⋱  "
+    @test arrstr(zeros(4, 30), 5) == "4×30 Array{Float64,2}:\n ⋮      ⋱  "
+    @test arrstr(zeros(4, 3), 6)  == "4×3 Array{Float64,2}:\n 0.0  0.0  0.0\n ⋮            "
+    @test arrstr(zeros(4, 30), 6) ==
+              string("4×30 Array{Float64,2}:\n",
+                     " 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  …  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n",
+                     " ⋮                        ⋮              ⋱            ⋮                      ")
+end
+
+module UnexportedOperators
+function + end
+function == end
+end
+
+@testset "Parseable printing of types" begin
+    @test repr(typeof(print)) == "typeof(print)"
+    @test repr(typeof(Base.show_default)) == "typeof(Base.show_default)"
+    @test repr(typeof(UnexportedOperators.:+)) == "typeof($(curmod_prefix)UnexportedOperators.:+)"
+    @test repr(typeof(UnexportedOperators.:(==))) == "typeof($(curmod_prefix)UnexportedOperators.:(==))"
+    anonfn = x->2x
+    modname = string(@__MODULE__)
+    anonfn_type_repr = "getfield($modname, Symbol(\"$(typeof(anonfn).name.name)\"))"
+    @test repr(typeof(anonfn)) == anonfn_type_repr
+    @test repr(anonfn) == anonfn_type_repr * "()"
+    @test stringmime("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
+    mkclosure = x->y->x+y
+    clo = mkclosure(10)
+    @test stringmime("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
+    @test repr(UnionAll) == "UnionAll"
+end
+
+let x = TypeVar(:_), y = TypeVar(:_)
+    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1,_2} where _2 where _1"
+    @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref{_1} where _1,_1} where _1"
+    x = TypeVar(:a)
+    y = TypeVar(:a)
+    z = TypeVar(:a)
+    @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z})))) == "Tuple{a1,a2,a} where a2 where a1 where a"
+end

@@ -35,9 +35,9 @@ end
 
 function ldflags()
     fl = "-L$(shell_escape(libDir()))"
-    if is_windows()
+    if Sys.iswindows()
         fl = fl * " -Wl,--stack,8388608"
-    elseif is_linux()
+    elseif Sys.islinux()
         fl = fl * " -Wl,--export-dynamic"
     end
     return fl
@@ -49,7 +49,7 @@ function ldlibs()
     else
         "julia"
     end
-    if is_unix()
+    if Sys.isunix()
         return "-Wl,-rpath,$(shell_escape(libDir())) -Wl,-rpath,$(shell_escape(private_libDir())) -l$libname"
     else
         return "-l$libname -lopenlibm"
@@ -64,7 +64,7 @@ function cflags()
     if threadingOn()
         print(flags, " -DJULIA_ENABLE_THREADING=1")
     end
-    if is_unix()
+    if Sys.isunix()
         print(flags, " -fPIC")
     end
     return String(take!(flags))

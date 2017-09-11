@@ -4,6 +4,7 @@
 #ifndef _OS_WINDOWS_
 #  include <sys/resource.h>
 #endif
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -91,7 +92,8 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
     // if any allocation fails, this just stops recording more pages from that point
     // and will free (munmap) the remainder
     jl_gc_pagemeta_t *page_meta =
-        (jl_gc_pagemeta_t*)jl_gc_perm_alloc_nolock(pg_cnt * sizeof(jl_gc_pagemeta_t), 1);
+        (jl_gc_pagemeta_t*)jl_gc_perm_alloc_nolock(pg_cnt * sizeof(jl_gc_pagemeta_t), 1,
+                                                   sizeof(void*), 0);
     pg = 0;
     if (page_meta) {
         for (; pg < pg_cnt; pg++) {
@@ -114,7 +116,8 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
                 memory_map.freemap1[info.pagetable_i32] |= msk; // has free
             info.pagetable1 = *(ppagetable1 = &memory_map.meta1[i]);
             if (!info.pagetable1) {
-                info.pagetable1 = (pagetable1_t*)jl_gc_perm_alloc_nolock(sizeof(pagetable1_t), 1);
+                info.pagetable1 = (pagetable1_t*)jl_gc_perm_alloc_nolock(sizeof(pagetable1_t), 1,
+                                                                         sizeof(void*), 0);
                 *ppagetable1 = info.pagetable1;
                 if (!info.pagetable1)
                     break;
@@ -129,7 +132,8 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
                 info.pagetable1->freemap0[info.pagetable1_i32] |= msk; // has free
             info.pagetable0 = *(ppagetable0 = &info.pagetable1->meta0[i]);
             if (!info.pagetable0) {
-                info.pagetable0 = (pagetable0_t*)jl_gc_perm_alloc_nolock(sizeof(pagetable0_t), 1);
+                info.pagetable0 = (pagetable0_t*)jl_gc_perm_alloc_nolock(sizeof(pagetable0_t), 1,
+                                                                         sizeof(void*), 0);
                 *ppagetable0 = info.pagetable0;
                 if (!info.pagetable0)
                     break;

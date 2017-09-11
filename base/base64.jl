@@ -22,6 +22,7 @@ base64-encoded ASCII bytes written to `ostream`.
 Calling [`close`](@ref) on the `Base64EncodePipe` stream
 is necessary to complete the encoding (but does not close `ostream`).
 
+# Examples
 ```jldoctest
 julia> io = IOBuffer();
 
@@ -207,6 +208,7 @@ base64encode(x...) = base64encode(write, x...)
 
 Returns a new read-only I/O stream, which decodes base64-encoded data read from `istream`.
 
+# Examples
 ```jldoctest
 julia> io = IOBuffer();
 
@@ -261,6 +263,7 @@ Decodes the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded
 
 See also [`base64encode`](@ref)
 
+# Examples
 ```jldoctest
 julia> b = base64decode("SGVsbG8h")
 6-element Array{UInt8,1}:

@@ -28,7 +28,7 @@ end
 if !isfile("big.txt")
     download("http://norvig.com/big.txt", "big.txt")
 end
-const NWORDS = train(words(readstring("big.txt")))
+const NWORDS = train(words(read("big.txt", String)))
 
 const alphabet = "abcdefghijklmnopqrstuvwxyz"
 
@@ -92,7 +92,7 @@ function spelltest(tests; bias=0, verbose=false)
         end
     end
 
-    return Dict("bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>round(Int, 100. - 100.*bad/n),
+    return Dict("bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>round(Int, 100. - 100. * bad/n),
                 "unknown"=>unknown, "secs"=>toc())
 end
 

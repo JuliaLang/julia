@@ -135,10 +135,10 @@ copy(d::Dict) = Dict(d)
 
 const AnyDict = Dict{Any,Any}
 
-Dict(ps::Pair{K,V}...) where {K,V}        = Dict{K,V}(ps)
-Dict(ps::Pair{K}...,) where K             = Dict{K,Any}(ps)
-Dict(ps::(Pair{K,V} where K)...,) where V = Dict{Any,V}(ps)
-Dict(ps::Pair...)                         = Dict{Any,Any}(ps)
+Dict(ps::Pair{K,V}...)           where {K,V} = Dict{K,V}(ps)
+Dict(ps::Pair{K}...)             where {K}   = Dict{K,Any}(ps)
+Dict(ps::(Pair{K,V} where K)...) where {V}   = Dict{Any,V}(ps)
+Dict(ps::Pair...)                            = Dict{Any,Any}(ps)
 
 function Dict(kv)
     try
@@ -270,7 +270,12 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     return h
 end
 
-function sizehint!(d::Dict, newsz)
+max_values(::Type) = typemax(Int)
+max_values(T::Type{<:Union{Void,BitIntegerSmall}}) = 1 << (8*sizeof(T))
+max_values(T::Union) = max(max_values(T.a), max_values(T.b))
+max_values(::Type{Bool}) = 2
+
+function sizehint!(d::Dict{T}, newsz) where T
     oldsz = length(d.slots)
     if newsz <= oldsz
         # todo: shrink
@@ -279,7 +284,8 @@ function sizehint!(d::Dict, newsz)
         return d
     end
     # grow at least 25%
-    newsz = max(newsz, (oldsz*5)>>2)
+    newsz = min(max(newsz, (oldsz*5)>>2),
+                max_values(T))
     rehash!(d, newsz)
 end
 
@@ -431,7 +437,50 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     return h
 end
 
+"""
+    get!(collection, key, default)
+
+Return the value stored for the given key, or if no mapping for the key is present, store
+`key => default`, and return `default`.
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
+
+julia> get!(d, "a", 5)
+1
+
+julia> get!(d, "d", 4)
+4
+
+julia> d
+Dict{String,Int64} with 4 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+  "d" => 4
+```
+"""
+get!(collection, key, default)
+
 get!(h::Dict{K,V}, key0, default) where {K,V} = get!(()->default, h, key0)
+
+"""
+    get!(f::Function, collection, key)
+
+Return the value stored for the given key, or if no mapping for the key is present, store
+`key => f()`, and return `f()`.
+
+This is intended to be called using `do` block syntax:
+```julia
+get!(dict, key) do
+    # default value calculated here
+    time()
+end
+```
+"""
+get!(f::Function, collection, key)
+
 function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
@@ -474,10 +523,46 @@ function getindex(h::Dict{K,V}, key) where V where K
     return (index < 0) ? throw(KeyError(key)) : h.vals[index]::V
 end
 
+"""
+    get(collection, key, default)
+
+Return the value stored for the given key, or the given default value if no mapping for the
+key is present.
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2);
+
+julia> get(d, "a", 3)
+1
+
+julia> get(d, "c", 3)
+3
+```
+"""
+get(collection, key, default)
+
 function get(h::Dict{K,V}, key, default) where V where K
     index = ht_keyindex(h, key)
     return (index < 0) ? default : h.vals[index]::V
 end
+
+"""
+    get(f::Function, collection, key)
+
+Return the value stored for the given key, or if no mapping for the key is present, return
+`f()`.  Use [`get!`](@ref) to also store the default value in the dictionary.
+
+This is intended to be called using `do` block syntax
+
+```julia
+get(dict, key) do
+    # default value calculated here
+    time()
+end
+```
+"""
+get(::Function, collection, key)
 
 function get(default::Callable, h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
@@ -539,9 +624,42 @@ function pop!(h::Dict, key)
     return index > 0 ? _pop!(h, index) : throw(KeyError(key))
 end
 
+"""
+    pop!(collection, key[, default])
+
+Delete and return the mapping for `key` if it exists in `collection`, otherwise return
+`default`, or throw an error if `default` is not specified.
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
+
+julia> pop!(d, "a")
+1
+
+julia> pop!(d, "d")
+ERROR: KeyError: key "d" not found
+Stacktrace:
+ [1] pop!(::Dict{String,Int64}, ::String) at ./dict.jl:539
+
+julia> pop!(d, "e", 4)
+4
+```
+"""
+pop!(collection, key, default)
+
 function pop!(h::Dict, key, default)
     index = ht_keyindex(h, key)
     return index > 0 ? _pop!(h, index) : default
+end
+
+function pop!(h::Dict)
+    isempty(h) && throw(ArgumentError("dict must be non-empty"))
+    idx = start(h)
+    key = h.keys[idx]
+    val = h.vals[idx]
+    _delete!(h, idx)
+    key => val
 end
 
 function _delete!(h::Dict, index)
@@ -553,6 +671,25 @@ function _delete!(h::Dict, index)
     h.age += 1
     return h
 end
+
+"""
+    delete!(collection, key)
+
+Delete the mapping for the given key in a collection, and return the collection.
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2)
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+
+julia> delete!(d, "b")
+Dict{String,Int64} with 1 entry:
+  "a" => 1
+```
+"""
+delete!(collection, key)
 
 function delete!(h::Dict, key)
     index = ht_keyindex(h, key)
@@ -584,16 +721,22 @@ length(t::Dict) = t.count
 next(v::KeyIterator{<:Dict}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
 next(v::ValueIterator{<:Dict}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
 
-# For these Associative types, it is safe to implement filter!
-# by deleting keys during iteration.
-function filter!(f, d::Union{ObjectIdDict,Dict})
-    for (k,v) in d
-        if !f(k,v)
-            delete!(d,k)
+function filter_in_one_pass!(f, d::Associative)
+    try
+        for (k, v) in d
+            if !f(k => v)
+                delete!(d, k)
+            end
         end
+    catch e
+        return filter!_dict_deprecation(e, f, d)
     end
     return d
 end
+
+# For these Associative types, it is safe to implement filter!
+# by deleting keys during iteration.
+filter!(f, d::Union{ObjectIdDict,Dict}) = filter_in_one_pass!(f, d)
 
 struct ImmutableDict{K,V} <: Associative{K,V}
     parent::ImmutableDict{K,V}
@@ -671,5 +814,5 @@ function similar(t::ImmutableDict)
     return t
 end
 
-_similar_for{P<:Pair}(c::Dict, ::Type{P}, itr, isz) = similar(c, P)
+_similar_for(c::Dict, ::Type{P}, itr, isz) where {P<:Pair} = similar(c, P)
 _similar_for(c::Associative, T, itr, isz) = throw(ArgumentError("for Associatives, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))

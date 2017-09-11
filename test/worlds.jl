@@ -136,7 +136,7 @@ f265(::Int) = 1
 
 # test for method errors
 h265() = true
-loc_h265 = "$(Base.source_path()):$(@__LINE__ - 1)"
+loc_h265 = "$(@__FILE__):$(@__LINE__() - 1)"
 @test h265()
 @test_throws MethodError put_n_take!(h265, ())
 @test_throws MethodError wait(t265)

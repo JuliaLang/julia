@@ -108,8 +108,8 @@ Run processes on hosts listed in <file>
 Interactive mode; REPL runs and isinteractive() is true
 
 .TP
--q, --quiet
-Quiet startup without banner
+--banner={yes|no}
+Enable or disable startup banner
 
 .TP
 --color={yes|no}
@@ -159,6 +159,10 @@ or adhere to declarations in source code
 .TP
 --depwarn={yes|no|error}
 Enable or disable syntax and method deprecation warnings ('error' turns warnings into errors)
+
+.TP
+--warn-overwrite={yes|no}
+Enable or disable method overwrite warnings
 
 .TP
 --output-o <name>

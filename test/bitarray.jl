@@ -1,14 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module BitArrayTests
-
-using Base.Test
 using Base: findprevnot, findnextnot
 
-tc{N}(r1::NTuple{N,Any}, r2::NTuple{N,Any}) = all(x->tc(x...), [zip(r1,r2)...])
-tc{N}(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) = true
+tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
+tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
 tc(r1::RowVector{Bool,BitVector}, r2::Union{RowVector{Bool,BitVector},RowVector{Bool,Vector{Bool}}}) = true
-tc{T}(r1::T, r2::T) = true
+tc(r1::T, r2::T) where {T} = true
 tc(r1,r2) = false
 
 bitcheck(b::BitArray) = Base._check_bitarray_consistency(b)
@@ -143,6 +140,10 @@ timesofar("conversions")
         @check_bit_operation reshape(b1, (n2,n1)) BitMatrix
         @test_throws DimensionMismatch reshape(b1, (1,n1))
 
+        @test @inferred(reshape(b1, n1*n2)) == @inferred(reshape(b1, (n1*n2,))) == @inferred(reshape(b1, Val(1))) == @inferred(reshape(b1, :))
+        @test @inferred(reshape(b1, n1, n2)) === @inferred(reshape(b1, Val(2))) === b1
+        @test @inferred(reshape(b1, n2, :)) == @inferred(reshape(b1, (n2, n1))) != @inferred(reshape(b1, Val(2)))
+
         b1 = bitrand(s1, s2, s3, s4)
         @check_bit_operation reshape(b1, (s3,s1,s2,s4)) BitArray{4}
         @test_throws DimensionMismatch reshape(b1, (1,n1))
@@ -189,6 +190,11 @@ timesofar("utils")
         @test Array(one(BitMatrix(2,2))) == eye(2,2)
         @test_throws DimensionMismatch one(BitMatrix(2,3))
     end
+
+    # constructors should copy
+    a = trues(3)
+    @test BitArray(a) !== a
+    @test BitArray{1}(a) !== a
 end
 
 timesofar("constructors")
@@ -470,20 +476,20 @@ timesofar("constructors")
         @check_bit_operation setindex!(b1, true, t1) BitMatrix
 
         t1 = bitrand(n1, n2)
-        b2 = bitrand(countnz(t1))
+        b2 = bitrand(count(t1))
         @check_bit_operation setindex!(b1, b2, t1) BitMatrix
 
         m1 = rand(1:n1)
         m2 = rand(1:n2)
         t1 = bitrand(n1)
-        b2 = bitrand(countnz(t1), m2)
+        b2 = bitrand(count(t1), m2)
         k2 = randperm(m2)
         @check_bit_operation setindex!(b1, b2, t1, 1:m2)       BitMatrix
         @check_bit_operation setindex!(b1, b2, t1, n2-m2+1:n2) BitMatrix
         @check_bit_operation setindex!(b1, b2, t1, k2)         BitMatrix
 
         t2 = bitrand(n2)
-        b2 = bitrand(m1, countnz(t2))
+        b2 = bitrand(m1, count(t2))
         k1 = randperm(m1)
         @check_bit_operation setindex!(b1, b2, 1:m1, t2)       BitMatrix
         @check_bit_operation setindex!(b1, b2, n1-m1+1:n1, t2) BitMatrix
@@ -884,8 +890,8 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(^, 1.0im, b2) Matrix{Complex128}
         @check_bit_operation broadcast(^, 0im, b2)   Matrix{Complex{Int}}
         @check_bit_operation broadcast(^, 1im, b2)   Matrix{Complex{Int}}
-        @check_bit_operation broadcast(^, 0x0im, b2) Matrix{Complex{UInt8}}
-        @check_bit_operation broadcast(^, 0x1im, b2) Matrix{Complex{UInt8}}
+        @check_bit_operation broadcast(^, 0x0*im, b2) Matrix{Complex{UInt8}}
+        @check_bit_operation broadcast(^, 0x1*im, b2) Matrix{Complex{UInt8}}
     end
 
     @testset "Matrix/Number" begin
@@ -981,7 +987,7 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(^, b1, 0.0)   Matrix{Float64}
         @check_bit_operation broadcast(^, b1, 1.0)   Matrix{Float64}
         @check_bit_operation broadcast(^, b1, 0.0im) Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 0x0im) Matrix{Complex128}
+        @check_bit_operation broadcast(^, b1, 0x0*im) Matrix{Complex128}
         @check_bit_operation broadcast(^, b1, 0im)   Matrix{Complex128}
         @test_throws DomainError broadcast(^, b1, -1)
 
@@ -990,7 +996,7 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(^, b1, 1.0im)  Matrix{Complex128}
         @check_bit_operation broadcast(^, b1, -1im)   Matrix{Complex128}
         @check_bit_operation broadcast(^, b1, 1im)    Matrix{Complex128}
-        @check_bit_operation broadcast(^, b1, 0x1im)  Matrix{Complex128}
+        @check_bit_operation broadcast(^, b1, 0x1*im)  Matrix{Complex128}
     end
 end
 
@@ -1034,30 +1040,29 @@ timesofar("binary comparison")
         @test isequal(b1 >>> m, [ falses(m); b1[1:end-m] ])
         @test isequal(b1 << -m, b1 >> m)
         @test isequal(b1 >>> -m, b1 << m)
-        @test isequal(rol(b1, m), [ b1[m+1:end]; b1[1:m] ])
-        @test isequal(ror(b1, m), [ b1[end-m+1:end]; b1[1:end-m] ])
-        @test isequal(ror(b1, m), rol(b1, -m))
-        @test isequal(rol(b1, m), ror(b1, -m))
+        @test isequal(circshift(b1, -m), [ b1[m+1:end]; b1[1:m] ])
+        @test isequal(circshift(b1, m), [ b1[end-m+1:end]; b1[1:end-m] ])
+        @test isequal(circshift(b1, m), circshift(b1, m - length(b1)))
     end
 
     b = bitrand(v1)
     i = bitrand(v1)
     for m = [rand(1:v1), 63, 64, 65, 191, 192, 193, v1-1]
         j = rand(1:m)
-        b1 = ror!(i, b, j)
-        i1 = ror!(b, j)
+        b1 = circshift!(i, b, j)
+        i1 = circshift!(b, j)
         @test b1 == i1
-        b2 = rol!(i1, b1, j)
-        i2 = rol!(b1, j)
+        b2 = circshift!(i1, b1, -j)
+        i2 = circshift!(b1, -j)
         @test b2 == i2
     end
 end
 
 timesofar("datamove")
 
-@testset "countnz & find" begin
+@testset "count & find" begin
     for m = 0:v1, b1 in Any[bitrand(m), trues(m), falses(m)]
-        @check_bit_operation countnz(b1) Int
+        @check_bit_operation count(b1) Int
 
         @check_bit_operation findfirst(b1) Int
 
@@ -1394,9 +1399,6 @@ timesofar("cat")
     b1 = bitrand(v1)
     @check_bit_operation diagm(b1) BitMatrix
 
-    b1 = bitrand(n1, n2)
-    @test_throws DimensionMismatch diagm(b1)
-
     b1 = bitrand(n1, n1)
     @check_bit_operation diag(b1)
 end
@@ -1463,5 +1465,3 @@ end
 end
 
 timesofar("I/O")
-
-end # module

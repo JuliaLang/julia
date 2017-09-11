@@ -45,14 +45,18 @@ do33 = ones(3)
 end
 
 @testset "concatenation tests" begin
+    sp33 = speye(3, 3)
+
     @testset "horizontal concatenation" begin
         @test all([se33 se33] == sparse([1, 2, 3, 1, 2, 3], [1, 2, 3, 4, 5, 6], ones(6)))
+        @test length(([sp33 0I]).nzval) == 3
     end
 
     @testset "vertical concatenation" begin
         @test all([se33; se33] == sparse([1, 4, 2, 5, 3, 6], [1, 1, 2, 2, 3, 3], ones(6)))
         se33_32bit = convert(SparseMatrixCSC{Float32,Int32}, se33)
         @test all([se33; se33_32bit] == sparse([1, 4, 2, 5, 3, 6], [1, 1, 2, 2, 3, 3], ones(6)))
+        @test length(([sp33; 0I]).nzval) == 3
     end
 
     se44 = speye(4)
@@ -62,6 +66,7 @@ end
     se77 = speye(7)
     @testset "h+v concatenation" begin
         @test all([se44 sz42 sz41; sz34 se33] == se77)
+        @test length(([sp33 0I; 1I 0I]).nzval) == 6
     end
 
     @testset "blkdiag concatenation" begin
@@ -221,6 +226,14 @@ end
         @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
         @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
 
+        # UpperTriangular/LowerTriangular solve
+        a = UpperTriangular(speye(5) + triu(0.1*sprandn(5, 5, 0.2)))
+        b = sprandn(5, 5, 0.2)
+        @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*eps())
+        a = LowerTriangular(speye(5) + tril(0.1*sprandn(5, 5, 0.2)))
+        b = sprandn(5, 5, 0.2)
+        @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*eps())
+
         a = spdiagm(randn(5)) + im*spdiagm(randn(5))
         b = randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
@@ -281,6 +294,17 @@ b = randn(7)
     @test 0.5 * dA            == scale!(sC, sA, 0.5)
     @test 0.5 * dA            == scale!(0.5, copy(sA))
     @test scale!(sC, 0.5, sA) == scale!(sC, sA, 0.5)
+end
+
+@testset "inverse scale!" begin
+    bi = inv.(b)
+    dAt = transpose(dA)
+    sAt = transpose(sA)
+    @test scale!(copy(dAt), bi) ≈ Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(b))
+    @test scale!(copy(dAt), bi) ≈ Base.LinAlg.A_rdiv_Bt!(copy(sAt), Diagonal(b))
+    @test scale!(copy(dAt), conj(bi)) ≈ Base.LinAlg.A_rdiv_Bc!(copy(sAt), Diagonal(b))
+    @test_throws DimensionMismatch Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(ones(length(b) + 1)))
+    @test_throws LinAlg.SingularException Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(zeros(length(b))))
 end
 
 @testset "copy!" begin
@@ -377,11 +401,11 @@ end
             fullAt = transpose(Array(A))
             @test transpose(A) == fullAt
             @test transpose!(similar(At), A) == fullAt
-            # ctranspose[!]
+            # adjoint[!]
             C = A + im*A/2
-            fullCh = ctranspose(Array(C))
-            @test ctranspose(C) == fullCh
-            @test ctranspose!(similar(sparse(fullCh)), C) == fullCh
+            fullCh = adjoint(Array(C))
+            @test adjoint(C) == fullCh
+            @test adjoint!(similar(sparse(fullCh)), C) == fullCh
             # permute[!]
             p = randperm(m)
             q = randperm(n)
@@ -399,12 +423,12 @@ end
 @testset "transpose of SubArrays" begin
     A = view(sprandn(10, 10, 0.3), 1:4, 1:4)
     @test  transpose(Array(A)) == Array(transpose(A))
-    @test ctranspose(Array(A)) == Array(ctranspose(A))
+    @test adjoint(Array(A)) == Array(adjoint(A))
 end
 
 @testset "exp" begin
     A = sprandn(5,5,0.2)
-    @test e.^A ≈ e.^Array(A)
+    @test ℯ.^A ≈ ℯ.^Array(A)
 end
 
 @testset "reductions" begin
@@ -442,11 +466,17 @@ end
         @test_throws ArgumentError maximum(sparse(Int[]))
         @test var(sparse(Int[])) === NaN
 
-        for f in (sum, prod, minimum, maximum, var)
+        for f in (sum, prod, var)
             @test isequal(f(spzeros(0, 1), 1), f(Array{Int}(0, 1), 1))
             @test isequal(f(spzeros(0, 1), 2), f(Array{Int}(0, 1), 2))
             @test isequal(f(spzeros(0, 1), (1, 2)), f(Array{Int}(0, 1), (1, 2)))
             @test isequal(f(spzeros(0, 1), 3), f(Array{Int}(0, 1), 3))
+        end
+        for f in (minimum, maximum, findmin, findmax)
+            @test_throws ArgumentError f(spzeros(0, 1), 1)
+            @test isequal(f(spzeros(0, 1), 2), f(Array{Int}(0,1), 2))
+            @test_throws ArgumentError f(spzeros(0, 1), (1, 2))
+            @test isequal(f(spzeros(0, 1), 3), f(Array{Int}(0,1), 3))
         end
     end
 end
@@ -533,10 +563,12 @@ end
     @test tan.(Afull) == Array(tan.(A)) # should be redundant with sin test
     @test ceil.(Afull) == Array(ceil.(A))
     @test floor.(Afull) == Array(floor.(A)) # should be redundant with ceil test
-    @test real.(Afull) == Array(real.(A))
-    @test imag.(Afull) == Array(imag.(A))
-    @test real.(Cfull) == Array(real.(C))
-    @test imag.(Cfull) == Array(imag.(C))
+    @test real.(Afull) == Array(real.(A)) == Array(real(A))
+    @test imag.(Afull) == Array(imag.(A)) == Array(imag(A))
+    @test conj.(Afull) == Array(conj.(A)) == Array(conj(A))
+    @test real.(Cfull) == Array(real.(C)) == Array(real(C))
+    @test imag.(Cfull) == Array(imag.(C)) == Array(imag(C))
+    @test conj.(Cfull) == Array(conj.(C)) == Array(conj(C))
     # Test representatives of [unary functions that map zeros to zeros and nonzeros to nonzeros]
     @test expm1.(Afull) == Array(expm1.(A))
     @test abs.(Afull) == Array(abs.(A))
@@ -554,12 +586,19 @@ end
         I = rand(T[1:100;], 2, 2)
         D = R + I*im
         S = sparse(D)
-        @test R == real.(S)
-        @test I == imag.(S)
-        @test real.(sparse(R)) == R
-        @test nnz(imag.(sparse(R))) == 0
+        spR = sparse(R)
+
+        @test R == real.(S) == real(S)
+        @test I == imag.(S) == imag(S)
+        @test conj(full(S)) == conj.(S) == conj(S)
+        @test real.(spR) == R
+        @test nnz(imag.(spR)) == nnz(imag(spR)) == 0
         @test abs.(S) == abs.(D)
         @test abs2.(S) == abs2.(D)
+
+        # test aliasing of real and conj of real valued matrix
+        @test real(spR) === spR
+        @test conj(spR) === spR
     end
 end
 
@@ -656,56 +695,56 @@ end
 
 @testset "setindex" begin
     a = spzeros(Int, 10, 10)
-    @test countnz(a) == 0
+    @test count(!iszero, a) == 0
     a[1,:] = 1
-    @test countnz(a) == 10
+    @test count(!iszero, a) == 10
     @test a[1,:] == sparse(ones(Int,10))
     a[:,2] = 2
-    @test countnz(a) == 19
+    @test count(!iszero, a) == 19
     @test a[:,2] == 2*sparse(ones(Int,10))
     b = copy(a)
 
     # Zero-assignment behavior of setindex!(A, v, i, j)
     a[1,3] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 18
+    @test count(!iszero, a) == 18
     a[2,1] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 18
+    @test count(!iszero, a) == 18
 
     # Zero-assignment behavior of setindex!(A, v, I, J)
     a[1,:] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 9
+    @test count(!iszero, a) == 9
     a[2,:] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 8
+    @test count(!iszero, a) == 8
     a[:,1] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 8
+    @test count(!iszero, a) == 8
     a[:,2] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 0
+    @test count(!iszero, a) == 0
     a = copy(b)
     a[:,:] = 0
     @test nnz(a) == 19
-    @test countnz(a) == 0
+    @test count(!iszero, a) == 0
 
     # Zero-assignment behavior of setindex!(A, B::SparseMatrixCSC, I, J)
     a = copy(b)
     a[1:2,:] = spzeros(2, 10)
     @test nnz(a) == 19
-    @test countnz(a) == 8
+    @test count(!iszero, a) == 8
     a[1:2,1:3] = sparse([1 0 1; 0 0 1])
     @test nnz(a) == 20
-    @test countnz(a) == 11
+    @test count(!iszero, a) == 11
     a = copy(b)
     a[1:2,:] = let c = sparse(ones(2,10)); fill!(c.nzval, 0); c; end
     @test nnz(a) == 19
-    @test countnz(a) == 8
+    @test count(!iszero, a) == 8
     a[1:2,1:3] = let c = sparse(ones(2,3)); c[1,2] = c[2,1] = c[2,2] = 0; c; end
     @test nnz(a) == 20
-    @test countnz(a) == 11
+    @test count(!iszero, a) == 11
 
     a[1,:] = 1:10
     @test a[1,:] == sparse([1:10;])
@@ -749,34 +788,34 @@ end
     A = spzeros(Int, 10, 20)
     A[1:5,1:10] = 10
     A[1:5,1:10] = 10
-    @test countnz(A) == 50
+    @test count(!iszero, A) == 50
     @test A[1:5,1:10] == 10 * ones(Int, 5, 10)
     A[6:10,11:20] = 0
-    @test countnz(A) == 50
+    @test count(!iszero, A) == 50
     A[6:10,11:20] = 20
-    @test countnz(A) == 100
+    @test count(!iszero, A) == 100
     @test A[6:10,11:20] == 20 * ones(Int, 5, 10)
     A[4:8,8:16] = 15
-    @test countnz(A) == 121
+    @test count(!iszero, A) == 121
     @test A[4:8,8:16] == 15 * ones(Int, 5, 9)
 
     ASZ = 1000
     TSZ = 800
     A = sprand(ASZ, 2*ASZ, 0.0001)
     B = copy(A)
-    nA = countnz(A)
+    nA = count(!iszero, A)
     x = A[1:TSZ, 1:(2*TSZ)]
-    nx = countnz(x)
+    nx = count(!iszero, x)
     A[1:TSZ, 1:(2*TSZ)] = 0
-    nB = countnz(A)
+    nB = count(!iszero, A)
     @test nB == (nA - nx)
     A[1:TSZ, 1:(2*TSZ)] = x
-    @test countnz(A) == nA
+    @test count(!iszero, A) == nA
     @test A == B
     A[1:TSZ, 1:(2*TSZ)] = 10
-    @test countnz(A) == nB + 2*TSZ*TSZ
+    @test count(!iszero, A) == nB + 2*TSZ*TSZ
     A[1:TSZ, 1:(2*TSZ)] = x
-    @test countnz(A) == nA
+    @test count(!iszero, A) == nA
     @test A == B
 
     A = speye(Int, 5)
@@ -787,17 +826,17 @@ end
     @test A[I] == A[X] == collect(1:10)
     A[I] = zeros(Int, 10)
     @test nnz(A) == 13
-    @test countnz(A) == 3
+    @test count(!iszero, A) == 3
     @test A[I] == A[X] == zeros(Int, 10)
     c = collect(11:20); c[1] = c[3] = 0
     A[I] = c
     @test nnz(A) == 13
-    @test countnz(A) == 11
+    @test count(!iszero, A) == 11
     @test A[I] == A[X] == c
     A = speye(Int, 5)
     A[I] = c
     @test nnz(A) == 12
-    @test countnz(A) == 11
+    @test count(!iszero, A) == 11
     @test A[I] == A[X] == c
 
     S = sprand(50, 30, 0.5, x -> round.(Int, rand(x) * 100))
@@ -806,14 +845,14 @@ end
     FI = Array(I)
     @test sparse(FS[FI]) == S[I] == S[FI]
     @test sum(S[FI]) + sum(S[.!FI]) == sum(S)
-    @test countnz(I) == count(I)
+    @test count(!iszero, I) == count(I)
 
     sumS1 = sum(S)
     sumFI = sum(S[FI])
     nnzS1 = nnz(S)
     S[FI] = 0
     sumS2 = sum(S)
-    cnzS2 = countnz(S)
+    cnzS2 = count(!iszero, S)
     @test sum(S[FI]) == 0
     @test nnz(S) == nnzS1
     @test (sum(S) + sumFI) == sumS1
@@ -824,7 +863,7 @@ end
     S[FI] = 0
     @test sum(S) == sumS2
     @test nnz(S) == nnzS3
-    @test countnz(S) == cnzS2
+    @test count(!iszero, S) == cnzS2
 
     S[FI] = [1:sum(FI);]
     @test sum(S) == sumS2 + sum(1:sum(FI))
@@ -959,8 +998,8 @@ end
 
     S = spzeros(10,8)
     A = Array(S)
-    @test indmax(S) == indmax(A) == 1
-    @test indmin(S) == indmin(A) == 1
+    @test indmax(S) == indmax(A) == CartesianIndex(1,1)
+    @test indmin(S) == indmin(A) == CartesianIndex(1,1)
 
     A = Array{Int}(0,0)
     S = sparse(A)
@@ -970,6 +1009,107 @@ end
     iA = try indmin(A) end
     iS = try indmin(S) end
     @test iA === iS === nothing
+end
+
+# findmin/findmax/minumum/maximum
+
+A = sparse([1.0 5.0 6.0;
+            5.0 2.0 4.0])
+for (tup, rval, rind) in [((1,), [1.0 2.0 4.0], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
+                          ((2,), reshape([1.0,2.0], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,2)], 2, 1)),
+                          ((1,2), fill(1.0,1,1),fill(CartesianIndex(1,1),1,1))]
+    @test findmin(A, tup) == (rval, rind)
+end
+
+for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+                          ((2,), reshape([6.0,5.0], 2, 1), reshape([CartesianIndex(1,3),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(6.0,1,1),fill(CartesianIndex(1,3),1,1))]
+    @test findmax(A, tup) == (rval, rind)
+end
+
+#issue 23209
+
+A = sparse([1.0 5.0 6.0;
+            NaN 2.0 4.0])
+for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [CartesianIndex(2,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
+                          ((2,), reshape([1.0, NaN], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), [NaN 5.0 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+                          ((2,), reshape([6.0, NaN], 2, 1), reshape([CartesianIndex(1,3),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+    @test isequal(findmax(A, tup), (rval, rind))
+end
+
+A = sparse([1.0 NaN 6.0;
+            NaN 2.0 4.0])
+for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(2,3)]),
+                          ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+                          ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+    @test isequal(findmax(A, tup), (rval, rind))
+end
+
+A = sparse([Inf -Inf Inf  -Inf;
+            Inf  Inf -Inf -Inf])
+for (tup, rval, rind) in [((1,), [Inf -Inf -Inf -Inf], [CartesianIndex(1,1) CartesianIndex(1,2) CartesianIndex(2,3) CartesianIndex(1,4)]),
+                          ((2,), reshape([-Inf -Inf], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,3)], 2, 1)),
+                          ((1,2), fill(-Inf,1,1),fill(CartesianIndex(1,2),1,1))]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(1,3) CartesianIndex(1,4)]),
+                          ((2,), reshape([Inf Inf], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,1)], 2, 1)),
+                          ((1,2), fill(Inf,1,1),fill(CartesianIndex(1,1),1,1))]
+    @test isequal(findmax(A, tup), (rval, rind))
+end
+
+A = sparse([BigInt(10)])
+for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
+    @test isequal(findmax(A, tup), (rval, rind))
+end
+
+A = sparse([BigInt(-10)])
+for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
+    @test isequal(findmax(A, tup), (rval, rind))
+end
+
+A = sparse([BigInt(10) BigInt(-10)])
+for (tup, rval, rind) in [((2,), reshape([BigInt(-10)], 1, 1), reshape([CartesianIndex(1,2)], 1, 1))]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((2,), reshape([BigInt(10)], 1, 1), reshape([CartesianIndex(1,1)], 1, 1))]
+    @test isequal(findmax(A, tup), (rval, rind))
+end
+
+A = sparse(["a", "b"])
+@test_throws MethodError findmin(A, 1)
+
+# Support the case, when user defined `zero` and `isless` for non-numerical type
+#
+Base.zero(::Type{T}) where T<:AbstractString = ""
+for (tup, rval, rind) in [((1,), ["a"], [1])]
+    @test isequal(findmin(A, tup), (rval, rind))
+end
+
+for (tup, rval, rind) in [((1,), ["b"], [2])]
+    @test isequal(findmax(A, tup), (rval, rind))
 end
 
 @testset "findn" begin
@@ -998,7 +1138,7 @@ end
     @test size(rotl90(a)) == (5,3)
 end
 
-function test_getindex_algs{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector, alg::Int)
+function test_getindex_algs(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector, alg::Int) where {Tv,Ti}
     # Sorted vectors for indexing rows.
     # Similar to getindex_general but without the transpose trick.
     (m, n) = size(A)
@@ -1062,14 +1202,14 @@ end
     N=2^3
     Irand = randperm(M)
     Jrand = randperm(N)
-    I = sort([Irand; Irand; Irand])
+    II = sort([Irand; Irand; Irand])
     J = [Jrand; Jrand]
 
     SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]]
     for S in SA
         res = Any[1,2,3]
         for searchtype in [0, 1, 2]
-            res[searchtype+1] = test_getindex_algs(S, I, J, searchtype)
+            res[searchtype+1] = test_getindex_algs(S, II, J, searchtype)
         end
 
         @test res[1] == res[2] == res[3]
@@ -1077,12 +1217,12 @@ end
 
     M = 2^14
     N=2^4
-    I = randperm(M)
+    II = randperm(M)
     J = randperm(N)
     Jsorted = sort(J)
 
     SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]]
-    IA = [I[1:round(Int,n)] for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]]
+    IA = [II[1:round(Int,n)] for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]]
     debug = false
     if debug
         @printf("         |         |         |        times        |        memory       |\n")
@@ -1115,11 +1255,11 @@ end
     sm = sparse(D)
     sv = sparsevec(D)
 
-    @test countnz(sm) == 10
-    @test countnz(sv) == 10
+    @test count(!iszero, sm) == 10
+    @test count(!iszero, sv) == 10
 
-    @test countnz(sparse(Diagonal(Int[]))) == 0
-    @test countnz(sparsevec(Diagonal(Int[]))) == 0
+    @test count(!iszero, sparse(Diagonal(Int[]))) == 0
+    @test count(!iszero, sparsevec(Diagonal(Int[]))) == 0
 end
 
 @testset "explicit zeros" begin
@@ -1159,12 +1299,15 @@ end
     T = SymTridiagonal(randn(5),rand(4))
     S = sparse(T)
     @test norm(Array(T) - Array(S)) == 0.0
-    B = Bidiagonal(randn(5),randn(4),true)
+    B = Bidiagonal(randn(5),randn(4),:U)
     S = sparse(B)
     @test norm(Array(B) - Array(S)) == 0.0
-    B = Bidiagonal(randn(5),randn(4),false)
+    B = Bidiagonal(randn(5),randn(4),:L)
     S = sparse(B)
     @test norm(Array(B) - Array(S)) == 0.0
+    D = Diagonal(randn(5))
+    S = sparse(D)
+    @test norm(Array(D) - Array(S)) == 0.0
 end
 
 @testset "spdiagm promotion" begin
@@ -1283,11 +1426,32 @@ end
     @test trace(speye(5)) == 5
 end
 
-@testset "diagm on a matrix" begin
-    @test_throws DimensionMismatch diagm(sparse(ones(5,2)))
-    @test_throws DimensionMismatch diagm(sparse(ones(2,5)))
-    @test diagm(sparse(ones(1,5))) == speye(5)
-    @test diagm(sparse(ones(5,1))) == speye(5)
+@testset "spdiagm" begin
+    v = sprand(10, 0.4)
+    @test spdiagm(v)::SparseMatrixCSC                == diagm(Vector(v))
+    @test spdiagm(sparse(ones(5)))::SparseMatrixCSC  == speye(5)
+    @test spdiagm(sparse(zeros(5)))::SparseMatrixCSC == spzeros(5,5)
+end
+
+@testset "diag" begin
+    for T in (Float64, Complex128)
+        S1 = sprand(T,  5,  5, 0.5)
+        S2 = sprand(T, 10,  5, 0.5)
+        S3 = sprand(T,  5, 10, 0.5)
+        for S in (S1, S2, S3)
+            A = Matrix(S)
+            @test diag(S)::SparseVector{T,Int} == diag(A)
+            for k in -size(S,1):size(S,2)
+                @test diag(S, k)::SparseVector{T,Int} == diag(A, k)
+            end
+            @test_throws ArgumentError diag(S, -size(S,1)-1)
+            @test_throws ArgumentError diag(S,  size(S,2)+1)
+        end
+    end
+    # test that stored zeros are still stored zeros in the diagonal
+    S = sparse([1,3],[1,3],[0.0,0.0]); V = diag(S)
+    @test V.nzind == [1,3]
+    @test V.nzval == [0.0,0.0]
 end
 
 @testset "expandptr" begin
@@ -1739,6 +1903,45 @@ end
     @test String(take!(io)) == "1×1 SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
     show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
     @test String(take!(io)) == "2×2 SparseMatrixCSC{Float32,Int64} with 0 stored entries"
+
+    ioc = IOContext(io, :displaysize => (5, 80), :limit => true)
+    show(ioc, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
+    @test String(take!(io)) == "1×1 SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
+    show(ioc, MIME"text/plain"(), sparse(Int64[1, 1], Int64[1, 2], [1.0, 2.0]))
+    @test String(take!(io)) == "1×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  ⋮"
+
+    # even number of rows
+    ioc = IOContext(io, :displaysize => (8, 80), :limit => true)
+    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4], Int64[1,1,2,2], [1.0,2.0,3.0,4.0]))
+    @test String(take!(io)) == string("4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]",
+                                      "  =  1.0\n  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0")
+
+    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
+    @test String(take!(io)) ==  string("5×3 SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
+                                       "  =  1.0\n  ⋮\n  [5, 3]  =  5.0")
+
+    show(ioc, MIME"text/plain"(), sparse(ones(5,3)))
+    @test String(take!(io)) ==  string("5×3 SparseMatrixCSC{Float64,$Int} with 15 stored entries:\n  [1, 1]",
+                                       "  =  1.0\n  ⋮\n  [5, 3]  =  1.0")
+
+    # odd number of rows
+    ioc = IOContext(io, :displaysize => (9, 80), :limit => true)
+    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5], Int64[1,1,2,2,3], [1.0,2.0,3.0,4.0,5.0]))
+    @test String(take!(io)) == string("5×3 SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]",
+                                      "  =  1.0\n  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0")
+
+    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5,6], Int64[1,1,2,2,3,3], [1.0,2.0,3.0,4.0,5.0,6.0]))
+    @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]",
+                                       "  =  1.0\n  [2, 1]  =  2.0\n  ⋮\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
+
+    show(ioc, MIME"text/plain"(), sparse(ones(6,3)))
+    @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,$Int} with 18 stored entries:\n  [1, 1]",
+                                       "  =  1.0\n  [2, 1]  =  1.0\n  ⋮\n  [5, 3]  =  1.0\n  [6, 3]  =  1.0")
+
+    ioc = IOContext(io, :displaysize => (9, 80))
+    show(ioc, MIME"text/plain"(), sparse(Int64[1,2,3,4,5,6], Int64[1,1,2,2,3,3], [1.0,2.0,3.0,4.0,5.0,6.0]))
+    @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,Int64} with 6 stored entries:\n  [1, 1]  =  1.0\n",
+        "  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
 end
 
 @testset "similar aliasing" begin
@@ -1761,4 +1964,69 @@ end
     A = SparseMatrixCSC(n, n, colptr, rowval, nzval2)
     @test nnz(A) == n
     @test A      == eye(n)
+end
+
+@testset "reverse search direction if step < 0 #21986" begin
+    srand(1234)
+    A = sprand(5, 5, 1/5)
+    A = max.(A, A')
+    A = spones(A)
+    B = A[5:-1:1, 5:-1:1]
+    @test issymmetric(B)
+end
+
+# Faster covariance function for sparse matrices
+# Prevents densifying the input matrix when subtracting the mean
+# Test against dense implementation
+# PR https://github.com/JuliaLang/julia/pull/22735
+# Part of this test needed to be hacked due to the treatment
+# of Inf in sparse matrix algebra
+# https://github.com/JuliaLang/julia/issues/22921
+# The issue will be resolved in
+# https://github.com/JuliaLang/julia/issues/22733
+@testset "optimizing sparse $elty covariance" for elty in (Float64, Complex{Float64})
+    n = 10
+    p = 5
+    np2 = div(n*p, 2)
+    srand(1)
+    if elty <: Real
+        nzvals = randn(np2)
+    else
+        nzvals = complex.(randn(np2), randn(np2))
+    end
+    x_sparse = sparse(rand(1:n, np2), rand(1:p, np2), nzvals, n, p)
+    x_dense  = convert(Matrix{elty}, x_sparse)
+    @testset "Test with no Infs and NaNs, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
+                                                                                 corrected in (true, false)
+        @test cov(x_sparse, vardim, corrected=corrected) ≈
+              cov(x_dense , vardim, corrected=corrected)
+    end
+
+    @testset "Test with $x11, vardim=$vardim, corrected=$corrected" for x11 in (NaN, Inf),
+                                                                     vardim in (1, 2),
+                                                                  corrected in (true, false)
+        x_sparse[1,1] = x11
+        x_dense[1 ,1] = x11
+
+        cov_sparse = cov(x_sparse, vardim, corrected=corrected)
+        cov_dense  = cov(x_dense , vardim, corrected=corrected)
+        @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+    end
+
+    @testset "Test with NaN and Inf, vardim=$vardim, corrected=$corrected" for vardim in (1, 2),
+                                                                            corrected in (true, false)
+        x_sparse[1,1] = Inf
+        x_dense[1 ,1] = Inf
+        x_sparse[2,1] = NaN
+        x_dense[2 ,1] = NaN
+
+        cov_sparse = cov(x_sparse, vardim, corrected=corrected)
+        cov_dense  = cov(x_dense , vardim, corrected=corrected)
+        @test cov_sparse[(1 + vardim):end, (1 + vardim):end] ≈
+              cov_dense[ (1 + vardim):end, (1 + vardim):end]
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+        @test isfinite.(cov_sparse) == isfinite.(cov_dense)
+    end
 end

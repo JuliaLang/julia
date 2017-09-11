@@ -251,7 +251,7 @@ module ArrayWrappers
 struct ArrayWrapper{T,N,A<:AbstractArray} <: AbstractArray{T,N}
     data::A
 end
-ArrayWrapper{T,N}(data::AbstractArray{T,N}) = ArrayWrapper{T,N,typeof(data)}(data)
+ArrayWrapper(data::AbstractArray{T,N}) where {T,N} = ArrayWrapper{T,N,typeof(data)}(data)
 Base.size(A::ArrayWrapper) = size(A.data)
 Base.size(A::ArrayWrapper, d) = size(A.data, d)
 Base.getindex(A::ArrayWrapper, i::Real...) = getindex(A.data, i...)
@@ -300,6 +300,15 @@ main_ex = quote
         $Test.@test g2() == :magic_token_anon_fun_test
         $Test.@test g2() == :magic_token_anon_fun_test
         $Test.@test deserialize(ds) === g2
+
+        # issue #21793
+        y = x -> (() -> x)
+        seekstart(s)
+        serialize(s, y)
+        seekstart(s)
+        y2 = deserialize(s)
+        x2 = y2(2)
+        $Test.@test x2() == 2
     end
 end
 # This needs to be run on `Main` since the serializer treats it differently.

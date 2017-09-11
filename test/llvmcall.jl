@@ -177,7 +177,7 @@ module ObjLoadTest
 end
 
 # Test for proper parenting
-if VersionNumber(Base.libllvm_version) >= v"3.6" # llvm 3.6 changed the syntax for a gep, so just ignore this test on older versions
+if Base.libllvm_version >= v"3.6" # llvm 3.6 changed the syntax for a gep, so just ignore this test on older versions
     local foo
     function foo()
         # this IR snippet triggers an optimization relying
@@ -190,4 +190,20 @@ if VersionNumber(Base.libllvm_version) >= v"3.6" # llvm 3.6 changed the syntax f
     code_llvm(DevNull, foo, ())
 else
     println("INFO: skipping gep parentage test on llvm < 3.6")
+end
+
+module CcallableRetTypeTest
+    using Base: Test, llvmcall, @ccallable
+    @ccallable function jl_test_returns_float()::Float64
+        return 42
+    end
+    function do_the_call()
+        llvmcall(
+        (""" declare double @jl_test_returns_float()""",
+        """
+        %1 = call double @jl_test_returns_float()
+        ret double %1
+        """),Float64,Tuple{})
+    end
+    @test do_the_call() === 42.0
 end

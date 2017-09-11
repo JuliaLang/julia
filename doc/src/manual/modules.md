@@ -21,7 +21,7 @@ importall OtherLib
 
 export MyType, foo
 
-type MyType
+struct MyType
     x
 end
 
@@ -214,9 +214,8 @@ in other modules can be invoked as `Mod.@mac` or `@Mod.mac`.
 The syntax `M.x = y` does not work to assign a global in another module; global assignment is
 always module-local.
 
-A variable can be "reserved" for the current module without assigning to it by declaring it as
-`global x` at the top level. This can be used to prevent name conflicts for globals initialized
-after load time.
+A variable name can be "reserved" without assigning to it by declaring it as `global x`.
+This prevents name conflicts for globals initialized after load time.
 
 ### Module initialization and precompilation
 
@@ -283,6 +282,7 @@ const foo_data_ptr = Ref{Ptr{Void}}(0)
 function __init__()
     ccall((:foo_init, :libfoo), Void, ())
     foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Void}, ())
+    nothing
 end
 ```
 
@@ -336,8 +336,8 @@ Other known potential failure scenarios include:
    Note that `object_id` (which works by hashing the memory pointer) has similar issues (see notes
    on `Dict` usage below).
 
-   One alternative is to store both [`current_module()`](@ref) and the current `counter` value, however,
-   it may be better to redesign the code to not depend on this global state.
+   One alternative is to use a macro to capture [`@__MODULE__`](@ref) and store it alone with the current `counter` value,
+   however, it may be better to redesign the code to not depend on this global state.
 2. Associative collections (such as `Dict` and `Set`) need to be re-hashed in `__init__`. (In the
    future, a mechanism may be provided to register an initializer function.)
 3. Depending on compile-time side-effects persisting through load-time. Example include: modifying
@@ -382,9 +382,9 @@ A few other points to be aware of:
    of these and to create a single unique instance of others.
 
 It is sometimes helpful during module development to turn off incremental precompilation. The
-command line flag `--compilecache={yes|no}` enables you to toggle module precompilation on and
-off. When Julia is started with `--compilecache=no` the serialized modules in the compile cache
-are ignored when loading modules and module dependencies. `Base.compilecache()` can still be called
+command line flag `--compiled-modules={yes|no}` enables you to toggle module precompilation on and
+off. When Julia is started with `--compiled-modules=no` the serialized modules in the compile cache
+are ignored when loading modules and module dependencies. `Base.compilecache` can still be called
 manually and it will respect `__precompile__()` directives for the module. The state of this command
-line flag is passed to [`Pkg.build()`](@ref) to disable automatic precompilation triggering when installing,
+line flag is passed to [`Pkg.build`](@ref) to disable automatic precompilation triggering when installing,
 updating, and explicitly building packages.

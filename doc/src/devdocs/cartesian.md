@@ -51,11 +51,21 @@ practice is to read from left to right, which is why `@nloops` is `@nloops 3 i A
 is `@nref 3 A i` (as in `A[i_1,i_2,i_3]`, where the array comes first).
 
 If you're developing code with Cartesian, you may find that debugging is easier when you examine
-the generated code, using `macroexpand`:
+the generated code, using `@macroexpand`:
 
-```julia
-julia> macroexpand(:(@nref 2 A i))
-:(A[i_1,i_2])
+```@meta
+DocTestSetup = quote
+    import Base.Cartesian: @nref
+end
+```
+
+```jldoctest
+julia> @macroexpand @nref 2 A i
+:(A[i_1, i_2])
+```
+
+```@meta
+DocTestSetup = nothing
 ```
 
 ### Supplying the number of expressions

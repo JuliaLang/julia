@@ -49,14 +49,35 @@ p = 1=>:foo
 @test xor(2) == 2
 @test (⊻)(2) == 2
 
-# @test ctranspose('a') == 'a' # (c)transpose of Chars no longer supported
-
 @test_throws ArgumentError Base.scalarmin(['a','b'],['c','d'])
 @test_throws ArgumentError Base.scalarmin('a',['c','d'])
 @test_throws ArgumentError Base.scalarmin(['a','b'],'c')
 @test_throws ArgumentError Base.scalarmax(['a','b'],['c','d'])
 @test_throws ArgumentError Base.scalarmax('a',['c','d'])
 @test_throws ArgumentError Base.scalarmax(['a','b'],'c')
+
+@test_throws MethodError min(Set([1]), Set([2]))
+@test_throws MethodError max(Set([1]), Set([2]))
+@test_throws MethodError minmax(Set([1]), Set([2]))
+
+# Test if isless (not <) is used by min, max, minmax
+# and commutativity.
+struct TO23094
+    x::Int
+end
+Base.isless(a::TO23094, b::TO23094) = isless(a.x, b.x)
+Base.isequal(a::TO23094, b::TO23094) = isequal(a.x, b.x)
+import Base.<
+<(a::TO23094, b::TO23094) = error("< should not be called")
+
+@test isequal(min(TO23094(1), TO23094(2)), TO23094(1))
+@test isequal(min(TO23094(2), TO23094(1)), TO23094(1))
+@test isequal(max(TO23094(1), TO23094(2)), TO23094(2))
+@test isequal(max(TO23094(2), TO23094(1)), TO23094(2))
+@test isequal(minmax(TO23094(1), TO23094(2))[1], TO23094(1))
+@test isequal(minmax(TO23094(1), TO23094(2))[2], TO23094(2))
+@test isequal(minmax(TO23094(2), TO23094(1))[1], TO23094(1))
+@test isequal(minmax(TO23094(2), TO23094(1))[2], TO23094(2))
 
 @test lexless('a','b')
 
@@ -96,4 +117,19 @@ end
     @test B == [true false false]
     B = 3 .> [1 -1 5] .> 0
     @test B == [true false false]
+end
+
+struct TypeWrapper
+    t::Type
+end
+Base.:(<)(x::TypeWrapper, y::TypeWrapper) = (x.t <: y.t) & (x.t != y.t)
+@testset "poset" begin
+    #   Real
+    #  /    \
+    # Int  Float64
+    #  \    /
+    #  Union{}
+    @test TypeWrapper(Int) <= TypeWrapper(Int)
+    @test TypeWrapper(Int) <= TypeWrapper(Real)
+    @test !(TypeWrapper(Int) <= TypeWrapper(Float64))
 end

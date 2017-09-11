@@ -1,35 +1,46 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
-import Base.LinAlg: BlasFloat, BlasComplex, SingularException
+import Base.LinAlg: BlasFloat, BlasComplex, SingularException, A_rdiv_B!, A_rdiv_Bt!,
+    A_rdiv_Bc!
 
 n=12 #Size of matrix problem to test
 srand(1)
 
 @testset for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
-    d=convert(Vector{elty}, randn(n))
-    v=convert(Vector{elty}, randn(n))
-    U=convert(Matrix{elty}, randn(n,n))
+    dd=convert(Vector{elty}, randn(n))
+    vv=convert(Vector{elty}, randn(n))
+    UU=convert(Matrix{elty}, randn(n,n))
     if elty <: Complex
-        d+=im*convert(Vector{elty}, randn(n))
-        v+=im*convert(Vector{elty}, randn(n))
-        U+=im*convert(Matrix{elty}, randn(n,n))
+        dd+=im*convert(Vector{elty}, randn(n))
+        vv+=im*convert(Vector{elty}, randn(n))
+        UU+=im*convert(Matrix{elty}, randn(n,n))
     end
-    D = Diagonal(d)
-    DM = diagm(d)
+    D = Diagonal(dd)
+    DM = diagm(dd)
+
+    @testset "constructor" begin
+        for x in (dd, GenericArray(dd))
+            @test Diagonal(x)::Diagonal{elty,typeof(x)} == DM
+            @test Diagonal(x).diag === x
+            @test Diagonal{elty}(x)::Diagonal{elty,typeof(x)} == DM
+            @test Diagonal{elty}(x).diag === x
+        end
+    end
+
     @testset "Basic properties" begin
         @test eye(Diagonal{elty},n) == Diagonal(ones(elty,n))
         @test_throws ArgumentError size(D,0)
-        @test typeof(convert(Diagonal{Complex64},D)) == Diagonal{Complex64}
-        @test typeof(convert(AbstractMatrix{Complex64},D))   == Diagonal{Complex64}
+        @test typeof(convert(Diagonal{Complex64},D)) <: Diagonal{Complex64}
+        @test typeof(convert(AbstractMatrix{Complex64},D)) <: Diagonal{Complex64}
 
         @test Array(real(D)) == real(DM)
         @test Array(abs.(D)) == abs.(DM)
         @test Array(imag(D)) == imag(DM)
 
-        @test parent(D) == d
-        @test diag(D) == d
-        @test D[1,1] == d[1]
+        @test parent(D) == dd
+        @test diag(D) == dd
+        @test D[1,1] == dd[1]
         @test D[1,2] == 0
 
         @test issymmetric(D)
@@ -49,61 +60,62 @@ srand(1)
             @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
         end
         if relty <: BlasFloat
-            for func in (expm,)
+            for func in (exp,)
                 @test func(D) ≈ func(DM) atol=n^3*eps(relty)
             end
-            @test logm(Diagonal(abs.(D.diag))) ≈ logm(abs.(DM)) atol=n^3*eps(relty)
+            @test log(Diagonal(abs.(D.diag))) ≈ log(abs.(DM)) atol=n^3*eps(relty)
         end
         if elty <: BlasComplex
-            for func in (logdet, sqrtm)
+            for func in (logdet, sqrt)
                 @test func(D) ≈ func(DM) atol=n^2*eps(relty)*2
             end
         end
     end
 
     @testset "Linear solve" begin
-        let vv = v, UU = U
-            @testset for atype in ("Array", "SubArray")
-                if atype == "Array"
-                    v = vv
-                    U = UU
-                else
-                    v = view(vv, 1:n)
-                    U = view(UU, 1:n, 1:2)
-                end
+        for (v, U) in ((vv, UU), (view(vv, 1:n), view(UU, 1:n, 1:2)))
+            @test D*v ≈ DM*v atol=n*eps(relty)*(1+(elty<:Complex))
+            @test D*U ≈ DM*U atol=n^2*eps(relty)*(1+(elty<:Complex))
 
-                @test D*v ≈ DM*v atol=n*eps(relty)*(1+(elty<:Complex))
-                @test D*U ≈ DM*U atol=n^2*eps(relty)*(1+(elty<:Complex))
+            @test U.'*D ≈ U.'*Array(D)
+            @test U'*D ≈ U'*Array(D)
 
-                @test U.'*D ≈ U.'*Array(D)
-                @test U'*D ≈ U'*Array(D)
-
-                if relty != BigFloat
-                    @test D\v ≈ DM\v atol=2n^2*eps(relty)*(1+(elty<:Complex))
-                    @test D\U ≈ DM\U atol=2n^3*eps(relty)*(1+(elty<:Complex))
-                    @test A_ldiv_B!(D,copy(v)) ≈ DM\v atol=2n^2*eps(relty)*(1+(elty<:Complex))
-                    @test A_ldiv_B!(D,copy(U)) ≈ DM\U atol=2n^3*eps(relty)*(1+(elty<:Complex))
-                    @test A_ldiv_B!(D,eye(D)) ≈ D\eye(D) atol=2n^3*eps(relty)*(1+(elty<:Complex))
-                    @test_throws DimensionMismatch A_ldiv_B!(D, ones(elty, n + 1))
-                    @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty,n)),copy(v))
-                    b = rand(elty,n,n)
-                    b = sparse(b)
-                    @test A_ldiv_B!(D,copy(b)) ≈ Array(D)\Array(b)
-                    @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty,n)),copy(b))
-                    b = view(rand(elty,n),collect(1:n))
-                    b2 = copy(b)
-                    c = A_ldiv_B!(D,b)
-                    d = Array(D)\b2
-                    for i in 1:n
-                        @test c[i] ≈ d[i]
-                    end
-                    @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty,n)),b)
-                    b = rand(elty,n+1,n+1)
-                    b = sparse(b)
-                    @test_throws DimensionMismatch A_ldiv_B!(D,copy(b))
-                    b = view(rand(elty,n+1),collect(1:n+1))
-                    @test_throws DimensionMismatch A_ldiv_B!(D,b)
-                end
+            if relty != BigFloat
+                atol_two = 2n^2 * eps(relty) * (1 + (elty <: Complex))
+                atol_three = 2n^3 * eps(relty) * (1 + (elty <: Complex))
+                @test D\v ≈ DM\v atol=atol_two
+                @test D\U ≈ DM\U atol=atol_three
+                @test A_ldiv_B!(D, copy(v)) ≈ DM\v atol=atol_two
+                @test At_ldiv_B!(D, copy(v)) ≈ DM\v atol=atol_two
+                @test Ac_ldiv_B!(conj(D), copy(v)) ≈ DM\v atol=atol_two
+                @test A_ldiv_B!(D, copy(U)) ≈ DM\U atol=atol_three
+                @test At_ldiv_B!(D, copy(U)) ≈ DM\U atol=atol_three
+                @test Ac_ldiv_B!(conj(D), copy(U)) ≈ DM\U atol=atol_three
+                Uc = adjoint(U)
+                target = scale!(Uc, inv.(D.diag))
+                @test A_rdiv_B!(Uc, D) ≈ target atol=atol_three
+                @test_throws DimensionMismatch A_rdiv_B!(eye(elty, n-1), D)
+                @test_throws SingularException A_rdiv_B!(Uc, zeros(D))
+                @test A_rdiv_Bt!(Uc, D) ≈ target atol=atol_three
+                @test A_rdiv_Bc!(Uc, conj(D)) ≈ target atol=atol_three
+                @test A_ldiv_B!(D, eye(D)) ≈ D\eye(D) atol=atol_three
+                @test_throws DimensionMismatch A_ldiv_B!(D, ones(elty, n + 1))
+                @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty, n)), copy(v))
+                b = rand(elty, n, n)
+                b = sparse(b)
+                @test A_ldiv_B!(D, copy(b)) ≈ Array(D)\Array(b)
+                @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty, n)), copy(b))
+                b = view(rand(elty, n), collect(1:n))
+                b2 = copy(b)
+                c = A_ldiv_B!(D, b)
+                d = Array(D)\b2
+                @test c ≈ d
+                @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty, n)), b)
+                b = rand(elty, n+1, n+1)
+                b = sparse(b)
+                @test_throws DimensionMismatch A_ldiv_B!(D, copy(b))
+                b = view(rand(elty, n+1), collect(1:n+1))
+                @test_throws DimensionMismatch A_ldiv_B!(D, b)
             end
         end
     end
@@ -139,15 +151,27 @@ srand(1)
         @test D\D2 ≈ Diagonal(D2.diag./D.diag)
 
         # Performance specialisations for A*_mul_B!
-        vv = similar(v)
-        @test (r = full(D) * v   ; A_mul_B!(vv, D, v)  ≈ r ≈ vv)
-        @test (r = full(D)' * v  ; Ac_mul_B!(vv, D, v) ≈ r ≈ vv)
-        @test (r = full(D).' * v ; At_mul_B!(vv, D, v) ≈ r ≈ vv)
+        vvv = similar(vv)
+        @test (r = full(D) * vv   ; A_mul_B!(vvv, D, vv)  ≈ r ≈ vvv)
+        @test (r = full(D)' * vv  ; Ac_mul_B!(vvv, D, vv) ≈ r ≈ vvv)
+        @test (r = full(D).' * vv ; At_mul_B!(vvv, D, vv) ≈ r ≈ vvv)
 
-        UU = similar(U)
-        @test (r = full(D) * U   ; A_mul_B!(UU, D, U) ≈ r ≈ UU)
-        @test (r = full(D)' * U  ; Ac_mul_B!(UU, D, U) ≈ r ≈ UU)
-        @test (r = full(D).' * U ; At_mul_B!(UU, D, U) ≈ r ≈ UU)
+        UUU = similar(UU)
+        @test (r = full(D) * UU   ; A_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
+        @test (r = full(D)' * UU  ; Ac_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
+        @test (r = full(D).' * UU ; At_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
+
+        # make sure that A_mul_B{c,t}! works with B as a Diagonal
+        VV = Array(D)
+        DD = copy(D)
+        r  = VV * full(D)
+        @test Array(A_mul_B!(VV, DD)) ≈ r ≈ Array(D)*Array(D)
+        DD = copy(D)
+        r  = VV * (Array(D).')
+        @test Array(A_mul_Bt!(VV, DD)) ≈ r
+        DD = copy(D)
+        r  = VV * (Array(D)')
+        @test Array(A_mul_Bc!(VV, DD)) ≈ r
     end
     @testset "triu/tril" begin
         @test istriu(D)
@@ -186,11 +210,11 @@ srand(1)
         @test transpose(D) == D
         if elty <: BlasComplex
             @test Array(conj(D)) ≈ conj(DM)
-            @test ctranspose(D) == conj(D)
+            @test adjoint(D) == conj(D)
         end
         # Translates to Ac/t_mul_B, which is specialized after issue 21286
-        @test(D' * v == conj(D) * v)
-        @test(D.' * v == D * v)
+        @test(D' * vv == conj(D) * vv)
+        @test(D.' * vv == D * vv)
     end
 
     #logdet
@@ -235,6 +259,7 @@ end
 end
 
 @testset "isposdef" begin
+    @test isposdef(Diagonal(1.0 + rand(n)))
     @test !isposdef(Diagonal(-1.0 * rand(n)))
 end
 
@@ -285,7 +310,7 @@ end
 end
 
 # allow construct from range
-@test Diagonal(linspace(1,3,3)) == Diagonal([1.,2.,3.])
+@test all(Diagonal(linspace(1,3,3)) .== Diagonal([1.0,2.0,3.0]))
 
 # Issue 12803
 for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})
@@ -317,6 +342,8 @@ end
     D = Diagonal(randn(5))
     Q = qrfact(randn(5, 5))[:Q]
     @test D * Q' == Array(D) * Q'
+    Q = qrfact(randn(5, 5), Val(true))[:Q]
+    @test_throws MethodError A_mul_B!(Q, D)
 end
 
 @testset "block diagonal matrices" begin
@@ -342,7 +369,37 @@ end
     @test ishermitian(Dherm) == true
     @test ishermitian(Dsym) == false
 
-    @test expm(D) == Diagonal([expm([1 2; 3 4]), expm([1 2; 3 4])])
-    @test logm(D) == Diagonal([logm([1 2; 3 4]), logm([1 2; 3 4])])
-    @test sqrtm(D) == Diagonal([sqrtm([1 2; 3 4]), sqrtm([1 2; 3 4])])
+    @test exp(D) == Diagonal([exp([1 2; 3 4]), exp([1 2; 3 4])])
+    @test log(D) == Diagonal([log([1 2; 3 4]), log([1 2; 3 4])])
+    @test sqrt(D) == Diagonal([sqrt([1 2; 3 4]), sqrt([1 2; 3 4])])
+end
+
+@testset "multiplication with Symmetric/Hermitian" begin
+    for T in (Float64, Complex128)
+        D = Diagonal(randn(T, n))
+        A = randn(T, n, n); A = A'A
+        S = Symmetric(A)
+        H = Hermitian(A)
+        for f in (*, Ac_mul_B, A_mul_Bc, Ac_mul_Bc, At_mul_B, A_mul_Bt, At_mul_Bt)
+            @test f(D, S) ≈ f(Matrix(D), Matrix(S))
+            @test f(D, H) ≈ f(Matrix(D), Matrix(H))
+            @test f(S, D) ≈ f(Matrix(S), Matrix(D))
+            @test f(S, H) ≈ f(Matrix(S), Matrix(H))
+        end
+    end
+end
+
+@testset "multiplication of transposes of Diagonal (#22428)" begin
+    for T in (Float64, Complex{Float64})
+        D = Diagonal(randn(T, 5, 5))
+        B = Diagonal(randn(T, 5, 5))
+        DD = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
+        BB = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
+        fullDD = copy!(Matrix{Matrix{T}}(2, 2), DD)
+        fullBB = copy!(Matrix{Matrix{T}}(2, 2), BB)
+        for f in (*, Ac_mul_B, A_mul_Bc, Ac_mul_Bc, At_mul_B, A_mul_Bt, At_mul_Bt)
+            @test f(D, B)::typeof(D) == f(Matrix(D), Matrix(B))
+            @test f(DD, BB)::typeof(DD) == f(fullDD, fullBB)
+        end
+    end
 end

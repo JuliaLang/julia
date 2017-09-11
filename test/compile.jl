@@ -30,6 +30,14 @@ try
           __precompile__(true)
 
           module $FooBase_module
+              import Base: hash, >
+              struct fmpz end
+              struct typeA end
+              >(x::fmpz, y::Int) = Base.cmp(x, y) > 0
+              function hash(a::typeA, h::UInt)
+                  d = den(a)
+                  return h
+              end
           end
           """)
     write(Foo2_file,
@@ -47,8 +55,14 @@ try
           __precompile__(true)
 
           module $Foo_module
-              using $FooBase_module
+              using $FooBase_module, $FooBase_module.typeA
               import $Foo2_module: $Foo2_module, override
+              import $FooBase_module.hash
+
+              struct typeB
+                  y::typeA
+              end
+              hash(x::typeB) = hash(x.y)
 
               # test that docs get reconnected
               @doc "foo function" foo(x) = x + 1
@@ -98,9 +112,9 @@ try
                   pool::NominalPool{T, R, NominalValue{T, R}}
               end
               (::Union{Type{NominalValue}, Type{OrdinalValue}})() = 1
-              (::Union{Type{NominalValue{T}}, Type{OrdinalValue{T}}}){T}() = 2
-              (::Type{Vector{NominalValue{T, R}}}){T, R}() = 3
-              (::Type{Vector{NominalValue{T, T}}}){T}() = 4
+              (::Union{Type{NominalValue{T}}, Type{OrdinalValue{T}}})() where {T} = 2
+              (::Type{Vector{NominalValue{T, R}}})() where {T, R} = 3
+              (::Type{Vector{NominalValue{T, T}}})() where {T} = 4
               (::Type{Vector{NominalValue{Int, Int}}})() = 5
 
               # more tests for method signature involving a complicated type
@@ -111,9 +125,9 @@ try
               struct Value18343{T, R}
                   pool::Pool18343{R, Value18343{T, R}}
               end
-              Base.convert{S}(::Type{Nullable{S}}, ::Value18343{Nullable}) = 2
+              Base.convert(::Type{Nullable{S}}, ::Value18343{Nullable}) where {S} = 2
               Base.convert(::Type{Nullable{Value18343}}, ::Value18343{Nullable}) = 2
-              Base.convert{T}(::Type{Ref}, ::Value18343{T}) = 3
+              Base.convert(::Type{Ref}, ::Value18343{T}) where {T} = 3
 
 
               let some_method = @which Base.include("string")
@@ -157,8 +171,8 @@ try
     cachefile = joinpath(dir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
-    @test_warn "WARNING: replacing module Foo4b3a94a1a081a8cb.\nWARNING: Method definition " begin
-        @test isa(Base._require_from_serialized(myid(), Foo_module, cachefile, #=broadcast-load=#false), Array{Any,1})
+    @test_warn "WARNING: replacing module $Foo_module." begin
+        @test isa(Base._require_from_serialized(Foo_module, cachefile), Array{Any,1})
     end
 
     let Foo = getfield(Main, Foo_module)
@@ -272,7 +286,7 @@ try
     @test !isdefined(Main, :FooBar1)
 
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) == !is_windows() # `..` is not a symlink on Windows
+    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) == !Sys.iswindows() # `..` is not a symlink on Windows
     mkdir(joinpath(dir, "subfolder"))
     @test !Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji"))
 
@@ -309,6 +323,12 @@ try
     @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
     @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
     @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
+
+    # test checksum
+    open(joinpath(dir2, "FooBar1.ji"), "a") do f
+        write(f, 0x076cac96) # append 4 random bytes
+    end
+    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
 
     # test behavior of precompile modules that throw errors
     write(FooBar_file,
@@ -367,7 +387,7 @@ finally
     rm(dir2, recursive=true)
 end
 
-# test --compilecache=no command line option
+# test --compiled-modules=no command line option
 let dir = mktempdir(),
     Time_module = :Time4b3a94a1a081a8cb
 
@@ -386,7 +406,7 @@ let dir = mktempdir(),
             Base.compilecache(:Time4b3a94a1a081a8cb)
         end)
 
-        exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
+        exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`
 
         testcode = """
             insert!(LOAD_PATH, 1, $(repr(dir)))
@@ -395,12 +415,12 @@ let dir = mktempdir(),
             getfield($Time_module, :time)
         """
 
-        t1_yes = readchomp(`$exename --compilecache=yes -E $(testcode)`)
-        t2_yes = readchomp(`$exename --compilecache=yes -E $(testcode)`)
+        t1_yes = readchomp(`$exename --compiled-modules=yes -E $(testcode)`)
+        t2_yes = readchomp(`$exename --compiled-modules=yes -E $(testcode)`)
         @test t1_yes == t2_yes
 
-        t1_no = readchomp(`$exename --compilecache=no -E $(testcode)`)
-        t2_no = readchomp(`$exename --compilecache=no -E $(testcode)`)
+        t1_no = readchomp(`$exename --compiled-modules=no -E $(testcode)`)
+        t2_no = readchomp(`$exename --compiled-modules=no -E $(testcode)`)
         @test t1_no != t2_no
         @test parse(Float64, t1_no) < parse(Float64, t2_no)
 
@@ -437,23 +457,154 @@ let dir = mktempdir()
         """
 
         exename = `$(Base.julia_cmd()) --startup-file=no`
-        @test readchomp(`$exename -E $(testcode)`) == "nothing"
-        @test readchomp(`$exename -E $(testcode)`) == "nothing"
+        let fname = tempname()
+            try
+                @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
+                @test Test.ismatch_warn("WARNING: replacing module $Test_module.\n", read(fname, String))
+            finally
+                rm(fname, force=true)
+            end
+        end
+        # Loading $Test_module from the cache should not bring `Base.Iterators`
+        # into `Main`, since that would lead to a namespace conflict with
+        # the module `Iterators` defined above.
+        let fname = tempname()
+            try
+                @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
+                # e.g `@test_nowarn`
+                @test Test.ismatch_warn(r"^(?!.)"s, read(fname, String))
+            finally
+                rm(fname, force=true)
+            end
+        end
     finally
         rm(dir, recursive=true)
     end
 end
 
+let dir = mktempdir()
+    try
+        insert!(LOAD_PATH, 1, dir)
+        insert!(Base.LOAD_CACHE_PATH, 1, dir)
+
+        loaded_modules = Channel{Symbol}(32)
+        callback = (mod::Symbol) -> put!(loaded_modules, mod)
+        push!(Base.package_callbacks, callback)
+
+        Test1_module = :Teste4095a81
+        Test2_module = :Teste4095a82
+        Test3_module = :Teste4095a83
+
+        write(joinpath(dir, "$(Test1_module).jl"),
+              """
+              module $(Test1_module)
+                  __precompile__(true)
+              end
+              """)
+
+        Base.compilecache("$(Test1_module)")
+        write(joinpath(dir, "$(Test2_module).jl"),
+              """
+              module $(Test2_module)
+                  __precompile__(true)
+                  using $(Test1_module)
+              end
+              """)
+        Base.compilecache("$(Test2_module)")
+        @test !Base.isbindingresolved(Main, Test2_module)
+        Base.require(Test2_module)
+        @test Base.isbindingresolved(Main, Test2_module)
+        @test take!(loaded_modules) == Test1_module
+        @test take!(loaded_modules) == Test2_module
+        write(joinpath(dir, "$(Test3_module).jl"),
+              """
+              module $(Test3_module)
+                  using $(Test3_module)
+              end
+              """)
+        Base.require(Test3_module)
+        @test take!(loaded_modules) == Test3_module
+    finally
+        pop!(Base.package_callbacks)
+        splice!(Base.LOAD_CACHE_PATH, 1)
+        splice!(LOAD_PATH, 1)
+        rm(dir, recursive=true)
+    end
+end
+
 let module_name = string("a",randstring())
-    insert!(LOAD_PATH, 1, pwd())
-    file_name = string(module_name, ".jl")
-    sleep(2); touch(file_name)
-    code = """module $(module_name)\nend\n"""
-    write(file_name, code)
-    reload(module_name)
-    @test isa(eval(Main, Symbol(module_name)), Module)
-    deleteat!(LOAD_PATH,1)
-    rm(file_name)
+    mktempdir() do path
+        unshift!(LOAD_PATH, path)
+        file_name = joinpath(path, string(module_name, ".jl"))
+        sleep(2)
+        touch(file_name)
+        code = """module $(module_name)\nend\n"""
+        write(file_name, code)
+        reload(module_name)
+        @test isa(getfield(Main, Symbol(module_name)), Module)
+        @test shift!(LOAD_PATH) == path
+        rm(file_name)
+    end
+end
+
+# Issue #19960
+let
+    test_workers = addprocs(1)
+    push!(test_workers, myid())
+    save_cwd = pwd()
+    temp_path = mktempdir()
+    try
+        cd(temp_path)
+        load_path = mktempdir(temp_path)
+        load_cache_path = mktempdir(temp_path)
+
+        ModuleA = :Issue19960A
+        ModuleB = :Issue19960B
+
+        write(joinpath(load_path, "$ModuleA.jl"),
+            """
+            __precompile__(true)
+            module $ModuleA
+                export f
+                f() = myid()
+            end
+            """)
+
+        write(joinpath(load_path, "$ModuleB.jl"),
+            """
+            __precompile__(true)
+            module $ModuleB
+                using $ModuleA
+                export g
+                g() = f()
+            end
+            """)
+
+        @everywhere test_workers begin
+            unshift!(LOAD_PATH, $load_path)
+            unshift!(Base.LOAD_CACHE_PATH, $load_cache_path)
+        end
+        try
+            @eval using $ModuleB
+            uuid = Base.module_uuid(getfield(Main, ModuleB))
+            for wid in test_workers
+                @test Base.Distributed.remotecall_eval(Main, wid, :( Base.module_uuid($ModuleB) )) == uuid
+                if wid != myid() # avoid world-age errors on the local proc
+                    @test remotecall_fetch(g, wid) == wid
+                end
+            end
+        finally
+            @everywhere test_workers begin
+                shift!(LOAD_PATH)
+                shift!(Base.LOAD_CACHE_PATH)
+            end
+        end
+    finally
+        cd(save_cwd)
+        rm(temp_path, recursive=true)
+        pop!(test_workers) # remove myid
+        rmprocs(test_workers)
+    end
 end
 
 end # !withenv

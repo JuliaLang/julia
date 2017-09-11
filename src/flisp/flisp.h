@@ -248,7 +248,7 @@ typedef struct _fltype_t {
     cvinitfunc_t init;
 } fltype_t;
 
-typedef struct {
+JL_EXTENSION typedef struct {
     fltype_t *type;
     void *data;
     size_t len;            // length of *data in bytes

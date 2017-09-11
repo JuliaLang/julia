@@ -150,7 +150,8 @@ and transport messages between processes. It is possible for Cluster Managers to
 Base.launch
 Base.manage
 Base.kill(::ClusterManager, ::Int, ::WorkerConfig)
-Base.init_worker
 Base.connect(::ClusterManager, ::Int, ::WorkerConfig)
+Base.init_worker
+Base.start_worker
 Base.process_messages
 ```

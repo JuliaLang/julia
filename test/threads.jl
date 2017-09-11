@@ -34,7 +34,7 @@ end
 test_threaded_loop_and_atomic_add()
 
 # Helper for test_threaded_atomic_minmax that verifies sequential consistency.
-function check_minmax_consistency{T}(old::Array{T,1}, m::T, start::T, o::Base.Ordering)
+function check_minmax_consistency(old::Array{T,1}, m::T, start::T, o::Base.Ordering) where T
     for v in old
         if v != start
             # Check that atomic op that installed v reported consistent old value.
@@ -43,7 +43,7 @@ function check_minmax_consistency{T}(old::Array{T,1}, m::T, start::T, o::Base.Or
     end
 end
 
-function test_threaded_atomic_minmax{T}(m::T,n::T)
+function test_threaded_atomic_minmax(m::T,n::T) where T
     mid = m + (n-m)>>1
     x = Atomic{T}(mid)
     y = Atomic{T}(mid)
@@ -63,7 +63,7 @@ end
 test_threaded_atomic_minmax(Int16(-5000),Int16(5000))
 test_threaded_atomic_minmax(UInt16(27000),UInt16(37000))
 
-function threaded_add_locked{LockT}(::Type{LockT}, x, n)
+function threaded_add_locked(::Type{LockT}, x, n) where LockT
     critical = LockT()
     @threads for i = 1:n
         @test lock(critical) === nothing
@@ -119,7 +119,7 @@ end
 
 # Make sure doing a GC while holding a lock doesn't cause dead lock
 # PR 14190. (This is only meaningful for threading)
-function threaded_gc_locked{LockT}(::Type{LockT})
+function threaded_gc_locked(::Type{LockT}) where LockT
     critical = LockT()
     @threads for i = 1:20
         @test lock(critical) === nothing
@@ -136,7 +136,7 @@ threaded_gc_locked(Mutex)
 
 # Issue 14726
 # Make sure that eval'ing in a different module doesn't mess up other threads
-orig_curmodule14726 = current_module()
+orig_curmodule14726 = @__MODULE__
 main_var14726 = 1
 module M14726
 module_var14726 = 1
@@ -147,15 +147,15 @@ end
         @eval M14726 module_var14726 = $j
     end
 end
-@test isdefined(:orig_curmodule14726)
-@test isdefined(:main_var14726)
-@test current_module() == orig_curmodule14726
+@test @isdefined(orig_curmodule14726)
+@test @isdefined(main_var14726)
+@test @__MODULE__() == orig_curmodule14726
 
 @threads for i in 1:100
     # Make sure current module is not null.
     # The @test might not be particularly meaningful currently since the
     # thread infrastructures swallows the error. (Same below)
-    @test current_module() == orig_curmodule14726
+    @test @__MODULE__() == orig_curmodule14726
 end
 
 module M14726_2
@@ -166,7 +166,7 @@ using Base.Threads
     # pushes the work onto the threads.
     # The @test might not be particularly meaningful currently since the
     # thread infrastructures swallows the error. (See also above)
-    @test current_module() == M14726_2
+    @test @__MODULE__() == M14726_2
 end
 end
 
@@ -296,7 +296,7 @@ let atomic_types = [Int8, Int16, Int32, Int64, Int128,
 end
 
 # Test atomic_cas! and atomic_xchg!
-function test_atomic_cas!{T}(var::Atomic{T}, range::StepRange{Int,Int})
+function test_atomic_cas!(var::Atomic{T}, range::StepRange{Int,Int}) where T
     for i in range
         while true
             old = atomic_cas!(var, T(i-1), T(i))
@@ -316,7 +316,7 @@ for T in (Int32, Int64, Float32, Float64)
     @test var[] === T(nloops)
 end
 
-function test_atomic_xchg!{T}(var::Atomic{T}, i::Int, accum::Atomic{Int})
+function test_atomic_xchg!(var::Atomic{T}, i::Int, accum::Atomic{Int}) where T
     old = atomic_xchg!(var, T(i))
     atomic_add!(accum, Int(old))
 end
@@ -330,7 +330,7 @@ for T in (Int32, Int64, Float32, Float64)
     @test accum[] + Int(var[]) === sum(0:nloops)
 end
 
-function test_atomic_float{T}(varadd::Atomic{T}, varmax::Atomic{T}, varmin::Atomic{T}, i::Int)
+function test_atomic_float(varadd::Atomic{T}, varmax::Atomic{T}, varmin::Atomic{T}, i::Int) where T
     atomic_add!(varadd, T(i))
     atomic_max!(varmax, T(i))
     atomic_min!(varmin, T(i))

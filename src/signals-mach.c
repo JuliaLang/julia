@@ -15,6 +15,8 @@
 #include <sys/_structs.h>
 #endif
 
+#include "julia_assert.h"
+
 static void attach_exception_port(thread_port_t thread, int segv_only);
 
 #ifdef JULIA_ENABLE_THREADING
@@ -141,10 +143,12 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
     kern_return_t ret = thread_get_state(thread, x86_THREAD_STATE64, (thread_state_t)&state, &count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
-
-    ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
-                                       (bt_context_t*)&state);
-    ptls2->exception_in_transit = exception;
+    if (!ptls2->safe_restore) {
+        assert(exception);
+        ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
+                                           (bt_context_t*)&state);
+        ptls2->exception_in_transit = exception;
+    }
     jl_call_in_state(ptls2, &state, &jl_rethrow);
     ret = thread_set_state(thread, x86_THREAD_STATE64,
                            (thread_state_t)&state, count);
@@ -212,6 +216,10 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
             jl_clear_force_sigint();
             jl_throw_in_thread(tid, thread, jl_interrupt_exception);
         }
+        return KERN_SUCCESS;
+    }
+    if (ptls2->safe_restore) {
+        jl_throw_in_thread(tid, thread, jl_stackovf_exception);
         return KERN_SUCCESS;
     }
 #ifdef SEGV_EXCEPTION

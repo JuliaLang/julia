@@ -2,18 +2,61 @@
 
 ## array.jl: Dense arrays
 
-## Type aliases for convenience ##
+"""
+    DimensionMismatch([msg])
 
+The objects called do not have matching dimensionality. Optional argument `msg` is a
+descriptive error string.
+"""
+mutable struct DimensionMismatch <: Exception
+    msg::AbstractString
+end
+DimensionMismatch() = DimensionMismatch("")
+
+## Type aliases for convenience ##
+"""
+    AbstractVector{T}
+
+Supertype for one-dimensional arrays (or array-like types) with
+elements of type `T`. Alias for [`AbstractArray{T,1}`](@ref).
+"""
 const AbstractVector{T} = AbstractArray{T,1}
+
+"""
+    AbstractMatrix{T}
+
+Supertype for two-dimensional arrays (or array-like types) with
+elements of type `T`. Alias for [`AbstractArray{T,2}`](@ref).
+"""
 const AbstractMatrix{T} = AbstractArray{T,2}
 const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
-const RangeIndex = Union{Int, Range{Int}, AbstractUnitRange{Int}}
+const RangeIndex = Union{Int, AbstractRange{Int}, AbstractUnitRange{Int}}
 const DimOrInd = Union{Integer, AbstractUnitRange}
 const IntOrInd = Union{Int, AbstractUnitRange}
 const DimsOrInds{N} = NTuple{N,DimOrInd}
 const NeedsShaping = Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{OneTo}}}
 
+"""
+    Array{T,N} <: AbstractArray{T,N}
+
+`N`-dimensional dense array with elements of type `T`.
+"""
+Array
+
+"""
+    Vector{T} <: AbstractVector{T}
+
+One-dimensional dense array with elements of type `T`, often used to represent
+a mathematical vector. Alias for [`Array{T,1}`](@ref).
+"""
 const Vector{T} = Array{T,1}
+
+"""
+    Matrix{T} <: AbstractMatrix{T}
+
+Two-dimensional dense array with elements of type `T`, often used to represent
+a mathematical matrix. Alias for [`Array{T,2}`](@ref).
+"""
 const Matrix{T} = Array{T,2}
 const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
 
@@ -32,6 +75,7 @@ For associative collection types, this will be a `Pair{KeyType,ValType}`. The de
 instead of types. However the form that accepts a type argument should be defined for new
 types.
 
+# Examples
 ```jldoctest
 julia> eltype(ones(Float32,2,2))
 Float32
@@ -48,20 +92,8 @@ eltype(x) = eltype(typeof(x))
 
 import Core: arraysize, arrayset, arrayref
 
-"""
-    Array{T}(dims)
-    Array{T,N}(dims)
-
-Construct an uninitialized `N`-dimensional dense array with element type `T`,
-where `N` is determined from the length or number of `dims`.  `dims` may
-be a tuple or a series of integer arguments corresponding to the lengths in each dimension.
-If the rank `N` is supplied explicitly as in `Array{T,N}(dims)`, then it must
-match the length or number of `dims`.
-"""
-Array
-
 vect() = Array{Any,1}(0)
-vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
+vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
 
 function vect(X...)
     T = promote_typeof(X...)
@@ -73,28 +105,53 @@ end
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
-size(a::Array) = (@_inline_meta; _size((), a))
-_size(out::NTuple{N}, A::Array{_,N}) where {_,N} = out
-function _size(out::NTuple{M}, A::Array{_,N}) where _ where M where N
-    @_inline_meta
-    _size((out..., size(A,M+1)), A)
-end
+size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(N)))
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
+"""
+    Base.isbitsunion(::Type{T})
+
+Return whether a type is an "is-bits" Union type, meaning each type included in a Union is `isbits`.
+"""
+isbitsunion(u::Union) = ccall(:jl_array_store_unboxed, Cint, (Any,), u) == Cint(1)
+isbitsunion(x) = false
+
+"""
+    Base.bitsunionsize(U::Union)
+
+For a Union of `isbits` types, return the size of the largest type; assumes `Base.isbitsunion(U) == true`
+"""
+function bitsunionsize(u::Union)
+    sz = Ref{Csize_t}(0)
+    algn = Ref{Csize_t}(0)
+    @assert ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), u, sz, algn) == Cint(1)
+    return sz[]
+end
+
 length(a::Array) = arraylen(a)
-elsize(a::Array{T}) where {T} = isbits(T) ? sizeof(T) : sizeof(Ptr)
-sizeof(a::Array) = elsize(a) * length(a)
+elsize(a::Array{T}) where {T} = isbits(T) ? sizeof(T) : (isbitsunion(T) ? bitsunionsize(T) : sizeof(Ptr))
+sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
     @_inline_meta
     ii = (sub2ind(size(a), i...) % UInt) - 1
-    ii < length(a) % UInt || return false
+    @boundscheck ii < length(a) % UInt || return false
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
 
 ## copy ##
 
+"""
+    unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
+
+Copy `N` elements from a source pointer to a destination, with no checking. The size of an
+element is determined by the type of the pointers.
+
+The `unsafe` prefix on this function indicates that no validation is performed on the
+pointers `dest` and `src` to ensure that they are valid. Incorrect usage may corrupt or
+segfault your program, in the same manner as C.
+"""
 function unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
@@ -103,9 +160,27 @@ function unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, n) where T
     return dest
 end
 
+"""
+    unsafe_copy!(dest::Array, do, src::Array, so, N)
+
+Copy `N` elements from a source array to a destination, starting at offset `so` in the
+source and `do` in the destination (1-indexed).
+
+The `unsafe` prefix on this function indicates that no validation is performed to ensure
+that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in
+the same manner as C.
+"""
 function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
+    elseif isbitsunion(T)
+        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+              pointer(dest, doffs), pointer(src, soffs), n * Base.bitsunionsize(T))
+        # copy selector bytes
+        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+              convert(Ptr{UInt8}, pointer(dest)) + length(dest) * Base.bitsunionsize(T) + doffs - 1,
+              convert(Ptr{UInt8}, pointer(src)) + length(src) * Base.bitsunionsize(T) + soffs - 1,
+              n)
     else
         ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
               dest, pointer(dest, doffs), src, pointer(src, soffs), n)
@@ -113,6 +188,12 @@ function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     return dest
 end
 
+"""
+    copy!(dest, do, src, so, N)
+
+Copy `N` elements from collection `src` starting at offset `so`, to array `dest` starting at
+offset `do`. Returns `dest`.
+"""
 function copy!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
     n == 0 && return dest
     n > 0 || throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
@@ -124,10 +205,17 @@ end
 
 copy!(dest::Array{T}, src::Array{T}) where {T} = copy!(dest, 1, src, 1, length(src))
 
+"""
+    copy(x)
+
+Create a shallow copy of `x`: the outer structure is copied, but not all internal values.
+For example, copying an array produces a new array with identically-same elements as the
+original.
+"""
 copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
 
 function reinterpret(::Type{T}, a::Array{S,1}) where T where S
-    nel = Int(div(length(a)*sizeof(S),sizeof(T)))
+    nel = Int(div(length(a) * sizeof(S), sizeof(T)))
     # TODO: maybe check that remainder is zero?
     return reinterpret(T, a, (nel,))
 end
@@ -140,15 +228,15 @@ function reinterpret(::Type{T}, a::Array{S}) where T where S
 end
 
 function reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where T where S where N
-    if !isbits(T)
-        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(T) is not a bits type"))
+    function throwbits(::Type{S}, ::Type{T}, ::Type{U}) where {S,T,U}
+        @_noinline_meta
+        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(U) is not a bits type"))
     end
-    if !isbits(S)
-        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(S) is not a bits type"))
-    end
-    nel = div(length(a)*sizeof(S),sizeof(T))
+    isbits(T) || throwbits(S, T, T)
+    isbits(S) || throwbits(S, T, S)
+    nel = div(length(a) * sizeof(S), sizeof(T))
     if prod(dims) != nel
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(nel)"))
+        _throw_dmrsa(dims, nel)
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
@@ -156,7 +244,7 @@ end
 # reshaping to same # of dimensions
 function reshape(a::Array{T,N}, dims::NTuple{N,Int}) where T where N
     if prod(dims) != length(a)
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
+        _throw_dmrsa(dims, length(a))
     end
     if dims == size(a)
         return a
@@ -167,9 +255,14 @@ end
 # reshaping to different # of dimensions
 function reshape(a::Array{T}, dims::NTuple{N,Int}) where T where N
     if prod(dims) != length(a)
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
+        _throw_dmrsa(dims, length(a))
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
+end
+
+function _throw_dmrsa(dims, len)
+    @_noinline_meta
+    throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $len"))
 end
 
 ## Constructors ##
@@ -183,6 +276,27 @@ similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(dims)
 
 # T[x...] constructs Array{T,1}
+"""
+    getindex(type[, elements...])
+
+Construct a 1-d array of the specified type. This is usually called with the syntax
+`Type[]`. Element values can be specified using `Type[a,b,c,...]`.
+
+# Examples
+```jldoctest
+julia> Int8[1, 2, 3]
+3-element Array{Int8,1}:
+ 1
+ 2
+ 3
+
+julia> getindex(Int8, 1, 2, 3)
+3-element Array{Int8,1}:
+ 1
+ 2
+ 3
+```
+"""
 function getindex(::Type{T}, vals...) where T
     a = Array{T,1}(length(vals))
     @inbounds for i = 1:length(vals)
@@ -196,7 +310,7 @@ getindex(::Type{T}, x) where {T} = (@_inline_meta; a = Array{T,1}(1); @inbounds 
 getindex(::Type{T}, x, y) where {T} = (@_inline_meta; a = Array{T,1}(2); @inbounds (a[1] = x; a[2] = y); a)
 getindex(::Type{T}, x, y, z) where {T} = (@_inline_meta; a = Array{T,1}(3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
-function getindex(::Type{Any}, vals::ANY...)
+function getindex(::Type{Any}, @nospecialize vals...)
     a = Array{Any,1}(length(vals))
     @inbounds for i = 1:length(vals)
         a[i] = vals[i]
@@ -218,13 +332,13 @@ function fill!(a::Array{T}, x) where T<:Union{Integer,AbstractFloat}
     return a
 end
 
-
 """
     fill(x, dims)
 
 Create an array filled with the value `x`. For example, `fill(1.0, (5,5))` returns a 5×5
 array of floats, with each element initialized to `1.0`.
 
+# Examples
 ```jldoctest
 julia> fill(1.0, (5,5))
 5×5 Array{Float64,2}:
@@ -240,6 +354,92 @@ dims)` will return an array filled with the result of evaluating `Foo()` once.
 """
 fill(v, dims::Dims)       = fill!(Array{typeof(v)}(dims), v)
 fill(v, dims::Integer...) = fill!(Array{typeof(v)}(dims...), v)
+
+"""
+    zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
+
+Create an array of all zeros with the same layout as `A`, element type `T` and size `dims`.
+The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
+For convenience `dims` may also be passed in variadic form.
+
+# Examples
+```jldoctest
+julia> zeros(1)
+1-element Array{Float64,1}:
+ 0.0
+
+julia> zeros(Int8, 2, 3)
+2×3 Array{Int8,2}:
+ 0  0  0
+ 0  0  0
+
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> zeros(A)
+2×2 Array{Int64,2}:
+ 0  0
+ 0  0
+
+julia> zeros(A, Float64)
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+
+julia> zeros(A, Bool, (3,))
+3-element Array{Bool,1}:
+ false
+ false
+ false
+```
+See also [`ones`](@ref), [`similar`](@ref).
+"""
+function zeros end
+
+"""
+    ones([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
+
+Create an array of all ones with the same layout as `A`, element type `T` and size `dims`.
+The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
+For convenience `dims` may also be passed in variadic form.
+
+# Examples
+```jldoctest
+julia> ones(Complex128, 2, 3)
+2×3 Array{Complex{Float64},2}:
+ 1.0+0.0im  1.0+0.0im  1.0+0.0im
+ 1.0+0.0im  1.0+0.0im  1.0+0.0im
+
+julia> ones(1,2)
+1×2 Array{Float64,2}:
+ 1.0  1.0
+
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> ones(A)
+2×2 Array{Int64,2}:
+ 1  1
+ 1  1
+
+julia> ones(A, Float64)
+2×2 Array{Float64,2}:
+ 1.0  1.0
+ 1.0  1.0
+
+julia> ones(A, Bool, (3,))
+3-element Array{Bool,1}:
+ true
+ true
+ true
+```
+See also [`zeros`](@ref), [`similar`](@ref).
+"""
+function ones end
 
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
@@ -259,7 +459,26 @@ end
     eye([T::Type=Float64,] m::Integer, n::Integer)
 
 `m`-by-`n` identity matrix.
-The default element type is `Float64`.
+The default element type is [`Float64`](@ref).
+
+# Examples
+```jldoctest
+julia> eye(3, 4)
+3×4 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0
+ 0.0  1.0  0.0  0.0
+ 0.0  0.0  1.0  0.0
+
+julia> eye(2, 2)
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
+
+julia> eye(Int, 2, 2)
+2×2 Array{Int64,2}:
+ 1  0
+ 0  1
+```
 """
 function eye(::Type{T}, m::Integer, n::Integer) where T
     a = zeros(T,m,n)
@@ -280,7 +499,20 @@ eye(::Type{T}, n::Integer) where {T} = eye(T, n, n)
     eye([T::Type=Float64,] n::Integer)
 
 `n`-by-`n` identity matrix.
-The default element type is `Float64`.
+The default element type is [`Float64`](@ref).
+
+# Examples
+```jldoctest
+julia> eye(Int, 2)
+2×2 Array{Int64,2}:
+ 1  0
+ 0  1
+
+julia> eye(2)
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
+```
 """
 eye(n::Integer) = eye(Float64, n)
 
@@ -289,6 +521,7 @@ eye(n::Integer) = eye(Float64, n)
 
 Constructs an identity matrix of the same dimensions and type as `A`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
 3×3 Array{Int64,2}:
@@ -327,7 +560,13 @@ convert(::Type{Array{T,n}}, x::Array{T,n}) where {T,n} = x
 convert(::Type{Array{T}}, x::AbstractArray{S,n}) where {T,n,S} = convert(Array{T,n}, x)
 convert(::Type{Array{T,n}}, x::AbstractArray{S,n}) where {T,n,S} = copy!(Array{T,n}(size(x)), x)
 
-promote_rule(::Type{Array{T,n}}, ::Type{Array{S,n}}) where {T,n,S} = Array{promote_type(T,S),n}
+promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
+
+# constructors should make copies
+
+if module_name(@__MODULE__) === :Base  # avoid method overwrite
+(::Type{T})(x::T) where {T<:Array} = copy(x)
+end
 
 ## copying iterators to containers
 
@@ -337,6 +576,7 @@ promote_rule(::Type{Array{T,n}}, ::Type{Array{S,n}}) where {T,n,S} = Array{promo
 Return an `Array` with the given element type of all items in a collection or iterable.
 The result has the same shape and number of dimensions as `collection`.
 
+# Examples
 ```jldoctest
 julia> collect(Float64, 1:2:5)
 3-element Array{Float64,1}:
@@ -370,6 +610,7 @@ Return an `Array` of all items in a collection or iterator. For associative coll
 `Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the `HasShape()`
 trait, the result will have the same shape and number of dimensions as the argument.
 
+# Examples
 ```jldoctest
 julia> collect(1:2:13)
 7-element Array{Int64,1}:
@@ -408,9 +649,9 @@ function _collect_indices(indsA, A)
 end
 
 if isdefined(Core, :Inference)
-    _default_eltype(itrt::ANY) = Core.Inference.return_type(first, Tuple{itrt})
+    _default_eltype(@nospecialize itrt) = Core.Inference.return_type(first, Tuple{itrt})
 else
-    _default_eltype(itr::ANY) = Any
+    _default_eltype(@nospecialize itr) = Any
 end
 
 _array_for(::Type{T}, itr, ::HasLength) where {T} = Array{T,1}(Int(length(itr)::Integer))
@@ -504,9 +745,28 @@ done(a::Array,i) = (@_inline_meta; i == length(a)+1)
 
 ## Indexing: getindex ##
 
+"""
+    getindex(collection, key...)
+
+Retrieve the value(s) stored at the given key or index within a collection. The syntax
+`a[i,j,...]` is converted by the compiler to `getindex(a, i, j, ...)`.
+
+# Examples
+```jldoctest
+julia> A = Dict("a" => 1, "b" => 2)
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+
+julia> getindex(A, "a")
+1
+```
+"""
+function getindex end
+
 # This is more complicated than it needs to be in order to get Win64 through bootstrap
-getindex(A::Array, i1::Int) = arrayref(A, i1)
-getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref(A, i1, i2, I...)) # TODO: REMOVE FOR #14770
+@eval getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
+@eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...)) # TODO: REMOVE FOR #14770
 
 # Faster contiguous indexing using copy! for UnitRange and Colon
 function getindex(A::Array, I::UnitRange{Int})
@@ -529,13 +789,23 @@ function getindex(A::Array, c::Colon)
 end
 
 # This is redundant with the abstract fallbacks, but needed for bootstrap
-function getindex(A::Array{S}, I::Range{Int}) where S
+function getindex(A::Array{S}, I::AbstractRange{Int}) where S
     return S[ A[i] for i in I ]
 end
 
 ## Indexing: setindex! ##
-setindex!(A::Array{T}, x, i1::Int) where {T} = arrayset(A, convert(T,x)::T, i1)
-setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} = (@_inline_meta; arrayset(A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
+
+"""
+    setindex!(collection, value, key...)
+
+Store the given value at the given key or index within a collection. The syntax `a[i,j,...] =
+x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
+"""
+function setindex! end
+
+@eval setindex!(A::Array{T}, x, i1::Int) where {T} = arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1)
+@eval setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
+    (@_inline_meta; arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
@@ -590,34 +860,92 @@ setindex!(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) where {T, N} = fill!(A,
 
 # efficiently grow an array
 
+_growbeg!(a::Vector, delta::Integer) =
+    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, delta)
+_growend!(a::Vector, delta::Integer) =
+    ccall(:jl_array_grow_end, Void, (Any, UInt), a, delta)
 _growat!(a::Vector, i::Integer, delta::Integer) =
     ccall(:jl_array_grow_at, Void, (Any, Int, UInt), a, i - 1, delta)
 
 # efficiently delete part of an array
 
+_deletebeg!(a::Vector, delta::Integer) =
+    ccall(:jl_array_del_beg, Void, (Any, UInt), a, delta)
+_deleteend!(a::Vector, delta::Integer) =
+    ccall(:jl_array_del_end, Void, (Any, UInt), a, delta)
 _deleteat!(a::Vector, i::Integer, delta::Integer) =
     ccall(:jl_array_del_at, Void, (Any, Int, UInt), a, i - 1, delta)
 
 ## Dequeue functionality ##
 
+"""
+    push!(collection, items...) -> collection
+
+Insert one or more `items` at the end of `collection`.
+
+# Examples
+```jldoctest
+julia> push!([1, 2, 3], 4, 5, 6)
+6-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
+```
+
+Use [`append!`](@ref) to add all the elements of another collection to
+`collection`. The result of the preceding example is equivalent to `append!([1, 2, 3], [4,
+5, 6])`.
+"""
+function push! end
+
 function push!(a::Array{T,1}, item) where T
     # convert first so we don't grow the array if the assignment won't work
     itemT = convert(T, item)
-    ccall(:jl_array_grow_end, Void, (Any, UInt), a, 1)
+    _growend!(a, 1)
     a[end] = itemT
     return a
 end
 
-function push!(a::Array{Any,1}, item::ANY)
-    ccall(:jl_array_grow_end, Void, (Any, UInt), a, 1)
-    arrayset(a, item, length(a))
+function push!(a::Array{Any,1}, @nospecialize item)
+    _growend!(a, 1)
+    arrayset(true, a, item, length(a))
     return a
 end
 
+"""
+    append!(collection, collection2) -> collection.
+
+Add the elements of `collection2` to the end of `collection`.
+
+# Examples
+```jldoctest
+julia> append!([1],[2,3])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> append!([1, 2, 3], [4, 5, 6])
+6-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
+```
+
+Use [`push!`](@ref) to add individual items to `collection` which are not already
+themselves in another collection. The result is of the preceding example is equivalent to
+`push!([1, 2, 3], 4, 5, 6)`.
+"""
 function append!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
-    ccall(:jl_array_grow_end, Void, (Any, UInt), a, n)
+    _growend!(a, n)
     copy!(a, length(a)-n+1, items, first(itemindices), n)
     return a
 end
@@ -646,6 +974,7 @@ end
 
 Insert the elements of `items` to the beginning of `a`.
 
+# Examples
 ```jldoctest
 julia> prepend!([3],[1,2])
 3-element Array{Int64,1}:
@@ -659,7 +988,7 @@ function prepend! end
 function prepend!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
-    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, n)
+    _growbeg!(a, n)
     if a === items
         copy!(a, 1, items, n+1, n)
     else
@@ -673,7 +1002,7 @@ unshift!(a::Vector, iter...) = prepend!(a, iter)
 
 function _prepend!(a, ::Union{HasLength,HasShape}, iter)
     n = length(iter)
-    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, n)
+    _growbeg!(a, n)
     i = 0
     for item in iter
         @inbounds a[i += 1] = item
@@ -690,7 +1019,6 @@ function _prepend!(a, ::IteratorSize, iter)
     a
 end
 
-
 """
     resize!(a::Vector, n::Integer) -> Vector
 
@@ -698,25 +1026,27 @@ Resize `a` to contain `n` elements. If `n` is smaller than the current collectio
 length, the first `n` elements will be retained. If `n` is larger, the new elements are not
 guaranteed to be initialized.
 
+# Examples
 ```jldoctest
 julia> resize!([6, 5, 4, 3, 2, 1], 3)
 3-element Array{Int64,1}:
  6
  5
  4
-```
 
-```julia
-julia> resize!([6, 5, 4, 3, 2, 1], 8)
-8-element Array{Int64,1}:
+julia> a = resize!([6, 5, 4, 3, 2, 1], 8);
+
+julia> length(a)
+8
+
+julia> a[1:6]
+6-element Array{Int64,1}:
  6
  5
  4
  3
  2
  1
- 0
- 0
 ```
 """
 function resize!(a::Vector, nl::Integer)
@@ -727,22 +1057,64 @@ function resize!(a::Vector, nl::Integer)
         if nl < 0
             throw(ArgumentError("new length must be ≥ 0"))
         end
-        ccall(:jl_array_del_end, Void, (Any, UInt), a, l-nl)
+        _deleteend!(a, l-nl)
     end
     return a
 end
+
+"""
+    sizehint!(s, n)
+
+Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
+"""
+function sizehint! end
 
 function sizehint!(a::Vector, sz::Integer)
     ccall(:jl_array_sizehint, Void, (Any, UInt), a, sz)
     a
 end
 
+"""
+    pop!(collection) -> item
+
+Remove an item in `collection` and return it. If `collection` is an
+ordered container, the last item is returned.
+
+# Examples
+```jldoctest
+julia> A=[1, 2, 3]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> pop!(A)
+3
+
+julia> A
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> S = Set([1, 2])
+Set([2, 1])
+
+julia> pop!(S)
+2
+
+julia> S
+Set([1])
+
+julia> pop!(Dict(1=>2))
+1 => 2
+```
+"""
 function pop!(a::Vector)
     if isempty(a)
         throw(ArgumentError("array must be non-empty"))
     end
     item = a[end]
-    ccall(:jl_array_del_end, Void, (Any, UInt), a, 1)
+    _deleteend!(a, 1)
     return item
 end
 
@@ -751,6 +1123,7 @@ end
 
 Insert one or more `items` at the beginning of `collection`.
 
+# Examples
 ```jldoctest
 julia> unshift!([1, 2, 3, 4], 5, 6)
 6-element Array{Int64,1}:
@@ -764,17 +1137,45 @@ julia> unshift!([1, 2, 3, 4], 5, 6)
 """
 function unshift!(a::Array{T,1}, item) where T
     item = convert(T, item)
-    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, 1)
+    _growbeg!(a, 1)
     a[1] = item
     return a
 end
 
+"""
+    shift!(collection) -> item
+
+Remove the first `item` from `collection`.
+
+# Examples
+```jldoctest
+julia> A = [1, 2, 3, 4, 5, 6]
+6-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
+
+julia> shift!(A)
+1
+
+julia> A
+5-element Array{Int64,1}:
+ 2
+ 3
+ 4
+ 5
+ 6
+```
+"""
 function shift!(a::Vector)
     if isempty(a)
         throw(ArgumentError("array must be non-empty"))
     end
     item = a[1]
-    ccall(:jl_array_del_beg, Void, (Any, UInt), a, 1)
+    _deletebeg!(a, 1)
     return item
 end
 
@@ -784,6 +1185,7 @@ end
 Insert an `item` into `a` at the given `index`. `index` is the index of `item` in
 the resulting `a`.
 
+# Examples
 ```jldoctest
 julia> insert!([6, 5, 4, 2, 1], 4, 3)
 6-element Array{Int64,1}:
@@ -810,6 +1212,7 @@ end
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
 
+# Examples
 ```jldoctest
 julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
 5-element Array{Int64,1}:
@@ -837,6 +1240,7 @@ Subsequent items are shifted to fill the resulting gap.
 `inds` can be either an iterator or a collection of sorted and unique integer indices,
 or a boolean vector of the same length as `a` with `true` indicating entries to delete.
 
+# Examples
 ```jldoctest
 julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 3-element Array{Int64,1}:
@@ -853,8 +1257,8 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], [true, false, true, false, true, false])
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
 Stacktrace:
- [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:873
- [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:860
+ [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:926
+ [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:913
 ```
 """
 deleteat!(a::Vector, inds) = _deleteat!(a, inds)
@@ -885,7 +1289,7 @@ function _deleteat!(a::Vector, inds)
         @inbounds a[p] = a[q]
         p += 1; q += 1
     end
-    ccall(:jl_array_del_end, Void, (Any, UInt), a, n-p+1)
+    _deleteend!(a, n-p+1)
     return a
 end
 
@@ -898,7 +1302,7 @@ function deleteat!(a::Vector, inds::AbstractVector{Bool})
         @inbounds a[p] = a[q]
         p += !i
     end
-    ccall(:jl_array_del_end, Void, (Any, UInt), a, n-p+1)
+    _deleteend!(a, n-p+1)
     return a
 end
 
@@ -912,6 +1316,7 @@ Subsequent items are shifted left to fill the resulting gap.
 If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
 
+# Examples
 ```jldoctest splice!
 julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
 2
@@ -982,6 +1387,7 @@ place of the removed items.
 To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
 
+# Examples
 ```jldoctest splice!
 julia> splice!(A, 4:3, 2)
 0-element Array{Int64,1}
@@ -1027,7 +1433,7 @@ function splice!(a::Vector, r::UnitRange{<:Integer}, ins=_default_splice)
 end
 
 function empty!(a::Vector)
-    ccall(:jl_array_del_end, Void, (Any, UInt), a, length(a))
+    _deleteend!(a, length(a))
     return a
 end
 
@@ -1038,19 +1444,60 @@ function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
+const BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where N
 # use memcmp for == on bit integer types
-function ==(a::Array{T,N}, b::Array{T,N}) where T<:BitInteger where N
+function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray
     size(a) == size(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * length(a))
+        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(Arr)) * length(a))
 end
 
 # this is ~20% faster than the generic implementation above for very small arrays
-function ==(a::Array{T,1}, b::Array{T,1}) where T<:BitInteger
+function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
     len = length(a)
     len == length(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * len)
+        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(Arr)) * len)
 end
 
+"""
+    reverse(v [, start=1 [, stop=length(v) ]] )
+
+Return a copy of `v` reversed from start to stop.
+
+# Examples
+```jldoctest
+julia> A = collect(1:5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> reverse(A)
+5-element Array{Int64,1}:
+ 5
+ 4
+ 3
+ 2
+ 1
+
+julia> reverse(A, 1, 4)
+5-element Array{Int64,1}:
+ 4
+ 3
+ 2
+ 1
+ 5
+
+julia> reverse(A, 3, 5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 5
+ 4
+ 3
+```
+"""
 function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))
     B = similar(A)
     for i = first(linearindices(A)):s-1
@@ -1069,6 +1516,11 @@ function reverseind(a::AbstractVector, i::Integer)
     first(li) + last(li) - i
 end
 
+"""
+    reverse!(v [, start=1 [, stop=length(v) ]]) -> v
+
+In-place version of [`reverse`](@ref).
+"""
 function reverse!(v::AbstractVector, s=first(linearindices(v)), n=last(linearindices(v)))
     liv = linearindices(v)
     if n <= s  # empty case; ok
@@ -1084,7 +1536,6 @@ function reverse!(v::AbstractVector, s=first(linearindices(v)), n=last(linearind
     end
     return v
 end
-
 
 # concatenations of homogeneous combinations of vectors, horizontal and vertical
 
@@ -1110,6 +1561,9 @@ function vcat(arrays::Vector{T}...) where T
     ptr = pointer(arr)
     if isbits(T)
         elsz = Core.sizeof(T)
+    elseif isbitsunion(T)
+        elsz = bitsunionsize(T)
+        selptr = convert(Ptr{UInt8}, ptr) + n * elsz
     else
         elsz = Core.sizeof(Ptr{Void})
     end
@@ -1119,6 +1573,13 @@ function vcat(arrays::Vector{T}...) where T
         if isbits(T)
             ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
                   ptr, a, nba)
+        elseif isbitsunion(T)
+            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+                  ptr, a, nba)
+            # copy selector bytes
+            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+                  selptr, convert(Ptr{UInt8}, pointer(a)) + nba, na)
+            selptr += na
         else
             ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
                   arr, ptr, a, pointer(a), na)
@@ -1130,7 +1591,6 @@ end
 
 cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x)))
 
-
 ## find ##
 
 """
@@ -1138,6 +1598,7 @@ cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x
 
 Find the next linear index >= `i` of a non-zero element of `A`, or `0` if not found.
 
+# Examples
 ```jldoctest
 julia> A = [0 0; 1 0]
 2×2 Array{Int64,2}:
@@ -1152,10 +1613,13 @@ julia> findnext(A,3)
 ```
 """
 function findnext(A, start::Integer)
-    for i = start:length(A)
+    l = endof(A)
+    i = start
+    while i <= l
         if A[i] != 0
             return i
         end
+        i = nextind(A, i)
     end
     return 0
 end
@@ -1166,6 +1630,7 @@ end
 Return the linear index of the first non-zero value in `A` (determined by `A[i]!=0`).
 Returns `0` if no such value is found.
 
+# Examples
 ```jldoctest
 julia> A = [0 0; 1 0]
 2×2 Array{Int64,2}:
@@ -1174,6 +1639,9 @@ julia> A = [0 0; 1 0]
 
 julia> findfirst(A)
 2
+
+julia> findfirst(zeros(3))
+0
 ```
 """
 findfirst(A) = findnext(A, 1)
@@ -1183,6 +1651,7 @@ findfirst(A) = findnext(A, 1)
 
 Find the next linear index >= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
 
+# Examples
 ```jldoctest
 julia> A = [1 4; 2 2]
 2×2 Array{Int64,2}:
@@ -1197,10 +1666,13 @@ julia> findnext(A,4,3)
 ```
 """
 function findnext(A, v, start::Integer)
-    for i = start:length(A)
+    l = endof(A)
+    i = start
+    while i <= l
         if A[i] == v
             return i
         end
+        i = nextind(A, i)
     end
     return 0
 end
@@ -1210,6 +1682,7 @@ end
 Return the linear index of the first element equal to `v` in `A`.
 Returns `0` if `v` is not found.
 
+# Examples
 ```jldoctest
 julia> A = [4 6; 2 2]
 2×2 Array{Int64,2}:
@@ -1230,6 +1703,7 @@ findfirst(A, v) = findnext(A, v, 1)
 
 Find the next linear index >= `i` of an element of `A` for which `predicate` returns `true`, or `0` if not found.
 
+# Examples
 ```jldoctest
 julia> A = [1 4; 2 2]
 2×2 Array{Int64,2}:
@@ -1244,10 +1718,13 @@ julia> findnext(isodd, A, 2)
 ```
 """
 function findnext(testf::Function, A, start::Integer)
-    for i = start:length(A)
+    l = endof(A)
+    i = start
+    while i <= l
         if testf(A[i])
             return i
         end
+        i = nextind(A, i)
     end
     return 0
 end
@@ -1258,6 +1735,7 @@ end
 Return the linear index of the first element of `A` for which `predicate` returns `true`.
 Returns `0` if there is no such element.
 
+# Examples
 ```jldoctest
 julia> A = [1 4; 2 2]
 2×2 Array{Int64,2}:
@@ -1278,6 +1756,7 @@ findfirst(testf::Function, A) = findnext(testf, A, 1)
 
 Find the previous linear index <= `i` of a non-zero element of `A`, or `0` if not found.
 
+# Examples
 ```jldoctest
 julia> A = [0 0; 1 2]
 2×2 Array{Int64,2}:
@@ -1292,8 +1771,10 @@ julia> findprev(A,1)
 ```
 """
 function findprev(A, start::Integer)
-    for i = start:-1:1
+    i = start
+    while i >= 1
         A[i] != 0 && return i
+        i = prevind(A, i)
     end
     return 0
 end
@@ -1304,6 +1785,7 @@ end
 Return the linear index of the last non-zero value in `A` (determined by `A[i]!=0`).
 Returns `0` if there is no non-zero value in `A`.
 
+# Examples
 ```jldoctest
 julia> A = [1 0; 1 0]
 2×2 Array{Int64,2}:
@@ -1322,13 +1804,14 @@ julia> findlast(A)
 0
 ```
 """
-findlast(A) = findprev(A, length(A))
+findlast(A) = findprev(A, endof(A))
 
 """
     findprev(A, v, i::Integer)
 
 Find the previous linear index <= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
 
+# Examples
 ```jldoctest
 julia> A = [0 0; 1 2]
 2×2 Array{Int64,2}:
@@ -1343,8 +1826,10 @@ julia> findprev(A, 1, 1)
 ```
 """
 function findprev(A, v, start::Integer)
-    for i = start:-1:1
+    i = start
+    while i >= 1
         A[i] == v && return i
+        i = prevind(A, i)
     end
     return 0
 end
@@ -1355,6 +1840,7 @@ end
 Return the linear index of the last element equal to `v` in `A`.
 Returns `0` if there is no element of `A` equal to `v`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 2 1]
 2×2 Array{Int64,2}:
@@ -1371,7 +1857,7 @@ julia> findlast(A,3)
 0
 ```
 """
-findlast(A, v) = findprev(A, v, length(A))
+findlast(A, v) = findprev(A, v, endof(A))
 
 """
     findprev(predicate::Function, A, i::Integer)
@@ -1379,6 +1865,7 @@ findlast(A, v) = findprev(A, v, length(A))
 Find the previous linear index <= `i` of an element of `A` for which `predicate` returns `true`, or
 `0` if not found.
 
+# Examples
 ```jldoctest
 julia> A = [4 6; 1 2]
 2×2 Array{Int64,2}:
@@ -1393,8 +1880,10 @@ julia> findprev(isodd, A, 3)
 ```
 """
 function findprev(testf::Function, A, start::Integer)
-    for i = start:-1:1
+    i = start
+    while i >= 1
         testf(A[i]) && return i
+        i = prevind(A, i)
     end
     return 0
 end
@@ -1405,6 +1894,7 @@ end
 Return the linear index of the last element of `A` for which `predicate` returns `true`.
 Returns `0` if there is no such element.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -1418,7 +1908,7 @@ julia> findlast(x -> x > 5, A)
 0
 ```
 """
-findlast(testf::Function, A) = findprev(testf, A, length(A))
+findlast(testf::Function, A) = findprev(testf, A, endof(A))
 
 """
     find(f::Function, A)
@@ -1426,6 +1916,7 @@ findlast(testf::Function, A) = findprev(testf, A, length(A))
 Return a vector `I` of the linear indexes of `A` where `f(A[I])` returns `true`.
 If there are no such elements of `A`, find returns an empty array.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -1436,6 +1927,9 @@ julia> find(isodd,A)
 2-element Array{Int64,1}:
  1
  2
+
+julia> find(isodd, [2, 4])
+0-element Array{Int64,1}
 ```
 """
 function find(testf::Function, A)
@@ -1462,6 +1956,7 @@ Return a vector of the linear indexes of the non-zeros in `A` (determined by `A[
 common use of this is to convert a boolean array to an array of indexes of the `true`
 elements. If there are no non-zero elements of `A`, `find` returns an empty array.
 
+# Examples
 ```jldoctest
 julia> A = [true false; false true]
 2×2 Array{Bool,2}:
@@ -1472,17 +1967,20 @@ julia> find(A)
 2-element Array{Int64,1}:
  1
  4
+
+julia> find(zeros(3))
+0-element Array{Int64,1}
 ```
 """
 function find(A)
-    nnzA = countnz(A)
+    nnzA = count(t -> t != 0, A)
     I = Vector{Int}(nnzA)
-    count = 1
+    cnt = 1
     inds = _index_remapper(A)
     for (i,a) in enumerate(A)
         if a != 0
-            I[count] = inds[i]
-            count += 1
+            I[cnt] = inds[i]
+            cnt += 1
         end
     end
     return I
@@ -1500,6 +1998,7 @@ Return a vector of indexes for each dimension giving the locations of the non-ze
 (determined by `A[i]!=0`).
 If there are no non-zero elements of `A`, `findn` returns a 2-tuple of empty arrays.
 
+# Examples
 ```jldoctest
 julia> A = [1 2 0; 0 0 3; 0 4 0]
 3×3 Array{Int64,2}:
@@ -1520,15 +2019,15 @@ julia> findn(A)
 ```
 """
 function findn(A::AbstractMatrix)
-    nnzA = countnz(A)
+    nnzA = count(t -> t != 0, A)
     I = similar(A, Int, nnzA)
     J = similar(A, Int, nnzA)
-    count = 1
+    cnt = 1
     for j=indices(A,2), i=indices(A,1)
         if A[i,j] != 0
-            I[count] = i
-            J[count] = j
-            count += 1
+            I[cnt] = i
+            J[cnt] = j
+            cnt += 1
         end
     end
     return (I, J)
@@ -1540,6 +2039,7 @@ end
 Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of the non-zero
 values in matrix `A`, and `V` is a vector of the non-zero values.
 
+# Examples
 ```jldoctest
 julia> A = [1 2 0; 0 0 3; 0 4 0]
 3×3 Array{Int64,2}:
@@ -1552,19 +2052,19 @@ julia> findnz(A)
 ```
 """
 function findnz(A::AbstractMatrix{T}) where T
-    nnzA = countnz(A)
+    nnzA = count(t -> t != 0, A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
     NZs = Array{T,1}(nnzA)
-    count = 1
+    cnt = 1
     if nnzA > 0
         for j=indices(A,2), i=indices(A,1)
             Aij = A[i,j]
             if Aij != 0
-                I[count] = i
-                J[count] = j
-                NZs[count] = Aij
-                count += 1
+                I[cnt] = i
+                J[cnt] = j
+                NZs[cnt] = Aij
+                cnt += 1
             end
         end
     end
@@ -1575,11 +2075,13 @@ end
     findmax(itr) -> (x, index)
 
 Returns the maximum element of the collection `itr` and its index. If there are multiple
-maximal elements, then the first one will be returned. `NaN` values are ignored, unless
-all elements are `NaN`.
+maximal elements, then the first one will be returned.
+If any data element is `NaN`, this element is returned.
+The result is in line with `max`.
 
 The collection must not be empty.
 
+# Examples
 ```jldoctest
 julia> findmax([8,0.1,-9,pi])
 (8.0, 1)
@@ -1588,20 +2090,21 @@ julia> findmax([1,7,7,6])
 (7, 2)
 
 julia> findmax([1,7,7,NaN])
-(7.0, 2)
+(NaN, 4)
 ```
 """
 function findmax(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
-    s = start(a)
-    mi = i = 1
-    m, s = next(a, s)
-    while !done(a, s)
-        ai, s = next(a, s)
-        i += 1
-        if ai > m || m!=m
+    p = pairs(a)
+    s = start(p)
+    (mi, m), s = next(p, s)
+    i = mi
+    while !done(p, s)
+        m != m && break
+        (i, ai), s = next(p, s)
+        if ai != ai || isless(m, ai)
             m = ai
             mi = i
         end
@@ -1613,11 +2116,13 @@ end
     findmin(itr) -> (x, index)
 
 Returns the minimum element of the collection `itr` and its index. If there are multiple
-minimal elements, then the first one will be returned. `NaN` values are ignored, unless
-all elements are `NaN`.
+minimal elements, then the first one will be returned.
+If any data element is `NaN`, this element is returned.
+The result is in line with `min`.
 
 The collection must not be empty.
 
+# Examples
 ```jldoctest
 julia> findmin([8,0.1,-9,pi])
 (-9.0, 3)
@@ -1626,20 +2131,21 @@ julia> findmin([7,1,1,6])
 (1, 2)
 
 julia> findmin([7,1,1,NaN])
-(1.0, 2)
+(NaN, 4)
 ```
 """
 function findmin(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
     end
-    s = start(a)
-    mi = i = 1
-    m, s = next(a, s)
-    while !done(a, s)
-        ai, s = next(a, s)
-        i += 1
-        if ai < m || m!=m
+    p = pairs(a)
+    s = start(p)
+    (mi, m), s = next(p, s)
+    i = mi
+    while !done(p, s)
+        m != m && break
+        (i, ai), s = next(p, s)
+        if ai != ai || isless(ai, m)
             m = ai
             mi = i
         end
@@ -1651,11 +2157,11 @@ end
     indmax(itr) -> Integer
 
 Returns the index of the maximum element in a collection. If there are multiple maximal
-elements, then the first one will be returned. `NaN` values are ignored, unless all
-elements are `NaN`.
+elements, then the first one will be returned.
 
 The collection must not be empty.
 
+# Examples
 ```jldoctest
 julia> indmax([8,0.1,-9,pi])
 1
@@ -1664,7 +2170,7 @@ julia> indmax([1,7,7,6])
 2
 
 julia> indmax([1,7,7,NaN])
-2
+4
 ```
 """
 indmax(a) = findmax(a)[2]
@@ -1673,11 +2179,11 @@ indmax(a) = findmax(a)[2]
     indmin(itr) -> Integer
 
 Returns the index of the minimum element in a collection. If there are multiple minimal
-elements, then the first one will be returned. `NaN` values are ignored, unless all
-elements are `NaN`.
+elements, then the first one will be returned.
 
 The collection must not be empty.
 
+# Examples
 ```jldoctest
 julia> indmin([8,0.1,-9,pi])
 3
@@ -1686,7 +2192,7 @@ julia> indmin([7,1,1,6])
 2
 
 julia> indmin([7,1,1,NaN])
-2
+4
 ```
 """
 indmin(a) = findmin(a)[2]
@@ -1699,6 +2205,7 @@ Returns a vector containing the highest index in `b` for
 each value in `a` that is a member of `b` . The output
 vector contains 0 wherever `a` is not a member of `b`.
 
+# Examples
 ```jldoctest
 julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
 
@@ -1725,11 +2232,63 @@ function indexin(a::AbstractArray, b::AbstractArray)
     [get(bdict, i, 0) for i in a]
 end
 
+function _findin(a, b)
+    ind  = Int[]
+    bset = Set(b)
+    @inbounds for (i,ai) in enumerate(a)
+        ai in bset && push!(ind, i)
+    end
+    ind
+end
+
+# If two collections are already sorted, findin can be computed with
+# a single traversal of the two collections. This is much faster than
+# using a hash table (although it has the same complexity).
+function _sortedfindin(v, w)
+    viter, witer = eachindex(v), eachindex(w)
+    out  = eltype(viter)[]
+    i, j = start(viter), start(witer)
+    if done(viter, i) || done(witer, j)
+        return out
+    end
+    viteri, i = next(viter, i)
+    witerj, j = next(witer, j)
+    @inbounds begin
+        vi, wj = v[viteri], w[witerj]
+        while true
+            if isless(vi, wj)
+                if done(viter, i)
+                    break
+                end
+                viteri, i = next(viter, i)
+                vi        = v[viteri]
+            elseif isless(wj, vi)
+                if done(witer, j)
+                    break
+                end
+                witerj, j = next(witer, j)
+                wj        = w[witerj]
+            else
+                push!(out, viteri)
+                if done(viter, i)
+                    break
+                end
+                # We only increment the v iterator because v can have
+                # repeated matches to a single value in w
+                viteri, i = next(viter, i)
+                vi        = v[viteri]
+            end
+        end
+    end
+    return out
+end
+
 """
     findin(a, b)
 
 Returns the indices of elements in collection `a` that appear in collection `b`.
 
+# Examples
 ```jldoctest
 julia> a = collect(1:3:15)
 5-element Array{Int64,1}:
@@ -1750,14 +2309,16 @@ julia> findin(a,b) # 10 is the only common element
  4
 ```
 """
-function findin(a, b)
-    ind = Array{Int,1}(0)
-    bset = Set(b)
-    @inbounds for (i,ai) in enumerate(a)
-        ai in bset && push!(ind, i)
+function findin(a::Array{<:Real}, b::Union{Array{<:Real},Real})
+    if issorted(a, Sort.Forward) && issorted(b, Sort.Forward)
+        return _sortedfindin(a, b)
+    else
+        return _findin(a, b)
     end
-    ind
 end
+# issorted fails for some element types so the method above has to be restricted
+# to element with isless/< defined.
+findin(a, b) = _findin(a, b)
 
 # Copying subregions
 # TODO: DEPRECATE FOR #14770
@@ -1786,12 +2347,13 @@ end
 ## Filter ##
 
 """
-    filter(function, collection)
+    filter(f, a::AbstractArray)
 
-Return a copy of `collection`, removing elements for which `function` is `false`. For
-associative collections, the function is passed two arguments (key and value).
+Return a copy of `a`, removing elements for which `f` is `false`.
+The function `f` is passed one argument.
 
-```jldocttest
+# Examples
+```jldoctest
 julia> a = 1:10
 1:10
 
@@ -1806,6 +2368,23 @@ julia> filter(isodd, a)
 """
 filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
+"""
+    filter!(f, a::AbstractVector)
+
+Update `a`, removing elements for which `f` is `false`.
+The function `f` is passed one argument.
+
+# Examples
+```jldoctest
+julia> filter!(isodd, collect(1:10))
+5-element Array{Int64,1}:
+ 1
+ 3
+ 5
+ 7
+ 9
+```
+"""
 function filter!(f, a::AbstractVector)
     isempty(a) && return a
 
@@ -1877,6 +2456,7 @@ both arguments must be collections, and both will be iterated over. In particula
 `setdiff(set,element)` where `element` is a potential member of `set`, will not work in
 general.
 
+# Examples
 ```jldoctest
 julia> setdiff([1,2,3],[3,4,5])
 2-element Array{Int64,1}:
@@ -1910,6 +2490,7 @@ symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
 Construct the symmetric difference of elements in the passed in sets or arrays.
 Maintains order with arrays.
 
+# Examples
 ```jldoctest
 julia> symdiff([1,2,3],[3,4,5],[4,5,6])
 3-element Array{Int64,1}:

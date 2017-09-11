@@ -319,19 +319,18 @@ f = "ymd"
 @test Dates.Date(string(Dates.Date(dt))) == Dates.Date(dt)
 @test Dates.DateTime(string(dt)) == dt
 
-# Vectorized
+# formerly vectorized Date/DateTime/format methods
 dr = ["2000-01-01", "2000-01-02", "2000-01-03", "2000-01-04", "2000-01-05",
       "2000-01-06", "2000-01-07", "2000-01-08", "2000-01-09", "2000-01-10"]
 dr2 = [Dates.Date(2000) : Dates.Date(2000, 1, 10);]
-@test Dates.Date(dr) == dr2
-@test Dates.Date(dr, "yyyy-mm-dd") == dr2
+@test Dates.Date.(dr) == dr2
+@test Dates.Date.(dr, dateformat"yyyy-mm-dd") == dr2
 @test Dates.DateTime.(dr) == Dates.DateTime.(dr2)
-@test Dates.DateTime(dr, "yyyy-mm-dd") == Dates.DateTime.(dr2)
+@test Dates.DateTime.(dr, dateformat"yyyy-mm-dd") == Dates.DateTime.(dr2)
 
-@test Dates.format(dr2) == dr
-@test Dates.format(dr2, "yyyy-mm-dd") == dr
+@test Dates.format.(dr2, "yyyy-mm-dd") == dr
 
-@test typeof(Dates.Date(dr)) == Array{Date, 1}
+@test typeof(Dates.Date.(dr)) == Array{Date, 1}
 
 # Issue 13
 t = Dates.DateTime(1, 1, 1, 14, 51, 0, 118)
@@ -379,7 +378,7 @@ end
 
 # Issue: https://github.com/quinnj/TimeZones.jl/issues/19
 let
-    const Zulu = String
+    Zulu = String
 
     function Dates.tryparsenext(d::Dates.DatePart{'Z'}, str, i, len)
         Dates.tryparsenext_word(str, i, len, Dates.min_width(d), Dates.max_width(d))
@@ -432,3 +431,55 @@ end
 
 # Issue #21504
 @test isnull(tryparse(Dates.Date, "0-1000"))
+
+# Issue #22100
+@testset "parse milliseconds" begin
+    @test Dates.DateTime("2017-Mar-17 00:00:00.0000", "y-u-d H:M:S.s") == Dates.DateTime(2017, 3, 17)
+    @test Dates.parse_components(".1", Dates.DateFormat(".s")) == [Dates.Millisecond(100)]
+    @test Dates.parse_components(".12", Dates.DateFormat(".s")) == [Dates.Millisecond(120)]
+    @test Dates.parse_components(".123", Dates.DateFormat(".s")) == [Dates.Millisecond(123)]
+    @test Dates.parse_components(".1230", Dates.DateFormat(".s")) == [Dates.Millisecond(123)]
+    @test_throws InexactError Dates.parse_components(".1234", Dates.DateFormat(".s"))
+
+    # Ensure that no overflow occurs when using Int32 literals: Int32(10)^10
+    @test Dates.parse_components("." * rpad(999, 10, '0'), Dates.DateFormat(".s")) == [Dates.Millisecond(999)]
+end
+
+# Time Parsing
+let
+    time_tuple(t::Dates.Time) = (
+        Dates.hour(t), Dates.minute(t), Dates.second(t),
+        Dates.millisecond(t), Dates.microsecond(t), Dates.nanosecond(t)
+    )
+
+    ## default ISOTimeFormat
+    t = Dates.Time("01")
+    @test time_tuple(t) == (1, 0, 0, 0, 0, 0)
+    t = Dates.Time("01:23")
+    @test time_tuple(t) == (1, 23, 0, 0, 0, 0)
+    t = Dates.Time("01:23:45")
+    @test time_tuple(t) == (1, 23, 45, 0, 0, 0)
+    t = Dates.Time("01:23:45.678")
+    @test time_tuple(t) == (1, 23, 45, 678, 0, 0)
+
+    ## string format
+    t = Dates.Time("23:56:12.1", "HH:MM:SS.s")
+    @test time_tuple(t) == (23, 56, 12, 100, 0, 0)
+
+    ## precomputed DateFormat
+    t = Dates.Time("04:09:45.012", DateFormat("HH:MM:SS.s"))
+    @test time_tuple(t) == (4, 9, 45, 12, 0, 0)
+    t = Dates.Time("21 07", DateFormat("HH MM"))
+    @test time_tuple(t) == (21, 7, 0, 0, 0, 0)
+    t = Dates.Time("4.02", DateFormat("H.MM"))
+    @test time_tuple(t) == (4, 2, 0, 0, 0, 0)
+    t = Dates.Time("1725", DateFormat("HHMM"))
+    @test time_tuple(t) == (17, 25, 0, 0, 0, 0)
+
+    ## exceptions
+    @test_throws ArgumentError Dates.Time("24:00")  # invalid hours
+    @test_throws ArgumentError Dates.Time("00:60")  # invalid minutes
+    @test_throws ArgumentError Dates.Time("00:00:60")  # invalid seconds
+    @test_throws ArgumentError Dates.Time("20:03:20", DateFormat("HH:MM"))  # too much precision
+    @test_throws ArgumentError Dates.Time("10:33:51", DateFormat("YYYY-MM-DD HH:MM:SS"))  # Time can't hold year/month/day
+end
