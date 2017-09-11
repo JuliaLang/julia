@@ -3,10 +3,15 @@ module Pkg3
 const DEPOTS = [joinpath(homedir(), ".julia")]
 depots() = DEPOTS
 
+# load snapshotted dependencies
+include("../ext/TOML/src/TOML.jl")
+include("../ext/TerminalMenus/src/TerminalMenus.jl")
+
 include("Types.jl")
 include("Operations.jl")
 include("REPLMode.jl")
-isdefined(Base, :active_repl) &&
+
+__init__() = isdefined(Base, :active_repl) &&
     REPLMode.repl_init(Base.active_repl)
 
 function Base.julia_cmd(julia::AbstractString)

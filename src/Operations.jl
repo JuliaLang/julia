@@ -3,9 +3,7 @@ module Operations
 using Base.Random: UUID
 using Base: LibGit2
 using Base: Pkg
-
-using TerminalMenus
-
+using Pkg3.TerminalMenus
 using Pkg3.Types
 import Pkg3: depots
 

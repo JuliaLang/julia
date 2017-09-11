@@ -2,8 +2,8 @@ module Types
 
 using Base.Random: UUID
 using Base.Pkg.Types: VersionSet, Available
-using TOML, TerminalMenus
-
+using Pkg3.TOML
+using Pkg3.TerminalMenus
 import Pkg3: depots
 
 export SHA1, VersionRange, VersionSpec, Package, PackageVersion, UpgradeLevel,

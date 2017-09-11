@@ -1,0 +1,1 @@
+Base.require(:Pkg3)
