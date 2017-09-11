@@ -1309,8 +1309,7 @@
        ((let)
         (let ((binds (if (memv (peek-token s) '(#\newline #\;))
                          '()
-                         (parse-comma-separated-
-                          s s))))
+                         (parse-comma-separated-assignments s))))
           (if (not (or (eof-object? (peek-token s))
                        (memv (peek-token s) '(#\newline #\; end))))
               (error "let variables should end in \";\" or newline"))
