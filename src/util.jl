@@ -30,8 +30,18 @@ function readKey() ::UInt32
 
 	# Escape characters
 	if c == '\x1b'
-        STDIN.buffer.size < 3 && return '\x1b'
+        STDIN.buffer.size < 2 && return '\x1b'
         esc_a = readNextChar()
+
+        if esc_a == 'v'  # M-v
+            return PAGE_UP
+        elseif esc_a == '<'  # M-<
+            return HOME_KEY
+        elseif esc_a == '>'  # M->
+            return END_KEY
+        end
+
+        STDIN.buffer.size < 3 && return '\x1b'
         esc_b = readNextChar()
 
 		if esc_a == '['
@@ -86,7 +96,14 @@ function readKey() ::UInt32
 		end
 
 		return '\x1b'
+
+    elseif c == '\x16'  # C-v
+        return PAGE_DOWN
+    elseif c == '\x10'  # C-p
+        return ARROW_UP
+    elseif c == '\x0e'  # C-n
+        return ARROW_DOWN
     else
-		return c;
+		return c
 	end
 end
