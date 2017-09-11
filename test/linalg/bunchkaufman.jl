@@ -101,7 +101,7 @@ bimg  = randn(n,2)/2
                 end
             end
         end
-        if eltya <: Real
+        if eltya <: BlasReal
             @testset "Bunch-Kaufman factors of a singular matrix" begin
                 As1 = ones(eltya, n, n)
                 As2 = complex(ones(eltya, n, n))
