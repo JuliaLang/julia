@@ -1,9 +1,10 @@
 module Types
 
-using Base.Loading: DEPOTS
 using Base.Random: UUID
 using Base.Pkg.Types: VersionSet, Available
 using TOML, TerminalMenus
+
+import Pkg3: depots
 
 export SHA1, VersionRange, VersionSpec, Package, PackageVersion, UpgradeLevel,
     EnvCache, has_name, has_uuid, write_env, parse_toml, find_registered!,
@@ -371,10 +372,27 @@ end
 
 # finding the current project file
 
-include("libgit2_discover.jl")
+function LibGit2_discover(
+    start_path::AbstractString = pwd();
+    ceiling::Union{AbstractString,Vector} = "",
+    across_fs::Bool = false,
+)
+    sep = @static is_windows() ? ";" : ":"
+    ceil = ceiling isa AbstractString ? ceiling :
+        join(convert(Vector{String}, ceiling), sep)
+    buf_ref = Ref(LibGit2.Buffer())
+    @LibGit2.check ccall(
+        (:git_repository_discover, :libgit2), Cint,
+        (Ptr{LibGit2.Buffer}, Cstring, Cint, Cstring),
+        buf_ref, start_path, across_fs, ceil)
+    buf = buf_ref[]
+    str = unsafe_string(buf.ptr, buf.size)
+    LibGit2.free(buf_ref)
+    return str
+end
 
 function find_local_env(start_path::String = pwd())
-    path = LibGit2.discover(start_path, ceiling = homedir())
+    path = LibGit2_discover(start_path, ceiling = homedir())
     repo = LibGit2.GitRepo(path)
     work = LibGit2.workdir(repo)
     for name in project_names
@@ -385,12 +403,12 @@ function find_local_env(start_path::String = pwd())
 end
 
 function find_named_env()
-    for depot in DEPOTS, env in default_envs, name in project_names
+    for depot in depots(), env in default_envs, name in project_names
         path = abspath(depot, "environments", env, name)
         isfile(path) && return path
     end
     env = VERSION.major == 0 ? default_envs[2] : default_envs[3]
-    return abspath(DEPOTS[1], "environments", env, project_names[end])
+    return abspath(depots()[1], "environments", env, project_names[end])
 end
 
 function find_project(env::String)
@@ -409,11 +427,11 @@ function find_project(env::String)
         end
         return abspath(env, project_names[end])
     else # named environment
-        for depot in DEPOTS
+        for depot in depots()
             path = abspath(depot, "environments", env, project_names[end])
             isfile(path) && return path
         end
-        return abspath(DEPOTS[1], "environments", env, project_names[end])
+        return abspath(depots()[1], "environments", env, project_names[end])
     end
 end
 
@@ -535,8 +553,8 @@ end
 
 "Return paths of all registries in all depots"
 function registries()::Vector{String}
-    isempty(DEPOTS) && return String[]
-    user_regs = abspath(DEPOTS[1], "registries")
+    isempty(depots()) && return String[]
+    user_regs = abspath(depots()[1], "registries")
     if !ispath(user_regs)
         mkpath(user_regs)
         info("Cloning default registries into $user_regs")
@@ -546,7 +564,7 @@ function registries()::Vector{String}
             LibGit2.clone(url, path)
         end
     end
-    return [r for d in DEPOTS for r in registries(d)]
+    return [r for d in depots() for r in registries(d)]
 end
 
 const line_re = r"""

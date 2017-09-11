@@ -1,6 +1,5 @@
 module Operations
 
-using Base.Loading: DEPOTS
 using Base.Random: UUID
 using Base: LibGit2
 using Base: Pkg
@@ -8,13 +7,14 @@ using Base: Pkg
 using TerminalMenus
 
 using Pkg3.Types
+import Pkg3: depots
 
 function find_installed(uuid::UUID, sha1::SHA1)
-    for depot in DEPOTS
+    for depot in depots()
         path = abspath(depot, "packages", string(uuid), string(sha1))
         ispath(path) && return path
     end
-    return abspath(DEPOTS[1], "packages", string(uuid), string(sha1))
+    return abspath(depots()[1], "packages", string(uuid), string(sha1))
 end
 
 function package_env_info(pkg::String, env::EnvCache = EnvCache(); verb::String = "choose")
@@ -198,7 +198,7 @@ function install(
 )
     version_path = find_installed(uuid, hash)
     ispath(version_path) && return nothing
-    upstream_dir = joinpath(DEPOTS[1], "upstream")
+    upstream_dir = joinpath(depots()[1], "upstream")
     ispath(upstream_dir) || mkpath(upstream_dir)
     repo_path = joinpath(upstream_dir, string(uuid))
     repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
