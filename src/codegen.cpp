@@ -555,7 +555,6 @@ public:
     Value *argCount = NULL;
     std::string funcName;
     int vaSlot = -1;        // name of vararg argument
-    bool vaStack = false;      // varargs stack-allocated
     bool has_sret = false;
     int nReqArgs = 0;
     int nargs = 0;
@@ -2337,7 +2336,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     }
 
     else if (f == jl_builtin__apply && nargs == 2 && ctx.vaSlot > 0) {
-        // turn Core._apply(f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the vaStack allocation
+        // turn Core._apply(f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the va allocation
         if (LoadInst *load = dyn_cast_or_null<LoadInst>(argv[2].V)) {
             if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot) {
                 Value *theF = maybe_decay_untracked(boxed(ctx, argv[1]));
@@ -3267,7 +3266,6 @@ static jl_cgval_t emit_local(jl_codectx_t &ctx, jl_value_t *slotload)
 {
     size_t sl = jl_slot_number(slotload) - 1;
     jl_varinfo_t &vi = ctx.slots[sl];
-    assert(!(ctx.vaStack && (int)sl == ctx.vaSlot && "error in escape analysis"));
     jl_sym_t *sym = slot_symbol(ctx, sl);
     jl_value_t *typ;
     if (jl_typeis(slotload, jl_typedslot_type)) {
@@ -4760,7 +4758,6 @@ static std::unique_ptr<Module> emit_function(
     ctx.world = world;
     ctx.name = jl_symbol_name(jl_is_method(lam->def.method) ? lam->def.method->name : anonymous_sym);
     ctx.funcName = ctx.name;
-    ctx.vaStack = false;
     ctx.params = params;
     ctx.spvals_ptr = NULL;
     ctx.nargs = jl_is_method(lam->def.method) ? lam->def.method->nargs : 0;
