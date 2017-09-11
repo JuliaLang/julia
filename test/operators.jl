@@ -141,10 +141,10 @@ vt = Val(true)
     @test vf & vt == vf
     @test vt & vf == vf
     @test vt & vt == vt
-    @test vf | vf == vf 
+    @test vf | vf == vf
     @test vf | vt == vt
     @test vt | vf == vt
-    @test vt | vt == vt 
+    @test vt | vt == vt
     @test !vf == vt
     @test !vt == vf
     @test ifelse(vf, vt, vf) == vf
