@@ -877,7 +877,7 @@ Base.iszero(x::Float16) = reinterpret(UInt16, x) & ~sign_mask(Float16) == 0x0000
 float(A::AbstractArray{<:AbstractFloat}) = A
 
 function float(A::AbstractArray{T}) where T
-    if !isleaftype(T)
+    if !isconcrete(T)
         error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
     end
     convert(AbstractArray{typeof(float(zero(T)))}, A)

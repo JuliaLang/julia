@@ -1766,6 +1766,9 @@ import .Iterators.enumerate
 # issue #5794
 @deprecate map(f, d::T) where {T<:Associative}  T( f(p) for p in pairs(d) )
 
+# issue #17086
+@deprecate isleaftype isconcrete
+
 # PR #22932
 @deprecate +(a::Number, b::AbstractArray) broadcast(+, a, b)
 @deprecate +(a::AbstractArray, b::Number) broadcast(+, a, b)

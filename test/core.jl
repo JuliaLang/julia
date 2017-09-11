@@ -169,7 +169,7 @@ let elT = T22624.body.body.body.types[1].parameters[1]
     elT2 = elT.body.types[1].parameters[1]
     @test elT2 == T22624{Int64, Int64, C} where C
     @test elT2.body.types[1].parameters[1] === elT2
-    @test isleaftype(elT2.body.types[1])
+    @test Base._isleaftype(elT2.body.types[1])
 end
 
 # issue #3890
@@ -4284,7 +4284,7 @@ let a = Val{Val{TypeVar(:_, Int)}},
 
     @test !isdefined(a, :instance)
     @test  isdefined(b, :instance)
-    @test isleaftype(b)
+    @test Base._isleaftype(b)
 end
 
 # A return type widened to Type{Union{T,Void}} should not confuse

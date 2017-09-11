@@ -339,7 +339,7 @@ end
 """
 Return the given type if it is concrete, and `Union{}` otherwise.
 """
-nullable_returntype(::Type{T}) where {T} = isleaftype(T) ? T : Union{}
+nullable_returntype(::Type{T}) where {T} = _isleaftype(T) ? T : Union{}
 
 """
     map(f, x::Nullable)
@@ -365,7 +365,7 @@ Nullable{Bool}()
 """
 function map(f, x::Nullable{T}) where T
     S = promote_op(f, T)
-    if isleaftype(S) && null_safe_op(f, T)
+    if _isleaftype(S) && null_safe_op(f, T)
         Nullable(f(unsafe_get(x)), !isnull(x))
     else
         if isnull(x)

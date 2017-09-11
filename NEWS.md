@@ -438,6 +438,11 @@ Deprecated or removed
     been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
     instead.
 
+  * `isleaftype` is deprecated in favor of a simpler predicate `isconcrete`. Concrete types are
+    those that might equal `typeof(x)` for some `x`; `isleaftype` includes some types for which
+    this is not true. If you are certain you need the old behavior, it is temporarily available
+    as `Base._isleaftype` ([#17086]).
+
 Command-line option changes
 ---------------------------
 

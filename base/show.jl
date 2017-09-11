@@ -253,7 +253,7 @@ function show_type_name(io::IO, tn::TypeName)
         globname_str = string(globname)
         if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
             isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
-            isa(getfield(tn.module, globname), tn.wrapper) && isleaftype(tn.wrapper))
+            isa(getfield(tn.module, globname), tn.wrapper) && _isleaftype(tn.wrapper))
             globfunc = true
         end
     end
@@ -617,7 +617,7 @@ function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     elseif ty === Core.IntrinsicFunction
         print(io, "::I")
     else
-        if emph && (!isleaftype(ty) || ty == Core.Box)
+        if emph && (!_isleaftype(ty) || ty == Core.Box)
             emphasize(io, "::$ty")
         else
             print(io, "::$ty")
@@ -1171,7 +1171,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
                 isdefined(uw.name.module, uw.name.mt.name) &&
                 ft == typeof(getfield(uw.name.module, uw.name.mt.name))
             print(io, uw.name.mt.name)
-        elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+        elseif isa(ft, DataType) && ft.name === Type.body.name && !Core.Inference.has_free_typevars(ft)
             f = ft.parameters[1]
             print(io, f)
         else
@@ -1913,7 +1913,7 @@ function array_eltype_show_how(X)
         str = string(e)
     end
     # Types hard-coded here are those which are created by default for a given syntax
-    (isleaftype(e),
+    (_isleaftype(e),
      (!isempty(X) && (e===Float64 || e===Int || e===Char || e===String) ? "" : str))
 end
 

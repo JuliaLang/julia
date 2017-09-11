@@ -555,7 +555,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
 function type_close_enough(@nospecialize(x), @nospecialize(t))
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
-            !isleaftype(t) && x <: t) ||
+            !_isleaftype(t) && x <: t) ||
            (isa(x,Union) && isa(t,DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
 end
 
