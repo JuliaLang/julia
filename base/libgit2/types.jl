@@ -1095,10 +1095,9 @@ mutable struct SSHCredentials <: AbstractCredentials
     pass::String
     prvkey::String
     pubkey::String
-    usesshagent::String  # used for ssh-agent authentication
     prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
     function SSHCredentials(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,prvkey,pubkey,"Y",prompt_if_incorrect)
+        c = new(u,p,prvkey,pubkey,prompt_if_incorrect)
         finalizer(c, securezero!)
         return c
     end
@@ -1143,13 +1142,14 @@ mutable struct CredentialPayload <: Payload
     credential::Nullable{AbstractCredentials}
     cache::Nullable{CachedCredentials}
     first_pass::Bool
+    use_ssh_agent::Char
     scheme::String
     username::String
     host::String
     path::String
 
     function CredentialPayload(credential::Nullable{<:AbstractCredentials}, cache::Nullable{CachedCredentials})
-        new(credential, cache, true, "", "", "", "")
+        new(credential, cache, true, 'Y', "", "", "", "")
     end
 end
 

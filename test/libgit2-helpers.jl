@@ -65,15 +65,7 @@ function credential_loop(
         use_ssh_agent::Bool=false)
 
     if !use_ssh_agent
-        if isnull(payload.cache)
-            payload.cache = Nullable(CachedCredentials())
-        end
-        cache = get(payload.cache)
-
-        m = match(LibGit2.URL_REGEX, url)
-        default_cred = SSHCredentials(true)
-        default_cred.usesshagent = "N"
-        LibGit2.get_creds!(cache, "ssh://$(m[:host])", default_cred)
+        payload.use_ssh_agent = 'N'
     end
 
     credential_loop(valid_credential, url, user, 0x000046, payload)
