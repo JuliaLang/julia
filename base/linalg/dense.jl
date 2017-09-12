@@ -731,7 +731,35 @@ function sin(A::StridedMatrix{<:Complex})
     if ishermitian(A)
         return full(sin(Hermitian(A)))
     end
-    return im * 0.5 * (exp(-im*A) - exp(im*A))
+    return -0.5im * (exp(im*A) - exp(-im*A))
+end
+
+"""
+    sincos(A::Matrix)
+
+Compute the matrix sine and cosine of a square matrix `A`.
+
+# Examples
+```jldoctest
+julia> sincos(ones(2, 2))
+2×2 Array{Float64,2}:
+ 0.454649  0.454649
+ 0.454649  0.454649
+```
+"""
+function sincos(A::StridedMatrix{<:Real})
+    if issymmetric(A)
+        return full(sincos(Symmetric(A)))
+    end
+    c, s = reim(exp(im*A))
+    return s, c
+end
+function sincos(A::StridedMatrix{<:Complex})
+    if ishermitian(A)
+        return full(sin(Hermitian(A)))
+    end
+    X, Y = exp(im*A), exp(-im*A)
+    return -0.5im * (X - Y), 0.5 * (X + Y)
 end
 
 """
@@ -745,17 +773,17 @@ used to compute the tangent. Otherwise, the tangent is determined by calling
 
 # Examples
 ```jldoctest
-julia> sin(ones(2, 2))
+julia> tan(ones(2, 2))
 2×2 Array{Float64,2}:
- 0.454649  0.454649
- 0.454649  0.454649
+ -1.09252  -1.09252
+ -1.09252  -1.09252
 ```
 """
 function tan(A::StridedMatrix{<:Real})
     if issymmetric(A)
         return full(tan(Symmetric(A)))
     end
-    c, s = reim(exp(im*A))
+    s, c = sincos(A)
     return s / c
 end
 function tan(A::StridedMatrix{<:Complex})
@@ -763,7 +791,63 @@ function tan(A::StridedMatrix{<:Complex})
         return full(tan(Hermitian(A)))
     end
     X, Y = exp(im*A), exp(-im*A)
-    return im * (Y - X) / (Y + X)
+    return -im * (X - Y) / (X + Y)
+end
+
+"""
+    cosh(A::Matrix)
+
+Compute the matrix hyperbolic cosine of a square matrix `A`.
+"""
+function cosh(A::StridedMatrix{<:Real})
+    if issymmetric(A)
+        return full(cosh(Symmetric(A)))
+    end
+    return 0.5 * (exp(A) + exp(-A))
+end
+function cosh(A::StridedMatrix{<:Complex})
+    if ishermitian(A)
+        return full(cosh(Hermitian(A)))
+    end
+    return 0.5 * (exp(A) + exp(-A))
+end
+
+"""
+    sinh(A::Matrix)
+
+Compute the matrix hyperbolic sine of a square matrix `A`.
+"""
+function sinh(A::StridedMatrix{<:Real})
+    if issymmetric(A)
+        return full(sinh(Symmetric(A)))
+    end
+    return 0.5 * (exp(A) - exp(-A))
+end
+function sinh(A::StridedMatrix{<:Complex})
+    if ishermitian(A)
+        return full(sinh(Hermitian(A)))
+    end
+    return 0.5 * (exp(A) - exp(-A))
+end
+
+"""
+    tanh(A::Matrix)
+
+Compute the matrix hyperbolic tangent of a square matrix `A`.
+"""
+function tanh(A::StridedMatrix{<:Real})
+    if issymmetric(A)
+        return full(tanh(Symmetric(A)))
+    end
+    X, Y = exp(A), exp(-A)
+    return (X - Y) / (X + Y)
+end
+function tanh(A::StridedMatrix{<:Complex})
+    if ishermitian(A)
+        return full(tanh(Hermitian(A)))
+    end
+    X, Y = exp(A), exp(-A)
+    return (X - Y) / (X + Y)
 end
 
 for (finv, f, finvh, fh, fn) in ((:sec, :cos, :sech, :cosh, "secant"),
