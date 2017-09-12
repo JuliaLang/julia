@@ -84,35 +84,65 @@ answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answ
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
-function repl_cmd(cmd, out)
-    shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
-    shell_name = Base.basename(shell[1])
+repl_cmd(line::AbstractString, out) = repl_cmd(Val(Sys.iswindows()), line, out)
 
-    if isempty(cmd.exec)
+function repl_cmd(iswindows::Val{false}, line::AbstractString, out)
+    shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV,"SHELL","/bin/sh")))
+    shell_name = basename(shell[1])
+    cmd = cmd_gen(eval(Main, shell_parse(line)[1]))
+    if isempty(cmd)
         throw(ArgumentError("no cmd to execute"))
-    elseif cmd.exec[1] == "cd"
-        new_oldpwd = pwd()
-        if length(cmd.exec) > 2
-            throw(ArgumentError("cd method only takes one argument"))
-        elseif length(cmd.exec) == 2
-            dir = cmd.exec[2]
-            if dir == "-"
-                if !haskey(ENV, "OLDPWD")
-                    error("cd: OLDPWD not set")
-                end
-                cd(ENV["OLDPWD"])
-            else
-                cd(@static Sys.iswindows() ? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
-            end
-        else
-            cd()
-        end
-        ENV["OLDPWD"] = new_oldpwd
-        println(out, pwd())
+    elseif cmd[1] == "cd" && length(cmd) <= 2
+        repl_cd(cmd, shell, out)
     else
-        run(ignorestatus(@static Sys.iswindows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
+        run(ignorestatus(isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`))
     end
     nothing
+end
+
+function repl_cmd(iswindows::Val{true}, line::AbstractString, out)
+    shell = shell_split(get(ENV, "JULIA_SHELL", "cmd"))
+    shell_name = isempty(shell) ? "" : lowercase(splitext(basename(shell[1]))[1])
+    cmd = cmd_gen(eval(Main, shell_parse(line)[1]))
+    if isempty(cmd)
+        throw(ArgumentError("no cmd to execute"))
+    elseif cmd[1] == "cd" && length(cmd) <= 2
+        repl_cd(cmd, shell, out)
+    else
+        interpolated_line = eval(Main, parse(string('"', escape_string(line), '"')))
+        if shell_name == ""
+            command = cmd
+        elseif shell_name == "cmd"
+            command = Cmd(`$shell /s /c $(string('"', interpolated_line, '"'))`, windows_verbatim=true)
+        elseif shell_name == "powershell"
+            command = `$shell -Command $interpolated_line`
+        elseif shell_name == "busybox"
+            command = `$shell sh -c $interpolated_line`
+        else
+            command = `$shell $interpolated_line`
+        end
+        run(ignorestatus(command))
+    end
+    nothing
+end
+
+function repl_cd(cmd::Cmd, shell, out)
+    new_oldpwd = pwd()
+    if length(cmd) == 2
+        dir = cmd[2]
+        if dir == "-"
+            if !haskey(ENV, "OLDPWD")
+                error("cd: OLDPWD not set")
+            end
+            cd(ENV["OLDPWD"])
+        else
+            cd(@static Sys.iswindows() ? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+        end
+    else
+        cd()
+    end
+    ENV["OLDPWD"] = new_oldpwd
+    println(out, pwd())
 end
 
 function shell_wrap_true(shell_name, cmd)
