@@ -383,7 +383,7 @@ v = OffsetArray(rand(8), (-2,))
 @test flipdim(A, 1) == OffsetArray(flipdim(parent(A), 1), A.offsets)
 @test flipdim(A, 2) == OffsetArray(flipdim(parent(A), 2), A.offsets)
 
-@test A+1 == OffsetArray(parent(A)+1, A.offsets)
+@test A .+ 1 == OffsetArray(parent(A) .+ 1, A.offsets)
 @test 2*A == OffsetArray(2*parent(A), A.offsets)
 @test A+A == OffsetArray(parent(A)+parent(A), A.offsets)
 @test A.*A == OffsetArray(parent(A).*parent(A), A.offsets)

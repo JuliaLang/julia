@@ -1258,7 +1258,7 @@ function _cat(A, shape::NTuple{N}, catdims, X...) where N
     for x in X
         for i = 1:N
             if concat[i]
-                inds[i] = offsets[i] + cat_indices(x, i)
+                inds[i] = offsets[i] .+ cat_indices(x, i)
                 offsets[i] += cat_size(x, i)
             else
                 inds[i] = 1:shape[i]

@@ -29,9 +29,9 @@
 
 t = Dates.Year(1)
 t2 = Dates.Year(2)
-@test ([t, t, t, t, t] + Dates.Year(1)) == ([t2, t2, t2, t2, t2])
-@test (Dates.Year(1) + [t, t, t, t, t]) == ([t2, t2, t2, t2, t2])
-@test ([t2, t2, t2, t2, t2] - Dates.Year(1)) == ([t, t, t, t, t])
+@test ([t, t, t, t, t] .+ Dates.Year(1)) == ([t2, t2, t2, t2, t2])
+@test (Dates.Year(1) .+ [t, t, t, t, t]) == ([t2, t2, t2, t2, t2])
+@test ([t2, t2, t2, t2, t2] .- Dates.Year(1)) == ([t, t, t, t, t])
 @test_throws MethodError ([t, t, t, t, t] .* Dates.Year(1)) == ([t, t, t, t, t])
 @test ([t, t, t, t, t] * 1) == ([t, t, t, t, t])
 @test ([t, t, t, t, t] .% t2) == ([t, t, t, t, t])
@@ -352,15 +352,15 @@ cpa = [1y + 1s 1m + 1s 1w + 1s 1d + 1s; 1h + 1s 1mi + 1s 2m + 1s 1s + 1ms]
 @test cpa .+ 1y == [2y + 1s 1y + 1m + 1s 1y + 1w + 1s 1y + 1d + 1s; 1y + 1h + 1s 1y + 1mi + 1s 1y + 2m + 1s 1y + 1ms + 1s]
 @test cpa .+ (1y + 1m) == [2y + 1m + 1s 1y + 2m + 1s 1y + 1m + 1w + 1s 1y + 1m + 1d + 1s; 1y + 1m + 1h + 1s 1y + 1m + 1mi + 1s 1y + 3m + 1s 1y + 1m + 1s + 1ms]
 
-@test 1y + pa == [2y 1y + 1m 1y + 1w 1y + 1d; 1y + 1h 1y + 1mi 1y + 1s 1y + 1ms]
-@test (1y + 1m) + pa == [2y + 1m 1y + 2m 1y + 1m + 1w 1y + 1m + 1d; 1y + 1m + 1h 1y + 1m + 1mi 1y + 1m + 1s 1y + 1m + 1ms]
-@test pa + 1y == [2y 1y + 1m 1y + 1w 1y + 1d; 1y + 1h 1y + 1mi 1y + 1s 1y + 1ms]
-@test pa + (1y + 1m) == [2y + 1m 1y + 2m 1y + 1m + 1w 1y + 1m + 1d; 1y + 1m + 1h 1y + 1m + 1mi 1y + 1m + 1s 1y + 1m + 1ms]
+@test 1y .+ pa == [2y 1y + 1m 1y + 1w 1y + 1d; 1y + 1h 1y + 1mi 1y + 1s 1y + 1ms]
+@test (1y + 1m) .+ pa == [2y + 1m 1y + 2m 1y + 1m + 1w 1y + 1m + 1d; 1y + 1m + 1h 1y + 1m + 1mi 1y + 1m + 1s 1y + 1m + 1ms]
+@test pa .+ 1y == [2y 1y + 1m 1y + 1w 1y + 1d; 1y + 1h 1y + 1mi 1y + 1s 1y + 1ms]
+@test pa .+ (1y + 1m) == [2y + 1m 1y + 2m 1y + 1m + 1w 1y + 1m + 1d; 1y + 1m + 1h 1y + 1m + 1mi 1y + 1m + 1s 1y + 1m + 1ms]
 
-@test 1y + cpa == [2y + 1s 1y + 1m + 1s 1y + 1w + 1s 1y + 1d + 1s; 1y + 1h + 1s 1y + 1mi + 1s 1y + 2m + 1s 1y + 1ms + 1s]
-@test (1y + 1m) + cpa == [2y + 1m + 1s 1y + 2m + 1s 1y + 1m + 1w + 1s 1y + 1m + 1d + 1s; 1y + 1m + 1h + 1s 1y + 1m + 1mi + 1s 1y + 3m + 1s 1y + 1m + 1s + 1ms]
-@test cpa + 1y == [2y + 1s 1y + 1m + 1s 1y + 1w + 1s 1y + 1d + 1s; 1y + 1h + 1s 1y + 1mi + 1s 1y + 2m + 1s 1y + 1ms + 1s]
-@test cpa + (1y + 1m) == [2y + 1m + 1s 1y + 2m + 1s 1y + 1m + 1w + 1s 1y + 1m + 1d + 1s; 1y + 1m + 1h + 1s 1y + 1m + 1mi + 1s 1y + 3m + 1s 1y + 1m + 1s + 1ms]
+@test 1y .+ cpa == [2y + 1s 1y + 1m + 1s 1y + 1w + 1s 1y + 1d + 1s; 1y + 1h + 1s 1y + 1mi + 1s 1y + 2m + 1s 1y + 1ms + 1s]
+@test (1y + 1m) .+ cpa == [2y + 1m + 1s 1y + 2m + 1s 1y + 1m + 1w + 1s 1y + 1m + 1d + 1s; 1y + 1m + 1h + 1s 1y + 1m + 1mi + 1s 1y + 3m + 1s 1y + 1m + 1s + 1ms]
+@test cpa .+ 1y == [2y + 1s 1y + 1m + 1s 1y + 1w + 1s 1y + 1d + 1s; 1y + 1h + 1s 1y + 1mi + 1s 1y + 2m + 1s 1y + 1ms + 1s]
+@test cpa .+ (1y + 1m) == [2y + 1m + 1s 1y + 2m + 1s 1y + 1m + 1w + 1s 1y + 1m + 1d + 1s; 1y + 1m + 1h + 1s 1y + 1m + 1mi + 1s 1y + 3m + 1s 1y + 1m + 1s + 1ms]
 
 @test 1y .- pa == [0y 1y-1m 1y-1w 1y-1d; 1y-1h 1y-1mi 1y-1s 1y-1ms]
 @test (1y + 1m) .- pa == [1m 1y 1y + 1m-1w 1y + 1m-1d; 1y + 1m-1h 1y + 1m-1mi 1y + 1m-1s 1y + 1m-1ms]
@@ -371,16 +371,6 @@ cpa = [1y + 1s 1m + 1s 1w + 1s 1d + 1s; 1h + 1s 1mi + 1s 2m + 1s 1s + 1ms]
 @test (1y + 1m) .- cpa == [1m-1s 1y-1s 1y + 1m-1w-1s 1y + 1m-1d-1s; 1y + 1m-1h-1s 1y + 1m-1mi-1s 1y-1m-1s 1y + 1m-1s-1ms]
 @test cpa .- 1y == [1s -1y + 1m + 1s -1y + 1w + 1s -1y + 1d + 1s; -1y + 1h + 1s -1y + 1mi + 1s -1y + 2m + 1s -1y + 1ms + 1s]
 @test cpa .- (1y + 1m) == [-1m + 1s -1y + 1s -1y-1m + 1w + 1s -1y-1m + 1d + 1s; -1y-1m + 1h + 1s -1y-1m + 1mi + 1s -1y + 1m + 1s -1y + -1m + 1s + 1ms]
-
-@test 1y - pa == [0y 1y-1m 1y-1w 1y-1d; 1y-1h 1y-1mi 1y-1s 1y-1ms]
-@test (1y + 1m) - pa == [1m 1y 1y + 1m-1w 1y + 1m-1d; 1y + 1m-1h 1y + 1m-1mi 1y + 1m-1s 1y + 1m-1ms]
-@test pa - (1y + 1m) == [-1m -1y -1y-1m + 1w -1y-1m + 1d; -1y-1m + 1h -1y-1m + 1mi -1y-1m + 1s -1y-1m + 1ms]
-@test pa - 1y == [0y 1m-1y -1y + 1w -1y + 1d; -1y + 1h -1y + 1mi -1y + 1s -1y + 1ms]
-
-@test 1y - cpa == [-1s 1y-1m-1s 1y-1w-1s 1y-1d-1s; 1y-1h-1s 1y-1mi-1s 1y-2m-1s 1y-1ms-1s]
-@test (1y + 1m) - cpa == [1m-1s 1y-1s 1y + 1m-1w-1s 1y + 1m-1d-1s; 1y + 1m-1h-1s 1y + 1m-1mi-1s 1y-1m-1s 1y + 1m-1s-1ms]
-@test cpa - 1y == [1s -1y + 1m + 1s -1y + 1w + 1s -1y + 1d + 1s; -1y + 1h + 1s -1y + 1mi + 1s -1y + 2m + 1s -1y + 1ms + 1s]
-@test cpa - (1y + 1m) == [-1m + 1s -1y + 1s -1y-1m + 1w + 1s -1y-1m + 1d + 1s; -1y-1m + 1h + 1s -1y-1m + 1mi + 1s -1y + 1m + 1s -1y + -1m + 1s + 1ms]
 
 @test [1y 1m; 1w 1d] + [1h 1mi; 1s 1ms] == [1y + 1h 1m + 1mi; 1w + 1s 1d + 1ms]
 @test [1y 1m; 1w 1d] - [1h 1mi; 1s 1ms] == [1y-1h 1m-1mi; 1w-1s 1d-1ms]

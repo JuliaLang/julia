@@ -397,12 +397,12 @@ end
         @test Y - I == T([0 -1; -1 0])
         @test Y * I == Y
 
-        @test Y + 1 == T([2 0; 0 2])
-        @test Y - 1 == T([0 -2; -2 0])
+        @test Y .+ 1 == T([2 0; 0 2])
+        @test Y .- 1 == T([0 -2; -2 0])
         @test Y * 2 == T([2 -2; -2 2])
         @test Y / 1 == Y
 
-        @test T([true false; false true]) + true == T([2 1; 1 2])
+        @test T([true false; false true]) .+ true == T([2 1; 1 2])
     end
 
     @test_throws ArgumentError Hermitian(X) + 2im*I
@@ -432,8 +432,8 @@ end
 @testset "inversion of Hilbert matrix" begin
     for T in (Float64, Complex128)
         H = T[1/(i + j - 1) for i in 1:8, j in 1:8]
-        @test norm(inv(Symmetric(H))*(H*ones(8))-1) ≈ 0 atol = 1e-5
-        @test norm(inv(Hermitian(H))*(H*ones(8))-1) ≈ 0 atol = 1e-5
+        @test norm(inv(Symmetric(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
+        @test norm(inv(Hermitian(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
     end
 end
 

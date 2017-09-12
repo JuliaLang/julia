@@ -438,7 +438,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
         for c in CartesianRange(indices(A))
             for i in 1:ndims(A)
                 n = inner[i]
-                inner_indices[i] = (1:n) + ((c[i] - 1) * n)
+                inner_indices[i] = (1:n) .+ ((c[i] - 1) * n)
             end
             fill!(view(R, inner_indices...), A[c])
         end
@@ -453,7 +453,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     for i in 1:length(outer)
         B = view(R, src_indices...)
         for j in 2:outer[i]
-            dest_indices[i] += inner_shape[i]
+            dest_indices[i] = dest_indices[i] .+ inner_shape[i]
             R[dest_indices...] = B
         end
         src_indices[i] = dest_indices[i] = 1:shape[i]

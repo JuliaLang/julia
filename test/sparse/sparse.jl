@@ -448,15 +448,15 @@ end
     for f in (sum, prod, minimum, maximum)
         # Test with a map function that maps to non-zero
         for arr in (se33, sA, pA)
-            @test f(x->x+1, arr) ≈ f(arr+1)
+            @test f(x->x+1, arr) ≈ f(arr .+ 1)
         end
 
         # case where f(0) would throw
-        @test f(x->sqrt(x-1), pA+1) ≈ f(sqrt.(pA))
+        @test f(x->sqrt(x-1), pA .+ 1) ≈ f(sqrt.(pA))
         # these actually throw due to #10533
-        # @test f(x->sqrt(x-1), pA+1, 1) ≈ f(sqrt(pA), 1)
-        # @test f(x->sqrt(x-1), pA+1, 2) ≈ f(sqrt(pA), 2)
-        # @test f(x->sqrt(x-1), pA+1, 3) ≈ f(pA)
+        # @test f(x->sqrt(x-1), pA .+ 1, 1) ≈ f(sqrt(pA), 1)
+        # @test f(x->sqrt(x-1), pA .+ 1, 2) ≈ f(sqrt(pA), 2)
+        # @test f(x->sqrt(x-1), pA .+ 1, 3) ≈ f(pA)
     end
 
     @testset "empty cases" begin
@@ -1844,8 +1844,8 @@ end
         @test Y - I == T(sparse([0 -1; -1 0]))
         @test Y * I == Y
 
-        @test Y + 1 == T(sparse([2 0; 0 2]))
-        @test Y - 1 == T(sparse([0 -2; -2 0]))
+        @test Y .+ 1 == T(sparse([2 0; 0 2]))
+        @test Y .- 1 == T(sparse([0 -2; -2 0]))
         @test Y * 2 == T(sparse([2 -2; -2 2]))
         @test Y / 1 == Y
     end

@@ -277,7 +277,7 @@ drs2 = map(x->Dates.Date(first(x)):step(x):Dates.Date(last(x)), drs)
     end
     true
 end
-@test_throws MethodError dr + 1
+@test_throws MethodError dr .+ 1
 a = Dates.DateTime(2013, 1, 1)
 b = Dates.DateTime(2013, 2, 1)
 @test map!(x->x + Dates.Day(1), Array{Dates.DateTime}(32), dr) == [(a + Dates.Day(1)):(b + Dates.Day(1));]
@@ -355,7 +355,7 @@ drs = Any[dr, dr1, dr2, dr3, dr4, dr5, dr6, dr7, dr8, dr9, dr10,
     end
     true
 end
-@test_throws MethodError dr + 1
+@test_throws MethodError dr .+ 1
 a = Dates.Date(2013, 1, 1)
 b = Dates.Date(2013, 2, 1)
 @test map!(x->x + Dates.Day(1), Array{Dates.Date}(32), dr) == [(a + Dates.Day(1)):(b + Dates.Day(1));]
@@ -538,7 +538,7 @@ drs = Any[dr, dr1, dr2, dr3, dr8, dr9, dr10,
 @test all(x->reverse(x) == last(x): - step(x):first(x), drs)
 @test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])
 @test all(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)), drs[4:end])
-@test_throws MethodError dr + 1
+@test_throws MethodError dr .+ 1
 
 a = Dates.Time(23, 1, 1)
 @test map(x->a in x, drs[1:4]) == [true, true, false, true]

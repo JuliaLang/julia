@@ -1664,21 +1664,21 @@ end
 
 @testset "binary ops on bool arrays" begin
     A = Array(trues(5))
-    @test A + true == [2,2,2,2,2]
+    @test A .+ true == [2,2,2,2,2]
     A = Array(trues(5))
-    @test A + false == [1,1,1,1,1]
+    @test A .+ false == [1,1,1,1,1]
     A = Array(trues(5))
-    @test true + A == [2,2,2,2,2]
+    @test true .+ A == [2,2,2,2,2]
     A = Array(trues(5))
-    @test false + A == [1,1,1,1,1]
+    @test false .+ A == [1,1,1,1,1]
     A = Array(trues(5))
-    @test A - true == [0,0,0,0,0]
+    @test A .- true == [0,0,0,0,0]
     A = Array(trues(5))
-    @test A - false == [1,1,1,1,1]
+    @test A .- false == [1,1,1,1,1]
     A = Array(trues(5))
-    @test true - A == [0,0,0,0,0]
+    @test true .- A == [0,0,0,0,0]
     A = Array(trues(5))
-    @test false - A == [-1,-1,-1,-1,-1]
+    @test false .- A == [-1,-1,-1,-1,-1]
 end
 
 @testset "simple transposes" begin
@@ -1734,8 +1734,8 @@ module RetTypeDecl
     broadcast(::typeof(*), x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
     convert(::Type{MeterUnits{T,pow}}, y::Real) where {T,pow} = MeterUnits{T,pow}(convert(T,y))
 
-    @test @inferred(m+[m,m]) == [m+m,m+m]
-    @test @inferred([m,m]+m) == [m+m,m+m]
+    @test @inferred(m .+ [m,m]) == [m+m,m+m]
+    @test @inferred([m,m] .+ m) == [m+m,m+m]
     @test @inferred(broadcast(*,m,[m,m])) == [m2,m2]
     @test @inferred(broadcast(*,[m,m],m)) == [m2,m2]
     @test @inferred([m 2m; m m]*[m,m]) == [3m2,2m2]
@@ -1847,7 +1847,7 @@ copy!(S, A)
 @test flipdim(A, 1) == flipdim(B, 1) == flipdim(S, 2)
 @test flipdim(A, 2) == flipdim(B, 2) == flipdim(S, 2)
 
-@test A + 1 == B + 1 == S + 1
+@test A .+ 1 == B .+ 1 == S .+ 1
 @test 2*A == 2*B == 2*S
 @test A/3 == B/3 == S/3
 
@@ -1951,7 +1951,7 @@ end
 
 #issue #18336
 @test cumsum([-0.0, -0.0])[1] === cumsum([-0.0, -0.0])[2] === -0.0
-@test cumprod(-0.0im + (0:0))[1] === Complex(0.0, -0.0)
+@test cumprod(-0.0im .+ (0:0))[1] === Complex(0.0, -0.0)
 
 module TestNLoops15895
 

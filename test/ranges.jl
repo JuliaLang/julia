@@ -464,16 +464,16 @@ end
 @test sum(0:0.000001:1) == 500000.5
 @test sum(0:0.1:10) == 505.
 
-# operations with scalars
-@test (1:3) - 2 == -1:1
-@test (1:3) - 0.25 == 1-0.25:3-0.25
-@test (1:3) + 2 == 3:5
-@test (1:3) + 0.25 == 1+0.25:3+0.25
-@test (1:2:6) + 1 == 2:2:6
-@test (1:2:6) + 0.3 == 1+0.3:2:5+0.3
-@test (1:2:6) - 1 == 0:2:4
-@test (1:2:6) - 0.3 == 1-0.3:2:5-0.3
-@test 2 - (1:3) == 1:-1:-1
+# broadcasted operations with scalars
+@test broadcast(-, 1:3, 2) == -1:1
+@test broadcast(-, 1:3, 0.25) == 1-0.25:3-0.25
+@test broadcast(+, 1:3, 2) == 3:5
+@test broadcast(+, 1:3, 0.25) == 1+0.25:3+0.25
+@test broadcast(+, 1:2:6, 1) == 2:2:6
+@test broadcast(+, 1:2:6, 0.3) == 1+0.3:2:5+0.3
+@test broadcast(-, 1:2:6, 1) == 0:2:4
+@test broadcast(-, 1:2:6, 0.3) == 1-0.3:2:5-0.3
+@test broadcast(-, 2, 1:3) == 1:-1:-1
 
 # operations between ranges and arrays
 @test all(([1:5;] + (5:-1:1)) .== 6)
@@ -710,7 +710,7 @@ let r1 = 1.0:0.1:2.0, r2 = 1.0f0:0.2f0:3.0f0, r3 = 1:2:21
     @test r3 + r3 == 2 * r3
 end
 
-# issue #7114
+# issue #7114d
 r = -0.004532318104333742:1.2597349521122731e-5:0.008065031416788989
 @test length(r[1:end-1]) == length(r) - 1
 @test isa(r[1:2:end],AbstractRange) && length(r[1:2:end]) == div(length(r)+1, 2)
@@ -737,14 +737,14 @@ r7484 = 0.1:0.1:1
 # issue #7387
 for r in (0:1, 0.0:1.0)
     local r
-    @test [r+im;] == [r;]+im
-    @test [r-im;] == [r;]-im
+    @test [r .+ im;] == [r;] .+ im
+    @test [r .- im;] == [r;] .- im
     @test [r*im;] == [r;]*im
     @test [r/im;] == [r;]/im
 end
 
 # Preservation of high precision upon addition
-r = (-0.1:0.1:0.3) + ((-0.3:0.1:0.1) + 1e-12)
+r = (-0.1:0.1:0.3) + broadcast(+, -0.3:0.1:0.1, 1e-12)
 @test r[3] == 1e-12
 
 # issue #7709
@@ -830,8 +830,8 @@ end
 @test 2*LinSpace(0,3,4) == LinSpace(0,6,4)
 @test LinSpace(0,3,4)*2 == LinSpace(0,6,4)
 @test LinSpace(0,3,4)/3 == LinSpace(0,1,4)
-@test 2-LinSpace(0,3,4) == LinSpace(2,-1,4)
-@test 2+LinSpace(0,3,4) == LinSpace(2,5,4)
+@test broadcast(-, 2, LinSpace(0,3,4)) == LinSpace(2,-1,4)
+@test broadcast(+, 2, LinSpace(0,3,4)) == LinSpace(2,5,4)
 @test -LinSpace(0,3,4) == LinSpace(0,-3,4)
 @test reverse(LinSpace(0,3,4)) == LinSpace(3,0,4)
 
@@ -901,13 +901,13 @@ function test_linspace_identity(r::AbstractRange{T}, mr) where T
     @test -collect(r) == collect(mr)
     @test isa(-r, typeof(r))
 
-    @test 1 + r + (-1) == r
-    @test 1 + collect(r) == collect(1 + r) == collect(r + 1)
-    @test isa(1 + r + (-1), typeof(r))
-    @test 1 - r - 1 == mr
-    @test 1 - collect(r) == collect(1 - r) == collect(1 + mr)
-    @test collect(r) - 1 == collect(r - 1) == -collect(mr + 1)
-    @test isa(1 - r - 1, typeof(r))
+    @test broadcast(+, broadcast(+, 1, r), -1) == r
+    @test 1 .+ collect(r) == collect(1 .+ r) == collect(r .+ 1)
+    @test isa(broadcast(+, broadcast(+, 1, r), -1), typeof(r))
+    @test broadcast(-, broadcast(-, 1, r), 1) == mr
+    @test 1 .- collect(r) == collect(1 .- r) == collect(1 .+ mr)
+    @test collect(r) .- 1 == collect(r .- 1) == -collect(mr .+ 1)
+    @test isa(broadcast(-, broadcast(-, 1, r), 1), typeof(r))
 
     @test 1 * r * 1 == r
     @test 2 * r * T(0.5) == r
@@ -1045,9 +1045,9 @@ r = Base.OneTo(3)
 @test r[2:3] === 2:3
 @test_throws BoundsError r[4]
 @test_throws BoundsError r[0]
-@test r+1 === 2:4
+@test broadcast(+, r, 1) === 2:4
 @test 2*r === 2:2:6
-@test r+r === 2:2:6
+@test r + r === 2:2:6
 k = 0
 for i in r
     local i

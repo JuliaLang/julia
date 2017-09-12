@@ -349,7 +349,7 @@ y = [0.40003674665581906,0.4085630862624367,0.41662034698690303,0.41662034698690
 
 # variance of complex arrays (#13309)
 let z = rand(Complex128, 10)
-    @test var(z) ≈ invoke(var, Tuple{Any}, z) ≈ cov(z) ≈ var(z,1)[1] ≈ sum(abs2, z - mean(z))/9
+    @test var(z) ≈ invoke(var, Tuple{Any}, z) ≈ cov(z) ≈ var(z,1)[1] ≈ sum(abs2, z .- mean(z))/9
     @test isa(var(z), Float64)
     @test isa(invoke(var, Tuple{Any}, z), Float64)
     @test isa(cov(z), Float64)
