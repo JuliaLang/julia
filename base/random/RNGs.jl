@@ -49,7 +49,7 @@ srand(rng::RandomDevice) = rng
 
 ### generation of floats
 
-@inline rand(r::RandomDevice, I::FloatInterval) = rand_generic(r, I)
+rand(r::RandomDevice, I::FloatInterval) = rand_generic(r, I)
 
 
 ## MersenneTwister
@@ -130,21 +130,21 @@ hash(r::MersenneTwister, h::UInt) = foldr(hash, h, (r.seed, r.state, r.vals, r.i
 
 ### low level API
 
-@inline mt_avail(r::MersenneTwister) = MTCacheLength - r.idx
-@inline mt_empty(r::MersenneTwister) = r.idx == MTCacheLength
-@inline mt_setfull!(r::MersenneTwister) = r.idx = 0
-@inline mt_setempty!(r::MersenneTwister) = r.idx = MTCacheLength
-@inline mt_pop!(r::MersenneTwister) = @inbounds return r.vals[r.idx+=1]
+mt_avail(r::MersenneTwister) = MTCacheLength - r.idx
+mt_empty(r::MersenneTwister) = r.idx == MTCacheLength
+mt_setfull!(r::MersenneTwister) = r.idx = 0
+mt_setempty!(r::MersenneTwister) = r.idx = MTCacheLength
+mt_pop!(r::MersenneTwister) = @inbounds return r.vals[r.idx+=1]
 
 function gen_rand(r::MersenneTwister)
     dsfmt_fill_array_close1_open2!(r.state, pointer(r.vals), length(r.vals))
     mt_setfull!(r)
 end
 
-@inline reserve_1(r::MersenneTwister) = (mt_empty(r) && gen_rand(r); nothing)
+reserve_1(r::MersenneTwister) = (mt_empty(r) && gen_rand(r); nothing)
 # `reserve` allows one to call `rand_inbounds` n times
 # precondition: n <= MTCacheLength
-@inline reserve(r::MersenneTwister, n::Int) = (mt_avail(r) < n && gen_rand(r); nothing)
+reserve(r::MersenneTwister, n::Int) = (mt_avail(r) < n && gen_rand(r); nothing)
 
 
 ### seeding
@@ -205,21 +205,21 @@ const GLOBAL_RNG = MersenneTwister(0)
 #### helper functions
 
 # precondition: !mt_empty(r)
-@inline rand_inbounds(r::MersenneTwister, ::Close1Open2_64) = mt_pop!(r)
-@inline rand_inbounds(r::MersenneTwister, ::CloseOpen_64) =
+rand_inbounds(r::MersenneTwister, ::Close1Open2_64) = mt_pop!(r)
+rand_inbounds(r::MersenneTwister, ::CloseOpen_64) =
     rand_inbounds(r, Close1Open2()) - 1.0
-@inline rand_inbounds(r::MersenneTwister) = rand_inbounds(r, CloseOpen())
+rand_inbounds(r::MersenneTwister) = rand_inbounds(r, CloseOpen())
 
-@inline rand_ui52_raw_inbounds(r::MersenneTwister) =
+rand_ui52_raw_inbounds(r::MersenneTwister) =
     reinterpret(UInt64, rand_inbounds(r, Close1Open2()))
-@inline rand_ui52_raw(r::MersenneTwister) = (reserve_1(r); rand_ui52_raw_inbounds(r))
+rand_ui52_raw(r::MersenneTwister) = (reserve_1(r); rand_ui52_raw_inbounds(r))
 
-@inline function rand_ui2x52_raw(r::MersenneTwister)
+function rand_ui2x52_raw(r::MersenneTwister)
     reserve(r, 2)
     rand_ui52_raw_inbounds(r) % UInt128 << 64 | rand_ui52_raw_inbounds(r)
 end
 
-@inline function rand_ui104_raw(r::MersenneTwister)
+function rand_ui104_raw(r::MersenneTwister)
     reserve(r, 2)
     rand_ui52_raw_inbounds(r) % UInt128 << 52 ⊻ rand_ui52_raw_inbounds(r)
 end
@@ -229,13 +229,13 @@ rand_ui23_raw(r::MersenneTwister) = rand_ui52_raw(r)
 
 #### floats
 
-@inline rand(r::MersenneTwister, I::FloatInterval_64) = (reserve_1(r); rand_inbounds(r, I))
+rand(r::MersenneTwister, I::FloatInterval_64) = (reserve_1(r); rand_inbounds(r, I))
 
-@inline rand(r::MersenneTwister, I::FloatInterval) = rand_generic(r, I)
+rand(r::MersenneTwister, I::FloatInterval) = rand_generic(r, I)
 
 #### integers
 
-@inline rand(r::MersenneTwister,
+rand(r::MersenneTwister,
              ::Type{T}) where {T<:Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}} =
                  rand_ui52_raw(r) % T
 
@@ -317,10 +317,10 @@ function rand!(r::MersenneTwister, A::Array{Float64}, n::Int=length(A),
     A
 end
 
-@inline mask128(u::UInt128, ::Type{Float16}) =
+mask128(u::UInt128, ::Type{Float16}) =
     (u & 0x03ff03ff03ff03ff03ff03ff03ff03ff) | 0x3c003c003c003c003c003c003c003c00
 
-@inline mask128(u::UInt128, ::Type{Float32}) =
+mask128(u::UInt128, ::Type{Float32}) =
     (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
 
 function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}},
@@ -408,7 +408,7 @@ end
 
 #### from a range
 
-@inline function rand_lteq(r::AbstractRNG, randfun, u::U, mask::U) where U<:Integer
+function rand_lteq(r::AbstractRNG, randfun, u::U, mask::U) where U<:Integer
     while true
         x = randfun(r) & mask
         x <= u && return x
