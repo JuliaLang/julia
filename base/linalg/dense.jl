@@ -742,21 +742,19 @@ Compute the matrix sine and cosine of a square matrix `A`.
 # Examples
 ```jldoctest
 julia> sincos(ones(2, 2))
-2×2 Array{Float64,2}:
- 0.454649  0.454649
- 0.454649  0.454649
+([0.454649 0.454649; 0.454649 0.454649], [0.291927 -0.708073; -0.708073 0.291927])
 ```
 """
 function sincos(A::StridedMatrix{<:Real})
     if issymmetric(A)
-        return full(sincos(Symmetric(A)))
+        return full.(sincos(Symmetric(A)))
     end
     c, s = reim(exp(im*A))
     return s, c
 end
 function sincos(A::StridedMatrix{<:Complex})
     if ishermitian(A)
-        return full(sin(Hermitian(A)))
+        return full.(sincos(Hermitian(A)))
     end
     X, Y = exp(im*A), exp(-im*A)
     return -0.5im * (X - Y), 0.5 * (X + Y)

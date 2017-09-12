@@ -421,6 +421,96 @@ end
     @test exp(log(A8)) ≈ A8
 end
 
+@testset "Matrix trigonometry" begin
+    @testset "Tests for $elty" for elty in (Float32, Float64, Complex64, Complex128)
+        A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
+        A2  = convert(Matrix{elty},
+                      [29.87942128909879    0.7815750847907159 -2.289519314033932;
+                       0.7815750847907159 25.72656945571064    8.680737820540137;
+                       -2.289519314033932   8.680737820540137  34.39400925519054])
+        A3 = convert(Matrix{elty}, [0.25 0.25; 0 0])
+        A4 = convert(Matrix{elty}, [0 0.02; 0 0])
+
+        # Identities
+        for A in (A1, A2, A3, A4)
+            @test sincos(A) == (sin(A), cos(A))
+            @test cos(A)^2 + sin(A)^2 ≈ eye(A)
+            @test tan(A) ≈ sin(A) / cos(A)
+            @test cos(A) ≈ real(exp(im*A))
+            @test sin(A) ≈ imag(exp(im*A))
+            @test cosh(A) ≈ 0.5 * (exp(A) + exp(-A))
+            @test sinh(A) ≈ 0.5 * (exp(A) - exp(-A))
+        end
+        # The following identities fail for A1, A2 due to rounding errors;
+        # needs better algorithm for the general case
+        for A in (A3, A4)
+            @test cosh(A)^2 - sinh(A)^2 ≈ eye(A)
+            @test tanh(A) ≈ sinh(A) / cosh(A)
+        end
+        # The following identities fail for A3, A4 because the matrices are singular
+        for A in (A1, A2)
+            @test sec(A) ≈ inv(cos(A))
+            @test csc(A) ≈ inv(sin(A))
+            @test cot(A) ≈ inv(tan(A))
+            @test sech(A) ≈ inv(cosh(A))
+            @test csch(A) ≈ inv(sinh(A))
+            @test coth(A) ≈ inv(tanh(A))
+        end
+
+        cosA1 = convert(Matrix{elty},[-0.3399382355168413 0.7726590094048935 0.527449512762314;
+                                      0.6500542610836038 -0.07621347913568476 0.3863295047024468;
+                                      0.6500542610836039 0.9137790174647606 -0.6036629918979983])
+        sinA1 = convert(Matrix{elty}, [0.0009415059736026382 -0.8468996671819825 0.566542663009454;
+                                       -0.14017850208626437 0.28421283747832987 -0.4234498335909914;
+                                       -0.14017850208626415 0.1430928294184625 -0.282329825531124] )
+        @test cos(A1) ≈ cosA1
+        @test sin(A1) ≈ sinA1
+
+        cosA2 = convert(Matrix{elty}, [0.14408835957555513 0.02411229662020243 0.131572799600281;
+                                       0.02411229662020243 0.11664638273689495 -0.4644914507922954;
+                                       0.131572799600281 -0.4644914507922954 -0.3653392922637553])
+        sinA2 = convert(Matrix{elty},[-0.880407410094922 -0.43009674285556254 -0.03528915168797607;
+                                      -0.43009674285556254 0.7600144329704634 -0.08634097606922514;
+                                      -0.03528915168797607 -0.08634097606922514 0.7904197642385895])
+        @test cos(A2) ≈ cosA2
+        @test sin(A2) ≈ sinA2
+
+        cosA3 = convert(Matrix{elty}, [0.9689124217106446 -0.031087578289355197; 0.0 1.0])
+        sinA3 = convert(Matrix{elty}, [0.24740395925452285 0.24740395925452285; 0.0 0.0])
+        @test cos(A3) ≈ cosA3
+        @test sin(A3) ≈ sinA3
+
+        cosA4 = convert(Matrix{elty}, [1.0 0.0; 0.0 1.0])
+        sinA4 = convert(Matrix{elty}, [0.0 0.02; 0.0 0.0])
+        @test cos(A4) ≈ cosA4
+        @test sin(A4) ≈ sinA4
+    end
+
+    @testset "Additional tests for $elty" for elty in (Complex64, Complex128)
+        A = convert(Matrix{elty}, [1im 2; 0.02+0.5im 3])
+
+        @test sincos(A) == (sin(A), cos(A))
+
+        @test cos(A)^2 + sin(A)^2 ≈ eye(A)
+        @test cosh(A)^2 - sinh(A)^2 ≈ eye(A)
+        @test cos(A)^2 + sin(A)^2 ≈ eye(A)
+        @test tan(A) ≈ sin(A) / cos(A)
+        @test tanh(A) ≈ sinh(A) / cosh(A)
+
+        @test sec(A) ≈ inv(cos(A))
+        @test csc(A) ≈ inv(sin(A))
+        @test cot(A) ≈ inv(tan(A))
+        @test sech(A) ≈ inv(cosh(A))
+        @test csch(A) ≈ inv(sinh(A))
+        @test coth(A) ≈ inv(tanh(A))
+
+        @test cos(A) ≈ 0.5 * (exp(im*A) + exp(-im*A))
+        @test sin(A) ≈ -0.5im * (exp(im*A) - exp(-im*A))
+        @test cosh(A) ≈ 0.5 * (exp(A) + exp(-A))
+        @test sinh(A) ≈ 0.5 * (exp(A) - exp(-A))
+    end
+end
+
 @testset "issue 5116" begin
     A9  = [0 10 0 0; -1 0 0 0; 0 0 0 0; -2 0 0 0]
     eA9 = [-0.999786072879326  -0.065407069689389   0.0   0.0
