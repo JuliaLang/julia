@@ -202,6 +202,9 @@ This section lists changes that do not have deprecation warnings.
     They now return `CartesianIndex`es for all but 1-d arrays, and in general return
     the `keys` of indexed collections (e.g. dictionaries) ([#22907]).
 
+  * The `openspecfun` library is no longer built and shipped with Julia, as it is no longer
+    used internally ([#22390]).
+
 Library improvements
 --------------------
 
@@ -1276,6 +1279,7 @@ Command-line option changes
 [#22310]: https://github.com/JuliaLang/julia/issues/22310
 [#22325]: https://github.com/JuliaLang/julia/issues/22325
 [#22350]: https://github.com/JuliaLang/julia/issues/22350
+[#22390]: https://github.com/JuliaLang/julia/issues/22390
 [#22496]: https://github.com/JuliaLang/julia/issues/22496
 [#22523]: https://github.com/JuliaLang/julia/issues/22523
 [#22532]: https://github.com/JuliaLang/julia/issues/22532
