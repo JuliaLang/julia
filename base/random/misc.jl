@@ -145,8 +145,7 @@ randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 
 "Return a random `Int` (masked with `mask`) in ``[0, n)``, when `n <= 2^52`."
 @inline function rand_lt(r::AbstractRNG, n::Int, mask::Int=nextpow2(n)-1)
-    # this duplicates the functionality of RangeGenerator objects,
-    # to optimize this special case
+    # this duplicates the functionality of rand(1:n), to optimize this special case
     while true
         x = (rand_ui52_raw(r) % Int) & mask
         x < n && return x

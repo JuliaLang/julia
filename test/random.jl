@@ -34,16 +34,13 @@ let A = zeros(2, 2)
                 0.9103565379264364  0.17732884646626457]
 end
 let A = zeros(2, 2)
-    @test_throws BoundsError rand!(MersenneTwister(0), A, 5)
+    @test_throws ArgumentError rand!(MersenneTwister(0), A, 5)
     @test rand(MersenneTwister(0), Int64, 1) == [4439861565447045202]
 end
 let A = zeros(Int64, 2, 2)
     rand!(MersenneTwister(0), A)
     @test A == [858542123778948672  5715075217119798169;
                 8690327730555225005 8435109092665372532]
-end
-let A = zeros(UInt128, 2, 2)
-    @test_throws BoundsError rand!(MersenneTwister(0), A, 5)
 end
 
 # rand from AbstractArray
@@ -609,7 +606,7 @@ let b = ['0':'9';'A':'Z';'a':'z']
 end
 
 # this shouldn't crash (#22403)
-@test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3])
+@test_throws ArgumentError rand!(Union{UInt,Int}[1, 2, 3])
 
 @testset "$RNG() & srand(rng::$RNG) initializes randomly" for RNG in (MersenneTwister, RandomDevice)
     m = RNG()
@@ -637,4 +634,10 @@ end
     a = [rand(m) for _=1:100]
     srand(m, seed)
     @test a == [rand(m) for _=1:100]
+end
+
+struct RandomStruct23964 end
+@testset "error message when rand not defined for a type" begin
+    @test_throws ArgumentError rand(nothing)
+    @test_throws ArgumentError rand(RandomStruct23964())
 end
