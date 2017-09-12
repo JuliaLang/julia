@@ -21,6 +21,11 @@ srand(0); rand(); x = rand(384)
 # Try a seed larger than 2^32
 @test rand(MersenneTwister(5294967296)) == 0.3498809918210497
 
+# Test that the empty tuple makes a scalar, not a 0-d array
+@test rand(MersenneTwister(0), ()) == 0.8236475079774124
+@test randn(MersenneTwister(42), ()) == -0.5560268761463861
+@test randexp(MersenneTwister(42), ()) == 0.8064248352460865
+
 # Test array filling, Issues #7643, #8360
 @test rand(MersenneTwister(0), 1) == [0.8236475079774124]
 A = zeros(2, 2)
