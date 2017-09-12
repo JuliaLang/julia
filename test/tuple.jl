@@ -167,7 +167,7 @@ t3 = ("c", 2)
         @test setindex(t1, (), ()) == t1
         @test setindex(t1, t3, ()) == t1
         @test setindex(t1, (), t2) == t1
-        @test setindex(t1, t3, t2) == ("c", "a", 2) 
+        @test setindex(t1, t3, t2) == ("c", "a", 2)
     end
 
     @testset "Multidimensional indexing (issue #20453)" begin
