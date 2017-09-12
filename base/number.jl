@@ -62,9 +62,14 @@ function getindex(x::Number, I::Integer...)
     @boundscheck all([i == 1 for i in I]) || throw(BoundsError())
     x
 end
+function getindex(x::Number, c::Colon)
+    x
+end
 first(x::Number) = x
 last(x::Number) = x
 copy(x::Number) = x  # some code treats numbers as collection-like
+
+
 
 """
     divrem(x, y)
