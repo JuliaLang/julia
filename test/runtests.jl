@@ -105,6 +105,53 @@ cd(dirwalk) do
 end
 rm(dirwalk, recursive=true)
 
+let
+    # Subset of tests copied from base test/error.jl
+    function foo_error(c, n)
+        c[1] += 1
+        if c[1] <= n
+            error("foo")
+        end
+        return 7
+    end
+
+    # Success on first attempt
+    c = [0]
+    @test Compat.retry(foo_error)(c, 0) == 7
+    @test c[1] == 1
+
+    # Success on second attempt
+    c = [0]
+    @test Compat.retry(foo_error)(c,1) == 7
+    @test c[1] == 2
+
+    # 2 failed retry attempts, so exception is raised
+    c = [0]
+    ex = try
+        Compat.retry(foo_error, delays=Compat.ExponentialBackOff(n=2))(c, 3)
+    catch e
+        e
+    end
+
+    c = [0]
+    ex = try
+        Compat.retry(
+            foo_error,
+            check=(s,e)->(s, try e.http_status_code == "503" end != true)
+        )(c, 2)
+    catch e
+        e
+    end
+    @test typeof(ex) == ErrorException
+    @test ex.msg == "foo"
+    @test c[1] == 2
+
+    # Functions with keyword arguments
+    foo_kwargs(x; y=5) = x + y
+    @test Compat.retry(foo_kwargs)(3) == 8
+    @test Compat.retry(foo_kwargs)(3; y=4) == 7
+end
+
 for os in [:apple, :bsd, :linux, :unix, :windows]
     from_base = if VERSION >= v"0.7.0-DEV.914"
         Expr(:., Expr(:., :Base, Base.Meta.quot(:Sys)), Base.Meta.quot(Symbol("is", os)))

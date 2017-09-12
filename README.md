@@ -162,6 +162,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * There are versions of `InexactError`, `DomainError`, and `OverflowError` that take the same arguments as introduced in Julia 0.7-DEV ([#20005], [#22751], [#22761]).
 
+* `retry` for the more flexible `retry` method introduced in 0.6 which includes support for kwargs ([#19331], [#21419]).
+
 ## Renamed functions
 
 

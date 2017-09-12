@@ -140,7 +140,64 @@ macro compat(ex...)
     esc(_compat(ex[1]))
 end
 
+
 export @compat
+
+if VERSION < v"0.6.0-dev.2042"
+    immutable ExponentialBackOff
+        n::Int
+        first_delay::Float64
+        max_delay::Float64
+        factor::Float64
+        jitter::Float64
+
+        function ExponentialBackOff(n, first_delay, max_delay, factor, jitter)
+            all(x->x>=0, (n, first_delay, max_delay, factor, jitter)) || error("all inputs must be non-negative")
+            new(n, first_delay, max_delay, factor, jitter)
+        end
+    end
+
+    """
+        ExponentialBackOff(; n=1, first_delay=0.05, max_delay=10.0, factor=5.0, jitter=0.1)
+
+    A [`Float64`](@ref) iterator of length `n` whose elements exponentially increase at a
+    rate in the interval `factor` * (1 ± `jitter`).  The first element is
+    `first_delay` and all elements are clamped to `max_delay`.
+    """
+    ExponentialBackOff(; n=1, first_delay=0.05, max_delay=10.0, factor=5.0, jitter=0.1) =
+        ExponentialBackOff(n, first_delay, max_delay, factor, jitter)
+    Base.start(ebo::ExponentialBackOff) = (ebo.n, min(ebo.first_delay, ebo.max_delay))
+    function Base.next(ebo::ExponentialBackOff, state)
+        next_n = state[1]-1
+        curr_delay = state[2]
+        next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (rand() * 2.0 * ebo.jitter)))
+        (curr_delay, (next_n, next_delay))
+    end
+    Base.done(ebo::ExponentialBackOff, state) = state[1]<1
+    Base.length(ebo::ExponentialBackOff) = ebo.n
+
+    function retry(f::Function;  delays=ExponentialBackOff(), check=nothing)
+        (args...; kwargs...) -> begin
+            state = start(delays)
+            while true
+                try
+                    return f(args...; kwargs...)
+                catch e
+                    done(delays, state) && rethrow(e)
+                    if check !== nothing
+                        state, retry_or_not = check(state, e)
+                        retry_or_not || rethrow(e)
+                    end
+                end
+                (delay, state) = next(delays, state)
+                sleep(delay)
+            end
+        end
+    end
+else
+    import Base.ExponentialBackOff
+    import Base.retry
+end
 
 import Base: redirect_stdin, redirect_stdout, redirect_stderr
 if VERSION < v"0.6.0-dev.374"
