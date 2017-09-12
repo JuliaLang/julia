@@ -573,13 +573,8 @@ julia> log(A)
  0.0  1.0
 ```
 """
-function log(A::StridedMatrix{T}) where T
+function log(A::StridedMatrix)
     # If possible, use diagonalization
-    if T <: Real
-        if issymmetric(A)
-            return full(log(Symmetric(A)))
-        end
-    end
     if ishermitian(A)
         return full(log(Hermitian(A)))
     end
