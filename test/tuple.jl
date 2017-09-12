@@ -156,18 +156,18 @@ t3 = ("c", 2)
         @test getindex(t1, ()) == ()
         @test getindex((), t2) == ()
         @test getindex(t1, t2) == (1, "b")
-        @test setindex((), 3, ()) == ()
-        @test setindex((), 3, t2) == ()
-        @test setindex(t1, 3, ()) == t1
-        @test setindex(t1, 3, t2) == (3, "a", 3)
-        @test setindex((), (), ()) == ()
-        @test setindex((), (), t2) == ()
-        @test setindex((), t3, ()) == ()
-        @test setindex((), t3, t2) == ()
-        @test setindex(t1, (), ()) == t1
-        @test setindex(t1, t3, ()) == t1
-        @test setindex(t1, (), t2) == t1
-        @test setindex(t1, t3, t2) == ("c", "a", 2)
+        @test Base.setindex((), 3, ()) == ()
+        @test Base.setindex((), 3, t2) == ()
+        @test Base.setindex(t1, 3, ()) == t1
+        @test Base.setindex(t1, 3, t2) == (3, "a", 3)
+        @test Base.setindex((), (), ()) == ()
+        @test Base.setindex((), (), t2) == ()
+        @test Base.setindex((), t3, ()) == ()
+        @test Base.setindex((), t3, t2) == ()
+        @test Base.setindex(t1, (), ()) == t1
+        @test Base.setindex(t1, t3, ()) == t1
+        @test Base.setindex(t1, (), t2) == t1
+        @test Base.setindex(t1, t3, t2) == ("c", "a", 2)
     end
 
     @testset "Multidimensional indexing (issue #20453)" begin
