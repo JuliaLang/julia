@@ -116,6 +116,10 @@ end
     # @test_throws ArgumentError size((1,2), 2)
 end
 
+t1 = (1, "a", "b")
+t2 = (true, false, true)
+t3 = ("c", 2)
+
 @testset "indexing" begin
     @test getindex((1,), 1) === 1
     @test getindex((1,2), 2) === 2
@@ -145,6 +149,25 @@ end
         @test_throws BoundsError (1,2,3)[falses(2)]
         @test_throws BoundsError ()[[false]]
         @test_throws BoundsError ()[[true]]
+    end
+
+    @testset "logical tuple getindex/setindex" begin
+        @test getindex((), ()) == ()
+        @test getindex(t1, ()) == ()
+        @test getindex((), t2) == ()
+        @test getindex(t1, t2) == (1, "b")
+        @test setindex((), 3, ()) == ()
+        @test setindex((), 3, t2) == ()
+        @test setindex(t1, 3, ()) == t1
+        @test setindex(t1, 3, t2) == (3, "a", 3)
+        @test setindex((), (), ()) == ()
+        @test setindex((), (), t2) == ()
+        @test setindex((), t3, ()) == ()
+        @test setindex((), t3, t2) == ()
+        @test setindex(t1, (), ()) == t1
+        @test setindex(t1, t3, ()) == t1
+        @test setindex(t1, (), t2) == t1
+        @test setindex(t1, t3, t2) == ("c", "a", 2) 
     end
 
     @testset "Multidimensional indexing (issue #20453)" begin
