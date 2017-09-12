@@ -142,7 +142,7 @@ ordschur(schur::Schur, select::Union{Vector{Bool},BitVector}) =
 Same as [`ordschur`](@ref) but overwrites the input arguments.
 """
 ordschur!(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
-    LinAlg.LAPACK.trsen!(convert(Vector{BlasInt}, select), T, Z)
+    LinAlg.LAPACK.trsen!(convert(Vector{BlasInt}, select), T, Z)[1:3]
 
 """
     ordschur(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector
