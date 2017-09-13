@@ -322,10 +322,10 @@ end
 
 function i18408()
     local i
-    x->i
+    return (x -> i)
 end
 let f = i18408()
-    @test_throws UndefRefError f(0)
+    @test_throws UndefVarError(:i) f(0)
 end
 
 # issue #23558

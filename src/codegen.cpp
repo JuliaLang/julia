@@ -2837,8 +2837,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             Value *ptr = data_pointer(ctx, obj, T_pint8);
             Value *llvm_idx = ConstantInt::get(T_size, offs);
             Value *addr = ctx.builder.CreateGEP(ptr, llvm_idx);
-            Value *fldv = tbaa_decorate(obj.tbaa, ctx.builder.CreateLoad(emit_bitcast(ctx, addr, T_ppjlvalue)));
-            Value *isdef = ctx.builder.CreateICmpNE(fldv, V_null);
+            // emit this using the same type as emit_getfield_knownidx
+            // so that LLVM may be able to load-load forward them and fold the result
+            Value *fldv = tbaa_decorate(obj.tbaa, ctx.builder.CreateLoad(T_prjlvalue, emit_bitcast(ctx, addr, T_pprjlvalue)));
+            Value *isdef = ctx.builder.CreateIsNotNull(fldv);
             *ret = mark_julia_type(ctx, isdef, false, jl_bool_type);
         }
         return true;
@@ -3139,10 +3141,12 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
 static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, bool isvol, MDNode *tbaa)
 {
     assert(bp->getType() == T_pprjlvalue);
-    Instruction *v = ctx.builder.CreateLoad(bp, isvol);
+    LoadInst *v = ctx.builder.CreateLoad(T_prjlvalue, bp);
+    if (isvol)
+        v->setVolatile(true);
     if (tbaa)
         tbaa_decorate(tbaa, v);
-    undef_var_error_ifnot(ctx, ctx.builder.CreateICmpNE(v, maybe_decay_untracked(V_null)), name);
+    undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name);
     return mark_julia_type(ctx, v, true, jl_any_type);
 }
 
