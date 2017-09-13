@@ -115,6 +115,17 @@ S = view(A, :, :)
 @test S[1,4] == S[4] == 4
 @test_throws BoundsError S[1,1]
 @test indices(S) === (0:1, 3:4)
+# https://github.com/JuliaArrays/OffsetArrays.jl/issues/27
+g = OffsetArray(collect(-2:3), (-3,))
+gv = view(g, -1:2)
+@test indices(gv, 1) === Base.OneTo(4)
+@test collect(gv) == collect(-1:2)
+gv = view(g, OffsetArray(-1:2, (-2,)))
+@test indices(gv, 1) === -1:2
+@test collect(gv) == collect(-1:2)
+gv = view(g, OffsetArray(-1:2, (-1,)))
+@test indices(gv, 1) === 0:3
+@test collect(gv) == collect(-1:2)
 
 # iteration
 for (a,d) in zip(A, A0)
