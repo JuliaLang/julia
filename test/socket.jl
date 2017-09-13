@@ -73,23 +73,46 @@ defaultport = rand(2000:4000)
 for testport in [0, defaultport]
     port = Channel(1)
     tsk = @async begin
-        p, s = listenany(testport)
+        local (p, s) = listenany(testport)
+        @test p != 0
+        @test getsockname(s) == (Base.localhost, p)
         put!(port, p)
-        sock = accept(s)
-        # test write call
-        write(sock,"Hello World\n")
-
-        # test "locked" println to a socket
-        @sync begin
-            for i in 1:100
-                @async println(sock, "a", 1)
+        for i in 1:3
+            sock = accept(s)
+            @test getsockname(sock) == (Base.localhost, p)
+            let peer = getpeername(sock)::Tuple{IPAddr, UInt16}
+                @test peer[1] == Base.localhost
+                @test 0 != peer[2] != p
             end
+            # test write call
+            write(sock, "Hello World\n")
+
+            # test "locked" println to a socket
+            @sync begin
+                for i in 1:100
+                    @async println(sock, "a", 1)
+                end
+            end
+            close(sock)
         end
         close(s)
-        close(sock)
     end
     wait(port)
-    @test read(connect(fetch(port)), String) == "Hello World\n" * ("a1\n"^100)
+    let p = fetch(port)
+        otherip = getipaddr()
+        if otherip != Base.localhost
+            @test_throws Base.UVError("connect", Base.UV_ECONNREFUSED) connect(otherip, p)
+        end
+        for i in 1:3
+            client = connect(p)
+            let name = getsockname(client)::Tuple{IPAddr, UInt16}
+                @test name[1] == Base.localhost
+                @test 0 != name[2] != p
+            end
+            @test getpeername(client) == (Base.localhost, p)
+            @test read(client, String) == "Hello World\n" * ("a1\n"^100)
+        end
+    end
     wait(tsk)
 end
 

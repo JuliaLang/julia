@@ -701,7 +701,7 @@ function getipaddr()
         end
     end
     ccall(:uv_free_interface_addresses, Void, (Ptr{UInt8}, Int32), addr, count)
-    return lo_present ? ip"127.0.0.1" : error("No networking interface available")
+    return lo_present ? localhost : error("No networking interface available")
 end
 
 ##
@@ -741,15 +741,15 @@ connect!(sock::TCPSocket, addr::InetAddr) = connect!(sock, addr.host, addr.port)
 
 Connect to the host `host` on port `port`.
 """
-connect(sock::TCPSocket, port::Integer) = connect(sock,IPv4(127,0,0,1), port)
-connect(port::Integer) = connect(IPv4(127,0,0,1), port)
+connect(sock::TCPSocket, port::Integer) = connect(sock, localhost, port)
+connect(port::Integer) = connect(localhost, port)
 
 # Valid connect signatures for TCP
 connect(host::AbstractString, port::Integer) = connect(TCPSocket(), host, port)
 connect(addr::IPAddr, port::Integer) = connect(TCPSocket(), addr, port)
 connect(addr::InetAddr) = connect(TCPSocket(), addr)
 
-default_connectcb(sock,status) = nothing
+default_connectcb(sock, status) = nothing
 
 function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     if sock.status != StatusInit
@@ -780,7 +780,7 @@ function listen(addr; backlog::Integer=BACKLOG_DEFAULT)
     listen(sock; backlog=backlog)
     return sock
 end
-listen(port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(IPv4(UInt32(0)), port; backlog=backlog)
+listen(port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(localhost, port; backlog=backlog)
 listen(host::IPAddr, port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(InetAddr(host, port); backlog=backlog)
 
 function listen(callback, server::Union{TCPSocket, UDPSocket})
@@ -822,6 +822,8 @@ end
 
 ## Utility functions
 
+const localhost = ip"127.0.0.1"
+
 """
     listenany([host::IPAddr,] port_hint) -> (UInt16, TCPServer)
 
@@ -847,7 +849,7 @@ function listenany(host::IPAddr, default_port)
     end
 end
 
-listenany(default_port) = listenany(IPv4(UInt32(0)), default_port)
+listenany(default_port) = listenany(localhost, default_port)
 
 """
     getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)
