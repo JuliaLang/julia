@@ -271,6 +271,8 @@ function test_3()
     @test !issub(Tuple{Type{Vector{T}} where T, Vector{Float64}}, Tuple{Type{T}, T} where T)
     @test !issub(Tuple{Vector{Float64}, Type{Vector{T}} where T}, Tuple{T, Type{T}} where T)
     @test !issub(Tuple{Type{Ref{T}} where T, Vector{Float64}}, Tuple{Ref{T}, T} where T)
+
+    @test !issub(Tuple{Type{Ref{T}} where T, Ref{Float64}}, Tuple{Type{T},T} where T)
 end
 
 # level 4: Union
@@ -930,6 +932,17 @@ function test_intersection()
     @testintersect(Tuple{Ref{Ref{T}} where T, Ref},
                    Tuple{Ref{T}, Ref{T}} where T,
                    Tuple{Ref{Ref{T}}, Ref{Ref{T}}} where T)
+
+    # issue #23685
+    @testintersect(Pair{Type{Z},Z} where Z,
+                   Pair{Type{Ref{T}} where T, Ref{Float64}},
+                   Bottom)
+    @testintersect(Tuple{Type{Z},Z} where Z,
+                   Tuple{Type{Ref{T}} where T, Ref{Float64}},
+                   !Bottom)
+    @test_broken typeintersect(Tuple{Type{Z},Z} where Z,
+                               Tuple{Type{Ref{T}} where T, Ref{Float64}}) ==
+        Tuple{Type{Ref{Float64}},Ref{Float64}}
 end
 
 function test_intersection_properties()
