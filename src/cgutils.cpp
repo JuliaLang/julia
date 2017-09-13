@@ -2234,13 +2234,12 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
 {
     assert(jl_is_datatype(ty));
     assert(jl_is_leaf_type(ty));
-    assert(nargs > 0);
     jl_datatype_t *sty = (jl_datatype_t*)ty;
     size_t nf = jl_datatype_nfields(sty);
     if (nf > 0) {
         if (jl_isbits(sty)) {
             Type *lt = julia_type_to_llvm(ty);
-            unsigned na = (nargs - 1 < nf) ? (nargs - 1) : nf;
+            unsigned na = nargs < nf ? nargs : nf;
 
             // whether we should perform the initialization with the struct as a IR value
             // or instead initialize the stack buffer with stores
@@ -2260,7 +2259,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
 
             for (unsigned i = 0; i < na; i++) {
                 jl_value_t *jtype = jl_svecref(sty->types, i);
-                const jl_cgval_t &fval_info = argv[i + 1];
+                const jl_cgval_t &fval_info = argv[i];
                 emit_typecheck(ctx, fval_info, jtype, "new");
                 Type *fty;
                 if (type_is_ghost(lt))
@@ -2334,12 +2333,12 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         }
         bool need_wb = false;
         // TODO: verify that nargs <= nf (currently handled by front-end)
-        for (size_t i = 1; i < nargs; i++) {
+        for (size_t i = 0; i < nargs; i++) {
             const jl_cgval_t &rhs = argv[i];
-            if (jl_field_isptr(sty, i - 1) && !rhs.isboxed)
+            if (jl_field_isptr(sty, i) && !rhs.isboxed)
                 need_wb = true;
-            emit_typecheck(ctx, rhs, jl_svecref(sty->types, i - 1), "new");
-            emit_setfield(ctx, sty, strctinfo, i - 1, rhs, false, need_wb);
+            emit_typecheck(ctx, rhs, jl_svecref(sty->types, i), "new");
+            emit_setfield(ctx, sty, strctinfo, i, rhs, false, need_wb);
         }
         return strctinfo;
     }
