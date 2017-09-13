@@ -690,9 +690,9 @@ function workspace()
     m = Core.Main # now grab a handle to the new Main module
     ccall(:jl_add_standard_imports, Void, (Any,), m)
     eval(m, Expr(:toplevel,
-        :(const Base = $b),
-        :(const LastMain = $last),
-        :(include(x) = $include($m, x))))
+                 :(const Base = $b),
+                 :(const LastMain = $last),
+                 :(using Base.MainInclude)))
     empty!(package_locks)
     return m
 end
