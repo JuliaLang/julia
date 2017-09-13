@@ -2432,15 +2432,13 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         t = Any
         if 1 <= n <= length(sv.sp)
             val = sv.sp[n]
-            if isa(val, TypeVar) && Any <: val.ub
-                # static param bound to typevar
-                # if the tvar is not known to refer to anything more specific than Any,
-                # the static param might actually be an integer, symbol, etc.
-            elseif has_free_typevars(val)
-                vs = ccall(:jl_find_free_typevars, Any, (Any,), val)
-                t = Type{val}
-                for v in vs
-                    t = UnionAll(v, t)
+            if isa(val, TypeVar)
+                if Any <: val.ub
+                    # static param bound to typevar
+                    # if the tvar is not known to refer to anything more specific than Any,
+                    # the static param might actually be an integer, symbol, etc.
+                else
+                    t = UnionAll(val, Type{val})
                 end
             else
                 t = abstract_eval_constant(val)
@@ -4387,8 +4385,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     @assert na == length(argexprs)
 
     for i = 1:length(methsp)
-        si = methsp[i]
-        isa(si, TypeVar) && return NF
+        isa(methsp[i], TypeVar) && return NF
     end
 
     # some gf have special tfunc, meaning they wouldn't have been inferred yet

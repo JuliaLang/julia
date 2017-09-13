@@ -551,6 +551,32 @@ static jl_value_t *widen_Type(jl_value_t *t)
     return t;
 }
 
+JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v);
+
+// convert a type with free variables to a typevar bounded by a UnionAll-wrapped
+// version of that type.
+// TODO: This loses some inference precision. For example in a case where a
+// variable bound is `Vector{_}`, we could potentially infer `Type{Vector{_}} where _`,
+// but this causes us to infer the larger `Type{T} where T<:Vector` instead.
+// However this is needed because many contexts check `isa(sp, TypeVar)` to determine
+// when a static parameter value is not known exactly.
+static jl_value_t *fix_inferred_var_bound(jl_tvar_t *var, jl_value_t *ty)
+{
+    if (!jl_is_typevar(ty) && jl_has_free_typevars(ty)) {
+        jl_value_t *ans = ty;
+        jl_array_t *vs = jl_find_free_typevars(ty);
+        JL_GC_PUSH2(&ans, &vs);
+        int i;
+        for (i = 0; i < jl_array_len(vs); i++) {
+            ans = jl_type_unionall((jl_tvar_t*)jl_array_ptr_ref(vs, i), ans);
+        }
+        ans = (jl_value_t*)jl_new_typevar(var->name, jl_bottom_type, ans);
+        JL_GC_POP();
+        return ans;
+    }
+    return ty;
+}
+
 // compare UnionAll type `u` to `t`. `R==1` if `u` came from the right side of A <: B.
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
@@ -597,7 +623,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             // if we try to assign different variable values (due to checking
             // multiple union members), consider the value unknown.
             if (!oldval || !jl_is_typevar(oldval) || !jl_is_long(val))
-                e->envout[e->envidx] = val;
+                e->envout[e->envidx] = fix_inferred_var_bound(u->var, val);
             // TODO: substitute the value (if any) of this variable into previous envout entries
         }
     }
@@ -1487,7 +1513,7 @@ static jl_value_t *finish_unionall(jl_value_t *res, jl_varbinding_t *vb, jl_sten
         if (!varval || (!is_leaf_bound(varval) && !vb->occurs_inv))
             e->envout[e->envidx] = (jl_value_t*)vb->var;
         else if (!(oldval && jl_is_typevar(oldval) && jl_is_long(varval)))
-            e->envout[e->envidx] = varval;
+            e->envout[e->envidx] = fix_inferred_var_bound(vb->var, varval);
     }
 
     JL_GC_POP();
