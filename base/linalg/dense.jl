@@ -459,12 +459,17 @@ julia> exp(A)
 ```
 """
 exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
-exp(A::StridedMatrix{<:Integer}) = exp!(float(A))
+exp(A::StridedMatrix{Union{<:Integer,Complex{<:Integer}}}) = exp!(float.(A))
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
 function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     n = checksquare(A)
+    if T <: Real
+        if issymmetric(A)
+            return full(exp(Symmetric(A)))
+        end
+    end
     if ishermitian(A)
         return full(exp(Hermitian(A)))
     end
@@ -589,11 +594,13 @@ julia> log(A)
 """
 function log(A::StridedMatrix{T}) where T
     # If possible, use diagonalization
-    if issymmetric(A) && T <: Real
-        return log(Symmetric(A))
+    if T <: Real
+        if issymmetric(A)
+            return full(log(Symmetric(A)))
+        end
     end
     if ishermitian(A)
-        return log(Hermitian(A))
+        return full(log(Hermitian(A)))
     end
 
     # Use Schur decomposition
