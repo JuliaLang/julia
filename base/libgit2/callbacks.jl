@@ -227,7 +227,6 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
                               username_ptr::Cstring,
                               allowed_types::Cuint, payload_ptr::Ptr{Void})
     err = Cint(0)
-    explicit = false
 
     # get `CredentialPayload` object from payload pointer
     @assert payload_ptr != C_NULL
@@ -247,9 +246,9 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
         # credential during the first callback by modifying the allowed types. The
         # modification only is in effect for the first callback since `allowed_types` cannot
         # be mutated.
-        if !isnull(p.credential)
-            explicit = true
-            cred = unsafe_get(p.credential)
+        if !isnull(p.explicit)
+            p.credential = p.explicit
+            cred = unsafe_get(p.explicit)
             if isa(cred, SSHCredentials)
                 allowed_types &= Cuint(Consts.CREDTYPE_SSH_KEY)
             elseif isa(cred, UserPasswordCredentials)
@@ -295,7 +294,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
     # that explicit credentials were passed in, but said credentials are incompatible
     # with the requested authentication method.
     if err == 0
-        if explicit
+        if !isnull(p.explicit)
             ccall((:giterr_set_str, :libgit2), Void, (Cint, Cstring), Cint(Error.Callback),
                   "The explicitly provided credential is incompatible with the requested " *
                   "authentication methods.")
