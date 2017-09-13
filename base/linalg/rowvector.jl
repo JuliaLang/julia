@@ -83,6 +83,7 @@ julia> transpose(v)
 @inline adjoint(rowvec::RowVector{<:Real}) = rowvec.vec
 
 parent(rowvec::RowVector) = rowvec.vec
+vec(rowvec::RowVector) = rowvec.vec
 
 """
     conj(v::RowVector)

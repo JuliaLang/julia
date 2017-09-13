@@ -49,6 +49,9 @@
 
     y = rand(Complex{Float64},3)
     @test sum(abs2, imag.(diag(y .+ y'))) < 1e-20
+
+    @test parent(rv) === v
+    @test vec(rv) === v
 end
 
 @testset "Diagonal ambiguity methods" begin
