@@ -1634,6 +1634,33 @@ mktempdir() do dir
         @test sshcreds == sshcreds2
     end
 
+    @testset "CachedCredentials" begin
+        cache = LibGit2.CachedCredentials()
+
+        url = "https://github.com/JuliaLang/Example.jl"
+        cred_id = LibGit2.credential_identifier(url)
+        cred = LibGit2.UserPasswordCredentials(deepcopy("julia"), deepcopy("password"))
+
+        @test !haskey(cache, cred_id)
+
+        # Reject a credential which wasn't stored
+        LibGit2.reject(cache, cred, url)
+        @test !haskey(cache, cred_id)
+        @test cred.user == "julia"
+        @test cred.pass == "password"
+
+        # Approve a credential which causes it to be stored
+        LibGit2.approve(cache, cred, url)
+        @test haskey(cache, cred_id)
+        @test cache[cred_id] === cred
+
+        # Reject an approved should cause it to be removed and erased
+        LibGit2.reject(cache, cred, url)
+        @test !haskey(cache, cred_id)
+        @test cred.user != "julia"
+        @test cred.pass != "password"
+    end
+
     # The following tests require that we can fake a TTY so that we can provide passwords
     # which use the `getpass` function. At the moment we can only fake this on UNIX based
     # systems.
