@@ -245,8 +245,11 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
         # modification only is in effect for the first callback since `allowed_types` cannot
         # be mutated.
         if !isnull(p.explicit)
-            p.credential = p.explicit
             cred = unsafe_get(p.explicit)
+
+            # Copy explicit credentials to avoid mutating approved credentials.
+            p.credential = Nullable(deepcopy(cred))
+
             if isa(cred, SSHCredentials)
                 allowed_types &= Cuint(Consts.CREDTYPE_SSH_KEY)
             elseif isa(cred, UserPasswordCredentials)
