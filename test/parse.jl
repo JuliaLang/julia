@@ -737,6 +737,8 @@ end
                   local x = 1
               end")) == Expr(:error, "local \"x\" declared twice")
 
+# issue #23673
+@test :(let $([:(x=1),:(y=2)]...); x+y end) == :(let x = 1, y = 2; x+y end)
 
 # make sure front end can correctly print values to error messages
 let ex = expand(Main, parse("\"a\"=1"))

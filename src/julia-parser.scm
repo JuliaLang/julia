@@ -1315,7 +1315,10 @@
                  (ex (if (and (length= ex 2) (pair? (cadr ex)) (eq? (caadr ex) 'line))
                          `(block)  ;; don't need line info in an empty let block
                          ex)))
-            `(let ,(if (length= binds 1) (car binds) (cons 'block binds))
+            `(let ,(if (and (length= binds 1) (or (assignment? (car binds)) (decl? (car binds))
+                                                  (symbol? (car binds))))
+                       (car binds)
+                       (cons 'block binds))
                ,ex))))
 
        ((if elseif)
