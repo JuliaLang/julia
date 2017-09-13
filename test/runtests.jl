@@ -767,6 +767,9 @@ no_specialize(@nospecialize(x::Integer)) = sin(2)
 @test contains(read(@__FILE__, String), "read(@__FILE__, String)")
 @test read(`$(Base.julia_cmd()) --startup-file=no -e "println(:aaaa)"`, String) == "aaaa\n"
 
+# 0.7
+@test isa(1:2, AbstractRange)
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end

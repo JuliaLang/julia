@@ -164,7 +164,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `retry` for the more flexible `retry` method introduced in 0.6 which includes support for kwargs ([#19331], [#21419]).
 
-## Renamed functions
+## Renamed functions and types
 
 
 * `$` is now `xor` or `⊻` ([#18977])
@@ -182,6 +182,7 @@ Currently, the `@compat` macro supports the following syntaxes:
     `read(::IO, ::Type{String})`, `read(::AbstractString, ::Type{String})`,
     and `read(::Cmd, ::Type{String})` are defined for 0.6 and below.
 
+* `Range` is now `AbstractRange` ([#23570])
 
 ## New macros
 
@@ -305,3 +306,4 @@ includes this fix. Find the minimum version from there.
 [#22751]: https://github.com/JuliaLang/julia/issues/22751
 [#22761]: https://github.com/JuliaLang/julia/issues/22761
 [#22864]: https://github.com/JuliaLang/julia/issues/22864
+[#23570]: https://github.com/JuliaLang/julia/issues/23570

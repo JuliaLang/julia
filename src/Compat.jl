@@ -582,6 +582,12 @@ if VERSION < v"0.7.0-DEV.1285"
     Base.OverflowError(msg) = OverflowError()
 end
 
+# 0.7.0-DEV.1721
+@static if !isdefined(Base, :AbstractRange)
+    const AbstractRange = Range
+    export AbstractRange
+end
+
 include("deprecated.jl")
 
 end # module Compat
