@@ -254,8 +254,8 @@ for f in (
         # base/special/gamma.jl
         :gamma, :lfact,
         # base/math.jl
-        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2,
-        :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh,
+        :cbrt, :atan, :asinh, :exp2,
+        :expm1, :exp10, :asin, :acos, :acosh, :atanh,
         :log2, :log10, :lgamma, #=:log1p,=#
         # base/floatfuncs.jl
         :abs, :abs2, :angle, :isnan, :isinf, :isfinite,
@@ -742,9 +742,9 @@ end
 @deprecate sign(A::AbstractArray) sign.(A)
 
 # Deprecate manually vectorized trigonometric and hyperbolic functions in favor of compact broadcast syntax
-for f in (:sec, :sech, :secd, :asec, :asech,
-            :csc, :csch, :cscd, :acsc, :acsch,
-            :cot, :coth, :cotd, :acot, :acoth)
+for f in (:secd, :asec, :asech,
+          :cscd, :acsc, :acsch,
+          :cotd, :acot, :acoth)
     @eval import .Math: $f
     @eval @deprecate $f(A::AbstractArray{<:Number}) $f.(A)
 end
