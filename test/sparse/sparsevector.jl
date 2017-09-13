@@ -992,6 +992,17 @@ let origmat = [-1.5 -0.7; 0.0 1.0]
     end
 end
 
+# kron
+let testdims = ((5,10), (20,12), (25,30))
+    for (m,n) in testdims
+        x = sprand(m, 0.4)
+        y = sprand(n, 0.3)
+        @test Vector(kron(x,y)) == kron(Vector(x), Vector(y))
+        @test Vector(kron(Vector(x),y)) == kron(Vector(x), Vector(y))
+        @test Vector(kron(x,Vector(y))) == kron(Vector(x), Vector(y))
+    end
+end
+
 # fkeep!
 let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
     # droptol

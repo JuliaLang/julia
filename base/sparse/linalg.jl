@@ -805,6 +805,31 @@ end
 kron(A::SparseMatrixCSC, B::VecOrMat) = kron(A, sparse(B))
 kron(A::VecOrMat, B::SparseMatrixCSC) = kron(sparse(A), B)
 
+function kron(x::SparseVector{Tv,Ti},y::SparseVector{Tv,Ti}) where {Tv,Ti}
+    nnzx = nnz(x)
+    nnzy = nnz(y)
+    nnzz = nnzx*nnzy # number of nonzeros in new vector
+    nzind = Vector{Ti}(nnzz) # the indices of nonzeros
+    nzval = Vector{Tv}(nnzz) # the values of nonzeros
+    @inbounds for i = 1:nnzx, j = 1:nnzy
+        this_ind = (i-1)*nnzy+j
+        nzind[this_ind] = (x.nzind[i]-1)*y.n + y.nzind[j]
+        nzval[this_ind] = x.nzval[i] * y.nzval[j]
+    end
+    return SparseVector(x.n*y.n,nzind,nzval)
+end
+
+function kron(x::SparseVector{Tv1,Ti1}, y::SparseVector{Tv2,Ti2}) where {Tv1,Ti1,Tv2,Ti2}
+    Tv_res = promote_type(Tv1, Tv2)
+    Ti_res = promote_type(Ti1, Ti2)
+    x2 = convert(SparseVector{Tv_res,Ti_res}, x)
+    y2 = convert(SparseVector{Tv_res,Ti_res}, y)
+    return kron(x2,y2)
+end
+
+kron(x::SparseVector{Tv,Ti}, y::AbstractVector) where {Tv,Ti} = kron(x, sparse(y))
+kron(x::AbstractVector, y::SparseVector{Tv,Ti}) where {Tv,Ti} = kron(sparse(x), y)
+
 ## det, inv, cond
 
 inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be dense and can cause the computer to run out of memory. If you are sure you have enough memory, please convert your matrix to a dense matrix.")
