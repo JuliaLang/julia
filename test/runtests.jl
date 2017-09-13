@@ -199,8 +199,11 @@ for sha_idx in 1:length(sha_funcs)
 end
 println("Done! [$(nerrors - nerrors_old) errors]")
 
-if VERSION >= v"0.5.0-pre+5599" replstr(x) = sprint((io, x) -> show(IOContext(io, limit=true), MIME("text/plain"), x), x)
-else replstr(x) = sprint((io, x) -> writemime(io, MIME("text/plain"), x), x) end
+if VERSION >= v"0.7.0-DEV.1472"
+    replstr(x) = sprint((io, x) -> show(IOContext(io, :limit => true), MIME("text/plain"), x), x)
+else
+    replstr(x) = sprint((io, x) -> show(IOContext(io, limit=true), MIME("text/plain"), x), x)
+end
 
 for idx in 1:length(ctxs)
     # Part #1: copy

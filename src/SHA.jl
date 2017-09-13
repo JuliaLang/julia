@@ -45,7 +45,7 @@ for (f, ctx) in [(:sha1, :SHA1_CTX),
         end
 
         # AbstractStrings are a pretty handy thing to be able to crunch through
-        $f(str::AbstractString) = $f(convert(Array{UInt8,1}, str))
+        $f(str::AbstractString) = $f(Vector{UInt8}(str))
 
         # Convenience function for IO devices, allows for things like:
         # open("test.txt") do f
