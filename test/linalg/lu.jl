@@ -68,7 +68,7 @@ dimg  = randn(n)/2
 
             lstring = sprint(show,l)
             ustring = sprint(show,u)
-            @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring\nsuccessful: true"
+            @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
             let Bs = copy(b), Cs = copy(c)
                 for (bb, cc) in ((Bs, Cs), (view(Bs, 1:n, 1), view(Cs, 1:n)))
                     @test norm(a*(lua\bb) - bb, 1) < ε*κ*n*2 # Two because the right hand side has two columns

@@ -78,7 +78,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
                 @test isposdef(capds)
             end
             ulstring = sprint(show,capds[:UL])
-            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring\nsuccessful: true"
+            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
         else
             capdh = cholfact(apdh)
             @test inv(capdh)*apdh ≈ eye(n)
@@ -96,7 +96,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             @test logdet(capdh) ≈ log(det(capdh))
             @test isposdef(capdh)
             ulstring = sprint(show,capdh[:UL])
-            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring\nsuccessful: true"
+            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
         end
 
         # test chol of 2x2 Strang matrix
@@ -270,6 +270,14 @@ end
         @test_throws PosDefException chol(A)
         @test_throws PosDefException Base.LinAlg.chol!(copy(A))
     end
+end
+
+@testset "throw for non-square input" begin
+    A = rand(2,3)
+    @test_throws DimensionMismatch chol(A)
+    @test_throws DimensionMismatch Base.LinAlg.chol!(A)
+    @test_throws DimensionMismatch cholfact(A)
+    @test_throws DimensionMismatch cholfact!(A)
 end
 
 @testset "fail for non-BLAS element types" begin
