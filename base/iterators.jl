@@ -733,17 +733,14 @@ iteratoreltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, iteratoreltype(
 _flatteneltype(I, ::HasEltype) = iteratoreltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()
 
-flatten_iteratorsize(::Union{HasShape, HasLength}, b::Type{<:Tuple}) = isleaftype(b) ? HasLength() : SizeUnknown()
-flatten_iteratorsize(::Union{HasShape, HasLength}, b::Type{<:Number}) = HasLength()
+flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:NTuple{N,Any}}) where {N} = HasLength()
+flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Tuple}) = SizeUnknown()
+flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Number}) = HasLength()
 flatten_iteratorsize(a, b) = SizeUnknown()
 
 iteratorsize(::Type{Flatten{I}}) where {I} = flatten_iteratorsize(iteratorsize(I), eltype(I))
 
-function flatten_length(f, ::Type{T}) where {T<:Tuple}
-    if !isleaftype(T)
-        throw(ArgumentError(
-            "Cannot compute length of a tuple-type which is not a leaf-type"))
-    end
+function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
     fieldcount(T)*length(f.it)
 end
 flatten_length(f, ::Type{<:Number}) = length(f.it)

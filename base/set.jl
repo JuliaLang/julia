@@ -18,7 +18,7 @@ for sets of arbitrary objects.
 Set(itr) = Set{eltype(itr)}(itr)
 function Set(g::Generator)
     T = _default_eltype(typeof(g))
-    (isleaftype(T) || T === Union{}) || return grow_to!(Set{T}(), g)
+    (_isleaftype(T) || T === Union{}) || return grow_to!(Set{T}(), g)
     return Set{T}(g)
 end
 
@@ -266,7 +266,7 @@ function unique(itr)
         return out
     end
     x, i = next(itr, i)
-    if !isleaftype(T) && iteratoreltype(itr) == EltypeUnknown()
+    if !_isleaftype(T) && iteratoreltype(itr) == EltypeUnknown()
         S = typeof(x)
         return _unique_from(itr, S[x], Set{S}((x,)), i)
     end

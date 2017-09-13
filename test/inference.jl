@@ -186,6 +186,7 @@ function find_tvar10930(arg)
 end
 @test find_tvar10930(Vararg{Int}) === 1
 
+const isleaftype = Base._isleaftype
 
 # issue #12474
 @generated function f12474(::Any)

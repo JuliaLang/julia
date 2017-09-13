@@ -63,6 +63,8 @@ const NF = NotFound()
 const LineNum = Int
 const VarTable = Array{Any,1}
 
+const isleaftype = _isleaftype
+
 # The type of a variable load is either a value or an UndefVarError
 mutable struct VarState
     typ
