@@ -125,6 +125,10 @@ Like [`mapreduce`](@ref), but with guaranteed right associativity, as in [`foldr
 """
 mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
 
+mapfoldr(mapper, reducer, default, args::Tuple{}) = default
+mapfoldr(mapper, reducer, default, args::Tuple) =
+    reducer(default, mapfoldr(mapper, reducer, mapper(first(args)), tail(args)))
+
 """
     mapfoldr(f, op, itr)
 
@@ -138,6 +142,10 @@ function mapfoldr(f, op, itr)
     end
     return mapfoldr_impl(f, op, f(itr[i]), itr, i-1)
 end
+
+mapfoldr(mapper, reducer, args::Tuple{}) = _empty_reduce_error()
+mapfoldr(mapper, reducer, args::Tuple) =
+    mapfoldr(mapper, reducer, mapper(first(args)), tail(args))
 
 """
     foldr(op, v0, itr)
@@ -208,6 +216,8 @@ Like `mapreduce(f, op, v0, itr)`. In general, this cannot be used with empty col
 """
 mapreduce(f, op, itr) = mapfoldl(f, op, itr)
 
+mapreduce(mapper, reducer, args::Tuple) = mapfoldr(mapper, reducer, args)
+
 """
     mapreduce(f, op, v0, itr)
 
@@ -231,12 +241,8 @@ guaranteed left or right associativity and invocation of `f` for every value.
 """
 mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
 
-mapreduce(mapper, reducer, args::Tuple{}) = _empty_reduce_error()
-mapreduce(mapper, reducer, args::Tuple) =
-    mapreduce(mapper, reducer, mapper(first(args)), tail(args))
-mapreduce(mapper, reducer, default, args::Tuple{}) = default
 mapreduce(mapper, reducer, default, args::Tuple) =
-    reducer(mapper(first(args)), mapreduce(mapper, reducer, default, tail(args)))
+    mapfoldr(mapper, reducer, default, args)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
