@@ -260,6 +260,9 @@ end
 # Computing the first index simply steps through the indices, accumulating the
 # sum of index each multiplied by the parent's stride.
 # The running sum is `f`; the cumulative stride product is `s`.
+# If the parent is a vector, then we offset the parent's own indices with parameters of I
+compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{Range}) =
+    (@_inline_meta; first(I[1]) - first(indices1(I[1]))*stride1)
 # If the result is one-dimensional and it's a Colon, then linear
 # indexing uses the indices along the given dimension. Otherwise
 # linear indexing always starts with 1.
