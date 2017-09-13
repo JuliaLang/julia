@@ -422,6 +422,12 @@ end
         @test exp(log(A7)) ≈ A7
     end
 
+    @testset "Integer promotion tests" for (elty1, elty2) in ((Int64, Float64), (Complex{Int64}, Complex{Float64}))
+        A4int  = convert(Matrix{elty1}, [1 2; 3 4])
+        A4float  = convert(Matrix{elty2}, A4int)
+        @test exp(A4int) == exp(A4float)
+    end
+
     A8 = 100 * [-1+1im 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1]
     @test exp(log(A8)) ≈ A8
 end
@@ -448,6 +454,12 @@ end
 
     A12 = convert(Matrix{elty}, [1 -1; 1 -1])
     @test typeof(log(A12)) == Array{Complex{Float64}, 2}
+
+    A13 = convert(Matrix{elty}, [2 0; 0 2])
+    @test typeof(log(A13)) == Array{elty, 2}
+
+    T = elty == Float64 ? Symmetric : Hermitian
+    @test typeof(log(T(A13))) == T{elty, Array{elty, 2}}
 
     A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
     logA1 = convert(Matrix{elty}, [1.329661349 0.5302876358 -0.06818951543;
