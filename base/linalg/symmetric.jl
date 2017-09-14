@@ -589,7 +589,8 @@ function ^(A::Hermitian{T}, p::Real) where T
     end
 end
 
-for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh)
+for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh,
+             :acos, :asin, :atan, :acosh, :asinh, :atanh)
     @eval begin
         function ($func)(A::Symmetric{T}) where T<:Real
             F = eigfact(A)

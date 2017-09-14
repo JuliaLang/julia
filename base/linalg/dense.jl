@@ -848,6 +848,170 @@ function tanh(A::StridedMatrix{T}) where T
     return (X - Y) / (X + Y)
 end
 
+"""
+    acos(A::StridedMatrix)
+
+Compute the inverse matrix cosine of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the inverse cosine. Otherwise, the inverse cosine is determined by using
+[`log`](@ref) and [`sqrt`](@ref).
+
+# Examples
+```jldoctest
+julia> acos(cos(ones(2, 2)))
+2×2 Array{Float64,2}:
+  0.291927  -0.708073
+ -0.708073   0.291927
+```
+"""
+function acos(A::StridedMatrix{<:Real})
+    if issymmetric(A)
+        return full(acos(Symmetric(A)))
+    end
+    return imag(log(A + sqrt(A^2 - one(A))))
+end
+function acos(A::StridedMatrix{<:Complex})
+    if ishermitian(A)
+        return full(acos(Hermitian(A)))
+    end
+    return -im * log(A + sqrt(A^2 - one(A)))
+end
+
+"""
+    asin(A::StridedMatrix)
+
+Compute the inverse matrix sine of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the inverse sine. Otherwise, the inverse sine is determined by using [`log`](@ref)
+and [`sqrt`](@ref).
+
+# Examples
+```jldoctest
+julia> asin(sin(ones(2, 2)))
+2×2 Array{Float64,2}:
+  0.291927  -0.708073
+ -0.708073   0.291927
+```
+"""
+function asin(A::StridedMatrix{<:Real})
+    if issymmetric(A)
+        return full(asin(Symmetric(A)))
+    end
+    return imag(log(im * A + sqrt(one(A) - A^2)))
+end
+function asin(A::StridedMatrix{<:Complex})
+    if ishermitian(A)
+        return full(asin(Hermitian(A)))
+    end
+    return -im * log(im * A + sqrt(one(A) - A^2))
+end
+
+"""
+    atan(A::StridedMatrix)
+
+Compute the inverse matrix tangent of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the inverse tangent. Otherwise, the inverse tangent is determined by using
+[`log`](@ref).
+
+# Examples
+```jldoctest
+julia> atan(tan(ones(2, 2)))
+2×2 Array{Float64,2}:
+  0.291927  -0.708073
+ -0.708073   0.291927
+```
+"""
+function atan(A::StridedMatrix{<:Real})
+    if issymmetric(A)
+        return full(atan(Symmetric(A)))
+    end
+    return imag(log(one(A) + im * A) - log(one(A) - im * A)) / 2
+end
+function atan(A::StridedMatrix{<:Complex})
+    if ishermitian(A)
+        return full(atan(Hermitian(A)))
+    end
+    return (log(one(A) + im * A) - log(one(A) - im * A)) / 2im
+end
+
+"""
+    acosh(A::StridedMatrix)
+
+Compute the inverse hyperbolic matrix cosine of a square matrix `A`.
+
+# Examples
+```jldoctest
+julia> acos(cos(ones(2, 2)))
+2×2 Array{Float64,2}:
+  0.291927  -0.708073
+ -0.708073   0.291927
+```
+"""
+function acosh(A::StridedMatrix{<:Real})
+    if issymmetric(A)
+        return full(acosh(Symmetric(A)))
+    end
+    return log(A + sqrt(A^2 - one(A)))
+end
+function acosh(A::StridedMatrix{<:Complex})
+    if ishermitian(A)
+        return full(acosh(Hermitian(A)))
+    end
+    return log(A + sqrt(A + one(A)) * sqrt(A - one(A)))
+end
+
+"""
+    asinh(A::StridedMatrix)
+
+Compute the inverse hyperbolic matrix sine of a square matrix `A`.
+
+# Examples
+```jldoctest
+julia> asin(sin(ones(2, 2)))
+2×2 Array{Float64,2}:
+  0.291927  -0.708073
+ -0.708073   0.291927
+```
+"""
+function asinh(A::StridedMatrix{T}) where T
+    if T <: Real
+        if issymmetric(A)
+            return full(asinh(Symmetric(A)))
+        end
+    elseif ishermitian(A)
+        return full(asinh(Hermitian(A)))
+    end
+    return log(A + sqrt(A^2 + one(A)))
+end
+
+"""
+    atanh(A::StridedMatrix)
+
+Compute the inverse hyperbolic matrix tangent of a square matrix `A`.
+
+# Examples
+```jldoctest
+julia> atan(tan(ones(2, 2)))
+2×2 Array{Float64,2}:
+  0.291927  -0.708073
+ -0.708073   0.291927
+```
+"""
+function atanh(A::StridedMatrix{T}) where T
+    if T <: Real
+        if issymmetric(A)
+            return full(atanh(Symmetric(A)))
+        end
+    elseif ishermitian(A)
+        return full(asinh(Hermitian(A)))
+    end
+    return (log(one(A) + A) - log(one(A) - A)) / 2
+end
+
 for (finv, f, finvh, fh, fn) in ((:sec, :cos, :sech, :cosh, "secant"),
                                  (:csc, :sin, :csch, :sinh, "cosecant"),
                                  (:cot, :tan, :coth, :tanh, "cotangent"))
@@ -864,6 +1028,21 @@ for (finv, f, finvh, fh, fn) in ((:sec, :cos, :sech, :cosh, "secant"),
 
         Compute the matrix hyperbolic $($fn) of square matrix `A`.
         """ ($finvh)(A::StridedMatrix{T}) where {T} = inv(($fh)(A))
+    end
+end
+
+for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
+                                       (:acsc, :asin, :acsch, :asinh, "cosecant"),
+                                       (:acot, :atan, :acoth, :atanh, "cotangent"))
+    tname = string(tfa)
+    hname = string(hfa)
+    @eval begin
+        @doc """
+            $($tname)(A::StridedMatrix)
+        Compute the inverse matrix $($fn) of `A`. """ ($tfa)(A::StridedMatrix{T}) where {T} = ($tfainv)(inv(A))
+        @doc """
+            $($hname)(A::StridedMatrix)
+        Compute the inverse matrix hyperbolic $($fn) of `A`. """ ($hfa)(A::StridedMatrix{T}) where {T} = ($hfainv)(inv(A))
     end
 end
 
