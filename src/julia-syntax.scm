@@ -225,7 +225,12 @@
         (else
          (error "malformed type parameter list"))))
 
-(define (method-expr-name m) (cadr m))
+(define (method-expr-name m)
+  (let ((name (cadr m)))
+       (cond ((not (pair? name)) name)
+             ((eq? (car name) 'outerref) (cadr name))
+             ;((eq? (car name) 'globalref) (caddr name))
+             (else name))))
 
 ;; extract static parameter names from a (method ...) expression
 (define (method-expr-static-parameters m)
@@ -243,6 +248,7 @@
 (define (sym-ref? e)
   (or (symbol? e)
       (and (length= e 3) (eq? (car e) 'globalref))
+      (and (length= e 2) (eq? (car e) 'outerref))
       (and (length= e 3) (eq? (car e) '|.|)
            (or (atom? (cadr e)) (sym-ref? (cadr e)))
            (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
@@ -290,6 +296,15 @@
         (else
          (cons (car e)
                (map (lambda (x) (replace-vars x renames))
+                    (cdr e))))))
+
+(define (replace-outer-vars e renames)
+  (cond ((and (pair? e) (eq? (car e) 'outerref)) (lookup (cadr e) renames e))
+        ((or (not (pair? e)) (quoted? e))  e)
+        ((memq (car e) '(-> function scope-block)) e)
+        (else
+         (cons (car e)
+               (map (lambda (x) (replace-outer-vars x renames))
                     (cdr e))))))
 
 ;; construct the (method ...) expression for one primitive method definition,
@@ -676,8 +691,8 @@
   (if (length> params (length type-params))
       (error "too few type parameters specified in \"new{...}\""))
   (let ((Texpr (if (null? type-params)
-                   `(globalref ,(current-julia-module) ,Tname)
-                   `(curly (globalref ,(current-julia-module) ,Tname)
+                   `(outerref ,Tname)
+                   `(curly (outerref ,Tname)
                            ,@type-params))))
     (cond ((length> args (length field-names))
            `(call (top error) "new: too many arguments"))
@@ -986,7 +1001,6 @@
                     `(scope-block
                       (block
                        (local ,(car binds))
-                       (newvar ,(decl-var (car binds)))
                        ,blk))))
              ((and (length= (car binds) 3)
                    (eq? (caar binds) '=))
@@ -1003,14 +1017,12 @@
                                 (block (= ,tmp ,(caddar binds))
                                        (scope-block
                                         (block
-                                         (local ,(cadar binds))
-                                         (newvar ,vname)
+                                         (local-def ,(cadar binds))
                                          (= ,vname ,tmp)
                                          ,blk)))))
                             `(scope-block
                               (block
-                               (local ,(cadar binds))
-                               (newvar ,vname)
+                               (local-def ,(cadar binds))
                                (= ,vname ,(caddar binds))
                                ,blk))))))
                ((and (pair? (cadar binds))
@@ -1027,8 +1039,7 @@
                   (loop (cdr binds)
                         `(scope-block
                           (block
-                           (local ,name)
-                           (newvar ,name)
+                           (local-def ,name)
                            ,asgn
                            ,blk)))))
                ;; (a, b, c, ...) = rhs
@@ -1038,8 +1049,7 @@
                   (loop (cdr binds)
                         `(scope-block
                           (block
-                           ,@(map (lambda (v) `(local ,v)) vars)
-                           ,@(map (lambda (v) `(newvar ,(decl-var v))) vars)
+                           ,@(map (lambda (v) `(local-def ,v)) vars)
                            ,(car binds)
                            ,blk)))))
                (else (error "invalid let syntax"))))
@@ -1214,7 +1224,7 @@
   (if (atom? (cadr e))
       e
       (case (car (cadr e))
-        ((global local)
+        ((global local local-def)
          (expand-forms
           (qualified-const-expr (cdr (cadr e)) e)))
         ((=)
@@ -1511,7 +1521,7 @@
                                 ,(loop (cdr tail)))))))))))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref line module toplevel ssavalue null meta)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -2245,11 +2255,11 @@
 
 ;; pass 2: identify and rename local vars
 
-(define (check-dups locals)
-  (if (and (pair? locals) (pair? (cdr locals)))
-      (or (and (memq (car locals) (cdr locals))
-               (error (string "local \"" (car locals) "\" declared twice")))
-          (check-dups (cdr locals))))
+(define (check-dups locals others)
+  (if (pair? locals)
+      (if (or (memq (car locals) (cdr locals)) (memq (car locals) others))
+          (error (string "local \"" (car locals) "\" declared twice"))
+          (check-dups (cdr locals) others)))
   locals)
 
 (define (find-assigned-vars e env)
@@ -2285,23 +2295,25 @@
              (apply append! (map (lambda (x) (find-decls kind x))
                                  e))))))
 
-(define (find-local-decls  e) (find-decls 'local  e))
+(define (find-local-decls e) (find-decls 'local e))
+(define (find-local-def-decls e) (find-decls 'local-def e))
 (define (find-global-decls e) (find-decls 'global e))
 
-(define (find-locals e env glob)
-  (delete-duplicates
-   (append! (check-dups (find-local-decls e))
-            ;; const decls on non-globals also introduce locals
-            (diff (find-decls 'const e) glob)
-            (find-assigned-vars e env))))
+(define (implicit-locals e env glob)
+  ;; const decls on non-globals introduce locals
+  (append! (diff (find-decls 'const e) glob)
+           (find-assigned-vars e env)))
 
-(define (occurs-outside? sym e excl)
-  (cond ((eq? e sym) #t)
-        ((not (pair? e)) #f)
-        ((eq? e excl) #f)
-        ((memq (car e) '(lambda module toplevel quote top globalref core line inert)) #f)
-        (else (any (lambda (x) (occurs-outside? sym x excl))
-                   (cdr e)))))
+(define (unbound-vars e bound tab)
+  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e UNUSED)) tab)
+        ((symbol? e) (if (not (memq e bound)) (put! tab e #t)) tab)
+        ((or (not (pair? e)) (quoted? e)) tab)
+        ((memq (car e) '(lambda scope-block module toplevel)) tab)
+        ((eq? (car e) 'break-block) (unbound-vars (caddr e) bound tab))
+        ((eq? (car e) 'with-static-parameters) (unbound-vars (cadr e) bound tab))
+        (else (for-each (lambda (x) (unbound-vars x bound tab))
+                            (cdr e))
+              tab)))
 
 ;; local variable identification and renaming, derived from:
 ;; 1. (local x) expressions inside this scope-block and lambda
@@ -2311,9 +2323,11 @@
 ;; returns lambdas in the form (lambda (args...) (locals...) body)
 (define (resolve-scopes- e env implicitglobals lam renames newlam)
   (cond ((symbol? e) (let ((r (assq e renames)))
-                       (if r (cdr r) e)))
-        ((or (not (pair? e)) (quoted? e) (eq? (car e) 'toplevel)) e)
+                       (if r (cdr r) e))) ;; return the renaming for e, or e
+        ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel global))) e)
         ((eq? (car e) 'local) '(null)) ;; remove local decls
+        ((eq? (car e) 'local-def) '(null)) ;; remove local decls
+        ((eq? (car e) 'implicit-global) '(null)) ;; remove implicit-global decls
         ((eq? (car e) 'lambda)
          (let* ((lv (lam:vars e))
                 (env (append lv env))
@@ -2325,54 +2339,83 @@
                                        (filter (lambda (ren) (not (memq (car ren) lv)))
                                                renames)
                                        #t)))
-           `(lambda ,(cadr e) ,(caddr e) ,body)))
+               `(lambda ,(cadr e) ,(caddr e) ,body)))
         ((eq? (car e) 'scope-block)
-         (let* ((blok (cadr e))
-                (other-locals (if lam (caddr lam) '()))
-                (iglo (find-decls 'implicit-global blok))
-                (glob (diff (find-global-decls blok) iglo))
-                (vars (find-locals
-                       blok
-                       ;; being declared global prevents a variable
-                       ;; assignment from introducing a local
-                       (append env glob implicitglobals iglo)
-                       (append glob iglo)))
-                (need-rename
-                 (if (or newlam (not lam)) '()
-                     (receive
-                      (conflicted unknown)
-                      (separate (lambda (v) (or (memq v env) (memq v other-locals)))
-                                vars)
-                      (append
-                       conflicted
-                       (let ((lbod (lam:body lam)))
-                         (filter (lambda (v) (occurs-outside? v lbod e))
-                                 unknown))))))
+         (let* ((blok (cadr e)) ;; body of scope-block expression
+                (other-locals (if lam (caddr lam) '())) ;; locals that are explicitly part of containing lambda expression
+                (iglo (find-decls 'implicit-global blok)) ;; implicitly defined globals used in blok
+                (glob (diff (find-global-decls blok) iglo)) ;; all globals declared in blok
+                (vars-def (check-dups (find-local-def-decls blok) '()))
+                (locals-declared (check-dups (find-local-decls blok) vars-def))
+                (locals-implicit (diff (implicit-locals
+                                         blok
+                                         ;; being declared global prevents a variable
+                                         ;; assignment from introducing a local
+                                         (append env glob implicitglobals iglo)
+                                         (append glob iglo))
+                                       vars-def))
+                (vars (delete-duplicates (append! locals-declared locals-implicit)))
+                (all-vars (append vars vars-def))
+                (need-rename?
+                 (lambda (vars)
+                  ;; compute the set of locals introduced by this scope which
+                  ;; have the same name as a variable used in an outer scope
+                  (if (or newlam (not lam))
+                      '()
+                       (filter (lambda (v) (or (memq v env)
+                                               (memq v other-locals)
+                                               (memq v (caddr lam))))
+                               vars))))
+                (need-rename (need-rename? vars))
+                (need-rename-def (need-rename? vars-def))
+                ;; new gensym names for conflicting variables
                 (renamed (map named-gensy need-rename))
-                (new-ren (append (map cons need-rename renamed)
-                                 (filter (lambda (ren)
-                                           (not (or (memq (car ren) vars)
-                                                    (memq (car ren) iglo)
-                                                    (memq (car ren) glob))))
-                                         renames)))
-                (new-env (append vars glob env))
-                (new-iglo (append iglo implicitglobals))
-                (body (resolve-scopes- blok new-env new-iglo lam new-ren #f))
-                (real-new-vars (append (diff vars need-rename) renamed)))
-           (for-each (lambda (v)
-                       (if (memq v vars)
-                           (error (string "variable \"" v "\" declared both local and global"))))
-                     glob)
-           (if lam
-               (set-car! (cddr lam)
-                         (append real-new-vars (caddr lam))))
-           (insert-after-meta
-            (if (and (pair? body) (eq? (car body) 'block))
-                body
-                `(block ,body))
-            (map (lambda (v) `(local ,v)) real-new-vars))))
+                (renamed-def (map named-gensy need-rename-def))
+                (new-env (append all-vars glob env)) ;; all variables declared in or outside blok
+                (new-iglo-table ;; initial list of implicit globals from outside blok which aren't part of the local vars
+                  (let ((tab (table)))
+                    (for-each (lambda (v) (if (not (memq v all-vars)) (put! tab v #t))) iglo)
+                    (for-each (lambda (v) (if (not (memq v all-vars)) (put! tab v #t))) implicitglobals)
+                    tab))
+                (new-iglo (table.keys ;; compute list of all globals used implicitly in blok
+                            (unbound-vars blok
+                                          new-env ;; list of everything else
+                                          new-iglo-table)))
+                ;; combine the list of new renamings with the inherited list
+                (new-renames (append (map cons need-rename renamed) ;; map from definition name -> gensym name
+                                     (map cons need-rename-def renamed-def)
+                                     (map (lambda (g) (cons g `(outerref ,g))) new-iglo)
+                                     (filter (lambda (ren) ;; old renames list, with anything in vars removed
+                                               (not (or (memq (car ren) all-vars)
+                                                        (memq (car ren) iglo)
+                                                        (memq (car ren) implicitglobals)
+                                                        (memq (car ren) glob))))
+                                             renames)))
+                (body (resolve-scopes- blok new-env new-iglo lam new-renames #f))
+                (real-new-vars (append (diff vars need-rename) renamed))
+                (real-new-vars-def (append (diff vars-def need-rename-def) renamed-def)))
+               (for-each (lambda (v)
+                           (if (memq v all-vars)
+                               (error (string "variable \"" v "\" declared both local and global"))))
+                         glob)
+               (if lam ;; update in-place the list of local variables in lam
+                   (set-car! (cddr lam)
+                             (append! (caddr lam) real-new-vars real-new-vars-def)))
+               (insert-after-meta ;; return the new, expanded scope-block
+                (if (and (pair? body) (eq? (car body) 'block))
+                    body
+                    `(block ,body))
+                (append! (map (lambda (v) `(local ,v)) real-new-vars)
+                         (map (lambda (v) `(local-def ,v)) real-new-vars-def)))))
         ((eq? (car e) 'module)
          (error "module expression not at top level"))
+        ((eq? (car e) 'break-block)
+         `(break-block ,(cadr e) ;; ignore type symbol of break-block expression
+                       ,(resolve-scopes- (caddr e) env implicitglobals lam renames #f))) ;; body of break-block expression
+        ((eq? (car e) 'with-static-parameters)
+         `(with-static-parameters ;; ignore list of sparams in break-block expression
+            ,(resolve-scopes- (cadr e) env implicitglobals lam renames #f)
+            ,@(cddr e))) ;; body of break-block expression
         (else
          (cons (car e)
                (map (lambda (x)
@@ -2391,6 +2434,9 @@
 (define (free-vars- e tab)
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e UNUSED)) tab)
         ((symbol? e) (put! tab e #t))
+        ((and (pair? e) (eq? (car e) 'outerref)) (put! tab (cadr e) #t))
+        ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
+        ((and (pair? e) (eq? (car e) 'with-static-parameters)) (free-vars- (cadr e) tab))
         ((or (atom? e) (quoted? e)) tab)
         ((eq? (car e) 'lambda)
          (let ((bound (lambda-all-vars e)))
@@ -2457,6 +2503,9 @@
   (if (or (atom? e) (quoted? e))
       e
       (case (car e)
+        ((local-def) ;; a local that we know has an assignment that dominates all usages
+         (let ((vi (var-info-for (cadr e) env)))
+              (vinfo:set-never-undef! vi #t)))
         ((=)
          (let ((vi (var-info-for (cadr e) env)))
            (if vi
@@ -2734,26 +2783,26 @@ f(x) = yt(x)
                         (take-statements-while
                          (lambda (e)
                            (or (atom? e)
-                               (memq (car e) '(quote top core line inert local unnecessary
+                               (memq (car e) '(quote top core line inert local local-def unnecessary
                                                meta inbounds boundscheck simdloop
-                                               implicit-global global globalref
-                                               const newvar = null method call))))
+                                               implicit-global global globalref outerref
+                                               const = null method call))))
                          (lam:body lam))))
                (unused (map cadr (filter (lambda (x) (memq (car x) '(method =)))
-                                         leading)))
-               (def (table)))
-          ;; TODO: reorder leading statements to put assignments where the RHS is
-          ;; `simple-atom?` at the top.
-          (for-each (lambda (e)
-                      (set! unused (filter (lambda (v) (not (expr-uses-var e v)))
-                                           unused))
-                      (if (and (memq (car e) '(method =)) (memq (cadr e) unused))
-                          (put! def (cadr e) #t)))
-                    leading)
-          (for-each (lambda (v)
-                      (if (and (vinfo:sa v) (has? def (car v)))
-                          (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
-                    vi)))
+                                         leading))))
+              ;; TODO: reorder leading statements to put assignments where the RHS is
+              ;; `simple-atom?` at the top.
+              (for-each (lambda (e)
+                          (set! unused (filter (lambda (v) (not (expr-uses-var e v)))
+                                               unused))
+                          (if (and (memq (car e) '(method =)) (memq (cadr e) unused))
+                              (let ((v (assq (cadr e) vi)))
+                                   (if v (vinfo:set-never-undef! v #t)))))
+                        leading)))
+    (for-each (lambda (v)
+                (if (and (vinfo:sa v) (vinfo:never-undef v))
+                    (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
+              vi)
     lam))
 
 (define (is-var-boxed? v lam)
@@ -2811,27 +2860,25 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref line break inert module toplevel null meta) e)
+          ((quote top core globalref outerref line break inert module toplevel null meta) e)
           ((=)
            (let ((var (cadr e))
                  (rhs (cl-convert (caddr e) fname lam namemap toplevel interp)))
              (if (ssavalue? var)
                  `(= ,var ,rhs)
                  (convert-assignment var rhs fname lam interp))))
-          ((newvar)
+          ((local-def) ;; make new Box for local declaration of defined variable
            (let ((vi (assq (cadr e) (car (lam:vinfo lam)))))
              (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
                  `(= ,(cadr e) (call (core Box)))
-                 e)))
-          ((local)
+                 '(null))))
+          ((local) ;; convert local declarations to newvar statements
            (let ((vi (assq (cadr e) (car (lam:vinfo lam)))))
-             (if (and vi (vinfo:asgn vi) (vinfo:capt vi)
-                      ;; avoid redundant box for vars with newvar nodes
-                      (not (expr-contains-p (lambda (x) (and (length= x 2)
-                                                             (eq? (car x) 'newvar) (eq? (cadr x) (cadr e))))
-                                            (lam:body lam))))
+             (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
                  `(= ,(cadr e) (call (core Box)))
-                 `(newvar ,(cadr e)))))
+                 (if (vinfo:never-undef vi)
+                     '(null)
+                     `(newvar ,(cadr e))))))
           ((const)
            (if (or (assq (cadr e) (car  (lam:vinfo lam)))
                    (assq (cadr e) (cadr (lam:vinfo lam))))
@@ -2913,12 +2960,15 @@ f(x) = yt(x)
                         (capt-vars (diff all-capt-vars capt-sp)) ; remove capt-sp from capt-vars
                         (find-locals-in-method-sig (lambda (methdef)
                                                      (expr-find-all
-                                                      (lambda (s) (and (not (eq? name s))
-                                                                       (not (memq s capt-sp))
-                                                                       (or ;(local? s) ; TODO: make this work for local variables too?
-                                                                         (memq s (lam:sp lam)))))
+                                                      (lambda (e) (and (pair? e) (eq? (car e) 'outerref)
+                                                                       (let ((s (cadr e)))
+                                                                            (and (symbol? s)
+                                                                                 (not (eq? name s))
+                                                                                 (not (memq s capt-sp))
+                                                                                 (or ;(local? s) ; TODO: make this work for local variables too?
+                                                                                   (memq s (lam:sp lam)))))))
                                                       (caddr methdef)
-                                                      identity)))
+                                                      (lambda (e) (cadr e)))))
                         (sig-locals (simple-sort
                                      (delete-duplicates  ;; locals used in sig from all definitions
                                       (apply append      ;; will convert these into sparams for dispatch
@@ -2943,7 +2993,7 @@ f(x) = yt(x)
                               (let* ((iskw ;; TODO jb/functions need more robust version of this
                                       (contains (lambda (x) (eq? x 'kwftype)) sig))
                                      (renamemap (map cons closure-param-names closure-param-syms))
-                                     (arg-defs (replace-vars
+                                     (arg-defs (replace-outer-vars
                                                 (fix-function-arg-type sig type-name iskw namemap closure-param-syms)
                                                 renamemap)))
                                     (append (map (lambda (gs tvar)
@@ -2966,7 +3016,7 @@ f(x) = yt(x)
                                                         v)))
                                                 capt-vars))
                                 (P (append
-                                    closure-param-names
+                                    (map (lambda (n) `(outerref ,n)) closure-param-names)
                                     (filter identity (map (lambda (v ve)
                                                             (if (is-var-boxed? v lam)
                                                                 #f
@@ -3094,7 +3144,7 @@ f(x) = yt(x)
                                  (cdr lst))))
                 (simple? (every (lambda (x) (or (simple-atom? x) (symbol? x) (ssavalue? x)
                                                 (and (pair? x)
-                                                     (memq (car x) '(quote inert top core globalref copyast)))))
+                                                     (memq (car x) '(quote inert top core globalref outerref copyast)))))
                                 lst)))
             (let loop ((lst  lst)
                        (vals '()))
@@ -3107,7 +3157,7 @@ f(x) = yt(x)
                                          (not (simple-atom? arg))  (not (ssavalue? arg))
                                          (not (simple-atom? aval)) (not (ssavalue? aval))
                                          (not (and (pair? arg)
-                                                   (memq (car arg) '(& quote inert top core globalref copyast))))
+                                                   (memq (car arg) '(& quote inert top core globalref outerref copyast))))
                                          (not (and (symbol? arg)
                                                    (or (null? (cdr lst))
                                                        (null? vals)))))
@@ -3132,7 +3182,7 @@ f(x) = yt(x)
     ;; from the current function.
     (define (compile e break-labels value tail)
       (if (or (not (pair? e)) (memq (car e) '(null ssavalue quote inert top core copyast the_exception $
-                                                   globalref cdecl stdcall fastcall thiscall)))
+                                                   globalref outerref cdecl stdcall fastcall thiscall)))
           (let ((e (if (and arg-map (symbol? e))
                        (get arg-map e e)
                        e)))
@@ -3140,6 +3190,8 @@ f(x) = yt(x)
                   (value e)
                   ((or (eq? e 'true) (eq? e 'false)) #f)
                   ((symbol? e) (emit e) #f)  ;; keep symbols for undefined-var checking
+                  ((and (pair? e) (eq? (car e) 'outerref)) (emit e) #f)  ;; keep globals for undefined-var checking
+                  ((and (pair? e) (eq? (car e) 'globalref)) (emit e) #f) ;; keep globals for undefined-var checking
                   (else #f)))
           (case (car e)
             ((call new)
@@ -3345,6 +3397,7 @@ f(x) = yt(x)
                    ;; issue #7264
                    (error (string "`global " vname "`: " vname " is local variable in the enclosing scope"))
                    #f)))
+            ((local-def) #f)
             ((local) #f)
             ((implicit-global) #f)
             ((const) (emit e))
@@ -3500,10 +3553,10 @@ f(x) = yt(x)
   (define (renumber-slots e)
     (cond ((symbol? e)
            (let ((idx (get slot-table e #f)))
-             (or (and idx `(slot ,idx))
-                 (let ((idx (get sp-table e #f)))
-                   (or (and idx `(static_parameter ,idx))
-                       e)))))
+             (if idx `(slot ,idx) e)))
+          ((and (pair? e) (eq? (car e) 'outerref))
+           (let ((idx (get sp-table (cadr e) #f)))
+                (if idx `(static_parameter ,idx) (cadr e))))
           ((or (atom? e) (quoted? e)) e)
           ((ssavalue? e)
            (let ((idx (or (get ssavalue-table (cadr e) #f)
