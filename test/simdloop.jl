@@ -26,8 +26,9 @@ function simd_loop_with_multiple_reductions(x, y, z)
 end
 
 for T in [Int32,Int64,Float32,Float64]
-   # Try various lengths to make sure "remainder loop" works
-   for n in [0,1,2,3,4,255,256,257]
+    # Try various lengths to make sure "remainder loop" works
+    for n in [0,1,2,3,4,255,256,257]
+        local n, a, b, c, s, t
         # Dataset chosen so that results will be exact with only 24 bits of mantissa
         a = convert(Array{T},[2*j+1 for j in 1:n])
         b = convert(Array{T},[3*j+2 for j in 1:n])

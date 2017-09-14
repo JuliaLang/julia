@@ -143,10 +143,10 @@ close(io)
 end
 
 # issue 5453
-let io=IOBuffer("abcdef")
-a = Array{UInt8}(1024)
-@test_throws EOFError read!(io,a)
-@test eof(io)
+let io = IOBuffer("abcdef"),
+    a = Array{UInt8}(1024)
+    @test_throws EOFError read!(io,a)
+    @test eof(io)
 end
 
 @test isempty(readlines(IOBuffer(), chomp=false))
@@ -169,7 +169,10 @@ let io=IOBuffer("hello")
 end
 
 # pr #11554
-let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodnightmoon", true, true)
+let a,
+    io = IOBuffer(SubString("***αhelloworldω***", 4, 16)),
+    io2 = IOBuffer(b"goodnightmoon", true, true)
+
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
     @test_throws ArgumentError write(io,'β')

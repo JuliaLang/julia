@@ -449,8 +449,10 @@ let b = IOBuffer()
 end
 
 # issue #1770
-let a = ['T', 'e', 's', 't']
+let a = ['T', 'e', 's', 't'],
     f = IOBuffer()
+
+    # issue #1770
     serialize(f, a)
     seek(f, 0)
     @test deserialize(f) == a

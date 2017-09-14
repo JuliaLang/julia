@@ -389,6 +389,7 @@ cpa = [1y + 1s 1m + 1s 1w + 1s 1d + 1s; 1h + 1s 1mi + 1s 2m + 1s 1s + 1ms]
 let types = (Dates.Week, Dates.Day, Dates.Hour, Dates.Minute,
              Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond)
     for i in 1:length(types), j in i:length(types), x in (0, 1, 235, -4677, 15250)
+        local T, U, y, z
         T = types[i]
         U = types[j]
         y = T(x)
@@ -400,6 +401,7 @@ end
 
 # Equality and hashing between OtherPeriod types
 for x in (0, 1, 235, -4677, 15250)
+    local x, y, z
     y = Dates.Year(x)
     z = convert(Dates.Month, y)
     @test y == z

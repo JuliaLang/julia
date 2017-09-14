@@ -119,33 +119,38 @@ end
 @test_throws ArgumentError connect(ip"0:0:0:0:0:ffff:127.0.0.1", -1)
 @test_throws ArgumentError connect(ip"0:0:0:0:0:ffff:127.0.0.1", typemax(UInt16)+1)
 
-p, server = listenany(defaultport)
-r = Channel(1)
-tsk = @async begin
-    put!(r, :start)
-    @test_throws Base.UVError accept(server)
+let
+    p, server = listenany(defaultport)
+    r = Channel(1)
+    tsk = @async begin
+        put!(r, :start)
+        @test_throws Base.UVError accept(server)
+    end
+    @test fetch(r) === :start
+    close(server)
+    wait(tsk)
 end
-@test fetch(r) === :start
-close(server)
-wait(tsk)
 
-port, server = listenany(defaultport)
-@async connect("localhost",port)
-s1 = accept(server)
-@test_throws ErrorException accept(server,s1)
-@test_throws Base.UVError listen(port)
-port2, server2 = listenany(port)
-@test port != port2
-close(server)
-close(server2)
+let
+    global randport
+    randport, server = listenany(defaultport)
+    @async connect("localhost", randport)
+    s1 = accept(server)
+    @test_throws ErrorException accept(server,s1)
+    @test_throws Base.UVError listen(randport)
+    port2, server2 = listenany(randport)
+    @test randport != port2
+    close(server)
+    close(server2)
+end
 
 @test_throws Base.DNSError connect(".invalid",80)
 
-begin
+let
     a = UDPSocket()
     b = UDPSocket()
-    bind(a, ip"127.0.0.1", port)
-    bind(b, ip"127.0.0.1", port + 1)
+    bind(a, ip"127.0.0.1", randport)
+    bind(b, ip"127.0.0.1", randport + 1)
 
     c = Condition()
     tsk = @async begin
@@ -155,10 +160,10 @@ begin
             @test String(recv(a)) == "Hello World"
             notify(c)
         end
-        send(b, ip"127.0.0.1", port, "Hello World")
+        send(b, ip"127.0.0.1", randport, "Hello World")
         wait(tsk2)
     end
-    send(b, ip"127.0.0.1", port, "Hello World")
+    send(b, ip"127.0.0.1", randport, "Hello World")
     wait(c)
     wait(tsk)
 
@@ -168,10 +173,10 @@ begin
             addr == ip"127.0.0.1" && String(data) == "Hello World"
         end
     end
-    send(b, ip"127.0.0.1", port, "Hello World")
+    send(b, ip"127.0.0.1", randport, "Hello World")
     wait(tsk)
 
-    @test_throws MethodError bind(UDPSocket(),port)
+    @test_throws MethodError bind(UDPSocket(), randport)
 
     close(a)
     close(b)
@@ -179,8 +184,8 @@ end
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     a = UDPSocket()
     b = UDPSocket()
-    bind(a, ip"::1", UInt16(port))
-    bind(b, ip"::1", UInt16(port+1))
+    bind(a, ip"::1", UInt16(randport))
+    bind(b, ip"::1", UInt16(randport + 1))
 
     tsk = @async begin
         @test begin
@@ -188,44 +193,44 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
             addr == ip"::1" && String(data) == "Hello World"
         end
     end
-    send(b, ip"::1", port, "Hello World")
+    send(b, ip"::1", randport, "Hello World")
     wait(tsk)
 end
 
-begin
-    for (addr, porthint) in [(IPv4("127.0.0.1"), UInt16(11011)),
-                        (IPv6("::1"), UInt16(11012)), (getipaddr(), UInt16(11013))]
-        port, listen_sock = listenany(addr, porthint)
-        gsn_addr, gsn_port = getsockname(listen_sock)
+for (addr, porthint) in [
+        (IPv4("127.0.0.1"), UInt16(11011)),
+        (IPv6("::1"), UInt16(11012)),
+        (getipaddr(), UInt16(11013)) ]
+    port, listen_sock = listenany(addr, porthint)
+    gsn_addr, gsn_port = getsockname(listen_sock)
 
-        @test addr == gsn_addr
-        @test port == gsn_port
+    @test addr == gsn_addr
+    @test port == gsn_port
 
-        @test_throws MethodError getpeername(listen_sock)
+    @test_throws MethodError getpeername(listen_sock)
 
-        # connect to it
-        client_sock = connect(addr, port)
-        server_sock = accept(listen_sock)
+    # connect to it
+    client_sock = connect(addr, port)
+    server_sock = accept(listen_sock)
 
-        self_client_addr, self_client_port = getsockname(client_sock)
-        peer_client_addr, peer_client_port = getpeername(client_sock)
-        self_srvr_addr, self_srvr_port = getsockname(server_sock)
-        peer_srvr_addr, peer_srvr_port = getpeername(server_sock)
+    self_client_addr, self_client_port = getsockname(client_sock)
+    peer_client_addr, peer_client_port = getpeername(client_sock)
+    self_srvr_addr, self_srvr_port = getsockname(server_sock)
+    peer_srvr_addr, peer_srvr_port = getpeername(server_sock)
 
-        @test self_client_addr == peer_client_addr == self_srvr_addr == peer_srvr_addr
+    @test self_client_addr == peer_client_addr == self_srvr_addr == peer_srvr_addr
 
-        @test peer_client_port == self_srvr_port
-        @test peer_srvr_port == self_client_port
-        @test self_srvr_port != self_client_port
+    @test peer_client_port == self_srvr_port
+    @test peer_srvr_port == self_client_port
+    @test self_srvr_port != self_client_port
 
-        close(listen_sock)
-        close(client_sock)
-        close(server_sock)
-    end
+    close(listen_sock)
+    close(client_sock)
+    close(server_sock)
 end
 
 # Local-machine broadcast
-let
+let a, b, c
     # (Mac OS X's loopback interface doesn't support broadcasts)
     bcastdst = Sys.isapple() ? ip"255.255.255.255" : ip"127.255.255.255"
 
@@ -302,8 +307,7 @@ let P = Pipe()
 end
 
 # test the method matching connect!(::TCPSocket, ::Base.InetAddr{T<:Base.IPAddr})
-let
-    addr = Base.InetAddr(ip"127.0.0.1", 4444)
+let addr = Base.InetAddr(ip"127.0.0.1", 4444)
 
     function test_connect(addr::Base.InetAddr)
         srv = listen(addr)

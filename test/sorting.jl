@@ -8,7 +8,7 @@ using Base.Order: Forward
 @test sort(['a':'z';], rev=true) == ['z':-1:'a';]
 @test sortperm([2,3,1]) == [3,1,2]
 @test sortperm!([1,2,3], [2,3,1]) == [3,1,2]
-let s = view([1,2,3,4], 1:3)
+let s = view([1,2,3,4], 1:3),
     r = sortperm!(s, [2,3,1])
     @test r == [3,1,2]
     @test r === s
@@ -223,6 +223,7 @@ end
 srand(0xdeadbeef)
 
 for n in [0:10; 100; 101; 1000; 1001]
+    local r
     r = -5:5
     v = rand(r,n)
     h = [sum(v .== x) for x in r]
@@ -324,8 +325,11 @@ inds = [
     193,193,193,194,194,194,195,195,195,196,196,197,197,197,
     198,198,198,199,199,199,200,200,200
 ]
-sp = sortperm(inds)
-@test all(issorted, [sp[inds.==x] for x in 1:200])
+
+let sp = sortperm(inds)
+    @test all(issorted, [sp[inds.==x] for x in 1:200])
+end
+
 for alg in [InsertionSort, MergeSort]
     sp = sortperm(inds, alg=alg)
     @test all(issorted, [sp[inds.==x] for x in 1:200])

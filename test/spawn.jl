@@ -16,10 +16,16 @@ catcmd = `cat`
 shcmd = `sh`
 sleepcmd = `sleep`
 lscmd = `ls`
+havebb = false
 if Sys.iswindows()
     busybox = joinpath(JULIA_HOME, "busybox.exe")
-    try # use busybox-w32 on windows
+    havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
+        true
+    catch
+        false
+    end
+    if havebb
         yescmd = `$busybox yes`
         echocmd = `$busybox echo`
         sortcmd = `$busybox sort`
@@ -49,7 +55,7 @@ out = read(`$echocmd hello` & `$echocmd world`, String)
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
 Sys.isunix() && run(pipeline(yescmd, `head`, DevNull))
 
-begin
+let a, p
     a = Base.Condition()
     @schedule begin
         p = spawn(pipeline(yescmd,DevNull))
@@ -236,7 +242,7 @@ end
 end
 
 # Test that redirecting an IOStream does not crash the process
-let fname = tempname()
+let fname = tempname(), p
     cmd = """
     # Overwrite libuv memory before freeing it, to make sure that a use after free
     # triggers an assertion.
@@ -351,14 +357,11 @@ end
 let fname = tempname()
     write(fname, "test\n")
     code = """
-    cmd = pipeline(`echo asdf`,`cat`)
-    if Sys.iswindows()
-        try
-            busybox = joinpath(JULIA_HOME, "busybox.exe")
-            success(`\$busybox`)
-            cmd = pipeline(`\$busybox echo asdf`,`\$busybox cat`)
-        end
-    end
+    $(if havebb
+        "cmd = pipeline(`\$$(repr(busybox)) echo asdf`, `\$$(repr(busybox)) cat`)"
+    else
+        "cmd = pipeline(`echo asdf`, `cat`)"
+    end)
     for line in eachline(STDIN)
         run(cmd)
     end

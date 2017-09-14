@@ -179,7 +179,7 @@ let f = keymap_fcn([test_keymap_7, test_keymap_6])
     buf = IOBuffer("abd")
     f(buf)
     @test a_foo == 3
-    a_foo = 0
+    global a_foo = 0
     f(buf)
     @test a_foo == 3
     f(buf)
@@ -370,6 +370,7 @@ let buf = IOBuffer()
 end
 
 @testset "edit_word_transpose" begin
+    local buf, mode
     buf = IOBuffer()
     mode = Ref{Symbol}()
     transpose!(i) = transform!(buf -> LineEdit.edit_transpose_words(buf, mode[]),
@@ -401,7 +402,7 @@ end
     @test transpose!(13) == ("àbç gh    def", 13)
 end
 
-let s = new_state()
+let s = new_state(),
     buf = buffer(s)
 
     edit_insert(s,"first line\nsecond line\nthird line")
@@ -446,10 +447,9 @@ end
 # julia> is 6 characters + 1 character for space,
 # so the rest of the terminal is 73 characters
 #########################################################################
-let
-    buf = IOBuffer(
-    "begin\nprint(\"A very very very very very very very very very very very very ve\")\nend")
-    seek(buf,4)
+let buf = IOBuffer(
+        "begin\nprint(\"A very very very very very very very very very very very very ve\")\nend")
+    seek(buf, 4)
     outbuf = IOBuffer()
     termbuf = Base.Terminals.TerminalBuffer(outbuf)
     term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
@@ -459,6 +459,7 @@ let
 end
 
 @testset "function prompt indentation" begin
+    local s, term, ps, buf, outbuf, termbuf
     s = new_state()
     term = Base.LineEdit.terminal(s)
     # default prompt: PromptState.indent should not be set to a final fixed value
@@ -583,7 +584,7 @@ end
 end
 
 @testset "change case on the right" begin
-    buf = IOBuffer()
+    local buf = IOBuffer()
     edit_insert(buf, "aa bb CC")
     seekstart(buf)
     LineEdit.edit_upper_case(buf)
@@ -595,6 +596,7 @@ end
 end
 
 @testset "kill ring" begin
+    local buf
     s = new_state()
     buf = buffer(s)
     edit_insert(s, "ça ≡ nothing")

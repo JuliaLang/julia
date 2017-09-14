@@ -174,11 +174,10 @@ end
 import Base.hash
 hash(x::I1438T, h::UInt) = hash(x.id, h)
 
-let
-    local seq, xs, s
-    seq = [26,28,29,30,31,32,33,34,35,36,-32,-35,-34,-28,37,38,39,40,-30,
-           -31,41,42,43,44,-33,-36,45,46,47,48,-37,-38,49,50,51,52,-46,-50,53]
-    xs = [ I1438T(id) for id=1:53 ]
+let seq, xs, s
+    seq = [26, 28, 29, 30, 31, 32, 33, 34, 35, 36, -32, -35, -34, -28, 37, 38, 39, 40, -30,
+           -31, 41, 42, 43, 44, -33, -36, 45, 46, 47, 48, -37, -38, 49, 50, 51, 52, -46, -50, 53]
+    xs = [ I1438T(id) for id = 1:53 ]
     s = Set()
     for id in seq
         if id > 0
@@ -197,39 +196,41 @@ end
 @test !isequal(Dict(1 => 1), Dict(1 => 2))
 @test !isequal(Dict(1 => 1), Dict(2 => 1))
 
-# Generate some data to populate dicts to be compared
-data_in = [ (rand(1:1000), randstring(2)) for _ in 1:1001 ]
+let
+    # Generate some data to populate dicts to be compared
+    data_in = [ (rand(1:1000), randstring(2)) for _ in 1:1001 ]
 
-# Populate the first dict
-d1 = Dict{Int, AbstractString}()
-for (k,v) in data_in
-    d1[k] = v
-end
-data_in = collect(d1)
-# shuffle the data
-for i in 1:length(data_in)
-    j = rand(1:length(data_in))
-    data_in[i], data_in[j] = data_in[j], data_in[i]
-end
-# Inserting data in different (shuffled) order should result in
-# equivalent dict.
-d2 = Dict{Int, AbstractString}()
-for (k,v) in data_in
-    d2[k] = v
-end
+    # Populate the first dict
+    d1 = Dict{Int, AbstractString}()
+    for (k, v) in data_in
+        d1[k] = v
+    end
+    data_in = collect(d1)
+    # shuffle the data
+    for i in 1:length(data_in)
+        j = rand(1:length(data_in))
+        data_in[i], data_in[j] = data_in[j], data_in[i]
+    end
+    # Inserting data in different (shuffled) order should result in
+    # equivalent dict.
+    d2 = Dict{Int, AbstractString}()
+    for (k, v) in data_in
+        d2[k] = v
+    end
 
-@test  isequal(d1, d2)
-d3 = copy(d2)
-d4 = copy(d2)
-# Removing an item gives different dict
-delete!(d1, data_in[rand(1:length(data_in))][1])
-@test !isequal(d1, d2)
-# Changing a value gives different dict
-d3[data_in[rand(1:length(data_in))][1]] = randstring(3)
-!isequal(d1, d3)
-# Adding a pair gives different dict
-d4[1001] = randstring(3)
-@test !isequal(d1, d4)
+    @test  isequal(d1, d2)
+    d3 = copy(d2)
+    d4 = copy(d2)
+    # Removing an item gives different dict
+    delete!(d1, data_in[rand(1:length(data_in))][1])
+    @test !isequal(d1, d2)
+    # Changing a value gives different dict
+    d3[data_in[rand(1:length(data_in))][1]] = randstring(3)
+    !isequal(d1, d3)
+    # Adding a pair gives different dict
+    d4[1001] = randstring(3)
+    @test !isequal(d1, d4)
+end
 
 @test isequal(Dict(), sizehint!(Dict(),96))
 
@@ -341,7 +342,7 @@ end
 
 # issue #8877
 let a = Dict("foo"  => 0.0, "bar" => 42.0),
-        b = Dict("フー" => 17, "バー" => 4711)
+    b = Dict("フー" => 17, "バー" => 4711)
     @test typeof(merge(a, b)) === Dict{String,Float64}
 end
 
@@ -423,14 +424,16 @@ let d = Dict{Int,Int}()
 end
 
 # iteration
-d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
-@test [d[k] for k in keys(d)] == [d[k] for k in eachindex(d)] ==
-      [v for (k, v) in d] == [d[x[1]] for (i, x) in enumerate(d)]
+let d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
+    @test [d[k] for k in keys(d)] == [d[k] for k in eachindex(d)] ==
+          [v for (k, v) in d] == [d[x[1]] for (i, x) in enumerate(d)]
+end
 
 # generators, similar
-d = Dict(:a=>"a")
-# TODO: restore when 0.7 deprecation is removed
-#@test @inferred(map(identity, d)) == d
+let d = Dict(:a=>"a")
+    # TODO: restore when 0.7 deprecation is removed
+    #@test @inferred(map(identity, d)) == d
+end
 
 # Issue 12451
 @test_throws ArgumentError Dict(0)
@@ -545,7 +548,7 @@ let badKeys = [
     "ECGRATE_ema5.0","FIO2_emv5.0","RESPRATE_emv5.0","7wu3ty0a4fs","BVO",
     "4UrCWXUsaT"
 ]
-    d = Dict{AbstractString,Int}()
+    local d = Dict{AbstractString,Int}()
     for i = 1:length(badKeys)
         d[badKeys[i]] = i
     end
@@ -556,7 +559,7 @@ let badKeys = [
 
     # Walk through all possible hash values (mod size of hash table)
     for offset = 0:1023
-        d2 = Dict{MyString,Int}()
+        local d2 = Dict{MyString,Int}()
         hashoffset[] = offset
         for i = 1:length(badKeys)
             d2[MyString(badKeys[i])] = i
@@ -585,7 +588,7 @@ let badKeys = UInt16[0xb800,0xa501,0xcdff,0x6303,0xe40a,0xcf0e,0xf3df,0xae99,0x9
                      0x8c48,0xdf49,0x5743]
     # Walk through all possible hash values (mod size of hash table)
     for offset = 0:1023
-        d2 = Dict{MyInt, Int}()
+        local d2 = Dict{MyInt, Int}()
         hashoffset[] = offset
         for i = 1:length(badKeys)
             d2[MyInt(badKeys[i])] = i

@@ -73,8 +73,8 @@ let a = Any[[1]], q = QuoteNode([1])
 end
 
 # issue #13124
-let a = rand(3, 5)
-    b = (a,a)
+let a = rand(3, 5),
+    b = (a,a),
     c = deepcopy(b)
     @test c[1] === c[2]
 end
@@ -83,8 +83,9 @@ end
 @test isnull(deepcopy(Nullable{Array}()))
 
 # issue #15250
-let a1 = Core.svec(1, 2, 3, []), a2 = Core.svec(1, 2, 3)
-    a3 = Core.svec(a1,a1)
+let a1 = Core.svec(1, 2, 3, []),
+    a2 = Core.svec(1, 2, 3),
+    a3 = Core.svec(a1,a1),
     b1 = deepcopy(a1)
     @test a1 == b1
     @test a1 !== b1

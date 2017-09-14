@@ -158,7 +158,7 @@ end
             @test ind2sub((0:3,3:5,-101:-100), l) == (i-1, j+2, k-102)
         end
 
-        A = reshape(collect(1:9), (3,3))
+        local A = reshape(collect(1:9), (3,3))
         @test ind2sub(size(A), 6) == (3,2)
         @test sub2ind(size(A), 3, 2) == 6
         @test ind2sub(A, 6) == (3,2)

@@ -61,7 +61,7 @@ for i = 1:size(cx,1)
         @test st == escape_string(string(ch))
     end
     for j = 1:size(cx,1)
-        str = string(ch, cx[j,2])
+        local str = string(ch, cx[j,2])
         @test str == unescape_string(escape_string(str))
     end
     @test repr(ch) == "'$(isprint(ch) ? ch : st)'"

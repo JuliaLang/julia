@@ -2,82 +2,83 @@
 
 using Base.REPLCompletions
 
-ex = quote
-    module CompletionFoo
-    mutable struct Test_y
-        yy
+let ex = quote
+        module CompletionFoo
+        mutable struct Test_y
+            yy
+        end
+        mutable struct Test_x
+            xx :: Test_y
+        end
+        type_test = Test_x(Test_y(1))
+        (::Test_y)() = "", ""
+        module CompletionFoo2
+
+        end
+        const bar = 1
+        foo() = bar
+        macro foobar()
+            :()
+        end
+
+        # Support non-Dict Associatives, #19441
+        mutable struct CustomDict{K, V} <: Associative{K, V}
+            mydict::Dict{K, V}
+        end
+
+        Base.keys(d::CustomDict) = collect(keys(d.mydict))
+        Base.length(d::CustomDict) = length(d.mydict)
+
+        test(x::T, y::T) where {T<:Real} = pass
+        test(x::Real, y::Real) = pass
+        test(x::AbstractArray{T}, y) where {T<:Real} = pass
+        test(args...) = pass
+
+        test1(x::Type{Float64}) = pass
+
+        test2(x::AbstractString) = pass
+        test2(x::Char) = pass
+        test2(x::Cmd) = pass
+
+        test3(x::AbstractArray{Int}, y::Int) = pass
+        test3(x::AbstractArray{Float64}, y::Float64) = pass
+
+        test4(x::AbstractString, y::AbstractString) = pass
+        test4(x::AbstractString, y::Regex) = pass
+
+        test5(x::Array{Bool,1}) = pass
+        test5(x::BitArray{1}) = pass
+        test5(x::Float64) = pass
+        const a=x->x
+        test6()=[a, a]
+        test7() = rand() > 0.5 ? 1 : 1.0
+        test8() = Any[1][1]
+        kwtest(; x=1, y=2, w...) = pass
+
+        array = [1, 1]
+        varfloat = 0.1
+
+        const tuple = (1, 2)
+
+        test_y_array=[CompletionFoo.Test_y(rand()) for i in 1:10]
+        test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3,
+                         contains=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
+                         "α"=>12, :α=>13)
+        test_customdict = CustomDict(test_dict)
+
+        macro teststr_str(s) end
+        macro tϵsτstρ_str(s) end
+        macro testcmd_cmd(s) end
+        macro tϵsτcmδ_cmd(s) end
+
+        end
+        test_repl_comp_dict = CompletionFoo.test_dict
+        test_repl_comp_customdict = CompletionFoo.test_customdict
+        test_dict_ℂ = Dict(1=>2)
     end
-    mutable struct Test_x
-        xx :: Test_y
-    end
-    type_test = Test_x(Test_y(1))
-    (::Test_y)() = "", ""
-    module CompletionFoo2
-
-    end
-    const bar = 1
-    foo() = bar
-    macro foobar()
-        :()
-    end
-
-    # Support non-Dict Associatives, #19441
-    mutable struct CustomDict{K, V} <: Associative{K, V}
-        mydict::Dict{K, V}
-    end
-
-    Base.keys(d::CustomDict) = collect(keys(d.mydict))
-    Base.length(d::CustomDict) = length(d.mydict)
-
-    test(x::T, y::T) where {T<:Real} = pass
-    test(x::Real, y::Real) = pass
-    test(x::AbstractArray{T}, y) where {T<:Real} = pass
-    test(args...) = pass
-
-    test1(x::Type{Float64}) = pass
-
-    test2(x::AbstractString) = pass
-    test2(x::Char) = pass
-    test2(x::Cmd) = pass
-
-    test3(x::AbstractArray{Int}, y::Int) = pass
-    test3(x::AbstractArray{Float64}, y::Float64) = pass
-
-    test4(x::AbstractString, y::AbstractString) = pass
-    test4(x::AbstractString, y::Regex) = pass
-
-    test5(x::Array{Bool,1}) = pass
-    test5(x::BitArray{1}) = pass
-    test5(x::Float64) = pass
-    const a=x->x
-    test6()=[a, a]
-    test7() = rand() > 0.5 ? 1 : 1.0
-    test8() = Any[1][1]
-    kwtest(; x=1, y=2, w...) = pass
-
-    array = [1, 1]
-    varfloat = 0.1
-
-    const tuple = (1, 2)
-
-    test_y_array=[CompletionFoo.Test_y(rand()) for i in 1:10]
-    test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3,
-                     contains=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
-                     "α"=>12, :α=>13)
-    test_customdict = CustomDict(test_dict)
-
-    macro teststr_str(s) end
-    macro tϵsτstρ_str(s) end
-    macro testcmd_cmd(s) end
-    macro tϵsτcmδ_cmd(s) end
-
-    end
-    test_repl_comp_dict = CompletionFoo.test_dict
-    test_repl_comp_customdict = CompletionFoo.test_customdict
-    test_dict_ℂ = Dict(1=>2)
+    ex.head = :toplevel
+    eval(Main, ex)
 end
-ex.head = :toplevel
-eval(Main, ex)
 
 function temp_pkg_dir_noinit(fn::Function)
     # Used in tests below to set up and tear down a sandboxed package directory
@@ -100,208 +101,241 @@ test_complete(s) = completions(s,endof(s))
 test_scomplete(s) = shell_completions(s,endof(s))
 test_bslashcomplete(s) = bslash_completions(s,endof(s))[2]
 
-s = ""
-c,r = test_complete(s)
-@test "CompletionFoo" in c
-@test isempty(r)
-@test s[r] == ""
+let s = ""
+    c, r = test_complete(s)
+    @test "CompletionFoo" in c
+    @test isempty(r)
+    @test s[r] == ""
+end
 
-s = "Comp"
-c,r = test_complete(s)
-@test "CompletionFoo" in c
-@test r == 1:4
-@test s[r] == "Comp"
+let s = "Comp"
+    c, r = test_complete(s)
+    @test "CompletionFoo" in c
+    @test r == 1:4
+    @test s[r] == "Comp"
+end
 
-s = "Main.Comp"
-c,r = test_complete(s)
-@test "CompletionFoo" in c
-@test r == 6:9
-@test s[r] == "Comp"
+let s = "Main.Comp"
+    c, r = test_complete(s)
+    @test "CompletionFoo" in c
+    @test r == 6:9
+    @test s[r] == "Comp"
+end
 
-s = "Main.CompletionFoo."
-c,r = test_complete(s)
-@test "bar" in c
-@test r == 20:19
-@test s[r] == ""
+let s = "Main.CompletionFoo."
+    c, r = test_complete(s)
+    @test "bar" in c
+    @test r == 20:19
+    @test s[r] == ""
+end
 
-s = "Main.CompletionFoo.f"
-c,r = test_complete(s)
-@test "foo" in c
-@test r == 20:20
-@test s[r] == "f"
-@test !("foobar" in c)
+let s = "Main.CompletionFoo.f"
+    c, r = test_complete(s)
+    @test "foo" in c
+    @test r == 20:20
+    @test s[r] == "f"
+    @test !("foobar" in c)
+end
 
 # issue #6424
-s = "Main.CompletionFoo.@f"
-c,r = test_complete(s)
-@test "@foobar" in c
-@test r == 20:21
-@test s[r] == "@f"
-@test !("foo" in c)
+let s = "Main.CompletionFoo.@f"
+    c, r = test_complete(s)
+    @test "@foobar" in c
+    @test r == 20:21
+    @test s[r] == "@f"
+    @test !("foo" in c)
+end
 
-s = "Main.CompletionFoo.type_test.x"
-c,r = test_complete(s)
-@test "xx" in c
-@test r == 30:30
-@test s[r] == "x"
+let s = "Main.CompletionFoo.type_test.x"
+    c, r = test_complete(s)
+    @test "xx" in c
+    @test r == 30:30
+    @test s[r] == "x"
+end
 
-s = "Main.CompletionFoo.bar.no_val_available"
-c,r = test_complete(s)
-@test length(c)==0
+let s = "Main.CompletionFoo.bar.no_val_available"
+    c, r = test_complete(s)
+    @test length(c)==0
+end
+
 #cannot do dot completion on infix operator
-s = "+."
-c,r = test_complete(s)
-@test length(c)==0
+let s = "+."
+    c, r = test_complete(s)
+    @test length(c)==0
+end
 
 # To complete on a variable of a type, the type T of the variable
 # must be a concrete type, hence Base.isstructtype(T) returns true,
 # for the completion to succeed. That why `xx :: Test_y` of `Test_x`.
-s = "Main.CompletionFoo.type_test.xx.y"
-c,r = test_complete(s)
-@test "yy" in c
-@test r == 33:33
-@test s[r] == "y"
+let s = "Main.CompletionFoo.type_test.xx.y"
+    c, r = test_complete(s)
+    @test "yy" in c
+    @test r == 33:33
+    @test s[r] == "y"
+end
 
 # issue #6333
-s = "Base.return_types(getin"
-c,r = test_complete(s)
-@test "getindex" in c
-@test r == 19:23
-@test s[r] == "getin"
+let s = "Base.return_types(getin"
+    c, r = test_complete(s)
+    @test "getindex" in c
+    @test r == 19:23
+    @test s[r] == "getin"
+end
 
 # issue #23193: after `using`, identifiers can be prefixed by module names
-s = "using Base.Test, Base.Random"
-c,r = test_complete(s)
-@test !("RandomDevice" in c)
+let s = "using Base.Test, Base.Random"
+    c, r = test_complete(s)
+    @test !("RandomDevice" in c)
+end
 
 # issue #23226: identifiers must be separated by a comma (not a newline)
-s = "using Base\nusi"
-c,r = test_complete(s)
-@test "using" in c
+let s = "using Base\nusi"
+    c, r = test_complete(s)
+    @test "using" in c
+end
 
 # issue 23292
-@test_nowarn test_complete("test7().")
-c,r = test_complete("test8().")
-@test isempty(c)
+let
+    @test_nowarn test_complete("test7().")
+    c, r = test_complete("test8().")
+    @test isempty(c)
+end
 
 # inexistent completion inside a string
-s = "Pkg.add(\"lol"
-c,r,res = test_complete(s)
-@test res == false
+let s = "Pkg.add(\"lol"
+    c, r, res = test_complete(s)
+    @test res == false
+end
 
 # test latex symbol completions
-s = "\\alpha"
-c,r = test_bslashcomplete(s)
-@test c[1] == "α"
-@test r == 1:length(s)
-@test length(c) == 1
+let s = "\\alpha"
+    c, r = test_bslashcomplete(s)
+    @test c[1] == "α"
+    @test r == 1:length(s)
+    @test length(c) == 1
+end
 
 # test latex symbol completions after unicode #9209
-s = "α\\alpha"
-c,r = test_bslashcomplete(s)
-@test c[1] == "α"
-@test r == 3:sizeof(s)
-@test length(c) == 1
+let s = "α\\alpha"
+    c, r = test_bslashcomplete(s)
+    @test c[1] == "α"
+    @test r == 3:sizeof(s)
+    @test length(c) == 1
+end
 
 # test emoji symbol completions
-s = "\\:koala:"
-c,r = test_bslashcomplete(s)
-@test c[1] == "🐨"
-@test r == 1:sizeof(s)
-@test length(c) == 1
+let s = "\\:koala:"
+    c, r = test_bslashcomplete(s)
+    @test c[1] == "🐨"
+    @test r == 1:sizeof(s)
+    @test length(c) == 1
+end
 
-s = "\\:ko"
-c,r = test_bslashcomplete(s)
-@test "\\:koala:" in c
+let s = "\\:ko"
+    c, r = test_bslashcomplete(s)
+    @test "\\:koala:" in c
+end
 
 # test emoji symbol completions after unicode #9209
-s = "α\\:koala:"
-c,r = test_bslashcomplete(s)
-@test c[1] == "🐨"
-@test r == 3:sizeof(s)
-@test length(c) == 1
+let s = "α\\:koala:"
+    c, r = test_bslashcomplete(s)
+    @test c[1] == "🐨"
+    @test r == 3:sizeof(s)
+    @test length(c) == 1
+end
 
 # test latex symbol completions in strings should not work when there
 # is a backslash in front of `\alpha` because it interferes with path completion on windows
-s = "cd(\"path_to_an_empty_folder_should_not_complete_latex\\\\\\alpha"
-c,r,res = test_complete(s)
-@test length(c) == 0
+let s = "cd(\"path_to_an_empty_folder_should_not_complete_latex\\\\\\alpha"
+    c, r, res = test_complete(s)
+    @test length(c) == 0
+end
 
 # test latex symbol completions in strings
-s = "\"C:\\\\ \\alpha"
-c,r,res = test_complete(s)
-@test c[1] == "α"
-@test r == 7:12
-@test length(c) == 1
+let s = "\"C:\\\\ \\alpha"
+    c, r, res = test_complete(s)
+    @test c[1] == "α"
+    @test r == 7:12
+    @test length(c) == 1
+end
 
-s = "\\a"
-c, r, res = test_complete(s)
-"\\alpha" in c
-@test r == 1:2
-@test s[r] == "\\a"
+let s = "\\a"
+    c, r, res = test_complete(s)
+    "\\alpha" in c
+    @test r == 1:2
+    @test s[r] == "\\a"
+end
 
 # `cd("C:\U should not make the repl crash due to escaping see comment #9137
-s = "cd(\"C:\\U"
-c,r,res = test_complete(s)
+let s = "cd(\"C:\\U"
+    c, r, res = test_complete(s)
+end
 
 # Test method completions
-s = "max("
-c, r, res = test_complete(s)
-@test !res
-@test let found = false
-    for m in methods(max)
-        if !found
-            found = (c[1] == string(m))
+let s = "max("
+    c, r, res = test_complete(s)
+    @test !res
+    @test let found = false
+        for m in methods(max)
+            if !found
+                found = (c[1] == string(m))
+            end
         end
+        found
     end
-    found
+    @test r == 1:3
+    @test s[r] == "max"
 end
-@test r == 1:3
-@test s[r] == "max"
 
 # Test completion of methods with input concrete args and args where typeinference determine their type
-s = "CompletionFoo.test(1,1, "
-c, r, res = test_complete(s)
-@test !res
-@test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
-@test length(c) == 3
-@test r == 1:18
-@test s[r] == "CompletionFoo.test"
+let s = "CompletionFoo.test(1,1, "
+    c, r, res = test_complete(s)
+    @test !res
+    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Int, Int})))
+    @test length(c) == 3
+    @test r == 1:18
+    @test s[r] == "CompletionFoo.test"
+end
 
-s = "CompletionFoo.test(CompletionFoo.array,"
-c, r, res = test_complete(s)
-@test !res
-@test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Array{Int, 1}, Any})))
-@test length(c) == 2
-@test r == 1:18
-@test s[r] == "CompletionFoo.test"
+let s = "CompletionFoo.test(CompletionFoo.array,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Array{Int, 1}, Any})))
+    @test length(c) == 2
+    @test r == 1:18
+    @test s[r] == "CompletionFoo.test"
+end
 
-s = "CompletionFoo.test(1,1,1,"
-c, r, res = test_complete(s)
-@test !res
-@test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Any, Any, Any})))
-@test r == 1:18
-@test s[r] == "CompletionFoo.test"
+let s = "CompletionFoo.test(1,1,1,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test c[1] == string(first(methods(Main.CompletionFoo.test, Tuple{Any, Any, Any})))
+    @test r == 1:18
+    @test s[r] == "CompletionFoo.test"
+end
 
-s = "CompletionFoo.test1(Int,"
-c, r, res = test_complete(s)
-@test !res
-@test length(c) == 0
-@test r == 1:19
-@test s[r] == "CompletionFoo.test1"
+let s = "CompletionFoo.test1(Int,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 0
+    @test r == 1:19
+    @test s[r] == "CompletionFoo.test1"
+end
 
-s = "CompletionFoo.test1(Float64,"
-c, r, res = test_complete(s)
-@test !res
-@test length(c) == 1
-@test r == 1:19
-@test s[r] == "CompletionFoo.test1"
+let s = "CompletionFoo.test1(Float64,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test r == 1:19
+    @test s[r] == "CompletionFoo.test1"
+end
 
-s = "prevind(\"θ\",1,"
-c, r, res = test_complete(s)
-@test c[1] == string(first(methods(prevind, Tuple{String, Int})))
-@test r == 1:7
-@test s[r] == "prevind"
+let s = "prevind(\"θ\",1,"
+    c, r, res = test_complete(s)
+    @test c[1] == string(first(methods(prevind, Tuple{String, Int})))
+    @test r == 1:7
+    @test s[r] == "prevind"
+end
 
 for (T, arg) in [(String,"\")\""),(Char, "')'")]
     s = "(1, CompletionFoo.test2($arg,"
@@ -312,117 +346,134 @@ for (T, arg) in [(String,"\")\""),(Char, "')'")]
     @test s[r] == "CompletionFoo.test2"
 end
 
-s = "(1, CompletionFoo.test2(`')'`,"
-c, r, res = test_complete(s)
-@test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
-@test length(c) == 1
+let s = "(1, CompletionFoo.test2(`')'`,"
+    c, r, res = test_complete(s)
+    @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
+    @test length(c) == 1
+end
 
-s = "CompletionFoo.test3([1, 2] + CompletionFoo.varfloat,"
-c, r, res = test_complete(s)
-@test !res
-@test c[1] == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
-@test length(c) == 1
+let s = "CompletionFoo.test3([1, 2] + CompletionFoo.varfloat,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test c[1] == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
+    @test length(c) == 1
+end
 
-s = "CompletionFoo.test3([1.,2.], 1.,"
-c, r, res = test_complete(s)
-@test !res
-@test c[1] == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
-@test r == 1:19
-@test length(c) == 1
-@test s[r] == "CompletionFoo.test3"
+let s = "CompletionFoo.test3([1.,2.], 1.,"
+    c, r, res = test_complete(s)
+    @test !res
+    @test c[1] == string(first(methods(Main.CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
+    @test r == 1:19
+    @test length(c) == 1
+    @test s[r] == "CompletionFoo.test3"
+end
 
-s = "CompletionFoo.test4(\"e\",r\" \","
-c, r, res = test_complete(s)
-@test !res
-@test c[1] == string(first(methods(Main.CompletionFoo.test4, Tuple{String, Regex})))
-@test r == 1:19
-@test length(c) == 1
-@test s[r] == "CompletionFoo.test4"
+let s = "CompletionFoo.test4(\"e\",r\" \","
+    c, r, res = test_complete(s)
+    @test !res
+    @test c[1] == string(first(methods(Main.CompletionFoo.test4, Tuple{String, Regex})))
+    @test r == 1:19
+    @test length(c) == 1
+    @test s[r] == "CompletionFoo.test4"
+end
 
 # (As discussed in #19829, the Base.REPLCompletions.get_type function isn't
 #  powerful enough to analyze general dot calls because it can't handle
 #  anonymous-function evaluation.)
-s = "CompletionFoo.test5(push!(Base.split(\"\",' '),\"\",\"\").==\"\","
-c, r, res = test_complete(s)
-@test !res
-@test_broken length(c) == 1
-@test_broken c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
+let s = "CompletionFoo.test5(push!(Base.split(\"\",' '),\"\",\"\").==\"\","
+    c, r, res = test_complete(s)
+    @test !res
+    @test_broken length(c) == 1
+    @test_broken c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
+end
 
-s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.test_y_array[1]()[2], "
-c, r, res = test_complete(s)
-@test !res
-@test length(c) == 1
-@test c[1] == string(first(methods(Main.CompletionFoo.test4, Tuple{String, String})))
+let s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.test_y_array[1]()[2], "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test c[1] == string(first(methods(Main.CompletionFoo.test4, Tuple{String, String})))
+end
 
 # Test that string escaption is handled correct
-s = """CompletionFoo.test4("\\"","""
-c, r, res = test_complete(s)
-@test !res
-@test length(c) == 2
+let s = """CompletionFoo.test4("\\"","""
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+end
 
 ########## Test where the current inference logic fails ########
 # Fails due to inferrence fails to determine a concrete type for arg 1
 # But it returns AbstractArray{T,N} and hence is able to remove test5(x::Float64) from the suggestions
-s = "CompletionFoo.test5(AbstractArray[[]][1],"
-c, r, res = test_complete(s)
-@test !res
-@test length(c) == 2
+let s = "CompletionFoo.test5(AbstractArray[[]][1],"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+end
 
 # equivalent to above but due to the time macro the completion fails to find the concrete type
-s = "CompletionFoo.test3(@time([1, 2] + CompletionFoo.varfloat),"
-c, r, res = test_complete(s)
-@test !res
-@test length(c) == 2
+let s = "CompletionFoo.test3(@time([1, 2] + CompletionFoo.varfloat),"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 2
+end
 #################################################################
 
-s = "CompletionFoo.kwtest( "
-c, r, res = test_complete(s)
-@test !res
-@test length(c) == 1
-@test contains(c[1], "x, y, w...")
+let s = "CompletionFoo.kwtest( "
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test contains(c[1], "x, y, w...")
+end
 
 # Test of inference based getfield completion
-s = "(1+2im)."
-c,r = test_complete(s)
-@test length(c)==2
-@test r == (endof(s)+1):endof(s)
-@test c == ["im","re"]
+let s = "(1+2im)."
+    c,r = test_complete(s)
+    @test length(c) == 2
+    @test r == (endof(s) + 1):endof(s)
+    @test c == ["im", "re"]
+end
 
-s = "((1+2im))."
-c,r = test_complete(s)
-@test length(c)==2
-@test r == (endof(s)+1):endof(s)
-@test c == ["im","re"]
+let s = "((1+2im))."
+    c, r = test_complete(s)
+    @test length(c) == 2
+    @test r == (endof(s) + 1):endof(s)
+    @test c == ["im", "re"]
+end
 
-s = "CompletionFoo.test_y_array[1]."
-c,r = test_complete(s)
-@test length(c)==1
-@test r == (endof(s)+1):endof(s)
-@test c[1] == "yy"
+let s = "CompletionFoo.test_y_array[1]."
+    c, r = test_complete(s)
+    @test length(c) == 1
+    @test r == (endof(s) + 1):endof(s)
+    @test c[1] == "yy"
+end
 
-s = "CompletionFoo.Test_y(rand()).y"
-c,r = test_complete(s)
-@test length(c)==1
-@test r == endof(s):endof(s)
-@test c[1] == "yy"
+let s = "CompletionFoo.Test_y(rand()).y"
+    c, r = test_complete(s)
+    @test length(c) == 1
+    @test r == endof(s):endof(s)
+    @test c[1] == "yy"
+end
 
-s = "CompletionFoo.test6()[1](CompletionFoo.Test_y(rand())).y"
-c,r = test_complete(s)
-@test length(c)==1
-@test r == endof(s):endof(s)
-@test c[1] == "yy"
+let s = "CompletionFoo.test6()[1](CompletionFoo.Test_y(rand())).y"
+    c, r = test_complete(s)
+    @test length(c) == 1
+    @test r == endof(s):endof(s)
+    @test c[1] == "yy"
+end
 
 # Test completion in multi-line comments
-s = "#=\n\\alpha"
-c, r, res = test_complete(s)
-@test c[1] == "α"
-@test r == 4:9
-@test length(c) == 1
+let s = "#=\n\\alpha"
+    c, r, res = test_complete(s)
+    @test c[1] == "α"
+    @test r == 4:9
+    @test length(c) == 1
+end
 
 # Test that completion do not work in multi-line comments
-s = "#=\nmax"
-c, r, res = test_complete(s)
-@test length(c) == 0
+let s = "#=\nmax"
+    c, r, res = test_complete(s)
+    @test length(c) == 0
+end
 
 # Test completion of packages
 mkp(p) = ((@assert !isdir(p)); mkpath(p))
@@ -466,7 +517,7 @@ try
     touch(joinpath(Pack_folder2, "Test_pack2.jl"))
 
     # Test it completes on folders
-    c,r,res = test_complete("using Test_p")
+    c, r, res = test_complete("using Test_p")
     @test !("Test_pack" in c)
     @test "Test_pack2" in c
 
@@ -474,7 +525,7 @@ try
     cd(Pack_folder) do
         open("Text.txt","w") do f end
         open("Pack.jl","w") do f end
-        c,r,res = test_complete("using ")
+        c, r, res = test_complete("using ")
         @test "Pack" in c
         @test !("Text.txt" in c)
     end
@@ -484,17 +535,19 @@ finally
 end
 
 # Test $ in shell-mode
-s = "cd \$(max"
-c, r, res = test_scomplete(s)
-@test "max" in c
-@test r == 6:8
-@test s[r] == "max"
+let s = "cd \$(max"
+    c, r, res = test_scomplete(s)
+    @test "max" in c
+    @test r == 6:8
+    @test s[r] == "max"
+end
 
 # The return type is of importance, before #8995 it would return nothing
 # which would raise an error in the repl code.
 @test (String[], 0:-1, false) == test_scomplete("\$a")
 
 if Sys.isunix()
+let s, c, r
     #Assume that we can rely on the existence and accessibility of /tmp
 
     # Tests path in Julia code and closing " if it's a file
@@ -551,7 +604,7 @@ if Sys.isunix()
     # Pressing tab after having entered "/tmp " should not
     # attempt to complete "/tmp" but rather work on the current
     # working directory again.
-    let
+    let s, c, r, file
         file = joinpath(path, "repl completions")
         s = "/tmp "
         c,r = test_scomplete(s)
@@ -559,7 +612,7 @@ if Sys.isunix()
     end
 
     # Test completing paths with an escaped trailing space
-    let
+    let s, c, r, file
         file = joinpath(tempdir(), "repl completions")
         touch(file)
         s = string(tempdir(), "/repl\\ ")
@@ -570,7 +623,7 @@ if Sys.isunix()
     end
 
     # Tests homedir expansion
-    let
+    let path, s, c, r
         path = homedir()
         dir = joinpath(path, "tmpfoobar")
         mkdir(dir)
@@ -587,7 +640,7 @@ if Sys.isunix()
     end
 
     # Tests detecting of files in the env path (in shell mode)
-    let
+    let path, s, c, r, file
         oldpath = ENV["PATH"]
         path = tempdir()
         # PATH can also contain folders which we aren't actually allowed to read.
@@ -637,12 +690,14 @@ if Sys.isunix()
         end
     end
 end
+end
 
-let #test that it can auto complete with spaces in file/path
-    path = tempdir()
-    space_folder = randstring() * " α"
-    dir = joinpath(path, space_folder)
+#test that it can auto complete with spaces in file/path
+let path = tempdir(),
+    space_folder = randstring() * " α",
+    dir = joinpath(path, space_folder),
     dir_space = replace(space_folder, " ", "\\ ")
+
     mkdir(dir)
     cd(path) do
         open(joinpath(space_folder, "space .file"),"w") do f
@@ -685,8 +740,8 @@ let #test that it can auto complete with spaces in file/path
     rm(dir, recursive=true)
 end
 
-let  # Test tilde path completion
-    c, r, res = test_complete("\"~/julia")
+# Test tilde path completion
+let (c, r, res) = test_complete("\"~/julia")
     if !Sys.iswindows()
         @test res && c == String[homedir() * "/julia"]
     else
@@ -698,8 +753,9 @@ let  # Test tilde path completion
 end
 
 # Test the completion returns nothing when the folder do not exist
-c,r = test_complete("cd(\"folder_do_not_exist_77/file")
-@test length(c) == 0
+let (c, r) = test_complete("cd(\"folder_do_not_exist_77/file")
+    @test length(c) == 0
+end
 
 if Sys.iswindows()
     tmp = tempname()
@@ -731,17 +787,21 @@ if Sys.iswindows()
 end
 
 # auto completions of true and false... issue #14101
-s = "tru"
-c, r, res = test_complete(s)
-@test "true" in c
-s = "fals"
-c, r, res = test_complete(s)
-@test "false" in c
+let s = "tru"
+    c, r, res = test_complete(s)
+    @test "true" in c
+end
+
+let s = "fals"
+    c, r, res = test_complete(s)
+    @test "false" in c
+end
 
 # Don't crash when attempting to complete a tuple, #15329
-s = "CompletionFoo.tuple."
-c, r, res = test_complete(s)
-@test isempty(c)
+let s = "CompletionFoo.tuple."
+    c, r, res = test_complete(s)
+    @test isempty(c)
+end
 
 # test Dicts
 function test_dict_completion(dict_name)

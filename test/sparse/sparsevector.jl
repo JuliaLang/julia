@@ -1096,18 +1096,21 @@ s14046 = sprand(5, 1.0)
 
 # Issue 14589
 # test vectors with no zero elements
-x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
-@test collect(sort(x)) == sort(collect(x))
+let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
+    @test collect(sort(x)) == sort(collect(x))
+end
 # test vectors with all zero elements
-x = sparsevec(Int64[], Float64[], 7)
-@test collect(sort(x)) == sort(collect(x))
+let x = sparsevec(Int64[], Float64[], 7)
+    @test collect(sort(x)) == sort(collect(x))
+end
 # test vector with sparsity approx 1/2
-x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
-@test collect(sort(x)) == sort(collect(x))
-# apply three distinct tranformations where zeros sort into start/middle/end
-@test collect(sort(x, by=abs)) == sort(collect(x), by=abs)
-@test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
-@test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
+let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
+    @test collect(sort(x)) == sort(collect(x))
+    # apply three distinct tranformations where zeros sort into start/middle/end
+    @test collect(sort(x, by=abs)) == sort(collect(x), by=abs)
+    @test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
+    @test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
+end
 
 # fill!
 for Tv in [Float32, Float64, Int64, Int32, Complex128]

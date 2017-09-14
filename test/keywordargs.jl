@@ -192,8 +192,7 @@ end
 
 # issue #7704, computed keywords
 @test kwf1(1; (:tens, 2)) == 21
-let
-    p = (:hundreds, 3)
+let p = (:hundreds, 3),
     q = (:tens, 1)
     @test kwf1(0; p, q) == 310
     @test kwf1(0; q, hundreds=4) == 410
@@ -213,7 +212,7 @@ end
 @test ((a=1,b=2)->(a,b))(5,6) == (5,6)
 
 # issue #9948
-f9948, getx9948 = let
+f9948, getx9948 = let x
     x = 3
     h(;x=x) = x
     getx() = x

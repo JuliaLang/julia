@@ -480,8 +480,7 @@ end
 @test !isdiag(LowerTriangular(rand(4, 4)))
 
 # Test throwing in fallbacks for non BlasFloat/BlasComplex in A_rdiv_Bx!
-let
-    n = 5
+let n = 5
     A = rand(Float16, n, n)
     B = rand(Float16, n-1, n-1)
     @test_throws DimensionMismatch A_rdiv_B!(A, LowerTriangular(B))

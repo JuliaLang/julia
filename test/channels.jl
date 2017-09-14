@@ -1,24 +1,27 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test various constructors
-c=Channel(1)
-@test eltype(c) == Any
-@test put!(c, 1) == 1
-@test isready(c) == true
-@test take!(c) == 1
-@test isready(c) == false
+let c = Channel(1)
+    @test eltype(c) == Any
+    @test put!(c, 1) == 1
+    @test isready(c) == true
+    @test take!(c) == 1
+    @test isready(c) == false
+end
 
 @test eltype(Channel(1.0)) == Any
 
-c=Channel{Int}(1)
-@test eltype(c) == Int
-@test_throws MethodError put!(c, "Hello")
+let c = Channel{Int}(1)
+    @test eltype(c) == Int
+    @test_throws MethodError put!(c, "Hello")
+end
 
-c=Channel{Int}(Inf)
-@test eltype(c) == Int
-pvals = map(i->put!(c,i), 1:10^6)
-tvals = Int[take!(c) for i in 1:10^6]
-@test pvals == tvals
+let c = Channel{Int}(Inf)
+    @test eltype(c) == Int
+    pvals = map(i->put!(c,i), 1:10^6)
+    tvals = Int[take!(c) for i in 1:10^6]
+    @test pvals == tvals
+end
 
 # Uncomment line below once deprecation support has been removed.
 # @test_throws MethodError Channel()
@@ -45,35 +48,40 @@ testcpt(Inf)
 
 # Test multiple "for" loops waiting on the same channel which
 # is closed after adding a few elements.
-c=Channel(32)
-results=[]
-@sync begin
-    for i in 1:20
-        @async for ii in c
-            push!(results, ii)
+let c = Channel(32),
+    results = []
+    @sync begin
+        for i in 1:20
+            @async for ii in c
+                push!(results, ii)
+            end
         end
+        sleep(1.0)
+        for i in 1:5
+            put!(c,i)
+        end
+        close(c)
     end
-    sleep(1.0)
-    for i in 1:5
-        put!(c,i)
-    end
-    close(c)
+    @test sum(results) == 15
 end
-@test sum(results) == 15
 
 # Test channel iterator with done() being called multiple times
 # This needs to be explicitly tested since `take!` is called
 # in `done()` and not `next()`
-c=Channel(32); foreach(i->put!(c,i), 1:10); close(c)
-s=start(c)
-@test done(c,s) == false
-res = Int[]
-while !done(c,s)
-    @test done(c,s) == false
-    v,s = next(c,s)
-    push!(res,v)
+let s, c = Channel(32)
+    foreach(i -> put!(c, i), 1:10)
+    close(c)
+    s = start(c)
+    @test done(c, s) == false
+    res = Int[]
+    while !done(c, s)
+        local v
+        @test done(c,s) == false
+        v, s = next(c, s)
+        push!(res, v)
+    end
+    @test res == Int[1:10...]
 end
-@test res == Int[1:10...]
 
 # Tests for channels bound to tasks.
 for N in [0,10]
@@ -188,7 +196,6 @@ for N in [0,10]
         @test_throws ErrorException take!(chnl)
     end
 end
-
 
 # Testing timedwait on multiple channels
 @sync begin

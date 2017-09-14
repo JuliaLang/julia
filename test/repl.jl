@@ -644,7 +644,7 @@ let exename = Base.julia_cmd()
 
     # Test stream mode
     outs, ins, p = readandwrite(`$exename --startup-file=no -q`)
-    write(ins,"1\nquit()\n")
+    write(ins, "1\nquit()\n")
     @test read(outs, String) == "1\n"
 end # let exename
 

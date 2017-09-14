@@ -210,7 +210,10 @@ let (a, b) = (1:3, [4 6;
 end
 
 # with 1D inputs
-let (a, b, c) = (1:2, 1.0:10.0, Int32(1):Int32(0))
+let a = 1:2,
+    b = 1.0:10.0,
+    c = Int32(1):Int32(0)
+
     # length
     @test length(product(a))       == 2
     @test length(product(a, b))    == 20
@@ -233,7 +236,10 @@ let (a, b, c) = (1:2, 1.0:10.0, Int32(1):Int32(0))
 end
 
 # with multidimensional inputs
-let (a, b, c) = (randn(4, 4), randn(3, 3, 3), randn(2, 2, 2, 2))
+let a = randn(4, 4),
+    b = randn(3, 3, 3),
+    c = randn(2, 2, 2, 2)
+
     args = Any[(a,),
                (a, a),
                (a, b),
@@ -275,11 +281,11 @@ let iters = (1:2,
 end
 
 # product of finite length and infinite length iterators
-let a = 1:2
-    b = countfrom(1)
-    ab = product(a, b)
-    ba = product(b, a)
-    abexp = [(1, 1), (2, 1), (1, 2), (2, 2), (1, 3), (2, 3)]
+let a = 1:2,
+    b = countfrom(1),
+    ab = product(a, b),
+    ba = product(b, a),
+    abexp = [(1, 1), (2, 1), (1, 2), (2, 2), (1, 3), (2, 3)],
     baexp = [(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1)]
     for (expected, actual) in zip([abexp, baexp], [ab, ba])
         for (i, el) in enumerate(actual)
