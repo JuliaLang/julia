@@ -1773,6 +1773,14 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         flip_vars(e);
         return ii;
     }
+    /*
+      TODO: This is a band-aid for issue #23685. A better solution would be to
+      first normalize types so that all `where` expressions in covariant position
+      are pulled out to the top level.
+    */
+    if ((jl_is_typevar(x) && !jl_is_typevar(y) && lookup(e, (jl_tvar_t*)x) == NULL) ||
+        (jl_is_typevar(y) && !jl_is_typevar(x) && lookup(e, (jl_tvar_t*)y) == NULL))
+        return ii;
     jl_value_t *root=NULL;
     jl_savedenv_t se;
     JL_GC_PUSH2(&ii, &root);

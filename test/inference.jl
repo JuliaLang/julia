@@ -1202,3 +1202,13 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 
 @test !Core.Inference.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
 @test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any]
+
+# issue #23685
+struct Node23685{T}
+end
+@inline function update23685!(::Node23685{T}) where T
+    convert(Node23685{T}, Node23685{Float64}())
+end
+h23685 = Node23685{Float64}()
+f23685() = update23685!(h23685)
+@test f23685() === h23685
