@@ -443,6 +443,8 @@ Deprecated or removed
     this is not true. If you are certain you need the old behavior, it is temporarily available
     as `Base._isleaftype` ([#17086]).
 
+  * `contains(eq, itr, item)` is deprecated in favor of `any` with a predicate ([#23716]).
+
 Command-line option changes
 ---------------------------
 
