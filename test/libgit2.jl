@@ -777,10 +777,13 @@ mktempdir() do dir
                 show_strs = split(sprint(show, tag1ref), "\n")
                 @test show_strs[1] == "GitReference:"
                 @test show_strs[2] == "Tag with name refs/tags/$tag1"
-                tag1tag = LibGit2.peel(LibGit2.GitTag,tag1ref)
+                tag1tag = LibGit2.peel(LibGit2.GitTag, tag1ref)
                 @test LibGit2.name(tag1tag) == tag1
                 @test LibGit2.target(tag1tag) == commit_oid1
                 @test sprint(show, tag1tag) == "GitTag:\nTag name: $tag1 target: $commit_oid1"
+                # peels to the commit the tag points to
+                tag1cmt = LibGit2.peel(tag1ref)
+                @test LibGit2.GitHash(tag1cmt) == commit_oid1
                 tag_oid2 = LibGit2.tag_create(repo, tag2, commit_oid2)
                 @test !LibGit2.iszero(tag_oid2)
                 tags = LibGit2.tag_list(repo)
