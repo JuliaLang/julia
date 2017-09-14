@@ -353,13 +353,15 @@ isType(t::ANY) = isa(t, DataType) && (t::DataType).name === _Type_name
 # true if Type is inlineable as constant (is a singleton)
 isconstType(t::ANY) = isType(t) && (isleaftype(t.parameters[1]) || t.parameters[1] === Union{})
 
+iskindtype(t::ANY) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+
 const IInf = typemax(Int) # integer infinity
-const n_ifunc = reinterpret(Int32,arraylen)+1
-const t_ifunc = Array{Tuple{Int,Int,Any},1}(n_ifunc)
-const t_ffunc_key = Array{Function,1}(0)
-const t_ffunc_val = Array{Tuple{Int,Int,Any},1}(0)
+const n_ifunc = reinterpret(Int32, arraylen) + 1
+const t_ifunc = Array{Tuple{Int, Int, Any}, 1}(n_ifunc)
+const t_ffunc_key = Array{Any, 1}(0)
+const t_ffunc_val = Array{Tuple{Int, Int, Any}, 1}(0)
 function add_tfunc(f::IntrinsicFunction, minarg::Int, maxarg::Int, tfunc::ANY)
-    t_ifunc[reinterpret(Int32,f)+1] = (minarg, maxarg, tfunc)
+    t_ifunc[reinterpret(Int32, f) + 1] = (minarg, maxarg, tfunc)
 end
 function add_tfunc(f::Function, minarg::Int, maxarg::Int, tfunc::ANY)
     push!(t_ffunc_key, f)
@@ -630,7 +632,7 @@ add_tfunc(isa, 2, 2,
               if t !== Any && !has_free_typevars(t)
                   if v ⊑ t
                       return Const(true)
-                  elseif isa(v, Const) || isa(v, Conditional) || isleaftype(v)
+                  elseif isa(v, Const) || isa(v, Conditional) || (isleaftype(v) && !iskindtype(v))
                       return Const(false)
                   end
               end
@@ -1171,20 +1173,20 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1},
     end
     if isa(f, IntrinsicFunction)
         iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
-        if !isassigned(t_ifunc, iidx)
-            # unknown/unhandled intrinsic (most fall in this category since most return an unboxed value)
+        if iidx < 0 || iidx > length(t_ifunc)
+            # invalid intrinsic
             return Any
         end
         tf = t_ifunc[iidx]
     else
-        fidx = findfirst(t_ffunc_key, f::Function)
+        fidx = findfirst(t_ffunc_key, f)
         if fidx == 0
-            # unknown/unhandled builtin or anonymous function
+            # unknown/unhandled builtin function
             return Any
         end
         tf = t_ffunc_val[fidx]
     end
-    tf = tf::Tuple{Real, Real, Any}
+    tf = tf::Tuple{Int, Int, Any}
     if !(tf[1] <= length(argtypes) <= tf[2])
         # wrong # of args
         return Bottom
@@ -5488,6 +5490,8 @@ let fs = Any[typeinf_ext, typeinf_loop, typeinf_edge, occurs_outside_getfield, p
         if isassigned(t_ifunc, i)
             x = t_ifunc[i]
             push!(fs, x[3])
+        else
+            println(STDERR, "WARNING: tfunc missing for ", reinterpret(IntrinsicFunction, Int32(i)))
         end
     end
     for f in fs
