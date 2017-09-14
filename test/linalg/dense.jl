@@ -423,29 +423,29 @@ end
 
 @testset "Matrix trigonometry" begin
     @testset "Tests for $elty" for elty in (Float32, Float64, Complex64, Complex128)
-        A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
+        A1  = convert(Matrix{elty}, [3 2 0; 1 3 1; 1 1 3])
         A2  = convert(Matrix{elty},
-                      [ 29.87942128909879    0.7815750847907159  -2.289519314033932
-                        0.7815750847907159   25.72656945571064    8.680737820540137
-                       -2.289519314033932    8.680737820540137    34.39400925519054])
+                      [3.975884257819758 0.15631501695814318 -0.4579038628067864;
+                       0.15631501695814318 4.545313891142127 1.7361475641080275;
+                       -0.4579038628067864 1.7361475641080275 6.478801851038108])
         A3 = convert(Matrix{elty}, [0.25 0.25; 0 0])
         A4 = convert(Matrix{elty}, [0 0.02; 0 0])
 
-        cosA1 = convert(Matrix{elty},[-0.3399382355168413 0.7726590094048935 0.527449512762314;
-                                      0.6500542610836038 -0.07621347913568476 0.3863295047024468;
-                                      0.6500542610836039 0.9137790174647606 -0.6036629918979983])
-        sinA1 = convert(Matrix{elty}, [0.0009415059736026382 -0.8468996671819825 0.566542663009454;
-                                       -0.14017850208626437 0.28421283747832987 -0.4234498335909914;
-                                       -0.14017850208626415 0.1430928294184625 -0.282329825531124] )
+        cosA1 = convert(Matrix{elty},[-0.18287716254368605 -0.29517205254584633 0.761711400552759;
+                                      0.23326967400345625 0.19797853773269333 -0.14758602627292305;
+                                      0.23326967400345636 0.6141253742798355 -0.5637328628200653])
+        sinA1 = convert(Matrix{elty}, [0.2865568596627417 -1.107751980582015 -0.13772915374386513;
+                                       -0.6227405671629401 0.2176922827908092 -0.5538759902910078;
+                                       -0.6227405671629398 -0.6916051440348725 0.3554214365346742])
         @test cos(A1) ≈ cosA1
         @test sin(A1) ≈ sinA1
 
-        cosA2 = convert(Matrix{elty}, [0.14408835957555513 0.02411229662020243 0.131572799600281;
-                                       0.02411229662020243 0.11664638273689495 -0.4644914507922954;
-                                       0.131572799600281 -0.4644914507922954 -0.3653392922637553])
-        sinA2 = convert(Matrix{elty},[-0.880407410094922 -0.43009674285556254 -0.03528915168797607;
-                                      -0.43009674285556254 0.7600144329704634 -0.08634097606922514;
-                                      -0.03528915168797607 -0.08634097606922514 0.7904197642385895])
+        cosA2 = convert(Matrix{elty}, [-0.6331745163802187 0.12878366262380136 -0.17304181968301532;
+                                       0.12878366262380136 -0.5596234510748788 0.5210483146041339;
+                                       -0.17304181968301532 0.5210483146041339 0.002263776356015268])
+        sinA2 = convert(Matrix{elty},[-0.6677253518411841 -0.32599318928375437 0.020799609079003523;
+                                      -0.32599318928375437 -0.04568726058081066 0.5388748740270427;
+                                      0.020799609079003523 0.5388748740270427 0.6385462428126032])
         @test cos(A2) ≈ cosA2
         @test sin(A2) ≈ sinA2
 
@@ -463,29 +463,30 @@ end
         for (i, A) in enumerate((A1, A2, A3, A4))
             @test sincos(A) == (sin(A), cos(A))
             @test cos(A)^2 + sin(A)^2 ≈ eye(A)
+            @test cos(A) ≈ cos(-A)
+            @test sin(A) ≈ -sin(-A)
             @test tan(A) ≈ sin(A) / cos(A)
             @test cos(A) ≈ real(exp(im*A))
             @test sin(A) ≈ imag(exp(im*A))
             @test cosh(A) ≈ 0.5 * (exp(A) + exp(-A))
             @test sinh(A) ≈ 0.5 * (exp(A) - exp(-A))
+            @test cosh(A) ≈ cosh(-A)
+            @test sinh(A) ≈ -sinh(-A)
+
+            # Some of the following identities fail for A3, A4 because the matrices are singular
+            if i in (1, 2)
+                @test sec(A) ≈ inv(cos(A))
+                @test csc(A) ≈ inv(sin(A))
+                @test cot(A) ≈ inv(tan(A))
+                @test sech(A) ≈ inv(cosh(A))
+                @test csch(A) ≈ inv(sinh(A))
+                @test coth(A) ≈ inv(tanh(A))
+            end
             # The following identities fail for A1, A2 due to rounding errors;
             # probably needs better algorithm for the general case
             if i in (3, 4)
                 @test cosh(A)^2 - sinh(A)^2 ≈ eye(A)
                 @test tanh(A) ≈ sinh(A) / cosh(A)
-            end
-            # The following identities fail for A3, A4 because the matrices are singular
-            if i in (1, 2)
-                @test sec(A) ≈ inv(cos(A))
-                @test csc(A) ≈ inv(sin(A))
-                @test cot(A) ≈ inv(tan(A))
-            end
-            # Black magic makes this fail for A2, elty === Float32 when running
-            # the full test suite, but not when run manually. Needs fix?
-            if i == 1
-                @test sech(A) ≈ inv(cosh(A))
-                @test csch(A) ≈ inv(sinh(A))
-                @test coth(A) ≈ inv(tanh(A))
             end
         end
     end
