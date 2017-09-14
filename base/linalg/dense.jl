@@ -676,13 +676,12 @@ function inv(A::StridedMatrix{T}) where T
 end
 
 """
-    cos(A::Matrix)
+    cos(A::StridedMatrix)
 
 Compute the matrix cosine of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
-used to compute the cosine. Otherwise, the cosine is determined by calling
-`exp`.
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the cosine. Otherwise, the cosine is determined by calling [`exp`](@ref).
 
 # Examples
 ```jldoctest
@@ -696,22 +695,22 @@ function cos(A::StridedMatrix{<:Real})
     if issymmetric(A)
         return full(cos(Symmetric(A)))
     end
-    return real(exp(im*A))
+    return real(exp!(im*A))
 end
 function cos(A::StridedMatrix{<:Complex})
     if ishermitian(A)
         return full(cos(Hermitian(A)))
     end
-    return 0.5 * (exp(im*A) + exp(-im*A))
+    return (exp!(im*A) + exp!(-im*A)) / 2
 end
 
 """
-    sin(A::Matrix)
+    sin(A::StridedMatrix)
 
 Compute the matrix sine of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
-used to compute the sine. Otherwise, the sine is determined by calling `exp`.
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the sine. Otherwise, the sine is determined by calling [`exp`](@ref).
 
 # Examples
 ```jldoctest
@@ -725,49 +724,57 @@ function sin(A::StridedMatrix{<:Real})
     if issymmetric(A)
         return full(sin(Symmetric(A)))
     end
-    return imag(exp(im*A))
+    return imag(exp!(im*A))
 end
 function sin(A::StridedMatrix{<:Complex})
     if ishermitian(A)
         return full(sin(Hermitian(A)))
     end
-    return -0.5im * (exp(im*A) - exp(-im*A))
+    return (exp!(im*A) - exp!(-im*A)) / 2im
 end
 
 """
-    sincos(A::Matrix)
+    sincos(A::StridedMatrix)
 
 Compute the matrix sine and cosine of a square matrix `A`.
 
 # Examples
 ```jldoctest
-julia> sincos(ones(2, 2))
-([0.454649 0.454649; 0.454649 0.454649], [0.291927 -0.708073; -0.708073 0.291927])
+julia> S, C = sincos(ones(2, 2));
+
+julia> S
+2×2 Array{Float64,2}:
+ 0.454649  0.454649
+ 0.454649  0.454649
+
+julia> C
+2×2 Array{Float64,2}:
+  0.291927  -0.708073
+ -0.708073   0.291927
 ```
 """
 function sincos(A::StridedMatrix{<:Real})
     if issymmetric(A)
         return full.(sincos(Symmetric(A)))
     end
-    c, s = reim(exp(im*A))
+    c, s = reim(exp!(im*A))
     return s, c
 end
 function sincos(A::StridedMatrix{<:Complex})
     if ishermitian(A)
         return full.(sincos(Hermitian(A)))
     end
-    X, Y = exp(im*A), exp(-im*A)
-    return -0.5im * (X - Y), 0.5 * (X + Y)
+    X, Y = exp!(im*A), exp!(-im*A)
+    return (X - Y) / 2im, (X + Y) / 2
 end
 
 """
-    tan(A::Matrix)
+    tan(A::StridedMatrix)
 
 Compute the matrix tangent of a square matrix `A`.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
-used to compute the tangent. Otherwise, the tangent is determined by calling
-`exp`.
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the tangent. Otherwise, the tangent is determined by calling [`exp`](@ref).
 
 # Examples
 ```jldoctest
@@ -788,63 +795,56 @@ function tan(A::StridedMatrix{<:Complex})
     if ishermitian(A)
         return full(tan(Hermitian(A)))
     end
-    X, Y = exp(im*A), exp(-im*A)
-    return -im * (X - Y) / (X + Y)
+    X, Y = exp!(im*A), exp!(-im*A)
+    return (X - Y) / (im * (X + Y))
 end
 
 """
-    cosh(A::Matrix)
+    cosh(A::StridedMatrix)
 
 Compute the matrix hyperbolic cosine of a square matrix `A`.
 """
-function cosh(A::StridedMatrix{<:Real})
-    if issymmetric(A)
-        return full(cosh(Symmetric(A)))
-    end
-    return 0.5 * (exp(A) + exp(-A))
-end
-function cosh(A::StridedMatrix{<:Complex})
-    if ishermitian(A)
+function cosh(A::StridedMatrix{T}) where T
+    if T <: Real
+        if issymmetric(A)
+            return full(cosh(Symmetric(A)))
+        end
+    elseif ishermitian(A)
         return full(cosh(Hermitian(A)))
     end
-    return 0.5 * (exp(A) + exp(-A))
+    return (exp(A) + exp!(-A)) / 2
 end
 
 """
-    sinh(A::Matrix)
+    sinh(A::StridedMatrix)
 
 Compute the matrix hyperbolic sine of a square matrix `A`.
 """
-function sinh(A::StridedMatrix{<:Real})
-    if issymmetric(A)
-        return full(sinh(Symmetric(A)))
-    end
-    return 0.5 * (exp(A) - exp(-A))
-end
-function sinh(A::StridedMatrix{<:Complex})
-    if ishermitian(A)
+function sinh(A::StridedMatrix{T}) where T
+    if T <: Real
+        if issymmetric(A)
+            return full(sinh(Symmetric(A)))
+        end
+    elseif ishermitian(A)
         return full(sinh(Hermitian(A)))
     end
-    return 0.5 * (exp(A) - exp(-A))
+    return (exp(A) - exp!(-A)) / 2
 end
 
 """
-    tanh(A::Matrix)
+    tanh(A::StridedMatrix)
 
 Compute the matrix hyperbolic tangent of a square matrix `A`.
 """
-function tanh(A::StridedMatrix{<:Real})
-    if issymmetric(A)
-        return full(tanh(Symmetric(A)))
-    end
-    X, Y = exp(A), exp(-A)
-    return (X - Y) / (X + Y)
-end
-function tanh(A::StridedMatrix{<:Complex})
-    if ishermitian(A)
+function tanh(A::StridedMatrix{T}) where T
+    if T <: Real
+        if issymmetric(A)
+            return full(tanh(Symmetric(A)))
+        end
+    elseif ishermitian(A)
         return full(tanh(Hermitian(A)))
     end
-    X, Y = exp(A), exp(-A)
+    X, Y = exp(A), exp!(-A)
     return (X - Y) / (X + Y)
 end
 
@@ -855,15 +855,15 @@ for (finv, f, finvh, fh, fn) in ((:sec, :cos, :sech, :cosh, "secant"),
     hname = string(finvh)
     @eval begin
         @doc """
-            $($name)(A::Matrix)
+            $($name)(A::StridedMatrix)
 
         Compute the matrix $($fn) of a square matrix `A`.
-        """ ($finv)(A::AbstractMatrix{T}) where {T} = inv(($f)(A))
+        """ ($finv)(A::StridedMatrix{T}) where {T} = inv(($f)(A))
         @doc """
-            $($hname)(A::Matrix)
+            $($hname)(A::StridedMatrix)
 
         Compute the matrix hyperbolic $($fn) of square matrix `A`.
-        """ ($finvh)(A::AbstractMatrix{T}) where {T} = inv(($fh)(A))
+        """ ($finvh)(A::StridedMatrix{T}) where {T} = inv(($fh)(A))
     end
 end
 
