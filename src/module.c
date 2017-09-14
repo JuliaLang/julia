@@ -515,8 +515,8 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
     // Only print a warning for deprecated == 1 (renamed).
     // For deprecated == 2 (moved to a package) the binding is to a function
     // that throws an error, so we don't want to print a warning too.
-    if (b->deprecated == 1 && jl_options.depwarn) {
-        if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR)
+    if (b->deprecated == 1 && jl_options.depwarn != JL_OPTIONS_DEPWARN_OFF) {
+        if (jl_options.depwarn != JL_OPTIONS_DEPWARN_THROW)
             jl_printf(JL_STDERR, "WARNING: ");
         jl_binding_t *dep_message_binding = NULL;
         if (b->owner) {
@@ -559,10 +559,10 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
         }
         jl_printf(JL_STDERR, ".\n");
 
-        if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR)
+        if (jl_options.depwarn != JL_OPTIONS_DEPWARN_THROW)
             jl_printf(JL_STDERR, "  likely near %s:%d\n", jl_filename, jl_lineno);
 
-        if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR) {
+        if (jl_options.depwarn == JL_OPTIONS_DEPWARN_THROW) {
             if (b->owner)
                 jl_errorf("deprecated binding: %s.%s",
                           jl_symbol_name(b->owner->name),
