@@ -285,6 +285,10 @@ end
     @test_throws BoundsError getindex(rv, CartesianIndex((5, 4, 3)))
     @test rv[1] == 5
 
+    @test rv[:, 2]::Vector == [v[2]]
+    @test rv[:, 2:3]::RowVector == v[2:3].'
+    @test rv[:, :]::RowVector == rv
+
     v = [1]
     rv = v.'
     rv[CartesianIndex()] = 2
