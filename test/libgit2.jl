@@ -1258,8 +1258,16 @@ mktempdir() do dir
             repo = LibGit2.GitRepo(test_repo)
             cache = LibGit2.GitRepo(cache_repo)
             try
+                # test map with oid
                 oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
                     LibGit2.map((oid,repo)->(oid,repo), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)
+                end
+                @test length(oids) == 1
+                # test map with range
+                str_1 = string(commit_oid1)
+                str_3 = string(commit_oid3)
+                oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
+                    LibGit2.map((oid,repo)->(oid,repo), walker, range="$str_1..$str_3", by=LibGit2.Consts.SORT_TIME)
                 end
                 @test length(oids) == 1
 
@@ -1272,8 +1280,13 @@ mktempdir() do dir
                 for i in eachindex(oids)
                     @test cache_oids[i] == test_oids[i]
                 end
+                # test with specified oid
                 LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
                     @test count((oid,repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME) == 1
+                end
+                # test without specified oid
+                LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
+                    @test count((oid,repo)->(oid == commit_oid1), walker, by=LibGit2.Consts.SORT_TIME) == 1
                 end
             finally
                 close(repo)
