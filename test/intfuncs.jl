@@ -175,7 +175,7 @@ end
 @test leading_zeros(Int32(1)) == 31
 @test leading_zeros(UInt32(Int64(2) ^ 32 - 2)) == 0
 
-@test count_zeros(Int64(1)) == 63
+@test countzeros(Int64(1)) == 63
 
 @test factorial(3) == 6
 @test factorial(Int8(3)) === 6

@@ -277,7 +277,7 @@ fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
 function ==(x::AbstractFloat, q::Rational)
     if isfinite(x)
-        (count_ones(q.den) == 1) & (x*q.den == q.num)
+        (countones(q.den) == 1) & (x*q.den == q.num)
     else
         x == q.num/q.den
     end

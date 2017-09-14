@@ -105,8 +105,8 @@ Base.Rounding.set_zero_subnormals
 ### Integers
 
 ```@docs
-Base.count_ones
-Base.count_zeros
+Base.countones
+Base.countzeros
 Base.leading_zeros
 Base.leading_ones
 Base.trailing_zeros

@@ -224,7 +224,7 @@ g = parse(BigInt,"-1")
 
 @test trailing_ones(a) == 8
 @test trailing_zeros(b) == 2
-@test count_ones(a) == 14
+@test countones(a) == 14
 
 # Large Fibonacci to exercise BigInt
 # from Bill Hart, https://groups.google.com/group/julia-dev/browse_frm/thread/798e2d1322daf633

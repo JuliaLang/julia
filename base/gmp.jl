@@ -7,7 +7,7 @@ export BigInt
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
-             sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
+             sum, trailing_zeros, trailing_ones, countones, base, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              hastypemax
@@ -474,7 +474,7 @@ end
 trailing_zeros(x::BigInt) = MPZ.scan1(x, 0)
 trailing_ones(x::BigInt) = MPZ.scan0(x, 0)
 
-count_ones(x::BigInt) = MPZ.popcount(x)
+countones(x::BigInt) = MPZ.popcount(x)
 
 """
     count_ones_abs(x::BigInt)

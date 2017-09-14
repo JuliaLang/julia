@@ -48,7 +48,7 @@ const masksAtCell = Array{Any}(width*height, height)
 
 valid(x, y) = (0 <= x < width) && (0 <= y < height)
 legal(mask::UInt64, board::UInt64) = (mask & board) == 0
-zerocount(mask::UInt64) = 50 - count_ones(mask)
+zerocount(mask::UInt64) = 50 - countones(mask)
 
 function findFreeCell(board::UInt64)
     for y in 0:height-1

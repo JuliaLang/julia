@@ -335,7 +335,7 @@ julia> ispow2(5)
 false
 ```
 """
-ispow2(x::Integer) = x > 0 && count_ones(x) == 1
+ispow2(x::Integer) = x > 0 && countones(x) == 1
 
 """
     nextpow(a, x)
