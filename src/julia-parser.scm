@@ -1188,7 +1188,7 @@
                          (if (eq? (peek-token s) 'do)
                              (begin
                                (take-token s)
-                               `(call ,ex ,@params ,(parse-do s) ,@args))
+                               `(do (call ,ex ,@params ,@args) ,(parse-do s)))
                              `(call ,ex ,@al))))))
                (if macrocall?
                    (map (lambda (x)  ;; parse `a=b` as `=` instead of `kw` in macrocall

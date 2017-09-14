@@ -876,7 +876,7 @@ function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
             print(io, "end")
         else
             print(io, ":(")
-            show_unquoted(io, value, indent+indent_width, -1)
+            show_unquoted(io, value, indent+2, -1)  # +2 for `:(`
             print(io, ")")
         end
     end
@@ -1080,6 +1080,17 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     elseif head === :function && nargs == 1
         print(io, "function ", args[1], " end")
+
+    elseif head === :do && nargs == 2
+        show_unquoted(io, args[1], indent, -1)
+        print(io, " do ")
+        show_list(io, args[2].args[1].args, ", ", 0)
+        for stmt in args[2].args[2].args
+            print(io, '\n', " "^(indent + indent_width))
+            show_unquoted(io, stmt, indent + indent_width, -1)
+        end
+        print(io, '\n', " "^indent)
+        print(io, "end")
 
     # block with argument
     elseif head in (:for,:while,:function,:if,:elseif,:let) && nargs==2

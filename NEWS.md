@@ -75,6 +75,9 @@ Language changes
     assignment or `block` of assignments, and the second argument is a block of
     statements ([#21774]).
 
+  * `do` syntax now parses to an expression with head `:do`, instead of as a function
+    call ([#21774]).
+
   * Parsed and lowered forms of type definitions have been synchronized with their
     new keywords ([#23157]). Expression heads are renamed as follows:
 

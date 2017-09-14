@@ -2229,6 +2229,17 @@
                   (map expand-forms e))))
          (map expand-forms e)))
 
+   'do
+   (lambda (e)
+     (let* ((call (cadr e))
+            (f    (cadr call))
+            (argl (cddr call))
+            (af   (caddr e)))
+       (expand-forms
+        (if (has-parameters? argl)
+            `(call ,f ,(car argl) ,af ,@(cdr argl))
+            `(call ,f ,af ,@argl)))))
+
    'tuple
    (lambda (e)
      (cond ((and (length> e 1) (pair? (cadr e)) (eq? (caadr e) 'parameters))

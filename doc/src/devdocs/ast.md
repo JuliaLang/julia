@@ -358,7 +358,7 @@ f(x) do a,b
 end
 ```
 
-parses as `(call f (-> (tuple a b) (block body)) x)`.
+parses as `(do (call f x) (-> (tuple a b) (block body)))`.
 
 ### Operators
 
