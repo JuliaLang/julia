@@ -119,15 +119,15 @@ end
             end
 
             @testset "tril/triu" begin
-                for di in -n:n
-                    @test triu(Symmetric(asym), di) == triu(asym, di)
-                    @test tril(Symmetric(asym), di) == tril(asym, di)
-                    @test triu(Hermitian(aherm), di) == triu(aherm, di)
-                    @test tril(Hermitian(aherm), di) == tril(aherm, di)
-                    @test triu(Symmetric(asym, :L), di) == triu(asym, di)
-                    @test tril(Symmetric(asym, :L), di) == tril(asym, di)
-                    @test triu(Hermitian(aherm, :L), di) == triu(aherm, di)
-                    @test tril(Hermitian(aherm, :L), di) == tril(aherm, di)
+                for (op, validks) in (
+                        (triu, (-n + 1):(n + 1)),
+                        (tril, (-n - 1):(n - 1)) )
+                    for di in validks
+                        @test op(Symmetric(asym), di) == op(asym, di)
+                        @test op(Hermitian(aherm), di) == op(aherm, di)
+                        @test op(Symmetric(asym, :L), di) == op(asym, di)
+                        @test op(Hermitian(aherm, :L), di) == op(aherm, di)
+                    end
                 end
             end
 

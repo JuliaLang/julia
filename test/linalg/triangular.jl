@@ -108,20 +108,24 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test tril(A1,0)  == A1
             @test tril(A1,-1) == LowerTriangular(tril(full(A1),-1))
             @test tril(A1,1)  == t1(tril(tril(full(A1),1)))
-            @test_throws ArgumentError tril!(A1,n+1)
+            @test_throws ArgumentError tril!(A1, -n - 2)
+            @test_throws ArgumentError tril!(A1, n)
             @test triu(A1,0)  == t1(diagm(diag(A1)))
             @test triu(A1,-1) == t1(tril(triu(A1.data,-1)))
             @test triu(A1,1)  == LowerTriangular(zeros(A1.data))
-            @test_throws ArgumentError triu!(A1,n+1)
+            @test_throws ArgumentError triu!(A1, -n)
+            @test_throws ArgumentError triu!(A1, n + 2)
         else
             @test triu(A1,0)  == A1
             @test triu(A1,1)  == UpperTriangular(triu(full(A1),1))
             @test triu(A1,-1) == t1(triu(triu(full(A1),-1)))
-            @test_throws ArgumentError triu!(A1,n+1)
+            @test_throws ArgumentError triu!(A1, -n)
+            @test_throws ArgumentError triu!(A1, n + 2)
             @test tril(A1,0)  == t1(diagm(diag(A1)))
             @test tril(A1,1)  == t1(triu(tril(A1.data,1)))
             @test tril(A1,-1) == UpperTriangular(zeros(A1.data))
-            @test_throws ArgumentError tril!(A1,n+1)
+            @test_throws ArgumentError tril!(A1, -n - 2)
+            @test_throws ArgumentError tril!(A1, n)
         end
 
         # factorize
