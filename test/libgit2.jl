@@ -1040,6 +1040,23 @@ mktempdir() do dir
             # from branch/ff_c using branch name
             @test LibGit2.merge!(repo, branch="refs/heads/branch/ff_c")
             @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+
+            LibGit2.branch!(repo, "branch/ff_d")
+            open(joinpath(LibGit2.path(repo),"ff_file7"),"w") do f
+                write(f, "777\n")
+            end
+            LibGit2.add!(repo, "ff_file7")
+            LibGit2.commit(repo, "add ff_file7")
+            branchhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "master")
+            # switch back, now try to ff-merge the changes
+            # from branch/a
+            # set up the merge using GitAnnotated objects
+            # from a fetchhead
+            fh = LibGit2.fetchheads(repo)
+            upst_ann = LibGit2.GitAnnotated(repo, fh[1])
+            @test LibGit2.merge!(repo, [upst_ann], true)
+            @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
         finally
             close(repo)
         end
