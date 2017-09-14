@@ -108,7 +108,7 @@ Base.LibGit2.isorphan
 Base.LibGit2.isset
 Base.LibGit2.iszero
 Base.LibGit2.lookup_branch
-Base.LibGit2.map(::Function, ::Base.LibGit2.GitRevWalker; ::Base.LibGit2.GitHash, ::Cint, ::Bool)
+Base.LibGit2.map(::Function, ::Base.LibGit2.GitRevWalker; ::Base.LibGit2.GitHash, ::AbstractString, ::Cint, ::Bool)
 Base.LibGit2.mirror_callback
 Base.LibGit2.mirror_cb
 Base.LibGit2.message
