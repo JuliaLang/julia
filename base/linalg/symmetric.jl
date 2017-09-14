@@ -623,7 +623,7 @@ end
 function sincos(A::Hermitian{T}) where T
     n = checksquare(A)
     F = eigfact(A)
-    S, C = Diagonal(similar(A)), Diagonal(similar(A))
+    S, C = Diagonal(similar(A, (n,))), Diagonal(similar(A, (n,)))
     for i in 1:n
         S.diag[i], C.diag[i] = sincos(F.values[i])
     end
