@@ -1000,6 +1000,9 @@ let testdims = ((5,10), (20,12), (25,30))
         @test Vector(kron(x,y)) == kron(Vector(x), Vector(y))
         @test Vector(kron(Vector(x),y)) == kron(Vector(x), Vector(y))
         @test Vector(kron(x,Vector(y))) == kron(Vector(x), Vector(y))
+        # test different types
+        z = convert(SparseVector{Float16, Int8}, y)
+        @test Vector(kron(x, z)) == kron(Vector(x), Vector(z))
     end
 end
 
