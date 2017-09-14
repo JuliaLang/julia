@@ -64,21 +64,27 @@ end
 
 function depwarn(msg, funcsym)
     opts = JLOptions()
-    if opts.depwarn > 0
-        bt = backtrace()
-        _depwarn(msg, opts, bt, firstcaller(bt, funcsym))
-    end
-    nothing
-end
-function _depwarn(msg, opts, bt, caller)
-    ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
-    fn = unsafe_string(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
-    if opts.depwarn == 1 # raise a warning
-        warn(msg, once=(caller != StackTraces.UNKNOWN), key=(caller,fn,ln), bt=bt,
-             filename=fn, lineno=ln)
-    elseif opts.depwarn == 2 # raise an error
+    if opts.depwarn == typemax(Int32)
         throw(ErrorException(msg))
     end
+    deplevel = Logging.LogLevel(opts.depwarn)
+    @logmsg(
+        deplevel,
+        msg,
+        _module=begin
+            bt = backtrace()
+            frame, caller = firstcaller(bt, funcsym)
+            # FIXME - The isnull handling isn't great here.
+            !isnull(caller.linfo) ? caller.linfo.value.def.module : Base
+        end,
+        _file=caller.file,
+        _line=caller.line,
+        _id=(frame,funcsym),
+        _group=:depwarn,
+        caller=caller,
+        max_log=1
+    )
+    nothing
 end
 
 firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol) = firstcaller(bt, (funcsym,))
@@ -86,13 +92,17 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     # Identify the calling line
     found = false
     lkup = StackTraces.UNKNOWN
+    found_frame = Ptr{Void}(0)
     for frame in bt
         lkups = StackTraces.lookup(frame)
         for outer lkup in lkups
             if lkup == StackTraces.UNKNOWN
                 continue
             end
-            found && @goto found
+            if found
+                found_frame = frame
+                @goto found
+            end
             found = lkup.func in funcsyms
             # look for constructor type name
             if !found && !isnull(lkup.linfo)
@@ -105,9 +115,9 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
             end
         end
     end
-    return StackTraces.UNKNOWN
+    return found_frame, StackTraces.UNKNOWN
     @label found
-    return lkup
+    return found_frame, lkup
 end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Void, (Any, Any, Cint), m, s, flag)
