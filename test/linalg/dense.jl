@@ -422,10 +422,12 @@ end
         @test exp(log(A7)) ≈ A7
     end
 
-    @testset "Integer promotion tests" for (elty1, elty2) in ((Int64, Float64), (Complex{Int64}, Complex{Float64}))
-        A4int  = convert(Matrix{elty1}, [1 2; 3 4])
-        A4float  = convert(Matrix{elty2}, A4int)
-        @test exp(A4int) == exp(A4float)
+    @testset "Integer promotion tests" begin
+        for (elty1, elty2) in ((Int64, Float64), (Complex{Int64}, Complex{Float64}))
+            A4int  = convert(Matrix{elty1}, [1 2; 3 4])
+            A4float  = convert(Matrix{elty2}, A4int)
+            @test exp(A4int) == exp(A4float)
+        end
     end
 
     A8 = 100 * [-1+1im 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1]
