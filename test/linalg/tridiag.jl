@@ -157,6 +157,7 @@ let n = 12 #Size of matrix problem to test
                 @test diag(A, 0) === d
                 @test diag(A) === d
                 @test diag(A, n - 1) == zeros(elty, 1)
+                @test_throws ArgumentError diag(A, -n - 1)
                 @test_throws ArgumentError diag(A, n + 1)
             end
             @testset "Idempotent tests" begin

@@ -234,7 +234,8 @@ end
 
 function diagind(m::Integer, n::Integer, k::Integer=0)
     if !(-m <= k <= n)
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m,$n)"))
+        throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) and ",
+            "at most $n in an $m-by-$n matrix")))
     end
     k <= 0 ? range(1-k, m+1, min(m+k, n)) : range(k*m+1, m+1, min(m, n-k))
 end

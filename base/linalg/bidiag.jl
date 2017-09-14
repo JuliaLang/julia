@@ -273,10 +273,11 @@ function diag(M::Bidiagonal{T}, n::Integer=0) where T
         return M.uplo == 'U' ? M.ev : zeros(T, size(M,1)-1)
     elseif n == -1
         return M.uplo == 'L' ? M.ev : zeros(T, size(M,1)-1)
-    elseif -size(M,1) < n < size(M,1)
+    elseif -size(M,1) <= n <= size(M,1)
         return zeros(T, size(M,1)-abs(n))
     else
-        throw(ArgumentError("matrix size is $(size(M)), n is $n"))
+        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
+            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
 end
 

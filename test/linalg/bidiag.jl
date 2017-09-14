@@ -215,7 +215,8 @@ srand(1)
 
         @testset "Diagonals" begin
             @test diag(T,2) == zeros(elty, n-2)
-            @test_throws ArgumentError diag(T,n+1)
+            @test_throws ArgumentError diag(T, -n - 1)
+            @test_throws ArgumentError diag(T, n + 1)
         end
 
         @testset "Eigensystems" begin
