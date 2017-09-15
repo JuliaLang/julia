@@ -208,35 +208,35 @@ const libm = Base.libm_name
 
 Compute hyperbolic sine of `x`.
 """
-sinh(x)
+sinh(x::Number)
 
 """
     cosh(x)
 
 Compute hyperbolic cosine of `x`.
 """
-cosh(x)
+cosh(x::Number)
 
 """
     tanh(x)
 
 Compute hyperbolic tangent of `x`.
 """
-tanh(x)
+tanh(x::Number)
 
 """
     atan(x)
 
 Compute the inverse tangent of `x`, where the output is in radians.
 """
-atan(x)
+atan(x::Number)
 
 """
     asinh(x)
 
 Compute the inverse hyperbolic sine of `x`.
 """
-asinh(x)
+asinh(x::Number)
 
 """
     expm1(x)
@@ -327,49 +327,49 @@ end
 
 Compute sine of `x`, where `x` is in radians.
 """
-sin(x)
+sin(x::Number)
 
 """
     cos(x)
 
 Compute cosine of `x`, where `x` is in radians.
 """
-cos(x)
+cos(x::Number)
 
 """
     tan(x)
 
 Compute tangent of `x`, where `x` is in radians.
 """
-tan(x)
+tan(x::Number)
 
 """
     asin(x)
 
 Compute the inverse sine of `x`, where the output is in radians.
 """
-asin(x)
+asin(x::Number)
 
 """
     acos(x)
 
 Compute the inverse cosine of `x`, where the output is in radians
 """
-acos(x)
+acos(x::Number)
 
 """
     acosh(x)
 
 Compute the inverse hyperbolic cosine of `x`.
 """
-acosh(x)
+acosh(x::Number)
 
 """
     atanh(x)
 
 Compute the inverse hyperbolic tangent of `x`.
 """
-atanh(x)
+atanh(x::Number)
 
 """
     log(x)
