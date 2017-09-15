@@ -1252,18 +1252,6 @@ end
 
 ## Data movement ##
 
-# preserve some special behavior
-function slicedim(A::BitVector, d::Integer, i::Integer)
-    d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
-    if d > 1
-        i == 1 || throw_boundserror(A, (:, ntuple(k->1,d-2)..., i))
-        A[:]
-    else
-        fill!(BitArray{0}(), A[i]) # generic slicedim would return A[i] here
-    end
-end
-
-
 # TODO some of this could be optimized
 
 function flipdim(A::BitArray, d::Integer)

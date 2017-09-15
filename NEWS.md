@@ -205,6 +205,10 @@ This section lists changes that do not have deprecation warnings.
   * The `openspecfun` library is no longer built and shipped with Julia, as it is no longer
     used internally ([#22390]).
 
+  * `slicedim(b::BitVector, 1, x)` now consistently returns the same thing that `b[x]` would,
+    consistent with its documentation. Previously it would return a `BitArray{0}` for scalar
+    `x` ([#20233]).
+
 Library improvements
 --------------------
 
