@@ -582,10 +582,85 @@ if VERSION < v"0.7.0-DEV.1285"
     Base.OverflowError(msg) = OverflowError()
 end
 
+if VERSION < v"0.7.0-DEV.755"
+    # This is a hack to only add keyword signature that won't work on all julia versions.
+    # However, since we really only need to support a few (0.5, 0.6 and early 0.7) versions
+    # this should be good enough.
+    let Tf = typeof(cov), Tkw = Core.Core.kwftype(Tf)
+        @eval begin
+            @inline function _get_corrected(kws)
+                corrected = true
+                nkw = length(kws) >> 1
+                for i in 1:nkw
+                    if kws[i * 2 - 1] !== :corrected
+                        Base.kwerr(kws)
+                    end
+                    corrected = kws[i * 2]
+                end
+                return corrected::Bool
+            end
+            if VERSION >= v"0.6"
+                (::$Tkw)(kws::Vector{Any}, ::$Tf, x::AbstractVector) = cov(x, _get_corrected(kws))
+                (::$Tkw)(kws::Vector{Any}, ::$Tf, X::AbstractVector, Y::AbstractVector) =
+                    cov(X, Y, _get_corrected(kws))
+            end
+            (::$Tkw)(kws::Vector{Any}, ::$Tf, x::AbstractMatrix, vardim::Int) =
+                cov(x, vardim, _get_corrected(kws))
+            (::$Tkw)(kws::Vector{Any}, ::$Tf, X::AbstractVecOrMat, Y::AbstractVecOrMat,
+                     vardim::Int) = cov(X, Y, vardim, _get_corrected(kws))
+        end
+    end
+end
+
+# 0.7.0-DEV.1415
+@static if !isdefined(Base, :adjoint)
+    const adjoint = ctranspose
+    const adjoint! = ctranspose!
+    export adjoint, adjoint!
+end
+
+# 0.7.0-DEV.1592
+@static if !isdefined(Base, :MathConstants)
+    @eval module MathConstants
+    # All other ones are already exported by Base (so should be already in the users namespace)
+    # and will be automatically be in this module.
+    export ℯ
+    const ℯ = e
+    end
+    const ℯ = e
+    export ℯ
+else
+    import Base.MathConstants
+end
+
+# 0.7.0-DEV.1535
+@static if !isdefined(Base, :partialsort)
+    const partialsort = select
+    const partialsort! = select!
+    const partialsortperm = selectperm
+    const partialsortperm! = selectperm!
+    export partialsort, partialsort!, partialsortperm, partialsortperm!
+end
+
 # 0.7.0-DEV.1721
 @static if !isdefined(Base, :AbstractRange)
     const AbstractRange = Range
     export AbstractRange
+end
+
+if VERSION < v"0.7.0-DEV.1325"
+    function Base.rtoldefault(x, y, atol::Real)
+        T = isa(x, Type) ? x : typeof(x)
+        S = isa(y, Type) ? y : typeof(y)
+        rtol = max(Base.rtoldefault(real(T)), Base.rtoldefault(real(S)))
+        return atol > 0 ? zero(rtol) : rtol
+    end
+end
+
+# 0.7.0-DEV.1775
+@static if !isdefined(Base, :isconcrete)
+    const isconcrete = isleaftype
+    export isconcrete
 end
 
 include("deprecated.jl")
