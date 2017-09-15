@@ -508,51 +508,35 @@ function readuntil(s::IO, delim::T) where T
     return out
 end
 
-mutable struct Backtrack{T, C<:AbstractArray}
-    target::Vector{T}
-    pos::Int
-    len::Int
+mutable struct Backtrack{T, O, C}
+    target::T
+    out::O
     cache::C
+    pos::Int
+    endof::Int
     max_pos::Int
 end
 
+function Backtrack(target, out)
+    first = start(target)
+    len = endof(target)
+    max_pos = next(target, first)[2]
+    return Backtrack(target, out, zeros(Int, len), first, len, max_pos)
+end
+
 function Backtrack(target::AbstractString)
-    t = collect(target)
-    len = length(t)
-    # Setting max_pos to 1 means that backtrack[1] == 0
-    Backtrack(t, 0, len, spzeros(Int, len), 1)
+    t = collect(target) # ensure that indices for target are small ordered integers bounded by 1 and endof
+    return Backtrack(t, IOBuffer())
 end
 
 function Backtrack(target::String)
     t = Vector{UInt8}(target)  # convert String to a utf8-byte-iterator
-    len = length(t)
-    Backtrack(t, 0, len, spzeros(Int, len), 1)
+    return Backtrack(t, StringVector(0)) # collect bytes directly into a Vector
 end
 
-function backtrack(bt::Backtrack, index::Integer)
-    for i = (bt.max_pos + 1):index
-        b = bt.cache[i - 1] + 1
-        # Requires that i > b. We can avoid this check since we start max_pos at 1.
-        if bt.target[i] == bt.target[b]
-            bt.cache[i] = b
-        end
-    end
-    bt.max_pos = index
-    return bt.cache[index]
-end
-
-@inline function record{T}(bt::Backtrack{T}, c::T)
-    i = bt.pos
-    # Backtrack until the next target character matches what was found
-    while i > 0 && c != bt.target[i + 1]
-        i = backtrack(bt, i)
-    end
-    if c == bt.target[i + 1]
-        i += 1
-    end
-    bt.pos = i
-    return i == bt.len
-end
+#function Backtrack(target::SubString{String})
+#    return Backtrack(target, IOBuffer())
+#end
 
 function readuntil(io::IO, target::AbstractString)
     i = start(target)
@@ -561,34 +545,46 @@ function readuntil(io::IO, target::AbstractString)
     end
     c, i = next(target, i)
     if done(target, i) && c < Char(0x80)
-        return readuntil_string(s, c % UInt8)
+        return readuntil_string(io, c % UInt8)
     end
+    # handle non-trivial cases
     backtrack = Backtrack(target)
-    out = IOBuffer()
+    first = start(backtrack.target)
     while !eof(io)
         c = read(io, Char)
-        write(out, c)
-        record(backtrack, c) && break
+        # Backtrack until the next target character matches what was found
+        if backtrack.out isa IO
+            write(backtrack.out, c)
+        else
+            push!(backtrack.out, c)
+        end
+        pos = backtrack.pos
+        while true
+            c1, pos1 = next(backtrack.target, pos)
+            if c == c1
+                pos = pos1
+                break
+            end
+            pos == first && break
+            # grow cache to contain up to index
+            let max_pos = backtrack.max_pos
+                while max_pos < max_pos
+                    b = backtrack.cache[max_pos] + cache_offset
+                    cb, b1 = next(backtrack.target, b)
+                    ci, max_pos1 = next(backtrack.target, max_pos)
+                    if ci == cb
+                        backtrack.cache[max_pos1] = b1 - cache_offset
+                    end
+                    max_pos = max_pos1
+                end
+                backtrack.max_pos = max_pos
+            end
+            pos = backtrack.cache[index] + cache_offset
+        end
+        backtrack.pos = pos
+        done(backtrack.target, pos) && break
     end
-    return String(take!(out))
-end
-
-function readuntil(s::IO, target::String)
-    i = start(target)
-    if done(target, i)
-        return ""
-    end
-    c, i = next(target, i)
-    if done(target, i) && c < Char(0x80)
-        return readuntil_string(s, c % UInt8)
-    end
-    backtrack = Backtrack(target)
-    out = Base.StringVector(0)
-    while !eof(s)
-        byte = read(s, UInt8)
-        push!(out, byte)
-        record(backtrack, byte) && break
-    end
+    out = isa(backtrack.out, IO) ? take!(backtrack.out) : backtrack.out
     return String(out)
 end
 
