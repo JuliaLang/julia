@@ -62,9 +62,12 @@ macro deprecate(old, new, ex=true)
     end
 end
 
+# NB: keep in sync with JL_OPTIONS_DEPWARN_THROW
+depwarn_should_throw(opts) =  opts.depwarn == typemax(Int32)
+
 function depwarn(msg, funcsym)
     opts = JLOptions()
-    if opts.depwarn == typemax(Int32)
+    if depwarn_should_throw(opts)
         throw(ErrorException(msg))
     end
     deplevel = Logging.LogLevel(opts.depwarn)
@@ -74,7 +77,7 @@ function depwarn(msg, funcsym)
         _module=begin
             bt = backtrace()
             frame, caller = firstcaller(bt, funcsym)
-            # FIXME - The isnull handling isn't great here.
+            # FIXME - Which module should a null here be attributed to?
             !isnull(caller.linfo) ? caller.linfo.value.def.module : Base
         end,
         _file=caller.file,
@@ -85,6 +88,19 @@ function depwarn(msg, funcsym)
         max_log=1
     )
     nothing
+end
+
+# Emit deprecated syntax warning. This function exists to be called from
+# the julia parser (see flisp julia-syntax-depwarn) and in that context any
+# exceptions will be ignored.
+function syntax_depwarn(msg, file, line)
+    opts = JLOptions()
+    if depwarn_should_throw(opts)
+        return 2 # Will throw error on parser side to simplify marshalling
+    end
+    deplevel = Logging.LogLevel(opts.depwarn)
+    @logmsg deplevel msg _file=file _line=line _group=:depwarn
+    return 0
 end
 
 firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol) = firstcaller(bt, (funcsym,))

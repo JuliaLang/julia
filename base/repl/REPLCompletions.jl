@@ -44,7 +44,7 @@ function complete_symbol(sym, ffunc)
         # Find module
         lookup_name, name = rsplit(sym, ".", limit=2)
 
-        ex = Base.syntax_deprecation_warnings(false) do
+        ex = Base.without_syntax_deprecations() do
             parse(lookup_name, raise=false)
         end
 
@@ -478,7 +478,7 @@ end
 function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
-    inc_tag = Base.syntax_deprecation_warnings(false) do
+    inc_tag = Base.without_syntax_deprecations() do
         Base.incomplete_tag(parse(partial, raise=false))
     end
 
@@ -526,7 +526,7 @@ function completions(string, pos)
 
     if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
-        ex = Base.syntax_deprecation_warnings(false) do
+        ex = Base.without_syntax_deprecations() do
             parse(partial[frange] * ")", raise=false)
         end
         if isa(ex, Expr) && ex.head==:call
