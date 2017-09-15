@@ -380,7 +380,7 @@ Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
 faster and more accurate.
 """
-log(x)
+log(x::Number)
 
 """
     log2(x)

@@ -102,7 +102,7 @@ Base.Math.cosc
 Base.Math.deg2rad
 Base.Math.rad2deg
 Base.Math.hypot
-Base.log(::Any)
+Base.log(::Number)
 Base.log(::Number, ::Number)
 Base.log2
 Base.log10
