@@ -101,7 +101,7 @@
                                                error incomplete))
                       (and (eq? (car e) 'global) (every symbol? (cdr e))))))
          (if (underscore-symbol? e)
-             (syntax-deprecation #f "underscores as an rvalue" ""))
+             (syntax-deprecation "underscores as an rvalue" ""))
          e)
         (else
          (let ((last *in-expand*))
@@ -202,18 +202,6 @@
    (jl-parse-all (open-input-file filename) filename)
    (lambda (e) #f)))
 
-(define *depwarn* #t)
-(define (jl-parser-depwarn w)
-  (let ((prev *depwarn*))
-    (set! *depwarn* (eq? w #t))
-    prev))
-
-(define *deperror* #f)
-(define (jl-parser-deperror e)
-  (let ((prev *deperror*))
-    (set! *deperror* (eq? e #t))
-    prev))
-
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)
   (parser-wrap (lambda ()
@@ -229,3 +217,36 @@
            (newline)
            (prn e))
    (lambda () (profile s))))
+
+
+; --- logging ---
+; Utilities for logging messages from the frontend, in a way which can be
+; controlled from julia code.
+
+; Log a syntax deprecation from an unknown location
+(define (syntax-deprecation what instead)
+  (syntax-deprecation- what instead 'none 0 #f))
+
+(define (syntax-deprecation- what instead file line exactloc)
+    (frontend-depwarn (format-syntax-deprecation what instead file line exactloc)
+                      file line))
+
+(define (format-syntax-deprecation what instead file line exactloc)
+  (string "Deprecated syntax \"" what "\""
+          (if (or (= line 0) (eq? file 'none))
+            ""
+            (string (if exactloc " at " " around ") file ":" line))
+          "."
+          (if (equal? instead "") ""
+            (string #\newline "Use \"" instead "\" instead."))))
+
+; Emit deprecation warning via julia logging layer if posible.  If not - eg,
+; in bootstrap or in the special case that deprecations have been set to
+; errors, do the job here.
+(define (frontend-depwarn msg file line)
+  (let ((warnstatus (julia-depwarn msg file line)))
+    (cond ((eq? warnstatus 2) (error msg))
+          ((eq? warnstatus 1) (io.write *stderr* msg))
+          ; (eq? warnstatus 0) - successfully logged
+          )))
+

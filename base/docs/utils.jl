@@ -102,7 +102,7 @@ function helpmode(io::IO, line::AbstractString)
             # keyword such as `function` would throw a parse error due to the missing `end`.
             Symbol(line)
         else
-            x = Base.syntax_deprecation_warnings(false) do
+            x = Base.without_syntax_deprecations() do
                 parse(line, raise = false)
             end
             # Retrieving docs for macros requires us to make a distinction between the text

@@ -249,7 +249,7 @@
         (if s
             (let ((newe (list (car e) (cadr e) (cadr (caddr e))))
                   (S (deparse `(quote ,s)))) ; #16295
-              (syntax-deprecation #f (string (deparse (cadr e)) ".(" S ")")
+              (syntax-deprecation (string (deparse (cadr e)) ".(" S ")")
                                   (string (deparse (cadr e)) "." S))
               newe)
             e))
@@ -788,9 +788,9 @@
                   (sig    (car temp))
                   (params (cdr temp)))
              (if (pair? params)
-                 (syntax-deprecation #f
-                                     (string "inner constructor " name "(...)" (linenode-string (function-body-lineno body)))
-                                     (deparse `(where (call (curly ,name ,@params) ...) ,@params))))
+                 (syntax-deprecation-lno (string "inner constructor " name "(...)" )
+                                         (deparse `(where (call (curly ,name ,@params) ...) ,@params))
+                                         (function-body-lineno body)))
              `(,keyword ,sig ,(ctor-body body params)))))))
 
 (define (function-body-lineno body)
@@ -1039,7 +1039,7 @@
                   (name    (deprecate-dotparen (if has-sp (cadr head) head)))
                   (op (let ((op_ (maybe-undotop name))) ; handle .op -> broadcast deprecation
                         (if op_
-                            (syntax-deprecation #f (string "function " (deparse name) "(...)")
+                            (syntax-deprecation (string "function " (deparse name) "(...)")
                                                 (string "function Base.broadcast(::typeof(" (deparse op_) "), ...)")))
                         op_))
                   (name (if op '(|.| Base (inert broadcast)) name))
@@ -1073,15 +1073,14 @@
                   (name    (if (or (decl? name) (and (pair? name) (eq? (car name) 'curly)))
                                #f name)))
              (if has-sp
-                 (syntax-deprecation #f
-                                     (string "parametric method syntax " (deparse (cadr e))
-                                             (linenode-string (function-body-lineno body)))
-                                     (deparse `(where (call ,(or name
-                                                                 (cadr (cadr (cadr e))))
-                                                            ,@(if (has-parameters? argl)
-                                                                  (cons (car argl) (cddr argl))
-                                                                  (cdr argl)))
-                                                      ,@raw-typevars))))
+                 (syntax-deprecation-lno (string "parametric method syntax " (deparse (cadr e)))
+                                         (deparse `(where (call ,(or name
+                                                                     (cadr (cadr (cadr e))))
+                                                                ,@(if (has-parameters? argl)
+                                                                      (cons (car argl) (cddr argl))
+                                                                      (cdr argl)))
+                                                          ,@raw-typevars))
+                                         (function-body-lineno body)))
              (expand-forms
               (method-def-expr name sparams argl body isstaged rett))))
           (else
@@ -1131,11 +1130,11 @@
 (define (expand-let e)
   (if (length= e 2)
       (begin (deprecation-message (string "The form `Expr(:let, ex)` is deprecated. "
-                                          "Use `Expr(:let, Expr(:block), ex)` instead." #\newline))
+                                          "Use `Expr(:let, Expr(:block), ex)` instead." #\newline) #f)
              (return (expand-let `(let (block) ,(cadr e))))))
   (if (length> e 3)
       (begin (deprecation-message (string "The form `Expr(:let, ex, binds...)` is deprecated. "
-                                          "Use `Expr(:let, Expr(:block, binds...), ex)` instead." #\newline))
+                                          "Use `Expr(:let, Expr(:block, binds...), ex)` instead." #\newline) #f)
              (return (expand-let `(let (block ,@(cddr e)) ,(cadr e))))))
   (let ((ex    (caddr e))
         (binds (let-binds e)))
@@ -1679,7 +1678,7 @@
                 (block
                  ;; NOTE: enable this to force loop-local var
                  #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
-                 ,@(if (and (not outer?) (or *depwarn* *deperror*))
+                 ,@(if (not outer?)
                        (map (lambda (v) `(warn-if-existing ,v)) (lhs-vars lhs))
                        '())
                  ,(lower-tuple-assignment (list lhs state)
@@ -1895,7 +1894,7 @@
    'struct         expand-struct-def
    'type
    (lambda (e)
-     (syntax-deprecation #f ":type expression head" ":struct")
+     (syntax-deprecation ":type expression head" ":struct")
      (expand-struct-def e))
    'try            expand-try
    ;; deprecated in 0.6
@@ -1989,7 +1988,7 @@
                  (b_  (caddr lhs))
                  (b   (if (and (length= b_ 2) (eq? (car b_) 'tuple))
                           (begin
-                            (syntax-deprecation #f
+                            (syntax-deprecation
                              (string (deparse a) ".(" (deparse (cadr b_)) ") = ...")
                              (string "setfield!(" (deparse a) ", " (deparse (cadr b_)) ", ...)"))
                             (cadr b_))
@@ -2095,7 +2094,7 @@
 
    'bitstype
    (lambda (e)
-     (syntax-deprecation #f "Expr(:bitstype, nbits, name)" "Expr(:primitive, name, nbits)")
+     (syntax-deprecation "Expr(:bitstype, nbits, name)" "Expr(:primitive, name, nbits)")
      (expand-forms `(primitive ,(caddr e) ,(cadr e))))
    'primitive
    (lambda (e)
@@ -2210,7 +2209,7 @@
 
    '=>
    (lambda (e)
-     (syntax-deprecation #f "Expr(:(=>), ...)" "Expr(:call, :(=>), ...)")
+     (syntax-deprecation "Expr(:(=>), ...)" "Expr(:call, :(=>), ...)")
      `(call => ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
    'braces    (lambda (e) (error "{ } vector syntax is discontinued"))
@@ -3383,10 +3382,15 @@ f(x) = yt(x)
         (else (for-each linearize (cdr e))))
   e)
 
-(define (deprecation-message msg)
-  (if *deperror*
-      (error msg)
-      (io.write *stderr* msg)))
+(define (deprecation-message msg lno)
+  (let ((line (if (> (length lno) 1) (cadr lno)  0))
+        (file (if (> (length lno) 2) (caddr lno) 'none)))
+    (frontend-depwarn msg file line)))
+
+(define (syntax-deprecation-lno what instead lno)
+  (let ((line (if (> (length lno) 1) (cadr lno)  0))
+        (file (if (> (length lno) 2) (caddr lno) 'none)))
+    (syntax-deprecation- what instead file line #f)))
 
 ;; this pass behaves like an interpreter on the given code.
 ;; to perform stateful operations, it calls `emit` to record that something
@@ -3519,12 +3523,11 @@ f(x) = yt(x)
                                (and (pair? e) (or (eq? (car e) 'outerref)
                                                   (eq? (car e) 'globalref))
                                     (underscore-symbol? (cadr e)))))
-                (syntax-deprecation #f (string "underscores as an rvalue" (linenode-string current-loc))
-                                    ""))
+                (syntax-deprecation-lno "underscores as an rvalue" "" current-loc))
             (if (and (not *warn-all-loop-vars*) (has? deprecated-loop-vars e))
                 (begin (deprecation-message
                         (string "Use of final value of loop variable \"" e "\"" (linenode-string current-loc) " "
-                                "is deprecated. In the future the variable will be local to the loop instead." #\newline))
+                                "is deprecated. In the future the variable will be local to the loop instead." #\newline) current-loc)
                        (del! deprecated-loop-vars e)))
             (cond (tail  (emit-return e1))
                   (value e1)
@@ -3542,7 +3545,8 @@ f(x) = yt(x)
                                             (deprecation-message
                                              (string "Syntax \"&argument\"" (linenode-string current-loc)
                                                      " is deprecated. Remove the \"&\" and use a \"Ref\" argument "
-                                                     "type instead." #\newline))))
+                                                     "type instead." #\newline)
+                                             current-loc)))
                                       (list-tail e 6))
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place
                             ;;       the 1st should be compiled if an atom.
@@ -3785,8 +3789,7 @@ f(x) = yt(x)
              (if (or (assq (cadr e) (car  (lam:vinfo lam)))
                      (assq (cadr e) (cadr (lam:vinfo lam))))
                  (begin
-                   (syntax-deprecation #f (string "`const` declaration on local variable" (linenode-string current-loc))
-                                       "")
+                   (syntax-deprecation-lno "`const` declaration on local variable" "" current-loc)
                    '(null))
                  (emit e)))
             ((isdefined) (if tail (emit-return e) e))
@@ -3797,7 +3800,8 @@ f(x) = yt(x)
                  (deprecation-message
                   (string "Loop variable \"" (cadr e) "\"" (linenode-string current-loc) " "
                           "overwrites a variable in an enclosing scope. "
-                          "In the future the variable will be local to the loop instead." #\newline))
+                          "In the future the variable will be local to the loop instead." #\newline)
+                  current-loc)
                  (put! deprecated-loop-vars (cadr e) #t))
              '(null))
             ((boundscheck) (if tail (emit-return e) e))

@@ -185,16 +185,10 @@ function eval_user_input(@nospecialize(ast), show_value)
     isa(STDIN,TTY) && println()
 end
 
-syntax_deprecation_warnings(warn::Bool) =
-    ccall(:jl_parse_depwarn, Cint, (Cint,), warn) == 1
-
-function syntax_deprecation_warnings(f::Function, warn::Bool)
-    prev = syntax_deprecation_warnings(warn)
-    try
-        f()
-    finally
-        syntax_deprecation_warnings(prev)
-    end
+function without_syntax_deprecations(f::Function)
+    # Turn off all logging
+    # TODO: Disable only depwarns, but in a clean way.
+    with_logger(f, Logging.NullLogger())
 end
 
 function parse_input_line(s::String; filename::String="none")
