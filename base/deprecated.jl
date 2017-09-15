@@ -1804,6 +1804,8 @@ import .Iterators.enumerate
     return p
 end
 
+@deprecate contains(eq::Function, itr, x) any(y->eq(y,x), itr)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

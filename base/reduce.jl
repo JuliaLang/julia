@@ -637,38 +637,6 @@ const ∈ = in
 ∋(itr, x)= ∈(x, itr)
 ∌(itr, x)=!∋(itr, x)
 
-"""
-    contains(fun, itr, x) -> Bool
-
-Returns `true` if there is at least one element `y` in `itr` such that `fun(y,x)` is `true`.
-
-```jldoctest
-julia> vec = [10, 100, 200]
-3-element Array{Int64,1}:
-  10
- 100
- 200
-
-julia> contains(==, vec, 200)
-true
-
-julia> contains(==, vec, 300)
-false
-
-julia> contains(>, vec, 100)
-true
-
-julia> contains(>, vec, 200)
-false
-```
-"""
-function contains(eq::Function, itr, x)
-    for y in itr
-        eq(y, x) && return true
-    end
-    return false
-end
-
 
 ## count
 

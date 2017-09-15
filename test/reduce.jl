@@ -370,7 +370,7 @@ A = reshape(map(UInt8, 1:100), (10,10))
 let A = collect(1:10)
     @test A ∋ 5
     @test A ∌ 11
-    @test contains(==,A,6)
+    @test any(y->y==6,A)
 end
 
 # issue #18695
