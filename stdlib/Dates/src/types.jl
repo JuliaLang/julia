@@ -314,6 +314,13 @@ DateTime(y, m=1, d=1, h=0, mi=0, s=0, ms=0) = DateTime(Int64(y), Int64(m), Int64
 Date(y, m=1, d=1) = Date(Int64(y), Int64(m), Int64(d))
 Time(h, mi=0, s=0, ms=0, us=0, ns=0) = Time(Int64(h), Int64(mi), Int64(s), Int64(ms), Int64(us), Int64(ns))
 
+# Empty constructors default to 'now'
+if VERSION >= v"0.8-"
+    DateTime() = now()
+    Date() = today()
+    Time() = Time(now())
+end
+
 # Traits, Equality
 Base.isfinite(::Union{Type{T}, T}) where {T<:TimeType} = true
 calendar(dt::DateTime) = ISOCalendar
