@@ -368,3 +368,7 @@ end
         end
     end
 end
+
+@testset "Diagonal of a RowVector (#23649)" begin
+    @test Diagonal([1,2,3].') == Diagonal([1 2 3])
+end

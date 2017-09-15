@@ -114,32 +114,13 @@ julia> conj(v)
 IndexStyle(::RowVector) = IndexLinear()
 IndexStyle(::Type{<:RowVector}) = IndexLinear()
 
-@propagate_inbounds getindex(rowvec::RowVector, i) = transpose(rowvec.vec[i])
-@propagate_inbounds setindex!(rowvec::RowVector, v, i) = setindex!(rowvec.vec, transpose(v), i)
+@propagate_inbounds getindex(rowvec::RowVector, i::Int) = transpose(rowvec.vec[i])
+@propagate_inbounds setindex!(rowvec::RowVector, v, i::Int) = setindex!(rowvec.vec, transpose(v), i)
 
-# Cartesian indexing is distorted by getindex
-# Furthermore, Cartesian indexes don't have to match shape, apparently!
-@inline function getindex(rowvec::RowVector, i::CartesianIndex)
-    @boundscheck if !(i.I[1] == 1 && i.I[2] ∈ indices(rowvec.vec)[1] && check_tail_indices(i.I...))
-        throw(BoundsError(rowvec, i.I))
-    end
-    @inbounds return transpose(rowvec.vec[i.I[2]])
-end
-@inline function setindex!(rowvec::RowVector, v, i::CartesianIndex)
-    @boundscheck if !(i.I[1] == 1 && i.I[2] ∈ indices(rowvec.vec)[1] && check_tail_indices(i.I...))
-        throw(BoundsError(rowvec, i.I))
-    end
-    @inbounds rowvec.vec[i.I[2]] = transpose(v)
-end
-
-@propagate_inbounds getindex(rowvec::RowVector, ::CartesianIndex{0}) = getindex(rowvec)
-@propagate_inbounds getindex(rowvec::RowVector, i::CartesianIndex{1}) = getindex(rowvec, i.I[1])
-
-@propagate_inbounds setindex!(rowvec::RowVector, v, ::CartesianIndex{0}) = setindex!(rowvec, v)
-@propagate_inbounds setindex!(rowvec::RowVector, v, i::CartesianIndex{1}) = setindex!(rowvec, v, i.I[1])
-
-@inline check_tail_indices(i1, i2) = true
-@inline check_tail_indices(i1, i2, i3, is...) = i3 == 1 ? check_tail_indices(i1, i2, is...) : false
+# Keep a RowVector where appropriate
+@propagate_inbounds getindex(rowvec::RowVector, ::Colon, i::Int) = transpose.(rowvec.vec[i:i])
+@propagate_inbounds getindex(rowvec::RowVector, ::Colon, inds::AbstractArray{Int}) = RowVector(rowvec.vec[inds])
+@propagate_inbounds getindex(rowvec::RowVector, ::Colon, ::Colon) = RowVector(rowvec.vec[:])
 
 # helper function for below
 @inline to_vec(rowvec::RowVector) = map(transpose, transpose(rowvec))

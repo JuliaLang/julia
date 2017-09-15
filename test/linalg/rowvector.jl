@@ -268,3 +268,23 @@ end
 @testset "ambiguity between * methods with RowVectors and ConjRowVectors (#20971)" begin
     @test RowVector(ConjArray(ones(4))) * ones(4) == 4
 end
+
+@testset "setindex!/getindex" begin
+    v = [2, 3, 4]
+    rv = v.'
+    @test_throws BoundsError setindex!(rv, 5, CartesianIndex((5, 4, 3)))
+    rv[CartesianIndex((1, 1, 1))] = 5
+    @test_throws BoundsError getindex(rv, CartesianIndex((5, 4, 3)))
+    @test rv[1] == 5
+
+    @test rv[:, 2]::Vector == [v[2]]
+    @test rv[:, 2:3]::RowVector == v[2:3].'
+    @test rv[:, :]::RowVector == rv
+
+    v = [1]
+    rv = v.'
+    rv[CartesianIndex()] = 2
+    @test rv[CartesianIndex()] == 2
+    rv[CartesianIndex(1)] = 1
+    @test rv[CartesianIndex(1)] == 1
+end
