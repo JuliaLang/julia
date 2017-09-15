@@ -29,7 +29,7 @@ end
 struct CompositeException <: Exception
     exceptions::Vector{Any}
     CompositeException() = new(Any[])
-    CompositeException(exceptions::Vector{Any}) = new(exceptions)
+    CompositeException(exceptions) = new(exceptions)
 end
 length(c::CompositeException) = length(c.exceptions)
 push!(c::CompositeException, ex) = push!(c.exceptions, ex)
