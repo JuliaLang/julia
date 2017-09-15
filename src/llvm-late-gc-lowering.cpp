@@ -259,6 +259,10 @@ struct State {
     // of the value (but not the other way around).
     std::map<int, int> LoadRefinements;
 
+    // GC preserves map. All safepoints dominated by the map key, but not any
+    // of its uses need to preserve the values listed in the map value.
+    std::map<Instruction *, std::vector<int>> GCPreserves;
+
     // The assignment of numbers to safepoints. The indices in the map
     // are indices into the next three maps which store safepoint properties
     std::map<Instruction *, int> SafepointNumbering;
@@ -322,7 +326,8 @@ private:
     MDNode *tbaa_tag;
     Function *ptls_getter;
     Function *gc_flush_func;
-    Function *gc_use_func;
+    Function *gc_preserve_begin_func;
+    Function *gc_preserve_end_func;
     Function *pointer_from_objref_func;
     Function *alloc_obj_func;
     Function *pool_alloc_func;
@@ -754,16 +759,28 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 if (CI->canReturnTwice()) {
                     S.ReturnsTwice.push_back(CI);
                 }
-                if (isa<IntrinsicInst>(CI)) {
-                    // Intrinsics are never safepoints.
-                    continue;
-                }
                 if (auto callee = CI->getCalledFunction()) {
+                    if (callee == gc_preserve_begin_func) {
+                        std::vector<int> args;
+                        for (Use &U : CI->arg_operands()) {
+                            Value *V = U;
+                            int Num = Number(S, V);
+                            if (Num >= 0)
+                                args.push_back(Num);
+                        }
+                        S.GCPreserves[CI] = args;
+                        continue;
+                    }
                     // Known functions emitted in codegen that are not safepoints
-                    if (callee == pointer_from_objref_func || callee == gc_use_func ||
+                    if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
+                        callee == gc_preserve_end_func ||
                         callee->getName() == "memcmp") {
                         continue;
                     }
+                }
+                if (isa<IntrinsicInst>(CI)) {
+                    // Intrinsics are never safepoints.
+                    continue;
                 }
                 int SafepointNumber = NoteSafepoint(S, BBS, CI);
                 BBS.HasSafepoint = true;
@@ -912,6 +929,7 @@ JL_USED_FUNC static void dumpSafepointsForBBName(Function &F, State &S, const ch
 }
 
 void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
+    DominatorTree *DT = nullptr;
     // Iterate over all safe points. Add to live sets all those variables that
     // are now live across their parent block.
     for (auto it : S.SafepointNumbering) {
@@ -934,6 +952,33 @@ void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
             int RefinedPtr = S.LoadRefinements[Idx];
             if (RefinedPtr == -1 || HasBitSet(LS, RefinedPtr))
                 LS[Idx] = 0;
+        }
+        // If the function has GC preserves, figure out whether we need to
+        // add in any extra live values.
+        if (!S.GCPreserves.empty()) {
+            if (!DT) {
+                DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+            }
+            for (auto it2 : S.GCPreserves) {
+                if (!DT->dominates(it2.first, Safepoint))
+                    continue;
+                bool OutsideRange = false;
+                for (const User *U : it2.first->users()) {
+                    // If this is dominated by an end, we don't need to add
+                    // the values to our live set.
+                    if (DT->dominates(cast<Instruction>(U), Safepoint)) {
+                        OutsideRange = true;
+                        break;
+                    }
+                }
+                if (OutsideRange)
+                    continue;
+                for (unsigned Num : it2.second) {
+                    if (Num >= LS.size())
+                        LS.resize(Num + 1);
+                    LS[Num] = 1;
+                }
+            }
         }
     }
     // Compute the interference graph
@@ -1153,8 +1198,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
             }
             CallingConv::ID CC = CI->getCallingConv();
             auto callee = CI->getCalledValue();
-            if ((gc_flush_func != nullptr && callee == gc_flush_func) ||
-                (gc_use_func != nullptr && callee == gc_use_func)) {
+            if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
+                        || callee == gc_preserve_end_func)) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
                 auto *obj = CI->getOperand(0);
@@ -1243,6 +1288,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                 CallInst *NewCall = CallInst::Create(CI, None, CI);
                 NewCall->takeName(CI);
                 CI->replaceAllUsesWith(NewCall);
+            }
+            if (!CI->use_empty()) {
+                CI->replaceAllUsesWith(UndefValue::get(CI->getType()));
             }
             it = CI->eraseFromParent();
             ChangesMade = true;
@@ -1423,7 +1471,8 @@ static void addRetNoAlias(Function *F)
 bool LateLowerGCFrame::DefineFunctions(Module &M) {
     ptls_getter = M.getFunction("jl_get_ptls_states");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
-    gc_use_func = M.getFunction("julia.gc_use");
+    gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
+    gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");
     pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
     auto &ctx = M.getContext();
     T_size = M.getDataLayout().getIntPtrType(ctx);

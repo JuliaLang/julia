@@ -356,7 +356,8 @@ static GlobalVariable *jlgetworld_global;
 
 // placeholder functions
 static Function *gcroot_flush_func;
-static Function *gc_use_func;
+static Function *gc_preserve_begin_func;
+static Function *gc_preserve_end_func;
 static Function *except_enter_func;
 static Function *pointer_from_objref_func;
 
@@ -3905,6 +3906,42 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
     else if (head == boundscheck_sym) {
         return mark_julia_const(bounds_check_enabled(ctx, jl_true) ? jl_true : jl_false);
     }
+    else if (head == gc_preserve_begin_sym) {
+        size_t nargs = jl_array_len(ex->args);
+        jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
+        for (size_t i = 0; i < nargs; ++i) {
+            argv[i] = emit_expr(ctx, args[i]);
+        }
+        size_t nargsboxed = 0;
+        Value **vals = (Value**)alloca(sizeof(Value *) * nargs);
+        for (size_t i = 0; i < nargs; ++i) {
+            if (!argv[i].isboxed) {
+                // This is intentionally not an error to allow writing
+                // generic code more easily.
+                continue;
+            } else if (argv[i].constant) {
+                continue;
+            }
+            vals[nargsboxed++] = argv[i].Vboxed;
+        }
+        Value *token = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func),
+            ArrayRef<Value*>(vals, nargsboxed));
+        jl_cgval_t tok(token, NULL, false, (jl_value_t*)jl_void_type, NULL);
+        tok.isimmutable = true;
+        return tok;
+    }
+    else if (head == gc_preserve_end_sym) {
+        // We only support ssa values as the argument. Everything else will
+        // fall back to the default behavior of preserving the argument value
+        // until the end of the scope, which is correct, but not optimal.
+        if (!jl_is_ssavalue(args[0])) {
+            return jl_cgval_t((jl_value_t*)jl_void_type);
+        }
+        jl_cgval_t token = emit_expr(ctx, args[0]);
+        assert(token.V->getType()->isTokenTy());
+        ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token.V});
+        return jl_cgval_t((jl_value_t*)jl_void_type);
+    }
     else {
         if (!strcmp(jl_symbol_name(head), "$"))
             jl_error("syntax: prefix \"$\" in non-quoted expression");
@@ -6526,11 +6563,17 @@ static void init_julia_llvm_env(Module *m)
                                          "julia.gcroot_flush");
     add_named_global(gcroot_flush_func, (void*)NULL, /*dllimport*/false);
 
-    gc_use_func = Function::Create(FunctionType::get(T_void,
-                                         ArrayRef<Type*>(PointerType::get(T_jlvalue, AddressSpace::Derived)), false),
+    gc_preserve_begin_func = Function::Create(FunctionType::get(Type::getTokenTy(jl_LLVMContext),
+                                         ArrayRef<Type*>(), true),
                                          Function::ExternalLinkage,
-                                         "julia.gc_use");
-    add_named_global(gc_use_func, (void*)NULL, /*dllimport*/false);
+                                         "llvm.julia.gc_preserve_begin");
+    add_named_global(gc_preserve_begin_func, (void*)NULL, /*dllimport*/false);
+
+    gc_preserve_end_func = Function::Create(FunctionType::get(T_void,
+                                        ArrayRef<Type*>(Type::getTokenTy(jl_LLVMContext)), false),
+                                        Function::ExternalLinkage,
+                                        "llvm.julia.gc_preserve_end");
+    add_named_global(gc_preserve_end_func, (void*)NULL, /*dllimport*/false);
 
     pointer_from_objref_func = Function::Create(FunctionType::get(T_size,
                                          ArrayRef<Type*>(PointerType::get(T_jlvalue, AddressSpace::Derived)), false),

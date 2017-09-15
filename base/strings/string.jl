@@ -73,10 +73,7 @@ codeunit(s::AbstractString, i::Integer)
     @boundscheck if (i < 1) | (i > sizeof(s))
         throw(BoundsError(s,i))
     end
-    ptr = pointer(s, i)
-    r = unsafe_load(ptr)
-    Core.gcuse(s)
-    r
+    @gc_preserve s unsafe_load(pointer(s, i))
 end
 
 write(io::IO, s::String) = unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))

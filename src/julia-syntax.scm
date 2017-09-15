@@ -3084,7 +3084,8 @@ f(x) = yt(x)
                                (memq (car e) '(quote top core line inert local local-def unnecessary
                                                meta inbounds boundscheck simdloop decl
                                                implicit-global global globalref outerref
-                                               const = null method call foreigncall ssavalue))))
+                                               const = null method call foreigncall ssavalue
+                                               gc_preserve_begin gc_preserve_end))))
                          (lam:body lam))))
                (unused (map cadr (filter (lambda (x) (memq (car x) '(method =)))
                                          leading))))
@@ -3816,8 +3817,13 @@ f(x) = yt(x)
              (if tail (emit-return '(null)))
              '(null))
 
+            ((gc_preserve_begin)
+              (let ((s (make-ssavalue)))
+                (emit `(= ,s ,e))
+                s))
+
             ;; other top level expressions and metadata
-            ((import importall using export line meta inbounds boundscheck simdloop)
+            ((import importall using export line meta inbounds boundscheck simdloop gc_preserve_end)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
                       (set! current-loc e)
