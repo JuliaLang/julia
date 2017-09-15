@@ -778,7 +778,8 @@ end
 
 # issue #21410
 f21410(::V, ::Pair{V,E}) where {V, E} = E
-@test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second == Type{Ref{T}} where T<:Number
+@test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second ==
+    Type{E} where E <: (Ref{T} where T<:Number)
 
 # issue #21369
 function inf_error_21369(arg)
@@ -1212,3 +1213,8 @@ end
 h23685 = Node23685{Float64}()
 f23685() = update23685!(h23685)
 @test f23685() === h23685
+
+let c(::Type{T}, x) where {T<:Array} = T,
+    f() = c(Vector{Any[Int][1]}, [1])
+    @test f() === Vector{Int}
+end
