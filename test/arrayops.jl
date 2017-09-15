@@ -2,7 +2,7 @@
 
 # Array test
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using TestHelpers.OAs
+using TestHelpers: OAs, Furlong
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
@@ -2194,6 +2194,10 @@ end
     oarr = zeros(randn(3), UInt16, 1:3, -1:0)
     @test indices(oarr) == (1:3, -1:0)
     test_zeros(oarr.parent, Matrix{UInt16}, (3, 2))
+
+    # works with oneunit rather than one
+    @test eltype(ones(Furlong{3, Int16}, 2)) === Furlong{3, Int16}
+    @test eltype(zeros(Furlong{2, Int32}, 2)) === Furlong{2, Int32}
 end
 
 # issue #11053
