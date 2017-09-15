@@ -733,8 +733,7 @@ function test!(pkg::AbstractString,
 end
 
 struct PkgTestError <: Exception
-    msg::String
-    PkgTestError(msg::AbstractString) = new(msg)
+    msg::AbstractString
 end
 
 function Base.showerror(io::IO, ex::PkgTestError, bt; backtrace=true)

@@ -9,11 +9,9 @@ The objects called do not have matching dimensionality. Optional argument `msg` 
 descriptive error string.
 """
 struct DimensionMismatch <: Exception
-    msg::String
-    DimensionMismatch() = new("")
-    DimensionMismatch(msg::AbstractString) = new(msg)
+    msg::AbstractString
 end
-
+DimensionMismatch() = DimensionMismatch("")
 
 ## Type aliases for convenience ##
 """

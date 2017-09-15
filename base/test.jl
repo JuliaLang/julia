@@ -600,8 +600,7 @@ struct FallbackTestSet <: AbstractTestSet end
 fallback_testset = FallbackTestSet()
 
 struct FallbackTestSetException <: Exception
-    msg::String
-    FallbackTestSetException(msg::AbstractString) = new(msg)
+    msg::AbstractString
 end
 
 function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)

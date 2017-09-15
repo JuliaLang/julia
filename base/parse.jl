@@ -247,8 +247,7 @@ The expression passed to the `parse` function could not be interpreted as a vali
 expression.
 """
 struct ParseError <: Exception
-    msg::String
-    ParseError(msg::AbstractString) = new(msg)
+    msg::AbstractString
 end
 
 """

@@ -12,8 +12,7 @@ import ..SparseArrays: increment, increment!, decrement, decrement!, nnz
 
 include("umfpack_h.jl")
 struct MatrixIllConditionedException <: Exception
-    msg::String
-    MatrixIllConditionedException(msg::AbstractString) = new(msg)
+    msg::AbstractString
 end
 
 function umferror(status::Integer)

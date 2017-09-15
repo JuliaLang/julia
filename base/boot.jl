@@ -196,8 +196,7 @@ Expr(@nospecialize args...) = _expr(args...)
 
 abstract type Exception end
 struct ErrorException <: Exception
-    msg::String
-    ErrorException(msg::AbstractString) = new(msg)
+    msg::AbstractString
 end
 
 macro _noinline_meta()
@@ -223,13 +222,13 @@ end
 struct InterruptException <: Exception end
 struct DomainError <: Exception
     val
-    msg::String
+    msg::AbstractString
     DomainError(@nospecialize(val)) = (@_noinline_meta; new(val, ""))
     DomainError(@nospecialize(val), @nospecialize(msg)) = (@_noinline_meta; new(val, msg))
 end
 struct TypeError <: Exception
     func::Symbol
-    context::String
+    context::AbstractString
     expected::Type
     got
 end
@@ -240,13 +239,11 @@ struct InexactError <: Exception
     InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@_noinline_meta; new(f, T, val))
 end
 struct OverflowError <: Exception
-    msg::String
-    OverflowError(msg::AbstractString) = new(msg)
+    msg::AbstractString
 end
 
 struct ArgumentError <: Exception
-    msg::String
-    ArgumentError(msg::AbstractString) = new(msg)
+    msg::AbstractString
 end
 
 struct MethodError <: Exception
@@ -259,20 +256,18 @@ const typemax_UInt = ccall(:jl_typemax_uint, Any, (Any,), UInt)
 MethodError(@nospecialize(f), @nospecialize(args)) = MethodError(f, args, typemax_UInt)
 
 struct AssertionError <: Exception
-    msg::String
-    AssertionError() = new("")
-    AssertionError(msg::AbstractString) = new(msg)
+    msg::AbstractString
 end
+AssertionError() = AssertionError("")
 
 #Generic wrapping of arbitrary exceptions
 #Subtypes should put the exception in an 'error' field
 abstract type WrappedException <: Exception end
 
 struct LoadError <: WrappedException
-    file::String
+    file::AbstractString
     line::Int
     error
-    LoadError(file::AbstractString, line::Integer, error) = new(file,line,error)
 end
 
 struct InitError <: WrappedException

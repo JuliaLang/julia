@@ -66,8 +66,7 @@ end
 struct GitError <: Exception
     class::Class
     code::Code
-    msg::String
-    GitError(class::Class, code::Code, msg::AbstractString) = new(class,code,msg)
+    msg::AbstractString
 end
 Base.show(io::IO, err::GitError) = print(io, "GitError(Code:$(err.code), Class:$(err.class), $(err.msg))")
 
