@@ -4713,17 +4713,16 @@ plus_saturate(x, y) = max(x, y, x+y)
 # known return type
 isknowntype(T) = (T == Union{}) || isleaftype(T)
 
-statement_cost(::Any, src::CodeInfo, mod::Module, params::InferenceParams) = 0
-statement_cost(qn::QuoteNode, src::CodeInfo, mod::Module, params::InferenceParams) =
-    statement_cost(qn.value, src, mod, params)
-function statement_cost(ex::Expr, src::CodeInfo, mod::Module, params::InferenceParams)
+function statement_cost(ex::Expr, line::Int, src::CodeInfo, mod::Module, params::InferenceParams)
     head = ex.head
     if is_meta_expr(ex) || head == :copyast # not sure if copyast is right
         return 0
     end
     argcost = 0
     for a in ex.args
-        argcost = plus_saturate(argcost, statement_cost(a, src, mod, params))
+        if a isa Expr
+            argcost = plus_saturate(argcost, statement_cost(a, line, src, mod, params))
+        end
     end
     if head == :return || head == :(=)
         return argcost
@@ -4775,10 +4774,20 @@ function statement_cost(ex::Expr, src::CodeInfo, mod::Module, params::InferenceP
         return ex.typ == Union{} ? 0 : plus_saturate(20, argcost)
     elseif head == :llvmcall
         return plus_saturate(10, argcost) # a wild guess at typical cost
-    elseif (head == :&)
-        return plus_saturate(length(ex.args), argcost)
+    elseif head == :enter
+        # try/catch is a couple function calls,
+        # but don't inline functions with try/catch
+        # since these aren't usually performance-sensitive functions,
+        # and llvm is more likely to miscompile them when these functions get large
+        return typemax(Int)
+    elseif head == :gotoifnot
+        target = ex.args[2]::Int
+        # loops are generally always expensive
+        # but assume that forward jumps are already counted for from
+        # summing the cost of the not-taken branch
+        return target < line ? plus_saturate(40, argcost) : argcost
     end
-    argcost
+    return argcost
 end
 
 function inline_worthy(body::Array{Any,1}, src::CodeInfo, mod::Module,
@@ -4787,23 +4796,33 @@ function inline_worthy(body::Array{Any,1}, src::CodeInfo, mod::Module,
     bodycost = 0
     for line = 1:length(body)
         stmt = body[line]
-        thiscost = statement_cost(stmt, src, mod, params)
+        if stmt isa Expr
+            thiscost = statement_cost(stmt, line, src, mod, params)::Int
+        elseif stmt isa GotoNode
+            # loops are generally always expensive
+            # but assume that forward jumps are already counted for from
+            # summing the cost of the not-taken branch
+            thiscost = stmt.label < line ? 40 : 0
+        else
+            continue
+        end
         bodycost = plus_saturate(bodycost, thiscost)
+        bodycost == typemax(Int) && return false
     end
-    bodycost <= cost_threshold
+    return bodycost <= cost_threshold
 end
 
 function inline_worthy(body::Expr, src::CodeInfo, mod::Module, params::InferenceParams,
                        cost_threshold::Integer=params.inline_cost_threshold)
-    bodycost = statement_cost(body, src, mod, params)
-    bodycost <= cost_threshold
+    bodycost = statement_cost(body, typemax(Int), src, mod, params)
+    return bodycost <= cost_threshold
 end
 
 function inline_worthy(@nospecialize(body), src::CodeInfo, mod::Module, params::InferenceParams,
                        cost_threshold::Integer=params.inline_cost_threshold)
     newbody = exprtype(body, src, mod)
     !isa(newbody, Expr) && return true
-    inline_worthy(newbody, src, mod, params, cost_threshold)
+    return inline_worthy(newbody, src, mod, params, cost_threshold)
 end
 
 ssavalue_increment(@nospecialize(body), incr) = body

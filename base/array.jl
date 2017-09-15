@@ -441,16 +441,16 @@ See also [`zeros`](@ref), [`similar`](@ref).
 """
 function ones end
 
-for (fname, felt) in ((:zeros,:zero), (:ones,:one))
+for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     @eval begin
         # allow signature of similar
-        $fname(a::AbstractArray, T::Type, dims::Tuple) = fill!(similar(a, T, dims), $felt(T))
-        $fname(a::AbstractArray, T::Type, dims...) = fill!(similar(a,T,dims...), $felt(T))
-        $fname(a::AbstractArray, T::Type=eltype(a)) = fill!(similar(a,T), $felt(T))
+        $fname(a::AbstractArray, ::Type{T}, dims::Tuple) where {T} = fill!(similar(a, T, dims), $felt(T))
+        $fname(a::AbstractArray, ::Type{T}, dims...) where {T} = fill!(similar(a, T, dims...), $felt(T))
+        $fname(a::AbstractArray, ::Type{T}=eltype(a)) where {T} = fill!(similar(a, T), $felt(T))
 
-        $fname(T::Type, dims::Tuple) = fill!(Array{T}(Dims(dims)), $felt(T))
+        $fname(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(Dims(dims)), $felt(T))
         $fname(dims::Tuple) = ($fname)(Float64, dims)
-        $fname(T::Type, dims...) = $fname(T, dims)
+        $fname(::Type{T}, dims...) where {T} = $fname(T, dims)
         $fname(dims...) = $fname(dims)
     end
 end
