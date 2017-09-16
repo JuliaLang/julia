@@ -805,11 +805,7 @@ end
 Compute the matrix hyperbolic cosine of a square matrix `A`.
 """
 function cosh(A::StridedMatrix{T}) where T
-    if T <: Real
-        if issymmetric(A)
-            return full(cosh(Symmetric(A)))
-        end
-    elseif ishermitian(A)
+    if ishermitian(A)
         return full(cosh(Hermitian(A)))
     end
     return (exp(A) + exp!(-A)) / 2
@@ -821,11 +817,7 @@ end
 Compute the matrix hyperbolic sine of a square matrix `A`.
 """
 function sinh(A::StridedMatrix{T}) where T
-    if T <: Real
-        if issymmetric(A)
-            return full(sinh(Symmetric(A)))
-        end
-    elseif ishermitian(A)
+    if ishermitian(A)
         return full(sinh(Hermitian(A)))
     end
     return (exp(A) - exp!(-A)) / 2
@@ -837,11 +829,7 @@ end
 Compute the matrix hyperbolic tangent of a square matrix `A`.
 """
 function tanh(A::StridedMatrix{T}) where T
-    if T <: Real
-        if issymmetric(A)
-            return full(tanh(Symmetric(A)))
-        end
-    elseif ishermitian(A)
+    if ishermitian(A)
         return full(tanh(Hermitian(A)))
     end
     X, Y = exp(A), exp!(-A)
@@ -866,11 +854,7 @@ julia> acos(cos(ones(2, 2)))
 ```
 """
 function acos(A::StridedMatrix{T}) where T
-    if T <: Real
-        if issymmetric(A)
-            return full(acos(Symmetric(A)))
-        end
-    elseif ishermitian(A)
+    if ishermitian(A)
         return full(acos(Hermitian(A)))
     end
     return -im * log(A + sqrt(A^2 - one(A)))
@@ -894,11 +878,7 @@ julia> asin(sin(ones(2, 2)))
 ```
 """
 function asin(A::StridedMatrix{T}) where T
-    if T <: Real
-        if issymmetric(A)
-            return full(asin(Symmetric(A)))
-        end
-    elseif ishermitian(A)
+    if ishermitian(A)
         return full(asin(Hermitian(A)))
     end
     return -im * log(im * A + sqrt(one(A) - A^2))
@@ -922,11 +902,7 @@ julia> atan(tan(ones(2, 2)))
 ```
 """
 function atan(A::StridedMatrix{T}) where T
-    if T <: Real
-        if issymmetric(A)
-            return full(atan(Symmetric(A)))
-        end
-    elseif ishermitian(A)
+    if ishermitian(A)
         return full(atan(Hermitian(A)))
     end
     return log((one(A) - im * A) \ (one(A) + im * A)) / 2im
@@ -938,11 +914,7 @@ end
 Compute the inverse hyperbolic matrix cosine of a square matrix `A`.
 """
 function acosh(A::StridedMatrix{T}) where T
-    if T <: Real
-        if issymmetric(A)
-            return full(acosh(Symmetric(A)))
-        end
-    elseif ishermitian(A)
+    if ishermitian(A)
         return full(acosh(Hermitian(A)))
     end
     return log(A + sqrt(A^2 - one(A)))
@@ -954,11 +926,7 @@ end
 Compute the inverse hyperbolic matrix sine of a square matrix `A`.
 """
 function asinh(A::StridedMatrix{T}) where T
-    if T <: Real
-        if issymmetric(A)
-            return full(asinh(Symmetric(A)))
-        end
-    elseif ishermitian(A)
+    if ishermitian(A)
         return full(asinh(Hermitian(A)))
     end
     return log(A + sqrt(A^2 + one(A)))
@@ -970,11 +938,7 @@ end
 Compute the inverse hyperbolic matrix tangent of a square matrix `A`.
 """
 function atanh(A::StridedMatrix{T}) where T
-    if T <: Real
-        if issymmetric(A)
-            return full(atanh(Symmetric(A)))
-        end
-    elseif ishermitian(A)
+    if ishermitian(A)
         return full(atanh(Hermitian(A)))
     end
     return log((one(A) - A) \ (one(A) + A)) / 2
