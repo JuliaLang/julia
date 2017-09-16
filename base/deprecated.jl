@@ -1806,6 +1806,10 @@ end
 
 @deprecate contains(eq::Function, itr, x) any(y->eq(y,x), itr)
 
+# PR #23690
+# `SSHCredentials` and `UserPasswordCredentials` constructors using `prompt_if_incorrect`
+# are deprecated in base/libgit2/types.jl.
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

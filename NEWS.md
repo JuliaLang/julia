@@ -445,6 +445,10 @@ Deprecated or removed
 
   * `contains(eq, itr, item)` is deprecated in favor of `any` with a predicate ([#23716]).
 
+  * Constructors for `LibGit2.UserPasswordCredentials` and `LibGit2.SSHCredentials` which take a
+    `prompt_if_incorrect` argument are deprecated. Instead, prompting behavior is controlled using
+    the `allow_prompt` keyword in the `LibGit2.CredentialPayload` constructor ([#23690]).
+
 Command-line option changes
 ---------------------------
 

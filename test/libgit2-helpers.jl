@@ -61,29 +61,14 @@ function credential_loop(
         valid_credential::SSHCredentials,
         url::AbstractString,
         user::Nullable{<:AbstractString}=Nullable{String}(),
-        payload::CredentialPayload=CredentialPayload();
-        use_ssh_agent::Bool=false)
-
-    if !use_ssh_agent
-        payload.use_ssh_agent = 'N'
-    end
-
+        payload::CredentialPayload=CredentialPayload(allow_ssh_agent=false))
     credential_loop(valid_credential, url, user, 0x000046, payload)
 end
 
 function credential_loop(
-        valid_credential::UserPasswordCredentials,
+        valid_credential::AbstractCredentials,
         url::AbstractString,
         user::AbstractString,
-        payload::CredentialPayload=CredentialPayload())
+        payload::CredentialPayload=CredentialPayload(allow_ssh_agent=false))
     credential_loop(valid_credential, url, Nullable(user), payload)
-end
-
-function credential_loop(
-        valid_credential::SSHCredentials,
-        url::AbstractString,
-        user::AbstractString,
-        payload::CredentialPayload=CredentialPayload();
-        use_ssh_agent::Bool=false)
-    credential_loop(valid_credential, url, Nullable(user), payload, use_ssh_agent=use_ssh_agent)
 end
