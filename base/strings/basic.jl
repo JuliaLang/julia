@@ -103,11 +103,13 @@ end
 """
     cmp(a::AbstractString, b::AbstractString)
 
-Compare two strings for equality. Returns `0` if both strings have the same
-length and the character at each index is the same in both strings.
-Returns `-1` if string `a` is a substring of `b` or `a` comes before
+Compare two strings for equality.
+
+Return `0` if both strings have the same length and the character
+at each index is the same in both strings.
+Return `-1` if `a` is a substring of `b`, or if `a` comes before
 `b` in alphabetical order.
-Returns `1` if string `b` is a substring of `a` or `b` comes before
+Return `1` if `b` is a substring of `a`, or if `b` comes before
 `a` in alphabetical order.
 
 # Examples
@@ -154,7 +156,7 @@ function cmp(a::AbstractString, b::AbstractString)
 end
 
 """
-    ==(a::AbstractString, b::AbstractString) = cmp(a,b) == 0
+    ==(a::AbstractString, b::AbstractString)
 
 Test whether two strings are equal character by character.
 
@@ -170,7 +172,7 @@ false
 ==(a::AbstractString, b::AbstractString) = cmp(a,b) == 0
 
 """
-    isless(a::AbstractString, b::AbstractString) = cmp(a,b) < 0
+    isless(a::AbstractString, b::AbstractString)
 
 Test whether string `a` comes before string `b` in alphabetical order.
 
@@ -408,7 +410,7 @@ strwidth(s::AbstractString) = (w=0; for c in s; w += charwidth(c); end; w)
 Test whether a character belongs to the ASCII character set, or whether this is true for
 all elements of a string.
 
-#Examples
+# Examples
 ```jldoctest
 julia> isascii('a')
 true

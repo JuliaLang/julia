@@ -157,13 +157,13 @@ end
 
 Create a string from any value using the [`show`](@ref) function.
 
-#Examples
+# Examples
 ```jldoctest
 julia> repr(1)
 "1"
 
-julia> repr(-1.0)
-"-1.0"
+julia> repr(zeros(3))
+"[0.0, 0.0, 0.0]"
 
 ```
 """
