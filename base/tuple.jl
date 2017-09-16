@@ -172,13 +172,21 @@ end
 isempty(x::Tuple{}) = true
 isempty(x::Tuple) = false
 
-reverse(t::Tuple{}) = t
-reverse(t::Tuple{T}) where {T} = t
-reverse(t::Tuple{T,U}) where {T,U} = t[2], t[1]
-reverse(t::Tuple{T,U,V}) where {T,U,V} = t[3], t[2], t[1]
-reverse(t::Tuple{T,U,V,W}) where {T,U,V,W} = t[4], t[3], t[2], t[1]
-reverse(t::NTuple{N}) where N = ([t[i] for i in length(t):-1:1]...)::NTuple{N}
-reverse(t::Tuple{Any,Any,Any,Any,Any,Vararg{Any}}) = ([t[i] for i in length(t):-1:1]...)
+# unrolled definition for for tuples not greater than 20
+for N in 0:20
+    head = :(reverse(t::NTuple{$N, Any}))
+    tail = Expr(:tuple, (:(t[$i]) for i in :($N):-1:1)...)
+    eval(Expr(Symbol("="), head, tail))
+end
+
+# we have 20+1 Ts in the definition
+function reverse(t::Tuple{T, T, T, T, T, T, T, T, T, T,
+                          T, T, T, T, T, T, T, T, T, T,
+                          T, Vararg{T}}) where T
+    ([t[i] for i in length(t):-1:1]...)::NTuple{nfields(t), T}
+end
+
+reverse(t::Tuple) = ([t[i] for i in length(t):-1:1]...)
 
 ## specialized reduction ##
 
