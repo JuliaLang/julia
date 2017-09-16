@@ -777,10 +777,13 @@ mktempdir() do dir
                 show_strs = split(sprint(show, tag1ref), "\n")
                 @test show_strs[1] == "GitReference:"
                 @test show_strs[2] == "Tag with name refs/tags/$tag1"
-                tag1tag = LibGit2.peel(LibGit2.GitTag,tag1ref)
+                tag1tag = LibGit2.peel(LibGit2.GitTag, tag1ref)
                 @test LibGit2.name(tag1tag) == tag1
                 @test LibGit2.target(tag1tag) == commit_oid1
                 @test sprint(show, tag1tag) == "GitTag:\nTag name: $tag1 target: $commit_oid1"
+                # peels to the commit the tag points to
+                tag1cmt = LibGit2.peel(tag1ref)
+                @test LibGit2.GitHash(tag1cmt) == commit_oid1
                 tag_oid2 = LibGit2.tag_create(repo, tag2, commit_oid2)
                 @test !LibGit2.iszero(tag_oid2)
                 tags = LibGit2.tag_list(repo)
@@ -1036,6 +1039,23 @@ mktempdir() do dir
             # switch back, now try to ff-merge the changes
             # from branch/ff_c using branch name
             @test LibGit2.merge!(repo, branch="refs/heads/branch/ff_c")
+            @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+
+            LibGit2.branch!(repo, "branch/ff_d")
+            open(joinpath(LibGit2.path(repo),"ff_file7"),"w") do f
+                write(f, "777\n")
+            end
+            LibGit2.add!(repo, "ff_file7")
+            LibGit2.commit(repo, "add ff_file7")
+            branchhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "master")
+            # switch back, now try to ff-merge the changes
+            # from branch/a
+            # set up the merge using GitAnnotated objects
+            # from a fetchhead
+            fh = LibGit2.fetchheads(repo)
+            upst_ann = LibGit2.GitAnnotated(repo, fh[1])
+            @test LibGit2.merge!(repo, [upst_ann], true)
             @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
         finally
             close(repo)
