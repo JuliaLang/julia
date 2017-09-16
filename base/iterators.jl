@@ -243,6 +243,15 @@ end
 iteratorsize(::Type{Zip{I1,I2}}) where {I1,I2} = zip_iteratorsize(iteratorsize(I1),iteratorsize(I2))
 iteratoreltype(::Type{Zip{I1,I2}}) where {I1,I2} = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
 
+zip_recursive(t1::Tuple{}, t2::Tuple{}) = ()
+zip_recursive(t1::Tuple{}, t2::Tuple) = ()
+zip_recursive(t1::Tuple, t2::Tuple{}) = ()
+zip_recursive(t1::Tuple, t2::Tuple) = 
+    (first(t1), first(t2)), zip_recursive(tail(t1), tail(t2))...
+
+Base.collect(z::Base.Iterators.Zip2{T1, T2} where {T1 <: Tuple, T2 <: Tuple}) = 
+    zip_recursive(z.a, z.b)
+
 # filter
 
 struct Filter{F,I}
