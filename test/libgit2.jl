@@ -310,7 +310,9 @@ mktempdir() do dir
                 error("unexpected")
             catch e
                 @test typeof(e) == LibGit2.GitError
-                @test startswith(sprint(show,e),"GitError(Code:ENOTFOUND, Class:OS, Failed to resolve path")
+                @test startswith(
+                    lowercase(sprint(show, e)),
+                    lowercase("GitError(Code:ENOTFOUND, Class:OS, failed to resolve path"))
             end
             path = joinpath(dir, "Example.BareTwo")
             repo = LibGit2.init(path, true)
