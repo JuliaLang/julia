@@ -4562,7 +4562,6 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, const jl_returnin
     allocate_gc_frame(ctx, b0);
 
     FunctionType *ftype = f.decl->getFunctionType();
-    size_t nargs = lam->def.method->nargs;
     size_t nfargs = ftype->getNumParams();
     Value **args = (Value**) alloca(nfargs*sizeof(Value*));
     unsigned idx = 0;
@@ -4884,7 +4883,7 @@ static std::unique_ptr<Module> emit_function(
     if (jl_is_method(lam->def.method)) {
         if (jl_svec_len(lam->def.method->sparam_syms) != jl_svec_len(lam->sparam_vals))
             needsparams = true;
-        for (int i = 0; i < jl_svec_len(lam->sparam_vals); ++i) {
+        for (size_t i = 0; i < jl_svec_len(lam->sparam_vals); ++i) {
             if (jl_is_typevar(jl_svecref(lam->sparam_vals, i)))
                 needsparams = true;
         }
