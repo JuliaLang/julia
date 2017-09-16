@@ -375,7 +375,7 @@ function code_warntype(io::IO, f, @nospecialize(t))
         used_slotids = slots_used(src, slotnames)
         for i = 1:length(slotnames)
             if used_slotids[i]
-                print(emph_io, "  ", slotnames[i])                
+                print(emph_io, "  ", slotnames[i])
                 if isa(src.slottypes, Array)
                     show_expr_type(emph_io, src.slottypes[i], true)
                 end
