@@ -592,27 +592,23 @@ end
 for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh,
              :acos, :asin, :atan, :acosh, :asinh, :atanh)
     @eval begin
-        function ($func)(A::Symmetric{T}) where T<:Real
+        function ($func)(A::HermOrSym{<:Real})
             F = eigfact(A)
             return Symmetric((F.vectors * Diagonal(($func).(F.values))) * F.vectors')
         end
-        function ($func)(A::Hermitian{T}) where T
+        function ($func)(A::Hermitian{<:Complex})
             n = checksquare(A)
             F = eigfact(A)
             retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
-            if T <: Real
-                return real(Hermitian(retmat))
-            else
-                for i = 1:n
-                    retmat[i,i] = real(retmat[i,i])
-                end
-                return Hermitian(retmat)
+            for i = 1:n
+                retmat[i,i] = real(retmat[i,i])
             end
+            return Hermitian(retmat)
         end
     end
 end
 
-function sincos(A::Symmetric{T}) where T<:Real
+function sincos(A::HermOrSym{<:Real})
     n = checksquare(A)
     F = eigfact(A)
     S, C = Diagonal(similar(A, (n,))), Diagonal(similar(A, (n,)))
@@ -621,7 +617,7 @@ function sincos(A::Symmetric{T}) where T<:Real
     end
     return Symmetric((F.vectors * S) * F.vectors'), Symmetric((F.vectors * C) * F.vectors')
 end
-function sincos(A::Hermitian{T}) where T
+function sincos(A::Hermitian{<:Complex})
     n = checksquare(A)
     F = eigfact(A)
     S, C = Diagonal(similar(A, (n,))), Diagonal(similar(A, (n,)))
@@ -629,20 +625,17 @@ function sincos(A::Hermitian{T}) where T
         S.diag[i], C.diag[i] = sincos(F.values[i])
     end
     retmatS, retmatC = (F.vectors * S) * F.vectors', (F.vectors * C) * F.vectors'
-    if T <: Real
-        return real(Hermitian(retmatS)), real(Hermitian(retmatC))
-    else
-        for i = 1:n
-            retmatS[i,i] = real(retmatS[i,i])
-            retmatC[i,i] = real(retmatC[i,i])
-        end
-        return Hermitian(retmatS), Hermitian(retmatC)
+    for i = 1:n
+        retmatS[i,i] = real(retmatS[i,i])
+        retmatC[i,i] = real(retmatC[i,i])
     end
+    return Hermitian(retmatS), Hermitian(retmatC)
 end
+
 
 for func in (:log, :sqrt)
     @eval begin
-        function ($func)(A::Symmetric{T}) where T<:Real
+        function ($func)(A::HermOrSym{<:Real})
             F = eigfact(A)
             if all(λ -> λ ≥ 0, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
@@ -652,20 +645,16 @@ for func in (:log, :sqrt)
             return Symmetric(retmat)
         end
 
-        function ($func)(A::Hermitian{T}) where T
+        function ($func)(A::Hermitian{<:Complex})
             n = checksquare(A)
             F = eigfact(A)
             if all(λ -> λ ≥ 0, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
-                if T <: Real
-                    return Hermitian(retmat)
-                else
-                    for i = 1:n
-                        retmat[i,i] = real(retmat[i,i])
-                    end
-                    return Hermitian(retmat)
+                for i = 1:n
+                    retmat[i,i] = real(retmat[i,i])
                 end
-            else
+                return Hermitian(retmat)
+        else
                 retmat = (F.vectors * Diagonal(($func).(complex(F.values)))) * F.vectors'
                 return retmat
             end
