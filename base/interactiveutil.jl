@@ -374,15 +374,15 @@ function code_warntype(io::IO, f, @nospecialize(t))
         slotnames = sourceinfo_slotnames(src)
         used_slotids = slots_used(src, slotnames)
         for i = 1:length(slotnames)
-            print(emph_io, "  ", slotnames[i])
             if used_slotids[i]
+                print(emph_io, "  ", slotnames[i])                
                 if isa(src.slottypes, Array)
                     show_expr_type(emph_io, src.slottypes[i], true)
                 end
-            else
-                print(emph_io, " <optimized out>")
+                print(emph_io, '\n')
+            elseif !('#' in slotnames[i] || '@' in slotnames[i])
+                print(emph_io, "  ", slotnames[i], "<optimized out>\n")
             end
-            print(emph_io, '\n')
         end
         print(emph_io, "\nBody:\n  ")
         body = Expr(:body)
