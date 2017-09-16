@@ -1304,7 +1304,7 @@ next(p::Union{Process, ProcessChain}, i::Int) = (getindex(p, i), i + 1)
 end
 
 import .LinAlg: cond
-@deprecate cond(F::LinAlg.LU, p::Integer) cond(full(F), p)
+@deprecate cond(F::LinAlg.LU, p::Integer) cond(convert(AbstractArray, F), p)
 
 # PR #21359
 import .Random: srand
