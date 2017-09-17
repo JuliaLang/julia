@@ -252,7 +252,7 @@ let n = 12 #Size of matrix problem to test
                                 D, Vecs = eig(fA)
                                 @test DT ≈ D
                                 @test abs.(VT'Vecs) ≈ eye(elty, n)
-                                @test eigvecs(A) ≈ eigvecs(fA)
+                                Test.test_approx_eq_modphase(eigvecs(A), eigvecs(fA))
                                 #call to LAPACK.stein here
                                 Test.test_approx_eq_modphase(eigvecs(A,eigvals(A)),eigvecs(A))
                             elseif elty != Int

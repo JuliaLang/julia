@@ -398,7 +398,7 @@ end
         fullDD = copy!(Matrix{Matrix{T}}(2, 2), DD)
         fullBB = copy!(Matrix{Matrix{T}}(2, 2), BB)
         for f in (*, Ac_mul_B, A_mul_Bc, Ac_mul_Bc, At_mul_B, A_mul_Bt, At_mul_Bt)
-            @test f(D, B)::typeof(D) == f(Matrix(D), Matrix(B))
+            @test f(D, B)::typeof(D) ≈ f(Matrix(D), Matrix(B)) atol=2 * eps()
             @test f(DD, BB)::typeof(DD) == f(fullDD, fullBB)
         end
     end
