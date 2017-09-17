@@ -24,7 +24,9 @@ const VALID_EXPR_HEADS = ObjectIdDict(
     :global => 1:1,
     :foreigncall => 3:typemax(Int),
     :isdefined => 1:1,
-    :simdloop => 0:0
+    :simdloop => 0:0,
+    :gc_preserve_begin => 0:typemax(Int),
+    :gc_preserve_end => 0:typemax(Int)
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this
