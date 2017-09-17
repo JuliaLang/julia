@@ -150,6 +150,7 @@ private:
     bool checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruction*> &uses,
                    bool &ignore_tag);
     void replaceUsesWith(Instruction *orig_i, Instruction *new_i, ReplaceUsesStack &stack);
+    void replaceIntrinsicUseWith(IntrinsicInst *call, Instruction *orig_i, Instruction *new_i);
     bool isSafepoint(Instruction *inst);
     void getAnalysisUsage(AnalysisUsage &AU) const override
     {
@@ -381,9 +382,10 @@ bool AllocOpt::checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruc
         if (isa<LoadInst>(inst))
             return true;
         if (auto call = dyn_cast<CallInst>(inst)) {
-            // TODO: on LLVM 5.0 we may need to handle certain llvm intrinsics
-            // including `memcpy`, `memset` etc. We might also need to handle
-            // `memcmp` by coverting to our own intrinsic and lower it after the gc root pass.
+            // TODO handle `memcmp`
+            // None of the intrinsics should care if the memory is stack or heap allocated.
+            if (isa<IntrinsicInst>(call))
+                return true;
             if (ptr_from_objref && ptr_from_objref == call->getCalledFunction())
                 return true;
             auto opno = use->getOperandNo();
@@ -443,6 +445,56 @@ bool AllocOpt::checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruc
     }
 }
 
+void AllocOpt::replaceIntrinsicUseWith(IntrinsicInst *call, Instruction *orig_i,
+                                       Instruction *new_i)
+{
+    Intrinsic::ID ID = call->getIntrinsicID();
+    assert(ID);
+    auto nargs = call->getNumArgOperands();
+    SmallVector<Value*, 8> args(nargs);
+    SmallVector<Type*, 8> argTys(nargs);
+    for (unsigned i = 0; i < nargs; i++) {
+        auto arg = call->getArgOperand(i);
+        args[i] = arg == orig_i ? new_i : arg;
+        argTys[i] = args[i]->getType();
+    }
+
+    // Accumulate an array of overloaded types for the given intrinsic
+    SmallVector<Type*, 4> overloadTys;
+    {
+        SmallVector<Intrinsic::IITDescriptor, 8> Table;
+        getIntrinsicInfoTableEntries(ID, Table);
+        ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
+        auto oldfType = call->getFunctionType();
+        bool res = Intrinsic::matchIntrinsicType(oldfType->getReturnType(), TableRef, overloadTys);
+        assert(!res);
+        for (auto Ty : argTys) {
+            res = Intrinsic::matchIntrinsicType(Ty, TableRef, overloadTys);
+            assert(!res);
+        }
+        res = Intrinsic::matchIntrinsicVarArg(oldfType->isVarArg(), TableRef);
+        assert(!res);
+        (void)res;
+    }
+    auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
+    newF->setCallingConv(call->getCallingConv());
+    auto newCall = CallInst::Create(newF, args, "", call);
+    newCall->setTailCallKind(call->getTailCallKind());
+    auto old_attrs = call->getAttributes();
+#if JL_LLVM_VERSION >= 50000
+    newCall->setAttributes(AttributeList::get(*ctx, old_attrs.getFnAttributes(),
+                                              old_attrs.getRetAttributes(), {}));
+#else
+    AttributeSet attr;
+    attr = attr.addAttributes(*ctx, AttributeSet::ReturnIndex, old_attrs.getRetAttributes())
+        .addAttributes(*ctx, AttributeSet::FunctionIndex, old_attrs.getFnAttributes());
+    newCall->setAttributes(attr);
+#endif
+    newCall->setDebugLoc(call->getDebugLoc());
+    call->replaceAllUsesWith(newCall);
+    call->eraseFromParent();
+}
+
 // This function needs to handle all cases `AllocOpt::checkInst` can handle.
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
@@ -494,6 +546,10 @@ void AllocOpt::replaceUsesWith(Instruction *orig_inst, Instruction *new_inst,
                 new_i = new PtrToIntInst(new_i, T_size, "", call);
                 call->replaceAllUsesWith(new_i);
                 call->eraseFromParent();
+                return;
+            }
+            if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
+                replaceIntrinsicUseWith(intrinsic, orig_i, new_i);
                 return;
             }
             // remove from operand bundle
