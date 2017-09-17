@@ -146,12 +146,13 @@ bimg  = randn(n,2)/2
 end # for eltya
 
 @testset "test triu/tril bounds checking" begin
-    ainit = rand(5,7)
-    for a in (copy(ainit), view(ainit, 1:size(ainit, 1), 1:size(ainit, 2)))
-        @test_throws(ArgumentError,triu(a,-6))
-        @test_throws(ArgumentError,triu(a,8))
-        @test_throws(ArgumentError,tril(a,8))
-        @test_throws(ArgumentError,tril(a,-6))
+    m, n = 5, 7
+    ainit = rand(m, n)
+    for a in (copy(ainit), view(ainit, 1:m, 1:n))
+        @test_throws ArgumentError triu(a, -m)
+        @test_throws ArgumentError triu(a, n + 2)
+        @test_throws ArgumentError tril(a, -m - 2)
+        @test_throws ArgumentError tril(a, n)
     end
 end
 

@@ -121,7 +121,8 @@ srand(1)
             @test tril!(bidiagcopy(dv,ev,:L),1)  == Bidiagonal(dv,ev,:L)
             @test tril!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,zeros(ev),:U)
             @test tril!(bidiagcopy(dv,ev,:L))    == Bidiagonal(dv,ev,:L)
-            @test_throws ArgumentError tril!(bidiagcopy(dv,ev,:U),n+1)
+            @test_throws ArgumentError tril!(bidiagcopy(dv, ev, :U), -n - 2)
+            @test_throws ArgumentError tril!(bidiagcopy(dv, ev, :U), n)
 
             @test istriu(Bidiagonal(dv,ev,:U))
             @test !istriu(Bidiagonal(dv,ev,:L))
@@ -133,7 +134,8 @@ srand(1)
             @test triu!(bidiagcopy(dv,ev,:L),-1) == Bidiagonal(dv,ev,:L)
             @test triu!(bidiagcopy(dv,ev,:L))    == Bidiagonal(dv,zeros(ev),:L)
             @test triu!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,ev,:U)
-            @test_throws ArgumentError triu!(bidiagcopy(dv,ev,:U),n+1)
+            @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), -n)
+            @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), n + 2)
         end
 
         Tfull = Array(T)
@@ -213,7 +215,8 @@ srand(1)
 
         @testset "Diagonals" begin
             @test diag(T,2) == zeros(elty, n-2)
-            @test_throws ArgumentError diag(T,n+1)
+            @test_throws ArgumentError diag(T, -n - 1)
+            @test_throws ArgumentError diag(T, n + 1)
         end
 
         @testset "Eigensystems" begin

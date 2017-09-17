@@ -1229,14 +1229,16 @@ function fkeep!(A::SparseMatrixCSC, f, trim::Bool = true)
 end
 
 function tril!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true)
-    if k > A.n-1 || k < 1-A.m
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($(A.m),$(A.n))"))
+    if !(-A.m - 1 <= k <= A.n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-A.m - 1) and at most $(A.n - 1) in an $(A.m)-by-$(A.n) matrix")))
     end
     fkeep!(A, (i, j, x) -> i + k >= j, trim)
 end
 function triu!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true)
-    if k > A.n-1 || k < 1-A.m
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($(A.m),$(A.n))"))
+    if !(-A.m + 1 <= k <= A.n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-A.m + 1) and at most $(A.n + 1) in an $(A.m)-by-$(A.n) matrix")))
     end
     fkeep!(A, (i, j, x) -> j >= i + k, trim)
 end
@@ -3385,7 +3387,8 @@ function diag(A::SparseMatrixCSC{Tv,Ti}, d::Integer=0) where {Tv,Ti}
     m, n = size(A)
     k = Int(d)
     if !(-m <= k <= n)
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m, $n)"))
+        throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) ",
+            "and at most $n in an $m-by-$n matrix")))
     end
     l = k < 0 ? min(m+k,n) : min(n-k,m)
     r, c = k <= 0 ? (-k, 0) : (0, k) # start row/col -1

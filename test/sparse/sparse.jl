@@ -1467,20 +1467,21 @@ end
 end
 
 @testset "triu/tril" begin
-    local A = sprand(5,5,0.2)
+    n = 5
+    local A = sprand(n, n, 0.2)
     AF = Array(A)
     @test Array(triu(A,1)) == triu(AF,1)
     @test Array(tril(A,1)) == tril(AF,1)
     @test Array(triu!(copy(A), 2)) == triu(AF,2)
     @test Array(tril!(copy(A), 2)) == tril(AF,2)
-    @test_throws BoundsError tril(A,6)
-    @test_throws BoundsError tril(A,-6)
-    @test_throws BoundsError triu(A,6)
-    @test_throws BoundsError triu(A,-6)
+    @test_throws ArgumentError tril(A, -n - 2)
+    @test_throws ArgumentError tril(A, n)
+    @test_throws ArgumentError triu(A, -n)
+    @test_throws ArgumentError triu(A, n + 2)
+    @test_throws ArgumentError tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -5)
     @test_throws ArgumentError tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), 4)
-    @test_throws ArgumentError tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -3)
-    @test_throws ArgumentError triu!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), 4)
     @test_throws ArgumentError triu!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -3)
+    @test_throws ArgumentError triu!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), 6)
 
     # fkeep trim option
     @test isequal(length(tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -1).rowval), 0)

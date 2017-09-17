@@ -44,6 +44,10 @@ end
 
 function triu(B::BitMatrix, k::Integer=0)
     m,n = size(B)
+    if !(-m + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least",
+            "$(-m + 1) and at most $(n + 1) in an $m-by-$n matrix")))
+    end
     A = falses(m,n)
     Ac = A.chunks
     Bc = B.chunks
@@ -56,6 +60,10 @@ end
 
 function tril(B::BitMatrix, k::Integer=0)
     m,n = size(B)
+    if !(-m - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-m - 1) and at most $(n - 1) in an $m-by-$n matrix")))
+    end
     A = falses(m, n)
     Ac = A.chunks
     Bc = B.chunks

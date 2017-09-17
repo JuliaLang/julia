@@ -182,8 +182,10 @@ srand(1)
         @test tril(D,1)  == D
         @test tril(D,-1) == zeros(D)
         @test tril(D,0)  == D
-        @test_throws ArgumentError tril(D,n+1)
-        @test_throws ArgumentError triu(D,n+1)
+        @test_throws ArgumentError tril(D, -n - 2)
+        @test_throws ArgumentError tril(D, n)
+        @test_throws ArgumentError triu(D, -n)
+        @test_throws ArgumentError triu(D, n + 2)
     end
 
     # factorize
