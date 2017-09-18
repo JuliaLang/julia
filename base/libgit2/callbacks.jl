@@ -124,7 +124,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
             if Sys.iswindows()
                 response = Base.winprompt(
                     "Your SSH Key requires a password, please enter it now:",
-                    "Passphrase required", privatekey; prompt_username = false)
+                    "Passphrase required", privatekey; prompt_username=false)
                 isnull(response) && return user_abort()
                 passphrase = unsafe_get(response)[2]
             else
@@ -162,8 +162,9 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayl
         if isempty(username) || isempty(userpass)
             prompt_url = git_url(scheme=p.scheme, host=p.host)
             if Sys.iswindows()
-                response = Base.winprompt("Please enter your credentials for '$prompt_url'", "Credentials required",
-                    isempty(username) ? p.username : username; prompt_username = true)
+                response = Base.winprompt(
+                    "Please enter your credentials for '$prompt_url'", "Credentials required",
+                    isempty(username) ? p.username : username; prompt_username=true)
                 isnull(response) && return user_abort()
                 username, userpass = unsafe_get(response)
             else
