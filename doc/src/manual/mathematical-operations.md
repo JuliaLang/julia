@@ -347,22 +347,22 @@ Moreover, these functions (like any Julia function) can be applied in "vectorize
 arrays and other collections with the [dot syntax](@ref man-vectorized) `f.(A)`,
 e.g. `sin.(A)` will compute the sine of each element of an array `A`.
 
-## Operator Precedence
+## Operator Precedence and Associativity
 
-Julia applies the following order of operations, from highest precedence to lowest:
+Julia applies the following order and associativity of operations, from highest precedence to lowest:
 
-| Category       | Operators                                                                                         |
-|:-------------- |:------------------------------------------------------------------------------------------------- |
-| Syntax         | `.` followed by `::`                                                                              |
-| Exponentiation | `^`                                                                                               |
-| Fractions      | `//`                                                                                              |
-| Multiplication | `* / % & \`                                                                                       |
-| Bitshifts      | `<< >> >>>`                                                                                       |
-| Addition       | `+ - \| ⊻`                                                                                        |
-| Syntax         | `: ..` followed by `\|>`                                                                          |
-| Comparisons    | `> < >= <= == === != !== <:`                                                                      |
-| Control flow   | `&&` followed by `\|\|` followed by `?`                                                           |
-| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            |
+| Category       | Operators                                                                                         | Associativity              |
+|:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
+| Syntax         | `.` followed by `::`                                                                              | Left                       |
+| Exponentiation | `^`                                                                                               | Right                      |
+| Fractions      | `//`                                                                                              | Left                       |
+| Multiplication | `* / % & \`                                                                                       | Left                       |
+| Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
+| Addition       | `+ - \| ⊻`                                                                                        | Left                       |
+| Syntax         | `: ..` followed by `\|>`                                                                          | Left                       |
+| Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
+| Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
+| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
 
 For a complete list of *every* Julia operator's precedence, see the top of this file:
 [`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm)
@@ -373,9 +373,22 @@ You can also find the numerical precedence for any given operator via the built-
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
 (9, 11, 15)
 
-julia> Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
-(1, 1)
+julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
+(0, 1, 1)
 ```
+
+A symbol representing the operator associativity can also be found by calling the built-in function `Base.operator_associativity`:
+
+```jldoctest
+julia> Base.operator_associativity(:+), Base.operator_associativity(:>), Base.operator_associativity(:^)
+(:left, :none, :right)
+
+julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Base.operator_associativity(:→)
+(:left, :none, :right)
+```
+
+Note that invalid operators such as `:sin` have precedence `0`. This value represents invalid
+operators and not operators of lowest precedence. Such operators also have associativity `:none`.
 
 ## Numerical Conversions
 

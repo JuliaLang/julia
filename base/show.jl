@@ -584,16 +584,45 @@ operators. Return `0` if `s` is not a valid operator.
 # Examples
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
-(9,11,15)
+(9, 11, 15)
 
-julia> Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
-(1,1)
+julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
+(0, 1, 1)
 ```
 """
 operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Cstring,), s))
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
+const prec_assignment = operator_precedence(:(=))
+const prec_arrow = operator_precedence(:(-->))
+const prec_control_flow = operator_precedence(:(&&))
+const prec_comparison = operator_precedence(:(>))
 const prec_power = operator_precedence(:(^))
 const prec_decl = operator_precedence(:(::))
+
+"""
+    operator_associativity(s::Symbol)
+
+Return a symbol representing the associativity of operator `s`. Left- and right-associative
+operators return `:left` and `:right`, respectively. Return `:none` if `s` is non-associative
+or an invalid operator.
+
+# Examples
+```jldoctest
+julia> Base.operator_associativity(:+), Base.operator_associativity(:>), Base.operator_associativity(:^)
+(:left, :none, :right)
+
+julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Base.operator_associativity(:→)
+(:left, :none, :right)
+```
+"""
+function operator_associativity(s::Symbol)
+    if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_power)
+        return :right
+    elseif operator_precedence(s) in (0, prec_comparison)
+        return :none
+    end
+    return :left
+end
 
 is_expr(ex, head::Symbol)         = (isa(ex, Expr) && (ex.head == head))
 is_expr(ex, head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
