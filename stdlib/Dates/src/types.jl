@@ -258,10 +258,10 @@ end
 Construct a `DateTime` type by `Period` type parts. Arguments may be in any order. DateTime
 parts not provided will default to the value of `Dates.default(period)`.
 """
-function DateTime(periods::Period...)
+function DateTime(period::Period, periods::Period...)
     y = Year(1); m = Month(1); d = Day(1)
     h = Hour(0); mi = Minute(0); s = Second(0); ms = Millisecond(0)
-    for p in periods
+    for p in (period, periods...)
         isa(p, Year) && (y = p::Year)
         isa(p, Month) && (m = p::Month)
         isa(p, Day) && (d = p::Day)
@@ -279,9 +279,9 @@ end
 Construct a `Date` type by `Period` type parts. Arguments may be in any order. `Date` parts
 not provided will default to the value of `Dates.default(period)`.
 """
-function Date(periods::Period...)
+function Date(period::Period, periods::Period...)
     y = Year(1); m = Month(1); d = Day(1)
-    for p in periods
+    for p in (period, periods...)
         isa(p, Year) && (y = p::Year)
         isa(p, Month) && (m = p::Month)
         isa(p, Day) && (d = p::Day)
@@ -295,10 +295,10 @@ end
 Construct a `Time` type by `Period` type parts. Arguments may be in any order. `Time` parts
 not provided will default to the value of `Dates.default(period)`.
 """
-function Time(periods::TimePeriod...)
+function Time(period::TimePeriod, periods::TimePeriod...)
     h = Hour(0); mi = Minute(0); s = Second(0)
     ms = Millisecond(0); us = Microsecond(0); ns = Nanosecond(0)
-    for p in periods
+    for p in (period, periods...)
         isa(p, Hour) && (h = p::Hour)
         isa(p, Minute) && (mi = p::Minute)
         isa(p, Second) && (s = p::Second)
@@ -313,13 +313,6 @@ end
 DateTime(y, m=1, d=1, h=0, mi=0, s=0, ms=0) = DateTime(Int64(y), Int64(m), Int64(d), Int64(h), Int64(mi), Int64(s), Int64(ms))
 Date(y, m=1, d=1) = Date(Int64(y), Int64(m), Int64(d))
 Time(h, mi=0, s=0, ms=0, us=0, ns=0) = Time(Int64(h), Int64(mi), Int64(s), Int64(ms), Int64(us), Int64(ns))
-
-# Empty constructors default to 'now'
-if VERSION >= v"0.8-"
-    DateTime() = now()
-    Date() = today()
-    Time() = Time(now())
-end
 
 # Traits, Equality
 Base.isfinite(::Union{Type{T}, T}) where {T<:TimeType} = true

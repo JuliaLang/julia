@@ -111,15 +111,6 @@ end
                      Dates.Microsecond(20), Dates.Nanosecond(25)) == Dates.Time(4, 0, 10, 15, 20, 25)
 end
 
-@testset "empty constructors" begin
-    if VERSION >= v"0.8-"
-        present = now()
-        @test Dates.DateTime(present) <= Dates.DateTime()
-        @test Dates.Date(present) <= Dates.Date()
-        @test Dates.Time(present) <= Dates.Time()
-    end
-end
-
 @testset "various input types for Date/DateTime" begin
     test = Dates.Date(1, 1, 1)
     @test Dates.Date(Int8(1), Int8(1), Int8(1)) == test
