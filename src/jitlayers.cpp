@@ -210,6 +210,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
     //PM->add(createLoopStrengthReducePass());   // (jwb added)
 
+    // Re-run SROA after loop-unrolling (useful for small loops that operate,
+    // over the structure of an aggregate)
+    PM->add(createSROAPass());                 // Break up aggregate allocas
     PM->add(createInstructionCombiningPass()); // Clean up after the unroller
     PM->add(createGVNPass());                  // Remove redundancies
     PM->add(createMemCpyOptPass());            // Remove memcpy / form memset

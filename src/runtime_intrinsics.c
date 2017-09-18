@@ -703,8 +703,10 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) 
 un_iintrinsic_fast(LLVMNeg, neg, neg_int, u)
 #define add(a,b) a + b
 bi_iintrinsic_fast(LLVMAdd, add, add_int, u)
+bi_iintrinsic_fast(LLVMAdd, add, add_ptr, u)
 #define sub(a,b) a - b
 bi_iintrinsic_fast(LLVMSub, sub, sub_int, u)
+bi_iintrinsic_fast(LLVMSub, sub, sub_ptr, u)
 #define mul(a,b) a * b
 bi_iintrinsic_fast(LLVMMul, mul, mul_int, u)
 #define div(a,b) a / b
