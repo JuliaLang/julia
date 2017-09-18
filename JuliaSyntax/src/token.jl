@@ -54,6 +54,11 @@ struct Token <: AbstractToken
     val::String # The actual string of the token
     token_error::TokenError
 end
+function Token(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{Int, Int},
+    startbyte::Int, endbyte::Int, val::String)
+Token(kind, startposition, endposition, startbyte, endbyte, val, NO_ERR)
+end
+Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN)
 
 struct RawToken <: AbstractToken
     kind::Kind
@@ -62,15 +67,19 @@ struct RawToken <: AbstractToken
     endpos::Tuple{Int, Int}
     startbyte::Int # The byte where the token start in the buffer
     endbyte::Int # The byte where the token ended in the buffer
+    token_error::TokenError
 end
-
-function Token(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{Int, Int},
-               startbyte::Int, endbyte::Int, val::String)
-    Token(kind, startposition, endposition, startbyte, endbyte, val, NO_ERR)
+function RawToken(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{Int, Int},
+    startbyte::Int, endbyte::Int)
+RawToken(kind, startposition, endposition, startbyte, endbyte, NO_ERR)
 end
-Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN)
+RawToken() = RawToken(ERROR, (0,0), (0,0), 0, 0, UNKNOWN)
 
-const EMPTY_TOKEN = Token()
+
+const _EMPTY_TOKEN = Token()
+const _EMPTY_RAWTOKEN = RawToken()
+EMPTY_TOKEN(::Type{Token}) = _EMPTY_TOKEN
+EMPTY_TOKEN(::Type{RawToken}) = _EMPTY_RAWTOKEN
 
 function kind(t::AbstractToken)
     isoperator(t.kind) && return OP

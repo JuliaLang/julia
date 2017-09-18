@@ -322,9 +322,9 @@ end
 
 @testset "inferred" begin
     l = tokenize("abc")
-    @test Base.Test.@inferred Tokenize.Lexers.next_token(l).kind == T.IDENTIFIER
+    @inferred Tokenize.Lexers.next_token(l)
     l = tokenize("abc", Tokens.RawToken)
-    @test Base.Test.@inferred typeof(Tokenize.Lexers.next_token(l)) == Tokens.RawToken
+    @inferred Tokenize.Lexers.next_token(l)
 end
 
 @testset "modifying function names (!) followed by operator" begin
