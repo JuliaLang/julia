@@ -1136,12 +1136,28 @@ struct CachedCredentials <: AbstractCredentials
     CachedCredentials() = new(Dict{String,AbstractCredentials}())
 end
 
-"Obtain the cached credentials for the given host+protocol (credid), or return and store the default if not found"
-get_creds!(collection::CachedCredentials, credid, default) = get!(collection.cred, credid, default)
+Base.haskey(cache::CachedCredentials, cred_id) = Base.haskey(cache.cred, cred_id)
+Base.getindex(cache::CachedCredentials, cred_id) = Base.getindex(cache.cred, cred_id)
+Base.get!(cache::CachedCredentials, cred_id, default) = Base.get!(cache.cred, cred_id, default)
 
 function securezero!(p::CachedCredentials)
     foreach(securezero!, values(p.cred))
     return p
+end
+
+function approve(cache::CachedCredentials, cred::AbstractCredentials, url::AbstractString)
+    cred_id = credential_identifier(url)
+    cache.cred[cred_id] = cred
+    nothing
+end
+
+function reject(cache::CachedCredentials, cred::AbstractCredentials, url::AbstractString)
+    cred_id = credential_identifier(url)
+    if haskey(cache.cred, cred_id)
+        securezero!(cache.cred[cred_id])  # Wipe out invalid credentials
+        delete!(cache.cred, cred_id)
+    end
+    nothing
 end
 
 """
@@ -1161,6 +1177,7 @@ mutable struct CredentialPayload <: Payload
     credential::Nullable{AbstractCredentials}
     first_pass::Bool
     use_ssh_agent::Bool
+    url::String
     scheme::String
     username::String
     host::String
@@ -1194,10 +1211,29 @@ function reset!(p::CredentialPayload)
     p.credential = Nullable{AbstractCredentials}()
     p.first_pass = true
     p.use_ssh_agent = p.allow_ssh_agent
+    p.url = ""
     p.scheme = ""
     p.username = ""
     p.host = ""
     p.path = ""
 
     return p
+end
+
+function approve(p::CredentialPayload)
+    isnull(p.credential) && return  # No credentials were used
+    cred = unsafe_get(p.credential)
+
+    if !isnull(p.cache)
+        approve(unsafe_get(p.cache), cred, p.url)
+    end
+end
+
+function reject(p::CredentialPayload)
+    isnull(p.credential) && return  # No credentials were used
+    cred = unsafe_get(p.credential)
+
+    if !isnull(p.cache)
+        reject(unsafe_get(p.cache), cred, p.url)
+    end
 end

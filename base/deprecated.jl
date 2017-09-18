@@ -1810,6 +1810,11 @@ end
 # `SSHCredentials` and `UserPasswordCredentials` constructors using `prompt_if_incorrect`
 # are deprecated in base/libgit2/types.jl.
 
+# PR #23711
+@eval LibGit2 begin
+    @deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

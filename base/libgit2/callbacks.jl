@@ -45,7 +45,7 @@ function user_abort()
           (Cint, Cstring),
           Cint(Error.Callback), "Aborting, user cancelled credential request.")
 
-    return Cint(Error.EAUTH)
+    return Cint(Error.EUSER)
 end
 
 function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, username_ptr)
@@ -231,27 +231,39 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     # Parse URL only during the first call to this function. Future calls will use the
     # information cached inside the payload.
-    if isempty(p.host)
-        url = match(URL_REGEX, unsafe_string(url_ptr))
+    if isempty(p.url)
+        p.url = unsafe_string(url_ptr)
+        m = match(URL_REGEX, p.url)
 
-        p.scheme = url[:scheme] === nothing ? "" : url[:scheme]
-        p.username = url[:user] === nothing ? "" : url[:user]
-        p.host = url[:host]
-        p.path = url[:path]
+        p.scheme = m[:scheme] === nothing ? "" : m[:scheme]
+        p.username = m[:user] === nothing ? "" : m[:user]
+        p.host = m[:host]
+        p.path = m[:path]
 
         # When an explicit credential is supplied we will make sure to use the given
         # credential during the first callback by modifying the allowed types. The
         # modification only is in effect for the first callback since `allowed_types` cannot
         # be mutated.
         if !isnull(p.explicit)
-            p.credential = p.explicit
             cred = unsafe_get(p.explicit)
+
+            # Copy explicit credentials to avoid mutating approved credentials.
+            p.credential = Nullable(deepcopy(cred))
+
             if isa(cred, SSHCredentials)
                 allowed_types &= Cuint(Consts.CREDTYPE_SSH_KEY)
             elseif isa(cred, UserPasswordCredentials)
                 allowed_types &= Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT)
             else
                 allowed_types &= Cuint(0)  # Unhandled credential type
+            end
+        elseif !isnull(p.cache)
+            cache = unsafe_get(p.cache)
+            cred_id = credential_identifier(p.scheme, p.host)
+
+            # Perform a deepcopy as we do not want to mutate approved cached credentials
+            if haskey(cache, cred_id)
+                p.credential = Nullable(deepcopy(cache[cred_id]))
             end
         end
 
@@ -263,12 +275,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
     # use ssh key or ssh-agent
     if isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY))
         if isnull(p.credential) || !isa(unsafe_get(p.credential), SSHCredentials)
-            creds = SSHCredentials(p.username)
-            if !isnull(p.cache)
-                credid = "ssh://$(p.host)"
-                creds = get_creds!(unsafe_get(p.cache), credid, creds)
-            end
-            p.credential = Nullable(creds)
+            p.credential = Nullable(SSHCredentials(p.username))
         end
         err = authenticate_ssh(libgit2credptr, p, username_ptr)
         err == 0 && return err
@@ -276,12 +283,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
         if isnull(p.credential) || !isa(unsafe_get(p.credential), UserPasswordCredentials)
-            creds = UserPasswordCredentials(p.username)
-            if !isnull(p.cache)
-                credid = "$(isempty(p.scheme) ? "ssh" : p.scheme)://$(p.host)"
-                creds = get_creds!(unsafe_get(p.cache), credid, creds)
-            end
-            p.credential = Nullable(creds)
+            p.credential = Nullable(UserPasswordCredentials(p.username))
         end
         err = authenticate_userpass(libgit2credptr, p)
         err == 0 && return err

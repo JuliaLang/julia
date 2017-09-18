@@ -562,10 +562,10 @@ let a = [1,2,3]
     @test unsafe_securezero!(Ptr{Void}(pointer(a)), sizeof(a)) == Ptr{Void}(pointer(a))
     @test a == [0,0,0]
 end
-let creds = Base.LibGit2.CachedCredentials()
-    LibGit2.get_creds!(creds, "foo", LibGit2.SSHCredentials()).pass = "bar"
-    securezero!(creds)
-    @test LibGit2.get_creds!(creds, "foo", nothing).pass == "\0\0\0"
+let cache = Base.LibGit2.CachedCredentials()
+    get!(cache, "foo", LibGit2.SSHCredentials("", "bar"))
+    securezero!(cache)
+    @test cache["foo"].pass == "\0\0\0"
 end
 
 # Test that we can VirtualProtect jitted code to writable
