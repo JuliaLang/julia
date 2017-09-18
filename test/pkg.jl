@@ -39,6 +39,12 @@ function temp_pkg_dir(fn::Function, tmp_dir=joinpath(tempdir(), randstring()),
     end
 end
 
+function write_build(pkg, content)
+    build_filename = Pkg.dir(pkg, "deps", "build.jl")
+    mkpath(dirname(build_filename))
+    write(build_filename, content)
+end
+
 # Test basic operations: adding or removing a package, status, free
 # Also test for the existence of REQUIRE and META_BRANCH
 temp_pkg_dir() do
@@ -612,12 +618,6 @@ end
 end
 
 temp_pkg_dir(initialize=false) do
-    function write_build(pkg, content)
-        build_filename = Pkg.dir(pkg, "deps", "build.jl")
-        mkpath(dirname(build_filename))
-        write(build_filename, content)
-    end
-
     write_build("Normal", "")
     write_build("Error", "error(\"An error has occurred while building a package\")")
     write_build("Exit", "exit()")
