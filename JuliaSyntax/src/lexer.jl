@@ -13,10 +13,10 @@ import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BITSTYPE, BR
 
 export tokenize
 
-ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
-isbinary(c::Char) = c == '0' || c == '1'
-isoctal(c::Char) =  '0' ≤ c ≤ '7'
-iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
+@inline ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
+@inline isbinary(c::Char) = c == '0' || c == '1'
+@inline isoctal(c::Char) =  '0' ≤ c ≤ '7'
+@inline iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
 
 mutable struct Lexer{IO_t <: IO, T <: AbstractToken}
     io::IO_t
@@ -45,7 +45,7 @@ Lexer(str::AbstractString, T::Type{TT} = Token) where TT <: AbstractToken = Lexe
     tokenize(x, T = Token)
 
 Returns an `Iterable` containing the tokenized input. Can be reverted by e.g.
-`join(untokenize.(tokenize(x)))`. Setting `T` chooses the type of token 
+`join(untokenize.(tokenize(x)))`. Setting `T` chooses the type of token
 produced by the lexer (`Token` or `RawToken`).
 """
 tokenize(x, ::Type{Token}) = Lexer(x, Token)
@@ -158,7 +158,7 @@ function readchar(l::Lexer{I}) where {I <: IO}
     if l.doread
         write(l.charstore, l.current_char)
     end
-    if l.current_char == '\n' 
+    if l.current_char == '\n'
         l.current_row += 1
         l.current_col = 1
     elseif !eof(l.current_char)
@@ -190,7 +190,7 @@ Consumes the next character `c` if either `f::Function(c)` returns true, `c == f
 for `c::Char` or `c in f` otherwise. Returns `true` if a character has been
 consumed and `false` otherwise.
 """
-function accept(l::Lexer, f::Union{Function, Char, Vector{Char}, String})
+@inline function accept(l::Lexer, f::Union{Function, Char, Vector{Char}, String})
     c = peekchar(l)
     if isa(f, Function)
         ok = f(c)
@@ -208,7 +208,7 @@ end
 
 Consumes all following characters until `accept(l, f)` is `false`.
 """
-function accept_batch(l::Lexer, f)
+@inline function accept_batch(l::Lexer, f)
     ok = false
     while accept(l, f)
         ok = true
@@ -265,7 +265,7 @@ Returns the next `Token`.
 function next_token(l::Lexer)
     start_token!(l)
     c = readchar(l)
-    if eof(c); 
+    if eof(c);
         return emit(l, Tokens.ENDMARKER)
     elseif iswhitespace(c)
         readon(l)
@@ -347,7 +347,7 @@ function next_token(l::Lexer)
         return lex_digit(l, Tokens.INTEGER)
     elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR
         return emit(l, k)
-    else 
+    else
         emit_error(l)
     end
 end
@@ -569,7 +569,7 @@ function lex_digit(l::Lexer, kind)
     accept_number(l, isdigit)
     pc,ppc = dpeekchar(l)
     if pc == '.'
-        if ppc == '.' 
+        if ppc == '.'
             return emit(l, kind)
         elseif (!(isdigit(ppc) ||
             iswhitespace(ppc) ||
@@ -589,11 +589,11 @@ function lex_digit(l::Lexer, kind)
             || ppc == '?'
             || eof(ppc)))
             kind = Tokens.INTEGER
-            
+
             return emit(l, kind)
         end
         readchar(l)
-        
+
         kind = Tokens.FLOAT
         accept_number(l, isdigit)
         pc, ppc = dpeekchar(l)
@@ -612,7 +612,7 @@ function lex_digit(l::Lexer, kind)
             readchar(l)
             return emit_error(l)
         end
-        
+
     elseif (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-')
         kind = Tokens.FLOAT
         readchar(l)
