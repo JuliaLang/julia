@@ -464,6 +464,8 @@ Deprecated or removed
   * The timing functions `tic`, `toc`, and `toq` are deprecated in favor of `@time` and `@elapsed`
     ([#17046]).
 
+  * `Base.runtests` has been renamed to `Base.test` for consistency with `Pkg.test` ([#23755]).
+
 Command-line option changes
 ---------------------------
 

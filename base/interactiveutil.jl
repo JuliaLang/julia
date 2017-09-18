@@ -700,12 +700,12 @@ end
 # testing
 
 """
-    runtests([tests=["all"] [, numcores=ceil(Int, Sys.CPU_CORES / 2) ]])
+    test([tests=["all"] [, numcores=ceil(Int, Sys.CPU_CORES / 2) ]])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
 strings, using `numcores` processors. (not exported)
 """
-function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2))
+function test(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2))
     if isa(tests,AbstractString)
         tests = split(tests)
     end
