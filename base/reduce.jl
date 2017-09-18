@@ -572,7 +572,8 @@ true
 ```
 """
 function any(f, itr)
-    for x in itr
+    # @inbounds allows the compiler to optimize out the loop in case f is constant
+    @inbounds for x in itr
         f(x) && return true
     end
     return false
@@ -597,13 +598,14 @@ false
 ```
 """
 function all(f, itr)
-    for x in itr
+    # @inbounds allows the compiler to optimize out the loop in case f is constant
+    @inbounds for x in itr
         f(x) || return false
     end
     return true
 end
 
-## in & contains
+## in
 
 """
     in(item, collection) -> Bool
@@ -658,15 +660,9 @@ julia> count([true, false, true, true])
 """
 function count(pred, itr)
     n = 0
-    for x in itr
+    # @inbounds allows the compiler to optimize out the loop in case f is constant
+    @inbounds for x in itr
         n += pred(x)::Bool
-    end
-    return n
-end
-function count(pred, a::AbstractArray)
-    n = 0
-    for i in eachindex(a)
-        @inbounds n += pred(a[i])::Bool
     end
     return n
 end
