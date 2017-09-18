@@ -1847,16 +1847,32 @@ mktempdir() do dir
             end
             =#
 
+            # Explicitly set the public key ENV variable to a non-existent file.
+            withenv("SSH_KEY_PATH" => valid_key,
+                    "SSH_PUB_KEY_PATH" => valid_key * ".public") do
+                @test !isfile(ENV["SSH_PUB_KEY_PATH"])
+
+                challenges = [
+                    # "Private key location for 'git@github.com' [$valid_key]:" => "\n"
+                    "Public key location for 'git@github.com' [$valid_key.public]:" => "$valid_key.pub\n"
+                ]
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
+                @test err == git_ok
+                @test auth_attempts == 1
+            end
+
             # TODO: Tests are currently broken. Credential callback currently infinite loops
             # and never prompts user to change private keys.
             #=
-            withenv("SSH_KEY_PATH" => valid_key, "SSH_PUB_KEY_PATH" => valid_key * ".public") do
-                @test !isfile(ENV["SSH_PUB_KEY_PATH"])
+            # Explicitly set the public key ENV variable to a public key that doesn't match
+            # the private key.
+            withenv("SSH_KEY_PATH" => valid_key,
+                    "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
+                @test isfile(ENV["SSH_PUB_KEY_PATH"])
 
-                # User explicitly sets the SSH_PUB_KEY_PATH incorrectly.
                 challenges = [
                     "Private key location for 'git@github.com' [$valid_key]:" => "\n"
-                    "Public key location for 'git@github.com':" => "$valid_key.pub\n"
+                    "Public key location for 'git@github.com' [$invalid_key.pub]:" => "$valid_key.pub\n"
                 ]
                 err, auth_attempts = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
