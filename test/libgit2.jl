@@ -1898,11 +1898,11 @@ mktempdir() do dir
 
             valid_username = "julia"
             valid_password = randstring(16)
+            valid_cred = LibGit2.UserPasswordCredentials(valid_username, valid_password)
 
             https_ex = quote
                 include($LIBGIT2_HELPER_PATH)
-                valid_cred = LibGit2.UserPasswordCredentials($valid_username, $valid_password)
-                credential_loop(valid_cred, $url)
+                credential_loop($valid_cred, $url)
             end
 
             # User provides a valid username and password
