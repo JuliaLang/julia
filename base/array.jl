@@ -8,7 +8,7 @@
 The objects called do not have matching dimensionality. Optional argument `msg` is a
 descriptive error string.
 """
-mutable struct DimensionMismatch <: Exception
+struct DimensionMismatch <: Exception
     msg::AbstractString
 end
 DimensionMismatch() = DimensionMismatch("")

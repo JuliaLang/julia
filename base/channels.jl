@@ -246,7 +246,7 @@ function close_chnl_on_taskdone(t::Task, ref::WeakRef)
     end
 end
 
-mutable struct InvalidStateException <: Exception
+struct InvalidStateException <: Exception
     msg::AbstractString
     state::Symbol
 end

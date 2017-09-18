@@ -70,7 +70,7 @@ end
 const VTypes = Union{Complex128, Float64}
 const VRealTypes = Union{Float64}
 
-mutable struct CHOLMODException <: Exception
+struct CHOLMODException <: Exception
     msg::AbstractString
 end
 

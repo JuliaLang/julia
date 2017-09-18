@@ -10,7 +10,7 @@ export UnsatError, Graph, Messages, maxsum
 
 # An exception type used internally to signal that an unsatisfiable
 # constraint was detected
-mutable struct UnsatError <: Exception
+struct UnsatError <: Exception
     info
 end
 

@@ -582,7 +582,7 @@ end
 
 ##
 
-mutable struct DNSError <: Exception
+struct DNSError <: Exception
     host::AbstractString
     code::Int32
 end
