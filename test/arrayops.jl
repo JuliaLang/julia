@@ -2119,3 +2119,8 @@ Base.:(==)(a::T11053, b::T11053) = a.a == b.a
 
 #15907
 @test typeof(Array{Int,0}()) == Array{Int,0}
+
+@testset "issue 23629" begin
+    @test_throws BoundsError zeros(2,3,0)[2,3]
+    @test_throws BoundsError checkbounds(zeros(2,3,0), 2, 3)
+end

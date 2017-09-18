@@ -1726,17 +1726,24 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, ssize
             // the accessed array, i.e. `if !(i < alen) goto error`.
             if (nidxs > 1) {
                 // TODO: REMOVE DEPWARN AND RETURN FALSE AFTER 0.6.
-                // We need to check if this is inside the non-linearized size
+                // We need to check if this index is inside its non-linearized dimension
                 BasicBlock *partidx = BasicBlock::Create(jl_LLVMContext, "partlinidx");
                 BasicBlock *partidxwarn = BasicBlock::Create(jl_LLVMContext, "partlinidxwarn");
+                BasicBlock *trailingcheck = BasicBlock::Create(jl_LLVMContext, "trailingcheck");
                 Value *d = emit_arraysize_for_unsafe_dim(ainfo, ex, nidxs, nd, ctx);
-                builder.CreateCondBr(builder.CreateICmpULT(ii, d), endBB, partidx);
+                Value *alen = emit_arraylen(ainfo, ex, ctx);
+                builder.CreateCondBr(builder.CreateICmpULT(ii, d), trailingcheck, partidx);
+
+                // If it is inside its own dimension, we still need to ensure all other
+                // dimensions are non-zero
+                ctx->f->getBasicBlockList().push_back(trailingcheck);
+                builder.SetInsertPoint(trailingcheck);
+                builder.CreateCondBr(builder.CreateICmpULT(ii, alen), endBB, failBB);
 
                 // We failed the normal bounds check; check to see if we're
                 // inside the linearized size (partial linear indexing):
                 ctx->f->getBasicBlockList().push_back(partidx);
                 builder.SetInsertPoint(partidx);
-                Value *alen = emit_arraylen(ainfo, ex, ctx);
                 builder.CreateCondBr(builder.CreateICmpULT(i, alen), partidxwarn, failBB);
 
                 // We passed the linearized bounds check; now throw the depwarn:

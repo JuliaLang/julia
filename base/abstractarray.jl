@@ -407,9 +407,10 @@ function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{Any})
 end
 function checkbounds_linear_indices(::Type{Bool}, IA::Tuple{Vararg{OneTo}}, i)
     @_inline_meta
-    if checkindex(Bool, IA[1], i)
+    ts = trailingsize(IA)
+    if checkindex(Bool, IA[1], i) && ts > 0
         return true
-    elseif checkindex(Bool, OneTo(trailingsize(IA)), i)  # partial linear indexing
+    elseif checkindex(Bool, OneTo(ts), i)  # partial linear indexing
         partial_linear_indexing_warning_lookup(length(IA))
         return true # TODO: Return false after the above function is removed in deprecated.jl
     end
