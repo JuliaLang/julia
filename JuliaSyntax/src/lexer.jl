@@ -39,6 +39,8 @@ end
 Lexer(io::IO_t, T::Type{TT} = Token) where {IO_t,TT <: AbstractToken} = Lexer{IO_t,T}(io, position(io), 1, 1, position(io), 1, 1, position(io), Tokens.ERROR, IOBuffer(), ' ', false)
 Lexer(str::AbstractString, T::Type{TT} = Token) where TT <: AbstractToken = Lexer(IOBuffer(str), T)
 
+@inline token_type(l::Lexer{IO_t, TT}) where {IO_t, TT} = TT
+
 """
     tokenize(x, T = Token)
 
@@ -239,7 +241,7 @@ end
 function emit(l::Lexer{IO_t,RawToken}, kind::Kind, err::TokenError = Tokens.NO_ERR) where IO_t
     tok = RawToken(kind, (l.token_start_row, l.token_start_col),
         (l.current_row, l.current_col - 1),
-        startpos(l), position(l) - 1)
+        startpos(l), position(l) - 1, err)
     l.last_token = kind
     readoff(l)
     return tok
@@ -316,24 +318,24 @@ function next_token(l::Lexer)
     elseif c == '&'
         return lex_amper(l)
     elseif c == '\''
-         return lex_prime(l)
+        return lex_prime(l)
     elseif c == '÷'
-         return lex_division(l)
+        return lex_division(l)
     elseif c == '"'
         readon(l)
         return lex_quote(l);
     elseif c == '%'
-         return lex_percent(l);
+        return lex_percent(l);
     elseif c == '/'
-         return lex_forwardslash(l);
+        return lex_forwardslash(l);
     elseif c == '\\'
-         return lex_backslash(l);
+        return lex_backslash(l);
     elseif c == '.'
-         return lex_dot(l);
+        return lex_dot(l);
     elseif c == '+'
-         return lex_plus(l);
+        return lex_plus(l);
     elseif c == '-'
-         return lex_minus(l);
+        return lex_minus(l);
     elseif c == '`'
         readon(l)
         return lex_cmd(l);
@@ -344,7 +346,7 @@ function next_token(l::Lexer)
         readon(l)
         return lex_digit(l, Tokens.INTEGER)
     elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR
-         return emit(l, k)
+        return emit(l, k)
     else 
         emit_error(l)
     end
@@ -362,7 +364,7 @@ function lex_comment(l::Lexer, doemit=true)
         while true
             pc = peekchar(l)
             if pc == '\n' || eof(pc)
-                return doemit ? emit(l, Tokens.COMMENT) : EMPTY_TOKEN
+                return doemit ? emit(l, Tokens.COMMENT) : EMPTY_TOKEN(token_type(l))
             end
             readchar(l)
         end
@@ -371,7 +373,7 @@ function lex_comment(l::Lexer, doemit=true)
         n_start, n_end = 1, 0
         while true
             if eof(c)
-                return doemit ? emit_error(l, Tokens.EOF_MULTICOMMENT) : EMPTY_TOKEN
+                return doemit ? emit_error(l, Tokens.EOF_MULTICOMMENT) : EMPTY_TOKEN(token_type(l))
             end
             nc = readchar(l)
             if c == '#' && nc == '='
@@ -380,7 +382,7 @@ function lex_comment(l::Lexer, doemit=true)
                 n_end += 1
             end
             if n_start == n_end
-                return doemit ? emit(l, Tokens.COMMENT) : EMPTY_TOKEN
+                return doemit ? emit(l, Tokens.COMMENT) : EMPTY_TOKEN(token_type(l))
             end
             c = nc
         end
@@ -698,18 +700,18 @@ function lex_quote(l::Lexer, doemit=true)
     if accept(l, '"') # ""
         if accept(l, '"') # """
             if read_string(l, Tokens.TRIPLE_STRING)
-                return doemit ? emit(l, Tokens.TRIPLE_STRING) : EMPTY_TOKEN
+                return doemit ? emit(l, Tokens.TRIPLE_STRING) : EMPTY_TOKEN(token_type(l))
             else
-                return doemit ? emit_error(l, Tokens.EOF_STRING) : EMPTY_TOKEN
+                return doemit ? emit_error(l, Tokens.EOF_STRING) : EMPTY_TOKEN(token_type(l))
             end
         else # empty string
-            return doemit ? emit(l, Tokens.STRING) : EMPTY_TOKEN
+            return doemit ? emit(l, Tokens.STRING) : EMPTY_TOKEN(token_type(l))
         end
     else # "?, ? != '"'
         if read_string(l, Tokens.STRING)
-            return doemit ? emit(l, Tokens.STRING) : EMPTY_TOKEN
+            return doemit ? emit(l, Tokens.STRING) : EMPTY_TOKEN(token_type(l))
         else
-            return doemit ? emit_error(l, Tokens.EOF_STRING) : EMPTY_TOKEN
+            return doemit ? emit_error(l, Tokens.EOF_STRING) : EMPTY_TOKEN(token_type(l))
         end
     end
 end
@@ -823,13 +825,13 @@ function lex_cmd(l::Lexer, doemit=true)
         if accept(l, '`') # ```
             kind = Tokens.TRIPLE_CMD
         else # empty cmd
-            return doemit ? emit(l, Tokens.CMD) : EMPTY_TOKEN
+            return doemit ? emit(l, Tokens.CMD) : EMPTY_TOKEN(token_type(l))
         end
     end
     while true
         c = readchar(l)
-        eof(c) && return (doemit ? emit_error(l, Tokens.EOF_CMD) : EMPTY_TOKEN)
-        string_terminated(l, c, kind) && return (doemit ? emit(l, kind) : EMPTY_TOKEN)
+        eof(c) && return (doemit ? emit_error(l, Tokens.EOF_CMD) : EMPTY_TOKEN(token_type(l)))
+        string_terminated(l, c, kind) && return (doemit ? emit(l, kind) : EMPTY_TOKEN(token_type(l)))
     end
 end
 
