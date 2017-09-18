@@ -249,62 +249,74 @@ function info_project_diff(env₀::EnvCache, env₁::EnvCache)
         clean = false
     end
     clean && info(" [no changes]")
+    return nothing
 end
 
-function manifest_infos(env::EnvCache)
-    infos = Dict{UUID,Dict}()
+struct ManifestEntry
+    name::String
+    uuid::UUID
+    hash::SHA1
+    version::Union{VersionNumber,Void}
+end
+
+function manifest_entries(env::EnvCache)
+    infos = Dict{UUID,ManifestEntry}()
     manifest_info(env) do name, info
-        info = deepcopy(info)
-        info["name"] = name
-        infos[UUID(info["uuid"])] = info
+        uuid = UUID(info["uuid"])
+        hash = SHA1(info["hash-sha1"])
+        ver = get(info, "version", nothing)
+        version = ver != nothing ? VersionNumber(ver) : nothing
+        infos[uuid] = ManifestEntry(name, uuid, hash, version)
     end
     return infos
 end
 
-function info_manifest_diff(env₀::EnvCache, env₁::EnvCache)
-    clean = true
-    infos₀ = manifest_infos(env₀)
-    infos₁ = manifest_infos(env₁)
+const ManifestDiff = Vector{NTuple{2,Union{ManifestEntry,Void}}}
+
+function manifest_diff(env₀::EnvCache, env₁::EnvCache)::ManifestDiff
+    infos₀ = manifest_entries(env₀)
+    infos₁ = manifest_entries(env₁)
     uuids = sort!(union(keys(infos₀), keys(infos₁)), by=uuid->uuid.value)
-    pairs = [(get(infos₀, u, nothing), get(infos₁, u, nothing)) for u in uuids]
-    sort!(pairs, by=pair->lowercase(pair[pair[2] != nothing ? 2 : 1]["name"]))
-    for (info₀, info₁) in pairs
+    diff = eltype(ManifestDiff)[
+        (get(infos₀, uuid, nothing), get(infos₁, uuid, nothing))
+        for uuid in uuids]
+    filter!(diff) do infos
+        info₀, info₁ = infos
+        info₀ == nothing || info₁ == nothing || info₀.hash != info₁.hash
+    end
+    sort!(diff, by=pair->lowercase(pair[pair[2]!=nothing ? 2 : 1].name))
+end
+
+v_str(x::ManifestEntry) =
+    x.version == nothing ? "[$(string(x.hash)[1:16])]" : "v$(x.version)"
+
+function info_manifest_diff(diff::ManifestDiff)
+    if isempty(diff)
+        info(" [no changes]")
+        return
+    end
+    for (info₀, info₁) in diff
+        uuid = info₁ != nothing ? info₁.uuid : info₀.uuid
+        name = info₁ != nothing ? info₁.name : info₀.name
+        u = string(uuid)[1:8]
         if info₀ != nothing && info₁ != nothing
-            name = info₁["name"]
-            uuid = info₁["uuid"][1:8]
-            hash₀ = info₀["hash-sha1"]
-            hash₁ = info₁["hash-sha1"]
-            hash₀ == hash₁ && continue
-            ver₀ = VersionNumber(get(info₀, "version", nothing))
-            ver₁ = VersionNumber(get(info₁, "version", nothing))
-            vstr₀ = ver₀ != nothing ? "v$ver₀" : hash₀[1:16]
-            vstr₁ = ver₁ != nothing ? "v$ver₁" : hash₁[1:16]
-            verb = ver₀ == nothing || ver₁ == nothing ? "~" :
-                   ver₁ > ver₀ ? "↑" : "↓"
-            info(" [$uuid] $verb $name $vstr₀ ⇒ $vstr₁" )
-            clean = false
+            v₀, v₁ = v_str(info₀), v_str(info₁)
+            x = info₀.version == nothing || info₁.version == nothing ? "~" :
+                info₀.version < info₁.version ? "↑" : "↓"
+            info(" [$u] $x $name $v₀ ⇒ $v₁")
         elseif info₀ != nothing
-            name = info₀["name"]
-            uuid = info₀["uuid"][1:8]
-            hash = info₀["hash-sha1"]
-            ver = get(info₀, "version", nothing)
-            vstr = ver != nothing ? "v$ver" : hash[1:16]
-            info(" [$uuid] - $name $vstr" )
-            clean = false
+            v₀ = v_str(info₀)
+            info(" [$u] - $name $v₀" )
         elseif info₁ != nothing
-            name = info₁["name"]
-            uuid = info₁["uuid"][1:8]
-            hash = info₁["hash-sha1"]
-            ver = get(info₁, "version", nothing)
-            vstr = ver != nothing ? "v$ver" : hash[1:16]
-            info(" [$uuid] + $name $vstr" )
-            clean = false
+            v₁ = v_str(info₁)
+            info(" [$u] + $name $v₁" )
         else
             error("this should not happen")
         end
     end
-    clean && info(" [no changes]")
 end
+info_manifest_diff(env₀::EnvCache, env₁::EnvCache) =
+    info_manifest_diff(manifest_diff(env₀, env₁))
 
 const indent = "  "
 
@@ -318,7 +330,7 @@ function print_package_tree(
     for (name::String, uuid::UUID) in sort!(collect(deps), by=lowercase∘first)
         print(io, indent^depth, name, " [", string(uuid)[1:8], "]")
         if haskey(seen, uuid)
-            seen[uuid] && print(io, " ...")
+            seen[uuid] && print(io, " ⋯")
             println(io)
         else
             println(io)
