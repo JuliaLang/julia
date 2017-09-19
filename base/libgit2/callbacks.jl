@@ -65,9 +65,30 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         err == 0 && return Cint(0)
     end
 
+    username = username_ptr != Cstring(C_NULL) ? unsafe_string(username_ptr) : ""
+
+    privatekey = Base.get(ENV, "SSH_KEY_PATH") do
+        default = joinpath(homedir(), ".ssh", "id_rsa")
+        if isempty(creds.prvkey) && isfile(default)
+            default
+        else
+            creds.prvkey
+        end
+    end
+
+    publickey = Base.get(ENV, "SSH_PUB_KEY_PATH") do
+        default = privatekey * ".pub"
+        if isempty(creds.pubkey) && isfile(default)
+            default
+        else
+            creds.pubkey
+        end
+    end
+
+    passphrase = Base.get(ENV, "SSH_KEY_PASS", creds.pass)
+
     if p.allow_prompt
         # if username is not provided or empty, then prompt for it
-        username = username_ptr != Cstring(C_NULL) ? unsafe_string(username_ptr) : ""
         if isempty(username)
             prompt_url = git_url(scheme=p.scheme, host=p.host)
             response = Base.prompt("Username for '$prompt_url'", default=creds.user)
@@ -78,68 +99,40 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         prompt_url = git_url(scheme=p.scheme, host=p.host, username=username)
 
         # For SSH we need a private key location
-        privatekey = if haskey(ENV,"SSH_KEY_PATH")
-            ENV["SSH_KEY_PATH"]
-        else
-            keydefpath = creds.prvkey # check if credentials were already used
-            if isempty(keydefpath)
-                defaultkeydefpath = joinpath(homedir(),".ssh","id_rsa")
-                if isempty(keydefpath) && isfile(defaultkeydefpath)
-                    keydefpath = defaultkeydefpath
-                else
-                    response = Base.prompt("Private key location for '$prompt_url'",
-                        default=keydefpath)
-                    isnull(response) && return user_abort()
-                    keydefpath = unsafe_get(response)
-                end
+        if !isfile(privatekey)
+            response = Base.prompt("Private key location for '$prompt_url'",
+                default=privatekey)
+            isnull(response) && return user_abort()
+            privatekey = unsafe_get(response)
+
+            # Only update the public key if the private key changed
+            if privatekey != creds.prvkey
+                publickey = privatekey * ".pub"
             end
-            keydefpath
         end
 
-        isfile(privatekey) || warn("Private key not found")
-
-        # If the private key changed, invalidate the cached public key
-        (privatekey != creds.prvkey) &&
-            (creds.pubkey = "")
-
-        # For SSH we need a public key location, look for environment vars SSH_* as well
-        publickey = if haskey(ENV,"SSH_PUB_KEY_PATH")
-            ENV["SSH_PUB_KEY_PATH"]
-        else
-            keydefpath = creds.pubkey # check if credentials were already used
-            if isempty(keydefpath)
-                if isempty(keydefpath)
-                    keydefpath = privatekey*".pub"
-                end
-                if !isfile(keydefpath)
-                    response = Base.prompt("Public key location for '$prompt_url'",
-                        default=keydefpath)
-                    isnull(response) && return user_abort()
-                    keydefpath = unsafe_get(response)
-                end
-            end
-            keydefpath
+        # For SSH we need a public key location. Avoid asking about the public key as
+        # typically this will just annoy users.
+        if !isfile(publickey) && isfile(privatekey)
+            response = Base.prompt("Public key location for '$prompt_url'",
+                default=publickey)
+            isnull(response) && return user_abort()
+            publickey = unsafe_get(response)
         end
 
-        passphrase = if haskey(ENV,"SSH_KEY_PASS")
-            ENV["SSH_KEY_PASS"]
-        else
-            passdef = creds.pass # check if credentials were already used
-            if isempty(passdef) && is_passphrase_required(privatekey)
-                if Sys.iswindows()
-                    response = Base.winprompt(
-                        "Your SSH Key requires a password, please enter it now:",
-                        "Passphrase required", privatekey; prompt_username = false)
-                    isnull(response) && return user_abort()
-                    passdef = unsafe_get(response)[2]
-                else
-                    response = Base.prompt("Passphrase for $privatekey", password=true)
-                    isnull(response) && return user_abort()
-                    passdef = unsafe_get(response)
-                    isempty(passdef) && return user_abort()  # Ambiguous if EOF or newline
-                end
+        if isempty(passphrase) && is_passphrase_required(privatekey)
+            if Sys.iswindows()
+                response = Base.winprompt(
+                    "Your SSH Key requires a password, please enter it now:",
+                    "Passphrase required", privatekey; prompt_username=false)
+                isnull(response) && return user_abort()
+                passphrase = unsafe_get(response)[2]
+            else
+                response = Base.prompt("Passphrase for $privatekey", password=true)
+                isnull(response) && return user_abort()
+                passphrase = unsafe_get(response)
+                isempty(passphrase) && return user_abort()  # Ambiguous if EOF or newline
             end
-            passdef
         end
 
         creds.user = username # save credentials
@@ -169,8 +162,9 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayl
         if isempty(username) || isempty(userpass)
             prompt_url = git_url(scheme=p.scheme, host=p.host)
             if Sys.iswindows()
-                response = Base.winprompt("Please enter your credentials for '$prompt_url'", "Credentials required",
-                    isempty(username) ? p.username : username; prompt_username = true)
+                response = Base.winprompt(
+                    "Please enter your credentials for '$prompt_url'", "Credentials required",
+                    isempty(username) ? p.username : username; prompt_username=true)
                 isnull(response) && return user_abort()
                 username, userpass = unsafe_get(response)
             else
