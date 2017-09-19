@@ -572,7 +572,31 @@ function isidentifier(s::AbstractString)
 end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
+"""
+    isoperator(s::Symbol)
+
+Return `true` if the symbol can be used as an operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Base.isoperator(:+), Base.isoperator(:f)
+(true, false)
+```
+"""
 isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+
+"""
+    isunaryoperator(s::Symbol)
+
+Return `true` if the symbol can be used as a unary (prefix) operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Base.isunaryoperator(:-), Base.isunaryoperator(:√), Base.isoperator(:f)
+(true, true, false)
+```
+"""
+isunaryoperator(s::Symbol) = ccall(:jl_is_unary_operator, Cint, (Cstring,), s) != 0
 
 """
     operator_precedence(s::Symbol)
@@ -616,7 +640,7 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 ```
 """
 function operator_associativity(s::Symbol)
-    if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_power)
+    if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_power) || isunaryoperator(s) && !(s in :+, :-)
         return :right
     elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
         return :none

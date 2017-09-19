@@ -355,19 +355,21 @@ Julia applies the following order and associativity of operations, from highest 
 |:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
 | Syntax         | `.` followed by `::`                                                                              | Left                       |
 | Exponentiation | `^`                                                                                               | Right                      |
-| Unary          | `√`                                                                                               | Not applicable             |
+| Unary          | `+ - √`                                                                                           | Right[^1]                   |
 | Fractions      | `//`                                                                                              | Left                       |
-| Multiplication | `* / % & \`                                                                                       | Left[^1]                      |
+| Multiplication | `* / % & \`                                                                                       | Left[^2]                    |
 | Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
-| Addition       | `+ - \| ⊻`                                                                                        | Left[^1]                      |
+| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                    |
 | Syntax         | `: ..` followed by `\|>`                                                                          | Left                       |
 | Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
 | Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
 | Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
 
 [^1]:
+    The unary operators `+` and `-` require explicit parentheses around their argument to disambiguate them from the operator `++`, etc. Other compositions of unary operators are parsed with right-associativity, e. g., `√√-a` as `√(√(-a))`.
+[^2]:
     The operators `+`, `++` and `*` are non-associative. `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),
-    c)`. However, the fallback methods for `+` and `*` both default to left-associative evaluation.
+    c)`. However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.
 
 For a complete list of *every* Julia operator's precedence, see the top of this file:
 [`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm)
