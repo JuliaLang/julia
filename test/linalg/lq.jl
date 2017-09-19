@@ -95,11 +95,34 @@ bimg  = randn(n,2)/2
             lqa = lqfact(a[:,1:n1])
             l,q = lqa[:L], lqa[:Q]
             @test full(q)*full(q)' ≈ eye(eltya,n1)
-            @test (full(q,thin=false)'*full(q,thin=false))[1:n1,:] ≈ eye(eltya,n1,n)
+            @test full(q,thin=false)'*full(q,thin=false) ≈ eye(eltya, n1)
             @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
             @test Ac_mul_B!(q,full(q)) ≈ eye(eltya,n1)
             @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
             @test_throws BoundsError size(q,-1)
         end
     end
+end
+
+@testset "correct form of Q from lq(...) (#23729)" begin
+    # matrices with more rows than columns
+    m, n = 4, 2
+    A = randn(m, n)
+    for thin in (true, false)
+        L, Q = lq(A, thin = thin)
+        @test size(L) == (m, n)
+        @test size(Q) == (n, n)
+        @test isapprox(A, L*Q)
+    end
+    # matrices with more columns than rows
+    m, n = 2, 4
+    A = randn(m, n)
+    Lthin, Qthin = lq(A, thin = true)
+    @test size(Lthin) == (m, m)
+    @test size(Qthin) == (m, n)
+    @test isapprox(A, Lthin * Qthin)
+    Lsquare, Qsquare = lq(A, thin = false)
+    @test size(Lsquare) == (m, m)
+    @test size(Qsquare) == (n, n)
+    @test isapprox(A, [Lsquare zeros(m, n - m)] * Qsquare)
 end

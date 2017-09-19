@@ -90,9 +90,11 @@ const Region = Pair{<:Integer,<:Integer}
 _region(s) = getmark(s) => position(s)
 region(s) = Pair(extrema(_region(s))...)
 
+bufend(s) = buffer(s).size
+
 indexes(reg::Region) = first(reg)+1:last(reg)
 
-content(s, reg::Region = 0=>buffer(s).size) = String(buffer(s).data[indexes(reg)])
+content(s, reg::Region = 0=>bufend(s)) = String(buffer(s).data[indexes(reg)])
 
 const REGION_ANIMATION_DURATION = Ref(0.2)
 
@@ -769,15 +771,15 @@ function edit_kill_line(s::MIState)
     push_undo(s)
     buf = buffer(s)
     pos = position(buf)
-    killbuf = readline(buf, chomp=false)
-    if length(killbuf) > 1 && killbuf[end] == '\n'
-        killbuf = killbuf[1:end-1]
-        char_move_left(buf)
+    endpos = endofline(buf)
+    endpos == pos && buf.size > pos && (endpos += 1)
+    if push_kill!(s, edit_splice!(s, pos => endpos))
+        refresh_line(s)
+        :edit_kill_line
+    else
+        pop_undo(s)
+        :ignore
     end
-    push_kill!(s, killbuf) || return :ignore
-    edit_splice!(buf, pos => position(buf))
-    refresh_line(s)
-    :edit_kill_line
 end
 
 function edit_copy_region(s::MIState)
@@ -873,10 +875,13 @@ edit_clear(buf::IOBuffer) = truncate(buf, 0)
 
 function edit_clear(s::MIState)
     push_undo(s)
-    push_kill!(s, content(s), false) || return :ignore
-    edit_clear(buffer(s))
-    refresh_line(s)
-    :edit_clear
+    if push_kill!(s, edit_splice!(s, 0 => bufend(s)), false)
+        refresh_line(s)
+        :edit_clear
+    else
+        pop_undo(s)
+        :ignore
+    end
 end
 
 function replace_line(s::PromptState, l::IOBuffer)
@@ -1512,12 +1517,12 @@ function setup_search_keymap(hp)
                         update_display_buffer(s, data) : beep(s)),
         127       => KeyAlias('\b'),
         # Meta Backspace
-        "\e\b"    => (s,data,c)->(edit_delete_prev_word(data.query_buffer) ?
-                        update_display_buffer(s, data) : beep(s)),
+        "\e\b"    => (s,data,c)->(isempty(edit_delete_prev_word(data.query_buffer)) ?
+                                  beep(s) : update_display_buffer(s, data)),
         "\e\x7f"  => "\e\b",
         # Word erase to whitespace
-        "^W"      => (s,data,c)->(edit_werase(data.query_buffer) ?
-                        update_display_buffer(s, data) : beep(s)),
+        "^W"      => (s,data,c)->(isempty(edit_werase(data.query_buffer)) ?
+                                  beep(s) : update_display_buffer(s, data)),
         # ^C and ^D
         "^C"      => (s,data,c)->(edit_clear(data.query_buffer);
                        edit_clear(data.response_buffer);
@@ -1669,12 +1674,14 @@ function edit_tab(s::MIState, jump_spaces=false, delete_trailing=jump_spaces)
         complete_line(s)
     else
         push_undo(s)
-        edit_insert_tab(buffer(s), jump_spaces, delete_trailing)
+        edit_insert_tab(buffer(s), jump_spaces, delete_trailing) || pop_undo(s)
         refresh_line(s)
         :edit_insert_tab
     end
 end
 
+# return true iff the content of the buffer is modified
+# return false when only the position changed
 function edit_insert_tab(buf::IOBuffer, jump_spaces=false, delete_trailing=jump_spaces)
     i = position(buf)
     if jump_spaces && i < buf.size && buf.data[i+1] == _space
@@ -1683,12 +1690,14 @@ function edit_insert_tab(buf::IOBuffer, jump_spaces=false, delete_trailing=jump_
             edit_splice!(buf, i => (spaces == 0 ? buf.size : i+spaces-1))
         else
             jump = spaces == 0 ? buf.size : i+spaces-1
-            return seek(buf, jump)
+            seek(buf, jump)
+            return false
         end
     end
     # align to multiples of 4:
     align = 4 - strwidth(String(buf.data[1+beginofline(buf, i):i])) % 4
-    return edit_insert(buf, ' '^align)
+    edit_insert(buf, ' '^align)
+    return true
 end
 
 

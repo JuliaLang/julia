@@ -825,6 +825,12 @@ let
 end
 
 # accessing fields by index
+mutable struct TestMutable
+    file::String
+    line::Int
+    error
+end
+
 let
     local z = complex(3, 4)
     v = Int[0,0]
@@ -836,16 +842,27 @@ let
     @test_throws BoundsError getfield(z, 0)
     @test_throws BoundsError getfield(z, 3)
 
-    strct = LoadError("", 0, "")
-    setfield!(strct, 2, 8)
-    @test strct.line == 8
-    setfield!(strct, 3, "hi")
-    @test strct.error == "hi"
-    setfield!(strct, 1, "yo")
-    @test strct.file == "yo"
+    strct = LoadError("yofile", 0, "bad")
     @test_throws BoundsError getfield(strct, 10)
-    @test_throws BoundsError setfield!(strct, 0, "")
-    @test_throws BoundsError setfield!(strct, 4, "")
+    @test_throws ErrorException setfield!(strct, 0, "")
+    @test_throws ErrorException setfield!(strct, 4, "")
+    @test strct.file == "yofile"
+    @test strct.line == 0
+    @test strct.error == "bad"
+    @test getfield(strct, 1) == "yofile"
+    @test getfield(strct, 2) == 0
+    @test getfield(strct, 3) == "bad"
+
+    mstrct = TestMutable("melm", 1, nothing)
+    setfield!(mstrct, 2, 8)
+    @test mstrct.line == 8
+    setfield!(mstrct, 3, "hi")
+    @test mstrct.error == "hi"
+    setfield!(mstrct, 1, "yo")
+    @test mstrct.file == "yo"
+    @test_throws BoundsError getfield(mstrct, 10)
+    @test_throws BoundsError setfield!(mstrct, 0, "")
+    @test_throws BoundsError setfield!(mstrct, 4, "")
 end
 
 # allow typevar in Union to match as long as the arguments contain

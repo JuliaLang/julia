@@ -1852,7 +1852,6 @@ mktempdir() do dir
                 # User provides an empty private key which triggers a re-prompt
                 challenges = [
                     "Private key location for 'git@github.com':" => "\n",
-                    "Public key location for 'git@github.com' [.pub]:" => "\n",
                     "Private key location for 'git@github.com':" => "\x04",
                 ]
                 err, auth_attempts = challenge_prompt(ssh_ex, challenges)
@@ -1875,16 +1874,32 @@ mktempdir() do dir
             end
             =#
 
+            # Explicitly set the public key ENV variable to a non-existent file.
+            withenv("SSH_KEY_PATH" => valid_key,
+                    "SSH_PUB_KEY_PATH" => valid_key * ".public") do
+                @test !isfile(ENV["SSH_PUB_KEY_PATH"])
+
+                challenges = [
+                    # "Private key location for 'git@github.com' [$valid_key]:" => "\n"
+                    "Public key location for 'git@github.com' [$valid_key.public]:" => "$valid_key.pub\n"
+                ]
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
+                @test err == git_ok
+                @test auth_attempts == 1
+            end
+
             # TODO: Tests are currently broken. Credential callback currently infinite loops
             # and never prompts user to change private keys.
             #=
-            withenv("SSH_KEY_PATH" => valid_key, "SSH_PUB_KEY_PATH" => valid_key * ".public") do
-                @test !isfile(ENV["SSH_PUB_KEY_PATH"])
+            # Explicitly set the public key ENV variable to a public key that doesn't match
+            # the private key.
+            withenv("SSH_KEY_PATH" => valid_key,
+                    "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
+                @test isfile(ENV["SSH_PUB_KEY_PATH"])
 
-                # User explicitly sets the SSH_PUB_KEY_PATH incorrectly.
                 challenges = [
                     "Private key location for 'git@github.com' [$valid_key]:" => "\n"
-                    "Public key location for 'git@github.com':" => "$valid_key.pub\n"
+                    "Public key location for 'git@github.com' [$invalid_key.pub]:" => "$valid_key.pub\n"
                 ]
                 err, auth_attempts = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
@@ -1898,11 +1913,11 @@ mktempdir() do dir
 
             valid_username = "julia"
             valid_password = randstring(16)
+            valid_cred = LibGit2.UserPasswordCredentials(valid_username, valid_password)
 
             https_ex = quote
                 include($LIBGIT2_HELPER_PATH)
-                valid_cred = LibGit2.UserPasswordCredentials($valid_username, $valid_password)
-                credential_loop(valid_cred, $url)
+                credential_loop($valid_cred, $url)
             end
 
             # User provides a valid username and password
@@ -2053,12 +2068,12 @@ mktempdir() do dir
             invalid_password = randstring(15)
             invalid_cred = LibGit2.UserPasswordCredentials(invalid_username, invalid_password)
 
-            function gen_ex(; cached_cred=nothing)
+            function gen_ex(; cached_cred=nothing, allow_prompt=true)
                 quote
                     include($LIBGIT2_HELPER_PATH)
                     cache = CachedCredentials()
                     $(cached_cred !== nothing && :(LibGit2.approve(cache, $cached_cred, $url)))
-                    payload = CredentialPayload(cache)
+                    payload = CredentialPayload(cache, allow_prompt=$allow_prompt)
                     err, auth_attempts = credential_loop($valid_cred, $url, "", payload)
                     (err, auth_attempts, cache)
                 end
@@ -2075,7 +2090,6 @@ mktempdir() do dir
                 "Username for 'https://github.com':" => "$valid_username\n",
                 "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
             ]
-
             err, auth_attempts, cache = challenge_prompt(ex, challenges)
             @test err == git_ok
             @test auth_attempts == 1
@@ -2093,6 +2107,27 @@ mktempdir() do dir
             @test auth_attempts == 2
             @test typeof(cache) == LibGit2.CachedCredentials
             @test cache.cred == Dict(cred_id => valid_cred)
+
+            # Canceling a credential request should leave the cache unmodified
+            ex = gen_ex(cached_cred=invalid_cred)
+            challenges = [
+                "Username for 'https://github.com' [alice]:" => "foo\n",
+                "Password for 'https://foo@github.com':" => "bar\n",
+                "Username for 'https://github.com' [foo]:" => "\x04",
+            ]
+            err, auth_attempts, cache = challenge_prompt(ex, challenges)
+            @test err == abort_prompt
+            @test auth_attempts == 3
+            @test typeof(cache) == LibGit2.CachedCredentials
+            @test cache.cred == Dict(cred_id => invalid_cred)
+
+            # An EAUTH error should remove credentials from the cache
+            ex = gen_ex(cached_cred=invalid_cred, allow_prompt=false)
+            err, auth_attempts, cache = challenge_prompt(ex, [])
+            @test err == eauth_error
+            @test auth_attempts == 2
+            @test typeof(cache) == LibGit2.CachedCredentials
+            @test cache.cred == Dict()
         end
 
         @testset "Incompatible explicit credentials" begin

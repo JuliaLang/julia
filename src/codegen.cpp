@@ -2460,7 +2460,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     if (al > 1)
                         lv->setAlignment(al);
                     Value *elidx = ctx.builder.CreateMul(idx, nbytes);
-                    ctx.builder.CreateMemCpy(lv, ctx.builder.CreateGEP(T_int8, data, elidx), nbytes, al);
+                    emit_memcpy(ctx, lv, ctx.builder.CreateGEP(T_int8, data, elidx), elsz, al);
                     *ret = mark_julia_slot(lv, ety, tindex, tbaa_stack);
                 }
                 else {
@@ -3433,12 +3433,8 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
             if (vi.pTIndex == NULL) {
                 assert(jl_is_leaf_type(vi.value.typ));
                 Value *copy_bytes = ConstantInt::get(T_int32, jl_datatype_size(vi.value.typ));
-                ctx.builder.CreateMemCpy(vi.value.V,
-                                     data_pointer(ctx, rval_info, T_pint8),
-                                     copy_bytes,
-                                     jl_datatype_align(rval_info.typ),
-                                     vi.isVolatile,
-                                     tbaa);
+                emit_memcpy(ctx, vi.value.V, rval_info, copy_bytes,
+                            jl_datatype_align(rval_info.typ), vi.isVolatile, tbaa);
             }
             else {
                 emit_unionmove(ctx, vi.value.V, rval_info, isboxed, vi.isVolatile, tbaa);
@@ -4059,7 +4055,7 @@ static void emit_cfunc_invalidate(
     }
     case jl_returninfo_t::SRet: {
         unsigned sret_nbytes = jl_datatype_size(astrt);
-        ctx.builder.CreateMemCpy(&*gf_thunk->arg_begin(), gf_ret, sret_nbytes, jl_alignment(sret_nbytes));
+        emit_memcpy(ctx, &*gf_thunk->arg_begin(), gf_ret, sret_nbytes, jl_alignment(sret_nbytes));
         ctx.builder.CreateRetVoid();
         break;
     }
@@ -5697,11 +5693,8 @@ static std::unique_ptr<Module> emit_function(
                 if (retvalinfo.ispointer()) {
                     if (returninfo.cc == jl_returninfo_t::SRet) {
                         assert(jl_is_leaf_type(jlrettype));
-                        Value *copy_bytes = ConstantInt::get(T_int32, jl_datatype_size(jlrettype));
-                        ctx.builder.CreateMemCpy(sret,
-                                             data_pointer(ctx, retvalinfo, T_pint8),
-                                             copy_bytes,
-                                             returninfo.union_minalign);
+                        emit_memcpy(ctx, sret, retvalinfo, jl_datatype_size(jlrettype),
+                                    returninfo.union_minalign);
                     }
                     else {
                         emit_unionmove(ctx, sret, retvalinfo, isboxed_union, false, NULL);

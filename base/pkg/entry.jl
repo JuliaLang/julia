@@ -732,8 +732,8 @@ function test!(pkg::AbstractString,
     isfile(reqs_path) && resolve()
 end
 
-mutable struct PkgTestError <: Exception
-    msg::String
+struct PkgTestError <: Exception
+    msg::AbstractString
 end
 
 function Base.showerror(io::IO, ex::PkgTestError, bt; backtrace=true)

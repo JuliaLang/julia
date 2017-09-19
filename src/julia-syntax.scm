@@ -1076,9 +1076,11 @@
                  (syntax-deprecation #f
                                      (string "parametric method syntax " (deparse (cadr e))
                                              (linenode-string (function-body-lineno body)))
-                                     (deparse `(where (call ,name ,@(if (has-parameters? argl)
-                                                                        (cons (car argl) (cddr argl))
-                                                                        (cdr argl)))
+                                     (deparse `(where (call ,(or name
+                                                                 (cadr (cadr (cadr e))))
+                                                            ,@(if (has-parameters? argl)
+                                                                  (cons (car argl) (cddr argl))
+                                                                  (cdr argl)))
                                                       ,@raw-typevars))))
              (expand-forms
               (method-def-expr name sparams argl body isstaged rett))))

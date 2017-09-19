@@ -1055,7 +1055,10 @@ timesofar("binary comparison")
         b2 = circshift!(i1, b1, -j)
         i2 = circshift!(b1, -j)
         @test b2 == i2
+
+        @check_bit_operation slicedim(b1, 1, m) Bool
     end
+    @check_bit_operation slicedim(b1, 1, :) BitVector
 end
 
 timesofar("datamove")

@@ -7,14 +7,14 @@
 
 No more data was available to read from a file or stream.
 """
-mutable struct EOFError <: Exception end
+struct EOFError <: Exception end
 
 """
     SystemError(prefix::AbstractString, [errno::Int32])
 
 A system call failed with an error code (in the `errno` global variable).
 """
-mutable struct SystemError <: Exception
+struct SystemError <: Exception
     prefix::AbstractString
     errnum::Int32
     extrainfo

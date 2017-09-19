@@ -8,7 +8,7 @@
 An indexing operation into an `Associative` (`Dict`) or `Set` like object tried to access or
 delete a non-existent element.
 """
-mutable struct KeyError <: Exception
+struct KeyError <: Exception
     key
 end
 

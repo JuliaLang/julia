@@ -246,7 +246,7 @@ float(a::AbstractArray{<:AbstractString}) = map!(float, similar(a,typeof(float(0
 The expression passed to the `parse` function could not be interpreted as a valid Julia
 expression.
 """
-mutable struct ParseError <: Exception
+struct ParseError <: Exception
     msg::AbstractString
 end
 
