@@ -11,10 +11,12 @@ function completes_global(x, name)
 end
 
 function appendmacro!(syms, macros, needle, endchar)
-    r = Regex("^.(.*)$needle\$")
     for s in macros
-        m = match(r, s)
-        m === nothing || push!(syms, m[1]*endchar)
+        if endswith(s, needle)
+            from = nextind(s, start(s))
+            to = prevind(s, sizeof(s)-sizeof(needle)+1)
+            push!(syms, s[from:to]*endchar)
+        end
     end
 end
 
