@@ -207,6 +207,34 @@ qrfact!(A::StridedMatrix{<:BlasFloat}) = qrfact!(A, Val(false))
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
+
+# Examples
+```jldoctest
+julia> a = [1. 2.; 3. 4.]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> qrfact!(a)
+Base.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:
+[-0.316228 -0.948683; -0.948683 0.316228]
+[-3.16228 -4.42719; 0.0 -0.632456]
+
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> qrfact!(a)
+ERROR: InexactError: convert(Int64, -3.1622776601683795)
+Stacktrace:
+ [1] convert at ./float.jl:703 [inlined]
+ [2] setindex! at ./array.jl:806 [inlined]
+ [3] setindex! at ./subarray.jl:245 [inlined]
+ [4] reflector! at ./linalg/generic.jl:1196 [inlined]
+ [5] qrfactUnblocked!(::Array{Int64,2}) at ./linalg/qr.jl:141
+ [6] qrfact!(::Array{Int64,2}) at ./linalg/qr.jl:213
+```
 """
 qrfact!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
 qrfact!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
@@ -345,6 +373,20 @@ and `r`, the norm of `v`.
 
 See also [`normalize`](@ref), [`normalize!`](@ref),
 and [`qr`](@ref).
+
+# Examples
+```jldoctest
+julia> v = [1.; 2.]
+2-element Array{Float64,1}:
+ 1.0
+ 2.0
+
+julia> w, r = Base.LinAlg.qr!(v)
+([0.447214, 0.894427], 2.23606797749979)
+
+julia> w === v
+true
+```
 """
 function qr!(v::AbstractVector)
     nrm = norm(v)
@@ -471,6 +513,39 @@ Optionally takes a `thin` Boolean argument, which if `true` omits the columns th
 rows of `R` in the QR factorization that are zero. The resulting matrix is the `Q` in a thin
 QR factorization (sometimes called the reduced QR factorization). If `false`, returns a `Q`
 that spans all rows of `R` in its corresponding QR factorization.
+
+# Examples
+```jldoctest
+julia> a = [1. 2.; 3. 4.; 5. 6.];
+
+julia> qra = qrfact(a, Val(true));
+
+julia> full(qra[:Q], thin=true)
+3×2 Array{Float64,2}:
+ -0.267261   0.872872
+ -0.534522   0.218218
+ -0.801784  -0.436436
+
+julia> full(qra[:Q], thin=false)
+3×3 Array{Float64,2}:
+ -0.267261   0.872872   0.408248
+ -0.534522   0.218218  -0.816497
+ -0.801784  -0.436436   0.408248
+
+julia> qra = qrfact(a, Val(false));
+
+julia> full(qra[:Q], thin=true)
+3×2 Array{Float64,2}:
+ -0.169031   0.897085
+ -0.507093   0.276026
+ -0.845154  -0.345033
+
+julia> full(qra[:Q], thin=false)
+3×3 Array{Float64,2}:
+ -0.169031   0.897085   0.408248
+ -0.507093   0.276026  -0.816497
+ -0.845154  -0.345033   0.408248
+```
 """
 function full(A::AbstractQ{T}; thin::Bool = true) where T
     if thin
