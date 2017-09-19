@@ -482,9 +482,11 @@ function completions(string, pos)
         paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
 
         if inc_tag == :string &&
-           length(paths) == 1 &&                              # Only close if there's a single choice,
-           !isdir(expanduser(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " "))) &&  # except if it's a directory
-           (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
+           length(paths) == 1 &&  # Only close if there's a single choice,
+           !isdir(expanduser(replace(string[startpos:prevind(string, start(r))] * paths[1],
+                                     r"\\ ", " "))) &&  # except if it's a directory
+           (length(string) <= pos ||
+            string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
             paths[1] *= "\""
         end
 
@@ -534,10 +536,11 @@ function completions(string, pos)
                         #   <Mod>/src/<Mod>.jl
                         #   <Mod>.jl/src/<Mod>.jl
                         if isfile(joinpath(dir, pname))
-                            endswith(pname, ".jl") && push!(suggestions, pname[1:end-3])
+                            endswith(pname, ".jl") && push!(suggestions,
+                                                            pname[1:prevind(pname, end-2)])
                         else
                             mod_name = if endswith(pname, ".jl")
-                                pname[1:end - 3]
+                                pname[1:prevind(pname, end-2)]
                             else
                                 pname
                             end
