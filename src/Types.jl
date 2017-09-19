@@ -237,18 +237,24 @@ struct EnvCache
 end
 EnvCache() = EnvCache(get(ENV, "JULIA_ENV", nothing))
 
-function info_project_diff(env₀::EnvCache, env₁::EnvCache)
+function emit_project(x::Char, name::String, uuid::String)
+    color = x == '+' ? :light_green : :light_red
+    print_with_color(:light_black, " [$(uuid[1:8])]")
+    print_with_color(color, " $x $name\n")
+end
+
+function print_project_diff(env₀::EnvCache, env₁::EnvCache)
     clean = true
     deps₀ = env₀.project["deps"]
     deps₁ = env₁.project["deps"]
     for name in sort!(union(keys(deps₀), keys(deps₁)), by=lowercase)
         uuid₀, uuid₁ = get(deps₀, name, ""), get(deps₁, name, "")
         uuid₀ == uuid₁ && continue
-        isempty(uuid₀) || info(" [-] $name = \"$uuid₀\"")
-        isempty(uuid₁) || info(" [+] $name = \"$uuid₁\"")
+        isempty(uuid₀) || emit_project('-', name, uuid₀)
+        isempty(uuid₁) || emit_project('+', name, uuid₁)
         clean = false
     end
-    clean && info(" [no changes]")
+    clean && print_with_color(:light_black, " [no changes]\n")
     return nothing
 end
 
@@ -290,9 +296,9 @@ end
 v_str(x::ManifestEntry) =
     x.version == nothing ? "[$(string(x.hash)[1:16])]" : "v$(x.version)"
 
-function info_manifest_diff(diff::ManifestDiff)
+function emit_manifest_diff(emit::Function, diff::ManifestDiff)
     if isempty(diff)
-        info(" [no changes]")
+        print_with_color(:light_black, " [no changes]\n")
         return
     end
     for (info₀, info₁) in diff
@@ -301,22 +307,29 @@ function info_manifest_diff(diff::ManifestDiff)
         u = string(uuid)[1:8]
         if info₀ != nothing && info₁ != nothing
             v₀, v₁ = v_str(info₀), v_str(info₁)
-            x = info₀.version == nothing || info₁.version == nothing ? "~" :
-                info₀.version < info₁.version ? "↑" : "↓"
-            info(" [$u] $x $name $v₀ ⇒ $v₁")
+            x = info₀.version == nothing || info₁.version == nothing ? '~' :
+                info₀.version < info₁.version ? '↑' : '↓'
+            emit(uuid, name, x, "$v₀ ⇒ $v₁")
         elseif info₀ != nothing
-            v₀ = v_str(info₀)
-            info(" [$u] - $name $v₀" )
+            emit(uuid, name, '-', v_str(info₀))
         elseif info₁ != nothing
-            v₁ = v_str(info₁)
-            info(" [$u] + $name $v₁" )
+            emit(uuid, name, '+', v_str(info₁))
         else
             error("this should not happen")
         end
     end
 end
-info_manifest_diff(env₀::EnvCache, env₁::EnvCache) =
-    info_manifest_diff(manifest_diff(env₀, env₁))
+
+function print_manifest_diff(env₀::EnvCache, env₁::EnvCache)
+    emit_manifest_diff(manifest_diff(env₀, env₁)) do uuid, name, x, vers
+        color = x == '+' ? :light_green   :
+                x == '-' ? :light_red     :
+                x == '↑' ? :light_yellow  :
+                           :light_magenta
+        print_with_color(:light_black, " [$(string(uuid)[1:8])] ")
+        print_with_color(color, "$x $name $vers\n")
+    end
+end
 
 const indent = "  "
 
@@ -354,7 +367,7 @@ function write_env(env::EnvCache)
     # update the project file
     if !isempty(env.project) || ispath(env.project_file)
         info("Updating project file $(env.project_file)")
-        info_project_diff(old_env, env)
+        print_project_diff(old_env, env)
         project = deepcopy(env.project)
         isempty(project["deps"]) && delete!(project, "deps")
         mkpath(dirname(env.project_file))
@@ -365,7 +378,7 @@ function write_env(env::EnvCache)
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
         info("Updating manifest file $(env.manifest_file)")
-        info_manifest_diff(old_env, env)
+        print_manifest_diff(old_env, env)
         manifest = deepcopy(env.manifest)
         uniques = sort!(collect(keys(manifest)), by=lowercase)
         filter!(name->length(manifest[name]) == 1, uniques)
