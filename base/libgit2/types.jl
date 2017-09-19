@@ -1239,6 +1239,12 @@ function reset!(p::CredentialPayload)
     return p
 end
 
+"""
+    approve(payload::CredentialPayload) -> Void
+
+Store the `payload` credential for re-use in a future authentication. Should only be called
+when authentication was successful.
+"""
 function approve(p::CredentialPayload)
     isnull(p.credential) && return  # No credentials were used
     cred = unsafe_get(p.credential)
@@ -1248,6 +1254,12 @@ function approve(p::CredentialPayload)
     end
 end
 
+"""
+    reject(payload::CredentialPayload) -> Void
+
+Discard the `payload` credential from begin re-used in future authentication. Should only be
+called when authentication was unsuccessful.
+"""
 function reject(p::CredentialPayload)
     isnull(p.credential) && return  # No credentials were used
     cred = unsafe_get(p.credential)

@@ -12,9 +12,7 @@ For more information on some of the objects and methods referenced here, consult
 [libgit2 API reference](https://libgit2.github.com/libgit2/#v0.25.1).
 
 ```@docs
-Base.LibGit2.AbstractCredentials
 Base.LibGit2.Buffer
-Base.LibGit2.CachedCredentials
 Base.LibGit2.CheckoutOptions
 Base.LibGit2.CloneOptions
 Base.LibGit2.DescribeOptions
@@ -49,13 +47,11 @@ Base.LibGit2.PushOptions
 Base.LibGit2.RebaseOperation
 Base.LibGit2.RebaseOptions
 Base.LibGit2.RemoteCallbacks
-Base.LibGit2.SSHCredentials
 Base.LibGit2.SignatureStruct
 Base.LibGit2.StatusEntry
 Base.LibGit2.StatusOptions
 Base.LibGit2.StrArrayStruct
 Base.LibGit2.TimeStruct
-Base.LibGit2.UserPasswordCredentials
 Base.LibGit2.add!
 Base.LibGit2.add_fetch!
 Base.LibGit2.add_push!
@@ -92,6 +88,7 @@ Base.LibGit2.features
 Base.LibGit2.filename
 Base.LibGit2.filemode
 Base.LibGit2.gitdir
+Base.LibGit2.git_url
 Base.LibGit2.@githash_str
 Base.LibGit2.head
 Base.LibGit2.head!
@@ -103,7 +100,6 @@ Base.LibGit2.isbinary
 Base.LibGit2.iscommit
 Base.LibGit2.isdiff
 Base.LibGit2.isdirty
-Base.LibGit2.isfilled
 Base.LibGit2.isorphan
 Base.LibGit2.isset
 Base.LibGit2.iszero
@@ -154,4 +150,12 @@ Base.LibGit2.with
 Base.LibGit2.with_warn
 Base.LibGit2.workdir
 Base.LibGit2.GitObject(::Base.LibGit2.GitTreeEntry)
+Base.LibGit2.AbstractCredentials
+Base.LibGit2.UserPasswordCredentials
+Base.LibGit2.SSHCredentials
+Base.LibGit2.isfilled
+Base.LibGit2.CachedCredentials
+Base.LibGit2.CredentialPayload
+Base.LibGit2.approve
+Base.LibGit2.reject
 ```
