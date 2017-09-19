@@ -62,6 +62,8 @@ static bool isBundleOperand(CallInst *call, unsigned idx)
  *
  * * load
  * * `pointer_from_objref`
+ * * Any real llvm intrinsics
+ * * gc preserve intrinsics
  * * `ccall` gcroot array (`jl_roots` operand bundle)
  * * store (as address)
  * * addrspacecast, bitcast, getelementptr
@@ -88,6 +90,7 @@ private:
     Function *ptr_from_objref;
     Function *lifetime_start;
     Function *lifetime_end;
+    Function *gc_preserve_begin;
 
     Type *T_int8;
     Type *T_int32;
@@ -150,7 +153,8 @@ private:
     bool checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruction*> &uses,
                    bool &ignore_tag);
     void replaceUsesWith(Instruction *orig_i, Instruction *new_i, ReplaceUsesStack &stack);
-    void replaceIntrinsicUseWith(IntrinsicInst *call, Instruction *orig_i, Instruction *new_i);
+    void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID, Instruction *orig_i,
+                                 Instruction *new_i);
     bool isSafepoint(Instruction *inst);
     void getAnalysisUsage(AnalysisUsage &AU) const override
     {
@@ -333,6 +337,7 @@ bool AllocOpt::doInitialization(Module &M)
         return false;
 
     ptr_from_objref = M.getFunction("julia.pointer_from_objref");
+    gc_preserve_begin = M.getFunction("llvm.julia.gc_preserve_begin");
 
     T_prjlvalue = alloc_obj->getReturnType();
     T_pjlvalue = PointerType::get(cast<PointerType>(T_prjlvalue)->getElementType(), 0);
@@ -384,9 +389,16 @@ bool AllocOpt::checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruc
         if (auto call = dyn_cast<CallInst>(inst)) {
             // TODO handle `memcmp`
             // None of the intrinsics should care if the memory is stack or heap allocated.
-            if (isa<IntrinsicInst>(call))
-                return true;
-            if (ptr_from_objref && ptr_from_objref == call->getCalledFunction())
+            auto callee = call->getCalledFunction();
+            if (auto II = dyn_cast<IntrinsicInst>(call)) {
+                if (II->getIntrinsicID()) {
+                    return true;
+                }
+                if (gc_preserve_begin && gc_preserve_begin == callee) {
+                    return true;
+                }
+            }
+            if (ptr_from_objref && ptr_from_objref == callee)
                 return true;
             auto opno = use->getOperandNo();
             // Uses in `jl_roots` operand bundle are not counted as escaping, everything else is.
@@ -445,11 +457,9 @@ bool AllocOpt::checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruc
     }
 }
 
-void AllocOpt::replaceIntrinsicUseWith(IntrinsicInst *call, Instruction *orig_i,
-                                       Instruction *new_i)
+void AllocOpt::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
+                                       Instruction *orig_i, Instruction *new_i)
 {
-    Intrinsic::ID ID = call->getIntrinsicID();
-    assert(ID);
     auto nargs = call->getNumArgOperands();
     SmallVector<Value*, 8> args(nargs);
     SmallVector<Type*, 8> argTys(nargs);
@@ -549,10 +559,12 @@ void AllocOpt::replaceUsesWith(Instruction *orig_inst, Instruction *new_inst,
                 return;
             }
             if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
-                replaceIntrinsicUseWith(intrinsic, orig_i, new_i);
-                return;
+                if (Intrinsic::ID ID = intrinsic->getIntrinsicID()) {
+                    replaceIntrinsicUseWith(intrinsic, ID, orig_i, new_i);
+                    return;
+                }
             }
-            // remove from operand bundle
+            // remove from operand bundle or arguments for gc_perserve_begin
             Type *new_t = new_i->getType();
             user->replaceUsesOfWith(orig_i, ConstantPointerNull::get(cast<PointerType>(new_t)));
         }

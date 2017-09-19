@@ -764,6 +764,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         std::vector<int> args;
                         for (Use &U : CI->arg_operands()) {
                             Value *V = U;
+                            if (isa<Constant>(V))
+                                continue;
                             int Num = Number(S, V);
                             if (Num >= 0)
                                 args.push_back(Num);
