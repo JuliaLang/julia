@@ -1282,9 +1282,75 @@ static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x, Type *astype 
             data = boxed(ctx, x);
         }
     }
-    if (data->getType() != astype)
+    if (astype && data->getType() != astype)
         data = emit_bitcast(ctx, data, astype);
     return decay_derived(data);
+}
+
+static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, Value *src,
+                             uint64_t sz, unsigned align, bool is_volatile, MDNode *tbaa)
+{
+    // If the types are small and simple, use load and store directly.
+    // Going through memcpy can cause LLVM (e.g. SROA) to create bitcasts between float and int
+    // that interferes with other optimizations.
+    if (sz <= 64) {
+        // The size limit is arbitrary but since we mainly care about floating points and
+        // machine size vectors this should be enough.
+#if JL_LLVM_VERSION >= 40000
+        const DataLayout &DL = jl_data_layout;
+#else
+        const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
+#endif
+        auto srcty = cast<PointerType>(src->getType());
+        auto srcel = srcty->getElementType();
+        auto dstty = cast<PointerType>(dst->getType());
+        auto dstel = dstty->getElementType();
+
+        bool direct = false;
+        if (srcel->isSized() && srcel->isSingleValueType() && DL.getTypeStoreSize(srcel) == sz) {
+            direct = true;
+            dst = emit_bitcast(ctx, dst, srcty);
+        }
+        else if (dstel->isSized() && dstel->isSingleValueType() &&
+                 DL.getTypeStoreSize(dstel) == sz) {
+            direct = true;
+            src = emit_bitcast(ctx, src, dstty);
+        }
+        if (direct) {
+            auto val = tbaa_decorate(tbaa, ctx.builder.CreateAlignedLoad(src, align, is_volatile));
+            tbaa_decorate(tbaa, ctx.builder.CreateAlignedStore(val, dst, align, is_volatile));
+            return;
+        }
+    }
+    ctx.builder.CreateMemCpy(dst, src, sz, align, is_volatile, tbaa);
+}
+
+static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, Value *src,
+                             Value *sz, unsigned align, bool is_volatile, MDNode *tbaa)
+{
+    if (auto const_sz = dyn_cast<ConstantInt>(sz)) {
+        emit_memcpy_llvm(ctx, dst, src, const_sz->getZExtValue(), align, is_volatile, tbaa);
+        return;
+    }
+    ctx.builder.CreateMemCpy(dst, src, sz, align, is_volatile, tbaa);
+}
+
+static Value *get_value_ptr(jl_codectx_t&, Value *ptr)
+{
+    return ptr;
+}
+
+static Value *get_value_ptr(jl_codectx_t &ctx, const jl_cgval_t &v)
+{
+    return data_pointer(ctx, v, nullptr);
+}
+
+template<typename T1, typename T2, typename T3>
+static void emit_memcpy(jl_codectx_t &ctx, T1 &&dst, T2 &&src, T3 &&sz, unsigned align,
+                        bool is_volatile=false, MDNode *tbaa=nullptr)
+{
+    emit_memcpy_llvm(ctx, get_value_ptr(ctx, dst), get_value_ptr(ctx, src), sz, align,
+                     is_volatile, tbaa);
 }
 
 static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
@@ -1423,8 +1489,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 AllocaInst *lv = emit_static_alloca(ctx, AT);
                 if (align > 1)
                     lv->setAlignment(align);
-                Value *nbytes = ConstantInt::get(T_size, fsz - 1);
-                ctx.builder.CreateMemCpy(lv, addr, nbytes, align);
+                emit_memcpy(ctx, lv, addr, fsz - 1, align);
                 addr = lv;
                 isimmutable = true;
             }
@@ -1742,7 +1807,7 @@ static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t& v,
 {
     // newv should already be tagged
     if (v.ispointer()) {
-        ctx.builder.CreateMemCpy(newv, data_pointer(ctx, v, T_pint8), jl_datatype_size(v.typ), sizeof(void*));
+        emit_memcpy(ctx, newv, v, jl_datatype_size(v.typ), sizeof(void*));
     }
     else {
         init_bits_value(ctx, newv, v.V, tbaa);
@@ -2058,9 +2123,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, const jl_cgval_t &src
                     dest = emit_bitcast(ctx, dest, T_pint8);
                 if (skip) // copy dest -> dest to simulate an undef value / conditional copy
                     src_ptr = ctx.builder.CreateSelect(skip, dest, src_ptr);
-                unsigned nb = jl_datatype_size(typ);
-                unsigned alignment = 0;
-                ctx.builder.CreateMemCpy(dest, src_ptr, nb, alignment, isVolatile, tbaa);
+                emit_memcpy(ctx, dest, src_ptr, jl_datatype_size(typ), 0, isVolatile, tbaa);
             }
         }
     }
@@ -2083,7 +2146,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, const jl_cgval_t &src
                     ctx.builder.SetInsertPoint(tempBB);
                     switchInst->addCase(ConstantInt::get(T_int8, idx), tempBB);
                     if (nb > 0)
-                        ctx.builder.CreateMemCpy(dest, src_ptr, nb, alignment, isVolatile, tbaa);
+                        emit_memcpy(ctx, dest, src_ptr, nb, alignment, isVolatile, tbaa);
                     ctx.builder.CreateBr(postBB);
                 },
                 src.typ,
@@ -2106,10 +2169,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, const jl_cgval_t &src
         Value *copy_bytes = emit_datatype_size(ctx, datatype);
         if (skip)
             copy_bytes = ctx.builder.CreateSelect(skip, ConstantInt::get(copy_bytes->getType(), 0), copy_bytes);
-        ctx.builder.CreateMemCpy(dest,
-                             data_pointer(ctx, src, T_pint8),
-                             copy_bytes,
-                             /*TODO: min-align*/1);
+        emit_memcpy(ctx, dest, src, copy_bytes, /*TODO: min-align*/1);
     }
 }
 
