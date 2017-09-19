@@ -357,6 +357,7 @@ A = view(rand(5,5), 1:3, 1:3)
 
 # julia#13998
 for x in (3.1, -17, 3//4, big(111.1), Inf)
+    local x
     @test min(x) == max(x) == x
     @test minmax(x) == (x, x)
 end
@@ -769,6 +770,58 @@ no_specialize(@nospecialize(x::Integer)) = sin(2)
 
 # 0.7
 @test isa(1:2, AbstractRange)
+
+# 0.7
+let M = [1 + 2im 3 + 4im; 5 + 6im 7 + 8im],
+    M2 = adjoint(M),
+    Mc = [1 - 2im 5 - 6im; 3 - 4im 7 - 8im]
+
+    @test adjoint(M) == Mc
+    M2 .= 0
+    adjoint!(M2, M)
+    @test M2 == Mc
+end
+
+# 0.7
+module TestMathConstants
+using Compat.MathConstants
+end
+for name in [:π, :pi, :ℯ, :e, :γ, :eulergamma, :catalan, :φ, :golden]
+    @test isdefined(TestMathConstants, name) && !Base.isdeprecated(TestMathConstants, name)
+    @test isdefined(Compat.MathConstants, name) && !Base.isdeprecated(Compat.MathConstants, name)
+end
+module TestMathConstants2
+using Compat
+end
+@test isdefined(TestMathConstants2, :ℯ) && !Base.isdeprecated(TestMathConstants, :ℯ)
+
+# 0.7
+@test partialsort([3,6,30,1,9], 2, rev=true) == 9
+@test partialsort([3,6,30,1,9], 2, by=x->1/x) == 9
+@test partialsortperm([3,6,30,1,9], 2, rev=true) == 5
+@test partialsortperm([3,6,30,1,9], 2, by=x->1/x) == 5
+
+# 0.7
+@test isa(Base.rtoldefault(1.0, 2.0, 0), Float64)
+@test isa(Base.rtoldefault(Float64, 2.0, 0), Float64)
+@test isa(Base.rtoldefault(1.0, Float64, 0), Float64)
+@test isa(Base.rtoldefault(Float64, Float64, 0), Float64)
+@test Base.rtoldefault(Float64, Float64, 1.0) === 0.0
+
+# 0.7
+@test cov([1 2; 3 4], 1, corrected=true) == fill(2.0, 2, 2)
+@test cov([1 2; 3 4], 1, corrected=false) == fill(1.0, 2, 2)
+@test cov([1 2; 3 4], [0 4; 8 9], 1, corrected=true) == [8.0 5.0; 8.0 5.0]
+@test cov([1 2; 3 4], [0 4; 8 9], 1, corrected=false) == [4.0 2.5; 4.0 2.5]
+if VERSION >= v"0.6"
+    @test cov([1, 2], corrected=true) === 0.5
+    @test cov([1, 2], corrected=false) === 0.25
+    @test cov([1, 2], [0, 10], corrected=true) === 5.0
+    @test cov([1, 2], [0, 10], corrected=false) === 2.5
+end
+
+# 0.7
+@test isconcrete(Int)
 
 if VERSION < v"0.6.0"
     include("deprecated.jl")

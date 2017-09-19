@@ -164,7 +164,15 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `retry` for the more flexible `retry` method introduced in 0.6 which includes support for kwargs ([#19331], [#21419]).
 
-## Renamed functions and types
+* `Base.rtoldefault` how takes a third parameter `atol`.
+  The two argument form is deprecated in favor of the three arguments form with `atol=0`.
+
+* The `corrected` optional argument of `cov` becomes a keyword argument.
+  Due to conflict with 0.5 deprecation,
+  `cov(::AbstractVector; corrected=)` and `cov(::AbstractVector, ::AbstractVector; corrected=)`
+  are only available on 0.6. ([#21709])
+
+## Renaming
 
 
 * `$` is now `xor` or `⊻` ([#18977])
@@ -183,6 +191,17 @@ Currently, the `@compat` macro supports the following syntaxes:
     and `read(::Cmd, ::Type{String})` are defined for 0.6 and below.
 
 * `Range` is now `AbstractRange` ([#23570])
+
+* `select`* functions (`select`, `select!`, `selectperm`, `selectperm!`) are renamed to
+  `partialsort`* (`partialsort`, `partialsort!`, `partialsortperm`, `partialsortperm!`) ([#23051])
+
+* `ctranspose` and `ctranspose!` are now `adjoint` and `adjoint!` ([#23235])
+
+* Math constants (`π`, `pi`, `e`, `γ`, `eulergamma`, `catalan`, `φ`, `golden`) are moved to the
+  `MathConstants` module (available as `Compat.MathConstants`).
+  The name exported from `Base` for `e` is changed to `ℯ`. ([#23427])
+
+* `isleaftype` is now `isconcrete` ([#23666])
 
 ## New macros
 
@@ -296,6 +315,7 @@ includes this fix. Find the minimum version from there.
 [#21257]: https://github.com/JuliaLang/julia/issues/21257
 [#21346]: https://github.com/JuliaLang/julia/issues/21346
 [#21378]: https://github.com/JuliaLang/julia/issues/21378
+[#21709]: https://github.com/JuliaLang/julia/issues/21709
 [#22064]: https://github.com/JuliaLang/julia/issues/22064
 [#22182]: https://github.com/JuliaLang/julia/issues/22182
 [#22350]: https://github.com/JuliaLang/julia/issues/22350
@@ -306,4 +326,8 @@ includes this fix. Find the minimum version from there.
 [#22751]: https://github.com/JuliaLang/julia/issues/22751
 [#22761]: https://github.com/JuliaLang/julia/issues/22761
 [#22864]: https://github.com/JuliaLang/julia/issues/22864
+[#23051]: https://github.com/JuliaLang/julia/issues/23051
+[#23235]: https://github.com/JuliaLang/julia/issues/23235
+[#23427]: https://github.com/JuliaLang/julia/issues/23427
 [#23570]: https://github.com/JuliaLang/julia/issues/23570
+[#23666]: https://github.com/JuliaLang/julia/issues/23666
