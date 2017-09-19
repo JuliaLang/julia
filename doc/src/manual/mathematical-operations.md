@@ -355,14 +355,19 @@ Julia applies the following order and associativity of operations, from highest 
 |:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
 | Syntax         | `.` followed by `::`                                                                              | Left                       |
 | Exponentiation | `^`                                                                                               | Right                      |
+| Unary          | `√`                                                                                               | Not applicable             |
 | Fractions      | `//`                                                                                              | Left                       |
-| Multiplication | `* / % & \`                                                                                       | Left                       |
+| Multiplication | `* / % & \`                                                                                       | Left[^1]                      |
 | Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
-| Addition       | `+ - \| ⊻`                                                                                        | Left                       |
+| Addition       | `+ - \| ⊻`                                                                                        | Left[^1]                      |
 | Syntax         | `: ..` followed by `\|>`                                                                          | Left                       |
 | Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
 | Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
 | Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
+
+[^1]:
+    The operators `+`, `++` and `*` are non-associative. `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),
+    c)`. However, the fallback methods for `+` and `*` both default to left-associative evaluation.
 
 For a complete list of *every* Julia operator's precedence, see the top of this file:
 [`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm)
@@ -380,15 +385,15 @@ julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.opera
 A symbol representing the operator associativity can also be found by calling the built-in function `Base.operator_associativity`:
 
 ```jldoctest
-julia> Base.operator_associativity(:+), Base.operator_associativity(:>), Base.operator_associativity(:^)
+julia> Base.operator_associativity(:-), Base.operator_associativity(:+), Base.operator_associativity(:^)
 (:left, :none, :right)
 
 julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Base.operator_associativity(:→)
 (:left, :none, :right)
 ```
 
-Note that invalid operators such as `:sin` have precedence `0`. This value represents invalid
-operators and not operators of lowest precedence. Such operators also have associativity `:none`.
+Note that symbols such as `:sin` return precedence `0`. This value represents invalid operators and not
+operators of lowest precedence. Similarly, such operators are assigned associativity `:none`.
 
 ## Numerical Conversions
 
