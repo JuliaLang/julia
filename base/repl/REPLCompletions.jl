@@ -11,7 +11,11 @@ function completes_global(x, name)
 end
 
 function appendmacro!(syms, macros, needle, endchar)
-    append!(syms, s[2:end-sizeof(needle)]*endchar for s in filter(x -> endswith(x, needle), macros))
+    r = Regex("^.(.*)$needle\$")
+    for s in macros
+        m = match(r, s)
+        m === nothing || push!(syms, m[1]*endchar)
+    end
 end
 
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
