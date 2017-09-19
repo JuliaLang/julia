@@ -108,7 +108,7 @@ julia [switches] -- [programfile] [args...]
                            Enable or disable incremental precompilation of modules
 
  -e, --eval <expr>         Evaluate <expr>
- -E, --print <expr>        Evaluate and show <expr>
+ -E, --print <expr>        Evaluate <expr> and display the result
  -L, --load <file>         Load <file> immediately on all processors
 
  -p, --procs {N|auto}      Integer value N launches N additional local worker processes

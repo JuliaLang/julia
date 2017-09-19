@@ -209,6 +209,9 @@ This section lists changes that do not have deprecation warnings.
     consistent with its documentation. Previously it would return a `BitArray{0}` for scalar
     `x` ([#20233]).
 
+  * All command line arguments passed via `-e`, `-E`, and `-L` will be executed in the order
+    given on the command line ([#23665]).
+
 Library improvements
 --------------------
 

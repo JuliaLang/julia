@@ -56,19 +56,22 @@ let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     @test !success(`$exename -i -e "exit(1)"`)
 
     # --print
-    @test read(`$exename -E "1+1"`, String) == "2\n"
-    @test read(`$exename --print="1+1"`, String) == "2\n"
+    @test read(`$exename -E "1+1"`, String) == "2"
+    @test read(`$exename --print="1+1"`, String) == "2"
     @test !success(`$exename -E`)
     @test !success(`$exename --print`)
 
     # --load
     let testfile = tempname()
         try
-            write(testfile, "testvar = :test\n")
+            write(testfile, "testvar = :test\nprint(\"loaded\")\n")
             @test split(readchomp(`$exename -i --load=$testfile -e "println(testvar)"`),
-                '\n')[end] == "test"
-            @test split(readchomp(`$exename -i -e "println(testvar)" -L $testfile`),
-                '\n')[end] == "test"
+                '\n')[end] == "loadedtest"
+            @test split(readchomp(`$exename -i -L $testfile -e "println(testvar)"`),
+                '\n')[end] == "loadedtest"
+            # multiple, combined
+            @test read(`$exename -e 'push!(ARGS, "hi")' -E "1+1" -E "2+2" -L$testfile -E '3+3' -L$testfile -E 'pop!(ARGS)' -e 'show(ARGS)' 9 10`, String) ==
+                "24loaded6loaded\"hi\"[\"9\", \"10\"]"
         finally
             rm(testfile)
         end

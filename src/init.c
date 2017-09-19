@@ -434,40 +434,58 @@ int isabspath(const char *in)
     return 0; // relative path
 }
 
-static char *abspath(const char *in)
+static char *abspath(const char *in, int nprefix)
 { // compute an absolute path location, so that chdir doesn't change the file reference
+  // ignores (copies directly over) nprefix characters at the start of abspath
 #ifndef _OS_WINDOWS_
-    char *out = realpath(in, NULL);
-    if (!out) {
-        if (in[0] == PATHSEPSTRING[0]) {
-            out = strdup(in);
+    char *out = realpath(in + nprefix, NULL);
+    if (out) {
+        if (nprefix > 0) {
+            size_t sz = strlen(out) + 1;
+            char *cpy = (char*)malloc(sz + nprefix);
+            if (!cpy)
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            memcpy(cpy, in, nprefix);
+            memcpy(cpy + nprefix, out, sz);
+            free(out);
+            out = cpy;
+        }
+    }
+    else {
+        size_t sz = strlen(in + nprefix) + 1;
+        if (in[nprefix] == PATHSEPSTRING[0]) {
+            out = (char*)malloc(sz + nprefix);
+            if (!out)
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            memcpy(out, in, sz + nprefix);
         }
         else {
             size_t path_size = PATH_MAX;
-            size_t len = strlen(in);
             char *path = (char*)malloc(PATH_MAX);
+            if (!path)
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
             if (uv_cwd(path, &path_size)) {
                 jl_error("fatal error: unexpected error while retrieving current working directory");
             }
-            if (path_size + len + 2 >= PATH_MAX) {
-                jl_error("fatal error: current working directory path too long");
-            }
-            path[path_size] = PATHSEPSTRING[0];
-            memcpy(path + path_size + 1, in, len+1);
-            out = strdup(path);
+            out = (char*)malloc(path_size + 1 + sz + nprefix);
+            memcpy(out, in, nprefix);
+            memcpy(out + nprefix, path, path_size);
+            out[nprefix + path_size] = PATHSEPSTRING[0];
+            memcpy(out + nprefix + path_size + 1, in + nprefix, sz);
             free(path);
         }
     }
 #else
-    DWORD n = GetFullPathName(in, 0, NULL, NULL);
+    DWORD n = GetFullPathName(in + nprefix, 0, NULL, NULL);
     if (n <= 0) {
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
     }
-    char *out = (char*)malloc(n);
-    DWORD m = GetFullPathName(in, n, out, NULL);
+    char *out = (char*)malloc(n + nprefix);
+    DWORD m = GetFullPathName(in + nprefix, n, out + nprefix, NULL);
     if (n != m + 1) {
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
     }
+    memcpy(out, in, nprefix);
 #endif
     return out;
 }
@@ -498,7 +516,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         }
     }
     if (jl_options.julia_home)
-        jl_options.julia_home = abspath(jl_options.julia_home);
+        jl_options.julia_home = abspath(jl_options.julia_home, 0);
     free(free_path);
     free_path = NULL;
     if (jl_options.image_file) {
@@ -513,22 +531,30 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
             jl_options.image_file = free_path;
         }
         if (jl_options.image_file)
-            jl_options.image_file = abspath(jl_options.image_file);
+            jl_options.image_file = abspath(jl_options.image_file, 0);
         if (free_path) {
             free(free_path);
             free_path = NULL;
         }
     }
     if (jl_options.outputo)
-        jl_options.outputo = abspath(jl_options.outputo);
+        jl_options.outputo = abspath(jl_options.outputo, 0);
     if (jl_options.outputji)
-        jl_options.outputji = abspath(jl_options.outputji);
+        jl_options.outputji = abspath(jl_options.outputji, 0);
     if (jl_options.outputbc)
-        jl_options.outputbc = abspath(jl_options.outputbc);
+        jl_options.outputbc = abspath(jl_options.outputbc, 0);
     if (jl_options.machinefile)
-        jl_options.machinefile = abspath(jl_options.machinefile);
-    if (jl_options.load)
-        jl_options.load = abspath(jl_options.load);
+        jl_options.machinefile = abspath(jl_options.machinefile, 0);
+
+    const char **cmdp = jl_options.cmds;
+    if (cmdp) {
+        for (; *cmdp; cmdp++) {
+            const char *cmd = *cmdp;
+            if (cmd[0] == 'L') {
+                *cmdp = abspath(cmd, 1);
+            }
+        }
+    }
 }
 
 static void jl_set_io_wait(int v)
