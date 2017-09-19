@@ -192,11 +192,11 @@ function test_file_poll(channel,interval,timeout_s)
 end
 
 function test_timeout(tval)
-    tic()
-    channel = Channel(1)
-    @async test_file_poll(channel, 10, tval)
-    tr = take!(channel)
-    t_elapsed = toq()
+    t_elapsed = @elapsed begin
+        channel = Channel(1)
+        @async test_file_poll(channel, 10, tval)
+        tr = take!(channel)
+    end
     @test tr[1] === Base.Filesystem.StatStruct() && tr[2] === EOFError()
     @test tval <= t_elapsed
 end

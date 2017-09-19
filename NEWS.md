@@ -453,6 +453,9 @@ Deprecated or removed
     `prompt_if_incorrect` argument are deprecated. Instead, prompting behavior is controlled using
     the `allow_prompt` keyword in the `LibGit2.CredentialPayload` constructor ([#23690]).
 
+  * The timing functions `tic`, `toc`, and `toq` are deprecated in favor of `@time` and `@elapsed`
+    ([#17046]).
+
 Command-line option changes
 ---------------------------
 

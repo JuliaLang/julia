@@ -193,9 +193,6 @@ Base.getipaddr
 Base.Libc.getpid
 Base.Libc.time()
 Base.time_ns
-Base.tic
-Base.toc
-Base.toq
 Base.@time
 Base.@timev
 Base.@timed

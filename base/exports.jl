@@ -897,11 +897,8 @@ export
 
 # time
     sleep,
-    tic,
     time,
     time_ns,
-    toc,
-    toq,
 
 # dates
     Date,

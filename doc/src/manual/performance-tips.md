@@ -73,8 +73,7 @@ julia> @time f(10^6)
 On the first call (`@time f(1)`), `f` gets compiled.  (If you've not yet used [`@time`](@ref)
 in this session, it will also compile functions needed for timing.)  You should not take the results
 of this run seriously. For the second run, note that in addition to reporting the time, it also
-indicated that a large amount of memory was allocated. This is the single biggest advantage of
-[`@time`](@ref) vs. functions like [`tic`](@ref) and [`toc`](@ref), which only report time.
+indicated that a large amount of memory was allocated.
 
 Unexpected memory allocation is almost always a sign of some problem with your code, usually a
 problem with type-stability. Consequently, in addition to the allocation itself, it's very likely
