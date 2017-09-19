@@ -38,11 +38,12 @@ lqfact(x::Number) = lqfact(fill(x,1,1))
 Perform an LQ factorization of `A` such that `A = L*Q`. The
 default is to compute a thin factorization. The LQ factorization
 is the QR factorization of `A.'`. `L` is not extended with
-zeros if the full `Q` is requested.
+zeros if the explicit, square form of `Q` is requested via `thin = false`.
 """
-function lq(A::Union{Number, AbstractMatrix}; thin::Bool=true)
+function lq(A::Union{Number,AbstractMatrix}; thin::Bool = true)
     F = lqfact(A)
-    F[:L], full(F[:Q], thin=thin)
+    L, Q = F[:L], F[:Q]
+    return L, thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 2)))
 end
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
@@ -90,19 +91,9 @@ convert(::Type{LQPackedQ{T}}, Q::LQPackedQ) where {T} = LQPackedQ(convert(Abstra
 convert(::Type{AbstractMatrix{T}}, Q::LQPackedQ) where {T} = convert(LQPackedQ{T}, Q)
 convert(::Type{Matrix}, A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
 convert(::Type{Array}, A::LQPackedQ) = convert(Matrix, A)
-function full(A::LQPackedQ{T}; thin::Bool = true) where T
-    #= We construct the full eye here, even though it seems inefficient, because
-    every element in the output matrix is a function of all the elements of
-    the input matrix. The eye is modified by the elementary reflectors held
-    in A, so this is not just an indexing operation. Note that in general
-    explicitly constructing Q, rather than using the ldiv or mult methods,
-    may be a wasteful allocation. =#
-    if thin
-        convert(Array, A)
-    else
-        A_mul_B!(A, eye(T, size(A.factors,2), size(A.factors,1)))
-    end
-end
+
+full(Q::LQPackedQ; thin::Bool = true) =
+    thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 2)))
 
 size(A::LQ, dim::Integer) = size(A.factors, dim)
 size(A::LQ) = size(A.factors)
@@ -119,9 +110,12 @@ end
 size(A::LQPackedQ) = size(A.factors)
 
 ## Multiplication by LQ
-A_mul_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,B)
-A_mul_B!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat} = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,full(B))
-A_mul_B!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat} = A_mul_B!(zeros(full(A)), full(A), full(B))
+A_mul_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+    A[:L] * LAPACK.ormlq!('L', 'N', A.factors, A.τ, B)
+A_mul_B!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat} =
+    A[:L] * LAPACK.ormlq!('L', 'N', A.factors, A.τ, Matrix(B))
+A_mul_B!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat} =
+    A_mul_B!(zeros(eltype(A), size(A)), Matrix(A), Matrix(B))
 function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
     A_mul_B!(convert(Factorization{TAB},A), copy_oftype(B, TAB))

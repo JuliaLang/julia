@@ -1846,6 +1846,15 @@ function toc()
     return t
 end
 
+@noinline function getaddrinfo(callback::Function, host::AbstractString)
+    depwarn("getaddrinfo with a callback function is deprecated, wrap code in @async instead for deferred execution", :getaddrinfo)
+    @async begin
+        r = getaddrinfo(host)
+        callback(r)
+    end
+    nothing
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
