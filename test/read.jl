@@ -145,17 +145,28 @@ for (name, f) in l
 
     verbose && println("$name readuntil...")
     for (t, s, m) in [
+            ("a", "ab", "a"),
+            ("b", "ab", "b"),
+            ("α", "αγ", "α"),
+            ("ab", "abc", "ab"),
+            ("bc", "abc", "bc"),
+            ("αβ", "αβγ", "αβ"),
+            ("aaabc", "ab", "aaab"),
+            ("aaabc", "ac", "aaabc"),
             ("aaabc", "aab", "aaab"),
+            ("aaabc", "aac", "aaabc"),
+            ("αααβγ", "αβ", "αααβ"),
             ("αααβγ", "ααβ", "αααβ"),
+            ("αααβγ", "αγ", "αααβγ"),
             ("barbarbarians", "barbarian", "barbarbarian")]
         local t, s, m
-        !isascii(t) && name in ("File", "PipeEndpoint") && continue
-
         @test readuntil(io(t), s) == m
-
-        s = SubString(s, start(s), endof(s))
-        @test readuntil(io(t), s) == m
+        @test readuntil(io(t), SubString(s, start(s), endof(s))) == m
+        @test readuntil(io(t), GenericString(s)) == m
+        @test readuntil(io(t), Vector{UInt8}(s)) == Vector{UInt8}(m)
+        @test readuntil(io(t), collect(s)::Vector{Char}) == Vector{Char}(m)
     end
+    cleanup()
 
     write(filename, text)
 

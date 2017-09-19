@@ -152,8 +152,10 @@ flush(io::AbstractPipe) = flush(pipe_writer(io))
 read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io), p, nb)
 read(io::AbstractPipe) = read(pipe_reader(io))
-readuntil(io::AbstractPipe, arg::UInt8)          = readuntil(pipe_reader(io), arg)
-readuntil(io::AbstractPipe, arg::Char)           = readuntil(pipe_reader(io), arg)
+readuntil(io::AbstractPipe, arg::UInt8) = readuntil(pipe_reader(io), arg)
+readuntil(io::AbstractPipe, arg::Char) = readuntil(pipe_reader(io), arg)
+readuntil_indexable(io::AbstractPipe, target#=::Indexable{T}=#, out) = readuntil_indexable(pipe_reader(io), target, out)
+
 readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
 
 isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
@@ -508,85 +510,88 @@ function readuntil(s::IO, delim::T) where T
     return out
 end
 
-mutable struct Backtrack{T, O, C}
-    target::T
-    out::O
-    cache::C
-    pos::Int
-    endof::Int
-    max_pos::Int
-end
-
-function Backtrack(target, out)
+# requires that indices for target are small ordered integers bounded by start and endof
+function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
+    T = eltype(target)
     first = start(target)
+    if done(target, first)
+        return
+    end
     len = endof(target)
-    max_pos = next(target, first)[2]
-    return Backtrack(target, out, zeros(Int, len), first, len, max_pos)
-end
-
-function Backtrack(target::AbstractString)
-    t = collect(target) # ensure that indices for target are small ordered integers bounded by 1 and endof
-    return Backtrack(t, IOBuffer())
-end
-
-function Backtrack(target::String)
-    t = Vector{UInt8}(target)  # convert String to a utf8-byte-iterator
-    return Backtrack(t, StringVector(0)) # collect bytes directly into a Vector
-end
-
-#function Backtrack(target::SubString{String})
-#    return Backtrack(target, IOBuffer())
-#end
-
-function readuntil(io::IO, target::AbstractString)
-    i = start(target)
-    if done(target, i)
-        return ""
-    end
-    c, i = next(target, i)
-    if done(target, i) && c < Char(0x80)
-        return readuntil_string(io, c % UInt8)
-    end
-    # handle non-trivial cases
-    backtrack = Backtrack(target)
-    first = start(backtrack.target)
+    local cache # will be lazy initialized when needed
+    second = next(target, first)[2]
+    max_pos = second
+    pos = first
     while !eof(io)
-        c = read(io, Char)
+        c = read(io, T)
         # Backtrack until the next target character matches what was found
-        if backtrack.out isa IO
-            write(backtrack.out, c)
+        if out isa IO
+            write(out, c)
         else
-            push!(backtrack.out, c)
+            push!(out, c)
         end
-        pos = backtrack.pos
         while true
-            c1, pos1 = next(backtrack.target, pos)
+            c1, pos1 = next(target, pos)
             if c == c1
                 pos = pos1
                 break
-            end
-            pos == first && break
-            # grow cache to contain up to index
-            let max_pos = backtrack.max_pos
-                while max_pos < max_pos
-                    b = backtrack.cache[max_pos] + cache_offset
-                    cb, b1 = next(backtrack.target, b)
-                    ci, max_pos1 = next(backtrack.target, max_pos)
+            elseif pos == first
+                break
+            elseif pos == second
+                pos = first
+            else
+                # grow cache to contain up to `pos`
+                if !@isdefined(cache)
+                    cache = zeros(Int, len)
+                end
+                while max_pos < pos
+                    b = cache[max_pos] + first
+                    cb, b1 = next(target, b)
+                    ci, max_pos1 = next(target, max_pos)
                     if ci == cb
-                        backtrack.cache[max_pos1] = b1 - cache_offset
+                        cache[max_pos1] = b1 - first
                     end
                     max_pos = max_pos1
                 end
-                backtrack.max_pos = max_pos
+                pos = cache[pos] + first
             end
-            pos = backtrack.cache[index] + cache_offset
         end
-        backtrack.pos = pos
-        done(backtrack.target, pos) && break
+        done(target, pos) && break
     end
-    out = isa(backtrack.out, IO) ? take!(backtrack.out) : backtrack.out
+end
+
+function readuntil(io::IO, target::AbstractString)
+    # small-string target optimizations
+    i = start(target)
+    done(target, i) && return ""
+    c, i = next(target, start(target))
+    if done(target, i) && c < Char(0x80)
+        return readuntil_string(io, c % UInt8)
+    end
+    # decide how we can index target
+    if target isa String
+        # convert String to a utf8-byte-iterator
+        target = Vector{UInt8}(target)
+    #elseif applicable(codeunit, target)
+    #   TODO: a more general version of above optimization
+    #         would be to permit accessing any string via codeunit
+    #   target = CodeUnitVector(target)
+    elseif !(target isa SubString{String})
+        # type with unknown indexing behavior: convert to array
+        target = collect(target)
+    end
+    out = (eltype(target) === UInt8 ? StringVector(0) : IOBuffer())
+    readuntil_indexable(io, target, out)
+    out = isa(out, IO) ? take!(out) : out
     return String(out)
 end
+
+function readuntil(io::IO, target::AbstractVector{T}) where T
+    out = (T === UInt8 ? StringVector(0) : Vector{T}())
+    readuntil_indexable(io, target, out)
+    return out
+end
+
 
 """
     readchomp(x)
