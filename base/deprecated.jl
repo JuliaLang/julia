@@ -218,15 +218,9 @@ end
 @deprecate SubArray(parent::AbstractArray, indexes::Tuple, dims::Tuple) SubArray(parent, indexes)
 
 # Deprecate vectorized unary functions over sparse matrices in favor of compact broadcast syntax (#17265).
-for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
-        :tan, :tanh, :tand, :atan, :atanh, :atand,
-        :sinpi, :cosc, :ceil, :floor, :trunc, :round,
-        :log1p, :expm1, :abs, :abs2,
-        :log2, :log10, :exp2, :exp10, :sinc, :cospi,
-        :cos, :cosh, :cosd, :acos, :acosd,
-        :cot, :coth, :cotd, :acot, :acotd,
-        :sec, :sech, :secd, :asech,
-        :csc, :csch, :cscd, :acsch)
+for f in (:sind, :asind, :tand, :atand, :sinpi, :cosc, :ceil, :floor, :trunc,
+        :round, :log1p, :expm1, :abs, :abs2, :log2, :log10, :exp2, :exp10,
+        :sinc, :cospi, :cosd, :acosd, :cotd, :acotd, :secd, :cscd)
     @eval import .Math: $f
     @eval @deprecate $f(A::SparseMatrixCSC) $f.(A)
 end
@@ -254,9 +248,7 @@ for f in (
         # base/special/gamma.jl
         :gamma, :lfact,
         # base/math.jl
-        :cbrt, :atan, :asinh, :exp2,
-        :expm1, :exp10, :asin, :acos, :acosh, :atanh,
-        :log2, :log10, :lgamma, #=:log1p,=#
+        :cbrt, :exp2, :expm1, :exp10, :log2, :log10, :lgamma, #=:log1p,=#
         # base/floatfuncs.jl
         :abs, :abs2, :angle, :isnan, :isinf, :isfinite,
         # base/complex.jl
@@ -742,9 +734,7 @@ end
 @deprecate sign(A::AbstractArray) sign.(A)
 
 # Deprecate manually vectorized trigonometric and hyperbolic functions in favor of compact broadcast syntax
-for f in (:secd, :asec, :asech,
-          :cscd, :acsc, :acsch,
-          :cotd, :acot, :acoth)
+for f in (:secd, :cscd, :cotd)
     @eval import .Math: $f
     @eval @deprecate $f(A::AbstractArray{<:Number}) $f.(A)
 end
@@ -1447,7 +1437,7 @@ function DomainError()
 end
 
 # PR #22761
-function OverflowError()
+                                                                                                               function OverflowError()
     depwarn("OverflowError now supports a message string, use `OverflowError(msg)` instead.", :OverflowError)
     OverflowError("")
 end
@@ -1480,10 +1470,11 @@ for op in (:floor, :ceil, :trunc, :round,
 end
 # deprecate remaining vectorized methods over SparseVectors (not-zero-preserving)
 for op in (:exp, :exp2, :exp10, :log, :log2, :log10,
-        :cos, :cosd, :acos, :cosh, :cospi,
-        :csc, :cscd, :acot, :csch, :acsch,
-        :cot, :cotd, :acosd, :coth,
-        :sec, :secd, :acotd, :sech, :asech)
+           :cos, :cosd, :acos, :cosh, :cospi,
+           :csc, :cscd, :acot, :csch, :acsch,
+           :cot, :cotd, :acosd, :coth,
+           :sec, :secd, :acotd, :sech, :asech)
+    @eval import .Math: $op
     @eval @deprecate ($op)(x::AbstractSparseVector{<:Number,<:Integer}) ($op).(x)
 end
 
