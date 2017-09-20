@@ -163,6 +163,19 @@ function _require_from_serialized(mod::Symbol, path_to_try::String)
     return restored
 end
 
+"""
+    is_optional_module_available(name::String)
+
+Check that optional module with `name` is available.
+"""
+function is_optional_module_available(name::String)
+    # TODO:
+    # - Doesn't take into account Base and child modules
+    # - Make depend on module called from
+    # - Make extendable for version checks (Pkg3)
+    return find_in_node_path(name, nothing, 1) !== nothing
+end
+
 # returns `true` if require found a precompile cache for this mod, but couldn't load it
 # returns `false` if the module isn't known to be precompilable
 # returns the set of modules restored if the cache load succeeded
@@ -232,6 +245,46 @@ no effect outside of compilation.
 function include_dependency(path::AbstractString)
     _include_dependency(path)
     return nothing
+end
+
+# used to track optional dependencies during precompilation
+const _optional_dependencies = String[]
+
+"""
+    register_optional_dependency(mod::String)
+
+In a module, declare that the module with the name `mod` is a dependency
+for precompilation; that is, the module will need to be recompiled if this
+optional module becomes available in the future.
+
+This is only needed if your module depends on a module that is not used via
+`require`, `using`, `import`, or `importall`. It has no effect outside
+pre-compilation.
+
+Most users will want to use instead `@dependson`
+"""
+function register_optional_dependency(mod::String)
+    if myid() == 1 && _track_dependencies[]
+        push!(_optional_dependencies, mod)
+    end
+end
+
+"""
+    dependson(mod, expr)
+
+Marks a expression to be dependent on the availability of a module by name `mod`.
+This only affects precompilation.
+
+See `register_optional_dependency` for more information.
+"""
+macro dependson(mod, expr)
+    name = string(mod)
+    if Base.is_optional_module_available(name)
+        return esc(expr)
+    else
+        Base.register_optional_dependency(name)
+        return nothing
+    end
 end
 
 # We throw PrecompilableError(true) when a module wants to be precompiled but isn't,
@@ -624,6 +677,20 @@ function parse_cache_header(f::IO)
         push!(files, (String(read(f, n)), ntoh(read(f, Float64))))
     end
     @assert totbytes == 4 "header of cache file appears to be corrupt"
+
+    # read the list of optional modules
+    totbytes = ntoh(read(f, Int64)) # total bytes for optional dependencies
+    optional_deps = Symbol[]
+    while true
+        n = ntoh(read(f, Int32))
+        n == 0 && break
+        totbytes -= 4 + n
+        @assert n >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
+        sym = Symbol(read(f, n)) # module symbol
+        push!(optional_deps, sym)
+    end
+    @assert totbytes == 4 "header of cache file appears to be corrupt"
+
     # read the list of modules that are required to be present during loading
     required_modules = Dict{Symbol,UInt64}()
     while true
@@ -633,7 +700,8 @@ function parse_cache_header(f::IO)
         uuid = ntoh(read(f, UInt64)) # module UUID
         required_modules[sym] = uuid
     end
-    return modules, files, required_modules
+
+    return modules, files, required_modules, optional_deps
 end
 
 function parse_cache_header(cachefile::String)
@@ -647,8 +715,8 @@ function parse_cache_header(cachefile::String)
 end
 
 function cache_dependencies(f::IO)
-    defs, files, modules = parse_cache_header(f)
-    return modules, files
+    defs, files, modules, optional = parse_cache_header(f)
+    return modules, files, optional
 end
 
 function cache_dependencies(cachefile::String)
@@ -668,10 +736,10 @@ function stale_cachefile(modpath::String, cachefile::String)
             DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile due to it containing an invalid cache header.")
             return true # invalid cache file
         end
-        modules, files, required_modules = parse_cache_header(io)
+        modules, files, required_deps, optional_deps = parse_cache_header(io)
 
         # Check if transitive dependencies can be fullfilled
-        for mod in keys(required_modules)
+        for mod in keys(required_deps)
             if mod == :Main || mod == :Core || mod == :Base
                 continue
             # Module is already loaded
@@ -696,6 +764,14 @@ function stale_cachefile(modpath::String, cachefile::String)
                 end
                 DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it provides the wrong uuid (got $uuid) for $mod (want $uuid_req).")
                 return true # cachefile doesn't provide the required version of the dependency
+            end
+        end
+
+        for mod in optional_deps
+            name = string(mod)
+            if is_optional_module_available(name)
+                DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because optional dependency $name became available.")
+                return true
             end
         end
 
