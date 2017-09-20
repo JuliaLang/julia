@@ -1080,7 +1080,7 @@ end
 Remove an item in `collection` and return it. If `collection` is an
 ordered container, the last item is returned.
 
-See also: shift!, splice!
+See also: [`shift!`](@ref), [`splice!`](@ref)
 
 # Examples
 ```jldoctest
@@ -1149,7 +1149,7 @@ end
 
 Remove the first `item` from `collection`.
 
-See also: pop!, splice!
+See also: [`pop!`](@ref), [`splice!`](@ref)
 
 # Examples
 ```jldoctest
@@ -1320,7 +1320,7 @@ Subsequent items are shifted left to fill the resulting gap.
 If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
 
-See also: pop!, shift!
+See also: [`pop!`](@ref), [`shift!`](@ref)
 
 # Examples
 ```jldoctest splice!
