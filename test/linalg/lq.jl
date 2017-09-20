@@ -103,3 +103,34 @@ bimg  = randn(n,2)/2
         end
     end
 end
+
+@testset "getindex on LQPackedQ (#23733)" begin
+    function getqs(F::Base.LinAlg.LQ)
+        implicitQ = F[:Q]
+        explicitQ = A_mul_B!(implicitQ, eye(eltype(implicitQ), size(implicitQ.factors, 2)))
+        return implicitQ, explicitQ
+    end
+
+    m, n = 3, 3 # thin Q 3-by-3, square Q 3-by-3
+    implicitQ, explicitQ = getqs(lqfact(randn(m, n)))
+    @test implicitQ[1, 1] == explicitQ[1, 1]
+    @test implicitQ[m, 1] == explicitQ[m, 1]
+    @test implicitQ[1, n] == explicitQ[1, n]
+    @test implicitQ[m, n] == explicitQ[m, n]
+
+    m, n = 3, 4 # thin Q 3-by-4, square Q 4-by-4
+    implicitQ, explicitQ = getqs(lqfact(randn(m, n)))
+    @test implicitQ[1, 1] == explicitQ[1, 1]
+    @test implicitQ[m, 1] == explicitQ[m, 1]
+    @test implicitQ[1, n] == explicitQ[1, n]
+    @test implicitQ[m, n] == explicitQ[m, n]
+    @test implicitQ[m+1, 1] == explicitQ[m+1, 1]
+    @test implicitQ[m+1, n] == explicitQ[m+1, n]
+
+    m, n = 4, 3 # thin Q 3-by-3, square Q 3-by-3
+    implicitQ, explicitQ = getqs(lqfact(randn(m, n)))
+    @test implicitQ[1, 1] == explicitQ[1, 1]
+    @test implicitQ[n, 1] == explicitQ[n, 1]
+    @test implicitQ[1, n] == explicitQ[1, n]
+    @test implicitQ[n, n] == explicitQ[n, n]
+end

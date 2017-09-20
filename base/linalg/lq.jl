@@ -69,13 +69,8 @@ function getindex(A::LQ, d::Symbol)
     end
 end
 
-function getindex(A::LQPackedQ, i::Integer, j::Integer)
-    x = zeros(eltype(A), size(A, 1))
-    x[i] = 1
-    y = zeros(eltype(A), size(A, 2))
-    y[j] = 1
-    return dot(x, A*y)
-end
+getindex(A::LQPackedQ, i::Integer, j::Integer) =
+    A_mul_B!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
 getq(A::LQ) = LQPackedQ(A.factors, A.τ)
 
