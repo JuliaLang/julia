@@ -104,7 +104,8 @@ Operators like `+` are also valid identifiers, but are parsed specially. In some
 can be used just like variables; for example `(+)` refers to the addition function, and `(+) = f`
 will reassign it. Most of the Unicode infix operators (in category Sm), such as `⊕`, are parsed
 as infix operators and are available for user-defined methods (e.g. you can use `const ⊗ = kron`
-to define `⊗` as an infix Kronecker product).
+to define `⊗` as an infix Kronecker product).  Operators can also be suffixed with modifying marks,
+primes, and sub/superscripts, e.g. `+̂ₐ″` is parsed as an infix operator with the same precedence as `+`.
 
 The only explicitly disallowed names for variables are the names of built-in statements:
 

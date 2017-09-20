@@ -11,6 +11,11 @@ New language features
     a function argument name, the argument is unpacked into local variables `x` and `y`
     as in the assignment `(x, y) = arg` ([#6614]).
 
+ * Custom infix operators can now be defined by appending Unicode
+   combining marks, primes, and sub/superscripts to other operators.
+   For example, `+̂ₐ″` is parsed as an infix operator with the same
+   precedence as `+` ([#22089]).
+
 Language changes
 ----------------
 
