@@ -803,7 +803,8 @@ function tan(A::StridedMatrix)
         return full(tan(Hermitian(A)))
     end
     S, C = sincos(A)
-    return A_rdiv_B!(S, C)
+    S /= C
+    return S
 end
 
 """
@@ -850,7 +851,8 @@ function tanh(A::StridedMatrix)
         X[i] = x - y
         Y[i] = x + y
     end
-    return A_rdiv_B!(X, Y)
+    X /= Y
+    return X
 end
 
 """
@@ -864,10 +866,10 @@ compute the inverse cosine. Otherwise, the inverse cosine is determined by using
 
 # Examples
 ```jldoctest
-julia> acos(cos(ones(2, 2)))
-2×2 Array{Float64,2}:
- 1.0  1.0
- 1.0  1.0
+julia> acos(cos([0.5 0.1; -0.2 0.3]))
+2×2 Array{Complex{Float64},2}:
+  0.5-8.32667e-17im  0.1-2.77556e-17im
+ -0.2+2.77556e-16im  0.3-3.46945e-16im
 ```
 """
 function acos(A::StridedMatrix)
@@ -920,8 +922,8 @@ compute the inverse tangent. Otherwise, the inverse tangent is determined by usi
 ```jldoctest
 julia> atan(tan([0.5 0.1; -0.2 0.3]))
 2×2 Array{Complex{Float64},2}:
-  0.5+1.38778e-17im  0.1+0.0im
- -0.2+8.32667e-17im  0.3-5.55112e-17im
+  0.5+1.38778e-17im  0.1-2.77556e-17im
+ -0.2+6.93889e-17im  0.3-4.16334e-17im
 ```
 """
 function atan(A::StridedMatrix)
@@ -930,7 +932,7 @@ function atan(A::StridedMatrix)
     end
     SchurF = schurfact(complex(A))
     U = im * UpperTriangular(SchurF.T)
-    R = full(log((I - U) \ (I + U)) / 2im)
+    R = full(log((I + U) / (I - U)) / 2im)
     return SchurF.Z * R * SchurF.Z'
 end
 
@@ -975,7 +977,7 @@ function atanh(A::StridedMatrix)
     end
     SchurF = schurfact(complex(A))
     U = UpperTriangular(SchurF.T)
-    R = full(log((I - U) \ (I + U)) / 2)
+    R = full(log((I + U) / (I - U)) / 2)
     return SchurF.Z * R * SchurF.Z'
 end
 

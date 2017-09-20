@@ -542,8 +542,10 @@ end
         A1 = convert(Matrix{elty}, [ 0.143721-0.0im       -0.138386-0.106905im;
                                      -0.138386+0.106905im   0.306224-0.0im])
         A2 = convert(Matrix{elty}, [1im 2; 0.02+0.5im 3])
-
-        for A in (A1, A2)
+        A3 = convert(Matrix{elty}, [0.138721-0.266836im 0.0971722-0.13715im 0.205046-0.137136im;
+                                    -0.0154974-0.00358254im 0.152163-0.445452im 0.0314575-0.536521im;
+                                    -0.387488+0.0294059im -0.0448773+0.114305im 0.230684-0.275894im])
+        for A in (A1, A2, A3)
             @test cos(acos(cos(A))) ≈ cos(A)
             @test sin(asin(sin(A))) ≈ sin(A)
             @test tan(atan(tan(A))) ≈ tan(A)
@@ -556,6 +558,24 @@ end
             @test sech(asech(sech(A))) ≈ sech(A)
             @test csch(acsch(csch(A))) ≈ csch(A)
             @test coth(acoth(coth(A))) ≈ coth(A)
+
+            # Definition of principal values (Aprahamian & Higham, 2016, pp. 4-5)
+            @test all(z -> (0 < real(z) < π ||
+                            real(z) ≈ 0 && imag(z) >= 0 ||
+                            real(z) ≈ π && imag(z) <= 0),
+                      eigfact(acos(A))[:values])
+            @test all(z -> (-π/2 < real(z) < π/2 ||
+                            real(z) ≈ -π/2 && imag(z) >= 0 ||
+                            real(z) ≈ π/2 && imag(z) <= 0),
+                      eigfact(asin(A))[:values])
+            @test all(z -> (-π < imag(z) < π && real(z) > 0 ||
+                            0 <= imag(z) < π && real(z) ≈ 0 ||
+                            imag(z) ≈ π && real(z) >= 0),
+                      eigfact(acosh(A))[:values])
+            @test all(z -> (-π/2 < imag(z) < π/2 ||
+                            imag(z) ≈ -π/2 && real(z) <= 0 ||
+                            imag(z) ≈ π/2 && real(z) <= 0),
+                      eigfact(asinh(A))[:values])
         end
     end
 end

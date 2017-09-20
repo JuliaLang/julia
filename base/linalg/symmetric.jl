@@ -589,8 +589,7 @@ function ^(A::Hermitian{T}, p::Real) where T
     end
 end
 
-for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh,
-             :acos, :asin, :atan, :acosh, :asinh, :atanh)
+for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh)
     @eval begin
         function ($func)(A::HermOrSym{<:Real})
             F = eigfact(A)
@@ -604,6 +603,24 @@ for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh,
                 retmat[i,i] = real(retmat[i,i])
             end
             return Hermitian(retmat)
+        end
+    end
+end
+
+# The inverse trigonometric functions have complicated domains on the real axis which would
+# throw domain errors, so we convert the eigenvalues to complex numbers first.  This breaks
+# the hermiticity.
+for func in (:acos, :asin, :atan, :acosh, :asinh, :atanh)
+    @eval begin
+        function ($func)(A::HermOrSym{<:Real})
+            F = eigfact(A)
+            return (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
+        end
+        function ($func)(A::Hermitian{<:Complex})
+            n = checksquare(A)
+            F = eigfact(A)
+            retmat = (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
+            return retmat
         end
     end
 end
