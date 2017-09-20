@@ -207,10 +207,7 @@ struct EnvCache
 
     function EnvCache(env::Union{Void,String})
         project_file = find_project(env)
-        project = parse_toml(project_file, fakeit=true)
-        if !haskey(project, "deps")
-            project["deps"] = Dict{String,Any}()
-        end
+        project = read_project(project_file)
         if haskey(project, "manifest")
             manifest_file = abspath(project["manifest"])
         else
@@ -220,16 +217,7 @@ struct EnvCache
                 isfile(manifest_file) && break
             end
         end
-        manifest = parse_toml(manifest_file, fakeit=true)
-        for (name, infos) in manifest, info in infos
-            haskey(info, "deps") || continue
-            info["deps"] isa AbstractVector || continue
-            for dep in info["deps"]
-                length(manifest[dep]) == 1 ||
-                    error("ambiguious dependency for $name: $dep\nManifest: $manifest_file")
-            end
-            info["deps"] = Dict(d => manifest[d][1]["uuid"] for d in info["deps"])
-        end
+        manifest = read_manifest(manifest_file)
         uuids = Dict{String,Vector{UUID}}()
         paths = Dict{UUID,Vector{String}}()
         new(env, project_file, manifest_file, project, manifest, uuids, paths)
@@ -237,16 +225,47 @@ struct EnvCache
 end
 EnvCache() = EnvCache(get(ENV, "JULIA_ENV", nothing))
 
+function read_project(io::IO)
+    project = TOML.parse(io)
+    if !haskey(project, "deps")
+        project["deps"] = Dict{String,Any}()
+    end
+    return project
+end
+function read_project(file::String)
+    isfile(file) ? open(read_project, file) : read_project(DevNull)
+end
+
+function read_manifest(io::IO)
+    manifest = TOML.parse(io)
+    for (name, infos) in manifest, info in infos
+        haskey(info, "deps") || continue
+        info["deps"] isa AbstractVector || continue
+        for dep in info["deps"]
+            length(manifest[dep]) == 1 ||
+                error("ambiguious dependency for $name: $dep")
+        end
+        info["deps"] = Dict(d => manifest[d][1]["uuid"] for d in info["deps"])
+    end
+    return manifest
+end
+function read_manifest(file::String)
+    try isfile(file) ? open(read_manifest, file) : read_manifest(DevNull)
+    catch err
+        err isa ErrorException && startswith(err.msg, "ambiguious dependency") || rethrow(err)
+        err.msg *= "In manifest file: $file"
+        rethrow(err)
+    end
+end
+
 function emit_project(x::Char, name::String, uuid::String)
     color = x == '+' ? :light_green : :light_red
     print_with_color(:light_black, " [$(uuid[1:8])]")
     print_with_color(color, " $x $name\n")
 end
 
-function print_project_diff(env₀::EnvCache, env₁::EnvCache)
+function print_project_diff(deps₀::Dict, deps₁::Dict)
     clean = true
-    deps₀ = env₀.project["deps"]
-    deps₁ = env₁.project["deps"]
     for name in sort!(union(keys(deps₀), keys(deps₁)), by=lowercase)
         uuid₀, uuid₁ = get(deps₀, name, ""), get(deps₁, name, "")
         uuid₀ == uuid₁ && continue
@@ -257,6 +276,8 @@ function print_project_diff(env₀::EnvCache, env₁::EnvCache)
     clean && print_with_color(:light_black, " [no changes]\n")
     return nothing
 end
+print_project_diff(env₀::EnvCache, env₁::EnvCache) =
+    print_project_diff(env₀.project["deps"], env₁.project["deps"])
 
 struct ManifestEntry
     name::String
@@ -265,9 +286,9 @@ struct ManifestEntry
     version::Union{VersionNumber,Void}
 end
 
-function manifest_entries(env::EnvCache)
+function manifest_entries(manifest::Dict)
     entries = Dict{UUID,ManifestEntry}()
-    for (name, infos) in env.manifest, info in infos
+    for (name, infos) in manifest, info in infos
         uuid = UUID(info["uuid"])
         hash = SHA1(info["hash-sha1"])
         ver = get(info, "version", nothing)
@@ -276,12 +297,14 @@ function manifest_entries(env::EnvCache)
     end
     return entries
 end
+manifest_entries(env::EnvCache) = manifest_entries(env.manifest)
 
 const ManifestDiff = Vector{NTuple{2,Union{ManifestEntry,Void}}}
 
-function manifest_diff(env₀::EnvCache, env₁::EnvCache)::ManifestDiff
-    infos₀ = manifest_entries(env₀)
-    infos₁ = manifest_entries(env₁)
+function manifest_diff(
+    infos₀::Dict{UUID,ManifestEntry},
+    infos₁::Dict{UUID,ManifestEntry},
+)::ManifestDiff
     uuids = sort!(union(keys(infos₀), keys(infos₁)), by=uuid->uuid.value)
     diff = eltype(ManifestDiff)[
         (get(infos₀, uuid, nothing), get(infos₁, uuid, nothing))
@@ -292,6 +315,8 @@ function manifest_diff(env₀::EnvCache, env₁::EnvCache)::ManifestDiff
     end
     sort!(diff, by=pair->lowercase(pair[pair[2]!=nothing ? 2 : 1].name))
 end
+manifest_diff(env₀::EnvCache, env₁::EnvCache)::ManifestDiff =
+    manifest_diff(manifest_entries(env₀), manifest_entries(env₁))
 
 v_str(x::ManifestEntry) =
     x.version == nothing ? "[$(string(x.hash)[1:16])]" : "v$(x.version)"
