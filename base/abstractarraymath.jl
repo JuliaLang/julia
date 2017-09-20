@@ -10,7 +10,7 @@ all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 ## Constructors ##
 
 """
-    vec(a::AbstractArray) -> Vector
+    vec(a::AbstractArray) -> AbstractVector
 
 Reshape the array `a` as a one-dimensional column vector. The resulting array
 shares the same underlying data as `a`, so modifying one will also modify the
@@ -40,7 +40,7 @@ vec(a::AbstractVector) = a
 
 
 """
-    mat(a::AbstractArray) -> Matrix
+    mat(a::AbstractArray) -> AbstractMatrix
 
 Reshape the array `a` as a two-dimensional matrix.
 The matrix will have the same size in the first dimension,
