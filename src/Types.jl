@@ -193,7 +193,10 @@ const default_envs = [
 
 struct EnvCache
     # environment info:
-    env::Union{String,Void}
+    env::Union{Void,String}
+    git::Union{Void,LibGit2.GitRepo}
+
+    # paths for files:
     project_file::String
     manifest_file::String
 
@@ -206,7 +209,7 @@ struct EnvCache
     paths::Dict{UUID,Vector{String}}
 
     function EnvCache(env::Union{Void,String})
-        project_file = find_project(env)
+        project_file, git_repo = find_project(env)
         project = read_project(project_file)
         if haskey(project, "manifest")
             manifest_file = abspath(project["manifest"])
@@ -220,7 +223,16 @@ struct EnvCache
         manifest = read_manifest(manifest_file)
         uuids = Dict{String,Vector{UUID}}()
         paths = Dict{UUID,Vector{String}}()
-        new(env, project_file, manifest_file, project, manifest, uuids, paths)
+        return new(
+            env,
+            git_repo,
+            project_file,
+            manifest_file,
+            project,
+            manifest,
+            uuids,
+            paths,
+        )
     end
 end
 EnvCache() = EnvCache(get(ENV, "JULIA_ENV", nothing))
@@ -441,24 +453,38 @@ function LibGit2_discover(
     return str
 end
 
+function find_git_repo(path::String)
+    while !ispath(path)
+        prev = path
+        path = dirname(path)
+        path == prev && break
+    end
+    try return LibGit2.GitRepo(LibGit2_discover(path))
+    catch err
+        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+    end
+    return nothing
+end
+
 function find_local_env(start_path::String = pwd())
     path = LibGit2_discover(start_path, ceiling = homedir())
     repo = LibGit2.GitRepo(path)
     work = LibGit2.workdir(repo)
     for name in project_names
         path = abspath(work, name)
-        isfile(path) && return path
+        isfile(path) && return path, repo
     end
-    return abspath(work, project_names[end])
+    return abspath(work, project_names[end]), repo
 end
 
 function find_named_env()
     for depot in depots(), env in default_envs, name in project_names
         path = abspath(depot, "environments", env, name)
-        isfile(path) && return path
+        isfile(path) && return path, find_git_repo(path)
     end
     env = VERSION.major == 0 ? default_envs[2] : default_envs[3]
-    return abspath(depots()[1], "environments", env, project_names[end])
+    path = abspath(depots()[1], "environments", env, project_names[end])
+    return path, find_git_repo(path)
 end
 
 function find_project(env::String)
@@ -473,21 +499,22 @@ function find_project(env::String)
         splitext(env)[2] == ".toml" && return abspath(env)
         for name in project_names
             path = abspath(env, name)
-            isfile(path) && return path
+            isfile(path) && return path, find_git_repo(path)
         end
-        return abspath(env, project_names[end])
+        path = abspath(env, project_names[end])
+        return path, find_git_repo(path)
     else # named environment
         for depot in depots()
             path = abspath(depot, "environments", env, project_names[end])
-            isfile(path) && return path
+            isfile(path) && return path, find_git_repo(path)
         end
-        return abspath(depots()[1], "environments", env, project_names[end])
+        path = abspath(depots()[1], "environments", env, project_names[end])
+        return path, find_git_repo(path)
     end
 end
 
 function find_project(::Void)
-    try
-        return find_local_env()
+    try return find_local_env()
     catch err
         err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
     end
