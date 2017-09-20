@@ -11,6 +11,7 @@ const cmds = Dict(
     "help"      => :help,
     "?"         => :help,
     "status"    => :status,
+    "st"        => :status,
     "search"    => :search,
     "find"      => :search,
     "info"      => :info,
@@ -106,9 +107,10 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
             end
         end
         env = EnvCache(env_opt)
-        cmd == :rm  ?  do_rm!(env, tokens) :
-        cmd == :add ? do_add!(env, tokens) :
-        cmd == :up  ?  do_up!(env, tokens) :
+        cmd == :rm     ?     do_rm!(env, tokens) :
+        cmd == :add    ?    do_add!(env, tokens) :
+        cmd == :up     ?     do_up!(env, tokens) :
+        cmd == :status ? do_status!(env, tokens) :
             error("`$cmd` command not yet implemented")
     catch exc
         Base.display_error(repl.t.err_stream, exc, Base.catch_backtrace())
@@ -186,6 +188,19 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         end
     end
     Pkg3.Operations.up(env, pkgs)
+end
+
+function do_status!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
+    isempty(tokens) || error("`status` does not take arguments")
+    path = LibGit2.path(env.git)
+    project_path = relpath(env.project_file, path)
+    manifest_path = relpath(env.manifest_file, path)
+    project = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
+    manifest = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
+    print_with_color(:cyan, "Project\n")
+    print_project_diff(project["deps"], env.project["deps"])
+    print_with_color(:cyan, "Manifest\n")
+    print_manifest_diff(manifest, env.manifest)
 end
 
 function create_mode(repl, main)

@@ -6,10 +6,11 @@ using Pkg3.TOML
 using Pkg3.TerminalMenus
 import Pkg3: depots
 
-export SHA1, VersionRange, VersionSpec, Package, PackageVersion, UpgradeLevel,
-    EnvCache, has_name, has_uuid, write_env, parse_toml, find_registered!,
-    project_resolve!, registry_resolve!, ensure_resolved, manifest_info,
-    registered_uuids, registered_paths, registered_uuid, registered_name
+export SHA1, VersionRange, VersionSpec, Package, PackageVersion, UpgradeLevel, EnvCache,
+    has_name, has_uuid, write_env, parse_toml, find_registered!, project_resolve!,
+    registry_resolve!, ensure_resolved, manifest_info,  registered_uuids, registered_paths,
+    registered_uuid, registered_name, git_file_stream, read_project, read_manifest,
+    print_project_diff, print_manifest_diff
 
 ## ordering of UUIDs ##
 
@@ -327,8 +328,6 @@ function manifest_diff(
     end
     sort!(diff, by=pair->lowercase(pair[pair[2]!=nothing ? 2 : 1].name))
 end
-manifest_diff(env₀::EnvCache, env₁::EnvCache)::ManifestDiff =
-    manifest_diff(manifest_entries(env₀), manifest_entries(env₁))
 
 v_str(x::ManifestEntry) =
     x.version == nothing ? "[$(string(x.hash)[1:16])]" : "v$(x.version)"
@@ -357,8 +356,11 @@ function emit_manifest_diff(emit::Function, diff::ManifestDiff)
     end
 end
 
-function print_manifest_diff(env₀::EnvCache, env₁::EnvCache)
-    emit_manifest_diff(manifest_diff(env₀, env₁)) do uuid, name, x, vers
+function print_manifest_diff(
+    infos₀::Dict{UUID,ManifestEntry},
+    infos₁::Dict{UUID,ManifestEntry},
+)::Void
+    emit_manifest_diff(manifest_diff(infos₀, infos₁)) do uuid, name, x, vers
         color = x == '+' ? :light_green   :
                 x == '-' ? :light_red     :
                 x == '↑' ? :light_yellow  :
@@ -367,8 +369,10 @@ function print_manifest_diff(env₀::EnvCache, env₁::EnvCache)
         print_with_color(color, "$x $name $vers\n")
     end
 end
-
-const indent = "  "
+print_manifest_diff(infos₀::Dict, infos₁::Dict) =
+    print_manifest_diff(manifest_entries(infos₀), manifest_entries(infos₁))
+print_manifest_diff(env₀::EnvCache, env₁::EnvCache) =
+    print_manifest_diff(env₀.manifest, env₁.manifest)
 
 function print_package_tree(
     io::IO,
@@ -378,7 +382,7 @@ function print_package_tree(
     depth::Int = 0,
 )::Void
     for (name::String, uuid::UUID) in sort!(collect(deps), by=lowercase∘first)
-        print(io, indent^depth, name, " [", string(uuid)[1:8], "]")
+        print(io, "  "^depth, name, " [", string(uuid)[1:8], "]")
         if haskey(seen, uuid)
             seen[uuid] && print(io, " ⋯")
             println(io)
@@ -434,7 +438,7 @@ end
 
 # finding the current project file
 
-function LibGit2_discover(
+function git_discover(
     start_path::AbstractString = pwd();
     ceiling::Union{AbstractString,Vector} = "",
     across_fs::Bool = false,
@@ -459,15 +463,24 @@ function find_git_repo(path::String)
         path = dirname(path)
         path == prev && break
     end
-    try return LibGit2.GitRepo(LibGit2_discover(path))
+    try return LibGit2.GitRepo(git_discover(path))
     catch err
         err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
     end
     return nothing
 end
 
+function git_file_stream(repo::LibGit2.GitRepo, spec::String; fakeit::Bool=false)::IO
+    blob = try LibGit2.GitBlob(repo, spec)
+    catch err
+        err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
+        fakeit && return DevNull
+    end
+    return IOBuffer(LibGit2.rawcontent(blob))
+end
+
 function find_local_env(start_path::String = pwd())
-    path = LibGit2_discover(start_path, ceiling = homedir())
+    path = git_discover(start_path, ceiling = homedir())
     repo = LibGit2.GitRepo(path)
     work = LibGit2.workdir(repo)
     for name in project_names
