@@ -103,7 +103,7 @@ function find_in_path(name::String, wd::Union{Void,String})
     isabspath(name) && return name
     base = name
     if endswith(name,".jl")
-        base = name[1:end-3]
+        base = name[1:prevind(name, end-2)]
     else
         name = string(base,".jl")
     end
