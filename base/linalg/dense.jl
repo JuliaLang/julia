@@ -701,7 +701,9 @@ function cos(A::StridedMatrix{<:Complex})
     if ishermitian(A)
         return full(cos(Hermitian(A)))
     end
-    return (exp!(im*A) + exp!(-im*A)) / 2
+    X = exp!(im*A)
+    X .= (X .+ inv(X)) ./ 2
+    return X
 end
 
 """
@@ -730,7 +732,13 @@ function sin(A::StridedMatrix{<:Complex})
     if ishermitian(A)
         return full(sin(Hermitian(A)))
     end
-    return (exp!(im*A) - exp!(-im*A)) / 2im
+    X = exp!(im*A)
+    Y = inv(X)
+    @inbounds for i in eachindex(X)
+        x, y = X[i]/2, Y[i]/2
+        X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
+    end
+    return X
 end
 
 """
@@ -764,8 +772,14 @@ function sincos(A::StridedMatrix{<:Complex})
     if ishermitian(A)
         return full.(sincos(Hermitian(A)))
     end
-    X, Y = exp!(im*A), exp!(-im*A)
-    return (X - Y) / 2im, (X + Y) / 2
+    X = exp!(im*A)
+    Y = inv(X)
+    @inbounds for i in eachindex(X)
+        x, y = X[i]/2, Y[i]/2
+        X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
+        Y[i] = x+y
+    end
+    return X, Y
 end
 
 """
@@ -784,19 +798,12 @@ julia> tan(ones(2, 2))
  -1.09252  -1.09252
 ```
 """
-function tan(A::StridedMatrix{<:Real})
-    if issymmetric(A)
-        return full(tan(Symmetric(A)))
-    end
-    s, c = sincos(A)
-    return s / c
-end
-function tan(A::StridedMatrix{<:Complex})
+function tan(A::StridedMatrix)
     if ishermitian(A)
         return full(tan(Hermitian(A)))
     end
-    X, Y = exp!(im*A), exp!(-im*A)
-    return (X - Y) / (im * (X + Y))
+    S, C = sincos(A)
+    return A_rdiv_B!(S, C)
 end
 
 """
@@ -804,11 +811,13 @@ end
 
 Compute the matrix hyperbolic cosine of a square matrix `A`.
 """
-function cosh(A::StridedMatrix{T}) where T
+function cosh(A::StridedMatrix)
     if ishermitian(A)
         return full(cosh(Hermitian(A)))
     end
-    return (exp(A) + exp!(-A)) / 2
+    X = exp(A)
+    X .= (X .+ inv(X)) ./ 2
+    return X
 end
 
 """
@@ -816,11 +825,13 @@ end
 
 Compute the matrix hyperbolic sine of a square matrix `A`.
 """
-function sinh(A::StridedMatrix{T}) where T
+function sinh(A::StridedMatrix)
     if ishermitian(A)
         return full(sinh(Hermitian(A)))
     end
-    return (exp(A) - exp!(-A)) / 2
+    X = exp(A)
+    X .= (X .- inv(X)) ./ 2
+    return X
 end
 
 """
@@ -828,12 +839,18 @@ end
 
 Compute the matrix hyperbolic tangent of a square matrix `A`.
 """
-function tanh(A::StridedMatrix{T}) where T
+function tanh(A::StridedMatrix)
     if ishermitian(A)
         return full(tanh(Hermitian(A)))
     end
-    X, Y = exp(A), exp!(-A)
-    return (X - Y) / (X + Y)
+    X = exp(A)
+    Y = inv(X)
+    @inbounds for i in eachindex(X)
+        x, y = X[i], Y[i]
+        X[i] = x - y
+        Y[i] = x + y
+    end
+    return A_rdiv_B!(X, Y)
 end
 
 """
@@ -849,15 +866,18 @@ compute the inverse cosine. Otherwise, the inverse cosine is determined by using
 ```jldoctest
 julia> acos(cos(ones(2, 2)))
 2×2 Array{Float64,2}:
-  0.291927  -0.708073
- -0.708073   0.291927
+ 1.0  1.0
+ 1.0  1.0
 ```
 """
-function acos(A::StridedMatrix{T}) where T
+function acos(A::StridedMatrix)
     if ishermitian(A)
         return full(acos(Hermitian(A)))
     end
-    return -im * log(A + sqrt(A^2 - one(A)))
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = full(-im * log(U + im * sqrt(I - U^2)))
+    return SchurF.Z * R * SchurF.Z'
 end
 
 """
@@ -871,17 +891,20 @@ and [`sqrt`](@ref).
 
 # Examples
 ```jldoctest
-julia> asin(sin(ones(2, 2)))
-2×2 Array{Float64,2}:
-  0.291927  -0.708073
- -0.708073   0.291927
+julia> asin(sin([0.5 0.1; -0.2 0.3]))
+2×2 Array{Complex{Float64},2}:
+  0.5-4.16334e-17im  0.1-5.55112e-17im
+ -0.2+9.71445e-17im  0.3-1.249e-16im
 ```
 """
-function asin(A::StridedMatrix{T}) where T
+function asin(A::StridedMatrix)
     if ishermitian(A)
         return full(asin(Hermitian(A)))
     end
-    return -im * log(im * A + sqrt(one(A) - A^2))
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = full(-im * log(im * U + sqrt(I - U^2)))
+    return SchurF.Z * R * SchurF.Z'
 end
 
 """
@@ -895,17 +918,20 @@ compute the inverse tangent. Otherwise, the inverse tangent is determined by usi
 
 # Examples
 ```jldoctest
-julia> atan(tan(ones(2, 2)))
-2×2 Array{Float64,2}:
-  0.291927  -0.708073
- -0.708073   0.291927
+julia> atan(tan([0.5 0.1; -0.2 0.3]))
+2×2 Array{Complex{Float64},2}:
+  0.5+1.38778e-17im  0.1+0.0im
+ -0.2+8.32667e-17im  0.3-5.55112e-17im
 ```
 """
-function atan(A::StridedMatrix{T}) where T
+function atan(A::StridedMatrix)
     if ishermitian(A)
         return full(atan(Hermitian(A)))
     end
-    return log((one(A) - im * A) \ (one(A) + im * A)) / 2im
+    SchurF = schurfact(complex(A))
+    U = im * UpperTriangular(SchurF.T)
+    R = full(log((I - U) \ (I + U)) / 2im)
+    return SchurF.Z * R * SchurF.Z'
 end
 
 """
@@ -913,11 +939,14 @@ end
 
 Compute the inverse hyperbolic matrix cosine of a square matrix `A`.
 """
-function acosh(A::StridedMatrix{T}) where T
+function acosh(A::StridedMatrix)
     if ishermitian(A)
         return full(acosh(Hermitian(A)))
     end
-    return log(A + sqrt(A^2 - one(A)))
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = full(log(U + sqrt(U - I) * sqrt(U + I)))
+    return SchurF.Z * R * SchurF.Z'
 end
 
 """
@@ -925,11 +954,14 @@ end
 
 Compute the inverse hyperbolic matrix sine of a square matrix `A`.
 """
-function asinh(A::StridedMatrix{T}) where T
+function asinh(A::StridedMatrix)
     if ishermitian(A)
         return full(asinh(Hermitian(A)))
     end
-    return log(A + sqrt(A^2 + one(A)))
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = full(log(U + sqrt(I + U^2)))
+    return SchurF.Z * R * SchurF.Z'
 end
 
 """
@@ -937,11 +969,14 @@ end
 
 Compute the inverse hyperbolic matrix tangent of a square matrix `A`.
 """
-function atanh(A::StridedMatrix{T}) where T
+function atanh(A::StridedMatrix)
     if ishermitian(A)
         return full(atanh(Hermitian(A)))
     end
-    return log((one(A) - A) \ (one(A) + A)) / 2
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = full(log((I - U) \ (I + U)) / 2)
+    return SchurF.Z * R * SchurF.Z'
 end
 
 for (finv, f, finvh, fh, fn) in ((:sec, :cos, :sech, :cosh, "secant"),
