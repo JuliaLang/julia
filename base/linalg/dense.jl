@@ -702,7 +702,7 @@ function cos(A::AbstractMatrix{<:Complex})
         return full(cos(Hermitian(A)))
     end
     X = exp!(im*A)
-    X .= (X .+ inv(X)) ./ 2
+    X .= (X .+ exp!(-im*A)) ./ 2
     return X
 end
 
@@ -733,7 +733,7 @@ function sin(A::AbstractMatrix{<:Complex})
         return full(sin(Hermitian(A)))
     end
     X = exp!(im*A)
-    Y = inv(X)
+    Y = exp!(-im*A)
     @inbounds for i in eachindex(X)
         x, y = X[i]/2, Y[i]/2
         X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
@@ -773,7 +773,7 @@ function sincos(A::AbstractMatrix{<:Complex})
         return full.(sincos(Hermitian(A)))
     end
     X = exp!(im*A)
-    Y = inv(X)
+    Y = exp!(-im*A)
     @inbounds for i in eachindex(X)
         x, y = X[i]/2, Y[i]/2
         X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
@@ -816,9 +816,7 @@ function cosh(A::AbstractMatrix)
     if ishermitian(A)
         return full(cosh(Hermitian(A)))
     end
-    X = exp(A)
-    X .= (X .+ inv(X)) ./ 2
-    return X
+    return (exp(A) .+ exp!(-A)) ./ 2
 end
 
 """
@@ -830,9 +828,7 @@ function sinh(A::AbstractMatrix)
     if ishermitian(A)
         return full(sinh(Hermitian(A)))
     end
-    X = exp(A)
-    X .= (X .- inv(X)) ./ 2
-    return X
+    return (exp(A) .- exp!(-A)) ./ 2
 end
 
 """
@@ -845,7 +841,7 @@ function tanh(A::AbstractMatrix)
         return full(tanh(Hermitian(A)))
     end
     X = exp(A)
-    Y = inv(X)
+    Y = exp!(-A)
     @inbounds for i in eachindex(X)
         x, y = X[i], Y[i]
         X[i] = x - y
