@@ -167,18 +167,18 @@ end
 end
 
 
-@testset "vec and mat" begin
+@testset "vec and matrix" begin
     a = [1, 2, 3, 4]
     @test a == vec(a)
-    @test mat(a) == [1 2 3 4]'
+    @test matrix(a) == [1 2 3 4]'
 
     b = [1 3; 2 4]
     @test vec(b) == a
-    @test b == mat(b)
+    @test b == matrix(b)
 
     c = [100a + 10b + c for a in 1:2, b in 1:3, c in 1:2]
-    @test mat(c) == [111 121 131 112 122 132; 211 221 231 212 222 232]
-    @test vec(c) == vec(mat(c)) == vec(mat(vec(c)))
+    @test matrix(c) == [111 121 131 112 122 132; 211 221 231 212 222 232]
+    @test vec(c) == vec(matrix(c)) == vec(matrix(vec(c)))
 end
 
 @test reshape(1:5, (5,)) === 1:5

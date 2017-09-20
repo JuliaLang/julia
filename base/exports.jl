@@ -476,7 +476,7 @@ export
     linspace,
     logspace,
     mapslices,
-    mat,
+    matrix,
     max,
     maximum!,
     maximum,

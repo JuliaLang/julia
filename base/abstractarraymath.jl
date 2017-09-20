@@ -33,14 +33,14 @@ julia> vec(a)
  6
 ```
 
-See also [`reshape`](@ref), [`mat`](@ref).
+See also [`reshape`](@ref), [`matrix`](@ref).
 """
 vec(a::AbstractArray) = reshape(a,_length(a))
 vec(a::AbstractVector) = a
 
 
 """
-    mat(a::AbstractArray) -> AbstractMatrix
+    matrix(a::AbstractArray) -> AbstractMatrix
 
 Reshape the array `a` as a two-dimensional matrix.
 The matrix will have the same size in the first dimension,
@@ -58,7 +58,7 @@ julia> a = [1,2,3]
  2
  3
 
-julia> mat(a)
+julia> matrix(a)
 3×1 Array{Int64,2}:
  1
  2
@@ -67,8 +67,8 @@ julia> mat(a)
 
 See also [`reshape`](@ref), [`vec`](@ref).
 """
-mat(a::AbstractArray) = reshape(a,Val(2))
-mat(a::AbstractMatrix) = a
+matrix(a::AbstractArray) = reshape(a,Val(2))
+matrix(a::AbstractMatrix) = a
 
 
 
