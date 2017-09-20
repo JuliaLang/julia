@@ -82,10 +82,10 @@ As in the example above, we recommend following some simple conventions when wri
    """
    ```
 5. Provide hints to similar functions
-   
+
    Sometimes there are functions of related functionality. To increase discoverability please provide
    a short list of these in a `See also: ` section.
-   
+
    ```
    See also: [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref)
    ```
