@@ -266,15 +266,15 @@ struct ManifestEntry
 end
 
 function manifest_entries(env::EnvCache)
-    infos = Dict{UUID,ManifestEntry}()
-    manifest_info(env) do name, info
+    entries = Dict{UUID,ManifestEntry}()
+    for (name, infos) in env.manifest, info in infos
         uuid = UUID(info["uuid"])
         hash = SHA1(info["hash-sha1"])
         ver = get(info, "version", nothing)
         version = ver != nothing ? VersionNumber(ver) : nothing
-        infos[uuid] = ManifestEntry(name, uuid, hash, version)
+        entries[uuid] = ManifestEntry(name, uuid, hash, version)
     end
-    return infos
+    return entries
 end
 
 const ManifestDiff = Vector{NTuple{2,Union{ManifestEntry,Void}}}
@@ -754,13 +754,6 @@ function registered_info(env::EnvCache, uuid::UUID, key::String)
     length(values) > 1 &&
         error("package `$uuid` has multiple registered `$key` values: ", join(values, ", "))
     return values[1]
-end
-
-"Iterate each info block in manifest file"
-function manifest_info(f::Function, env::EnvCache)
-    for (name, infos) in env.manifest, info in infos
-        f(name, info)
-    end
 end
 
 "Find package by UUID in the manifest file"

@@ -262,9 +262,9 @@ function prune_manifest(env::EnvCache)
     keep = map(UUID, values(env.project["deps"]))
     while !isempty(keep)
         clean = true
-        manifest_info(env) do name, info
-            haskey(info, "uuid") && haskey(info, "deps") || return
-            UUID(info["uuid"]) ∈ keep || return
+        for (name, infos) in env.manifest, info in infos
+            haskey(info, "uuid") && haskey(info, "deps") || continue
+            UUID(info["uuid"]) ∈ keep || continue
             for dep::UUID in values(info["deps"])
                 dep ∈ keep && continue
                 push!(keep, dep)
@@ -309,12 +309,12 @@ function rm(env::EnvCache, pkgs::Vector{Package})
     # drop reverse dependencies
     while !isempty(drop)
         clean = true
-        manifest_info(env) do name, info
-            haskey(info, "uuid") && haskey(info, "deps") || return
+        for (name, infos) in env.manifest, info in infos
+            haskey(info, "uuid") && haskey(info, "deps") || continue
             deps = map(UUID, values(info["deps"]))
-            isempty(drop ∩ deps) && return
+            isempty(drop ∩ deps) && continue
             uuid = UUID(info["uuid"])
-            uuid ∉ drop || return
+            uuid ∉ drop || continue
             push!(drop, uuid)
             clean = false
         end
