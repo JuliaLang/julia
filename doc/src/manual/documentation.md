@@ -89,16 +89,6 @@ As in the example above, we recommend following some simple conventions when wri
    ```
    See also: [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref)
    ```
-   If the difference in functionality is not obvious from the name, you can provide a short description 
-   in a list:
-   
-   ```
-   See also: 
-   
-     * [`bar!`](@ref) - mutating variant, see for description of keyword arguments 
-     * [`baz`](@ref)  - is an extraordinary example
-     * [`baaz`](@ref) - even more marvellous
-   ```
 6. Include any code examples in an `# Examples` section.
 
    Examples should, whenever possible, be written as *doctests*. A *doctest* is a fenced code block
