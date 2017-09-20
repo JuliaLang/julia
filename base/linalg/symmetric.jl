@@ -589,7 +589,7 @@ function ^(A::Hermitian{T}, p::Real) where T
     end
 end
 
-for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh)
+for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh, :atan, :asinh, :atanh)
     @eval begin
         function ($func)(A::HermOrSym{<:Real})
             F = eigfact(A)
@@ -607,21 +607,53 @@ for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh)
     end
 end
 
-# The inverse trigonometric functions have complicated domains on the real axis which would
-# throw domain errors, so we convert the eigenvalues to complex numbers first.  This breaks
-# the hermiticity.
-for func in (:acos, :asin, :atan, :acosh, :asinh, :atanh)
+for func in (:acos, :asin)
     @eval begin
         function ($func)(A::HermOrSym{<:Real})
             F = eigfact(A)
-            return (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
+            if all(λ -> -1 ≤ λ ≤ 1, F.values)
+                retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
+            else
+                retmat = (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
+            end
+            return Symmetric(retmat)
         end
         function ($func)(A::Hermitian{<:Complex})
             n = checksquare(A)
             F = eigfact(A)
-            retmat = (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
-            return retmat
+            if all(λ -> -1 ≤ λ ≤ 1, F.values)
+                retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
+                for i = 1:n
+                    retmat[i,i] = real(retmat[i,i])
+                end
+                return Hermitian(retmat)
+            else
+                return (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
+            end
         end
+    end
+end
+
+function acosh(A::HermOrSym{<:Real})
+    F = eigfact(A)
+    if all(λ -> λ ≥ 1, F.values)
+        retmat = (F.vectors * Diagonal(acosh.(F.values))) * F.vectors'
+    else
+        retmat = (F.vectors * Diagonal(acosh.(complex.(F.values)))) * F.vectors'
+    end
+    return Symmetric(retmat)
+end
+function acosh(A::Hermitian{<:Complex})
+    n = checksquare(A)
+    F = eigfact(A)
+    if all(λ -> λ ≥ 1, F.values)
+        retmat = (F.vectors * Diagonal(acosh.(F.values))) * F.vectors'
+        for i = 1:n
+            retmat[i,i] = real(retmat[i,i])
+        end
+        return Hermitian(retmat)
+    else
+        return (F.vectors * Diagonal(acosh.(complex.(F.values)))) * F.vectors'
     end
 end
 
@@ -671,7 +703,7 @@ for func in (:log, :sqrt)
                     retmat[i,i] = real(retmat[i,i])
                 end
                 return Hermitian(retmat)
-        else
+            else
                 retmat = (F.vectors * Diagonal(($func).(complex(F.values)))) * F.vectors'
                 return retmat
             end
