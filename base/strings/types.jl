@@ -118,7 +118,7 @@ end
 Reverses a string.
 
 Technically, this function reverses the "codepoints" in a string, and its
-use is for reversed-order string processing, especially for reversed
+main utility is for reversed-order string processing, especially for reversed
 regex (regular expression) searches.  See also [`reverseind`](@ref) to convert indices
 in `s` to indices in `reverse(s)` and vice-versa, and [`graphemes`](@ref)
 to operate on user-visible "characters" (graphemes) rather than codepoints
