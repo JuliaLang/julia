@@ -1,4 +1,4 @@
-import Tokenize
+using Tokenize
 using BenchmarkTools
 
 function speed_test(::Type{T}=Tokenize.Tokens.Token) where T <: Tokenize.Tokens.AbstractToken
