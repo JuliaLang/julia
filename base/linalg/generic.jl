@@ -451,6 +451,27 @@ end
     vecnorm(x::Number, p::Real=2)
 
 For numbers, return ``\\left( |x|^p \\right) ^{1/p}``.
+
+# Examples
+```jldoctest
+julia> vecnorm(2, 2)
+2
+
+julia> vecnorm(2, 1)
+2
+
+julia> vecnorm(2, Inf)
+2
+
+julia> vecnorm(-2, Inf)
+2
+
+julia> vecnorm(-2, 2)
+2
+
+julia> vecnorm(-2, 1)
+2
+```
 """
 @inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : oneunit(abs(x))) : abs(x)
 
@@ -591,6 +612,33 @@ value `p = q/(q-1)`. They coincide at `p = q = 2`.
 The difference in norm between a vector space and its dual arises to preserve
 the relationship between duality and the inner product, and the result is
 consistent with the p-norm of `1 × n` matrix.
+
+# Examples
+```jldoctest
+julia> v = [1; im];
+
+julia> vc = v'
+1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:
+ 1+0im  0-1im
+
+julia> norm(vc, 1)
+1.0
+
+julia> norm(vc, 2)
+1.4142135623730951
+
+julia> norm(vc, Inf)
+2.0
+
+julia> norm(v, 1)
+2.0
+
+julia> norm(v, 2)
+1.4142135623730951
+
+julia> norm(v, Inf)
+1.0
+```
 """
 @inline norm(tv::RowVector, q::Real) = q == Inf ? norm(transpose(tv), 1) : norm(transpose(tv), q/(q-1))
 
