@@ -87,15 +87,17 @@ As in the example above, we recommend following some simple conventions when wri
    discoverability please provide a short list of these similar functions in a `See also: ` section.
    
    ```
-   See also: bar!, baz, baaz
+   See also: [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref)
    ```
    If the difference in functionality is not obvious from the name, you can provide a short description 
    in a list:
    
    ```
-   See also: bar! - mutating variant, see for description of keyword arguments 
-             baz  - is an extraordinary example
-             baaz - even more marvellous
+   See also: 
+   
+     * [`bar!`](@ref) - mutating variant, see for description of keyword arguments 
+     * [`baz`](@ref)  - is an extraordinary example
+     * [`baaz`](@ref) - even more marvellous
    ```
 6. Include any code examples in an `# Examples` section.
 
