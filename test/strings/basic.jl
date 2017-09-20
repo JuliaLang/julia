@@ -497,6 +497,23 @@ Base.endof(x::CharStr) = endof(x.chars)
 @test repeat("x",1) == repeat('x',1) == "x"^1 == 'x'^1 == GenericString("x")^1 == "x"
 @test repeat("x",0) == repeat('x',0) == "x"^0 == 'x'^0 == GenericString("x")^0 == ""
 
+for S in ["xxx", "ååå", "∀∀∀", "🍕🍕🍕"]
+    c = S[1]
+    s = string(c)
+    @test_throws ArgumentError repeat(c, -1)
+    @test_throws ArgumentError repeat(s, -1)
+    @test_throws ArgumentError repeat(S, -1)
+    @test repeat(c, 0) == ""
+    @test repeat(s, 0) == ""
+    @test repeat(S, 0) == ""
+    @test repeat(c, 1) == s
+    @test repeat(s, 1) == s
+    @test repeat(S, 1) == S
+    @test repeat(c, 3) == S
+    @test repeat(s, 3) == S
+    @test repeat(S, 3) == S*S*S
+end
+
 # issue #12495: check that logical indexing attempt raises ArgumentError
 @test_throws ArgumentError "abc"[[true, false, true]]
 @test_throws ArgumentError "abc"[BitArray([true, false, true])]
