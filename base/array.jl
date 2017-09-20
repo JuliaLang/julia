@@ -1080,6 +1080,8 @@ end
 Remove an item in `collection` and return it. If `collection` is an
 ordered container, the last item is returned.
 
+See also: shift!, splice!
+
 # Examples
 ```jldoctest
 julia> A=[1, 2, 3]
@@ -1146,6 +1148,8 @@ end
     shift!(collection) -> item
 
 Remove the first `item` from `collection`.
+
+See also: pop!, splice!
 
 # Examples
 ```jldoctest
@@ -1315,6 +1319,8 @@ Remove the item at the given index, and return the removed item.
 Subsequent items are shifted left to fill the resulting gap.
 If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
+
+See also: pop!, shift!
 
 # Examples
 ```jldoctest splice!
