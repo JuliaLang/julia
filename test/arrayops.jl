@@ -1554,6 +1554,8 @@ end
     @test min(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((2,2))
     @test max(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((5,3))
 
+    @test Tuple(I1) == (2,3,0)
+
     # CartesianIndex allows construction at a particular dimensionality
     @test length(CartesianIndex{3}()) == 3
     @test length(CartesianIndex{3}(1,2)) == 3
