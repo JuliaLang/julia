@@ -164,39 +164,60 @@ for (f1, f2) in ((:A_mul_Bc, :A_mul_B!),
     end
 end
 
-### AQ
-A_mul_B!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasFloat} = LAPACK.ormlq!('R', 'N', B.factors, B.τ, A)
-function *(A::StridedMatrix{TA}, B::LQPackedQ{TB}) where {TA,TB}
-    TAB = promote_type(TA,TB)
-    if size(B.factors,2) == size(A,2)
-        A_mul_B!(copy_oftype(A, TAB),convert(AbstractMatrix{TAB},B))
-    elseif size(B.factors,1) == size(A,2)
-        A_mul_B!( [A zeros(TAB, size(A,1), size(B.factors,2)-size(B.factors,1))], convert(AbstractMatrix{TAB},B))
+# in-place right-application of LQPackedQs
+# these methods require that the applied-to matrix's (A's) number of columns
+# match the number of columns (nQ) of the LQPackedQ (Q) (necessary for in-place
+# operation, and the underlying LAPACK routine (ormlq) treats the implicit Q
+# as its (nQ-by-nQ) square form)
+A_mul_B!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasFloat} =
+    LAPACK.ormlq!('R', 'N', B.factors, B.τ, A)
+A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasReal} =
+    LAPACK.ormlq!('R', 'T', B.factors, B.τ, A)
+A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasComplex} =
+    LAPACK.ormlq!('R', 'C', B.factors, B.τ, A)
+
+# out-of-place right-application of LQPackedQs
+# unlike their in-place equivalents, these methods: (1) check whether the applied-to
+# matrix's (A's) appropriate dimension (columns for A_*, rows for Ac_*) matches the
+# number of columns (nQ) of the LQPackedQ (Q), as the underlying LAPACK routine (ormlq)
+# treats the implicit Q as its (nQ-by-nQ) square form; and (2) if the preceding dimensions
+# do not match, these methods check whether the appropriate dimension of A instead matches
+# the number of rows of the matrix of which Q is a factor (i.e. size(Q.factors, 1)),
+# and if so zero-extends A as necessary for check (1) to pass (if possible).
+*(A::StridedVecOrMat, Q::LQPackedQ) = _A_mul_Bq(A_mul_B!, A, Q)
+A_mul_Bc(A::StridedVecOrMat, Q::LQPackedQ) = _A_mul_Bq(A_mul_Bc!, A, Q)
+function _A_mul_Bq(A_mul_Bop!::FT, A::StridedVecOrMat, Q::LQPackedQ) where FT<:Function
+    TR = promote_type(eltype(A), eltype(Q))
+    if size(A, 2) == size(Q.factors, 2)
+        C = copy_oftype(A, TR)
+    elseif size(A, 2) == size(Q.factors, 1)
+        C = zeros(TR, size(A, 1), size(Q.factors, 2))
+        copy!(C, 1, A, 1, length(A))
     else
-        throw(DimensionMismatch("second dimension of A, $(size(A,2)), must equal one of the dimensions of B, $(size(B))"))
+        _rightappdimmismatch("columns")
     end
+    return A_mul_Bop!(C, convert(AbstractMatrix{TR}, Q))
 end
-
-### AQc
-A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasReal}    = LAPACK.ormlq!('R','T',B.factors,B.τ,A)
-A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasComplex} = LAPACK.ormlq!('R','C',B.factors,B.τ,A)
-function A_mul_Bc(A::StridedVecOrMat{TA}, B::LQPackedQ{TB}) where {TA<:Number,TB<:Number}
-    TAB = promote_type(TA,TB)
-    A_mul_Bc!(copy_oftype(A, TAB), convert(AbstractMatrix{TAB},(B)))
-end
-
-### AcQ/AcQc
-for (f1, f2) in ((:Ac_mul_B, :A_mul_B!),
-                 (:Ac_mul_Bc, :A_mul_Bc!))
-    @eval begin
-        function ($f1)(A::StridedMatrix, B::LQPackedQ)
-            TAB = promote_type(eltype(A), eltype(B))
-            AA = similar(A, TAB, (size(A, 2), size(A, 1)))
-            adjoint!(AA, A)
-            return ($f2)(AA, B)
-        end
+Ac_mul_B(A::StridedMatrix, Q::LQPackedQ) = _Ac_mul_Bq(A_mul_B!, A, Q)
+Ac_mul_Bc(A::StridedMatrix, Q::LQPackedQ) = _Ac_mul_Bq(A_mul_Bc!, A, Q)
+function _Ac_mul_Bq(A_mul_Bop!::FT, A::StridedMatrix, Q::LQPackedQ) where FT<:Function
+    TR = promote_type(eltype(A), eltype(Q))
+    if size(A, 1) == size(Q.factors, 2)
+        C = adjoint!(similar(A, TR, reverse(size(A))), A)
+    elseif size(A, 1) == size(Q.factors, 1)
+        C = zeros(TR, size(A, 2), size(Q.factors, 2))
+        adjoint!(view(C, :, 1:size(A, 1)), A)
+    else
+        _rightappdimmismatch("rows")
     end
+    return A_mul_Bop!(C, convert(AbstractMatrix{TR}, Q))
 end
+_rightappdimmismatch(rowsorcols) =
+    throw(DimensionMismatch(string("the number of $(rowsorcols) of the matrix on the left ",
+        "must match either (1) the number of columns of the (LQPackedQ) matrix on the right ",
+        "or (2) the number of rows of that (LQPackedQ) matrix's internal representation ",
+        "(the factorization's originating matrix's number of rows)")))
+
 
 function (\)(A::LQ{TA}, b::StridedVector{Tb}) where {TA,Tb}
     S = promote_type(TA,Tb)
