@@ -92,17 +92,22 @@ full(Q::LQPackedQ; thin::Bool = true) =
 
 size(A::LQ, dim::Integer) = size(A.factors, dim)
 size(A::LQ) = size(A.factors)
-function size(A::LQPackedQ, dim::Integer)
-    if 0 < dim && dim <= 2
-        return size(A.factors, dim)
-    elseif 0 < dim && dim > 2
-        return 1
-    else
+
+# size(Q::LQPackedQ) yields the shape of Q's square form
+function size(Q::LQPackedQ)
+    n = size(Q.factors, 2)
+    return n, n
+end
+function size(Q::LQPackedQ, dim::Integer)
+    if dim < 1
         throw(BoundsError())
+    elseif dim <= 2 # && 1 <= dim
+        return size(Q.factors, 2)
+    else # 2 < dim
+        return 1
     end
 end
 
-size(A::LQPackedQ) = size(A.factors)
 
 ## Multiplication by LQ
 A_mul_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
