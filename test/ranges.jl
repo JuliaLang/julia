@@ -1155,7 +1155,7 @@ Base.isless(x, y::NotReal) = isless(x, y.val)
 
 # dimensional correctness:
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using TestHelpers.Furlong
+using Main.TestHelpers.Furlong
 @test_throws MethodError collect(Furlong(2):Furlong(10)) # step size is ambiguous
 @test_throws MethodError range(Furlong(2), 9) # step size is ambiguous
 @test collect(Furlong(2):Furlong(1):Furlong(10)) == collect(range(Furlong(2),Furlong(1),9)) == Furlong.(2:10)

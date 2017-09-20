@@ -110,6 +110,7 @@ typedef struct {
     jl_array_t *tree_literal_values;
     jl_module_t *tree_enclosing_module;
     jl_ptls_t ptls;
+    jl_array_t *loaded_modules_array;
 } jl_serializer_state;
 
 static jl_value_t *jl_idtable_type = NULL;
@@ -369,16 +370,32 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
 {
     writetag(s->s, jl_module_type);
     jl_serialize_value(s, m->name);
-    int ref_only = 0;
-    if (!module_in_worklist(m))
-        ref_only = 1;
-    write_int8(s->s, ref_only);
-    jl_serialize_value(s, m->parent);
-    if (ref_only) {
-        assert(m->parent != m);
+    size_t i;
+    if (!module_in_worklist(m)) {
+        if (m == m->parent) {
+            // top-level module
+            write_int8(s->s, 2);
+            int j = 0;
+            for (i = 0; i < jl_array_len(s->loaded_modules_array); i++) {
+                jl_module_t *mi = (jl_module_t*)jl_array_ptr_ref(s->loaded_modules_array, i);
+                if (!module_in_worklist(mi)) {
+                    if (m == mi) {
+                        write_int32(s->s, j);
+                        return;
+                    }
+                    j++;
+                }
+            }
+            assert(0 && "top level module not found in modules array");
+        }
+        else {
+            write_int8(s->s, 1);
+            jl_serialize_value(s, m->parent);
+        }
         return;
     }
-    size_t i;
+    write_int8(s->s, 0);
+    jl_serialize_value(s, m->parent);
     void **table = m->bindings.table;
     for(i=1; i < m->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
@@ -994,28 +1011,19 @@ static void jl_collect_backedges(jl_array_t *s)
     }
 }
 
-// serialize information about all of the modules accessible directly from Main
-static void write_mod_list(ios_t *s)
+// serialize information about all loaded modules
+static void write_mod_list(ios_t *s, jl_array_t *a)
 {
-    jl_module_t *m = jl_main_module;
     size_t i;
-    void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->owner == m &&
-                    b->value && b->constp &&
-                    jl_is_module(b->value) &&
-                    !module_in_worklist((jl_module_t*)b->value)) {
-                jl_module_t *child = (jl_module_t*)b->value;
-                if (child->name == b->name) {
-                    // this is the original/primary binding for the submodule
-                    size_t l = strlen(jl_symbol_name(child->name));
-                    write_int32(s, l);
-                    ios_write(s, jl_symbol_name(child->name), l);
-                    write_uint64(s, child->uuid);
-                }
-            }
+    size_t len = jl_array_len(a);
+    for (i = 0; i < len; i++) {
+        jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(a, i);
+        assert(jl_is_module(m));
+        if (!module_in_worklist(m)) {
+            size_t l = strlen(jl_symbol_name(m->name));
+            write_int32(s, l);
+            ios_write(s, jl_symbol_name(m->name), l);
+            write_uint64(s, m->uuid);
         }
     }
     write_int32(s, 0);
@@ -1045,7 +1053,7 @@ static void write_work_list(ios_t *s)
     int i, l = jl_array_len(serializer_worklist);
     for (i = 0; i < l; i++) {
         jl_module_t *workmod = (jl_module_t*)jl_array_ptr_ref(serializer_worklist, i);
-        if (workmod->parent == jl_main_module) {
+        if (workmod->parent == jl_main_module || workmod->parent == workmod) {
             size_t l = strlen(jl_symbol_name(workmod->name));
             write_int32(s, l);
             ios_write(s, jl_symbol_name(workmod->name), l);
@@ -1514,7 +1522,11 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s)
     jl_sym_t *mname = (jl_sym_t*)jl_deserialize_value(s, NULL);
     int ref_only = read_uint8(s->s);
     if (ref_only) {
-        jl_value_t *m_ref = jl_get_global((jl_module_t*)jl_deserialize_value(s, NULL), mname);
+        jl_value_t *m_ref;
+        if (ref_only == 1)
+            m_ref = jl_get_global((jl_module_t*)jl_deserialize_value(s, NULL), mname);
+        else
+            m_ref = jl_array_ptr_ref(s->loaded_modules_array, read_int32(s->s));
         if (usetable)
             backref_list.items[pos] = m_ref;
         return m_ref;
@@ -1900,44 +1912,47 @@ static jl_value_t *read_verify_mod_list(ios_t *s, arraylist_t *dependent_worlds)
         return jl_get_exceptionf(jl_errorexception_type,
                 "Main module uuid state is invalid for module deserialization.");
     }
+    jl_array_t *mod_array = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&mod_array);
     while (1) {
         size_t len = read_int32(s);
-        if (len == 0)
-            return NULL;
+        if (len == 0) {
+            JL_GC_POP();
+            return (jl_value_t*)mod_array;
+        }
         char *name = (char*)alloca(len+1);
         ios_read(s, name, len);
         name[len] = '\0';
         uint64_t uuid = read_uint64(s);
         jl_sym_t *sym = jl_symbol(name);
         jl_module_t *m = NULL;
-        if (jl_binding_resolved_p(jl_main_module, sym))
-            m = (jl_module_t*)jl_get_global(jl_main_module, sym);
-        if (!m) {
-            static jl_value_t *require_func = NULL;
-            if (!require_func)
-                require_func = jl_get_global(jl_base_module, jl_symbol("require"));
-            jl_value_t *reqargs[2] = {require_func, (jl_value_t*)sym};
-            JL_TRY {
-                jl_apply(reqargs, 2);
-            }
-            JL_CATCH {
-                ios_close(s);
-                jl_rethrow();
-            }
-            m = (jl_module_t*)jl_get_global(jl_main_module, sym);
+        static jl_value_t *require_func = NULL;
+        if (!require_func)
+            require_func = jl_get_global(jl_base_module, jl_symbol("require"));
+        jl_value_t *reqargs[2] = {require_func, (jl_value_t*)sym};
+        JL_TRY {
+            m = (jl_module_t*)jl_apply(reqargs, 2);
+        }
+        JL_CATCH {
+            ios_close(s);
+            jl_rethrow();
         }
         if (!m) {
+            JL_GC_POP();
             return jl_get_exceptionf(jl_errorexception_type,
                     "Requiring \"%s\" did not define a corresponding module.", name);
         }
         if (!jl_is_module(m)) {
+            JL_GC_POP();
             return jl_get_exceptionf(jl_errorexception_type,
                 "Invalid module path (%s does not name a module).", name);
         }
         if (m->uuid != uuid) {
+            JL_GC_POP();
             return jl_get_exceptionf(jl_errorexception_type,
                 "Module %s uuid did not match cache file.", name);
         }
+        jl_array_ptr_1d_push(mod_array, (jl_value_t*)m);
         if (m->primary_world > jl_main_module->primary_world)
             arraylist_push(dependent_worlds, (void*)m->primary_world);
     }
@@ -2003,6 +2018,8 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
             }
             case 2: { // reinsert module v into parent (const)
                 jl_module_t *mod = (jl_module_t*)v;
+                if (mod->parent == mod) // top level modules handled by loader
+                    break;
                 jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name, 1);
                 jl_declare_constant(b); // this can throw
                 if (b->value != NULL) {
@@ -2013,8 +2030,7 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
                     if (jl_generating_output() && jl_options.incremental) {
                         jl_errorf("Cannot replace module %s during incremental precompile.", jl_symbol_name(mod->name));
                     }
-                    jl_printf(JL_STDERR, "WARNING: replacing module %s.\n",
-                              jl_symbol_name(mod->name));
+                    jl_printf(JL_STDERR, "WARNING: replacing module %s.\n", jl_symbol_name(mod->name));
                 }
                 b->value = v;
                 jl_gc_wb_binding(b, v);
@@ -2262,16 +2278,20 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 {
     char *tmpfname = strcat(strcpy((char *) alloca(strlen(fname)+8), fname), ".XXXXXX");
     ios_t f;
+    jl_array_t *mod_array;
     if (ios_mkstemp(&f, tmpfname) == NULL) {
         jl_printf(JL_STDERR, "Cannot open cache file \"%s\" for writing.\n", tmpfname);
         return 1;
     }
+    JL_GC_PUSH1(&mod_array);
+    mod_array = jl_get_loaded_modules();
+
     serializer_worklist = worklist;
     write_header(&f);
     write_work_list(&f);
     write_dependency_list(&f);
-    write_mod_list(&f); // this can return errors during deserialize,
-                        // best to keep it early (before any actual initialization)
+    write_mod_list(&f, mod_array); // this can return errors during deserialize,
+                                   // best to keep it early (before any actual initialization)
 
     arraylist_new(&reinit_list, 0);
     htable_new(&edges_map, 0);
@@ -2283,13 +2303,23 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     int en = jl_gc_enable(0); // edges map is not gc-safe
     jl_array_t *lambdas = jl_alloc_vec_any(0);
     jl_array_t *edges = jl_alloc_vec_any(0);
-    jl_collect_lambdas_from_mod(lambdas, jl_main_module);
+
+    size_t i;
+    size_t len = jl_array_len(mod_array);
+    for (i = 0; i < len; i++) {
+        jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
+        assert(jl_is_module(m));
+        jl_collect_lambdas_from_mod(lambdas, m);
+    }
+    JL_GC_POP();
+
     jl_collect_backedges(edges);
 
     jl_serializer_state s = {
         &f, MODE_MODULE,
         NULL, NULL,
-        jl_get_ptls_states()
+        jl_get_ptls_states(),
+        mod_array
     };
     jl_serialize_value(&s, worklist);
     jl_serialize_value(&s, lambdas);
@@ -2588,12 +2618,13 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     arraylist_new(&dependent_worlds, 0);
 
     // verify that the system state is valid
-    jl_value_t *verify_error = read_verify_mod_list(f, &dependent_worlds);
-    if (verify_error) {
+    jl_value_t *verify_result = read_verify_mod_list(f, &dependent_worlds);
+    if (!jl_is_array(verify_result)) {
         arraylist_free(&dependent_worlds);
         ios_close(f);
-        return verify_error;
+        return verify_result;
     }
+    jl_array_t *mod_array = (jl_array_t*)verify_result;
 
     // prepare to deserialize
     int en = jl_gc_enable(0);
@@ -2610,7 +2641,8 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     jl_serializer_state s = {
         f, MODE_MODULE,
         NULL, NULL,
-        ptls
+        ptls,
+        mod_array
     };
     jl_array_t *restored = (jl_array_t*)jl_deserialize_value(&s, (jl_value_t**)&restored);
     serializer_worklist = restored;

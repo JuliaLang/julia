@@ -213,6 +213,10 @@ This section lists changes that do not have deprecation warnings.
   * The `openspecfun` library is no longer built and shipped with Julia, as it is no longer
     used internally ([#22390]).
 
+  * All loaded packges used to have bindings in `Main` (e.g. `Main.Package`). This is no
+    longer the case; now bindings will only exist for packages brought into scope by
+    typing `using Package` or `import Package` ([#17997]).
+
   * `slicedim(b::BitVector, 1, x)` now consistently returns the same thing that `b[x]` would,
     consistent with its documentation. Previously it would return a `BitArray{0}` for scalar
     `x` ([#20233]).

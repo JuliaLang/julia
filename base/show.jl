@@ -380,8 +380,8 @@ function show(io::IO, p::Pair)
 end
 
 function show(io::IO, m::Module)
-    if m === Main
-        print(io, "Main")
+    if is_root_module(m)
+        print(io, module_name(m))
     else
         print(io, join(fullname(m),"."))
     end

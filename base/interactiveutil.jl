@@ -566,7 +566,7 @@ end
 Return an array of methods with an argument of type `typ`.
 
 The optional second argument restricts the search to a particular module or function
-(the default is all modules, starting from Main).
+(the default is all top-level modules).
 
 If optional `showparents` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
@@ -588,7 +588,7 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
     return meths
 end
 
-function methodswith(t::Type, m::Module, showparents::Bool=false)
+function _methodswith(t::Type, m::Module, showparents::Bool)
     meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
@@ -601,17 +601,12 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
     return unique(meths)
 end
 
+methodswith(t::Type, m::Module, showparents::Bool=false) = _methodswith(t, m, showparents)
+
 function methodswith(t::Type, showparents::Bool=false)
     meths = Method[]
-    mainmod = Main
-    # find modules in Main
-    for nm in names(mainmod)
-        if isdefined(mainmod, nm)
-            mod = getfield(mainmod, nm)
-            if isa(mod, Module)
-                append!(meths, methodswith(t, mod, showparents))
-            end
-        end
+    for mod in loaded_modules_array()
+        append!(meths, _methodswith(t, mod, showparents))
     end
     return unique(meths)
 end
@@ -678,8 +673,10 @@ download(url, filename)
     workspace()
 
 Replace the top-level module (`Main`) with a new one, providing a clean workspace. The
-previous `Main` module is made available as `LastMain`. A previously-loaded package can be
-accessed using a statement such as `using LastMain.Package`.
+previous `Main` module is made available as `LastMain`.
+
+If `Package` was previously loaded, `using Package` in the new `Main` will re-use the
+loaded copy. Run `reload("Package")` first to load a fresh copy.
 
 This function should only be used interactively.
 """
