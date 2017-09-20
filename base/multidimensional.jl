@@ -123,6 +123,10 @@ module IteratorsMD
     _isless(ret, ::Tuple{}, ::Tuple{}) = ifelse(ret==1, true, false)
     icmp(a, b) = ifelse(isless(a,b), 1, ifelse(a==b, 0, -1))
 
+    # conversions
+    convert(::Type{T}, index::CartesianIndex{1}) where {T<:Number} = convert(T, index[1])
+    convert(::Type{T}, index::CartesianIndex) where {T<:Tuple} = convert(T, index.I)
+
     # hashing
     const cartindexhash_seed = UInt == UInt64 ? 0xd60ca92f8284b8b0 : 0xf2ea7c2e
     function Base.hash(ci::CartesianIndex, h::UInt)
