@@ -676,7 +676,7 @@ function inv(A::StridedMatrix{T}) where T
 end
 
 """
-    cos(A::StridedMatrix)
+    cos(A::AbstractMatrix)
 
 Compute the matrix cosine of a square matrix `A`.
 
@@ -691,13 +691,13 @@ julia> cos(ones(2, 2))
  -0.708073   0.291927
 ```
 """
-function cos(A::StridedMatrix{<:Real})
+function cos(A::AbstractMatrix{<:Real})
     if issymmetric(A)
         return full(cos(Symmetric(A)))
     end
     return real(exp!(im*A))
 end
-function cos(A::StridedMatrix{<:Complex})
+function cos(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
         return full(cos(Hermitian(A)))
     end
@@ -707,7 +707,7 @@ function cos(A::StridedMatrix{<:Complex})
 end
 
 """
-    sin(A::StridedMatrix)
+    sin(A::AbstractMatrix)
 
 Compute the matrix sine of a square matrix `A`.
 
@@ -722,13 +722,13 @@ julia> sin(ones(2, 2))
  0.454649  0.454649
 ```
 """
-function sin(A::StridedMatrix{<:Real})
+function sin(A::AbstractMatrix{<:Real})
     if issymmetric(A)
         return full(sin(Symmetric(A)))
     end
     return imag(exp!(im*A))
 end
-function sin(A::StridedMatrix{<:Complex})
+function sin(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
         return full(sin(Hermitian(A)))
     end
@@ -742,7 +742,7 @@ function sin(A::StridedMatrix{<:Complex})
 end
 
 """
-    sincos(A::StridedMatrix)
+    sincos(A::AbstractMatrix)
 
 Compute the matrix sine and cosine of a square matrix `A`.
 
@@ -761,14 +761,14 @@ julia> C
  -0.708073   0.291927
 ```
 """
-function sincos(A::StridedMatrix{<:Real})
+function sincos(A::AbstractMatrix{<:Real})
     if issymmetric(A)
         return full.(sincos(Symmetric(A)))
     end
     c, s = reim(exp!(im*A))
     return s, c
 end
-function sincos(A::StridedMatrix{<:Complex})
+function sincos(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
         return full.(sincos(Hermitian(A)))
     end
@@ -783,7 +783,7 @@ function sincos(A::StridedMatrix{<:Complex})
 end
 
 """
-    tan(A::StridedMatrix)
+    tan(A::AbstractMatrix)
 
 Compute the matrix tangent of a square matrix `A`.
 
@@ -798,7 +798,7 @@ julia> tan(ones(2, 2))
  -1.09252  -1.09252
 ```
 """
-function tan(A::StridedMatrix)
+function tan(A::AbstractMatrix)
     if ishermitian(A)
         return full(tan(Hermitian(A)))
     end
@@ -808,11 +808,11 @@ function tan(A::StridedMatrix)
 end
 
 """
-    cosh(A::StridedMatrix)
+    cosh(A::AbstractMatrix)
 
 Compute the matrix hyperbolic cosine of a square matrix `A`.
 """
-function cosh(A::StridedMatrix)
+function cosh(A::AbstractMatrix)
     if ishermitian(A)
         return full(cosh(Hermitian(A)))
     end
@@ -822,11 +822,11 @@ function cosh(A::StridedMatrix)
 end
 
 """
-    sinh(A::StridedMatrix)
+    sinh(A::AbstractMatrix)
 
 Compute the matrix hyperbolic sine of a square matrix `A`.
 """
-function sinh(A::StridedMatrix)
+function sinh(A::AbstractMatrix)
     if ishermitian(A)
         return full(sinh(Hermitian(A)))
     end
@@ -836,11 +836,11 @@ function sinh(A::StridedMatrix)
 end
 
 """
-    tanh(A::StridedMatrix)
+    tanh(A::AbstractMatrix)
 
 Compute the matrix hyperbolic tangent of a square matrix `A`.
 """
-function tanh(A::StridedMatrix)
+function tanh(A::AbstractMatrix)
     if ishermitian(A)
         return full(tanh(Hermitian(A)))
     end
@@ -856,7 +856,7 @@ function tanh(A::StridedMatrix)
 end
 
 """
-    acos(A::StridedMatrix)
+    acos(A::AbstractMatrix)
 
 Compute the inverse matrix cosine of a square matrix `A`.
 
@@ -875,7 +875,7 @@ julia> acos(cos([0.5 0.1; -0.2 0.3]))
  -0.2+2.77556e-16im  0.3-3.46945e-16im
 ```
 """
-function acos(A::StridedMatrix)
+function acos(A::AbstractMatrix)
     if ishermitian(A)
         return full(acos(Hermitian(A)))
     end
@@ -886,7 +886,7 @@ function acos(A::StridedMatrix)
 end
 
 """
-    asin(A::StridedMatrix)
+    asin(A::AbstractMatrix)
 
 Compute the inverse matrix sine of a square matrix `A`.
 
@@ -905,7 +905,7 @@ julia> asin(sin([0.5 0.1; -0.2 0.3]))
  -0.2+9.71445e-17im  0.3-1.249e-16im
 ```
 """
-function asin(A::StridedMatrix)
+function asin(A::AbstractMatrix)
     if ishermitian(A)
         return full(asin(Hermitian(A)))
     end
@@ -916,7 +916,7 @@ function asin(A::StridedMatrix)
 end
 
 """
-    atan(A::StridedMatrix)
+    atan(A::AbstractMatrix)
 
 Compute the inverse matrix tangent of a square matrix `A`.
 
@@ -935,7 +935,7 @@ julia> atan(tan([0.5 0.1; -0.2 0.3]))
  -0.2+6.93889e-17im  0.3-4.16334e-17im
 ```
 """
-function atan(A::StridedMatrix)
+function atan(A::AbstractMatrix)
     if ishermitian(A)
         return full(atan(Hermitian(A)))
     end
@@ -946,14 +946,14 @@ function atan(A::StridedMatrix)
 end
 
 """
-    acosh(A::StridedMatrix)
+    acosh(A::AbstractMatrix)
 
 Compute the inverse hyperbolic matrix cosine of a square matrix `A`.  For the theory and
 logarithmic formulas used to compute this function, see [^AH16].
 
 [^AH16]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
-function acosh(A::StridedMatrix)
+function acosh(A::AbstractMatrix)
     if ishermitian(A)
         return full(acosh(Hermitian(A)))
     end
@@ -964,14 +964,14 @@ function acosh(A::StridedMatrix)
 end
 
 """
-    asinh(A::StridedMatrix)
+    asinh(A::AbstractMatrix)
 
 Compute the inverse hyperbolic matrix sine of a square matrix `A`.  For the theory and
 logarithmic formulas used to compute this function, see [^AH16].
 
 [^AH16]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
-function asinh(A::StridedMatrix)
+function asinh(A::AbstractMatrix)
     if ishermitian(A)
         return full(asinh(Hermitian(A)))
     end
@@ -982,14 +982,14 @@ function asinh(A::StridedMatrix)
 end
 
 """
-    atanh(A::StridedMatrix)
+    atanh(A::AbstractMatrix)
 
 Compute the inverse hyperbolic matrix tangent of a square matrix `A`.  For the theory and
 logarithmic formulas used to compute this function, see [^AH16].
 
 [^AH16]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
-function atanh(A::StridedMatrix)
+function atanh(A::AbstractMatrix)
     if ishermitian(A)
         return full(atanh(Hermitian(A)))
     end
@@ -1006,15 +1006,15 @@ for (finv, f, finvh, fh, fn) in ((:sec, :cos, :sech, :cosh, "secant"),
     hname = string(finvh)
     @eval begin
         @doc """
-            $($name)(A::StridedMatrix)
+            $($name)(A::AbstractMatrix)
 
         Compute the matrix $($fn) of a square matrix `A`.
-        """ ($finv)(A::StridedMatrix{T}) where {T} = inv(($f)(A))
+        """ ($finv)(A::AbstractMatrix{T}) where {T} = inv(($f)(A))
         @doc """
-            $($hname)(A::StridedMatrix)
+            $($hname)(A::AbstractMatrix)
 
         Compute the matrix hyperbolic $($fn) of square matrix `A`.
-        """ ($finvh)(A::StridedMatrix{T}) where {T} = inv(($fh)(A))
+        """ ($finvh)(A::AbstractMatrix{T}) where {T} = inv(($fh)(A))
     end
 end
 
@@ -1025,11 +1025,11 @@ for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
     hname = string(hfa)
     @eval begin
         @doc """
-            $($tname)(A::StridedMatrix)
-        Compute the inverse matrix $($fn) of `A`. """ ($tfa)(A::StridedMatrix{T}) where {T} = ($tfainv)(inv(A))
+            $($tname)(A::AbstractMatrix)
+        Compute the inverse matrix $($fn) of `A`. """ ($tfa)(A::AbstractMatrix{T}) where {T} = ($tfainv)(inv(A))
         @doc """
-            $($hname)(A::StridedMatrix)
-        Compute the inverse matrix hyperbolic $($fn) of `A`. """ ($hfa)(A::StridedMatrix{T}) where {T} = ($hfainv)(inv(A))
+            $($hname)(A::AbstractMatrix)
+        Compute the inverse matrix hyperbolic $($fn) of `A`. """ ($hfa)(A::AbstractMatrix{T}) where {T} = ($hfainv)(inv(A))
     end
 end
 
