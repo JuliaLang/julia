@@ -117,10 +117,23 @@ end
 
 Reverses a string.
 
+Technically, this function reverses the "codepoints" in a string, and its
+use is for reversed-order string processing, especially for reversed
+regex (regular expression) searches.  See also [`reverseind`](@ref) to convert indices
+in `s` to indices in `reverse(s)` and vice-versa, and [`graphemes`](@ref)
+to operate on user-visible "characters" (graphemes) rather than codepoints
+(which is more [visually pleasing but less useful](https://github.com/JuliaLang/julia/issues/6165) for reverse searching).
+
 # Examples
 ```jldoctest
 julia> reverse("JuliaLang")
 "gnaLailuJ"
+
+julia> reverse("ax̂e") # combining characters can lead to surprising results
+"êxa"
+
+julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
+"ex̂a"
 ```
 """
 reverse(s::AbstractString) = RevString(s)
@@ -131,7 +144,7 @@ reverse(s::RevString) = s.string
 """
     reverseind(v, i)
 
-Given an index `i` in `reverse(v)`, return the corresponding index in `v` so that
+Given an index `i` in [`reverse(v)`](@ref), return the corresponding index in `v` so that
 `v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in the case where `v` is a
 Unicode string.)
 
