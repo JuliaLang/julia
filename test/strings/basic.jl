@@ -159,9 +159,10 @@ end
 @test first('\x00':'\x7f') === '\x00'
 @test last('\x00':'\x7f') === '\x7f'
 
-# make sure substrings handle last code unit even if not start of codepoint
+# make sure substrings do not accept code unit if it is not start of codepoint
 let s = "x\u0302"
-    @test s[1:3] == s
+    @test_throws UnicodeError s[1:3]
+    @test s[1:2]==s
 end
 
 # issue #9781
