@@ -27,9 +27,9 @@ function package_env_info(pkg::String, env::EnvCache = EnvCache(); verb::String 
             haskey(info, "uuid") && info["uuid"] == uuid
         end
         length(infos) < 1 &&
-            error("manifest has no stanza for $pkg/$uuid")
+            cmderror("manifest has no stanza for $pkg/$uuid")
         length(infos) > 1 &&
-            error("manifest has multiple stanzas for $pkg/$uuid")
+            cmderror("manifest has multiple stanzas for $pkg/$uuid")
         return first(infos)
     elseif length(infos) == 1
         return first(infos)
@@ -52,7 +52,7 @@ function package_env_info(pkg::String, env::EnvCache = EnvCache(); verb::String 
         end
         menu = RadioMenu(options)
         choice = request("Which $pkg package do you want to use:", menu)
-        choice == -1 && error("Package load aborted")
+        choice == -1 && cmderror("Package load aborted")
         return infos[choice]
     end
 end
@@ -74,7 +74,7 @@ function load_package_data(f::Base.Callable, path::String, versions)
             vr = VersionRange(v)
             ver in vr || continue
             dict = get!(data, ver, Dict{String,Any}())
-            haskey(dict, key) && error("$ver/$key is duplicated in $path")
+            haskey(dict, key) && cmderror("$ver/$key is duplicated in $path")
             dict[key] = f(value)
         end
     end
@@ -160,8 +160,8 @@ function version_data(env::EnvCache, pkgs::Vector{PackageVersion})
             info = parse_toml(path, "package.toml")
             if haskey(names, uuid)
                 names[uuid] == info["name"] ||
-                    error("$uuid: name mismatch between registries: ",
-                          "$(names[uuid]) vs. $(info["name"])")
+                    cmderror("$uuid: name mismatch between registries: ",
+                             "$(names[uuid]) vs. $(info["name"])")
             else
                 names[uuid] = info["name"]
             end
@@ -365,7 +365,7 @@ function up(env::EnvCache, pkgs::Vector{PackageVersion})
             r = level == UpgradeLevel(:patch) ? VersionRange(ver.major, ver.minor) :
                 level == UpgradeLevel(:minor) ? VersionRange(ver.major) :
                 level == UpgradeLevel(:major) ? VersionRange() :
-                    error("unexpected upgrade level")
+                    error("unexpected upgrade level: $level")
             pkg.version = VersionSpec(r)
         end
     end

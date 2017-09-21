@@ -30,7 +30,7 @@ const cmds = Dict(
 
 function parse_option(word::AbstractString)
     m = match(r"^--(\w+)(?:\s*=\s*(\S*))?$", word)
-    m == nothing && error("invalid option: ", repr(word))
+    m == nothing && cmderror("invalid option: ", repr(word))
     return m.captures[2] == nothing ?
         (:opt, Symbol(m.captures[1])) :
         (:opt, Symbol(m.captures[1]), String(m.captures[2]))
@@ -55,14 +55,14 @@ function tokenize(cmd::String)::Vector{Tuple{Symbol,Vararg{Any}}}
         if word[1] == '-'
             push!(tokens, parse_option(word))
         else
-            word in keys(cmds) || error("invalid command: ", repr(word))
+            word in keys(cmds) || cmderror("invalid command: ", repr(word))
             push!(tokens, (:cmd, cmds[word]))
             help_mode || cmds[word] != :help && break
             help_mode = true
         end
     end
     if isempty(tokens) || tokens[end][1] != :cmd
-        error("no package command given")
+        cmderror("no package command given")
     end
     while !isempty(words)
         word = shift!(words)
@@ -78,7 +78,7 @@ function tokenize(cmd::String)::Vector{Tuple{Symbol,Vararg{Any}}}
             m = match(name_uuid_re, word)
             push!(tokens, (:pkg, String(m.captures[1]), UUID(m.captures[2])))
         else
-            error("invalid argument: ", repr(word))
+            cmderror("invalid argument: ", repr(word))
         end
     end
     return tokens
@@ -97,13 +97,13 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
             elseif token[1] == :opt
                 if token[2] == :env
                     length(token) == 3 ||
-                        error("the `--env` option requires a value")
+                        cmderror("the `--env` option requires a value")
                     env_opt = token[3]
                 else
-                    error("unrecognized option: `--$(token[2])`")
+                    cmderror("unrecognized option: `--$(token[2])`")
                 end
             else
-                error("misplaced token: ", token)
+                cmderror("misplaced token: ", token)
             end
         end
         env = EnvCache(env_opt)
@@ -111,21 +111,25 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
         cmd == :add    ?    do_add!(env, tokens) :
         cmd == :up     ?     do_up!(env, tokens) :
         cmd == :status ? do_status!(env, tokens) :
-            error("`$cmd` command not yet implemented")
-    catch exc
-        Base.display_error(repl.t.err_stream, exc, Base.catch_backtrace())
+            cmderror("`$cmd` command not yet implemented")
+    catch err
+        if err isa CommandError
+            Base.display_error(repl.t.err_stream, ErrorException(err.msg), Ptr{Void}[])
+        else
+            Base.display_error(repl.t.err_stream, err, Base.catch_backtrace())
+        end
     end
 end
 
 function do_rm!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     # tokens: package names and/or uuids
     isempty(tokens) &&
-        error("`rm` – list packages to remove")
+        cmderror("`rm` – list packages to remove")
     pkgs = Package[]
     while !isempty(tokens)
         token = shift!(tokens)
         token[1] != :pkg &&
-            error("`rm` only accepts package names and/or UUIDs")
+            cmderror("`rm` only accepts package names and/or UUIDs")
         push!(pkgs, Package(token[2:end]...))
     end
     project_resolve!(env, pkgs)
@@ -136,9 +140,9 @@ end
 function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     # tokens: package names and/or uuids, optionally followed by version specs
     isempty(tokens) &&
-    error("`add` – list packages to add")
+    cmderror("`add` – list packages to add")
     tokens[1][1] == :ver &&
-        error("package name/uuid must precede version spec `@$(tokens[1][2])`")
+        cmderror("package name/uuid must precede version spec `@$(tokens[1][2])`")
     pkgs = PackageVersion[]
     while !isempty(tokens)
         token = shift!(tokens)
@@ -147,9 +151,9 @@ function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         elseif token[1] == :ver
             pkgs[end].version = VersionSpec(token[2])
             isempty(tokens) || tokens[1][1] == :pkg ||
-                error("package name/uuid must precede version spec `@$(tokens[1][2])`")
+                cmderror("package name/uuid must precede version spec `@$(tokens[1][2])`")
         elseif token[1] == :opt
-            error("`add` doesn't take options: --$(join(token[2:end], '='))\ninvalid command: $input")
+            cmderror("`add` doesn't take options: --$(join(token[2:end], '='))\ninvalid command: $input")
         end
     end
     project_resolve!(env, pkgs)
@@ -163,7 +167,7 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     #  - upgrade levels as options: --[fixed|patch|minor|major]
     #  - package names and/or uuids, optionally followed by version specs
     !isempty(tokens) && tokens[1][1] == :ver &&
-        error("package name/uuid must precede version spec `@$(tokens[1][2])`")
+        cmderror("package name/uuid must precede version spec `@$(tokens[1][2])`")
     pkgs = PackageVersion[]
     level = UpgradeLevel(:major)
     while !isempty(tokens)
@@ -173,11 +177,11 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         elseif token[1] == :ver
             pkgs[end].version = VersionSpec(token[2])
             isempty(tokens) || tokens[1][1] == :pkg ||
-                error("package name/uuid must precede version spec `@$(tokens[1][2])`")
+                cmderror("package name/uuid must precede version spec `@$(tokens[1][2])`")
         elseif token[1] == :opt
             level = UpgradeLevel(token[2])
             length(token) == 3 &&
-                error("the --$(token[2]) option does not take an argument")
+                cmderror("the --$(token[2]) option does not take an argument")
         end
     end
     project_resolve!(env, pkgs)
@@ -191,16 +195,20 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
 end
 
 function do_status!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
-    isempty(tokens) || error("`status` does not take arguments")
-    path = LibGit2.path(env.git)
-    project_path = relpath(env.project_file, path)
-    manifest_path = relpath(env.manifest_file, path)
-    project = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
-    manifest = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
-    print_with_color(:cyan, "Project\n")
-    print_project_diff(project["deps"], env.project["deps"])
-    print_with_color(:cyan, "Manifest\n")
-    print_manifest_diff(manifest, env.manifest)
+    isempty(tokens) || cmderror("`status` does not take arguments")
+    if env.git == nothing
+        cmderror("`status` only supported in git-saved environments")
+    else
+        path = LibGit2.path(env.git)
+        project_path = relpath(env.project_file, path)
+        manifest_path = relpath(env.manifest_file, path)
+        project = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
+        manifest = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
+        print_with_color(:cyan, "Project\n")
+        print_project_diff(project["deps"], env.project["deps"])
+        print_with_color(:cyan, "Manifest\n")
+        print_manifest_diff(manifest, env.manifest)
+    end
 end
 
 function create_mode(repl, main)

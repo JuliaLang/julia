@@ -7,10 +7,10 @@ using Pkg3.TerminalMenus
 import Pkg3: depots
 
 export SHA1, VersionRange, VersionSpec, Package, PackageVersion, UpgradeLevel, EnvCache,
-    has_name, has_uuid, write_env, parse_toml, find_registered!, project_resolve!,
-    registry_resolve!, ensure_resolved, manifest_info,  registered_uuids, registered_paths,
-    registered_uuid, registered_name, git_file_stream, read_project, read_manifest,
-    print_project_diff, print_manifest_diff
+    CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
+    project_resolve!, registry_resolve!, ensure_resolved, manifest_info,
+    registered_uuids, registered_paths, registered_uuid, registered_name,
+    git_file_stream, read_project, read_manifest, print_project_diff, print_manifest_diff
 
 ## ordering of UUIDs ##
 
@@ -137,6 +137,13 @@ Base.convert(::Type{VersionSet}, r::VersionRange{m,3}) where {m} =
     VersionSet(VersionNumber(r.lower.t...), VersionNumber(r.upper[1], r.upper[2], r.upper[3]+1))
 Base.convert(::Type{VersionSet}, s::VersionSpec) = mapreduce(VersionSet, ∪, s.ranges)
 Base.convert(::Type{Available}, t::Tuple{SHA1,Dict{UUID,VersionSpec}}) = Available(t...)
+
+## command errors (no stacktrace) ##
+
+struct CommandError <: Exception
+    msg::String
+end
+cmderror(msg::String...) = throw(CommandError(join(msg)))
 
 ## type for expressing operations ##
 
@@ -502,7 +509,7 @@ end
 
 function find_project(env::String)
     if isempty(env)
-        error("invalid environment name: \"\"")
+        cmderror("invalid environment name: \"\"")
     elseif env == "/"
         return find_named_env()
     elseif env == "."
@@ -619,7 +626,7 @@ function ensure_resolved(
         end
         print(io, "Please specify by known `name=uuid`.")
     end
-    error(msg)
+    cmderror(msg)
 end
 ensure_resolved(
     env::EnvCache,
@@ -730,7 +737,7 @@ function find_registered!(
     elseif !isempty(names)
         Regex(name_re, "x")
     else
-        error("this sholdn't happen")
+        error("this should not happen")
     end
 
     # initialize env entries for names and uuids
@@ -809,7 +816,7 @@ end
 "Return most current package info for a registered UUID"
 function registered_info(env::EnvCache, uuid::UUID, key::String)
     paths = env.paths[uuid]
-    isempty(paths) && error("`$uuid` is not registered")
+    isempty(paths) && cmderror("`$uuid` is not registered")
     values = []
     for path in paths
         info = parse_toml(paths[1], "package.toml")
@@ -817,7 +824,7 @@ function registered_info(env::EnvCache, uuid::UUID, key::String)
         value in values || push!(values, value)
     end
     length(values) > 1 &&
-        error("package `$uuid` has multiple registered `$key` values: ", join(values, ", "))
+        cmderror("package `$uuid` has multiple registered `$key` values: ", join(values, ", "))
     return values[1]
 end
 
