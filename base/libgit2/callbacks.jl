@@ -110,21 +110,20 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         # if username is not provided or empty, then prompt for it
         username = username_ptr != Cstring(C_NULL) ? unsafe_string(username_ptr) : ""
         if isempty(username)
-            prompt_url = git_url(scheme=p.scheme, host=p.host)
-            response = Base.prompt("Username for '$prompt_url'", default=cred.user)
+            url = git_url(scheme=p.scheme, host=p.host)
+            response = Base.prompt("Username for '$url'", default=cred.user)
             isnull(response) && return user_abort()
             cred.user = unsafe_get(response)
         else
             cred.user = username
         end
 
-        prompt_url = git_url(scheme=p.scheme, host=p.host, username=cred.user)
+        url = git_url(scheme=p.scheme, host=p.host, username=cred.user)
 
         # For SSH we need a private key location
         last_private_key = cred.prvkey
         if !isfile(cred.prvkey) || !revised
-            response = Base.prompt("Private key location for '$prompt_url'",
-                default=cred.prvkey)
+            response = Base.prompt("Private key location for '$url'", default=cred.prvkey)
             isnull(response) && return user_abort()
             cred.prvkey = expanduser(unsafe_get(response))
 
@@ -138,8 +137,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
         # typically this will just annoy users.
         stale = !p.first_pass && cred.prvkey == last_private_key && cred.pubkey != cred.prvkey * ".pub"
         if isfile(cred.prvkey) && (stale || !isfile(cred.pubkey))
-            response = Base.prompt("Public key location for '$prompt_url'",
-                default=cred.pubkey)
+            response = Base.prompt("Public key location for '$url'", default=cred.pubkey)
             isnull(response) && return user_abort()
             cred.pubkey = expanduser(unsafe_get(response))
         end
@@ -187,21 +185,21 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayl
     end
 
     if p.remaining_prompts > 0 && (!revised || !isfilled(cred))
-        prompt_url = git_url(scheme=p.scheme, host=p.host)
+        url = git_url(scheme=p.scheme, host=p.host)
+        username = isempty(cred.user) ? p.username : cred.user
         if Sys.iswindows()
             response = Base.winprompt(
-                "Please enter your credentials for '$prompt_url'", "Credentials required",
-                isempty(cred.user) ? p.username : cred.user; prompt_username=true)
+                "Please enter your credentials for '$url'", "Credentials required",
+                username; prompt_username=true)
             isnull(response) && return user_abort()
             cred.user, cred.pass = unsafe_get(response)
         else
-            response = Base.prompt("Username for '$prompt_url'",
-                default=isempty(cred.user) ? p.username : cred.user)
+            response = Base.prompt("Username for '$url'", default=username)
             isnull(response) && return user_abort()
             cred.user = unsafe_get(response)
 
-            prompt_url = git_url(scheme=p.scheme, host=p.host, username=cred.user)
-            response = Base.prompt("Password for '$prompt_url'", password=true)
+            url = git_url(scheme=p.scheme, host=p.host, username=cred.user)
+            response = Base.prompt("Password for '$url'", password=true)
             isnull(response) && return user_abort()
             cred.pass = unsafe_get(response)
             isempty(cred.pass) && return user_abort()  # Ambiguous if EOF or newline
