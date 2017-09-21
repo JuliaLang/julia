@@ -10,10 +10,10 @@ end
 
 Julia is under rapid development and has an extensive test suite to verify functionality across
 multiple platforms. If you build Julia from source, you can run this test suite with `make test`.
-In a binary install, you can run the test suite using `Base.runtests()`.
+In a binary install, you can run the test suite using `Base.test()`.
 
 ```@docs
-Base.runtests
+Base.test
 ```
 
 ## Basic Unit Tests
