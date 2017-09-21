@@ -221,6 +221,10 @@ This section lists changes that do not have deprecation warnings.
     consistent with its documentation. Previously it would return a `BitArray{0}` for scalar
     `x` ([#20233]).
 
+  * The rules for mixed-signedness integer arithmetic (e.g. `Int32(1) + UInt64(1)`) have been
+    simplified: if the arguments have different sizes (in bits), then the type of the larger
+    argument is used. If the arguments have the same size, the unsigned type is used ([#9292]).
+
 Library improvements
 --------------------
 
