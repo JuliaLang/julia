@@ -10,9 +10,6 @@
     PAGE_UP,
     PAGE_DOWN)
 
-# The user terminal
-terminal = Base.Terminals.TTYTerminal(get(ENV, "TERM", @static is_windows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
-
 # Enable raw mode. Allows us to process keyboard inputs directly.
 enableRawMode() = Base.Terminals.raw!(terminal, true)
 
