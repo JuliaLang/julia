@@ -35,4 +35,4 @@ TerminalMenus.writeLine(buf, radio_menu, 1, true)
 
 # Test using STDIN
 radio_menu = RadioMenu(string.(1:10))
-@test simulateInput(radio_menu, :down, :down, :enter) == 3
+@test simulateInput(3, radio_menu, :down, :down, :enter)
