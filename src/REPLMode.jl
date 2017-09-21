@@ -12,14 +12,17 @@ const cmds = Dict(
     "?"         => :help,
     "status"    => :status,
     "st"        => :status,
+    "."         => :status,
     "search"    => :search,
     "find"      => :search,
-    "info"      => :info,
+    "/"         => :search,
     "add"       => :add,
     "install"   => :add,
+    "+"         => :add,
     "rm"        => :rm,
     "remove"    => :rm,
     "uninstall" => :rm,
+    "-"         => :rm,
     "up"        => :up,
     "update"    => :up,
     "upgrade"   => :up,
@@ -52,7 +55,7 @@ function tokenize(cmd::String)::Vector{Tuple{Symbol,Vararg{Any}}}
     help_mode = false
     while !isempty(words)
         word = shift!(words)
-        if word[1] == '-'
+        if word[1] == '-' && length(word) > 1
             push!(tokens, parse_option(word))
         else
             word in keys(cmds) || cmderror("invalid command: ", repr(word))
