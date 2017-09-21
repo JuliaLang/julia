@@ -49,11 +49,11 @@ function user_abort()
 end
 
 function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, username_ptr)
-    creds = Base.get(p.credential)::SSHCredentials
+    cred = Base.get(p.credential)::SSHCredentials
 
     # Reset password on sucessive calls
     if !p.first_pass
-        creds.pass = ""
+        cred.pass = ""
     end
 
     # first try ssh-agent if credentials support its usage
@@ -69,29 +69,29 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
 
     privatekey = Base.get(ENV, "SSH_KEY_PATH") do
         default = joinpath(homedir(), ".ssh", "id_rsa")
-        if isempty(creds.prvkey) && isfile(default)
+        if isempty(cred.prvkey) && isfile(default)
             default
         else
-            creds.prvkey
+            cred.prvkey
         end
     end
 
     publickey = Base.get(ENV, "SSH_PUB_KEY_PATH") do
         default = privatekey * ".pub"
-        if isempty(creds.pubkey) && isfile(default)
+        if isempty(cred.pubkey) && isfile(default)
             default
         else
-            creds.pubkey
+            cred.pubkey
         end
     end
 
-    passphrase = Base.get(ENV, "SSH_KEY_PASS", creds.pass)
+    passphrase = Base.get(ENV, "SSH_KEY_PASS", cred.pass)
 
     if p.allow_prompt
         # if username is not provided or empty, then prompt for it
         if isempty(username)
             prompt_url = git_url(scheme=p.scheme, host=p.host)
-            response = Base.prompt("Username for '$prompt_url'", default=creds.user)
+            response = Base.prompt("Username for '$prompt_url'", default=cred.user)
             isnull(response) && return user_abort()
             username = unsafe_get(response)
         end
@@ -106,7 +106,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
             privatekey = unsafe_get(response)
 
             # Only update the public key if the private key changed
-            if privatekey != creds.prvkey
+            if privatekey != cred.prvkey
                 publickey = privatekey * ".pub"
             end
         end
@@ -135,30 +135,30 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
             end
         end
 
-        creds.user = username # save credentials
-        creds.prvkey = privatekey # save credentials
-        creds.pubkey = publickey # save credentials
-        creds.pass = passphrase
+        cred.user = username # save credentials
+        cred.prvkey = privatekey # save credentials
+        cred.pubkey = publickey # save credentials
+        cred.pass = passphrase
     elseif !p.first_pass
         return Cint(Error.EAUTH)
     end
 
     return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Cstring, Cstring, Cstring, Cstring),
-                 libgit2credptr, creds.user, creds.pubkey, creds.prvkey, creds.pass)
+                 libgit2credptr, cred.user, cred.pubkey, cred.prvkey, cred.pass)
 end
 
 function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload)
-    creds = Base.get(p.credential)::UserPasswordCredentials
+    cred = Base.get(p.credential)::UserPasswordCredentials
 
     # Reset password on sucessive calls
     if !p.first_pass
-        creds.pass = ""
+        cred.pass = ""
     end
 
     if p.allow_prompt
-        username = creds.user
-        userpass = creds.pass
+        username = cred.user
+        userpass = cred.pass
         if isempty(username) || isempty(userpass)
             prompt_url = git_url(scheme=p.scheme, host=p.host)
             if Sys.iswindows()
@@ -180,15 +180,15 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayl
                 isempty(userpass) && return user_abort()  # Ambiguous if EOF or newline
             end
         end
-        creds.user = username # save credentials
-        creds.pass = userpass # save credentials
+        cred.user = username # save credentials
+        cred.pass = userpass # save credentials
     elseif !p.first_pass
         return Cint(Error.EAUTH)
     end
 
     return ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Cstring, Cstring),
-                 libgit2credptr, creds.user, creds.pass)
+                 libgit2credptr, cred.user, cred.pass)
 end
 
 
