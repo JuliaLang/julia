@@ -620,10 +620,10 @@ const _space = UInt8(' ')
 
 _notspace(c) = c != _space
 
-beginofline(buf, pos=position(buf)) = findprev(buf.data, _newline, pos)
+beginofline(buf, pos=position(buf)) = findprev(equalto(_newline), buf.data, pos)
 
 function endofline(buf, pos=position(buf))
-    eol = findnext(buf.data[pos+1:buf.size], _newline, 1)
+    eol = findnext(equalto(_newline), buf.data[pos+1:buf.size], 1)
     eol == 0 ? buf.size : pos + eol - 1
 end
 

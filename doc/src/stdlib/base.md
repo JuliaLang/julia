@@ -136,6 +136,7 @@ Core.invoke
 Base.invokelatest
 Base.:(|>)
 Base.:(∘)
+Base.equalto
 ```
 
 ## Syntax

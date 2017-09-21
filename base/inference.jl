@@ -1583,7 +1583,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
         end
         tf = t_ifunc[iidx]
     else
-        fidx = findfirst(t_ffunc_key, f)
+        fidx = findfirst(x->x===f, t_ffunc_key)
         if fidx == 0
             # unknown/unhandled builtin function
             return Any
@@ -4757,7 +4757,7 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, mod::Module, params:
                 elseif f == Main.Core.arrayref
                     return plus_saturate(argcost, isknowntype(ex.typ) ? 4 : params.inline_nonleaf_penalty)
                 end
-                fidx = findfirst(t_ffunc_key, f)
+                fidx = findfirst(x->x===f, t_ffunc_key)
                 if fidx == 0
                     # unknown/unhandled builtin or anonymous function
                     # Use the generic cost of a direct function call
@@ -5604,7 +5604,7 @@ function _getfield_elim_pass!(e::Expr, sv::InferenceState)
             if alloc !== false
                 flen, fnames = alloc
                 if isa(j, QuoteNode)
-                    j = findfirst(fnames, j.value)
+                    j = findfirst(equalto(j.value), fnames)
                 end
                 if 1 <= j <= flen
                     ok = true
@@ -5899,7 +5899,7 @@ function replace_getfield!(e::Expr, tupname, vals, field_names, sv::InferenceSta
                 a.args[3]
             else
                 @assert isa(a.args[3], QuoteNode)
-                findfirst(field_names, a.args[3].value)
+                findfirst(equalto(a.args[3].value), field_names)
             end
             @assert(idx > 0) # clients should check that all getfields are valid
             val = vals[idx]

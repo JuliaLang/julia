@@ -859,6 +859,7 @@ export
     identity,
     isbits,
     isequal,
+    equalto,
     isimmutable,
     isless,
     ifelse,

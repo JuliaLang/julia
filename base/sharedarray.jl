@@ -390,7 +390,7 @@ sub_1dim(S::SharedArray, pidx) = view(S.s, range_1dim(S, pidx))
 
 function init_loc_flds(S::SharedArray{T,N}, empty_local=false) where T where N
     if myid() in S.pids
-        S.pidx = findfirst(S.pids, myid())
+        S.pidx = findfirst(equalto(myid()), S.pids)
         if isa(S.refs[1], Future)
             refid = remoteref_id(S.refs[S.pidx])
         else

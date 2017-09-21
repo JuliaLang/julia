@@ -25,7 +25,7 @@ function test_threaded_loop_and_atomic_add()
     @test x[] == 10000
     # Next test checks that all loop iterations ran,
     # and were unique (via pigeon-hole principle).
-    @test findfirst(found,false) == 0
+    @test !(false in found)
     if was_inorder
         println(STDERR, "Warning: threaded loop executed in order")
     end

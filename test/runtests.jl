@@ -16,7 +16,7 @@ end
 const node1_tests = String[]
 function move_to_node1(t)
     if t in tests
-        splice!(tests, findfirst(tests, t))
+        splice!(tests, findfirst(equalto(t), tests))
         push!(node1_tests, t)
     end
 end

@@ -1102,7 +1102,7 @@ isdefined_f3(x) = isdefined(x, 3)
 @test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]).code, isdefined, 3)
 
 let isa_tfunc = Core.Inference.t_ffunc_val[
-        findfirst(Core.Inference.t_ffunc_key, isa)][3]
+        findfirst(x->x===isa, Core.Inference.t_ffunc_key)][3]
     @test isa_tfunc(Array, Const(AbstractArray)) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray}) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray{Int}}) == Bool
@@ -1142,7 +1142,7 @@ let isa_tfunc = Core.Inference.t_ffunc_val[
 end
 
 let subtype_tfunc = Core.Inference.t_ffunc_val[
-        findfirst(Core.Inference.t_ffunc_key, <:)][3]
+        findfirst(x->x===(<:), Core.Inference.t_ffunc_key)][3]
     @test subtype_tfunc(Type{<:Array}, Const(AbstractArray)) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray}) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray{Int}}) == Bool

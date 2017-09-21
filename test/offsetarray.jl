@@ -364,7 +364,7 @@ I,J,N = findnz(z)
 @test I == [-1]
 @test J == [0]
 @test N == [2]
-@test find(h) == [-2:1;]
+@test find(!iszero,h) == [-2:1;]
 @test find(x->x>0, h) == [-1,1]
 @test find(x->x<0, h) == [-2,0]
 @test find(x->x==0, h) == [2]
