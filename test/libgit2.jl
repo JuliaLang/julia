@@ -1717,14 +1717,14 @@ mktempdir() do dir
             # sure a users will actually have these files. Instead we will use the ENV
             # variables to set the default values.
 
-            # Default credentials are valid
+            # ENV credentials are valid
             withenv("SSH_KEY_PATH" => valid_key) do
                 err, auth_attempts = challenge_prompt(ssh_ex, [])
                 @test err == git_ok
                 @test auth_attempts == 1
             end
 
-            # Default credentials are valid but requires a passphrase
+            # ENV credentials are valid but requires a passphrase
             withenv("SSH_KEY_PATH" => valid_p_key) do
                 challenges = [
                     "Passphrase for $valid_p_key:" => "$passphrase\n",
@@ -1763,6 +1763,7 @@ mktempdir() do dir
                 @test auth_attempts == 1
             end
 
+            # ENV credential requiring passphrase
             withenv("SSH_KEY_PATH" => valid_p_key, "SSH_KEY_PASS" => passphrase) do
                 err, auth_attempts = challenge_prompt(ssh_p_ex, [])
                 @test err == git_ok
@@ -2019,7 +2020,39 @@ mktempdir() do dir
             @test auth_attempts == 2
         end
 
-         @testset "SSH expand tilde" begin
+        @testset "SSH default" begin
+            mktempdir() do home_dir
+                url = "github.com:test/package.jl"
+
+                default_key = joinpath(home_dir, ".ssh", "id_rsa")
+                default_cred = LibGit2.SSHCredentials("git", "", default_key, default_key * ".pub")
+
+                # Copy the stored private/public
+                key = joinpath(KEY_DIR, "valid")
+                mkdir(dirname(default_key))
+                cp(key, default_key)
+                cp(key * ".pub", default_key * ".pub")
+
+                ssh_ex = quote
+                    include($LIBGIT2_HELPER_PATH)
+                    credential_loop($default_cred, $url, "git")
+                end
+
+                withenv("SSH_KEY_PATH" => nothing,
+                        "SSH_PUB_KEY_PATH" => nothing,
+                        "SSH_KEY_PASS" => nothing,
+                        HOME => home_dir) do
+
+                    @test isfile(joinpath(homedir(), ".ssh", "id_rsa"))
+
+                    err, auth_attempts = challenge_prompt(ssh_ex, [])
+                    @test err == git_ok
+                    @test auth_attempts == 1
+                end
+            end
+        end
+
+        @testset "SSH expand tilde" begin
             url = "git@github.com:test/package.jl"
 
             valid_key = joinpath(KEY_DIR, "valid")
