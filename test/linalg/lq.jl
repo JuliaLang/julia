@@ -181,3 +181,40 @@ end
         @test size(lqfact(randn(mA, nA))[:Q]) == (nQ, nQ)
     end
 end
+
+@testset "postmultiplication with / right-application of LQPackedQ (#23779)" begin
+    function getqs(F::Base.LinAlg.LQ)
+        implicitQ = F[:Q]
+        explicitQ = A_mul_B!(implicitQ, eye(eltype(implicitQ), size(implicitQ)...))
+        return implicitQ, explicitQ
+    end
+    # for any shape m-by-n of LQ-factored matrix, where Q is an LQPackedQ
+    # A_mul_B*(C, Q) (Ac_mul_B*(C, Q)) operations should work for
+    # *-by-n (n-by-*) C, which we test below via n-by-n C
+    for (mA, nA) in ((3, 3), (3, 4), (4, 3))
+        implicitQ, explicitQ = getqs(lqfact(randn(mA, nA)))
+        C = randn(nA, nA)
+        @test *(C, implicitQ) ≈ *(C, explicitQ)
+        @test A_mul_Bc(C, implicitQ) ≈ A_mul_Bc(C, explicitQ)
+        @test Ac_mul_B(C, implicitQ) ≈ Ac_mul_B(C, explicitQ)
+        @test Ac_mul_Bc(C, implicitQ) ≈ Ac_mul_Bc(C, explicitQ)
+    end
+    # where the LQ-factored matrix has at least as many rows m as columns n,
+    # Q's square and thin forms have the same shape (n-by-n). hence we expect
+    # _only_ *-by-n (n-by-*) C to work in A_mul_B*(C, Q) (Ac_mul_B*(C, Q)) ops.
+    # and hence the n-by-n C tests above suffice.
+    #
+    # where the LQ-factored matrix has more columns n than rows m,
+    # Q's square form is n-by-n whereas its thin form is m-by-n.
+    # hence we need also test *-by-m (m-by-*) C with
+    # A_mul_B*(C, Q) (Ac_mul_B*(C, Q)) ops, as below via m-by-m C.
+    mA, nA = 3, 4
+    implicitQ, explicitQ = getqs(lqfact(randn(mA, nA)))
+    C = randn(mA, mA)
+    zeroextCright = hcat(C, zeros(eltype(C), mA))
+    zeroextCdown = vcat(C, zeros(eltype(C), (1, mA)))
+    @test *(C, implicitQ) ≈ *(zeroextCright, explicitQ)
+    @test A_mul_Bc(C, implicitQ) ≈ A_mul_Bc(zeroextCright, explicitQ)
+    @test Ac_mul_B(C, implicitQ) ≈ Ac_mul_B(zeroextCdown, explicitQ)
+    @test Ac_mul_Bc(C, implicitQ) ≈ Ac_mul_Bc(zeroextCdown, explicitQ)
+end
