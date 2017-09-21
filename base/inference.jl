@@ -837,7 +837,7 @@ function limit_type_depth(@nospecialize(t), d::Int, cov::Bool, vars::Vector{Type
             end
             ub = Any
         else
-            ub = limit_type_depth(v.ub, d - 1, true)
+            ub = limit_type_depth(v.ub, d - 1, cov, vars)
         end
         if v.lb === Bottom || type_depth(v.lb) > d
             # note: lower bounds need to be widened by making them lower
@@ -855,7 +855,8 @@ function limit_type_depth(@nospecialize(t), d::Int, cov::Bool, vars::Vector{Type
     if d < 0
         if isvarargtype(t)
             # never replace Vararg with non-Vararg
-            return Vararg{limit_type_depth(P[1], d, cov, vars), P[2]}
+            # passing depth=0 avoids putting a bare typevar here, for the diagonal rule
+            return Vararg{limit_type_depth(P[1], 0, cov, vars), P[2]}
         end
         widert = t.name.wrapper
         if !(t <: widert)
@@ -870,7 +871,11 @@ function limit_type_depth(@nospecialize(t), d::Int, cov::Bool, vars::Vector{Type
         return var
     end
     stillcov = cov && (t.name === Tuple.name)
-    Q = map(x -> limit_type_depth(x, d - 1, stillcov, vars), P)
+    newdepth = d - 1
+    if isvarargtype(t)
+        newdepth = max(newdepth, 0)
+    end
+    Q = map(x -> limit_type_depth(x, newdepth, stillcov, vars), P)
     R = t.name.wrapper{Q...}
     if cov && !stillcov
         for var in vars
