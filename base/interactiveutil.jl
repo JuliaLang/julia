@@ -697,15 +697,20 @@ end
 # testing
 
 """
-    runtests([tests=["all"] [, numcores=ceil(Int, Sys.CPU_CORES / 2) ]])
+    Base.runtests(tests=["all"], numcores=ceil(Int, Sys.CPU_CORES / 2);
+                  exit_on_error=false)
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
-strings, using `numcores` processors. (not exported)
+strings, using `numcores` processors. If `exit_on_error` is `false`, when one test
+fails, all remaining tests in other files will still be run; they are otherwise discarded,
+when `exit_on_error == true`.
 """
-function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2))
+function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
+                  exit_on_error=false)
     if isa(tests,AbstractString)
         tests = split(tests)
     end
+    exit_on_error && push!(tests, "--exit-on-error")
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     try
