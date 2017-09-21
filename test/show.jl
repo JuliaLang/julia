@@ -1000,3 +1000,28 @@ end
     s = String(take!(io))
     @test contains(s, " in Base.Math ")
 end
+
+module TestShowType
+    export TypeA
+    struct TypeA end
+end
+
+@testset "module prefix when printing type" begin
+    @test sprint(show, TestShowType.TypeA) == "$(@__MODULE__).TestShowType.TypeA"
+
+    b = IOBuffer()
+    show(IOContext(b, :module => @__MODULE__), TestShowType.TypeA)
+    @test String(take!(b)) == "$(@__MODULE__).TestShowType.TypeA"
+
+    b = IOBuffer()
+    show(IOContext(b, :module => TestShowType), TestShowType.TypeA)
+    @test String(take!(b)) == "TypeA"
+
+    using .TestShowType
+
+    @test sprint(show, TypeA) == "$(@__MODULE__).TestShowType.TypeA"
+
+    b = IOBuffer()
+    show(IOContext(b, :module => @__MODULE__), TypeA)
+    @test String(take!(b)) == "TypeA"
+end
