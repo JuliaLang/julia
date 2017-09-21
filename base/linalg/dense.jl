@@ -816,7 +816,9 @@ function cosh(A::AbstractMatrix)
     if ishermitian(A)
         return full(cosh(Hermitian(A)))
     end
-    return (exp(A) .+ exp!(-A)) ./ 2
+    X = exp(A)
+    X .= (X .+ exp!(-A)) ./ 2
+    return X
 end
 
 """
@@ -828,7 +830,9 @@ function sinh(A::AbstractMatrix)
     if ishermitian(A)
         return full(sinh(Hermitian(A)))
     end
-    return (exp(A) .- exp!(-A)) ./ 2
+    X = exp(A)
+    X .= (X .- exp!(-A)) ./ 2
+    return X
 end
 
 """
