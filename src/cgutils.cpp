@@ -1758,18 +1758,49 @@ static Value *emit_array_nd_index(
     if (bc) {
         // We have already emitted a bounds check for each index except for
         // the last one which we therefore have to do here.
-        bool linear_indexing = nd == -1 || nidxs < (size_t)nd;
-        if (linear_indexing && nidxs == 1) {
-            // Check against the entire linear span of the array
+        if (nidxs == 1) {
+            // Linear indexing: Check against the entire linear span of the array
             Value *alen = emit_arraylen(ctx, ainfo, ex);
             ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(i, alen), endBB, failBB);
-        } else {
-            // Compare the last index of the access against the last dimension of
-            // the accessed array, i.e. `if !(last_index < last_dimension) goto error`.
+        } else if (nidxs >= (size_t)nd){
+            // No dimensions were omitted; just check the last remaining index
             assert(nd >= 0);
             Value *last_index = ii;
             Value *last_dimension = emit_arraysize_for_unsafe_dim(ctx, ainfo, ex, nidxs, nd);
             ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(last_index, last_dimension), endBB, failBB);
+        } else {
+            // There were fewer indices than dimensions; check the last remaining index
+            BasicBlock *depfailBB = BasicBlock::Create(jl_LLVMContext, "dimsdepfail"); // REMOVE AFTER 0.7
+            BasicBlock *depwarnBB = BasicBlock::Create(jl_LLVMContext, "dimsdepwarn"); // REMOVE AFTER 0.7
+            BasicBlock *checktrailingdimsBB = BasicBlock::Create(jl_LLVMContext, "dimsib");
+            assert(nd >= 0);
+            Value *last_index = ii;
+            Value *last_dimension = emit_arraysize_for_unsafe_dim(ctx, ainfo, ex, nidxs, nd);
+            ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(last_index, last_dimension), checktrailingdimsBB, failBB);
+            ctx.f->getBasicBlockList().push_back(checktrailingdimsBB);
+            ctx.builder.SetInsertPoint(checktrailingdimsBB);
+            // And then also make sure that all dimensions that weren't explicitly
+            // indexed into have size 1
+            for (size_t k = nidxs+1; k < (size_t)nd; k++) {
+                BasicBlock *dimsokBB = BasicBlock::Create(jl_LLVMContext, "dimsok");
+                Value *dim = emit_arraysize_for_unsafe_dim(ctx, ainfo, ex, k, nd);
+                ctx.builder.CreateCondBr(ctx.builder.CreateICmpEQ(dim, ConstantInt::get(T_size, 1)), dimsokBB, depfailBB); // s/depfailBB/failBB/ AFTER 0.7
+                ctx.f->getBasicBlockList().push_back(dimsokBB);
+                ctx.builder.SetInsertPoint(dimsokBB);
+            }
+            Value *dim = emit_arraysize_for_unsafe_dim(ctx, ainfo, ex, nd, nd);
+            ctx.builder.CreateCondBr(ctx.builder.CreateICmpEQ(dim, ConstantInt::get(T_size, 1)), endBB, depfailBB);   // s/depfailBB/failBB/ AFTER 0.7
+
+            // Remove after 0.7: Ensure no dimensions were 0 and depwarn
+            ctx.f->getBasicBlockList().push_back(depfailBB);
+            ctx.builder.SetInsertPoint(depfailBB);
+            Value *total_length = emit_arraylen(ctx, ainfo, ex);
+            ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(i, total_length), depwarnBB, failBB);
+
+            ctx.f->getBasicBlockList().push_back(depwarnBB);
+            ctx.builder.SetInsertPoint(depwarnBB);
+            ctx.builder.CreateCall(prepare_call(jldepwarnpi_func), ConstantInt::get(T_size, nidxs));
+            ctx.builder.CreateBr(endBB);
         }
 
         ctx.f->getBasicBlockList().push_back(failBB);
