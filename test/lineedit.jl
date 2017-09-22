@@ -4,7 +4,7 @@ using Base.LineEdit
 using Base.LineEdit: edit_insert, buffer, content, setmark, getmark
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using TestHelpers
+using Main.TestHelpers
 
 # no need to have animation in tests
 LineEdit.REGION_ANIMATION_DURATION[] = 0.001

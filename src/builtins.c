@@ -115,17 +115,63 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
     return 1;
 }
 
+static int egal_types(jl_value_t *a, jl_value_t *b, jl_typeenv_t *env)
+{
+    if (a == b)
+        return 1;
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
+    if (dt != (jl_datatype_t*)jl_typeof(b))
+        return 0;
+    if (dt == jl_tvar_type) {
+        jl_typeenv_t *pe = env;
+        while (pe != NULL) {
+            if (pe->var == (jl_tvar_t*)a)
+                return pe->val == b;
+            pe = pe->prev;
+        }
+        return 0;
+    }
+    if (dt == jl_uniontype_type) {
+        return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env) &&
+            egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env);
+    }
+    if (dt == jl_unionall_type) {
+        jl_unionall_t *ua = (jl_unionall_t*)a;
+        jl_unionall_t *ub = (jl_unionall_t*)b;
+        if (ua->var->name != ub->var->name)
+            return 0;
+        if (!(egal_types(ua->var->lb, ub->var->lb, env) && egal_types(ua->var->ub, ub->var->ub, env)))
+            return 0;
+        jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, env };
+        return egal_types(ua->body, ub->body, &e);
+    }
+    if (dt == jl_datatype_type) {
+        jl_datatype_t *dta = (jl_datatype_t*)a;
+        jl_datatype_t *dtb = (jl_datatype_t*)b;
+        if (dta->name != dtb->name)
+            return 0;
+        size_t i, l = jl_nparams(dta);
+        if (jl_nparams(dtb) != l)
+            return 0;
+        for (i = 0; i < l; i++) {
+            if (!egal_types(jl_tparam(dta, i), jl_tparam(dtb, i), env))
+                return 0;
+        }
+        return 1;
+    }
+    return jl_egal(a, b);
+}
+
 JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
 {
     // warning: a,b may NOT have been gc-rooted by the caller
     if (a == b)
         return 1;
-    jl_value_t *ta = (jl_value_t*)jl_typeof(a);
-    if (ta != (jl_value_t*)jl_typeof(b))
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
+    if (dt != (jl_datatype_t*)jl_typeof(b))
         return 0;
-    if (jl_is_svec(a))
+    if (dt == jl_simplevector_type)
         return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
-    jl_datatype_t *dt = (jl_datatype_t*)ta;
     if (dt == jl_datatype_type) {
         jl_datatype_t *dta = (jl_datatype_t*)a;
         jl_datatype_t *dtb = (jl_datatype_t*)b;
@@ -145,6 +191,8 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
     size_t nf = jl_datatype_nfields(dt);
     if (nf == 0)
         return bits_equal(jl_data_ptr(a), jl_data_ptr(b), sz);
+    if (dt == jl_unionall_type)
+        return egal_types(a, b, NULL);
     return compare_fields(a, b, dt);
 }
 
@@ -180,6 +228,52 @@ static uintptr_t NOINLINE hash_svec(jl_svec_t *v)
         h = bitmix(h, u);
     }
     return h;
+}
+
+typedef struct _varidx {
+    jl_tvar_t *var;
+    struct _varidx *prev;
+} jl_varidx_t;
+
+static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v);
+
+static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env)
+{
+    if (v == NULL) return 0;
+    jl_datatype_t *tv = (jl_datatype_t*)jl_typeof(v);
+    if (tv == jl_tvar_type) {
+        jl_varidx_t *pe = env;
+        int i = 0;
+        while (pe != NULL) {
+            if (pe->var == (jl_tvar_t*)v)
+                return (i<<8) + 42;
+            i++;
+            pe = pe->prev;
+        }
+        return inthash((uintptr_t)v);
+    }
+    if (tv == jl_uniontype_type) {
+        return bitmix(bitmix(jl_object_id((jl_value_t*)tv),
+                             type_object_id_(((jl_uniontype_t*)v)->a, env)),
+                      type_object_id_(((jl_uniontype_t*)v)->b, env));
+    }
+    if (tv == jl_unionall_type) {
+        jl_unionall_t *u = (jl_unionall_t*)v;
+        uintptr_t h = u->var->name->hash;
+        h = bitmix(h, type_object_id_(u->var->lb, env));
+        h = bitmix(h, type_object_id_(u->var->ub, env));
+        jl_varidx_t e = { u->var, env };
+        return bitmix(h, type_object_id_(u->body, &e));
+    }
+    if (tv == jl_datatype_type) {
+        uintptr_t h = ~((jl_datatype_t*)v)->name->hash;
+        size_t i, l = jl_nparams(v);
+        for (i = 0; i < l; i++) {
+            h = bitmix(h, type_object_id_(jl_tparam(v, i), env));
+        }
+        return h;
+    }
+    return jl_object_id_((jl_value_t*)tv, v);
 }
 
 static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
@@ -222,6 +316,8 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     size_t f, nf = jl_datatype_nfields(dt);
     if (nf == 0)
         return bits_hash(jl_data_ptr(v), sz) ^ h;
+    if (dt == jl_unionall_type)
+        return type_object_id_(v, NULL);
     for (f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *vo = (char*)jl_data_ptr(v) + offs;

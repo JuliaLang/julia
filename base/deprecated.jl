@@ -1746,6 +1746,24 @@ function countnz(x)
     return count(t -> t != 0, x)
 end
 
+# issue #14470
+# TODO: More deprecations must be removed in src/cgutils.cpp:emit_array_nd_index()
+# TODO: Re-enable the disabled tests marked PLI
+# On the Julia side, this definition will gracefully supercede the new behavior (already coded)
+@inline function checkbounds_indices(::Type{Bool}, IA::Tuple{Any,Vararg{Any}}, ::Tuple{})
+    any(x->unsafe_length(x)==0, IA) && return false
+    any(x->unsafe_length(x)!=1, IA) && return _depwarn_for_trailing_indices(IA)
+    return true
+end
+function _depwarn_for_trailing_indices(n::Integer) # Called by the C boundscheck
+    depwarn("omitting indices for non-singleton trailing dimensions is deprecated. Add `1`s as trailing indices or use `reshape(A, Val($n))` to make the dimensionality of the array match the number of indices.", (:getindex, :setindex!, :view))
+    true
+end
+function _depwarn_for_trailing_indices(t::Tuple)
+    depwarn("omitting indices for non-singleton trailing dimensions is deprecated. Add `$(join(map(first, t),','))` as trailing indices or use `reshape` to make the dimensionality of the array match the number of indices.", (:getindex, :setindex!, :view))
+    true
+end
+
 # issue #22791
 @deprecate select partialsort
 @deprecate select! partialsort!
@@ -1804,6 +1822,10 @@ import .Iterators.enumerate
     return p
 end
 
+# ease transition for return type change of e.g. indmax due to PR #22907 when used in the
+# common pattern `ind2sub(size(a), indmax(a))`
+@deprecate(ind2sub(dims::NTuple{N,Integer}, idx::CartesianIndex{N}) where N, Tuple(idx))
+
 @deprecate contains(eq::Function, itr, x) any(y->eq(y,x), itr)
 
 # PR #23690
@@ -1813,6 +1835,46 @@ end
 # PR #23711
 @eval LibGit2 begin
     @deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)
+end
+
+export tic, toq, toc
+function tic()
+    depwarn("tic() is deprecated, use @time, @elapsed, or calls to time_ns() instead.", :tic)
+    t0 = time_ns()
+    task_local_storage(:TIMERS, (t0, get(task_local_storage(), :TIMERS, ())))
+    return t0
+end
+
+function _toq()
+    t1 = time_ns()
+    timers = get(task_local_storage(), :TIMERS, ())
+    if timers === ()
+        error("toc() without tic()")
+    end
+    t0 = timers[1]::UInt64
+    task_local_storage(:TIMERS, timers[2])
+    (t1-t0)/1e9
+end
+
+function toq()
+    depwarn("toq() is deprecated, use @elapsed or calls to time_ns() instead.", :toq)
+    return _toq()
+end
+
+function toc()
+    depwarn("toc() is deprecated, use @time, @elapsed, or calls to time_ns() instead.", :toc)
+    t = _toq()
+    println("elapsed time: ", t, " seconds")
+    return t
+end
+
+@noinline function getaddrinfo(callback::Function, host::AbstractString)
+    depwarn("getaddrinfo with a callback function is deprecated, wrap code in @async instead for deferred execution", :getaddrinfo)
+    @async begin
+        r = getaddrinfo(host)
+        callback(r)
+    end
+    nothing
 end
 
 # END 0.7 deprecations

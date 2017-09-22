@@ -319,7 +319,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
             # in this case, we haven't yet written the cursor position
             line_pos -= slength # '\n' gets an extra pos
             if line_pos < 0 || !moreinput
-                num_chars = (line_pos >= 0 ? llength : strwidth(l[1:(line_pos + slength)]))
+                num_chars = (line_pos >= 0 ? llength : strwidth(l[1:prevind(l, line_pos + slength + 1)]))
                 curs_row, curs_pos = divrem(lindent + num_chars - 1, cols)
                 curs_row += cur_row
                 curs_pos += 1
@@ -1572,7 +1572,8 @@ function setup_search_keymap(hp)
         # Bracketed paste mode
         "\e[200~" => (s,data,c)-> begin
             ps = state(s, mode(s))
-            input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
+            str = readuntil(ps.terminal, "\e[201~")
+            input = str[1:prevind(str, end-5)]
             edit_insert(data.query_buffer, input); update_display_buffer(s, data)
         end,
         "*"       => (s,data,c)->(edit_insert(data.query_buffer, c); update_display_buffer(s, data))
@@ -1642,7 +1643,8 @@ global tabwidth = 8
 
 function bracketed_paste(s)
     ps = state(s, mode(s))
-    input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
+    str = readuntil(ps.terminal, "\e[201~")
+    input = str[1:prevind(str, end-5)]
     input = replace(input, '\r', '\n')
     if position(buffer(s)) == 0
         indent = Base.indentation(input; tabwidth=tabwidth)[1]

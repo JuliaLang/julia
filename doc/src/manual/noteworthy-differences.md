@@ -52,8 +52,7 @@ may trip up Julia users accustomed to MATLAB:
   * In Julia, functions such as [`sort`](@ref) that operate column-wise by default (`sort(A)` is
     equivalent to `sort(A,1)`) do not have special behavior for `1xN` arrays; the argument is returned
     unmodified since it still performs `sort(A,1)`. To sort a `1xN` matrix like a vector, use `sort(A,2)`.
-  * In Julia, parentheses must be used to call a function with zero arguments, like in [`tic()`](@ref)
-    and [`toc()`](@ref).
+  * In Julia, parentheses must be used to call a function with zero arguments, like in [`rand()`](@ref).
   * Julia discourages the used of semicolons to end statements. The results of statements are not
     automatically printed (except at the interactive prompt), and lines of code do not need to end
     with semicolons. [`println`](@ref) or [`@printf`](@ref) can be used to print specific output.

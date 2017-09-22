@@ -374,15 +374,15 @@ function code_warntype(io::IO, f, @nospecialize(t))
         slotnames = sourceinfo_slotnames(src)
         used_slotids = slots_used(src, slotnames)
         for i = 1:length(slotnames)
-            print(emph_io, "  ", slotnames[i])
             if used_slotids[i]
+                print(emph_io, "  ", slotnames[i])
                 if isa(src.slottypes, Array)
                     show_expr_type(emph_io, src.slottypes[i], true)
                 end
-            else
-                print(emph_io, " <optimized out>")
+                print(emph_io, '\n')
+            elseif !('#' in slotnames[i] || '@' in slotnames[i])
+                print(emph_io, "  ", slotnames[i], "<optimized out>\n")
             end
-            print(emph_io, '\n')
         end
         print(emph_io, "\nBody:\n  ")
         body = Expr(:body)
@@ -566,7 +566,7 @@ end
 Return an array of methods with an argument of type `typ`.
 
 The optional second argument restricts the search to a particular module or function
-(the default is all modules, starting from Main).
+(the default is all top-level modules).
 
 If optional `showparents` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
@@ -588,7 +588,7 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
     return meths
 end
 
-function methodswith(t::Type, m::Module, showparents::Bool=false)
+function _methodswith(t::Type, m::Module, showparents::Bool)
     meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
@@ -601,17 +601,12 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
     return unique(meths)
 end
 
+methodswith(t::Type, m::Module, showparents::Bool=false) = _methodswith(t, m, showparents)
+
 function methodswith(t::Type, showparents::Bool=false)
     meths = Method[]
-    mainmod = Main
-    # find modules in Main
-    for nm in names(mainmod)
-        if isdefined(mainmod, nm)
-            mod = getfield(mainmod, nm)
-            if isa(mod, Module)
-                append!(meths, methodswith(t, mod, showparents))
-            end
-        end
+    for mod in loaded_modules_array()
+        append!(meths, _methodswith(t, mod, showparents))
     end
     return unique(meths)
 end
@@ -678,8 +673,10 @@ download(url, filename)
     workspace()
 
 Replace the top-level module (`Main`) with a new one, providing a clean workspace. The
-previous `Main` module is made available as `LastMain`. A previously-loaded package can be
-accessed using a statement such as `using LastMain.Package`.
+previous `Main` module is made available as `LastMain`.
+
+If `Package` was previously loaded, `using Package` in the new `Main` will re-use the
+loaded copy. Run `reload("Package")` first to load a fresh copy.
 
 This function should only be used interactively.
 """
@@ -700,15 +697,20 @@ end
 # testing
 
 """
-    runtests([tests=["all"] [, numcores=ceil(Int, Sys.CPU_CORES / 2) ]])
+    Base.runtests(tests=["all"], numcores=ceil(Int, Sys.CPU_CORES / 2);
+                  exit_on_error=false)
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
-strings, using `numcores` processors. (not exported)
+strings, using `numcores` processors. If `exit_on_error` is `false`, when one test
+fails, all remaining tests in other files will still be run; they are otherwise discarded,
+when `exit_on_error == true`.
 """
-function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2))
+function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
+                  exit_on_error=false)
     if isa(tests,AbstractString)
         tests = split(tests)
     end
+    exit_on_error && push!(tests, "--exit-on-error")
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     try

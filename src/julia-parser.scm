@@ -37,6 +37,10 @@
                      prec-pipe prec-colon prec-plus prec-bitshift prec-times prec-rational
                      prec-power prec-decl prec-dot))
 
+(define trans-op (string->symbol ".'"))
+(define ctrans-op (string->symbol "'"))
+(define vararg-op (string->symbol "..."))
+
 (define (Set l)
   ;; construct a length-specialized membership tester
   (cond ((length= l 1)
@@ -54,9 +58,29 @@
            (lambda (x)
              (has? t x))))))
 
+; only allow/strip suffixes for some operators
+(define no-suffix? (Set (append prec-assignment prec-conditional prec-lazy-or prec-lazy-and
+                                prec-colon prec-decl prec-dot
+                                '(-- --> -> |<:| |>:| in isa $)
+                                (list ctrans-op trans-op vararg-op))))
+(define (maybe-strip-op-suffix op)
+  (if (symbol? op)
+      (let ((op_ (strip-op-suffix op)))
+        (if (or (eq? op op_) (no-suffix? op_))
+            op
+            op_))
+      op))
+
+; like Set, but strip operator suffixes before testing membership
+(define (SuffSet l)
+  (let ((S (Set l)))
+    (if (every no-suffix? l)
+        S ; suffixes not allowed for anything in l
+        (lambda (op) (S (maybe-strip-op-suffix op))))))
+
 ;; for each prec-x generate an is-prec-x? procedure
 (for-each (lambda (name)
-            (eval `(define ,(symbol (string "is-" name "?")) (Set ,name))))
+            (eval `(define ,(symbol (string "is-" name "?")) (SuffSet ,name))))
           prec-names)
 
 ;; hash table of binary operators -> precedence
@@ -68,7 +92,9 @@
                              (pushprec (cdr L) (+ prec 1)))))
                      (pushprec (map eval prec-names) 1)
                      t))
-(define (operator-precedence op) (get prec-table op 0))
+(define (operator-precedence op) (get prec-table
+                                      (maybe-strip-op-suffix op)
+                                      0))
 
 (define unary-ops (append! '(|<:| |>:|)
                            (add-dots '(+ - ! ~ ¬ √ ∛ ∜))))
@@ -77,6 +103,8 @@
 
 ; operators that are both unary and binary
 (define unary-and-binary-ops '(+ - $ & ~ |.+| |.-|))
+
+(define unary-and-binary-op? (Set unary-and-binary-ops))
 
 ; operators that are special forms, not function names
 (define syntactic-operators
@@ -91,10 +119,6 @@
   (or (symbol? ex)
       (and (pair? ex)
            (eq? '$ (car ex)))))
-
-(define trans-op (string->symbol ".'"))
-(define ctrans-op (string->symbol "'"))
-(define vararg-op (string->symbol "..."))
 
 (define (is-word-operator? op)
   (every identifier-start-char? (string->list (symbol->string op))))
@@ -117,7 +141,7 @@
                      (delete-duplicates
                       (map (lambda (op) (string.char (string op) 1))
                            (cons `|..| (filter dotop? operators))))))
-(define operator? (Set operators))
+(define operator? (SuffSet operators))
 
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const do
@@ -202,21 +226,29 @@
           (else               (read-char port)
                               (skip-to-eol port)))))
 
+(define (op-or-sufchar? c) (or (op-suffix-char? c) (opchar? c)))
+
 (define (read-operator port c)
   (if (and (eqv? c #\*) (eqv? (peek-char port) #\*))
       (error "use \"^\" instead of \"**\""))
-  (if (or (eof-object? (peek-char port)) (not (opchar? (peek-char port))))
+  (if (or (eof-object? (peek-char port)) (not (op-or-sufchar? (peek-char port))))
       (symbol (string c)) ; 1-char operator
       (let ((str (let loop ((str (string c))
-                            (c   (peek-char port)))
-                   (if (and (not (eof-object? c)) (opchar? c))
-                       (let* ((newop (string str c))
-                              (opsym (string->symbol newop)))
-                         (if (operator? opsym)
-                             (begin (read-char port)
-                                    (loop newop (peek-char port)))
-                             str))
-                       str))))
+                            (c   (peek-char port))
+                            (in-suffix? #f))
+                   (if (eof-object? c)
+                       str
+                       (let ((sufchar? (op-suffix-char? c)))
+                         (if (if in-suffix?
+                                 sufchar?
+                                 (or sufchar? (opchar? c)))
+                             (let* ((newop (string str c))
+                                    (opsym (string->symbol newop)))
+                               (if (operator? opsym)
+                                   (begin (read-char port)
+                                          (loop newop (peek-char port) sufchar?))
+                                   str))
+                             str))))))
         (if (equal? str "--")
             (error (string "invalid operator \"" str "\"")))
         (string->symbol str))))

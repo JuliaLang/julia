@@ -1164,3 +1164,13 @@ end
 @testset "spzeros with index type" begin
     @test typeof(spzeros(Float32, Int16, 3)) == SparseVector{Float32,Int16}
 end
+
+@testset "corner cases of broadcast arithmetic operations with scalars (#21515)" begin
+    # test both scalar literals and variables
+    areequal(a, b, c) = isequal(a, b) && isequal(b, c)
+    inf, zeroh, zv, spzv = Inf, 0.0, zeros(1), spzeros(1)
+    @test areequal(spzv .* Inf,  spzv .* inf,    sparsevec(zv .* Inf))
+    @test areequal(Inf .* spzv,  inf .* spzv,    sparsevec(Inf .* zv))
+    @test areequal(spzv ./ 0.0,  spzv ./ zeroh,  sparsevec(zv ./ 0.0))
+    @test areequal(0.0 .\ spzv,  zeroh .\ spzv,  sparsevec(0.0 .\ zv))
+end

@@ -1218,3 +1218,10 @@ let c(::Type{T}, x) where {T<:Array} = T,
     f() = c(Vector{Any[Int][1]}, [1])
     @test f() === Vector{Int}
 end
+
+# issue #23786
+struct T23786{D<:Tuple{Vararg{Vector{T} where T}}, N}
+end
+let t = Tuple{Type{T23786{D, N} where N where D<:Tuple{Vararg{Array{T, 1} where T, N} where N}}}
+    @test Core.Inference.limit_type_depth(t, 4) >: t
+end

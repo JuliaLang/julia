@@ -256,9 +256,9 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
 {
     jl_array_t *a;
     // manually inlined common case
-    char *pd = (char*)memchr(s->buf+s->bpos, delim, (size_t)(s->size - s->bpos));
+    char *pd = (char*)memchr(s->buf + s->bpos, delim, (size_t)(s->size - s->bpos));
     if (pd) {
-        size_t n = pd-(s->buf+s->bpos)+1;
+        size_t n = pd - (s->buf + s->bpos) + 1;
         if (str) {
             size_t nchomp = 0;
             if (chomp) {
@@ -277,7 +277,16 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
         ios_t dest;
         ios_mem(&dest, 0);
         ios_setbuf(&dest, (char*)a->data, 80, 0);
-        size_t n = ios_copyuntil(&dest, s, delim, chomp);
+        size_t n = ios_copyuntil(&dest, s, delim);
+        if (chomp && n > 0 && dest.buf[n - 1] == '\n') {
+            n--;
+            if (n > 0 && dest.buf[n - 1] == '\r') {
+                n--;
+            }
+            int truncret = ios_trunc(&dest, n); // it should always be possible to truncate dest
+            assert(truncret == 0);
+            (void)truncret; // ensure the variable is used to avoid warnings
+        }
         if (dest.buf != a->data) {
             a = jl_take_buffer(&dest);
         }

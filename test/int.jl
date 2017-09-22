@@ -229,3 +229,25 @@ end
     @test x[end] == 1180591620717411303424
     @test eltype(x) == BigInt
 end
+
+# issue #9292
+@testset "mixed signedness arithmetic" begin
+    for T in Base.BitInteger_types
+        for S in Base.BitInteger_types
+            a, b = one(T), one(S)
+            for c in (a+b, a-b, a*b)
+                if T === S
+                    @test c isa T
+                elseif sizeof(T) > sizeof(S)
+                    # larger type wins
+                    @test c isa T
+                elseif sizeof(S) > sizeof(T)
+                    @test c isa S
+                else
+                    # otherwise Unsigned wins
+                    @test c isa (T <: Unsigned ? T : S)
+                end
+            end
+        end
+    end
+end

@@ -897,11 +897,8 @@ export
 
 # time
     sleep,
-    tic,
     time,
     time_ns,
-    toc,
-    toq,
 
 # dates
     Date,
@@ -1019,6 +1016,8 @@ export
     fdio,
     flush,
     getaddrinfo,
+    getalladdrinfo,
+    getnameinfo,
     gethostname,
     getipaddr,
     getpeername,

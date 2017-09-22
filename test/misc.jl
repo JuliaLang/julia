@@ -231,7 +231,7 @@ struct NoMethodHasThisType end
 @test !isempty(methodswith(Int))
 struct Type4Union end
 func4union(::Union{Type4Union,Int}) = ()
-@test !isempty(methodswith(Type4Union))
+@test !isempty(methodswith(Type4Union, @__MODULE__))
 
 # PR #10984
 # Disable on windows because of issue (missing flush) when redirecting STDERR.
