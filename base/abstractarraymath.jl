@@ -67,7 +67,7 @@ julia> squeeze(a,3)
 function squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
-        size(A, dims[i]) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
+        length(indices(A, dims[i])) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
         for j = 1:i-1
             dims[j] == dims[i] && throw(ArgumentError("squeezed dims must be unique"))
         end
@@ -75,10 +75,10 @@ function squeeze(A::AbstractArray, dims::Dims)
     d = ()
     for i = 1:ndims(A)
         if !in(i, dims)
-            d = tuple(d..., size(A, i))
+            d = tuple(d..., indices(A, i))
         end
     end
-    reshape(A, d::typeof(_sub(size(A), dims)))
+    reshape(A, d::typeof(_sub(indices(A), dims)))
 end
 
 squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
