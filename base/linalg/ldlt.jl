@@ -23,18 +23,18 @@ Same as [`ldltfact`](@ref), but saves space by overwriting the input `A`, instea
 
 # Examples
 ```jldoctest
-julia> a = SymTridiagonal([3., 4., 5.], [1., 2.])
+julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
 3×3 SymTridiagonal{Float64,Array{Float64,1}}:
  3.0  1.0   ⋅
  1.0  4.0  2.0
   ⋅   2.0  5.0
 
-julia> ldlta = ldltfact!(a);
+julia> ldltS = ldltfact!(S);
 
-julia> ldlta === a
+julia> ldltS === S
 false
 
-julia> a
+julia> S
 3×3 SymTridiagonal{Float64,Array{Float64,1}}:
  3.0       0.333333   ⋅
  0.333333  3.66667   0.545455
@@ -61,23 +61,23 @@ factorization `F = ldltfact(A)` is to solve the linear system of equations `Ax =
 
 # Examples
 ```jldoctest
-julia> a = SymTridiagonal([3., 4., 5.], [1., 2.])
+julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
 3×3 SymTridiagonal{Float64,Array{Float64,1}}:
  3.0  1.0   ⋅
  1.0  4.0  2.0
   ⋅   2.0  5.0
 
-julia> ldlta = ldltfact(a);
+julia> ldltS = ldltfact(S);
 
 julia> b = [6., 7., 8.];
 
-julia> ldlta\b
+julia> ldltS\b
 3-element Array{Float64,1}:
  1.7906976744186047
  0.627906976744186
  1.3488372093023255
 
-julia> a\b
+julia> S\b
 3-element Array{Float64,1}:
  1.7906976744186047
  0.627906976744186

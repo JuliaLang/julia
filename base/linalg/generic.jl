@@ -454,22 +454,22 @@ For numbers, return ``\\left( |x|^p \\right) ^{1/p}``.
 
 # Examples
 ```jldoctest
+julia> vecnorm(2, 1)
+2
+
+julia> vecnorm(-2, 1)
+2
+
 julia> vecnorm(2, 2)
 2
 
-julia> vecnorm(2, 1)
+julia> vecnorm(-2, 2)
 2
 
 julia> vecnorm(2, Inf)
 2
 
 julia> vecnorm(-2, Inf)
-2
-
-julia> vecnorm(-2, 2)
-2
-
-julia> vecnorm(-2, 1)
 2
 ```
 """
@@ -617,24 +617,22 @@ consistent with the p-norm of `1 × n` matrix.
 ```jldoctest
 julia> v = [1; im];
 
-julia> vc = v'
-1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:
- 1+0im  0-1im
+julia> vc = v';
 
 julia> norm(vc, 1)
 1.0
 
+julia> norm(v, 1)
+2.0
+
 julia> norm(vc, 2)
+1.4142135623730951
+
+julia> norm(v, 2)
 1.4142135623730951
 
 julia> norm(vc, Inf)
 2.0
-
-julia> norm(v, 1)
-2.0
-
-julia> norm(v, 2)
-1.4142135623730951
 
 julia> norm(v, Inf)
 1.0
