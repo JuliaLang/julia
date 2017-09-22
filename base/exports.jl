@@ -458,7 +458,6 @@ export
     findnz,
     first,
     flipdim,
-    gradient,
     hcat,
     hvcat,
     ind2sub,

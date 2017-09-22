@@ -74,15 +74,6 @@ function tril(B::BitMatrix, k::Integer=0)
     A
 end
 
-## diff and gradient
-
-# TODO: this could be improved (is it worth it?)
-gradient(F::BitVector) = gradient(Array(F))
-gradient(F::BitVector, h::Real) = gradient(Array(F), h)
-gradient(F::Vector, h::BitVector) = gradient(F, Array(h))
-gradient(F::BitVector, h::Vector) = gradient(Array(F), h)
-gradient(F::BitVector, h::BitVector) = gradient(Array(F), Array(h))
-
 ## diag and related
 
 function diag(B::BitMatrix)

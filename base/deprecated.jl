@@ -1868,6 +1868,43 @@ function toc()
     return t
 end
 
+# PR #23816: deprecation of gradient
+export gradient
+@eval Base.LinAlg begin
+    export gradient
+
+    function gradient(args...)
+        Base.depwarn("gradient is deprecated and will be removed in the next release.", :gradient)
+        return _gradient(args...)
+    end
+
+    _gradient(F::BitVector) = _gradient(Array(F))
+    _gradient(F::BitVector, h::Real) = _gradient(Array(F), h)
+    _gradient(F::Vector, h::BitVector) = _gradient(F, Array(h))
+    _gradient(F::BitVector, h::Vector) = _gradient(Array(F), h)
+    _gradient(F::BitVector, h::BitVector) = _gradient(Array(F), Array(h))
+
+    function _gradient(F::AbstractVector, h::Vector)
+        n = length(F)
+        T = typeof(oneunit(eltype(F))/oneunit(eltype(h)))
+        g = similar(F, T)
+        if n == 1
+            g[1] = zero(T)
+        elseif n > 1
+            g[1] = (F[2] - F[1]) / (h[2] - h[1])
+            g[n] = (F[n] - F[n-1]) / (h[end] - h[end-1])
+            if n > 2
+                h = h[3:n] - h[1:n-2]
+                g[2:n-1] = (F[3:n] - F[1:n-2]) ./ h
+            end
+        end
+        g
+    end
+
+    _gradient(F::AbstractVector) = _gradient(F, [1:length(F);])
+    _gradient(F::AbstractVector, h::Real) = _gradient(F, [h*(1:length(F));])
+end
+
 @noinline function getaddrinfo(callback::Function, host::AbstractString)
     depwarn("getaddrinfo with a callback function is deprecated, wrap code in @async instead for deferred execution", :getaddrinfo)
     @async begin

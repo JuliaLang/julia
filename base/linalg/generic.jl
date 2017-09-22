@@ -271,32 +271,7 @@ function diff(A::AbstractMatrix, dim::Integer=1)
     end
 end
 
-
-gradient(F::AbstractVector) = gradient(F, [1:length(F);])
-
-"""
-    gradient(F::AbstractVector, [h::Real])
-
-Compute differences along vector `F`, using `h` as the spacing between points. The default
-spacing is one.
-
-# Examples
-```jldoctest
-julia> a = [2,4,6,8];
-
-julia> gradient(a)
-4-element Array{Float64,1}:
- 2.0
- 2.0
- 2.0
- 2.0
-```
-"""
-gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F));])
-
 diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to construct a diagonal matrix"))
-
-#diagm(v::AbstractVecOrMat{T}) where {T}
 
 ###########################################################################################
 # Inner products and norms

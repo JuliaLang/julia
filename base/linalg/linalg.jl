@@ -84,7 +84,6 @@ export
     eye,
     factorize,
     givens,
-    gradient,
     hessfact,
     hessfact!,
     isdiag,

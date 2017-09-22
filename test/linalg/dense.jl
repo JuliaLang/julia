@@ -156,20 +156,6 @@ end # for eltya
     end
 end
 
-@testset "Test gradient for $elty" for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
-    if elty <: Real
-        x = convert(Vector{elty}, [1:3;])
-        g = ones(elty, 3)
-    else
-        x = convert(Vector{elty}, complex.([1:3;], [1:3;]))
-        g = convert(Vector{elty}, complex.(ones(3), ones(3)))
-    end
-    xsub = view(x, 1:size(x, 1))
-    @test gradient(x) ≈ g
-    @test gradient(xsub) ≈ g # Test gradient on SubArray
-    @test gradient(ones(elty,1)) == zeros(elty,1)
-end
-
 @testset "Tests norms" begin
     nnorm = 10
     mmat = 10
