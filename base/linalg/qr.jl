@@ -321,11 +321,13 @@ qr(A::Union{Number, AbstractMatrix}, pivot::Union{Val{false}, Val{true}}=Val(fal
     _qr(A, pivot, thin=thin)
 function _qr(A::Union{Number, AbstractMatrix}, ::Val{false}; thin::Bool=true)
     F = qrfact(A, Val(false))
-    full(getq(F), thin=thin), F[:R]::Matrix{eltype(F)}
+    Q, R = getq(F), F[:R]::Matrix{eltype(F)}
+    return (thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))), R
 end
 function _qr(A::Union{Number, AbstractMatrix}, ::Val{true}; thin::Bool=true)
     F = qrfact(A, Val(true))
-    full(getq(F), thin=thin), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
+    Q, R, p = getq(F), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
+    return (thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))), R, p
 end
 
 """
