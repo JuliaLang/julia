@@ -1434,7 +1434,7 @@ end
 ## for these cases, but I'm not sure it is worth it.
 for t in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
     @eval begin
-        (*)(A::Tridiagonal, B::$t) = A_mul_B!(full(A), B)
+        (*)(A::Tridiagonal, B::$t) = A_mul_B!(Matrix(A), B)
     end
 end
 
