@@ -1644,7 +1644,7 @@ mktempdir() do dir
 
         @test !haskey(cache, cred_id)
 
-        # Reject a credential which wasn't stored
+        # Attempt to reject a credential which wasn't stored
         LibGit2.reject(cache, cred, url)
         @test !haskey(cache, cred_id)
         @test cred.user == "julia"
