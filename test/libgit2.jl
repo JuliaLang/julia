@@ -2110,22 +2110,24 @@ mktempdir() do dir
             invalid_key = joinpath(KEY_DIR, "invalid")
             invalid_cred = LibGit2.SSHCredentials(username, "", invalid_key, invalid_key * ".pub")
 
-            function gen_ex(cred; allow_prompt=true)
+            function gen_ex(cred; allow_prompt=true, allow_ssh_agent=false)
                 quote
                     include($LIBGIT2_HELPER_PATH)
-                    payload = CredentialPayload($cred, allow_ssh_agent=false, allow_prompt=$allow_prompt)
+                    payload = CredentialPayload($cred, allow_ssh_agent=$allow_ssh_agent,
+                        allow_prompt=$allow_prompt)
                     credential_loop($valid_cred, $url, $username, payload)
                 end
             end
 
-            # Explicitly provided credential is correct
-            ex = gen_ex(valid_cred, allow_prompt=true)
+            # Explicitly provided credential is correct. Note: allowing prompting and
+            # SSH agent to ensure they are skipped.
+            ex = gen_ex(valid_cred, allow_prompt=true, allow_ssh_agent=true)
             err, auth_attempts = challenge_prompt(ex, [])
             @test err == git_ok
             @test auth_attempts == 1
 
             # Explicitly provided credential is incorrect
-            ex = gen_ex(invalid_cred, allow_prompt=false)
+            ex = gen_ex(invalid_cred, allow_prompt=false, allow_ssh_agent=false)
             err, auth_attempts = challenge_prompt(ex, [])
             @test err == exhausted_error
             @test auth_attempts == 3
