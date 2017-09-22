@@ -103,14 +103,14 @@ function request(m::AbstractMenu)
     cursor = 1
 
     menu_header = header(m)
-    if menu_header != ""
+    if !CONFIG[:supress_output] && menu_header != ""
         println(menu_header)
     end
 
     printMenu(m, cursor, init=true)
 
-    enableRawMode()
-    print("\x1b[?25l") # hide the cursor
+    raw_mode_enabled = enableRawMode()
+    raw_mode_enabled && print("\x1b[?25l") # hide the cursor
     try
         while true
             c = readKey()
@@ -183,8 +183,10 @@ function request(m::AbstractMenu)
     finally
         # always disable raw mode even even if there is an
         #  exception in the above loop
-        print("\x1b[?25h") # unhide cursor
-        disableRawMode()
+        if raw_mode_enabled
+            print("\x1b[?25h") # unhide cursor
+            disableRawMode()
+        end
     end
     println()
 
@@ -210,6 +212,8 @@ end
 #   and have fields `pagesize::Int` and `pageoffset::Int` as part of
 #   their type definition
 function printMenu(m::AbstractMenu, cursor::Int; init::Bool=false)
+    CONFIG[:supress_output] && return
+
     buf = IOBuffer()
 
     # Move the cursor to the beginning of where it should print

@@ -16,6 +16,7 @@ Keyword-only function to configure global menu parameters
  - `checked::String="[X]"|"✓"`: string to use for checked
  - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
  - `scroll::Symbol=:na`: If `:wrap` then wrap the cursor around top and bottom, if :`nowrap` do not wrap cursor
+ - `supress_output::Bool=false`: For testing. If true, menu will not be printed to console.
 """
 function config(;charset::Symbol = :na,
                 scroll::Symbol = :na,
@@ -23,7 +24,8 @@ function config(;charset::Symbol = :na,
                 up_arrow::Char = '\0',
                 down_arrow::Char = '\0',
                 checked::String = "",
-                unchecked::String = "")
+                unchecked::String = "",
+                supress_output::Union{Void, Bool}=nothing)
 
     if !(charset in [:na, :ascii, :unicode])
         error("charset should be :ascii or :unicode, recieved $charset")
@@ -53,6 +55,10 @@ function config(;charset::Symbol = :na,
         unchecked = "⬚"
     end
 
+    if isa(supress_output, Bool)
+        CONFIG[:supress_output] = supress_output
+    end
+
     cursor != '\0'      && (CONFIG[:cursor] = cursor)
     up_arrow != '\0'    && (CONFIG[:up_arrow] = up_arrow)
     down_arrow != '\0'  && (CONFIG[:down_arrow] = down_arrow)
@@ -64,4 +70,4 @@ function config(;charset::Symbol = :na,
 end
 
 # Set up defaults
-config(charset=:ascii, scroll=:nowrap)
+config(charset=:ascii, scroll=:nowrap, supress_output=false)
