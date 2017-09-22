@@ -103,6 +103,7 @@ Base.LibGit2.isbinary
 Base.LibGit2.iscommit
 Base.LibGit2.isdiff
 Base.LibGit2.isdirty
+Base.LibGit2.isfilled
 Base.LibGit2.isorphan
 Base.LibGit2.isset
 Base.LibGit2.iszero

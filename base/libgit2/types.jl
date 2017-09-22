@@ -1062,6 +1062,13 @@ import Base.securezero!
 "Abstract credentials payload"
 abstract type AbstractCredentials end
 
+"""
+    isfilled(cred::AbstractCredentials) -> Bool
+
+Verifies that a credential is ready for use in authentication.
+"""
+isfilled(::AbstractCredentials)
+
 "Credentials that support only `user` and `password` parameters"
 mutable struct UserPasswordCredentials <: AbstractCredentials
     user::String
@@ -1091,6 +1098,10 @@ end
 
 function Base.:(==)(a::UserPasswordCredentials, b::UserPasswordCredentials)
     a.user == b.user && a.pass == b.pass
+end
+
+function isfilled(cred::UserPasswordCredentials)
+    !isempty(cred.user) && !isempty(cred.pass)
 end
 
 "SSH credentials type"
@@ -1128,6 +1139,11 @@ end
 
 function Base.:(==)(a::SSHCredentials, b::SSHCredentials)
     a.user == b.user && a.pass == b.pass && a.prvkey == b.prvkey && a.pubkey == b.pubkey
+end
+
+function isfilled(cred::SSHCredentials)
+    !isempty(cred.user) && isfile(cred.prvkey) && isfile(cred.pubkey) &&
+    (!isempty(cred.pass) || !is_passphrase_required(cred.prvkey))
 end
 
 "Credentials that support caching"
@@ -1177,6 +1193,7 @@ mutable struct CredentialPayload <: Payload
     credential::Nullable{AbstractCredentials}
     first_pass::Bool
     use_ssh_agent::Bool
+    use_env::Bool
     url::String
     scheme::String
     username::String
@@ -1211,6 +1228,7 @@ function reset!(p::CredentialPayload)
     p.credential = Nullable{AbstractCredentials}()
     p.first_pass = true
     p.use_ssh_agent = p.allow_ssh_agent
+    p.use_env = true
     p.url = ""
     p.scheme = ""
     p.username = ""
