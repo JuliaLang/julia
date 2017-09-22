@@ -898,9 +898,8 @@ julia> push!([1, 2, 3], 4, 5, 6)
  6
 ```
 
-Use [`append!`](@ref) to add all the elements of another collection to
-`collection`. The result of the preceding example is equivalent to `append!([1, 2, 3], [4,
-5, 6])`.
+Use [`append!`](@ref) to add all the elements of another collection to `collection`.
+The result of the preceding example is equivalent to `append!([1, 2, 3], [4, 5, 6])`.
 """
 function push! end
 
@@ -944,9 +943,8 @@ julia> append!([1, 2, 3], [4, 5, 6])
  6
 ```
 
-Use [`push!`](@ref) to add individual items to `collection` which are not already
-themselves in another collection. The result is of the preceding example is equivalent to
-`push!([1, 2, 3], 4, 5, 6)`.
+Use [`push!`](@ref) to add individual items to `collection`. The result of
+the preceding example is equivalent to `push!([1, 2, 3], 4, 5, 6)`.
 """
 function append!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
@@ -990,11 +988,19 @@ julia> prepend!([3],[1,2])
  1
  2
  3
+
+julia> prepend!([1, 2, 3], [4, 5, 6])
+6-element Array{Int64,1}:
+ 4
+ 5
+ 6
+ 1
+ 2
+ 3
 ```
 
-Use [`unshift!`](@ref) to add individual items to `collection` which are not already
-themselves in another collection. The result is of the preceding example is equivalent to
-`unshift!([1, 2, 3], 4, 5, 6)`.
+Use [`unshift!`](@ref) to add individual items to `collection`. The result of
+the preceding example is equivalent to `unshift!([1, 2, 3], 4, 5, 6)`.
 """
 function prepend! end
 
@@ -1152,8 +1158,8 @@ julia> unshift!([1, 2, 3], 4, 5, 6)
  2
  3
 ```
-Use [`prepend!`](@ref) to add all the elements of another collection to
-`collection`. The result of the preceding example is equivalent to `prepend!([1, 2, 3], [4, 5, 6])`.
+Use [`prepend!`](@ref) to add all the elements of another collection to `collection`.
+The result of the preceding example is equivalent to `prepend!([1, 2, 3], [4, 5, 6])`.
 """
 function unshift!(a::Array{T,1}, item) where T
     item = convert(T, item)
