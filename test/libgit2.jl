@@ -2025,17 +2025,34 @@ mktempdir() do dir
                 url = "github.com:test/package.jl"
 
                 default_key = joinpath(home_dir, ".ssh", "id_rsa")
-                default_cred = LibGit2.SSHCredentials("git", "", default_key, default_key * ".pub")
-
-                # Copy the stored private/public
-                key = joinpath(KEY_DIR, "valid")
                 mkdir(dirname(default_key))
-                cp(key, default_key)
-                cp(key * ".pub", default_key * ".pub")
 
-                ssh_ex = quote
-                    include($LIBGIT2_HELPER_PATH)
-                    credential_loop($default_cred, $url, "git")
+                valid_key = joinpath(KEY_DIR, "valid")
+                valid_cred = LibGit2.SSHCredentials("git", "", valid_key, valid_key * ".pub")
+
+                valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
+                passphrase = "secret"
+                valid_p_cred = LibGit2.SSHCredentials("git", passphrase, valid_p_key, valid_p_key * ".pub")
+
+                function gen_ex(cred)
+                    quote
+                        valid_cred = $cred
+
+                        default_cred = deepcopy(valid_cred)
+                        default_cred.prvkey = $default_key
+                        default_cred.pubkey = $default_key * ".pub"
+
+                        cp(valid_cred.prvkey, default_cred.prvkey)
+                        cp(valid_cred.pubkey, default_cred.pubkey)
+
+                        try
+                            include($LIBGIT2_HELPER_PATH)
+                            credential_loop(default_cred, $url, "git")
+                        finally
+                            rm(default_cred.prvkey)
+                            rm(default_cred.pubkey)
+                        end
+                    end
                 end
 
                 withenv("SSH_KEY_PATH" => nothing,
@@ -2043,9 +2060,19 @@ mktempdir() do dir
                         "SSH_KEY_PASS" => nothing,
                         HOME => home_dir) do
 
-                    @test isfile(joinpath(homedir(), ".ssh", "id_rsa"))
+                    # Automatically use the default key
+                    ex = gen_ex(valid_cred)
+                    err, auth_attempts = challenge_prompt(ex, [])
+                    @test err == git_ok
+                    @test auth_attempts == 1
 
-                    err, auth_attempts = challenge_prompt(ssh_ex, [])
+                    # Confirm the private key if any other prompting is required
+                    ex = gen_ex(valid_p_cred)
+                    challenges = [
+                        "Private key location for 'git@github.com' [$default_key]:" => "\n",
+                        "Passphrase for $default_key:" => "$passphrase\n",
+                    ]
+                    err, auth_attempts = challenge_prompt(ex, challenges)
                     @test err == git_ok
                     @test auth_attempts == 1
                 end

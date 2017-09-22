@@ -82,6 +82,10 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
     end
 
     if p.use_env && (!revised || !isfilled(cred))
+        if isempty(cred.user) && username_ptr != Cstring(C_NULL)
+            cred.user = unsafe_string(username_ptr)
+        end
+
         cred.prvkey = Base.get(ENV, "SSH_KEY_PATH") do
             default = joinpath(homedir(), ".ssh", "id_rsa")
             if isempty(cred.prvkey) && isfile(default)
@@ -107,22 +111,18 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Void}}, p::CredentialPayload, 
     end
 
     if p.remaining_prompts > 0 && (!revised || !isfilled(cred))
-        # if username is not provided or empty, then prompt for it
-        username = username_ptr != Cstring(C_NULL) ? unsafe_string(username_ptr) : ""
-        if isempty(username)
+        if isempty(cred.user) || username_ptr == Cstring(C_NULL)
             url = git_url(scheme=p.scheme, host=p.host)
             response = Base.prompt("Username for '$url'", default=cred.user)
             isnull(response) && return user_abort()
             cred.user = unsafe_get(response)
-        else
-            cred.user = username
         end
 
         url = git_url(scheme=p.scheme, host=p.host, username=cred.user)
 
         # For SSH we need a private key location
         last_private_key = cred.prvkey
-        if !isfile(cred.prvkey) || !revised
+        if !isfile(cred.prvkey) || !revised || !haskey(ENV, "SSH_KEY_PATH")
             response = Base.prompt("Private key location for '$url'", default=cred.prvkey)
             isnull(response) && return user_abort()
             cred.prvkey = expanduser(unsafe_get(response))
