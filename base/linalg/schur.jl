@@ -109,7 +109,7 @@ schur(A::Symmetric) = schur(full(A))
 schur(A::Hermitian) = schur(full(A))
 schur(A::UpperTriangular) = schur(full(A))
 schur(A::LowerTriangular) = schur(full(A))
-schur(A::Tridiagonal) = schur(full(A))
+schur(A::Tridiagonal) = schur(Matrix(A))
 
 
 """
