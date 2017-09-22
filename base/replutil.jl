@@ -158,6 +158,8 @@ function show(io::IO, ::MIME"text/plain", opt::JLOptions)
         v = getfield(opt, i)
         if isa(v, Ptr{UInt8})
             v = (v != C_NULL) ? unsafe_string(v) : ""
+        elseif isa(v, Ptr{Ptr{UInt8}})
+            v = unsafe_load_commands(v)
         end
         println(io, "  ", f, " = ", repr(v), i < nfields ? "," : "")
     end

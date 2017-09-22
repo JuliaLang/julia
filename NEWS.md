@@ -225,6 +225,9 @@ This section lists changes that do not have deprecation warnings.
     simplified: if the arguments have different sizes (in bits), then the type of the larger
     argument is used. If the arguments have the same size, the unsigned type is used ([#9292]).
 
+  * All command line arguments passed via `-e`, `-E`, and `-L` will be executed in the order
+    given on the command line ([#23665]).
+
 Library improvements
 --------------------
 

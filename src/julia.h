@@ -1679,9 +1679,7 @@ typedef struct {
     int8_t banner;
     const char *julia_home;
     const char *julia_bin;
-    const char *eval;
-    const char *print;
-    const char *load;
+    const char **cmds;
     const char *image_file;
     const char *cpu_target;
     int32_t nprocs;
