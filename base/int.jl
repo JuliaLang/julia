@@ -602,24 +602,21 @@ end
 
 ## integer promotions ##
 
-promote_rule(::Type{Int8}, ::Type{Int16})   = Int16
-promote_rule(::Type{UInt8}, ::Type{UInt16}) = UInt16
-promote_rule(::Type{Int32}, ::Type{<:Union{Int8,Int16}})    = Int32
-promote_rule(::Type{UInt32}, ::Type{<:Union{UInt8,UInt16}}) = UInt32
-promote_rule(::Type{Int64}, ::Type{<:Union{Int8,Int16,Int32}})     = Int64
-promote_rule(::Type{UInt64}, ::Type{<:Union{UInt8,UInt16,UInt32}}) = UInt64
-promote_rule(::Type{Int128}, ::Type{<:BitSigned64})    = Int128
-promote_rule(::Type{UInt128}, ::Type{<:BitUnsigned64}) = UInt128
-for T in BitSigned_types
-    @eval promote_rule(::Type{<:Union{UInt8,UInt16}}, ::Type{$T}) =
-        $(sizeof(T) < sizeof(Int) ? Int : T)
-end
-@eval promote_rule(::Type{UInt32}, ::Type{<:Union{Int8,Int16,Int32}}) =
-    $(Core.sizeof(Int) == 8 ? Int : UInt)
-promote_rule(::Type{UInt32}, ::Type{Int64}) = Int64
-promote_rule(::Type{UInt64}, ::Type{<:BitSigned64}) = UInt64
-promote_rule(::Type{<:Union{UInt32, UInt64}}, ::Type{Int128}) = Int128
-promote_rule(::Type{UInt128}, ::Type{<:BitSigned}) = UInt128
+# with different sizes, promote to larger type
+promote_rule(::Type{Int16}, ::Union{Type{Int8}, Type{UInt8}}) = Int16
+promote_rule(::Type{Int32}, ::Union{Type{Int16}, Type{Int8}, Type{UInt16}, Type{UInt8}}) = Int32
+promote_rule(::Type{Int64}, ::Union{Type{Int16}, Type{Int32}, Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt8}}) = Int64
+promote_rule(::Type{Int128}, ::Union{Type{Int16}, Type{Int32}, Type{Int64}, Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt8}}) = Int128
+promote_rule(::Type{UInt16}, ::Union{Type{Int8}, Type{UInt8}}) = UInt16
+promote_rule(::Type{UInt32}, ::Union{Type{Int16}, Type{Int8}, Type{UInt16}, Type{UInt8}}) = UInt32
+promote_rule(::Type{UInt64}, ::Union{Type{Int16}, Type{Int32}, Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt8}}) = UInt64
+promote_rule(::Type{UInt128}, ::Union{Type{Int16}, Type{Int32}, Type{Int64}, Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt8}}) = UInt128
+# with mixed signedness and same size, Unsigned wins
+promote_rule(::Type{UInt8},   ::Type{Int8}  ) = UInt8
+promote_rule(::Type{UInt16},  ::Type{Int16} ) = UInt16
+promote_rule(::Type{UInt32},  ::Type{Int32} ) = UInt32
+promote_rule(::Type{UInt64},  ::Type{Int64} ) = UInt64
+promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 _default_type(::Type{Unsigned}) = UInt
 _default_type(::Union{Type{Integer},Type{Signed}}) = Int
