@@ -306,7 +306,8 @@ function process_options(opts::JLOptions)
         if cmd == 'e'
             eval(Main, parse_input_line(arg))
         elseif cmd == 'E'
-            invokelatest(display, eval(Main, parse_input_line(arg)))
+            invokelatest(show, eval(Main, parse_input_line(arg)))
+            println()
         elseif cmd == 'L'
             # load file immediately on all processors
             @sync for p in procs()

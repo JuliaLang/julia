@@ -670,7 +670,7 @@ end
 # run this test in a separate process to avoid interfering with `getindex`
 let def = "Base.getindex(t::NTuple{3,NTuple{2,Int}}, i::Int, j::Int, k::Int) = (t[1][i], t[2][j], t[3][k])"
     @test read(`$(Base.julia_cmd()) --startup-file=no -E "$def;test(t) = t[2,1,2];test(((3,4), (5,6), (7,8)))"`, String) ==
-        "(4, 5, 8)"
+        "(4, 5, 8)\n"
 end
 
 # issue #20267
