@@ -558,6 +558,10 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_simplevector_type) {
         n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");
     }
+    else if (v == (jl_value_t*)jl_unionall_type) {
+        // avoid printing `typeof(Type)` for `UnionAll`.
+        n += jl_printf(out, "UnionAll");
+    }
     else if (vt == jl_datatype_type) {
         jl_datatype_t *dv = (jl_datatype_t*)v;
         jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
