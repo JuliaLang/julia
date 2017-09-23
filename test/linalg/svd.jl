@@ -99,12 +99,12 @@ a2img  = randn(n,n)/2
     if eltya <: Base.LinAlg.BlasReal
         @testset "Number input" begin
             x, y = randn(eltya, 2)
-            @test svdfact(x)    == svdfact(      fill(x, 1, 1))
+            @test svdfact(x)    == svdfact(fill(x, 1, 1))
             @test svdvals(x)    == first(svdvals(fill(x, 1, 1)))
-            @test svd(x)        == first.(svd(   fill(x, 1, 1)))
-            @test svdfact(x, y) == svdfact(      fill(x, 1, 1), fill(y, 1, 1))
-            @test svdvals(x, y) ≈ first(svdvals(fill(x, 1, 1), fill(y, 1, 1)))
-            @test svd(x, y)     == first.(svd(   fill(x, 1, 1), fill(y, 1, 1)))
+            @test svd(x)        == first.(svd(fill(x, 1, 1)))
+            @test svdfact(x, y) == svdfact(fill(x, 1, 1), fill(y, 1, 1))
+            @test svdvals(x, y) ≈  first(svdvals(fill(x, 1, 1), fill(y, 1, 1)))
+            @test svd(x, y)     == first.(svd(fill(x, 1, 1), fill(y, 1, 1)))
         end
     end
     if eltya != Int
