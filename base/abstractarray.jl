@@ -1676,13 +1676,6 @@ Returns a tuple of subscripts into an array with dimensions `dims`,
 corresponding to the linear index `index`.
 
 # Examples
-```
-i, j, ... = ind2sub(size(A), indmax(A))
-```
-
-provides the indices of the maximum element.
-
-# Examples
 ```jldoctest
 julia> ind2sub((3,4),2)
 (2, 1)
