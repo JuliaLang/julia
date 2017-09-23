@@ -494,18 +494,8 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
 
     index > 0 && return h.vals[index]
 
-    age0 = h.age
     v = convert(V, default())
-    if h.age != age0
-        index = ht_keyindex2(h, key)
-    end
-    if index > 0
-        h.age += 1
-        h.keys[index] = key
-        h.vals[index] = v
-    else
-        _setindex!(h, v, key, -index)
-    end
+    _setindex!(h, v, key, -index)
     return v
 end
 
