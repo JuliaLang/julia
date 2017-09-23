@@ -72,11 +72,10 @@ function convert(::Type{Diagonal}, A::AbstractTriangular)
 end
 
 function convert(::Type{Bidiagonal}, A::AbstractTriangular)
-    fA = full(A)
-    if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1)
-        return Bidiagonal(diag(A), diag(fA,1), :U)
-    elseif fA == diagm(diag(A)) + diagm(diag(fA, -1), -1)
-        return Bidiagonal(diag(A), diag(fA,-1), :L)
+    if isbanded(A, 0, 1) # is upper bidiagonal
+        return Bidiagonal(diag(A), diag(A, 1), :U)
+    elseif isbanded(A, -1, 0) # is lower bidiagonal
+        return Bidiagonal(diag(A), diag(A, -1), :L)
     else
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
     end
@@ -86,9 +85,8 @@ convert(::Type{SymTridiagonal}, A::AbstractTriangular) =
     convert(SymTridiagonal, convert(Tridiagonal, A))
 
 function convert(::Type{Tridiagonal}, A::AbstractTriangular)
-    fA = full(A)
-    if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1) + diagm(diag(fA, -1), -1)
-        return Tridiagonal(diag(fA, -1), diag(A), diag(fA,1))
+    if isbanded(A, -1, 1) # is tridiagonal
+        return Tridiagonal(diag(A, -1), diag(A), diag(A, 1))
     else
         throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
     end
