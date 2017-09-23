@@ -4,6 +4,8 @@
 #undef DEBUG
 #include "llvm-version.h"
 
+#include <llvm/ADT/SmallSet.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Dominators.h>
@@ -128,8 +130,9 @@ private:
         {}
         // insert llvm.lifetime.* calls for `ptr` with size `sz`
         // based on the use of `orig` given in `alloc_uses`.
-        void insert(Instruction *ptr, Constant *sz, Instruction *orig,
-                    const std::set<Instruction*> &alloc_uses);
+        void insert(Function &F, Instruction *ptr, Constant *sz, Instruction *orig,
+                    const std::set<Instruction*> &alloc_uses,
+                    const std::set<CallInst*> &preserves);
     private:
         Instruction *getFirstSafepoint(BasicBlock *bb);
         void insertEnd(Instruction *ptr, Constant *sz, Instruction *insert);
@@ -151,7 +154,7 @@ private:
     bool doInitialization(Module &m) override;
     bool runOnFunction(Function &F) override;
     bool checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruction*> &uses,
-                   bool &ignore_tag);
+                   std::set<CallInst*> &preserves, bool &ignore_tag);
     void replaceUsesWith(Instruction *orig_i, Instruction *new_i, ReplaceUsesStack &stack);
     void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID, Instruction *orig_i,
                                  Instruction *new_i);
@@ -203,8 +206,9 @@ void AllocOpt::LifetimeMarker::insertEnd(Instruction *ptr, Constant *sz, Instruc
     CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert);
 }
 
-void AllocOpt::LifetimeMarker::insert(Instruction *ptr, Constant *sz, Instruction *orig,
-                                      const std::set<Instruction*> &alloc_uses)
+void AllocOpt::LifetimeMarker::insert(Function &F, Instruction *ptr, Constant *sz,
+                                      Instruction *orig, const std::set<Instruction*> &alloc_uses,
+                                      const std::set<CallInst*> &preserves)
 {
     CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig);
     BasicBlock *def_bb = orig->getParent();
@@ -248,6 +252,34 @@ void AllocOpt::LifetimeMarker::insert(Instruction *ptr, Constant *sz, Instructio
         abort();
     }
 #endif
+    // Record extra BBs that contain invisible uses.
+    SmallSet<BasicBlock*, 8> extra_use;
+    SmallVector<DomTreeNodeBase<BasicBlock>*, 8> dominated;
+    for (auto preserve: preserves) {
+        for (auto RN = DT.getNode(preserve->getParent()); RN;
+             RN = dominated.empty() ? nullptr : dominated.pop_back_val()) {
+            for (auto N: *RN) {
+                auto bb = N->getBlock();
+                if (extra_use.count(bb))
+                    continue;
+                bool ended = false;
+                for (auto end: preserve->users()) {
+                    auto end_bb = cast<Instruction>(end)->getParent();
+                    auto end_node = DT.getNode(end_bb);
+                    if (end_bb == bb || (end_node && DT.dominates(end_node, N))) {
+                        ended = true;
+                        break;
+                    }
+                }
+                if (ended)
+                    continue;
+                bbs.insert(bb);
+                extra_use.insert(bb);
+                dominated.push_back(N);
+            }
+        }
+        assert(dominated.empty());
+    }
     // For each BB, find the first instruction(s) where the allocation is possibly dead.
     // If all successors are live, then there isn't one.
     // If all successors are dead, then it's the first instruction after the last use
@@ -270,6 +302,9 @@ void AllocOpt::LifetimeMarker::insert(Instruction *ptr, Constant *sz, Instructio
                     first_dead.push_back(&*succ->begin());
                 }
             }
+        }
+        else if (extra_use.count(bb)) {
+            first_dead.push_back(bb->getTerminator());
         }
         else {
             for (auto it = bb->rbegin(), end = bb->rend(); it != end; ++it) {
@@ -302,6 +337,7 @@ void AllocOpt::LifetimeMarker::insert(Instruction *ptr, Constant *sz, Instructio
             }
             else if (auto insert = getFirstSafepoint(bb)) {
                 insertEnd(ptr, sz, insert);
+                continue;
             }
         }
         else {
@@ -366,7 +402,7 @@ bool AllocOpt::doInitialization(Module &M)
 }
 
 bool AllocOpt::checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruction*> &uses,
-                         bool &ignore_tag)
+                         std::set<CallInst*> &preserves, bool &ignore_tag)
 {
     uses.clear();
     if (I->use_empty())
@@ -395,6 +431,9 @@ bool AllocOpt::checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruc
                     return true;
                 }
                 if (gc_preserve_begin && gc_preserve_begin == callee) {
+                    for (auto user: call->users())
+                        uses.insert(cast<Instruction>(user));
+                    preserves.insert(call);
                     return true;
                 }
             }
@@ -565,8 +604,8 @@ void AllocOpt::replaceUsesWith(Instruction *orig_inst, Instruction *new_inst,
                 }
             }
             // remove from operand bundle or arguments for gc_perserve_begin
-            Type *new_t = new_i->getType();
-            user->replaceUsesOfWith(orig_i, ConstantPointerNull::get(cast<PointerType>(new_t)));
+            Type *orig_t = orig_i->getType();
+            user->replaceUsesOfWith(orig_i, ConstantPointerNull::get(cast<PointerType>(orig_t)));
         }
         else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user)) {
             auto cast_t = PointerType::get(cast<PointerType>(user->getType())->getElementType(),
@@ -654,12 +693,14 @@ bool AllocOpt::runOnFunction(Function &F)
     CheckInstStack check_stack;
     ReplaceUsesStack replace_stack;
     std::set<Instruction*> alloc_uses;
+    std::set<CallInst*> preserves;
     LifetimeMarker lifetime(*this);
     for (auto &it: allocs) {
         bool ignore_tag = true;
         auto orig = it.first;
         size_t &sz = it.second;
-        if (!checkInst(orig, check_stack, alloc_uses, ignore_tag)) {
+        preserves.clear();
+        if (!checkInst(orig, check_stack, alloc_uses, preserves, ignore_tag)) {
             sz = UINT32_MAX;
             continue;
         }
@@ -692,7 +733,7 @@ bool AllocOpt::runOnFunction(Function &F)
             buff->setAlignment(align);
             ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, T_pint8));
         }
-        lifetime.insert(ptr, ConstantInt::get(T_int64, sz), orig, alloc_uses);
+        lifetime.insert(F, ptr, ConstantInt::get(T_int64, sz), orig, alloc_uses, preserves);
         // Someone might be reading the tag, initialize it.
         if (!ignore_tag) {
             ptr = cast<Instruction>(prolog_builder.CreateConstGEP1_32(T_int8, ptr, align));
