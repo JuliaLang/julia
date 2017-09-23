@@ -610,11 +610,11 @@ let
 
         for x in -10:20
             n = p = x
-            for i in 1:40
+            for j in 1:40
                 p = prevind(strs[i], p)
-                @test prevind(strs[i], x, i) == p
+                @test prevind(strs[i], x, j) == p
                 n = nextind(strs[i], n)
-                @test nextind(strs[i], x, i) == n
+                @test nextind(strs[i], x, j) == n
             end
         end
     end
