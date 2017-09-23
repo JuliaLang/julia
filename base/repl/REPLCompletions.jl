@@ -10,11 +10,25 @@ function completes_global(x, name)
     return startswith(x, name) && !('#' in x)
 end
 
+function appendmacro!(syms, macros, needle, endchar)
+    for s in macros
+        if endswith(s, needle)
+            from = nextind(s, start(s))
+            to = prevind(s, sizeof(s)-sizeof(needle)+1)
+            push!(syms, s[from:to]*endchar)
+        end
+    end
+end
+
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
     ssyms = names(mod, all, imported)
     filter!(ffunc, ssyms)
     syms = String[string(s) for s in ssyms]
+    macros =  filter(x -> startswith(x, "@" * name), syms)
+    appendmacro!(syms, macros, "_str", "\"")
+    appendmacro!(syms, macros, "_cmd", "`")
     filter!(x->completes_global(x, name), syms)
+    return syms
 end
 
 # REPL Symbol Completions
@@ -71,25 +85,28 @@ function complete_symbol(sym, ffunc)
         end
     else
         # Looking for a member of a type
-        fields = fieldnames(t)
-        for field in fields
-            s = string(field)
-            if startswith(s, name)
-                push!(suggestions, s)
+        if t isa DataType && t != Any
+            fields = fieldnames(t)
+            for field in fields
+                s = string(field)
+                if startswith(s, name)
+                    push!(suggestions, s)
+                end
             end
         end
     end
     suggestions
 end
 
+const sorted_keywords = [
+    "abstract type", "baremodule", "begin", "break", "catch", "ccall",
+    "const", "continue", "do", "else", "elseif", "end", "export", "false",
+    "finally", "for", "function", "global", "if", "import",
+    "importall", "let", "local", "macro", "module", "mutable struct",
+    "primitive type", "quote", "return", "struct",
+    "true", "try", "using", "while"]
+
 function complete_keyword(s::String)
-    const sorted_keywords = [
-        "abstract type", "baremodule", "begin", "break", "catch", "ccall",
-        "const", "continue", "do", "else", "elseif", "end", "export", "false",
-        "finally", "for", "function", "global", "if", "import",
-        "importall", "let", "local", "macro", "module", "mutable struct",
-        "primitive type", "quote", "return", "struct",
-        "true", "try", "using", "while"]
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)
@@ -181,6 +198,11 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
     # hence we need to add one to get the first index. This is also correct when considering
     # pos, because pos is the `endof` a larger string which `endswith(path)==true`.
     return matchList, startpos:pos, !isempty(matchList)
+end
+
+function complete_expanduser(path::AbstractString, r)
+    expanded = expanduser(path)
+    return String[expanded], r, path != expanded
 end
 
 # Determines whether method_complete should be tried. It should only be done if
@@ -368,7 +390,7 @@ function afterusing(string::String, startpos::Int)
     r = search(rstr, r"\s(gnisu|tropmi)\b")
     isempty(r) && return false
     fr = reverseind(str, last(r))
-    return ismatch(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*\w*$", str[fr:end])
+    return ismatch(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
 end
 
 function bslash_completions(string, pos)
@@ -459,13 +481,21 @@ function completions(string, pos)
         m = match(r"[\t\n\r\"><=*?|]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
+
+        expanded = complete_expanduser(replace(string[r], r"\\ ", " "), r)
+        expanded[3] && return expanded  # If user expansion available, return it
+
         paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
+
         if inc_tag == :string &&
-           length(paths) == 1 &&                              # Only close if there's a single choice,
-           !isdir(expanduser(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " "))) &&  # except if it's a directory
-           (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
+           length(paths) == 1 &&  # Only close if there's a single choice,
+           !isdir(expanduser(replace(string[startpos:prevind(string, start(r))] * paths[1],
+                                     r"\\ ", " "))) &&  # except if it's a directory
+           (length(string) <= pos ||
+            string[nextind(string,pos)] != '"')  # or there's already a " at the cursor.
             paths[1] *= "\""
         end
+
         #Latex symbols can be completed for strings
         (success || inc_tag==:cmd) && return sort!(paths), r, success
     end
@@ -512,10 +542,11 @@ function completions(string, pos)
                         #   <Mod>/src/<Mod>.jl
                         #   <Mod>.jl/src/<Mod>.jl
                         if isfile(joinpath(dir, pname))
-                            endswith(pname, ".jl") && push!(suggestions, pname[1:end-3])
+                            endswith(pname, ".jl") && push!(suggestions,
+                                                            pname[1:prevind(pname, end-2)])
                         else
                             mod_name = if endswith(pname, ".jl")
-                                pname[1:end - 3]
+                                pname[1:prevind(pname, end-2)]
                             else
                                 pname
                             end
@@ -592,7 +623,7 @@ function shell_completions(string, pos)
         r = first(last_parse):prevind(last_parse, last(last_parse))
         partial = scs[r]
         ret, range = completions(partial, endof(partial))
-        range += first(r) - 1
+        range = range .+ (first(r) - 1)
         return ret, range, true
     end
     return String[], 0:-1, false

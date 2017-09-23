@@ -234,8 +234,8 @@ function dllist()
     dynamic_libraries = Vector{AbstractString}(0)
 
     @static if Sys.islinux()
-        const callback = cfunction(dl_phdr_info_callback, Cint,
-                                   Tuple{Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}})
+        callback = cfunction(dl_phdr_info_callback, Cint,
+                             Tuple{Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}})
         ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
     end
 
@@ -254,8 +254,8 @@ function dllist()
     end
 
     @static if Sys.isbsd() && !Sys.isapple()
-        const callback = cfunction(dl_phdr_info_callback, Cint,
-                                   Tuple{Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}})
+        callback = cfunction(dl_phdr_info_callback, Cint,
+                             Tuple{Ref{dl_phdr_info}, Csize_t, Ref{Vector{AbstractString}}})
         ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Vector{AbstractString}}), callback, dynamic_libraries)
         shift!(dynamic_libraries)
     end

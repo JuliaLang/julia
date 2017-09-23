@@ -27,6 +27,9 @@ Base.ismatch
 Base.match
 Base.eachmatch
 Base.matchall
+Base.isless(::AbstractString, ::AbstractString)
+Base.:(==)(::AbstractString, ::AbstractString)
+Base.cmp(::AbstractString, ::AbstractString)
 Base.lpad
 Base.rpad
 Base.search

@@ -90,6 +90,25 @@ write(io,"\n\r\n\n\r \n") > 0
 @test readlines(IOBuffer(""), chomp=true) == []
 @test readlines(IOBuffer("first\nsecond"), chomp=false) == String["first\n", "second"]
 @test readlines(IOBuffer("first\nsecond"), chomp=true) == String["first", "second"]
+
+let fname = tempname()
+    for dochomp in [true, false],
+        endline in ["\n", "\r\n"],
+        i in -5:5
+
+        ref = ("1"^(2^17 - i)) * endline
+        open(fname, "w") do io
+            write(io, ref)
+        end
+        x = readlines(fname, chomp = dochomp)
+        if dochomp
+            ref = chomp(ref)
+        end
+        @test ref == x[1]
+    end
+    rm(fname)
+end
+
 Base.compact(io)
 @test position(io) == 0
 @test ioslength(io) == 0
@@ -143,10 +162,10 @@ close(io)
 end
 
 # issue 5453
-let io=IOBuffer("abcdef")
-a = Array{UInt8}(1024)
-@test_throws EOFError read!(io,a)
-@test eof(io)
+let io = IOBuffer("abcdef"),
+    a = Array{UInt8}(1024)
+    @test_throws EOFError read!(io,a)
+    @test eof(io)
 end
 
 @test isempty(readlines(IOBuffer(), chomp=false))
@@ -169,7 +188,10 @@ let io=IOBuffer("hello")
 end
 
 # pr #11554
-let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodnightmoon", true, true)
+let a,
+    io = IOBuffer(SubString("***αhelloworldω***", 4, 16)),
+    io2 = IOBuffer(b"goodnightmoon", true, true)
+
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
     @test_throws ArgumentError write(io,'β')

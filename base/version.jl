@@ -2,21 +2,23 @@
 
 ## semantic version numbers (http://semver.org)
 
-struct VersionNumber
-    major::Int
-    minor::Int
-    patch::Int
-    prerelease::Tuple{Vararg{Union{Int,String}}}
-    build::Tuple{Vararg{Union{Int,String}}}
+const VInt = UInt32
 
-    function VersionNumber(major::Int, minor::Int, patch::Int,
-            pre::Tuple{Vararg{Union{Int,String}}},
-            bld::Tuple{Vararg{Union{Int,String}}})
+struct VersionNumber
+    major::VInt
+    minor::VInt
+    patch::VInt
+    prerelease::Tuple{Vararg{Union{UInt64,String}}}
+    build::Tuple{Vararg{Union{UInt64,String}}}
+
+    function VersionNumber(major::VInt, minor::VInt, patch::VInt,
+            pre::Tuple{Vararg{Union{UInt64,String}}},
+            bld::Tuple{Vararg{Union{UInt64,String}}})
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
         for ident in pre
-            if isa(ident,Int)
+            if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative pre-release identifier: $ident"))
             else
                 if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
@@ -26,7 +28,7 @@ struct VersionNumber
             end
         end
         for ident in bld
-            if isa(ident,Int)
+            if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative build identifier: $ident"))
             else
                 if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
@@ -41,9 +43,9 @@ end
 VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
         pre::Tuple{Vararg{Union{Integer,AbstractString}}} = (),
         bld::Tuple{Vararg{Union{Integer,AbstractString}}} = ()) =
-    VersionNumber(Int(major), Int(minor), Int(patch),
-        map(x->isa(x,Integer) ? Int(x) : String(x), pre),
-        map(x->isa(x,Integer) ? Int(x) : String(x), bld))
+    VersionNumber(VInt(major), VInt(minor), VInt(patch),
+        map(x->x isa Integer ? UInt64(x) : String(x), pre),
+        map(x->x isa Integer ? UInt64(x) : String(x), bld))
 
 function print(io::IO, v::VersionNumber)
     v == typemax(VersionNumber) && return print(io, "∞")
@@ -82,7 +84,7 @@ function split_idents(s::AbstractString)
     idents = split(s, '.')
     ntuple(length(idents)) do i
         ident = idents[i]
-        ismatch(r"^\d+$", ident) ? parse(Int, ident) : String(ident)
+        ismatch(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident)
     end
 end
 
@@ -91,9 +93,9 @@ function VersionNumber(v::AbstractString)
     m = match(VERSION_REGEX, v)
     m === nothing && throw(ArgumentError("invalid version string: $v"))
     major, minor, patch, minus, prerl, plus, build = m.captures
-    major = parse(Int, major)
-    minor = minor !== nothing ? parse(Int, minor) : 0
-    patch = patch !== nothing ? parse(Int, patch) : 0
+    major = parse(VInt, major)
+    minor = minor !== nothing ? parse(VInt, minor) : VInt(0)
+    patch = patch !== nothing ? parse(VInt, patch) : VInt(0)
     if prerl !== nothing && !isempty(prerl) && prerl[1] == '-'
         prerl = prerl[2:end] # strip leading '-'
     end
@@ -107,15 +109,21 @@ convert(::Type{VersionNumber}, v::AbstractString) = VersionNumber(v)
 macro v_str(v); VersionNumber(v); end
 
 typemin(::Type{VersionNumber}) = v"0-"
-typemax(::Type{VersionNumber}) = VersionNumber(typemax(Int),typemax(Int),typemax(Int),(),("",))
 
-ident_cmp(a::Int, b::Int) = cmp(a,b)
-ident_cmp(a::Int, b::String) = isempty(b) ? +1 : -1
-ident_cmp(a::String, b::Int) = isempty(a) ? -1 : +1
-ident_cmp(a::String, b::String) = cmp(a,b)
+function typemax(::Type{VersionNumber})
+    ∞ = typemax(VInt)
+    VersionNumber(∞, ∞, ∞, (), ("",))
+end
 
-function ident_cmp(A::Tuple{Vararg{Union{Int,String}}},
-                   B::Tuple{Vararg{Union{Int,String}}})
+ident_cmp(a::Integer, b::Integer) = cmp(a, b)
+ident_cmp(a::Integer, b::String ) = isempty(b) ? +1 : -1
+ident_cmp(a::String,  b::Integer) = isempty(a) ? -1 : +1
+ident_cmp(a::String,  b::String ) = cmp(a, b)
+
+function ident_cmp(
+    A::Tuple{Vararg{Union{Integer,String}}},
+    B::Tuple{Vararg{Union{Integer,String}}},
+)
     i = start(A)
     j = start(B)
     while !done(A,i) && !done(B,i)
@@ -132,8 +140,8 @@ function ==(a::VersionNumber, b::VersionNumber)
     (a.major != b.major) && return false
     (a.minor != b.minor) && return false
     (a.patch != b.patch) && return false
-    (ident_cmp(a.prerelease,b.prerelease) != 0) && return false
-    (ident_cmp(a.build,b.build) != 0) && return false
+    (ident_cmp(a.prerelease, b.prerelease) != 0) && return false
+    (ident_cmp(a.build, b.build) != 0) && return false
     return true
 end
 
@@ -186,7 +194,7 @@ function check_new_version(existing::Vector{VersionNumber}, ver::VersionNumber)
         end
         error("$ver is not a valid initial version (try 0.0.0, 0.0.1, 0.1 or 1.0)")
     end
-    idx = searchsortedlast(existing,ver)
+    idx = searchsortedlast(existing, ver)
     prv = existing[idx]
     ver == prv && error("version $ver already exists")
     nxt = thismajor(ver) != thismajor(prv) ? nextmajor(prv) :

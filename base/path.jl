@@ -88,6 +88,7 @@ end
 
 Determines whether a path is absolute (begins at the root directory).
 
+# Examples
 ```jldoctest
 julia> isabspath("/home")
 true
@@ -103,6 +104,7 @@ isabspath(path::AbstractString)
 
 Determines whether a path refers to a directory (for example, ends with a path separator).
 
+# Examples
 ```jldoctest
 julia> isdirpath("/home")
 false
@@ -118,6 +120,7 @@ isdirpath(path::String) = ismatch(path_directory_re, splitdrive(path)[2])
 
 Split a path into a tuple of the directory name and file name.
 
+# Examples
 ```jldoctest
 julia> splitdir("/home/myuser")
 ("/home", "myuser")
@@ -136,6 +139,7 @@ end
 
 Get the directory part of a path.
 
+# Examples
 ```jldoctest
 julia> dirname("/home/myuser")
 "/home"
@@ -150,6 +154,7 @@ See also: [`basename`](@ref)
 
 Get the file name part of a path.
 
+# Examples
  ```jldoctest
 julia> basename("/home/myuser/example.jl")
 "example.jl"
@@ -166,6 +171,7 @@ If the last component of a path contains a dot, split the path into everything b
 dot and everything including and after the dot. Otherwise, return a tuple of the argument
 unmodified and the empty string.
 
+# Examples
 ```jldoctest
 julia> splitext("/home/myuser/example.jl")
 ("/home/myuser/example", ".jl")
@@ -194,11 +200,13 @@ joinpath(a::AbstractString) = a
 """
     joinpath(parts...) -> AbstractString
 
-Join path components into a full path. If some argument is an absolute path, then prior
-components are dropped.
+Join path components into a full path. If some argument is an absolute path or
+(on Windows) has a drive specification that doesn't match the drive computed for
+the join of the preceding paths, then prior components are dropped.
 
+# Examples
 ```jldoctest
-julia> joinpath("/home/myuser","example.jl")
+julia> joinpath("/home/myuser", "example.jl")
 "/home/myuser/example.jl"
 ```
 """
@@ -208,7 +216,7 @@ function joinpath(a::String, b::String)
     isabspath(b) && return b
     A, a = splitdrive(a)
     B, b = splitdrive(b)
-    !isempty(B) && A != B && throw(ArgumentError("drive mismatch: $A$a $B$b"))
+    !isempty(B) && A != B && return string(B,b)
     C = isempty(B) ? A : B
     isempty(a)                             ? string(C,b) :
     ismatch(path_separator_re, a[end:end]) ? string(C,a,b) :
@@ -221,6 +229,7 @@ joinpath(a::AbstractString, b::AbstractString) = joinpath(String(a), String(b))
 
 Normalize a path, removing "." and ".." entries.
 
+# Examples
 ```jldoctest
 julia> normpath("/home/myuser/../example.jl")
 "/home/example.jl"
@@ -329,6 +338,7 @@ expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
 else
 function expanduser(path::AbstractString)
     i = start(path)
+    if done(path,i) return path end
     c, i = next(path,i)
     if c != '~' return path end
     if done(path,i) return homedir() end

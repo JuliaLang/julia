@@ -5,7 +5,7 @@ include("testenv.jl")
 
 # REPL tests
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using TestHelpers
+using Main.TestHelpers
 import Base: REPL, LineEdit
 
 function fake_repl(f)
@@ -232,7 +232,7 @@ function AddCustomMode(repl, prompt)
     hp.mode_mapping[:foobar] = foobar_mode
     foobar_mode.hist = hp
 
-    const foobar_keymap = Dict{Any,Any}(
+    foobar_keymap = Dict{Any,Any}(
         '<' => function (s,args...)
             if isempty(s)
                 if !haskey(s.mode_state,foobar_mode)
@@ -359,6 +359,17 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         LineEdit.history_last(s, hp)
         @test buffercontents(LineEdit.buffer(s)) == "wip"
         @test position(LineEdit.buffer(s)) == 3
+        # test that history_first jumps to beginning of current session's history
+        hp.start_idx -= 5 # temporarily alter history
+        LineEdit.history_first(s, hp)
+        @test hp.cur_idx == 6
+        # we are at the beginning of current session's history, so history_first
+        # must now jump to the beginning of all history
+        LineEdit.history_first(s, hp)
+        @test hp.cur_idx == 1
+        LineEdit.history_last(s, hp)
+        @test hp.cur_idx-1 == length(hp.history)
+        hp.start_idx += 5
         LineEdit.move_line_start(s)
         @test position(LineEdit.buffer(s)) == 0
 
@@ -550,6 +561,18 @@ fake_repl() do stdin_write, stdout_read, repl
     wait(c)
     @test Main.A == 1
 
+    # Test that indentation corresponding to the prompt is removed
+    sendrepl2("""\e[200~julia> begin\n           α=1\n           β=2\n       end\n\e[201~""")
+    wait(c)
+    readuntil(stdout_read, "begin")
+    @test readuntil(stdout_read, "end") == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
+    # for incomplete input (`end` below is added after the end of bracket paste)
+    sendrepl2("""\e[200~julia> begin\n           α=1\n           β=2\n\e[201~end""")
+    wait(c)
+    readuntil(stdout_read, "begin")
+    readuntil(stdout_read, "begin")
+    @test readuntil(stdout_read, "end") == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
+
     # Close repl
     write(stdin_write, '\x04')
     wait(repltask)
@@ -603,7 +626,7 @@ let exename = Base.julia_cmd()
         TestHelpers.with_fake_pty() do slave, master
             nENV = copy(ENV)
             nENV["TERM"] = "dumb"
-            p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
+            p = spawn(setenv(`$exename --startup-file=no -q`,nENV),slave,slave,slave)
             output = readuntil(master,"julia> ")
             if ccall(:jl_running_on_valgrind,Cint,()) == 0
                 # If --trace-children=yes is passed to valgrind, we will get a
@@ -620,8 +643,8 @@ let exename = Base.julia_cmd()
     end
 
     # Test stream mode
-    outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
-    write(ins,"1\nquit()\n")
+    outs, ins, p = readandwrite(`$exename --startup-file=no -q`)
+    write(ins, "1\nquit()\n")
     @test read(outs, String) == "1\n"
 end # let exename
 

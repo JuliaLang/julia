@@ -25,6 +25,11 @@ throw
 
 ## native julia error handling ##
 
+"""
+    error(message::AbstractString)
+
+Raise an `ErrorException` with the given message.
+"""
 error(s::AbstractString) = throw(ErrorException(s))
 
 """
@@ -85,7 +90,7 @@ systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(str
 Throw an [`AssertionError`](@ref) if `cond` is `false`.
 Also available as the macro [`@assert`](@ref).
 """
-assert(x) = x ? nothing : throw(Main.Base.AssertionError())
+assert(x) = x ? nothing : throw(AssertionError())
 
 """
     @assert cond [text]
@@ -114,7 +119,7 @@ macro assert(ex, msgs...)
         # string() might not be defined during bootstrap
         msg = :(Main.Base.string($(Expr(:quote,msg))))
     end
-    return :($(esc(ex)) ? $(nothing) : throw(Main.Base.AssertionError($msg)))
+    return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
 
 struct ExponentialBackOff

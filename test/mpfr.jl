@@ -382,17 +382,14 @@ setprecision(406) do
     @test string(nextfloat(BigFloat(1))) == str
 end
 setprecision(21) do
-    @test string(zero(BigFloat)) == "0.0000000"
     @test string(parse(BigFloat, "0.1")) == "1.0000002e-01"
     @test string(parse(BigFloat, "-9.9")) == "-9.9000015"
 end
 setprecision(40) do
-    @test string(zero(BigFloat)) == "0.0000000000000"
     @test string(parse(BigFloat, "0.1")) == "1.0000000000002e-01"
     @test string(parse(BigFloat, "-9.9")) == "-9.8999999999942"
 end
 setprecision(123) do
-    @test string(zero(BigFloat)) == "0.00000000000000000000000000000000000000"
     @test string(parse(BigFloat, "0.1")) == "9.99999999999999999999999999999999999953e-02"
     @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
 end
@@ -850,8 +847,8 @@ i3 = trunc(Integer,f)
 @test_throws ArgumentError parse(BigFloat, "1\0")
 
 # serialization (issue #12386)
-let b = IOBuffer()
-    x = 2.1*big(pi)
+let b = IOBuffer(),
+    x = 2.1 * big(pi)
     serialize(b, x)
     seekstart(b)
     @test deserialize(b) == x
@@ -863,11 +860,10 @@ end
 # test constructors and `big` with additional precision and rounding mode:
 for prec in (10, 100, 1000)
     for val in ("3.1", pi, "-1.3", 3.1)
-        let
-            a = BigFloat(val)
-            b = BigFloat(val, prec)
-            c = BigFloat(val, RoundUp)
-            d = BigFloat(val, prec, RoundDown)
+        let a = BigFloat(val),
+            b = BigFloat(val, prec),
+            c = BigFloat(val, RoundUp),
+            d = BigFloat(val, prec, RoundDown),
             e = BigFloat(val, prec, RoundUp)
 
             @test precision(a) == precision(BigFloat)
@@ -880,15 +876,43 @@ for prec in (10, 100, 1000)
     end
 end
 
-setprecision(256) do
-    @test string(big(Inf)) == "BigFloat(Inf, 256)"
-    @test string(big(-Inf)) == "BigFloat(-Inf, 256)"
-    @test string(big(NaN)) == "BigFloat(NaN, 256)"
-end
-
 # issue #22758
-if MPFR.get_version() > v"3.1.5" || "r11590" in MPFR.get_patches()
+if MPFR.version() > v"3.1.5" || "r11590" in MPFR.version().build
     setprecision(2_000_000) do
         @test abs(sin(big(pi)/6) - 0.5) < ldexp(big(1.0),-1_999_000)
+    end
+end
+
+@testset "show BigFloat" begin
+    function test_show_bigfloat(x::BigFloat; contains_e::Bool=true,
+        ends::String="",
+        starts::String="")
+        sx = sprint(show, x)
+        scx = sprint(showcompact, x)
+        strx = string(x)
+        @test sx == strx
+        @test length(scx) < 20
+        @test length(scx) <= length(sx)
+        @test x == parse(BigFloat, sx)
+        @test ≈(x, parse(BigFloat, scx), rtol=1e-4)
+        for s in (sx, scx)
+            @test contains(s, 'e') == contains_e
+            @test startswith(s, starts)
+            @test endswith(s, ends)
+        end
+    end
+
+    test_show_bigfloat(big"1.23456789", contains_e=false, starts="1.23")
+    test_show_bigfloat(big"-1.23456789", contains_e=false, starts="-1.23")
+    test_show_bigfloat(big"2.3457645687563543266576889678956787e10000", starts="2.345", ends="e+10000")
+    test_show_bigfloat(big"-2.3457645687563543266576889678956787e-10000", starts="-2.345", ends="e-10000")
+
+    for to_string in [string,
+        x->sprint(show, x),
+        x->sprint(showcompact,x)]
+        @test to_string(big"0.0") == "0.0"
+        @test to_string(big"-0.0") == "-0.0"
+        @test to_string(big"1.0") == "1.0"
+        @test to_string(big"-1.0") == "-1.0"
     end
 end

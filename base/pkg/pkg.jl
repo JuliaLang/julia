@@ -20,7 +20,7 @@ export dir, init, rm, add, available, installed, status, clone, checkout,
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
 
-mutable struct PkgError <: Exception
+struct PkgError <: Exception
     msg::AbstractString
     ex::Nullable{Exception}
 end
@@ -225,7 +225,7 @@ optimal set of packages versions.
 Without arguments, updates all installed packages. When one or more package names are provided as
 arguments, only those packages and their dependencies are updated.
 """
-update(upkgs::AbstractString...) = cd(Entry.update,Dir.getmetabranch(),Set{String}([upkgs...]))
+update(upkgs::AbstractString...) = cd(Entry.update,Dir.getmetabranch(),Set{String}(splitjl.([upkgs...])))
 
 """
     resolve()

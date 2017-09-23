@@ -191,35 +191,35 @@ test_remoteref_dgc(id_me)
 test_remoteref_dgc(id_other)
 
 # if sent to another worker, it should not be deleted till the other worker has also finalized.
-wid1 = workers()[1]
-wid2 = workers()[2]
-rr = RemoteChannel(wid1)
-rrid = Base.remoteref_id(rr)
+let wid1 = workers()[1],
+    wid2 = workers()[2],
+    rr = RemoteChannel(wid1),
+    rrid = Base.remoteref_id(rr),
+    fstore = RemoteChannel(wid2)
 
-fstore = RemoteChannel(wid2)
-put!(fstore, rr)
-
-@test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == true
-finalize(rr) # finalize locally
-yield(); # flush gc msgs
-@test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == true
-remotecall_fetch(r->(finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
-sleep(0.5) # to ensure that wid2 messages have been executed on wid1
-@test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == false
+    put!(fstore, rr)
+    @test remotecall_fetch(k -> haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == true
+    finalize(rr) # finalize locally
+    yield() # flush gc msgs
+    @test remotecall_fetch(k -> haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == true
+    remotecall_fetch(r -> (finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
+    sleep(0.5) # to ensure that wid2 messages have been executed on wid1
+    @test remotecall_fetch(k -> haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == false
+end
 
 # Tests for issue #23109 - should not hang.
-f = @spawn rand(1,1)
+f = @spawn rand(1, 1)
 @sync begin
     for _ in 1:10
         @async fetch(f)
     end
 end
 
-wid1,wid2 = workers()[1:2]
+wid1, wid2 = workers()[1:2]
 f = @spawnat wid1 rand(1,1)
 @sync begin
-        @async fetch(f)
-        @async remotecall_fetch(()->fetch(f), wid2)
+    @async fetch(f)
+    @async remotecall_fetch(()->fetch(f), wid2)
 end
 
 
@@ -469,7 +469,7 @@ d[5,1:2:4,8] = 19
 AA = rand(4,2)
 A = @inferred(convert(SharedArray, AA))
 B = @inferred(convert(SharedArray, AA'))
-@test B*A == ctranspose(AA)*AA
+@test B*A == adjoint(AA)*AA
 
 d=SharedArray{Int64,2}((10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
 d2 = map(x->1, d)
@@ -492,7 +492,7 @@ map!(x->1, d, d)
 # Shared arrays of singleton immutables
 @everywhere struct ShmemFoo end
 for T in [Void, ShmemFoo]
-    s = @inferred(SharedArray{T}(10))
+    local s = @inferred(SharedArray{T}(10))
     @test T() === remotecall_fetch(x->x[3], workers()[1], s)
 end
 
@@ -525,6 +525,7 @@ function finalize_and_test(r)
 end
 
 for id in [id_me, id_other]
+    local id
     finalize_and_test(Future(id))
     finalize_and_test((r=Future(id); put!(r, 1); r))
     finalize_and_test(RemoteChannel(id))
@@ -536,17 +537,19 @@ finalize(d)
 @test_throws BoundsError d[1]
 
 # Issue 22139
-aorig = a1 = SharedArray{Float64}((3, 3))
-a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-@test object_id(aorig) == object_id(a1)
-id = a1.id
-aorig = nothing
-a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-gc(); gc()
-a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-@test haskey(Base.sa_refs, id)
-finalize(a1)
-@test !haskey(Base.sa_refs, id)
+let
+    aorig = a1 = SharedArray{Float64}((3, 3))
+    a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
+    @test object_id(aorig) == object_id(a1)
+    id = a1.id
+    aorig = nothing
+    a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
+    gc(); gc()
+    a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
+    @test haskey(Base.sa_refs, id)
+    finalize(a1)
+    @test !haskey(Base.sa_refs, id)
+end
 
 # Test @parallel load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
@@ -581,7 +584,8 @@ ntasks = 10
 rr_list = [Channel(1) for x in 1:ntasks]
 
 for rr in rr_list
-    let rr=rr
+    local rr
+    let rr = rr
         @async try
             for i in 1:10
                 a = rand(2*10^5)
@@ -676,6 +680,7 @@ function test_remoteexception_thrown(expr)
 end
 
 for id in [id_other, id_me]
+    local id
     test_remoteexception_thrown() do
         remotecall_fetch(id) do
             throw(ErrorException("foobar"))
@@ -800,14 +805,15 @@ end
 walk_args(1)
 
 # Simple test for pmap throws error
-error_thrown = false
-try
-    pmap(x -> x==50 ? error("foobar") : x, 1:100)
-catch e
-    @test e.captured.ex.msg == "foobar"
-    error_thrown = true
+let error_thrown = false
+    try
+        pmap(x -> x == 50 ? error("foobar") : x, 1:100)
+    catch e
+        @test e.captured.ex.msg == "foobar"
+        error_thrown = true
+    end
+    @test error_thrown
 end
-@test error_thrown
 
 # Test pmap with a generator type iterator
 @test [1:100...] == pmap(x->x, Base.Generator(x->(sleep(0.0001); x), 1:100))
@@ -955,7 +961,7 @@ if DoFullTest
     # error message but should not terminate.
     for w in Base.Distributed.PGRP.workers
         if isa(w, Base.Distributed.Worker)
-            s = connect(get(w.config.host), get(w.config.port))
+            local s = connect(get(w.config.host), get(w.config.port))
             write(s, randstring(32))
         end
     end
@@ -1033,7 +1039,7 @@ if Sys.isunix() # aka have ssh
         for addp_func in [()->addprocs_with_testenv(["localhost"]; exename=exename, exeflags=test_exeflags, sshflags=sshflags),
                           ()->addprocs_with_testenv(1; exename=exename, exeflags=test_exeflags)]
 
-            new_pids = addp_func()
+            local new_pids = addp_func()
             @test length(new_pids) == 1
             test_n_remove_pids(new_pids)
         end
@@ -1248,6 +1254,7 @@ let (p, p2) = filter!(p -> p != myid(), procs())
                 ex = Any[ (ex::CapturedException).ex for ex in (excpt::CompositeException).exceptions ]
             end
             for (p, ex) in zip(procs, ex)
+                local p
                 if procs isa Int || p != myid()
                     @test (ex::RemoteException).pid == p
                     ex = ((ex::RemoteException).captured::CapturedException).ex
@@ -1372,6 +1379,7 @@ end
 
 # Test addprocs/rmprocs from master node only
 for f in [ ()->addprocs(1; exeflags=test_exeflags), ()->rmprocs(workers()) ]
+    local f
     try
         remotecall_fetch(f, id_other)
         error("Unexpected")
@@ -1622,7 +1630,7 @@ let thrown = false
         remotecall_fetch(sqrt, 2, -1)
     catch e
         thrown = true
-        b = IOBuffer()
+        local b = IOBuffer()
         showerror(b, e)
         @test contains(String(take!(b)), "sqrt will only return")
     end

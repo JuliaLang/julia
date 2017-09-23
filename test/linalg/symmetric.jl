@@ -12,18 +12,18 @@ end
 @testset "Hermitian matrix exponential/log" begin
     A1 = randn(4,4) + im*randn(4,4)
     A2 = A1 + A1'
-    @test expm(A2) ≈ expm(Hermitian(A2))
-    @test logm(A2) ≈ logm(Hermitian(A2))
+    @test exp(A2) ≈ exp(Hermitian(A2))
+    @test log(A2) ≈ log(Hermitian(A2))
     A3 = A1 * A1' # posdef
-    @test expm(A3) ≈ expm(Hermitian(A3))
-    @test logm(A3) ≈ logm(Hermitian(A3))
+    @test exp(A3) ≈ exp(Hermitian(A3))
+    @test log(A3) ≈ log(Hermitian(A3))
 
     A1 = randn(4,4)
     A3 = A1 * A1'
     A4 = A1 + A1.'
-    @test expm(A4) ≈ expm(Symmetric(A4))
-    @test logm(A3) ≈ logm(Symmetric(A3))
-    @test logm(A3) ≈ logm(Hermitian(A3))
+    @test exp(A4) ≈ exp(Symmetric(A4))
+    @test log(A3) ≈ log(Symmetric(A3))
+    @test log(A3) ≈ log(Hermitian(A3))
 end
 
 @testset "Core functionality" begin
@@ -119,28 +119,28 @@ end
             end
 
             @testset "tril/triu" begin
-                for di in -n:n
-                    @test triu(Symmetric(asym), di) == triu(asym, di)
-                    @test tril(Symmetric(asym), di) == tril(asym, di)
-                    @test triu(Hermitian(aherm), di) == triu(aherm, di)
-                    @test tril(Hermitian(aherm), di) == tril(aherm, di)
-                    @test triu(Symmetric(asym, :L), di) == triu(asym, di)
-                    @test tril(Symmetric(asym, :L), di) == tril(asym, di)
-                    @test triu(Hermitian(aherm, :L), di) == triu(aherm, di)
-                    @test tril(Hermitian(aherm, :L), di) == tril(aherm, di)
+                for (op, validks) in (
+                        (triu, (-n + 1):(n + 1)),
+                        (tril, (-n - 1):(n - 1)) )
+                    for di in validks
+                        @test op(Symmetric(asym), di) == op(asym, di)
+                        @test op(Hermitian(aherm), di) == op(aherm, di)
+                        @test op(Symmetric(asym, :L), di) == op(asym, di)
+                        @test op(Hermitian(aherm, :L), di) == op(aherm, di)
+                    end
                 end
             end
 
-            @testset "transpose, ctranspose" begin
+            @testset "transpose, adjoint" begin
                 S = Symmetric(asym)
                 H = Hermitian(aherm)
                 @test  transpose(S) === S == asym
-                @test ctranspose(H) === H == aherm
+                @test adjoint(H) === H == aherm
                 if eltya <: Real
-                    @test ctranspose(S) === S == asym
+                    @test adjoint(S) === S == asym
                     @test  transpose(H) === H == aherm
                 else
-                    @test ctranspose(S) ==  Symmetric(conj(asym))
+                    @test adjoint(S) ==  Symmetric(conj(asym))
                     @test  transpose(H) ==  Hermitian(transpose(aherm))
                 end
             end
@@ -245,10 +245,18 @@ end
                 @testset "pow" begin
                     # Integer power
                     @test (asym)^2   ≈ (Symmetric(asym)^2)::Symmetric
-                    @test (asym)^-2  ≈ (Symmetric(asym)^-2)::Symmetric
+                    if eltya <: Integer && !isone(asym) && !isone(-asym)
+                        @test_throws DomainError (asym)^-2
+                    else
+                        @test (asym)^-2  ≈ (Symmetric(asym)^-2)::Symmetric
+                    end
                     @test (aposs)^2  ≈ (Symmetric(aposs)^2)::Symmetric
                     @test (aherm)^2  ≈ (Hermitian(aherm)^2)::Hermitian
-                    @test (aherm)^-2 ≈ (Hermitian(aherm)^-2)::Hermitian
+                    if eltya <: Integer && !isone(aherm) && !isone(-aherm)
+                        @test_throws DomainError (aherm)^-2
+                    else
+                        @test (aherm)^-2 ≈ (Hermitian(aherm)^-2)::Hermitian
+                    end
                     @test (apos)^2   ≈ (Hermitian(apos)^2)::Hermitian
                     # integer floating point power
                     @test (asym)^2.0   ≈ (Symmetric(asym)^2.0)::Symmetric
@@ -389,12 +397,12 @@ end
         @test Y - I == T([0 -1; -1 0])
         @test Y * I == Y
 
-        @test Y + 1 == T([2 0; 0 2])
-        @test Y - 1 == T([0 -2; -2 0])
+        @test Y .+ 1 == T([2 0; 0 2])
+        @test Y .- 1 == T([0 -2; -2 0])
         @test Y * 2 == T([2 -2; -2 2])
         @test Y / 1 == Y
 
-        @test T([true false; false true]) + true == T([2 1; 1 2])
+        @test T([true false; false true]) .+ true == T([2 1; 1 2])
     end
 
     @test_throws ArgumentError Hermitian(X) + 2im*I
@@ -424,8 +432,8 @@ end
 @testset "inversion of Hilbert matrix" begin
     for T in (Float64, Complex128)
         H = T[1/(i + j - 1) for i in 1:8, j in 1:8]
-        @test norm(inv(Symmetric(H))*(H*ones(8))-1) ≈ 0 atol = 1e-5
-        @test norm(inv(Hermitian(H))*(H*ones(8))-1) ≈ 0 atol = 1e-5
+        @test norm(inv(Symmetric(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
+        @test norm(inv(Hermitian(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
     end
 end
 

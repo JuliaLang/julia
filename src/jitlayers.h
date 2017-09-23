@@ -22,7 +22,7 @@
 extern legacy::PassManager *jl_globalPM;
 
 #include <llvm/Target/TargetMachine.h>
-#include "fix_llvm_assert.h"
+#include "julia_assert.h"
 
 extern "C" {
     extern int globalUnique;
@@ -42,6 +42,7 @@ extern size_t jltls_offset_idx;
 
 typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 
+void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level);
 void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL);
 GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,

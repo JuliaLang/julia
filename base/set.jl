@@ -18,7 +18,7 @@ for sets of arbitrary objects.
 Set(itr) = Set{eltype(itr)}(itr)
 function Set(g::Generator)
     T = _default_eltype(typeof(g))
-    (isleaftype(T) || T === Union{}) || return grow_to!(Set{T}(), g)
+    (_isleaftype(T) || T === Union{}) || return grow_to!(Set{T}(), g)
     return Set{T}(g)
 end
 
@@ -65,6 +65,36 @@ done(s::Set, state) = done(s.dict, state)
 # NOTE: manually optimized to take advantage of Dict representation
 next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict, i+1))
 
+"""
+    union(s1,s2...)
+    ∪(s1,s2...)
+
+Construct the union of two or more sets. Maintains order with arrays.
+
+# Examples
+```jldoctest
+julia> union([1, 2], [3, 4])
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+
+julia> union([1, 2], [2, 4])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 4
+
+julia> union([4, 2], [1, 2])
+3-element Array{Int64,1}:
+ 4
+ 2
+ 1
+```
+"""
+function union end
+
 union(s::Set) = copy(s)
 function union(s::Set, sets...)
     u = Set{join_eltype(s, sets...)}()
@@ -102,6 +132,28 @@ end
 
 join_eltype() = Bottom
 join_eltype(v1, vs...) = typejoin(eltype(v1), join_eltype(vs...))
+
+"""
+    intersect(s1,s2...)
+    ∩(s1,s2)
+
+Construct the intersection of two or more sets.
+Maintains order and multiplicity of the first argument for arrays and ranges.
+
+# Examples
+```jldoctest
+julia> intersect([1, 2, 3], [3, 4, 5])
+1-element Array{Int64,1}:
+ 3
+
+julia> intersect([1, 4, 4, 5, 6], [4, 6, 6, 7, 8])
+3-element Array{Int64,1}:
+ 4
+ 4
+ 6
+```
+"""
+function intersect end
 
 intersect(s::Set) = copy(s)
 function intersect(s::Set, sets...)
@@ -188,7 +240,8 @@ const ⊆ = issubset
 
 Return an array containing only the unique elements of collection `itr`,
 as determined by [`isequal`](@ref), in the order that the first of each
-set of equivalent elements originally appears.
+set of equivalent elements originally appears. The element type of the
+input is preserved.
 
 # Examples
 ```jldoctest
@@ -197,6 +250,11 @@ julia> unique([1, 2, 6, 2])
  1
  2
  6
+
+julia> unique(Real[1, 1.0, 2])
+2-element Array{Real,1}:
+ 1
+ 2
 ```
 """
 function unique(itr)
@@ -208,7 +266,7 @@ function unique(itr)
         return out
     end
     x, i = next(itr, i)
-    if !isleaftype(T)
+    if !_isleaftype(T) && iteratoreltype(itr) == EltypeUnknown()
         S = typeof(x)
         return _unique_from(itr, S[x], Set{S}((x,)), i)
     end
@@ -388,7 +446,7 @@ end
 
 allunique(::Set) = true
 
-allunique(r::Range{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
+allunique(r::AbstractRange{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
 
 function filter(f, s::Set)
     u = similar(s)

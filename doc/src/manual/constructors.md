@@ -354,7 +354,7 @@ following additional outer constructor method:
 julia> Point(x::Int64, y::Float64) = Point(convert(Float64,x),y);
 ```
 
-This method uses the [`convert()`](@ref) function to explicitly convert `x` to [`Float64`](@ref)
+This method uses the [`convert`](@ref) function to explicitly convert `x` to [`Float64`](@ref)
 and then delegates construction to the general constructor for the case where both arguments are
 [`Float64`](@ref). With this method definition what was previously a [`MethodError`](@ref) now
 successfully creates a point of type `Point{Float64}`:
@@ -513,7 +513,7 @@ table for the `Type` type. This means that you can declare more flexible constru
 for abstract types, by explicitly defining methods for the appropriate types.
 
 However, in some cases you could consider adding methods to `Base.convert` *instead* of defining
-a constructor, because Julia falls back to calling [`convert()`](@ref) if no matching constructor
+a constructor, because Julia falls back to calling [`convert`](@ref) if no matching constructor
 is found. For example, if no constructor `T(args...) = ...` exists `Base.convert(::Type{T}, args...) = ...`
 is called.
 

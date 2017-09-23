@@ -83,7 +83,7 @@ Base.widen
 Base.identity
 ```
 
-## Types
+## Dealing with Types
 
 ```@docs
 Base.supertype
@@ -106,12 +106,24 @@ Base.fieldoffset
 Core.fieldtype
 Base.isimmutable
 Base.isbits
-Base.isleaftype
+Base.isconcrete
 Base.typejoin
 Base.typeintersect
-Base.Val
-Base.Enums.@enum
 Base.instances
+```
+
+## Special Types
+
+```@docs
+Core.Void
+Core.Any
+Base.Enums.@enum
+Core.Union
+Union{}
+Core.UnionAll
+Core.Tuple
+Base.Val
+Core.Vararg
 ```
 
 ## Generic Functions
@@ -134,14 +146,17 @@ Base.@eval
 Base.evalfile
 Base.esc
 Base.@inbounds
+Base.@boundscheck
 Base.@inline
 Base.@noinline
 Base.@nospecialize
 Base.gensym
 Base.@gensym
+Base.@goto
+Base.@label
 Base.@polly
-Base.parse(::Any, ::Any)
-Base.parse(::Any)
+Base.parse(::AbstractString, ::Int)
+Base.parse(::AbstractString)
 ```
 
 ## Nullables
@@ -178,9 +193,6 @@ Base.getipaddr
 Base.Libc.getpid
 Base.Libc.time()
 Base.time_ns
-Base.tic
-Base.toc
-Base.toq
 Base.@time
 Base.@timev
 Base.@timed

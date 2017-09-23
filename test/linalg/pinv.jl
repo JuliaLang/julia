@@ -129,11 +129,21 @@ end
             a = onediag_sparse(eltya, m)
             test_pinv(a, m, m, default_tol, default_tol, default_tol)
         end
+        @testset "Vector" begin
+            a = rand(eltya, m)
+            apinv = @inferred pinv(a)
+            @test pinv(hcat(a)) ≈ apinv
+            @test apinv isa RowVector{eltya}
+        end
+        @testset "RowVector" begin
+            a = rand(eltya, m)'
+            apinv = @inferred pinv(a)
+            @test pinv(vcat(a)) ≈ apinv
+            @test apinv isa Vector{eltya}
+        end
     end
-end
 
-@testset "zero valued numbers/vectors/matrices" begin
-    @testset for eltya in (Float32, Float64, Complex64, Complex128)
+    @testset "zero valued numbers/vectors/matrices" begin
         a = pinv(zero(eltya))
         @test a ≈ 0.0
 
@@ -141,33 +151,37 @@ end
         @test a[1] ≈ 0.0
         @test a[2] ≈ 0.0
 
+        a = pinv([zero(eltya); zero(eltya)]')
+        @test a[1] ≈ 0.0
+        @test a[2] ≈ 0.0
+
         a = pinv(Diagonal([zero(eltya); zero(eltya)]))
         @test a.diag[1] ≈ 0.0
         @test a.diag[2] ≈ 0.0
     end
-end
 
-@testset "sub-normal numbers/vectors/matrices" begin
-    @testset for eltya in (Float32, Float64)
-        a = pinv(realmin(eltya)/100)
-        @test a ≈ 0.0
-        # Complex subnormal
-        a = pinv(realmin(eltya)/100*(1+1im))
-        @test a ≈ 0.0
+    if eltya <: Base.LinAlg.BlasReal
+        @testset "sub-normal numbers/vectors/matrices" begin
+            a = pinv(realmin(eltya)/100)
+            @test a ≈ 0.0
+            # Complex subnormal
+            a = pinv(realmin(eltya)/100*(1+1im))
+            @test a ≈ 0.0
 
-        a = pinv([realmin(eltya); realmin(eltya)]/100)
-        @test a[1] ≈ 0.0
-        @test a[2] ≈ 0.0
-        # Complex subnormal
-        a = pinv([realmin(eltya); realmin(eltya)]/100*(1+1im))
-        @test a[1] ≈ 0.0
-        @test a[2] ≈ 0.0
-        a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100))
-        @test a.diag[1] ≈ 0.0
-        @test a.diag[2] ≈ 0.0
-        # Complex subnormal
-        a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100*(1+1im)))
-        @test a.diag[1] ≈ 0.0
-        @test a.diag[2] ≈ 0.0
+            a = pinv([realmin(eltya); realmin(eltya)]/100)
+            @test a[1] ≈ 0.0
+            @test a[2] ≈ 0.0
+            # Complex subnormal
+            a = pinv([realmin(eltya); realmin(eltya)]/100*(1+1im))
+            @test a[1] ≈ 0.0
+            @test a[2] ≈ 0.0
+            a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100))
+            @test a.diag[1] ≈ 0.0
+            @test a.diag[2] ≈ 0.0
+            # Complex subnormal
+            a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100*(1+1im)))
+            @test a.diag[1] ≈ 0.0
+            @test a.diag[2] ≈ 0.0
+        end
     end
 end

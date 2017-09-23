@@ -5,7 +5,6 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -20,6 +19,7 @@
 #else
 #define RUNNING_ON_VALGRIND 0
 #endif
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -163,7 +163,7 @@ static void jl_load_sysimg_so(void)
 #endif
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
     // in --build mode only use sysimg data, not precompiled native code
-    if (!imaging_mode && jl_options.use_precompiled==JL_OPTIONS_USE_PRECOMPILED_YES) {
+    if (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
         sysimg_gvars_base = (uintptr_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_base");
         sysimg_gvars_offsets = (const int32_t*)jl_dlsym(jl_sysimg_handle,
                                                         "jl_sysimg_gvars_offsets");
@@ -589,7 +589,8 @@ static void jl_write_values(jl_serializer_state *s)
             // make some header modifications in-place
             jl_array_t *newa = (jl_array_t*)&s->s->buf[reloc_offset];
             size_t alen = jl_array_len(ar);
-            size_t tot = alen * ar->elsize;
+            size_t extra = (!ar->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(ar)))) ? alen : 0;
+            size_t tot = alen * ar->elsize + extra;
             if (newa->flags.ndims == 1)
                 newa->maxsize = alen;
             newa->offset = 0;
@@ -820,7 +821,7 @@ static uintptr_t get_reloc_for_item(uintptr_t reloc_item, size_t reloc_offset)
     }
     else {
         // just write the item reloc_id directly
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
         assert(reloc_offset == 0 && "offsets for relocations to builtin objects should be precomposed in the reloc_item");
         size_t offset = (reloc_item & (((uintptr_t)1 << RELOC_TAG_OFFSET) - 1));
         switch (tag) {
@@ -1340,7 +1341,6 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname)
 extern int jl_boot_file_loaded;
 extern void jl_get_builtins(void);
 extern void jl_get_builtin_hooks(void);
-extern void jl_get_system_hooks(void);
 extern void jl_gc_set_permalloc_region(void *start, void *end);
 
 // Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
@@ -1496,9 +1496,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
     jl_get_builtins();
     jl_get_builtin_hooks();
-    if (jl_base_module) {
-        jl_get_system_hooks();
-    }
     jl_boot_file_loaded = 1;
     jl_init_box_caches();
 
@@ -1515,7 +1512,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 // TODO: need to enforce that the alignment of the buffer is suitable for vectors
 JL_DLLEXPORT void jl_restore_system_image(const char *fname)
 {
-#ifndef NDEBUG
+#ifndef JL_NDEBUG
     char *dot = fname ? (char*)strrchr(fname, '.') : NULL;
     int is_ji = (dot && !strcmp(dot, ".ji"));
     assert((is_ji || jl_sysimg_handle) && "System image file not preloaded");

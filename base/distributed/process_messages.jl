@@ -16,7 +16,7 @@ end
 wait(rv::RemoteValue) = wait(rv.c)
 
 ## core messages: do, call, fetch, wait, ref, put! ##
-mutable struct RemoteException <: Exception
+struct RemoteException <: Exception
     pid::Int
     captured::CapturedException
 end

@@ -20,7 +20,7 @@ let x = spv_x1
     @test size(x,2) == 1
     @test !isempty(x)
 
-    @test countnz(x) == 3
+    @test count(!iszero, x) == 3
     @test nnz(x) == 3
     @test SparseArrays.nonzeroinds(x) == [2, 5, 6]
     @test nonzeros(x) == [1.25, -0.75, 3.5]
@@ -296,7 +296,7 @@ let a = SparseVector(8, [2, 5, 6], Int32[12, 35, 72])
     @test complex(acp) == acp
     @test isa(acp, SparseVector{Complex128,Int})
     @test exact_equal(acp, SparseVector(8, [2, 5, 6], complex([12., 35., 72.])))
-    @test sparsevec(ctranspose(ctranspose(acp))) == acp
+    @test sparsevec(adjoint(adjoint(acp))) == acp
 end
 
 let x1 = SparseVector(8, [2, 5, 6], [12.2, 1.4, 5.0])
@@ -992,6 +992,17 @@ let origmat = [-1.5 -0.7; 0.0 1.0]
     end
 end
 
+# kron
+let testdims = ((5,10), (20,12), (25,30))
+    for (m,n) in testdims
+        x = sprand(m, 0.4)
+        y = sprand(n, 0.3)
+        @test Vector(kron(x,y)) == kron(Vector(x), Vector(y))
+        @test Vector(kron(Vector(x),y)) == kron(Vector(x), Vector(y))
+        @test Vector(kron(x,Vector(y))) == kron(Vector(x), Vector(y))
+    end
+end
+
 # fkeep!
 let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
     # droptol
@@ -1085,18 +1096,21 @@ s14046 = sprand(5, 1.0)
 
 # Issue 14589
 # test vectors with no zero elements
-x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
-@test collect(sort(x)) == sort(collect(x))
+let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
+    @test collect(sort(x)) == sort(collect(x))
+end
 # test vectors with all zero elements
-x = sparsevec(Int64[], Float64[], 7)
-@test collect(sort(x)) == sort(collect(x))
+let x = sparsevec(Int64[], Float64[], 7)
+    @test collect(sort(x)) == sort(collect(x))
+end
 # test vector with sparsity approx 1/2
-x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
-@test collect(sort(x)) == sort(collect(x))
-# apply three distinct tranformations where zeros sort into start/middle/end
-@test collect(sort(x, by=abs)) == sort(collect(x), by=abs)
-@test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
-@test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
+let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
+    @test collect(sort(x)) == sort(collect(x))
+    # apply three distinct tranformations where zeros sort into start/middle/end
+    @test collect(sort(x, by=abs)) == sort(collect(x), by=abs)
+    @test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
+    @test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
+end
 
 # fill!
 for Tv in [Float32, Float64, Int64, Int32, Complex128]
@@ -1149,4 +1163,14 @@ end
 
 @testset "spzeros with index type" begin
     @test typeof(spzeros(Float32, Int16, 3)) == SparseVector{Float32,Int16}
+end
+
+@testset "corner cases of broadcast arithmetic operations with scalars (#21515)" begin
+    # test both scalar literals and variables
+    areequal(a, b, c) = isequal(a, b) && isequal(b, c)
+    inf, zeroh, zv, spzv = Inf, 0.0, zeros(1), spzeros(1)
+    @test areequal(spzv .* Inf,  spzv .* inf,    sparsevec(zv .* Inf))
+    @test areequal(Inf .* spzv,  inf .* spzv,    sparsevec(Inf .* zv))
+    @test areequal(spzv ./ 0.0,  spzv ./ zeroh,  sparsevec(zv ./ 0.0))
+    @test areequal(0.0 .\ spzv,  zeroh .\ spzv,  sparsevec(0.0 .\ zv))
 end

@@ -69,13 +69,13 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include "llvm/IR/AssemblyAnnotationWriter.h"
-#include "fix_llvm_assert.h"
 
 #include "julia.h"
 #include "julia_internal.h"
 
 using namespace llvm;
 #include "debuginfo.h"
+#include "julia_assert.h"
 
 // helper class for tracking inlining context while printing debug info
 class DILineInfoPrinter {

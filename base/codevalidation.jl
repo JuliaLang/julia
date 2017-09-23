@@ -18,16 +18,16 @@ const VALID_EXPR_HEADS = ObjectIdDict(
     :enter => 1:1,
     :leave => 1:1,
     :inbounds => 1:1,
-    :boundscheck => 1:1,
+    :boundscheck => 0:0,
     :copyast => 1:1,
     :meta => 0:typemax(Int),
     :global => 1:1,
     :foreigncall => 3:typemax(Int),
     :isdefined => 1:1,
-    :simdloop => 0:0
+    :simdloop => 0:0,
+    :gc_preserve_begin => 0:typemax(Int),
+    :gc_preserve_end => 0:typemax(Int)
 )
-
-const ASSIGNED_FLAG = 0x02
 
 # @enum isn't defined yet, otherwise I'd use it for this
 const INVALID_EXPR_HEAD = "invalid expression head"
@@ -41,17 +41,16 @@ const SLOTTYPES_MISMATCH = "length(slotnames) != length(slottypes)"
 const SLOTTYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo slottypes field is not `nothing`"
 const SSAVALUETYPES_MISMATCH = "not all SSAValues in AST have a type in ssavaluetypes"
 const SSAVALUETYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
-const INVALID_ASSIGNMENT_SLOTFLAG = "slot has wrong assignment slotflag setting (bit flag 2 not set)"
 const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
 const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of method arguments"
 const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
 
 struct InvalidCodeError <: Exception
-    kind::String
+    kind::AbstractString
     meta::Any
 end
+InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
 
-InvalidCodeError(kind) = InvalidCodeError(kind, nothing)
 
 """
     validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
@@ -76,9 +75,6 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                     push!(errors, InvalidCodeError(INVALID_LVALUE, lhs))
                 elseif isa(lhs, SlotNumber) && !in(lhs.id, lhs_slotnums)
                     n = lhs.id
-                    if isassigned(c.slotflags, n) && !is_flag_set(c.slotflags[n], ASSIGNED_FLAG)
-                        push!(errors, InvalidCodeError(INVALID_ASSIGNMENT_SLOTFLAG, lhs))
-                    end
                     push!(lhs_slotnums, n)
                 end
                 if !is_valid_rvalue(rhs)

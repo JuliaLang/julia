@@ -211,7 +211,7 @@ bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
 
-in(x::Complex, r::Range{<:Real}) = isreal(x) && real(x) in r
+in(x::Complex, r::AbstractRange{<:Real}) = isreal(x) && real(x) in r
 
 if UInt === UInt64
     const h_imag = 0x32a7a07f3e7cd1f9
@@ -499,9 +499,9 @@ julia> rad2deg(angle(-1 - im))
 angle(z::Complex) = atan2(imag(z), real(z))
 
 function log(z::Complex{T}) where T<:AbstractFloat
-    const T1::T  = 1.25
-    const T2::T  = 3
-    const ln2::T = log(convert(T,2))  #0.6931471805599453
+    T1::T  = 1.25
+    T2::T  = 3
+    ln2::T = log(convert(T,2))  #0.6931471805599453
     x, y = reim(z)
     ρ, k = ssqs(x,y)
     ax = abs(x)
@@ -835,7 +835,7 @@ function cosh(z::Complex)
 end
 
 function tanh(z::Complex{T}) where T<:AbstractFloat
-    const Ω = prevfloat(typemax(T))
+    Ω = prevfloat(typemax(T))
     ξ, η = reim(z)
     if isnan(ξ) && η==0 return Complex(ξ, η) end
     if 4*abs(ξ) > asinh(Ω) #Overflow?
@@ -880,9 +880,9 @@ function acosh(z::Complex)
 end
 
 function atanh(z::Complex{T}) where T<:AbstractFloat
-    const Ω = prevfloat(typemax(T))
-    const θ = sqrt(Ω)/4
-    const ρ = 1/θ
+    Ω = prevfloat(typemax(T))
+    θ = sqrt(Ω)/4
+    ρ = 1/θ
     x, y = reim(z)
     ax = abs(x)
     ay = abs(y)
@@ -958,7 +958,7 @@ big(z::Complex{T}) where {T<:Real} = Complex{big(T)}(z)
 complex(A::AbstractArray{<:Complex}) = A
 
 function complex(A::AbstractArray{T}) where T
-    if !isleaftype(T)
+    if !isconcrete(T)
         error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)

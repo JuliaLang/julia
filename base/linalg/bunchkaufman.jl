@@ -116,7 +116,7 @@ julia> A = [1 2 3; 2 1 2; 3 2 1]
 julia> F = bkfact(Symmetric(A, :L))
 Base.LinAlg.BunchKaufman{Float64,Array{Float64,2}}
 D factor:
-3×3 Tridiagonal{Float64}:
+3×3 Tridiagonal{Float64,Array{Float64,1}}:
  1.0  3.0    ⋅
  3.0  1.0   0.0
   ⋅   0.0  -1.0
@@ -130,7 +130,6 @@ permutation:
  1
  3
  2
-successful: true
 
 julia> F[:L]*F[:D]*F[:L].' - A[F[:p], F[:p]]
 3×3 Array{Float64,2}:
@@ -155,9 +154,7 @@ function getindex(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
         return eye(T, n)[:,invperm(B[:p])]
     elseif d == :L || d == :U || d == :D
         if B.rook
-            # syconvf_rook just added to LAPACK 3.7.0. Uncomment and remove error when we distribute LAPACK 3.7.0
-            # LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', copy(B.LD), B.ipiv)
-            throw(ArgumentError("reconstruction rook pivoted Bunch-Kaufman factorization not implemented yet"))
+            LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', copy(B.LD), B.ipiv)
         else
             LUD, od = LAPACK.syconv!(B.uplo, copy(B.LD), B.ipiv)
         end
@@ -190,14 +187,17 @@ end
 issuccess(B::BunchKaufman) = B.info == 0
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, B::BunchKaufman)
-    println(io, summary(B))
-    println(io, "D factor:")
-    show(io, mime, B[:D])
-    println(io, "\n$(B.uplo) factor:")
-    show(io, mime, B[Symbol(B.uplo)])
-    println(io, "\npermutation:")
-    show(io, mime, B[:p])
-    print(io, "\nsuccessful: $(issuccess(B))")
+    if issuccess(B)
+        println(io, summary(B))
+        println(io, "D factor:")
+        show(io, mime, B[:D])
+        println(io, "\n$(B.uplo) factor:")
+        show(io, mime, B[Symbol(B.uplo)])
+        println(io, "\npermutation:")
+        show(io, mime, B[:p])
+    else
+        print(io, "Failed factorization of type $(typeof(B))")
+    end
 end
 
 function inv(B::BunchKaufman{<:BlasReal})

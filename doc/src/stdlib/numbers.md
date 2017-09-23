@@ -59,6 +59,7 @@ Base.Math.exponent
 Base.complex(::Complex)
 Base.bswap
 Base.hex2bytes
+Base.hex2bytes!
 Base.bytes2hex
 ```
 
@@ -68,12 +69,12 @@ Base.bytes2hex
 Base.one
 Base.oneunit
 Base.zero
-Base.pi
 Base.im
-Base.eu
-Base.catalan
-Base.eulergamma
-Base.golden
+Base.MathConstants.pi
+Base.MathConstants.ℯ
+Base.MathConstants.catalan
+Base.MathConstants.eulergamma
+Base.MathConstants.golden
 Base.Inf
 Base.Inf32
 Base.Inf16
@@ -143,12 +144,12 @@ dimension specifications `dims...` (which can be given as a tuple) to generate a
 values.
 
 A `MersenneTwister` or `RandomDevice` RNG can generate random numbers of the following types:
-[`Float16`](@ref), [`Float32`](@ref), [`Float64`](@ref), [`Bool`](@ref), [`Int8`](@ref),
-[`UInt8`](@ref), [`Int16`](@ref), [`UInt16`](@ref), [`Int32`](@ref), [`UInt32`](@ref),
-[`Int64`](@ref), [`UInt64`](@ref), [`Int128`](@ref), [`UInt128`](@ref), [`BigInt`](@ref)
-(or complex numbers of those types). Random floating point numbers are generated uniformly
-in ``[0, 1)``. As `BigInt` represents unbounded integers, the interval must be specified
-(e.g. `rand(big(1:6))`).
+[`Float16`](@ref), [`Float32`](@ref), [`Float64`](@ref), [`BigFloat`](@ref), [`Bool`](@ref),
+[`Int8`](@ref), [`UInt8`](@ref), [`Int16`](@ref), [`UInt16`](@ref), [`Int32`](@ref),
+[`UInt32`](@ref), [`Int64`](@ref), [`UInt64`](@ref), [`Int128`](@ref), [`UInt128`](@ref),
+[`BigInt`](@ref) (or complex numbers of those types).
+Random floating point numbers are generated uniformly in ``[0, 1)``. As `BigInt` represents
+unbounded integers, the interval must be specified (e.g. `rand(big(1:6))`).
 
 ```@docs
 Base.Random.srand

@@ -42,7 +42,6 @@ Base.length(::AbstractArray)
 Base.eachindex
 Base.linearindices
 Base.IndexStyle
-Base.countnz
 Base.conj!
 Base.stride
 Base.strides
@@ -107,7 +106,6 @@ Base.flipdim
 Base.circshift
 Base.circshift!
 Base.circcopy!
-Base.contains(::Function, ::Any, ::Any)
 Base.find(::Any)
 Base.find(::Function, ::Any)
 Base.findn
@@ -179,10 +177,6 @@ and can be converted to/from the latter via `Array(bitarray)` and `BitArray(arra
 
 ```@docs
 Base.flipbits!
-Base.rol!
-Base.rol
-Base.ror!
-Base.ror
 ```
 
 ## [Sparse Vectors and Matrices](@id stdlib-sparse-arrays)

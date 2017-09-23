@@ -266,7 +266,7 @@ situations like hash key comparisons:
 | [`isinf(x)`](@ref)      | `x` is infinite           |
 | [`isnan(x)`](@ref)      | `x` is not a number       |
 
-[`isequal()`](@ref) considers `NaN`s equal to each other:
+[`isequal`](@ref) considers `NaN`s equal to each other:
 
 ```jldoctest
 julia> isequal(NaN, NaN)
@@ -279,7 +279,7 @@ julia> isequal(NaN, NaN32)
 true
 ```
 
-`isequal()` can also be used to distinguish signed zeros:
+`isequal` can also be used to distinguish signed zeros:
 
 ```jldoctest
 julia> -0.0 == 0.0
@@ -292,9 +292,9 @@ false
 Mixed-type comparisons between signed integers, unsigned integers, and floats can be tricky. A
 great deal of care has been taken to ensure that Julia does them correctly.
 
-For other types, `isequal()` defaults to calling [`==()`](@ref), so if you want to define
-equality for your own types then you only need to add a [`==()`](@ref) method.  If you define
-your own equality function, you should probably define a corresponding [`hash()`](@ref) method
+For other types, `isequal` defaults to calling [`==`](@ref), so if you want to define
+equality for your own types then you only need to add a [`==`](@ref) method.  If you define
+your own equality function, you should probably define a corresponding [`hash`](@ref) method
 to ensure that `isequal(x,y)` implies `hash(x) == hash(y)`.
 
 ### Chaining comparisons
@@ -347,22 +347,29 @@ Moreover, these functions (like any Julia function) can be applied in "vectorize
 arrays and other collections with the [dot syntax](@ref man-vectorized) `f.(A)`,
 e.g. `sin.(A)` will compute the sine of each element of an array `A`.
 
-## Operator Precedence
+## Operator Precedence and Associativity
 
-Julia applies the following order of operations, from highest precedence to lowest:
+Julia applies the following order and associativity of operations, from highest precedence to lowest:
 
-| Category       | Operators                                                                                         |
-|:-------------- |:------------------------------------------------------------------------------------------------- |
-| Syntax         | `.` followed by `::`                                                                              |
-| Exponentiation | `^`                                                                                               |
-| Fractions      | `//`                                                                                              |
-| Multiplication | `* / % & \`                                                                                       |
-| Bitshifts      | `<< >> >>>`                                                                                       |
-| Addition       | `+ - \| ⊻`                                                                                        |
-| Syntax         | `: ..` followed by `\|>`                                                                          |
-| Comparisons    | `> < >= <= == === != !== <:`                                                                      |
-| Control flow   | `&&` followed by `\|\|` followed by `?`                                                           |
-| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            |
+| Category       | Operators                                                                                         | Associativity              |
+|:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
+| Syntax         | `.` followed by `::`                                                                              | Left                       |
+| Exponentiation | `^`                                                                                               | Right                      |
+| Unary          | `+ - √`                                                                                           | Right[^1]                   |
+| Fractions      | `//`                                                                                              | Left                       |
+| Multiplication | `* / % & \`                                                                                       | Left[^2]                    |
+| Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
+| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                    |
+| Syntax         | `: ..` followed by `\|>`                                                                          | Left                       |
+| Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
+| Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
+| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
+
+[^1]:
+    The unary operators `+` and `-` require explicit parentheses around their argument to disambiguate them from the operator `++`, etc. Other compositions of unary operators are parsed with right-associativity, e. g., `√√-a` as `√(√(-a))`.
+[^2]:
+    The operators `+`, `++` and `*` are non-associative. `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),
+    c)`. However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.
 
 For a complete list of *every* Julia operator's precedence, see the top of this file:
 [`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm)
@@ -373,9 +380,22 @@ You can also find the numerical precedence for any given operator via the built-
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
 (9, 11, 15)
 
-julia> Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
-(1, 1)
+julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
+(0, 1, 1)
 ```
+
+A symbol representing the operator associativity can also be found by calling the built-in function `Base.operator_associativity`:
+
+```jldoctest
+julia> Base.operator_associativity(:-), Base.operator_associativity(:+), Base.operator_associativity(:^)
+(:left, :none, :right)
+
+julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Base.operator_associativity(:→)
+(:left, :none, :right)
+```
+
+Note that symbols such as `:sin` return precedence `0`. This value represents invalid operators and not
+operators of lowest precedence. Similarly, such operators are assigned associativity `:none`.
 
 ## Numerical Conversions
 
@@ -462,7 +482,7 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`cld(x,y)`](@ref)    | ceiling division; quotient rounded towards `+Inf`                                                         |
 | [`rem(x,y)`](@ref)    | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
 | [`mod(x,y)`](@ref)    | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
-| [`mod1(x,y)`](@ref)   | `mod()` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
+| [`mod1(x,y)`](@ref)   | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
 | [`mod2pi(x)`](@ref)   | modulus with respect to 2pi;  `0 <= mod2pi(x)    < 2pi`                                                   |
 | [`divrem(x,y)`](@ref) | returns `(div(x,y),rem(x,y))`                                                                             |
 | [`fldmod(x,y)`](@ref) | returns `(fld(x,y),mod(x,y))`                                                                             |
@@ -498,7 +518,7 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`exponent(x)`](@ref)    | binary exponent of `x`                                                     |
 | [`significand(x)`](@ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
 
-For an overview of why functions like [`hypot()`](@ref), [`expm1()`](@ref), and [`log1p()`](@ref)
+For an overview of why functions like [`hypot`](@ref), [`expm1`](@ref), and [`log1p`](@ref)
 are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](https://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),
 and [hypot](https://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/).
 

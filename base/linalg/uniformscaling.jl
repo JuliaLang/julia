@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv,
+import Base: copy, adjoint, getindex, show, transpose, one, zero, inv,
              hcat, vcat, hvcat
 import Base.LinAlg: SingularException
 
@@ -63,7 +63,7 @@ end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
 transpose(J::UniformScaling) = J
-ctranspose(J::UniformScaling) = UniformScaling(conj(J.λ))
+adjoint(J::UniformScaling) = UniformScaling(conj(J.λ))
 
 one(::Type{UniformScaling{T}}) where {T} = UniformScaling(one(T))
 one(J::UniformScaling{T}) where {T} = one(UniformScaling{T})
@@ -167,6 +167,16 @@ end
 
 inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 norm(J::UniformScaling, p::Real=2) = abs(J.λ)
+
+function det(J::UniformScaling{T}) where T
+    if isone(J.λ)
+        one(T)
+    elseif iszero(J.λ)
+        zero(T)
+    else
+        throw(ArgumentError("Determinant of UniformScaling is only well-defined when λ = 0 or 1."))
+    end
+end
 
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(Array(B), J::UniformScaling)

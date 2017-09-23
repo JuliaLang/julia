@@ -7,6 +7,15 @@ New language features
   * Local variables can be tested for being defined
     using the new `@isdefined variable` macro ([#22281]).
 
+  * Destructuring in function arguments: when an expression such as `(x, y)` is used as
+    a function argument name, the argument is unpacked into local variables `x` and `y`
+    as in the assignment `(x, y) = arg` ([#6614]).
+
+ * Custom infix operators can now be defined by appending Unicode
+   combining marks, primes, and sub/superscripts to other operators.
+   For example, `+̂ₐ″` is parsed as an infix operator with the same
+   precedence as `+` ([#22089]).
+
 Language changes
 ----------------
 
@@ -18,6 +27,9 @@ Language changes
 
   * In string and character literals, backslash `\` may no longer
     precede unrecognized escape characters ([#22800]).
+
+  * Juxtaposing binary, octal, and hexadecimal literals is deprecated, since it can lead to
+    confusing code such as `0xapi == 0xa * pi` ([#16356]).
 
   * Declaring arguments as `x::ANY` to avoid specialization has been replaced
     by `@nospecialize x`. ([#22666]).
@@ -34,6 +46,10 @@ Language changes
 
   * Nested `if` expressions that arise from the keyword `elseif` now use `elseif`
     as their expression head instead of `if` ([#21774]).
+
+  * `let` blocks now parse the same as `for` loops; the first argument is either an
+    assignment or `block` of assignments, and the second argument is a block of
+    statements ([#21774]).
 
   * Parsed and lowered forms of type definitions have been synchronized with their
     new keywords ([#23157]). Expression heads are renamed as follows:
@@ -63,11 +79,34 @@ Language changes
     (`need_to_handle_undef_sparam = Set{Any}(m.sig for m in Test.detect_unbound_args(Base, recursive=true))`)
     is equal (`==`) to some known set (`expected = Set()`). ([#23117])
 
+  * `const` declarations on local variables were previously ignored. They now give a
+    warning, so that this syntax can be disallowed or given a new meaning in a
+    future version ([#5148]).
+
+  * Placing an expression after `catch`, as in `catch f(x)`, is deprecated.
+    Use `catch; f(x)` instead ([#19987]).
+
+  * In `for i = ...`, if a local variable `i` already existed it would be overwritten
+    during the loop. This behavior is deprecated, and in the future `for` loop variables
+    will always be new variables local to the loop ([#22314]).
+    The old behavior of overwriting an existing variable is available via `for outer i = ...`.
+
+  * In `for i in x`, `x` used to be evaluated in a new scope enclosing the `for` loop.
+    Now it is evaluated in the scope outside the `for` loop.
+
+  * Variable bindings local to `while` loop bodies are now freshly allocated on each loop iteration,
+    matching the behavior of `for` loops.
+
+  * Prefix `&` for by-reference arguments to `ccall` has been deprecated in favor of
+    `Ref` argument types ([#6080]).
 
 Breaking changes
 ----------------
 
 This section lists changes that do not have deprecation warnings.
+
+  * `getindex(s::String, r::UnitRange{Int})` now throws `UnicodeError` if `last(r)`
+    is not a valid index into `s` ([#22572]).
 
   * `ntuple(f, n::Integer)` throws `ArgumentError` if `n` is negative.
     Previously an empty tuple was returned ([#21697]).
@@ -115,10 +154,15 @@ This section lists changes that do not have deprecation warnings.
     longer present. Use `first(R)` and `last(R)` to obtain
     start/stop. ([#20974])
 
-  * The `Diagonal`, `Bidiagonal` and `SymTridiagonal` type definitions have changed from
-    `Diagonal{T}`, `Bidiagonal{T}` and `SymTridiagonal{T}` to `Diagonal{T,V<:AbstractVector{T}}`,
-    `Bidiagonal{T,V<:AbstractVector{T}}` and `SymTridiagonal{T,V<:AbstractVector{T}}`
-    respectively ([#22718], [#22925], [#23035]).
+  * The `Diagonal`, `Bidiagonal`, `Tridiagonal` and `SymTridiagonal` type definitions have
+    changed from `Diagonal{T}`, `Bidiagonal{T}`, `Tridiagonal{T}` and `SymTridiagonal{T}`
+    to `Diagonal{T,V<:AbstractVector{T}}`, `Bidiagonal{T,V<:AbstractVector{T}}`,
+    `Tridiagonal{T,V<:AbstractVector{T}}` and `SymTridiagonal{T,V<:AbstractVector{T}}`
+    respectively ([#22718], [#22925], [#23035], [#23154]).
+
+  * When called with an argument that contains `NaN` elements, `findmin` and `findmax` now return the
+    first `NaN` found and its corresponding index. Previously, `NaN` elements were ignored.
+    The new behavior matches that of `min`, `max`, `minimum`, and `maximum`.
 
   * `isapprox(x,y)` now tests `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`
     rather than `norm(x-y) <= atol + ...`, and `rtol` defaults to zero
@@ -139,6 +183,50 @@ This section lists changes that do not have deprecation warnings.
 
   * Worker-worker connections are setup lazily for an `:all_to_all` topology. Use keyword
     arg `lazy=false` to force all connections to be setup during a `addprocs` call. ([#22814])
+
+  * In `joinpath(a, b)` on Windows, if the drive specifications of `a` and `b` do not match,
+    `joinpath` now returns `b` instead of throwing an `ArgumentError`. `joinpath(path...)` is
+    defined to be left associative, so if any argument has a drive path which does not match
+    the drive of the join of the preceding paths, the prior ones are dropped. ([#20912])
+
+  * `^(A::AbstractMatrix{<:Integer}, p::Integer)` now throws a `DomainError`
+    if `p < 0`, unless `A == one(A)` or `A == -one(A)` (same as for
+    `^(A::Integer, p::Integer)`) ([#23366]).
+
+  * `^(A::AbstractMatrix{<:Integer}, p::Integer)` now promotes the element type in the same
+    way as `^(A::Integer, p::Integer)`. This means, for instance, that `[1 1; 0 1]^big(1)`
+    will return a `Matrix{BigInt}` instead of a `Matrix{Int}` ([#23366]).
+
+  * The element type of the input is now preserved in `unique`. Previously the element type
+    of the output was shrunk to fit the union of the type of each element in the input.
+    ([#22696])
+
+  * The `promote` function now raises an error if its arguments are of different types
+    and if attempting to convert them to a common type fails to change any of their types.
+    This avoids stack overflows in the common case of definitions like
+    `f(x, y) = f(promote(x, y)...)` ([#22801]).
+
+  * `findmin`, `findmax`, `indmin`, and `indmax` used to always return linear indices.
+    They now return `CartesianIndex`es for all but 1-d arrays, and in general return
+    the `keys` of indexed collections (e.g. dictionaries) ([#22907]).
+
+  * The `openspecfun` library is no longer built and shipped with Julia, as it is no longer
+    used internally ([#22390]).
+
+  * All loaded packges used to have bindings in `Main` (e.g. `Main.Package`). This is no
+    longer the case; now bindings will only exist for packages brought into scope by
+    typing `using Package` or `import Package` ([#17997]).
+
+  * `slicedim(b::BitVector, 1, x)` now consistently returns the same thing that `b[x]` would,
+    consistent with its documentation. Previously it would return a `BitArray{0}` for scalar
+    `x` ([#20233]).
+
+  * The rules for mixed-signedness integer arithmetic (e.g. `Int32(1) + UInt64(1)`) have been
+    simplified: if the arguments have different sizes (in bits), then the type of the larger
+    argument is used. If the arguments have the same size, the unsigned type is used ([#9292]).
+
+  * All command line arguments passed via `-e`, `-E`, and `-L` will be executed in the order
+    given on the command line ([#23665]).
 
 Library improvements
 --------------------
@@ -166,7 +254,7 @@ Library improvements
 
   * The `crc32c` function for CRC-32c checksums is now exported ([#22274]).
 
-  * The output of `versioninfo()` is now controlled with keyword arguments ([#21974]).
+  * The output of `versioninfo` is now controlled with keyword arguments ([#21974]).
 
   * The function `LibGit2.set_remote_url` now always sets both the fetch and push URLs for a
     git repo. Additionally, the argument order was changed to be consistent with the git
@@ -190,12 +278,17 @@ Library improvements
 
   * `Char`s can now be concatenated with `String`s and/or other `Char`s using `*` ([#22532]).
 
-  * `Diagonal`, `Bidiagonal` and `SymTridiagonal` are now parameterized on the type of the
-    wrapped vectors, allowing `Diagonal`, `Bidiagonal` and `SymTridiagonal` matrices with
-    arbitrary `AbstractVector`s ([#22718], [#22925], [#23035]).
+  * `Diagonal`, `Bidiagonal`, `Tridiagonal` and `SymTridiagonal` are now parameterized on
+    the type of the wrapped vectors, allowing `Diagonal`, `Bidiagonal`, `Tridiagonal` and
+    `SymTridiagonal` matrices with arbitrary `AbstractVector`s
+    ([#22718], [#22925], [#23035], [#23154]).
 
   * Mutating versions of `randperm` and `randcycle` have been added:
     `randperm!` and `randcycle!` ([#22723]).
+
+  * `BigFloat` random numbers can now be generated ([#22720]).
+
+  * REPL Undo via Ctrl-/ and Ctrl-_
 
 Compiler/Runtime improvements
 -----------------------------
@@ -212,7 +305,18 @@ Deprecated or removed
   * The keyword `immutable` is fully deprecated to `struct`, and
     `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
 
+  * Indexing into multidimensional arrays with more than one index but fewer indices than there are
+    dimensions is no longer permitted when those trailing dimensions have lengths greater than 1.
+    Instead, reshape the array or add trailing indices so the dimensionality and number of indices
+    match ([#14770], [#23628]).
+
+  * `writecsv(io, a; opts...)` has been deprecated in favor of
+    `writedlm(io, a, ','; opts...)` ([#23529]).
+
   * The method `srand(rng, filename, n=4)` has been deprecated ([#21359]).
+
+  * `readcsv(io[, T::Type]; opts...)` has been deprecated in favor of
+    `readdlm(io, ','[, T]; opts...)` ([#23530]).
 
   * The `cholfact`/`cholfact!` methods that accepted an `uplo` symbol have been deprecated
     in favor of using `Hermitian` (or `Symmetric`) views ([#22187], [#22188]).
@@ -255,8 +359,9 @@ Deprecated or removed
   * `Bidiagonal` constructors now use a `Symbol` (`:U` or `:L`) for the upper/lower
     argument, instead of a `Bool` or a `Char` ([#22703]).
 
-  * `Bidiagonal` and `SymTridiagonal` constructors that automatically converted the input
-    vectors to the same type are deprecated in favor of explicit conversion ([#22925], [#23035]).
+  * `Bidiagonal`, `Tridiagonal` and `SymTridiagonal` constructors that automatically
+    converted the input vectors to the same type are deprecated in favor of explicit
+    conversion ([#22925], [#23035], [#23154].
 
   * Calling `nfields` on a type to find out how many fields its instances have is deprecated.
     Use `fieldcount` instead. Use `nfields` only to get the number of fields in a specific object ([#22350]).
@@ -300,6 +405,12 @@ Deprecated or removed
     full path if you need access to executables or libraries in the `JULIA_HOME` directory, e.g.
     `joinpath(JULIA_HOME, "7z.exe")` for `7z.exe` ([#21540]).
 
+  * `sqrtm` has been deprecated in favor of `sqrt` ([#23504]).
+
+  * `expm` has been deprecated in favor of `exp` ([#23233]).
+
+  * `logm` has been deprecated in favor of `log` ([#23505]).
+
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).
 
@@ -308,6 +419,81 @@ Deprecated or removed
 
   * `Base.cpad` has been removed; use an appropriate combination of `rpad` and `lpad`
     instead ([#23187]).
+
+  * `ctranspose` and `ctranspose!` have been deprecated in favor of `adjoint` and `adjoint!`,
+    respectively ([#23235]).
+
+  * `filter` and `filter!` on dictionaries now pass a single `key=>value` pair to the
+    argument function, instead of two arguments ([#17886]).
+
+  * `rol`, `rol!`, `ror`, and `ror!` have been deprecated in favor of specialized methods for
+    `circshift`/`circshift!` ([#23404]).
+
+  * `Base.SparseArrays.SpDiagIterator` has been removed ([#23261]).
+
+  * The tuple-of-types form of `cfunction`, `cfunction(f, returntype, (types...))`, has been deprecated
+    in favor of the tuple-type form `cfunction(f, returntype, Tuple{types...})` ([#23066]).
+
+  * `diagm(A::SparseMatrixCSC)` has been deprecated in favor of
+    `spdiagm(sparsevec(A))` ([#23341]).
+
+  * `diagm(A::BitMatrix)` has been deprecated, use `diagm(vec(A))` instead ([#23373]).
+
+  * `ℯ` (written as `\mscre<TAB>` or `\euler<TAB>`) is now the only (by default) exported
+    name for Euler's number, and the type has changed from `Irrational{:e}` to
+    `Irrational{:ℯ}` ([#23427]).
+
+  * The mathematical constants `π`, `pi`, `ℯ`, `e`, `γ`, `eulergamma`, `catalan`, `φ` and
+    `golden` have been have been moved from `Base` to a new module; `Base.MathConstants`.
+    Only `π`, `pi` and `ℯ` are now exported by default from `Base` ([#23427]).
+
+  * `eu` (previously an alias for `ℯ`) has been deprecated in favor of `ℯ` (or `MathConstants.e`) ([#23427]).
+
+  * `GMP.gmp_version()`, `GMP.GMP_VERSION`, `GMP.gmp_bits_per_limb()`, and `GMP.GMP_BITS_PER_LIBM`
+    have been renamed to `GMP.version()`, `GMP.VERSION`, `GMP.bits_per_libm()`, and `GMP.BITS_PER_LIBM`,
+    respectively. Similarly, `MPFR.get_version()`, has been renamed to `MPFR.version()` ([#23323]). Also,
+    `LinAlg.LAPACK.laver()` has been renamed to `LinAlg.LAPACK.version()` and now returns a `VersionNumber`.
+
+  * `select`, `select!`, `selectperm` and `selectperm!` have been renamed respectively to
+    `partialsort`, `partialsort!`, `partialsortperm` and `partialsortperm!` ([#23051]).
+
+  * The `Range` abstract type has been renamed to `AbstractRange` ([#23570]).
+
+  * `map` on dictionaries previously operated on `key=>value` pairs. This behavior is deprecated,
+    and in the future `map` will operate only on values ([#5794]).
+
+  * Automatically broadcasted `+` and `-` for `array + scalar`, `scalar - array`, and so-on have
+    been deprecated due to inconsistency with linear algebra. Use `.+` and `.-` for these operations
+    instead.
+
+  * `isleaftype` is deprecated in favor of a simpler predicate `isconcrete`. Concrete types are
+    those that might equal `typeof(x)` for some `x`; `isleaftype` includes some types for which
+    this is not true. If you are certain you need the old behavior, it is temporarily available
+    as `Base._isleaftype` ([#17086]).
+
+  * `contains(eq, itr, item)` is deprecated in favor of `any` with a predicate ([#23716]).
+
+  * Constructors for `LibGit2.UserPasswordCredentials` and `LibGit2.SSHCredentials` which take a
+    `prompt_if_incorrect` argument are deprecated. Instead, prompting behavior is controlled using
+    the `allow_prompt` keyword in the `LibGit2.CredentialPayload` constructor ([#23690]).
+
+  * The timing functions `tic`, `toc`, and `toq` are deprecated in favor of `@time` and `@elapsed`
+    ([#17046]).
+
+Command-line option changes
+---------------------------
+
+  * New option `--warn-overwrite={yes|no}` to control the warning for overwriting method
+    definitions. The default is `no` ([#23002]).
+
+  * New option `--banner={yes,no}` allows suppressing or forcing the printing of the
+    startup banner, overriding the default behavior (banner in REPL, no banner otherwise).
+    The `--quiet` option implies `--banner=no` even in REPL mode but can be overridden by
+    passing `--quiet` together with `--banner=yes` ([#23342]).
+
+  * The option `--precompiled` has been renamed to `--sysimage-native-code` ([#23054]).
+
+  * The option `--compilecache` has been renamed to `--compiled-modules` ([#23054]).
 
 Julia v0.6.0 Release Notes
 ==========================
@@ -780,7 +966,7 @@ Deprecated or removed
     `pop!(ENV, k, def)`. Be aware that `pop!` returns `k` or `def`, whereas `delete!`
     returns `ENV` or `def` ([#18012]).
 
-  * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor()` ([#18977]).
+  * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor` ([#18977]).
 
   * The single-argument form of `write` (`write(x)`, with implicit `STDOUT` output stream),
     has been deprecated in favor of the explicit equivalent `write(STDOUT, x)` ([#17654]).
@@ -1135,12 +1321,14 @@ Command-line option changes
 [#22310]: https://github.com/JuliaLang/julia/issues/22310
 [#22325]: https://github.com/JuliaLang/julia/issues/22325
 [#22350]: https://github.com/JuliaLang/julia/issues/22350
+[#22390]: https://github.com/JuliaLang/julia/issues/22390
 [#22496]: https://github.com/JuliaLang/julia/issues/22496
 [#22523]: https://github.com/JuliaLang/julia/issues/22523
 [#22532]: https://github.com/JuliaLang/julia/issues/22532
 [#22588]: https://github.com/JuliaLang/julia/issues/22588
 [#22605]: https://github.com/JuliaLang/julia/issues/22605
 [#22666]: https://github.com/JuliaLang/julia/issues/22666
+[#22696]: https://github.com/JuliaLang/julia/issues/22696
 [#22703]: https://github.com/JuliaLang/julia/issues/22703
 [#22712]: https://github.com/JuliaLang/julia/issues/22712
 [#22718]: https://github.com/JuliaLang/julia/issues/22718
@@ -1165,3 +1353,6 @@ Command-line option changes
 [#23157]: https://github.com/JuliaLang/julia/issues/23157
 [#23187]: https://github.com/JuliaLang/julia/issues/23187
 [#23207]: https://github.com/JuliaLang/julia/issues/23207
+[#23233]: https://github.com/JuliaLang/julia/issues/23233
+[#23342]: https://github.com/JuliaLang/julia/issues/23342
+[#23404]: https://github.com/JuliaLang/julia/issues/23404

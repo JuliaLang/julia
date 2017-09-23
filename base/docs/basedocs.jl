@@ -132,7 +132,7 @@ kw"primitive type"
 """
 `macro` defines a method to include generated code in the final body of a program. A
 macro maps a tuple of arguments to a returned expression, and the resulting expression
-is compiled directly rather than requiring a runtime `eval()` call. Macro arguments may
+is compiled directly rather than requiring a runtime `eval` call. Macro arguments may
 include expressions, literal values, and symbols. For example:
 
     macro sayhello(name)
@@ -189,7 +189,7 @@ modify the global variable `z`:
     julia> z
     6
 
-Without the `global` declaration in `foo()`, a new local variable would have been
+Without the `global` declaration in `foo`, a new local variable would have been
 created inside foo(), and the `z` in the global scope would have remained equal to `3`.
 """
 kw"global"
@@ -683,6 +683,27 @@ A variable referring to the last computed value, automatically set at the intera
 kw"ans"
 
 """
+    DevNull
+
+Used in a stream redirect to discard all data written to it. Essentially equivalent to
+/dev/null on Unix or NUL on Windows. Usage:
+
+```julia
+run(pipeline(`cat test.txt`, DevNull))
+```
+"""
+DevNull
+
+# doc strings for code in boot.jl and built-ins
+
+"""
+    Void
+
+A type with no fields that is the type [`nothing`](@ref).
+"""
+Void
+
+"""
     nothing
 
 The singleton instance of type `Void`, used by convention when there is no value to return
@@ -696,18 +717,6 @@ nothing
 The singleton type containing only the value `Union{}`.
 """
 Core.TypeofBottom
-
-"""
-    DevNull
-
-Used in a stream redirect to discard all data written to it. Essentially equivalent to
-/dev/null on Unix or NUL on Windows. Usage:
-
-```julia
-run(pipeline(`cat test.txt`, DevNull))
-```
-"""
-DevNull
 
 """
     Function
@@ -726,5 +735,664 @@ true
 ```
 """
 Function
+
+"""
+    ReadOnlyMemoryError()
+
+An operation tried to write to memory that is read-only.
+"""
+ReadOnlyMemoryError
+
+"""
+    ErrorException(msg)
+
+Generic error type. The error message, in the `.msg` field, may provide more specific details.
+"""
+ErrorException
+
+"""
+    UndefRefError()
+
+The item or field is not defined for the given object.
+"""
+UndefRefError
+
+"""
+    Float32(x [, mode::RoundingMode])
+
+Create a Float32 from `x`. If `x` is not exactly representable then `mode` determines how
+`x` is rounded.
+
+# Examples
+```jldoctest
+julia> Float32(1/3, RoundDown)
+0.3333333f0
+
+julia> Float32(1/3, RoundUp)
+0.33333334f0
+```
+
+See [`RoundingMode`](@ref) for available rounding modes.
+"""
+Float32(x)
+
+"""
+    Float64(x [, mode::RoundingMode])
+
+Create a Float64 from `x`. If `x` is not exactly representable then `mode` determines how
+`x` is rounded.
+
+# Examples
+```jldoctest
+julia> Float64(pi, RoundDown)
+3.141592653589793
+
+julia> Float64(pi, RoundUp)
+3.1415926535897936
+```
+
+See [`RoundingMode`](@ref) for available rounding modes.
+"""
+Float64(x)
+
+"""
+    OutOfMemoryError()
+
+An operation allocated too much memory for either the system or the garbage collector to
+handle properly.
+"""
+OutOfMemoryError
+
+"""
+    BoundsError([a],[i])
+
+An indexing operation into an array, `a`, tried to access an out-of-bounds element at index `i`.
+
+# Examples
+```jldoctest
+julia> A = ones(7);
+
+julia> A[8]
+ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
+Stacktrace:
+ [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:763
+
+julia> B = ones(2, 3);
+
+julia> B[2, 4]
+ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]
+Stacktrace:
+ [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:764
+
+julia> B[9]
+ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [9]
+Stacktrace:
+ [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:763
+```
+"""
+BoundsError
+
+"""
+    InexactError(name::Symbol, T, val)
+
+Cannot exactly convert `val` to type `T` in a method of function `name`.
+
+# Examples
+```jldoctest
+julia> convert(Float64, 1+2im)
+ERROR: InexactError: convert(Float64, 1 + 2im)
+Stacktrace:
+ [1] convert(::Type{Float64}, ::Complex{Int64}) at ./complex.jl:37
+```
+"""
+InexactError
+
+"""
+    DomainError(val)
+    DomainError(val, msg)
+
+The argument `val` to a function or constructor is outside the valid domain.
+
+# Examples
+```jldoctest
+julia> sqrt(-1)
+ERROR: DomainError with -1.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+Stacktrace:
+ [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
+ [2] sqrt at ./math.jl:462 [inlined]
+ [3] sqrt(::Int64) at ./math.jl:472
+```
+"""
+DomainError
+
+"""
+    Task(func)
+
+Create a `Task` (i.e. coroutine) to execute the given function (which must be
+callable with no arguments). The task exits when this function returns.
+
+# Examples
+```jldoctest
+julia> a() = det(rand(1000, 1000));
+
+julia> b = Task(a);
+```
+
+In this example, `b` is a runnable `Task` that hasn't started yet.
+"""
+Task
+
+"""
+    StackOverflowError()
+
+The function call grew beyond the size of the call stack. This usually happens when a call
+recurses infinitely.
+"""
+StackOverflowError
+
+"""
+    nfields(x) -> Int
+
+Get the number of fields in the given object.
+"""
+nfields
+
+"""
+    UndefVarError(var::Symbol)
+
+A symbol in the current scope is not defined.
+"""
+UndefVarError
+
+"""
+    OverflowError(msg)
+
+The result of an expression is too large for the specified type and will cause a wraparound.
+"""
+OverflowError
+
+"""
+    TypeError(func::Symbol, context::AbstractString, expected::Type, got)
+
+A type assertion failure, or calling an intrinsic function with an incorrect argument type.
+"""
+TypeError
+
+"""
+    InterruptException()
+
+The process was stopped by a terminal interrupt (CTRL+C).
+"""
+InterruptException
+
+"""
+    applicable(f, args...) -> Bool
+
+Determine whether the given generic function has a method applicable to the given arguments.
+
+# Examples
+```jldoctest
+julia> function f(x, y)
+           x + y
+       end;
+
+julia> applicable(f, 1)
+false
+
+julia> applicable(f, 1, 2)
+true
+```
+"""
+applicable
+
+"""
+    invoke(f, argtypes::Type, args...; kwargs...)
+
+Invoke a method for the given generic function `f` matching the specified types `argtypes` on the
+specified arguments `args` and passing the keyword arguments `kwargs`. The arguments `args` must
+conform with the specified types in `argtypes`, i.e. conversion is not automatically performed.
+This method allows invoking a method other than the most specific matching method, which is useful
+when the behavior of a more general definition is explicitly needed (often as part of the
+implementation of a more specific method of the same function).
+
+# Examples
+```jldoctest
+julia> f(x::Real) = x^2;
+
+julia> f(x::Integer) = 1 + invoke(f, Tuple{Real}, x);
+
+julia> f(2)
+5
+```
+"""
+invoke
+
+"""
+    isa(x, type) -> Bool
+
+Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
+`x isa type`.
+"""
+isa
+
+"""
+    DivideError()
+
+Integer division was attempted with a denominator value of 0.
+
+# Examples
+```jldoctest
+julia> 2/0
+Inf
+
+julia> div(2, 0)
+ERROR: DivideError: integer division error
+Stacktrace:
+ [1] div(::Int64, ::Int64) at ./int.jl:220
+```
+"""
+DivideError
+
+"""
+    Number
+
+Abstract supertype for all number types.
+"""
+Number
+
+"""
+    Real <: Number
+
+Abstract supertype for all real numbers.
+"""
+Real
+
+"""
+    AbstractFloat <: Real
+
+Abstract supertype for all floating point numbers.
+"""
+AbstractFloat
+
+"""
+    Integer <: Real
+
+Abstract supertype for all integers.
+"""
+Integer
+
+"""
+    Signed <: Integer
+
+Abstract supertype for all signed integers.
+"""
+Signed
+
+"""
+    Unsigned <: Integer
+
+Abstract supertype for all unsigned integers.
+"""
+Unsigned
+
+"""
+    Bool <: Integer
+
+Boolean type.
+"""
+Bool
+
+for bit in (16, 32, 64)
+    @eval begin
+        """
+            Float$($bit) <: AbstractFloat
+
+        $($bit)-bit floating point number type.
+        """
+        $(Symbol("Float", bit))
+    end
+end
+
+for bit in (8, 16, 32, 64, 128)
+    @eval begin
+        """
+            Int$($bit) <: Signed
+
+        $($bit)-bit signed integer type.
+        """
+        $(Symbol("Int", bit))
+
+        """
+            UInt$($bit) <: Unsigned
+
+        $($bit)-bit unsigned integer type.
+        """
+        $(Symbol("UInt", bit))
+    end
+end
+
+"""
+    Symbol(x...) -> Symbol
+
+Create a `Symbol` by concatenating the string representations of the arguments together.
+"""
+Symbol
+
+"""
+    tuple(xs...)
+
+Construct a tuple of the given objects.
+
+# Examples
+```jldoctest
+julia> tuple(1, 'a', pi)
+(1, 'a', π = 3.1415926535897...)
+```
+"""
+tuple
+
+"""
+    getfield(value, name::Symbol)
+
+Extract a named field from a `value` of composite type. The syntax `a.b` calls
+`getfield(a, :b)`.
+
+# Examples
+```jldoctest
+julia> a = 1//2
+1//2
+
+julia> getfield(a, :num)
+1
+```
+"""
+getfield
+
+"""
+    setfield!(value, name::Symbol, x)
+
+Assign `x` to a named field in `value` of composite type. The syntax `a.b = c` calls
+`setfield!(a, :b, c)`.
+"""
+setfield!
+
+"""
+    typeof(x)
+
+Get the concrete type of `x`.
+"""
+typeof
+
+"""
+    isdefined(m::Module, s::Symbol)
+    isdefined(object, s::Symbol)
+    isdefined(object, index::Int)
+
+Tests whether an assignable location is defined. The arguments can be a module and a symbol
+or a composite object and field name (as a symbol) or index.
+"""
+isdefined
+
+
+"""
+    Vector{T}(n)
+
+Construct an uninitialized [`Vector{T}`](@ref) of length `n`.
+
+# Examples
+```julia-repl
+julia> Vector{Float64}(3)
+3-element Array{Float64,1}:
+ 6.90966e-310
+ 6.90966e-310
+ 6.90966e-310
+```
+"""
+Vector{T}(n)
+
+"""
+    Matrix{T}(m, n)
+
+Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`.
+
+# Examples
+```julia-repl
+julia> Matrix{Float64}(2, 3)
+2×3 Array{Float64,2}:
+ 6.93517e-310  6.93517e-310  6.93517e-310
+ 6.93517e-310  6.93517e-310  1.29396e-320
+```
+"""
+Matrix{T}(m, n)
+
+"""
+    Array{T}(dims)
+    Array{T,N}(dims)
+
+Construct an uninitialized `N`-dimensional [`Array`](@ref)
+containing elements of type `T`. `N` can either be supplied explicitly,
+as in `Array{T,N}(dims)`, or be determined by the length or number of `dims`.
+`dims` may be a tuple or a series of integer arguments corresponding to the lengths
+in each dimension. If the rank `N` is supplied explicitly, then it must
+match the length or number of `dims`.
+
+# Examples
+```julia-repl
+julia> A = Array{Float64,2}(2, 3) # N given explicitly
+2×3 Array{Float64,2}:
+ 6.90198e-310  6.90198e-310  6.90198e-310
+ 6.90198e-310  6.90198e-310  0.0
+
+julia> B = Array{Float64}(2) # N determined by the input
+2-element Array{Float64,1}:
+ 1.87103e-320
+ 0.0
+```
+"""
+Array{T,N}(dims)
+
+"""
+    +(x, y...)
+
+Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
+"""
+(+)(x, y...)
+
+"""
+    -(x)
+
+Unary minus operator.
+"""
+-(x)
+
+"""
+    -(x, y)
+
+Subtraction operator.
+"""
+-(x, y)
+
+"""
+    *(x, y...)
+
+Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`.
+"""
+(*)(x, y...)
+
+"""
+    /(x, y)
+
+Right division operator: multiplication of `x` by the inverse of `y` on the right. Gives
+floating-point results for integer arguments.
+"""
+/(x, y)
+
+"""
+    ArgumentError(msg)
+
+The parameters to a function call do not match a valid signature. Argument `msg` is a
+descriptive error string.
+"""
+ArgumentError
+
+"""
+    MethodError(f, args)
+
+A method with the required type signature does not exist in the given generic function.
+Alternatively, there is no unique most-specific method.
+"""
+MethodError
+
+"""
+    AssertionError([msg])
+
+The asserted condition did not evaluate to `true`.
+Optional argument `msg` is a descriptive error string.
+"""
+AssertionError
+
+"""
+    LoadError(file::AbstractString, line::Int, error)
+
+An error occurred while `include`ing, `require`ing, or `using` a file. The error specifics
+should be available in the `.error` field.
+"""
+LoadError
+
+"""
+    InitError(mod::Symbol, error)
+
+An error occurred when running a module's `__init__` function. The actual error thrown is
+available in the `.error` field.
+"""
+InitError
+
+"""
+    Any::DataType
+
+`Any` is the union of all types. It has the defining property `isa(x, Any) == true` for any `x`. `Any` therefore
+describes the entire universe of possible values. For example `Integer` is a subset of `Any` that includes `Int`,
+`Int8`, and other integer types.
+"""
+Any
+
+"""
+    Union{}
+
+`Union{}`, the empty [`Union`](@ref) of types, is the type that has no values. That is, it has the defining
+property `isa(x, Union{}) == false` for any `x`. `Base.Bottom` is defined as its alias and the type of `Union{}`
+is `Core.TypeofBottom`.
+
+# Examples
+```jldoctest
+julia> isa(nothing, Union{})
+false
+```
+"""
+kw"Union{}", Base.Bottom
+
+"""
+    Union{Types...}
+
+A type union is an abstract type which includes all instances of any of its argument types. The empty
+union [`Union{}`](@ref) is the bottom type of Julia.
+
+# Examples
+```jldoctest
+julia> IntOrString = Union{Int,AbstractString}
+Union{AbstractString, Int64}
+
+julia> 1 :: IntOrString
+1
+
+julia> "Hello!" :: IntOrString
+"Hello!"
+
+julia> 1.0 :: IntOrString
+ERROR: TypeError: typeassert: expected Union{AbstractString, Int64}, got Float64
+```
+"""
+Union
+
+
+"""
+    UnionAll
+
+A union of types over all values of a type parameter. `UnionAll` is used to describe parametric types
+where the values of some parameters are not known.
+
+# Examples
+```jldoctest
+julia> typeof(Vector)
+UnionAll
+
+julia> typeof(Vector{Int})
+DataType
+```
+"""
+UnionAll
+
+"""
+    ::
+
+With the `::`-operator type annotations are attached to expressions and variables in programs.
+See the manual section on [Type Declarations](@ref).
+
+Outside of declarations `::` is used to assert that expressions and variables in programs have a given type.
+
+# Examples
+```jldoctest
+julia> (1+2)::AbstractFloat
+ERROR: TypeError: typeassert: expected AbstractFloat, got Int64
+
+julia> (1+2)::Int
+3
+```
+"""
+kw"::"
+
+"""
+    Vararg{T,N}
+
+The last parameter of a tuple type [`Tuple`](@ref) can be the special type `Vararg`, which denotes any
+number of trailing elements. The type `Vararg{T,N}` corresponds to exactly `N` elements of type `T`.
+`Vararg{T}` corresponds to zero or more elements of type `T`. `Vararg` tuple types are used to represent the
+arguments accepted by varargs methods (see the section on [Varargs Functions](@ref) in the manual.)
+
+# Examples
+```jldoctest
+julia> mytupletype = Tuple{AbstractString,Vararg{Int}}
+Tuple{AbstractString,Vararg{Int64,N} where N}
+
+julia> isa(("1",), mytupletype)
+true
+
+julia> isa(("1",1), mytupletype)
+true
+
+julia> isa(("1",1,2), mytupletype)
+true
+
+julia> isa(("1",1,2,3.0), mytupletype)
+false
+```
+"""
+Vararg
+
+"""
+    Tuple{Types...}
+
+Tuples are an abstraction of the arguments of a function – without the function itself. The salient aspects of
+a function's arguments are their order and their types. Therefore a tuple type is similar to a parameterized
+immutable type where each parameter is the type of one field. Tuple types may have any number of parameters.
+
+Tuple types are covariant in their parameters: `Tuple{Int}` is a subtype of `Tuple{Any}`. Therefore `Tuple{Any}`
+is considered an abstract type, and tuple types are only concrete if their parameters are. Tuples do not have
+field names; fields are only accessed by index.
+
+See the manual section on [Tuple Types](@ref).
+"""
+Tuple
 
 end

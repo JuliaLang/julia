@@ -24,8 +24,8 @@ function open_fake_pty()
         error("Unable to create a fake PTY in Windows")
     end
 
-    const O_RDWR = Base.Filesystem.JL_O_RDWR
-    const O_NOCTTY = Base.Filesystem.JL_O_NOCTTY
+    O_RDWR = Base.Filesystem.JL_O_RDWR
+    O_NOCTTY = Base.Filesystem.JL_O_NOCTTY
 
     fdm = ccall(:posix_openpt, Cint, (Cint,), O_RDWR|O_NOCTTY)
     fdm == -1 && error("Failed to open PTY master")
@@ -53,7 +53,7 @@ function with_fake_pty(f)
     end
 end
 
-function challenge_prompt(code::AbstractString, challenges; timeout::Integer=10, debug::Bool=true)
+function challenge_prompt(code::Expr, challenges; timeout::Integer=10, debug::Bool=true)
     output_file = tempname()
     wrapped_code = """
     result = let
@@ -129,8 +129,8 @@ OffsetVector{T,AA<:AbstractArray} = OffsetArray{T,1,AA}
 OffsetArray(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) where {T,N} = OffsetArray{T,N,typeof(A)}(A, offsets)
 OffsetArray(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) where {T,N} = OffsetArray(A, offsets)
 
-(::Type{OffsetArray{T,N}})(inds::Indices{N}) where {T,N} = OffsetArray{T,N,Array{T,N}}(Array{T,N}(map(length, inds)), map(indsoffset, inds))
-(::Type{OffsetArray{T}})(inds::Indices{N}) where {T,N} = OffsetArray{T,N}(inds)
+OffsetArray{T,N}(inds::Indices{N}) where {T,N} = OffsetArray{T,N,Array{T,N}}(Array{T,N}(map(length, inds)), map(indsoffset, inds))
+OffsetArray{T}(inds::Indices{N}) where {T,N} = OffsetArray{T,N}(inds)
 
 Base.IndexStyle(::Type{T}) where {T<:OffsetArray} = Base.IndexStyle(parenttype(T))
 parenttype(::Type{OffsetArray{T,N,AA}}) where {T,N,AA} = AA
@@ -147,9 +147,9 @@ Base.eachindex(::IndexLinear, A::OffsetVector) = indices(A, 1)
 # Implementations of indices and indices1. Since bounds-checking is
 # performance-critical and relies on indices, these are usually worth
 # optimizing thoroughly.
-@inline Base.indices(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? indices(parent(A))[d] + A.offsets[d] : (1:1)
+@inline Base.indices(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? indices(parent(A))[d] .+ A.offsets[d] : (1:1)
 @inline Base.indices(A::OffsetArray) = _indices(indices(parent(A)), A.offsets)  # would rather use ntuple, but see #15276
-@inline _indices(inds, offsets) = (inds[1]+offsets[1], _indices(tail(inds), tail(offsets))...)
+@inline _indices(inds, offsets) = (inds[1] .+ offsets[1], _indices(tail(inds), tail(offsets))...)
 _indices(::Tuple{}, ::Tuple{}) = ()
 Base.indices1(A::OffsetArray{T,0}) where {T} = 1:1  # we only need to specialize this one
 
@@ -221,7 +221,7 @@ offset(offsets::NTuple{N,Int}, inds::NTuple{N,Int}) where {N} = _offset((), offs
 _offset(out, ::Tuple{}, ::Tuple{}) = out
 @inline _offset(out, offsets, inds) = _offset((out..., inds[1]-offsets[1]), Base.tail(offsets), Base.tail(inds))
 
-indsoffset(r::Range) = first(r) - 1
+indsoffset(r::AbstractRange) = first(r) - 1
 indsoffset(i::Integer) = 0
 
 Base.resize!(A::OffsetVector, nl::Integer) = (resize!(A.parent, nl); A)

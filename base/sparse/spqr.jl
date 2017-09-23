@@ -60,7 +60,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         H,              # m-by-nh Householder vectors
         HPinv,          # size m row permutation
         HTau,           # 1-by-nh Householder coefficients
-        CHOLMOD.common()) # /* workspace and parameters */
+        CHOLMOD.common_struct) # /* workspace and parameters */
 
     if rnk < 0
         error("Sparse QR factorization failed")
@@ -79,7 +79,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # the common struct is updated
         ccall((:cholmod_l_free, :libcholmod), Void,
             (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Void}),
-            n, sizeof(CHOLMOD.SuiteSparse_long), e, CHOLMOD.common())
+            n, sizeof(CHOLMOD.SuiteSparse_long), e, CHOLMOD.common_struct)
     end
     hpinv = HPinv[]
     if hpinv == C_NULL
@@ -94,7 +94,7 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
         # the common struct is updated
         ccall((:cholmod_l_free, :libcholmod), Void,
             (Csize_t, Cint, Ptr{CHOLMOD.SuiteSparse_long}, Ptr{Void}),
-            m, sizeof(CHOLMOD.SuiteSparse_long), hpinv, CHOLMOD.common())
+            m, sizeof(CHOLMOD.SuiteSparse_long), hpinv, CHOLMOD.common_struct)
     end
 
     return rnk, _E, _HPinv

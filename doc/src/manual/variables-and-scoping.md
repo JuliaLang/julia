@@ -304,8 +304,8 @@ julia> odd(3)
 true
 ```
 
-Julia provides built-in, efficient functions to test for oddness and evenness called [`iseven()`](@ref)
-and [`isodd()`](@ref) so the above definitions should only be taken as examples.
+Julia provides built-in, efficient functions to test for oddness and evenness called [`iseven`](@ref)
+and [`isodd`](@ref) so the above definitions should only be taken as examples.
 
 ### Hard vs. Soft Local Scope
 
@@ -416,10 +416,9 @@ outer local `x`.
 
 ### For Loops and Comprehensions
 
-`for` loops and [Comprehensions](@ref) have the following behavior: any new variables introduced
-in their body scopes are freshly allocated for each loop iteration. This is in contrast to `while`
-loops which reuse the variables for all iterations. Therefore these constructs are similar to
-`while` loops with `let` blocks inside:
+`for` loops, `while` loops, and [Comprehensions](@ref) have the following behavior: any new variables
+introduced in their body scopes are freshly allocated for each loop iteration, as if the loop body
+were surrounded by a `let` block:
 
 ```jldoctest
 julia> Fs = Array{Any}(2);
@@ -435,7 +434,7 @@ julia> Fs[2]()
 2
 ```
 
-`for` loops will reuse existing variables for its iteration variable:
+A `for` loop or comprehension iteration variable is always a new variable:
 
 ```jldoctest
 julia> i = 0;
@@ -444,18 +443,20 @@ julia> for i = 1:3
        end
 
 julia> i
-3
+0
 ```
 
-However, comprehensions do not do this, and always freshly allocate their iteration variables:
+However, it is occasionally useful to reuse an existing variable as the iteration variable.
+This can be done conveniently by adding the keyword `outer`:
 
 ```jldoctest
-julia> x = 0;
+julia> i = 0;
 
-julia> [ x for x = 1:3 ];
+julia> for outer i = 1:3
+       end
 
-julia> x
-0
+julia> i
+3
 ```
 
 ## Constants
@@ -475,7 +476,8 @@ their values (or even their types) might change at almost any time. If a global 
 not change, adding a `const` declaration solves this performance problem.
 
 Local constants are quite different. The compiler is able to determine automatically when a local
-variable is constant, so local constant declarations are not necessary, and are currently just ignored.
+variable is constant, so local constant declarations are not necessary, and in fact are currently
+not supported.
 
 Special top-level assignments, such as those performed by the `function` and `struct` keywords,
 are constant by default.

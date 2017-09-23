@@ -359,7 +359,7 @@ julia> sum(1:20)
 ```
 """
 sum(a) = mapreduce(identity, +, a)
-sum(a::AbstractArray{Bool}) = countnz(a)
+sum(a::AbstractArray{Bool}) = count(a)
 
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
@@ -472,7 +472,7 @@ minimum(a) = mapreduce(identity, scalarmin, a)
 
 ## extrema
 
-extrema(r::Range) = (minimum(r), maximum(r))
+extrema(r::AbstractRange) = (minimum(r), maximum(r))
 extrema(x::Real) = (x, x)
 
 """
@@ -637,40 +637,8 @@ const ∈ = in
 ∋(itr, x)= ∈(x, itr)
 ∌(itr, x)=!∋(itr, x)
 
-"""
-    contains(fun, itr, x) -> Bool
 
-Returns `true` if there is at least one element `y` in `itr` such that `fun(y,x)` is `true`.
-
-```jldoctest
-julia> vec = [10, 100, 200]
-3-element Array{Int64,1}:
-  10
- 100
- 200
-
-julia> contains(==, vec, 200)
-true
-
-julia> contains(==, vec, 300)
-false
-
-julia> contains(>, vec, 100)
-true
-
-julia> contains(>, vec, 200)
-false
-```
-"""
-function contains(eq::Function, itr, x)
-    for y in itr
-        eq(y, x) && return true
-    end
-    return false
-end
-
-
-## countnz & count
+## count
 
 """
     count(p, itr) -> Integer
@@ -703,22 +671,3 @@ function count(pred, a::AbstractArray)
     return n
 end
 count(itr) = count(identity, itr)
-
-"""
-    countnz(A) -> Integer
-
-Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation.
-For sparse matrices, one should usually use [`nnz`](@ref), which returns the number of stored values.
-
-```jldoctest
-julia> A = [1 2 4; 0 0 1; 1 1 0]
-3×3 Array{Int64,2}:
- 1  2  4
- 0  0  1
- 1  1  0
-
-julia> countnz(A)
-6
-```
-"""
-countnz(a) = count(x -> x != 0, a)

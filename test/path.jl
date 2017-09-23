@@ -10,6 +10,7 @@ for S in (String, GenericString)
     @test basename(S("foo$(sep)bar")) == "bar"
     @test dirname(S("foo$(sep)bar")) == "foo"
 
+    @test expanduser(S("")) == ""
     @test expanduser(S("x")) == "x"
     @test expanduser(S("~")) == (Sys.iswindows() ? "~" : homedir())
 
@@ -26,6 +27,16 @@ for S in (String, GenericString)
     @test joinpath(S("foo"), S("bar")) == "foo$(sep)bar"
     @test joinpath(S("foo"), S(homedir())) == homedir()
     @test joinpath(S(abspath("foo")), S(homedir())) == homedir()
+
+    if Sys.iswindows()
+        @test joinpath(S("foo"),S("bar:baz")) == "bar:baz"
+        @test joinpath(S("C:"),S("foo"),S("D:"),S("bar")) == "D:bar"
+        @test joinpath(S("C:"),S("foo"),S("D:bar"),S("baz")) == "D:bar$(sep)baz"
+    elseif Sys.isunix()
+        @test joinpath(S("foo"),S("bar:baz")) == "foo$(sep)bar:baz"
+        @test joinpath(S("C:"),S("foo"),S("D:"),S("bar")) == "C:$(sep)foo$(sep)D:$(sep)bar"
+        @test joinpath(S("C:"),S("foo"),S("D:"),S("bar"),S("baz")) == "C:$(sep)foo$(sep)D:$(sep)bar$(sep)baz"
+    end
 
     @test normpath(S(joinpath("."))) == "."
     @test normpath(S(joinpath(".."))) == ".."

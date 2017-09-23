@@ -705,13 +705,13 @@ dot(x::AbstractVector{<:Number}, y::AbstractVector{<:Number}) = vecdot(x, y)
 ###########################################################################################
 
 """
-    rank(M[, tol::Real])
+    rank(A[, tol::Real])
 
 Compute the rank of a matrix by counting how many singular
-values of `M` have magnitude greater than `tol`.
-By default, the value of `tol` is the largest
-dimension of `M` multiplied by the [`eps`](@ref)
-of the [`eltype`](@ref) of `M`.
+values of `A` have magnitude greater than `tol*σ₁` where `σ₁` is
+`A`'s largest singular values. By default, the value of `tol` is the smallest
+dimension of `A` multiplied by the [`eps`](@ref)
+of the [`eltype`](@ref) of `A`.
 
 # Examples
 ```jldoctest
@@ -728,14 +728,11 @@ julia> rank(diagm([1, 0.001, 2]), 0.00001)
 3
 ```
 """
-rank(A::AbstractMatrix, tol::Real) = mapreduce(x -> x > tol, +, 0, svdvals(A))
-function rank(A::AbstractMatrix)
-    m,n = size(A)
-    (m == 0 || n == 0) && return 0
-    sv = svdvals(A)
-    return sum(sv .> maximum(size(A))*eps(sv[1]))
+function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+    s = svdvals(A)
+    sum(x -> x > tol*s[1], s)
 end
-rank(x::Number) = x==0 ? 0 : 1
+rank(x::Number) = x == 0 ? 0 : 1
 
 """
     trace(M)
@@ -794,6 +791,19 @@ function inv(A::AbstractMatrix{T}) where T
     A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S0, checksquare(A)))
 end
 
+function pinv(v::AbstractVector{T}, tol::Real=real(zero(T))) where T
+    res = similar(v, typeof(zero(T) / (abs2(one(T)) + abs2(one(T)))))'
+    den = sum(abs2, v)
+    # as tol is the threshold relative to the maximum singular value, for a vector with
+    # single singular value σ=√den, σ ≦ tol*σ is equivalent to den=0 ∨ tol≥1
+    if iszero(den) || tol >= one(tol)
+        fill!(res, zero(eltype(res)))
+    else
+        res .= v' ./ den
+    end
+    return res
+end
+
 """
     \\(A, B)
 
@@ -841,10 +851,11 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
     return qrfact(A,Val(true)) \ B
 end
 
-(\)(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
+(\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
 (/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)
+/(x::Number, v::AbstractVector) = x*pinv(v)
 
 cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)
@@ -942,7 +953,7 @@ function ishermitian(A::AbstractMatrix)
         return false
     end
     for i = indsn, j = i:last(indsn)
-        if A[i,j] != ctranspose(A[j,i])
+        if A[i,j] != adjoint(A[j,i])
             return false
         end
     end
@@ -1151,6 +1162,16 @@ function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractAr
     end
     for (IY, IX) in zip(eachindex(ry), eachindex(rx))
         @inbounds y[ry[IY]] += x[rx[IX]]*α
+    end
+    y
+end
+
+function axpby!(α, x::AbstractArray, β, y::AbstractArray)
+    if _length(x) != _length(y)
+        throw(DimensionMismatch("x has length $(_length(x)), but y has length $(_length(y))"))
+    end
+    for (IX, IY) in zip(eachindex(x), eachindex(y))
+        @inbounds y[IY] = x[IX]*α + y[IY]*β
     end
     y
 end

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import .Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
-import .Distributed: RRID
+import .Distributed: RRID, procs
 
 mutable struct SharedArray{T,N} <: DenseArray{T,N}
     id::RRID
@@ -499,7 +499,7 @@ function rand!(S::SharedArray{T}) where T
     return S
 end
 
-function randn!(S::SharedArray)
+function Random.randn!(S::SharedArray)
     f = S->map!(x -> randn(), S.loc_subarr_1d, S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(f, p, S)

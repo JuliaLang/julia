@@ -7,13 +7,13 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
 #include "julia.h"
 #include "julia_internal.h"
 #include "builtin_proto.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,7 +65,6 @@ jl_datatype_t *jl_float32_type;
 jl_datatype_t *jl_float64_type;
 jl_datatype_t *jl_floatingpoint_type;
 jl_datatype_t *jl_number_type;
-jl_unionall_t *jl_complex_type;
 jl_datatype_t *jl_signed_type;
 
 JL_DLLEXPORT jl_value_t *jl_emptytuple=NULL;
@@ -128,7 +127,7 @@ jl_value_t *jl_memory_exception;
 jl_value_t *jl_readonlymemory_exception;
 union jl_typemap_t jl_cfunction_list;
 
-jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 1, 1, 1, {NULL, NULL, NULL}};
+jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 0, NULL, NULL, NULL};
 
 // --- type properties and predicates ---
 
@@ -271,7 +270,7 @@ JL_DLLEXPORT int (jl_is_leaf_type)(jl_value_t *v)
 {
     if (jl_is_datatype(v)) {
         int isleaf = ((jl_datatype_t*)v)->isleaftype;
-#ifdef NDEBUG
+#ifdef JL_NDEBUG
         return isleaf;
 #else
         if (((jl_datatype_t*)v)->abstract) {
@@ -367,6 +366,22 @@ static jl_value_t *nth_union_component(jl_value_t *v, int *pi)
 jl_value_t *jl_nth_union_component(jl_value_t *v, int i)
 {
     return nth_union_component(v, &i);
+}
+
+// inverse of jl_nth_union_component
+int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth)
+{
+    if (jl_is_uniontype(haystack)) {
+        if (jl_find_union_component(((jl_uniontype_t*)haystack)->a, needle, nth))
+            return 1;
+        if (jl_find_union_component(((jl_uniontype_t*)haystack)->b, needle, nth))
+            return 1;
+        return 0;
+    }
+    if (needle == haystack)
+        return 1;
+    (*nth)++;
+    return 0;
 }
 
 static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, size_t *idx)
@@ -1065,7 +1080,7 @@ static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, si
     JL_GC_POP();
 }
 
-static arraylist_t partial_inst;
+arraylist_t partial_inst;
 int inside_typedef = 0;
 
 static jl_value_t *extract_wrapper(jl_value_t *t)
@@ -1648,9 +1663,9 @@ void jl_init_types(void)
     jl_methtable_type = jl_new_uninitialized_datatype();
     jl_nothing = jl_gc_permobj(0, NULL);
 
-    jl_default_cgparams.hooks.module_setup = jl_nothing;
-    jl_default_cgparams.hooks.module_activation = jl_nothing;
-    jl_default_cgparams.hooks.raise_exception = jl_nothing;
+    jl_default_cgparams.module_setup = jl_nothing;
+    jl_default_cgparams.module_activation = jl_nothing;
+    jl_default_cgparams.raise_exception = jl_nothing;
 
     jl_emptysvec = (jl_svec_t*)jl_gc_permobj(sizeof(void*), jl_simplevector_type);
     jl_svec_set_len_unsafe(jl_emptysvec, 0);
@@ -1832,14 +1847,10 @@ void jl_init_types(void)
     jl_emptytuple_type->instance = jl_emptytuple;
 
     // non-primitive definitions follow
-    jl_int32_type = NULL;
     jl_int32_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Int32"), core,
                                          jl_any_type, jl_emptysvec, 32);
-    jl_int64_type = NULL;
     jl_int64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Int64"), core,
                                          jl_any_type, jl_emptysvec, 64);
-
-    jl_uint8_type = NULL;
     jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"), core,
                                          jl_any_type, jl_emptysvec, 8);
 

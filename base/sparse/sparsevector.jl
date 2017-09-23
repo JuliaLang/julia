@@ -37,11 +37,11 @@ const SparseVectorUnion{T} = Union{SparseVector{T}, SparseColumnView{T}}
 
 ### Basic properties
 
-length(x::SparseVector) = x.n
-size(x::SparseVector) = (x.n,)
-nnz(x::SparseVector) = length(x.nzval)
-countnz(x::SparseVector) = countnz(x.nzval)
-count(x::SparseVector) = count(x.nzval)
+length(x::SparseVector)   = x.n
+size(x::SparseVector)     = (x.n,)
+nnz(x::SparseVector)      = length(x.nzval)
+count(x::SparseVector)    = count(x.nzval)
+count(f, x::SparseVector) = count(f, x.nzval) + f(zero(eltype(x)))*(length(x) - nnz(x))
 
 nonzeros(x::SparseVector) = x.nzval
 function nonzeros(x::SparseColumnView)
@@ -573,7 +573,7 @@ function _logical_index(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool}) where Tv
     SparseVector(n, rowvalB, nzvalB)
 end
 
-# TODO: further optimizations are available for ::Colon and other types of Range
+# TODO: further optimizations are available for ::Colon and other types of AbstractRange
 getindex(A::SparseMatrixCSC, ::Colon) = A[1:end]
 
 function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
@@ -955,7 +955,7 @@ vcat(X::Union{Vector,SparseVector}...) = vcat(map(sparse, X)...)
 
 # TODO: A definition similar to the third exists in base/linalg/bidiag.jl. These definitions
 # should be consolidated in a more appropriate location, e.g. base/linalg/special.jl.
-const _SparseArrays = Union{SparseVector, SparseMatrixCSC}
+const _SparseArrays = Union{SparseVector, SparseMatrixCSC, RowVector{<:Any, <:SparseVector}}
 const _SpecialArrays = Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}
 const _SparseConcatArrays = Union{_SpecialArrays, _SparseArrays}
 
@@ -970,9 +970,9 @@ const _Triangular_DenseArrays{T,A<:Matrix} = Base.LinAlg.AbstractTriangular{T,A}
 const _Annotated_DenseArrays = Union{_Triangular_DenseArrays, _Symmetric_DenseArrays, _Hermitian_DenseArrays}
 const _Annotated_Typed_DenseArrays{T} = Union{_Triangular_DenseArrays{T}, _Symmetric_DenseArrays{T}, _Hermitian_DenseArrays{T}}
 
-const _SparseConcatGroup = Union{Vector, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
-const _DenseConcatGroup = Union{Vector, Matrix, _Annotated_DenseArrays}
-const _TypedDenseConcatGroup{T} = Union{Vector{T}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
+const _SparseConcatGroup = Union{Vector, RowVector{<:Any, <:Vector}, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
+const _DenseConcatGroup = Union{Vector, RowVector{<:Any, <:Vector}, Matrix, _Annotated_DenseArrays}
+const _TypedDenseConcatGroup{T} = Union{Vector{T}, RowVector{T,Vector{T}}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
 
 # Concatenations involving un/annotated sparse/special matrices/vectors should yield sparse arrays
 function cat(catdims, Xin::_SparseConcatGroup...)
@@ -994,7 +994,7 @@ function hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
     tmp_rows = Vector{SparseMatrixCSC}(nbr)
     k = 0
     @inbounds for i = 1 : nbr
-        tmp_rows[i] = hcat(X[(1 : rows[i]) + k]...)
+        tmp_rows[i] = hcat(X[(1 : rows[i]) .+ k]...)
         k += rows[i]
     end
     vcat(tmp_rows...)
@@ -1401,7 +1401,7 @@ vecnorm(x::SparseVectorUnion, p::Real=2) = vecnorm(nonzeros(x), p)
 # Transpose
 # (The only sparse matrix structure in base is CSC, so a one-row sparse matrix is worse than dense)
 @inline transpose(sv::SparseVector) = RowVector(sv)
-@inline ctranspose(sv::SparseVector) = RowVector(conj(sv))
+@inline adjoint(sv::SparseVector) = RowVector(conj(sv))
 
 ### BLAS Level-1
 
@@ -1443,13 +1443,9 @@ scale!(x::AbstractSparseVector, a::Complex) = (scale!(nonzeros(x), a); x)
 scale!(a::Real, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
 scale!(a::Complex, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
 
-
 (*)(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) * a)
 (*)(a::Number, x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), a * nonzeros(x))
 (/)(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
-broadcast(::typeof(*), x::AbstractSparseVector, a::Number) = x * a
-broadcast(::typeof(*), a::Number, x::AbstractSparseVector) = a * x
-broadcast(::typeof(/), x::AbstractSparseVector, a::Number) = x / a
 
 # dot
 function dot(x::StridedVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
@@ -1827,7 +1823,7 @@ for isunittri in (true, false), islowertri in (true, false)
                 nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
                     :(b.nzind[1]:b.n) :
                     :(1:b.nzind[end]) )
-                nzrangeviewbnz = view(b.nzval, nzrange - b.nzind[1] + 1)
+                nzrangeviewbnz = view(b.nzval, nzrange .- (b.nzind[1] - 1))
                 nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
                 ($func)(nzrangeviewA, nzrangeviewbnz)
                 # could strip any miraculous zeros here perhaps
@@ -1892,7 +1888,7 @@ function sort(x::SparseVector{Tv,Ti}; kws...) where {Tv,Ti}
     n,k = length(x),length(allvals)
     z = findfirst(sinds,k)
     newnzind = collect(Ti,1:k-1)
-    newnzind[z:end]+= n-k+1
+    newnzind[z:end] .+= n-k+1
     newnzvals = allvals[deleteat!(sinds[1:k],z)]
     SparseVector(n,newnzind,newnzvals)
 end

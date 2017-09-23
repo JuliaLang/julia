@@ -187,6 +187,7 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/array.jl \
 		base/bool.jl \
 		base/associative.jl \
+		base/codevalidation.jl \
 		base/error.jl \
 		base/essentials.jl \
 		base/generator.jl \
@@ -209,7 +210,7 @@ BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl) $(shell find $(B
 
 $(build_private_libdir)/inference.ji: $(CORE_SRCS) | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) \
+	$(call spawn,$(JULIA_EXECUTABLE)) -C "$(JULIA_CPU_TARGET)" --output-ji $(call cygpath_w,$@) \
 		--startup-file=no -g0 -O0 coreimg.jl)
 
 RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/")
@@ -217,8 +218,8 @@ COMMA:=,
 define sysimg_builder
 $$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS)
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
-	$$(call spawn,$3) $2 -C $$(JULIA_CPU_TARGET) --output-o $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) \
-		--startup-file=no --sysimage $$(call cygpath_w,$$<) sysimg.jl $$(RELBUILDROOT) \
+	$$(call spawn,$3) $2 -C "$$(JULIA_CPU_TARGET)" --output-o $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) \
+		--startup-file=no --warn-overwrite=yes --sysimage $$(call cygpath_w,$$<) sysimg.jl $$(RELBUILDROOT) \
 		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; } )
 .SECONDARY: $(build_private_libdir)/sys$1.o
 endef
@@ -249,9 +250,6 @@ ifeq ($(USE_SYSTEM_OPENLIBM),0)
 ifeq ($(USE_SYSTEM_LIBM),0)
 JL_PRIVATE_LIBS += openlibm
 endif
-endif
-ifeq ($(USE_SYSTEM_OPENSPECFUN),0)
-JL_PRIVATE_LIBS += openspecfun
 endif
 ifeq ($(USE_SYSTEM_DSFMT),0)
 JL_PRIVATE_LIBS += dSFMT
@@ -550,9 +548,9 @@ test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 ifeq ($(JULIA_BUILD_MODE),release)
-JULIA_SYSIMG=$(build_private_libdir)/sys$(JULIA_LIBSUFFIX).$(SHLIB_EXT)
+JULIA_SYSIMG=$(build_private_libdir)/sys$(JULIA_LIBSUFFIX)$(CPUID_TAG).$(SHLIB_EXT)
 else
-JULIA_SYSIMG=$(build_private_libdir)/sys-$(JULIA_BUILD_MODE)$(JULIA_LIBSUFFIX).$(SHLIB_EXT)
+JULIA_SYSIMG=$(build_private_libdir)/sys-$(JULIA_BUILD_MODE)$(JULIA_LIBSUFFIX)$(CPUID_TAG).$(SHLIB_EXT)
 endif
 testall: check-whitespace $(JULIA_BUILD_MODE)
 	cp $(JULIA_SYSIMG) $(BUILDROOT)/local.$(SHLIB_EXT) && $(JULIA_EXECUTABLE) -J $(call cygpath_w,$(BUILDROOT)/local.$(SHLIB_EXT)) -e 'true' && rm $(BUILDROOT)/local.$(SHLIB_EXT)

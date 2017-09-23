@@ -135,7 +135,7 @@ export
     ErrorException, BoundsError, DivideError, DomainError, Exception,
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
-    TypeError,
+    TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
     GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
@@ -195,39 +195,38 @@ end
 Expr(@nospecialize args...) = _expr(args...)
 
 abstract type Exception end
-mutable struct ErrorException <: Exception
+struct ErrorException <: Exception
     msg::AbstractString
-    ErrorException(msg::AbstractString) = new(msg)
 end
 
 macro _noinline_meta()
     Expr(:meta, :noinline)
 end
 
-struct BoundsError        <: Exception
+struct BoundsError <: Exception
     a::Any
     i::Any
     BoundsError() = new()
     BoundsError(@nospecialize(a)) = (@_noinline_meta; new(a))
     BoundsError(@nospecialize(a), i) = (@_noinline_meta; new(a,i))
 end
-struct DivideError        <: Exception end
-struct OutOfMemoryError   <: Exception end
-struct ReadOnlyMemoryError<: Exception end
-struct SegmentationFault  <: Exception end
-struct StackOverflowError <: Exception end
-struct UndefRefError      <: Exception end
-struct UndefVarError      <: Exception
+struct DivideError         <: Exception end
+struct OutOfMemoryError    <: Exception end
+struct ReadOnlyMemoryError <: Exception end
+struct SegmentationFault   <: Exception end
+struct StackOverflowError  <: Exception end
+struct UndefRefError       <: Exception end
+struct UndefVarError <: Exception
     var::Symbol
 end
 struct InterruptException <: Exception end
 struct DomainError <: Exception
     val
-    msg
-    DomainError(@nospecialize(val)) = (@_noinline_meta; new(val))
+    msg::AbstractString
+    DomainError(@nospecialize(val)) = (@_noinline_meta; new(val, ""))
     DomainError(@nospecialize(val), @nospecialize(msg)) = (@_noinline_meta; new(val, msg))
 end
-mutable struct TypeError <: Exception
+struct TypeError <: Exception
     func::Symbol
     context::AbstractString
     expected::Type
@@ -237,11 +236,43 @@ struct InexactError <: Exception
     func::Symbol
     T::Type
     val
-
     InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@_noinline_meta; new(f, T, val))
 end
 struct OverflowError <: Exception
-    msg
+    msg::AbstractString
+end
+
+struct ArgumentError <: Exception
+    msg::AbstractString
+end
+
+struct MethodError <: Exception
+    f
+    args
+    world::UInt
+    MethodError(@nospecialize(f), @nospecialize(args), world::UInt) = new(f, args, world)
+end
+const typemax_UInt = ccall(:jl_typemax_uint, Any, (Any,), UInt)
+MethodError(@nospecialize(f), @nospecialize(args)) = MethodError(f, args, typemax_UInt)
+
+struct AssertionError <: Exception
+    msg::AbstractString
+end
+AssertionError() = AssertionError("")
+
+#Generic wrapping of arbitrary exceptions
+#Subtypes should put the exception in an 'error' field
+abstract type WrappedException <: Exception end
+
+struct LoadError <: WrappedException
+    file::AbstractString
+    line::Int
+    error
+end
+
+struct InitError <: WrappedException
+    mod::Symbol
+    error
 end
 
 abstract type DirectIndexString <: AbstractString end
@@ -297,17 +328,17 @@ VecElement(arg::T) where {T} = VecElement{T}(arg)
 # used by lowering of splicing unquote
 splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
 
-_new(typ::Symbol, argty::Symbol) = eval(Core, :((::Type{$typ})(@nospecialize n::$argty) = $(Expr(:new, typ, :n))))
+_new(typ::Symbol, argty::Symbol) = eval(Core, :($typ(@nospecialize n::$argty) = $(Expr(:new, typ, :n))))
 _new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
 _new(:NewvarNode, :SlotNumber)
 _new(:QuoteNode, :Any)
 _new(:SSAValue, :Int)
-eval(Core, :((::Type{LineNumberNode})(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
-eval(Core, :((::Type{LineNumberNode})(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumberNode, :l, :f))))
-eval(Core, :((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
-eval(Core, :((::Type{SlotNumber})(n::Int) = $(Expr(:new, :SlotNumber, :n))))
-eval(Core, :((::Type{TypedSlot})(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
+eval(Core, :(LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
+eval(Core, :(LineNumberNode(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumberNode, :l, :f))))
+eval(Core, :(GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
+eval(Core, :(SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))))
+eval(Core, :(TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
@@ -355,6 +386,7 @@ function Symbol(a::Array{UInt8,1})
                  ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
                  Intrinsics.arraylen(a))
 end
+Symbol(s::Symbol) = s
 
 # docsystem basics
 macro doc(x...)

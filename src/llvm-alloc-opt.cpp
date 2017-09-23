@@ -16,14 +16,14 @@
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 
-#include "fix_llvm_assert.h"
-
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 
 #include <map>
 #include <set>
+
+#include "julia_assert.h"
 
 using namespace llvm;
 
@@ -62,6 +62,8 @@ static bool isBundleOperand(CallInst *call, unsigned idx)
  *
  * * load
  * * `pointer_from_objref`
+ * * Any real llvm intrinsics
+ * * gc preserve intrinsics
  * * `ccall` gcroot array (`jl_roots` operand bundle)
  * * store (as address)
  * * addrspacecast, bitcast, getelementptr
@@ -88,6 +90,7 @@ private:
     Function *ptr_from_objref;
     Function *lifetime_start;
     Function *lifetime_end;
+    Function *gc_preserve_begin;
 
     Type *T_int8;
     Type *T_int32;
@@ -150,6 +153,8 @@ private:
     bool checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruction*> &uses,
                    bool &ignore_tag);
     void replaceUsesWith(Instruction *orig_i, Instruction *new_i, ReplaceUsesStack &stack);
+    void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID, Instruction *orig_i,
+                                 Instruction *new_i);
     bool isSafepoint(Instruction *inst);
     void getAnalysisUsage(AnalysisUsage &AU) const override
     {
@@ -332,6 +337,7 @@ bool AllocOpt::doInitialization(Module &M)
         return false;
 
     ptr_from_objref = M.getFunction("julia.pointer_from_objref");
+    gc_preserve_begin = M.getFunction("llvm.julia.gc_preserve_begin");
 
     T_prjlvalue = alloc_obj->getReturnType();
     T_pjlvalue = PointerType::get(cast<PointerType>(T_prjlvalue)->getElementType(), 0);
@@ -381,10 +387,18 @@ bool AllocOpt::checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruc
         if (isa<LoadInst>(inst))
             return true;
         if (auto call = dyn_cast<CallInst>(inst)) {
-            // TODO: on LLVM 5.0 we may need to handle certain llvm intrinsics
-            // including `memcpy`, `memset` etc. We might also need to handle
-            // `memcmp` by coverting to our own intrinsic and lower it after the gc root pass.
-            if (ptr_from_objref && ptr_from_objref == call->getCalledFunction())
+            // TODO handle `memcmp`
+            // None of the intrinsics should care if the memory is stack or heap allocated.
+            auto callee = call->getCalledFunction();
+            if (auto II = dyn_cast<IntrinsicInst>(call)) {
+                if (II->getIntrinsicID()) {
+                    return true;
+                }
+                if (gc_preserve_begin && gc_preserve_begin == callee) {
+                    return true;
+                }
+            }
+            if (ptr_from_objref && ptr_from_objref == callee)
                 return true;
             auto opno = use->getOperandNo();
             // Uses in `jl_roots` operand bundle are not counted as escaping, everything else is.
@@ -443,6 +457,54 @@ bool AllocOpt::checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruc
     }
 }
 
+void AllocOpt::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
+                                       Instruction *orig_i, Instruction *new_i)
+{
+    auto nargs = call->getNumArgOperands();
+    SmallVector<Value*, 8> args(nargs);
+    SmallVector<Type*, 8> argTys(nargs);
+    for (unsigned i = 0; i < nargs; i++) {
+        auto arg = call->getArgOperand(i);
+        args[i] = arg == orig_i ? new_i : arg;
+        argTys[i] = args[i]->getType();
+    }
+
+    // Accumulate an array of overloaded types for the given intrinsic
+    SmallVector<Type*, 4> overloadTys;
+    {
+        SmallVector<Intrinsic::IITDescriptor, 8> Table;
+        getIntrinsicInfoTableEntries(ID, Table);
+        ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
+        auto oldfType = call->getFunctionType();
+        bool res = Intrinsic::matchIntrinsicType(oldfType->getReturnType(), TableRef, overloadTys);
+        assert(!res);
+        for (auto Ty : argTys) {
+            res = Intrinsic::matchIntrinsicType(Ty, TableRef, overloadTys);
+            assert(!res);
+        }
+        res = Intrinsic::matchIntrinsicVarArg(oldfType->isVarArg(), TableRef);
+        assert(!res);
+        (void)res;
+    }
+    auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
+    newF->setCallingConv(call->getCallingConv());
+    auto newCall = CallInst::Create(newF, args, "", call);
+    newCall->setTailCallKind(call->getTailCallKind());
+    auto old_attrs = call->getAttributes();
+#if JL_LLVM_VERSION >= 50000
+    newCall->setAttributes(AttributeList::get(*ctx, old_attrs.getFnAttributes(),
+                                              old_attrs.getRetAttributes(), {}));
+#else
+    AttributeSet attr;
+    attr = attr.addAttributes(*ctx, AttributeSet::ReturnIndex, old_attrs.getRetAttributes())
+        .addAttributes(*ctx, AttributeSet::FunctionIndex, old_attrs.getFnAttributes());
+    newCall->setAttributes(attr);
+#endif
+    newCall->setDebugLoc(call->getDebugLoc());
+    call->replaceAllUsesWith(newCall);
+    call->eraseFromParent();
+}
+
 // This function needs to handle all cases `AllocOpt::checkInst` can handle.
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
@@ -491,11 +553,18 @@ void AllocOpt::replaceUsesWith(Instruction *orig_inst, Instruction *new_inst,
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             if (ptr_from_objref && ptr_from_objref == call->getCalledFunction()) {
+                new_i = new PtrToIntInst(new_i, T_size, "", call);
                 call->replaceAllUsesWith(new_i);
                 call->eraseFromParent();
                 return;
             }
-            // remove from operand bundle
+            if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
+                if (Intrinsic::ID ID = intrinsic->getIntrinsicID()) {
+                    replaceIntrinsicUseWith(intrinsic, ID, orig_i, new_i);
+                    return;
+                }
+            }
+            // remove from operand bundle or arguments for gc_perserve_begin
             Type *new_t = new_i->getType();
             user->replaceUsesOfWith(orig_i, ConstantPointerNull::get(cast<PointerType>(new_t)));
         }

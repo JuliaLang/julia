@@ -3,7 +3,7 @@
 # For curmod_*
 include("testenv.jl")
 
-replstr(x) = sprint((io,x) -> show(IOContext(io, limit=true, displaysize=(24, 80)), MIME("text/plain"), x), x)
+replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
 
 @test replstr(Array{Any}(2)) == "2-element Array{Any,1}:\n #undef\n #undef"
 @test replstr(Array{Any}(2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
@@ -13,17 +13,17 @@ replstr(x) = sprint((io,x) -> show(IOContext(io, limit=true, displaysize=(24, 80
 struct T5589
     names::Vector{String}
 end
-@test replstr(T5589(Array{String,1}(100))) == "$(curmod_prefix)T5589(String[#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
+@test replstr(T5589(Array{String,1}(100))) == "$(curmod_prefix)T5589([#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
 
 @test replstr(parse("mutable struct X end")) == ":(mutable struct X\n        #= none:1 =#\n    end)"
 @test replstr(parse("struct X end")) == ":(struct X\n        #= none:1 =#\n    end)"
-s = "ccall(:f, Int, (Ptr{Void},), &x)"
-@test replstr(parse(s)) == ":($s)"
+let s = "ccall(:f, Int, (Ptr{Void},), &x)"
+    @test replstr(parse(s)) == ":($s)"
+end
 
 # recursive array printing
 # issue #10353
-let
-    a = Any[]
+let a = Any[]
     push!(a,a)
     show(IOBuffer(), a)
     push!(a,a)
@@ -343,6 +343,7 @@ end"
 
 # issue #9474
 for s in ("(1::Int64 == 1::Int64)::Bool", "(1:2:3) + 4", "x = 1:2:3")
+    local s
     @test sprint(show, parse(s)) == ":("*s*")"
 end
 
@@ -414,9 +415,11 @@ end
 @test_repr "a::b where T"
 @test_repr "X where (T=1)"
 @test_repr "X where T = 1"
+@test_repr "Array{<:Real}"
+@test_repr "Array{>:Real}"
 
 let oldout = STDOUT, olderr = STDERR
-    local rdout, wrout, rderr, wrerr, out, err, rd, wr
+    local rdout, wrout, rderr, wrerr, out, err, rd, wr, io
     try
         # pr 16917
         rdout, wrout = redirect_stdout()
@@ -507,7 +510,7 @@ function f13127()
     show(buf, f)
     String(take!(buf))
 end
-@test f13127() == "$(curmod_prefix)f"
+@test startswith(f13127(), "getfield($(@__MODULE__), Symbol(\"")
 
 #test methodshow.jl functions
 @test Base.inbase(Base)
@@ -593,14 +596,15 @@ end
 
 
 # test structured zero matrix printing for select structured types
-A = reshape(1:16,4,4)
-@test replstr(Diagonal(A)) == "4×4 Diagonal{$(Int),Array{$(Int),1}}:\n 1  ⋅   ⋅   ⋅\n ⋅  6   ⋅   ⋅\n ⋅  ⋅  11   ⋅\n ⋅  ⋅   ⋅  16"
-@test replstr(Bidiagonal(A,:U)) == "4×4 Bidiagonal{$(Int),Array{$(Int),1}}:\n 1  5   ⋅   ⋅\n ⋅  6  10   ⋅\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
-@test replstr(Bidiagonal(A,:L)) == "4×4 Bidiagonal{$(Int),Array{$(Int),1}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n ⋅  7  11   ⋅\n ⋅  ⋅  12  16"
-@test replstr(SymTridiagonal(A+A')) == "4×4 SymTridiagonal{$(Int),Array{$(Int),1}}:\n 2   7   ⋅   ⋅\n 7  12  17   ⋅\n ⋅  17  22  27\n ⋅   ⋅  27  32"
-@test replstr(Tridiagonal(diag(A,-1),diag(A),diag(A,+1))) == "4×4 Tridiagonal{$Int}:\n 1  5   ⋅   ⋅\n 2  6  10   ⋅\n ⋅  7  11  15\n ⋅  ⋅  12  16"
-@test replstr(UpperTriangular(copy(A))) == "4×4 UpperTriangular{$Int,Array{$Int,2}}:\n 1  5   9  13\n ⋅  6  10  14\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
-@test replstr(LowerTriangular(copy(A))) == "4×4 LowerTriangular{$Int,Array{$Int,2}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n 3  7  11   ⋅\n 4  8  12  16"
+let A = reshape(1:16, 4, 4)
+    @test replstr(Diagonal(A)) == "4×4 Diagonal{$(Int),Array{$(Int),1}}:\n 1  ⋅   ⋅   ⋅\n ⋅  6   ⋅   ⋅\n ⋅  ⋅  11   ⋅\n ⋅  ⋅   ⋅  16"
+    @test replstr(Bidiagonal(A, :U)) == "4×4 Bidiagonal{$(Int),Array{$(Int),1}}:\n 1  5   ⋅   ⋅\n ⋅  6  10   ⋅\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
+    @test replstr(Bidiagonal(A, :L)) == "4×4 Bidiagonal{$(Int),Array{$(Int),1}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n ⋅  7  11   ⋅\n ⋅  ⋅  12  16"
+    @test replstr(SymTridiagonal(A + A')) == "4×4 SymTridiagonal{$(Int),Array{$(Int),1}}:\n 2   7   ⋅   ⋅\n 7  12  17   ⋅\n ⋅  17  22  27\n ⋅   ⋅  27  32"
+    @test replstr(Tridiagonal(diag(A, -1), diag(A), diag(A, +1))) == "4×4 Tridiagonal{$(Int),Array{$(Int),1}}:\n 1  5   ⋅   ⋅\n 2  6  10   ⋅\n ⋅  7  11  15\n ⋅  ⋅  12  16"
+    @test replstr(UpperTriangular(copy(A))) == "4×4 UpperTriangular{$Int,Array{$Int,2}}:\n 1  5   9  13\n ⋅  6  10  14\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
+    @test replstr(LowerTriangular(copy(A))) == "4×4 LowerTriangular{$Int,Array{$Int,2}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n 3  7  11   ⋅\n 4  8  12  16"
+end
 
 # Vararg methods in method tables
 function test_mt(f, str)
@@ -675,8 +679,9 @@ end
 @test contains(sprint((io, x) -> show(IOContext(io, :limit => true), x), ones(30, 30)), "\u2026")
 
 # showcompact() also sets :multiline=>false (#16817)
-let io = IOBuffer()
+let io = IOBuffer(),
     x = [1, 2]
+
     showcompact(io, x)
     @test String(take!(io)) == "[1, 2]"
     showcompact(IOContext(io, :compact => true), x)
@@ -736,7 +741,7 @@ let sv = Core.svec(:a, :b, :c)
     @test repr == "SimpleVector\n  1: Symbol a\n  2: Symbol b\n  3: #undef\n"
 end
 let repr = sprint(dump, sin)
-    @test repr == "sin (function of type Base.#sin)\n"
+    @test repr == "sin (function of type typeof(sin))\n"
 end
 let repr = sprint(dump, Base.Test)
     @test repr == "Module Base.Test\n"
@@ -758,6 +763,8 @@ end
 @test repr(:([x for x = y])) == ":([x for x = y])"
 @test repr(:([x for x = y if z])) == ":([x for x = y if z])"
 @test repr(:(z for z = 1:5, y = 1:5)) == ":((z for z = 1:5, y = 1:5))"
+@test_repr "(x for i in a, b in c)"
+@test_repr "(x for a in b, c in d for e in f)"
 
 for op in (:(.=), :(.+=), :(.&=))
     @test repr(parse("x $op y")) == ":(x $op y)"
@@ -874,7 +881,7 @@ end
                    (Pair{Integer,Int64}(1, 2) => 3)       => "Pair{Integer,Int64}(1, 2) => 3",
                    ((1+2im) => (3+4im))                   => "1+2im => 3+4im",
                    (1 => 2 => Pair{Real,Int64}(3, 4))     => "1 => (2=>Pair{Real,Int64}(3, 4))")
-
+        local s
         @test sprint(show, p) == s
     end
     # - when the context has :compact=>false, print pair's member non-compactly
@@ -923,7 +930,7 @@ end
 @testset "Array printing with limited rows" begin
     arrstr = let buf = IOBuffer()
         function (A, rows)
-            Base.showarray(IOContext(buf, displaysize=(rows, 80), limit=true),
+            Base.showarray(IOContext(buf, :displaysize => (rows, 80), :limit => true),
                            A, false, header=true)
             String(take!(buf))
         end
@@ -946,4 +953,46 @@ end
               string("4×30 Array{Float64,2}:\n",
                      " 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  …  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n",
                      " ⋮                        ⋮              ⋱            ⋮                      ")
+end
+
+module UnexportedOperators
+function + end
+function == end
+end
+
+@testset "Parseable printing of types" begin
+    @test repr(typeof(print)) == "typeof(print)"
+    @test repr(typeof(Base.show_default)) == "typeof(Base.show_default)"
+    @test repr(typeof(UnexportedOperators.:+)) == "typeof($(curmod_prefix)UnexportedOperators.:+)"
+    @test repr(typeof(UnexportedOperators.:(==))) == "typeof($(curmod_prefix)UnexportedOperators.:(==))"
+    anonfn = x->2x
+    modname = string(@__MODULE__)
+    anonfn_type_repr = "getfield($modname, Symbol(\"$(typeof(anonfn).name.name)\"))"
+    @test repr(typeof(anonfn)) == anonfn_type_repr
+    @test repr(anonfn) == anonfn_type_repr * "()"
+    @test stringmime("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
+    mkclosure = x->y->x+y
+    clo = mkclosure(10)
+    @test stringmime("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
+    @test repr(UnionAll) == "UnionAll"
+end
+
+let x = TypeVar(:_), y = TypeVar(:_)
+    @test repr(UnionAll(x, UnionAll(y, Pair{x,y}))) == "Pair{_1,_2} where _2 where _1"
+    @test repr(UnionAll(x, UnionAll(y, Pair{UnionAll(x,Ref{x}),y}))) == "Pair{Ref{_1} where _1,_1} where _1"
+    x = TypeVar(:a)
+    y = TypeVar(:a)
+    z = TypeVar(:a)
+    @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z})))) == "Tuple{a1,a2,a} where a2 where a1 where a"
+end
+
+@testset "showarg" begin
+    A = reshape(collect(Int16(1):Int16(2*3*5)), 2, 3, 5)
+    @test summary(A) == "2×3×5 Array{Int16,3}"
+    v = view(A, :, 3, 2:5)
+    @test summary(v) == "2×4 view(::Array{Int16,3}, :, 3, 2:5) with eltype Int16"
+    r = reshape(v, 4, 2)
+    @test summary(r) == "4×2 reshape(view(::Array{Int16,3}, :, 3, 2:5), 4, 2) with eltype Int16"
+    p = PermutedDimsArray(r, (2, 1))
+    @test summary(p) == "2×4 PermutedDimsArray(reshape(view(::Array{Int16,3}, :, 3, 2:5), 4, 2), (2, 1)) with eltype Int16"
 end

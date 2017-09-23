@@ -84,7 +84,6 @@ signbit(x::Unsigned) = false
 flipsign(x::T, y::T) where {T<:BitSigned} = flipsign_int(x, y)
 flipsign(x::BitSigned, y::BitSigned) = flipsign_int(promote(x, y)...) % typeof(x)
 
-flipsign(x::Signed, y::Signed)  = convert(typeof(x), flipsign(promote_noncircular(x, y)...))
 flipsign(x::Signed, y::Float16) = flipsign(x, bitcast(Int16, y))
 flipsign(x::Signed, y::Float32) = flipsign(x, bitcast(Int32, y))
 flipsign(x::Signed, y::Float64) = flipsign(x, bitcast(Int64, y))
@@ -125,7 +124,7 @@ abs(x::Signed) = flipsign(x,x)
 
 ~(n::Integer) = -n-1
 
-unsigned(x::Signed) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
+unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 unsigned(x::Bool) = convert(Unsigned, x)
 
 """
@@ -157,11 +156,11 @@ signed without checking for overflow.
 """
 signed(x) = convert(Signed, x)
 
-div(x::Signed, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)
-div(x::Unsigned, y::Signed) = unsigned(flipsign(signed(div(x, unsigned(abs(y)))), y))
+div(x::BitSigned, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)
+div(x::Unsigned, y::BitSigned) = unsigned(flipsign(signed(div(x, unsigned(abs(y)))), y))
 
-rem(x::Signed, y::Unsigned) = flipsign(signed(rem(unsigned(abs(x)), y)), x)
-rem(x::Unsigned, y::Signed) = rem(x, unsigned(abs(y)))
+rem(x::BitSigned, y::Unsigned) = flipsign(signed(rem(unsigned(abs(x)), y)), x)
+rem(x::Unsigned, y::BitSigned) = rem(x, unsigned(abs(y)))
 
 fld(x::Signed, y::Unsigned) = div(x, y) - (signbit(x) & (rem(x, y) != 0))
 fld(x::Unsigned, y::Signed) = div(x, y) - (signbit(y) & (rem(x, y) != 0))
@@ -294,6 +293,26 @@ julia> 4 | 1
 (|)(x::T, y::T) where {T<:BitInteger} = or_int(x, y)
 xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
 
+"""
+    bswap(n)
+
+Byte-swap an integer. Flip the bits of its binary representation.
+
+# Examples
+```jldoctest
+julia> a = bswap(4)
+288230376151711744
+
+julia> bswap(a)
+4
+
+julia> bin(1)
+"1"
+
+julia> bin(bswap(1))
+"100000000000000000000000000000000000000000000000000000000"
+```
+"""
 bswap(x::Union{Int8, UInt8}) = x
 bswap(x::Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}) =
     bswap_int(x)
@@ -376,12 +395,12 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 (<=)(x::T, y::T) where {T<:BitSigned}   = sle_int(x, y)
 (<=)(x::T, y::T) where {T<:BitUnsigned} = ule_int(x, y)
 
-==(x::Signed,   y::Unsigned) = (x >= 0) & (unsigned(x) == y)
-==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == unsigned(y))
-<( x::Signed,   y::Unsigned) = (x <  0) | (unsigned(x) <  y)
-<( x::Unsigned, y::Signed  ) = (y >= 0) & (x <  unsigned(y))
-<=(x::Signed,   y::Unsigned) = (x <  0) | (unsigned(x) <= y)
-<=(x::Unsigned, y::Signed  ) = (y >= 0) & (x <= unsigned(y))
+==(x::BitSigned,   y::BitUnsigned) = (x >= 0) & (unsigned(x) == y)
+==(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x == unsigned(y))
+<( x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <  y)
+<( x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <  unsigned(y))
+<=(x::BitSigned,   y::BitUnsigned) = (x <  0) | (unsigned(x) <= y)
+<=(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <= unsigned(y))
 
 ## integer shifts ##
 
@@ -513,6 +532,45 @@ convert(::Type{Unsigned}, x::Union{Float32, Float64, Bool}) = convert(UInt, x)
 convert(::Type{Integer}, x::Integer) = x
 convert(::Type{Integer}, x::Real) = convert(Signed, x)
 
+"""
+    trunc([T,] x, [digits, [base]])
+
+`trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
+is less than or equal to `x`.
+
+`trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
+not representable.
+
+`digits` and `base` work as for [`round`](@ref).
+"""
+function trunc end
+
+"""
+    floor([T,] x, [digits, [base]])
+
+`floor(x)` returns the nearest integral value of the same type as `x` that is less than or
+equal to `x`.
+
+`floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
+not representable.
+
+`digits` and `base` work as for [`round`](@ref).
+"""
+function floor end
+
+"""
+    ceil([T,] x, [digits, [base]])
+
+`ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
+equal to `x`.
+
+`ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is not
+representable.
+
+`digits` and `base` work as for [`round`](@ref).
+"""
+function ceil end
+
 round(x::Integer) = x
 trunc(x::Integer) = x
 floor(x::Integer) = x
@@ -544,29 +602,49 @@ end
 
 ## integer promotions ##
 
-promote_rule(::Type{Int8}, ::Type{Int16})   = Int16
-promote_rule(::Type{UInt8}, ::Type{UInt16}) = UInt16
-promote_rule(::Type{Int32}, ::Type{<:Union{Int8,Int16}})    = Int32
-promote_rule(::Type{UInt32}, ::Type{<:Union{UInt8,UInt16}}) = UInt32
-promote_rule(::Type{Int64}, ::Type{<:Union{Int8,Int16,Int32}})     = Int64
-promote_rule(::Type{UInt64}, ::Type{<:Union{UInt8,UInt16,UInt32}}) = UInt64
-promote_rule(::Type{Int128}, ::Type{<:BitSigned64})    = Int128
-promote_rule(::Type{UInt128}, ::Type{<:BitUnsigned64}) = UInt128
-for T in BitSigned_types
-    @eval promote_rule(::Type{<:Union{UInt8,UInt16}}, ::Type{$T}) =
-        $(sizeof(T) < sizeof(Int) ? Int : T)
-end
-@eval promote_rule(::Type{UInt32}, ::Type{<:Union{Int8,Int16,Int32}}) =
-    $(Core.sizeof(Int) == 8 ? Int : UInt)
-promote_rule(::Type{UInt32}, ::Type{Int64}) = Int64
-promote_rule(::Type{UInt64}, ::Type{<:BitSigned64}) = UInt64
-promote_rule(::Type{<:Union{UInt32, UInt64}}, ::Type{Int128}) = Int128
-promote_rule(::Type{UInt128}, ::Type{<:BitSigned}) = UInt128
+# with different sizes, promote to larger type
+promote_rule(::Type{Int16}, ::Union{Type{Int8}, Type{UInt8}}) = Int16
+promote_rule(::Type{Int32}, ::Union{Type{Int16}, Type{Int8}, Type{UInt16}, Type{UInt8}}) = Int32
+promote_rule(::Type{Int64}, ::Union{Type{Int16}, Type{Int32}, Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt8}}) = Int64
+promote_rule(::Type{Int128}, ::Union{Type{Int16}, Type{Int32}, Type{Int64}, Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt8}}) = Int128
+promote_rule(::Type{UInt16}, ::Union{Type{Int8}, Type{UInt8}}) = UInt16
+promote_rule(::Type{UInt32}, ::Union{Type{Int16}, Type{Int8}, Type{UInt16}, Type{UInt8}}) = UInt32
+promote_rule(::Type{UInt64}, ::Union{Type{Int16}, Type{Int32}, Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt8}}) = UInt64
+promote_rule(::Type{UInt128}, ::Union{Type{Int16}, Type{Int32}, Type{Int64}, Type{Int8}, Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt8}}) = UInt128
+# with mixed signedness and same size, Unsigned wins
+promote_rule(::Type{UInt8},   ::Type{Int8}  ) = UInt8
+promote_rule(::Type{UInt16},  ::Type{Int16} ) = UInt16
+promote_rule(::Type{UInt32},  ::Type{Int32} ) = UInt32
+promote_rule(::Type{UInt64},  ::Type{Int64} ) = UInt64
+promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 _default_type(::Type{Unsigned}) = UInt
 _default_type(::Union{Type{Integer},Type{Signed}}) = Int
 
 ## traits ##
+
+"""
+    typemin(T)
+
+The lowest value representable by the given (real) numeric DataType `T`.
+
+# Examples
+```jldoctest
+julia> typemin(Float16)
+-Inf16
+
+julia> typemin(Float32)
+-Inf32
+```
+"""
+function typemin end
+
+"""
+    typemax(T)
+
+The highest value representable by the given (real) numeric `DataType`.
+"""
+function typemax end
 
 typemin(::Type{Int8  }) = Int8(-128)
 typemax(::Type{Int8  }) = Int8(127)

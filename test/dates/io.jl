@@ -377,8 +377,8 @@ let f = "YY"
 end
 
 # Issue: https://github.com/quinnj/TimeZones.jl/issues/19
-let
-    const Zulu = String
+let dt
+    Zulu = String
 
     function Dates.tryparsenext(d::Dates.DatePart{'Z'}, str, i, len)
         Dates.tryparsenext_word(str, i, len, Dates.min_width(d), Dates.max_width(d))
@@ -422,7 +422,7 @@ end
 
 # Issue 21001
 for (ms, str) in zip([0, 1, 20, 300, 450, 678], ["0", "001", "02", "3", "45", "678"])
-    dt = DateTime(2000, 1, 1, 0, 0, 0, ms)
+    local dt = DateTime(2000, 1, 1, 0, 0, 0, ms)
     @test Dates.format(dt, "s") == str
     @test Dates.format(dt, "ss") == rpad(str, 2, '0')
     @test Dates.format(dt, "sss") == rpad(str, 3, '0')
@@ -446,7 +446,7 @@ end
 end
 
 # Time Parsing
-let
+let t
     time_tuple(t::Dates.Time) = (
         Dates.hour(t), Dates.minute(t), Dates.second(t),
         Dates.millisecond(t), Dates.microsecond(t), Dates.nanosecond(t)

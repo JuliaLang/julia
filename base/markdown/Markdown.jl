@@ -56,8 +56,8 @@ macro doc_str(s::AbstractString, t...)
     docexpr(__source__, __module__, s, t...)
 end
 
-function Base.display(d::Base.REPL.REPLDisplay, md::Vector{MD})
-    for md in md
+function Base.display(d::Base.REPL.REPLDisplay, mds::Vector{MD})
+    for md in mds
         display(d, md)
     end
 end

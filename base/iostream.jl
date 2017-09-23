@@ -26,7 +26,15 @@ IOStream(name::AbstractString) = IOStream(name, true)
 
 unsafe_convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, pointer(s.ios))
 show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
+
+"""
+    fd(stream)
+
+Returns the file descriptor backing the stream or file. Note that this function only applies
+to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
+"""
 fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
+
 stat(s::IOStream) = stat(fd(s))
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 isopen(s::IOStream) = ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios)!=0
@@ -39,11 +47,22 @@ end
 iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios)!=0
 isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios)!=0
 
+"""
+    truncate(file,n)
+
+Resize the file or buffer given by the first argument to exactly `n` bytes, filling
+previously unallocated space with '\\0' if the file or buffer is grown.
+"""
 function truncate(s::IOStream, n::Integer)
     systemerror("truncate", ccall(:ios_trunc, Cint, (Ptr{Void}, Csize_t), s.ios, n) != 0)
     return s
 end
 
+"""
+    seek(s, pos)
+
+Seek a stream to the given position.
+"""
 function seek(s::IOStream, n::Integer)
     ret = ccall(:ios_seek, Int64, (Ptr{Void}, Int64), s.ios, n)
     systemerror("seek", ret == -1)
@@ -51,13 +70,28 @@ function seek(s::IOStream, n::Integer)
     return s
 end
 
+"""
+    seekstart(s)
+
+Seek a stream to its beginning.
+"""
 seekstart(s::IO) = seek(s,0)
 
+"""
+    seekend(s)
+
+Seek a stream to its end.
+"""
 function seekend(s::IOStream)
     systemerror("seekend", ccall(:ios_seek_end, Int64, (Ptr{Void},), s.ios) != 0)
     return s
 end
 
+"""
+    skip(s, offset)
+
+Seek a stream relative to the current position.
+"""
 function skip(s::IOStream, delta::Integer)
     ret = ccall(:ios_skip, Int64, (Ptr{Void}, Int64), s.ios, delta)
     systemerror("skip", ret == -1)
@@ -65,6 +99,11 @@ function skip(s::IOStream, delta::Integer)
     return s
 end
 
+"""
+    position(s)
+
+Get the current position of a stream.
+"""
 function position(s::IOStream)
     pos = ccall(:ios_pos, Int64, (Ptr{Void},), s.ios)
     systemerror("position", pos == -1)

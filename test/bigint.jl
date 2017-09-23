@@ -250,21 +250,22 @@ function bigfib(n)
 end
 @test [bigfib(n) for n=0:10] == [0,1,1,2,3,5,8,13,21,34,55]
 
-n = bigfib(1000001)
-@test ndigits(n) == 208988
-@test mod(n,big(10)^15) == 359244926937501
-@test div(n,big(10)^208973) == 316047687386689
+let s, n = bigfib(1000001)
+    @test ndigits(n) == 208988
+    @test mod(n,big(10)^15) == 359244926937501
+    @test div(n,big(10)^208973) == 316047687386689
 
-s = string(n)
-@test length(s) == 208988
-@test endswith(s, "359244926937501")
-@test startswith(s, "316047687386689")
+    s = string(n)
+    @test length(s) == 208988
+    @test endswith(s, "359244926937501")
+    @test startswith(s, "316047687386689")
+end
 
 # serialization (#5133)
-let n = parse(BigInt,"359334085968622831041960188598043661065388726959079837")
+let n = parse(BigInt, "359334085968622831041960188598043661065388726959079837"),
     b = IOBuffer()
-    serialize(b,n)
-    seek(b,0)
+    serialize(b, n)
+    seek(b, 0)
     @test deserialize(b) == n
 end
 
@@ -282,8 +283,8 @@ ndigits(big(rand(Int)), rand(63:typemax(Int)))
 ndigits(big(rand(Int)), big(2)^rand(2:999))
 
 for x in big.([-20:20; rand(Int)])
-    for b in -1:1
-        @test_throws DomainError ndigits(x, b)
+    for _base in -1:1
+        @test_throws DomainError ndigits(x, _base)
     end
 end
 
@@ -344,6 +345,7 @@ end
 
 # respect 0-padding on big(0)
 for f in (bin, oct, dec, hex)
+    local f
     @test f(big(0), 0) == ""
 end
 @test base(rand(2:62), big(0), 0) == ""
@@ -370,3 +372,13 @@ end
 @test typeof(tan(a)) == BigFloat
 @test typeof(cos(a)) == BigFloat
 @test typeof(sin(a)) == BigFloat
+
+@test BigInt <: Signed
+@test big(1) isa Signed
+
+let x = big(1)
+    @test signed(x) === x
+    @test convert(Signed, x) === x
+    @test Signed(x) === x
+    @test_throws MethodError convert(Unsigned, x) # could change in the future
+end

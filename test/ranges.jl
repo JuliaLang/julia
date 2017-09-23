@@ -1,6 +1,189 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# ranges
+# Because ranges rely on high precision arithmetic, test those utilities first
+for (I, T) in ((Int16, Float16), (Int32, Float32), (Int64, Float64)), i = 1:10^3
+    i = rand(I) >> 1  # test large values below
+    hi, lo = Base.splitprec(T, i)
+    @test widen(hi) + widen(lo) == i
+    @test endswith(bits(hi), repeat('0', Base.Math.significand_bits(T) ÷ 2))
+end
+for (I, T) in ((Int16, Float16), (Int32, Float32), (Int64, Float64))
+    x = T(typemax(I))
+    Δi = ceil(I, eps(x))
+    for i = typemax(I)-2Δi:typemax(I)-Δi
+        hi, lo = Base.splitprec(T, i)
+        @test widen(hi) + widen(lo) == i
+        @test endswith(bits(hi), repeat('0', Base.Math.significand_bits(T) ÷ 2))
+    end
+    for i = typemin(I):typemin(I)+Δi
+        hi, lo = Base.splitprec(T, i)
+        @test widen(hi) + widen(lo) == i
+        @test endswith(bits(hi), repeat('0', Base.Math.significand_bits(T) ÷ 2))
+    end
+end
+
+# Compare precision in a manner sensitive to subnormals, which lose
+# precision compared to widening.
+function cmp_sn(w, hi, lo, slopbits=0)
+    if !isfinite(hi)
+        if abs(w) > realmax(typeof(hi))
+            return isinf(hi) && sign(w) == sign(hi)
+        end
+        if isnan(w) && isnan(hi)
+            return true
+        end
+        return w == hi
+    end
+    if abs(w) < subnormalmin(typeof(hi))
+        return (hi == zero(hi) || abs(w - widen(hi)) < abs(w)) && lo == zero(hi)
+    end
+    # Compare w == hi + lo unless `lo` issubnormal
+    z = widen(hi) + widen(lo)
+    if !issubnormal(lo) && lo != 0
+        if slopbits == 0
+            return z == w
+        end
+        wr, zr = roundshift(w, slopbits), roundshift(z, slopbits)
+        return max(wr-1, zero(wr)) <= zr <= wr+1
+    end
+    # round w to the same number of bits as z
+    zu = asbits(z)
+    wu = asbits(w)
+    lastbit = false
+    while zu > 0 && !isodd(zu)
+        lastbit = isodd(wu)
+        zu = zu >> 1
+        wu = wu >> 1
+    end
+    return wu <= zu <= wu + lastbit
+end
+
+asbits(x) = reinterpret(Base.uinttype(typeof(x)), x)
+
+function roundshift(x, n)
+    xu = asbits(x)
+    lastbit = false
+    for i = 1:n
+        lastbit = isodd(xu)
+        xu = xu >> 1
+    end
+    xu + lastbit
+end
+
+subnormalmin(::Type{T}) where T = reinterpret(T, Base.uinttype(T)(1))
+
+function highprec_pair(x, y)
+    slopbits = (Base.Math.significand_bits(typeof(widen(x))) + 1) -
+        2*(Base.Math.significand_bits(typeof(x)) + 1)
+    hi, lo = Base.add12(x, y)
+    @test cmp_sn(widen(x) + widen(y), hi, lo)
+    hi, lo = Base.mul12(x, y)
+    @test cmp_sn(widen(x) * widen(y), hi, lo)
+    y == 0 && return nothing
+    hi, lo = Base.div12(x, y)
+    @test cmp_sn(widen(x) / widen(y), hi, lo, slopbits)
+    nothing
+end
+
+# # This tests every possible pair of Float16s. It takes too long for
+# # ordinary use, which is why it's commented out.
+# function pair16()
+#     for yu in 0x0000:0xffff
+#         for xu in 0x0000:0xffff
+#             x, y = reinterpret(Float16, xu), reinterpret(Float16, yu)
+#             highprec_pair(x, y)
+#         end
+#     end
+# end
+
+for T in (Float16, Float32) # skip Float64 (bit representation of BigFloat is not available)
+    for i = 1:10^5
+        x, y = rand(T), rand(T)
+        highprec_pair(x, y)
+        highprec_pair(-x, y)
+        highprec_pair(x, -y)
+        highprec_pair(-x, -y)
+    end
+    # Make sure we test dynamic range too
+    for i = 1:10^5
+        x, y = rand(T), rand(T)
+        x == 0 || y == 0 && continue
+        x, y = log(x), log(y)
+        highprec_pair(x, y)
+    end
+end
+
+asww(x) = widen(widen(x.hi)) + widen(widen(x.lo))
+astuple(x) = (x.hi, x.lo)
+
+function cmp_sn2(w, hi, lo, slopbits=0)
+    if !isfinite(hi)
+        if abs(w) > realmax(typeof(hi))
+            return isinf(hi) && sign(w) == sign(hi)
+        end
+        if isnan(w) && isnan(hi)
+            return true
+        end
+        return w == hi
+    end
+    if abs(w) < subnormalmin(typeof(hi))
+        return (hi == zero(hi) || abs(w - widen(hi)) < abs(w)) && lo == zero(hi)
+    end
+    z = widen(hi) + widen(lo)
+    zu, wu = asbits(z), asbits(w)
+    while zu > 0 && !isodd(zu)
+        zu = zu >> 1
+        wu = wu >> 1
+    end
+    zu = zu >> slopbits
+    wu = wu >> slopbits
+    return wu - 1 <= zu <= wu + 1
+end
+
+# TwicePrecision test. These routines lose accuracy if you form
+# intermediate subnormals; with Float16, this happens so frequently,
+# let's only test Float32.
+let T = Float32
+    Tw = widen(T)
+    slopbits = (Base.Math.significand_bits(Tw) + 1) -
+        2*(Base.Math.significand_bits(T) + 1)
+    for i = 1:10^5
+        x = Base.TwicePrecision{T}(rand())
+        y = Base.TwicePrecision{T}(rand())
+        xw, yw = asww(x), asww(y)
+        @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
+        @test cmp_sn2(Tw(xw-yw), astuple(x-y)..., slopbits)
+        @test cmp_sn2(Tw(xw*yw), astuple(x*y)..., slopbits)
+        @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits)
+        y = rand(T)
+        yw = widen(widen(y))
+        @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
+        @test cmp_sn2(Tw(xw-yw), astuple(x-y)..., slopbits)
+        @test cmp_sn2(Tw(xw*yw), astuple(x*y)..., slopbits)
+        @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits)
+    end
+end
+
+x1 = Base.TwicePrecision{Float64}(1)
+x0 = Base.TwicePrecision{Float64}(0)
+xinf = Base.TwicePrecision{Float64}(Inf)
+@test Float64(x1+x0)  == 1
+@test Float64(x1+0)   == 1
+@test Float64(x1+0.0) == 1
+@test Float64(x1*x0)  == 0
+@test Float64(x1*0)   == 0
+@test Float64(x1*0.0) == 0
+@test Float64(x1/x0)  == Inf
+@test Float64(x1/0)   == Inf
+@test Float64(xinf*x1) == Inf
+@test isnan(Float64(xinf*x0))
+@test isnan(Float64(xinf*0))
+@test isnan(Float64(xinf*0.0))
+@test isnan(Float64(x0/x0))
+@test isnan(Float64(x0/0))
+@test isnan(Float64(x0/0.0))
+
+## ranges
 @test size(10:1:0) == (0,)
 @test length(1:.2:2) == 6
 @test length(1.:.2:2.) == 6
@@ -27,12 +210,13 @@ L64 = @inferred(linspace(Int64(1), Int64(4), 4))
 @test L32[4] == 4 && L64[4] == 4
 @test @inferred(linspace(1.0, 2.0, 2.0f0)) === linspace(1.0, 2.0, 2)
 
-r = 5:-1:1
-@test r[1]==5
-@test r[2]==4
-@test r[3]==3
-@test r[4]==2
-@test r[5]==1
+let r = 5:-1:1
+    @test r[1]==5
+    @test r[2]==4
+    @test r[3]==3
+    @test r[4]==2
+    @test r[5]==1
+end
 
 @test length(.1:.1:.3) == 3
 @test length(1.1:1.1:3.3) == 3
@@ -53,13 +237,13 @@ r = 5:-1:1
 @test isempty((1:4)[5:4])
 @test_throws BoundsError (1:10)[8:-1:-2]
 
-r = typemax(Int)-5:typemax(Int)-1
-@test_throws BoundsError r[7]
+let r = typemax(Int)-5:typemax(Int)-1
+    @test_throws BoundsError r[7]
+end
 
 @test findin([5.2, 3.3], 3:20) == findin([5.2, 3.3], collect(3:20))
 
-let
-    span = 5:20
+let span = 5:20,
     r = -7:3:42
     @test findin(r, span) == 5:10
     r = 15:-2:-38
@@ -111,7 +295,7 @@ end
 @test intersect(-51:5:100, -33:7:125) == -26:35:79
 @test intersect(-51:5:100, -32:7:125) == -11:35:94
 #@test intersect(0:6:24, 6+0*(0:4:24)) == 6:6:6
-#@test intersect(12+0*(0:6:24), 0:4:24) == Range(12, 0, 5)
+#@test intersect(12+0*(0:6:24), 0:4:24) == AbstractRange(12, 0, 5)
 #@test isempty(intersect(6+0*(0:6:24), 0:4:24))
 @test intersect(-10:3:24, -10:3:24) == -10:3:23
 @test isempty(intersect(-11:3:24, -10:3:24))
@@ -131,7 +315,7 @@ end
 @test sort!(UnitRange(1,2)) == UnitRange(1,2)
 @test sort(1:10, rev=true) == collect(10:-1:1)
 @test sort(-3:3, by=abs) == [0,-1,1,-2,2,-3,3]
-@test select(1:10, 4) == 4
+@test partialsort(1:10, 4) == 4
 
 @test 0 in UInt(0):100:typemax(UInt)
 @test last(UInt(0):100:typemax(UInt)) in UInt(0):100:typemax(UInt)
@@ -150,11 +334,13 @@ end
 #@test (3 in 3+0*(1:5))
 #@test !(4 in 3+0*(1:5))
 
-r = 0.0:0.01:1.0
-@test (r[30] in r)
-r = (-4*Int64(maxintfloat(Int === Int32 ? Float32 : Float64))):5
-@test (3 in r)
-@test (3.0 in r)
+let r = 0.0:0.01:1.0
+    @test (r[30] in r)
+end
+let r = (-4*Int64(maxintfloat(Int === Int32 ? Float32 : Float64))):5
+    @test (3 in r)
+    @test (3.0 in r)
+end
 
 @test !(1 in 1:0)
 @test !(1.0 in 1.0:0.0)
@@ -189,7 +375,7 @@ r = (-4*Int64(maxintfloat(Int === Int32 ? Float32 : Float64))):5
 @test_throws BoundsError (0:2:10)[7:7]
 
 # indexing with negative ranges (#8351)
-for a=Range[3:6, 0:2:10], b=Range[0:1, 2:-1:0]
+for a=AbstractRange[3:6, 0:2:10], b=AbstractRange[0:1, 2:-1:0]
     @test_throws BoundsError a[b]
 end
 
@@ -201,7 +387,7 @@ end
 @test_throws OverflowError length(typemin(Int):typemax(Int))
 @test_throws OverflowError length(-1:typemax(Int)-1)
 
-let s = 0
+let s = 0, n
     # loops ending at typemax(Int)
     for i = (typemax(Int)-1):typemax(Int)
         s += 1
@@ -281,16 +467,16 @@ end
 @test sum(0:0.000001:1) == 500000.5
 @test sum(0:0.1:10) == 505.
 
-# operations with scalars
-@test (1:3) - 2 == -1:1
-@test (1:3) - 0.25 == 1-0.25:3-0.25
-@test (1:3) + 2 == 3:5
-@test (1:3) + 0.25 == 1+0.25:3+0.25
-@test (1:2:6) + 1 == 2:2:6
-@test (1:2:6) + 0.3 == 1+0.3:2:5+0.3
-@test (1:2:6) - 1 == 0:2:4
-@test (1:2:6) - 0.3 == 1-0.3:2:5-0.3
-@test 2 - (1:3) == 1:-1:-1
+# broadcasted operations with scalars
+@test broadcast(-, 1:3, 2) == -1:1
+@test broadcast(-, 1:3, 0.25) == 1-0.25:3-0.25
+@test broadcast(+, 1:3, 2) == 3:5
+@test broadcast(+, 1:3, 0.25) == 1+0.25:3+0.25
+@test broadcast(+, 1:2:6, 1) == 2:2:6
+@test broadcast(+, 1:2:6, 0.3) == 1+0.3:2:5+0.3
+@test broadcast(-, 1:2:6, 1) == 0:2:4
+@test broadcast(-, 1:2:6, 0.3) == 1-0.3:2:5-0.3
+@test broadcast(-, 2, 1:3) == 1:-1:-1
 
 # operations between ranges and arrays
 @test all(([1:5;] + (5:-1:1)) .== 6)
@@ -336,16 +522,20 @@ end
 @test [0.0:prevfloat(0.1):0.3;] == [0.0, prevfloat(0.1), prevfloat(0.2), 0.3]
 @test [0.0:nextfloat(0.1):0.3;] == [0.0, nextfloat(0.1), nextfloat(0.2)]
 
-for T = (Float32, Float64,),# BigFloat),
-    a = -5:25, s = [-5:-1;1:25;], d = 1:25, n = -1:15
-    den   = convert(T,d)
-    start = convert(T,a)/den
-    step  = convert(T,s)/den
-    stop  = convert(T,(a+(n-1)*s))/den
-    vals  = T[a:s:a+(n-1)*s;]./den
-    r = start:step:stop
+for T = (Float32, Float64,), # BigFloat),
+    a = -5:25,
+    s = [-5:-1; 1:25; ],
+    d = 1:25,
+    n = -1:15
+
+    denom = convert(T, d)
+    strt = convert(T, a)/denom
+    Δ     = convert(T, s)/denom
+    stop  = convert(T, (a + (n - 1) * s)) / denom
+    vals  = T[a:s:(a + (n - 1) * s); ] ./ denom
+    r = strt:Δ:stop
     @test [r;] == vals
-    @test [linspace(start, stop, length(r));] == vals
+    @test [linspace(strt, stop, length(r));] == vals
     # issue #7420
     n = length(r)
     @test [r[1:n];] == [r;]
@@ -362,27 +552,31 @@ end
 @test [-3*0.05:-0.05:-0.2;] == [linspace(-3*0.05,-0.2,2);] == [-3*0.05,-0.2]
 @test [-0.2:0.05:-3*0.05;]  == [linspace(-0.2,-3*0.05,2);] == [-0.2,-3*0.05]
 
-for T = (Float32, Float64,), i = 1:2^15, n = 1:5
-    start, step = randn(T), randn(T)
-    step == 0 && continue
-    stop = start + (n-1)*step
-    # `n` is not necessarily unique s.t. `start + (n-1)*step == stop`
-    # so test that `length(start:step:stop)` satisfies this identity
-    # and is the closest value to `(stop-start)/step` to do so
-    lo = hi = n
-    while start + (lo-1)*step == stop; lo -= 1; end
-    while start + (hi-1)*step == stop; hi += 1; end
-    m = clamp(round(Int, (stop-start)/step) + 1, lo+1, hi-1)
-    r = start:step:stop
-    @test m == length(r)
-    # FIXME: these fail some small portion of the time
-    @test_skip start == first(r)
-    @test_skip stop  == last(r)
-    l = linspace(start,stop,n)
-    @test n == length(l)
-    # FIXME: these fail some small portion of the time
-    @test_skip start == first(l)
-    @test_skip stop  == last(l)
+function range_fuzztests(::Type{T}, niter, nrange) where {T}
+    for i = 1:niter, n in nrange
+        strt, Δ = randn(T), randn(T)
+        Δ == 0 && continue
+        stop = strt + (n-1)*Δ
+        # `n` is not necessarily unique s.t. `strt + (n-1)*Δ == stop`
+        # so test that `length(strt:Δ:stop)` satisfies this identity
+        # and is the closest value to `(stop-strt)/Δ` to do so
+        lo = hi = n
+        while strt + (lo-1)*Δ == stop; lo -= 1; end
+        while strt + (hi-1)*Δ == stop; hi += 1; end
+        m = clamp(round(Int, (stop-strt)/Δ) + 1, lo+1, hi-1)
+        r = strt:Δ:stop
+        @test m == length(r)
+        @test strt == first(r)
+        @test Δ == step(r)
+        @test_skip stop == last(r)
+        l = linspace(strt,stop,n)
+        @test n == length(l)
+        @test strt == first(l)
+        @test stop  == last(l)
+    end
+end
+for T = (Float32, Float64,)
+    range_fuzztests(T, 2^15, 1:5)
 end
 
 # Inexact errors on 32 bit architectures. #22613
@@ -448,8 +642,9 @@ for T = (Float32, Float64)
 end
 
 # issue #20380
-r = LinSpace(1,4,4)
-@test isa(r[1:4], LinSpace)
+let r = LinSpace(1,4,4)
+    @test isa(r[1:4], LinSpace)
+end
 
 # linspace with 1 or 0 elements (whose step length is NaN)
 @test issorted(linspace(1,1,0))
@@ -460,10 +655,11 @@ r = LinSpace(1,4,4)
 
 # comparing and hashing ranges
 let
-    Rs = Range[1:2, map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 17:-3:0,
-               0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
-               linspace(0, 1, 20), map(Float32, linspace(0, 1, 20))]
+    Rs = AbstractRange[1:2, map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 17:-3:0,
+                       0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),
+                       linspace(0, 1, 20), map(Float32, linspace(0, 1, 20))]
     for r in Rs
+        local r
         ar = collect(r)
         @test r != ar
         @test !isequal(r,ar)
@@ -521,40 +717,48 @@ let r1 = 1.0:0.1:2.0, r2 = 1.0f0:0.2f0:3.0f0, r3 = 1:2:21
 end
 
 # issue #7114
-r = -0.004532318104333742:1.2597349521122731e-5:0.008065031416788989
-@test length(r[1:end-1]) == length(r) - 1
-@test isa(r[1:2:end],Range) && length(r[1:2:end]) == div(length(r)+1, 2)
-@test r[3:5][2] ≈ r[4]
-@test r[5:-2:1][2] ≈ r[3]
-@test_throws BoundsError r[0:10]
-@test_throws BoundsError r[1:10000]
+let r = -0.004532318104333742:1.2597349521122731e-5:0.008065031416788989
+    @test length(r[1:end-1]) == length(r) - 1
+    @test isa(r[1:2:end],AbstractRange) && length(r[1:2:end]) == div(length(r)+1, 2)
+    @test r[3:5][2] ≈ r[4]
+    @test r[5:-2:1][2] ≈ r[3]
+    @test_throws BoundsError r[0:10]
+    @test_throws BoundsError r[1:10000]
+end
 
-r = linspace(1/3,5/7,6)
-@test length(r) == 6
-@test r[1] == 1/3
-@test abs(r[end] - 5/7) <= eps(5/7)
-r = linspace(0.25,0.25,1)
-@test length(r) == 1
-@test_throws ArgumentError linspace(0.25,0.5,1)
+let r = linspace(1/3, 5/7, 6)
+    @test length(r) == 6
+    @test r[1] == 1/3
+    @test abs(r[end] - 5/7) <= eps(5/7)
+end
+
+let r = linspace(0.25, 0.25, 1)
+    @test length(r) == 1
+    @test_throws ArgumentError linspace(0.25,0.5,1)
+end
+
 
 # issue #7426
 @test [typemax(Int):1:typemax(Int);] == [typemax(Int)]
 
 #issue #7484
-r7484 = 0.1:0.1:1
-@test [reverse(r7484);] == reverse([r7484;])
+let r7484 = 0.1:0.1:1
+    @test [reverse(r7484);] == reverse([r7484;])
+end
 
 # issue #7387
 for r in (0:1, 0.0:1.0)
-    @test [r+im;] == [r;]+im
-    @test [r-im;] == [r;]-im
-    @test [r*im;] == [r;]*im
-    @test [r/im;] == [r;]/im
+    local r
+    @test [r .+ im;] == [r;] .+ im
+    @test [r .- im;] == [r;] .- im
+    @test [r * im;] == [r;] * im
+    @test [r / im;] == [r;] / im
 end
 
 # Preservation of high precision upon addition
-r = (-0.1:0.1:0.3) + ((-0.3:0.1:0.1) + 1e-12)
-@test r[3] == 1e-12
+let r = (-0.1:0.1:0.3) + broadcast(+, -0.3:0.1:0.1, 1e-12)
+    @test r[3] == 1e-12
+end
 
 # issue #7709
 @test length(map(identity, 0x01:0x05)) == 5
@@ -639,8 +843,8 @@ end
 @test 2*LinSpace(0,3,4) == LinSpace(0,6,4)
 @test LinSpace(0,3,4)*2 == LinSpace(0,6,4)
 @test LinSpace(0,3,4)/3 == LinSpace(0,1,4)
-@test 2-LinSpace(0,3,4) == LinSpace(2,-1,4)
-@test 2+LinSpace(0,3,4) == LinSpace(2,5,4)
+@test broadcast(-, 2, LinSpace(0,3,4)) == LinSpace(2,-1,4)
+@test broadcast(+, 2, LinSpace(0,3,4)) == LinSpace(2,5,4)
 @test -LinSpace(0,3,4) == LinSpace(0,-3,4)
 @test reverse(LinSpace(0,3,4)) == LinSpace(3,0,4)
 
@@ -653,18 +857,19 @@ let io = IOBuffer()
 end
 
 # issue 10950
-r = 1//2:3
-@test length(r) == 3
-i = 1
-for x in r
-    @test x == i//2
-    i += 2
+let r = 1//2:3
+    @test length(r) == 3
+    i = 1
+    for x in r
+        @test x == i//2
+        i += 2
+    end
+    @test i == 7
 end
-@test i == 7
 
 # stringmime/show should display the range or linspace nicely
 # to test print_range in range.jl
-replstrmime(x) = sprint((io,x) -> show(IOContext(io, limit=true, displaysize=(24, 80)), MIME("text/plain"), x), x)
+replstrmime(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
 @test replstrmime(1:4) == "1:4"
 @test stringmime("text/plain", 1:4) == "1:4"
 @test stringmime("text/plain", linspace(1,5,7)) == "1.0:0.6666666666666666:5.0"
@@ -705,18 +910,18 @@ test_range_index(linspace(1.0, 1.0, 1), 1:1)
 test_range_index(linspace(1.0, 1.0, 1), 1:0)
 test_range_index(linspace(1.0, 2.0, 0), 1:0)
 
-function test_linspace_identity(r::Range{T}, mr) where T
+function test_linspace_identity(r::AbstractRange{T}, mr) where T
     @test -r == mr
     @test -collect(r) == collect(mr)
     @test isa(-r, typeof(r))
 
-    @test 1 + r + (-1) == r
-    @test 1 + collect(r) == collect(1 + r) == collect(r + 1)
-    @test isa(1 + r + (-1), typeof(r))
-    @test 1 - r - 1 == mr
-    @test 1 - collect(r) == collect(1 - r) == collect(1 + mr)
-    @test collect(r) - 1 == collect(r - 1) == -collect(mr + 1)
-    @test isa(1 - r - 1, typeof(r))
+    @test broadcast(+, broadcast(+, 1, r), -1) == r
+    @test 1 .+ collect(r) == collect(1 .+ r) == collect(r .+ 1)
+    @test isa(broadcast(+, broadcast(+, 1, r), -1), typeof(r))
+    @test broadcast(-, broadcast(-, 1, r), 1) == mr
+    @test 1 .- collect(r) == collect(1 .- r) == collect(1 .+ mr)
+    @test collect(r) .- 1 == collect(r .- 1) == -collect(mr .+ 1)
+    @test isa(broadcast(-, broadcast(-, 1, r), 1), typeof(r))
 
     @test 1 * r * 1 == r
     @test 2 * r * T(0.5) == r
@@ -754,7 +959,7 @@ for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
         @test isa(float_r, typeof(_r))
         @test eltype(big_r) === BigFloat
     else
-        @test isa(float_r, Range)
+        @test isa(float_r, AbstractRange)
         @test eltype(float_r) <: AbstractFloat
         @test eltype(big_r) === BigInt
     end
@@ -805,6 +1010,7 @@ end
 
 # Issue #13738
 for r in (big(1):big(2), UInt128(1):UInt128(2), 0x1:0x2)
+    local r
     rr = r[r]
     @test typeof(rr) == typeof(r)
     @test r[r] == r
@@ -836,68 +1042,84 @@ let r = 1:3, a = [1,2,3]
 end
 
 # OneTo
-r = Base.OneTo(-5)
-@test isempty(r)
-@test length(r) == 0
-@test size(r) == (0,)
-r = Base.OneTo(3)
-@test !isempty(r)
-@test length(r) == 3
-@test size(r) == (3,)
-@test step(r) == 1
-@test first(r) == 1
-@test last(r) == 3
-@test minimum(r) == 1
-@test maximum(r) == 3
-@test r[2] == 2
-@test r[2:3] === 2:3
-@test_throws BoundsError r[4]
-@test_throws BoundsError r[0]
-@test r+1 === 2:4
-@test 2*r === 2:2:6
-@test r+r === 2:2:6
-k = 0
-for i in r
-    @test i == (k+=1)
+let r = Base.OneTo(-5)
+    @test isempty(r)
+    @test length(r) == 0
+    @test size(r) == (0,)
 end
-@test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
-@test intersect(r, 0:5) == 1:3
-@test intersect(r, 2) === intersect(2, r) === 2:2
-@test findin(r, r) === findin(r, 1:length(r)) === findin(1:length(r), r) === 1:length(r)
-r2 = Base.OneTo(7)
-@test findin(r2, 2:length(r2)-1) === 2:length(r2)-1
-@test findin(2:length(r2)-1, r2) === 1:length(r2)-2
-io = IOBuffer()
-show(io, r)
-str = String(take!(io))
-@test str == "Base.OneTo(3)"
+let r = Base.OneTo(3)
+    @test !isempty(r)
+    @test length(r) == 3
+    @test size(r) == (3,)
+    @test step(r) == 1
+    @test first(r) == 1
+    @test last(r) == 3
+    @test minimum(r) == 1
+    @test maximum(r) == 3
+    @test r[2] == 2
+    @test r[2:3] === 2:3
+    @test_throws BoundsError r[4]
+    @test_throws BoundsError r[0]
+    @test broadcast(+, r, 1) === 2:4
+    @test 2*r === 2:2:6
+    @test r + r === 2:2:6
+    k = 0
+    for i in r
+        @test i == (k += 1)
+    end
+    @test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
+    @test intersect(r, 0:5) == 1:3
+    @test intersect(r, 2) === intersect(2, r) === 2:2
+    @test findin(r, r) === findin(r, 1:length(r)) === findin(1:length(r), r) === 1:length(r)
+    io = IOBuffer()
+    show(io, r)
+    str = String(take!(io))
+    @test str == "Base.OneTo(3)"
+end
+let r = Base.OneTo(7)
+    @test findin(r, 2:(length(r) - 1)) === 2:(length(r) - 1)
+    @test findin(2:(length(r) - 1), r) === 1:(length(r) - 2)
+end
 
 # linspace of other types
-r = linspace(0, 3//10, 4)
-@test eltype(r) == Rational{Int}
-@test r[2] === 1//10
+let r = linspace(0, 3//10, 4)
+    @test eltype(r) == Rational{Int}
+    @test r[2] === 1//10
+end
 
-a, b = 1.0, nextfloat(1.0)
-ba, bb = BigFloat(a), BigFloat(b)
-r = linspace(ba, bb, 3)
-@test eltype(r) == BigFloat
-@test r[1] == a && r[3] == b
-@test r[2] == (ba+bb)/2
+let a = 1.0,
+    b = nextfloat(1.0),
+    ba = BigFloat(a),
+    bb = BigFloat(b),
+    r = linspace(ba, bb, 3)
+    @test eltype(r) == BigFloat
+    @test r[1] == a && r[3] == b
+    @test r[2] == (ba+bb)/2
+end
 
-a, b = rand(10), rand(10)
-r = linspace(a, b, 5)
-@test r[1] == a && r[5] == b
-for i = 2:4
-    x = ((5-i)//4)*a + ((i-1)//4)*b
-    @test r[i] == x
+let (a, b) = (rand(10), rand(10)),
+    r = linspace(a, b, 5)
+    @test r[1] == a && r[5] == b
+    for i = 2:4
+        x = ((5 - i) // 4) * a + ((i - 1) // 4) * b
+        @test r[i] == x
+    end
+end
+
+# issue #23178
+let r = linspace(Float16(0.1094), Float16(0.9697), 300)
+    @test r[1] == Float16(0.1094)
+    @test r[end] == Float16(0.9697)
 end
 
 # issue #20382
-r = @inferred(colon(big(1.0),big(2.0),big(5.0)))
-@test eltype(r) == BigFloat
+let r = @inferred(colon(big(1.0),big(2.0),big(5.0)))
+    @test eltype(r) == BigFloat
+end
 
 # issue #14420
 for r in (linspace(0.10000000000000045, 1), 0.10000000000000045:(1-0.10000000000000045)/49:1)
+    local r
     @test r[1] === 0.10000000000000045
     @test r[end] === 1.0
 end
@@ -933,7 +1155,7 @@ Base.isless(x, y::NotReal) = isless(x, y.val)
 
 # dimensional correctness:
 isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using TestHelpers.Furlong
+using Main.TestHelpers.Furlong
 @test_throws MethodError collect(Furlong(2):Furlong(10)) # step size is ambiguous
 @test_throws MethodError range(Furlong(2), 9) # step size is ambiguous
 @test collect(Furlong(2):Furlong(1):Furlong(10)) == collect(range(Furlong(2),Furlong(1),9)) == Furlong.(2:10)
@@ -952,8 +1174,15 @@ end
     # test default values; n = 50, base = 10
     @test logspace(a, b) == logspace(a, b, 50) == 10 .^ linspace(a, b, 50)
     @test logspace(a, b, n) == 10 .^ linspace(a, b, n)
-    for base in (10, 2, e)
+    for base in (10, 2, ℯ)
         @test logspace(a, b, base=base) == logspace(a, b, 50, base=base) == base.^linspace(a, b, 50)
         @test logspace(a, b, n, base=base) == base.^linspace(a, b, n)
     end
 end
+
+# issue #23300
+x = -5:big(1.0):5
+@test map(Float64, x) === -5.0:1.0:5.0
+@test map(Float32, x) === -5.0f0:1.0f0:5.0f0
+@test map(Float16, x) === Float16(-5.0):Float16(1.0):Float16(5.0)
+@test map(BigFloat, x) === x

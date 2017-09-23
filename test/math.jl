@@ -23,16 +23,16 @@
 end
 
 @testset "constants" begin
-    @test pi != e
-    @test e != 1//2
-    @test 1//2 <= e
-    @test e <= 15//3
-    @test big(1//2) < e
-    @test e < big(20//6)
-    @test e^pi == exp(pi)
-    @test e^2 == exp(2)
-    @test e^2.4 == exp(2.4)
-    @test e^(2//3) == exp(2//3)
+    @test pi != ℯ
+    @test ℯ != 1//2
+    @test 1//2 <= ℯ
+    @test ℯ <= 15//3
+    @test big(1//2) < ℯ
+    @test ℯ < big(20//6)
+    @test ℯ^pi == exp(pi)
+    @test ℯ^2 == exp(2)
+    @test ℯ^2.4 == exp(2.4)
+    @test ℯ^(2//3) == exp(2//3)
 
     @test Float16(3.0) < pi
     @test pi < Float16(4.0)
@@ -171,19 +171,19 @@ end
             @test isequal(cos(T(0)), T(1))
             @test cos(T(pi)/2) ≈ T(0) atol=eps(T)
             @test isequal(cos(T(pi)), T(-1))
-            @test exp(T(1)) ≈ T(e) atol=10*eps(T)
+            @test exp(T(1)) ≈ T(ℯ) atol=10*eps(T)
             @test isequal(exp10(T(1)), T(10))
             @test isequal(exp2(T(1)), T(2))
             @test isequal(expm1(T(0)), T(0))
-            @test expm1(T(1)) ≈ T(e)-1 atol=10*eps(T)
+            @test expm1(T(1)) ≈ T(ℯ)-1 atol=10*eps(T)
             @test isequal(hypot(T(3),T(4)), T(5))
             @test isequal(log(T(1)), T(0))
-            @test isequal(log(e,T(1)), T(0))
-            @test log(T(e)) ≈ T(1) atol=eps(T)
+            @test isequal(log(ℯ,T(1)), T(0))
+            @test log(T(ℯ)) ≈ T(1) atol=eps(T)
             @test isequal(log10(T(1)), T(0))
             @test isequal(log10(T(10)), T(1))
             @test isequal(log1p(T(0)), T(0))
-            @test log1p(T(e)-1) ≈ T(1) atol=eps(T)
+            @test log1p(T(ℯ)-1) ≈ T(1) atol=eps(T)
             @test isequal(log2(T(1)), T(0))
             @test isequal(log2(T(2)), T(1))
             @test isequal(sin(T(0)), T(0))
@@ -402,7 +402,7 @@ end
 end
 
 @testset "Irrational args to sinpi/cospi/sinc/cosc" begin
-    for x in (pi, e, golden)
+    for x in (pi, ℯ, Base.MathConstants.golden)
         @test sinpi(x) ≈ Float64(sinpi(big(x)))
         @test cospi(x) ≈ Float64(cospi(big(x)))
         @test sinc(x)  ≈ Float64(sinc(big(x)))
@@ -662,8 +662,8 @@ end
 @testset "test fallback definitions" begin
     @test exp10(5) ≈ exp10(5.0)
     @test exp10(50//10) ≈ exp10(5.0)
-    @test log10(exp10(e)) ≈ e
-    @test log(e) === 1
+    @test log10(exp10(ℯ)) ≈ ℯ
+    @test log(ℯ) === 1
     @test exp2(Float16(2.0)) ≈ exp2(2.0)
     @test exp2(Float16(1.0)) === Float16(exp2(1.0))
     @test exp10(Float16(1.0)) === Float16(exp10(1.0))
@@ -682,4 +682,24 @@ Base.:^(x::Number, y::Float22716) = x^(y.x)
 let x = 2.0
     @test exp2(Float22716(x)) === 2^x
     @test exp10(Float22716(x)) === 10^x
+end
+
+@testset "asin #23088" begin
+    for T in (Float32, Float64)
+        @test asin(zero(T)) === zero(T)
+        @test asin(-zero(T)) === -zero(T)
+        @test asin(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test asin(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test asin(one(T)) === T(pi)/2
+        @test asin(-one(T)) === -T(pi)/2
+        for x in (0.45, 0.6, 0.98)
+            by = T(asin(big(x)))
+            @test abs(asin(T(x)) - by)/eps(by) <= one(T)
+            bym = T(asin(big(-x)))
+            @test abs(asin(T(-x)) - bym)/eps(bym) <= one(T)
+        end
+        @test_throws DomainError asin(-T(Inf))
+        @test_throws DomainError asin(T(Inf))
+        @test asin(T(NaN)) === T(NaN)
+    end
 end

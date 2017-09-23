@@ -4,7 +4,7 @@ using Base.Test
 include("choosetests.jl")
 include("testenv.jl")
 
-tests, net_on = choosetests(ARGS)
+tests, net_on, exit_on_error = choosetests(ARGS)
 tests = unique(tests)
 
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
@@ -33,6 +33,7 @@ cd(dirname(@__FILE__)) do
         n > 1 && addprocs_with_testenv(n)
         BLAS.set_num_threads(1)
     end
+    skipped = 0
 
     @everywhere include("testdefs.jl")
 
@@ -59,14 +60,18 @@ cd(dirname(@__FILE__)) do
                         resp = [e]
                     end
                     push!(results, (test, resp))
-                    if (isa(resp[end], Integer) && (resp[end] > max_worker_rss)) || isa(resp, Exception)
+                    if resp[1] isa Exception
+                        if exit_on_error
+                            skipped = length(tests)
+                            empty!(tests)
+                        end
+                    elseif resp[end] > max_worker_rss
                         if n > 1
                             rmprocs(wrkr, waitfor=30)
                             p = addprocs_with_testenv(1)[1]
                             remotecall_fetch(include, p, "testdefs.jl")
-                        else
-                            # single process testing, bail if mem limit reached, or, on an exception.
-                            isa(resp, Exception) ? rethrow(resp) : error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
+                        else # single process testing
+                            error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                         end
                     end
                     if !isa(resp[1], Exception)
@@ -181,7 +186,9 @@ cd(dirname(@__FILE__)) do
     if !o_ts.anynonpass
         println("    \033[32;1mSUCCESS\033[0m")
     else
-        println("    \033[31;1mFAILURE\033[0m")
+        println("    \033[31;1mFAILURE\033[0m\n")
+        skipped > 0 &&
+            println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.\n")
         Base.Test.print_test_errors(o_ts)
         throw(Test.FallbackTestSetException("Test run finished with errors"))
     end

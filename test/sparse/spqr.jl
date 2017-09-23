@@ -73,7 +73,7 @@ end
     xd = full(A)\b
 
     # check that basic solution has more zeros
-    @test countnz(xs) < countnz(xd)
+    @test count(!iszero, xs) < count(!iszero, xd)
     @test A*xs ≈ A*xd
 end
 

@@ -20,41 +20,32 @@ struct IOContext{IO_t <: IO} <: AbstractPipe
     end
 end
 
-"""
-    IOContext(io::IO; properties...)
+unwrapcontext(io::IO) = io, ImmutableDict{Symbol,Any}()
+unwrapcontext(io::IOContext) = io.io, io.dict
 
-The same as `IOContext(io::IO, KV::Pair)`, but accepting properties as keyword arguments.
-"""
-IOContext(io::IO; kws...) = IOContext(convert(IOContext, io); kws...)
-function IOContext(io::IOContext; kws...)
-    for (k, v) in kws
-        io = IOContext(io, k, v)
-    end
-    return io
+function IOContext(io::IO, dict::ImmutableDict)
+    io0 = unwrapcontext(io)[1]
+    IOContext{typeof(io0)}(io0, dict)
 end
 
-convert(::Type{IOContext}, io::IOContext) = io
-convert(::Type{IOContext}, io::IO) = IOContext(io, ImmutableDict{Symbol, Any}())
+convert(::Type{IOContext}, io::IO) = IOContext(unwrapcontext(io)...)
 
-IOContext(io::IOContext, dict::ImmutableDict) = typeof(io)(io.io, dict)
-IOContext(io::IO, dict::ImmutableDict) = IOContext{typeof(io)}(io, dict)
-
-IOContext(io::IOContext, key, value) = IOContext(io.io, ImmutableDict{Symbol, Any}(io.dict, key, value))
-IOContext(io::IO, key, value) = IOContext(io, ImmutableDict{Symbol, Any}(key, value))
-
-IOContext(io::IO, context::IO) = convert(IOContext, io)
+function IOContext(io::IO, KV::Pair)
+    io0, d = unwrapcontext(io)
+    IOContext(io0, ImmutableDict{Symbol,Any}(d, KV[1], KV[2]))
+end
 
 """
     IOContext(io::IO, context::IOContext)
 
 Create an `IOContext` that wraps an alternate `IO` but inherits the properties of `context`.
 """
-IOContext(io::IO, context::IOContext) = IOContext(io, context.dict)
+IOContext(io::IO, context::IO) = IOContext(unwrapcontext(io)[1], unwrapcontext(context)[2])
 
 """
-    IOContext(io::IO, KV::Pair)
+    IOContext(io::IO, KV::Pair...)
 
-Create an `IOContext` that wraps a given stream, adding the specified `key=>value` pair to
+Create an `IOContext` that wraps a given stream, adding the specified `key=>value` pairs to
 the properties of that stream (note that `io` can itself be an `IOContext`).
 
  - use `(key => value) in dict` to see if this particular combination is in the properties set
@@ -87,7 +78,7 @@ julia> f(IOContext(STDOUT, :short => true))
 short
 ```
 """
-IOContext(io::IO, KV::Pair) = IOContext(io, KV[1], KV[2])
+IOContext(io::IO, KV::Pair, KVs::Pair...) = IOContext(IOContext(io, KV), KVs...)
 
 show(io::IO, ctx::IOContext) = (print(io, "IOContext("); show(io, ctx.io); print(io, ")"))
 
@@ -122,7 +113,17 @@ function show_circular(io::IOContext, @nospecialize(x))
     return false
 end
 
+"""
+    show(x)
+
+Write an informative text representation of a value to the current output stream. New types
+should overload `show(io, x)` where the first argument is a stream. The representation used
+by `show` generally includes Julia-specific formatting and type information.
+"""
+show(x) = show(STDOUT::IO, x)
+
 show(io::IO, @nospecialize(x)) = show_default(io, x)
+
 function show_default(io::IO, @nospecialize(x))
     t = typeof(x)::DataType
     show(io, t)
@@ -171,10 +172,15 @@ end
 function show(io::IO, f::Function)
     ft = typeof(f)
     mt = ft.name.mt
-    if !isdefined(mt, :module) || is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
-        print(io, mt.name)
+    if isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
+        getfield(mt.module, mt.name) === f
+        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
+            print(io, mt.name)
+        else
+            print(io, mt.module, ".", mt.name)
+        end
     else
-        print(io, mt.module, ".", mt.name)
+        show_default(io, f)
     end
 end
 
@@ -198,16 +204,93 @@ function print_without_params(@nospecialize(x))
     return false
 end
 
+has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v)!=0
+
+function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
+    for (key, val) in io.dict
+        if key === :unionall_env && val isa TypeVar && val.name === name && has_typevar(x, val)
+            return true
+        end
+    end
+    return false
+end
+io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
+
 function show(io::IO, x::UnionAll)
     if print_without_params(x)
         return show(io, unwrap_unionall(x).name)
     end
+
+    if x.var.name == :_ || io_has_tvar_name(io, x.var.name, x)
+        counter = 1
+        while true
+            newname = Symbol(x.var.name, counter)
+            if !io_has_tvar_name(io, newname, x)
+                newtv = TypeVar(newname, x.var.lb, x.var.ub)
+                x = UnionAll(newtv, x{newtv})
+                break
+            end
+            counter += 1
+        end
+    end
+
     show(IOContext(io, :unionall_env => x.var), x.body)
     print(io, " where ")
     show(io, x.var)
 end
 
 show(io::IO, x::DataType) = show_datatype(io, x)
+
+function show_type_name(io::IO, tn::TypeName)
+    if tn === UnionAll.name
+        # by coincidence, `typeof(Type)` is a valid representation of the UnionAll type.
+        # intercept this case and print `UnionAll` instead.
+        return print(io, "UnionAll")
+    end
+    globname = isdefined(tn, :mt) ? tn.mt.name : nothing
+    globfunc = false
+    if globname !== nothing
+        globname_str = string(globname)
+        if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
+            isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
+            isa(getfield(tn.module, globname), tn.wrapper) && _isleaftype(tn.wrapper))
+            globfunc = true
+        end
+    end
+    sym = globfunc ? globname : tn.name
+    sym_str = string(sym)
+    hidden = !globfunc && '#' ∈ sym_str
+    quo = false
+    if hidden
+        print(io, "getfield(")
+    elseif globfunc
+        print(io, "typeof(")
+    end
+    if isdefined(tn, :module) && !(is_exported_from_stdlib(sym, tn.module) || (tn.module === Main && !hidden))
+        show(io, tn.module)
+        if !hidden
+            print(io, ".")
+            if globfunc && !is_id_start_char(first(sym_str))
+                print(io, ":")
+                if sym == :(==)
+                    print(io, "(")
+                    quo = true
+                end
+            end
+        end
+    end
+    if hidden
+        print(io, ", Symbol(\"", sym_str, "\"))")
+    else
+        print(io, sym_str)
+        if globfunc
+            print(io, ")")
+            if quo
+                print(io, ")")
+            end
+        end
+    end
+end
 
 function show_datatype(io::IO, x::DataType)
     istuple = x.name === Tuple.name
@@ -218,7 +301,7 @@ function show_datatype(io::IO, x::DataType)
         if istuple && n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
             print(io, "NTuple{", n, ',', x.parameters[1], "}")
         else
-            show(io, x.name)
+            show_type_name(io, x.name)
             # Do not print the type parameters for the primary type if we are
             # printing a method signature or type parameter.
             # Always print the type parameter if we are printing the type directly
@@ -231,7 +314,7 @@ function show_datatype(io::IO, x::DataType)
             print(io, '}')
         end
     else
-        show(io, x.name)
+        show_type_name(io, x.name)
     end
 end
 
@@ -262,11 +345,7 @@ macro show(exs...)
 end
 
 function show(io::IO, tn::TypeName)
-    if is_exported_from_stdlib(tn.name, tn.module) || tn.module === Main
-        print(io, tn.name)
-    else
-        print(io, tn.module, '.', tn.name)
-    end
+    show_type_name(io, tn)
 end
 
 show(io::IO, ::Void) = print(io, "nothing")
@@ -301,8 +380,8 @@ function show(io::IO, p::Pair)
 end
 
 function show(io::IO, m::Module)
-    if m === Main
-        print(io, "Main")
+    if is_root_module(m)
+        print(io, module_name(m))
     else
         print(io, join(fullname(m),"."))
     end
@@ -461,6 +540,7 @@ show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
 
 const indent_width = 4
 const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(!=),:(===),:(!==),:(=>),:(>=),:(<=)])
+const uni_syms = Set{Symbol}([:(::), :(<:), :(>:)])
 const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
 const expr_infix_wide = Set{Symbol}([
     :(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(^=), :(&=), :(|=), :(÷=), :(%=), :(>>>=), :(>>=), :(<<=),
@@ -492,7 +572,45 @@ function isidentifier(s::AbstractString)
 end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
+"""
+    isoperator(s::Symbol)
+
+Return `true` if the symbol can be used as an operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Base.isoperator(:+), Base.isoperator(:f)
+(true, false)
+```
+"""
 isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+
+"""
+    isunaryoperator(s::Symbol)
+
+Return `true` if the symbol can be used as a unary (prefix) operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Base.isunaryoperator(:-), Base.isunaryoperator(:√), Base.isunaryoperator(:f)
+(true, true, false)
+```
+"""
+isunaryoperator(s::Symbol) = ccall(:jl_is_unary_operator, Cint, (Cstring,), s) != 0
+is_unary_and_binary_operator(s::Symbol) = ccall(:jl_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0
+
+"""
+    isbinaryoperator(s::Symbol)
+
+Return `true` if the symbol can be used as a binary (infix) operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Base.isbinaryoperator(:-), Base.isbinaryoperator(:√), Base.isbinaryoperator(:f)
+(true, false, false)
+```
+"""
+isbinaryoperator(s::Symbol) = isoperator(s) && (!isunaryoperator(s) || is_unary_and_binary_operator(s))
 
 """
     operator_precedence(s::Symbol)
@@ -504,16 +622,45 @@ operators. Return `0` if `s` is not a valid operator.
 # Examples
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
-(9,11,15)
+(9, 11, 15)
 
-julia> Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
-(1,1)
+julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
+(0, 1, 1)
 ```
 """
 operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Cstring,), s))
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
+const prec_assignment = operator_precedence(:(=))
+const prec_arrow = operator_precedence(:(-->))
+const prec_control_flow = operator_precedence(:(&&))
+const prec_comparison = operator_precedence(:(>))
 const prec_power = operator_precedence(:(^))
 const prec_decl = operator_precedence(:(::))
+
+"""
+    operator_associativity(s::Symbol)
+
+Return a symbol representing the associativity of operator `s`. Left- and right-associative
+operators return `:left` and `:right`, respectively. Return `:none` if `s` is non-associative
+or an invalid operator.
+
+# Examples
+```jldoctest
+julia> Base.operator_associativity(:-), Base.operator_associativity(:+), Base.operator_associativity(:^)
+(:left, :none, :right)
+
+julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Base.operator_associativity(:→)
+(:left, :none, :right)
+```
+"""
+function operator_associativity(s::Symbol)
+    if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_power) || isunaryoperator(s) && !is_unary_and_binary_operator(s)
+        return :right
+    elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
+        return :none
+    end
+    return :left
+end
 
 is_expr(ex, head::Symbol)         = (isa(ex, Expr) && (ex.head == head))
 is_expr(ex, head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
@@ -537,7 +684,7 @@ function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     elseif ty === Core.IntrinsicFunction
         print(io, "::I")
     else
-        if emph && (!isleaftype(ty) || ty == Core.Box)
+        if emph && (!_isleaftype(ty) || ty == Core.Box)
             emphasize(io, "::$ty")
         else
             print(io, "::$ty")
@@ -702,23 +849,19 @@ function show_generator(io, ex, indent)
         fg = ex
         ranges = Any[]
         while isa(fg, Expr) && fg.head === :flatten
-            push!(ranges, fg.args[1].args[2])
+            push!(ranges, fg.args[1].args[2:end])
             fg = fg.args[1].args[1]
         end
-        push!(ranges, fg.args[2])
+        push!(ranges, fg.args[2:end])
         show_unquoted(io, fg.args[1], indent)
         for r in ranges
             print(io, " for ")
-            show_unquoted(io, r, indent)
+            show_list(io, r, ", ", indent)
         end
     else
         show_unquoted(io, ex.args[1], indent)
         print(io, " for ")
-        show_unquoted(io, ex.args[2], indent)
-        for i = 3:length(ex.args)
-            print(io, ", ")
-            show_unquoted(io, ex.args[i], indent)
-        end
+        show_list(io, ex.args[2:end], ", ", indent)
     end
 end
 
@@ -883,7 +1026,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "function ", args[1], " end")
 
     # block with argument
-    elseif head in (:for,:while,:function,:if,:elseif) && nargs==2
+    elseif head in (:for,:while,:function,:if,:elseif,:let) && nargs==2
         show_block(io, head, args[1], args[2], indent)
         print(io, "end")
 
@@ -920,8 +1063,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head)
 
     # type annotation (i.e. "::Int")
-    elseif head === Symbol("::") && nargs == 1
-        print(io, "::")
+    elseif head in uni_syms && nargs == 1
+        print(io, head)
         show_unquoted(io, args[1], indent)
 
     # var-arg declaration or expansion
@@ -966,9 +1109,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             show_block(io, "finally", Any[], args[4], indent)
         end
         print(io, "end")
-
-    elseif head === :let && nargs >= 1
-        show_block(io, "let", args[2:end], args[1], indent); print(io, "end")
 
     elseif head === :block || head === :body
         show_block(io, "begin", ex, indent); print(io, "end")
@@ -1098,7 +1238,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
                 isdefined(uw.name.module, uw.name.mt.name) &&
                 ft == typeof(getfield(uw.name.module, uw.name.mt.name))
             print(io, uw.name.mt.name)
-        elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+        elseif isa(ft, DataType) && ft.name === Type.body.name && !Core.Inference.has_free_typevars(ft)
             f = ft.parameters[1]
             print(io, f)
         else
@@ -1325,7 +1465,7 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
                     tp = t
                     while true
                         show(tvar_io, tp.var)
-                        tvar_io = IOContext(tvar_io, :unionall_env, tp.var)
+                        tvar_io = IOContext(tvar_io, :unionall_env => tp.var)
                         tp = tp.body
                         if isa(tp, UnionAll)
                             print(io, ", ")
@@ -1362,6 +1502,12 @@ end
 dump(io::IO, x::DataType; maxdepth=8) = ((x.abstract ? dumptype : dump)(io, x, maxdepth, ""); println(io))
 
 dump(io::IO, arg; maxdepth=8) = (dump(io, arg, maxdepth, ""); println(io))
+
+"""
+    dump(x)
+
+Show every part of the representation of a value.
+"""
 dump(arg; maxdepth=8) = dump(IOContext(STDOUT::IO, :limit => true), arg; maxdepth=maxdepth)
 
 
@@ -1538,9 +1684,8 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     postsp = ""
     @assert strwidth(hdots) == strwidth(ddots)
     sepsize = length(sep)
-    inds1, inds2 = indices(X,1), indices(X,2)
-    m, n = length(inds1), length(inds2)
-    rowsA, colsA = collect(inds1), collect(inds2)
+    rowsA, colsA = indices(X,1), indices(X,2)
+    m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
     # If not, then we only need to look at the first and last chunks of A,
@@ -1574,7 +1719,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 print(io, i == first(rowsA) ? pre : presp)
                 print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
                 print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
-                print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
+                print_matrix_row(io, X, Ralign, i, (n - length(Ralign)) .+ colsA, sep)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != last(rowsA); println(io); end
             end
@@ -1602,7 +1747,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 print(io, i == first(rowsA) ? pre : presp)
                 print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
                 print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
-                print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
+                print_matrix_row(io, X,Ralign,i,(n-length(Ralign)).+colsA,sep)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]
@@ -1624,10 +1769,11 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
 end
 
 """
-    summary(x)
+    summary(io::IO, x)
+    str = summary(x)
 
-Return a string giving a brief description of a value. By default returns
-`string(typeof(x))`, e.g. [`Int64`](@ref).
+Print to a stream `io`, or return a string `str`, giving a brief description of
+a value. By default returns `string(typeof(x))`, e.g. [`Int64`](@ref).
 
 For arrays, returns a string of size and type info,
 e.g. `10-element Array{Int64,1}`.
@@ -1640,8 +1786,14 @@ julia> summary(zeros(2))
 "2-element Array{Float64,1}"
 ```
 """
-summary(x) = string(typeof(x)) # e.g. Int64
+summary(io::IO, x) = print(io, typeof(x))
+function summary(x)
+    io = IOBuffer()
+    summary(io, x)
+    String(take!(io))
+end
 
+## `summary` for AbstractArrays
 # sizes such as 0-dimensional, 4-dimensional, 2x3
 dims2string(d::Dims) = isempty(d) ? "0-dimensional" :
                        length(d) == 1 ? "$(d[1])-element" :
@@ -1650,9 +1802,85 @@ dims2string(d::Dims) = isempty(d) ? "0-dimensional" :
 inds2string(inds::Indices) = join(map(string,inds), '×')
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
-summary(a::AbstractArray) = _summary(a, indices(a))
-_summary(a, inds::Tuple{Vararg{OneTo}}) = string(dims2string(length.(inds)), " ", typeof(a))
-_summary(a, inds) = string(typeof(a), " with indices ", inds2string(inds))
+summary(io::IO, a::AbstractArray) = summary(io, a, indices(a))
+function summary(io::IO, a, inds::Tuple{Vararg{OneTo}})
+    print(io, dims2string(length.(inds)), " ")
+    showarg(io, a, true)
+end
+function summary(io::IO, a, inds)
+    showarg(io, a, true)
+    print(io, " with indices ", inds2string(inds))
+end
+
+"""
+    showarg(io::IO, x, toplevel)
+
+Show `x` as if it were an argument to a function. This function is
+used by [`summary`](@ref) to display type information in terms of sequences of
+function calls on objects. `toplevel` is `true` if this is
+the direct call from `summary` and `false` for nested (recursive) calls.
+
+The fallback definition is to print `x` as "::\$(typeof(x))",
+representing argument `x` in terms of its type. (The double-colon is
+omitted if `toplevel=true`.) However, you can
+specialize this function for specific types to customize printing.
+
+# Example
+
+A SubArray created as `view(a, :, 3, 2:5)`, where `a` is a
+3-dimensional Float64 array, has type
+
+    SubArray{Float64,2,Array{Float64,3},Tuple{Colon,Int64,UnitRange{Int64}},false}
+
+The default `show` printing would display this full type.
+However, the summary for SubArrays actually prints as
+
+    2×4 view(::Array{Float64,3}, :, 3, 2:5) with eltype Float64
+
+because of a definition similar to
+
+    function Base.showarg(io::IO, v::SubArray, toplevel)
+        print(io, "view(")
+        showarg(io, parent(v), false)
+        print(io, ", ", join(v.indexes, ", "))
+        print(io, ')')
+        toplevel && print(io, " with eltype ", eltype(v))
+    end
+
+Note that we're calling `showarg` recursively for the parent array
+type, indicating that any recursed calls are not at the top level.
+Printing the parent as `::Array{Float64,3}` is the fallback (non-toplevel)
+behavior, because no specialized method for `Array` has been defined.
+"""
+function showarg(io::IO, ::Type{T}, toplevel) where {T}
+    toplevel || print(io, "::")
+    print(io, "Type{", T, "}")
+end
+function showarg(io::IO, x, toplevel)
+    toplevel || print(io, "::")
+    print(io, typeof(x))
+end
+
+function showarg(io::IO, v::SubArray, toplevel)
+    print(io, "view(")
+    showarg(io, parent(v), false)
+    showindices(io, v.indexes...)
+    print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(v))
+end
+showindices(io, ::Slice, inds...) =
+    (print(io, ", :"); showindices(io, inds...))
+showindices(io, ind1, inds...) =
+    (print(io, ", ", ind1); showindices(io, inds...))
+showindices(io) = nothing
+
+function showarg(io::IO, r::ReshapedArray, toplevel)
+    print(io, "reshape(")
+    showarg(io, parent(r), false)
+    print(io, ", ", join(r.dims, ", "))
+    print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(r))
+end
 
 # n-dimensional arrays
 function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
@@ -1834,7 +2062,8 @@ function array_eltype_show_how(X)
         str = string(e)
     end
     # Types hard-coded here are those which are created by default for a given syntax
-    isleaftype(e), (!isempty(X) && (e===Float64 || e===Int || e===Char) ? "" : str)
+    (_isleaftype(e),
+     (!isempty(X) && (e===Float64 || e===Int || e===Char || e===String) ? "" : str))
 end
 
 function show_vector(io::IO, v, opn, cls)

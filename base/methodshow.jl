@@ -108,7 +108,7 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
                 # TODO: more accurate test? (tn.name === "#" name)
             ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.body.name
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)
@@ -144,7 +144,8 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     n = length(ms)
     if header
         m = n==1 ? "method" : "methods"
-        ns = isself ? string(name) : string("(::", name, ")")
+        sname = string(name)
+        ns = (isself || '#' in sname) ? sname : string("(::", name, ")")
         what = startswith(ns, '@') ? "macro" : "generic function"
         print(io, "# $n $m for ", what, " \"", ns, "\":")
     end
@@ -234,7 +235,7 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=N
             isdefined(ft.name.module, ft.name.mt.name) &&
             ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.body.name
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)

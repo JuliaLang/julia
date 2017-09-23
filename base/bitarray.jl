@@ -555,6 +555,10 @@ reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
 BitArray(A::AbstractArray{<:Any,N}) where {N} = convert(BitArray{N}, A)
 
+if module_name(@__MODULE__) === :Base  # avoid method overwrite
+(::Type{T})(x::T) where {T<:BitArray} = copy(x)
+end
+
 """
     BitArray(itr)
 
@@ -1248,18 +1252,6 @@ end
 
 ## Data movement ##
 
-# preserve some special behavior
-function slicedim(A::BitVector, d::Integer, i::Integer)
-    d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
-    if d > 1
-        i == 1 || throw_boundserror(A, (:, ntuple(k->1,d-2)..., i))
-        A[:]
-    else
-        fill!(BitArray{0}(), A[i]) # generic slicedim would return A[i] here
-    end
-end
-
-
 # TODO some of this could be optimized
 
 function flipdim(A::BitArray, d::Integer)
@@ -1474,149 +1466,28 @@ details and examples.
 """
 (>>>)(B::BitVector, i::Int) = (i >=0 ? B >> unsigned(i) : B << unsigned(-i))
 
-"""
-    rol!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
-
-Performs a left rotation operation on `src` and puts the result into `dest`.
-`i` controls how far to rotate the bits.
-"""
-function rol!(dest::BitVector, src::BitVector, i::Integer)
+function circshift!(dest::BitVector, src::BitVector, i::Integer)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
     n = length(dest)
     i %= n
     i == 0 && return (src === dest ? src : copy!(dest, src))
-    i < 0 && return ror!(dest, src, -i)
     Bc = (src === dest ? copy(src.chunks) : src.chunks)
-    copy_chunks!(dest.chunks, 1, Bc, i+1, n-i)
-    copy_chunks!(dest.chunks, n-i+1, Bc, 1, i)
+    if i > 0 # right
+        copy_chunks!(dest.chunks, i+1, Bc, 1, n-i)
+        copy_chunks!(dest.chunks, 1, Bc, n-i+1, i)
+    else # left
+        i = -i
+        copy_chunks!(dest.chunks, 1, Bc, i+1, n-i)
+        copy_chunks!(dest.chunks, n-i+1, Bc, 1, i)
+    end
     return dest
 end
 
-"""
-    rol!(B::BitVector, i::Integer) -> BitVector
+circshift!(B::BitVector, i::Integer) = circshift!(B, B, i)
 
-Performs a left rotation operation in-place on `B`.
-`i` controls how far to rotate the bits.
-"""
-rol!(B::BitVector, i::Integer) = rol!(B, B, i)
+## count & find ##
 
-"""
-    rol(B::BitVector, i::Integer) -> BitVector
-
-Performs a left rotation operation, returning a new `BitVector`.
-`i` controls how far to rotate the bits.
-See also [`rol!`](@ref).
-
-# Examples
-```jldoctest
-julia> A = BitArray([true, true, false, false, true])
-5-element BitArray{1}:
-  true
-  true
- false
- false
-  true
-
-julia> rol(A,1)
-5-element BitArray{1}:
-  true
- false
- false
-  true
-  true
-
-julia> rol(A,2)
-5-element BitArray{1}:
- false
- false
-  true
-  true
-  true
-
-julia> rol(A,5)
-5-element BitArray{1}:
-  true
-  true
- false
- false
-  true
-```
-"""
-rol(B::BitVector, i::Integer) = rol!(similar(B), B, i)
-
-"""
-    ror!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
-
-Performs a right rotation operation on `src` and puts the result into `dest`.
-`i` controls how far to rotate the bits.
-"""
-function ror!(dest::BitVector, src::BitVector, i::Integer)
-    length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
-    n = length(dest)
-    i %= n
-    i == 0 && return (src === dest ? src : copy!(dest, src))
-    i < 0 && return rol!(dest, src, -i)
-    Bc = (src === dest ? copy(src.chunks) : src.chunks)
-    copy_chunks!(dest.chunks, i+1, Bc, 1, n-i)
-    copy_chunks!(dest.chunks, 1, Bc, n-i+1, i)
-    return dest
-end
-
-"""
-    ror!(B::BitVector, i::Integer) -> BitVector
-
-Performs a right rotation operation in-place on `B`.
-`i` controls how far to rotate the bits.
-"""
-ror!(B::BitVector, i::Integer) = ror!(B, B, i)
-
-"""
-    ror(B::BitVector, i::Integer) -> BitVector
-
-Performs a right rotation operation on `B`, returning a new `BitVector`.
-`i` controls how far to rotate the bits.
-See also [`ror!`](@ref).
-
-# Examples
-```jldoctest
-julia> A = BitArray([true, true, false, false, true])
-5-element BitArray{1}:
-  true
-  true
- false
- false
-  true
-
-julia> ror(A,1)
-5-element BitArray{1}:
-  true
-  true
-  true
- false
- false
-
-julia> ror(A,2)
-5-element BitArray{1}:
- false
-  true
-  true
-  true
- false
-
-julia> ror(A,5)
-5-element BitArray{1}:
-  true
-  true
- false
- false
-  true
-```
-"""
-ror(B::BitVector, i::Integer) = ror!(similar(B), B, i)
-
-## countnz & find ##
-
-function countnz(B::BitArray)
+function count(B::BitArray)
     n = 0
     Bc = B.chunks
     @inbounds for i = 1:length(Bc)
@@ -1624,7 +1495,6 @@ function countnz(B::BitArray)
     end
     return n
 end
-count(B::BitArray) = countnz(B)
 
 # returns the index of the next non-zero element, or 0 if all zeros
 function findnext(B::BitArray, start::Integer)
@@ -1778,7 +1648,7 @@ end
 
 function find(B::BitArray)
     l = length(B)
-    nnzB = countnz(B)
+    nnzB = count(B)
     I = Vector{Int}(nnzB)
     nnzB == 0 && return I
     Bc = B.chunks
@@ -1812,15 +1682,15 @@ end
 findn(B::BitVector) = find(B)
 
 function findn(B::BitMatrix)
-    nnzB = countnz(B)
+    nnzB = count(B)
     I = Vector{Int}(nnzB)
     J = Vector{Int}(nnzB)
-    count = 1
+    cnt = 1
     for j = 1:size(B,2), i = 1:size(B,1)
         if B[i,j]
-            I[count] = i
-            J[count] = j
-            count += 1
+            I[cnt] = i
+            J[cnt] = j
+            cnt += 1
         end
     end
     return I, J
@@ -1834,7 +1704,7 @@ end
 ## Reductions ##
 
 sum(A::BitArray, region) = reducedim(+, A, region)
-sum(B::BitArray) = countnz(B)
+sum(B::BitArray) = count(B)
 
 function all(B::BitArray)
     isempty(B) && return true

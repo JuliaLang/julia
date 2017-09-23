@@ -358,8 +358,6 @@ GeneralPeriod = Union{Period, CompoundPeriod}
 
 for op in (:+, :-)
     @eval begin
-        ($op)(x::GeneralPeriod, Y::StridedArray{<:GeneralPeriod}) = broadcast($op, x, Y)
-        ($op)(Y::StridedArray{<:GeneralPeriod}, x::GeneralPeriod) = broadcast($op, Y, x)
         ($op)(X::StridedArray{<:GeneralPeriod}, Y::StridedArray{<:GeneralPeriod}) =
             reshape(CompoundPeriod[($op)(x, y) for (x, y) in zip(X, Y)], promote_shape(size(X), size(Y)))
     end

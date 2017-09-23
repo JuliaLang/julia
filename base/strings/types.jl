@@ -30,6 +30,10 @@ SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
+SubString{T}(s::T) where {T<:AbstractString} = SubString(s, 1, endof(s))
+
+String(p::SubString{String}) =
+    unsafe_string(pointer(p.string, p.offset+1), nextind(p, p.endof)-1)
 
 sizeof(s::SubString{String}) = s.endof == 0 ? 0 : nextind(s, s.endof) - 1
 
@@ -73,11 +77,6 @@ chr2ind(s::SubString{<:DirectIndexString}, i::Integer) = begin checkbounds(s,i);
 nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
-convert(::Type{SubString{T}}, s::T) where {T<:AbstractString} = SubString(s, 1, endof(s))
-
-String(p::SubString{String}) =
-    unsafe_string(pointer(p.string, p.offset+1), nextind(p, p.endof)-1)
-
 function getindex(s::AbstractString, r::UnitRange{Int})
     checkbounds(s, r) || throw(BoundsError(s, r))
     SubString(s, first(r), last(r))
@@ -118,10 +117,22 @@ end
 
 Reverses a string.
 
+Technically, this function reverses the codepoints in a string, and its
+main utility is for reversed-order string processing, especially for reversed
+regular-expression searches.  See also [`reverseind`](@ref) to convert indices
+in `s` to indices in `reverse(s)` and vice-versa, and [`graphemes`](@ref)
+to operate on user-visible "characters" (graphemes) rather than codepoints.
+
 # Examples
 ```jldoctest
 julia> reverse("JuliaLang")
 "gnaLailuJ"
+
+julia> reverse("ax̂e") # combining characters can lead to surprising results
+"êxa"
+
+julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
+"ex̂a"
 ```
 """
 reverse(s::AbstractString) = RevString(s)
@@ -132,9 +143,9 @@ reverse(s::RevString) = s.string
 """
     reverseind(v, i)
 
-Given an index `i` in `reverse(v)`, return the corresponding index in `v` so that
-`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in the case where `v` is a
-Unicode string.)
+Given an index `i` in [`reverse(v)`](@ref), return the corresponding index in `v` so that
+`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in cases where `v` contains
+non-ASCII characters.)
 
 # Examples
 ```jldoctest

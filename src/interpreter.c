@@ -2,13 +2,13 @@
 
 #include <stdlib.h>
 #include <setjmp.h>
-#include <assert.h>
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
 #include "julia.h"
 #include "julia_internal.h"
 #include "builtin_proto.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -270,8 +270,12 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSH2(&thetype, &v);
         assert(jl_is_structtype(thetype));
         v = jl_new_struct_uninit((jl_datatype_t*)thetype);
-        for(size_t i=1; i < nargs; i++) {
-            jl_set_nth_field(v, i-1, eval(args[i], s));
+        for (size_t i = 1; i < nargs; i++) {
+            jl_value_t *ft = jl_field_type(thetype, i - 1);
+            jl_value_t *fldv = eval(args[i], s);
+            if (!jl_isa(fldv, ft))
+                jl_type_error("new", ft, fldv);
+            jl_set_nth_field(v, i - 1, fldv);
         }
         JL_GC_POP();
         return v;
@@ -376,7 +380,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     }
     else if (ex->head == primtype_sym) {
         if (inside_typedef)
-            jl_error("cannot eval a new bits type definition while defining another type");
+            jl_error("cannot eval a new primitive type definition while defining another type");
         jl_value_t *name = args[0];
         jl_value_t *super = NULL, *para = NULL, *vnb = NULL, *temp = NULL;
         jl_datatype_t *dt = NULL;
@@ -391,11 +395,11 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         assert(jl_is_svec(para));
         vnb  = eval(args[2], s);
         if (!jl_is_long(vnb))
-            jl_errorf("invalid declaration of bits type %s",
+            jl_errorf("invalid declaration of primitive type %s",
                       jl_symbol_name((jl_sym_t*)name));
         ssize_t nb = jl_unbox_long(vnb);
-        if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
-            jl_errorf("invalid number of bits in type %s",
+        if (nb < 1 || nb >= (1 << 23) || (nb & 7) != 0)
+            jl_errorf("invalid number of bits in primitive type %s",
                       jl_symbol_name((jl_sym_t*)name));
         dt = jl_new_primitivetype(name, modu, NULL, (jl_svec_t*)para, nb);
         w = dt->name->wrapper;
@@ -424,7 +428,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     }
     else if (ex->head == structtype_sym) {
         if (inside_typedef)
-            jl_error("cannot eval a new data type definition while defining another type");
+            jl_error("cannot eval a new struct type definition while defining another type");
         jl_value_t *name = args[0];
         jl_value_t *para = eval(args[1], s);
         jl_value_t *temp = NULL;
@@ -458,12 +462,13 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             jl_set_datatype_super(dt, super);
             dt->types = (jl_svec_t*)eval(args[4], s);
             jl_gc_wb(dt, dt->types);
-            for(size_t i=0; i < jl_svec_len(dt->types); i++) {
+            for (size_t i = 0; i < jl_svec_len(dt->types); i++) {
                 jl_value_t *elt = jl_svecref(dt->types, i);
-                if (!jl_is_type(elt) && !jl_is_typevar(elt))
+                if ((!jl_is_type(elt) && !jl_is_typevar(elt)) || jl_is_vararg_type(elt)) {
                     jl_type_error_rt(jl_symbol_name(dt->name->name),
                                      "type definition",
                                      (jl_value_t*)jl_type_type, elt);
+                }
             }
             jl_reinstantiate_inner_types(dt);
         }
@@ -495,12 +500,20 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             jl_errorf("syntax: %s", jl_string_data(args[0]));
         jl_throw(args[0]);
     }
+    else if (ex->head == boundscheck_sym) {
+        return jl_true;
+    }
     else if (ex->head == boundscheck_sym || ex->head == inbounds_sym || ex->head == fastmath_sym ||
              ex->head == simdloop_sym || ex->head == meta_sym) {
         return jl_nothing;
+    } else if (ex->head == gc_preserve_begin_sym || ex->head == gc_preserve_end_sym) {
+        // The interpreter generally keeps values that were assigned in this scope
+        // rooted. If the interpreter learns to be more agressive here, we may
+        // want to explicitly root these values.
+        return jl_nothing;
     }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(ex->head));
-    return (jl_value_t*)jl_nothing;
+    abort();
 }
 
 jl_value_t *jl_toplevel_eval_body(jl_module_t *m, jl_array_t *stmts)

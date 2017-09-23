@@ -297,3 +297,24 @@ for the function. As a result, the external rooting must be arranged while the
 value is still tracked by the system. I.e. it is not valid to attempt to use the
 result of this operation to establish a global root - the optimizer may have
 already dropped the value.
+
+### Keeping values alive in the absence of uses
+
+In certain cases it is necessary to keep an object alive, even though there is
+no compiler-visible use of said object. This may be case for low level code
+that operates on the memory-representation of an object directly or code that
+needs to interface with C code. In order to allow this, we provide the following
+intrinsics at the LLVM level:
+```
+token @llvm.julia.gc_preserve_begin(...)
+void @llvm.julia.gc_preserve_end(token)
+```
+(The `llvm.` in the name is required in order to be able to use the `token`
+type). The semantics of these intrinsics are as follows:
+At any safepoint that is dominated by a `gc_preserve_begin` call, but that is not
+not dominated by a corresponding `gc_preserve_end` call (i.e. a call whose argument
+is the token returned by a `gc_preserve_begin` call), the values passed as
+arguments to that `gc_preserve_begin` will be kept live. Note that the
+`gc_preserve_begin` still counts as a regular use of those values, so the
+standard lifetime semantics will ensure that the values will be kept alive
+before entering the preserve region.

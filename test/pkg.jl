@@ -65,14 +65,6 @@ temp_pkg_dir() do
     @test_throws PkgError Pkg.installed("MyFakePackage")
     @test Pkg.installed("Example") === nothing
 
-    # check that versioninfo(io; verbose=true) doesn't error and produces some output
-    # (done here since it calls Pkg.status which might error or clone metadata)
-    buf = PipeBuffer()
-    versioninfo(buf, verbose=true)
-    ver = read(buf, String)
-    @test startswith(ver, "Julia Version $VERSION")
-    @test contains(ver, "Environment:")
-
     # Check that setprotocol! works.
     begin
         try
@@ -480,7 +472,7 @@ temp_pkg_dir() do
                     nothingtodomsg) Pkg.update("Example")
 
         metadata_dir = Pkg.dir("METADATA")
-        const old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
+        old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
 
         # Force a METADATA rollback to an old version, so that we will install some
         # outdated versions of some packages and then update some of those
@@ -525,7 +517,7 @@ temp_pkg_dir() do
         Pkg.rm(package)  # Remove package if installed
 
         metadata_dir = Pkg.dir("METADATA")
-        const old_commit = "83ff7116e51fc9cdbd7e67affbd344b9f5c9dbf2"
+        old_commit = "83ff7116e51fc9cdbd7e67affbd344b9f5c9dbf2"
 
         # Reset METADATA to the second to last update of Example.jl
         LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
@@ -580,6 +572,23 @@ temp_pkg_dir() do
             @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined true")
         end
     end
+
+    let package = "Output"
+        stdout_file = Pkg.dir(package, "stdout.txt")
+        stderr_file = Pkg.dir(package, "stderr.txt")
+        content = """
+            println(STDOUT, "stdout")
+            println(STDERR, "stderr")
+            """
+        write_build(package, content)
+
+        code = "Pkg.build(\"$package\")"
+        msg = run(pipeline(
+            `$(Base.julia_cmd()) --startup-file=no -e $code`,
+            stdout=stdout_file, stderr=stderr_file))
+        @test last(readlines(stdout_file)) == "stdout"
+        @test last(readlines(stderr_file)) == "stderr"
+    end
 end
 
 @testset "Pkg functions with .jl extension" begin
@@ -588,6 +597,7 @@ end
         Pkg.add("Example.jl")
         @test [keys(Pkg.installed())...] == ["Example"]
         iob = IOBuffer()
+        Pkg.update("Example.jl")
         Pkg.checkout("Example.jl")
         Pkg.status("Example.jl", iob)
         str = chomp(String(take!(iob)))

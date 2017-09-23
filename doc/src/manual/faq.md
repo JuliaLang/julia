@@ -94,7 +94,7 @@ julia> x
  3
 ```
 
-Here we created a function `change_array!()`, that assigns `5` to the first element of the passed
+Here we created a function `change_array!`, that assigns `5` to the first element of the passed
 array (bound to `x` at the call site, and bound to `A` within the function). Notice that, after
 the function call, `x` is still bound to the same array, but the content of that array changed:
 the variables `A` and `x` were distinct bindings refering to the same mutable `Array` object.
@@ -235,18 +235,18 @@ ERROR: DomainError with -5:
 Cannot raise an integer x to a negative power -5.
 Make x a float by adding a zero decimal (e.g., 2.0^-5 instead of 2^-5), or write 1/x^5, float(x)^-5, or (x//1)^-5
 Stacktrace:
- [1] throw_domerr_powbysq(::Int64) at ./intfuncs.jl:163
- [2] power_by_squaring at ./intfuncs.jl:178 [inlined]
- [3] ^ at ./intfuncs.jl:202 [inlined]
- [4] literal_pow(::Base.#^, ::Int64, ::Val{-5}) at ./intfuncs.jl:213
+ [1] throw_domerr_powbysq(::Int64) at ./intfuncs.jl:164
+ [2] power_by_squaring at ./intfuncs.jl:179 [inlined]
+ [3] ^ at ./intfuncs.jl:203 [inlined]
+ [4] literal_pow(::Base.#^, ::Int64, ::Val{-5}) at ./intfuncs.jl:214
 ```
 
 This behavior is an inconvenient consequence of the requirement for type-stability.  In the case
-of [`sqrt()`](@ref), most users want `sqrt(2.0)` to give a real number, and would be unhappy if
-it produced the complex number `1.4142135623730951 + 0.0im`.  One could write the [`sqrt()`](@ref)
+of [`sqrt`](@ref), most users want `sqrt(2.0)` to give a real number, and would be unhappy if
+it produced the complex number `1.4142135623730951 + 0.0im`.  One could write the [`sqrt`](@ref)
 function to switch to a complex-valued output only when passed a negative number (which is what
-[`sqrt()`](@ref) does in some other languages), but then the result would not be [type-stable](@ref man-type-stability)
-and the [`sqrt()`](@ref) function would have poor performance.
+[`sqrt`](@ref) does in some other languages), but then the result would not be [type-stable](@ref man-type-stability)
+and the [`sqrt`](@ref) function would have poor performance.
 
 In these and other cases, you can get the result you want by choosing an *input type* that conveys
 your willingness to accept an *output type* in which the result can be represented:

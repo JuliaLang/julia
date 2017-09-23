@@ -211,6 +211,7 @@ given tuple of indices and the dimensional indices of `A` in tandem. As such,
 not all index types are guaranteed to propagate to `Base.to_index`.
 """
 to_indices(A, I::Tuple) = (@_inline_meta; to_indices(A, indices(A), I))
+to_indices(A, I::Tuple{Any}) = (@_inline_meta; to_indices(A, (linearindices(A),), I))
 to_indices(A, inds, ::Tuple{}) = ()
 to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
     (@_inline_meta; (to_index(A, I[1]), to_indices(A, _maybetail(inds), tail(I))...))
@@ -223,7 +224,7 @@ _maybetail(t::Tuple) = tail(t)
 
 Represent an AbstractUnitRange of indices as a vector of the indices themselves.
 
-Upon calling `to_indices()`, Colons are converted to Slice objects to represent
+Upon calling `to_indices`, Colons are converted to Slice objects to represent
 the indices over which the Colon spans. Slice objects are themselves unit
 ranges with the same indices as those they wrap. This means that indexing into
 Slice objects with an integer always returns that exact integer, and they
