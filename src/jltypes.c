@@ -588,8 +588,13 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
     }
     for(j=0; j < n; j++) {
         jl_value_t *kj = key[j], *tj = jl_svecref(tt->parameters,j);
-        if (tj != kj && !jl_types_equal(tj, kj))
-            return 0;
+        if (tj != kj) {
+            // require exact same Type{T}. see e.g. issue #22842
+            if (jl_is_type_type(tj) || jl_is_type_type(kj))
+                return 0;
+            if (!jl_types_equal(tj, kj))
+                return 0;
+        }
     }
     return 1;
 }
