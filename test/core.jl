@@ -907,6 +907,12 @@ let
     @test_throws MethodError foor(StridedArray)
 end
 
+# issue #22842
+f22842(x::UnionAll) = UnionAll
+f22842(x::DataType) = length(x.parameters)
+@test f22842(Tuple{Vararg{Int64,N} where N}) == 1
+@test f22842(Tuple{Vararg{Int64,N}} where N) === UnionAll
+
 # issue #1153
 mutable struct SI{m, s, kg}
     value::AbstractFloat
