@@ -863,9 +863,9 @@ Compute the inverse matrix cosine of a square matrix `A`.
 If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
 compute the inverse cosine. Otherwise, the inverse cosine is determined by using
 [`log`](@ref) and [`sqrt`](@ref).  For the theory and logarithmic formulas used to compute
-this function, see [^AH16].
+this function, see [^AH16_1].
 
-[^AH16]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+[^AH16_1]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 
 # Examples
 ```jldoctest
@@ -893,9 +893,9 @@ Compute the inverse matrix sine of a square matrix `A`.
 If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
 compute the inverse sine. Otherwise, the inverse sine is determined by using [`log`](@ref)
 and [`sqrt`](@ref).  For the theory and logarithmic formulas used to compute this function,
-see [^AH16].
+see [^AH16_2].
 
-[^AH16]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+[^AH16_2]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 
 # Examples
 ```jldoctest
@@ -923,9 +923,9 @@ Compute the inverse matrix tangent of a square matrix `A`.
 If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
 compute the inverse tangent. Otherwise, the inverse tangent is determined by using
 [`log`](@ref).  For the theory and logarithmic formulas used to compute this function, see
-[^AH16].
+[^AH16_3].
 
-[^AH16]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+[^AH16_3]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 
 # Examples
 ```jldoctest
@@ -949,9 +949,9 @@ end
     acosh(A::AbstractMatrix)
 
 Compute the inverse hyperbolic matrix cosine of a square matrix `A`.  For the theory and
-logarithmic formulas used to compute this function, see [^AH16].
+logarithmic formulas used to compute this function, see [^AH16_4].
 
-[^AH16]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+[^AH16_4]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
 function acosh(A::AbstractMatrix)
     if ishermitian(A)
@@ -967,9 +967,9 @@ end
     asinh(A::AbstractMatrix)
 
 Compute the inverse hyperbolic matrix sine of a square matrix `A`.  For the theory and
-logarithmic formulas used to compute this function, see [^AH16].
+logarithmic formulas used to compute this function, see [^AH16_5].
 
-[^AH16]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+[^AH16_5]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
 function asinh(A::AbstractMatrix)
     if ishermitian(A)
@@ -985,9 +985,9 @@ end
     atanh(A::AbstractMatrix)
 
 Compute the inverse hyperbolic matrix tangent of a square matrix `A`.  For the theory and
-logarithmic formulas used to compute this function, see [^AH16].
+logarithmic formulas used to compute this function, see [^AH16_6].
 
-[^AH16]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+[^AH16_6]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
 function atanh(A::AbstractMatrix)
     if ishermitian(A)
