@@ -548,57 +548,10 @@ end
     @test "a" * 'b' * 'c' == "abc"
 end
 
-<<<<<<< 19921aa00468edf11f3d61f8c9b8d639ec71cd23
 @testset "unrecognized escapes in string/char literals" begin
     @test_throws ParseError parse("\"\\.\"")
     @test_throws ParseError parse("\'\\.\'")
-=======
-# Simple case, with just ANSI Latin 1 characters
-@test "áB" != CharStr("áá") # returns false with bug
-@test cmp("áB", CharStr("áá")) == -1 # returns 0 with bug
-
-# Case with Unicode characters
-@test cmp("\U1f596\U1f596", CharStr("\U1f596")) == 1   # Gives BoundsError with bug
-@test cmp(CharStr("\U1f596"), "\U1f596\U1f596") == -1
-
-# repeat function
-@inferred repeat(GenericString("x"), 1)
-@test repeat("xx",3) == repeat("x",6) == repeat('x',6) == repeat(GenericString("x"), 6) == "xxxxxx"
-@test repeat("αα",3) == repeat("α",6) == repeat('α',6) == repeat(GenericString("α"), 6) == "αααααα"
-@test repeat("x",1) == repeat('x',1) == "x"^1 == 'x'^1 == GenericString("x")^1 == "x"
-@test repeat("x",0) == repeat('x',0) == "x"^0 == 'x'^0 == GenericString("x")^0 == ""
-
-for S in ["xxx", "ååå", "∀∀∀", "🍕🍕🍕"]
-    c = S[1]
-    s = string(c)
-    @test_throws ArgumentError repeat(c, -1)
-    @test_throws ArgumentError repeat(s, -1)
-    @test_throws ArgumentError repeat(S, -1)
-    @test repeat(c, 0) == ""
-    @test repeat(s, 0) == ""
-    @test repeat(S, 0) == ""
-    @test repeat(c, 1) == s
-    @test repeat(s, 1) == s
-    @test repeat(S, 1) == S
-    @test repeat(c, 3) == S
-    @test repeat(s, 3) == S
-    @test repeat(S, 3) == S*S*S
 end
-
-# issue #12495: check that logical indexing attempt raises ArgumentError
-@test_throws ArgumentError "abc"[[true, false, true]]
-@test_throws ArgumentError "abc"[BitArray([true, false, true])]
-
-@test "ab" * "cd" == "abcd"
-@test 'a' * "bc" == "abc"
-@test "ab" * 'c' == "abc"
-@test 'a' * 'b' == "ab"
-@test 'a' * "b" * 'c' == "abc"
-@test "a" * 'b' * 'c' == "abc"
-
-# unrecognized escapes in string/char literals
-@test_throws ParseError parse("\"\\.\"")
-@test_throws ParseError parse("\'\\.\'")
 
 # prevind and nextind tests
 
@@ -670,5 +623,4 @@ let
 
     @test prevind(strs[2], -1) == 0
     @test prevind(strs[2], -1, 1) == 0
->>>>>>> improved prevind and nextind
 end
