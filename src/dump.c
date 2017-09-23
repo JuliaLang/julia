@@ -2116,7 +2116,8 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
     jl_serializer_state s = {
         &dest, MODE_AST,
         m->roots, m->module,
-        jl_get_ptls_states()
+        jl_get_ptls_states(),
+        NULL
     };
 
     uint8_t flags = (code->inferred << 3)
@@ -2174,7 +2175,8 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data)
     jl_serializer_state s = {
         &src, MODE_AST,
         m->roots, m->module,
-        jl_get_ptls_states()
+        jl_get_ptls_states(),
+        NULL
     };
 
     jl_code_info_t *code =
