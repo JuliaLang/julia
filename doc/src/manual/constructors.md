@@ -80,7 +80,7 @@ objects. For these problems, one needs *inner* constructor methods. An inner con
 is much like an outer constructor method, with two differences:
 
 1. It is declared inside the block of a type declaration, rather than outside of it like normal methods.
-2. It has access to a special locally existent function called `new` that creates objects of the
+2. It has access to a special locally existent function called [`new`](@ref) that creates objects of the
    block's type.
 
 For example, suppose one wants to declare a type that holds a pair of real numbers, subject to
@@ -190,7 +190,7 @@ for its `obj` field? The only solution is to allow creating an incompletely init
 of `SelfReferential` with an unassigned `obj` field, and using that incomplete instance as a valid
 value for the `obj` field of another instance, such as, for example, itself.
 
-To allow for the creation of incompletely initialized objects, Julia allows the `new` function
+To allow for the creation of incompletely initialized objects, Julia allows the [`new`](@ref) function
 to be called with fewer than the number of fields that the type has, returning an object with
 the unspecified fields uninitialized. The inner constructor method can then use the incomplete
 object, finishing its initialization before returning it. Here, for example, we take another crack

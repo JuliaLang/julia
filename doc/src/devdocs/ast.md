@@ -136,7 +136,7 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
   * `new`
 
-    Allocates a new struct-like object. First argument is the type. The `new` pseudo-function is lowered
+    Allocates a new struct-like object. First argument is the type. The [`new`](@ref) pseudo-function is lowered
     to this, and the type is always inserted by the compiler.  This is very much an internal-only
     feature, and does no checking. Evaluating arbitrary `new` expressions can easily segfault.
 

@@ -22,106 +22,97 @@ by its name, e.g. `?cos`, or `?@time`, and press enter.
 kw"help", kw"?", kw"julia"
 
 """
-`using` will load the given module or package and make some of its names available for
-use (see also `export`). For example:
+    using
 
-    using Gadfly
-
-loads the plotting package, Gadfly, so that the `plot` function can be used.
-
-Names can be used via dot syntax, whether they are exported or not:
-
-    Gadfly.plot(...)
-
-If you don't want to use the packages exports directly, see also `import`. If you're not
-sure, `using` is almost definitely what you want.
+`using Foo` will load the module or package `Foo` and make its [`export`](@ref)ed names
+available for direct use. Names can also be used via dot syntax (e.g. `Foo.foo` to access
+the name `foo` in the `Foo` module), whether they are `export`ed or not.
+See the [manual section about modules](@ref modules) for details.
+```
 """
 kw"using"
 
 """
-    import Gadfly
+    import
 
-`import`, like `using`, will load modules and packages for use. Unlike `using`, however,
-it will *not* make any `export`ed names available for use. To use Gadfly's `plot`
-function after importing it, for example, you have to write:
-
-    Gadfly.plot(...)
-
-Import can also be used with specific names, for example
-
-    import Gadfly: plot, render
-
-This syntax is used when you want to extend the modules functions with new methods.
+`import Foo` will load the module or package `Foo`. Unlike [`using`](@ref), however,
+`import` will *not* make any `export`ed names available for use.
+See the [manual section about modules](@ref modules) for details.
 """
 kw"import"
 
 """
-`export` is used within modules and packages to tell Julia which functions should be
-made available to the user. For example:
+    export
 
-    module Test
-    export foo # foo is exported, but bar isn't
-    foo(x) = x
-    bar(y) = y
-    end
-
-    using Test
-    foo(1) # 1
-    bar(1) # Error: bar not defined
-    Test.bar(1) # 1
+`export` is used within modules to tell Julia which functions should be
+made available to the user. For example: `export foo` makes the name
+`foo` available when [`using`](@ref) the module.
+See the [manual section about modules](@ref modules) for details.
 """
 kw"export"
 
 """
+    abstract type
+
 `abstract type` declares a type that cannot be instantiated, and serves only as a node in the
 type graph, thereby describing sets of related concrete types: those concrete types
 which are their descendants. Abstract types form the conceptual hierarchy which makes
 Julia’s type system more than just a collection of object implementations. For example:
 
-    abstract type Number end
-    abstract type Real <: Number end
-
+```julia
+abstract type Number end
+abstract type Real <: Number end
+```
 [`Number`](@ref) has no supertype, whereas [`Real`](@ref) is an abstract subtype of `Number`.
 """
 kw"abstract type"
 
 """
+    module
+
 `module` declares a Module, which is a separate global variable workspace.  Within a
 module, you can control which names from other modules are visible (via importing), and
 specify which of your names are intended to be public (via exporting). For example:
 
-    module
-    import Base.show
-    export MyType, foo
+```julia
+module
+import Base.show
+export MyType, foo
 
-    type MyType
-        x
-    end
+type MyType
+    x
+end
 
-    bar(x) = 2x
-    foo(a::MyType) = bar(a.x) + 1
-    show(io, a::MyType) = print(io, "MyType \$(a.x)")
-    end
-
+bar(x) = 2x
+foo(a::MyType) = bar(a.x) + 1
+show(io, a::MyType) = print(io, "MyType \$(a.x)")
+end
+```
 Modules allow you to create top-level definitions without worrying about name conflicts
 when your code is used together with somebody else’s.
+See the [manual section about modules](@ref modules) for more details.
 """
 kw"module"
 
 """
+    baremodule
+
 `baremodule` declares a module that does not contain `using Base`
-or a definition of `eval`.  It does still import `Core`.
+or a definition of `eval`. It does still import `Core`.
 """
 kw"baremodule"
 
 """
+    primitive type
+
 `primitive type` declares a concrete type whose data consists only of a series of bits. Classic
 examples of primitive types are integers and floating-point values. Some example built-in
 primitive type declarations:
 
-    primitive type Char 32 end
-    primitive type Bool <: Integer 8 end
-
+```julia
+primitive type Char 32 end
+primitive type Bool <: Integer 8 end
+```
 The number after the name indicates how many bits of storage the type requires. Currently,
 only sizes that are multiples of 8 bits are supported.
 The [`Bool`](@ref) declaration shows how a primitive type can be optionally
@@ -130,15 +121,18 @@ declared to be a subtype of some supertype.
 kw"primitive type"
 
 """
+    macro
+
 `macro` defines a method to include generated code in the final body of a program. A
 macro maps a tuple of arguments to a returned expression, and the resulting expression
 is compiled directly rather than requiring a runtime `eval` call. Macro arguments may
 include expressions, literal values, and symbols. For example:
 
-    macro sayhello(name)
-        return :( println("Hello, ", \$name) )
-    end
-
+```julia
+macro sayhello(name)
+    return :( println("Hello, ", \$name) )
+end
+```
 This macro takes one argument: `name`. When `@sayhello` is encountered, the quoted
 expression is expanded to interpolate the value of the argument into the final
 expression.
@@ -146,65 +140,80 @@ expression.
 kw"macro"
 
 """
+    importall
+
 `importall` imports all names exported by the specified module, as if `import` were used
-individually on all of them.  For example:
+individually on all of them. For example:
 
     importall Distributions
 
 As with `import`, functions imported by `importall` can be extended.
+See the [manual section about modules](@ref modules) for details.
 """
 kw"importall"
 
 """
-`local` introduces a new local variable. For example:
+    local
 
-    function foo(n)
-        x = 0
-        for i = 1:n
-            local x
-            x = i
-        end
-        x
-    end
+`local` introduces a new local variable.
 
-    julia> foo(10)
-    0
+# Examples
+```jldoctest
+julia> function foo(n)
+           x = 0
+           for i = 1:n
+               local x # introduce a loop-local x
+               x = i
+           end
+           x
+       end
+foo (generic function with 1 method)
 
-Here `local x` introduces a separate `x` inside the loop, so the function returns `0`.
+julia> foo(10)
+0
+```
 """
 kw"local"
 
 """
+    global
+
 `global x` makes `x` in the current scope and its inner scopes refer to the global
-variable of that name.   In the example below, `global` is needed so the function can
-modify the global variable `z`:
+variable of that name.
 
-    z=3
-    function foo()
-        global z=6
-    end
+# Examples
+```jldoctest
+julia> z = 3
+3
 
-    julia> foo()
-    6
-    julia> z
-    6
+julia> function foo()
+           global z = 6 # use the z variable defined outside foo
+       end
+foo (generic function with 1 method)
 
-Without the `global` declaration in `foo`, a new local variable would have been
-created inside foo(), and the `z` in the global scope would have remained equal to `3`.
+julia> foo()
+6
+
+julia> z
+6
+```
 """
 kw"global"
 
 """
+    let
+
 `let` statements allocate new variable bindings each time they run. Whereas an
 assignment modifies an existing value location, `let` creates new locations. This
 difference is only detectable in the case of variables that outlive their scope via
 closures. The `let` syntax accepts a comma-separated series of assignments and variable
 names:
 
-    let var1 = value1, var2, var3 = value3
-        code
-    end
-
+```julia
+let var1 = value1, var2, var3 = value3
+    code
+end
+```
 The assignments are evaluated in order, with each right-hand side evaluated in the scope
 before the new variable on the left-hand side has been introduced. Therefore it makes
 sense to write something like `let x = x`, since the two `x` variables are distinct and
@@ -213,15 +222,18 @@ have separate storage.
 kw"let"
 
 """
+    quote
+
 `quote` creates multiple expression objects in a block without using the explicit `Expr`
 constructor. For example:
 
-    ex = quote
-        x = 1
-        y = 2
-        x + y
-    end
-
+```julia
+ex = quote
+    x = 1
+    y = 2
+    x + y
+end
+```
 Unlike the other means of quoting, `:( ... )`, this form introduces `QuoteNode` elements
 to the expression tree, which must be considered when directly manipulating the tree.
 For other purposes, `:( ... )` and `quote .. end` blocks are treated identically.
@@ -229,75 +241,29 @@ For other purposes, `:( ... )` and `quote .. end` blocks are treated identically
 kw"quote"
 
 """
-`'` is the conjugate transposition operator:
+    '
 
-    julia> A = reshape(1:4, 2,2)
-    2×2 Array{Int64,2}:
-     1  3
-     2  4
-
-    julia> A'
-    2×2 Array{Int64,2}:
-     1  2
-     3  4
-
-    julia> B = A + im
-    2×2 Array{Complex{Int64},2}:
-     1+1im  3+1im
-     2+1im  4+1im
-
-    julia> B'
-    2×2 Array{Complex{Int64},2}:
-     1-1im  2-1im
-     3-1im  4-1im
-
+The conjugate transposition operator, see [`adjoint`](@ref).
 """
 kw"'"
 
-
 """
-`.'` is the transposition operator:
+    .'
 
-    julia> A = reshape(1:4, 2,2)
-    2×2 Array{Int64,2}:
-     1  3
-     2  4
-
-    julia> A.'
-    2×2 Array{Int64,2}:
-     1  2
-     3  4
-
-    julia> B = A + im
-    2×2 Array{Complex{Int64},2}:
-     1+1im  3+1im
-     2+1im  4+1im
-
-    julia> B.'
-    2×2 Array{Complex{Int64},2}:
-     1+1im  2+1im
-     3+1im  4+1im
-
-    julia> v = [1,2,3]
-    3-element Array{Int64,1}:
-     1
-     2
-     3
-
-    julia> v.'
-    1×3 RowVector{Int64,Array{Int64,1}}:
-     1  2  3
-
+The transposition operator, see [`transpose`](@ref).
 """
 kw".'"
 
 """
+    const
+
 `const` is used to declare global variables which are also constant. In almost all code
 (and particularly performance sensitive code) global variables should be declared
 constant in this way.
 
-    const x = 5
-
+```julia
+const x = 5
+```
 Note that "constant-ness" is not enforced inside containers, so if `x` is an array or
 dictionary (for example) you can still add and remove elements.
 
@@ -309,52 +275,52 @@ globals.
 kw"const"
 
 """
+    function
+
 Functions are defined with the `function` keyword:
 
-    function add(a, b)
-        return a + b
-    end
-
+```julia
+function add(a, b)
+    return a + b
+end
+```
 Or the short form notation:
 
-    add(a, b) = a + b
-
-The use of the `return` keyword is exactly the same as in other languages, but is often
-optional. When it's not used, the last expression in the function body will be returned
-by default:
-
-    function compare(a, b)
-        a == b && return "equal to"
-        a < b ? "less than" : "greater than"
-    end
+```julia
+add(a, b) = a + b
+```
 """
 kw"function"
 
 """
+    return
+
 `return` can be used function bodies to exit early and return a given value, e.g.
 
-    function compare(a, b)
-        a == b && return "equal to"
-        a < b ? "less than" : "greater than"
-    end
-
+```julia
+function compare(a, b)
+    a == b && return "equal to"
+    a < b ? "less than" : "greater than"
+end
+```
 In general you can place a `return` statement anywhere within a function body, including
 within deeply nested loops or conditionals, but be careful with `do` blocks. For
 example:
 
-    function test1(xs)
-        for x in xs
-            iseven(x) && return 2x
-        end
+```julia
+function test1(xs)
+    for x in xs
+        iseven(x) && return 2x
     end
+end
 
-    function test2(xs)
-        map(xs) do x
-            iseven(x) && return 2x
-            x
-        end
+function test2(xs)
+    map(xs) do x
+        iseven(x) && return 2x
+        x
     end
-
+end
+```
 In the first example, the return breaks out of its enclosing function as soon as it hits
 an even number, so `test1([5,6,7])` returns `12`.
 
@@ -365,18 +331,21 @@ back to `map`. `test2([5,6,7])` then returns `[5,12,7]`.
 kw"return"
 
 """
+    if - elseif - if
+
 `if`-`elseif`-`else` performs conditional evaluation, which allows portions of code to
 be evaluated or not evaluated depending on the value of a boolean expression. Here is
 the anatomy of the `if`-`elseif`-`else` conditional syntax:
 
-    if x < y
-        println("x is less than y")
-    elseif x > y
-        println("x is greater than y")
-    else
-        println("x is equal to y")
-    end
-
+```julia
+if x < y
+    println("x is less than y")
+elseif x > y
+    println("x is greater than y")
+else
+    println("x is equal to y")
+end
+```
 If the condition expression `x < y` is true, then the corresponding block is evaluated;
 otherwise the condition expression `x > y` is evaluated, and if it is true, the
 corresponding block is evaluated; if neither expression is true, the `else` block is
@@ -386,56 +355,84 @@ desired can be used.
 kw"if", kw"elseif", kw"else"
 
 """
-`for` loops repeatedly evaluate the body of the loop by iterating over a sequence of
-values. For example:
+    for
 
-    for i in [1,4,0]
-        println(i)
-    end
+`for` loops repeatedly evaluate the body of the loop by
+iterating over a sequence of values.
+
+# Examples
+```jldoctest
+julia> for i in [1, 4, 0]
+           println(i)
+       end
+1
+4
+0
+```
 """
 kw"for"
 
 """
+    while
+
 `while` loops repeatedly evaluate a conditional expression, and continues evaluating the
 body of the while loop so long as the expression remains `true`. If the condition
 expression is false when the while loop is first reached, the body is never evaluated.
-For example:
 
-    while i <= 5
-        println(i)
-        i += 1
-    end
+# Examples
+```jldoctest
+julia> i = 1
+1
+
+julia> while i < 5
+           println(i)
+           i += 1
+       end
+1
+2
+3
+4
+```
 """
 kw"while"
 
 """
-`end` marks the conclusion of a block of expressions. In the example below, `end` marks
-the conclusion of a `function`.
-
-    function foo()
-        println("hello, world")
     end
 
-`end` marks the conclusion of all kinds of expression blocks: `module`, `type`, `begin`,
-`let`, `for`, etc.
+`end` marks the conclusion of a block of expressions, for example
+`module`, `struct`, `mutable struct`, `begin`, `let`, `for` etc.
+`end` may also be used when indexing into an array to represent
+the last index of a dimension.
 
-In addition, `end` may be used when indexing into an array to represent the last index
-of each dimension:
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
 
-    x[1:end, 2:end-1]
+julia> A[end, :]
+2-element Array{Int64,1}:
+ 3
+ 4
+```
 """
 kw"end"
 
 """
+    try/catch
+
 A `try/catch` statement allows for `Exception`s to be tested for. For example, a
 customized square root function can be written to automatically call either the real or
 complex square root method on demand using `Exception`s:
 
-    f(x) = try
-        sqrt(x)
-    catch
-        sqrt(complex(x, 0))
-    end
+```julia
+f(x) = try
+    sqrt(x)
+catch
+    sqrt(complex(x, 0))
+end
+```
 
 `try/catch` statements also allow the `Exception` to be saved in a variable, e.g. `catch y`.
 
@@ -446,16 +443,20 @@ nested computation immediately to a much higher level in the stack of calling fu
 kw"try", kw"catch"
 
 """
+    finally
+
 `finally` provides a way to run some code when a given block of code exits, regardless
 of how it exits. For example, here is how we can guarantee that an opened file is
 closed:
 
-    f = open("file")
-    try
-        operate_on_file(f)
-    finally
-        close(f)
-    end
+```julia
+f = open("file")
+try
+    operate_on_file(f)
+finally
+    close(f)
+end
+```
 
 When control leaves the `try` block (for example due to a `return`, or just finishing
 normally), `close(f)` will be executed. If the `try` block exits due to an exception,
@@ -466,75 +467,109 @@ the error.
 kw"finally"
 
 """
-`break` breaks out of a loop immediately. For example
+    break
 
-    i = 0
-    while true
-        i += 1
-        i > 10 && break
-        println(i)
-    end
+`break` breaks out of a loop immediately.
 
-prints the numbers 1 to 10.
+```jldoctest
+julia> i = 0
+0
+
+julia> while true
+           i += 1
+           i > 5 && break
+           println(i)
+       end
+1
+2
+3
+4
+5
+```
 """
 kw"break"
 
 """
-`continue` skips the rest of the current loop, then carries on looping. For example
+    continue
 
-    for i = 1:10
-        iseven(i) && continue
-        println(i)
-    end
+`continue` skips the rest of the current loop, then carries on looping.
 
-prints the numbers 1, 3, 5..., skipping the even numbers.
+# Examples
+```jldoctest
+julia> for i = 1:6
+           iseven(i) && continue
+           println(i)
+       end
+1
+3
+5
+```
 """
 kw"continue"
 
 """
-The `do` keyword creates an anonymous function. For example
+    do
 
-    map(1:10) do x
-        2x
-    end
+The `do` keyword creates an anonymous function. For example:
+
+```julia
+map(1:10) do x
+    2x
+end
+```
 
 is equivalent to `map(x->2x, 1:10)`.
 
 Use multiple arguments like so:
 
-    map(1:10, 11:20) do x, y
-        x + y
-    end
+```julia
+map(1:10, 11:20) do x, y
+    x + y
+end
+```
 """
 kw"do"
 
 """
-The "splat" operator, `...`, represents a sequence of arguments. For example
+    ...
 
-    add(xs...) = reduce(+, xs)
+The "splat" operator, `...`, represents a sequence of arguments.
+`...` can be used in function definitions, to indicate that the function
+accepts an arbitrary number of arguments.
+`...` can also be used to apply a function to a sequence of arguments.
 
-can take any number of arguments:
+# Examples
+```jldoctest
+julia> add(xs...) = reduce(+, xs)
+add (generic function with 1 method)
 
-    add(1, 2, 3, 4, 5)
+julia> add(1, 2, 3, 4, 5)
+15
 
-`...` can also be used to apply a function to a sequence of arguments like so:
+julia> add([1, 2, 3]...)
+6
 
-    add([1, 2, 3]...) # 6
-    add(7, 1:100..., 1000:1100...) # 111107
+julia> add(7, 1:100..., 1000:1100...)
+111107
+```
 """
 kw"..."
 
 """
+    ;
+
 `;` has a similar role in Julia as in many C-like languages, and is used to delimit the
 end of the previous statement. `;` is not necessary after new lines, but can be used to
 separate statements on a single line or to join statements into a single expression:
 
-    function foo()
-        println("Hello, "); println("World!")
-        return true
-    end
+```julia
+function foo()
+    println("Hello, "); println("World!")
+    return true
+end
 
-    foo() = (println("Hello, World!"); true)
+foo() = (println("Hello, World!"); true)
+```
 
 `;` is also used to suppress output in the REPL and similar interfaces.
 """
@@ -598,75 +633,108 @@ See `test/llvmcall.jl` for usage examples.
 Core.Intrinsics.llvmcall
 
 """
+    begin
+
 `begin...end` denotes a block of code.
 
-    begin
-        println("Hello, ")
-        println("World!")
-    end
+```julia
+begin
+    println("Hello, ")
+    println("World!")
+end
+```
 
 Usually `begin` will not be necessary, since keywords such as `function` and `let`
-implicitly begin blocks of code. See also `;`.
+implicitly begin blocks of code. See also [`;`](@ref).
 """
 kw"begin"
 
 """
+    struct
+
 The most commonly used kind of type in Julia is a struct, specified as a name and a
 set of fields.
 
+```julia
     struct Point
         x
         y
     end
+```
 
 Fields can have type restrictions, which may be parameterized:
 
+```julia
     struct Point{X}
         x::X
         y::Float64
     end
+```
 
 A struct can also declare an abstract super type via `<:` syntax:
 
-    struct Point <: AbstractPoint
-        ...
+```julia
+struct Point <: AbstractPoint
+    x
+    y
+end
+```
 
-Structs are immutable by default; an instance of one of these types cannot
+`struct`s are immutable by default; an instance of one of these types cannot
 be modified after construction. Use `mutable struct` instead to declare a
 type whose instances can be modified.
 
-See the manual for more details, such as how to define constructors.
+See the manual section on [Composite Types](@ref) for more details,
+such as how to define constructors.
 """
 kw"struct"
 
 """
-`mutable struct` is similar to  `struct`, but additionally allows the fields of the type
-to be set after construction. See `struct` and the manual for more information.
+    mutable struct
+
+`mutable struct` is similar to [`struct`](@ref), but additionally allows the
+fields of the type to be set after construction. See the manual section on
+[Composite Types](@ref) for more information.
 """
 kw"mutable struct"
 
 """
+    new
+
+Special function available to inner constructors which created a new object
+of the type.
+See the manual section on [Inner Constructor Methods](@ref) for more information.
+"""
+kw"new"
+
+"""
+    where
+
 The `where` keyword creates a type that is an iterated union of other types, over all
 values of some variable. For example `Vector{T} where T<:Real` includes all `Vector`s
 where the element type is some kind of `Real` number.
 
 The variable bound defaults to `Any` if it is omitted:
 
-    Vector{T} where T    # short for `where T<:Any`
-
+```julia
+Vector{T} where T    # short for `where T<:Any`
+```
 Variables can also have lower bounds:
 
-    Vector{T} where T>:Int
-    Vector{T} where Int<:T<:Real
-
+```julia
+Vector{T} where T>:Int
+Vector{T} where Int<:T<:Real
+```
 There is also a concise syntax for nested `where` expressions. For example, this:
 
-    Pair{T, S} where S<:Array{T} where T<:Number
-
+```julia
+Pair{T, S} where S<:Array{T} where T<:Number
+```
 can be shortened to:
 
-    Pair{T, S} where {T<:Number, S<:Array{T}}
-
+```julia
+Pair{T, S} where {T<:Number, S<:Array{T}}
+```
 This form is often found on method signatures.
 
 Note that in this form, the variables are listed outermost-first. This matches the
