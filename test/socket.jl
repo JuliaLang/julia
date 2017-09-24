@@ -245,7 +245,7 @@ end
 
     close(a)
     close(b)
- d
+
     if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         a = UDPSocket()
         b = UDPSocket()
