@@ -138,7 +138,6 @@ defaultport = rand(2000:4000)
     end
 end
 
-
 @testset "getnameinfo on some unroutable IP addresses (RFC 5737)" begin
     @test getnameinfo(ip"192.0.2.1") == "192.0.2.1"
     @test getnameinfo(ip"198.51.100.1") == "198.51.100.1"
