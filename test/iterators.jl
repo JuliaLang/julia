@@ -429,3 +429,32 @@ end
     @test length(arr) == 0
     @test eltype(arr) == Int
 end
+
+# To be inferrable these have to be defined outside the @testset
+ltmap(f, t::Tuple) = _ltmap(f, Base.iterator(t))
+_ltmap(f, t::Tuple) = (f(t[1]), _ltmap(f, Base.tail(t))...)
+_ltmap(f, ::Tuple{}) = ()
+_ltmap(f, iter) = (map(f, iter)...)
+ltsqr(x) = x^2
+
+@testset "long tuples" begin
+    for t in ((1:5...),
+              (1:10...),
+              (1:20...),
+              (1:100...),
+              (1:1000...))
+        @test isa(ltmap(ltsqr, t), Tuple{Vararg{Int}})
+        if length(t) < 16
+            @inferred(ltmap(ltsqr, t))
+        else
+            @inferred(eltype(ltmap(ltsqr, t)))
+        end
+        @test [ltmap(ltsqr, t)...] == map(ltsqr, [t...])
+        lt = Base.iterator(t)
+        y = map(ltsqr, lt)
+        stats = Base.gc_num()
+        y = map(ltsqr, lt)
+        diff = Base.GC_Diff(Base.gc_num(), stats)
+        @test Base.gc_alloc_count(diff) < 5
+    end
+end
