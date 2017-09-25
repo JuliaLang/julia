@@ -929,15 +929,6 @@ julia> append!([1],[2,3])
  1
  2
  3
-
-julia> append!([1, 2, 3], [4, 5, 6])
-6-element Array{Int64,1}:
- 1
- 2
- 3
- 4
- 5
- 6
 ```
 """
 function append!(a::Array{<:Any,1}, items::AbstractVector)
@@ -978,15 +969,6 @@ See also: [`unshift!`](@ref), [`append!`](@ref), [`insert!`](@ref)
 ```jldoctest
 julia> prepend!([3],[1,2])
 3-element Array{Int64,1}:
- 1
- 2
- 3
-
-julia> prepend!([1, 2, 3], [4, 5, 6])
-6-element Array{Int64,1}:
- 4
- 5
- 6
  1
  2
  3
@@ -1229,7 +1211,7 @@ end
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
 
-See also: [`splice!`](@ref)
+See also: [`splice!`](@ref), [`pop!`](@ref), [`unshift!`](@ref)
 
 # Examples
 ```jldoctest
@@ -1335,7 +1317,7 @@ Subsequent items are shifted left to fill the resulting gap.
 If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
 
-See also: [`pop!`](@ref), [`shift!`](@ref), [`insert!`](@ref)
+See also: [`pop!`](@ref), [`shift!`](@ref), [`insert!`](@ref), [`deleteat!`](@ref)
 
 # Examples
 ```jldoctest splice!
