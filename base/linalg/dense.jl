@@ -215,23 +215,6 @@ function tril!(M::AbstractMatrix, k::Integer)
 end
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
-function gradient(F::AbstractVector, h::Vector)
-    n = length(F)
-    T = typeof(oneunit(eltype(F))/oneunit(eltype(h)))
-    g = similar(F, T)
-    if n == 1
-        g[1] = zero(T)
-    elseif n > 1
-        g[1] = (F[2] - F[1]) / (h[2] - h[1])
-        g[n] = (F[n] - F[n-1]) / (h[end] - h[end-1])
-        if n > 2
-            h = h[3:n] - h[1:n-2]
-            g[2:n-1] = (F[3:n] - F[1:n-2]) ./ h
-        end
-    end
-    g
-end
-
 function diagind(m::Integer, n::Integer, k::Integer=0)
     if !(-m <= k <= n)
         throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) and ",
