@@ -87,7 +87,7 @@ As in the example above, we recommend following some simple conventions when wri
    a short list of these in a `See also:` paragraph.
 
    ```
-   See also:[`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref)
+   See also: [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref)
    ```
 6. Include any code examples in an `# Examples` section.
 
