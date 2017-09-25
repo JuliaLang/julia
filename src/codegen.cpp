@@ -6914,7 +6914,6 @@ extern "C" void jl_dump_llvm_inst_function(void *v)
 extern "C" void jl_dump_llvm_type(void *v)
 {
     llvm_dump((Type*)v);
-    putchar('\n');
 }
 
 extern "C" void jl_dump_llvm_module(void *v)

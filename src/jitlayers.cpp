@@ -70,16 +70,13 @@ using namespace llvm;
 
 RTDyldMemoryManager* createRTDyldMemoryManager(void);
 
-static Type *T_void;
 static IntegerType *T_uint32;
 static IntegerType *T_uint64;
 static IntegerType *T_size;
 static Type *T_psize;
-static Type *T_pvoidfunc;
 static Type *T_pjlvalue;
 void jl_init_jit(Type *T_pjlvalue_)
 {
-    T_void = Type::getVoidTy(jl_LLVMContext);
     T_uint32 = Type::getInt32Ty(jl_LLVMContext);
     T_uint64 = Type::getInt64Ty(jl_LLVMContext);
     if (sizeof(size_t) == 8)
@@ -87,7 +84,6 @@ void jl_init_jit(Type *T_pjlvalue_)
     else
         T_size = T_uint32;
     T_psize = PointerType::get(T_size, 0);
-    T_pvoidfunc = FunctionType::get(T_void, /*isVarArg*/false)->getPointerTo();
     T_pjlvalue = T_pjlvalue_;
 }
 
