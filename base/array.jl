@@ -551,6 +551,9 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
+# arises in similar(dest, Pair{Union{},Union{}}) where dest::Dict:
+convert(::Type{Vector{Union{}}}, a::Vector{Union{}}) = a
+
 convert(::Type{Vector}, x::AbstractVector{T}) where {T} = convert(Vector{T}, x)
 convert(::Type{Matrix}, x::AbstractMatrix{T}) where {T} = convert(Matrix{T}, x)
 

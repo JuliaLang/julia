@@ -856,3 +856,10 @@ end
 # nextind
 @test nextind(zeros(4), 2) == 3
 @test nextind(zeros(2,3), CartesianIndex(2,1)) == CartesianIndex(1, 2)
+
+@testset "ImageCore #40" begin
+    Base.convert(::Type{Array{T,n}}, a::Array{T,n}) where {T<:Number,n} = a
+    Base.convert(::Type{Array{T,n}}, a::Array) where {T<:Number,n} =
+        copy!(Array{T,n}(size(a)), a)
+    @test isa(similar(Dict(:a=>1, :b=>2.0), Pair{Union{},Union{}}), Dict{Union{}, Union{}})
+end

@@ -1860,7 +1860,13 @@ function showarg(io::IO, x, toplevel)
     toplevel || print(io, "::")
     print(io, typeof(x))
 end
+# This method resolves an ambiguity for packages that specialize on eltype
+function showarg(io::IO, a::Array{Union{}}, toplevel)
+    toplevel || print(io, "::")
+    print(io, typeof(a))
+end
 
+# Container specializations
 function showarg(io::IO, v::SubArray, toplevel)
     print(io, "view(")
     showarg(io, parent(v), false)
