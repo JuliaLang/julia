@@ -60,7 +60,7 @@ ans
 Core.:(===)
 Core.isa
 Base.isequal
-Base.isless
+Base.isless   # isless functions do not work for complex numbers as any non-equality comparison doesn't apply mathematically.
 Base.isless(::Nullable, ::Nullable)
 Base.ifelse
 Base.lexcmp
