@@ -713,18 +713,18 @@ function start(t::Dict)
     return i
 end
 done(t::Dict, i) = i > length(t.vals)
-function next(t::Dict{K,V}, i) where {K,V}
-    @inbounds return (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1))
+@propagate_inbounds function next(t::Dict{K,V}, i) where {K,V}
+    return (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 end
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-function next(v::KeyIterator{<:Dict}, i)
-    @inbounds return (v.dict.keys[i], skip_deleted(v.dict,i+1))
+@propagate_inbounds function next(v::KeyIterator{<:Dict}, i)
+    return (v.dict.keys[i], skip_deleted(v.dict,i+1))
 end
-function next(v::ValueIterator{<:Dict}, i)
-    @inbounds return (v.dict.vals[i], skip_deleted(v.dict,i+1))
+@propagate_inbounds function next(v::ValueIterator{<:Dict}, i)
+    return (v.dict.vals[i], skip_deleted(v.dict,i+1))
 end
 
 function filter_in_one_pass!(f, d::Associative)
