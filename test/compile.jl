@@ -207,8 +207,11 @@ try
         @test map(x -> x[1],  sort(deps)) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
 
         modules, deps1 = Base.cache_dependencies(cachefile)
-        @test modules == Dict(s => Base.module_uuid(getfield(Foo, s)) for s in
-                                    [:Base, :Core, Foo2_module, FooBase_module, :Main])
+        @test modules == merge(Dict(s => Base.module_uuid(getfield(Foo, s)) for s in
+                                    [:Base, :Core, Foo2_module, FooBase_module, :Main]),
+                               # plus modules included in the system image
+                               Dict(s => Base.module_uuid(Base.root_module(s)) for s in
+                                    [:DelimitedFiles]))
         @test deps == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2

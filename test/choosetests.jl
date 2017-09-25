@@ -32,7 +32,7 @@ function choosetests(choices = [])
         "bigfloat", "sorting", "statistics", "spawn", "backtrace",
         "file", "read", "mmap", "version", "resolve",
         "pollfd", "mpfr", "broadcast", "complex", "socket",
-        "floatapprox", "datafmt", "reflection", "regex", "float16",
+        "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
         "replutil", "sets", "test", "goto", "llvmcall", "llvmcall2", "grisu",

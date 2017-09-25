@@ -1,18 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-@testset "countlines" begin
-    @test countlines(IOBuffer("\n")) == 1
-    @test countlines(IOBuffer("\n"),'\r') == 0
-    @test countlines(IOBuffer("\n\n\n\n\n\n\n\n\n\n")) == 10
-    @test countlines(IOBuffer("\n \n \n \n \n \n \n \n \n \n")) == 10
-    @test countlines(IOBuffer("\r\n \r\n \r\n \r\n \r\n")) == 5
-    file = tempname()
-    write(file,"Spiffy header\nspectacular first row\neven better 2nd row\nalmost done\n")
-    @test countlines(file) == 4
-    @test countlines(file,'\r') == 0
-    @test countlines(file,'\n') == 4
-    rm(file)
-end
+using Base.Test
+using DelimitedFiles
 
 isequaldlm(m1, m2, t) = isequal(m1, m2) && (eltype(m1) == eltype(m2) == t)
 
@@ -295,3 +284,9 @@ end
 
 # issue #11484: useful error message for invalid readdlm filepath arguments
 @test_throws ArgumentError readdlm(tempdir())
+
+# displaying as text/csv
+let d = TextDisplay(IOBuffer())
+    display(d, "text/csv", [3 1 4])
+    @test String(take!(d.io)) == "3,1,4\n"
+end

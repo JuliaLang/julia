@@ -1048,7 +1048,6 @@ export
     readbytes!,
     readchomp,
     readdir,
-    readdlm,
     readline,
     readlines,
     readuntil,
@@ -1070,7 +1069,6 @@ export
     unmark,
     watch_file,
     write,
-    writedlm,
     TCPSocket,
     UDPSocket,
 
