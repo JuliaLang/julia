@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using DelimitedFiles
+
 mktempdir() do dir
 
 tasks = []
@@ -494,3 +496,17 @@ close(f2)
 rm(f)
 
 end # mktempdir() do dir
+
+@testset "countlines" begin
+    @test countlines(IOBuffer("\n")) == 1
+    @test countlines(IOBuffer("\n"),'\r') == 0
+    @test countlines(IOBuffer("\n\n\n\n\n\n\n\n\n\n")) == 10
+    @test countlines(IOBuffer("\n \n \n \n \n \n \n \n \n \n")) == 10
+    @test countlines(IOBuffer("\r\n \r\n \r\n \r\n \r\n")) == 5
+    file = tempname()
+    write(file,"Spiffy header\nspectacular first row\neven better 2nd row\nalmost done\n")
+    @test countlines(file) == 4
+    @test countlines(file,'\r') == 0
+    @test countlines(file,'\n') == 4
+    rm(file)
+end

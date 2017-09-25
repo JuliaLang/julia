@@ -1724,18 +1724,11 @@ import .LinAlg: diagm
 @deprecate_binding φ          MathConstants.φ
 @deprecate_binding golden     MathConstants.golden
 
-# deprecate writecsv
-@deprecate writecsv(io, a; opts...) writedlm(io, a, ','; opts...)
-
 # PR #23271
 function IOContext(io::IO; kws...)
     depwarn("IOContext(io, k=v, ...) is deprecated, use IOContext(io, :k => v, ...) instead.", :IOContext)
     IOContext(io, (k=>v for (k, v) in kws)...)
 end
-
-# deprecate readcsv
-@deprecate readcsv(io; opts...) readdlm(io, ','; opts...)
-@deprecate readcsv(io, T::Type; opts...) readdlm(io, ',', T; opts...)
 
 @deprecate IOContext(io::IO, key, value) IOContext(io, key=>value)
 

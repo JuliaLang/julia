@@ -786,10 +786,7 @@ end
 # don't use julia-specific `f` in Float32 printing (PR #18053)
 @test sprint(print, 1f-7) == "1.0e-7"
 
-# test that the REPL TextDisplay works for displaying arbitrary textual MIME types
 let d = TextDisplay(IOBuffer())
-    display(d, "text/csv", [3 1 4])
-    @test String(take!(d.io)) == "3,1,4\n"
     @test_throws MethodError display(d, "text/foobar", [3 1 4])
     try
         display(d, "text/foobar", [3 1 4])

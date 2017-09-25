@@ -728,3 +728,26 @@ function skipchars(io::IO, pred; linecomment=nothing)
     end
     return io
 end
+
+"""
+    countlines(io::IO, eol::Char='\\n')
+
+Read `io` until the end of the stream/file and count the number of lines. To specify a file
+pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
+passing them as the second argument.
+"""
+function countlines(io::IO, eol::Char='\n')
+    isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
+    aeol = UInt8(eol)
+    a = Vector{UInt8}(8192)
+    nl = 0
+    while !eof(io)
+        nb = readbytes!(io, a)
+        @simd for i=1:nb
+            @inbounds nl += a[i] == aeol
+        end
+    end
+    nl
+end
+
+countlines(f::AbstractString, eol::Char='\n') = open(io->countlines(io,eol), f)::Int

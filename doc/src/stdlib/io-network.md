@@ -47,7 +47,7 @@ Base.redirect_stdin(::Function, ::Any)
 Base.readchomp
 Base.truncate
 Base.skipchars
-Base.DataFmt.countlines
+Base.countlines
 Base.PipeBuffer
 Base.readavailable
 Base.IOContext
@@ -77,13 +77,6 @@ Base.readline
 Base.readuntil
 Base.readlines
 Base.eachline
-Base.DataFmt.readdlm(::Any, ::Char, ::Type, ::Char)
-Base.DataFmt.readdlm(::Any, ::Char, ::Char)
-Base.DataFmt.readdlm(::Any, ::Char, ::Type)
-Base.DataFmt.readdlm(::Any, ::Char)
-Base.DataFmt.readdlm(::Any, ::Type)
-Base.DataFmt.readdlm(::Any)
-Base.DataFmt.writedlm
 Base.Base64.Base64EncodePipe
 Base.Base64.Base64DecodePipe
 Base.Base64.base64encode
