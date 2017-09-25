@@ -134,8 +134,8 @@ script:
       fi
     - cd .. && mv julia julia2
     # run tests
-    - /tmp/julia/bin/julia --precompiled=no -e 'true' &&
-        /tmp/julia/bin/julia-debug --precompiled=no -e 'true'
+    - /tmp/julia/bin/julia --sysimage-native-code=no -e 'true' &&
+        /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true'
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - pushd /tmp/julia/share/julia/test
     - /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
