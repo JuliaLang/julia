@@ -82,10 +82,6 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
     Reference a static parameter by index.
 
-  * `line`
-
-    Line number and file name metadata. Unlike a `LineNumberNode`, can also contain a file name.
-
   * `gotoifnot`
 
     Conditional branch. If `args[1]` is false, goes to label identified in `args[2]`.
@@ -337,10 +333,11 @@ Boolean properties:
 
 ## Surface syntax AST
 
-Front end ASTs consist entirely of `Expr`s and atoms (e.g. symbols, numbers). There is generally
-a different expression head for each visually distinct syntactic form. Examples will be given
-in s-expression syntax. Each parenthesized list corresponds to an Expr, where the first element
-is the head. For example `(call f x)` corresponds to `Expr(:call, :f, :x)` in Julia.
+Front end ASTs consist almost entirely of `Expr`s and atoms (e.g. symbols, numbers).
+There is generally a different expression head for each visually distinct syntactic form.
+Examples will be given in s-expression syntax.
+Each parenthesized list corresponds to an Expr, where the first element is the head.
+For example `(call f x)` corresponds to `Expr(:call, :f, :x)` in Julia.
 
 ### Calls
 
@@ -526,3 +523,22 @@ The first argument is a boolean telling whether the type is mutable.
 `try` blocks parse as `(try try_block var catch_block finally_block)`. If no variable is present
 after `catch`, `var` is `#f`. If there is no `finally` clause, then the last argument is not present.
 
+### Quote expressions
+
+Julia source syntax forms for code quoting (`quote` and `:( )`) support interpolation with `$`.
+In Lisp terminology, this means they are actually "backquote" or "quasiquote" forms.
+Internally, there is also a need for code quoting without interpolation.
+In Julia's scheme code, non-interpolating quote is represented with the expression head `inert`.
+
+`inert` expressions are converted to Julia `QuoteNode` objects.
+These objects wrap a single value of any type, and when evaluated simply return that value.
+
+A `quote` expression whose argument is an atom also gets converted to a `QuoteNode`.
+
+### Line numbers
+
+Source location information is represented as `(line line_num file_name)` where the third
+component is optional (and omitted when the current line number, but not file name,
+changes).
+
+These expressions are represented as `LineNumberNode`s in Julia.
