@@ -4050,7 +4050,7 @@ static void emit_cfunc_invalidate(
         }
         else {
             gf_ret = emit_bitcast(ctx, gf_ret, gfrt->getPointerTo());
-            ctx.builder.CreateRet(ctx.builder.CreateLoad(gf_ret));
+            ctx.builder.CreateRet(ctx.builder.CreateAlignedLoad(gf_ret, julia_alignment(astrt, 0)));
         }
         break;
     }
@@ -4598,7 +4598,7 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, const jl_returnin
         if (lty != NULL && !isboxed) {
             theArg = decay_derived(emit_bitcast(ctx, theArg, PointerType::get(lty, 0)));
             if (!lty->isAggregateType()) // keep "aggregate" type values in place as pointers
-                theArg = ctx.builder.CreateAlignedLoad(theArg, julia_alignment(theArg, ty, 0));
+                theArg = ctx.builder.CreateAlignedLoad(theArg, julia_alignment(ty, 0));
         }
         assert(dyn_cast<UndefValue>(theArg) == NULL);
         args[idx] = theArg;
@@ -4684,7 +4684,7 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
     jl_returninfo_t props = {};
     SmallVector<Type*, 8> fsig;
     Type *rt;
-    if (jlrettype == (jl_value_t*)jl_void_type) {
+    if (jl_is_structtype(jlrettype) && jl_is_datatype_singleton((jl_datatype_t*)jlrettype)) {
         rt = T_void;
         props.cc = jl_returninfo_t::Register;
     }
@@ -5695,9 +5695,9 @@ static std::unique_ptr<Module> emit_function(
                     if (returninfo.cc == jl_returninfo_t::SRet) {
                         assert(jl_is_leaf_type(jlrettype));
                         emit_memcpy(ctx, sret, retvalinfo, jl_datatype_size(jlrettype),
-                                    returninfo.union_minalign);
+                                    julia_alignment(jlrettype, 0));
                     }
-                    else {
+                    else { // must be jl_returninfo_t::Union
                         emit_unionmove(ctx, sret, retvalinfo, isboxed_union, false, NULL);
                     }
                 }
