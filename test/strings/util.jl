@@ -217,7 +217,7 @@ end
 
     # test replace with a count for String and GenericString
     # check that replace is a no-op if count==0
-    for s in ["aaa", Base.Test.GenericString("aaa")]
+    for s in ["aaa", Test.GenericString("aaa")]
         # @test replace("aaa", 'a', 'z', 0) == "aaa" # enable when undeprecated
         @test replace(s, 'a', 'z', 1) == "zaa"
         @test replace(s, 'a', 'z', 2) == "zza"

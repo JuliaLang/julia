@@ -19,8 +19,10 @@ end
 # make links for stdlib package docs
 if Sys.iswindows()
     cp("../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
+    cp("../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
 else
     symlink("../../../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
+    symlink("../../../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
 end
 
 const PAGES = [
@@ -124,11 +126,11 @@ const PAGES = [
     ],
 ]
 
-using DelimitedFiles
+using DelimitedFiles, Test
 
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg, DelimitedFiles],
+    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,

@@ -35,7 +35,7 @@ function choosetests(choices = [])
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
-        "replutil", "sets", "test", "goto", "llvmcall", "llvmcall2", "grisu",
+        "replutil", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
         "nullable", "meta", "stacktraces", "profile", "libgit2", "docs",
         "markdown", "base64", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",

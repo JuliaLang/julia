@@ -1,4 +1,4 @@
-using Base.Test
+using Test
 
 module DeprecationTests # to test @deprecate
     f() = true

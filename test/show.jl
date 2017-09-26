@@ -743,8 +743,8 @@ end
 let repr = sprint(dump, sin)
     @test repr == "sin (function of type typeof(sin))\n"
 end
-let repr = sprint(dump, Base.Test)
-    @test repr == "Module Base.Test\n"
+let repr = sprint(dump, Test)
+    @test repr == "Module Test\n"
 end
 let a = Array{Any}(10000)
     a[2] = "elemA"

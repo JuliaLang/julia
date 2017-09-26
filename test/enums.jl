@@ -3,7 +3,7 @@
 # For curmod_*
 include("testenv.jl")
 
-using Base.Test
+using Test
 
 @test_throws MethodError convert(Enum, 1.0)
 

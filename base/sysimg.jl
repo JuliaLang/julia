@@ -364,7 +364,6 @@ include("deepcopy.jl")
 include("interactiveutil.jl")
 include("summarysize.jl")
 include("replutil.jl")
-include("test.jl")
 include("i18n.jl")
 using .I18n
 
@@ -456,6 +455,7 @@ Base.init_load_path(ccall(:jl_get_julia_home, Any, ()))
 
 # load some stdlib packages but don't put their names in Main
 Base.require(:DelimitedFiles)
+Base.require(:Test)
 
 empty!(LOAD_PATH)
 

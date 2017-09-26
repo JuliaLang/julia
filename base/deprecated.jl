@@ -119,14 +119,18 @@ macro deprecate_binding(old, new, export_old=true)
          Expr(:call, :deprecate, __module__, Expr(:quote, old)))
 end
 
-macro deprecate_moved(old, new, export_old=true)
+macro deprecate_moved(old, new, export_old=true, default_package=false)
     eold = esc(old)
     return Expr(:toplevel,
-         :(function $eold(args...; kwargs...)
-               error($eold, " has been moved to the package ", $new, ".jl.\n",
-                     "Run `Pkg.add(\"", $new, "\")` to install it, restart Julia,\n",
-                     "and then run `using ", $new, "` to load it.")
-           end),
+         default_package ? :(function $eold(args...; kwargs...)
+                                 error($eold, " has been moved to the standard library package ", $new, ".\n",
+                                       "Restart Julia and then run `using ", $new, "` to load it.")
+                             end) :
+                           :(function $eold(args...; kwargs...)
+                                 error($eold, " has been moved to the package ", $new, ".jl.\n",
+                                       "Run `Pkg.add(\"", $new, "\")` to install it, restart Julia,\n",
+                                       "and then run `using ", $new, "` to load it.")
+                             end),
          export_old ? Expr(:export, eold) : nothing,
          Expr(:call, :deprecate, __module__, Expr(:quote, old), 2))
 end
@@ -134,7 +138,7 @@ end
 # BEGIN 0.6-alpha deprecations (delete when 0.6 is released)
 
 @deprecate isambiguous(m1::Method, m2::Method, b::Bool) isambiguous(m1, m2, ambiguous_bottom=b) false
-# TODO: delete allow_bottom keyword code in Base.Test.detect_ambiguities
+# TODO: delete allow_bottom keyword code in Test.detect_ambiguities
 
 # END 0.6-alpha deprecations
 
@@ -996,73 +1000,6 @@ iteratoreltype(::Type{Task}) = EltypeUnknown()
 
 isempty(::Task) = error("isempty not defined for Tasks")
 
-@eval Base.Test begin
-    approx_full(x::AbstractArray) = x
-    approx_full(x::Number) = x
-    approx_full(x) = full(x)
-
-    function test_approx_eq(va, vb, Eps, astr, bstr)
-        va = approx_full(va)
-        vb = approx_full(vb)
-        la, lb = length(linearindices(va)), length(linearindices(vb))
-        if la != lb
-            error("lengths of ", astr, " and ", bstr, " do not match: ",
-                "\n  ", astr, " (length $la) = ", va,
-                "\n  ", bstr, " (length $lb) = ", vb)
-        end
-        diff = real(zero(eltype(va)))
-        for (xa, xb) = zip(va, vb)
-            if isfinite(xa) && isfinite(xb)
-                diff = max(diff, abs(xa-xb))
-            elseif !isequal(xa,xb)
-                error("mismatch of non-finite elements: ",
-                    "\n  ", astr, " = ", va,
-                    "\n  ", bstr, " = ", vb)
-            end
-        end
-
-        if !isnan(Eps) && !(diff <= Eps)
-            sdiff = string("|", astr, " - ", bstr, "| <= ", Eps)
-            error("assertion failed: ", sdiff,
-                "\n  ", astr, " = ", va,
-                "\n  ", bstr, " = ", vb,
-                "\n  difference = ", diff, " > ", Eps)
-        end
-    end
-
-    array_eps(a::AbstractArray{Complex{T}}) where {T} = eps(float(maximum(x->(isfinite(x) ? abs(x) : T(NaN)), a)))
-    array_eps(a) = eps(float(maximum(x->(isfinite(x) ? abs(x) : oftype(x,NaN)), a)))
-
-    test_approx_eq(va, vb, astr, bstr) =
-        test_approx_eq(va, vb, 1E4*length(linearindices(va))*max(array_eps(va), array_eps(vb)), astr, bstr)
-
-    """
-        @test_approx_eq_eps(a, b, tol)
-
-    Test two floating point numbers `a` and `b` for equality taking into account
-    a margin of tolerance given by `tol`.
-    """
-    macro test_approx_eq_eps(a, b, c)
-        Base.depwarn(string("@test_approx_eq_eps is deprecated, use `@test ", a, " ≈ ", b, " atol=", c, "` instead"),
-                    Symbol("@test_approx_eq_eps"))
-        :(test_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b))))
-    end
-    export @test_approx_eq_eps
-
-    """
-        @test_approx_eq(a, b)
-
-    Deprecated. Test two floating point numbers `a` and `b` for equality taking into
-    account small numerical errors.
-    """
-    macro test_approx_eq(a, b)
-        Base.depwarn(string("@test_approx_eq is deprecated, use `@test ", a, " ≈ ", b, "` instead"),
-                    Symbol("@test_approx_eq"))
-        :(test_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
-    end
-    export @test_approx_eq
-end
-
 # Deprecate Array(T, dims...) in favor of proper type constructors
 @deprecate Array(::Type{T}, d::NTuple{N,Int}) where {T,N}               Array{T}(d)
 @deprecate Array(::Type{T}, d::Int...) where {T}                        Array{T}(d...)
@@ -1428,6 +1365,18 @@ module DSP
 end
 using .DSP
 export conv, conv2, deconv, filt, filt!, xcorr
+
+module Test
+for f in [Symbol("@inferred"), Symbol("@test"), Symbol("@test_approx_eq"),
+          Symbol("@test_approx_eq_eps"), Symbol("@test_broken"), Symbol("@test_nowarn"),
+          Symbol("@test_skip"), Symbol("@test_throws"), Symbol("@test_warn"),
+          Symbol("@testset"), :GenericArray, :GenericDict, :GenericSet, :GenericString,
+          :detect_ambiguities, :detect_unbound_args]
+    @eval Base.@deprecate_moved $f "Test" true true
+end
+end
+export Test
+deprecate(@__MODULE__, :Test)
 
 # PR #21709
 @deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)

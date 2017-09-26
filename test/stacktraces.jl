@@ -81,7 +81,7 @@ let ct = current_task()
 end
 
 module inlined_test
-using Base.Test
+using Test
 @inline g(x) = (y = throw("a"); y) # the inliner does not insert the proper markers when inlining a single expression
 @inline h(x) = (y = g(x); y)       # this test could be extended to check for that if we switch to linear representation
 f(x) = (y = h(x); y)

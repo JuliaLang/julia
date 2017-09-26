@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 import Base: root_module
 
@@ -60,6 +60,7 @@ try
               using $FooBase_module, $FooBase_module.typeA
               import $Foo2_module: $Foo2_module, override
               import $FooBase_module.hash
+              import Test
 
               struct typeB
                   y::typeA
@@ -91,7 +92,7 @@ try
               (::Task)(::UInt8, ::UInt16, ::UInt32) = 2
 
               # issue 16471 (capturing references to a kwfunc)
-              Base.Test.@test_throws ErrorException Core.kwfunc(Base.nothing)
+              Test.@test_throws ErrorException Core.kwfunc(Base.nothing)
               Base.nothing(::UInt8, ::UInt16, ::UInt32; x = 52) = x
               const nothingkw = Core.kwfunc(Base.nothing)
 
@@ -140,7 +141,7 @@ try
               end
 
               g() = override(1.0)
-              Base.Test.@test g() === 2.0 # compile this
+              Test.@test g() === 2.0 # compile this
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
@@ -208,7 +209,7 @@ try
 
         modules, deps1 = Base.cache_dependencies(cachefile)
         @test modules == merge(Dict(s => Base.module_uuid(getfield(Foo, s)) for s in
-                                    [:Base, :Core, Foo2_module, FooBase_module, :Main]),
+                                    [:Base, :Core, Foo2_module, FooBase_module, :Main, :Test]),
                                # plus modules included in the system image
                                Dict(s => Base.module_uuid(Base.root_module(s)) for s in
                                     [:DelimitedFiles]))

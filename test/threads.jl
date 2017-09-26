@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 using Base.Threads
 
 # threading constructs
@@ -159,7 +159,7 @@ end
 end
 
 module M14726_2
-using Base.Test
+using Test
 using Base.Threads
 @threads for i in 1:100
     # Make sure current module is the same as the one on the thread that

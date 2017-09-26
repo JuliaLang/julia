@@ -435,7 +435,7 @@ end # let
 # StackOverflowError if no appropriate method has been defined
 # (#18107)
 module SimilarUR
-    using Base.Test
+    using Test
     struct MyURange <: AbstractUnitRange{Int}
         start::Int
         stop::Int

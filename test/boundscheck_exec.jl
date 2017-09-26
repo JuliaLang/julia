@@ -2,7 +2,7 @@
 
 module TestBoundsCheck
 
-using Base.Test
+using Test
 
 @enum BCOption bc_default bc_on bc_off
 bc_opt = BCOption(Base.JLOptions().check_bounds)

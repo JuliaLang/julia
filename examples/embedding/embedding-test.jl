@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests the output of the embedding example is correct
-using Base.Test
+using Test
 
 if Sys.iswindows()
     # libjulia needs to be in the same directory as the embedding executable or in path
