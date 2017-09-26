@@ -342,8 +342,8 @@ mktemp(parent)
     mktempdir(parent=tempdir(); prefix="$temp_prefix")
 
 Create a temporary directory in the `parent` directory and return its path.
-If `parent` does not exist, throw an error. An optional `prefix` to the directory name can
-be provided.
+If `parent` does not exist, throw an error.
+An optional `prefix` to the directory name can be provided.
 """
 function mktempdir(parent=tempdir(); prefix="$temp_prefix")
     template = prefix*"XXXXXX"
@@ -357,7 +357,6 @@ function mktempdir(parent=tempdir(); prefix="$temp_prefix")
         if ret < 0
             ccall(:uv_fs_req_cleanup, Void, (Ptr{Void},), req)
             uv_error("mktempdir", ret)
-            assert(false)
         end
         path = unsafe_string(ccall(:jl_uv_fs_t_path, Ptr{Cchar}, (Ptr{Void},), req))
         ccall(:uv_fs_req_cleanup, Void, (Ptr{Void},), req)
