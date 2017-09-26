@@ -35,10 +35,17 @@ lqfact(x::Number) = lqfact(fill(x,1,1))
 """
     lq(A; [thin=true]) -> L, Q
 
-Perform an LQ factorization of `A` such that `A = L*Q`. The
-default is to compute a thin factorization. The LQ factorization
-is the QR factorization of `A.'`. `L` is not extended with
-zeros if the explicit, square form of `Q` is requested via `thin = false`.
+Perform an LQ factorization of `A` such that `A = L*Q`. The default is to compute
+a "thin" factorization. The LQ factorization is the QR factorization of `A.'`.
+`L` is not extendedwith zeros if the explicit, square form of `Q`
+is requested via `thin = false`.
+
+!!! note
+    While in QR factorization the "thin" factorization is so named due to yielding
+    either a square or "tall"/"thin" factor `Q`, in LQ factorization the "thin"
+    factorization somewhat confusingly produces either a square or "short"/"wide"
+    factor `Q`. "Thin" factorizations more broadly are also (more descriptively)
+    referred to as "truncated" or "reduced" factorizatons.
 """
 function lq(A::Union{Number,AbstractMatrix}; thin::Bool = true)
     F = lqfact(A)
@@ -176,17 +183,41 @@ A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasReal} =
 A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasComplex} =
     LAPACK.ormlq!('R', 'C', B.factors, B.τ, A)
 
-# out-of-place right-application of LQPackedQs
-# unlike their in-place equivalents, these methods: (1) check whether the applied-to
-# matrix's (A's) appropriate dimension (columns for A_*, rows for Ac_*) matches the
-# number of columns (nQ) of the LQPackedQ (Q), as the underlying LAPACK routine (ormlq)
-# treats the implicit Q as its (nQ-by-nQ) square form; and (2) if the preceding dimensions
-# do not match, these methods check whether the appropriate dimension of A instead matches
-# the number of rows of the matrix of which Q is a factor (i.e. size(Q.factors, 1)),
-# and if so zero-extends A as necessary for check (1) to pass (if possible).
-*(A::StridedVecOrMat, Q::LQPackedQ) = _A_mul_Bq(A_mul_B!, A, Q)
-A_mul_Bc(A::StridedVecOrMat, Q::LQPackedQ) = _A_mul_Bq(A_mul_Bc!, A, Q)
-function _A_mul_Bq(A_mul_Bop!::FT, A::StridedVecOrMat, Q::LQPackedQ) where FT<:Function
+# out-of-place right application of LQPackedQs
+#
+# LQPackedQ's out-of-place multiplication behavior is context dependent. specifically,
+# if the inner dimension in the multiplication is the LQPackedQ's second dimension,
+# the LQPackedQ behaves like its square form. if the inner dimension in the
+# multiplication is the LQPackedQ's first dimension, the LQPackedQ behaves like either
+# its square form or its truncated form depending on the shape of the other object
+# involved in the multiplication. we treat these cases separately.
+#
+# (1) the inner dimension in the multiplication is the LQPackedQ's second dimension.
+# in this case, the LQPackedQ behaves like its square form.
+#
+function A_mul_Bc(A::StridedVecOrMat, Q::LQPackedQ)
+    TR = promote_type(eltype(A), eltype(Q))
+    return A_mul_Bc!(copy_oftype(A, TR), convert(AbstractMatrix{TR}, Q))
+end
+function Ac_mul_Bc(A::StridedMatrix, Q::LQPackedQ)
+    TR = promote_type(eltype(A), eltype(Q))
+    C = adjoint!(similar(A, TR, reverse(size(A))), A)
+    return A_mul_Bc!(C, convert(AbstractMatrix{TR}, Q))
+end
+#
+# (2) the inner dimension in the multiplication is the LQPackedQ's first dimension.
+# in this case, the LQPackedQ behaves like either its square form or its
+# truncated form depending on the shape of the other object in the multiplication.
+#
+# these methods: (1) check whether the applied-to matrix's (A's) appropriate dimension
+# (columns for A_*, rows for Ac_*) matches the number of columns (nQ) of the LQPackedQ (Q),
+# and if so effectively apply Q's square form to A without additional shenanigans; and
+# (2) if the preceding dimensions do not match, check whether the appropriate dimension of
+# A instead matches the number of rows of the matrix of which Q is a factor (i.e.
+# size(Q.factors, 1)), and if so implicitly apply Q's truncated form to A by zero extending
+# A as necessary for check (1) to pass (if possible) and then applying Q's square form
+#
+function *(A::StridedVecOrMat, Q::LQPackedQ)
     TR = promote_type(eltype(A), eltype(Q))
     if size(A, 2) == size(Q.factors, 2)
         C = copy_oftype(A, TR)
@@ -196,11 +227,9 @@ function _A_mul_Bq(A_mul_Bop!::FT, A::StridedVecOrMat, Q::LQPackedQ) where FT<:F
     else
         _rightappdimmismatch("columns")
     end
-    return A_mul_Bop!(C, convert(AbstractMatrix{TR}, Q))
+    return A_mul_B!(C, convert(AbstractMatrix{TR}, Q))
 end
-Ac_mul_B(A::StridedMatrix, Q::LQPackedQ) = _Ac_mul_Bq(A_mul_B!, A, Q)
-Ac_mul_Bc(A::StridedMatrix, Q::LQPackedQ) = _Ac_mul_Bq(A_mul_Bc!, A, Q)
-function _Ac_mul_Bq(A_mul_Bop!::FT, A::StridedMatrix, Q::LQPackedQ) where FT<:Function
+function Ac_mul_B(A::StridedMatrix, Q::LQPackedQ)
     TR = promote_type(eltype(A), eltype(Q))
     if size(A, 1) == size(Q.factors, 2)
         C = adjoint!(similar(A, TR, reverse(size(A))), A)
@@ -210,7 +239,7 @@ function _Ac_mul_Bq(A_mul_Bop!::FT, A::StridedMatrix, Q::LQPackedQ) where FT<:Fu
     else
         _rightappdimmismatch("rows")
     end
-    return A_mul_Bop!(C, convert(AbstractMatrix{TR}, Q))
+    return A_mul_B!(C, convert(AbstractMatrix{TR}, Q))
 end
 _rightappdimmismatch(rowsorcols) =
     throw(DimensionMismatch(string("the number of $(rowsorcols) of the matrix on the left ",
