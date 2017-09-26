@@ -85,7 +85,7 @@ stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bol
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
-    shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
+    shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
     shell_name = Base.basename(shell[1])
 
     if isempty(cmd.exec)
@@ -102,7 +102,14 @@ function repl_cmd(cmd, out)
                 end
                 cd(ENV["OLDPWD"])
             else
-                cd(@static Sys.iswindows() ? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+                @static if !Sys.iswindows()
+                    # TODO: this is a rather expensive way to copy a string, remove?
+                    # If it's intended to simulate `cd`, it should instead be doing
+                    # more nearly `cd $dir && printf %s \$PWD` (with appropriate quoting),
+                    # since shell `cd` does more than just `echo` the result.
+                    dir = read(`$shell -c "printf %s $(shell_escape_posixly(dir))"`, String)
+                end
+                cd(dir)
             end
         else
             cd()
@@ -110,17 +117,19 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@static Sys.iswindows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
+        @static if !Sys.iswindows()
+            if shell_name == "fish"
+                shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
+            else
+                shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
+            end
+            cmd = `$shell`
+            isa(STDIN, TTY) && (cmd = `$cmd -i`)
+            cmd = `$cmd -c $shell_escape_cmd`
+        end
+        run(ignorestatus(cmd))
     end
     nothing
-end
-
-function shell_wrap_true(shell_name, cmd)
-    if shell_name == "fish"
-        "begin; $(shell_escape(cmd)); and true; end"
-    else
-        "($(shell_escape(cmd))) && true"
-    end
 end
 
 function display_error(io::IO, er, bt)

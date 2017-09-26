@@ -14,7 +14,7 @@ using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connecte
             VERSION_STRING, sync_begin, sync_add, sync_end, async_run_thunk,
             binding_module, notify_error, atexit, julia_exename, julia_cmd,
             AsyncGenerator, display_error, acquire, release, invokelatest, warn_once,
-            shell_escape, uv_error
+            shell_escape_posixly, uv_error
 
 # NOTE: clusterserialize.jl imports additional symbols from Base.Serializer for use
 
