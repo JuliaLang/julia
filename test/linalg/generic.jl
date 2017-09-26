@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: -, *, /, \
-using Base.Test
+using Test
 
 # A custom Quaternion type with minimal defined interface and methods.
 # Used to test scale and scale! methods to show non-commutativity.

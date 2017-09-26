@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 # Check that serializer hasn't gone out-of-frame
 @test Serializer.sertag(Symbol) == 1
@@ -401,7 +401,7 @@ end
 
 # issue #13452
 module Test13452
-using Base.Test
+using Test
 
 module Shell
 export foo

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 include("choosetests.jl")
 include("testenv.jl")
 
@@ -133,63 +133,63 @@ cd(dirname(@__FILE__)) do
     Errored, and execution continues until the summary at the end of the test
     run, where the test file is printed out as the "failed expression".
     =#
-    o_ts = Base.Test.DefaultTestSet("Overall")
-    Base.Test.push_testset(o_ts)
+    o_ts = Test.DefaultTestSet("Overall")
+    Test.push_testset(o_ts)
     for res in results
-        if isa(res[2][1], Base.Test.DefaultTestSet)
-            Base.Test.push_testset(res[2][1])
-            Base.Test.record(o_ts, res[2][1])
-            Base.Test.pop_testset()
+        if isa(res[2][1], Test.DefaultTestSet)
+            Test.push_testset(res[2][1])
+            Test.record(o_ts, res[2][1])
+            Test.pop_testset()
         elseif isa(res[2][1], Tuple{Int,Int})
-            fake = Base.Test.DefaultTestSet(res[1])
+            fake = Test.DefaultTestSet(res[1])
             for i in 1:res[2][1][1]
-                Base.Test.record(fake, Base.Test.Pass(:test, nothing, nothing, nothing))
+                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
             end
             for i in 1:res[2][1][2]
-                Base.Test.record(fake, Base.Test.Broken(:test, nothing))
+                Test.record(fake, Test.Broken(:test, nothing))
             end
-            Base.Test.push_testset(fake)
-            Base.Test.record(o_ts, fake)
-            Base.Test.pop_testset()
-        elseif isa(res[2][1], RemoteException) && isa(res[2][1].captured.ex, Base.Test.TestSetException)
+            Test.push_testset(fake)
+            Test.record(o_ts, fake)
+            Test.pop_testset()
+        elseif isa(res[2][1], RemoteException) && isa(res[2][1].captured.ex, Test.TestSetException)
             println("Worker $(res[2][1].pid) failed running test $(res[1]):")
             Base.showerror(STDOUT,res[2][1].captured)
-            fake = Base.Test.DefaultTestSet(res[1])
+            fake = Test.DefaultTestSet(res[1])
             for i in 1:res[2][1].captured.ex.pass
-                Base.Test.record(fake, Base.Test.Pass(:test, nothing, nothing, nothing))
+                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
             end
             for i in 1:res[2][1].captured.ex.broken
-                Base.Test.record(fake, Base.Test.Broken(:test, nothing))
+                Test.record(fake, Test.Broken(:test, nothing))
             end
             for t in res[2][1].captured.ex.errors_and_fails
-                Base.Test.record(fake, t)
+                Test.record(fake, t)
             end
-            Base.Test.push_testset(fake)
-            Base.Test.record(o_ts, fake)
-            Base.Test.pop_testset()
+            Test.push_testset(fake)
+            Test.record(o_ts, fake)
+            Test.pop_testset()
         elseif isa(res[2][1], Exception)
             # If this test raised an exception that is not a remote testset exception,
             # i.e. not a RemoteException capturing a TestSetException that means
             # the test runner itself had some problem, so we may have hit a segfault,
             # deserialization errors or something similar.  Record this testset as Errored.
-            fake = Base.Test.DefaultTestSet(res[1])
-            Base.Test.record(fake, Base.Test.Error(:test_error, res[1], res[2][1], []))
-            Base.Test.push_testset(fake)
-            Base.Test.record(o_ts, fake)
-            Base.Test.pop_testset()
+            fake = Test.DefaultTestSet(res[1])
+            Test.record(fake, Test.Error(:test_error, res[1], res[2][1], []))
+            Test.push_testset(fake)
+            Test.record(o_ts, fake)
+            Test.pop_testset()
         else
             error(string("Unknown result type : ", typeof(res)))
         end
     end
     println()
-    Base.Test.print_test_results(o_ts,1)
+    Test.print_test_results(o_ts,1)
     if !o_ts.anynonpass
         println("    \033[32;1mSUCCESS\033[0m")
     else
         println("    \033[31;1mFAILURE\033[0m\n")
         skipped > 0 &&
             println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.\n")
-        Base.Test.print_test_errors(o_ts)
+        Test.print_test_errors(o_ts)
         throw(Test.FallbackTestSetException("Test run finished with errors"))
     end
 end

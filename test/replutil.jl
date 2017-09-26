@@ -229,7 +229,7 @@ end
 
 module __tmp_replutil
 
-using Base.Test
+using Test
 import ..@except_str
 global +
 +() = nothing

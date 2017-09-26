@@ -2273,7 +2273,7 @@ end
 
 #issue #9835
 module M9835
-    using Base.Test
+    using Test
     mutable struct A end; mutable struct B end
     f() = (isa(A(), A) ? A : B)()
     @test isa(f(), A)
@@ -3193,7 +3193,7 @@ end
 @test_throws TypeError MyType8010_ghost([3.0;4.0])
 
 module TestNewTypeError
-using Base.Test
+using Test
 
 struct A
 end
@@ -3697,7 +3697,7 @@ end
 
 # issue #13229
 module I13229
-using Base.Test
+using Test
 if !startswith(string(Sys.ARCH), "arm")
     global z = 0
     @timed @profile for i = 1:5
@@ -3874,7 +3874,7 @@ let
 end
 
 module TestSharedArrayResize
-using Base.Test
+using Test
 # Attempting to change the shape of a shared array should unshare it and
 # not modify the original data
 function test_shared_array_resize(::Type{T}) where T
@@ -3914,7 +3914,7 @@ test_shared_array_resize(Any)
 end
 
 module TestArrayNUL
-using Base.Test
+using Test
 function check_nul(a::Vector{UInt8})
     b = ccall(:jl_array_cconvert_cstring,
               Ref{Vector{UInt8}}, (Vector{UInt8},), a)
@@ -3992,7 +3992,7 @@ end
 
 # issue #14113
 module A14113
-    using Base.Test
+    using Test
     # show that making several thousand methods (and lots of AST constants)
     # doesn't cause any serious issues (for example, for the serializer)
     # although to keep runtime on the order of several seconds for this test,
@@ -4036,7 +4036,7 @@ end
 # PR #16011 Make sure dead code elimination doesn't delete push and pop
 # of metadata
 module TestDeadElim16011
-using Base.Test
+using Test
 
 function count_expr_push(ex::Expr, head::Symbol, counter)
     if ex.head === head
@@ -4132,7 +4132,7 @@ end
 # with verifier on (but should still pass on release build).
 module TestSSA16244
 
-using Base.Test
+using Test
 @noinline k(a) = a
 
 # unreachable branch due to `ccall(:jl_throw)`
@@ -4744,7 +4744,7 @@ end
 @test let_noBox()() == 21
 
 module TestModuleAssignment
-using Base.Test
+using Test
 @eval $(GlobalRef(TestModuleAssignment, :x)) = 1
 @test x == 1
 @eval $(GlobalRef(TestModuleAssignment, :x)) = 2
@@ -4780,7 +4780,7 @@ module SOE
 mutable struct Sgnd <: Signed
     v::Int
 end
-using Base.Test
+using Test
 @test_throws ErrorException abs(Sgnd(1))       #12007
 io = IOBuffer()
 @test_throws ErrorException show(io, Sgnd(1))  #12007
@@ -5291,7 +5291,7 @@ end
 
 # issue 18933
 module GlobalDef18933
-    using Base.Test
+    using Test
     import Base.sqrt
     # test that global declaration vs assignment operates correctly in local scope
     f() = (global sin; nothing)
@@ -5334,7 +5334,7 @@ end
 
 module UnionOptimizations
 
-using Base.Test
+using Test
 
 const boxedunions = [Union{}, Union{String, Void}]
 const unboxedunions = [Union{Int8, Void}, Union{Int8, Float16, Void},

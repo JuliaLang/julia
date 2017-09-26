@@ -9,7 +9,6 @@ export
     Profile,
     Dates,
     Sys,
-    Test,
     Libc,
     Libdl,
     Mmap,

@@ -15,7 +15,7 @@ end
 
 # Test location information for inlined code (ref issues #1334 #12544)
 module test_inline_bt
-using Base.Test
+using Test
 
 function get_bt_frames(functionname, bt)
     for i = 1:length(bt)
@@ -104,7 +104,7 @@ end
 
 module BackTraceTesting
 
-using Base.Test
+using Test
 
 @inline bt2() = backtrace()
 @inline bt1() = bt2()

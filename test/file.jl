@@ -1123,6 +1123,7 @@ function test_13559()
     run(`mkfifo $fn`)
     # use subprocess to write 127 bytes to FIFO
     writer_cmds = """
+        using Test
         x = open($(repr(fn)), "w")
         for i in 1:120
             write(x, 0xaa)
@@ -1159,6 +1160,7 @@ if !Sys.iswindows()
         run(`mkfifo $fn`)
 
         script = """
+            using Test
             x = open($(repr(fn)), "w")
             write(x, 0x42)
             flush(x)

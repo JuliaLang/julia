@@ -1731,7 +1731,7 @@ end
 end
 
 module RetTypeDecl
-    using Base.Test
+    using Test
     import Base: +, *, broadcast, convert
 
     struct MeterUnits{T,P} <: Number
@@ -1975,7 +1975,7 @@ end
 module TestNLoops15895
 
 using Base.Cartesian
-using Base.Test
+using Test
 
 # issue 15894
 function f15894(d)
@@ -2020,7 +2020,7 @@ end
 # issue 17254
 module AutoRetType
 
-using Base.Test
+using Test
 
 struct Foo end
 for op in (:+, :*, :÷, :%, :<<, :>>, :-, :/, :\, ://, :^)

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 @testset "Check that non-floats are correctly promoted" begin
     @test [1 0 0; 0 1 0]\[1,1] ≈ [1;1;0]

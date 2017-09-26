@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Small sanity tests to ensure changing the rounding of float functions work
-using Base: Test, MathConstants
+using Base.MathConstants
+
+using Test
 
 @testset "Float64 checks" begin
     # a + b returns a number exactly between prevfloat(1.) and 1., so its

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 # Test givens rotations
 @testset for elty in (Float32, Float64, Complex64, Complex128)

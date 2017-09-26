@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 import Base.LinAlg: BlasReal, BlasFloat
 
 n = 10 #Size of test matrix

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 ## Test Julia fallbacks to BLAS routines
 
@@ -64,7 +64,7 @@ end
 # Generic integer matrix multiplication
 # Generic AbstractArrays
 module MyArray15367
-    using Base.Test
+    using Test
     struct MyArray{T,N} <: AbstractArray{T,N}
         data::Array{T,N}
     end
@@ -366,7 +366,7 @@ end
 
 # #18218
 module TestPR18218
-    using Base.Test
+    using Test
     import Base.*, Base.+, Base.zero
     struct TypeA
         x::Int

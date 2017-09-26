@@ -138,7 +138,7 @@ end
 
 # @generated functions that throw (shouldn't segfault or throw)
 module TestGeneratedThrow
-    using Base.Test
+    using Test
 
     @generated function bar(x)
         error("I'm not happy with type $x")

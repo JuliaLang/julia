@@ -5,7 +5,7 @@
 # sufficient to catch segfault bugs.
 
 module ReflectionTest
-using Base.Test
+using Test
 
 function test_ast_reflection(freflect, f, types)
     @test !isempty(freflect(f, types))
@@ -55,7 +55,7 @@ end # module ReflectionTest
 
 # code_warntype
 module WarnType
-using Base.Test
+using Test
 
 function warntype_hastag(f, types, tag)
     iob = IOBuffer()
@@ -197,7 +197,7 @@ not_const = 1
 include("testenv.jl")
 
 module TestMod7648
-using Base.Test
+using Test
 import Base.convert
 import ..curmod_name, ..curmod
 export a9475, foo9475, c7648, foo7648, foo7648_nomethods, Foo7648
@@ -210,7 +210,7 @@ function foo7648_nomethods end
 mutable struct Foo7648 end
 
 module TestModSub9475
-    using Base.Test
+    using Test
     using ..TestMod7648
     import ..curmod_name
     export a9475, foo9475
@@ -277,7 +277,7 @@ end
 @test_throws ArgumentError("argument is not a generic function") Base.return_types(===, Tuple{Int, Int})
 
 module TestingExported
-using Base.Test
+using Test
 include("testenv.jl") # for curmod_str
 import Base.isexported
 global this_is_not_defined

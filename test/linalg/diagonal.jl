@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 import Base.LinAlg: BlasFloat, BlasComplex, SingularException, A_rdiv_B!, A_rdiv_Bt!,
     A_rdiv_Bc!
 

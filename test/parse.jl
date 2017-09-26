@@ -862,7 +862,7 @@ end
 
 # Issue #16578 (Lowering) mismatch between push_loc and pop_loc
 module TestMeta_16578
-using Base.Test
+using Test
 function get_expr_list(ex::CodeInfo)
     return ex.code::Array{Any,1}
 end
@@ -1101,7 +1101,7 @@ end
 # issue #20653
 @test_throws UndefVarError Base.call(::Int) = 1
 module Test20653
-using Base.Test
+using Test
 struct A
 end
 call(::A) = 1
@@ -1212,7 +1212,7 @@ end
 
 # comment 298107224 on pull #21607
 module Test21607
-    using Base.Test
+    using Test
     const Any = Integer
 
     # check that X <: Core.Any, not Integer
