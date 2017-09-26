@@ -268,6 +268,20 @@ In this case, the character `∀` is a three-byte character, so the indices 2 an
 and the next character's index is 4; this next valid index can be computed by [`nextind(s,1)`](@ref),
 and the next index after that by `nextind(s,4)` and so on.
 
+Extraction of a substring using range indexing also expects valid byte indices or error is thrown:
+
+```jldoctest unicodestring
+julia> s[1:1]
+"∀"
+
+julia> s[1:2]
+ERROR: UnicodeError: invalid character index
+[...]
+
+julia> s[1:4]
+"∀ "
+```
+
 Because of variable-length encodings, the number of characters in a string (given by [`length(s)`](@ref))
 is not always the same as the last index. If you iterate through the indices 1 through [`endof(s)`](@ref)
 and index into `s`, the sequence of characters returned when errors aren't thrown is the sequence
