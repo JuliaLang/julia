@@ -31,7 +31,11 @@ end
 @test @nested_LINE_expansion() == ((@__LINE__() - 4, @__LINE__() - 12), @__LINE__())
 @test @nested_LINE_expansion2() == ((@__LINE__() - 5, @__LINE__() - 9), @__LINE__())
 
+loaded_files = String[]
+push!(Base.include_callbacks, (mod::Module, fn::String) -> push!(loaded_files, fn))
 include("test_sourcepath.jl")
+@test length(loaded_files) == 1 && endswith(loaded_files[1], "test_sourcepath.jl")
+pop!(Base.include_callbacks)
 thefname = "the fname!//\\&\1*"
 include_string_test_func = include_string(@__MODULE__, "include_string_test() = @__FILE__", thefname)
 @test include_string_test_func() == thefname

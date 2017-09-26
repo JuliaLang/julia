@@ -201,6 +201,10 @@ const package_locks = Dict{Symbol,Condition}()
 # Callbacks take the form (mod::Symbol) -> nothing.
 # WARNING: This is an experimental feature and might change later, without deprecation.
 const package_callbacks = Any[]
+# to notify downstream consumers that a file has been included into a particular module
+# Callbacks take the form (mod::Module, filename::String) -> nothing
+# WARNING: This is an experimental feature and might change later, without deprecation.
+const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Any[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
@@ -519,6 +523,9 @@ end
 include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
 function include_relative(mod::Module, _path::String)
     path, prev = _include_dependency(_path)
+    for callback in include_callbacks # to preserve order, must come before Core.include
+        invokelatest(callback, mod, path)
+    end
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
     local result
