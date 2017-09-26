@@ -2162,9 +2162,9 @@ indmin(a) = findmin(a)[2]
 """
     indexin(a, b)
 
-Return a vector containing the highest index in `b` for
-each value in `a` that is a member of `b` . The output
-vector contains 0 wherever `a` is not a member of `b`.
+Return an array containing the highest index in `b` for
+each value in `a` that is a member of `b`. The output
+array contains 0 wherever `a` is not a member of `b`.
 
 # Examples
 ```jldoctest
