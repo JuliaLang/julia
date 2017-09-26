@@ -208,9 +208,9 @@ const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Any[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
-const _require_dependencies = Any[] # a list of (path, mtime) tuples that are the file dependencies of the module currently being precompiled
+const _require_dependencies = Any[] # a list of (mod, path, mtime) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
-function _include_dependency(_path::AbstractString)
+function _include_dependency(modstring::AbstractString, _path::AbstractString)
     prev = source_path(nothing)
     if prev === nothing
         path = abspath(_path)
@@ -218,7 +218,7 @@ function _include_dependency(_path::AbstractString)
         path = joinpath(dirname(prev), _path)
     end
     if _track_dependencies[]
-        push!(_require_dependencies, (path, mtime(path)))
+        push!(_require_dependencies, (modstring, path, mtime(path)))
     end
     return path, prev
 end
@@ -234,7 +234,7 @@ This is only needed if your module depends on a file that is not used via `inclu
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
-    _include_dependency(path)
+    _include_dependency("#__external__", path)
     return nothing
 end
 
@@ -522,7 +522,7 @@ end
 
 include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
 function include_relative(mod::Module, _path::String)
-    path, prev = _include_dependency(_path)
+    path, prev = _include_dependency(string(mod), _path)
     for callback in include_callbacks # to preserve order, must come before Core.include
         invokelatest(callback, mod, path)
     end
@@ -678,13 +678,17 @@ function parse_cache_header(f::IO)
     end
     totbytes = ntoh(read(f, Int64)) # total bytes for file dependencies
     # read the list of files
-    files = Tuple{String,Float64}[]
+    files = Tuple{String,String,Float64}[]
     while true
-        n = ntoh(read(f, Int32))
-        n == 0 && break
-        totbytes -= 4 + n + 8
-        @assert n >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
-        push!(files, (String(read(f, n)), ntoh(read(f, Float64))))
+        n1 = ntoh(read(f, Int32))
+        n1 == 0 && break
+        @assert n1 >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
+        modname = String(read(f, n1))
+        n2 = ntoh(read(f, Int32))
+        @assert n2 >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
+        filename = String(read(f, n2))
+        push!(files, (modname, filename, ntoh(read(f, Float64))))
+        totbytes -= 8 + n1 + n2 + 8
     end
     @assert totbytes == 4 "header of cache file appears to be corrupt"
     # read the list of modules that are required to be present during loading
@@ -711,7 +715,7 @@ end
 
 function cache_dependencies(f::IO)
     defs, files, modules = parse_cache_header(f)
-    return modules, files
+    return modules, map(mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3]), files)  # discard the module
 end
 
 function cache_dependencies(cachefile::String)
@@ -763,11 +767,11 @@ function stale_cachefile(modpath::String, cachefile::String)
         end
 
         # now check if this file is fresh relative to its source files
-        if !samefile(files[1][1], modpath)
-            DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it is for file $(files[1][1])) not file $modpath.")
+        if !samefile(files[1][2], modpath)
+            DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it is for file $(files[1][2])) not file $modpath.")
             return true # cache file was compiled from a different path
         end
-        for (f, ftime_req) in files
+        for (_, f, ftime_req) in files
             # Issue #13606: compensate for Docker images rounding mtimes
             # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
             ftime = mtime(f)

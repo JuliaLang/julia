@@ -204,8 +204,9 @@ try
         @test stringmime("text/plain", Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
 
         modules, deps, required_modules = Base.parse_cache_header(cachefile)
+        discard_module = mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3])
         @test modules == Dict(Foo_module => Base.module_uuid(Foo))
-        @test map(x -> x[1],  sort(deps)) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
+        @test map(x -> x[1],  sort(discard_module.(deps))) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
 
         modules, deps1 = Base.cache_dependencies(cachefile)
         @test modules == merge(Dict(s => Base.module_uuid(getfield(Foo, s)) for s in
@@ -213,7 +214,7 @@ try
                                # plus modules included in the system image
                                Dict(s => Base.module_uuid(Base.root_module(s)) for s in
                                     [:DelimitedFiles,:Mmap]))
-        @test deps == deps1
+        @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
         @test nothing(0x01, 0x4000, 0x30031234) == 52
