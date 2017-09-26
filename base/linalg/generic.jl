@@ -984,9 +984,9 @@ end
 ishermitian(x::Number) = (x == conj(x))
 
 """
-    istriu(A) -> Bool
+    istriu(A::AbstractMatrix, k::Integer = 0) -> Bool
 
-Test whether a matrix is upper triangular.
+Test whether `A` is upper triangular starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
@@ -998,6 +998,9 @@ julia> a = [1 2; 2 -1]
 julia> istriu(a)
 false
 
+julia> istriu(a, -1)
+true
+
 julia> b = [1 im; 0 -1]
 2×2 Array{Complex{Int64},2}:
  1+0im   0+1im
@@ -1005,22 +1008,26 @@ julia> b = [1 im; 0 -1]
 
 julia> istriu(b)
 true
+
+julia> istriu(b, 1)
+false
 ```
 """
-function istriu(A::AbstractMatrix)
+function istriu(A::AbstractMatrix, k::Integer = 0)
     m, n = size(A)
-    for j = 1:min(n,m-1), i = j+1:m
-        if !iszero(A[i,j])
-            return false
+    for j in 1:min(n, m + k - 1)
+        for i in max(1, j - k + 1):m
+            iszero(A[i, j]) || return false
         end
     end
     return true
 end
+istriu(x::Number) = true
 
 """
-    istril(A) -> Bool
+    istril(A::AbstractMatrix, k::Integer = 0) -> Bool
 
-Test whether a matrix is lower triangular.
+Test whether `A` is lower triangular starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
@@ -1032,6 +1039,9 @@ julia> a = [1 2; 2 -1]
 julia> istril(a)
 false
 
+julia> istril(a, 1)
+true
+
 julia> b = [1 0; -im -1]
 2×2 Array{Complex{Int64},2}:
  1+0im   0+0im
@@ -1039,17 +1049,54 @@ julia> b = [1 0; -im -1]
 
 julia> istril(b)
 true
+
+julia> istril(b, -1)
+false
 ```
 """
-function istril(A::AbstractMatrix)
+function istril(A::AbstractMatrix, k::Integer = 0)
     m, n = size(A)
-    for j = 2:n, i = 1:min(j-1,m)
-        if !iszero(A[i,j])
-            return false
+    for j in max(1, k + 2):n
+        for i in 1:min(j - k - 1, m)
+            iszero(A[i, j]) || return false
         end
     end
     return true
 end
+istril(x::Number) = true
+
+"""
+    isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) -> Bool
+
+Test whether `A` is banded with lower bandwidth starting from the `kl`th superdiagonal
+and upper bandwidth extending through the `ku`th superdiagonal.
+
+# Examples
+```jldoctest
+julia> a = [1 2; 2 -1]
+2×2 Array{Int64,2}:
+ 1   2
+ 2  -1
+
+julia> isbanded(a, 0, 0)
+false
+
+julia> isbanded(a, -1, 1)
+true
+
+julia> b = [1 0; -im -1] # lower bidiagonal
+2×2 Array{Complex{Int64},2}:
+ 1+0im   0+0im
+ 0-1im  -1+0im
+
+julia> isbanded(b, 0, 0)
+false
+
+julia> isbanded(b, -1, 0)
+true
+```
+"""
+isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril(A, ku)
 
 """
     isdiag(A) -> Bool
@@ -1075,11 +1122,9 @@ julia> isdiag(b)
 true
 ```
 """
-isdiag(A::AbstractMatrix) = istril(A) && istriu(A)
-
-istriu(x::Number) = true
-istril(x::Number) = true
+isdiag(A::AbstractMatrix) = isbanded(A, 0, 0)
 isdiag(x::Number) = true
+
 
 """
     linreg(x, y)
