@@ -11,6 +11,7 @@ end
 
 # sin_kernel and cos_kernel functions are only valid for |x| < pi/4 = 0.7854
 # translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c.
+# acos functions are based on openlibm code: e_acos.c, e_acosf.c.
 # asin functions are based on openlibm code: e_asin.c, e_asinf.c. The above
 # functions are made available under the following licence:
 
@@ -82,7 +83,6 @@ sin_kernel(x::Real) = sin(x)
 cos_kernel(x::Real) = cos(x)
 
 # Inverse trigonometric functions
-
 # asin methods
 ASIN_X_MIN_THRESHOLD(::Type{Float32}) = 2.0f0^-12
 ASIN_X_MIN_THRESHOLD(::Type{Float64}) = sqrt(eps(Float64))
@@ -96,8 +96,8 @@ arc_p(t::Float64) =
     7.91534994289814532176e-04,
     3.47933107596021167570e-05)
 
-arc_q(t::Float64) =
-    @horner(t,
+arc_q(z::Float64) =
+    @horner(z,
     1.0,
     -2.40339491173441421878e+00,
     2.02094576023350569471e+00,
@@ -112,58 +112,51 @@ arc_p(t::Float32) =
 
 arc_q(t::Float32) = @horner(t, 1.0f0, -7.0662963390f-01)
 
+@inline arc_tRt(t) = arc_p(t)/arc_q(t)
+
+
 @inline function asin_kernel(t::Float64, x::Float64)
+    # we use that for 1/2 <= x < 1 we have
+    #     asin(x) = pi/2-2*asin(sqrt((1-x)/2))
+    # Let y = (1-x), z = y/2, s := sqrt(z), and pio2_hi+pio2_lo=pi/2;
+    # then for x>0.98
+    #     asin(x) = pi/2 - 2*(s+s*z*R(z))
+    #         = pio2_hi - (2*(s+s*z*R(z)) - pio2_lo)
+    # For x<=0.98, let pio4_hi = pio2_hi/2, then
+    #     f = hi part of s;
+    #     c = sqrt(z) - f = (z-f*f)/(s+f)     ...f+c=sqrt(z)
+    #  and
+    #     asin(x) = pi/2 - 2*(s+s*z*R(z))
+    #         = pio4_hi+(pio4-2s)-(2s*z*R(z)-pio2_lo)
+    #         = pio4_hi+(pio4-2f)-(2s*z*R(z)-(pio2_lo+2c))
     pio2_lo = 6.12323399573676603587e-17
     s = sqrt_llvm(t)
-    p = arc_p(t) # numerator polynomial
-    q = arc_q(t) # denominator polynomial
+    tRt = arc_tRt(t)
     if abs(x) >= 0.975 # |x| > 0.975
-        Rx = p/q
-        return flipsign(pi/2 - (2.0*(s + s*Rx) - pio2_lo), x)
+        return flipsign(pi/2 - (2.0*(s + s*tRt) - pio2_lo), x)
     else
         s0 = reinterpret(Float64, (reinterpret(UInt64, s) >> 32) << 32)
         c = (t - s0*s0)/(s + s0)
-        Rx = p/q
-        p = 2.0*s*Rx - (pio2_lo - 2.0*c)
+        p = 2.0*s*tRt - (pio2_lo - 2.0*c)
         q = pi/4 - 2.0*s0
         return flipsign(pi/4 - (p-q), x)
     end
 end
 @inline function asin_kernel(t::Float32, x::Float32)
     s = sqrt_llvm(Float64(t))
-    p = arc_p(t) # numerator polynomial
-    q = arc_q(t) # denominator polynomial
-    Rx = p/q # rational approximation
-    flipsign(Float32(pi/2 - 2*(s + s*Rx)), x)
+    tRt = arc_tRt(t) # rational approximation
+    flipsign(Float32(pi/2 - 2*(s + s*tRt)), x)
 end
 
 @noinline asin_domain_error(x) = throw(DomainError(x, "asin(x) is not defined for |x|>1."))
 function asin(x::T) where T<:Union{Float32, Float64}
-    # Method :
-    #    Since  asin(x) = x + x^3/6 + x^5*3/40 + x^7*15/336 + ...
-    #    we approximate asin(x) on [0,0.5] by
-    #        asin(x) = x + x*x^2*R(x^2)
-    #    where
-    #        R(x^2) is a rational approximation of (asin(x)-x)/x^3
-    #    and its remez error is bounded by
-    #        |(asin(x)-x)/x^3 - R(x^2)| < 2^(-58.75)
-    #
-    #    For x in [0.5,1]
-    #        asin(x) = pi/2-2*asin(sqrt((1-x)/2))
-    #    Let y = (1-x), z = y/2, s := sqrt(z), and pio2_hi+pio2_lo=pi/2;
-    #    then for x>0.98
-    #        asin(x) = pi/2 - 2*(s+s*z*R(z))
-    #            = pio2_hi - (2*(s+s*z*R(z)) - pio2_lo)
-    #    For x<=0.98, let pio4_hi = pio2_hi/2, then
-    #        f = hi part of s;
-    #        c = sqrt(z) - f = (z-f*f)/(s+f)     ...f+c=sqrt(z)
-    #    and
-    #        asin(x) = pi/2 - 2*(s+s*z*R(z))
-    #            = pio4_hi+(pio4-2s)-(2s*z*R(z)-pio2_lo)
-    #            = pio4_hi+(pio4-2f)-(2s*z*R(z)-(pio2_lo+2c))
-    #
-    # Special cases:
-    #    if |x|>1, throw DomainError
+    # Since  asin(x) = x + x^3/6 + x^5*3/40 + x^7*15/336 + ...
+    # we approximate asin(x) on [0,0.5] by
+    #     asin(x) = x + x*x^2*R(x^2)
+    # where
+    #     R(x^2) is a rational approximation of (asin(x)-x)/x^3
+    # and its remez error is bounded by
+    #     |(asin(x)-x)/x^3 - R(x^2)| < 2^(-58.75)
     absx = abs(x)
     if absx >= T(1.0) # |x|>= 1
         if absx == T(1.0)
@@ -175,15 +168,79 @@ function asin(x::T) where T<:Union{Float32, Float64}
         if absx < ASIN_X_MIN_THRESHOLD(T)
             return x
         end
-        # else if |x|<0.5 we use a rational approximation R(x)=p(x)/q(x) such that
-        # tan(x) ≈ x+x*R(x)
-        x² = x*x
-        Rx = arc_p(x²)/arc_q(x²) # rational approximation
-        return muladd(x, Rx, x)
+        return muladd(x, arc_tRt(x*x), x)
     end
     # else 1/2 <= |x| < 1
     t = (T(1.0) - absx)/2
     return asin_kernel(t, x)
+end
+
+# acos methods
+ACOS_X_MIN_THRESHOLD(::Type{Float32}) = 2.0f0^-26
+ACOS_X_MIN_THRESHOLD(::Type{Float64}) = 2.0^-57
+PIO2_HI(::Type{Float32}) = 1.5707962513f+00
+PIO2_LO(::Type{Float32}) = 7.5497894159f-08
+PIO2_HI(::Type{Float64}) = 1.57079632679489655800e+00
+PIO2_LO(::Type{Float64}) = 6.12323399573676603587e-17
+ACOS_PI(::Type{Float32}) = 3.1415925026f+00
+ACOS_PI(::Type{Float64}) = 3.14159265358979311600e+00
+@inline ACOS_CORRECT_LOWWORD(::Type{Float32}, x) = reinterpret(Float32, (reinterpret(UInt32, x) & 0xfffff000))
+@inline ACOS_CORRECT_LOWWORD(::Type{Float64}, x) = reinterpret(Float64, (reinterpret(UInt64, x) >> 32) << 32)
+
+@noinline acos_domain_error(x) = throw(DomainError(x, "acos(x) not defined for |x| > 1"))
+function acos(x::T) where T <: Union{Float32, Float64}
+    # Method :
+    #    acos(x)  = pi/2 - asin(x)
+    #    acos(-x) = pi/2 + asin(x)
+    # As a result, we use the same rational approximation (arc_tRt) as in asin.
+    # See the comments in asin for more information about this approximation.
+    # 1) For |x| <= 0.5
+    #    acos(x) = pi/2 - (x + x*x^2*R(x^2))
+    # 2) For x < -0.5
+    #    acos(x) = pi - 2asin(sqrt((1 - |x|)/2))
+    #        = pi - 0.5*(s+s*z*R(z))
+    # where z=(1-|x|)/2, s=sqrt(z)
+    # 3) For x > 0.5
+    #     acos(x) = pi/2 - (pi/2 - 2asin(sqrt((1 - x)/2)))
+    #        = 2asin(sqrt((1 - x)/2))
+    #        = 2s + 2s*z*R(z)     ...z=(1 - x)/2, s=sqrt(z)
+    #        = 2f + (2c + 2s*z*R(z))
+    #    where f=hi part of s, and c = (z - f*f)/(s + f) is the correction term
+    #    for f so that f + c ~ sqrt(z).
+
+    # Special cases:
+    #    4) if x is NaN, return x itself;
+    #    5) if |x|>1 throw warning.
+
+    absx = abs(x)
+    if absx >= T(1.0)
+        # acos(-1) = π, acos(1) = 0
+        absx == T(1.0) && return x > T(0.0) ? T(0.0) : T(pi)
+        # acos(x) is not defined for |x| > 1
+        acos_domain_error(x) # see 5) above
+    elseif absx < T(1.0)/2 # see 1) above
+        # if |x| sufficiently small, acos(x) ≈ pi/2
+        absx < ACOS_X_MIN_THRESHOLD(T) && return T(pi)/2
+        # if |x| < 0.5 we have acos(x) = pi/2 - (x + x*x^2*R(x^2))
+        return PIO2_HI(T) - (x - (PIO2_LO(T) - x*arc_tRt(x*x)))
+    end
+    z = (T(1.0) - absx)*T(0.5)
+    zRz = arc_tRt(z)
+    s = sqrt_llvm(z)
+    if x < T(0.0) # see 2) above
+        return ACOS_PI(T) - T(2.0)*(s + (zRz*s - PIO2_LO(T)))
+    else # see 3) above
+        # if x > 0.5 we have
+        # acos(x) = pi/2 - (pi/2 - 2asin(sqrt((1-x)/2)))
+        #         = 2asin(sqrt((1-x)/2))
+        #         = 2s + 2s*z*R(z)    ...z=(1-x)/2, s=sqrt(z)
+        #         = 2f + (2c + 2s*z*R(z))
+        # where f=hi part of s, and c = (z-f*f)/(s+f) is the correction term
+        # for f so that f+c ~ sqrt(z).
+        df = ACOS_CORRECT_LOWWORD(T, s)
+        c  = (z - df*df)/(s + df)
+        return T(2.0)*(df + (zRz*s + c))
+    end
 end
 
 # multiply in extended precision
