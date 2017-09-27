@@ -589,7 +589,13 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 #endif
     // Force LLVM to emit the module so that we can register the symbols
     // in our lookup table.
+#if JL_LLVM_VERSION >= 50000
+    auto Err = CompileLayer.emitAndFinalize(modset);
+    // Check for errors to prevent LLVM from crashing the program.
+    assert(!Err);
+#else
     CompileLayer.emitAndFinalize(modset);
+#endif
 }
 
 void JuliaOJIT::removeModule(ModuleHandleT H)
