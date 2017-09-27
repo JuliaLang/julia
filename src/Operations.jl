@@ -211,7 +211,7 @@ function install(
             err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
         end
         url = urls[i]
-        info("Updating $name from $url")
+        info("Updating $name $(repr(url))")
         LibGit2.fetch(repo, remoteurl=url, refspecs=refspecs)
     end
     tree = try
