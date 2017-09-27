@@ -1,25 +1,26 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+__precompile__()
 
 module Markdown
 
 import Base: show, ==
 import Core: @doc_str
 
-include(joinpath("parse", "config.jl"))
-include(joinpath("parse", "util.jl"))
-include(joinpath("parse", "parse.jl"))
+include(joinpath(@__DIR__, "parse", "config.jl"))
+include(joinpath(@__DIR__, "parse", "util.jl"))
+include(joinpath(@__DIR__, "parse", "parse.jl"))
 
-include(joinpath("Common", "Common.jl"))
-include(joinpath("GitHub", "GitHub.jl"))
-include(joinpath("IPython", "IPython.jl"))
-include(joinpath("Julia", "Julia.jl"))
+include(joinpath(@__DIR__, "Common", "Common.jl"))
+include(joinpath(@__DIR__, "GitHub", "GitHub.jl"))
+include(joinpath(@__DIR__, "IPython", "IPython.jl"))
+include(joinpath(@__DIR__, "Julia", "Julia.jl"))
 
-include(joinpath("render", "plain.jl"))
-include(joinpath("render", "html.jl"))
-include(joinpath("render", "latex.jl"))
-include(joinpath("render", "rst.jl"))
+include(joinpath(@__DIR__, "render", "plain.jl"))
+include(joinpath(@__DIR__, "render", "html.jl"))
+include(joinpath(@__DIR__, "render", "latex.jl"))
+include(joinpath(@__DIR__, "render", "rst.jl"))
 
-include(joinpath("render", "terminal", "render.jl"))
+include(joinpath(@__DIR__, "render", "terminal", "render.jl"))
 
 export readme, license, @md_str, @doc_str
 
@@ -61,5 +62,8 @@ function Base.display(d::Base.REPL.REPLDisplay, mds::Vector{MD})
         display(d, md)
     end
 end
+
+include(joinpath(@__DIR__, "precompile.jl"))
+_precompile_()
 
 end

@@ -60,7 +60,7 @@ function.
 
 include("bindings.jl")
 
-import Base.Markdown: @doc_str, MD
+import Markdown: @doc_str, MD
 import Base.Meta: quot, isexpr
 import Base: Callable
 import ..CoreDocs: lazy_iterpolate
@@ -446,7 +446,7 @@ isdoc(s::AbstractString) = true
 
 isdoc(x) = isexpr(x, :string) ||
     (isexpr(x, :macrocall) && x.args[1] === Symbol("@doc_str")) ||
-    (isexpr(x, :call) && x.args[1] === Base.Markdown.doc_str)
+    (isexpr(x, :call) && x.args[1] === Markdown.doc_str)
 
 function unblock(ex)
     isexpr(ex, :block) || return ex

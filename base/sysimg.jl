@@ -427,10 +427,13 @@ include("deprecated.jl")
 # Some basic documentation
 include("docs/basedocs.jl")
 
+Base.init_load_path(ccall(:jl_get_julia_home, Any, ()))
+Base.require(:Markdown)
+empty!(LOAD_PATH)
+
 # Documentation -- should always be included last in sysimg.
-include("markdown/Markdown.jl")
 include("docs/Docs.jl")
-using .Docs, .Markdown
+using .Docs
 isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
 
 function __init__()
@@ -455,7 +458,7 @@ Base.init_load_path(ccall(:jl_get_julia_home, Any, ()))
 
 # load some stdlib packages but don't put their names in Main
 Base.require(:DelimitedFiles)
-Base.require(:Test)
+# Base.require(:Test)
 
 empty!(LOAD_PATH)
 

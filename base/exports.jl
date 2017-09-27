@@ -17,7 +17,6 @@ export
     LAPACK,
     Serializer,
     Docs,
-    Markdown,
     Threads,
     Iterators,
     Distributed,

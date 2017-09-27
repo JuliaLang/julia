@@ -3,6 +3,7 @@
 # Text / HTML objects
 
 import Base: print, show, ==, hash
+import Markdown
 
 export HTML, @html_str
 

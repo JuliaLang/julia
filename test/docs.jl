@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.Docs: meta, @var, DocStr, parsedoc
+import Markdown
 
 # For curmod_*
 include("testenv.jl")
@@ -953,7 +954,7 @@ for (line, expr) in Pair[
     ]
     @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(117, doc_util_path), STDOUT, expr)
     buf = IOBuffer()
-    @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
+    @test eval(Base, Docs.helpmode(buf, line)) isa Union{Markdown.MD,Void}
 end
 
 let save_color = Base.have_color
