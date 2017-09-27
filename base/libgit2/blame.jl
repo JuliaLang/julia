@@ -1,5 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    GitBlame(repo::GitRepo, path::AbstractString; options::BlameOptions=BlameOptions())
+
+Construct a `GitBlame` object for the file at `path`, using change information gleaned
+from the history of `repo`. The `GitBlame` object records who changed which chunks of
+the file when, and how. `options` controls how to separate the contents of the file and
+which commits to probe - see [`BlameOptions`](@ref) for more information.
+"""
 function GitBlame(repo::GitRepo, path::AbstractString; options::BlameOptions=BlameOptions())
     blame_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_blame_file, :libgit2), Cint,
@@ -8,6 +16,14 @@ function GitBlame(repo::GitRepo, path::AbstractString; options::BlameOptions=Bla
     return GitBlame(repo, blame_ptr_ptr[])
 end
 
+"""
+    counthunks(blame::GitBlame)
+
+Return the number of distinct "hunks" with a file. A hunk may contain multiple lines.
+A hunk is usually a piece of a file that was added/changed/removed together, for example,
+a function added to a source file or an inner loop that was optimized out of
+that function later.
+"""
 function counthunks(blame::GitBlame)
     return ccall((:git_blame_get_hunk_count, :libgit2), Int32, (Ptr{Void},), blame.ptr)
 end

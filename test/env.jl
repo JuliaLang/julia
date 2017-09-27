@@ -30,6 +30,7 @@ key = randstring(25)
 @test !haskey(ENV,key)
 @test_throws KeyError ENV[key]
 @test get(ENV,key,"default") == "default"
+@test get(() -> "default", ENV, key) == "default"
 
 # Test for #17956
 @test length(ENV) > 1

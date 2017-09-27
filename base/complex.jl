@@ -211,7 +211,7 @@ bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
 
-in(x::Complex, r::Range{<:Real}) = isreal(x) && real(x) in r
+in(x::Complex, r::AbstractRange{<:Real}) = isreal(x) && real(x) in r
 
 if UInt === UInt64
     const h_imag = 0x32a7a07f3e7cd1f9
@@ -958,7 +958,7 @@ big(z::Complex{T}) where {T<:Real} = Complex{big(T)}(z)
 complex(A::AbstractArray{<:Complex}) = A
 
 function complex(A::AbstractArray{T}) where T
-    if !isleaftype(T)
+    if !isconcrete(T)
         error("`complex` not defined on abstractly-typed arrays; please convert to a more specific type")
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)

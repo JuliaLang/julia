@@ -7,7 +7,17 @@ using Base.Test
 
 @test_throws MethodError convert(Enum, 1.0)
 
-@test_throws ArgumentError eval(:(@enum Foo))
+macro macrocall(ex)
+    @assert Meta.isexpr(ex, :macrocall)
+    ex.head = :call
+    for i in 2:length(ex.args)
+        ex.args[i] = QuoteNode(ex.args[i])
+    end
+    insert!(ex.args, 3, __module__)
+    return esc(ex)
+end
+
+@test_throws ArgumentError("no arguments given for Enum Foo") @macrocall(@enum Foo)
 
 @enum Fruit apple orange kiwi
 @test typeof(Fruit) == DataType
@@ -72,14 +82,18 @@ end
 @test Int(_neg4) === -4
 @test Int(_neg3) === -3
 
-@test_throws ArgumentError eval(:(@enum Test1 _zerofp=0.0))
-@test_throws ArgumentError eval(:(@enum Test11 _zerofp2=0.5))
+@test_throws ArgumentError("invalid value for Enum Test1, _zerofp = 0.0=0.0; values must be integers") @macrocall(@enum Test1 _zerofp=0.0)
+@test_throws ArgumentError("invalid value for Enum Test11, _zerofp2 = 0.5=0.5; values must be integers") @macrocall(@enum Test11 _zerofp2=0.5)
 @enum Test111 _zerobi=BigInt(1)
 @test Integer(_zerobi) == 1
 
 # can't use non-identifiers as enum members
-@test_throws ArgumentError eval(:(@enum Test2  x ? 1 : 2))
-@test_throws ArgumentError eval(:(@enum Test22 1=2))
+@test_throws ArgumentError("""invalid argument for Enum Test2: if x
+                                  1
+                              else
+                                  2
+                              end""") @macrocall(@enum Test2  x ? 1 : 2)
+@test_throws ArgumentError("invalid argument for Enum Test22: 1 = 2") @macrocall(@enum Test22 1=2)
 
 # other Integer types of enum members
 @enum Test3::UInt8 _one_Test3=0x01 _two_Test3=0x02 _three_Test3=0x03
@@ -98,9 +112,9 @@ end
 @test typeof(convert(Integer, _one_Test6)) == UInt128
 
 # enum values must be integers
-@test_throws ArgumentError eval(:(@enum Test7 _zero="zero"))
-@test_throws ArgumentError eval(:(@enum Test8 _zero='0'))
-@test_throws ArgumentError eval(:(@enum Test9 _zero=0.5))
+@test_throws ArgumentError("invalid value for Enum Test7, _zero = \"zero\"=zero; values must be integers") @macrocall(@enum Test7 _zero="zero")
+@test_throws ArgumentError("invalid value for Enum Test8, _zero = '0'=0; values must be integers") @macrocall(@enum Test8 _zero='0')
+@test_throws ArgumentError("invalid value for Enum Test9, _zero = 0.5=0.5; values must be integers") @macrocall(@enum Test9 _zero=0.5)
 
 # test macro handles keyword arguments
 @enum(Test11, _zero_Test11=2,
@@ -114,10 +128,10 @@ end
 @test Int(_three_Test11) == 6
 
 # don't allow enum value to overflow
-@test_throws ArgumentError @eval(@enum EnumOvf x=typemax(Int32) y)
+@test_throws ArgumentError("overflow in value \"y\" of Enum EnumOvf") @macrocall(@enum EnumOvf x=typemax(Int32) y)
 
 # test for unique Enum values
-@test_throws ArgumentError eval(:(@enum(Test14, _zero_Test14, _one_Test14, _two_Test14=0)))
+@test_throws ArgumentError("values for Enum Test14 are not unique") @macrocall(@enum(Test14, _zero_Test14, _one_Test14, _two_Test14=0))
 
 @test repr(apple) == "apple::$(string(Fruit)) = 0"
 @test string(apple) == "apple"

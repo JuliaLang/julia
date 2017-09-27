@@ -46,7 +46,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
         for i=1:n, j=1:n
             @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
         end
-        E = abs.(apd - full(capd))
+        E = abs.(apd - Matrix(capd))
         for i=1:n, j=1:n
             @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
         end
@@ -78,7 +78,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
                 @test isposdef(capds)
             end
             ulstring = sprint(show,capds[:UL])
-            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring\nsuccessful: true"
+            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
         else
             capdh = cholfact(apdh)
             @test inv(capdh)*apdh ≈ eye(n)
@@ -96,12 +96,12 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             @test logdet(capdh) ≈ log(det(capdh))
             @test isposdef(capdh)
             ulstring = sprint(show,capdh[:UL])
-            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring\nsuccessful: true"
+            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
         end
 
         # test chol of 2x2 Strang matrix
-        S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
-        @test full(chol(S)) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
+        S = Matrix{eltya}(SymTridiagonal([2, 2], [-1]))
+        @test Matrix(chol(S)) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
 
         # test extraction of factor and re-creating original matrix
         if eltya <: Real
@@ -109,7 +109,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             lapds = cholfact(apdsL)
             cl    = chol(apdsL)
             ls = lapds[:L]
-            @test full(capds) ≈ full(lapds) ≈ apd
+            @test Matrix(capds) ≈ Matrix(lapds) ≈ apd
             @test ls*ls' ≈ apd
             @test triu(capds.factors) ≈ lapds[:U]
             @test tril(lapds.factors) ≈ capds[:L]
@@ -121,7 +121,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             lapdh = cholfact(apdhL)
             cl    = chol(apdhL)
             ls = lapdh[:L]
-            @test full(capdh) ≈ full(lapdh) ≈ apd
+            @test Matrix(capdh) ≈ Matrix(lapdh) ≈ apd
             @test ls*ls' ≈ apd
             @test triu(capdh.factors) ≈ lapdh[:U]
             @test tril(lapdh.factors) ≈ capdh[:L]
@@ -140,12 +140,12 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             if isreal(apd)
                 @test apd*inv(cpapd) ≈ eye(n)
             end
-            @test full(cpapd) ≈ apd
+            @test Matrix(cpapd) ≈ apd
             #getindex
             @test_throws KeyError cpapd[:Z]
 
             @test size(cpapd) == size(apd)
-            @test full(copy(cpapd)) ≈ apd
+            @test Matrix(copy(cpapd)) ≈ apd
             @test det(cpapd) ≈ det(apd)
             @test logdet(cpapd) ≈ logdet(apd)
             @test cpapd[:P]*cpapd[:L]*cpapd[:U]*cpapd[:P]' ≈ apd
@@ -192,9 +192,9 @@ end
 
 @testset "Cholesky factor of Matrix with non-commutative elements, here 2x2-matrices" begin
     X = Matrix{Float64}[0.1*rand(2,2) for i in 1:3, j = 1:3]
-    L = full(Base.LinAlg._chol!(X*X', LowerTriangular)[1])
-    U = full(Base.LinAlg._chol!(X*X', UpperTriangular)[1])
-    XX = full(X*X')
+    L = Matrix(Base.LinAlg._chol!(X*X', LowerTriangular)[1])
+    U = Matrix(Base.LinAlg._chol!(X*X', UpperTriangular)[1])
+    XX = Matrix(X*X')
 
     @test sum(sum(norm, L*L' - XX)) < eps()
     @test sum(sum(norm, U'*U - XX)) < eps()
@@ -209,8 +209,8 @@ end
             A = randn(5,5)
         end
         A = convert(Matrix{elty}, A'A)
-        @test full(cholfact(A)[:L]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular)[1])
-        @test full(cholfact(A)[:U]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular)[1])
+        @test Matrix(cholfact(A)[:L]) ≈ Matrix(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular)[1])
+        @test Matrix(cholfact(A)[:U]) ≈ Matrix(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular)[1])
     end
 end
 
@@ -270,6 +270,14 @@ end
         @test_throws PosDefException chol(A)
         @test_throws PosDefException Base.LinAlg.chol!(copy(A))
     end
+end
+
+@testset "throw for non-square input" begin
+    A = rand(2,3)
+    @test_throws DimensionMismatch chol(A)
+    @test_throws DimensionMismatch Base.LinAlg.chol!(A)
+    @test_throws DimensionMismatch cholfact(A)
+    @test_throws DimensionMismatch cholfact!(A)
 end
 
 @testset "fail for non-BLAS element types" begin

@@ -126,9 +126,9 @@ for T in (Int8, Int16, Int32, Int64)
     @test convert(T, max_val) == max_val
     @test_throws InexactError convert(T, max_val+1)
 
-    m = Int128(typemin(T))
-    @test convert(T, m) == m
-    @test_throws InexactError convert(T, m-1)
+    min_val = Int128(typemin(T))
+    @test convert(T, min_val) == min_val
+    @test_throws InexactError convert(T, min_val-1)
 end
 
 for T in (UInt8, UInt16, UInt32, UInt64)
@@ -228,4 +228,26 @@ end
     x = BigInt(1) .<< [1:70;]
     @test x[end] == 1180591620717411303424
     @test eltype(x) == BigInt
+end
+
+# issue #9292
+@testset "mixed signedness arithmetic" begin
+    for T in Base.BitInteger_types
+        for S in Base.BitInteger_types
+            a, b = one(T), one(S)
+            for c in (a+b, a-b, a*b)
+                if T === S
+                    @test c isa T
+                elseif sizeof(T) > sizeof(S)
+                    # larger type wins
+                    @test c isa T
+                elseif sizeof(S) > sizeof(T)
+                    @test c isa S
+                else
+                    # otherwise Unsigned wins
+                    @test c isa (T <: Unsigned ? T : S)
+                end
+            end
+        end
+    end
 end

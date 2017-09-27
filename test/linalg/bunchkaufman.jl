@@ -22,19 +22,14 @@ bimg  = randn(n,2)/2
 @testset for eltya in (Float32, Float64, Complex64, Complex128, Int)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
-    @testset for atype in ("Array", "SubArray")
-        asym = a.'+ a                  # symmetric indefinite
-        aher = a' + a                  # Hermitian indefinite
-        apd  = a' * a                  # Positive-definite
-        if atype == "Array"
-            a  = a
-            a2 = a2
-        else
-            a    = view(a   , 1:n, 1:n)
-            a2   = view(a2  , 1:n, 1:n)
-            aher = view(aher, 1:n, 1:n)
-            apd  = view(apd , 1:n, 1:n)
-        end
+    asym = a.'+ a                  # symmetric indefinite
+    aher = a' + a                  # Hermitian indefinite
+    apd  = a' * a                  # Positive-definite
+    for (a, a2, aher, apd) in ((a, a2, aher, apd),
+                               (view(a, 1:n, 1:n),
+                                view(a2, 1:n, 1:n),
+                                view(aher, 1:n, 1:n),
+                                view(apd , 1:n, 1:n)))
         ε = εa = eps(abs(float(one(eltya))))
 
         @testset for eltyb in (Float32, Float64, Complex64, Complex128, Int)
@@ -44,13 +39,7 @@ bimg  = randn(n,2)/2
             @test isa(factorize(asym), LinAlg.BunchKaufman)
             @test isa(factorize(aher), LinAlg.BunchKaufman)
 
-            @testset for btype in ("Array", "SubArray")
-                if btype == "Array"
-                    b = b
-                else
-                    b = view(b, 1:n, 1:2)
-                end
-
+            for b in (b, view(b, 1:n, 1:2))
                 εb = eps(abs(float(one(eltyb))))
                 ε = max(εa,εb)
 
@@ -113,13 +102,7 @@ end
         As3[1, end] -= im
 
         for As = (As1, As2, As3)
-            @testset for Astype in ("Array", "SubArray")
-                if Astype == "Array"
-                    As = As
-                else
-                    As = view(As, 1:n, 1:n)
-                end
-
+            for As in (As, view(As, 1:n, 1:n))
                 @testset for rook in (false, true)
                     @testset for uplo in (:L, :U)
                         F = bkfact(issymmetric(As) ? Symmetric(As, uplo) : Hermitian(As, uplo), rook)

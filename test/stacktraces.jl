@@ -6,7 +6,7 @@ let
     @noinline child() = stacktrace()
     @noinline parent() = child()
     @noinline grandparent() = parent()
-    line_numbers = @__LINE__() - [3, 2, 1]
+    line_numbers = @__LINE__() .- [3, 2, 1]
     stack = grandparent()
 
     # Basic tests.

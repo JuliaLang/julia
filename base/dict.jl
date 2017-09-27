@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
-    truncwidth = strwidth(truncmark)
+    truncwidth = textwidth(truncmark)
     (width <= 0 || width < truncwidth) && return ""
 
     wid = truncidx = lastidx = 0
@@ -9,7 +9,7 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     while !done(str, idx)
         lastidx = idx
         c, idx = next(str, idx)
-        wid += charwidth(c)
+        wid += textwidth(c)
         wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
         (wid >= width || c in chars) && break
     end
@@ -34,7 +34,7 @@ function show(io::IO, t::Associative{K,V}) where V where K
     if isempty(t)
         print(io, typeof(t), "()")
     else
-        if isleaftype(K) && isleaftype(V)
+        if _isleaftype(K) && _isleaftype(V)
             print(io, typeof(t).name)
         else
             print(io, typeof(t))
@@ -161,7 +161,7 @@ associative_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
 associative_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(associative_with_eltype(DT_apply, _default_eltype(typeof(kv))), kv)
 function associative_with_eltype(DT_apply::F, kv::Generator, t) where F
     T = _default_eltype(typeof(kv))
-    if T <: Union{Pair, Tuple{Any, Any}} && isleaftype(T)
+    if T <: Union{Pair, Tuple{Any, Any}} && _isleaftype(T)
         return associative_with_eltype(DT_apply, kv, T)
     end
     return grow_to!(associative_with_eltype(DT_apply, T), kv)

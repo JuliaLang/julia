@@ -21,12 +21,12 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -64,6 +64,9 @@ typedef struct _varbinding {
     int8_t occurs_inv;  // occurs in invariant position
     int8_t occurs_cov;  // # of occurrences in covariant position
     int8_t concrete;    // 1 if another variable has a constraint forcing this one to be concrete
+    // set if this variable's bounds contain a free variable that's been removed from
+    // the environment.
+    int8_t hasfree;
     // in covariant position, we need to try constraining a variable in different ways:
     // 0 - unconstrained
     // 1 - less than
@@ -139,7 +142,7 @@ static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
         v = v->prev;
     }
     *root = (jl_value_t*)jl_alloc_svec(len*3);
-    se->buf = (int8_t*)(len ? malloc(len*2) : NULL);
+    se->buf = (int8_t*)(len ? malloc(len*3) : NULL);
     int i=0, j=0; v = e->vars;
     while (v != NULL) {
         jl_svecset(*root, i++, v->lb);
@@ -147,6 +150,7 @@ static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
         jl_svecset(*root, i++, (jl_value_t*)v->innervars);
         se->buf[j++] = v->occurs_inv;
         se->buf[j++] = v->occurs_cov;
+        se->buf[j++] = v->hasfree;
         v = v->prev;
     }
     se->rdepth = e->Runions.depth;
@@ -165,6 +169,7 @@ static void restore_env(jl_stenv_t *e, jl_value_t *root, jl_savedenv_t *se)
         i++;
         v->occurs_inv = se->buf[j++];
         v->occurs_cov = se->buf[j++];
+        v->hasfree = se->buf[j++];
         v = v->prev;
     }
     e->Runions.depth = se->rdepth;
@@ -420,9 +425,10 @@ static int subtype_ufirst(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, int param)
 {
     if (vb != NULL && param) {
-        if (param == 2 && e->invdepth > vb->depth0)
+        // saturate counters at 2; we don't need values bigger than that
+        if (param == 2 && e->invdepth > vb->depth0 && vb->occurs_inv < 2)
             vb->occurs_inv++;
-        else
+        else if (vb->occurs_cov < 2)
             vb->occurs_cov++;
     }
 }
@@ -545,6 +551,32 @@ static jl_value_t *widen_Type(jl_value_t *t)
     return t;
 }
 
+JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v);
+
+// convert a type with free variables to a typevar bounded by a UnionAll-wrapped
+// version of that type.
+// TODO: This loses some inference precision. For example in a case where a
+// variable bound is `Vector{_}`, we could potentially infer `Type{Vector{_}} where _`,
+// but this causes us to infer the larger `Type{T} where T<:Vector` instead.
+// However this is needed because many contexts check `isa(sp, TypeVar)` to determine
+// when a static parameter value is not known exactly.
+static jl_value_t *fix_inferred_var_bound(jl_tvar_t *var, jl_value_t *ty)
+{
+    if (!jl_is_typevar(ty) && jl_has_free_typevars(ty)) {
+        jl_value_t *ans = ty;
+        jl_array_t *vs = jl_find_free_typevars(ty);
+        JL_GC_PUSH2(&ans, &vs);
+        int i;
+        for (i = 0; i < jl_array_len(vs); i++) {
+            ans = jl_type_unionall((jl_tvar_t*)jl_array_ptr_ref(vs, i), ans);
+        }
+        ans = (jl_value_t*)jl_new_typevar(var->name, jl_bottom_type, ans);
+        JL_GC_POP();
+        return ans;
+    }
+    return ty;
+}
+
 // compare UnionAll type `u` to `t`. `R==1` if `u` came from the right side of A <: B.
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
@@ -561,7 +593,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         }
         btemp = btemp->prev;
     }
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0, e->invdepth, 0, NULL, e->vars };
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0, 0, e->invdepth, 0, NULL, e->vars };
     JL_GC_PUSH3(&u, &vb.lb, &vb.ub);
     e->vars = &vb;
     int ans;
@@ -591,13 +623,14 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             // if we try to assign different variable values (due to checking
             // multiple union members), consider the value unknown.
             if (!oldval || !jl_is_typevar(oldval) || !jl_is_long(val))
-                e->envout[e->envidx] = val;
+                e->envout[e->envidx] = fix_inferred_var_bound(u->var, val);
             // TODO: substitute the value (if any) of this variable into previous envout entries
         }
     }
     else {
         ans = subtype(u->body, t, e, param);
     }
+    if (vb.hasfree) ans = 0;
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
     // than once, and only in covariant position, is constrained to concrete types. E.g.
@@ -637,14 +670,16 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     e->vars = vb.prev;
 
     btemp = e->vars;
-    while (btemp != NULL) {
-        jl_value_t *vi = btemp->ub;
-        // TODO: this takes a significant amount of time
-        if (vi != (jl_value_t*)vb.var && btemp->var->ub != vi && jl_has_typevar(vi, vb.var)) {
-            btemp->ub = jl_new_struct(jl_unionall_type, vb.var, vi);
-            btemp->lb = jl_bottom_type;
+    if (vb.lb != vb.ub) {
+        while (btemp != NULL) {
+            jl_value_t *vu = btemp->ub;
+            jl_value_t *vl = btemp->lb;
+            // TODO: this takes a significant amount of time
+            if ((vu != (jl_value_t*)vb.var && btemp->var->ub != vu && jl_has_typevar(vu, vb.var)) ||
+                (vl != (jl_value_t*)vb.var && btemp->var->lb != vl && jl_has_typevar(vl, vb.var)))
+                btemp->hasfree = 1;
+            btemp = btemp->prev;
         }
-        btemp = btemp->prev;
     }
 
     JL_GC_POP();
@@ -1478,7 +1513,7 @@ static jl_value_t *finish_unionall(jl_value_t *res, jl_varbinding_t *vb, jl_sten
         if (!varval || (!is_leaf_bound(varval) && !vb->occurs_inv))
             e->envout[e->envidx] = (jl_value_t*)vb->var;
         else if (!(oldval && jl_is_typevar(oldval) && jl_is_long(varval)))
-            e->envout[e->envidx] = varval;
+            e->envout[e->envidx] = fix_inferred_var_bound(vb->var, varval);
     }
 
     JL_GC_POP();
@@ -1547,7 +1582,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 {
     jl_value_t *res=NULL, *res2=NULL, *save=NULL, *save2=NULL;
     jl_savedenv_t se, se2;
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0, e->invdepth, 0, NULL, e->vars };
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, NULL, 0, 0, 0, 0, 0, e->invdepth, 0, NULL, e->vars };
     JL_GC_PUSH6(&res, &save2, &vb.lb, &vb.ub, &save, &vb.innervars);
     save_env(e, &save, &se);
     res = intersect_unionall_(t, u, e, R, param, &vb);
@@ -1764,6 +1799,14 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         flip_vars(e);
         return ii;
     }
+    /*
+      TODO: This is a band-aid for issue #23685. A better solution would be to
+      first normalize types so that all `where` expressions in covariant position
+      are pulled out to the top level.
+    */
+    if ((jl_is_typevar(x) && !jl_is_typevar(y) && lookup(e, (jl_tvar_t*)x) == NULL) ||
+        (jl_is_typevar(y) && !jl_is_typevar(x) && lookup(e, (jl_tvar_t*)y) == NULL))
+        return ii;
     jl_value_t *root=NULL;
     jl_savedenv_t se;
     JL_GC_PUSH2(&ii, &root);

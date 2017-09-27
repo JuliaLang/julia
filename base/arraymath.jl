@@ -40,7 +40,7 @@ for f in (:+, :-)
     end
 end
 
-for f in (:/, :\, :*, :+, :-)
+for f in (:/, :\, :*)
     if f != :/
         @eval ($f)(A::Number, B::AbstractArray) = broadcast($f, A, B)
     end

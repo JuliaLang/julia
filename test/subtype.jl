@@ -256,6 +256,23 @@ function test_3()
     @test !issub((@UnionAll T>:Integer @UnionAll S>:Ptr Tuple{Ptr{T},Ptr{S}}), B)
 
     @test  issub((@UnionAll T>:Ptr @UnionAll S>:Integer Tuple{Ptr{T},Ptr{S}}), B)
+
+    # issue #23327
+    @test !issub((Type{AbstractArray{Array{T}} where T}), Type{AbstractArray{S}} where S)
+    @test !issub((Val{AbstractArray{Array{T}} where T}), Val{AbstractArray{T}} where T)
+    @test !issub((Array{Array{Array{T}} where T}), Array{Array{T}} where T)
+    @test !issub((Array{Array{T, 1}, 1} where T), AbstractArray{Vector})
+
+    @test !issub((Ref{Pair{Pair{T, R}, R} where R} where T),
+                 (Ref{Pair{A,          B} where B} where A))
+    @test !issub((Ref{Pair{Pair{A, B}, B} where B} where A),
+                 (Ref{Pair{A,          B2} where B2 <: B} where A where B))
+
+    @test !issub(Tuple{Type{Vector{T}} where T, Vector{Float64}}, Tuple{Type{T}, T} where T)
+    @test !issub(Tuple{Vector{Float64}, Type{Vector{T}} where T}, Tuple{T, Type{T}} where T)
+    @test !issub(Tuple{Type{Ref{T}} where T, Vector{Float64}}, Tuple{Ref{T}, T} where T)
+
+    @test !issub(Tuple{Type{Ref{T}} where T, Ref{Float64}}, Tuple{Type{T},T} where T)
 end
 
 # level 4: Union
@@ -646,8 +663,8 @@ function test_intersection()
     @testintersect(Tuple{Type{Ptr{UInt8}}, Ptr{Bottom}},
                    (@UnionAll T Tuple{Type{Ptr{T}},Ptr{T}}), Bottom)
 
-    @testintersect(Tuple{Range{Int},Tuple{Int,Int}}, (@UnionAll T Tuple{AbstractArray{T},Dims}),
-                   Tuple{Range{Int},Tuple{Int,Int}})
+    @testintersect(Tuple{AbstractRange{Int},Tuple{Int,Int}}, (@UnionAll T Tuple{AbstractArray{T},Dims}),
+                   Tuple{AbstractRange{Int},Tuple{Int,Int}})
 
     @testintersect((@UnionAll Integer<:T<:Number Array{T}), (@UnionAll T<:Number Array{T}),
                    (@UnionAll Integer<:T<:Number Array{T}))
@@ -915,6 +932,17 @@ function test_intersection()
     @testintersect(Tuple{Ref{Ref{T}} where T, Ref},
                    Tuple{Ref{T}, Ref{T}} where T,
                    Tuple{Ref{Ref{T}}, Ref{Ref{T}}} where T)
+
+    # issue #23685
+    @testintersect(Pair{Type{Z},Z} where Z,
+                   Pair{Type{Ref{T}} where T, Ref{Float64}},
+                   Bottom)
+    @testintersect(Tuple{Type{Z},Z} where Z,
+                   Tuple{Type{Ref{T}} where T, Ref{Float64}},
+                   !Bottom)
+    @test_broken typeintersect(Tuple{Type{Z},Z} where Z,
+                               Tuple{Type{Ref{T}} where T, Ref{Float64}}) ==
+        Tuple{Type{Ref{Float64}},Ref{Float64}}
 end
 
 function test_intersection_properties()
@@ -1130,3 +1158,29 @@ end
 @testintersect(Tuple{DataType, Any},
                Tuple{Type{T}, Int} where T,
                Tuple{DataType, Int})
+
+# issue #23430
+@test [0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.;
+       0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.;
+       0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.;
+       0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.;
+       0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.; 0 0.;
+       0 0.; 0 0.; 0 0.; 0 0.] isa Matrix{Float64}
+@test !(Tuple{Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
+              Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64} <: (Tuple{Vararg{T}} where T<:Number))
+
+# part of issue #23327
+let
+    triangular(::Type{<:AbstractArray{T}}) where {T} = T
+    triangular(::Type{<:AbstractArray}) = Any
+    @test triangular(Array{Array{T, 1}, 1} where T) === Any
+end

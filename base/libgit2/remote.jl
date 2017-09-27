@@ -276,6 +276,7 @@ Fetch from the specified `rmt` remote git repository, using `refspecs` to
 determine which remote branch(es) to fetch.
 The keyword arguments are:
   * `options`: determines the options for the fetch, e.g. whether to prune afterwards.
+    See [`FetchOptions`](@ref) for more information.
   * `msg`: a message to insert into the reflogs.
 """
 function fetch(rmt::GitRemote, refspecs::Vector{<:AbstractString};
@@ -295,6 +296,7 @@ determine which remote branch(es) to push to.
 The keyword arguments are:
   * `force`: if `true`, a force-push will occur, disregarding conflicts.
   * `options`: determines the options for the push, e.g. which proxy headers to use.
+    See [`PushOptions`](@ref) for more information.
 
 !!! note
     You can add information about the push refspecs in two other ways: by setting
@@ -328,8 +330,8 @@ Base.show(io::IO, rmt::GitRemote) = print(io, "GitRemote:\nRemote name: ", name(
     set_remote_fetch_url(repo::GitRepo, remote_name, url)
     set_remote_fetch_url(path::String, remote_name, url)
 
-Set the fetch `url` for the specified `remote_name` for the GitRepo or the git repository
-located at `path`. Typically git repos use "origin" as the remote name.
+Set the fetch `url` for the specified `remote_name` for the [`GitRepo`](@ref) or the git repository
+located at `path`. Typically git repos use `"origin"` as the remote name.
 """
 function set_remote_fetch_url end
 
@@ -350,8 +352,8 @@ end
     set_remote_push_url(repo::GitRepo, remote_name, url)
     set_remote_push_url(path::String, remote_name, url)
 
-Set the push `url` for the specified `remote_name` for the GitRepo or the git repository
-located at `path`. Typically git repos use "origin" as the remote name.
+Set the push `url` for the specified `remote_name` for the [`GitRepo`](@ref) or the git repository
+located at `path`. Typically git repos use `"origin"` as the remote name.
 """
 function set_remote_push_url end
 
@@ -372,8 +374,8 @@ end
     set_remote_url(repo::GitRepo, remote_name, url)
     set_remote_url(repo::String, remote_name, url)
 
-Set both the fetch and push `url` for `remote_name` for the GitRepo or the git repository
-located at `path`. Typically git repos use "origin" as the remote name.
+Set both the fetch and push `url` for `remote_name` for the [`GitRepo`](@ref) or the git repository
+located at `path`. Typically git repos use `"origin"` as the remote name.
 
 # Examples
 ```julia

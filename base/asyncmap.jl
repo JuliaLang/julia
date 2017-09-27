@@ -15,7 +15,7 @@ up to 100 tasks will be used for concurrent mapping.
 
 `ntasks` can also be specified as a zero-arg function. In this case, the
 number of tasks to run in parallel is checked before processing every element and a new
-task started if the value of `ntasks_func()` is less than the current number
+task started if the value of `ntasks_func` is less than the current number
 of tasks.
 
 If `batch_size` is specified, the collection is processed in batch mode. `f` must
@@ -285,7 +285,7 @@ Returns an iterator which applies `f` to each element of `c` asynchronously
 and collects output into `results`.
 
 Keyword args `ntasks` and `batch_size` have the same behavior as in
-[`asyncmap()`](@ref). If `batch_size` is specified, `f` must
+[`asyncmap`](@ref). If `batch_size` is specified, `f` must
 be a function which operates on an array of argument tuples.
 
 !!! note
@@ -360,7 +360,7 @@ end
 Apply `f` to each element of `c` using at most `ntasks` asynchronous tasks.
 
 Keyword args `ntasks` and `batch_size` have the same behavior as in
-[`asyncmap()`](@ref). If `batch_size` is specified, `f` must
+[`asyncmap`](@ref). If `batch_size` is specified, `f` must
 be a function which operates on an array of argument tuples.
 
 !!! note
@@ -415,7 +415,7 @@ length(itr::AsyncGenerator) = length(itr.collector.enumerator)
 """
     asyncmap!(f, results, c...; ntasks=0, batch_size=nothing)
 
-Like [`asyncmap()`](@ref), but stores output in `results` rather than
+Like [`asyncmap`](@ref), but stores output in `results` rather than
 returning a collection.
 """
 function asyncmap!(f, r, c1, c...; ntasks=0, batch_size=nothing)

@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base.MathConstants
 const ≣ = isequal # convenient for comparing NaNs
 
 # basic booleans
@@ -815,8 +816,8 @@ function _cmp_(x::Union{Int64,UInt64}, y::Float64)
     error("invalid: _cmp_($x,$y)")
 end
 
-for x=Int64(2)^53-2:Int64(2)^53+5,
-    y=[2.0^53-2 2.0^53-1 2.0^53 2.0^53+2 2.0^53+4]
+for x = Int64(2)^53-2:Int64(2)^53+5,
+    y = [2.0^53-2 2.0^53-1 2.0^53 2.0^53+2 2.0^53+4]
     u = UInt64(x)
     @test y == Float64(trunc(Int64,y))
 
@@ -1705,7 +1706,7 @@ let ≈(x,y) = x==y && typeof(x)==typeof(y)
     for t in [Float32,Float64]
         # try different vector lengths
         for n in [0,3,255,256]
-            r = (1:n)-div(n,2)
+            r = (1:n) .- div(n,2)
             y = t[x/4 for x in r]
             @test trunc.(y) ≈ t[div(i,4) for i in r]
             @test floor.(y) ≈ t[i>>2 for i in r]
@@ -1991,34 +1992,38 @@ for x in (12345.6789, 0, -12345.6789)
     @test y == floor(x, 1000)
     @test y == ceil(x, 1000)
 end
-x = 12345.6789
-@test 0.0 == trunc(x, -1000)
-@test 0.0 == round(x, -1000)
-@test 0.0 == floor(x, -1000)
-@test Inf == ceil(x, -1000)
-x = -12345.6789
-@test -0.0 == trunc(x, -1000)
-@test -0.0 == round(x, -1000)
-@test -Inf == floor(x, -1000)
-@test -0.0 == ceil(x, -1000)
-x = 0.0
-@test 0.0 == trunc(x, -1000)
-@test 0.0 == round(x, -1000)
-@test 0.0 == floor(x, -1000)
-@test 0.0 == ceil(x, -1000)
+let x = 12345.6789
+    @test 0.0 == trunc(x, -1000)
+    @test 0.0 == round(x, -1000)
+    @test 0.0 == floor(x, -1000)
+    @test Inf == ceil(x, -1000)
+end
+let x = -12345.6789
+    @test -0.0 == trunc(x, -1000)
+    @test -0.0 == round(x, -1000)
+    @test -Inf == floor(x, -1000)
+    @test -0.0 == ceil(x, -1000)
+end
+let x = 0.0
+    @test 0.0 == trunc(x, -1000)
+    @test 0.0 == round(x, -1000)
+    @test 0.0 == floor(x, -1000)
+    @test 0.0 == ceil(x, -1000)
+end
 # rounding in other bases
 @test approx_eq(round(pi,2,2), 3.25)
 @test approx_eq(round(pi,3,2), 3.125)
 @test approx_eq(round(pi,3,5), 3.144)
 # vectorized trunc/round/floor/ceil with digits/base argument
-a = rand(2, 2, 2)
-for f in (round, trunc, floor, ceil)
-    @test f.(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
-    @test f.(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
-    @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
-    @test f.(a[:, 1, 1], 9, 2) == map(x->f(x, 9, 2), a[:, 1, 1])
-    @test f.(a[:, :, 1], 9, 2) == map(x->f(x, 9, 2), a[:, :, 1])
-    @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
+let a = rand(2, 2, 2)
+    for f in (round, trunc, floor, ceil)
+        @test f.(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
+        @test f.(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
+        @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
+        @test f.(a[:, 1, 1], 9, 2) == map(x->f(x, 9, 2), a[:, 1, 1])
+        @test f.(a[:, :, 1], 9, 2) == map(x->f(x, 9, 2), a[:, :, 1])
+        @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
+    end
 end
 # significant digits (would be nice to have a smart vectorized
 # version of signif)
@@ -2487,7 +2492,7 @@ z2 = read(zbuf, Complex128)
 @test bswap(z2) ===  3.5 - 4.5im
 
 #isreal(x::Real) = true
-for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
+for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
     @test isreal(x) == true
 end
 
@@ -2522,7 +2527,7 @@ let number_types = Set()
 end
 
 #getindex(x::Number) = x
-for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
+for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
     @test getindex(x) == x
     @test getindex(x, 1, 1) == x
 end
@@ -2533,7 +2538,7 @@ end
 #getindex(x::Array,-1) throws BoundsError
 #getindex(x::Array,0 throws BoundsError
 #getindex(x::Array,length(x::Array)+1) throws BoundsError
-for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
+for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
     @test_throws BoundsError getindex(x,-1)
     @test_throws BoundsError getindex(x,0)
     @test_throws BoundsError getindex(x,2)
@@ -2545,8 +2550,8 @@ end
 
 # copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
 # flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, x)
-for x in [1.23, 7, e, 4//5]
-    for y in [1.23, 7, e, 4//5]
+for x in [1.23, 7, ℯ, 4//5]
+    for y in [1.23, 7, ℯ, 4//5]
         @test copysign(x, y) == x
         @test copysign(x, -y) == -x
         @test copysign(-x, y) == x
@@ -2566,7 +2571,7 @@ end
 #in(x::Number, y::Number) = x == y
 @test in(3,3) == true #Int
 @test in(2.0,2.0) == true #FP
-@test in(e,e) == true #Const
+@test in(ℯ,ℯ) == true #Const
 @test in(4//5,4//5) == true #Rat
 @test in(1+2im, 1+2im) == true #Imag
 @test in(3, 3.0) == true #mixed
@@ -2948,7 +2953,7 @@ end
     end
     @test !iszero(nextfloat(BigFloat(0)))
     @test !isone(nextfloat(BigFloat(1)))
-    for x in (π, e, γ, catalan, φ)
+    for x in (π, ℯ, γ, catalan, φ)
         @test !iszero(x)
         @test !isone(x)
     end
@@ -3024,9 +3029,14 @@ end
     end
 end
 
-@testset "compact NaN printing" begin
-    @test sprint(io->show(IOContext(io, :compact => true), NaN16)) == "NaN"
-    @test sprint(io->show(IOContext(io, :compact => true), NaN32)) == "NaN"
-    @test sprint(io->show(IOContext(io, :compact => true), NaN64)) == "NaN"
-    @test_broken sprint(io->show(IOContext(io, :compact => true), big(NaN))) == "NaN"
+@testset "printing non finite floats" for T in subtypes(AbstractFloat)
+    for (x, sx) in [(T(NaN), "NaN"),
+                    (-T(NaN), "NaN"),
+                    (T(Inf), "Inf"),
+                    (-T(Inf), "-Inf")]
+        @assert x isa T
+        @test string(x) == sx
+        @test sprint(io -> show(IOContext(io, :compact => true), x)) == sx
+        @test sprint(print, x) == sx
+    end
 end

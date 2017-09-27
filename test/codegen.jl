@@ -51,13 +51,9 @@ end
 function test_jl_dump_compiles()
     tfile = tempname()
     io = open(tfile, "w")
+    @eval(test_jl_dump_compiles_internal(x) = x)
     ccall(:jl_dump_compiles, Void, (Ptr{Void},), io.handle)
-    eval(@noinline function test_jl_dump_compiles_internal(x)
-        if x > 0
-            test_jl_dump_compiles_internal(x-1)
-        end
-        end)
-    test_jl_dump_compiles_internal(1)
+    @eval test_jl_dump_compiles_internal(1)
     ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
     close(io)
     tstats = stat(tfile)
@@ -71,8 +67,9 @@ end
 function test_jl_dump_compiles_toplevel_thunks()
     tfile = tempname()
     io = open(tfile, "w")
+    topthunk = expand(Main, :(for i in 1:10; end))
     ccall(:jl_dump_compiles, Void, (Ptr{Void},), io.handle)
-    eval(expand(Main, :(for i in 1:10 end)))
+    Core.eval(Main, topthunk)
     ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
     close(io)
     tstats = stat(tfile)
@@ -191,6 +188,13 @@ function two_breakpoint(a::Float64)
     ccall(:jl_breakpoint, Void, (Ref{Float64},), a)
 end
 
+function load_dummy_ref(x::Int)
+    r = Ref{Int}(x)
+    Base.@gc_preserve r begin
+        unsafe_load(Ptr{Int}(pointer_from_objref(r)))
+    end
+end
+
 if opt_level > 0
     breakpoint_f64_ir = get_llvm((a)->ccall(:jl_breakpoint, Void, (Ref{Float64},), a),
                                  Tuple{Float64})
@@ -201,6 +205,12 @@ if opt_level > 0
     two_breakpoint_ir = get_llvm(two_breakpoint, Tuple{Float64})
     @test !contains(two_breakpoint_ir, "jl_gc_pool_alloc")
     @test contains(two_breakpoint_ir, "llvm.lifetime.end")
+
+    @test load_dummy_ref(1234) === 1234
+    load_dummy_ref_ir = get_llvm(load_dummy_ref, Tuple{Int})
+    @test !contains(load_dummy_ref_ir, "jl_gc_pool_alloc")
+    # Hopefully this is reliable enough. LLVM should be able to optimize this to a direct return.
+    @test contains(load_dummy_ref_ir, "ret $Iptr %0")
 end
 
 # Issue 22770
@@ -248,3 +258,8 @@ let c = [1,2,3]
     len2 = issue22582!(c, true)
     @test len1 == len2
 end
+
+# PR #23595
+@generated f23595(g, args...) = Expr(:call, :g, Expr(:(...), :args))
+x23595 = rand(1)
+@test f23595(Core.arrayref, true, x23595, 1) == x23595[]

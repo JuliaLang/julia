@@ -53,10 +53,10 @@ unpreserve_handle(x) = (v = uvhandles[x]::Int; v == 1 ? pop!(uvhandles,x) : (uvh
 
 ## Libuv error handling ##
 
-mutable struct UVError <: Exception
+struct UVError <: Exception
     prefix::AbstractString
     code::Int32
-    UVError(p::AbstractString,code::Integer)=new(p,code)
+    UVError(p::AbstractString, code::Integer) = new(p,code)
 end
 
 struverror(err::Int32) = unsafe_string(ccall(:uv_strerror,Cstring,(Int32,),err))
@@ -92,6 +92,7 @@ function reinit_stdio()
     global uv_jl_connectcb     = cfunction(uv_connectcb, Void, Tuple{Ptr{Void}, Cint})
     global uv_jl_writecb_task  = cfunction(uv_writecb_task, Void, Tuple{Ptr{Void}, Cint})
     global uv_jl_getaddrinfocb = cfunction(uv_getaddrinfocb, Void, Tuple{Ptr{Void}, Cint, Ptr{Void}})
+    global uv_jl_getnameinfocb = cfunction(uv_getnameinfocb, Void, Tuple{Ptr{Void}, Cint, Cstring, Cstring})
     global uv_jl_recvcb        = cfunction(uv_recvcb, Void, Tuple{Ptr{Void}, Cssize_t, Ptr{Void}, Ptr{Void}, Cuint})
     global uv_jl_sendcb        = cfunction(uv_sendcb, Void, Tuple{Ptr{Void}, Cint})
     global uv_jl_return_spawn  = cfunction(uv_return_spawn, Void, Tuple{Ptr{Void}, Int64, Int32})

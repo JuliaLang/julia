@@ -118,8 +118,9 @@ istriu(D::Diagonal) = true
 istril(D::Diagonal) = true
 function triu!(D::Diagonal,k::Integer=0)
     n = size(D,1)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 0
         fill!(D.diag,0)
     end
@@ -128,8 +129,9 @@ end
 
 function tril!(D::Diagonal,k::Integer=0)
     n = size(D,1)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < 0
         fill!(D.diag,0)
     end
@@ -326,12 +328,9 @@ end
 eye(::Type{Diagonal{T}}, n::Int) where {T} = Diagonal(ones(T,n))
 
 # Matrix functions
-expm(D::Diagonal) = Diagonal(exp.(D.diag))
-expm(D::Diagonal{<:AbstractMatrix}) = Diagonal(expm.(D.diag))
-logm(D::Diagonal) = Diagonal(log.(D.diag))
-logm(D::Diagonal{<:AbstractMatrix}) = Diagonal(logm.(D.diag))
-sqrtm(D::Diagonal) = Diagonal(sqrt.(D.diag))
-sqrtm(D::Diagonal{<:AbstractMatrix}) = Diagonal(sqrtm.(D.diag))
+exp(D::Diagonal) = Diagonal(exp.(D.diag))
+log(D::Diagonal) = Diagonal(log.(D.diag))
+sqrt(D::Diagonal) = Diagonal(sqrt.(D.diag))
 
 #Linear solver
 function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)

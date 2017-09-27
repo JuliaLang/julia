@@ -892,7 +892,7 @@ After a client Julia process has exited, further attempts to reference the dead 
 throw this exception.
 """
 ProcessExitedException()
-mutable struct ProcessExitedException <: Exception end
+struct ProcessExitedException <: Exception end
 
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)

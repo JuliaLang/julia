@@ -22,7 +22,7 @@ There are a few noteworthy high-level features about Julia's strings:
 
   * The built-in concrete type used for strings (and string literals) in Julia is [`String`](@ref).
     This supports the full range of [Unicode](https://en.wikipedia.org/wiki/Unicode) characters via
-    the [UTF-8](https://en.wikipedia.org/wiki/UTF-8) encoding. (A [`transcode()`](@ref) function is
+    the [UTF-8](https://en.wikipedia.org/wiki/UTF-8) encoding. (A [`transcode`](@ref) function is
     provided to convert to/from other Unicode encodings.)
   * All string types are subtypes of the abstract type `AbstractString`, and external packages define
     additional `AbstractString` subtypes (e.g. for other encodings).  If you define a function expecting
@@ -72,9 +72,9 @@ julia> Char(120)
 'x': ASCII/Unicode U+0078 (category Ll: Letter, lowercase)
 ```
 
-Not all integer values are valid Unicode code points, but for performance, the `Char()` conversion
+Not all integer values are valid Unicode code points, but for performance, the `Char` conversion
 does not check that every character value is valid. If you want to check that each converted value
-is a valid code point, use the [`isvalid()`](@ref) function:
+is a valid code point, use the [`isvalid`](@ref) function:
 
 ```jldoctest
 julia> Char(0x110000)
@@ -314,7 +314,7 @@ For example, the [LegacyStrings.jl](https://github.com/JuliaArchive/LegacyString
 implements `UTF16String` and `UTF32String` types. Additional discussion of other encodings and
 how to implement support for them is beyond the scope of this document for the time being. For
 further discussion of UTF-8 encoding issues, see the section below on [byte array literals](@ref man-byte-array-literals).
-The [`transcode()`](@ref) function is provided to convert data between the various UTF-xx encodings,
+The [`transcode`](@ref) function is provided to convert data between the various UTF-xx encodings,
 primarily for working with external data and libraries.
 
 ## Concatenation
@@ -359,7 +359,7 @@ implies commutativity.
 ## [Interpolation](@id string-interpolation)
 
 Constructing strings using concatenation can become a bit cumbersome, however. To reduce the need for these
-verbose calls to [`string()`](@ref) or repeated multiplications, Julia allows interpolation into string literals
+verbose calls to [`string`](@ref) or repeated multiplications, Julia allows interpolation into string literals
 using `$`, as in Perl:
 
 ```jldoctest stringconcat
@@ -378,7 +378,7 @@ julia> "1 + 2 = $(1 + 2)"
 "1 + 2 = 3"
 ```
 
-Both concatenation and string interpolation call [`string()`](@ref) to convert objects into string
+Both concatenation and string interpolation call [`string`](@ref) to convert objects into string
 form. Most non-`AbstractString` objects are converted to strings closely corresponding to how
 they are entered as literal expressions:
 
@@ -393,7 +393,7 @@ julia> "v: $v"
 "v: [1, 2, 3]"
 ```
 
-[`string()`](@ref) is the identity for `AbstractString` and `Char` values, so these are interpolated
+[`string`](@ref) is the identity for `AbstractString` and `Char` values, so these are interpolated
 into strings as themselves, unquoted and unescaped:
 
 ```jldoctest
@@ -474,7 +474,7 @@ julia> "1 + 2 = 3" == "1 + 2 = $(1 + 2)"
 true
 ```
 
-You can search for the index of a particular character using the [`search()`](@ref) function:
+You can search for the index of a particular character using the [`search`](@ref) function:
 
 ```jldoctest
 julia> search("xylophone", 'x')
@@ -500,7 +500,7 @@ julia> search("xylophone", 'o', 8)
 0
 ```
 
-You can use the [`contains()`](@ref) function to check if a substring is contained in a string:
+You can use the [`contains`](@ref) function to check if a substring is contained in a string:
 
 ```jldoctest
 julia> contains("Hello, world.", "world")
@@ -516,9 +516,9 @@ julia> contains("Xylophon", 'o')
 true
 ```
 
-The last example shows that [`contains()`](@ref) can also look for a character literal.
+The last example shows that [`contains`](@ref) can also look for a character literal.
 
-Two other handy string functions are [`repeat()`](@ref) and [`join()`](@ref):
+Two other handy string functions are [`repeat`](@ref) and [`join`](@ref):
 
 ```jldoctest
 julia> repeat(".:Z:.", 10)
@@ -535,7 +535,7 @@ Some other useful functions include:
   * [`i = start(str)`](@ref start) gives the first valid index at which a character can be found in `str`
     (typically 1).
   * [`c, j = next(str,i)`](@ref next) returns next character at or after the index `i` and the next valid
-    character index following that. With [`start()`](@ref) and [`endof()`](@ref), can be used to iterate
+    character index following that. With [`start`](@ref) and [`endof`](@ref), can be used to iterate
     through the characters in `str`.
   * [`ind2chr(str,i)`](@ref) gives the number of characters in `str` up to and including any at index
     `i`.
@@ -569,7 +569,7 @@ julia> typeof(ans)
 Regex
 ```
 
-To check if a regex matches a string, use [`ismatch()`](@ref):
+To check if a regex matches a string, use [`ismatch`](@ref):
 
 ```jldoctest
 julia> ismatch(r"^\s*(?:#|$)", "not a comment")
@@ -579,10 +579,10 @@ julia> ismatch(r"^\s*(?:#|$)", "# a comment")
 true
 ```
 
-As one can see here, [`ismatch()`](@ref) simply returns true or false, indicating whether the
+As one can see here, [`ismatch`](@ref) simply returns true or false, indicating whether the
 given regex matches the string or not. Commonly, however, one wants to know not just whether a
 string matched, but also *how* it matched. To capture this information about a match, use the
-[`match()`](@ref) function instead:
+[`match`](@ref) function instead:
 
 ```jldoctest
 julia> match(r"^\s*(?:#|$)", "not a comment")
@@ -591,7 +591,7 @@ julia> match(r"^\s*(?:#|$)", "# a comment")
 RegexMatch("#")
 ```
 
-If the regular expression does not match the given string, [`match()`](@ref) returns `nothing`
+If the regular expression does not match the given string, [`match`](@ref) returns `nothing`
 -- a special value that does not print anything at the interactive prompt. Other than not printing,
 it is a completely normal value and you can test for it programmatically:
 
@@ -604,7 +604,7 @@ else
 end
 ```
 
-If a regular expression does match, the value returned by [`match()`](@ref) is a `RegexMatch`
+If a regular expression does match, the value returned by [`match`](@ref) is a `RegexMatch`
 object. These objects record how the expression matches, including the substring that the pattern
 matches and any captured substrings, if there are any. This example only captures the portion
 of the substring that matches, but perhaps we want to capture any non-blank text after the comment
@@ -615,7 +615,7 @@ julia> m = match(r"^\s*(?:#\s*(.*?)\s*$|$)", "# a comment ")
 RegexMatch("# a comment ", 1="a comment")
 ```
 
-When calling [`match()`](@ref), you have the option to specify an index at which to start the
+When calling [`match`](@ref), you have the option to specify an index at which to start the
 search. For example:
 
 ```jldoctest
@@ -706,7 +706,7 @@ julia> m[2]
 "45"
 ```
 
-Captures can be referenced in a substitution string when using [`replace()`](@ref) by using `\n`
+Captures can be referenced in a substitution string when using [`replace`](@ref) by using `\n`
 to refer to the nth capture group and prefixing the substitution string with `s`. Capture group
 0 refers to the entire match object. Named capture groups can be referenced in the substitution
 with `g<groupname>`. For example:

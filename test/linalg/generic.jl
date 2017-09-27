@@ -380,3 +380,57 @@ end
     @test_throws ErrorException adjoint(rand(2,2,2,2))
     @test_throws ErrorException transpose(rand(2,2,2,2))
 end
+
+@testset "generic functions for checking whether matrices have banded structure" begin
+    using Base.LinAlg: isbanded
+    pentadiag = [1 2 3; 4 5 6; 7 8 9]
+    tridiag   = [1 2 0; 4 5 6; 0 8 9]
+    ubidiag   = [1 2 0; 0 5 6; 0 0 9]
+    lbidiag   = [1 0 0; 4 5 0; 0 8 9]
+    adiag     = [1 0 0; 0 5 0; 0 0 9]
+    @testset "istriu" begin
+        @test !istriu(pentadiag)
+        @test istriu(pentadiag, -2)
+        @test !istriu(tridiag)
+        @test istriu(tridiag, -1)
+        @test istriu(ubidiag)
+        @test !istriu(ubidiag, 1)
+        @test !istriu(lbidiag)
+        @test istriu(lbidiag, -1)
+        @test istriu(adiag)
+    end
+    @testset "istril" begin
+        @test !istril(pentadiag)
+        @test istril(pentadiag, 2)
+        @test !istril(tridiag)
+        @test istril(tridiag, 1)
+        @test !istril(ubidiag)
+        @test istril(ubidiag, 1)
+        @test istril(lbidiag)
+        @test !istril(lbidiag, -1)
+        @test istril(adiag)
+    end
+    @testset "isbanded" begin
+        @test isbanded(pentadiag, -2, 2)
+        @test !isbanded(pentadiag, -1, 2)
+        @test !isbanded(pentadiag, -2, 1)
+        @test isbanded(tridiag, -1, 1)
+        @test !isbanded(tridiag, 0, 1)
+        @test !isbanded(tridiag, -1, 0)
+        @test isbanded(ubidiag, 0, 1)
+        @test !isbanded(ubidiag, 1, 1)
+        @test !isbanded(ubidiag, 0, 0)
+        @test isbanded(lbidiag, -1, 0)
+        @test !isbanded(lbidiag, 0, 0)
+        @test !isbanded(lbidiag, -1, -1)
+        @test isbanded(adiag, 0, 0)
+        @test !isbanded(adiag, -1, -1)
+        @test !isbanded(adiag, 1, 1)
+    end
+    @testset "isdiag" begin
+        @test !isdiag(tridiag)
+        @test !isdiag(ubidiag)
+        @test !isdiag(lbidiag)
+        @test isdiag(adiag)
+    end
+end

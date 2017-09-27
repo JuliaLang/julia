@@ -224,7 +224,7 @@ varm(iterable, m::Number; corrected::Bool=true) =
 
 ## variances over ranges
 
-function varm(v::Range, m::Number)
+function varm(v::AbstractRange, m::Number)
     f  = first(v) - m
     s  = step(v)
     l  = length(v)
@@ -235,7 +235,7 @@ function varm(v::Range, m::Number)
     return vv
 end
 
-function var(v::Range)
+function var(v::AbstractRange)
     s  = step(v)
     l  = length(v)
     vv = abs2(s) * (l + 1) * l / 12
@@ -561,7 +561,7 @@ julia> middle(1:10)
 5.5
 ```
 """
-middle(a::Range) = middle(a[1], a[end])
+middle(a::AbstractRange) = middle(a[1], a[end])
 
 """
     middle(a)
@@ -599,9 +599,9 @@ function median!(v::AbstractVector)
     n = length(inds)
     mid = div(first(inds)+last(inds),2)
     if isodd(n)
-        return middle(select!(v,mid))
+        return middle(partialsort!(v,mid))
     else
-        m = select!(v, mid:mid+1)
+        m = partialsort!(v, mid:mid+1)
         return middle(m[1], m[2])
     end
 end

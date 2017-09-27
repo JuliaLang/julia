@@ -10,7 +10,6 @@
 #include <string.h>
 #include <stdarg.h>
 #include <setjmp.h>
-#include <assert.h>
 #include <sys/types.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -23,6 +22,7 @@
 #include <ctype.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -305,6 +305,10 @@ JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
 {
     return a;
 }
+JL_DLLEXPORT void jl_gc_use(jl_value_t *a)
+{
+    (void)a;
+}
 
 // parsing --------------------------------------------------------------------
 
@@ -553,6 +557,10 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_simplevector_type) {
         n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");
+    }
+    else if (v == (jl_value_t*)jl_unionall_type) {
+        // avoid printing `typeof(Type)` for `UnionAll`.
+        n += jl_printf(out, "UnionAll");
     }
     else if (vt == jl_datatype_type) {
         jl_datatype_t *dv = (jl_datatype_t*)v;
@@ -883,9 +891,12 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                     n += jl_static_show_x(out, *(jl_value_t**)fld_ptr, depth);
                 }
                 else {
-                    n += jl_static_show_x_(out, (jl_value_t*)fld_ptr,
-                                           (jl_datatype_t*)jl_field_type(vt, i),
-                                           depth);
+                    jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(vt, i);
+                    if (jl_is_uniontype(ft)) {
+                        uint8_t sel = ((uint8_t*)fld_ptr)[jl_field_size(vt, i) - 1];
+                        ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, sel);
+                    }
+                    n += jl_static_show_x_(out, (jl_value_t*)fld_ptr, ft, depth);
                 }
                 if (istuple && tlen == 1)
                     n += jl_printf(out, ",");
@@ -1020,11 +1031,11 @@ JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n)
 {
     static jl_value_t *depwarn_func = NULL;
     if (!depwarn_func && jl_base_module) {
-        depwarn_func = jl_get_global(jl_base_module, jl_symbol("partial_linear_indexing_warning"));
+        depwarn_func = jl_get_global(jl_base_module, jl_symbol("_depwarn_for_trailing_indices"));
     }
     if (!depwarn_func) {
-        jl_safe_printf("WARNING: Partial linear indexing is deprecated. Use "
-            "`reshape(A, Val(%zd))` to make the dimensionality of the array match "
+        jl_safe_printf("WARNING: omitting indices for non-singleton trailing dimensions is deprecated. Use "
+            "`reshape(A, Val(%zd))` or add trailing `1` indices to make the dimensionality of the array match "
             "the number of indices\n", n);
         return;
     }
