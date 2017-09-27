@@ -592,7 +592,7 @@ end
 
         @test R == real.(S) == real(S)
         @test I == imag.(S) == imag(S)
-        @test conj(full(S)) == conj.(S) == conj(S)
+        @test conj(Array(S)) == conj.(S) == conj(S)
         @test real.(spR) == R
         @test nnz(imag.(spR)) == nnz(imag(spR)) == 0
         @test abs.(S) == abs.(D)
