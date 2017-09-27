@@ -129,6 +129,31 @@ common:
     ret void
 }
 
+define void @phi_lift_union(i64 %a, i64 %b) {
+top:
+; CHECK-LABEL: @phi_lift_union
+    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %cmp = icmp eq i64 %a, %b
+    br i1 %cmp, label %alabel, label %blabel
+alabel:
+    %u = call { %jl_value_t addrspace(10)*, i8 } @union_ret()
+; CHECK: %aboxed = extractvalue { %jl_value_t addrspace(10)*, i8 } %u, 0
+    %aboxed = extractvalue { %jl_value_t addrspace(10)*, i8 } %u, 0
+    %adecayed = addrspacecast %jl_value_t addrspace(10)* %aboxed to i64 addrspace(12)*
+; CHECK: extractvalue { %jl_value_t addrspace(10)*, i8 } %u, 0
+; CHECK-NEXT: br label %common
+    br label %common
+blabel:
+    %bboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %b)
+    %bdecayed = addrspacecast %jl_value_t addrspace(10)* %bboxed to i64 addrspace(12)*
+    br label %common
+common:
+; CHECK: %gclift = phi %jl_value_t addrspace(10)* [ %{{.*}}, %alabel ], [ %bboxed, %blabel ]
+    %phi = phi i64 addrspace(12)* [ %adecayed, %alabel ], [ %bdecayed, %blabel ]
+    call void @one_arg_decayed(i64 addrspace(12)* %phi)
+    ret void
+}
+
 define void @live_if_live_out(i64 %a, i64 %b) {
 ; CHECK-LABEL: @live_if_live_out
 top:
