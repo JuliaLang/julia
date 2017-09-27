@@ -2188,9 +2188,9 @@ julia> indexin(b,a)
  3
 ```
 """
-function indexin(a::AbstractArray, b::AbstractArray)
+function indexin(a, b::AbstractArray)
     bdict = Dict(zip(b, 1:length(b)))
-    [get(bdict, i, 0) for i in a]
+    map(i -> get(bdict, i, 0), a)
 end
 
 function _findin(a, b)

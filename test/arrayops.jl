@@ -1396,6 +1396,11 @@ end
 # PR #8622 and general indexin tests
 @test indexin([1,3,5,7], [5,4,3]) == [0,3,1,0]
 @test indexin([1 3; 5 7], [5 4; 3 2]) == [0 2; 1 0]
+@test indexin((2 * x + 1 for x in 0:3), [5,4,3,5,6]) == [0,3,4,0]
+@test indexin(6, [1,3,6,6,2]) == 4
+@test indexin([6], [1,3,6,6,2]) == [4]
+@test indexin(3, 2:5) == 2
+@test indexin(3.0, 2:5) == 2
 
 #6828 - size of specific dimensions
 let a = Array{Float64}(uninitialized, 10)
