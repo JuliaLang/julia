@@ -481,6 +481,7 @@ $(eval $(call LLVM_PATCH,llvm-D32623-GVN-non-integral)) # Remove for 5.0
 $(eval $(call LLVM_PATCH,llvm-D33129-scevexpander-non-integral)) # Remove for 5.0
 $(eval $(call LLVM_PATCH,llvm-Yet-another-fix))
 $(eval $(call LLVM_PATCH,llvm-4.0.0-D37576-NVPTX-sm_70)) # NVPTX, Remove for 6.0
+$(eval $(call LLVM_PATCH,llvm-loadcse-addrspace_4.0))
 endif # LLVM_VER
 
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_PATCH_PREV)
