@@ -715,10 +715,7 @@ bool AllocOpt::runOnFunction(Function &F)
             sz += align;
         }
         else if (sz > 1) {
-            align = JL_SMALL_BYTE_ALIGNMENT;
-            while (sz < align) {
-                align = align / 2;
-            }
+            align = llvm::MinAlign(JL_SMALL_BYTE_ALIGNMENT, llvm::NextPowerOf2(sz));
         }
         // No debug info for prolog instructions
         IRBuilder<> prolog_builder(&entry.front());

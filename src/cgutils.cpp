@@ -1168,10 +1168,7 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
 // If given alignment is 0 and LLVM's assumed alignment for a load/store via ptr
 // might be stricter than the Julia alignment for jltype, return the alignment of jltype.
 // Otherwise return the given alignment.
-//
-// Parameter ptr should be the pointer argument for the LoadInst or StoreInst.
-// It is currently unused, but might be used in the future for a more precise answer.
-static unsigned julia_alignment(Value* /*ptr*/, jl_value_t *jltype, unsigned alignment)
+static unsigned julia_alignment(jl_value_t *jltype, unsigned alignment)
 {
     if (!alignment) {
         alignment = jl_datatype_align(jltype);
@@ -1207,7 +1204,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     //}
     //else {
         Instruction *load = ctx.builder.CreateAlignedLoad(data, isboxed ?
-            alignment : julia_alignment(data, jltype, alignment), false);
+            alignment : julia_alignment(jltype, alignment), false);
         if (isboxed)
             load = maybe_mark_load_dereferenceable(load, true, jltype);
         if (tbaa) {
@@ -1254,7 +1251,7 @@ static void typed_store(jl_codectx_t &ctx,
         data = ptr;
     }
     Instruction *store = ctx.builder.CreateAlignedStore(r, ctx.builder.CreateGEP(data,
-        idx_0based), isboxed ? alignment : julia_alignment(r, jltype, alignment));
+        idx_0based), isboxed ? alignment : julia_alignment(jltype, alignment));
     if (tbaa)
         tbaa_decorate(tbaa, store);
 }
@@ -1290,6 +1287,9 @@ static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x, Type *astype 
 static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, Value *src,
                              uint64_t sz, unsigned align, bool is_volatile, MDNode *tbaa)
 {
+    if (sz == 0)
+        return;
+    assert(align && "align must be specified");
     // If the types are small and simple, use load and store directly.
     // Going through memcpy can cause LLVM (e.g. SROA) to create bitcasts between float and int
     // that interferes with other optimizations.
@@ -1466,7 +1466,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 addr = ctx.builder.CreateStructGEP(lt, ptr, idx);
             }
         }
-        int align = jl_field_align(jt, idx);
+        unsigned align = jl_field_align(jt, idx);
         if (jl_field_isptr(jt, idx)) {
             bool maybe_null = idx >= (unsigned)jt->ninitialized;
             Instruction *Load = maybe_mark_load_dereferenceable(
@@ -1733,7 +1733,7 @@ static Value *emit_array_nd_index(
 #endif
     Value **idxs = (Value**)alloca(sizeof(Value*) * nidxs);
     for (size_t k = 0; k < nidxs; k++) {
-        idxs[k] = emit_unbox(ctx, T_size, argv[k], NULL);
+        idxs[k] = emit_unbox(ctx, T_size, argv[k], (jl_value_t*)jl_long_type); // type asserted by caller
     }
     Value *ii;
     for (size_t k = 0; k < nidxs; k++) {
@@ -2154,7 +2154,8 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, const jl_cgval_t &src
                     dest = emit_bitcast(ctx, dest, T_pint8);
                 if (skip) // copy dest -> dest to simulate an undef value / conditional copy
                     src_ptr = ctx.builder.CreateSelect(skip, dest, src_ptr);
-                emit_memcpy(ctx, dest, src_ptr, jl_datatype_size(typ), 0, isVolatile, tbaa);
+                unsigned alignment = julia_alignment(typ, 0);
+                emit_memcpy(ctx, dest, src_ptr, jl_datatype_size(typ), alignment, isVolatile, tbaa);
             }
         }
     }
@@ -2172,7 +2173,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, const jl_cgval_t &src
         bool allunboxed = for_each_uniontype_small(
                 [&](unsigned idx, jl_datatype_t *jt) {
                     unsigned nb = jl_datatype_size(jt);
-                    unsigned alignment = 0;
+                    unsigned alignment = julia_alignment((jl_value_t*)jt, 0);
                     BasicBlock *tempBB = BasicBlock::Create(jl_LLVMContext, "union_move", ctx.f);
                     ctx.builder.SetInsertPoint(tempBB);
                     switchInst->addCase(ConstantInt::get(T_int8, idx), tempBB);
@@ -2310,7 +2311,7 @@ static void emit_setfield(jl_codectx_t &ctx,
             }
         }
         else {
-            int align = jl_field_align(sty, idx0);
+            unsigned align = jl_field_align(sty, idx0);
             typed_store(ctx, addr, ConstantInt::get(T_size, 0), rhs, jfty,
                 strct.tbaa, data_pointer(ctx, strct, T_pjlvalue), align);
         }

@@ -341,17 +341,8 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         return NULL;
     }
 
-    int alignment;
-    if (jt) {
-        alignment = julia_alignment(p, jt, 0);
-    }
-    else {
-        // stack has default alignment
-        alignment = 0;
-    }
+    unsigned alignment = julia_alignment(jt, 0);
     if (dest) {
-        // callers using the dest argument only use it for a stack slot for now
-        alignment = 0;
         MDNode *tbaa = x.tbaa;
         // the memcpy intrinsic does not allow to specify different alias tags
         // for the load part (x.tbaa) and the store part (tbaa_stack).
@@ -363,11 +354,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         return NULL;
     }
     else {
-        Instruction *load;
-        if (alignment)
-            load = ctx.builder.CreateAlignedLoad(p, alignment);
-        else
-            load = ctx.builder.CreateLoad(p);
+        Instruction *load = ctx.builder.CreateAlignedLoad(p, alignment);
         return tbaa_decorate(x.tbaa, load);
     }
 }
