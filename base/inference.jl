@@ -4,7 +4,7 @@ import Core: _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstanc
 
 #### parameters limiting potentially-infinite types ####
 const MAX_TYPEUNION_LEN = 3
-const MAX_TYPE_DEPTH = 8
+const MAX_TYPE_DEPTH = 10
 const TUPLE_COMPLEXITY_LIMIT_DEPTH = 3
 
 const MAX_INLINE_CONST_SIZE = 256

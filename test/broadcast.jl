@@ -167,7 +167,9 @@ rt = Base.return_types(broadcast!, Tuple{Function, Array{Float64, 3}, Array{Floa
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
 
 # f.(args...) syntax (#15032)
-let x = [1,3.2,4.7], y = [3.5, pi, 1e-4], α = 0.2342
+let x = [1, 3.2, 4.7],
+    y = [3.5, pi, 1e-4],
+    α = 0.2342
     @test sin.(x) == broadcast(sin, x)
     @test sin.(α) == broadcast(sin, α)
     @test sin.(3.2) == broadcast(sin, 3.2) == sin(3.2)
@@ -237,12 +239,12 @@ let x = sin.(1:10), a = [x]
     @test atan2.(x, cos.(x)) == atan2.(a..., cos.(x)) == broadcast(atan2, x, cos.(a...)) == broadcast(atan2, a..., cos.(a...))
     @test ((args...)->cos(args[1])).(x) == cos.(x) == ((y,args...)->cos(y)).(x)
 end
-@test atan2.(3,4) == atan2(3,4) == (() -> atan2(3,4)).()
+@test atan2.(3, 4) == atan2(3, 4) == (() -> atan2(3, 4)).()
 # fusion with keyword args:
 let x = [1:4;]
     f17300kw(x; y=0) = x + y
     @test f17300kw.(x) == x
-    @test f17300kw.(x, y=1) == f17300kw.(x; y=1) == f17300kw.(x; [(:y,1)]...) == x .+ 1
+    @test f17300kw.(x, y=1) == f17300kw.(x; y=1) == f17300kw.(x; [(:y,1)]...) == x .+ 1 == [2, 3, 4, 5]
     @test f17300kw.(sin.(x), y=1) == f17300kw.(sin.(x); y=1) == sin.(x) .+ 1
     @test sin.(f17300kw.(x, y=1)) == sin.(f17300kw.(x; y=1)) == sin.(x .+ 1)
 end
@@ -482,8 +484,10 @@ Base.BroadcastStyle(a2::Broadcast.ArrayStyle{AD2C}, a1::Broadcast.ArrayStyle{AD1
 @testset "broadcasting for custom AbstractArray" begin
     a  = randn(10)
     aa = Array19745(a)
-    @test a .+ 1  == @inferred(aa .+ 1)
-    @test a .* a' == @inferred(aa .* aa')
+    fadd(aa) = aa .+ 1
+    fprod(aa) = aa .* aa'
+    @test a .+ 1  == @inferred(fadd(aa))
+    @test a .* a' == @inferred(fprod(aa))
     @test isa(aa .+ 1, Array19745)
     @test isa(aa .* aa', Array19745)
     a1 = AD1(rand(2,3))
@@ -611,4 +615,14 @@ end
 let n = 1
     @test ceil.(Int, n ./ (1,)) == (1,)
     @test ceil.(Int, 1 ./ (1,)) == (1,)
+end
+
+# lots of splatting!
+let x = [[1, 4], [2, 5], [3, 6]]
+    y = .+(x..., .*(x..., x...)..., x[1]..., x[2]..., x[3]...)
+    @test y == [14463, 14472]
+
+    z = zeros(2)
+    z .= .+(x..., .*(x..., x...)..., x[1]..., x[2]..., x[3]...)
+    @test z == Float64[14463, 14472]
 end

@@ -991,7 +991,10 @@ end
     for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
                linspace(1, 100, 10), linspace(1f0, 100f0, 10))
         float_r = float(_r)
-        big_r = big.(_r)
+        big_r = broadcast(big, _r)
+        big_rdot = big.(_r)
+        @test big_rdot == big_r
+        @test typeof(big_r) == typeof(big_rdot)
         @test typeof(big_r).name === typeof(_r).name
         if eltype(_r) <: AbstractFloat
             @test isa(float_r, typeof(_r))
