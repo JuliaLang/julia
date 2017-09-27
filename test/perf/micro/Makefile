@@ -17,7 +17,8 @@ endif
 
 #Which BLAS library am I using?
 ifeq ($(USE_SYSTEM_BLAS), 0)
-BLASDIR=$(JULIAHOME)/deps/build/openblas/
+BLASMANIFEST=$(shell cat $(JULIAHOME)/usr/manifest/openblas)
+BLASDIR=$(JULIAHOME)/deps/scratch/$(BLASMANIFEST)/
 LIBBLAS=$(BLASDIR)$(LIBBLASNAME).a
 endif
 
@@ -31,15 +32,15 @@ FFLAGS+= -static-libgfortran
 endif
 
 #Which libm library am I using?
-LIBMDIR = $(JULIAHOME)/deps/build/openlibm/
+LIBMDIR = $(JULIAHOME)/usr/lib/
 ifeq ($(USE_SYSTEM_LIBM), 0)
 ifeq ($(USE_SYSTEM_OPENLIBM), 0)
 LIBM = $(LIBMDIR)libopenlibm.a
 endif
 endif
 
-DSFMTDIR = $(JULIAHOME)/deps/build/dsfmt-$(DSFMT_VER)
-RMATHDIR = $(JULIAHOME)/deps/build/Rmath-julia-$(RMATH_JULIA_VER)
+DSFMTDIR = $(JULIAHOME)/deps/scratch/dsfmt-$(DSFMT_VER)
+RMATHDIR = $(JULIAHOME)/deps/scratch/Rmath-julia-$(RMATH_JULIA_VER)
 
 default: benchmarks.html
 
@@ -110,7 +111,8 @@ benchmarks/stata.csv: perf.do
 	for t in 1 2 3 4 5; do stata -b do $^ $@; done
 
 benchmarks/lua.csv: perf.lua
-	for t in 1 2 3 4 5; do gsl-shell $<; done >$@
+	for t in 1 2 3 4 5; do scilua $<; done >$@
+#	for t in 1 2 3 4 5; do gsl-shell $<; done >$@
 
 benchmarks/java.csv: java/src/main/java/PerfBLAS.java
 	cd java; sh setup.sh; for t in 1 2 3 4 5; do mvn -q exec:java; done >../$@
@@ -121,17 +123,21 @@ benchmarks/scala.csv: scala/src/main/scala/perf.scala scala/build.sbt
 BENCHMARKS = \
 	benchmarks/c.csv \
 	benchmarks/fortran.csv \
-	benchmarks/go.csv \
+	benchmarks/java.csv \
+	benchmarks/javascript.csv \
 	benchmarks/julia.csv \
-	benchmarks/python.csv \
+ 	benchmarks/lua.csv \
+	benchmarks/mathematica.csv \
 	benchmarks/matlab.csv \
 	benchmarks/octave.csv \
-	benchmarks/r.csv \
-	benchmarks/lua.csv \
-	benchmarks/javascript.csv \
-	benchmarks/mathematica.csv \
-	benchmarks/java.csv \
-	benchmarks/scala.csv
+	benchmarks/python.csv \
+	benchmarks/r.csv 
+
+# These were formerly listed in BENCHMARKS, but I can't get them to run 
+# 2017-09-27 johnfgibson 
+#	benchmarks/go.csv \
+#	benchmarks/scala.csv
+
 
 benchmarks.csv: bin/collect.pl $(BENCHMARKS)
 	@$(call PRINT_PERL, $^ >$@)
