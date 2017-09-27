@@ -321,7 +321,8 @@ _vmean(x::AbstractMatrix, vardim::Int) = mean(x, vardim)
 
 # core functions
 
-unscaled_covzm(x::AbstractVector) = sum(abs2, x)
+unscaled_covzm(x::AbstractVector{<:Number})    = sum(abs2, x)
+unscaled_covzm(x::AbstractVector)              = sum(t -> t*t', x)
 unscaled_covzm(x::AbstractMatrix, vardim::Int) = (vardim == 1 ? _conj(x'x) : x * x')
 
 unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(y, x)
@@ -349,13 +350,14 @@ function covzm(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int=1; correcte
 end
 
 # covm (with provided mean)
-
+## Use map(t -> t - xmean, x) instead of x .- xmean to allow for Vector{Vector}
+## which can't be handled by broadcast
 covm(x::AbstractVector, xmean; corrected::Bool=true) =
-    covzm(x .- xmean; corrected=corrected)
+    covzm(map(t -> t - xmean, x); corrected=corrected)
 covm(x::AbstractMatrix, xmean, vardim::Int=1; corrected::Bool=true) =
     covzm(x .- xmean, vardim; corrected=corrected)
 covm(x::AbstractVector, xmean, y::AbstractVector, ymean; corrected::Bool=true) =
-    covzm(x .- xmean, y .- ymean; corrected=corrected)
+    covzm(map(t -> t - xmean, x), map(t -> t - ymean, y); corrected=corrected)
 covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean, vardim::Int=1; corrected::Bool=true) =
     covzm(x .- xmean, y .- ymean, vardim; corrected=corrected)
 
