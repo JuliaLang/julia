@@ -134,12 +134,12 @@ bimg  = randn(n,2)/2
         @test factorize(A) == Bidiagonal(d,e,:U)
         if eltya <: Real
             A = diagm(d) + diagm(e,1) + diagm(e,-1)
-            @test full(factorize(A)) ≈ full(factorize(SymTridiagonal(d,e)))
+            @test Matrix(factorize(A)) ≈ Matrix(factorize(SymTridiagonal(d,e)))
             A = diagm(d) + diagm(e,1) + diagm(e,-1) + diagm(f,2) + diagm(f,-2)
             @test inv(factorize(A)) ≈ inv(factorize(Symmetric(A)))
         end
         A = diagm(d) + diagm(e,1) + diagm(e2,-1)
-        @test full(factorize(A)) ≈ full(factorize(Tridiagonal(e2,d,e)))
+        @test Matrix(factorize(A)) ≈ Matrix(factorize(Tridiagonal(e2,d,e)))
         A = diagm(d) + diagm(e,1) + diagm(f,2)
         @test factorize(A) == UpperTriangular(A)
     end
