@@ -116,9 +116,11 @@ const PAGES = [
     ],
 ]
 
+using Test
+
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg],
+    modules   = [Base, Core, BuildSysImg, Test],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
