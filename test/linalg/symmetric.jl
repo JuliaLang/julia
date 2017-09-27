@@ -72,10 +72,6 @@ end
                 @test isa(similar(Symmetric(asym), Int, (3,2)), Matrix{Int})
                 @test isa(similar(Hermitian(aherm), Int, (3,2)), Matrix{Int})
             end
-            @testset "full" begin
-                @test asym  == full(Symmetric(asym))
-                @test aherm == full(Hermitian(aherm))
-            end
 
             @testset "parent" begin
                 @test asym === parent(Symmetric(asym))
@@ -209,7 +205,7 @@ end
                         @test eigvals(Symmetric(asym), 1:2) ≈ d[1:2]
                         @test eigvals(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
                         # eigfact doesn't support Symmetric{Complex}
-                        @test full(eigfact(asym)) ≈ asym
+                        @test Matrix(eigfact(asym)) ≈ asym
                         @test eigvecs(Symmetric(asym)) ≈ eigvecs(asym)
                     end
 
@@ -223,7 +219,7 @@ end
                     eig(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
                     @test eigvals(Hermitian(aherm), 1:2) ≈ d[1:2]
                     @test eigvals(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
-                    @test full(eigfact(aherm)) ≈ aherm
+                    @test Matrix(eigfact(aherm)) ≈ aherm
                     @test eigvecs(Hermitian(aherm)) ≈ eigvecs(aherm)
 
                     # relation to svdvals
@@ -336,7 +332,7 @@ end
 @testset "Issue #7933" begin
     A7933 = [1 2; 3 4]
     B7933 = copy(A7933)
-    C7933 = full(Symmetric(A7933))
+    C7933 = Matrix(Symmetric(A7933))
     @test A7933 == B7933
 end
 
@@ -443,6 +439,6 @@ end
         A = T[0.650488+0.0im 0.826686+0.667447im; 0.826686-0.667447im 1.81707+0.0im]
         H = Hermitian(A)
         @test inv(H) ≈ inv(A)
-        @test ishermitian(full(inv(H)))
+        @test ishermitian(Matrix(inv(H)))
     end
 end
