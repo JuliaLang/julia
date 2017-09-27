@@ -147,7 +147,7 @@ The absolute path of the shell with which Julia should execute external commands
 falls back to `/bin/sh` if `$SHELL` is unset.
 
 On Windows, `$JULIA_SHELL` can be set to `cmd`, `powershell`, `busybox` or `""`.
-If set to `""` external commands are executed directly. Defaults to `cmd` if 
+If set to `""` external commands are executed directly. Defaults to `cmd` if
 `$JULIA_SHELL` is not set.
 
 ### `JULIA_EDITOR`
