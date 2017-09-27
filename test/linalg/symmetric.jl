@@ -73,6 +73,11 @@ end
                 @test isa(similar(Hermitian(aherm), Int, (3,2)), Matrix{Int})
             end
 
+            @testset "Array/Matrix constructor from Symmetric/Hermitian" begin
+                @test asym  == Matrix(Symmetric(asym))  == Array(Symmetric(asym))
+                @test aherm == Matrix(Hermitian(aherm)) == Array(Hermitian(aherm))
+            end
+
             @testset "parent" begin
                 @test asym === parent(Symmetric(asym))
                 @test aherm === parent(Hermitian(aherm))
