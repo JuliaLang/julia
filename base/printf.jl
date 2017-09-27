@@ -39,7 +39,7 @@ function parse(s::AbstractString)
     # parse format string into strings and format tuples
     list = []
     i = j = start(s)
-    j1 = 0 # invariant: j1 == prevind(s, j-1)
+    j1 = 0 # invariant: j1 == prevind(s, j)
     while !done(s,j)
         c, k = next(s,j)
         if c == '%'
