@@ -1799,7 +1799,29 @@ function abstract_call_method(method::Method, @nospecialize(f), @nospecialize(si
                     topmost = nothing
                     break
                 end
-                topmost === nothing && (topmost = infstate)
+                if topmost === nothing
+                    # inspect the parent of this edge,
+                    # to see if they are the same Method as sv
+                    # in which case we'll need to ensure it is convergent
+                    # otherwise, we don't
+                    for parent in infstate.callers_in_cycle
+                        # check in the cycle list first
+                        # all items in here are mutual parents of all others
+                        if parent.linfo.def === sv.linfo.def
+                            topmost = infstate
+                            break
+                        end
+                    end
+                    let parent = infstate.parent
+                        # then check the parent link
+                        if topmost === nothing && parent !== nothing
+                            parent = parent::InferenceState
+                            if parent.cached && parent.linfo.def === sv.linfo.def
+                                topmost = infstate
+                            end
+                        end
+                    end
+                end
             end
             # iterate through the cycle before walking to the parent
             if cyclei < length(infstate.callers_in_cycle)

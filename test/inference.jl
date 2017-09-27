@@ -980,13 +980,13 @@ copy_dims_out(out) = ()
 copy_dims_out(out, dim::Int, tail...) =  copy_dims_out((out..., dim), tail...)
 copy_dims_out(out, dim::Colon, tail...) = copy_dims_out((out..., dim), tail...)
 @test Base.return_types(copy_dims_out, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 2 < count_specializations(m) < 15, methods(copy_dims_out))
+@test all(m -> 15 < count_specializations(m) < 45, methods(copy_dims_out))
 
 copy_dims_pair(out) = ()
-copy_dims_pair(out, dim::Int, tail...) =  copy_dims_out(out => dim, tail...)
-copy_dims_pair(out, dim::Colon, tail...) = copy_dims_out(out => dim, tail...)
+copy_dims_pair(out, dim::Int, tail...) =  copy_dims_pair(out => dim, tail...)
+copy_dims_pair(out, dim::Colon, tail...) = copy_dims_pair(out => dim, tail...)
 @test Base.return_types(copy_dims_pair, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 5 < count_specializations(m) < 25, methods(copy_dims_out))
+@test all(m -> 10 < count_specializations(m) < 35, methods(copy_dims_pair))
 
 # splatting an ::Any should still allow inference to use types of parameters preceding it
 f22364(::Int, ::Any...) = 0
