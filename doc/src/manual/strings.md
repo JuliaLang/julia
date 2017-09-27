@@ -268,7 +268,7 @@ In this case, the character `∀` is a three-byte character, so the indices 2 an
 and the next character's index is 4; this next valid index can be computed by [`nextind(s,1)`](@ref),
 and the next index after that by `nextind(s,4)` and so on.
 
-Extraction of a substring using range indexing also expects valid byte indices or error is thrown:
+Extraction of a substring using range indexing also expects valid byte indices or an error is thrown:
 
 ```jldoctest unicodestring
 julia> s[1:1]
