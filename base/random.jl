@@ -1237,22 +1237,20 @@ const ziggurat_exp_r      = 7.6971174701310497140446280481
 Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
 The `Base` module currently provides an implementation for the types
-[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
-[`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
-from the circularly symmetric complex normal distribution.
+[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default).
 
 # Examples
 
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> randn(rng, Complex128)
-0.6133070881429037 - 0.6376291670853887im
+julia> randn(rng, Float64)
+0.8673472019512456
 
-julia> randn(rng, Complex64, (2, 4))
-2×4 Array{Complex{Float32},2}:
- -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im  -0.585317+0.0778497im
-  0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im    -0.177608+0.261427im
+julia> randn(rng, Float32, (2, 4))
+2×4 Array{Float32,2}:
+ -0.901744  -0.902914  2.21188   -0.271735
+ -0.494479   0.864401  0.532813   0.502334
 ```
 """
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
