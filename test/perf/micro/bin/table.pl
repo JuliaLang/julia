@@ -25,11 +25,12 @@ our $python_ver = `python3 -V 2>&1 | cut -f2 -d" "`;
 our $matlab_ver = `matlab -nodisplay -nojvm -nosplash -r "version -release, quit" | tail -n 3 | head -n 1`;
 our $R_ver = `R --version | grep "R version" | cut -f3 -d" "`;
 our $octave_ver = `octave -v | grep version | cut -f4 -d" "`;
-our $go_ver = `go version | cut -f3 -d" "`;
-our $lua_ver = `gsl-shell -v 2>&1 | grep Shell | cut -f3 -d" " | cut -f1 -d,`;
+#our $go_ver = `go version | cut -f3 -d" "`;
+#our $lua_ver = `scilua -v 2>&1 | grep Shell | cut -f3 -d" " | cut -f1 -d,`;
+our $lua_ver = "v1.0.0-beta12";
 our $javascript_ver = `nodejs -e "console.log(process.versions.v8)"`;
 our $mathematica_ver = `echo quit | math -version | head -n 1 | cut -f2 -d" "`;
-our $stata_ver = `stata -q -b version && grep version stata.log | cut -f2 -d" " && rm stata.log`;
+#our $stata_ver = `stata -q -b version && grep version stata.log | cut -f2 -d" " && rm stata.log`;
 our $java_ver = `java -version 2>&1 |grep "version" | cut -f 3 -d " " | cut -c 2-9`;
 
 our %systems = (
@@ -40,10 +41,10 @@ our %systems = (
   "octave"     => ["Octave"      , $octave_ver ],
   "r"          => ["R"           , $R_ver ],
   "javascript" => ["JavaScript"  , "V8 $javascript_ver" ],
-  "go"         => ["Go"          , $go_ver ],
-  "mathematica"=> ["Mathe-matica" , $mathematica_ver ],
-  "lua"	       => ["LuaJIT"      , "gsl-shell $lua_ver" ],
-  "stata"      => ["Stata"       , $stata_ver ],
+#  "go"         => ["Go"          , $go_ver ],
+  "mathematica"=> ["Mathematica" , $mathematica_ver ],
+  "lua"	       => ["SciLua"      , "lua_ver" ],
+#  "stata"      => ["Stata"       , $stata_ver ],
   "java"       => ["Java"        , $java_ver ],
 );
 
