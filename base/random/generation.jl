@@ -58,7 +58,7 @@ function _rand(rng::AbstractRNG, gen::BigFloatRandGenerator)
         limbs[end] |= Limb_high_bit
     end
     z.sign = 1
-    unsafe_copy!(z.d, pointer(limbs), gen.nlimbs)
+    Base.@gc_preserve limbs unsafe_copy!(z.d, pointer(limbs), gen.nlimbs)
     (z, randbool)
 end
 
@@ -382,7 +382,7 @@ rand(s::Union{Associative,AbstractSet}, dims::Dims) = rand(GLOBAL_RNG, s, dims)
 
 ## random characters from a string
 
-isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(unsafe_load(pointer(s), i))
+isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(Base.@gc_preserve s unsafe_load(pointer(s), i))
 isvalid_unsafe(s::AbstractString, i) = isvalid(s, i)
 _endof(s::String) = sizeof(s)
 _endof(s::AbstractString) = endof(s)

@@ -18,6 +18,14 @@ macro _noinline_meta()
     Expr(:meta, :noinline)
 end
 
+macro _gc_preserve_begin(arg1)
+    Expr(:gc_preserve_begin, esc(arg1))
+end
+
+macro _gc_preserve_end(token)
+    Expr(:gc_preserve_end, esc(token))
+end
+
 """
     @nospecialize
 
@@ -513,16 +521,23 @@ end
 # SimpleVector
 
 function getindex(v::SimpleVector, i::Int)
-    if !(1 <= i <= length(v))
+    @boundscheck if !(1 <= i <= length(v))
         throw(BoundsError(v,i))
     end
+    t = @_gc_preserve_begin v
     x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
     x == C_NULL && throw(UndefRefError())
-    return unsafe_pointer_to_objref(x)
+    o = unsafe_pointer_to_objref(x)
+    @_gc_preserve_end t
+    return o
 end
 
-# TODO: add gc use intrinsic call instead of noinline
-length(v::SimpleVector) = (@_noinline_meta; unsafe_load(convert(Ptr{Int},data_pointer_from_objref(v))))
+function length(v::SimpleVector)
+    t = @_gc_preserve_begin v
+    l = unsafe_load(convert(Ptr{Int},data_pointer_from_objref(v)))
+    @_gc_preserve_end t
+    return l
+end
 endof(v::SimpleVector) = length(v)
 start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
@@ -573,7 +588,9 @@ function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
+    t = @_gc_preserve_begin v
     x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    @_gc_preserve_end t
     return x != C_NULL
 end
 

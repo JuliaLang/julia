@@ -137,7 +137,7 @@ hash(r::MersenneTwister, h::UInt) = foldr(hash, h, (r.seed, r.state, r.vals, r.i
 @inline mt_pop!(r::MersenneTwister) = @inbounds return r.vals[r.idx+=1]
 
 function gen_rand(r::MersenneTwister)
-    dsfmt_fill_array_close1_open2!(r.state, pointer(r.vals), length(r.vals))
+    Base.@gc_preserve r dsfmt_fill_array_close1_open2!(r.state, pointer(r.vals), length(r.vals))
     mt_setfull!(r)
 end
 
@@ -303,7 +303,7 @@ function rand!(r::MersenneTwister, A::Array{Float64}, n::Int=length(A),
     else
         pA = pointer(A)
         align = Csize_t(pA) % 16
-        if align > 0
+        Base.@gc_preserve A if align > 0
             pA2 = pA + 16 - align
             fill_array!(r.state, pA2, n2, I) # generate the data in-place, but shifted
             unsafe_copy!(pA, pA2, n2) # move the data to the beginning of the array
@@ -328,8 +328,9 @@ function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}},
     T = eltype(A)
     n = length(A)
     n128 = n * sizeof(T) ÷ 16
-    rand!(r, unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2*n128),
-          2*n128, Close1Open2())
+    Base.@gc_preserve A rand!(r, unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2*n128),
+                              2*n128, Close1Open2())
+    # FIXME: This code is completely invalid!!!
     A128 = unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128)
     @inbounds for i in 1:n128
         u = A128[i]
@@ -370,6 +371,7 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
     if n > length(A)
         throw(BoundsError(A,n))
     end
+    # FIXME: This code is completely invalid!!!
     Af = unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2n)
     i = n
     while true
@@ -399,6 +401,7 @@ function rand!(r::MersenneTwister, A::Base.BitIntegerArray)
     n = length(A)
     T = eltype(A)
     n128 = n * sizeof(T) ÷ 16
+    # FIXME: This code is completely invalid!!!
     rand!(r, unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128))
     for i = 16*n128÷sizeof(T)+1:n
         @inbounds A[i] = rand(r, T)

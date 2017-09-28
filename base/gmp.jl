@@ -252,7 +252,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     if Base.containsnul(bstr)
         err = -1 # embedded NUL char (not handled correctly by GMP)
     else
-        err = MPZ.set_str!(z, pointer(bstr)+(i-start(bstr)), base)
+        err = Base.@gc_preserve bstr MPZ.set_str!(z, pointer(bstr)+(i-start(bstr)), base)
     end
     if err != 0
         raise && throw(ArgumentError("invalid BigInt: $(repr(bstr))"))
@@ -612,7 +612,7 @@ function base(b::Integer, n::BigInt, pad::Integer=1)
     nd1 = ndigits(n, b)
     nd  = max(nd1, pad)
     sv  = Base.StringVector(nd + isneg(n))
-    MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
+    Base.@gc_preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
     @inbounds for i = (1:nd-nd1) .+ isneg(n)
         sv[i] = '0' % UInt8
     end

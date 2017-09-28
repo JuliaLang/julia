@@ -99,7 +99,7 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     avail = nb_available(from)
     adv = min(avail, nb)
-    unsafe_copy!(p, pointer(from.data, from.ptr), adv)
+    @gc_preserve from unsafe_copy!(p, pointer(from.data, from.ptr), adv)
     from.ptr += adv
     if nb > avail
         throw(EOFError())
@@ -114,7 +114,7 @@ function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
     end
     if isbits(T) && isa(a,Array)
         nb = UInt(nel * sizeof(T))
-        unsafe_read(from, pointer(a, offs), nb)
+        @gc_preserve a unsafe_read(from, pointer(a, offs), nb)
     else
         for i = offs:offs+nel-1
             a[i] = read(to, T)
@@ -334,7 +334,7 @@ function write_sub(to::GenericIOBuffer, a::AbstractArray{UInt8}, offs, nel)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    unsafe_write(to, pointer(a, offs), UInt(nel))
+    @gc_preserve a unsafe_write(to, pointer(a, offs), UInt(nel))
 end
 
 @inline function write(to::GenericIOBuffer, a::UInt8)
@@ -367,7 +367,7 @@ read(io::GenericIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, nb_availa
 
 function search(buf::IOBuffer, delim::UInt8)
     p = pointer(buf.data, buf.ptr)
-    q = ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim,nb_available(buf))
+    q = @gc_preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim,nb_available(buf))
     nb::Int = (q == C_NULL ? 0 : q-p+1)
     return nb
 end
@@ -413,7 +413,7 @@ function crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
     io.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     n = min(nb, nb_available(io))
     n == 0 && return crc
-    crc = unsafe_crc32c(pointer(io.data, io.ptr), n, crc)
+    crc = @gc_preserve io unsafe_crc32c(pointer(io.data, io.ptr), n, crc)
     io.ptr += n
     return crc
 end

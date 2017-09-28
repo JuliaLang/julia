@@ -171,6 +171,8 @@ that N is inbounds on either array. Incorrect usage may corrupt or segfault your
 the same manner as C.
 """
 function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
+    t1 = @_gc_preserve_begin dest
+    t2 = @_gc_preserve_begin src
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
     elseif isbitsunion(T)
@@ -185,6 +187,8 @@ function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
         ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
               dest, pointer(dest, doffs), src, pointer(src, soffs), n)
     end
+    @_gc_preserve_end t2
+    @_gc_preserve_end t1
     return dest
 end
 
@@ -1570,6 +1574,7 @@ function vcat(arrays::Vector{T}...) where T
     else
         elsz = Core.sizeof(Ptr{Void})
     end
+    t = @_gc_preserve_begin arr
     for a in arrays
         na = length(a)
         nba = na * elsz
@@ -1589,6 +1594,7 @@ function vcat(arrays::Vector{T}...) where T
         end
         ptr += nba
     end
+    @_gc_preserve_end t
     return arr
 end
 
