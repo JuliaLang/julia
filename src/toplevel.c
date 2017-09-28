@@ -540,10 +540,6 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
         }
         return jl_nothing;
     }
-    else if (ex->head == line_sym) {
-        jl_lineno = jl_unbox_long(jl_exprarg(ex, 0));
-        return jl_nothing;
-    }
     else if (ex->head == global_sym) {
         // create uninitialized mutable binding for "global x" decl
         size_t i, l = jl_array_len(ex->args);

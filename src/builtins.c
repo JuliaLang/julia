@@ -999,7 +999,7 @@ JL_CALLABLE(jl_f_invoke_kwsorter)
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_array_t *ar = n==0 ? (jl_array_t*)jl_an_empty_vec_any : jl_alloc_vec_any(n);
+    jl_array_t *ar = jl_alloc_vec_any(n);
     JL_GC_PUSH1(&ar);
     jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ptls, sizeof(jl_expr_t),
                                             jl_expr_type);

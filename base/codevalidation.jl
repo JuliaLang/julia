@@ -5,7 +5,6 @@ const VALID_EXPR_HEADS = ObjectIdDict(
     :call => 1:typemax(Int),
     :invoke => 2:typemax(Int),
     :static_parameter => 1:1,
-    :line => 1:3,
     :gotoifnot => 2:2,
     :(&) => 1:1,
     :(=) => 2:2,

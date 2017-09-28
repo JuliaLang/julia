@@ -33,7 +33,7 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
         }
         if (jl_is_toplevel_only_expr(expr) || e->head == const_sym || e->head == copyast_sym ||
             e->head == quote_sym || e->head == inert_sym ||
-            e->head == line_sym || e->head == meta_sym || e->head == inbounds_sym ||
+            e->head == meta_sym || e->head == inbounds_sym ||
             e->head == boundscheck_sym || e->head == simdloop_sym) {
             // ignore these
         }
@@ -430,21 +430,6 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 jl_value_t *file = jl_linenode_file(st);
                 if (jl_is_symbol(file))
                     m->file = (jl_sym_t*)file;
-                st = jl_nothing;
-                set_lineno = 1;
-            }
-        }
-        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == line_sym) {
-            if (!set_lineno) {
-                switch (jl_expr_nargs(st)) {
-                case 2:
-                    m->file = (jl_sym_t*)jl_exprarg(st, 1);
-                    JL_FALLTHROUGH;
-                case 1:
-                    m->line = jl_unbox_long(jl_exprarg(st, 0));
-                    JL_FALLTHROUGH;
-                default: ;
-                }
                 st = jl_nothing;
                 set_lineno = 1;
             }

@@ -588,11 +588,6 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
                     jl_type_error_rt("toplevel", "if", (jl_value_t*)jl_bool_type, cond);
                 }
             }
-            else if (head == line_sym) {
-                if (toplevel)
-                    jl_lineno = jl_unbox_long(jl_exprarg(stmt, 0));
-                // TODO: interpreted function line numbers
-            }
             else if (head == enter_sym) {
                 jl_enter_handler(&__eh);
                 if (!jl_setjmp(__eh.eh_ctx,1)) {

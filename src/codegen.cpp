@@ -1982,7 +1982,7 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
             // don't consider assignment LHS as a variable "use"
             simple_use_analysis(ctx, jl_exprarg(e, 1));
         }
-        else if (e->head != line_sym) {
+        else {
             size_t elen = jl_array_dim0(e->args);
             for (i = 0; i < elen; i++) {
                 simple_use_analysis(ctx, jl_exprarg(e, i));
@@ -3664,7 +3664,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr)
     jl_expr_t *ex = (jl_expr_t*)expr;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     jl_sym_t *head = ex->head;
-    if (head == line_sym || head == meta_sym || head == inbounds_sym) {
+    if (head == meta_sym || head == inbounds_sym) {
         // some expression types are metadata and can be ignored
         // in statement position
         return;
@@ -5425,14 +5425,9 @@ static std::unique_ptr<Module> emit_function(
             }
         }
 #endif
-        if (jl_is_linenode(stmt) || (expr && expr->head == line_sym)) {
+        if (jl_is_linenode(stmt)) {
             ssize_t lno = -1;
-            if (jl_is_linenode(stmt)) {
-                lno = jl_linenode_line(stmt);
-            }
-            else {
-                lno = jl_unbox_long(jl_exprarg(stmt,0));
-            }
+            lno = jl_linenode_line(stmt);
             MDNode *inlinedAt = NULL;
             if (DI_stack.size() > 0) {
                 inlinedAt = DI_stack.back().loc;
