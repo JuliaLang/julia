@@ -280,10 +280,10 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 function generic_vecnormMinusInf(x)
     s = start(x)
     (v, s) = next(x, s)
-    minabs = norm(v)
+    minabs = norm(v,-Inf)
     while !done(x, s)
         (v, s) = next(x, s)
-        vnorm = norm(v)
+        vnorm = norm(v,-Inf)
         minabs = ifelse(isnan(minabs) | (minabs < vnorm), minabs, vnorm)
     end
     return float(minabs)
@@ -292,10 +292,10 @@ end
 function generic_vecnormInf(x)
     s = start(x)
     (v, s) = next(x, s)
-    maxabs = norm(v)
+    maxabs = norm(v,Inf)
     while !done(x, s)
         (v, s) = next(x, s)
-        vnorm = norm(v)
+        vnorm = norm(v,Inf)
         maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
     end
     return float(maxabs)
@@ -304,12 +304,12 @@ end
 function generic_vecnorm1(x)
     s = start(x)
     (v, s) = next(x, s)
-    av = float(norm(v))
+    av = float(norm(v,1))
     T = typeof(av)
     sum::promote_type(Float64, T) = av
     while !done(x, s)
         (v, s) = next(x, s)
-        sum += norm(v)
+        sum += norm(v,1)
     end
     return convert(T, sum)
 end
@@ -352,21 +352,21 @@ function generic_vecnormp(x, p)
         (maxabs == 0 || isinf(maxabs)) && return maxabs
         T = typeof(maxabs)
     else
-        T = typeof(float(norm(v)))
+        T = typeof(float(norm(v,p)))
     end
     spp::promote_type(Float64, T) = p
     if -1 <= p <= 1 || (isfinite(_length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
         sum::promote_type(Float64, T) = norm(v)^spp
         while !done(x, s)
             (v, s) = next(x, s)
-            sum += norm(v)^spp
+            sum += norm(v,p)^spp
         end
         return convert(T, sum^inv(spp))
     else # rescaling
         sum = (norm(v)/maxabs)^spp
         while !done(x, s)
             (v, s) = next(x, s)
-            sum += (norm(v)/maxabs)^spp
+            sum += (norm(v,p)/maxabs)^spp
         end
         return convert(T, maxabs*sum^inv(spp))
     end
