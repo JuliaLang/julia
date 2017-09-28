@@ -136,3 +136,21 @@ Base.:(<)(x::TypeWrapper, y::TypeWrapper) = (x.t <: y.t) & (x.t != y.t)
     @test TypeWrapper(Int) <= TypeWrapper(Real)
     @test !(TypeWrapper(Int) <= TypeWrapper(Float64))
 end
+
+vf = Val(false)
+vt = Val(true)
+@testset "value_logic" begin
+    @test vf & vf == vf
+    @test vf & vt == vf
+    @test vt & vf == vf
+    @test vt & vt == vt
+    @test vf | vf == vf
+    @test vf | vt == vt
+    @test vt | vf == vt
+    @test vt | vt == vt
+    @test !vf == vt
+    @test !vt == vf
+    @test ifelse(vf, vt, vf) == vf
+    @test ifelse(vt, vt, vf) == vt
+    @test eltype(vt)
+end
