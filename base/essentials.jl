@@ -615,7 +615,7 @@ end
 
 Val(x) = (@_pure_meta; Val{x}())
 
-# used by interpolating quote and some other things in the front end
+# used by keyword arg call lowering
 function vector_any(@nospecialize xs...)
     n = length(xs)
     a = Vector{Any}(n)
