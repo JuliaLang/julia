@@ -121,8 +121,7 @@ macro irrational(sym, val, def)
         function Base.convert(::Type{BigFloat}, ::Irrational{$qsym})
             c = BigFloat()
             ccall(($(string("mpfr_const_", def)), :libmpfr),
-                  Cint, (Ptr{BigFloat}, Int32),
-                  &c, MPFR.ROUNDING_MODE[])
+                  Cint, (Ref{BigFloat}, Int32), c, MPFR.ROUNDING_MODE[])
             return c
         end
     end : quote
@@ -141,91 +140,6 @@ end
 
 big(x::Irrational) = convert(BigFloat,x)
 big(::Type{<:Irrational}) = BigFloat
-
-## specific irrational mathematical constants
-
-@irrational π        3.14159265358979323846  pi
-@irrational e        2.71828182845904523536  exp(big(1))
-@irrational γ        0.57721566490153286061  euler
-@irrational catalan  0.91596559417721901505  catalan
-@irrational φ        1.61803398874989484820  (1+sqrt(big(5)))/2
-
-# aliases
-"""
-    pi
-    π
-
-The constant pi.
-
-```jldoctest
-julia> pi
-π = 3.1415926535897...
-```
-"""
-π, const pi = π
-
-"""
-    e
-    eu
-
-The constant e.
-
-```jldoctest
-julia> e
-e = 2.7182818284590...
-```
-"""
-e, const eu = e
-
-"""
-    γ
-    eulergamma
-
-Euler's constant.
-
-```jldoctest
-julia> eulergamma
-γ = 0.5772156649015...
-```
-"""
-γ, const eulergamma = γ
-
-"""
-    φ
-    golden
-
-The golden ratio.
-
-```jldoctest
-julia> golden
-φ = 1.6180339887498...
-```
-"""
-φ, const golden = φ
-
-"""
-    catalan
-
-Catalan's constant.
-
-```jldoctest
-julia> catalan
-catalan = 0.9159655941772...
-```
-"""
-catalan
-
-# special behaviors
-
-# use exp for e^x or e.^x, as in
-#    ^(::Irrational{:e}, x::Number) = exp(x)
-# but need to loop over types to prevent ambiguity with generic rules for ^(::Number, x) etc.
-for T in (Irrational, Rational, Integer, Number)
-    ^(::Irrational{:e}, x::T) = exp(x)
-end
-
-log(::Irrational{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
-log(::Irrational{:e}, x::Number) = log(x)
 
 # align along = for nice Array printing
 function alignment(io::IO, x::Irrational)

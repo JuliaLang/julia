@@ -122,10 +122,10 @@ Base.issorted
 Base.Sort.searchsorted
 Base.Sort.searchsortedfirst
 Base.Sort.searchsortedlast
-Base.Sort.select!
-Base.Sort.select
-Base.Sort.selectperm
-Base.Sort.selectperm!
+Base.Sort.partialsort!
+Base.Sort.partialsort
+Base.Sort.partialsortperm
+Base.Sort.partialsortperm!
 ```
 
 ## Sorting Algorithms

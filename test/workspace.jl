@@ -67,7 +67,7 @@ mktempdir() do dir
             nothing
         """)
         # Ensure that STDIO doesn't get swallowed (helps with debugging)
-        cmd = `$(Base.julia_cmd()) --startup-file=no --precompiled=yes --compilecache=yes $(joinpath(dir, "testdriver.jl"))`
+        cmd = `$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=yes --compiled-modules=yes $(joinpath(dir, "testdriver.jl"))`
         @test success(pipeline(cmd, stdout=STDOUT, stderr=STDERR))
     end
 end

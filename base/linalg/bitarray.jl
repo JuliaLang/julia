@@ -44,6 +44,10 @@ end
 
 function triu(B::BitMatrix, k::Integer=0)
     m,n = size(B)
+    if !(-m + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least",
+            "$(-m + 1) and at most $(n + 1) in an $m-by-$n matrix")))
+    end
     A = falses(m,n)
     Ac = A.chunks
     Bc = B.chunks
@@ -56,6 +60,10 @@ end
 
 function tril(B::BitMatrix, k::Integer=0)
     m,n = size(B)
+    if !(-m - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-m - 1) and at most $(n - 1) in an $m-by-$n matrix")))
+    end
     A = falses(m, n)
     Ac = A.chunks
     Bc = B.chunks
@@ -65,15 +73,6 @@ function tril(B::BitMatrix, k::Integer=0)
     end
     A
 end
-
-## diff and gradient
-
-# TODO: this could be improved (is it worth it?)
-gradient(F::BitVector) = gradient(Array(F))
-gradient(F::BitVector, h::Real) = gradient(Array(F), h)
-gradient(F::Vector, h::BitVector) = gradient(F, Array(h))
-gradient(F::BitVector, h::Vector) = gradient(Array(F), h)
-gradient(F::BitVector, h::BitVector) = gradient(Array(F), Array(h))
 
 ## diag and related
 
@@ -86,8 +85,7 @@ function diag(B::BitMatrix)
     v
 end
 
-function diagm(v::Union{BitVector,BitMatrix})
-    isa(v, BitMatrix) && size(v,1)==1 || size(v,2)==1 || throw(DimensionMismatch())
+function diagm(v::BitVector)
     n = length(v)
     a = falses(n, n)
     for i=1:n
@@ -121,10 +119,10 @@ function kron(a::BitMatrix, b::BitMatrix)
     R = falses(mA*mB, nA*nB)
 
     for i = 1:mA
-        ri = (1:mB)+(i-1)*mB
+        ri = (1:mB) .+ ((i-1)*mB)
         for j = 1:nA
             if a[i,j]
-                rj = (1:nB)+(j-1)*nB
+                rj = (1:nB) .+ ((j-1)*nB)
                 R[ri,rj] = b
             end
         end
@@ -134,7 +132,7 @@ end
 
 ## Structure query functions
 
-issymmetric(A::BitMatrix) = size(A, 1)==size(A, 2) && countnz(A - A.')==0
+issymmetric(A::BitMatrix) = size(A, 1)==size(A, 2) && count(!iszero, A - A.')==0
 ishermitian(A::BitMatrix) = issymmetric(A)
 
 function nonzero_chunks(chunks::Vector{UInt64}, pos0::Int, pos1::Int)

@@ -67,7 +67,7 @@ julia> squeeze(a,3)
 function squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
-        size(A, dims[i]) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
+        length(indices(A, dims[i])) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
         for j = 1:i-1
             dims[j] == dims[i] && throw(ArgumentError("squeezed dims must be unique"))
         end
@@ -75,10 +75,10 @@ function squeeze(A::AbstractArray, dims::Dims)
     d = ()
     for i = 1:ndims(A)
         if !in(i, dims)
-            d = tuple(d..., size(A, i))
+            d = tuple(d..., indices(A, i))
         end
     end
-    reshape(A, d::typeof(_sub(size(A), dims)))
+    reshape(A, d::typeof(_sub(indices(A), dims)))
 end
 
 squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
@@ -178,8 +178,9 @@ circshift(a::AbstractArray, shiftamt::DimsInteger) = circshift!(similar(a), a, s
 """
     circshift(A, shifts)
 
-Circularly shift the data in an array. The second argument is a vector giving the amount to
-shift in each dimension.
+Circularly shift, i.e. rotate, the data in an array. The second argument is a tuple or
+vector giving the amount to shift in each dimension, or an integer to shift only in the
+first dimension.
 
 # Examples
 ```jldoctest
@@ -203,6 +204,30 @@ julia> circshift(b, (-1,0))
  3  7  11  15
  4  8  12  16
  1  5   9  13
+
+julia> a = BitArray([true, true, false, false, true])
+5-element BitArray{1}:
+  true
+  true
+ false
+ false
+  true
+
+julia> circshift(a, 1)
+5-element BitArray{1}:
+  true
+  true
+  true
+ false
+ false
+
+julia> circshift(a, -1)
+5-element BitArray{1}:
+  true
+ false
+ false
+  true
+  true
 ```
 
 See also [`circshift!`](@ref).
@@ -413,7 +438,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
         for c in CartesianRange(indices(A))
             for i in 1:ndims(A)
                 n = inner[i]
-                inner_indices[i] = (1:n) + ((c[i] - 1) * n)
+                inner_indices[i] = (1:n) .+ ((c[i] - 1) * n)
             end
             fill!(view(R, inner_indices...), A[c])
         end
@@ -428,7 +453,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     for i in 1:length(outer)
         B = view(R, src_indices...)
         for j in 2:outer[i]
-            dest_indices[i] += inner_shape[i]
+            dest_indices[i] = dest_indices[i] .+ inner_shape[i]
             R[dest_indices...] = B
         end
         src_indices[i] = dest_indices[i] = 1:shape[i]

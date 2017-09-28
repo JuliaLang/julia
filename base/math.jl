@@ -201,7 +201,6 @@ log(b::Number, x::Number) = log(promote(b,x)...)
 # type specific math functions
 
 const libm = Base.libm_name
-const openspecfun = "libopenspecfun"
 
 # functions with no domain error
 """
@@ -436,7 +435,7 @@ julia> log1p(0)
 ```
 """
 log1p(x)
-for f in (:sin, :cos, :tan, :acos, :acosh, :atanh, :log, :log2, :log10,
+for f in (:sin, :cos, :tan, :acosh, :atanh, :log, :log2, :log10,
           :lgamma, :log1p)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
@@ -446,6 +445,7 @@ for f in (:sin, :cos, :tan, :acos, :acosh, :atanh, :log, :log2, :log10,
 end
 
 @inline asin(x::Real) = asin(float(x))
+@inline acos(x::Real) = acos(float(x))
 
 """
     sincos(x)

@@ -269,7 +269,7 @@ order to throw an error if Julia attempts to precompile it.
 using `__precompile__()`. Failure to do so can result in a runtime error when loading the module.
 """
 function __precompile__(isprecompilable::Bool=true)
-    if (JLOptions().use_compilecache != 0 &&
+    if (JLOptions().use_compiled_modules != 0 &&
         isprecompilable != (0 != ccall(:jl_generating_output, Cint, ())) &&
         !(isprecompilable && toplevel_load[]))
         throw(PrecompilableError(isprecompilable))
@@ -288,6 +288,7 @@ function reload(name::AbstractString)
         error("use `include` instead of `reload` to load source files")
     else
         # reload("Package") is ok
+        unreference_module(Symbol(name))
         require(Symbol(name))
     end
 end
@@ -315,21 +316,78 @@ all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
 """
 function require(mod::Symbol)
-    _require(mod)
-    # After successfully loading, notify downstream consumers
-    if toplevel_load[] && myid() == 1 && nprocs() > 1
-        # broadcast top-level import/using from node 1 (only)
-        @sync for p in procs()
-            p == 1 && continue
-            @async remotecall_wait(p) do
-                if !isbindingresolved(Main, mod) || !isdefined(Main, mod)
-                    _require(mod)
+    if !root_module_exists(mod)
+        _require(mod)
+        # After successfully loading, notify downstream consumers
+        if toplevel_load[] && myid() == 1 && nprocs() > 1
+            # broadcast top-level import/using from node 1 (only)
+            @sync for p in procs()
+                p == 1 && continue
+                @async remotecall_wait(p) do
+                    require(mod)
+                    nothing
                 end
             end
         end
+        for callback in package_callbacks
+            invokelatest(callback, mod)
+        end
     end
-    for callback in package_callbacks
-        invokelatest(callback, mod)
+    return root_module(mod)
+end
+
+const loaded_modules = ObjectIdDict()
+const module_keys = ObjectIdDict()
+
+function register_root_module(key, m::Module)
+    if haskey(loaded_modules, key)
+        oldm = loaded_modules[key]
+        if oldm !== m
+            name = module_name(oldm)
+            warn("replacing module $name.")
+        end
+    end
+    loaded_modules[key] = m
+    module_keys[m] = key
+    nothing
+end
+
+register_root_module(:Core, Core)
+register_root_module(:Base, Base)
+register_root_module(:Main, Main)
+
+is_root_module(m::Module) = haskey(module_keys, m)
+
+root_module_key(m::Module) = module_keys[m]
+
+# This is used as the current module when loading top-level modules.
+# It has the special behavior that modules evaluated in it get added
+# to the loaded_modules table instead of getting bindings.
+baremodule __toplevel__
+using Base
+end
+
+# get a top-level Module from the given key
+# for now keys can only be Symbols, but that will change
+root_module(key::Symbol) = loaded_modules[key]
+
+root_module_exists(key::Symbol) = haskey(loaded_modules, key)
+
+loaded_modules_array() = collect(values(loaded_modules))
+
+function unreference_module(key)
+    if haskey(loaded_modules, key)
+        m = pop!(loaded_modules, key)
+        # need to ensure all modules are GC rooted; will still be referenced
+        # in module_keys
+    end
+end
+
+function register_all(a)
+    for m in a
+        if module_parent(m) === m
+            register_root_module(module_name(m), m)
+        end
     end
 end
 
@@ -361,10 +419,11 @@ function _require(mod::Symbol)
 
         # attempt to load the module file via the precompile cache locations
         doneprecompile = false
-        if JLOptions().use_compilecache != 0
+        if JLOptions().use_compiled_modules != 0
             doneprecompile = _require_search_from_serialized(mod, path)
             if !isa(doneprecompile, Bool)
-                return # success
+                register_all(doneprecompile)
+                return
             end
         end
 
@@ -391,16 +450,18 @@ function _require(mod::Symbol)
                 warn(m, prefix="WARNING: ")
                 # fall-through, TODO: disable __precompile__(true) error so that the normal include will succeed
             else
-                return # success
+                register_all(m)
+                return
             end
         end
 
         # just load the file normally via include
         # for unknown dependencies
         try
-            Base.include_relative(Main, path)
+            Base.include_relative(__toplevel__, path)
+            return
         catch ex
-            if doneprecompile === true || JLOptions().use_compilecache == 0 || !precompilableerror(ex, true)
+            if doneprecompile === true || JLOptions().use_compiled_modules == 0 || !precompilableerror(ex, true)
                 rethrow() # rethrow non-precompilable=true errors
             end
             # the file requested `__precompile__`, so try to build a cache file and use that
@@ -411,6 +472,7 @@ function _require(mod::Symbol)
                 # TODO: disable __precompile__(true) error and do normal include instead of error
                 error("Module $mod declares __precompile__(true) but require failed to create a usable precompiled cache file.")
             end
+            register_all(m)
         end
     finally
         toplevel_load[] = last
@@ -532,7 +594,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::Vector{
                       task_local_storage()[:SOURCE_PATH] = $(source)
                       end)
         end
-        serialize(in, :(Base.include(Main, $(abspath(input)))))
+        serialize(in, :(Base.include(Base.__toplevel__, $(abspath(input)))))
         if source !== nothing
             serialize(in, :(delete!(task_local_storage(), :SOURCE_PATH)))
         end
@@ -570,15 +632,9 @@ function compilecache(name::String)
     cachefile::String = abspath(cachepath, name*".ji")
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
-    for existing in names(Main)
-        if isdefined(Main, existing)
-            mod = getfield(Main, existing)
-            if isa(mod, Module) && !(mod === Main || mod === Core || mod === Base)
-                mod = mod::Module
-                if module_parent(mod) === Main && module_name(mod) === existing
-                    push!(concrete_deps, (existing, module_uuid(mod)))
-                end
-            end
+    for (key,mod) in loaded_modules
+        if !(mod === Main || mod === Core || mod === Base)
+            push!(concrete_deps, (key, module_uuid(mod)))
         end
     end
     # run the expression and cache the result
@@ -675,7 +731,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             if mod == :Main || mod == :Core || mod == :Base
                 continue
             # Module is already loaded
-            elseif isbindingresolved(Main, mod)
+            elseif root_module_exists(mod)
                 continue
             end
             name = string(mod)

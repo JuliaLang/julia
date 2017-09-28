@@ -4,7 +4,7 @@
 module IteratorsMD
     import Base: eltype, length, size, start, done, next, first, last, in, getindex,
                  setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
-                 ndims, iteratorsize, convert
+                 ndims, iteratorsize, convert, show
 
     import Base: +, -, *
     import Base: simd_outer_range, simd_inner_length, simd_index
@@ -80,6 +80,7 @@ module IteratorsMD
     @inline _flatten(i, I...)                 = (i, _flatten(I...)...)
     @inline _flatten(i::CartesianIndex, I...) = (i.I..., _flatten(I...)...)
     CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
+    show(io::IO, i::CartesianIndex) = (print(io, "CartesianIndex"); show(io, i.I))
 
     # length
     length(::CartesianIndex{N}) where {N} = N
@@ -87,6 +88,10 @@ module IteratorsMD
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
+    eltype(index::CartesianIndex) = eltype(index.I)
+
+    # access to index tuple
+    Tuple(index::CartesianIndex) = index.I
 
     # zeros and ones
     zero(::CartesianIndex{N}) where {N} = zero(CartesianIndex{N})
@@ -130,6 +135,12 @@ module IteratorsMD
             h = hash(i, h)
         end
         return h
+    end
+
+    # nextind with CartesianIndex
+    function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
+        _, ni = next(CartesianRange(indices(a)), i)
+        return ni
     end
 
     # Iteration
@@ -394,7 +405,7 @@ wrapped with `LogicalIndex` upon calling `to_indices`.
 struct LogicalIndex{T, A<:AbstractArray{Bool}} <: AbstractVector{T}
     mask::A
     sum::Int
-    LogicalIndex{T,A}(mask::A) where {T,A<:AbstractArray{Bool}} = new(mask, countnz(mask))
+    LogicalIndex{T,A}(mask::A) where {T,A<:AbstractArray{Bool}} = new(mask, count(mask))
 end
 LogicalIndex(mask::AbstractVector{Bool}) = LogicalIndex{Int, typeof(mask)}(mask)
 LogicalIndex(mask::AbstractArray{Bool, N}) where {N} = LogicalIndex{CartesianIndex{N}, typeof(mask)}(mask)
@@ -416,7 +427,7 @@ end
     r = CartesianRange(indices(L.mask))
     return (r, start(r), 1)
 end
-@inline function next(L::LogicalIndex, s)
+@propagate_inbounds function next(L::LogicalIndex, s)
     # We're looking for the n-th true element, using iterator r at state i
     r, i, n = s
     while true
@@ -442,15 +453,6 @@ done(L::LogicalIndex, s) = s[3] > length(L)
 end
 @inline done(L::LogicalIndex{Int,<:BitArray}, s) = s[2] > length(L)
 
-# Checking bounds with LogicalIndex{Int} is tricky since we allow linear indexing over trailing dimensions
-@inline checkbounds_indices(::Type{Bool},IA::Tuple{},I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}}) where {N} =
-    checkindex(Bool, IA, I[1])
-@inline checkbounds_indices(::Type{Bool},IA::Tuple{Any},I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}}) where {N} =
-    checkindex(Bool, IA[1], I[1])
-@inline function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}}) where N
-    IA1, IArest = IteratorsMD.split(IA, Val(N))
-    checkindex(Bool, IA1, I[1])
-end
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex{<:Any,<:AbstractArray{Bool,1}}) =
     linearindices(A) == linearindices(I.mask)
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = indices(A) == indices(I.mask)
@@ -490,15 +492,8 @@ _maybe_linear_logical_index(::IndexLinear, A, i) = LogicalIndex{Int}(i)
     (uncolon(inds, I), to_indices(A, _maybetail(inds), tail(I))...)
 
 const CI0 = Union{CartesianIndex{0}, AbstractArray{CartesianIndex{0}}}
-uncolon(inds::Tuple{},    I::Tuple{Colon})              = Slice(OneTo(1))
 uncolon(inds::Tuple{},    I::Tuple{Colon, Vararg{Any}}) = Slice(OneTo(1))
-uncolon(inds::Tuple{},    I::Tuple{Colon, Vararg{CI0}}) = Slice(OneTo(1))
-uncolon(inds::Tuple{Any}, I::Tuple{Colon})              = Slice(inds[1])
-uncolon(inds::Tuple{Any}, I::Tuple{Colon, Vararg{Any}}) = Slice(inds[1])
-uncolon(inds::Tuple{Any}, I::Tuple{Colon, Vararg{CI0}}) = Slice(inds[1])
 uncolon(inds::Tuple,      I::Tuple{Colon, Vararg{Any}}) = Slice(inds[1])
-uncolon(inds::Tuple,      I::Tuple{Colon})              = Slice(OneTo(trailingsize(inds)))
-uncolon(inds::Tuple,      I::Tuple{Colon, Vararg{CI0}}) = Slice(OneTo(trailingsize(inds)))
 
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
 getindex(x::Number, i::CartesianIndex{0}) = x
@@ -574,9 +569,12 @@ end
 
 ##
 
+# small helper function since we cannot use a closure in a generated function
+_countnz(x) = x != 0
+
 @generated function findn(A::AbstractArray{T,N}) where {T,N}
     quote
-        nnzA = countnz(A)
+        nnzA = count(_countnz, A)
         @nexprs $N d->(I_d = Vector{Int}(nnzA))
         k = 1
         @nloops $N i A begin
@@ -841,9 +839,9 @@ end
 
 @noinline function _accumulate!(op, B, A, R1, ind, R2)
     # Copy the initial element in each 1d vector along dimension `axis`
-    i = first(ind)
+    ii = first(ind)
     @inbounds for J in R2, I in R1
-        B[I, i, J] = A[I, i, J]
+        B[I, ii, J] = A[I, ii, J]
     end
     # Accumulate
     @inbounds for J in R2, i in first(ind)+1:last(ind), I in R1
@@ -946,7 +944,7 @@ circshift!(dest::AbstractArray, src, ::Tuple{}) = copy!(dest, src)
 """
     circshift!(dest, src, shifts)
 
-Circularly shift the data in `src`, storing the result in
+Circularly shift, i.e. rotate, the data in `src`, storing the result in
 `dest`. `shifts` specifies the amount to shift in each dimension.
 
 The `dest` array must be distinct from the `src` array (they cannot
@@ -1150,7 +1148,7 @@ end
 @inline unchecked_bool_convert(x::Real) = x == 1
 
 function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArray{<:Real}, pos_s::Int, numbits::Int)
-    @inbounds for i = (1:numbits) + pos_s - 1
+    @inbounds for i = (1:numbits) .+ (pos_s - 1)
         try_bool_conversion(C[i])
     end
 
@@ -1301,7 +1299,7 @@ end
 
 @generated function findn(B::BitArray{N}) where N
     quote
-        nnzB = countnz(B)
+        nnzB = count(B)
         I = ntuple(x->Vector{Int}(nnzB), Val($N))
         if nnzB > 0
             count = 1

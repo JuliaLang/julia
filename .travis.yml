@@ -1,33 +1,41 @@
 language: cpp
-sudo: false
+sudo: required
 dist: trusty
 matrix:
   include:
     - os: linux
       env: ARCH="i686"
-      compiler: "g++ -m32"
+      compiler: "g++-5 -m32"
       addons:
         apt:
+          sources:
+            - ubuntu-toolchain-r-test
           packages:
             - libssl1.0.0
             - bar
             - time
-            - gcc-multilib
-            - g++-multilib
+            - binutils
+            - gcc-5
+            - g++-5
+            - gcc-5-multilib
+            - g++-5-multilib
             - make:i386
             - libssl-dev:i386
-            - gfortran
-            - gfortran-multilib
+            - gfortran-5
+            - gfortran-5-multilib
     - os: linux
       env: ARCH="x86_64"
-      compiler: "g++ -m64"
+      compiler: "g++-5 -m64"
       addons:
         apt:
+          sources:
+            - ubuntu-toolchain-r-test
           packages:
             - libssl1.0.0
             - bar
             - time
-            - gfortran
+            - g++-5
+            - gfortran-5
     - os: osx
       env: ARCH="x86_64"
       osx_image: xcode8
@@ -56,10 +64,19 @@ before_install:
     - make check-whitespace
     - if [ `uname` = "Linux" ]; then
         contrib/travis_fastfail.sh || exit 1;
+        mkdir -p $HOME/bin;
+        ln -s /usr/bin/gcc-5 $HOME/bin/gcc;
+        ln -s /usr/bin/g++-5 $HOME/bin/g++;
+        ln -s /usr/bin/gfortran-5 $HOME/bin/gfortran;
+        ln -s /usr/bin/gcc-5 $HOME/bin/x86_64-linux-gnu-gcc;
+        ln -s /usr/bin/g++-5 $HOME/bin/x86_64-linux-gnu-g++;
         gcc --version;
         BAR="bar -i 30";
-        BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1";
+        BUILDOPTS="-j5 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1";
         echo "override ARCH=$ARCH" >> Make.user;
+        sudo sh -c "echo 0 > /proc/sys/net/ipv6/conf/lo/disable_ipv6";
+        export JULIA_CPU_CORES=4;
+        export JULIA_TEST_MAXRSS_MB=1200;
         TESTSTORUN="all";
       elif [ `uname` = "Darwin" ]; then
         brew update;
@@ -81,6 +98,8 @@ before_install:
         export JULIA_MACOS_SPAWN="DYLD_FALLBACK_LIBRARY_PATH=\"$DYLD_FALLBACK_LIBRARY_PATH\" \$1";
         export BUILDOPTS="$BUILDOPTS spawn=\$(JULIA_MACOS_SPAWN)";
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
+        export JULIA_CPU_CORES=2;
+        export JULIA_TEST_MAXRSS_MB=600;
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
     - git clone -q git://git.kitenet.net/moreutils
 script:
@@ -115,13 +134,12 @@ script:
       fi
     - cd .. && mv julia julia2
     # run tests
-    - /tmp/julia/bin/julia --precompiled=no -e 'true' &&
-        /tmp/julia/bin/julia-debug --precompiled=no -e 'true'
+    - /tmp/julia/bin/julia --sysimage-native-code=no -e 'true' &&
+        /tmp/julia/bin/julia-debug --sysimage-native-code=no -e 'true'
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - pushd /tmp/julia/share/julia/test
-    - export JULIA_CPU_CORES=2 && export JULIA_TEST_MAXRSS_MB=600 &&
-        /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
-        /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online download pkg
+    - /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
+      /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online download pkg
     - popd
     # test that the embedding code works on our installation
     - mkdir /tmp/embedding-test &&

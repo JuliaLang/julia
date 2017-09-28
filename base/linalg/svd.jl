@@ -193,7 +193,7 @@ end
 """
 function svdfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0
-    if LAPACK.laver() < (3, 6, 0)
+    if LAPACK.version() < v"3.6.0"
         U, V, Q, a, b, k, l, R = LAPACK.ggsvd!('U', 'V', 'Q', A, B)
     else
         U, V, Q, a, b, k, l, R = LAPACK.ggsvd3!('U', 'V', 'Q', A, B)
@@ -290,7 +290,7 @@ end
 
 function svdvals!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0
-    if LAPACK.laver() < (3, 6, 0)
+    if LAPACK.version() < v"3.6.0"
         _, _, _, a, b, k, l, _ = LAPACK.ggsvd!('N', 'N', 'N', A, B)
     else
         _, _, _, a, b, k, l, _ = LAPACK.ggsvd3!('N', 'N', 'N', A, B)

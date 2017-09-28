@@ -148,7 +148,7 @@ end
 convert(::Type{Matrix}, A::Bidiagonal{T}) where {T} = convert(Matrix{T}, A)
 convert(::Type{Array}, A::Bidiagonal) = convert(Matrix, A)
 full(A::Bidiagonal) = convert(Array, A)
-promote_rule(::Type{Matrix{T}}, ::Type{Bidiagonal{S}}) where {T,S} = Matrix{promote_type(T,S)}
+promote_rule(::Type{Matrix{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} = Matrix{promote_type(T,S)}
 
 #Converting from Bidiagonal to Tridiagonal
 Tridiagonal(M::Bidiagonal{T}) where {T} = convert(Tridiagonal{T}, M)
@@ -158,7 +158,7 @@ function convert(::Type{Tridiagonal{T}}, A::Bidiagonal) where T
     z = fill!(similar(ev), zero(T))
     A.uplo == 'U' ? Tridiagonal(z, dv, ev) : Tridiagonal(ev, dv, z)
 end
-promote_rule(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}}) where {T,S} = Tridiagonal{promote_type(T,S)}
+promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} = Tridiagonal{promote_type(T,S)}
 
 # No-op for trivial conversion Bidiagonal{T} -> Bidiagonal{T}
 convert(::Type{Bidiagonal{T}}, A::Bidiagonal{T}) where {T} = A
@@ -230,8 +230,9 @@ istril(M::Bidiagonal) = M.uplo == 'L' || iszero(M.ev)
 
 function tril!(M::Bidiagonal, k::Integer=0)
     n = length(M.dv)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif M.uplo == 'U' && k < 0
         fill!(M.dv,0)
         fill!(M.ev,0)
@@ -248,8 +249,9 @@ end
 
 function triu!(M::Bidiagonal, k::Integer=0)
     n = length(M.dv)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least",
+            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif M.uplo == 'L' && k > 0
         fill!(M.dv,0)
         fill!(M.ev,0)
@@ -271,10 +273,11 @@ function diag(M::Bidiagonal{T}, n::Integer=0) where T
         return M.uplo == 'U' ? M.ev : zeros(T, size(M,1)-1)
     elseif n == -1
         return M.uplo == 'L' ? M.ev : zeros(T, size(M,1)-1)
-    elseif -size(M,1) < n < size(M,1)
+    elseif -size(M,1) <= n <= size(M,1)
         return zeros(T, size(M,1)-abs(n))
     else
-        throw(ArgumentError("matrix size is $(size(M)), n is $n"))
+        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
+            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
 end
 
@@ -307,6 +310,7 @@ A_mul_B!(C::AbstractMatrix, A::BiTri, B::BiTriSym) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::BiTriSym) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym) = A_mul_B_td!(C, A, B)
+A_mul_B!(C::AbstractMatrix, A::Diagonal, B::BiTriSym) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractVector, A::BiTri, B::AbstractVector) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractMatrix, A::BiTri, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
 A_mul_B!(C::AbstractVecOrMat, A::BiTri, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)

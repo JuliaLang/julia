@@ -68,7 +68,7 @@ end
     addfile(cfg::GitConfig, path::AbstractString, level::Consts.GIT_CONFIG=Consts.CONFIG_LEVEL_APP, force::Bool=false)
 
 Add an existing git configuration file located at `path` to the current
-[`GitConfig`](@ref) `cfg`. If the file does not exist, it will be created.
+`GitConfig` `cfg`. If the file does not exist, it will be created.
 `level` sets the git configuration priority level and is determined by
 [`Consts.GIT_CONFIG`](@ref). If `force` is `false` and a configuration for
 the given priority level already exists, `addfile` will error. If `force` is

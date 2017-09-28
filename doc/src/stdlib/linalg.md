@@ -92,9 +92,6 @@ Base.repmat
 Base.kron
 Base.SparseArrays.blkdiag
 Base.LinAlg.linreg
-Base.LinAlg.expm
-Base.LinAlg.logm
-Base.LinAlg.sqrtm
 Base.LinAlg.lyap
 Base.LinAlg.sylvester
 Base.LinAlg.issuccess

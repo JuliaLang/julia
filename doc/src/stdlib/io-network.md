@@ -35,6 +35,7 @@ Base.isreadable
 Base.isopen
 Base.Serializer.serialize
 Base.Serializer.deserialize
+Base.Serializer.writeheader
 Base.Grisu.print_shortest
 Base.fd
 Base.redirect_stdout
@@ -83,8 +84,6 @@ Base.DataFmt.readdlm(::Any, ::Char)
 Base.DataFmt.readdlm(::Any, ::Type)
 Base.DataFmt.readdlm(::Any)
 Base.DataFmt.writedlm
-Base.DataFmt.readcsv
-Base.DataFmt.writecsv
 Base.Base64.Base64EncodePipe
 Base.Base64.Base64DecodePipe
 Base.Base64.base64encode
@@ -160,6 +159,8 @@ Base.connect(::AbstractString)
 Base.listen(::Any)
 Base.listen(::AbstractString)
 Base.getaddrinfo
+Base.getalladdrinfo
+Base.getnameinfo
 Base.getsockname
 Base.getpeername
 Base.IPv4

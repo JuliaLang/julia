@@ -51,8 +51,8 @@ function aupd_wrapper(T, matvecA!::Function, matvecB::Function, solveSI::Functio
             throw(ARPACKException(info[]))
         end
 
-        x = view(workd, ipntr[1]+zernm1)
-        y = view(workd, ipntr[2]+zernm1)
+        x = view(workd, ipntr[1] .+ zernm1)
+        y = view(workd, ipntr[2] .+ zernm1)
         if mode == 1  # corresponds to dsdrv1, dndrv1 or zndrv1
             if ido[] == 1
                 matvecA!(y, x)
@@ -87,7 +87,7 @@ function aupd_wrapper(T, matvecA!::Function, matvecB::Function, solveSI::Functio
             if ido[] == -1
                 y[:] = solveSI(matvecB(x))
             elseif  ido[] == 1
-                y[:] = solveSI(view(workd,ipntr[3]+zernm1))
+                y[:] = solveSI(view(workd,ipntr[3] .+ zernm1))
             elseif ido[] == 2
                 y[:] = matvecB(x)
             elseif ido[] == 99

@@ -57,7 +57,7 @@ function parse(s::AbstractString)
     i = 1
     while i < length(list)
         if isa(list[i],AbstractString)
-            for j = i+1:length(list)
+            for outer j = i+1:length(list)
                 if !isa(list[j],AbstractString)
                     j -= 1
                     break
@@ -617,11 +617,11 @@ function gen_c(flags::String, width::Int, precision::Int, c::Char)
     blk = Expr(:block, :($x = Char($x)))
     if width > 1 && !('-' in flags)
         p = '0' in flags ? '0' : ' '
-        push!(blk.args, pad(width-1, :($width-charwidth($x)), p))
+        push!(blk.args, pad(width-1, :($width-textwidth($x)), p))
     end
     push!(blk.args, :(write(out, $x)))
     if width > 1 && '-' in flags
-        push!(blk.args, pad(width-1, :($width-charwidth($x)), ' '))
+        push!(blk.args, pad(width-1, :($width-textwidth($x)), ' '))
     end
     :(($x)::Integer), blk
 end
@@ -652,11 +652,11 @@ function gen_s(flags::String, width::Int, precision::Int, c::Char)
             push!(blk.args, :($x = _limit($x, $precision)))
         end
         if !('-' in flags)
-            push!(blk.args, pad(width, :($width-strwidth($x)), ' '))
+            push!(blk.args, pad(width, :($width-textwidth($x)), ' '))
         end
         push!(blk.args, :(write(out, $x)))
         if '-' in flags
-            push!(blk.args, pad(width, :($width-strwidth($x)), ' '))
+            push!(blk.args, pad(width, :($width-textwidth($x)), ' '))
         end
     else
         if precision!=-1
@@ -1102,7 +1102,7 @@ ini_hex(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::In
 ini_HEX(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
 ini_hex(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
 ini_HEX(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-function bigfloat_printf(out, d, flags::String, width::Int, precision::Int, c::Char)
+function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char)
     fmt_len = sizeof(flags)+4
     if width > 0
         fmt_len += ndigits(width)
@@ -1130,8 +1130,8 @@ function bigfloat_printf(out, d, flags::String, width::Int, precision::Int, c::C
     @assert length(printf_fmt) == fmt_len
     bufsiz = length(DIGITS)
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32,
-                (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...),
-                DIGITS, bufsiz, printf_fmt, &d)
+                (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...),
+                DIGITS, bufsiz, printf_fmt, d)
     lng > 0 || error("invalid printf formatting for BigFloat")
     unsafe_write(out, pointer(DIGITS), min(lng, bufsiz-1))
     return (false, ())
@@ -1188,13 +1188,13 @@ function _printf(macroname, io, fmt, args)
     end
 
     unshift!(blk.args, :(out = $io))
-    Expr(:let, blk)
+    Expr(:let, Expr(:block), blk)
 end
 
 """
     @printf([io::IOStream], "%Fmt", args...)
 
-Print `args` using C `printf()` style format specification string, with some caveats:
+Print `args` using C `printf` style format specification string, with some caveats:
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
 `%e`, `%E`, `%f`, `%F`, `%g`, and `%G`. Furthermore, if a floating point number is
 equally close to the numeric values of two possible output strings, the output
@@ -1241,7 +1241,7 @@ macro sprintf(args...)
     isa(args[1], AbstractString) || is_str_expr(args[1]) ||
         throw(ArgumentError("@sprintf: first argument must be a format string"))
     letexpr = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
-    push!(letexpr.args[1].args, :(String(take!(out))))
+    push!(letexpr.args[2].args, :(String(take!(out))))
     letexpr
 end
 

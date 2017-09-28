@@ -47,14 +47,7 @@ a2img  = randn(n,n)/2
     aa2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     asym = aa'+aa                  # symmetric indefinite
     apd  = aa'*aa                 # symmetric positive-definite
-    @testset for atype in ("Array", "SubArray")
-        if atype == "Array"
-            a = aa
-            a2 = aa2
-        else
-            a = view(aa, 1:n, 1:n)
-            a2 = view(aa2, 1:n, 1:n)
-        end
+    for (a, a2) in ((aa, aa2), (view(aa, 1:n, 1:n), view(aa2, 1:n, 1:n)))
         ε = εa = eps(abs(float(one(eltya))))
 
         usv = svdfact(a)
@@ -103,26 +96,28 @@ a2img  = randn(n,n)/2
             @test gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' ≈ c
         end
     end
-end
-
-@testset "Number input" begin
-    x, y = randn(2)
-    @test svdfact(x)    == svdfact(      fill(x, 1, 1))
-    @test svdvals(x)    == first(svdvals(fill(x, 1, 1)))
-    @test svd(x)        == first.(svd(   fill(x, 1, 1)))
-    @test svdfact(x, y) == svdfact(      fill(x, 1, 1), fill(y, 1, 1))
-    @test svdvals(x, y) == first(svdvals(fill(x, 1, 1), fill(y, 1, 1)))
-    @test svd(x, y)     == first.(svd(   fill(x, 1, 1), fill(y, 1, 1)))
-end
-
-@testset "isequal, ==, and hash" begin
-    x, y   = rand(), NaN
-    Fx, Fy = svdfact(x), svdfact(y)
-    @test   Fx == Fx
-    @test !(Fy == Fy)
-    @test isequal(Fy, Fy)
-    @test hash(Fx)          == hash(Fx)
-    @test hash(Fx, UInt(1)) == hash(Fx, UInt(1))
-    @test hash(Fy)          == hash(Fy)
-    @test hash(Fy, UInt(1)) == hash(Fy, UInt(1))
+    if eltya <: Base.LinAlg.BlasReal
+        @testset "Number input" begin
+            x, y = randn(eltya, 2)
+            @test svdfact(x)    == svdfact(fill(x, 1, 1))
+            @test svdvals(x)    == first(svdvals(fill(x, 1, 1)))
+            @test svd(x)        == first.(svd(fill(x, 1, 1)))
+            @test svdfact(x, y) == svdfact(fill(x, 1, 1), fill(y, 1, 1))
+            @test svdvals(x, y) ≈  first(svdvals(fill(x, 1, 1), fill(y, 1, 1)))
+            @test svd(x, y)     == first.(svd(fill(x, 1, 1), fill(y, 1, 1)))
+        end
+    end
+    if eltya != Int
+        @testset "isequal, ==, and hash" begin
+            x, y   = rand(eltya), convert(eltya, NaN)
+            Fx, Fy = svdfact(x), svdfact(y)
+            @test   Fx == Fx
+            @test !(Fy == Fy)
+            @test isequal(Fy, Fy)
+            @test hash(Fx)          == hash(Fx)
+            @test hash(Fx, UInt(1)) == hash(Fx, UInt(1))
+            @test hash(Fy)          == hash(Fy)
+            @test hash(Fy, UInt(1)) == hash(Fy, UInt(1))
+        end
+    end
 end

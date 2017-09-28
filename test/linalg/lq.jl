@@ -95,11 +95,126 @@ bimg  = randn(n,2)/2
             lqa = lqfact(a[:,1:n1])
             l,q = lqa[:L], lqa[:Q]
             @test full(q)*full(q)' ≈ eye(eltya,n1)
-            @test (full(q,thin=false)'*full(q,thin=false))[1:n1,:] ≈ eye(eltya,n1,n)
+            @test full(q,thin=false)'*full(q,thin=false) ≈ eye(eltya, n1)
             @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
             @test Ac_mul_B!(q,full(q)) ≈ eye(eltya,n1)
             @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
             @test_throws BoundsError size(q,-1)
         end
     end
+end
+
+@testset "correct form of Q from lq(...) (#23729)" begin
+    # where the original matrix (say A) is square or has more rows than columns,
+    # then A's factorization's triangular factor (say L) should have the same shape
+    # as A independent of factorization form (truncated, square), and A's factorization's
+    # orthogonal factor (say Q) should be a square matrix of order of A's number of
+    # columns independent of factorization form (truncated, square), and L and Q
+    # should have multiplication-compatible shapes.
+    m, n = 4, 2
+    A = randn(m, n)
+    for thin in (true, false)
+        L, Q = lq(A, thin = thin)
+        @test size(L) == (m, n)
+        @test size(Q) == (n, n)
+        @test isapprox(A, L*Q)
+    end
+    # where the original matrix has strictly fewer rows than columns ...
+    m, n = 2, 4
+    A = randn(m, n)
+    # ... then, for a truncated factorization of A, L should be a square matrix
+    # of order of A's number of rows, Q should have the same shape as A,
+    # and L and Q should have multiplication-compatible shapes
+    Lthin, Qthin = lq(A, thin = true)
+    @test size(Lthin) == (m, m)
+    @test size(Qthin) == (m, n)
+    @test isapprox(A, Lthin * Qthin)
+    # ... and, for a square/non-truncated factorization of A, L should have the
+    # same shape as A, Q should be a square matrix of order of A's number of columns,
+    # and L and Q should have multiplication-compatible shape. but instead the L returned
+    # has no zero-padding on the right / is L for the truncated factorization,
+    # so for L and Q to have multiplication-compatible shapes, L must be zero-padded
+    # to have the shape of A.
+    Lsquare, Qsquare = lq(A, thin = false)
+    @test size(Lsquare) == (m, m)
+    @test size(Qsquare) == (n, n)
+    @test isapprox(A, [Lsquare zeros(m, n - m)] * Qsquare)
+end
+
+@testset "getindex on LQPackedQ (#23733)" begin
+    function getqs(F::Base.LinAlg.LQ)
+        implicitQ = F[:Q]
+        explicitQ = A_mul_B!(implicitQ, eye(eltype(implicitQ), size(implicitQ.factors, 2)))
+        return implicitQ, explicitQ
+    end
+
+    m, n = 3, 3 # truncated Q 3-by-3, square Q 3-by-3
+    implicitQ, explicitQ = getqs(lqfact(randn(m, n)))
+    @test implicitQ[1, 1] == explicitQ[1, 1]
+    @test implicitQ[m, 1] == explicitQ[m, 1]
+    @test implicitQ[1, n] == explicitQ[1, n]
+    @test implicitQ[m, n] == explicitQ[m, n]
+
+    m, n = 3, 4 # truncated Q 3-by-4, square Q 4-by-4
+    implicitQ, explicitQ = getqs(lqfact(randn(m, n)))
+    @test implicitQ[1, 1] == explicitQ[1, 1]
+    @test implicitQ[m, 1] == explicitQ[m, 1]
+    @test implicitQ[1, n] == explicitQ[1, n]
+    @test implicitQ[m, n] == explicitQ[m, n]
+    @test implicitQ[m+1, 1] == explicitQ[m+1, 1]
+    @test implicitQ[m+1, n] == explicitQ[m+1, n]
+
+    m, n = 4, 3 # truncated Q 3-by-3, square Q 3-by-3
+    implicitQ, explicitQ = getqs(lqfact(randn(m, n)))
+    @test implicitQ[1, 1] == explicitQ[1, 1]
+    @test implicitQ[n, 1] == explicitQ[n, 1]
+    @test implicitQ[1, n] == explicitQ[1, n]
+    @test implicitQ[n, n] == explicitQ[n, n]
+end
+
+@testset "size on LQPackedQ (#23780)" begin
+    # size(Q::LQPackedQ) yields the shape of Q's square form
+    for ((mA, nA), nQ) in (
+        ((3, 3), 3), # A 3-by-3 => square Q 3-by-3
+        ((3, 4), 4), # A 3-by-4 => square Q 4-by-4
+        ((4, 3), 3) )# A 4-by-3 => square Q 3-by-3
+        @test size(lqfact(randn(mA, nA))[:Q]) == (nQ, nQ)
+    end
+end
+
+@testset "postmultiplication with / right-application of LQPackedQ (#23779)" begin
+    function getqs(F::Base.LinAlg.LQ)
+        implicitQ = F[:Q]
+        explicitQ = A_mul_B!(implicitQ, eye(eltype(implicitQ), size(implicitQ)...))
+        return implicitQ, explicitQ
+    end
+    # for any shape m-by-n of LQ-factored matrix, where Q is an LQPackedQ
+    # A_mul_B*(C, Q) (Ac_mul_B*(C, Q)) operations should work for
+    # *-by-n (n-by-*) C, which we test below via n-by-n C
+    for (mA, nA) in ((3, 3), (3, 4), (4, 3))
+        implicitQ, explicitQ = getqs(lqfact(randn(mA, nA)))
+        C = randn(nA, nA)
+        @test *(C, implicitQ) ≈ *(C, explicitQ)
+        @test A_mul_Bc(C, implicitQ) ≈ A_mul_Bc(C, explicitQ)
+        @test Ac_mul_B(C, implicitQ) ≈ Ac_mul_B(C, explicitQ)
+        @test Ac_mul_Bc(C, implicitQ) ≈ Ac_mul_Bc(C, explicitQ)
+    end
+    # where the LQ-factored matrix has at least as many rows m as columns n,
+    # Q's square and truncated forms have the same shape (n-by-n). hence we expect
+    # _only_ *-by-n (n-by-*) C to work in A_mul_B*(C, Q) (Ac_mul_B*(C, Q)) ops.
+    # and hence the n-by-n C tests above suffice.
+    #
+    # where the LQ-factored matrix has more columns n than rows m,
+    # Q's square form is n-by-n whereas its truncated form is m-by-n.
+    # hence we need also test *-by-m C with
+    # A*_mul_B(C, Q) ops, as below via m-by-m C.
+    mA, nA = 3, 4
+    implicitQ, explicitQ = getqs(lqfact(randn(mA, nA)))
+    C = randn(mA, mA)
+    zeroextCright = hcat(C, zeros(eltype(C), mA))
+    zeroextCdown = vcat(C, zeros(eltype(C), (1, mA)))
+    @test *(C, implicitQ) ≈ *(zeroextCright, explicitQ)
+    @test Ac_mul_B(C, implicitQ) ≈ Ac_mul_B(zeroextCdown, explicitQ)
+    @test_throws DimensionMismatch A_mul_Bc(C, implicitQ)
+    @test_throws DimensionMismatch Ac_mul_Bc(C, implicitQ)
 end

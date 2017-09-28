@@ -76,79 +76,6 @@ gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 # total number of bytes allocated so far
 gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 
-"""
-    tic()
-
-Set a timer to be read by the next call to [`toc`](@ref) or [`toq`](@ref). The
-macro call `@time expr` can also be used to time evaluation.
-
-```julia-repl
-julia> tic()
-0x0000c45bc7abac95
-
-julia> sleep(0.3)
-
-julia> toc()
-elapsed time: 0.302745944 seconds
-0.302745944
-```
-"""
-function tic()
-    t0 = time_ns()
-    task_local_storage(:TIMERS, (t0, get(task_local_storage(), :TIMERS, ())))
-    return t0
-end
-
-"""
-    toq()
-
-Return, but do not print, the time elapsed since the last [`tic`](@ref). The
-macro calls `@timed expr` and `@elapsed expr` also return evaluation time.
-
-```julia-repl
-julia> tic()
-0x0000c46477a9675d
-
-julia> sleep(0.3)
-
-julia> toq()
-0.302251004
-```
-"""
-function toq()
-    t1 = time_ns()
-    timers = get(task_local_storage(), :TIMERS, ())
-    if timers === ()
-        error("toc() without tic()")
-    end
-    t0 = timers[1]::UInt64
-    task_local_storage(:TIMERS, timers[2])
-    (t1-t0)/1e9
-end
-
-"""
-    toc()
-
-Print and return the time elapsed since the last [`tic`](@ref). The macro call
-`@time expr` can also be used to time evaluation.
-
-```julia-repl
-julia> tic()
-0x0000c45bc7abac95
-
-julia> sleep(0.3)
-
-julia> toc()
-elapsed time: 0.302745944 seconds
-0.302745944
-```
-"""
-function toc()
-    t = toq()
-    println("elapsed time: ", t, " seconds")
-    return t
-end
-
 # print elapsed time, return expression value
 const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
@@ -563,7 +490,7 @@ function warn(io::IO, msg...;
         show_backtrace(io, bt)
     end
     if filename !== nothing
-        print(io, "\nwhile loading $filename, in expression starting on line $lineno")
+        print(io, "\nin expression starting at $filename:$lineno")
     end
     println(io)
     return

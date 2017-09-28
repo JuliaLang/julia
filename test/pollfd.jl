@@ -25,12 +25,12 @@ end
 function pfd_tst_reads(idx, intvl)
     global ready += 1
     wait(ready_c)
-    tic()
-    start_evt2 = Condition()
-    evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
-    wait(start_evt2); yield() # make sure the async poll_fd is pumping events
-    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
-    t_elapsed = toq()
+    t_elapsed = @elapsed begin
+        start_evt2 = Condition()
+        evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
+        wait(start_evt2); yield() # make sure the async poll_fd is pumping events
+        evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
+    end
     @test !evt.timedout
     @test evt.readable
     @test !evt.writable
@@ -53,16 +53,16 @@ end
 function pfd_tst_timeout(idx, intvl)
     global ready += 1
     wait(ready_c)
-    tic()
-    start_evt2 = Condition()
-    evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
-    wait(start_evt2); yield() # make sure the async poll_fd is pumping events
-    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
-    @test evt.timedout
-    @test !evt.readable
-    @test !evt.writable
-    @test evt === wait(evt2)
-    t_elapsed = toq()
+    t_elapsed = @elapsed begin
+        start_evt2 = Condition()
+        evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
+        wait(start_evt2); yield() # make sure the async poll_fd is pumping events
+        evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
+        @test evt.timedout
+        @test !evt.readable
+        @test !evt.writable
+        @test evt === wait(evt2)
+    end
 
     # Disabled since these assertions fail randomly, notably on build VMs (issue #12824)
     # @test intvl <= t_elapsed

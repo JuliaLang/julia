@@ -569,7 +569,7 @@ function finish end
 
 Thrown when a test set finishes and not all tests passed.
 """
-mutable struct TestSetException <: Exception
+struct TestSetException <: Exception
     pass::Int
     fail::Int
     error::Int
@@ -596,12 +596,11 @@ end
 
 A simple fallback test set that throws immediately on a failure.
 """
-struct FallbackTestSet <: AbstractTestSet
-end
+struct FallbackTestSet <: AbstractTestSet end
 fallback_testset = FallbackTestSet()
 
-mutable struct FallbackTestSetException <: Exception
-    msg::String
+struct FallbackTestSetException <: Exception
+    msg::AbstractString
 end
 
 function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
@@ -1010,7 +1009,7 @@ function testset_forloop(args, testloop)
     end
     quote
         arr = Array{Any,1}(0)
-        first_iteration = true
+        local first_iteration = true
         local ts
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
@@ -1205,12 +1204,13 @@ function test_approx_eq_modphase(a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
 end
 
 """
-    detect_ambiguities(mod1, mod2...; imported=false, ambiguous_bottom=false)
+    detect_ambiguities(mod1, mod2...; imported=false, recursive=false, ambiguous_bottom=false)
 
 Returns a vector of `(Method,Method)` pairs of ambiguous methods
-defined in the specified modules. Use `imported=true` if you wish to
-also test functions that were imported into these modules from
-elsewhere.
+defined in the specified modules.
+Use `imported=true` if you wish to also test functions that were
+imported into these modules from elsewhere.
+Use `recursive=true` to test in all submodules.
 
 `ambiguous_bottom` controls whether ambiguities triggered only by
 `Union{}` type parameters are included; in most cases you probably
@@ -1218,6 +1218,7 @@ want to set this to `false`. See [`Base.isambiguous`](@ref).
 """
 function detect_ambiguities(mods...;
                             imported::Bool = false,
+                            recursive::Bool = false,
                             ambiguous_bottom::Bool = false,
                             allow_bottom::Union{Bool,Void} = nothing)
     if allow_bottom !== nothing
@@ -1239,8 +1240,12 @@ function detect_ambiguities(mods...;
                 println("Skipping ", mod, '.', n)  # typically stale exports
                 continue
             end
-            f = getfield(mod, n)
-            if isa(f, DataType) && isdefined(f.name, :mt)
+            f = Base.unwrap_unionall(getfield(mod, n))
+            if recursive && isa(f, Module) && f !== mod && module_parent(f) === mod && module_name(f) === n
+                subambs = detect_ambiguities(f,
+                    imported=imported, recursive=recursive, ambiguous_bottom=ambiguous_bottom)
+                union!(ambs, subambs)
+            elseif isa(f, DataType) && isdefined(f.name, :mt)
                 mt = Base.MethodList(f.name.mt)
                 for m in mt
                     if m.ambig !== nothing
@@ -1415,11 +1420,13 @@ end
 GenericArray{T}(args...) where {T} = GenericArray(Array{T}(args...))
 GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(args...))
 
-Base.eachindex(a::GenericArray) = eachindex(a.a)
+Base.keys(a::GenericArray) = keys(a.a)
 Base.indices(a::GenericArray) = indices(a.a)
 Base.length(a::GenericArray) = length(a.a)
 Base.size(a::GenericArray) = size(a.a)
 Base.getindex(a::GenericArray, i...) = a.a[i...]
 Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
+
+Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
 
 end # module

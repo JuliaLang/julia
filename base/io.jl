@@ -7,14 +7,14 @@
 
 No more data was available to read from a file or stream.
 """
-mutable struct EOFError <: Exception end
+struct EOFError <: Exception end
 
 """
     SystemError(prefix::AbstractString, [errno::Int32])
 
 A system call failed with an error code (in the `errno` global variable).
 """
-mutable struct SystemError <: Exception
+struct SystemError <: Exception
     prefix::AbstractString
     errnum::Int32
     extrainfo
@@ -152,10 +152,10 @@ flush(io::AbstractPipe) = flush(pipe_writer(io))
 read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io), p, nb)
 read(io::AbstractPipe) = read(pipe_reader(io))
-readuntil(io::AbstractPipe, arg::UInt8)          = readuntil(pipe_reader(io), arg)
-readuntil(io::AbstractPipe, arg::Char)           = readuntil(pipe_reader(io), arg)
-readuntil(io::AbstractPipe, arg::AbstractString) = readuntil(pipe_reader(io), arg)
-readuntil(io::AbstractPipe, arg)                 = readuntil(pipe_reader(io), arg)
+readuntil(io::AbstractPipe, arg::UInt8) = readuntil(pipe_reader(io), arg)
+readuntil(io::AbstractPipe, arg::Char) = readuntil(pipe_reader(io), arg)
+readuntil_indexable(io::AbstractPipe, target#=::Indexable{T}=#, out) = readuntil_indexable(pipe_reader(io), target, out)
+
 readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
 
 isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
@@ -499,7 +499,7 @@ function readuntil(s::IO, delim::Char)
 end
 
 function readuntil(s::IO, delim::T) where T
-    out = T[]
+    out = (T === UInt8 ? StringVector(0) : Vector{T}())
     while !eof(s)
         c = read(s, T)
         push!(out, c)
@@ -510,38 +510,88 @@ function readuntil(s::IO, delim::T) where T
     return out
 end
 
-# based on code by Glen Hertz
-function readuntil(s::IO, t::AbstractString)
-    l = length(t)
-    if l == 0
-        return ""
+# requires that indices for target are small ordered integers bounded by start and endof
+function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
+    T = eltype(target)
+    first = start(target)
+    if done(target, first)
+        return
     end
-    if l > 40
-        warn("readuntil(IO,AbstractString) will perform poorly with a long string")
-    end
-    out = IOBuffer()
-    m = Vector{Char}(l)  # last part of stream to match
-    t = collect(t)
-    i = 0
-    while !eof(s)
-        i += 1
-        c = read(s, Char)
-        write(out, c)
-        if i <= l
-            m[i] = c
+    len = endof(target)
+    local cache # will be lazy initialized when needed
+    second = next(target, first)[2]
+    max_pos = second
+    pos = first
+    while !eof(io)
+        c = read(io, T)
+        # Backtrack until the next target character matches what was found
+        if out isa IO
+            write(out, c)
         else
-            # shift to last part of s
-            for j = 2:l
-                m[j-1] = m[j]
+            push!(out, c)
+        end
+        while true
+            c1, pos1 = next(target, pos)
+            if c == c1
+                pos = pos1
+                break
+            elseif pos == first
+                break
+            elseif pos == second
+                pos = first
+            else
+                # grow cache to contain up to `pos`
+                if !@isdefined(cache)
+                    cache = zeros(Int, len)
+                end
+                while max_pos < pos
+                    b = cache[max_pos] + first
+                    cb, b1 = next(target, b)
+                    ci, max_pos1 = next(target, max_pos)
+                    if ci == cb
+                        cache[max_pos1] = b1 - first
+                    end
+                    max_pos = max_pos1
+                end
+                pos = cache[pos] + first
             end
-            m[l] = c
         end
-        if i >= l && m == t
-            break
-        end
+        done(target, pos) && break
     end
-    return String(take!(out))
 end
+
+function readuntil(io::IO, target::AbstractString)
+    # small-string target optimizations
+    i = start(target)
+    done(target, i) && return ""
+    c, i = next(target, start(target))
+    if done(target, i) && c < Char(0x80)
+        return readuntil_string(io, c % UInt8)
+    end
+    # decide how we can index target
+    if target isa String
+        # convert String to a utf8-byte-iterator
+        target = Vector{UInt8}(target)
+    #elseif applicable(codeunit, target)
+    #   TODO: a more general version of above optimization
+    #         would be to permit accessing any string via codeunit
+    #   target = CodeUnitVector(target)
+    elseif !(target isa SubString{String})
+        # type with unknown indexing behavior: convert to array
+        target = collect(target)
+    end
+    out = (eltype(target) === UInt8 ? StringVector(0) : IOBuffer())
+    readuntil_indexable(io, target, out)
+    out = isa(out, IO) ? take!(out) : out
+    return String(out)
+end
+
+function readuntil(io::IO, target::AbstractVector{T}) where T
+    out = (T === UInt8 ? StringVector(0) : Vector{T}())
+    readuntil_indexable(io, target, out)
+    return out
+end
+
 
 """
     readchomp(x)
@@ -592,6 +642,7 @@ function read(s::IO, nb::Integer = typemax(Int))
 end
 
 read(s::IO, ::Type{String}) = String(read(s))
+read(s::IO, T::Type) = error("The IO stream does not support reading objects of type $T.")
 
 ## high-level iterator interfaces ##
 

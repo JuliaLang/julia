@@ -141,6 +141,7 @@ function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
     @assertposdef C info
 end
 function chol!(A::StridedMatrix)
+    checksquare(A)
     C, info = _chol!(A)
     @assertposdef C info
 end
@@ -236,6 +237,7 @@ ERROR: InexactError: convert(Int64, 6.782329983125268)
 ```
 """
 function cholfact!(A::StridedMatrix, ::Val{false}=Val(false))
+    checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         return Cholesky(A, 'U', convert(BlasInt, -1))
     else
@@ -267,6 +269,7 @@ factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
 function cholfact!(A::StridedMatrix, ::Val{true}; tol = 0.0)
+    checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
         return CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
                                tol, convert(BlasInt, -1))
@@ -299,7 +302,6 @@ julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
 julia> C = cholfact(A)
 Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
 [2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]
-successful: true
 
 julia> C[:U]
 3×3 UpperTriangular{Float64,Array{Float64,2}}:
@@ -402,9 +404,12 @@ end
 issuccess(C::Cholesky) = C.info == 0
 
 function show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix})
-    println(io, "$(typeof(C)) with factor:")
-    show(io, C[:UL])
-    print(io, "\nsuccessful: $(issuccess(C))")
+    if issuccess(C)
+        println(io, "$(typeof(C)) with factor:")
+        show(io, C[:UL])
+    else
+        print("Failed factorization of type $(typeof(C))")
+    end
 end
 
 A_ldiv_B!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =

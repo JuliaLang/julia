@@ -65,7 +65,7 @@
 ;; note: expansion of stuff inside module is delayed, so the contents obey
 ;; toplevel expansion order (don't expand until stuff before is evaluated).
 (define (expand-toplevel-expr-- e)
-  (let ((ex0 (julia-expand-macros e)))
+  (let ((ex0 (julia-expand-macroscope e)))
     (if (and (pair? ex0) (eq? (car ex0) 'toplevel))
         ex0
         (let* ((ex (julia-expand0 ex0))
@@ -218,17 +218,6 @@
 (define (jl-expand-to-thunk expr)
   (parser-wrap (lambda ()
                  (expand-toplevel-expr expr))))
-
-; macroexpand only
-(define (jl-macroexpand expr)
-  (reset-gensyms)
-  (parser-wrap (lambda ()
-                 (julia-expand-macros expr))))
-
-(define (jl-macroexpand-1 expr)
-  (reset-gensyms)
-  (parser-wrap (lambda ()
-                 (julia-expand-macros expr 1))))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)

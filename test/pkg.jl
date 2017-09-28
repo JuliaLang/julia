@@ -65,14 +65,6 @@ temp_pkg_dir() do
     @test_throws PkgError Pkg.installed("MyFakePackage")
     @test Pkg.installed("Example") === nothing
 
-    # check that versioninfo(io; verbose=true) doesn't error and produces some output
-    # (done here since it calls Pkg.status which might error or clone metadata)
-    buf = PipeBuffer()
-    versioninfo(buf, verbose=true)
-    ver = read(buf, String)
-    @test startswith(ver, "Julia Version $VERSION")
-    @test contains(ver, "Environment:")
-
     # Check that setprotocol! works.
     begin
         try
@@ -579,6 +571,23 @@ temp_pkg_dir() do
             @test contains(msg, "INFO: JULIA_RC_LOADED defined true")
             @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined true")
         end
+    end
+
+    let package = "Output"
+        stdout_file = Pkg.dir(package, "stdout.txt")
+        stderr_file = Pkg.dir(package, "stderr.txt")
+        content = """
+            println(STDOUT, "stdout")
+            println(STDERR, "stderr")
+            """
+        write_build(package, content)
+
+        code = "Pkg.build(\"$package\")"
+        msg = run(pipeline(
+            `$(Base.julia_cmd()) --startup-file=no -e $code`,
+            stdout=stdout_file, stderr=stderr_file))
+        @test last(readlines(stdout_file)) == "stdout"
+        @test last(readlines(stderr_file)) == "stderr"
     end
 end
 

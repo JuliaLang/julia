@@ -149,6 +149,7 @@ pred = afiro'*sol
 @test norm(afiro * (convert(Matrix, y) - convert(Matrix, pred))) < 1e-8
 
 let # Issue 9160
+    local A, B
     A = sprand(10, 10, 0.1)
     A = convert(SparseMatrixCSC{Float64,CHOLMOD.SuiteSparse_long}, A)
     cmA = CHOLMOD.Sparse(A)
@@ -216,7 +217,7 @@ end
 ### illegal dtype (for now but should be supported at some point)
 p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common())
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
 puint = convert(Ptr{UInt32}, p)
 unsafe_store!(puint, CHOLMOD.SINGLE, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 4)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -224,7 +225,7 @@ unsafe_store!(puint, CHOLMOD.SINGLE, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Pt
 ### illegal dtype
 p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common())
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
 puint = convert(Ptr{UInt32}, p)
 unsafe_store!(puint, 5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 4)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -232,7 +233,7 @@ unsafe_store!(puint, 5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) 
 ### illegal xtype
 p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common())
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
 puint = convert(Ptr{UInt32}, p)
 unsafe_store!(puint, 3, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 3)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -240,7 +241,7 @@ unsafe_store!(puint, 3, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) 
 ### illegal itype
 p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common())
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
 puint = convert(Ptr{UInt32}, p)
 unsafe_store!(puint, CHOLMOD.INTLONG, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 2)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -248,7 +249,7 @@ unsafe_store!(puint, CHOLMOD.INTLONG, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(P
 ### illegal itype
 p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common())
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
 puint = convert(Ptr{UInt32}, p)
 unsafe_store!(puint,  5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 2)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
@@ -257,6 +258,7 @@ unsafe_store!(puint,  5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4)
 
 ## High level interface
 for elty in (Float64, Complex{Float64})
+    local A, b
     if elty == Float64
         A = randn(5, 5)
         b = randn(5)
@@ -297,7 +299,7 @@ end
 ## test free_sparse!
 p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Float64}},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common())
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common_struct)
 @test CHOLMOD.free_sparse!(p)
 
 for elty in (Float64, Complex{Float64})
@@ -639,23 +641,24 @@ Fnew = deserialize(b)
 @test_throws MethodError cholfact(Hermitian(speye(Complex{BigFloat}, 5)))
 
 # test \ for Factor and StridedVecOrMat
-let x = rand(5)
+let x = rand(5),
     A = cholfact(sparse(diagm(x.\1)))
     @test A\view(ones(10),1:2:10) ≈ x
     @test A\view(eye(5,5),:,:) ≈ diagm(x)
 end
 
 # Real factorization and complex rhs
-A = sprandn(5,5,0.4) |> t -> t't + I
-B = complex.(randn(5,2), randn(5,2))
-@test cholfact(A)\B ≈ A\B
+let A = sprandn(5, 5, 0.4) |> t -> t't + I,
+    B = complex.(randn(5, 2), randn(5, 2))
+    @test cholfact(A)\B ≈ A\B
+end
 
 # Make sure that ldltfact performs an LDLt (Issue #19032)
-let m = 400, n = 500
-    A = sprandn(m, n, .2)
-    M = [speye(n) A'; A -speye(m)]
-    b = M*ones(m + n)
-    F = ldltfact(M)
+let m = 400, n = 500,
+    A = sprandn(m, n, .2),
+    M = [speye(n) A'; A -speye(m)],
+    b = M * ones(m + n),
+    F = ldltfact(M),
     s = unsafe_load(pointer(F))
     @test s.is_super == 0
     @test F\b ≈ ones(m + n)
@@ -668,6 +671,7 @@ let Apre = sprandn(10, 10, 0.2) - I
     for A in (Symmetric(Apre), Hermitian(Apre),
               Symmetric(Apre + 10I), Hermitian(Apre + 10I),
               Hermitian(complex(Apre)), Hermitian(complex(Apre) + 10I))
+        local A, x, b
         x = ones(10)
         b = A*x
         @test x ≈ A\b
@@ -676,8 +680,8 @@ let Apre = sprandn(10, 10, 0.2) - I
 end
 
 # Check that Symmetric{SparseMatrixCSC} can be constructed from CHOLMOD.Sparse
-let A = sprandn(10, 10, 0.1)
-    B = SparseArrays.CHOLMOD.Sparse(A)
+let A = sprandn(10, 10, 0.1),
+    B = SparseArrays.CHOLMOD.Sparse(A),
     C = B'B
     # Change internal representation to symmetric (upper/lower)
     o = fieldoffset(CHOLMOD.C_Sparse{eltype(C)}, find(fieldnames(CHOLMOD.C_Sparse{eltype(C)}) .== :stype)[1])
@@ -687,14 +691,13 @@ let A = sprandn(10, 10, 0.1)
     end
 end
 
-@testset "Check inputs to Sparse. Related to #20024" for A in (
+@testset "Check inputs to Sparse. Related to #20024" for A_ in (
     SparseMatrixCSC(2, 2, [1, 2], CHOLMOD.SuiteSparse_long[], Float64[]),
     SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[]),
     SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[], Float64[1.0]),
     SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[1.0]))
-
-    @test_throws ArgumentError CHOLMOD.Sparse(size(A)..., A.colptr - 1, A.rowval - 1, A.nzval)
-    @test_throws ArgumentError CHOLMOD.Sparse(A)
+    @test_throws ArgumentError CHOLMOD.Sparse(size(A_)..., A_.colptr .- 1, A_.rowval .- 1, A_.nzval)
+    @test_throws ArgumentError CHOLMOD.Sparse(A_)
 end
 
 @testset "sparse right multiplication of Symmetric and Hermitian matrices #21431" begin
@@ -714,29 +717,31 @@ AtA = A'*A;
 C0 = [1., 2., 0, 0, 0]
 #Test both cholfact and LDLt with and without automatic permutations
 for F in (cholfact(AtA), cholfact(AtA, perm=1:5), ldltfact(AtA), ldltfact(AtA, perm=1:5))
+    local F
     B0 = F\ones(5)
     #Test both sparse/dense and vectors/matrices
     for Ctest in (C0, sparse(C0), [C0 2*C0], sparse([C0 2*C0]))
+        local B, C, F1
         C = copy(Ctest)
         F1 = copy(F)
         B = (AtA+C*C')\ones(5)
 
         #Test update
         F11 = CHOLMOD.lowrankupdate(F1, C)
-        @test full(sparse(F11)) ≈ AtA+C*C'
+        @test Array(sparse(F11)) ≈ AtA+C*C'
         @test F11\ones(5) ≈ B
         #Make sure we get back the same factor again
         F10 = CHOLMOD.lowrankdowndate(F11, C)
-        @test full(sparse(F10)) ≈ AtA
+        @test Array(sparse(F10)) ≈ AtA
         @test F10\ones(5) ≈ B0
 
         #Test in-place update
         CHOLMOD.lowrankupdate!(F1, C)
-        @test full(sparse(F1)) ≈ AtA+C*C'
+        @test Array(sparse(F1)) ≈ AtA+C*C'
         @test F1\ones(5) ≈ B
         #Test in-place downdate
         CHOLMOD.lowrankdowndate!(F1, C)
-        @test full(sparse(F1)) ≈ AtA
+        @test Array(sparse(F1)) ≈ AtA
         @test F1\ones(5) ≈ B0
 
         @test C == Ctest    #Make sure C didn't change
@@ -744,6 +749,7 @@ for F in (cholfact(AtA), cholfact(AtA, perm=1:5), ldltfact(AtA), ldltfact(AtA, p
 end
 
 @testset "Issue #22335" begin
+    local A, F
     A = speye(3)
     @test LinAlg.issuccess(cholfact(A))
     A[3, 3] = -1

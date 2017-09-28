@@ -4,8 +4,8 @@ using Base.Test
 
 # Check that serializer hasn't gone out-of-frame
 @test Serializer.sertag(Symbol) == 1
-@test Serializer.sertag(()) == 55
-@test Serializer.sertag(false) == 63
+@test Serializer.sertag(()) == 68
+@test Serializer.sertag(false) == 76
 
 function create_serialization_stream(f::Function)
     s = IOBuffer()
@@ -449,8 +449,10 @@ let b = IOBuffer()
 end
 
 # issue #1770
-let a = ['T', 'e', 's', 't']
+let a = ['T', 'e', 's', 't'],
     f = IOBuffer()
+
+    # issue #1770
     serialize(f, a)
     seek(f, 0)
     @test deserialize(f) == a
@@ -477,4 +479,18 @@ let x = T20324[T20324(1) for i = 1:2]
     y = deserialize(b)
     @test isa(y,Vector{T20324})
     @test y == x
+end
+
+# serializer header
+let io = IOBuffer()
+    serialize(io, ())
+    seekstart(io)
+    b = read(io)
+    @test b[1] == Serializer.HEADER_TAG
+    @test b[2:3] == b"JL"
+    @test b[4] == Serializer.ser_version
+    @test (b[5] & 0x3) == (ENDIAN_BOM == 0x01020304)
+    @test ((b[5] & 0xc)>>2) == (sizeof(Int) == 8)
+    @test (b[5] & 0xf0) == 0
+    @test all(b[6:8] .== 0)
 end

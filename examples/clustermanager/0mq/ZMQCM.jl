@@ -1,6 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using ZMQ
+# the 0mq clustermanager depends on package ZMQ. For testing purposes, at least
+# make sure the code loads without it.
+try
+    using ZMQ
+end
 
 import Base: launch, manage, connect, kill
 

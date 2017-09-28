@@ -56,35 +56,27 @@ end
 @test sprint(show,UniformScaling(one(Complex128))) == "UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
 @test sprint(show,UniformScaling(one(Float32))) == "UniformScaling{Float32}\n1.0*I"
 
-λ = complex(randn(),randn())
-J = UniformScaling(λ)
-@testset "transpose, conj, inv" begin
-    @test ndims(J) == 2
-    @test transpose(J) == J
-    @test J*eye(2) == conj(J'eye(2)) # ctranpose (and A(c)_mul_B)
-    @test I + I === UniformScaling(2) # +
-    @test inv(I) == I
-    @test inv(J) == UniformScaling(inv(λ))
-    @test cond(I) == 1
-    @test cond(J) == (λ ≠ zero(λ) ? one(real(λ)) : oftype(real(λ), Inf))
-end
+let
+    λ = complex(randn(),randn())
+    J = UniformScaling(λ)
+    @testset "transpose, conj, inv" begin
+        @test ndims(J) == 2
+        @test transpose(J) == J
+        @test J*eye(2) == conj(J'eye(2)) # ctranpose (and A(c)_mul_B)
+        @test I + I === UniformScaling(2) # +
+        @test inv(I) == I
+        @test inv(J) == UniformScaling(inv(λ))
+        @test cond(I) == 1
+        @test cond(J) == (λ ≠ zero(λ) ? one(real(λ)) : oftype(real(λ), Inf))
+    end
 
-B = bitrand(2,2)
-@test B + I == B + eye(B)
-@test I + B == B + eye(B)
-
-@testset "binary ops with matrices" begin
-    let AA = randn(2, 2)
+    @testset "binary ops with matrices" begin
+        B = bitrand(2, 2)
+        @test B + I == B + eye(B)
+        @test I + B == B + eye(B)
+        AA = randn(2, 2)
         for SS in (sprandn(3,3, 0.5), speye(Int, 3))
-            @testset for atype in ("Array", "SubArray")
-                if atype == "Array"
-                    A = AA
-                    S = SS
-                else
-                    A = view(AA, 1:2, 1:2)
-                    S = view(SS, 1:3, 1:3)
-                end
-
+            for (A, S) in ((AA, SS), (view(AA, 1:2, 1:2), view(SS, 1:3, 1:3)))
                 @test @inferred(A + I) == A + eye(A)
                 @test @inferred(I + A) == A + eye(A)
                 @test @inferred(I - I) === UniformScaling(0)
@@ -113,48 +105,48 @@ B = bitrand(2,2)
                 @test @inferred(I/λ) === UniformScaling(1/λ)
                 @test @inferred(I\J) === J
 
-                if atype == "Array"
+                if isa(A, Array)
                     T = LowerTriangular(randn(3,3))
                 else
                     T = LowerTriangular(view(randn(3,3), 1:3, 1:3))
                 end
-                @test @inferred(T + J) == full(T) + J
-                @test @inferred(J + T) == J + full(T)
-                @test @inferred(T - J) == full(T) - J
-                @test @inferred(J - T) == J - full(T)
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
-                if atype == "Array"
+                if isa(A, Array)
                     T = LinAlg.UnitLowerTriangular(randn(3,3))
                 else
                     T = LinAlg.UnitLowerTriangular(view(randn(3,3), 1:3, 1:3))
                 end
-                @test @inferred(T + J) == full(T) + J
-                @test @inferred(J + T) == J + full(T)
-                @test @inferred(T - J) == full(T) - J
-                @test @inferred(J - T) == J - full(T)
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
-                if atype == "Array"
+                if isa(A, Array)
                     T = UpperTriangular(randn(3,3))
                 else
                     T = UpperTriangular(view(randn(3,3), 1:3, 1:3))
                 end
-                @test @inferred(T + J) == full(T) + J
-                @test @inferred(J + T) == J + full(T)
-                @test @inferred(T - J) == full(T) - J
-                @test @inferred(J - T) == J - full(T)
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
-                if atype == "Array"
+                if isa(A, Array)
                     T = LinAlg.UnitUpperTriangular(randn(3,3))
                 else
                     T = LinAlg.UnitUpperTriangular(view(randn(3,3), 1:3, 1:3))
                 end
-                @test @inferred(T + J) == full(T) + J
-                @test @inferred(J + T) == J + full(T)
-                @test @inferred(T - J) == full(T) - J
-                @test @inferred(J - T) == J - full(T)
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
                 @test @inferred(I\A) == A
