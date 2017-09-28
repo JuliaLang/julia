@@ -99,7 +99,7 @@ function parse1(s::AbstractString, k::Integer)
     while c in "#0- + '"
         c, k = next_or_die(s,k)
     end
-    flags = String(s[j:k-2]) # exploiting that all specifier characters are one-byte.
+    flags = String(s[j:prevind(s,k)-1]) # exploiting that all flags are one-byte.
     # parse width
     while '0' <= c <= '9'
         width = 10*width + c-'0'

@@ -283,4 +283,7 @@ end
 @test (@sprintf("%d\u0f00%d", 1, 2)) == "1\u0f002"
 @test (@sprintf("%d\U0001ffff%d", 1, 2)) == "1\U0001ffff2"
 @test (@sprintf("%d\u2203%d\u0203", 1, 2)) == "1\u22032\u0203"
-
+@test_throws ArgumentError @macroexpand(@sprintf("%y%d", 1, 2))
+@test_throws ArgumentError @macroexpand(@sprintf("%\u00d0%d", 1, 2))
+@test_throws ArgumentError @macroexpand(@sprintf("%\u0f00%d", 1, 2))
+@test_throws ArgumentError @macroexpand(@sprintf("%\U0001ffff%d", 1, 2))
