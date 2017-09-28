@@ -743,6 +743,7 @@ end
             By = Float32(rem(big(op(x)), pi/2))
             @test Ty ≈ By || Ty ≈ By-Float32(pi)/2
         end
+    end
 end
 @testset "acos #23283" begin
     for T in (Float32, Float64)
