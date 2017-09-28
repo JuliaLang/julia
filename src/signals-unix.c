@@ -744,3 +744,8 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
 {
     // TODO: ?
 }
+
+JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
+{
+    return raise(SIGTSTP);
+}
