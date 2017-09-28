@@ -686,8 +686,9 @@ function test_map(::Type{TestAbstractArray})
     # Map to destination collection
     map!((x,y,z)->x*y*z, A, Float64[1:10...], Float64[1:10...], Float64[1:10...])
     @test A == map(x->x*x*x, Float64[1:10...])
-    Base.asyncmap!((x,y,z)->x*y*z, B, Float64[1:10...], Float64[1:10...], Float64[1:10...])
+    C = Base.asyncmap!((x,y,z)->x*y*z, B, Float64[1:10...], Float64[1:10...], Float64[1:10...])
     @test A == B
+    @test B === C
 end
 
 @testset "issue #15689, mapping an abstract type" begin
