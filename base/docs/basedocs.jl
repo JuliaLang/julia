@@ -26,7 +26,7 @@ kw"help", kw"?", kw"julia"
 
 `using Foo` will load the module or package `Foo` and make its [`export`](@ref)ed names
 available for direct use. Names can also be used via dot syntax (e.g. `Foo.foo` to access
-the name `foo` in the `Foo` module), whether they are `export`ed or not.
+the name `foo`), whether they are `export`ed or not.
 See the [manual section about modules](@ref modules) for details.
 ```
 """
@@ -35,8 +35,9 @@ kw"using"
 """
     import
 
-`import Foo` will load the module or package `Foo`. Unlike [`using`](@ref), however,
-`import` will *not* make any `export`ed names available for use.
+`import Foo` will load the module or package `Foo`.
+Names from the imported `Foo` module can be accessed with dot syntax
+(e.g. `Foo.foo` to access the name `foo`).
 See the [manual section about modules](@ref modules) for details.
 """
 kw"import"
@@ -70,27 +71,28 @@ kw"abstract type"
 """
     module
 
-`module` declares a Module, which is a separate global variable workspace.  Within a
+`module` declares a Module, which is a separate global variable workspace. Within a
 module, you can control which names from other modules are visible (via importing), and
-specify which of your names are intended to be public (via exporting). For example:
+specify which of your names are intended to be public (via exporting).
+Modules allow you to create top-level definitions without worrying about name conflicts
+when your code is used together with somebody else’s.
+See the [manual section about modules](@ref modules) for more details.
 
+# Examples
 ```julia
-module
+module Foo
 import Base.show
 export MyType, foo
 
-type MyType
+struct MyType
     x
 end
 
 bar(x) = 2x
 foo(a::MyType) = bar(a.x) + 1
-show(io, a::MyType) = print(io, "MyType \$(a.x)")
+show(io::IO, a::MyType) = print(io, "MyType \$(a.x)")
 end
 ```
-Modules allow you to create top-level definitions without worrying about name conflicts
-when your code is used together with somebody else’s.
-See the [manual section about modules](@ref modules) for more details.
 """
 kw"module"
 
@@ -128,26 +130,24 @@ macro maps a tuple of arguments to a returned expression, and the resulting expr
 is compiled directly rather than requiring a runtime `eval` call. Macro arguments may
 include expressions, literal values, and symbols. For example:
 
-```julia
-macro sayhello(name)
-    return :( println("Hello, ", \$name) )
-end
+# Examples
+```jldoctest
+julia> macro sayhello(name)
+           return :( println("Hello, ", \$name, "!") )
+       end
+@sayhello (macro with 1 method)
+
+julia> @sayhello "Charlie"
+Hello, Charlie!
 ```
-This macro takes one argument: `name`. When `@sayhello` is encountered, the quoted
-expression is expanded to interpolate the value of the argument into the final
-expression.
 """
 kw"macro"
 
 """
     importall
 
-`importall` imports all names exported by the specified module, as if `import` were used
-individually on all of them. For example:
-
-    importall Distributions
-
-As with `import`, functions imported by `importall` can be extended.
+`importall` imports all names exported by the specified module,
+as if `import` were used individually on all of them.
 See the [manual section about modules](@ref modules) for details.
 """
 kw"importall"
@@ -244,6 +244,19 @@ kw"quote"
     '
 
 The conjugate transposition operator, see [`adjoint`](@ref).
+
+# Examples
+```jldoctest
+julia> A = [1.0 -2.0im; 4.0im 2.0]
+2×2 Array{Complex{Float64},2}:
+ 1.0+0.0im  -0.0-2.0im
+ 0.0+4.0im   2.0+0.0im
+
+julia> A'
+2×2 Array{Complex{Float64},2}:
+  1.0-0.0im  0.0-4.0im
+ -0.0+2.0im  2.0-0.0im
+```
 """
 kw"'"
 
@@ -251,6 +264,19 @@ kw"'"
     .'
 
 The transposition operator, see [`transpose`](@ref).
+
+# Examples
+```jldoctest
+julia> A = [1.0 -2.0im; 4.0im 2.0]
+2×2 Array{Complex{Float64},2}:
+ 1.0+0.0im  -0.0-2.0im
+ 0.0+4.0im   2.0+0.0im
+
+julia> A.'
+2×2 Array{Complex{Float64},2}:
+  1.0+0.0im  0.0+4.0im
+ -0.0-2.0im  2.0+0.0im
+```
 """
 kw".'"
 
@@ -295,7 +321,7 @@ kw"function"
 """
     return
 
-`return` can be used function bodies to exit early and return a given value, e.g.
+`return` can be used in function bodies to exit early and return a given value, e.g.
 
 ```julia
 function compare(a, b)
@@ -331,7 +357,7 @@ back to `map`. `test2([5,6,7])` then returns `[5,12,7]`.
 kw"return"
 
 """
-    if - elseif - if
+    if - elseif - else
 
 `if`-`elseif`-`else` performs conditional evaluation, which allows portions of code to
 be evaluated or not evaluated depending on the value of a boolean expression. Here is
@@ -471,6 +497,7 @@ kw"finally"
 
 `break` breaks out of a loop immediately.
 
+# Examples
 ```jldoctest
 julia> i = 0
 0
@@ -560,18 +587,25 @@ kw"..."
 
 `;` has a similar role in Julia as in many C-like languages, and is used to delimit the
 end of the previous statement. `;` is not necessary after new lines, but can be used to
-separate statements on a single line or to join statements into a single expression:
+separate statements on a single line or to join statements into a single expression.
+`;` is also used to suppress output printing in the REPL and similar interfaces.
 
+# Examples
 ```julia
-function foo()
-    println("Hello, "); println("World!")
-    return true
-end
+julia> function foo()
+           x = "Hello, "; x *= "World!"
+           return x
+       end
+foo (generic function with 1 method)
 
-foo() = (println("Hello, World!"); true)
+julia> bar() = (x = "Hello, Mars!"; return x)
+bar (generic function with 1 method)
+
+julia> foo();
+
+julia> bar()
+"Hello, Mars!"
 ```
-
-`;` is also used to suppress output in the REPL and similar interfaces.
 """
 kw";"
 
