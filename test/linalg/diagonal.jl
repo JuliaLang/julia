@@ -152,19 +152,19 @@ srand(1)
 
         # Performance specialisations for A*_mul_B!
         vvv = similar(vv)
-        @test (r = full(D) * vv   ; A_mul_B!(vvv, D, vv)  ≈ r ≈ vvv)
-        @test (r = full(D)' * vv  ; Ac_mul_B!(vvv, D, vv) ≈ r ≈ vvv)
-        @test (r = full(D).' * vv ; At_mul_B!(vvv, D, vv) ≈ r ≈ vvv)
+        @test (r = Matrix(D) * vv   ; A_mul_B!(vvv, D, vv)  ≈ r ≈ vvv)
+        @test (r = Matrix(D)' * vv  ; Ac_mul_B!(vvv, D, vv) ≈ r ≈ vvv)
+        @test (r = Matrix(D).' * vv ; At_mul_B!(vvv, D, vv) ≈ r ≈ vvv)
 
         UUU = similar(UU)
-        @test (r = full(D) * UU   ; A_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
-        @test (r = full(D)' * UU  ; Ac_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
-        @test (r = full(D).' * UU ; At_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
+        @test (r = Matrix(D) * UU   ; A_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
+        @test (r = Matrix(D)' * UU  ; Ac_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
+        @test (r = Matrix(D).' * UU ; At_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
 
         # make sure that A_mul_B{c,t}! works with B as a Diagonal
         VV = Array(D)
         DD = copy(D)
-        r  = VV * full(D)
+        r  = VV * Matrix(D)
         @test Array(A_mul_B!(VV, DD)) ≈ r ≈ Array(D)*Array(D)
         DD = copy(D)
         r  = VV * (Array(D).')

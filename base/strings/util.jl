@@ -204,9 +204,9 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 ## string padding functions ##
 
 function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
-    m = n - strwidth(s)
+    m = n - textwidth(s)
     (m <= 0) && (return s)
-    l = strwidth(p)
+    l = textwidth(p)
     if l==1
         return string(p^m, s)
     end
@@ -217,9 +217,9 @@ function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
 end
 
 function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
-    m = n - strwidth(s)
+    m = n - textwidth(s)
     (m <= 0) && (return s)
-    l = strwidth(p)
+    l = textwidth(p)
     if l==1
         return string(s, p^m)
     end

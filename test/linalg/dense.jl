@@ -134,12 +134,12 @@ bimg  = randn(n,2)/2
         @test factorize(A) == Bidiagonal(d,e,:U)
         if eltya <: Real
             A = diagm(d) + diagm(e,1) + diagm(e,-1)
-            @test full(factorize(A)) ≈ full(factorize(SymTridiagonal(d,e)))
+            @test Matrix(factorize(A)) ≈ Matrix(factorize(SymTridiagonal(d,e)))
             A = diagm(d) + diagm(e,1) + diagm(e,-1) + diagm(f,2) + diagm(f,-2)
             @test inv(factorize(A)) ≈ inv(factorize(Symmetric(A)))
         end
         A = diagm(d) + diagm(e,1) + diagm(e2,-1)
-        @test full(factorize(A)) ≈ full(factorize(Tridiagonal(e2,d,e)))
+        @test Matrix(factorize(A)) ≈ Matrix(factorize(Tridiagonal(e2,d,e)))
         A = diagm(d) + diagm(e,1) + diagm(f,2)
         @test factorize(A) == UpperTriangular(A)
     end
@@ -154,20 +154,6 @@ end # for eltya
         @test_throws ArgumentError tril(a, -m - 2)
         @test_throws ArgumentError tril(a, n)
     end
-end
-
-@testset "Test gradient for $elty" for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
-    if elty <: Real
-        x = convert(Vector{elty}, [1:3;])
-        g = ones(elty, 3)
-    else
-        x = convert(Vector{elty}, complex.([1:3;], [1:3;]))
-        g = convert(Vector{elty}, complex.(ones(3), ones(3)))
-    end
-    xsub = view(x, 1:size(x, 1))
-    @test gradient(x) ≈ g
-    @test gradient(xsub) ≈ g # Test gradient on SubArray
-    @test gradient(ones(elty,1)) == zeros(elty,1)
 end
 
 @testset "Tests norms" begin

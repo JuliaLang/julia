@@ -7,6 +7,7 @@ const LIBGIT2_MIN_VER = v"0.23.0"
 const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
 
 const KEY_DIR = joinpath(@__DIR__, "libgit2")
+const HOME = Sys.iswindows() ? "USERPROFILE" : "HOME"  # Environment variable name for home
 
 function get_global_dir()
     buf = Ref(LibGit2.Buffer())
@@ -1643,7 +1644,7 @@ mktempdir() do dir
 
         @test !haskey(cache, cred_id)
 
-        # Reject a credential which wasn't stored
+        # Attempt to reject a credential which wasn't stored
         LibGit2.reject(cache, cred, url)
         @test !haskey(cache, cred_id)
         @test cred.user == "julia"
@@ -1673,14 +1674,18 @@ mktempdir() do dir
             LibGit2.Error.Callback, LibGit2.Error.EUSER,
             "Aborting, user cancelled credential request.")
 
+        prompt_limit = LibGit2.GitError(
+            LibGit2.Error.Callback, LibGit2.Error.EAUTH,
+            "Aborting, maximum number of prompts reached.")
+
         incompatible_error = LibGit2.GitError(
             LibGit2.Error.Callback, LibGit2.Error.EAUTH,
             "The explicitly provided credential is incompatible with the requested " *
             "authentication methods.")
 
-        eauth_error = LibGit2.GitError(
-            LibGit2.Error.None, LibGit2.Error.EAUTH,
-            "No errors")
+        exhausted_error = LibGit2.GitError(
+            LibGit2.Error.Callback, LibGit2.Error.EAUTH,
+            "All authentication methods have failed.")
 
         @testset "SSH credential prompt" begin
             url = "git@github.com:test/package.jl"
@@ -1712,14 +1717,14 @@ mktempdir() do dir
             # sure a users will actually have these files. Instead we will use the ENV
             # variables to set the default values.
 
-            # Default credentials are valid
+            # ENV credentials are valid
             withenv("SSH_KEY_PATH" => valid_key) do
                 err, auth_attempts = challenge_prompt(ssh_ex, [])
                 @test err == git_ok
                 @test auth_attempts == 1
             end
 
-            # Default credentials are valid but requires a passphrase
+            # ENV credentials are valid but requires a passphrase
             withenv("SSH_KEY_PATH" => valid_p_key) do
                 challenges = [
                     "Passphrase for $valid_p_key:" => "$passphrase\n",
@@ -1734,7 +1739,7 @@ mktempdir() do dir
                 # could also just re-call the credential callback like they do for HTTP.
                 challenges = [
                     "Passphrase for $valid_p_key:" => "foo\n",
-                    # "Private key location for 'git@github.com' [$valid_p_key]:" => "\n",
+                    "Private key location for 'git@github.com' [$valid_p_key]:" => "\n",
                     "Passphrase for $valid_p_key:" => "$passphrase\n",
                 ]
                 err, auth_attempts = challenge_prompt(ssh_p_ex, challenges)
@@ -1758,6 +1763,7 @@ mktempdir() do dir
                 @test auth_attempts == 1
             end
 
+            # ENV credential requiring passphrase
             withenv("SSH_KEY_PATH" => valid_p_key, "SSH_KEY_PASS" => passphrase) do
                 err, auth_attempts = challenge_prompt(ssh_p_ex, [])
                 @test err == git_ok
@@ -1795,6 +1801,7 @@ mktempdir() do dir
                 challenges = [
                     "Username for 'github.com':" => "foo\n",
                     "Username for 'github.com' [foo]:" => "\n",
+                    "Private key location for 'foo@github.com' [$valid_key]:" => "\n",
                     "Username for 'github.com' [foo]:" => "\x04",  # Need to manually abort
                 ]
                 err, auth_attempts = challenge_prompt(ssh_u_ex, challenges)
@@ -1802,7 +1809,7 @@ mktempdir() do dir
                 @test auth_attempts == 3
 
                 # Credential callback is given an empty string in the `username_ptr`
-                # instead of the typical C_NULL.
+                # instead of the C_NULL in the other missing username tests.
                 ssh_user_empty_ex = gen_ex(valid_cred, username="")
                 challenges = [
                     "Username for 'github.com':" => "$username\n",
@@ -1817,7 +1824,7 @@ mktempdir() do dir
             withenv("SSH_KEY_PATH" => nothing,
                     "SSH_PUB_KEY_PATH" => nothing,
                     "SSH_KEY_PASS" => nothing,
-                    (Sys.iswindows() ? "USERPROFILE" : "HOME") => tempdir()) do
+                    HOME => dir) do
 
                 # Set the USERPROFILE / HOME above to be a directory that does not contain
                 # the "~/.ssh/id_rsa" file. If this file exists the credential callback
@@ -1857,22 +1864,40 @@ mktempdir() do dir
                 err, auth_attempts = challenge_prompt(ssh_ex, challenges)
                 @test err == abort_prompt
                 @test auth_attempts == 2
+
+                # User provides an invalid private key until prompt limit reached.
+                # Note: the prompt should not supply an invalid default.
+                challenges = [
+                    "Private key location for 'git@github.com':" => "foo\n",
+                    "Private key location for 'git@github.com' [foo]:" => "foo\n",
+                    "Private key location for 'git@github.com' [foo]:" => "foo\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
+                @test err == prompt_limit
+                @test auth_attempts == 3
             end
 
-            # TODO: Tests are currently broken. Credential callback currently infinite loops
-            # and never prompts user to change private keys.
-            #=
             # Explicitly setting these env variables to an existing but invalid key pair
             # means the user will be given a prompt with that defaults to the given values.
-            withenv("SSH_KEY_PATH" => invalid_key, "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
+            withenv("SSH_KEY_PATH" => invalid_key,
+                    "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
                 challenges = [
                     "Private key location for 'git@github.com' [$invalid_key]:" => "$valid_key\n",
                 ]
                 err, auth_attempts = challenge_prompt(ssh_ex, challenges)
                 @test err == git_ok
                 @test auth_attempts == 2
+
+                # User repeatedly chooses the default invalid private key until prompt limit reached
+                challenges = [
+                    "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
+                    "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
+                    "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
+                @test err == prompt_limit
+                @test auth_attempts == 4
             end
-            =#
 
             # Explicitly set the public key ENV variable to a non-existent file.
             withenv("SSH_KEY_PATH" => valid_key,
@@ -1888,9 +1913,6 @@ mktempdir() do dir
                 @test auth_attempts == 1
             end
 
-            # TODO: Tests are currently broken. Credential callback currently infinite loops
-            # and never prompts user to change private keys.
-            #=
             # Explicitly set the public key ENV variable to a public key that doesn't match
             # the private key.
             withenv("SSH_KEY_PATH" => valid_key,
@@ -1905,7 +1927,6 @@ mktempdir() do dir
                 @test err == git_ok
                 @test auth_attempts == 2
             end
-            =#
         end
 
         @testset "HTTPS credential prompt" begin
@@ -1961,12 +1982,14 @@ mktempdir() do dir
             challenges = [
                 "Username for 'https://github.com':" => "foo\n",
                 "Password for 'https://foo@github.com':" => "bar\n",
-                "Username for 'https://github.com' [foo]:" => "$valid_username\n",
-                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+                "Username for 'https://github.com' [foo]:" => "foo\n",
+                "Password for 'https://foo@github.com':" => "bar\n",
+                "Username for 'https://github.com' [foo]:" => "foo\n",
+                "Password for 'https://foo@github.com':" => "bar\n",
             ]
             err, auth_attempts = challenge_prompt(https_ex, challenges)
-            @test err == git_ok
-            @test auth_attempts == 2
+            @test err == prompt_limit
+            @test auth_attempts == 3
         end
 
         @testset "SSH agent username" begin
@@ -1986,15 +2009,121 @@ mktempdir() do dir
             # An empty string username_ptr
             ex = gen_ex(username="")
             err, auth_attempts = challenge_prompt(ex, [])
-            @test err == eauth_error
-            @test auth_attempts == 2
+            @test err == exhausted_error
+            @test auth_attempts == 3
 
             # A null username_ptr passed into `git_cred_ssh_key_from_agent` can cause a
             # segfault.
             ex = gen_ex(username=nothing)
             err, auth_attempts = challenge_prompt(ex, [])
-            @test err == eauth_error
+            @test err == exhausted_error
             @test auth_attempts == 2
+        end
+
+        @testset "SSH default" begin
+            mktempdir() do home_dir
+                url = "github.com:test/package.jl"
+
+                default_key = joinpath(home_dir, ".ssh", "id_rsa")
+                mkdir(dirname(default_key))
+
+                valid_key = joinpath(KEY_DIR, "valid")
+                valid_cred = LibGit2.SSHCredentials("git", "", valid_key, valid_key * ".pub")
+
+                valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
+                passphrase = "secret"
+                valid_p_cred = LibGit2.SSHCredentials("git", passphrase, valid_p_key, valid_p_key * ".pub")
+
+                function gen_ex(cred)
+                    quote
+                        valid_cred = $cred
+
+                        default_cred = deepcopy(valid_cred)
+                        default_cred.prvkey = $default_key
+                        default_cred.pubkey = $default_key * ".pub"
+
+                        cp(valid_cred.prvkey, default_cred.prvkey)
+                        cp(valid_cred.pubkey, default_cred.pubkey)
+
+                        try
+                            include($LIBGIT2_HELPER_PATH)
+                            credential_loop(default_cred, $url, "git")
+                        finally
+                            rm(default_cred.prvkey)
+                            rm(default_cred.pubkey)
+                        end
+                    end
+                end
+
+                withenv("SSH_KEY_PATH" => nothing,
+                        "SSH_PUB_KEY_PATH" => nothing,
+                        "SSH_KEY_PASS" => nothing,
+                        HOME => home_dir) do
+
+                    # Automatically use the default key
+                    ex = gen_ex(valid_cred)
+                    err, auth_attempts = challenge_prompt(ex, [])
+                    @test err == git_ok
+                    @test auth_attempts == 1
+
+                    # Confirm the private key if any other prompting is required
+                    ex = gen_ex(valid_p_cred)
+                    challenges = [
+                        "Private key location for 'git@github.com' [$default_key]:" => "\n",
+                        "Passphrase for $default_key:" => "$passphrase\n",
+                    ]
+                    err, auth_attempts = challenge_prompt(ex, challenges)
+                    @test err == git_ok
+                    @test auth_attempts == 1
+                end
+            end
+        end
+
+        @testset "SSH expand tilde" begin
+            url = "git@github.com:test/package.jl"
+
+            valid_key = joinpath(KEY_DIR, "valid")
+            valid_cred = LibGit2.SSHCredentials("git", "", valid_key, valid_key * ".pub")
+
+            invalid_key = joinpath(KEY_DIR, "invalid")
+
+            ssh_ex = quote
+                include($LIBGIT2_HELPER_PATH)
+                payload = CredentialPayload(allow_ssh_agent=false, allow_prompt=true)
+                err, auth_attempts = credential_loop($valid_cred, $url, "git", payload)
+                (err, auth_attempts, payload.credential)
+            end
+
+            withenv("SSH_KEY_PATH" => nothing,
+                    "SSH_PUB_KEY_PATH" => nothing,
+                    "SSH_KEY_PASS" => nothing,
+                    HOME => KEY_DIR) do
+
+                # Expand tilde during the private key prompt
+                challenges = [
+                    "Private key location for 'git@github.com':" => "~/valid\n",
+                ]
+                err, auth_attempts, credential = challenge_prompt(ssh_ex, challenges)
+                @test err == git_ok
+                @test auth_attempts == 1
+                @test get(credential).prvkey == abspath(valid_key)
+            end
+
+            withenv("SSH_KEY_PATH" => valid_key,
+                    "SSH_PUB_KEY_PATH" => invalid_key * ".pub",
+                    "SSH_KEY_PASS" => nothing,
+                    HOME => KEY_DIR) do
+
+                # Expand tilde during the public key prompt
+                challenges = [
+                    "Private key location for 'git@github.com' [$valid_key]:" => "\n",
+                    "Public key location for 'git@github.com' [$invalid_key.pub]:" => "~/valid.pub\n",
+                ]
+                err, auth_attempts, credential = challenge_prompt(ssh_ex, challenges)
+                @test err == git_ok
+                @test auth_attempts == 2
+                @test get(credential).pubkey == abspath(valid_key * ".pub")
+            end
         end
 
         @testset "SSH explicit credentials" begin
@@ -2008,25 +2137,27 @@ mktempdir() do dir
             invalid_key = joinpath(KEY_DIR, "invalid")
             invalid_cred = LibGit2.SSHCredentials(username, "", invalid_key, invalid_key * ".pub")
 
-            function gen_ex(cred; allow_prompt=true)
+            function gen_ex(cred; allow_prompt=true, allow_ssh_agent=false)
                 quote
                     include($LIBGIT2_HELPER_PATH)
-                    payload = CredentialPayload($cred, allow_ssh_agent=false, allow_prompt=$allow_prompt)
+                    payload = CredentialPayload($cred, allow_ssh_agent=$allow_ssh_agent,
+                        allow_prompt=$allow_prompt)
                     credential_loop($valid_cred, $url, $username, payload)
                 end
             end
 
-            # Explicitly provided credential is correct
-            ex = gen_ex(valid_cred, allow_prompt=true)
+            # Explicitly provided credential is correct. Note: allowing prompting and
+            # SSH agent to ensure they are skipped.
+            ex = gen_ex(valid_cred, allow_prompt=true, allow_ssh_agent=true)
             err, auth_attempts = challenge_prompt(ex, [])
             @test err == git_ok
             @test auth_attempts == 1
 
             # Explicitly provided credential is incorrect
-            ex = gen_ex(invalid_cred, allow_prompt=false)
+            ex = gen_ex(invalid_cred, allow_prompt=false, allow_ssh_agent=false)
             err, auth_attempts = challenge_prompt(ex, [])
-            @test err == eauth_error
-            @test auth_attempts == 2
+            @test err == exhausted_error
+            @test auth_attempts == 3
         end
 
         @testset "HTTPS explicit credentials" begin
@@ -2052,7 +2183,7 @@ mktempdir() do dir
             # Explicitly provided credential is incorrect
             ex = gen_ex(invalid_cred, allow_prompt=false)
             err, auth_attempts = challenge_prompt(ex, [])
-            @test err == eauth_error
+            @test err == exhausted_error
             @test auth_attempts == 2
         end
 
@@ -2124,7 +2255,7 @@ mktempdir() do dir
             # An EAUTH error should remove credentials from the cache
             ex = gen_ex(cached_cred=invalid_cred, allow_prompt=false)
             err, auth_attempts, cache = challenge_prompt(ex, [])
-            @test err == eauth_error
+            @test err == exhausted_error
             @test auth_attempts == 2
             @test typeof(cache) == LibGit2.CachedCredentials
             @test cache.cred == Dict()
@@ -2216,182 +2347,6 @@ mktempdir() do dir
             @test auth_attempts == 1
         end
     end
-
-    #= temporarily disabled until working on the buildbots, ref https://github.com/JuliaLang/julia/pull/17651#issuecomment-238211150
-    @testset "SSH" begin
-        sshd_command = ""
-        ssh_repo = joinpath(dir, "Example.SSH")
-        if !Sys.iswindows()
-            try
-                # SSHD needs to be executed by its full absolute path
-                sshd_command = strip(read(`which sshd`, String))
-            catch
-                warn("Skipping SSH tests (Are `which` and `sshd` installed?)")
-            end
-        end
-        if !isempty(sshd_command)
-            mktempdir() do fakehomedir
-                mkdir(joinpath(fakehomedir,".ssh"))
-                # Unsetting the SSH agent serves two purposes. First, we make
-                # sure that we don't accidentally pick up an existing agent,
-                # and second we test that we fall back to using a key file
-                # if the agent isn't present.
-                withenv("HOME"=>fakehomedir,"SSH_AUTH_SOCK"=>nothing) do
-                    # Generate user file, first an unencrypted one
-                    wait(spawn(`ssh-keygen -N "" -C juliatest@localhost -f $fakehomedir/.ssh/id_rsa`))
-
-                    # Generate host keys
-                    wait(spawn(`ssh-keygen -f $fakehomedir/ssh_host_rsa_key -N '' -t rsa`))
-                    wait(spawn(`ssh-keygen -f $fakehomedir/ssh_host_dsa_key -N '' -t dsa`))
-
-                    our_ssh_port = rand(13000:14000) # Chosen arbitrarily
-
-                    key_option = "AuthorizedKeysFile $fakehomedir/.ssh/id_rsa.pub"
-                    pidfile_option = "PidFile $fakehomedir/sshd.pid"
-                    sshp = agentp = nothing
-                    logfile = tempname()
-                    ssh_debug = false
-                    function spawn_sshd()
-                        debug_flags = ssh_debug ? `-d -d` : ``
-                        _p = open(logfile, "a") do logfilestream
-                            spawn(pipeline(pipeline(`$sshd_command
-                            -e -f /dev/null $debug_flags
-                            -h $fakehomedir/ssh_host_rsa_key
-                            -h $fakehomedir/ssh_host_dsa_key -p $our_ssh_port
-                            -o $pidfile_option
-                            -o 'Protocol 2'
-                            -o $key_option
-                            -o 'UsePrivilegeSeparation no'
-                            -o 'StrictModes no'`,STDOUT),stderr=logfilestream))
-                        end
-                        # Give the SSH server 5 seconds to start up
-                        yield(); sleep(5)
-                        _p
-                    end
-                    sshp = spawn_sshd()
-
-                    TIOCSCTTY_str = "ccall(:ioctl, Void, (Cint, Cint, Int64), 0,
-                        (Sys.isbsd() || Sys.isapple()) ? 0x20007461 : Sys.islinux() ? 0x540E :
-                        error(\"Fill in TIOCSCTTY for this OS here\"), 0)"
-
-                    # To fail rather than hang
-                    function killer_task(p, master)
-                        @async begin
-                            sleep(10)
-                            kill(p)
-                            if isopen(master)
-                                nb_available(master) > 0 &&
-                                    write(logfile,
-                                        readavailable(master))
-                                close(master)
-                            end
-                        end
-                    end
-
-                    try
-                        function try_clone(challenges = [])
-                            cmd = """
-                            repo = nothing
-                            try
-                                $TIOCSCTTY_str
-                                reponame = "ssh://$(ENV["USER"])@localhost:$our_ssh_port$cache_repo"
-                                repo = LibGit2.clone(reponame, "$ssh_repo")
-                            catch err
-                                open("$logfile","a") do f
-                                    println(f,"HOME: ",ENV["HOME"])
-                                    println(f, err)
-                                end
-                            finally
-                                close(repo)
-                            end
-                            """
-                            # We try to be helpful by desperately looking for
-                            # a way to prompt the password interactively. Pretend
-                            # to be a TTY to suppress those shenanigans. Further, we
-                            # need to detach and change the controlling terminal with
-                            # TIOCSCTTY, since getpass opens the controlling terminal
-                            TestHelpers.with_fake_pty() do slave, master
-                                err = Base.Pipe()
-                                let p = spawn(detach(
-                                    `$(Base.julia_cmd()) --startup-file=no -e $cmd`),slave,slave,STDERR)
-                                    killer_task(p, master)
-                                    for (challenge, response) in challenges
-                                        readuntil(master, challenge)
-                                        sleep(1)
-                                        print(master, response)
-                                    end
-                                    sleep(2)
-                                    wait(p)
-                                    close(master)
-                                end
-                            end
-                            @test isfile(joinpath(ssh_repo,"testfile"))
-                            rm(ssh_repo, recursive = true)
-                        end
-
-                        # Should use the default files, no interaction required.
-                        try_clone()
-                        ssh_debug && (kill(sshp); sshp = spawn_sshd())
-
-                        # Ok, now encrypt the file and test with that (this also
-                        # makes sure that we don't accidentally fall back to the
-                        # unencrypted version)
-                        wait(spawn(`ssh-keygen -p -N "xxxxx" -f $fakehomedir/.ssh/id_rsa`))
-
-                        # Try with the encrypted file. Needs a password.
-                        try_clone(["Passphrase"=>"xxxxx\r\n"])
-                        ssh_debug && (kill(sshp); sshp = spawn_sshd())
-
-                        # Move the file. It should now ask for the location and
-                        # then the passphrase
-                        mv("$fakehomedir/.ssh/id_rsa","$fakehomedir/.ssh/id_rsa2")
-                        cp("$fakehomedir/.ssh/id_rsa.pub","$fakehomedir/.ssh/id_rsa2.pub")
-                        try_clone(["location"=>"$fakehomedir/.ssh/id_rsa2\n",
-                                   "Passphrase"=>"xxxxx\n"])
-                        mv("$fakehomedir/.ssh/id_rsa2","$fakehomedir/.ssh/id_rsa")
-                        rm("$fakehomedir/.ssh/id_rsa2.pub")
-
-                        # Ok, now start an agent
-                        agent_sock = tempname()
-                        agentp = spawn(`ssh-agent -a $agent_sock -d`)
-                        while stat(agent_sock).mode == 0 # Wait until the agent is started
-                            sleep(1)
-                        end
-
-                        # fake pty is required for the same reason as in try_clone
-                        # above
-                        withenv("SSH_AUTH_SOCK" => agent_sock) do
-                            TestHelpers.with_fake_pty() do slave, master
-                                cmd = """
-                                    $TIOCSCTTY_str
-                                    run(pipeline(`ssh-add $fakehomedir/.ssh/id_rsa`,
-                                        stderr = DevNull))
-                                """
-                                addp = spawn(detach(`$(Base.julia_cmd()) --startup-file=no -e $cmd`),
-                                        slave, slave, STDERR)
-                                killer_task(addp, master)
-                                sleep(2)
-                                write(master, "xxxxx\n")
-                                wait(addp)
-                            end
-
-                            # Should now use the agent
-                            try_clone()
-                        end
-                    catch err
-                        println("SSHD logfile contents follows:")
-                        println(read(logfile, String))
-                        rethrow(err)
-                    finally
-                        rm(logfile)
-                        sshp !== nothing && kill(sshp)
-                        agentp !== nothing && kill(agentp)
-                    end
-                end
-            end
-        end
-    end
-    =#
 
     # Note: Tests only work on linux as SSL_CERT_FILE is only respected on linux systems.
     @testset "Hostname verification" begin

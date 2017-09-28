@@ -460,6 +460,7 @@ int LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi)
     for (unsigned i = 0; i < Phi->getNumIncomingValues(); ++i) {
         Value *Incoming = Phi->getIncomingValue(i);
         Value *Base = FindBaseValue(S, Incoming, false);
+        Base = MaybeExtractUnion(Base, Phi->getIncomingBlock(i)->getTerminator());
         if (getValueAddrSpace(Base) != AddressSpace::Tracked)
             Base = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
         if (Base->getType() != T_prjlvalue)
@@ -764,6 +765,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         std::vector<int> args;
                         for (Use &U : CI->arg_operands()) {
                             Value *V = U;
+                            if (isa<Constant>(V))
+                                continue;
                             int Num = Number(S, V);
                             if (Num >= 0)
                                 args.push_back(Num);

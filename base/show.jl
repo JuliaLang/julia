@@ -1682,7 +1682,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     screenwidth -= length(pre) + length(post)
     presp = repeat(" ", length(pre))  # indent each row to match pre string
     postsp = ""
-    @assert strwidth(hdots) == strwidth(ddots)
+    @assert textwidth(hdots) == textwidth(ddots)
     sepsize = length(sep)
     rowsA, colsA = indices(X,1), indices(X,2)
     m, n = length(rowsA), length(colsA)
@@ -1860,7 +1860,13 @@ function showarg(io::IO, x, toplevel)
     toplevel || print(io, "::")
     print(io, typeof(x))
 end
+# This method resolves an ambiguity for packages that specialize on eltype
+function showarg(io::IO, a::Array{Union{}}, toplevel)
+    toplevel || print(io, "::")
+    print(io, typeof(a))
+end
 
+# Container specializations
 function showarg(io::IO, v::SubArray, toplevel)
     print(io, "view(")
     showarg(io, parent(v), false)

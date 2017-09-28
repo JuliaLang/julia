@@ -2559,8 +2559,10 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function orgrq!(A::StridedMatrix{$elty}, tau::StridedVector{$elty}, k::Integer = length(tau))
             chkstride1(A,tau)
-            m = size(A, 1)
-            n = min(m, size(A, 2))
+            m, n = size(A)
+            if n < m
+                throw(DimensionMismatch("input matrix A has dimensions ($m,$n), but cannot have fewer columns than rows"))
+            end
             if k > n
                 throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= n = $n"))
             end
@@ -2580,11 +2582,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                     resize!(work, lwork)
                 end
             end
-            if n < size(A,2)
-                A[:,1:n]
-            else
-                A
-            end
+            A
         end
 
         #      SUBROUTINE DORMLQ( SIDE, TRANS, M, N, K, A, LDA, TAU, C, LDC,

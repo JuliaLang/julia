@@ -274,7 +274,7 @@ end
             Base.show(io, MIME("text/plain"), d)
             out = split(String(take!(s)),'\n')
             for line in out[2:end]
-                @test strwidth(line) <= cols
+                @test textwidth(line) <= cols
             end
             @test length(out) <= rows
 
@@ -284,7 +284,7 @@ end
                 Base.show(io, MIME("text/plain"), f(d))
                 out = split(String(take!(s)),'\n')
                 for line in out[2:end]
-                    @test strwidth(line) <= cols
+                    @test textwidth(line) <= cols
                 end
                 @test length(out) <= rows
             end

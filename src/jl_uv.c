@@ -382,9 +382,9 @@ JL_DLLEXPORT int jl_fs_read(int handle, char *data, size_t len)
 JL_DLLEXPORT int jl_fs_read_byte(int handle)
 {
     uv_fs_t req;
-    char c;
+    unsigned char c;
     uv_buf_t buf[1];
-    buf[0].base = &c;
+    buf[0].base = (char*)&c;
     buf[0].len = 1;
     int ret = uv_fs_read(jl_io_loop, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);

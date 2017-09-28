@@ -12,6 +12,7 @@ static inline void llvm_dump(llvm::Value *v)
 {
 #if JL_LLVM_VERSION >= 50000
     v->print(llvm::dbgs(), true);
+    putchar('\n');
 #else
     v->dump();
 #endif
@@ -24,6 +25,7 @@ static inline void llvm_dump(llvm::Type *v)
 #else
     v->dump();
 #endif
+    putchar('\n');
 }
 
 static inline void llvm_dump(llvm::Function *f)

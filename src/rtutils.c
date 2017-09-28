@@ -558,6 +558,10 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_simplevector_type) {
         n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");
     }
+    else if (v == (jl_value_t*)jl_unionall_type) {
+        // avoid printing `typeof(Type)` for `UnionAll`.
+        n += jl_printf(out, "UnionAll");
+    }
     else if (vt == jl_datatype_type) {
         jl_datatype_t *dv = (jl_datatype_t*)v;
         jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
@@ -1020,6 +1024,26 @@ void jl_depwarn(const char *msg, jl_value_t *sym)
     depwarn_args[1] = jl_cstr_to_string(msg);
     depwarn_args[2] = sym;
     jl_apply(depwarn_args, 3);
+    JL_GC_POP();
+}
+
+JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n)
+{
+    static jl_value_t *depwarn_func = NULL;
+    if (!depwarn_func && jl_base_module) {
+        depwarn_func = jl_get_global(jl_base_module, jl_symbol("_depwarn_for_trailing_indices"));
+    }
+    if (!depwarn_func) {
+        jl_safe_printf("WARNING: omitting indices for non-singleton trailing dimensions is deprecated. Use "
+            "`reshape(A, Val(%zd))` or add trailing `1` indices to make the dimensionality of the array match "
+            "the number of indices\n", n);
+        return;
+    }
+    jl_value_t **depwarn_args;
+    JL_GC_PUSHARGS(depwarn_args, 2);
+    depwarn_args[0] = depwarn_func;
+    depwarn_args[1] = jl_box_long(n);
+    jl_apply(depwarn_args, 2);
     JL_GC_POP();
 }
 

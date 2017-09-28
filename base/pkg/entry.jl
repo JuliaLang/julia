@@ -570,7 +570,7 @@ end
 
 function warnbanner(msg...; label="[ WARNING ]", prefix="")
     cols = Base.displaysize(STDERR)[2]
-    str = rpad(lpad(label, div(cols+strwidth(label), 2), "="), cols, "=")
+    str = rpad(lpad(label, div(cols+textwidth(label), 2), "="), cols, "=")
     warn(prefix="", str)
     println(STDERR)
     warn(prefix=prefix, msg...)

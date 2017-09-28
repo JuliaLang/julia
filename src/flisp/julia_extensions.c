@@ -203,7 +203,7 @@ value_t fl_julia_strip_op_suffix(fl_context_t *fl_ctx, value_t *args, uint32_t n
     }
     if (!op[i]) return args[0]; // no suffix to strip
     if (!i) lerror(fl_ctx, symbol(fl_ctx, "error"), "invalid operator");
-    char *opnew = strncpy(malloc(i+1), op, i);
+    char *opnew = strncpy((char*)malloc(i+1), op, i);
     opnew[i] = 0;
     value_t opnew_symbol = symbol(fl_ctx, opnew);
     free(opnew);

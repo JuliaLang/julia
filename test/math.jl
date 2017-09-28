@@ -294,11 +294,11 @@ end
     TAA = rand(2,2)
     TAA = (TAA + TAA.')/2.
     STAA = Symmetric(TAA)
-    @test full(atanh.(STAA)) == atanh.(TAA)
-    @test full(asinh.(STAA)) == asinh.(TAA)
-    @test full(acosh.(STAA+Symmetric(ones(TAA)))) == acosh.(TAA+ones(TAA))
-    @test full(acsch.(STAA+Symmetric(ones(TAA)))) == acsch.(TAA+ones(TAA))
-    @test full(acoth.(STAA+Symmetric(ones(TAA)))) == acoth.(TAA+ones(TAA))
+    @test Array(atanh.(STAA)) == atanh.(TAA)
+    @test Array(asinh.(STAA)) == asinh.(TAA)
+    @test Array(acosh.(STAA+Symmetric(ones(TAA)))) == acosh.(TAA+ones(TAA))
+    @test Array(acsch.(STAA+Symmetric(ones(TAA)))) == acsch.(TAA+ones(TAA))
+    @test Array(acoth.(STAA+Symmetric(ones(TAA)))) == acoth.(TAA+ones(TAA))
 end
 
 @testset "check exp2(::Integer) matches exp2(::Float)" begin
@@ -693,13 +693,33 @@ end
         @test asin(one(T)) === T(pi)/2
         @test asin(-one(T)) === -T(pi)/2
         for x in (0.45, 0.6, 0.98)
-            by = T(asin(big(x)))
-            @test abs(asin(T(x)) - by)/eps(by) <= one(T)
-            bym = T(asin(big(-x)))
-            @test abs(asin(T(-x)) - bym)/eps(bym) <= one(T)
+            by = asin(big(T(x)))
+            @test T(abs(asin(T(x)) - by))/eps(T(abs(by))) <= 1
+            bym = asin(big(T(-x)))
+            @test T(abs(asin(T(-x)) - bym))/eps(T(abs(bym))) <= 1
         end
         @test_throws DomainError asin(-T(Inf))
         @test_throws DomainError asin(T(Inf))
         @test asin(T(NaN)) === T(NaN)
+    end
+end
+
+@testset "acos #23283" begin
+    for T in (Float32, Float64)
+        @test acos(zero(T)) === T(pi)/2
+        @test acos(-zero(T)) === T(pi)/2
+        @test acos(nextfloat(zero(T))) === T(pi)/2
+        @test acos(prevfloat(zero(T))) === T(pi)/2
+        @test acos(one(T)) === T(0.0)
+        @test acos(-one(T)) === T(pi)
+        for x in (0.45, 0.6, 0.98)
+            by = acos(big(T(x)))
+            @test T((acos(T(x)) - by))/eps(abs(T(by))) <= 1
+            bym = acos(big(T(-x)))
+            @test T(abs(acos(T(-x)) - bym))/eps(abs(T(bym))) <= 1
+        end
+        @test_throws DomainError acos(-T(Inf))
+        @test_throws DomainError acos(T(Inf))
+        @test acos(T(NaN)) === T(NaN)
     end
 end

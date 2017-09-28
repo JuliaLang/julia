@@ -38,9 +38,7 @@ jl_options_t jl_options = { 0,    // quiet
                             -1,   // banner
                             NULL, // julia_home
                             NULL, // julia_bin
-                            NULL, // eval
-                            NULL, // print
-                            NULL, // load
+                            NULL, // cmds
                             NULL, // image_file (will be filled in below)
                             NULL, // cpu_target ("native", "core2", etc...)
                             0,    // nprocs
@@ -96,7 +94,7 @@ static const char opts[]  =
 
     // actions
     " -e, --eval <expr>         Evaluate <expr>\n"
-    " -E, --print <expr>        Evaluate and show <expr>\n"
+    " -E, --print <expr>        Evaluate <expr> and display the result\n"
     " -L, --load <file>         Load <file> immediately on all processors\n\n"
 
     // parallel options
@@ -125,7 +123,7 @@ static const char opts[]  =
 #else
         " (default level is 1 if unspecified or 2 if used without a level)\n"
 #endif
-    " --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)\n"
+    " --inline={yes|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
     " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n"
 #ifdef USE_POLLY
     " --polly={yes|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
@@ -231,14 +229,17 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
     // If CPUID specific binaries are enabled, this varies between runs, so initialize
     // it here, rather than as part of the static initialization above.
     jl_options.image_file = jl_get_default_sysimg_path();
+    jl_options.cmds = NULL;
 
-    int codecov  = JL_LOG_NONE;
-    int malloclog= JL_LOG_NONE;
+    int ncmds = 0;
+    const char **cmds = NULL;
+    int codecov = JL_LOG_NONE;
+    int malloclog = JL_LOG_NONE;
     // getopt handles argument parsing up to -- delineator
     int argc = *argcp;
     char **argv = *argvp;
     if (argc > 0) {
-        for (int i=0; i < argc; i++) {
+        for (int i = 0; i < argc; i++) {
             if (!strcmp(argv[i], "--")) {
                 argc = i;
                 break;
@@ -309,18 +310,36 @@ restart_switch:
             break;
         case 'H': // home
             jl_options.julia_home = strdup(optarg);
+            if (!jl_options.julia_home)
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
             break;
         case 'e': // eval
-            jl_options.eval = strdup(optarg);
-            break;
         case 'E': // print
-            jl_options.print = strdup(optarg);
-            break;
         case 'L': // load
-            jl_options.load = strdup(optarg);
+        {
+            size_t sz = strlen(optarg) + 1;
+            char *arg = (char*)malloc(sz + 1);
+            const char **newcmds;
+            if (!arg)
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            arg[0] = c;
+            memcpy(arg + 1, optarg, sz);
+            newcmds = (const char**)realloc(cmds, (ncmds + 2) * sizeof(char*));
+            if (!newcmds) {
+                free(cmds);
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            }
+            cmds = newcmds;
+            cmds[ncmds] = arg;
+            ncmds++;
+            cmds[ncmds] = 0;
+            jl_options.cmds = cmds;
             break;
+        }
         case 'J': // sysimage
             jl_options.image_file = strdup(optarg);
+            if (!jl_options.image_file)
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
             jl_options.image_file_specified = 1;
             break;
         case 'q': // quiet
@@ -360,6 +379,8 @@ restart_switch:
             break;
         case 'C': // cpu-target
             jl_options.cpu_target = strdup(optarg);
+            if (!jl_options.cpu_target)
+                jl_error("julia: failed to allocate memory");
             break;
         case 'p': // procs
             errno = 0;
@@ -375,6 +396,8 @@ restart_switch:
             break;
         case opt_machinefile:
             jl_options.machinefile = strdup(optarg);
+            if (!jl_options.machinefile)
+                jl_error("julia: failed to allocate memory");
             break;
         case opt_color:
             if (!strcmp(optarg,"yes"))
@@ -548,10 +571,16 @@ restart_switch:
             break;
         case opt_worker:
             jl_options.worker = 1;
-            if (optarg != NULL) jl_options.cookie = strdup(optarg);
+            if (optarg != NULL) {
+                jl_options.cookie = strdup(optarg);
+                if (!jl_options.cookie)
+                    jl_error("julia: failed to allocate memory");
+            }
             break;
         case opt_bind_to:
             jl_options.bindto = strdup(optarg);
+            if (!jl_options.bindto)
+                jl_error("julia: failed to allocate memory");
             break;
         case opt_handle_signals:
             if (!strcmp(optarg,"yes"))

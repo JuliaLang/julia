@@ -36,7 +36,7 @@ nn = 100
         @test (eye(m)*Q)*Q' ≈ eye(m)
 
         # test that Q'Pl*A*Pr = R
-        R0 = Q'*full(A[F[:prow], F[:pcol]])
+        R0 = Q'*Array(A[F[:prow], F[:pcol]])
         @test R0[1:n, :] ≈ F[:R]
         @test norm(R0[n + 1:end, :], 1) < 1e-12
 
@@ -70,7 +70,7 @@ end
     A = sprandn(m, 5, 0.9)*sprandn(5, n, 0.9)
     b = randn(m)
     xs = A\b
-    xd = full(A)\b
+    xd = Array(A)\b
 
     # check that basic solution has more zeros
     @test count(!iszero, xs) < count(!iszero, xd)

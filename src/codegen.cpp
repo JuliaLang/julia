@@ -341,6 +341,7 @@ static Function *expect_func;
 static Function *jldlsym_func;
 static Function *jlnewbits_func;
 static Function *jltypeassert_func;
+static Function *jldepwarnpi_func;
 //static Function *jlgetnthfield_func;
 static Function *jlgetnthfieldchecked_func;
 //static Function *jlsetnthfield_func;
@@ -1981,7 +1982,7 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
             // don't consider assignment LHS as a variable "use"
             simple_use_analysis(ctx, jl_exprarg(e, 1));
         }
-        else if (e->head != line_sym) {
+        else {
             size_t elen = jl_array_dim0(e->args);
             for (i = 0; i < elen; i++) {
                 simple_use_analysis(ctx, jl_exprarg(e, i));
@@ -3663,7 +3664,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr)
     jl_expr_t *ex = (jl_expr_t*)expr;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     jl_sym_t *head = ex->head;
-    if (head == line_sym || head == meta_sym || head == inbounds_sym) {
+    if (head == meta_sym || head == inbounds_sym) {
         // some expression types are metadata and can be ignored
         // in statement position
         return;
@@ -4049,7 +4050,7 @@ static void emit_cfunc_invalidate(
         }
         else {
             gf_ret = emit_bitcast(ctx, gf_ret, gfrt->getPointerTo());
-            ctx.builder.CreateRet(ctx.builder.CreateLoad(gf_ret));
+            ctx.builder.CreateRet(ctx.builder.CreateAlignedLoad(gf_ret, julia_alignment(astrt, 0)));
         }
         break;
     }
@@ -4597,7 +4598,7 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, const jl_returnin
         if (lty != NULL && !isboxed) {
             theArg = decay_derived(emit_bitcast(ctx, theArg, PointerType::get(lty, 0)));
             if (!lty->isAggregateType()) // keep "aggregate" type values in place as pointers
-                theArg = ctx.builder.CreateAlignedLoad(theArg, julia_alignment(theArg, ty, 0));
+                theArg = ctx.builder.CreateAlignedLoad(theArg, julia_alignment(ty, 0));
         }
         assert(dyn_cast<UndefValue>(theArg) == NULL);
         args[idx] = theArg;
@@ -4683,7 +4684,7 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
     jl_returninfo_t props = {};
     SmallVector<Type*, 8> fsig;
     Type *rt;
-    if (jlrettype == (jl_value_t*)jl_void_type) {
+    if (jl_is_structtype(jlrettype) && jl_is_datatype_singleton((jl_datatype_t*)jlrettype)) {
         rt = T_void;
         props.cc = jl_returninfo_t::Register;
     }
@@ -5424,14 +5425,9 @@ static std::unique_ptr<Module> emit_function(
             }
         }
 #endif
-        if (jl_is_linenode(stmt) || (expr && expr->head == line_sym)) {
+        if (jl_is_linenode(stmt)) {
             ssize_t lno = -1;
-            if (jl_is_linenode(stmt)) {
-                lno = jl_linenode_line(stmt);
-            }
-            else {
-                lno = jl_unbox_long(jl_exprarg(stmt,0));
-            }
+            lno = jl_linenode_line(stmt);
             MDNode *inlinedAt = NULL;
             if (DI_stack.size() > 0) {
                 inlinedAt = DI_stack.back().loc;
@@ -5694,9 +5690,9 @@ static std::unique_ptr<Module> emit_function(
                     if (returninfo.cc == jl_returninfo_t::SRet) {
                         assert(jl_is_leaf_type(jlrettype));
                         emit_memcpy(ctx, sret, retvalinfo, jl_datatype_size(jlrettype),
-                                    returninfo.union_minalign);
+                                    julia_alignment(jlrettype, 0));
                     }
-                    else {
+                    else { // must be jl_returninfo_t::Union
                         emit_unionmove(ctx, sret, retvalinfo, isboxed_union, false, NULL);
                     }
                 }
@@ -6315,6 +6311,14 @@ static void init_julia_llvm_env(Module *m)
 
     jlapply2va_func = jlcall_func_to_llvm("jl_apply_2va", &jl_apply_2va, m);
 
+    std::vector<Type*> argsdepwarnpi(0);
+    argsdepwarnpi.push_back(T_size);
+    jldepwarnpi_func = Function::Create(FunctionType::get(T_void, argsdepwarnpi, false),
+                                        Function::ExternalLinkage,
+                                        "jl_depwarn_partial_indexing", m);
+    add_named_global(jldepwarnpi_func, &jl_depwarn_partial_indexing);
+
+
     std::vector<Type *> args_1ptr(0);
     args_1ptr.push_back(T_prjlvalue);
     queuerootfun = Function::Create(FunctionType::get(T_void, args_1ptr, false),
@@ -6905,7 +6909,6 @@ extern "C" void jl_dump_llvm_inst_function(void *v)
 extern "C" void jl_dump_llvm_type(void *v)
 {
     llvm_dump((Type*)v);
-    putchar('\n');
 }
 
 extern "C" void jl_dump_llvm_module(void *v)

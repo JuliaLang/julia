@@ -43,13 +43,7 @@ mktempdir() do dir
                 error("unexpected")
             catch ex
                 @test isa(ex, LibGit2.Error.GitError)
-                if Sys.iswindows() && LibGit2.version() >= v"0.26.0"
-                    # see #22681 and https://github.com/libgit2/libgit2/pull/4055
-                    @test_broken ex.code == LibGit2.Error.EAUTH
-                    @test ex.code == LibGit2.Error.ERROR
-                else
-                    @test ex.code == LibGit2.Error.EAUTH
-                end
+                @test ex.code == LibGit2.Error.EAUTH
             end
         end
     end

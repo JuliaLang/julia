@@ -8,7 +8,7 @@ import Base: show, ==, hash, string, Symbol, isless, length, eltype, start, next
 export isgraphemebreak, category_code, category_abbrev, category_string
 
 # also exported by Base:
-export normalize_string, graphemes, is_assigned_char, charwidth, isvalid,
+export normalize_string, graphemes, is_assigned_char, textwidth, isvalid,
    islower, isupper, isalpha, isdigit, isnumber, isalnum,
    iscntrl, ispunct, isspace, isprint, isgraph
 
@@ -208,21 +208,35 @@ end
 
 ############################################################################
 
+## character column width function ##
 """
-    charwidth(c)
+    textwidth(c)
 
-Gives the number of columns needed to print a character.
+Give the number of columns needed to print a character.
 
 # Examples
 ```jldoctest
-julia> charwidth('α')
+julia> textwidth('α')
 1
 
-julia> charwidth('❤')
+julia> textwidth('❤')
 2
 ```
 """
-charwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
+textwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
+
+"""
+    textwidth(s::AbstractString)
+
+Give the number of columns needed to print a string.
+
+# Examples
+```jldoctest
+julia> textwidth("March")
+5
+```
+"""
+textwidth(s::AbstractString) = mapreduce(textwidth, +, 0, s)
 
 lowercase(c::Char) = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) : Char(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
 uppercase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) : Char(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))

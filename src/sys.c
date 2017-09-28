@@ -285,6 +285,7 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
             }
             int truncret = ios_trunc(&dest, n); // it should always be possible to truncate dest
             assert(truncret == 0);
+            (void)truncret; // ensure the variable is used to avoid warnings
         }
         if (dest.buf != a->data) {
             a = jl_take_buffer(&dest);

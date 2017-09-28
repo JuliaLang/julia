@@ -307,8 +307,8 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     while moreinput
         l = readline(buf, chomp=false)
         moreinput = endswith(l, "\n")
-        # We need to deal with on-screen characters, so use strwidth to compute occupied columns
-        llength = strwidth(l)
+        # We need to deal with on-screen characters, so use textwidth to compute occupied columns
+        llength = textwidth(l)
         slength = sizeof(l)
         cur_row += 1
         cmove_col(termbuf, lindent + 1)
@@ -319,7 +319,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
             # in this case, we haven't yet written the cursor position
             line_pos -= slength # '\n' gets an extra pos
             if line_pos < 0 || !moreinput
-                num_chars = (line_pos >= 0 ? llength : strwidth(l[1:prevind(l, line_pos + slength + 1)]))
+                num_chars = (line_pos >= 0 ? llength : textwidth(l[1:prevind(l, line_pos + slength + 1)]))
                 curs_row, curs_pos = divrem(lindent + num_chars - 1, cols)
                 curs_row += cur_row
                 curs_pos += 1
@@ -408,7 +408,7 @@ function edit_move_left(buf::IOBuffer)
         #move to the next base UTF8 character to the left
         while true
             c = char_move_left(buf)
-            if charwidth(c) != 0 || c == '\n' || position(buf) == 0
+            if textwidth(c) != 0 || c == '\n' || position(buf) == 0
                 break
             end
         end
@@ -466,7 +466,7 @@ function edit_move_right(buf::IOBuffer)
             pos = position(buf)
             nextc = read(buf,Char)
             seek(buf,pos)
-            (charwidth(nextc) != 0 || nextc == '\n') && break
+            (textwidth(nextc) != 0 || nextc == '\n') && break
         end
         return true
     end
@@ -637,7 +637,7 @@ function edit_backspace(buf::IOBuffer, align::Bool=false, adjust::Bool=false)
     newpos = position(buf)
     if align && c == ' ' # maybe delete multiple spaces
         beg = beginofline(buf, newpos)
-        align = strwidth(String(buf.data[1+beg:newpos])) % 4
+        align = textwidth(String(buf.data[1+beg:newpos])) % 4
         nonspace = findprev(_notspace, buf.data, newpos)
         if newpos - align >= nonspace
             newpos -= align
@@ -950,7 +950,7 @@ end
 function write_prompt(terminal, s::Union{AbstractString,Function})
     promptstr = prompt_string(s)
     write(terminal, promptstr)
-    strwidth(promptstr)
+    textwidth(promptstr)
 end
 
 ### Keymap Support
@@ -1697,7 +1697,7 @@ function edit_insert_tab(buf::IOBuffer, jump_spaces=false, delete_trailing=jump_
         end
     end
     # align to multiples of 4:
-    align = 4 - strwidth(String(buf.data[1+beginofline(buf, i):i])) % 4
+    align = 4 - textwidth(String(buf.data[1+beginofline(buf, i):i])) % 4
     edit_insert(buf, ' '^align)
     return true
 end

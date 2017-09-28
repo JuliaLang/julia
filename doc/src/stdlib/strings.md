@@ -59,8 +59,7 @@ Base.chr2ind
 Base.nextind
 Base.prevind
 Base.Random.randstring
-Base.UTF8proc.charwidth
-Base.strwidth
+Base.UTF8proc.textwidth
 Base.UTF8proc.isalnum
 Base.UTF8proc.isalpha
 Base.isascii

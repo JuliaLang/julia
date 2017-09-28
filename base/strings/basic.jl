@@ -389,21 +389,6 @@ next(e::EachStringIndex, state) = (state, nextind(e.s, state))
 done(e::EachStringIndex, state) = done(e.s, state)
 eltype(::Type{EachStringIndex}) = Int
 
-## character column width function ##
-
-"""
-    strwidth(s::AbstractString)
-
-Give the number of columns needed to print a string.
-
-# Examples
-```jldoctest
-julia> strwidth("March")
-5
-```
-"""
-strwidth(s::AbstractString) = (w=0; for c in s; w += charwidth(c); end; w)
-
 """
     isascii(c::Union{Char,AbstractString}) -> Bool
 
