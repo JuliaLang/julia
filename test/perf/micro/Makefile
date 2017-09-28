@@ -131,10 +131,10 @@ BENCHMARKS = \
 	benchmarks/matlab.csv \
 	benchmarks/octave.csv \
 	benchmarks/python.csv \
-	benchmarks/r.csv 
+	benchmarks/r.csv
 
-# These were formerly listed in BENCHMARKS, but I can't get them to run 
-# 2017-09-27 johnfgibson 
+# These were formerly listed in BENCHMARKS, but I can't get them to run
+# 2017-09-27 johnfgibson
 #	benchmarks/go.csv \
 #	benchmarks/scala.csv
 
