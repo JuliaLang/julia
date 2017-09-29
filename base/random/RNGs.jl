@@ -236,8 +236,8 @@ rand(r::MersenneTwister, I::FloatInterval) = rand_generic(r, I)
 #### integers
 
 rand(r::MersenneTwister,
-             ::Type{T}) where {T<:Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}} =
-                 rand_ui52_raw(r) % T
+     ::Type{T}) where {T<:Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}} =
+    rand_ui52_raw(r) % T
 
 function rand(r::MersenneTwister, ::Type{UInt64})
     reserve(r, 2)
