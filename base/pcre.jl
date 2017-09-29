@@ -123,7 +123,7 @@ function err_message(errno)
     buffer = Vector{UInt8}(256)
     ccall((:pcre2_get_error_message_8, PCRE_LIB), Void,
           (Int32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
-    unsafe_string(pointer(buffer))
+    Base.@gc_preserve buffer unsafe_string(pointer(buffer))
 end
 
 function exec(re,subject,offset,options,match_data)

@@ -30,7 +30,7 @@ scale!(s::T, X::Array{T}) where {T<:BlasFloat} = scale!(X, s)
 scale!(X::Array{T}, s::Number) where {T<:BlasFloat} = scale!(X, convert(T, s))
 function scale!(X::Array{T}, s::Real) where T<:BlasComplex
     R = typeof(real(zero(T)))
-    BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
+    Base.@gc_preserve X BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
     X
 end
 
@@ -119,7 +119,7 @@ function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) w
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
     end
-    BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
+    Base.@gc_preserve x BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
 vecnorm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =

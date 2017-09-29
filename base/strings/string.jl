@@ -76,7 +76,8 @@ codeunit(s::AbstractString, i::Integer)
     @gc_preserve s unsafe_load(pointer(s, i))
 end
 
-write(io::IO, s::String) = unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
+write(io::IO, s::String) =
+    @gc_preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
 
 ## comparison ##
 
