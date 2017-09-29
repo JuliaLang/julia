@@ -6,12 +6,12 @@
 
 ### GLOBAL_RNG fallback for all types
 
-@inline rand(T::Type) = rand(GLOBAL_RNG, T)
+rand(::Type{T}) where {T} = rand(GLOBAL_RNG, T)
 
 ### random floats
 
 # CloseOpen(T) is the fallback for an AbstractFloat T
-@inline rand(r::AbstractRNG=GLOBAL_RNG, ::Type{T}=Float64) where {T<:AbstractFloat} =
+rand(r::AbstractRNG=GLOBAL_RNG, ::Type{T}=Float64) where {T<:AbstractFloat} =
     rand(r, CloseOpen(T))
 
 # generic random generation function which can be used by RNG implementors
@@ -95,8 +95,8 @@ rand_generic(rng::AbstractRNG, I::FloatInterval{BigFloat}) =
 rand_ui10_raw(r::AbstractRNG) = rand(r, UInt16)
 rand_ui23_raw(r::AbstractRNG) = rand(r, UInt32)
 
-@inline rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2()))
-@inline rand_ui52(r::AbstractRNG) = rand_ui52_raw(r) & 0x000fffffffffffff
+rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2()))
+rand_ui52(r::AbstractRNG) = rand_ui52_raw(r) & 0x000fffffffffffff
 
 ### random complex numbers
 
@@ -131,10 +131,14 @@ rand(                dims::Dims)       = rand(GLOBAL_RNG, dims)
 rand(r::AbstractRNG, dims::Integer...) = rand(r, Dims(dims))
 rand(                dims::Integer...) = rand(Dims(dims))
 
-rand(r::AbstractRNG, T::Type, dims::Dims)                   = rand!(r, Array{T}(dims))
-rand(                T::Type, dims::Dims)                   = rand(GLOBAL_RNG, T, dims)
-rand(r::AbstractRNG, T::Type, d::Integer, dims::Integer...) = rand(r, T, Dims((d, dims...)))
-rand(                T::Type, d::Integer, dims::Integer...) = rand(T, Dims((d, dims...)))
+rand(r::AbstractRNG, ::Type{T}, dims::Dims) where {T} = rand!(r, Array{T}(dims))
+rand(                ::Type{T}, dims::Dims) where {T} = rand(GLOBAL_RNG, T, dims)
+
+rand(r::AbstractRNG, ::Type{T}, d::Integer, dims::Integer...) where {T} =
+    rand(r, T, Dims((d, dims...)))
+
+rand(                ::Type{T}, d::Integer, dims::Integer...) where {T} =
+    rand(T, Dims((d, dims...)))
 # note: the above methods would trigger an ambiguity warning if d was not separated out:
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
