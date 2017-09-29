@@ -651,7 +651,7 @@ end
 
 function find(x::SparseVector)
     if !(eltype(x) <: Bool)
-        depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
+        Base.depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
     end
     return find(x->x!=0, x)
 end
