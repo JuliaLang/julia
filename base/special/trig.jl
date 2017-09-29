@@ -275,7 +275,7 @@ function atan2(y::T, x::T) where T<:Union{Float32, Float64}
     else # default case m == 3
         return (z-ATAN2_PI_LO(T))-T(pi) # atan(-,-)
     end
-end  
+end
 # acos methods
 ACOS_X_MIN_THRESHOLD(::Type{Float32}) = 2.0f0^-26
 ACOS_X_MIN_THRESHOLD(::Type{Float64}) = 2.0^-57
