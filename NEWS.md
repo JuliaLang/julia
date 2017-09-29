@@ -454,7 +454,7 @@ Deprecated or removed
     `Irrational{:ℯ}` ([#23427]).
 
   * The mathematical constants `π`, `pi`, `ℯ`, `e`, `γ`, `eulergamma`, `catalan`, `φ` and
-    `golden` have been have been moved from `Base` to a new module; `Base.MathConstants`.
+    `golden` have been moved from `Base` to a new module; `Base.MathConstants`.
     Only `π`, `pi` and `ℯ` are now exported by default from `Base` ([#23427]).
 
   * `eu` (previously an alias for `ℯ`) has been deprecated in favor of `ℯ` (or `MathConstants.e`) ([#23427]).
