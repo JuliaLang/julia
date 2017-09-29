@@ -355,10 +355,6 @@ using .Serializer
 import .Serializer: serialize, deserialize
 include("channels.jl")
 
-# memory-mapped and shared arrays
-include("mmap.jl")
-import .Mmap
-
 # utilities - timing, help, edit
 include("deepcopy.jl")
 include("interactiveutil.jl")
@@ -413,7 +409,6 @@ include("asyncmap.jl")
 
 include("distributed/Distributed.jl")
 using .Distributed
-include("sharedarray.jl")
 
 # code loading
 include("loading.jl")

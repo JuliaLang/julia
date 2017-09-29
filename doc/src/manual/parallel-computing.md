@@ -858,7 +858,9 @@ julia> addprocs(3)
  3
  4
 
-julia> S = SharedArray{Int,2}((3,4), init = S -> S[Base.localindexes(S)] = myid())
+julia> @everywhere using SharedArrays
+
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindexes(S)] = myid())
 3×4 SharedArray{Int64,2}:
  2  2  3  4
  2  3  3  4
@@ -874,7 +876,7 @@ julia> S
  2  7  4  4
 ```
 
-[`Base.localindexes`](@ref) provides disjoint one-dimensional ranges of indexes, and is sometimes
+[`SharedArrays.localindexes`](@ref) provides disjoint one-dimensional ranges of indexes, and is sometimes
 convenient for splitting up tasks among processes. You can, of course, divide the work any way
 you wish:
 

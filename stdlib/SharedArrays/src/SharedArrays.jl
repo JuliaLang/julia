@@ -1,7 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import .Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
-import .Distributed: RRID, procs
+module SharedArrays
+
+using Mmap, Base.Distributed
+
+import Base: length, size, ndims, IndexStyle, reshape, convert, deepcopy_internal, serialize, deserialize,
+             show, getindex, setindex!, fill!, rand!, similar, reduce, map!, copy!, unsafe_convert
+import Base.Random
+import Base.Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
+import Base.Distributed: RRID, procs
+import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
+
+export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindexes
 
 mutable struct SharedArray{T,N} <: DenseArray{T,N}
     id::RRID
@@ -663,6 +673,17 @@ end
 
 shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
 shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Cint,
-    (Cstring, Cint, Cmode_t), shm_seg_name, oflags, permissions)
+    (Cstring, Cint, Base.Cmode_t), shm_seg_name, oflags, permissions)
 
 end # os-test
+
+# 0.7 deprecations
+
+@deprecate SharedArray(::Type{T}, dims::Dims{N}; kwargs...) where {T,N} SharedArray{T}(dims; kwargs...)
+@deprecate SharedArray(::Type{T}, dims::Int...; kwargs...) where {T}    SharedArray{T}(dims...; kwargs...)
+@deprecate(SharedArray(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int}, offset; kwargs...) where {T,N},
+           SharedArray{T}(filename, dims, offset; kwargs...))
+@deprecate(SharedArray(filename::AbstractString, ::Type{T}, dims::NTuple, offset; kwargs...) where {T},
+           SharedArray{T}(filename, dims, offset; kwargs...))
+
+end # module

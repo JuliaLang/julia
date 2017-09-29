@@ -136,14 +136,6 @@ Base.Multimedia.TextDisplay
 Base.Multimedia.istextmime
 ```
 
-## Memory-mapped I/O
-
-```@docs
-Base.Mmap.Anonymous
-Base.Mmap.mmap
-Base.Mmap.sync!
-```
-
 ## Network I/O
 
 ```@docs

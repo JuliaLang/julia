@@ -4,6 +4,8 @@ __precompile__(true)
 
 module DelimitedFiles
 
+using Mmap
+
 import Base: _default_delims, tryparse_internal, show
 
 export readdlm, writedlm
