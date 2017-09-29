@@ -1366,3 +1366,11 @@ let xs = [:(1+2), :(3+4), :(5+6)]
     ex2 = eval(ex)
     @test ex2.args[2:end] == [3,7,11]
 end
+
+# issue #23519
+@test parse("@foo[1]") == parse("@foo([1])")
+@test parse("@foo[1 2; 3 4]") == parse("@foo([1 2; 3 4])")
+@test parse("@foo[1] + [2]") == parse("@foo([1]) + [2]")
+@test parse("@foo [1] + [2]") == parse("@foo([1] + [2])")
+@test parse("@Mdl.foo[1] + [2]") == parse("@Mdl.foo([1]) + [2]")
+@test parse("@Mdl.foo [1] + [2]") == parse("@Mdl.foo([1] + [2])")
