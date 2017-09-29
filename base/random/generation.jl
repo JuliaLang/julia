@@ -132,6 +132,7 @@ rand(r::AbstractRNG, dims::Integer...) = rand(r, Dims(dims))
 rand(                dims::Integer...) = rand(Dims(dims))
 
 rand(r::AbstractRNG, T::Type, dims::Dims)                   = rand!(r, Array{T}(dims))
+rand(r::AbstractRNG, T::Type, ::Tuple{})                    = rand(r, T)
 rand(                T::Type, dims::Dims)                   = rand(GLOBAL_RNG, T, dims)
 rand(r::AbstractRNG, T::Type, d::Integer, dims::Integer...) = rand(r, T, Dims((d, dims...)))
 rand(                T::Type, d::Integer, dims::Integer...) = rand(T, Dims((d, dims...)))

@@ -177,6 +177,8 @@ for randfun in [:randn, :randexp]
 
         # generating arrays
         $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(dims))
+        # 0-d arrays return a scalar instead
+        $randfun(rng::AbstractRNG, ::Type{T}, ::Tuple{}                      ) where {T} = $randfun(rng, T)
         # Note that this method explicitly does not define $randfun(rng, T),
         # in order to prevent an infinite recursion.
         $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(dim1, dims...))
