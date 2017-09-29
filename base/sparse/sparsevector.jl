@@ -649,7 +649,17 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractVector) where Tv
     SparseVector(n, rowvalB, nzvalB)
 end
 
-function find(x::SparseVector{<:Any,Ti}) where Ti
+function find(x::SparseVector)
+    if !(eltype(x) <: Bool)
+        depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
+    end
+    return find(x->x!=0, x)
+end
+
+function find(p::Function, x::SparseVector{<:Any,Ti}) where Ti
+    if p(zero(eltype(x)))
+        return invoke(find, Tuple{Function, Any}, p, x)
+    end
     numnz = nnz(x)
     I = Vector{Ti}(numnz)
 
@@ -658,7 +668,7 @@ function find(x::SparseVector{<:Any,Ti}) where Ti
 
     count = 1
     @inbounds for i = 1 : numnz
-        if nzval[i] != 0
+        if p(nzval[i])
             I[count] = nzind[i]
             count += 1
         end
@@ -1886,7 +1896,7 @@ function sort(x::SparseVector{Tv,Ti}; kws...) where {Tv,Ti}
     allvals = push!(copy(nonzeros(x)),zero(Tv))
     sinds = sortperm(allvals;kws...)
     n,k = length(x),length(allvals)
-    z = findfirst(sinds,k)
+    z = findfirst(equalto(k),sinds)
     newnzind = collect(Ti,1:k-1)
     newnzind[z:end] .+= n-k+1
     newnzvals = allvals[deleteat!(sinds[1:k],z)]

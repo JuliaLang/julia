@@ -1283,19 +1283,31 @@ dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
 ## Find methods
 
 function find(S::SparseMatrixCSC)
+    if !(eltype(S) <: Bool)
+        depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
+    end
+    return find(x->x!=0, S)
+end
+
+function find(p::Function, S::SparseMatrixCSC)
+    if p(zero(eltype(S)))
+        return invoke(find, Tuple{Function, Any}, p, S)
+    end
     sz = size(S)
-    I, J = findn(S)
+    I, J = _findn(p, S)
     return sub2ind(sz, I, J)
 end
 
-function findn(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+findn(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = _findn(x->x!=0, S)
+
+function _findn(p::Function, S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
     I = Vector{Ti}(numnz)
     J = Vector{Ti}(numnz)
 
     count = 1
     @inbounds for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if S.nzval[k] != 0
+        if p(S.nzval[k])
             I[count] = S.rowval[k]
             J[count] = col
             count += 1

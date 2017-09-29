@@ -427,44 +427,44 @@ end
     @test X[Y[end],1] == 5
     @test X[end,Y[end]] == 11
 end
+
 @testset "find, findfirst, findnext, findlast, findprev" begin
     a = [0,1,2,3,0,1,2,3]
-    @test find(a) == [2,3,4,6,7,8]
+    @test find(!iszero, a) == [2,3,4,6,7,8]
     @test find(a.==2) == [3,7]
     @test find(isodd,a) == [2,4,6,8]
-    @test findfirst(a) == 2
+    @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == 0
-    @test findfirst([1,2,4,1,2,3,4], 3) == 6
+    @test findfirst(equalto(3), [1,2,4,1,2,3,4]) == 6
+    @test findfirst(!equalto(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
     @test findfirst(isodd, [2,4,6,2,0]) == 0
-    @test findnext(a,4) == 4
-    @test findnext(a,5) == 6
-    @test findnext(a,1) == 2
-    @test findnext(a,1,4) == 6
-    @test findnext(a,5,4) == 0
-    @test findlast(a) == 8
+    @test findnext(!iszero,a,4) == 4
+    @test findnext(!iszero,a,5) == 6
+    @test findnext(!iszero,a,1) == 2
+    @test findnext(equalto(1),a,4) == 6
+    @test findnext(equalto(5),a,4) == 0
+    @test findlast(!iszero, a) == 8
     @test findlast(a.==0) == 5
     @test findlast(a.==5) == 0
-    @test findlast([1,2,4,1,2,3,4], 3) == 6
+    @test findlast(equalto(3), [1,2,4,1,2,3,4]) == 6
     @test findlast(isodd, [2,4,6,3,9,2,0]) == 5
     @test findlast(isodd, [2,4,6,2,0]) == 0
-    @test findprev(a,4) == 4
-    @test findprev(a,5) == 4
-    @test findprev(a,1) == 0
-    @test findprev(a,1,4) == 2
-    @test findprev(a,1,8) == 6
+    @test findprev(!iszero,a,4) == 4
+    @test findprev(!iszero,a,5) == 4
+    @test findprev(!iszero,a,1) == 0
+    @test findprev(equalto(1),a,4) == 2
+    @test findprev(equalto(1),a,8) == 6
     @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
     @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
 end
 @testset "find with general iterables" begin
     s = "julia"
-    # FIXME once 16269 is resolved
-    # @test find(s) == [1,2,3,4,5]
     @test find(c -> c == 'l', s) == [3]
     g = graphemes("日本語")
     @test find(isascii, g) == Int[]
-    @test find((i % 2 for i in 1:10)) == collect(1:2:9)
+    @test find(!iszero, (i % 2 for i in 1:10)) == collect(1:2:9)
 end
 @testset "findn" begin
     b = findn(ones(2,2,2,2))

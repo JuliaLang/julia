@@ -111,17 +111,13 @@ Base.find(::Function, ::Any)
 Base.findn
 Base.findnz
 Base.findfirst(::Any)
-Base.findfirst(::Any, ::Any)
 Base.findfirst(::Function, ::Any)
 Base.findlast(::Any)
-Base.findlast(::Any, ::Any)
 Base.findlast(::Function, ::Any)
 Base.findnext(::Any, ::Integer)
 Base.findnext(::Function, ::Any, ::Integer)
-Base.findnext(::Any, ::Any, ::Integer)
 Base.findprev(::Any, ::Integer)
 Base.findprev(::Function, ::Any, ::Integer)
-Base.findprev(::Any, ::Any, ::Integer)
 Base.permutedims
 Base.permutedims!
 Base.PermutedDimsArray
