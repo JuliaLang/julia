@@ -69,7 +69,7 @@ functionality is experimental and may break or change in Julia 1.0.
 const LOAD_PATH = Any[]
 const LOAD_CACHE_PATH = String[]
 
-function init_load_path()
+function init_load_path(JULIA_HOME = JULIA_HOME)
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV, "JULIA_LOAD_PATH")
         prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @static Sys.iswindows() ? ';' : ':'))

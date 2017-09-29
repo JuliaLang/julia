@@ -382,7 +382,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     end
     for C in [1:0, Dict(), Set(), IntSet(), Int[],
               GenericDict(Dict()), GenericSet(Set()),
-              "", Base.Test.GenericString("")]
+              "", Test.GenericString("")]
         @test_throws ArgumentError rand(rng..., C)
         @test_throws ArgumentError rand(rng..., C, 5)
     end

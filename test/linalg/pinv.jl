@@ -4,7 +4,7 @@
 #  Test the pseudo-inverse
 #
 
-using Base.Test
+using Test
 
 srand(12345)
 

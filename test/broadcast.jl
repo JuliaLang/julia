@@ -4,7 +4,8 @@ module TestBroadcastInternals
 
 using Base.Broadcast: broadcast_indices, check_broadcast_indices,
                       check_broadcast_shape, newindex, _bcs
-using Base: Test, OneTo
+using Base: OneTo
+using Test
 
 @test @inferred(_bcs((3,5), (3,5))) == (3,5)
 @test @inferred(_bcs((3,1), (3,5))) == (3,5)

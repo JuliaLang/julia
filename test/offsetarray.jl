@@ -2,6 +2,7 @@
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using Main.TestHelpers.OAs
+using DelimitedFiles
 
 const OAs_name = join(fullname(OAs), ".")
 
@@ -434,7 +435,7 @@ end # let
 # StackOverflowError if no appropriate method has been defined
 # (#18107)
 module SimilarUR
-    using Base.Test
+    using Test
     struct MyURange <: AbstractUnitRange{Int}
         start::Int
         stop::Int

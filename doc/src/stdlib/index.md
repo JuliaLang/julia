@@ -10,6 +10,7 @@
   * [Linear Algebra](@ref)
   * [Constants](@ref lib-constants)
   * [Filesystem](@ref)
+  * [Delimited Files](@ref)
   * [I/O and Network](@ref)
   * [Punctuation](@ref)
   * [Sorting and Related Functions](@ref)

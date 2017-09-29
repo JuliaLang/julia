@@ -16,6 +16,15 @@ end
 
 # Documenter Setup.
 
+# make links for stdlib package docs
+if Sys.iswindows()
+    cp("../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
+    cp("../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
+else
+    symlink("../../../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
+    symlink("../../../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
+end
+
 const PAGES = [
     "Home" => "index.md",
     "Manual" => [
@@ -69,6 +78,7 @@ const PAGES = [
         "stdlib/linalg.md",
         "stdlib/constants.md",
         "stdlib/file.md",
+        "stdlib/delimitedfiles.md",
         "stdlib/io-network.md",
         "stdlib/punctuation.md",
         "stdlib/sort.md",
@@ -116,9 +126,11 @@ const PAGES = [
     ],
 ]
 
+using DelimitedFiles, Test
+
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg],
+    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,

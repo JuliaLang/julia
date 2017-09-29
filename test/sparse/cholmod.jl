@@ -3,6 +3,7 @@
 srand(123)
 
 using Base.SparseArrays.CHOLMOD
+using DelimitedFiles
 
 # based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/
 

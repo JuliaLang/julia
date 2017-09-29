@@ -2929,9 +2929,10 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     @test PR20889(2)^3 == 5
 end
 module M20889 # do we get the expected behavior without importing Base.^?
+    using Test
     struct PR20889; x; end
     ^(t::PR20889, b) = t.x + b
-    Base.Test.@test PR20889(2)^3 == 5
+    Test.@test PR20889(2)^3 == 5
 end
 
 @testset "iszero & isone" begin

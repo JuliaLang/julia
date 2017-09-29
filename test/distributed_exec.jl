@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 include("testenv.jl")
 
 # Test a few "remote" invocations when no workers are present
@@ -12,6 +12,8 @@ include("testenv.jl")
 
 addprocs_with_testenv(4)
 @test nprocs() == 5
+
+@everywhere using Test
 
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]

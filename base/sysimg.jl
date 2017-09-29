@@ -360,13 +360,10 @@ include("mmap.jl")
 import .Mmap
 
 # utilities - timing, help, edit
-include("datafmt.jl")
-using .DataFmt
 include("deepcopy.jl")
 include("interactiveutil.jl")
 include("summarysize.jl")
 include("replutil.jl")
-include("test.jl")
 include("i18n.jl")
 using .I18n
 
@@ -452,5 +449,14 @@ include(Base, "precompile.jl")
 end # baremodule Base
 
 using Base
+
+# set up load path to be able to find stdlib packages
+Base.init_load_path(ccall(:jl_get_julia_home, Any, ()))
+
+# load some stdlib packages but don't put their names in Main
+Base.require(:DelimitedFiles)
+Base.require(:Test)
+
+empty!(LOAD_PATH)
 
 Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")
