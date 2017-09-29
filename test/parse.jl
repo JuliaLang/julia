@@ -1346,3 +1346,23 @@ end
             x::Int -> 2
         end
     end) == Expr(:error, "local variable Int cannot be used in closure declaration")
+
+# some issues with backquote
+# preserve QuoteNode and LineNumberNode
+@test eval(Expr(:quote, QuoteNode(Expr(:tuple, 1, Expr(:$, :(1+2)))))) == QuoteNode(Expr(:tuple, 1, 3))
+@test eval(Expr(:quote, Expr(:line, Expr(:$, :(1+2))))) === LineNumberNode(3, nothing)
+# splicing at the top level should be an error
+xs23917 = [1,2,3]
+@test_throws ErrorException eval(:(:($(xs23917...))))
+let ex2 = eval(:(:(:($$(xs23917...)))))
+    @test ex2 isa Expr
+    @test_throws ErrorException eval(ex2)
+    @test eval(:($(xs23917...),)) == (1,2,3)  # adding a comma gives a tuple
+end
+# multi-unquote of splice in nested quote
+let xs = [:(1+2), :(3+4), :(5+6)]
+    ex = quote quote $$(xs...) end end
+    @test ex.args[2].args[1].args[2].args[2] == :(3 + 4)
+    ex2 = eval(ex)
+    @test ex2.args[2:end] == [3,7,11]
+end
