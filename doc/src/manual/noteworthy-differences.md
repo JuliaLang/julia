@@ -108,9 +108,9 @@ For users coming to Julia from R, these are some noteworthy differences:
     R where the vectors only need to share a common index range.  For example, `c(1, 2, 3, 4) + c(1, 2)`
     is valid R but the equivalent `[1, 2, 3, 4] + [1, 2]` will throw an error in Julia.
   * Julia allows an optional trailing comma when that comma does not change the meaning of code.
-   This can cause confusion among R users when indexing into arrays. For example, `x[1,]` in R
-    would return the first row of a matrix; in Julia, however, the comma is ignored, so `x[1,] ==
-     x[1]`, and will return the first element. To extract a row, be sure to use `:`, as in `x[1,:]`.
+    This can cause confusion among R users when indexing into arrays. For example, `x[1,]` in R
+    would return the first row of a matrix; in Julia, however, the comma is ignored, so
+    `x[1,] == x[1]`, and will return the first element. To extract a row, be sure to use `:`, as in `x[1,:]`.
   * Julia's [`map`](@ref) takes the function first, then its arguments, unlike `lapply(<structure>, function, ...)`
     in R. Similarly Julia's equivalent of `apply(X, MARGIN, FUN, ...)` in R is [`mapslices`](@ref)
     where the function is the first argument.
