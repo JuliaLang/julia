@@ -640,14 +640,14 @@ function rtruncto(str::String, w::Int)
     if length(str) <= w
         return str
     else
-        return string("...", str[end-w+4:end])
+        return string("...", str[chr2ind(str, length(str)-w+4):end])
     end
 end
 function ltruncto(str::String, w::Int)
     if length(str) <= w
         return str
     else
-        return string(str[1:w-4], "...")
+        return string(str[1:chr2ind(str,w-4)], "...")
     end
 end
 
