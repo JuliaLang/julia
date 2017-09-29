@@ -112,9 +112,12 @@ end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Void, (Any, Any, Cint), m, s, flag)
 
-macro deprecate_binding(old, new, export_old=true)
+macro deprecate_binding(old, new, export_old=true, dep_message=nothing)
     return Expr(:toplevel,
          export_old ? Expr(:export, esc(old)) : nothing,
+         dep_message != nothing ? Expr(:const, Expr(:(=),
+             esc(Symbol(string("_dep_message_",old))), esc(dep_message))) :
+             nothing,
          Expr(:const, Expr(:(=), esc(old), esc(new))),
          Expr(:call, :deprecate, __module__, Expr(:quote, old)))
 end
@@ -1716,8 +1719,8 @@ import .LinAlg: diagm
 @eval LinAlg.LAPACK @deprecate laver() version() false
 
 # PR #23427
-@deprecate_binding e          ℯ
-@deprecate_binding eu         ℯ
+@deprecate_binding e          ℯ true ", use ℯ (\\euler) or Base.MathConstants.e"
+@deprecate_binding eu         ℯ true ", use ℯ (\\euler) or Base.MathConstants.e"
 @deprecate_binding γ          MathConstants.γ
 @deprecate_binding eulergamma MathConstants.eulergamma
 @deprecate_binding catalan    MathConstants.catalan
