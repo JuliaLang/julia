@@ -315,6 +315,10 @@ Or the short form notation:
 ```julia
 add(a, b) = a + b
 ```
+
+The use of the [`return`](@ref) keyword is exactly the same as in other languages,
+but is often optional. A function without an explicit `return` statement will return
+the last expression in the function body.
 """
 kw"function"
 
@@ -357,11 +361,11 @@ back to `map`. `test2([5,6,7])` then returns `[5,12,7]`.
 kw"return"
 
 """
-    if - elseif - else
+    if/elseif/else
 
-`if`-`elseif`-`else` performs conditional evaluation, which allows portions of code to
+`if`/`elseif`/`else` performs conditional evaluation, which allows portions of code to
 be evaluated or not evaluated depending on the value of a boolean expression. Here is
-the anatomy of the `if`-`elseif`-`else` conditional syntax:
+the anatomy of the `if`/`elseif`/`else` conditional syntax:
 
 ```julia
 if x < y
@@ -448,7 +452,7 @@ kw"end"
 """
     try/catch
 
-A `try/catch` statement allows for `Exception`s to be tested for. For example, a
+A `try`/`catch` statement allows for `Exception`s to be tested for. For example, a
 customized square root function can be written to automatically call either the real or
 complex square root method on demand using `Exception`s:
 
@@ -460,10 +464,10 @@ catch
 end
 ```
 
-`try/catch` statements also allow the `Exception` to be saved in a variable, e.g. `catch y`.
+`try`/`catch` statements also allow the `Exception` to be saved in a variable, e.g. `catch y`.
 
 The `catch` clause is not strictly necessary; when omitted, the default return value is
-`nothing`. The power of the `try/catch` construct lies in the ability to unwind a deeply
+`nothing`. The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
 """
 kw"try", kw"catch"
@@ -690,10 +694,10 @@ The most commonly used kind of type in Julia is a struct, specified as a name an
 set of fields.
 
 ```julia
-    struct Point
-        x
-        y
-    end
+struct Point
+    x
+    y
+end
 ```
 
 Fields can have type restrictions, which may be parameterized:
