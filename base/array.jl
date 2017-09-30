@@ -664,6 +664,14 @@ end
 _array_for(::Type{T}, itr, ::HasLength) where {T} = Array{T,1}(Int(length(itr)::Integer))
 _array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, indices(itr))
 
+function _isconcreteunion(::Type{T}) where T
+    if T isa Union
+        _isconcreteunion(T.a) && _isconcreteunion(T.b)
+    else
+        isconcrete(T)
+    end
+end
+
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
     et = _default_eltype(typeof(itr))
@@ -675,7 +683,9 @@ function collect(itr::Generator)
             return _array_for(et, itr.iter, isz)
         end
         v1, st = next(itr, st)
-        collect_to_with_first!(_array_for(typeof(v1), itr.iter, isz), v1, itr, st)
+        S = _default_eltype(typeof(itr))
+        T = _isconcreteunion(S) ? S : typeof(v1)
+        collect_to_with_first!(_array_for(T, itr.iter, isz), v1, itr, st)
     end
 end
 
@@ -688,7 +698,9 @@ function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
         return _similar_for(c, _default_eltype(typeof(itr)), itr, isz)
     end
     v1, st = next(itr, st)
-    collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)
+    S = _default_eltype(typeof(itr))
+    T = _isconcreteunion(S) ? S : typeof(v1)
+    collect_to_with_first!(_similar_for(c, T, itr, isz), v1, itr, st)
 end
 
 function collect_to_with_first!(dest::AbstractArray, v1, itr, st)
