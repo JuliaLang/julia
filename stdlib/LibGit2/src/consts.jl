@@ -2,6 +2,8 @@
 
 module Consts
 
+using LibGit2
+
 const HEAD_FILE  = "HEAD"
 const FETCH_HEAD  = "FETCH_HEAD"
 const REMOTE_ORIGIN = "origin"

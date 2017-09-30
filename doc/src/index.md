@@ -88,7 +88,7 @@
       * [Bounds checking](@ref)
       * [Proper maintenance and care of multi-threading locks](@ref)
       * [Arrays with custom indices](@ref)
-      * [Base.LibGit2](@ref)
+      * [LibGit2](@ref)
       * [Module loading](@ref)
       * [Inference](@ref)
   * Developing/debugging Julia's C code

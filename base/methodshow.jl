@@ -206,6 +206,7 @@ function url(m::Method)
     else
         try
             d = dirname(file)
+            LibGit2 = require(:LibGit2)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
                 LibGit2.with(LibGit2.GitConfig(repo)) do cfg
                     u = LibGit2.get(cfg, "remote.origin.url", "")

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base.LibGit2: AbstractCredentials, UserPasswordCredentials, SSHCredentials,
+import LibGit2: AbstractCredentials, UserPasswordCredentials, SSHCredentials,
     CachedCredentials, CredentialPayload, Payload
 
 """
@@ -13,7 +13,7 @@ function credential_loop(
         user::Nullable{<:AbstractString},
         allowed_types::UInt32,
         payload::CredentialPayload)
-    cb = Base.LibGit2.credentials_cb()
+    cb = LibGit2.credentials_cb()
     libgitcred_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     payload_ptr = Ref(payload)
 

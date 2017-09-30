@@ -3,8 +3,6 @@
 export
 # Modules
     Meta,
-    Pkg,
-    LibGit2,
     StackTraces,
     Profile,
     Dates,

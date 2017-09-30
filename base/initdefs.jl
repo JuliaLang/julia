@@ -76,6 +76,13 @@ function init_load_path(JULIA_HOME = JULIA_HOME)
     end
     push!(LOAD_PATH, abspath(JULIA_HOME, "..", "local", "share", "julia", "site", vers))
     push!(LOAD_PATH, abspath(JULIA_HOME, "..", "share", "julia", "site", vers))
+end
+
+function init_cache_path()
+    vers = "v$(VERSION.major).$(VERSION.minor)"
+    vers_cpu = ccall(:jl_uses_cpuid_tag, Cint, ()) == 0 ? vers :
+        joinpath(vers,hex(ccall(:jl_cpuid_tag, UInt64, ()), 2*sizeof(UInt64)))
+    unshift!(LOAD_CACHE_PATH, abspath(Base._pkgroot(), "lib", vers_cpu))
     #push!(LOAD_CACHE_PATH, abspath(JULIA_HOME, "..", "lib", "julia")) #TODO: add a builtin location?
 end
 

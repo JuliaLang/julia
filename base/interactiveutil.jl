@@ -328,9 +328,10 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
     end
     if packages || verbose
         println(io, "Packages:")
-        println(io, "  Package Directory: ", Pkg.dir())
+        println(io, "  Package Directory: ", pkgdir())
         print(io, "  Package Status:")
-        if isdir(Pkg.dir())
+        if isdir(pkgdir())
+            Pkg = require(:Pkg)
             println(io, "")
             Pkg.status(io)
         else

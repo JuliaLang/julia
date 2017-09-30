@@ -97,6 +97,21 @@ load_hook(prefix, name::String, ::Any) =
 _str(x::AbstractString) = String(x)
 _str(x) = x
 
+const DIR_NAME = ".julia"
+
+_pkgroot() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))
+
+function pkgdir()
+    b = _pkgroot()
+    x, y = VERSION.major, VERSION.minor
+    d = joinpath(b,"v$x.$y")
+    if isdir(d) || !isdir(b) || !isdir(joinpath(b, "METADATA"))
+        return d
+    end
+    return b
+end
+pkgdir(pkg::AbstractString...) = normpath(pkgdir(),pkg...)
+
 # `wd` is a working directory to search. defaults to current working directory.
 # if `wd === nothing`, no extra path is searched.
 function find_in_path(name::String, wd::Union{Void,String})
@@ -111,7 +126,7 @@ function find_in_path(name::String, wd::Union{Void,String})
         isfile_casesensitive(joinpath(wd,name)) && return joinpath(wd,name)
     end
     path = nothing
-    path = _str(load_hook(_str(Pkg.dir()), base, path))
+    path = _str(load_hook(_str(pkgdir()), base, path))
     for dir in LOAD_PATH
         path = _str(load_hook(_str(dir), base, path))
     end

@@ -2,7 +2,7 @@
 
 module Read
 
-import ...LibGit2, ..Cache, ..Reqs, ...Pkg.PkgError, ..Dir
+import LibGit2, ..Cache, ..Reqs, ...Pkg.PkgError, ..Dir
 using ..Types
 
 readstrip(path...) = strip(read(joinpath(path...), String))
