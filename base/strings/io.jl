@@ -367,6 +367,25 @@ unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
 
 macro b_str(s); :(Vector{UInt8}($(unescape_string(s)))); end
 
+"""
+    @raw_str -> String
+
+Raw strings without interpolation or unescaping can be expressed with
+non-standard string literals of the form `raw"..."`. Raw string literals create
+ordinary [`String`](@ref) objects which contain the enclosed contents exactly as
+entered with no interpolation or unescaping. This is useful for strings which
+contain code or markup in other languages which use `\$` or `\\` as special
+characters. The exception is quotation marks that still must be escaped.
+
+# Examples
+```jldoctest
+julia> raw"\\""
+"\\""
+
+julia> raw""\" " ""\"
+" \\" "
+```
+"""
 macro raw_str(s); s; end
 
 ## multiline strings ##
