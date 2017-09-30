@@ -233,13 +233,13 @@ function do_status!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     if mode == :project
         project_path = relpath(env.project_file, path)
         project = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
-        print_with_color(:cyan, repr(relpath(env.project_file)), "\n")
-        print_project_diff(project["deps"], env.project["deps"])
+        info("Status ", repr(relpath(env.project_file)))
+        print_project_diff(project["deps"], env.project["deps"], true)
     elseif mode == :manifest
         manifest_path = relpath(env.manifest_file, path)
         manifest = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
-        print_with_color(:cyan, repr(relpath(env.manifest_file)), "\n")
-        print_manifest_diff(manifest, env.manifest)
+        info("Status ", repr(relpath(env.manifest_file)))
+        print_manifest_diff(manifest, env.manifest, true)
     else
         error("this should not happen")
     end

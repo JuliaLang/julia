@@ -4,6 +4,8 @@ using Base.Random: UUID
 using Base.Pkg.Types: VersionSet, Available
 using Pkg3.TOML
 using Pkg3.TerminalMenus
+
+import Pkg3
 import Pkg3: depots
 
 export SHA1, VersionRange, VersionSpec, Package, PackageVersion, UpgradeLevel, EnvCache,
@@ -283,8 +285,8 @@ function write_env(env::EnvCache)
     old_env = EnvCache(env.env)
     # update the project file
     if !isempty(env.project) || ispath(env.project_file)
-        info("Updating project $(repr(env.project_file))")
-        print_project_diff(old_env, env)
+        info("Updating $(repr(relpath(env.project_file)))")
+        Pkg3.Display.print_project_diff(old_env, env)
         project = deepcopy(env.project)
         isempty(project["deps"]) && delete!(project, "deps")
         mkpath(dirname(env.project_file))
@@ -294,8 +296,8 @@ function write_env(env::EnvCache)
     end
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
-        info("Updating manifest $(repr(env.manifest_file))")
-        print_manifest_diff(old_env, env)
+        info("Updating $(repr(relpath(env.manifest_file)))")
+        Pkg3.Display.print_manifest_diff(old_env, env)
         manifest = deepcopy(env.manifest)
         uniques = sort!(collect(keys(manifest)), by=lowercase)
         filter!(name->length(manifest[name]) == 1, uniques)
