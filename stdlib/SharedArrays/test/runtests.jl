@@ -1,5 +1,5 @@
 using Test, SharedArrays
-include("../../../../test/testenv.jl")
+include(joinpath(JULIA_HOME, "..", "share", "julia", "test", "testenv.jl"))
 
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
