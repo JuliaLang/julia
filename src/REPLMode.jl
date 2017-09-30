@@ -31,12 +31,25 @@ const cmds = Dict(
     "fsck"      => :fsck,
 )
 
+const opts = Dict(
+    "env"      => :env,
+    "project"  => :project,
+    "p"        => :project,
+    "manifest" => :manifest,
+    "m"        => :manifest,
+    "major"    => :major,
+    "minor"    => :minor,
+    "patch"    => :patch,
+    "fixed"    => :fixed,
+)
+
 function parse_option(word::AbstractString)
-    m = match(r"^--(\w+)(?:\s*=\s*(\S*))?$", word)
+    m = match(r"^(?: -([a-z]) | --([a-z]{2,})(?:\s*=\s*(\S*))? )$"ix, word)
     m == nothing && cmderror("invalid option: ", repr(word))
-    return m.captures[2] == nothing ?
-        (:opt, Symbol(m.captures[1])) :
-        (:opt, Symbol(m.captures[1]), String(m.captures[2]))
+    k = m.captures[1] != nothing ? m.captures[1] : m.captures[2]
+    haskey(opts, k) || cmderror("invalid option: ", repr(word))
+    m.captures[3] == nothing ?
+        (:opt, opts[k]) : (:opt, opts[k], String(m.captures[3]))
 end
 
 let uuid = raw"(?i)[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(?-i)",
@@ -198,19 +211,34 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
 end
 
 function do_status!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
-    isempty(tokens) || cmderror("`status` does not take arguments")
-    if env.git == nothing
+    mode = :project
+    while !isempty(tokens)
+        token = shift!(tokens)
+        if token[1] == :opt
+            if token[2] in (:project, :manifest)
+                length(token) == 2 ||
+                    cmderror("the --$(token[2]) option does not take an argument")
+                mode = token[2]
+            else
+                cmderror("invalid option for `status`: --$(token[2])")
+            end
+        else
+            cmderror("`status` does not take arguments")
+        end
+    end
+    env.git == nothing &&
         cmderror("`status` only supported in git-saved environments")
-    else
-        path = LibGit2.path(env.git)
+    path = LibGit2.path(env.git)
+    if mode == :project
         project_path = relpath(env.project_file, path)
-        manifest_path = relpath(env.manifest_file, path)
         project = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
-        manifest = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
-        print_with_color(:cyan, "Project\n")
         print_project_diff(project["deps"], env.project["deps"])
-        print_with_color(:cyan, "Manifest\n")
+    elseif mode == :manifest
+        manifest_path = relpath(env.manifest_file, path)
+        manifest = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
         print_manifest_diff(manifest, env.manifest)
+    else
+        error("this should not happen")
     end
 end
 
