@@ -1014,14 +1014,6 @@ isempty(::Task) = error("isempty not defined for Tasks")
 @deprecate Array(::Type{T}, m::Integer,n::Integer) where {T}            Array{T}(Int(m),Int(n))
 @deprecate Array(::Type{T}, m::Integer,n::Integer,o::Integer) where {T} Array{T}(Int(m),Int(n),Int(o))
 
-# Likewise for SharedArrays
-@deprecate SharedArray(::Type{T}, dims::Dims{N}; kwargs...) where {T,N} SharedArray{T}(dims; kwargs...)
-@deprecate SharedArray(::Type{T}, dims::Int...; kwargs...) where {T}    SharedArray{T}(dims...; kwargs...)
-@deprecate(SharedArray(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int}, offset; kwargs...) where {T,N},
-           SharedArray{T}(filename, dims, offset; kwargs...))
-@deprecate(SharedArray(filename::AbstractString, ::Type{T}, dims::NTuple, offset; kwargs...) where {T},
-           SharedArray{T}(filename, dims, offset; kwargs...))
-
 @noinline function is_intrinsic_expr(@nospecialize(x))
     Base.depwarn("is_intrinsic_expr is deprecated. There are no intrinsic functions anymore.", :is_intrinsic_expr)
     return false
@@ -1380,6 +1372,10 @@ end
 end
 export Test
 deprecate(@__MODULE__, :Test)
+
+@deprecate_moved SharedArray "SharedArrays" true true
+
+@deprecate_binding Mmap nothing true ", run `using Mmap` instead"
 
 # PR #21709
 @deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)

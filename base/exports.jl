@@ -11,7 +11,6 @@ export
     Sys,
     Libc,
     Libdl,
-    Mmap,
     LinAlg,
     BLAS,
     LAPACK,
@@ -104,9 +103,6 @@ export
     AbstractSerializer,
     SerializationState,
     Set,
-    SharedArray,
-    SharedMatrix,
-    SharedVector,
     StepRange,
     StepRangeLen,
     StridedArray,
@@ -1087,11 +1083,6 @@ export
     redisplay,
     HTML,
     Text,
-
-# shared arrays
-    sdata,
-    indexpids,
-    localindexes,
 
 # paths and file names
     abspath,

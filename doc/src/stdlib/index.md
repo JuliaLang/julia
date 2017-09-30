@@ -24,3 +24,5 @@
   * [Dynamic Linker](@ref)
   * [Profiling](@ref lib-profiling)
   * [SIMD Support](@ref)
+  * [Memory-mapped I/O](@ref)
+  * [Shared Arrays](@ref)

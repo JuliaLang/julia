@@ -16,13 +16,20 @@ end
 
 # Documenter Setup.
 
+symlink_q(tgt, link) = isfile(link) || symlink(tgt, link)
+cp_q(src, dest) = isfile(dest) || cp(src, dest)
+
 # make links for stdlib package docs
 if Sys.iswindows()
-    cp("../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
-    cp("../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
+    cp_q("../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
+    cp_q("../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
+    cp_q("../stdlib/Mmap/docs/src/index.md", "src/stdlib/mmap.md")
+    cp_q("../stdlib/SharedArrays/docs/src/index.md", "src/stdlib/sharedarrays.md")
 else
-    symlink("../../../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
-    symlink("../../../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
+    symlink_q("../../../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
+    symlink_q("../../../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
+    symlink_q("../../../stdlib/Mmap/docs/src/index.md", "src/stdlib/mmap.md")
+    symlink_q("../../../stdlib/SharedArrays/docs/src/index.md", "src/stdlib/sharedarrays.md")
 end
 
 const PAGES = [
@@ -126,11 +133,11 @@ const PAGES = [
     ],
 ]
 
-using DelimitedFiles, Test
+using DelimitedFiles, Test, Mmap, SharedArrays
 
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test],
+    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
