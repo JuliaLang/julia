@@ -8,6 +8,7 @@ include("../ext/TOML/src/TOML.jl")
 include("../ext/TerminalMenus/src/TerminalMenus.jl")
 
 include("Types.jl")
+include("Display.jl")
 include("Operations.jl")
 include("REPLMode.jl")
 

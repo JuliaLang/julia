@@ -2,6 +2,7 @@ module REPLMode
 
 import Pkg3
 using Pkg3.Types
+using Pkg3.Display
 using Pkg3.Operations
 
 import Base: LineEdit, REPL, REPLCompletions
