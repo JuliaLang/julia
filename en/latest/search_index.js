@@ -2389,7 +2389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Parallel Computing",
     "title": "Shared Arrays",
     "category": "section",
-    "text": "Shared Arrays use system shared memory to map the same array across many processes. While there are some similarities to a DArray, the behavior of a SharedArray is quite different. In a DArray, each process has local access to just a chunk of the data, and no two processes share the same chunk; in contrast, in a SharedArray each \"participating\" process has access to the entire array.  A SharedArray is a good choice when you want to have a large amount of data jointly accessible to two or more processes on the same machine.SharedArray indexing (assignment and accessing values) works just as with regular arrays, and is efficient because the underlying memory is available to the local process. Therefore, most algorithms work naturally on SharedArrays, albeit in single-process mode. In cases where an algorithm insists on an Array input, the underlying array can be retrieved from a SharedArray by calling sdata. For other AbstractArray types, sdata just returns the object itself, so it's safe to use sdata on any Array-type object.The constructor for a shared array is of the form:SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])which creates an N-dimensional shared array of a bits type T and size dims across the processes specified by pids. Unlike distributed arrays, a shared array is accessible only from those participating workers specified by the pids named argument (and the creating process too, if it is on the same host).If an init function, of signature initfn(S::SharedArray), is specified, it is called on all the participating workers. You can specify that each worker runs the init function on a distinct portion of the array, thereby parallelizing initialization.Here's a brief example:julia> addprocs(3)\n3-element Array{Int64,1}:\n 2\n 3\n 4\n\njulia> S = SharedArray{Int,2}((3,4), init = S -> S[Base.localindexes(S)] = myid())\n3×4 SharedArray{Int64,2}:\n 2  2  3  4\n 2  3  3  4\n 2  3  4  4\n\njulia> S[3,2] = 7\n7\n\njulia> S\n3×4 SharedArray{Int64,2}:\n 2  2  3  4\n 2  3  3  4\n 2  7  4  4Base.localindexes provides disjoint one-dimensional ranges of indexes, and is sometimes convenient for splitting up tasks among processes. You can, of course, divide the work any way you wish:julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())\n3×4 SharedArray{Int64,2}:\n 2  2  2  2\n 3  3  3  3\n 4  4  4  4Since all processes have access to the underlying data, you do have to be careful not to set up conflicts. For example:@sync begin\n    for p in procs(S)\n        @async begin\n            remotecall_wait(fill!, p, S, p)\n        end\n    end\nendwould result in undefined behavior. Because each process fills the entire array with its own pid, whichever process is the last to execute (for any particular element of S) will have its pid retained.As a more extended and complex example, consider running the following \"kernel\" in parallel:q[i,j,t+1] = q[i,j,t] + u[i,j,t]In this case, if we try to split up the work using a one-dimensional index, we are likely to run into trouble: if q[i,j,t] is near the end of the block assigned to one worker and q[i,j,t+1] is near the beginning of the block assigned to another, it's very likely that q[i,j,t] will not be ready at the time it's needed for computing q[i,j,t+1]. In such cases, one is better off chunking the array manually. Let's split along the second dimension. Define a function that returns the (irange, jrange) indexes assigned to this worker:julia> @everywhere function myrange(q::SharedArray)\n           idx = indexpids(q)\n           if idx == 0 # This worker is not assigned a piece\n               return 1:0, 1:0\n           end\n           nchunks = length(procs(q))\n           splits = [round(Int, s) for s in linspace(0,size(q,2),nchunks+1)]\n           1:size(q,1), splits[idx]+1:splits[idx+1]\n       endNext, define the kernel:julia> @everywhere function advection_chunk!(q, u, irange, jrange, trange)\n           @show (irange, jrange, trange)  # display so we can see what's happening\n           for t in trange, j in jrange, i in irange\n               q[i,j,t+1] = q[i,j,t] + u[i,j,t]\n           end\n           q\n       endWe also define a convenience wrapper for a SharedArray implementationjulia> @everywhere advection_shared_chunk!(q, u) =\n           advection_chunk!(q, u, myrange(q)..., 1:size(q,3)-1)Now let's compare three different versions, one that runs in a single process:julia> advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1);one that uses @parallel:julia> function advection_parallel!(q, u)\n           for t = 1:size(q,3)-1\n               @sync @parallel for j = 1:size(q,2)\n                   for i = 1:size(q,1)\n                       q[i,j,t+1]= q[i,j,t] + u[i,j,t]\n                   end\n               end\n           end\n           q\n       end;and one that delegates in chunks:julia> function advection_shared!(q, u)\n           @sync begin\n               for p in procs(q)\n                   @async remotecall_wait(advection_shared_chunk!, p, q, u)\n               end\n           end\n           q\n       end;If we create SharedArrays and time these functions, we get the following results (with julia -p 4):julia> q = SharedArray{Float64,3}((500,500,500));\n\njulia> u = SharedArray{Float64,3}((500,500,500));Run the functions once to JIT-compile and @time them on the second run:julia> @time advection_serial!(q, u);\n(irange,jrange,trange) = (1:500,1:500,1:499)\n 830.220 milliseconds (216 allocations: 13820 bytes)\n\njulia> @time advection_parallel!(q, u);\n   2.495 seconds      (3999 k allocations: 289 MB, 2.09% gc time)\n\njulia> @time advection_shared!(q,u);\n        From worker 2:       (irange,jrange,trange) = (1:500,1:125,1:499)\n        From worker 4:       (irange,jrange,trange) = (1:500,251:375,1:499)\n        From worker 3:       (irange,jrange,trange) = (1:500,126:250,1:499)\n        From worker 5:       (irange,jrange,trange) = (1:500,376:500,1:499)\n 238.119 milliseconds (2264 allocations: 169 KB)The biggest advantage of advection_shared! is that it minimizes traffic among the workers, allowing each to compute for an extended time on the assigned piece."
+    "text": "Shared Arrays use system shared memory to map the same array across many processes. While there are some similarities to a DArray, the behavior of a SharedArray is quite different. In a DArray, each process has local access to just a chunk of the data, and no two processes share the same chunk; in contrast, in a SharedArray each \"participating\" process has access to the entire array.  A SharedArray is a good choice when you want to have a large amount of data jointly accessible to two or more processes on the same machine.SharedArray indexing (assignment and accessing values) works just as with regular arrays, and is efficient because the underlying memory is available to the local process. Therefore, most algorithms work naturally on SharedArrays, albeit in single-process mode. In cases where an algorithm insists on an Array input, the underlying array can be retrieved from a SharedArray by calling sdata. For other AbstractArray types, sdata just returns the object itself, so it's safe to use sdata on any Array-type object.The constructor for a shared array is of the form:SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])which creates an N-dimensional shared array of a bits type T and size dims across the processes specified by pids. Unlike distributed arrays, a shared array is accessible only from those participating workers specified by the pids named argument (and the creating process too, if it is on the same host).If an init function, of signature initfn(S::SharedArray), is specified, it is called on all the participating workers. You can specify that each worker runs the init function on a distinct portion of the array, thereby parallelizing initialization.Here's a brief example:julia> addprocs(3)\n3-element Array{Int64,1}:\n 2\n 3\n 4\n\njulia> @everywhere using SharedArrays\n\njulia> S = SharedArray{Int,2}((3,4), init = S -> S[localindexes(S)] = myid())\n3×4 SharedArray{Int64,2}:\n 2  2  3  4\n 2  3  3  4\n 2  3  4  4\n\njulia> S[3,2] = 7\n7\n\njulia> S\n3×4 SharedArray{Int64,2}:\n 2  2  3  4\n 2  3  3  4\n 2  7  4  4SharedArrays.localindexes provides disjoint one-dimensional ranges of indexes, and is sometimes convenient for splitting up tasks among processes. You can, of course, divide the work any way you wish:julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())\n3×4 SharedArray{Int64,2}:\n 2  2  2  2\n 3  3  3  3\n 4  4  4  4Since all processes have access to the underlying data, you do have to be careful not to set up conflicts. For example:@sync begin\n    for p in procs(S)\n        @async begin\n            remotecall_wait(fill!, p, S, p)\n        end\n    end\nendwould result in undefined behavior. Because each process fills the entire array with its own pid, whichever process is the last to execute (for any particular element of S) will have its pid retained.As a more extended and complex example, consider running the following \"kernel\" in parallel:q[i,j,t+1] = q[i,j,t] + u[i,j,t]In this case, if we try to split up the work using a one-dimensional index, we are likely to run into trouble: if q[i,j,t] is near the end of the block assigned to one worker and q[i,j,t+1] is near the beginning of the block assigned to another, it's very likely that q[i,j,t] will not be ready at the time it's needed for computing q[i,j,t+1]. In such cases, one is better off chunking the array manually. Let's split along the second dimension. Define a function that returns the (irange, jrange) indexes assigned to this worker:julia> @everywhere function myrange(q::SharedArray)\n           idx = indexpids(q)\n           if idx == 0 # This worker is not assigned a piece\n               return 1:0, 1:0\n           end\n           nchunks = length(procs(q))\n           splits = [round(Int, s) for s in linspace(0,size(q,2),nchunks+1)]\n           1:size(q,1), splits[idx]+1:splits[idx+1]\n       endNext, define the kernel:julia> @everywhere function advection_chunk!(q, u, irange, jrange, trange)\n           @show (irange, jrange, trange)  # display so we can see what's happening\n           for t in trange, j in jrange, i in irange\n               q[i,j,t+1] = q[i,j,t] + u[i,j,t]\n           end\n           q\n       endWe also define a convenience wrapper for a SharedArray implementationjulia> @everywhere advection_shared_chunk!(q, u) =\n           advection_chunk!(q, u, myrange(q)..., 1:size(q,3)-1)Now let's compare three different versions, one that runs in a single process:julia> advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1);one that uses @parallel:julia> function advection_parallel!(q, u)\n           for t = 1:size(q,3)-1\n               @sync @parallel for j = 1:size(q,2)\n                   for i = 1:size(q,1)\n                       q[i,j,t+1]= q[i,j,t] + u[i,j,t]\n                   end\n               end\n           end\n           q\n       end;and one that delegates in chunks:julia> function advection_shared!(q, u)\n           @sync begin\n               for p in procs(q)\n                   @async remotecall_wait(advection_shared_chunk!, p, q, u)\n               end\n           end\n           q\n       end;If we create SharedArrays and time these functions, we get the following results (with julia -p 4):julia> q = SharedArray{Float64,3}((500,500,500));\n\njulia> u = SharedArray{Float64,3}((500,500,500));Run the functions once to JIT-compile and @time them on the second run:julia> @time advection_serial!(q, u);\n(irange,jrange,trange) = (1:500,1:500,1:499)\n 830.220 milliseconds (216 allocations: 13820 bytes)\n\njulia> @time advection_parallel!(q, u);\n   2.495 seconds      (3999 k allocations: 289 MB, 2.09% gc time)\n\njulia> @time advection_shared!(q,u);\n        From worker 2:       (irange,jrange,trange) = (1:500,1:125,1:499)\n        From worker 4:       (irange,jrange,trange) = (1:500,251:375,1:499)\n        From worker 3:       (irange,jrange,trange) = (1:500,126:250,1:499)\n        From worker 5:       (irange,jrange,trange) = (1:500,376:500,1:499)\n 238.119 milliseconds (2264 allocations: 169 KB)The biggest advantage of advection_shared! is that it minimizes traffic among the workers, allowing each to compute for an extended time on the assigned piece."
 },
 
 {
@@ -4977,7 +4977,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/base/#Base.eps-Tuple{Type{#s60} where #s60<:AbstractFloat}",
+    "location": "stdlib/base/#Base.eps-Tuple{Type{#s84} where #s84<:AbstractFloat}",
     "page": "Essentials",
     "title": "Base.eps",
     "category": "Method",
@@ -7053,7 +7053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nSee also: IndexStyle, indices.\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nSee also: IndexStyle, indices.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
 },
 
 {
@@ -12257,54 +12257,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/parallel/#Base.SharedArray",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.SharedArray",
-    "category": "Type",
-    "text": "SharedArray{T}(dims::NTuple; init=false, pids=Int[])\nSharedArray{T,N}(...)\n\nConstruct a SharedArray of a bits type T and size dims across the processes specified by pids - all of which have to be on the same host.  If N is specified by calling SharedArray{T,N}(dims), then N must match the length of dims.\n\nIf pids is left unspecified, the shared array will be mapped across all processes on the current host, including the master. But, localindexes and indexpids will only refer to worker processes. This facilitates work distribution code to use workers for actual computation with the master process acting as a driver.\n\nIf an init function of the type initfn(S::SharedArray) is specified, it is called on all the participating workers.\n\nThe shared array is valid as long as a reference to the SharedArray object exists on the node which created the mapping.\n\nSharedArray{T}(filename::AbstractString, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])\nSharedArray{T,N}(...)\n\nConstruct a SharedArray backed by the file filename, with element type T (must be a bits type) and size dims, across the processes specified by pids - all of which have to be on the same host. This file is mmapped into the host memory, with the following consequences:\n\nThe array data must be represented in binary format (e.g., an ASCII format like CSV cannot be supported)\nAny changes you make to the array values (e.g., A[3] = 0) will also change the values on disk\n\nIf pids is left unspecified, the shared array will be mapped across all processes on the current host, including the master. But, localindexes and indexpids will only refer to worker processes. This facilitates work distribution code to use workers for actual computation with the master process acting as a driver.\n\nmode must be one of \"r\", \"r+\", \"w+\", or \"a+\", and defaults to \"r+\" if the file specified by filename already exists, or \"w+\" if not. If an init function of the type initfn(S::SharedArray) is specified, it is called on all the participating workers. You cannot specify an init function if the file is not writable.\n\noffset allows you to skip the specified number of bytes at the beginning of the file.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.Distributed.procs-Tuple{SharedArray}",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.Distributed.procs",
-    "category": "Method",
-    "text": "procs(S::SharedArray)\n\nGet the vector of processes mapping the shared array.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.sdata",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.sdata",
-    "category": "Function",
-    "text": "sdata(S::SharedArray)\n\nReturns the actual Array object backing S.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.indexpids",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.indexpids",
-    "category": "Function",
-    "text": "indexpids(S::SharedArray)\n\nReturns the current worker's index in the list of workers mapping the SharedArray (i.e. in the same list returned by procs(S)), or 0 if the SharedArray is not mapped locally.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Base.localindexes",
-    "page": "Tasks and Parallel Computing",
-    "title": "Base.localindexes",
-    "category": "Function",
-    "text": "localindexes(S::SharedArray)\n\nReturns a range describing the \"default\" indexes to be handled by the current process.  This range should be interpreted in the sense of linear indexing, i.e., as a sub-range of 1:length(S).  In multi-process contexts, returns an empty range in the parent process (or any process for which indexpids returns 0).\n\nIt's worth emphasizing that localindexes exists purely as a convenience, and you can partition work on the array among workers any way you wish. For a SharedArray, all indexes should be equally fast for each worker process.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/parallel/#Shared-Arrays-1",
-    "page": "Tasks and Parallel Computing",
-    "title": "Shared Arrays",
-    "category": "section",
-    "text": "Base.SharedArray\nBase.procs(::SharedArray)\nBase.sdata\nBase.indexpids\nBase.localindexes"
-},
-
-{
     "location": "stdlib/parallel/#Base.Threads.threadid",
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.threadid",
@@ -15329,6 +15281,78 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/delimitedfiles/#",
+    "page": "Delimited Files",
+    "title": "Delimited Files",
+    "category": "page",
+    "text": ""
+},
+
+{
+    "location": "stdlib/delimitedfiles/#DelimitedFiles.readdlm-Tuple{Any,Char,Type,Char}",
+    "page": "Delimited Files",
+    "title": "DelimitedFiles.readdlm",
+    "category": "Method",
+    "text": "readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=true, comment_char='#')\n\nRead a matrix from the source where each line (separated by eol) gives one row, with elements separated by the given delimiter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.\n\nIf T is a numeric type, the result is an array of that type, with any non-numeric elements as NaN for floating-point types, or zero. Other useful values of T include String, AbstractString, and Any.\n\nIf header is true, the first row of data will be read as header and the tuple (data_cells, header_cells) is returned instead of only data_cells.\n\nSpecifying skipstart will ignore the corresponding number of initial lines from the input.\n\nIf skipblanks is true, blank lines in the input will be ignored.\n\nIf use_mmap is true, the file specified by source is memory mapped for potential speedups. Default is true except on Windows. On Windows, you may want to specify true if the file is large, and is only read once and not written to.\n\nIf quotes is true, columns enclosed within double-quote (\") characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.  Specifying dims as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.  If comments is true, lines beginning with comment_char and text following comment_char in any line are ignored.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/delimitedfiles/#DelimitedFiles.readdlm-Tuple{Any,Char,Char}",
+    "page": "Delimited Files",
+    "title": "DelimitedFiles.readdlm",
+    "category": "Method",
+    "text": "readdlm(source, delim::Char, eol::Char; options...)\n\nIf all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings is returned.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/delimitedfiles/#DelimitedFiles.readdlm-Tuple{Any,Char,Type}",
+    "page": "Delimited Files",
+    "title": "DelimitedFiles.readdlm",
+    "category": "Method",
+    "text": "readdlm(source, delim::Char, T::Type; options...)\n\nThe end of line delimiter is taken as \\n.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/delimitedfiles/#DelimitedFiles.readdlm-Tuple{Any,Char}",
+    "page": "Delimited Files",
+    "title": "DelimitedFiles.readdlm",
+    "category": "Method",
+    "text": "readdlm(source, delim::Char; options...)\n\nThe end of line delimiter is taken as \\n. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings is returned.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/delimitedfiles/#DelimitedFiles.readdlm-Tuple{Any,Type}",
+    "page": "Delimited Files",
+    "title": "DelimitedFiles.readdlm",
+    "category": "Method",
+    "text": "readdlm(source, T::Type; options...)\n\nThe columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as \\n.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/delimitedfiles/#DelimitedFiles.readdlm-Tuple{Any}",
+    "page": "Delimited Files",
+    "title": "DelimitedFiles.readdlm",
+    "category": "Method",
+    "text": "readdlm(source; options...)\n\nThe columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as \\n. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings is returned.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/delimitedfiles/#DelimitedFiles.writedlm",
+    "page": "Delimited Files",
+    "title": "DelimitedFiles.writedlm",
+    "category": "Function",
+    "text": "writedlm(f, A, delim='\\t'; opts)\n\nWrite A (a vector, matrix, or an iterable collection of iterable rows) as text to f (either a filename string or an IO stream) using the given delimiter delim (which defaults to tab, but can be any printable Julia object, typically a Char or AbstractString).\n\nFor example, two vectors x and y of the same length can be written as two columns of tab-delimited text to f by either writedlm(f, [x y]) or by writedlm(f, zip(x, y)).\n\n\n\n"
+},
+
+{
+    "location": "stdlib/delimitedfiles/#Delimited-Files-1",
+    "page": "Delimited Files",
+    "title": "Delimited Files",
+    "category": "section",
+    "text": "DelimitedFiles.readdlm(::Any, ::Char, ::Type, ::Char)\nDelimitedFiles.readdlm(::Any, ::Char, ::Char)\nDelimitedFiles.readdlm(::Any, ::Char, ::Type)\nDelimitedFiles.readdlm(::Any, ::Char)\nDelimitedFiles.readdlm(::Any, ::Type)\nDelimitedFiles.readdlm(::Any)\nDelimitedFiles.writedlm"
+},
+
+{
     "location": "stdlib/io-network/#",
     "page": "I/O and Network",
     "title": "I/O and Network",
@@ -15697,9 +15721,9 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/io-network/#Base.DataFmt.countlines",
+    "location": "stdlib/io-network/#Base.countlines",
     "page": "I/O and Network",
-    "title": "Base.DataFmt.countlines",
+    "title": "Base.countlines",
     "category": "Function",
     "text": "countlines(io::IO, eol::Char='\\n')\n\nRead io until the end of the stream/file and count the number of lines. To specify a file pass the filename as the first argument. EOL markers other than '\\n' are supported by passing them as the second argument.\n\n\n\n"
 },
@@ -15749,7 +15773,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "General I/O",
     "category": "section",
-    "text": "Base.STDOUT\nBase.STDERR\nBase.STDIN\nBase.open\nBase.IOBuffer\nBase.take!(::Base.GenericIOBuffer)\nBase.fdio\nBase.flush\nBase.close\nBase.crc32c(::IO, ::Integer, ::UInt32)\nBase.write\nBase.read\nBase.read!\nBase.readbytes!\nBase.unsafe_read\nBase.unsafe_write\nBase.position\nBase.seek\nBase.seekstart\nBase.seekend\nBase.skip\nBase.mark\nBase.unmark\nBase.reset\nBase.ismarked\nBase.eof\nBase.isreadonly\nBase.iswritable\nBase.isreadable\nBase.isopen\nBase.Serializer.serialize\nBase.Serializer.deserialize\nBase.Serializer.writeheader\nBase.Grisu.print_shortest\nBase.fd\nBase.redirect_stdout\nBase.redirect_stdout(::Function, ::Any)\nBase.redirect_stderr\nBase.redirect_stderr(::Function, ::Any)\nBase.redirect_stdin\nBase.redirect_stdin(::Function, ::Any)\nBase.readchomp\nBase.truncate\nBase.skipchars\nBase.DataFmt.countlines\nBase.PipeBuffer\nBase.readavailable\nBase.IOContext\nBase.IOContext(::IO, ::Pair)\nBase.IOContext(::IO, ::IOContext)"
+    "text": "Base.STDOUT\nBase.STDERR\nBase.STDIN\nBase.open\nBase.IOBuffer\nBase.take!(::Base.GenericIOBuffer)\nBase.fdio\nBase.flush\nBase.close\nBase.crc32c(::IO, ::Integer, ::UInt32)\nBase.write\nBase.read\nBase.read!\nBase.readbytes!\nBase.unsafe_read\nBase.unsafe_write\nBase.position\nBase.seek\nBase.seekstart\nBase.seekend\nBase.skip\nBase.mark\nBase.unmark\nBase.reset\nBase.ismarked\nBase.eof\nBase.isreadonly\nBase.iswritable\nBase.isreadable\nBase.isopen\nBase.Serializer.serialize\nBase.Serializer.deserialize\nBase.Serializer.writeheader\nBase.Grisu.print_shortest\nBase.fd\nBase.redirect_stdout\nBase.redirect_stdout(::Function, ::Any)\nBase.redirect_stderr\nBase.redirect_stderr(::Function, ::Any)\nBase.redirect_stdin\nBase.redirect_stdin(::Function, ::Any)\nBase.readchomp\nBase.truncate\nBase.skipchars\nBase.countlines\nBase.PipeBuffer\nBase.readavailable\nBase.IOContext\nBase.IOContext(::IO, ::Pair)\nBase.IOContext(::IO, ::IOContext)"
 },
 
 {
@@ -15905,62 +15929,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/io-network/#Base.DataFmt.readdlm-Tuple{Any,Char,Type,Char}",
-    "page": "I/O and Network",
-    "title": "Base.DataFmt.readdlm",
-    "category": "Method",
-    "text": "readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=true, comment_char='#')\n\nRead a matrix from the source where each line (separated by eol) gives one row, with elements separated by the given delimiter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.\n\nIf T is a numeric type, the result is an array of that type, with any non-numeric elements as NaN for floating-point types, or zero. Other useful values of T include String, AbstractString, and Any.\n\nIf header is true, the first row of data will be read as header and the tuple (data_cells, header_cells) is returned instead of only data_cells.\n\nSpecifying skipstart will ignore the corresponding number of initial lines from the input.\n\nIf skipblanks is true, blank lines in the input will be ignored.\n\nIf use_mmap is true, the file specified by source is memory mapped for potential speedups. Default is true except on Windows. On Windows, you may want to specify true if the file is large, and is only read once and not written to.\n\nIf quotes is true, columns enclosed within double-quote (\") characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.  Specifying dims as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.  If comments is true, lines beginning with comment_char and text following comment_char in any line are ignored.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/io-network/#Base.DataFmt.readdlm-Tuple{Any,Char,Char}",
-    "page": "I/O and Network",
-    "title": "Base.DataFmt.readdlm",
-    "category": "Method",
-    "text": "readdlm(source, delim::Char, eol::Char; options...)\n\nIf all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings is returned.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/io-network/#Base.DataFmt.readdlm-Tuple{Any,Char,Type}",
-    "page": "I/O and Network",
-    "title": "Base.DataFmt.readdlm",
-    "category": "Method",
-    "text": "readdlm(source, delim::Char, T::Type; options...)\n\nThe end of line delimiter is taken as \\n.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/io-network/#Base.DataFmt.readdlm-Tuple{Any,Char}",
-    "page": "I/O and Network",
-    "title": "Base.DataFmt.readdlm",
-    "category": "Method",
-    "text": "readdlm(source, delim::Char; options...)\n\nThe end of line delimiter is taken as \\n. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings is returned.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/io-network/#Base.DataFmt.readdlm-Tuple{Any,Type}",
-    "page": "I/O and Network",
-    "title": "Base.DataFmt.readdlm",
-    "category": "Method",
-    "text": "readdlm(source, T::Type; options...)\n\nThe columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as \\n.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/io-network/#Base.DataFmt.readdlm-Tuple{Any}",
-    "page": "I/O and Network",
-    "title": "Base.DataFmt.readdlm",
-    "category": "Method",
-    "text": "readdlm(source; options...)\n\nThe columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as \\n. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings is returned.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/io-network/#Base.DataFmt.writedlm",
-    "page": "I/O and Network",
-    "title": "Base.DataFmt.writedlm",
-    "category": "Function",
-    "text": "writedlm(f, A, delim='\\t'; opts)\n\nWrite A (a vector, matrix, or an iterable collection of iterable rows) as text to f (either a filename string or an IO stream) using the given delimiter delim (which defaults to tab, but can be any printable Julia object, typically a Char or AbstractString).\n\nFor example, two vectors x and y of the same length can be written as two columns of tab-delimited text to f by either writedlm(f, [x y]) or by writedlm(f, zip(x, y)).\n\n\n\n"
-},
-
-{
     "location": "stdlib/io-network/#Base.Base64.Base64EncodePipe",
     "page": "I/O and Network",
     "title": "Base.Base64.Base64EncodePipe",
@@ -16005,7 +15973,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Text I/O",
     "category": "section",
-    "text": "Base.show(::Any)\nBase.showcompact\nBase.summary\nBase.print\nBase.println\nBase.print_with_color\nBase.info\nBase.warn\nBase.logging\nBase.Printf.@printf\nBase.Printf.@sprintf\nBase.sprint\nBase.showerror\nBase.dump\nMeta.@dump\nBase.readline\nBase.readuntil\nBase.readlines\nBase.eachline\nBase.DataFmt.readdlm(::Any, ::Char, ::Type, ::Char)\nBase.DataFmt.readdlm(::Any, ::Char, ::Char)\nBase.DataFmt.readdlm(::Any, ::Char, ::Type)\nBase.DataFmt.readdlm(::Any, ::Char)\nBase.DataFmt.readdlm(::Any, ::Type)\nBase.DataFmt.readdlm(::Any)\nBase.DataFmt.writedlm\nBase.Base64.Base64EncodePipe\nBase.Base64.Base64DecodePipe\nBase.Base64.base64encode\nBase.Base64.base64decode\nBase.displaysize"
+    "text": "Base.show(::Any)\nBase.showcompact\nBase.summary\nBase.print\nBase.println\nBase.print_with_color\nBase.info\nBase.warn\nBase.logging\nBase.Printf.@printf\nBase.Printf.@sprintf\nBase.sprint\nBase.showerror\nBase.dump\nMeta.@dump\nBase.readline\nBase.readuntil\nBase.readlines\nBase.eachline\nBase.Base64.Base64EncodePipe\nBase.Base64.Base64DecodePipe\nBase.Base64.base64encode\nBase.Base64.base64decode\nBase.displaysize"
 },
 
 {
@@ -16102,38 +16070,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Multimedia I/O",
     "category": "section",
     "text": "Just as text output is performed by print and user-defined types can indicate their textual representation by overloading show, Julia provides a standardized mechanism for rich multimedia output (such as images, formatted text, or even audio and video), consisting of three parts:A function display(x) to request the richest available multimedia display of a Julia object x (with a plain-text fallback).\nOverloading show allows one to indicate arbitrary multimedia representations (keyed by standard MIME types) of user-defined types.\nMultimedia-capable display backends may be registered by subclassing a generic Display type and pushing them onto a stack of display backends via pushdisplay.The base Julia runtime provides only plain-text display, but richer displays may be enabled by loading external modules or by using graphical Julia environments (such as the IPython-based IJulia notebook).Base.Multimedia.display\nBase.Multimedia.redisplay\nBase.Multimedia.displayable\nBase.show(::Any, ::Any, ::Any)\nBase.Multimedia.mimewritable\nBase.Multimedia.reprmime\nBase.Multimedia.stringmimeAs mentioned above, one can also define new display backends. For example, a module that can display PNG images in a window can register this capability with Julia, so that calling display(x) on types with PNG representations will automatically display the image using the module's window.In order to define a new display backend, one should first create a subtype D of the abstract class Display.  Then, for each MIME type (mime string) that can be displayed on D, one should define a function display(d::D, ::MIME\"mime\", x) = ... that displays x as that MIME type, usually by calling reprmime(mime, x).  A MethodError should be thrown if x cannot be displayed as that MIME type; this is automatic if one calls reprmime. Finally, one should define a function display(d::D, x) that queries mimewritable(mime, x) for the mime types supported by D and displays the \"best\" one; a MethodError should be thrown if no supported MIME types are found for x.  Similarly, some subtypes may wish to override redisplay(d::D, ...). (Again, one should import Base.display to add new methods to display.) The return values of these functions are up to the implementation (since in some cases it may be useful to return a display \"handle\" of some type).  The display functions for D can then be called directly, but they can also be invoked automatically from display(x) simply by pushing a new display onto the display-backend stack with:Base.Multimedia.pushdisplay\nBase.Multimedia.popdisplay\nBase.Multimedia.TextDisplay\nBase.Multimedia.istextmime"
-},
-
-{
-    "location": "stdlib/io-network/#Base.Mmap.Anonymous",
-    "page": "I/O and Network",
-    "title": "Base.Mmap.Anonymous",
-    "category": "Type",
-    "text": "Mmap.Anonymous(name, readonly, create)\n\nCreate an IO-like object for creating zeroed-out mmapped-memory that is not tied to a file for use in Mmap.mmap. Used by SharedArray for creating shared memory arrays.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/io-network/#Base.Mmap.mmap",
-    "page": "I/O and Network",
-    "title": "Base.Mmap.mmap",
-    "category": "Function",
-    "text": "Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)\n       Mmap.mmap(type::Type{Array{T,N}}, dims)\n\nCreate an Array whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.\n\nThe type is an Array{T,N} with a bits-type element of T and dimension N that determines how the bytes of the array are interpreted. Note that the file must be stored in binary format, and no format conversions are possible (this is a limitation of operating systems, not Julia).\n\ndims is a tuple or single Integer specifying the size or length of the array.\n\nThe file is passed via the stream argument, either as an open IOStream or filename string. When you initialize the stream, use \"r\" for a \"read-only\" array, and \"w+\" to create a new array used to write values to disk.\n\nIf no type argument is specified, the default is Vector{UInt8}.\n\nOptionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position for an IOStream.\n\nThe grow keyword argument specifies whether the disk file should be grown to accommodate the requested size of array (if the total file size is < requested array size). Write privileges are required to grow the file.\n\nThe shared keyword argument specifies whether the resulting Array and changes made to it will be visible to other processes mapping the same file.\n\nFor example, the following code\n\n# Create a file for mmapping\n# (you could alternatively use mmap to do this step, too)\nA = rand(1:20, 5, 30)\ns = open(\"/tmp/mmap.bin\", \"w+\")\n# We'll write the dimensions of the array as the first two Ints in the file\nwrite(s, size(A,1))\nwrite(s, size(A,2))\n# Now write the data\nwrite(s, A)\nclose(s)\n\n# Test by reading it back in\ns = open(\"/tmp/mmap.bin\")   # default is read-only\nm = read(s, Int)\nn = read(s, Int)\nA2 = Mmap.mmap(s, Matrix{Int}, (m,n))\n\ncreates a m-by-n Matrix{Int}, linked to the file associated with stream s.\n\nA more portable file would need to encode the word size – 32 bit or 64 bit – and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).\n\n\n\nMmap.mmap(io, BitArray, [dims, offset])\n\nCreate a BitArray whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same arguments, as mmap, but the byte representation is different.\n\nExample: B = Mmap.mmap(s, BitArray, (25,30000))\n\nThis would create a 25-by-30000 BitArray, linked to the file associated with stream s.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/io-network/#Base.Mmap.sync!",
-    "page": "I/O and Network",
-    "title": "Base.Mmap.sync!",
-    "category": "Function",
-    "text": "Mmap.sync!(array)\n\nForces synchronization between the in-memory version of a memory-mapped Array or BitArray and the on-disk version.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/io-network/#Memory-mapped-I/O-1",
-    "page": "I/O and Network",
-    "title": "Memory-mapped I/O",
-    "category": "section",
-    "text": "Base.Mmap.Anonymous\nBase.Mmap.mmap\nBase.Mmap.sync!"
 },
 
 {
@@ -17409,7 +17345,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/dates/#Base.Dates.CompoundPeriod-Tuple{Array{#s60,1} where #s60<:Base.Dates.Period}",
+    "location": "stdlib/dates/#Base.Dates.CompoundPeriod-Tuple{Array{#s84,1} where #s84<:Base.Dates.Period}",
     "page": "Dates and Time",
     "title": "Base.Dates.CompoundPeriod",
     "category": "Method",
@@ -17693,7 +17629,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unit Testing",
     "title": "Unit Testing",
     "category": "section",
-    "text": "DocTestSetup = quote\n    using Base.Test\nend"
+    "text": "DocTestSetup = quote\n    using Test\nend"
 },
 
 {
@@ -17713,17 +17649,17 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/test/#Base.Test.@test",
+    "location": "stdlib/test/#Test.@test",
     "page": "Unit Testing",
-    "title": "Base.Test.@test",
+    "title": "Test.@test",
     "category": "Macro",
     "text": "@test ex\n@test f(args...) key=val ...\n\nTests that the expression ex evaluates to true. Returns a Pass Result if it does, a Fail Result if it is false, and an Error Result if it could not be evaluated.\n\nThe @test f(args...) key=val... form is equivalent to writing @test f(args..., key=val...) which can be useful when the expression is a call using infix syntax such as approximate comparisons:\n\n@test a ≈ b atol=ε\n\nThis is equivalent to the uglier test @test ≈(a, b, atol=ε). It is an error to supply more than one expression unless the first is a call expression and the rest are assignments (k=v).\n\n\n\n"
 },
 
 {
-    "location": "stdlib/test/#Base.Test.@test_throws",
+    "location": "stdlib/test/#Test.@test_throws",
     "page": "Unit Testing",
-    "title": "Base.Test.@test_throws",
+    "title": "Test.@test_throws",
     "category": "Macro",
     "text": "@test_throws exception expr\n\nTests that the expression expr throws exception. The exception may specify either a type, or a value (which will be tested for equality by comparing fields). Note that @test_throws does not support a trailing keyword form.\n\n\n\n"
 },
@@ -17733,13 +17669,13 @@ var documenterSearchIndex = {"docs": [
     "page": "Unit Testing",
     "title": "Basic Unit Tests",
     "category": "section",
-    "text": "The Base.Test module provides simple unit testing functionality. Unit testing is a way to see if your code is correct by checking that the results are what you expect. It can be helpful to ensure your code still works after you make changes, and can be used when developing as a way of specifying the behaviors your code should have when complete.Simple unit testing can be performed with the @test and @test_throws macros:Base.Test.@test\nBase.Test.@test_throwsFor example, suppose we want to check our new function foo(x) works as expected:julia> using Base.Test\n\njulia> foo(x) = length(x)^2\nfoo (generic function with 1 method)If the condition is true, a Pass is returned:julia> @test foo(\"bar\") == 9\nTest Passed\n\njulia> @test foo(\"fizz\") >= 10\nTest PassedIf the condition is false, then a Fail is returned and an exception is thrown:julia> @test foo(\"f\") == 20\nTest Failed\n  Expression: foo(\"f\") == 20\n   Evaluated: 1 == 20\nERROR: There was an error during testingIf the condition could not be evaluated because an exception was thrown, which occurs in this case because length is not defined for symbols, an Error object is returned and an exception is thrown:julia> @test foo(:cat) == 1\nError During Test\n  Test threw an exception of type MethodError\n  Expression: foo(:cat) == 1\n  MethodError: no method matching length(::Symbol)\n  Closest candidates are:\n    length(::SimpleVector) at essentials.jl:256\n    length(::Base.MethodList) at reflection.jl:521\n    length(::MethodTable) at reflection.jl:597\n    ...\n  Stacktrace:\n   [...]\nERROR: There was an error during testingIf we expect that evaluating an expression should throw an exception, then we can use @test_throws to check that this occurs:julia> @test_throws MethodError foo(:cat)\nTest Passed\n      Thrown: MethodError"
+    "text": "The Test module provides simple unit testing functionality. Unit testing is a way to see if your code is correct by checking that the results are what you expect. It can be helpful to ensure your code still works after you make changes, and can be used when developing as a way of specifying the behaviors your code should have when complete.Simple unit testing can be performed with the @test and @test_throws macros:Test.@test\nTest.@test_throwsFor example, suppose we want to check our new function foo(x) works as expected:julia> using Test\n\njulia> foo(x) = length(x)^2\nfoo (generic function with 1 method)If the condition is true, a Pass is returned:julia> @test foo(\"bar\") == 9\nTest Passed\n\njulia> @test foo(\"fizz\") >= 10\nTest PassedIf the condition is false, then a Fail is returned and an exception is thrown:julia> @test foo(\"f\") == 20\nTest Failed\n  Expression: foo(\"f\") == 20\n   Evaluated: 1 == 20\nERROR: There was an error during testingIf the condition could not be evaluated because an exception was thrown, which occurs in this case because length is not defined for symbols, an Error object is returned and an exception is thrown:julia> @test foo(:cat) == 1\nError During Test\n  Test threw an exception of type MethodError\n  Expression: foo(:cat) == 1\n  MethodError: no method matching length(::Symbol)\n  Closest candidates are:\n    length(::SimpleVector) at essentials.jl:256\n    length(::Base.MethodList) at reflection.jl:521\n    length(::MethodTable) at reflection.jl:597\n    ...\n  Stacktrace:\n   [...]\nERROR: There was an error during testingIf we expect that evaluating an expression should throw an exception, then we can use @test_throws to check that this occurs:julia> @test_throws MethodError foo(:cat)\nTest Passed\n      Thrown: MethodError"
 },
 
 {
-    "location": "stdlib/test/#Base.Test.@testset",
+    "location": "stdlib/test/#Test.@testset",
     "page": "Unit Testing",
-    "title": "Base.Test.@testset",
+    "title": "Test.@testset",
     "category": "Macro",
     "text": "@testset [CustomTestSet] [option=val  ...] [\"description\"] begin ... end\n@testset [CustomTestSet] [option=val  ...] [\"description $v\"] for v in (...) ... end\n@testset [CustomTestSet] [option=val  ...] [\"description $v, $w\"] for v in (...), w in (...) ... end\n\nStarts a new test set, or multiple test sets if a for loop is provided.\n\nIf no custom testset type is given it defaults to creating a DefaultTestSet. DefaultTestSet records all the results and, if there are any Fails or Errors, throws an exception at the end of the top-level (non-nested) test set, along with a summary of the test results.\n\nAny custom testset type (subtype of AbstractTestSet) can be given and it will also be used for any nested @testset invocations. The given options are only applied to the test set where they are given. The default test set type does not take any options.\n\nThe description string accepts interpolation from the loop indices. If no description is provided, one is constructed based on the variables.\n\nBy default the @testset macro will return the testset object itself, though this behavior can be customized in other testset types. If a for loop is used then the macro collects and returns a list of the return values of the finish method, which by default will return a list of the testset objects used in each iteration.\n\n\n\n"
 },
@@ -17749,29 +17685,29 @@ var documenterSearchIndex = {"docs": [
     "page": "Unit Testing",
     "title": "Working with Test Sets",
     "category": "section",
-    "text": "Typically a large number of tests are used to make sure functions work correctly over a range of inputs. In the event a test fails, the default behavior is to throw an exception immediately. However, it is normally preferable to run the rest of the tests first to get a better picture of how many errors there are in the code being tested.The @testset macro can be used to group tests into sets. All the tests in a test set will be run, and at the end of the test set a summary will be printed. If any of the tests failed, or could not be evaluated due to an error, the test set will then throw a TestSetException.Base.Test.@testsetWe can put our tests for the foo(x) function in a test set:julia> @testset \"Foo Tests\" begin\n           @test foo(\"a\")   == 1\n           @test foo(\"ab\")  == 4\n           @test foo(\"abc\") == 9\n       end;\nTest Summary: | Pass  Total\nFoo Tests     |    3      3Test sets can also be nested:julia> @testset \"Foo Tests\" begin\n           @testset \"Animals\" begin\n               @test foo(\"cat\") == 9\n               @test foo(\"dog\") == foo(\"cat\")\n           end\n           @testset \"Arrays $i\" for i in 1:3\n               @test foo(zeros(i)) == i^2\n               @test foo(ones(i)) == i^2\n           end\n       end;\nTest Summary: | Pass  Total\nFoo Tests     |    8      8In the event that a nested test set has no failures, as happened here, it will be hidden in the summary. If we do have a test failure, only the details for the failed test sets will be shown:julia> @testset \"Foo Tests\" begin\n           @testset \"Animals\" begin\n               @testset \"Felines\" begin\n                   @test foo(\"cat\") == 9\n               end\n               @testset \"Canines\" begin\n                   @test foo(\"dog\") == 9\n               end\n           end\n           @testset \"Arrays\" begin\n               @test foo(zeros(2)) == 4\n               @test foo(ones(4)) == 15\n           end\n       end\n\nArrays: Test Failed\n  Expression: foo(ones(4)) == 15\n   Evaluated: 16 == 15\nStacktrace:\n    [...]\nTest Summary: | Pass  Fail  Total\nFoo Tests     |    3     1      4\n  Animals     |    2            2\n  Arrays      |    1     1      2\nERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken."
+    "text": "Typically a large number of tests are used to make sure functions work correctly over a range of inputs. In the event a test fails, the default behavior is to throw an exception immediately. However, it is normally preferable to run the rest of the tests first to get a better picture of how many errors there are in the code being tested.The @testset macro can be used to group tests into sets. All the tests in a test set will be run, and at the end of the test set a summary will be printed. If any of the tests failed, or could not be evaluated due to an error, the test set will then throw a TestSetException.Test.@testsetWe can put our tests for the foo(x) function in a test set:julia> @testset \"Foo Tests\" begin\n           @test foo(\"a\")   == 1\n           @test foo(\"ab\")  == 4\n           @test foo(\"abc\") == 9\n       end;\nTest Summary: | Pass  Total\nFoo Tests     |    3      3Test sets can also be nested:julia> @testset \"Foo Tests\" begin\n           @testset \"Animals\" begin\n               @test foo(\"cat\") == 9\n               @test foo(\"dog\") == foo(\"cat\")\n           end\n           @testset \"Arrays $i\" for i in 1:3\n               @test foo(zeros(i)) == i^2\n               @test foo(ones(i)) == i^2\n           end\n       end;\nTest Summary: | Pass  Total\nFoo Tests     |    8      8In the event that a nested test set has no failures, as happened here, it will be hidden in the summary. If we do have a test failure, only the details for the failed test sets will be shown:julia> @testset \"Foo Tests\" begin\n           @testset \"Animals\" begin\n               @testset \"Felines\" begin\n                   @test foo(\"cat\") == 9\n               end\n               @testset \"Canines\" begin\n                   @test foo(\"dog\") == 9\n               end\n           end\n           @testset \"Arrays\" begin\n               @test foo(zeros(2)) == 4\n               @test foo(ones(4)) == 15\n           end\n       end\n\nArrays: Test Failed\n  Expression: foo(ones(4)) == 15\n   Evaluated: 16 == 15\nStacktrace:\n    [...]\nTest Summary: | Pass  Fail  Total\nFoo Tests     |    3     1      4\n  Animals     |    2            2\n  Arrays      |    1     1      2\nERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken."
 },
 
 {
-    "location": "stdlib/test/#Base.Test.@inferred",
+    "location": "stdlib/test/#Test.@inferred",
     "page": "Unit Testing",
-    "title": "Base.Test.@inferred",
+    "title": "Test.@inferred",
     "category": "Macro",
-    "text": "@inferred f(x)\n\nTests that the call expression f(x) returns a value of the same type inferred by the compiler. It is useful to check for type stability.\n\nf(x) can be any call expression. Returns the result of f(x) if the types match, and an Error Result if it finds different types.\n\njulia> using Base.Test\n\njulia> f(a,b,c) = b > 1 ? 1 : 1.0\nf (generic function with 1 method)\n\njulia> typeof(f(1,2,3))\nInt64\n\njulia> @code_warntype f(1,2,3)\nVariables:\n  #self#::#f\n  a::Int64\n  b::Int64\n  c::Int64\n\nBody:\n  begin\n      unless (Base.slt_int)(1, b::Int64)::Bool goto 3\n      return 1\n      3:\n      return 1.0\n  end::UNION{FLOAT64, INT64}\n\njulia> @inferred f(1,2,3)\nERROR: return type Int64 does not match inferred return type Union{Float64, Int64}\nStacktrace:\n [1] error(::String) at ./error.jl:33\n\njulia> @inferred max(1,2)\n2\n\n\n\n"
+    "text": "@inferred f(x)\n\nTests that the call expression f(x) returns a value of the same type inferred by the compiler. It is useful to check for type stability.\n\nf(x) can be any call expression. Returns the result of f(x) if the types match, and an Error Result if it finds different types.\n\njulia> using Test\n\njulia> f(a,b,c) = b > 1 ? 1 : 1.0\nf (generic function with 1 method)\n\njulia> typeof(f(1,2,3))\nInt64\n\njulia> @code_warntype f(1,2,3)\nVariables:\n  #self#::#f\n  a::Int64\n  b::Int64\n  c::Int64\n\nBody:\n  begin\n      unless (Base.slt_int)(1, b::Int64)::Bool goto 3\n      return 1\n      3:\n      return 1.0\n  end::UNION{FLOAT64, INT64}\n\njulia> @inferred f(1,2,3)\nERROR: return type Int64 does not match inferred return type Union{Float64, Int64}\nStacktrace:\n [1] error(::String) at ./error.jl:33\n\njulia> @inferred max(1,2)\n2\n\n\n\n"
 },
 
 {
-    "location": "stdlib/test/#Base.Test.@test_warn",
+    "location": "stdlib/test/#Test.@test_warn",
     "page": "Unit Testing",
-    "title": "Base.Test.@test_warn",
+    "title": "Test.@test_warn",
     "category": "Macro",
     "text": "@test_warn msg expr\n\nTest whether evaluating expr results in STDERR output that contains the msg string or matches the msg regular expression.  If msg is a boolean function, tests whether msg(output) returns true.  If msg is a tuple or array, checks that the error output contains/matches each item in msg. Returns the result of evaluating expr.\n\nSee also @test_nowarn to check for the absence of error output.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/test/#Base.Test.@test_nowarn",
+    "location": "stdlib/test/#Test.@test_nowarn",
     "page": "Unit Testing",
-    "title": "Base.Test.@test_nowarn",
+    "title": "Test.@test_nowarn",
     "category": "Macro",
     "text": "@test_nowarn expr\n\nTest whether evaluating expr results in empty STDERR output (no warnings or other messages).  Returns the result of evaluating expr.\n\n\n\n"
 },
@@ -17781,21 +17717,21 @@ var documenterSearchIndex = {"docs": [
     "page": "Unit Testing",
     "title": "Other Test Macros",
     "category": "section",
-    "text": "As calculations on floating-point values can be imprecise, you can perform approximate equality checks using either @test a ≈ b (where ≈, typed via tab completion of \\approx, is the isapprox function) or use isapprox directly.julia> @test 1 ≈ 0.999999999\nTest Passed\n\njulia> @test 1 ≈ 0.999999\nTest Failed\n  Expression: 1 ≈ 0.999999\n   Evaluated: 1 ≈ 0.999999\nERROR: There was an error during testingBase.Test.@inferred\nBase.Test.@test_warn\nBase.Test.@test_nowarn"
+    "text": "As calculations on floating-point values can be imprecise, you can perform approximate equality checks using either @test a ≈ b (where ≈, typed via tab completion of \\approx, is the isapprox function) or use isapprox directly.julia> @test 1 ≈ 0.999999999\nTest Passed\n\njulia> @test 1 ≈ 0.999999\nTest Failed\n  Expression: 1 ≈ 0.999999\n   Evaluated: 1 ≈ 0.999999\nERROR: There was an error during testingTest.@inferred\nTest.@test_warn\nTest.@test_nowarn"
 },
 
 {
-    "location": "stdlib/test/#Base.Test.@test_broken",
+    "location": "stdlib/test/#Test.@test_broken",
     "page": "Unit Testing",
-    "title": "Base.Test.@test_broken",
+    "title": "Test.@test_broken",
     "category": "Macro",
     "text": "@test_broken ex\n@test_broken f(args...) key=val ...\n\nIndicates a test that should pass but currently consistently fails. Tests that the expression ex evaluates to false or causes an exception. Returns a Broken Result if it does, or an Error Result if the expression evaluates to true.\n\nThe @test_broken f(args...) key=val... form works as for the @test macro.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/test/#Base.Test.@test_skip",
+    "location": "stdlib/test/#Test.@test_skip",
     "page": "Unit Testing",
-    "title": "Base.Test.@test_skip",
+    "title": "Test.@test_skip",
     "category": "Macro",
     "text": "@test_skip ex\n@test_skip f(args...) key=val ...\n\nMarks a test that should not be executed but should be included in test summary reporting as Broken. This can be useful for tests that intermittently fail, or tests of not-yet-implemented functionality.\n\nThe @test_skip f(args...) key=val... form works as for the @test macro.\n\n\n\n"
 },
@@ -17805,37 +17741,37 @@ var documenterSearchIndex = {"docs": [
     "page": "Unit Testing",
     "title": "Broken Tests",
     "category": "section",
-    "text": "If a test fails consistently it can be changed to use the @test_broken macro. This will denote the test as Broken if the test continues to fail and alerts the user via an Error if the test succeeds.Base.Test.@test_broken@test_skip is also available to skip a test without evaluation, but counting the skipped test in the test set reporting. The test will not run but gives a Broken Result.Base.Test.@test_skip"
+    "text": "If a test fails consistently it can be changed to use the @test_broken macro. This will denote the test as Broken if the test continues to fail and alerts the user via an Error if the test succeeds.Test.@test_broken@test_skip is also available to skip a test without evaluation, but counting the skipped test in the test set reporting. The test will not run but gives a Broken Result.Test.@test_skip"
 },
 
 {
-    "location": "stdlib/test/#Base.Test.record",
+    "location": "stdlib/test/#Test.record",
     "page": "Unit Testing",
-    "title": "Base.Test.record",
+    "title": "Test.record",
     "category": "Function",
     "text": "record(ts::AbstractTestSet, res::Result)\n\nRecord a result to a testset. This function is called by the @testset infrastructure each time a contained @test macro completes, and is given the test result (which could be an Error). This will also be called with an Error if an exception is thrown inside the test block but outside of a @test context.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/test/#Base.Test.finish",
+    "location": "stdlib/test/#Test.finish",
     "page": "Unit Testing",
-    "title": "Base.Test.finish",
+    "title": "Test.finish",
     "category": "Function",
     "text": "finish(ts::AbstractTestSet)\n\nDo any final processing necessary for the given testset. This is called by the @testset infrastructure after a test block executes. One common use for this function is to record the testset to the parent's results list, using get_testset.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/test/#Base.Test.get_testset",
+    "location": "stdlib/test/#Test.get_testset",
     "page": "Unit Testing",
-    "title": "Base.Test.get_testset",
+    "title": "Test.get_testset",
     "category": "Function",
     "text": "get_testset()\n\nRetrieve the active test set from the task's local storage. If no test set is active, use the fallback default test set.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/test/#Base.Test.get_testset_depth",
+    "location": "stdlib/test/#Test.get_testset_depth",
     "page": "Unit Testing",
-    "title": "Base.Test.get_testset_depth",
+    "title": "Test.get_testset_depth",
     "category": "Function",
     "text": "get_testset_depth()\n\nReturns the number of active test sets, not including the defaut test set\n\n\n\n"
 },
@@ -17845,7 +17781,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unit Testing",
     "title": "Creating Custom AbstractTestSet Types",
     "category": "section",
-    "text": "Packages can create their own AbstractTestSet subtypes by implementing the record and finish methods. The subtype should have a one-argument constructor taking a description string, with any options passed in as keyword arguments.Base.Test.record\nBase.Test.finishBase.Test takes responsibility for maintaining a stack of nested testsets as they are executed, but any result accumulation is the responsibility of the AbstractTestSet subtype. You can access this stack with the get_testset and get_testset_depth methods. Note that these functions are not exported.Base.Test.get_testset\nBase.Test.get_testset_depthBase.Test also makes sure that nested @testset invocations use the same AbstractTestSet subtype as their parent unless it is set explicitly. It does not propagate any properties of the testset. Option inheritance behavior can be implemented by packages using the stack infrastructure that Base.Test provides.Defining a basic AbstractTestSet subtype might look like:import Base.Test: record, finish\nusing Base.Test: AbstractTestSet, Result, Pass, Fail, Error\nusing Base.Test: get_testset_depth, get_testset\nstruct CustomTestSet <: Base.Test.AbstractTestSet\n    description::AbstractString\n    foo::Int\n    results::Vector\n    # constructor takes a description string and options keyword arguments\n    CustomTestSet(desc; foo=1) = new(desc, foo, [])\nend\n\nrecord(ts::CustomTestSet, child::AbstractTestSet) = push!(ts.results, child)\nrecord(ts::CustomTestSet, res::Result) = push!(ts.results, res)\nfunction finish(ts::CustomTestSet)\n    # just record if we're not the top-level parent\n    if get_testset_depth() > 0\n        record(get_testset(), ts)\n    end\n    ts\nendAnd using that testset looks like:@testset CustomTestSet foo=4 \"custom testset inner 2\" begin\n    # this testset should inherit the type, but not the argument.\n    @testset \"custom testset inner\" begin\n        @test true\n    end\nendDocTestSetup = nothing"
+    "text": "Packages can create their own AbstractTestSet subtypes by implementing the record and finish methods. The subtype should have a one-argument constructor taking a description string, with any options passed in as keyword arguments.Test.record\nTest.finishTest takes responsibility for maintaining a stack of nested testsets as they are executed, but any result accumulation is the responsibility of the AbstractTestSet subtype. You can access this stack with the get_testset and get_testset_depth methods. Note that these functions are not exported.Test.get_testset\nTest.get_testset_depthTest also makes sure that nested @testset invocations use the same AbstractTestSet subtype as their parent unless it is set explicitly. It does not propagate any properties of the testset. Option inheritance behavior can be implemented by packages using the stack infrastructure that Test provides.Defining a basic AbstractTestSet subtype might look like:import Test: record, finish\nusing Test: AbstractTestSet, Result, Pass, Fail, Error\nusing Test: get_testset_depth, get_testset\nstruct CustomTestSet <: Test.AbstractTestSet\n    description::AbstractString\n    foo::Int\n    results::Vector\n    # constructor takes a description string and options keyword arguments\n    CustomTestSet(desc; foo=1) = new(desc, foo, [])\nend\n\nrecord(ts::CustomTestSet, child::AbstractTestSet) = push!(ts.results, child)\nrecord(ts::CustomTestSet, res::Result) = push!(ts.results, res)\nfunction finish(ts::CustomTestSet)\n    # just record if we're not the top-level parent\n    if get_testset_depth() > 0\n        record(get_testset(), ts)\n    end\n    ts\nendAnd using that testset looks like:@testset CustomTestSet foo=4 \"custom testset inner 2\" begin\n    # this testset should inherit the type, but not the argument.\n    @testset \"custom testset inner\" begin\n        @test true\n    end\nendDocTestSetup = nothing"
 },
 
 {
