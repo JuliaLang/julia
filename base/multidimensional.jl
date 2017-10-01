@@ -657,7 +657,7 @@ end
 """
     cumsum(A, dim=1)
 
-Cumulative sum along a dimension `dim` (defaults to 1). See also [`cumsum!`](@ref)
+Cumulative sum along a dimension `dim`. See also [`cumsum!`](@ref)
 to use a preallocated output array, both for performance and to control the precision of the
 output (e.g. to avoid overflow).
 
@@ -686,15 +686,14 @@ end
 """
     cumsum!(B, A, dim::Integer=1)
 
-Cumulative sum of `A` along a dimension, storing the result in `B`. The dimension defaults
-to 1. See also [`cumsum`](@ref).
+Cumulative sum of `A` along a dimension, storing the result in `B`. See also [`cumsum`](@ref).
 """
 cumsum!(B, A, axis::Integer=1) = accumulate!(+, B, A, axis)
 
 """
     cumprod(A, dim=1)
 
-Cumulative product along a dimension `dim` (defaults to 1). See also
+Cumulative product along a dimension `dim`. See also
 [`cumprod!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow).
 
@@ -720,7 +719,7 @@ cumprod(A::AbstractArray, axis::Integer=1) = accumulate(*, A, axis)
 """
     cumprod!(B, A, dim::Integer=1)
 
-Cumulative product of `A` along a dimension, storing the result in `B`. The dimension defaults to 1.
+Cumulative product of `A` along a dimension, storing the result in `B`.
 See also [`cumprod`](@ref).
 """
 cumprod!(B, A, axis::Integer=1) = accumulate!(*, B, A, axis)
@@ -728,7 +727,7 @@ cumprod!(B, A, axis::Integer=1) = accumulate!(*, B, A, axis)
 """
     accumulate(op, A, dim=1)
 
-Cumulative operation `op` along a dimension `dim` (defaults to 1). See also
+Cumulative operation `op` along a dimension `dim`. See also
 [`accumulate!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow). For common operations
 there are specialized variants of `accumulate`, see:
@@ -813,7 +812,7 @@ end
     accumulate!(op, B, A, dim=1)
 
 Cumulative operation `op` on `A` along a dimension, storing the result in `B`.
-The dimension defaults to 1. See also [`accumulate`](@ref).
+See also [`accumulate`](@ref).
 """
 function accumulate!(op, B, A, axis::Integer=1)
     axis > 0 || throw(ArgumentError("axis must be a positive integer"))
