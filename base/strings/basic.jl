@@ -239,11 +239,23 @@ end
 prevind(s::DirectIndexString, i::Integer) = Int(i)-1
 nextind(s::DirectIndexString, i::Integer) = Int(i)+1
 
+function prevind(s::DirectIndexString, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    Int(i)-nchar
+end
+
+function nextind(s::DirectIndexString, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    Int(i)+nchar
+end
+
+
 """
-    prevind(str::AbstractString, i::Integer)
+    prevind(str::AbstractString, i::Integer, nchar::Integer=1)
 
 Get the previous valid string index before `i`.
 Returns a value less than `1` at the beginning of the string.
+If the `nchar` argument is given the function goes back `nchar` characters.
 
 # Examples
 ```jldoctest
@@ -252,6 +264,10 @@ julia> prevind("αβγdef", 3)
 
 julia> prevind("αβγdef", 1)
 0
+
+julia> prevind("αβγdef", 3, 2)
+0
+
 ```
 """
 function prevind(s::AbstractString, i::Integer)
@@ -269,11 +285,32 @@ function prevind(s::AbstractString, i::Integer)
     return 0 # out of range
 end
 
+function prevind(s::AbstractString, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    e = endof(s)
+    j = Int(i)
+    j < 1 && return 0
+    while nchar > 0
+        if j > e
+            j = e
+        else
+            j -= 1
+            while j >= 1 && !isvalid(s,j)
+                j -= 1
+            end
+        end
+        j < 1 && return 0
+        nchar -= 1
+    end
+    j
+end
+
 """
-    nextind(str::AbstractString, i::Integer)
+    nextind(str::AbstractString, i::Integer, nchar::Integer=1)
 
 Get the next valid string index after `i`.
 Returns a value greater than `endof(str)` at or after the end of the string.
+If the `nchar` argument is given the function goes forward `nchar` characters.
 
 # Examples
 ```jldoctest
@@ -281,6 +318,9 @@ julia> str = "αβγdef";
 
 julia> nextind(str, 1)
 3
+
+julia> nextind(str, 1, 2)
+5
 
 julia> endof(str)
 9
@@ -303,6 +343,25 @@ function nextind(s::AbstractString, i::Integer)
         end
     end
     next(s,e)[2] # out of range
+end
+
+function nextind(s::AbstractString, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    e = endof(s)
+    j = Int(i)
+    while nchar > 0
+        if j < 1
+            j = 1
+        else
+            j > e && return j + nchar
+            j == e && return next(s,e)[2] + nchar - 1
+            for j = j+1:e
+                isvalid(s,j) && break
+            end
+        end
+        nchar -= 1
+    end
+    j
 end
 
 checkbounds(s::AbstractString, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError(s, i))

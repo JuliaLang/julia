@@ -236,6 +236,9 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
+  * The functions `nextind` and `prevind` now accept `nchar` argument that indicates
+    number of characters to move ([#23805]).
+
   * The functions `strip`, `lstrip` and `rstrip` now return `SubString` ([#22496]).
 
   * The functions `strwidth` and `charwidth` have been merged into `textwidth`([#20816]).
