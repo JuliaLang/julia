@@ -1972,14 +1972,10 @@ end
     @test isinf(nextfloat(0x1.fffffffffffffp1023))
 end
 # custom rounding and significant-digit ops
-function approx_eq(a, b, tol)
-    abs(a - b) < tol
-end
-approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @testset "rounding to digits relative to the decimal point" begin
-    @test approx_eq(round(pi,0), 3.)
-    @test approx_eq(round(pi,1), 3.1)
-    @test approx_eq(round(10*pi,-1), 30.)
+    @test round(pi,0) ≈ 3.
+    @test round(pi,1) ≈ 3.1
+    @test round(10*pi,-1) ≈ 30.
     @test round(.1,0) == 0.
     @test round(-.1,0) == -0.
     @test isnan(round(NaN, 2))
@@ -1987,14 +1983,14 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
     @test isinf(round(-Inf,2))
 end
 @testset "round vs trunc vs floor vs ceil" begin
-    @test approx_eq(round(123.456,1), 123.5)
-    @test approx_eq(round(-123.456,1), -123.5)
-    @test approx_eq(trunc(123.456,1), 123.4)
-    @test approx_eq(trunc(-123.456,1), -123.4)
-    @test approx_eq(ceil(123.456,1), 123.5)
-    @test approx_eq(ceil(-123.456,1), -123.4)
-    @test approx_eq(floor(123.456,1), 123.4)
-    @test approx_eq(floor(-123.456,1), -123.5)
+    @test round(123.456,1) ≈ 123.5
+    @test round(-123.456,1) ≈ -123.5
+    @test trunc(123.456,1) ≈ 123.4
+    @test trunc(-123.456,1) ≈ -123.4
+    @test ceil(123.456,1) ≈ 123.5
+    @test ceil(-123.456,1) ≈ -123.4
+    @test floor(123.456,1) ≈ 123.4
+    @test floor(-123.456,1) ≈ -123.5
 end
 @testset "rounding with too much (or too few) precision" begin
     for x in (12345.6789, 0, -12345.6789)
@@ -2024,9 +2020,9 @@ end
     end
 end
 @testset "rounding in other bases" begin
-    @test approx_eq(round(pi,2,2), 3.25)
-    @test approx_eq(round(pi,3,2), 3.125)
-    @test approx_eq(round(pi,3,5), 3.144)
+    @test round(pi,2,2) ≈ 3.25
+    @test round(pi,3,2) ≈ 3.125
+    @test round(pi,3,5) ≈ 3.144
 end
 @testset "vectorized trunc/round/floor/ceil with digits/base argument" begin
     a = rand(2, 2, 2)
@@ -2042,10 +2038,10 @@ end
 @testset "significant digits" begin
     # (would be nice to have a smart vectorized
     # version of signif)
-    @test approx_eq(signif(123.456,1), 100.)
-    @test approx_eq(signif(123.456,3), 123.)
-    @test approx_eq(signif(123.456,5), 123.46)
-    @test approx_eq(signif(123.456,8,2), 123.5)
+    @test signif(123.456,1) ≈ 100.
+    @test signif(123.456,3) ≈ 123.
+    @test signif(123.456,5) ≈ 123.46
+    @test signif(123.456,8,2) ≈ 123.5
     @test signif(0.0, 1) === 0.0
     @test signif(-0.0, 1) === -0.0
     @test signif(1.2, 2) === 1.2
