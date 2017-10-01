@@ -399,6 +399,10 @@ code_warntype(f, @nospecialize(t)) = code_warntype(STDOUT, f, t)
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
 
 function gen_call_with_extracted_types(__module__, fcn, ex0)
+    # assignments get bypassed: @edit a = f(x) <=> @edit f(x)
+    if isa(ex0, Expr) && ex0.head == :(=)
+        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
+    end
     if isa(ex0, Expr)
         if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
             # remove keyword args, but call the kwfunc
