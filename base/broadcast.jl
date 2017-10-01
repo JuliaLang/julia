@@ -662,41 +662,56 @@ tuplebroadcast_getargs(::Tuple{}, k) = ()
 """
     broadcast_getindex(A, inds...)
 
-Broadcasts the `inds` arrays to a common size like [`broadcast`](@ref)
-and returns an array of the results `A[ks...]`,
-where `ks` goes over the positions in the broadcast result `A`.
+Equivalent to [`broadcast`](@ref)ing the `inds` arrays to a common size
+and returning an array `[A[ks...] for ks in zip(indsb...)]` (where `indsb`
+would be the broadcast `inds`). The shape of the output is equal to the shape of each
+element of `indsb`.
 
 # Examples
 ```jldoctest
-julia> A = [1, 2, 3, 4, 5]
-5-element Array{Int64,1}:
- 1
- 2
- 3
- 4
- 5
-
-julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
-5×2 Array{Int64,2}:
- 1   2
- 3   4
- 5   6
- 7   8
- 9  10
-
-julia> C = broadcast(+,A,B)
-5×2 Array{Int64,2}:
-  2   3
-  5   6
-  8   9
+julia> A = [11 12; 21 22]
+2×2 Array{Int64,2}:
  11  12
- 14  15
+ 21  22
 
-julia> broadcast_getindex(C,[1,2,10])
-3-element Array{Int64,1}:
-  2
-  5
- 15
+julia> A[1:2, 1:2]
+2×2 Array{Int64,2}:
+ 11  12
+ 21  22
+
+julia> broadcast_getindex(A, 1:2, 1:2)
+2-element Array{Int64,1}:
+ 11
+ 22
+
+julia> A[1:2, 2:-1:1]
+2×2 Array{Int64,2}:
+ 12  11
+ 22  21
+
+julia> broadcast_getindex(A, 1:2, 2:-1:1)
+2-element Array{Int64,1}:
+ 12
+ 21
+ ```
+Because the indices are all vectors, these calls are like `[A[i[k], j[k]] for k = 1:2]`
+where `i` and `j` are the two index vectors.
+
+```jldoctest
+julia> broadcast_getindex(A, 1:2, (1:2)')
+2×2 Array{Int64,2}:
+ 11  12
+ 21  22
+
+julia> broadcast_getindex(A, (1:2)', 1:2)
+2×2 Array{Int64,2}:
+ 11  21
+ 12  22
+
+julia> broadcast_getindex(A, [1 2 1; 1 2 2], [1, 2])
+2×3 Array{Int64,2}:
+ 11  21  11
+ 12  22  22
 ```
 """
 broadcast_getindex(src::AbstractArray, I::AbstractArray...) =
@@ -723,8 +738,16 @@ end
 """
     broadcast_setindex!(A, X, inds...)
 
-Broadcasts the `X` and `inds` arrays to a common size and stores the value from each
-position in `X` at the indices in `A` given by the same positions in `inds`.
+Efficient element-by-element setting of the values of `A` in a pattern established by `inds`.
+Equivalent to broadcasting the `X` and `inds` arrays to a common size, and then executing
+
+    for (is, js) in zip(zip(indsb), eachindex(Xb))
+        A[is...] = Xb[js...]
+    end
+
+where `Xb` and `indsb` are the broadcast `X` and `inds`.
+
+See [`broadcast_getindex`](@ref) for examples of the treatment of `inds`.
 """
 @generated function broadcast_setindex!(A::AbstractArray, x, I::AbstractArray...)
     N = length(I)
