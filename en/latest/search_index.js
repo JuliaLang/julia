@@ -1517,7 +1517,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Documentation",
     "title": "Documentation",
     "category": "section",
-    "text": "Julia enables package developers and users to document functions, types and other objects easily via a built-in documentation system since Julia 0.4.The basic syntax is very simple: any string appearing at the top-level right before an object (function, macro, type or instance) will be interpreted as documenting it (these are called docstrings). Here is a very simple example:\"Tell whether there are too foo items in the array.\"\nfoo(xs::Array) = ...Documentation is interpreted as Markdown, so you can use indentation and code fences to delimit code examples from text. Technically, any object can be associated with any other as metadata; Markdown happens to be the default, but one can construct other string macros and pass them to the @doc macro just as well.Here is a more complex example, still using Markdown:\"\"\"\n    bar(x[, y])\n\nCompute the Bar index between `x` and `y`. If `y` is missing, compute\nthe Bar index between all pairs of columns of `x`.\n\n# Examples\n```julia-repl\njulia> bar([1, 2], [1, 2])\n1\n```\n\"\"\"\nfunction bar(x, y) ...As in the example above, we recommend following some simple conventions when writing documentation:Always show the signature of a function at the top of the documentation, with a four-space indent so that it is printed as Julia code.\nThis can be identical to the signature present in the Julia code (like mean(x::AbstractArray)), or a simplified form. Optional arguments should be represented with their default values (i.e. f(x, y=1)) when possible, following the actual Julia syntax. Optional arguments which do not have a default value should be put in brackets (i.e. f(x[, y]) and f(x[, y[, z]])). An alternative solution is to use several lines: one without optional arguments, the other(s) with them. This solution can also be used to document several related methods of a given function. When a function accepts many keyword arguments, only include a <keyword arguments> placeholder in the signature (i.e. f(x; <keyword arguments>)), and give the complete list under an # Arguments section (see point 4 below).\nInclude a single one-line sentence describing what the function does or what the object represents after the simplified signature block. If needed, provide more details in a second paragraph, after a blank line.\nThe one-line sentence should use the imperative form (\"Do this\", \"Return that\") instead of the third person (do not write \"Returns the length...\") when documenting functions. It should end with a period. If the meaning of a function cannot be summarized easily, splitting it into separate composable parts could be beneficial (this should not be taken as an absolute requirement for every single case though).\nDo not repeat yourself.\nSince the function name is given by the signature, there is no need to start the documentation with \"The function bar...\": go straight to the point. Similarly, if the signature specifies the types of the arguments, mentioning them in the description is redundant.\nOnly provide an argument list when really necessary.\nFor simple functions, it is often clearer to mention the role of the arguments directly in the description of the function's purpose. An argument list would only repeat information already provided elsewhere. However, providing an argument list can be a good idea for complex functions with many arguments (in particular keyword arguments). In that case, insert it after the general description of the function, under an # Arguments header, with one - bullet for each argument. The list should mention the types and default values (if any) of the arguments:\n\"\"\"\n...\n# Arguments\n- `n::Integer`: the number of elements to compute.\n- `dim::Integer=1`: the dimensions along which to perform the computation.\n...\n\"\"\"\nProvide hints to related functions.\nSometimes there are functions of related functionality. To increase discoverability please provide a short list of these in a See also: paragraph.\nSee also: [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref)\nInclude any code examples in an # Examples section.\nExamples should, whenever possible, be written as doctests. A doctest is a fenced code block (see Code blocks) starting with ```jldoctest and contains any number of julia> prompts together with inputs and expected outputs that mimic the Julia REPL.\nFor example in the following docstring a variable a is defined and the expected result, as printed in a Julia REPL, appears afterwards:\n\"\"\"\nSome nice documentation here.\n\n# Examples\n\n```jldoctest\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n```\n\"\"\"\nwarning: Warning\nCalling rand and other RNG-related functions should be avoided in doctests since they will not produce consistent outputs during different Julia sessions. If you would like to show some random number generation related functionality, one option is to explicitly construct and seed your own MersenneTwister (or other pseudorandom number generator) and pass it to the functions you are doctesting.Operating system word size (Int32 or Int64) as well as path separator differences (/ or \\) will also affect the reproducibility of some doctests.Note that whitespace in your doctest is significant! The doctest will fail if you misalign the output of pretty-printing an array, for example.\nYou can then run make -C doc doctest to run all the doctests in the Julia Manual, which will ensure that your example works.\nExamples that are untestable should be written within fenced code blocks starting with ```julia so that they are highlighted correctly in the generated documentation.\ntip: Tip\nWherever possible examples should be self-contained and runnable so that readers are able to try them out without having to include any dependencies.\nUse backticks to identify code and equations.\nJulia identifiers and code excerpts should always appear between backticks ` to enable highlighting. Equations in the LaTeX syntax can be inserted between double backticks ``. Use Unicode characters rather than their LaTeX escape sequence, i.e. ``α = 1`` rather than ``\\\\alpha = 1``.\nPlace the starting and ending \"\"\" characters on lines by themselves.\nThat is, write:\n\"\"\"\n...\n\n...\n\"\"\"\nf(x, y) = ...\nrather than:\n\"\"\"...\n\n...\"\"\"\nf(x, y) = ...\nThis makes it more clear where docstrings start and end.\nRespect the line length limit used in the surrounding code.\nDocstrings are edited using the same tools as code. Therefore, the same conventions should apply. It it advised to add line breaks after 92 characters."
+    "text": "Julia enables package developers and users to document functions, types and other objects easily via a built-in documentation system since Julia 0.4.The basic syntax is very simple: any string appearing at the top-level right before an object (function, macro, type or instance) will be interpreted as documenting it (these are called docstrings). Here is a very simple example:\"Tell whether there are too foo items in the array.\"\nfoo(xs::Array) = ...Documentation is interpreted as Markdown, so you can use indentation and code fences to delimit code examples from text. Technically, any object can be associated with any other as metadata; Markdown happens to be the default, but one can construct other string macros and pass them to the @doc macro just as well.Here is a more complex example, still using Markdown:\"\"\"\n    bar(x[, y])\n\nCompute the Bar index between `x` and `y`. If `y` is missing, compute\nthe Bar index between all pairs of columns of `x`.\n\n# Examples\n```julia-repl\njulia> bar([1, 2], [1, 2])\n1\n```\n\"\"\"\nfunction bar(x, y) ...As in the example above, we recommend following some simple conventions when writing documentation:Always show the signature of a function at the top of the documentation, with a four-space indent so that it is printed as Julia code.\nThis can be identical to the signature present in the Julia code (like mean(x::AbstractArray)), or a simplified form. Optional arguments should be represented with their default values (i.e. f(x, y=1)) when possible, following the actual Julia syntax. Optional arguments which do not have a default value should be put in brackets (i.e. f(x[, y]) and f(x[, y[, z]])). An alternative solution is to use several lines: one without optional arguments, the other(s) with them. This solution can also be used to document several related methods of a given function. When a function accepts many keyword arguments, only include a <keyword arguments> placeholder in the signature (i.e. f(x; <keyword arguments>)), and give the complete list under an # Arguments section (see point 4 below).\nInclude a single one-line sentence describing what the function does or what the object represents after the simplified signature block. If needed, provide more details in a second paragraph, after a blank line.\nThe one-line sentence should use the imperative form (\"Do this\", \"Return that\") instead of the third person (do not write \"Returns the length...\") when documenting functions. It should end with a period. If the meaning of a function cannot be summarized easily, splitting it into separate composable parts could be beneficial (this should not be taken as an absolute requirement for every single case though).\nDo not repeat yourself.\nSince the function name is given by the signature, there is no need to start the documentation with \"The function bar...\": go straight to the point. Similarly, if the signature specifies the types of the arguments, mentioning them in the description is redundant.\nOnly provide an argument list when really necessary.\nFor simple functions, it is often clearer to mention the role of the arguments directly in the description of the function's purpose. An argument list would only repeat information already provided elsewhere. However, providing an argument list can be a good idea for complex functions with many arguments (in particular keyword arguments). In that case, insert it after the general description of the function, under an # Arguments header, with one - bullet for each argument. The list should mention the types and default values (if any) of the arguments:\n\"\"\"\n...\n# Arguments\n- `n::Integer`: the number of elements to compute.\n- `dim::Integer=1`: the dimensions along which to perform the computation.\n...\n\"\"\"\nProvide hints to related functions.\nSometimes there are functions of related functionality. To increase discoverability please provide a short list of these in a See also: paragraph.\nSee also: [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref)\nInclude any code examples in an # Examples section.\nExamples should, whenever possible, be written as doctests. A doctest is a fenced code block (see Code blocks) starting with ```jldoctest and contains any number of julia> prompts together with inputs and expected outputs that mimic the Julia REPL.\nFor example in the following docstring a variable a is defined and the expected result, as printed in a Julia REPL, appears afterwards:\n\"\"\"\nSome nice documentation here.\n\n# Examples\n```jldoctest\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n```\n\"\"\"\nwarning: Warning\nCalling rand and other RNG-related functions should be avoided in doctests since they will not produce consistent outputs during different Julia sessions. If you would like to show some random number generation related functionality, one option is to explicitly construct and seed your own MersenneTwister (or other pseudorandom number generator) and pass it to the functions you are doctesting.Operating system word size (Int32 or Int64) as well as path separator differences (/ or \\) will also affect the reproducibility of some doctests.Note that whitespace in your doctest is significant! The doctest will fail if you misalign the output of pretty-printing an array, for example.\nYou can then run make -C doc doctest to run all the doctests in the Julia Manual, which will ensure that your example works.\nExamples that are untestable should be written within fenced code blocks starting with ```julia so that they are highlighted correctly in the generated documentation.\ntip: Tip\nWherever possible examples should be self-contained and runnable so that readers are able to try them out without having to include any dependencies.\nUse backticks to identify code and equations.\nJulia identifiers and code excerpts should always appear between backticks ` to enable highlighting. Equations in the LaTeX syntax can be inserted between double backticks ``. Use Unicode characters rather than their LaTeX escape sequence, i.e. ``α = 1`` rather than ``\\\\alpha = 1``.\nPlace the starting and ending \"\"\" characters on lines by themselves.\nThat is, write:\n\"\"\"\n...\n\n...\n\"\"\"\nf(x, y) = ...\nrather than:\n\"\"\"...\n\n...\"\"\"\nf(x, y) = ...\nThis makes it more clear where docstrings start and end.\nRespect the line length limit used in the surrounding code.\nDocstrings are edited using the same tools as code. Therefore, the same conventions should apply. It it advised to add line breaks after 92 characters."
 },
 
 {
@@ -4697,6 +4697,246 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/base/#module",
+    "page": "Essentials",
+    "title": "module",
+    "category": "Keyword",
+    "text": "module\n\nmodule declares a Module, which is a separate global variable workspace. Within a module, you can control which names from other modules are visible (via importing), and specify which of your names are intended to be public (via exporting). Modules allow you to create top-level definitions without worrying about name conflicts when your code is used together with somebody else’s. See the manual section about modules for more details.\n\nExamples\n\nmodule Foo\nimport Base.show\nexport MyType, foo\n\nstruct MyType\n    x\nend\n\nbar(x) = 2x\nfoo(a::MyType) = bar(a.x) + 1\nshow(io::IO, a::MyType) = print(io, \"MyType $(a.x)\")\nend\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#export",
+    "page": "Essentials",
+    "title": "export",
+    "category": "Keyword",
+    "text": "export\n\nexport is used within modules to tell Julia which functions should be made available to the user. For example: export foo makes the name foo available when using the module. See the manual section about modules for details.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#import",
+    "page": "Essentials",
+    "title": "import",
+    "category": "Keyword",
+    "text": "import\n\nimport Foo will load the module or package Foo. Names from the imported Foo module can be accessed with dot syntax (e.g. Foo.foo to access the name foo). See the manual section about modules for details.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#using",
+    "page": "Essentials",
+    "title": "using",
+    "category": "Keyword",
+    "text": "using\n\nusing Foo will load the module or package Foo and make its exported names available for direct use. Names can also be used via dot syntax (e.g. Foo.foo to access the name foo), whether they are exported or not. See the manual section about modules for details. ```\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#baremodule",
+    "page": "Essentials",
+    "title": "baremodule",
+    "category": "Keyword",
+    "text": "baremodule\n\nbaremodule declares a module that does not contain using Base or a definition of eval. It does still import Core.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#function",
+    "page": "Essentials",
+    "title": "function",
+    "category": "Keyword",
+    "text": "function\n\nFunctions are defined with the function keyword:\n\nfunction add(a, b)\n    return a + b\nend\n\nOr the short form notation:\n\nadd(a, b) = a + b\n\nThe use of the return keyword is exactly the same as in other languages, but is often optional. A function without an explicit return statement will return the last expression in the function body.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#macro",
+    "page": "Essentials",
+    "title": "macro",
+    "category": "Keyword",
+    "text": "macro\n\nmacro defines a method to include generated code in the final body of a program. A macro maps a tuple of arguments to a returned expression, and the resulting expression is compiled directly rather than requiring a runtime eval call. Macro arguments may include expressions, literal values, and symbols. For example:\n\nExamples\n\njulia> macro sayhello(name)\n           return :( println(\"Hello, \", $name, \"!\") )\n       end\n@sayhello (macro with 1 method)\n\njulia> @sayhello \"Charlie\"\nHello, Charlie!\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#return",
+    "page": "Essentials",
+    "title": "return",
+    "category": "Keyword",
+    "text": "return\n\nreturn can be used in function bodies to exit early and return a given value, e.g.\n\nfunction compare(a, b)\n    a == b && return \"equal to\"\n    a < b ? \"less than\" : \"greater than\"\nend\n\nIn general you can place a return statement anywhere within a function body, including within deeply nested loops or conditionals, but be careful with do blocks. For example:\n\nfunction test1(xs)\n    for x in xs\n        iseven(x) && return 2x\n    end\nend\n\nfunction test2(xs)\n    map(xs) do x\n        iseven(x) && return 2x\n        x\n    end\nend\n\nIn the first example, the return breaks out of its enclosing function as soon as it hits an even number, so test1([5,6,7]) returns 12.\n\nYou might expect the second example to behave the same way, but in fact the return there only breaks out of the inner function (inside the do block) and gives a value back to map. test2([5,6,7]) then returns [5,12,7].\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#do",
+    "page": "Essentials",
+    "title": "do",
+    "category": "Keyword",
+    "text": "do\n\nThe do keyword creates an anonymous function. For example:\n\nmap(1:10) do x\n    2x\nend\n\nis equivalent to map(x->2x, 1:10).\n\nUse multiple arguments like so:\n\nmap(1:10, 11:20) do x, y\n    x + y\nend\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#begin",
+    "page": "Essentials",
+    "title": "begin",
+    "category": "Keyword",
+    "text": "begin\n\nbegin...end denotes a block of code.\n\nbegin\n    println(\"Hello, \")\n    println(\"World!\")\nend\n\nUsually begin will not be necessary, since keywords such as function and let implicitly begin blocks of code. See also ;.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#end",
+    "page": "Essentials",
+    "title": "end",
+    "category": "Keyword",
+    "text": "end\n\nend marks the conclusion of a block of expressions, for example module, struct, mutable struct, begin, let, for etc. end may also be used when indexing into an array to represent the last index of a dimension.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> A[end, :]\n2-element Array{Int64,1}:\n 3\n 4\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#let",
+    "page": "Essentials",
+    "title": "let",
+    "category": "Keyword",
+    "text": "let\n\nlet statements allocate new variable bindings each time they run. Whereas an assignment modifies an existing value location, let creates new locations. This difference is only detectable in the case of variables that outlive their scope via closures. The let syntax accepts a comma-separated series of assignments and variable names:\n\nlet var1 = value1, var2, var3 = value3\n    code\nend\n\nThe assignments are evaluated in order, with each right-hand side evaluated in the scope before the new variable on the left-hand side has been introduced. Therefore it makes sense to write something like let x = x, since the two x variables are distinct and have separate storage.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#if",
+    "page": "Essentials",
+    "title": "if",
+    "category": "Keyword",
+    "text": "if/elseif/else\n\nif/elseif/else performs conditional evaluation, which allows portions of code to be evaluated or not evaluated depending on the value of a boolean expression. Here is the anatomy of the if/elseif/else conditional syntax:\n\nif x < y\n    println(\"x is less than y\")\nelseif x > y\n    println(\"x is greater than y\")\nelse\n    println(\"x is equal to y\")\nend\n\nIf the condition expression x < y is true, then the corresponding block is evaluated; otherwise the condition expression x > y is evaluated, and if it is true, the corresponding block is evaluated; if neither expression is true, the else block is evaluated. The elseif and else blocks are optional, and as many elseif blocks as desired can be used.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#for",
+    "page": "Essentials",
+    "title": "for",
+    "category": "Keyword",
+    "text": "for\n\nfor loops repeatedly evaluate the body of the loop by iterating over a sequence of values.\n\nExamples\n\njulia> for i in [1, 4, 0]\n           println(i)\n       end\n1\n4\n0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#while",
+    "page": "Essentials",
+    "title": "while",
+    "category": "Keyword",
+    "text": "while\n\nwhile loops repeatedly evaluate a conditional expression, and continues evaluating the body of the while loop so long as the expression remains true. If the condition expression is false when the while loop is first reached, the body is never evaluated.\n\nExamples\n\njulia> i = 1\n1\n\njulia> while i < 5\n           println(i)\n           i += 1\n       end\n1\n2\n3\n4\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#break",
+    "page": "Essentials",
+    "title": "break",
+    "category": "Keyword",
+    "text": "break\n\nbreak breaks out of a loop immediately.\n\nExamples\n\njulia> i = 0\n0\n\njulia> while true\n           i += 1\n           i > 5 && break\n           println(i)\n       end\n1\n2\n3\n4\n5\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#continue",
+    "page": "Essentials",
+    "title": "continue",
+    "category": "Keyword",
+    "text": "continue\n\ncontinue skips the rest of the current loop, then carries on looping.\n\nExamples\n\njulia> for i = 1:6\n           iseven(i) && continue\n           println(i)\n       end\n1\n3\n5\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#try",
+    "page": "Essentials",
+    "title": "try",
+    "category": "Keyword",
+    "text": "try/catch\n\nA try/catch statement allows for Exceptions to be tested for. For example, a customized square root function can be written to automatically call either the real or complex square root method on demand using Exceptions:\n\nf(x) = try\n    sqrt(x)\ncatch\n    sqrt(complex(x, 0))\nend\n\ntry/catch statements also allow the Exception to be saved in a variable, e.g. catch y.\n\nThe catch clause is not strictly necessary; when omitted, the default return value is nothing. The power of the try/catch construct lies in the ability to unwind a deeply nested computation immediately to a much higher level in the stack of calling functions.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#finally",
+    "page": "Essentials",
+    "title": "finally",
+    "category": "Keyword",
+    "text": "finally\n\nfinally provides a way to run some code when a given block of code exits, regardless of how it exits. For example, here is how we can guarantee that an opened file is closed:\n\nf = open(\"file\")\ntry\n    operate_on_file(f)\nfinally\n    close(f)\nend\n\nWhen control leaves the try block (for example due to a return, or just finishing normally), close(f) will be executed. If the try block exits due to an exception, the exception will continue propagating. A catch block may be combined with try and finally as well. In this case the finally block will run after catch has handled the error.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#quote",
+    "page": "Essentials",
+    "title": "quote",
+    "category": "Keyword",
+    "text": "quote\n\nquote creates multiple expression objects in a block without using the explicit Expr constructor. For example:\n\nex = quote\n    x = 1\n    y = 2\n    x + y\nend\n\nUnlike the other means of quoting, :( ... ), this form introduces QuoteNode elements to the expression tree, which must be considered when directly manipulating the tree. For other purposes, :( ... ) and quote .. end blocks are treated identically.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#local",
+    "page": "Essentials",
+    "title": "local",
+    "category": "Keyword",
+    "text": "local\n\nlocal introduces a new local variable.\n\nExamples\n\njulia> function foo(n)\n           x = 0\n           for i = 1:n\n               local x # introduce a loop-local x\n               x = i\n           end\n           x\n       end\nfoo (generic function with 1 method)\n\njulia> foo(10)\n0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#global",
+    "page": "Essentials",
+    "title": "global",
+    "category": "Keyword",
+    "text": "global\n\nglobal x makes x in the current scope and its inner scopes refer to the global variable of that name.\n\nExamples\n\njulia> z = 3\n3\n\njulia> function foo()\n           global z = 6 # use the z variable defined outside foo\n       end\nfoo (generic function with 1 method)\n\njulia> foo()\n6\n\njulia> z\n6\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#const",
+    "page": "Essentials",
+    "title": "const",
+    "category": "Keyword",
+    "text": "const\n\nconst is used to declare global variables which are also constant. In almost all code (and particularly performance sensitive code) global variables should be declared constant in this way.\n\nconst x = 5\n\nNote that \"constant-ness\" is not enforced inside containers, so if x is an array or dictionary (for example) you can still add and remove elements.\n\nTechnically, you can even redefine const variables, although this will generate a warning from the compiler. The only strict requirement is that the type of the variable does not change, which is why const variables are much faster than regular globals.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#struct",
+    "page": "Essentials",
+    "title": "struct",
+    "category": "Keyword",
+    "text": "struct\n\nThe most commonly used kind of type in Julia is a struct, specified as a name and a set of fields.\n\nstruct Point\n    x\n    y\nend\n\nFields can have type restrictions, which may be parameterized:\n\n    struct Point{X}\n        x::X\n        y::Float64\n    end\n\nA struct can also declare an abstract super type via <: syntax:\n\nstruct Point <: AbstractPoint\n    x\n    y\nend\n\nstructs are immutable by default; an instance of one of these types cannot be modified after construction. Use mutable struct instead to declare a type whose instances can be modified.\n\nSee the manual section on Composite Types for more details, such as how to define constructors.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#mutable struct",
+    "page": "Essentials",
+    "title": "mutable struct",
+    "category": "Keyword",
+    "text": "mutable struct\n\nmutable struct is similar to struct, but additionally allows the fields of the type to be set after construction. See the manual section on Composite Types for more information.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#abstract type",
+    "page": "Essentials",
+    "title": "abstract type",
+    "category": "Keyword",
+    "text": "abstract type\n\nabstract type declares a type that cannot be instantiated, and serves only as a node in the type graph, thereby describing sets of related concrete types: those concrete types which are their descendants. Abstract types form the conceptual hierarchy which makes Julia’s type system more than just a collection of object implementations. For example:\n\nabstract type Number end\nabstract type Real <: Number end\n\nNumber has no supertype, whereas Real is an abstract subtype of Number.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#primitive type",
+    "page": "Essentials",
+    "title": "primitive type",
+    "category": "Keyword",
+    "text": "primitive type\n\nprimitive type declares a concrete type whose data consists only of a series of bits. Classic examples of primitive types are integers and floating-point values. Some example built-in primitive type declarations:\n\nprimitive type Char 32 end\nprimitive type Bool <: Integer 8 end\n\nThe number after the name indicates how many bits of storage the type requires. Currently, only sizes that are multiples of 8 bits are supported. The Bool declaration shows how a primitive type can be optionally declared to be a subtype of some supertype.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#...",
+    "page": "Essentials",
+    "title": "...",
+    "category": "Keyword",
+    "text": "...\n\nThe \"splat\" operator, ..., represents a sequence of arguments. ... can be used in function definitions, to indicate that the function accepts an arbitrary number of arguments. ... can also be used to apply a function to a sequence of arguments.\n\nExamples\n\njulia> add(xs...) = reduce(+, xs)\nadd (generic function with 1 method)\n\njulia> add(1, 2, 3, 4, 5)\n15\n\njulia> add([1, 2, 3]...)\n6\n\njulia> add(7, 1:100..., 1000:1100...)\n111107\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#;",
+    "page": "Essentials",
+    "title": ";",
+    "category": "Keyword",
+    "text": ";\n\n; has a similar role in Julia as in many C-like languages, and is used to delimit the end of the previous statement. ; is not necessary after new lines, but can be used to separate statements on a single line or to join statements into a single expression. ; is also used to suppress output printing in the REPL and similar interfaces.\n\nExamples\n\njulia> function foo()\n           x = \"Hello, \"; x *= \"World!\"\n           return x\n       end\nfoo (generic function with 1 method)\n\njulia> bar() = (x = \"Hello, Mars!\"; return x)\nbar (generic function with 1 method)\n\njulia> foo();\n\njulia> bar()\n\"Hello, Mars!\"\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Keywords-1",
+    "page": "Essentials",
+    "title": "Keywords",
+    "category": "section",
+    "text": "module\nexport\nimport\nusing\nbaremodule\nfunction\nmacro\nreturn\ndo\nbegin\nend\nlet\nif\nfor\nwhile\nbreak\ncontinue\ntry\nfinally\nquote\nlocal\nglobal\nconst\nstruct\nmutable struct\nabstract type\nprimitive type\n...\n;"
+},
+
+{
     "location": "stdlib/base/#Core.:===",
     "page": "Essentials",
     "title": "Core.:===",
@@ -5217,6 +5457,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/base/#new",
+    "page": "Essentials",
+    "title": "new",
+    "category": "Keyword",
+    "text": "new\n\nSpecial function available to inner constructors which created a new object of the type. See the manual section on Inner Constructor Methods for more information.\n\n\n\n"
+},
+
+{
     "location": "stdlib/base/#Base.:|>",
     "page": "Essentials",
     "title": "Base.:|>",
@@ -5245,7 +5493,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Generic Functions",
     "category": "section",
-    "text": "Core.Function\nBase.method_exists\nCore.applicable\nCore.invoke\nBase.invokelatest\nBase.:(|>)\nBase.:(∘)\nBase.equalto"
+    "text": "Core.Function\nBase.method_exists\nCore.applicable\nCore.invoke\nBase.invokelatest\nnew\nBase.:(|>)\nBase.:(∘)\nBase.equalto"
 },
 
 {
@@ -6749,7 +6997,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "Function",
-    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n"
+    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n"
 },
 
 {
@@ -6781,7 +7029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nmap(f, x::Nullable)\n\nReturn f applied to the value of x if it has one, as a Nullable. If x is null, then return a null value of type Nullable{S}. S is guaranteed to be either Union{} or a concrete type. Whichever of these is chosen is an implementation detail, but typically the choice that maximizes performance would be used. If x has a value, then the return type is guaranteed to be of type Nullable{typeof(f(x))}.\n\nExamples\n\njulia> map(isodd, Nullable(1))\nNullable{Bool}(true)\n\njulia> map(isodd, Nullable(2))\nNullable{Bool}(false)\n\njulia> map(isodd, Nullable{Int}())\nNullable{Bool}()\n\n\n\n"
+    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nmap(f, x::Nullable)\n\nReturn f applied to the value of x if it has one, as a Nullable. If x is null, then return a null value of type Nullable{S}. S is guaranteed to be either Union{} or a concrete type. Whichever of these is chosen is an implementation detail, but typically the choice that maximizes performance would be used. If x has a value, then the return type is guaranteed to be of type Nullable{typeof(f(x))}.\n\nExamples\n\njulia> map(isodd, Nullable(1))\nNullable{Bool}(true)\n\njulia> map(isodd, Nullable(2))\nNullable{Bool}(false)\n\njulia> map(isodd, Nullable{Int}())\nNullable{Bool}()\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n"
 },
 
 {
@@ -7053,7 +7301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nSee also: IndexStyle, indices.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nSee also: IndexStyle, indices.\n\n\n\n"
 },
 
 {
@@ -7341,7 +7589,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\n"
+    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
 },
 
 {
@@ -8093,7 +8341,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.log",
     "category": "Method",
-    "text": "log(A{T}::StridedMatrix{T})\n\nIf A has no negative real eigenvalue, compute the principal matrix logarithm of A, i.e. the unique matrix X such that e^X = A and -pi  Im(lambda)  pi for all the eigenvalues lambda of X. If A has nonpositive eigenvalues, a nonprincipal matrix function is returned whenever possible.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used, if A is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12] and [AHR13]). For general matrices, the complex Schur form (schur) is computed and the triangular algorithm is used on the triangular factor.\n\n[AH12]: Awad H. Al-Mohy and Nicholas J. Higham, \"Improved inverse  scaling and squaring algorithms for the matrix logarithm\", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. doi:10.1137/110852553\n\n[AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, \"Computing the Fréchet derivative of the matrix logarithm and estimating the condition number\", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. doi:10.1137/120885991\n\nExamples\n\njulia> A = 2.7182818 * eye(2)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\njulia> log(A)\n2×2 Symmetric{Float64,Array{Float64,2}}:\n 1.0  0.0\n 0.0  1.0\n\n\n\nlog(x)\n\nCompute the natural logarithm of x. Throws DomainError for negative Real arguments. Use complex negative arguments to obtain complex results.\n\nThere is an experimental variant in the Base.Math.JuliaLibm module, which is typically faster and more accurate.\n\n\n\n"
+    "text": "log(x)\n\nCompute the natural logarithm of x. Throws DomainError for negative Real arguments. Use complex negative arguments to obtain complex results.\n\nThere is an experimental variant in the Base.Math.JuliaLibm module, which is typically faster and more accurate.\n\n\n\nlog(A{T}::StridedMatrix{T})\n\nIf A has no negative real eigenvalue, compute the principal matrix logarithm of A, i.e. the unique matrix X such that e^X = A and -pi  Im(lambda)  pi for all the eigenvalues lambda of X. If A has nonpositive eigenvalues, a nonprincipal matrix function is returned whenever possible.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used, if A is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12] and [AHR13]). For general matrices, the complex Schur form (schur) is computed and the triangular algorithm is used on the triangular factor.\n\n[AH12]: Awad H. Al-Mohy and Nicholas J. Higham, \"Improved inverse  scaling and squaring algorithms for the matrix logarithm\", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. doi:10.1137/110852553\n\n[AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, \"Computing the Fréchet derivative of the matrix logarithm and estimating the condition number\", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. doi:10.1137/120885991\n\nExamples\n\njulia> A = 2.7182818 * eye(2)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\njulia> log(A)\n2×2 Symmetric{Float64,Array{Float64,2}}:\n 1.0  0.0\n 0.0  1.0\n\n\n\n"
 },
 
 {
@@ -8141,7 +8389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.exp",
     "category": "Function",
-    "text": "exp(A::AbstractMatrix)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExamples\n\njulia> A = eye(2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> exp(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\nexp(x)\n\nCompute the natural base exponential of x, in other words e^x.\n\njulia> exp(1.0)\n2.718281828459045\n\n\n\n"
+    "text": "exp(x)\n\nCompute the natural base exponential of x, in other words e^x.\n\njulia> exp(1.0)\n2.718281828459045\n\n\n\nexp(A::AbstractMatrix)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExamples\n\njulia> A = eye(2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> exp(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\n"
 },
 
 {
@@ -8493,7 +8741,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.sqrt",
     "category": "Function",
-    "text": "sqrt(A::AbstractMatrix)\n\nIf A has no negative real eigenvalues, compute the principal matrix square root of A, that is the unique matrix X with eigenvalues having positive real part such that X^2 = A. Otherwise, a nonprincipal square root is returned.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the square root. Otherwise, the square root is determined by means of the Björck-Hammarling method [BH83], which computes the complex Schur form (schur) and then the complex square root of the triangular factor.\n\n[BH83]: Åke Björck and Sven Hammarling, \"A Schur method for the square root of a matrix\", Linear Algebra and its Applications, 52-53, 1983, 127-140. doi:10.1016/0024-3795(83)80010-X\n\nExamples\n\njulia> A = [4 0; 0 4]\n2×2 Array{Int64,2}:\n 4  0\n 0  4\n\njulia> sqrt(A)\n2×2 Array{Float64,2}:\n 2.0  0.0\n 0.0  2.0\n\n\n\nsqrt(x)\n\nReturn sqrtx. Throws DomainError for negative Real arguments. Use complex negative arguments instead. The prefix operator √ is equivalent to sqrt.\n\n\n\n"
+    "text": "sqrt(x)\n\nReturn sqrtx. Throws DomainError for negative Real arguments. Use complex negative arguments instead. The prefix operator √ is equivalent to sqrt.\n\n\n\nsqrt(A::AbstractMatrix)\n\nIf A has no negative real eigenvalues, compute the principal matrix square root of A, that is the unique matrix X with eigenvalues having positive real part such that X^2 = A. Otherwise, a nonprincipal square root is returned.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the square root. Otherwise, the square root is determined by means of the Björck-Hammarling method [BH83], which computes the complex Schur form (schur) and then the complex square root of the triangular factor.\n\n[BH83]: Åke Björck and Sven Hammarling, \"A Schur method for the square root of a matrix\", Linear Algebra and its Applications, 52-53, 1983, 127-140. doi:10.1016/0024-3795(83)80010-X\n\nExamples\n\njulia> A = [4 0; 0 4]\n2×2 Array{Int64,2}:\n 4  0\n 0  4\n\njulia> sqrt(A)\n2×2 Array{Float64,2}:\n 2.0  0.0\n 0.0  2.0\n\n\n\n"
 },
 
 {
@@ -8541,7 +8789,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -12717,7 +12965,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A, pivot=Val(true)) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExamples\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A, pivot=Val(true)) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExamples\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
 },
 
 {
@@ -12741,7 +12989,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact",
     "category": "Function",
-    "text": "cholfact(A, Val(false)) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, det, logdet and isposdef.\n\nExamples\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\ncholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
+    "text": "cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\ncholfact(A, Val(false)) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, det, logdet and isposdef.\n\nExamples\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\n"
 },
 
 {
@@ -12749,7 +12997,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact!",
     "category": "Function",
-    "text": "cholfact!(A, Val(false)) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError: convert(Int64, 6.782329983125268)\n\n\n\ncholfact!(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\ncholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/ Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/ Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\ncholfact!(A, Val(false)) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError: convert(Int64, 6.782329983125268)\n\n\n\ncholfact!(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\n"
 },
 
 {
@@ -12789,7 +13037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact",
     "category": "Function",
-    "text": "ldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of the real symmetric tridiagonal matrix S such that S = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(S) is to solve the linear system of equations Sx = b with F\\b.\n\nExamples\n\njulia> S = SymTridiagonal([3., 4., 5.], [1., 2.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 3.0  1.0   ⋅\n 1.0  4.0  2.0\n  ⋅   2.0  5.0\n\njulia> ldltS = ldltfact(S);\n\njulia> b = [6., 7., 8.];\n\njulia> ldltS\n3-element Array{Float64,1}:\n 1.7906976744186047\n 0.627906976744186\n 1.3488372093023255\n\njulia> S\n3-element Array{Float64,1}:\n 1.7906976744186047\n 0.627906976744186\n 1.3488372093023255\n\n\n\nldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, logdet, and inv. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
+    "text": "ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, logdet, and inv. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\nldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of the real symmetric tridiagonal matrix S such that S = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(S) is to solve the linear system of equations Sx = b with F\\b.\n\nExamples\n\njulia> S = SymTridiagonal([3., 4., 5.], [1., 2.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 3.0  1.0   ⋅\n 1.0  4.0  2.0\n  ⋅   2.0  5.0\n\njulia> ldltS = ldltfact(S);\n\njulia> b = [6., 7., 8.];\n\njulia> ldltS\n3-element Array{Float64,1}:\n 1.7906976744186047\n 0.627906976744186\n 1.3488372093023255\n\njulia> S\n3-element Array{Float64,1}:\n 1.7906976744186047\n 0.627906976744186\n 1.3488372093023255\n\n\n\n"
 },
 
 {
@@ -12797,7 +13045,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact!",
     "category": "Function",
-    "text": "ldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input S, instead of creating a copy.\n\nExamples\n\njulia> S = SymTridiagonal([3., 4., 5.], [1., 2.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 3.0  1.0   ⋅\n 1.0  4.0  2.0\n  ⋅   2.0  5.0\n\njulia> ldltS = ldltfact!(S);\n\njulia> ldltS === S\nfalse\n\njulia> S\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 3.0       0.333333   ⋅\n 0.333333  3.66667   0.545455\n  ⋅        0.545455  3.90909\n\n\n\nldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input S, instead of creating a copy.\n\nExamples\n\njulia> S = SymTridiagonal([3., 4., 5.], [1., 2.])\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 3.0  1.0   ⋅\n 1.0  4.0  2.0\n  ⋅   2.0  5.0\n\njulia> ldltS = ldltfact!(S);\n\njulia> ldltS === S\nfalse\n\njulia> S\n3×3 SymTridiagonal{Float64,Array{Float64,1}}:\n 3.0       0.333333   ⋅\n 0.333333  3.66667   0.545455\n  ⋅        0.545455  3.90909\n\n\n\n"
 },
 
 {
@@ -12821,7 +13069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExamples\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\nqrfact(A) -> QRSparse\n\nCompute the QR factorization of a sparse matrix A. Fill-reducing row and column permutations are used such that F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]. The main application of this type is to solve least squares or underdetermined problems with \\. The function calls the C library SPQR.\n\nExamples\n\njulia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))\n4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 1]  =  1.0\n  [3, 2]  =  1.0\n  [4, 2]  =  1.0\n\njulia> qrfact(A)\nBase.SparseArrays.SPQR.QRSparse{Float64,Int64}\nQ factor:\n4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:\n -0.707107   0.0        0.0       -0.707107\n  0.0       -0.707107  -0.707107   0.0\n  0.0       -0.707107   0.707107   0.0\n -0.707107   0.0        0.0        0.707107\nR factor:\n2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  -1.41421\n  [2, 2]  =  -1.41421\nRow permutation:\n4-element Array{Int64,1}:\n 1\n 3\n 4\n 2\nColumn permutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
+    "text": "qrfact(A) -> QRSparse\n\nCompute the QR factorization of a sparse matrix A. Fill-reducing row and column permutations are used such that F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]. The main application of this type is to solve least squares or underdetermined problems with \\. The function calls the C library SPQR.\n\nExamples\n\njulia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))\n4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 1]  =  1.0\n  [3, 2]  =  1.0\n  [4, 2]  =  1.0\n\njulia> qrfact(A)\nBase.SparseArrays.SPQR.QRSparse{Float64,Int64}\nQ factor:\n4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:\n -0.707107   0.0        0.0       -0.707107\n  0.0       -0.707107  -0.707107   0.0\n  0.0       -0.707107   0.707107   0.0\n -0.707107   0.0        0.0        0.707107\nR factor:\n2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  -1.41421\n  [2, 2]  =  -1.41421\nRow permutation:\n4-element Array{Int64,1}:\n 1\n 3\n 4\n 2\nColumn permutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\nqrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExamples\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\n"
 },
 
 {
