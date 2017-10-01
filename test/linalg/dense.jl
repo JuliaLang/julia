@@ -560,7 +560,7 @@ end
             @test coth(acoth(coth(A))) ≈ coth(A)
 
             # Definition of principal values (Aprahamian & Higham, 2016, pp. 4-5)
-            abstol = 1e-10 * norm(acosh(A))
+            abstol = 1e-8 * norm(acosh(A))
             @test all(z -> (0 < real(z) < π ||
                             abs(real(z)) < abstol && imag(z) >= 0 ||
                             abs(real(z) - π) < abstol && imag(z) <= 0),
