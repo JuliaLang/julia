@@ -555,6 +555,23 @@ Some other useful functions include:
     `i`.
   * [`chr2ind(str,j)`](@ref) gives the index at which the `j`th character in `str` occurs.
 
+
+It is possible to create a view into a string using the type `SubString`, for example:
+
+```jldoctest
+julia> str = "long string"
+"long string"
+
+julia> substr = SubString(str, 1, 4)
+"long"
+
+julia> typeof(substr)
+SubString{String}
+```
+
+`SubString` works like [`getindex`](@ref), but it does not make a copy of the parent string. Several
+standard functions like [`chop`](@ref), [`chomp`](@ref) or [`strip`](@ref) return a `SubString`.
+
 ## [Non-Standard String Literals](@id non-standard-string-literals)
 
 There are situations when you want to construct a string or use string semantics, but the behavior
