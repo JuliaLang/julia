@@ -41,7 +41,7 @@ end
 
 function _nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...)
     @gensym d
-    _nloops(N, itersym, :($d->indices($arraysym, $d)), args...)
+    _nloops(N, itersym, :($d->Base.indices($arraysym, $d)), args...)
 end
 
 function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)

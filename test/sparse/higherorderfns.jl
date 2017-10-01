@@ -118,7 +118,7 @@ end
         @test broadcast!(cos, Z, X) == sparse(broadcast!(cos, fZ, fX))
         # --> test shape checks for broadcast! entry point
         # TODO strengthen this test, avoiding dependence on checking whether
-        # broadcast_indices throws to determine whether sparse broadcast should throw
+        # check_broadcast_indices throws to determine whether sparse broadcast should throw
         try
             Base.Broadcast.check_broadcast_indices(indices(Z), spzeros((shapeX .- 1)...))
         catch
@@ -142,7 +142,7 @@ end
         @test broadcast!(cos, V, X) == sparse(broadcast!(cos, fV, fX))
         # --> test shape checks for broadcast! entry point
         # TODO strengthen this test, avoiding dependence on checking whether
-        # broadcast_indices throws to determine whether sparse broadcast should throw
+        # check_broadcast_indices throws to determine whether sparse broadcast should throw
         try
             Base.Broadcast.check_broadcast_indices(indices(V), spzeros((shapeX .- 1)...))
         catch
@@ -177,9 +177,9 @@ end
             @test broadcast(*, X, Y) == sparse(broadcast(*, fX, fY))
             @test broadcast(f, X, Y) == sparse(broadcast(f, fX, fY))
             # TODO strengthen this test, avoiding dependence on checking whether
-            # broadcast_indices throws to determine whether sparse broadcast should throw
+            # check_broadcast_indices throws to determine whether sparse broadcast should throw
             try
-                Base.Broadcast.broadcast_indices(spzeros((shapeX .- 1)...), Y)
+                Base.Broadcast.combine_indices(spzeros((shapeX .- 1)...), Y)
             catch
                 @test_throws DimensionMismatch broadcast(+, spzeros((shapeX .- 1)...), Y)
             end
@@ -200,7 +200,7 @@ end
             @test broadcast!(f, Z, X, Y) == sparse(broadcast!(f, fZ, fX, fY))
             # --> test shape checks for both broadcast and broadcast! entry points
             # TODO strengthen this test, avoiding dependence on checking whether
-            # broadcast_indices throws to determine whether sparse broadcast should throw
+            # check_broadcast_indices throws to determine whether sparse broadcast should throw
             try
                 Base.Broadcast.check_broadcast_indices(indices(Z), spzeros((shapeX .- 1)...), Y)
             catch
@@ -227,9 +227,9 @@ end
             @test broadcast(*, X, Y, Z) == sparse(broadcast(*, fX, fY, fZ))
             @test broadcast(f, X, Y, Z) == sparse(broadcast(f, fX, fY, fZ))
             # TODO strengthen this test, avoiding dependence on checking whether
-            # broadcast_indices throws to determine whether sparse broadcast should throw
+            # check_broadcast_indices throws to determine whether sparse broadcast should throw
             try
-                Base.Broadcast.broadcast_indices(spzeros((shapeX .- 1)...), Y, Z)
+                Base.Broadcast.combine_indices(spzeros((shapeX .- 1)...), Y, Z)
             catch
                 @test_throws DimensionMismatch broadcast(+, spzeros((shapeX .- 1)...), Y, Z)
             end
@@ -257,7 +257,7 @@ end
             @test broadcast!(f, Q, X, Y, Z) == sparse(broadcast!(f, fQ, fX, fY, fZ))
             # --> test shape checks for both broadcast and broadcast! entry points
             # TODO strengthen this test, avoiding dependence on checking whether
-            # broadcast_indices throws to determine whether sparse broadcast should throw
+            # check_broadcast_indices throws to determine whether sparse broadcast should throw
             try
                 Base.Broadcast.check_broadcast_indices(indices(Q), spzeros((shapeX .- 1)...), Y, Z)
             catch
@@ -418,6 +418,8 @@ end
         @test broadcast(+, A, X')::SparseMatrixCSC == sparse(broadcast(+, fA, X'))
         @test broadcast(*, V, X')::SparseMatrixCSC == sparse(broadcast(*, fV, X'))
     end
+    @test V .+ ntuple(identity, N) isa Vector
+    @test A .+ ntuple(identity, N) isa Matrix
 end
 
 @testset "broadcast! where the destination is a structured matrix" begin

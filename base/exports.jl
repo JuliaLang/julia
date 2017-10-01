@@ -18,6 +18,7 @@ export
     Threads,
     Iterators,
     Distributed,
+    Broadcast,
 
 # Types
     AbstractChannel,

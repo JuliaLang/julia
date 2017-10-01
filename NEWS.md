@@ -290,6 +290,11 @@ This section lists changes that do not have deprecation warnings.
     Its return value has been removed. Use the `process_running` function
     to determine if a process has already exited.
 
+  * Broadcasting has been redesigned with an extensible public interface. The new API is
+    documented at https://docs.julialang.org/en/latest/manual/interfaces/#Interfaces-1.
+    `AbstractArray` types that specialized broadcasting using the old internal API will
+    need to switch to the new API. ([#20740])
+
 Library improvements
 --------------------
 
@@ -1490,6 +1495,7 @@ Command-line option changes
 [#20549]: https://github.com/JuliaLang/julia/issues/20549
 [#20575]: https://github.com/JuliaLang/julia/issues/20575
 [#20609]: https://github.com/JuliaLang/julia/issues/20609
+[#20740]: https://github.com/JuliaLang/julia/issues/20740
 [#20816]: https://github.com/JuliaLang/julia/issues/20816
 [#20889]: https://github.com/JuliaLang/julia/issues/20889
 [#20912]: https://github.com/JuliaLang/julia/issues/20912
