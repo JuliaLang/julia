@@ -563,19 +563,19 @@ end
             abstol = 1e-10 * norm(acosh(A))
             @test all(z -> (0 < real(z) < π ||
                             abs(real(z)) < abstol && imag(z) >= 0 ||
-                            real(z) ≈ π && imag(z) <= 0),
+                            abs(real(z) - π) < abstol && imag(z) <= 0),
                       eigfact(acos(A))[:values])
             @test all(z -> (-π/2 < real(z) < π/2 ||
-                            real(z) ≈ -π/2 && imag(z) >= 0 ||
-                            real(z) ≈ π/2 && imag(z) <= 0),
+                            abs(real(z) + π/2) < abstol && imag(z) >= 0 ||
+                            abs(real(z) - π/2) < abstol && imag(z) <= 0),
                       eigfact(asin(A))[:values])
             @test all(z -> (-π < imag(z) < π && real(z) > 0 ||
                             0 <= imag(z) < π && abs(real(z)) < abstol ||
-                            imag(z) ≈ π && real(z) >= 0),
+                            abs(imag(z) - π) < abstol && real(z) >= 0),
                       eigfact(acosh(A))[:values])
             @test all(z -> (-π/2 < imag(z) < π/2 ||
-                            imag(z) ≈ -π/2 && real(z) <= 0 ||
-                            imag(z) ≈ π/2 && real(z) <= 0),
+                            abs(imag(z) + π/2) < abstol && real(z) <= 0 ||
+                            abs(imag(z) - π/2) < abstol && real(z) <= 0),
                       eigfact(asinh(A))[:values])
         end
     end
