@@ -73,13 +73,6 @@ static int exec_program(char *program)
 
 void jl_lisp_prompt();
 
-#ifndef _WIN32
-JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
-{
-    return raise(SIGTSTP);
-}
-#endif
-
 #ifdef JL_GF_PROFILE
 static void print_profile(void)
 {
