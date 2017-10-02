@@ -237,7 +237,7 @@ Library improvements
 --------------------
 
   * Functions `first` and `last` now accept `nchar` argument for `AbstractString`.
-    If this argument is used they reutrn a substring consisting of first/last `nchar`
+    If this argument is used they reutrn a string consisting of first/last `nchar`
     characters from the original string ([#?????]).
 
   * The functions `nextind` and `prevind` now accept `nchar` argument that indicates

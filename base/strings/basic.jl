@@ -616,7 +616,7 @@ end
 """
     first(str::AbstractString, nchar::Integer)
 
-Get a string consisting of first `nchar` characters of `str`.
+Get a string consisting of the first `nchar` characters of `str`.
 
 ```jldoctest
 julia> first("∀ϵ≠0: ϵ²>0", 0)
@@ -638,7 +638,7 @@ end
 """
     last(str::AbstractString, nchar::Integer)
 
-Get a string consisting of last `nchar` characters of `str`.
+Get a string consisting of the last `nchar` characters of `str`.
 
 ```jldoctest
 julia> last("∀ϵ≠0: ϵ²>0", 0)
