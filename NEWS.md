@@ -238,7 +238,7 @@ Library improvements
 
   * Functions `first` and `last` now accept `nchar` argument for `AbstractString`.
     If this argument is used they reutrn a string consisting of first/last `nchar`
-    characters from the original string ([#?????]).
+    characters from the original string ([#23960]).
 
   * The functions `nextind` and `prevind` now accept `nchar` argument that indicates
     the number of characters to move ([#23805]).
