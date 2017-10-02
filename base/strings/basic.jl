@@ -630,8 +630,9 @@ julia> first("∀ϵ≠0: ϵ²>0", 3)
 ```
 """
 function first(str::AbstractString, nchar::Integer)
-    nchar == 0 && return ""
-    nchar == 1 && return str[1:1]
+    if 0 <= nchar <= 1
+        return str[1:nchar]
+    end
     str[1:nextind(str, 1, nchar-1)]
 end
 
@@ -652,8 +653,9 @@ julia> last("∀ϵ≠0: ϵ²>0", 3)
 ```
 """
 function last(str::AbstractString, nchar::Integer)
-    nchar == 0 && return ""
     e = endof(str)
-    nchar == 1 && return str[e:e]
+    if 0 <= nchar <= 1
+        return str[(e-nchar+1):e]
+    end
     str[prevind(str, e, nchar-1):e]
 end
