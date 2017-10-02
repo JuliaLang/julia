@@ -355,7 +355,7 @@ function nextind(s::AbstractString, i::Integer, nchar::Integer)
         else
             j > e && return j + nchar
             j == e && return next(s,e)[2] + nchar - 1
-            for j = j+1:e
+            for outer j = j+1:e
                 isvalid(s,j) && break
             end
         end
