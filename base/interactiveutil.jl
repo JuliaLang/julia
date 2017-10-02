@@ -400,7 +400,7 @@ typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
 
 function gen_call_with_extracted_types(__module__, fcn, ex0)
     # assignments get bypassed: @edit a = f(x) <=> @edit f(x)
-    if isa(ex0, Expr) && ex0.head == :(=)
+    if isa(ex0, Expr) && ex0.head == :(=) && isa(ex0.args[1], Symbol)
         return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
     end
     if isa(ex0, Expr)
