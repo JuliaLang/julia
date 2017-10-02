@@ -493,6 +493,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     }
     else if (ex->head == importall_sym) {
         jl_sym_t *name = NULL;
+        jl_depwarn("`importall` is deprecated, use `using` or individual `import` statements instead",
+                   (jl_value_t*)jl_symbol("importall"));
         jl_module_t *import = eval_import_path(m, ex->args, &name, "importall");
         if (name != NULL) {
             import = (jl_module_t*)jl_eval_global_var(import, name);

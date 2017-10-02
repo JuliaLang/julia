@@ -561,21 +561,18 @@ julia> remotecall_fetch(anon_bar, 2)
 
 ## Packages and Modules
 
-### What is the difference between "using" and "importall"?
+### What is the difference between "using" and "import"?
 
 There is only one difference, and on the surface (syntax-wise) it may seem very minor. The difference
-between `using` and `importall` is that with `using` you need to say `function Foo.bar(..` to
-extend module Foo's function bar with a new method, but with `importall` or `import Foo.bar`,
+between `using` and `import` is that with `using` you need to say `function Foo.bar(..` to
+extend module Foo's function bar with a new method, but with `import Foo.bar`,
 you only need to say `function bar(...` and it automatically extends module Foo's function bar.
-
-If you use `importall`, then `function Foo.bar(...` and `function bar(...` become equivalent.
-If you use `using`, then they are different.
 
 The reason this is important enough to have been given separate syntax is that you don't want
 to accidentally extend a function that you didn't know existed, because that could easily cause
 a bug. This is most likely to happen with a method that takes a common type like a string or integer,
 because both you and the other module could define a method to handle such a common type. If you
-use `importall`, then you'll replace the other module's implementation of `bar(s::AbstractString)`
+use `import`, then you'll replace the other module's implementation of `bar(s::AbstractString)`
 with your new implementation, which could easily do something completely different (and break
 all/many future usages of the other functions in module Foo that depend on calling bar).
 

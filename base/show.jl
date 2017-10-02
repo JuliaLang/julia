@@ -1182,7 +1182,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         parens && print(io, ")")
 
-    elseif head === :import || head === :importall || head === :using
+    elseif head === :import || head === :using
         print(io, head)
         first = true
         for a = args

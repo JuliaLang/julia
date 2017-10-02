@@ -311,8 +311,6 @@ end
 @test_repr "baremodule X
 # line meta
 # line meta
-importall ..A.b
-# line meta
 import ...B.c
 # line meta
 import D

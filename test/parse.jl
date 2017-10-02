@@ -111,8 +111,6 @@ macro test999_str(args...); args; end
                                                Expr(:using, :A, :b),
                                                Expr(:using, :A, :c, :d)))
 
-@test parse(":(importall A)") == Expr(:quote, Expr(:importall, :A))
-
 @test parse(":(import A)") == Expr(:quote, Expr(:import, :A))
 @test parse(":(import A.b, B)") == Expr(:quote,
                                         Expr(:toplevel,

@@ -144,15 +144,6 @@ Hello, Charlie!
 kw"macro"
 
 """
-    importall
-
-`importall` imports all names exported by the specified module,
-as if `import` were used individually on all of them.
-See the [manual section about modules](@ref modules) for details.
-"""
-kw"importall"
-
-"""
     local
 
 `local` introduces a new local variable.

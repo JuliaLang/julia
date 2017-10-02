@@ -17,8 +17,6 @@ using BigLib: thing1, thing2
 
 import Base.show
 
-importall OtherLib
-
 export MyType, foo
 
 struct MyType
@@ -53,9 +51,6 @@ from `using` in that functions must be imported using `import` to be extended wi
 In `MyModule` above we wanted to add a method to the standard `show` function, so we had to write
 `import Base.show`. Functions whose names are only visible via `using` cannot be extended.
 
-The keyword `importall` explicitly imports all names exported by the specified module, as if
-`import` were individually used on all of them.
-
 Once a variable is made visible via `using` or `import`, a module may not create its own variable
 with the same name. Imported variables are read-only; assigning to a global variable always affects
 a variable owned by the current module, or else raises an error.
@@ -89,7 +84,6 @@ functions into the current workspace:
 | `import MyModule`               | `MyModule.x`, `MyModule.y` and `MyModule.p`                                     | `MyModule.x`, `MyModule.y` and `MyModule.p` |
 | `import MyModule.x, MyModule.p` | `x` and `p`                                                                     | `x` and `p`                                 |
 | `import MyModule: x, p`         | `x` and `p`                                                                     | `x` and `p`                                 |
-| `importall MyModule`            | All `export`ed names (`x` and `y`)                                              | `x` and `y`                                 |
 
 ### Modules and files
 
