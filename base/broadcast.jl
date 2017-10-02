@@ -45,12 +45,13 @@ promote_containertype(::Type{T}, ::Type{T}) where {T} = T
 ## Calculate the broadcast indices of the arguments, or error if incompatible
 # array inputs
 broadcast_indices() = ()
-broadcast_indices(A) = broadcast_indices(containertype(A), A)
+broadcast_indices(A) = _broadcast_indices(containertype(A), A)
 @inline broadcast_indices(A, B...) = broadcast_shape(broadcast_indices(A), broadcast_indices(B...))
-broadcast_indices(::ScalarType, A) = ()
-broadcast_indices(::Type{Tuple}, A) = (OneTo(length(A)),)
-broadcast_indices(::Type{Array}, A::Ref) = ()
-broadcast_indices(::Type{Array}, A) = indices(A)
+_broadcast_indices(::Type, A) = error("_containertype definition requires a corresponding _broadcast_indices definition")
+_broadcast_indices(::ScalarType, A) = ()
+_broadcast_indices(::Type{Tuple}, A) = (OneTo(length(A)),)
+_broadcast_indices(::Type{Array}, A::Ref) = ()
+_broadcast_indices(::Type{Array}, A) = indices(A)
 
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
