@@ -610,3 +610,50 @@ function filter(f, s::AbstractString)
     end
     String(take!(out))
 end
+
+## string first and last ##
+
+"""
+    first(str::AbstractString, nchar::Integer)
+
+Get a string consisting of first `nchar` characters of `str`.
+
+```jldoctest
+julia> first("∀ϵ≠0: ϵ²>0", 0)
+""
+
+julia> first("∀ϵ≠0: ϵ²>0", 1)
+"∀"
+
+julia> first("∀ϵ≠0: ϵ²>0", 3)
+"∀ϵ≠"
+```
+"""
+function first(str::AbstractString, nchar::Integer)
+    nchar == 0 && return ""
+    nchar == 1 && return str[1:1]
+    str[1:nextind(str, 1, nchar-1)]
+end
+
+"""
+    last(str::AbstractString, nchar::Integer)
+
+Get a string consisting of last `nchar` characters of `str`.
+
+```jldoctest
+julia> last("∀ϵ≠0: ϵ²>0", 0)
+""
+
+julia> last("∀ϵ≠0: ϵ²>0", 1)
+"0"
+
+julia> last("∀ϵ≠0: ϵ²>0", 3)
+"²>0"
+```
+"""
+function last(str::AbstractString, nchar::Integer)
+    nchar == 0 && return ""
+    e = endof(str)
+    nchar == 1 && return str[e:e]
+    str[prevind(str, e, nchar-1):e]
+end
