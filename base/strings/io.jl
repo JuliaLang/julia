@@ -371,7 +371,7 @@ macro b_str(s); :(Vector{UInt8}($(unescape_string(s)))); end
     @raw_str -> String
 
 Create a raw string without interpolation and unescaping.
-The exception is quotation marks that still must be escaped.
+The exception is that quotation marks still must be escaped.
 
 # Examples
 ```jldoctest
