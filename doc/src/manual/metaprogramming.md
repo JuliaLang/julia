@@ -583,6 +583,13 @@ above; it passes the tuple `(expr1, expr2, ...)` as one argument to the macro:
 @name (expr1, expr2, ...)
 ```
 
+An alternative way to invoke a macro over an array literal (or comprehension) is to juxtapose both without using parentheses. In this case, the array will be the only expression fed to the macro. The following syntax is equivalent (and different from `@name [a b] * v`):
+
+```julia
+@name[a b] * v
+@name([a b]) * v
+```
+
 It is important to emphasize that macros receive their arguments as expressions, literals, or
 symbols. One way to explore macro arguments is to call the [`show`](@ref) function within the
 macro body:

@@ -16,6 +16,9 @@ New language features
    For example, `+̂ₐ″` is parsed as an infix operator with the same
    precedence as `+` ([#22089]).
 
+ * The macro call syntax `@macroname[args]` is now available and is parsed
+   as `@macroname([args])` ([#23519]).
+
 Language changes
 ----------------
 
