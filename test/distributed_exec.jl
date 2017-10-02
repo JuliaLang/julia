@@ -433,7 +433,7 @@ let ex
     @test length(bt) > 1
     frame, repeated = bt[1]::Tuple{StackFrame, Int}
     @test frame.func == :foo
-    @test isnull(frame.linfo)
+    @test frame.linfo == nothing
     @test repeated == 1
 end
 

@@ -25,13 +25,14 @@ extern "C" {
 #endif
 
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context);
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp);
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp);
 
-size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t maxsize)
+size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t maxsize, int add_interp_frames)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     volatile size_t n = 0;
-    uintptr_t nullsp;
+    uintptr_t thesp;
+    uintptr_t thefp;
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
     assert(!jl_in_stackwalk);
     jl_in_stackwalk = 1;
@@ -47,9 +48,15 @@ size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t ma
                n = maxsize; // return maxsize + 1 if ran out of space
                break;
            }
-           if (!jl_unw_step(cursor, &ip[n], sp ? &sp[n] : &nullsp))
+           if (!jl_unw_step(cursor, &ip[n], &thesp, &thefp))
                break;
-           n++;
+           if (sp)
+                sp[n] = thesp;
+            if (add_interp_frames && jl_is_enter_interpreter_frame(ip[n])) {
+                n += jl_capture_interp_frame(&ip[n], thesp, thefp, maxsize-n-1) + 1;
+            } else {
+                n++;
+            }
         }
         n++;
 #if !defined(_OS_WINDOWS_)
@@ -76,7 +83,7 @@ size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize,
     bt_cursor_t cursor;
     if (!jl_unw_init(&cursor, context))
         return 0;
-    n = jl_unw_stepn(&cursor, data, NULL, maxsize);
+    n = jl_unw_stepn(&cursor, data, NULL, maxsize, 1);
     return n > maxsize ? maxsize : n;
 }
 
@@ -110,7 +117,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
             jl_array_grow_end(ip, maxincr);
             if (returnsp) jl_array_grow_end(sp, maxincr);
             n = jl_unw_stepn(&cursor, (uintptr_t*)jl_array_data(ip) + offset,
-                    returnsp ? (uintptr_t*)jl_array_data(sp) + offset : NULL, maxincr);
+                    returnsp ? (uintptr_t*)jl_array_data(sp) + offset : NULL, maxincr, 0);
             offset += maxincr;
         } while (n > maxincr);
         jl_array_del_end(ip, maxincr - n);
@@ -121,18 +128,30 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
     return bt;
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
+JL_DLLEXPORT void jl_get_backtrace(jl_array_t **btout, jl_array_t **bt2out)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_array_t *bt = NULL;
-    JL_GC_PUSH1(&bt);
+    jl_array_t *bt2 = NULL;
+    JL_GC_PUSH2(&bt, &bt2);
     if (array_ptr_void_type == NULL) {
         array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
     }
     bt = jl_alloc_array_1d(array_ptr_void_type, ptls->bt_size);
     memcpy(bt->data, ptls->bt_data, ptls->bt_size * sizeof(void*));
+    bt2 = jl_alloc_array_1d(jl_array_any_type, 0);
+    // Scan the stack for any interpeter frames
+    size_t n = 0;
+    while (n < ptls->bt_size) {
+        if (ptls->bt_data[n] == (uintptr_t)-1) {
+            jl_array_ptr_1d_push(bt2, (jl_value_t*)ptls->bt_data[n+1]);
+            n += 2;
+        }
+        n++;
+    }
+    *btout = bt;
+    *bt2out = bt2;
     JL_GC_POP();
-    return (jl_value_t*)bt;
 }
 
 
@@ -245,12 +264,14 @@ static int readable_pointer(LPCVOID pointer)
     return 1;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp)
 {
     // Might be called from unmanaged thread.
 #ifndef _CPU_X86_64_
     *ip = (uintptr_t)cursor->stackframe.AddrPC.Offset;
     *sp = (uintptr_t)cursor->stackframe.AddrStack.Offset;
+    if (fp)
+        *fp = (uintptr_t)cursor->stackframe.AddrFrame.Offset;
     if (*ip == 0 || *ip == ((uintptr_t)0)-1) {
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
@@ -265,6 +286,8 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 #else
     *ip = (uintptr_t)cursor->Rip;
     *sp = (uintptr_t)cursor->Rsp;
+    if (fp)
+        *fp = (uintptr_t)cursor->Rbp;
     if (*ip == 0 || *ip == ((uintptr_t)0)-1) {
         if (!readable_pointer((LPCVOID)*sp))
             return 0;
@@ -313,7 +336,7 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
     return unw_init_local(cursor, context) == 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp)
 {
     unw_word_t reg;
     if (unw_get_reg(cursor, UNW_REG_IP, &reg) < 0)
@@ -322,6 +345,15 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
     if (unw_get_reg(cursor, UNW_REG_SP, &reg) < 0)
         return 0;
     *sp = reg;
+#ifdef UNW_REG_FP
+    if (unw_get_reg(cursor, UNW_REG_FP, &reg) < 0)
+        return 0;
+    if (fp)
+        *fp = reg;
+#else
+    if (fp)
+        *fp = 0;
+#endif
     return unw_step(cursor) > 0;
 }
 
@@ -337,7 +369,7 @@ size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize,
     bt_cursor_t cursor;
     if (!jl_unw_init_dwarf(&cursor, context))
         return 0;
-    n = jl_unw_stepn(&cursor, data, NULL, maxsize);
+    n = jl_unw_stepn(&cursor, data, NULL, maxsize, 1);
     return n > maxsize ? maxsize : n;
 }
 #endif
@@ -349,7 +381,7 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
     return 0;
 }
 
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, uintptr_t *fp)
 {
     return 0;
 }

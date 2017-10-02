@@ -60,12 +60,38 @@ Get a backtrace object for the current program point.
 """
 backtrace() = ccall(:jl_backtrace_from_here, Array{Ptr{Void},1}, (Int32,), false)
 
+struct InterpreterIP
+    code::CodeInfo
+    stmt::Csize_t
+end
+
 """
     catch_backtrace()
 
 Get the backtrace of the current exception, for use within `catch` blocks.
 """
-catch_backtrace() = ccall(:jl_get_backtrace, Array{Ptr{Void},1}, ())
+function catch_backtrace()
+    bt = Ref{Any}(nothing)
+    bt2 = Ref{Any}(nothing)
+    ccall(:jl_get_backtrace, Void, (Ref{Any}, Ref{Any}), bt, bt2)
+    ret = Array{Union{InterpreterIP,Ptr{Void}},1}()
+    i, j = 1, 1
+    while i <= length(bt[])
+        ip = bt[][i]::Ptr{Void}
+        if ip == Ptr{Void}(-1%UInt)
+            # The next one is really a CodeInfo
+            push!(ret, InterpreterIP(
+                bt2[][j],
+                bt[][i+2]))
+            j += 1
+            i += 3
+        else
+            push!(ret, Ptr{Void}(ip))
+            i += 1
+        end
+    end
+    ret
+end
 
 ## keyword arg lowering generates calls to this ##
 function kwerr(kw, args::Vararg{Any,N}) where {N}
