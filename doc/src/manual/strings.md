@@ -228,7 +228,9 @@ julia> str[6:6]
 The former is a single character value of type `Char`, while the latter is a string value that
 happens to contain only a single character. In Julia these are very different things.
 
-It is possible to create a view into a string using the type `SubString`, for example:
+Range indexing makes a copy of the selected part of the original string.
+Alternatively, it is possible to create a view into a string using the type `SubString`,
+for example:
 
 ```jldoctest
 julia> str = "long string"
@@ -241,8 +243,8 @@ julia> typeof(substr)
 SubString{String}
 ```
 
-`SubString` works like [`getindex`](@ref), but it does not make a copy of the parent string. Several
-standard functions like [`chop`](@ref), [`chomp`](@ref) or [`strip`](@ref) return a `SubString`.
+Several standard functions like [`chop`](@ref), [`chomp`](@ref) or [`strip`](@ref)
+return a `SubString`.
 
 ## Unicode and UTF-8
 
