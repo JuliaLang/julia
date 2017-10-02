@@ -454,3 +454,10 @@ end
     @test isequal(mean(a01, 1)     , fill(NaN, 1, 1))
     @test isequal(mean(a10, 2)     , fill(NaN, 1, 1))
 end
+
+@testset "cov/var/std of Vector{Vector}" begin
+    x = [[2,4,6],[4,6,8]]
+    @test var(x) ≈ vec(var([x[1] x[2]], 2))
+    @test std(x) ≈ vec(std([x[1] x[2]], 2))
+    @test cov(x) ≈ cov([x[1] x[2]], 2)
+end
