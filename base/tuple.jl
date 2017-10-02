@@ -57,7 +57,7 @@ end
 # while reducing to plain next() for arbitrary iterables.
 indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
 indexed_next(a::Array, i::Int, state) = (a[i], i+1)
-indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state)
+indexed_next(I, i, state) = done(I,state) ? throw(BoundsError(I, i)) : next(I, state)
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
