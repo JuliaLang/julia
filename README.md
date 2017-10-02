@@ -79,6 +79,10 @@ Currently, the `@compat` macro supports the following syntaxes:
   `CartesianRange` now has two type parameters, so using them as
   fields in other `struct`s requires manual intervention.
 
+* `using Compat.Test`, `using Compat.SharedArrays`, `using Compat.Mmap`, and `using
+  Compat.DelimitedFiles` are provided on versions older than 0.7, where these are not yet
+  part of the standard library. ([#23931])
+
 ## Module Aliases
 
 * In 0.6, some 0.5 iterator functions have been moved to the `Base.Iterators`
@@ -296,6 +300,7 @@ includes this fix. Find the minimum version from there.
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
 [#19088]: https://github.com/JuliaLang/julia/issues/19088
 [#19246]: https://github.com/JuliaLang/julia/issues/19246
+[#19331]: https://github.com/JuliaLang/julia/issues/19331
 [#19449]: https://github.com/JuliaLang/julia/issues/19449
 [#19635]: https://github.com/JuliaLang/julia/issues/19635
 [#19784]: https://github.com/JuliaLang/julia/issues/19784
@@ -315,6 +320,7 @@ includes this fix. Find the minimum version from there.
 [#21257]: https://github.com/JuliaLang/julia/issues/21257
 [#21346]: https://github.com/JuliaLang/julia/issues/21346
 [#21378]: https://github.com/JuliaLang/julia/issues/21378
+[#21419]: https://github.com/JuliaLang/julia/issues/21419
 [#21709]: https://github.com/JuliaLang/julia/issues/21709
 [#22064]: https://github.com/JuliaLang/julia/issues/22064
 [#22182]: https://github.com/JuliaLang/julia/issues/22182
@@ -331,3 +337,4 @@ includes this fix. Find the minimum version from there.
 [#23427]: https://github.com/JuliaLang/julia/issues/23427
 [#23570]: https://github.com/JuliaLang/julia/issues/23570
 [#23666]: https://github.com/JuliaLang/julia/issues/23666
+[#23931]: https://github.com/JuliaLang/julia/issues/23931

@@ -663,6 +663,24 @@ end
     export isconcrete
 end
 
+# 0.7.0-DEV.2005
+if VERSION < v"0.7.0-DEV.2005"
+    const Mmap = Base.Mmap
+    const Test = Base.Test
+    @eval module SharedArrays
+        if isdefined(Base, :Distributed)
+            using Base.Distributed.procs
+        else
+            using Base.procs
+        end
+        export SharedArray, SharedMatrix, SharedVector, indexpids, localindexes, sdata,
+               procs
+    end
+    const DelimitedFiles = Base.DataFmt
+else
+    import Test, SharedArrays, Mmap, DelimitedFiles
+end
+
 include("deprecated.jl")
 
 end # module Compat
