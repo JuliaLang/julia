@@ -84,42 +84,39 @@ answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answ
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
-repl_cmd(line::AbstractString, out) = repl_cmd(Val(Sys.iswindows()), line, out)
-
-function repl_cmd(iswindows::Val{false}, line::AbstractString, out)
-    shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV,"SHELL","/bin/sh")))
-    shell_name = basename(shell[1])
-    cmd = cmd_gen(eval(Main, shell_parse(line)[1]))
-    if isempty(cmd)
-        throw(ArgumentError("no cmd to execute"))
-    elseif cmd[1] == "cd" && length(cmd) <= 2
-        repl_cd(cmd, shell, out)
+function repl_cmd(line::AbstractString, out)
+    if Sys.iswindows()
+        shell = shell_split(get(ENV, "JULIA_SHELL", "cmd"))
+        shell_name = isempty(shell) ? "" : lowercase(splitext(basename(shell[1]))[1])
     else
-        run(ignorestatus(isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`))
+        shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV,"SHELL","/bin/sh")))
+        shell_name = basename(shell[1])
     end
-    nothing
-end
 
-function repl_cmd(iswindows::Val{true}, line::AbstractString, out)
-    shell = shell_split(get(ENV, "JULIA_SHELL", "cmd"))
-    shell_name = isempty(shell) ? "" : lowercase(splitext(basename(shell[1]))[1])
     cmd = cmd_gen(eval(Main, shell_parse(line)[1]))
+
     if isempty(cmd)
         throw(ArgumentError("no cmd to execute"))
     elseif cmd[1] == "cd" && length(cmd) <= 2
         repl_cd(cmd, shell, out)
     else
-        interpolated_line = eval(Main, parse(string('"', escape_string(line), '"')))
-        if shell_name == ""
-            command = cmd
-        elseif shell_name == "cmd"
-            command = Cmd(`$shell /s /c $(string('"', interpolated_line, '"'))`, windows_verbatim=true)
-        elseif shell_name == "powershell"
-            command = `$shell -Command $interpolated_line`
-        elseif shell_name == "busybox"
-            command = `$shell sh -c $interpolated_line`
+        local command::Cmd
+        if Sys.iswindows()
+            interpolated_line = eval(Main, parse(string('"', escape_string(line), '"')))::String
+            if shell_name == ""
+                command = cmd
+            elseif shell_name == "cmd"
+                command = Cmd(`$shell /s /c $(string('"', interpolated_line, '"'))`, windows_verbatim=true)
+            elseif shell_name == "powershell"
+                command = `$shell -Command $interpolated_line`
+            elseif shell_name == "busybox"
+                command = `$shell sh -c $interpolated_line`
+            else
+                command = `$shell $interpolated_line`
+            end
         else
-            command = `$shell $interpolated_line`
+            ttyopt = STDIN isa TTY ? `-i` : ``
+            command = `$shell $ttyopt -c "$(shell_wrap_true(shell_name, cmd))"`
         end
         run(ignorestatus(command))
     end
