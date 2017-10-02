@@ -105,6 +105,10 @@ Language changes
     of the `:quote` expression head (though `:quote` `Expr`s are still used for quoted
     expressions) ([#23885]).
 
+  * The `+` and `-` methods for `Number` and `UniformScaling` are not ambiguous anymore since `+`
+    and `-` no longer do automatic broadcasting. Hence the methods for `UniformScaling` and `Number` are
+    no longer deprecated ([#23923]).
+
 Breaking changes
 ----------------
 

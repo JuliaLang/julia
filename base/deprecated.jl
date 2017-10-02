@@ -156,11 +156,6 @@ function delete!(::EnvHash, k::AbstractString, def)
     haskey(ENV,k) ? delete!(ENV,k) : def
 end
 
-@deprecate (+)(J::UniformScaling, x::Number) J.λ + x
-@deprecate (+)(x::Number, J::UniformScaling) x + J.λ
-@deprecate (-)(J::UniformScaling, x::Number) J.λ - x
-@deprecate (-)(x::Number, J::UniformScaling) x - J.λ
-
 # Deprecate methods that convert Diagonal and Bidiagonal to <:AbstractTriangular.
 function convert(::Type{UpperTriangular}, A::Diagonal)
     depwarn(string("`convert(::Type{UpperTriangular}, A::Diagonal)` and other methods ",
