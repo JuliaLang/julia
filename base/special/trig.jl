@@ -97,7 +97,7 @@ end
 @inline function cos(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx < T(pi)/4
-        if absx < sqrt(eps(T))/sqrt(T(2.0))
+        if absx < sqrt(eps(T)/T(2.0))
             return x
         end
         return cos_kernel(x)
