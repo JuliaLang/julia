@@ -376,7 +376,7 @@ Returns the sum of all elements of `A`, using the Kahan-Babuska-Neumaier compens
 summation algorithm for additional accuracy.
 """
 function sum_kbn(A)
-    T = _default_eltype(typeof(A))
+    T = @default_eltype(typeof(A))
     c = r_promote(+, zero(T)::T)
     i = start(A)
     if done(A, i)

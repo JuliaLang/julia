@@ -152,6 +152,7 @@ mutable struct InferenceState
     # TODO: put these in InferenceParams (depends on proper multi-methodcache support)
     optimize::Bool
     cached::Bool
+    limited::Bool
 
     inferred::Bool
 
@@ -201,7 +202,7 @@ mutable struct InferenceState
                     end
                     vararg_type = Tuple
                 else
-                    vararg_type_container = limit_tuple_depth(params, tupletype_tail(atypes, la))
+                    vararg_type_container = limit_tuple_depth(params, tupleparam_tail(atypes.parameters, la))
                     vararg_type = tuple_tfunc(vararg_type_container) # returns a Const object, if applicable
                     vararg_type = rewrap(vararg_type, linfo.specTypes)
                 end
@@ -231,7 +232,7 @@ mutable struct InferenceState
                     # replace singleton types with their equivalent Const object
                     atyp = Const(atyp.instance)
                 elseif isconstType(atyp)
-                    atype = Const(atyp.parameters[1])
+                    atyp = Const(atyp.parameters[1])
                 else
                     atyp = rewrap_unionall(atyp, linfo.specTypes)
                 end
@@ -282,7 +283,7 @@ mutable struct InferenceState
             Vector{Tuple{InferenceState,LineNum}}(), # backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
-            false, false, optimize, cached, false, false)
+            false, false, optimize, cached, false, false, false)
         return frame
     end
 end
@@ -314,9 +315,13 @@ end
 
 function print_callstack(sv::InferenceState)
     while sv !== nothing
-        println(sv.linfo)
+        print(sv.linfo)
+        sv.limited && print("  [limited]")
+        println()
         for cycle in sv.callers_in_cycle
-            println(' ', cycle.linfo)
+            print(' ', cycle.linfo)
+            cycle.limited && print("  [limited]")
+            println()
         end
         sv = sv.parent
     end
@@ -391,7 +396,18 @@ isknownlength(t::DataType) = !isvatuple(t) ||
     (length(t.parameters) > 0 && isa(unwrap_unionall(t.parameters[end]).parameters[2],Int))
 
 # t[n:end]
-tupletype_tail(@nospecialize(t), n) = Tuple{t.parameters[n:end]...}
+function tupleparam_tail(t::SimpleVector, n)
+    lt = length(t)
+    if n > lt
+        va = t[lt]
+        if isvarargtype(va)
+            # assumes that we should never see Vararg{T, x}, where x is a constant (should be guaranteed by construction)
+            return Tuple{va}
+        end
+        return Tuple{}
+    end
+    return Tuple{t[n:lt]...}
+end
 
 function is_specializable_vararg_slot(arg, sv::InferenceState)
     return (isa(arg, Slot) && slot_id(arg) == sv.nargs &&
@@ -889,11 +905,12 @@ end
 
 # limit the complexity of type `t` to be simpler than the comparison type `compare`
 # no new values may be introduced, so the parameter `source` encodes the set of all values already present
-function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source))
+# the outermost tuple type is permitted to have up to `allowed_tuplelen` parameters
+function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source), allowed_tuplelen::Int)
     source = svec(unwrap_unionall(compare), unwrap_unionall(source))
     source[1] === source[2] && (source = svec(source[1]))
-    type_more_complex(t, compare, source, TUPLE_COMPLEXITY_LIMIT_DEPTH) || return t
-    r = _limit_type_size(t, compare, source)
+    type_more_complex(t, compare, source, TUPLE_COMPLEXITY_LIMIT_DEPTH, allowed_tuplelen) || return t
+    r = _limit_type_size(t, compare, source, allowed_tuplelen)
     @assert t <: r
     #@assert r === _limit_type_size(r, t, source) # this monotonicity constraint is slightly stronger than actually required,
       # since we only actually need to demonstrate that repeated application would reaches a fixed point,
@@ -903,7 +920,7 @@ end
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
-function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVector, tupledepth::Int)
+function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVector, tupledepth::Int, allowed_tuplelen::Int)
     # detect cases where the comparison is trivial
     if t === c
         return false
@@ -929,17 +946,17 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     if isa(c, TypeVar)
         if isa(t, TypeVar)
             return !(t.lb === Union{} || t.lb === c.lb) || # simplify lb towards Union{}
-                   type_more_complex(t.ub, c.ub, sources, tupledepth)
+                   type_more_complex(t.ub, c.ub, sources, tupledepth, 0)
         end
         c.lb === Union{} || return true
-        return type_more_complex(t, c.ub, sources, max(tupledepth, 1)) # allow replacing a TypeVar with a concrete value
+        return type_more_complex(t, c.ub, sources, max(tupledepth, 1), 0) # allow replacing a TypeVar with a concrete value
     elseif isa(c, Union)
         if isa(t, Union)
-            return type_more_complex(t.a, c.a, sources, tupledepth) ||
-                   type_more_complex(t.b, c.b, sources, tupledepth)
+            return type_more_complex(t.a, c.a, sources, tupledepth, allowed_tuplelen) ||
+                   type_more_complex(t.b, c.b, sources, tupledepth, allowed_tuplelen)
         end
-        return type_more_complex(t, c.a, sources, tupledepth) &&
-               type_more_complex(t, c.b, sources, tupledepth)
+        return type_more_complex(t, c.a, sources, tupledepth, allowed_tuplelen) &&
+               type_more_complex(t, c.b, sources, tupledepth, allowed_tuplelen)
     elseif isa(t, Int) && isa(c, Int)
         return t !== 1 # alternatively, could use !(0 <= t < c)
     end
@@ -972,9 +989,11 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
                         end
                     end
                 end
-                type_more_complex(tPi, cPi, sources, tupledepth) && return true
+                type_more_complex(tPi, cPi, sources, tupledepth, 0) && return true
             end
             return false
+        elseif isvarargtype(c)
+            return type_more_complex(t, unwrapva(c), sources, tupledepth, 0)
         end
         if isType(t) # allow taking typeof any source type anywhere as Type{...}, as long as it isn't nesting Type{Type{...}}
             tt = unwrap_unionall(t.parameters[1])
@@ -1035,7 +1054,7 @@ function is_derived_type_from_any(@nospecialize(t), sources::SimpleVector)
     return false
 end
 
-function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector) # type vs. comparison which was derived from source
+function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector, allowed_tuplelen::Int) # type vs. comparison which was derived from source
     if t === c
         return t # quick egal test
     elseif t === Union{}
@@ -1055,8 +1074,8 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         end
     elseif isa(t, Union)
         if isa(c, Union)
-            a = _limit_type_size(t.a, c.a, sources)
-            b = _limit_type_size(t.b, c.b, sources)
+            a = _limit_type_size(t.a, c.a, sources, allowed_tuplelen)
+            b = _limit_type_size(t.b, c.b, sources, allowed_tuplelen)
             return Union{a, b}
         end
     elseif isa(t, UnionAll)
@@ -1065,11 +1084,11 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
             cv = c.var
             if tv.ub === cv.ub
                 if tv.lb === cv.lb
-                    return UnionAll(tv, _limit_type_size(t.body, c.body, sources))
+                    return UnionAll(tv, _limit_type_size(t.body, c.body, sources, allowed_tuplelen))
                 end
                 ub = tv.ub
             else
-                ub = _limit_type_size(tv.ub, cv.ub, sources)
+                ub = _limit_type_size(tv.ub, cv.ub, sources, 0)
             end
             if tv.lb === cv.lb
                 lb = tv.lb
@@ -1078,37 +1097,54 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                 lb = Bottom
             end
             v2 = TypeVar(tv.name, lb, ub)
-            return UnionAll(v2, _limit_type_size(t{v2}, c{v2}, sources))
+            return UnionAll(v2, _limit_type_size(t{v2}, c{v2}, sources, allowed_tuplelen))
         end
-        tbody = _limit_type_size(t.body, c, sources)
+        tbody = _limit_type_size(t.body, c, sources, allowed_tuplelen)
         tbody === t.body && return t
         return UnionAll(t.var, tbody)
+    elseif isa(c, UnionAll)
+        # peel off non-matching wrapper of comparison
+        return _limit_type_size(t, c.body, sources, allowed_tuplelen)
     elseif isa(t, DataType)
         if isa(c, DataType)
             tP = t.parameters
             cP = c.parameters
             if t.name === c.name && !isempty(cP)
                 if isvarargtype(t)
-                    VaT = _limit_type_size(tP[1], cP[1], sources)
+                    VaT = _limit_type_size(tP[1], cP[1], sources, 0)
                     N = tP[2]
                     if isa(N, TypeVar) || N === cP[2]
                         return Vararg{VaT, N}
                     end
                     return Vararg{VaT}
                 elseif t.name === Tuple.name
-                    # for covariant datatypes (aka Tuple),
-                    # apply type-size limit elementwise
-                    np = min(length(tP), length(cP))
+                    # for covariant datatypes (Tuple),
+                    # apply type-size limit element-wise
+                    ltP = length(tP)
+                    lcP = length(cP)
+                    np = min(ltP, max(lcP, allowed_tuplelen))
                     Q = Any[ tP[i] for i in 1:np ]
-                    if length(tP) > np # implies Tuple
+                    if ltP > np
                         # combine tp[np:end] into tP[np] using Vararg
-                        Q[np] = tuple_tail_elem(Bottom, Any[ tP[i] for i in np:length(tP) ])
+                        Q[np] = tuple_tail_elem(Bottom, Any[ tP[i] for i in np:ltP ])
                     end
                     for i = 1:np
-                        Q[i] = _limit_type_size(Q[i], cP[i], sources)
+                        # now apply limit element-wise to Q
+                        # padding out the comparison as needed to allowed_tuplelen elements
+                        if i <= lcP
+                            cPi = cP[i]
+                        elseif isvarargtype(cP[lcP])
+                            cPi = cP[lcP]
+                        else
+                            cPi = Any
+                        end
+                        Q[i] = _limit_type_size(Q[i], cPi, sources, 0)
                     end
                     return Tuple{Q...}
                 end
+            elseif isvarargtype(c)
+                # Tuple{Vararg{T}} --> Tuple{T} is OK
+                return _limit_type_size(t, cP[1], sources, 0)
             end
         end
         if isType(t) # allow taking typeof as Type{...}, but ensure it doesn't start nesting
@@ -1769,26 +1805,27 @@ function abstract_call_gf_by_type(@nospecialize(f), @nospecialize(atype), sv::In
 end
 
 function abstract_call_method(method::Method, @nospecialize(f), @nospecialize(sig), sparams::SimpleVector, sv::InferenceState)
-    sigtuple = unwrap_unionall(sig)::DataType
-
-    tm = _topmod(sv)
-    if (!istopfunction(tm, f, :promote_typeof)) # promote_typeof signature may be used with many arguments, here we'll just assume it is defined non-recursively
+    limited = sv.limited
+    # If we are operating without inference limits,
+    # see if we need to enable those.
+    # The limit will be imposed if we recur on the same method.
+    topmost = nothing
+    if !limited && !istopfunction(_topmod(sv), f, :promote_typeof)
+        # since promote_typeof signature may be used with many arguments, here we'll just assume it is defined non-recursively
         # otherwise: limit argument type tuple growth of all other functions
-        msig = unwrap_unionall(method.sig)
-        lsig = length(msig.parameters)
-        ls = length(sigtuple.parameters)
         # look through the parents list to find the topmost
         # function call to the same method
         cyclei = 0
         infstate = sv
-        topmost = nothing
         while infstate !== nothing
             infstate = infstate::InferenceState
             if method === infstate.linfo.def
                 if infstate.linfo.specTypes == sig
                     # avoid widening when detecting self-recursion
                     # TODO: merge call cycle and return right away
-                    topmost = nothing
+                    # TODO: this'll improve convergence speed and give better results,
+                    #       but is it correct and valid?
+                    limited = false
                     break
                 end
                 if topmost === nothing
@@ -1800,6 +1837,7 @@ function abstract_call_method(method::Method, @nospecialize(f), @nospecialize(si
                         # check in the cycle list first
                         # all items in here are mutual parents of all others
                         if parent.linfo.def === sv.linfo.def
+                            limited = true
                             topmost = infstate
                             break
                         end
@@ -1809,6 +1847,7 @@ function abstract_call_method(method::Method, @nospecialize(f), @nospecialize(si
                         if topmost === nothing && parent !== nothing
                             parent = parent::InferenceState
                             if parent.cached && parent.linfo.def === sv.linfo.def
+                                limited = true
                                 topmost = infstate
                             end
                         end
@@ -1824,52 +1863,70 @@ function abstract_call_method(method::Method, @nospecialize(f), @nospecialize(si
                 infstate = infstate.parent
             end
         end
+    end
 
-        # TODO: FIXME: this heuristic depends on non-local state making type-inference unpredictable
-        # it also should be integrated into the cycle resolution and iterated to convergence
-        if topmost !== nothing
-            # impose limit if we recur on the same method and the argument type complexity is growing or is beyond MAX_TYPE_DEPTH
-            newsig = sig
-            if !isempty(topmost.callers_in_cycle)
-                # already discovered this method causes dependent self-recursion
-                # widen fully to avoid making the cycle any larger
-                newsig = method.sig
-            else
-                comparison = topmost.linfo.specTypes
-                if ls > lsig + 1 && ls > length(unwrap_unionall(comparison).parameters)
-                    # limit length based on size of definition signature.
-                    # for example, given function f(T, Any...), limit to 3 arguments
-                    # instead of the default (MAX_TUPLETYPE_LEN)
-                    fst = sigtuple.parameters[lsig + 1]
-                    allsame = true
-                    # allow specializing on longer arglists if all the trailing
-                    # arguments are the same, since there is no exponential
-                    # blowup in this case.
-                    for i = (lsig + 2):ls
-                        if sigtuple.parameters[i] != fst
-                            allsame = false
-                            break
+    if limited
+        newsig = sig
+        sigtuple = unwrap_unionall(sig)::DataType
+        msig = unwrap_unionall(method.sig)::DataType
+        max_spec_len = length(msig.parameters) + 1
+        ls = length(sigtuple.parameters)
+        if method === sv.linfo.def
+            # direct self-recursion permits much greater use of reducers
+            # without using non-local state (just the total edge)
+            # here we assume that complexity(specTypes) :>= complexity(sig)
+            comparison = sv.linfo.specTypes
+            l_comparison = length(unwrap_unionall(comparison).parameters)
+            max_spec_len = max(max_spec_len, l_comparison)
+        else
+            comparison = method.sig
+        end
+        if method.isva && ls > max_spec_len
+            # limit length based on size of definition signature.
+            # for example, given function f(T, Any...), limit to 3 arguments
+            # instead of the default (MAX_TUPLETYPE_LEN)
+            fst = sigtuple.parameters[max_spec_len]
+            allsame = true
+            # allow specializing on longer arglists if all the trailing
+            # arguments are the same, since there is no exponential
+            # blowup in this case.
+            for i = (max_spec_len + 1):ls
+                if sigtuple.parameters[i] != fst
+                    allsame = false
+                    break
+                end
+            end
+            if !allsame
+                sigtuple = limit_tuple_type_n(sigtuple, max_spec_len)
+                newsig = rewrap_unionall(sigtuple, newsig)
+            end
+        end
+        # see if the type is still too big, and limit it further if still required
+        newsig = limit_type_size(newsig, comparison, sv.linfo.specTypes, max_spec_len)
+        if newsig !== sig
+            if !sv.limited
+                # continue inference, but limit parameter complexity to ensure (quick) convergence
+                topmost = topmost::InferenceState
+                infstate = sv
+                while infstate !== topmost.parent
+                    # TODO: avoid this non-local mutation
+                    infstate.limited = true
+                    if infstate.parent !== nothing
+                        infstate.optimize = false
+                    end
+                    for infstate_cycle in infstate.callers_in_cycle
+                        infstate_cycle.limited = true
+                        if infstate_cycle.parent !== nothing
+                            infstate_cycle.optimize = false
                         end
                     end
-                    if !allsame
-                        sigtuple = limit_tuple_type_n(sigtuple, lsig + 1)
-                        newsig = rewrap_unionall(sigtuple, newsig)
-                    end
+                    infstate = infstate.parent
+                    infstate === nothing && break
                 end
-                td = type_depth(newsig)
-                max_type_depth = min(MAX_TYPE_DEPTH, type_depth(comparison))
-                if td > max_type_depth
-                    # limit growth in type depth
-                    newsig = limit_type_depth(newsig, max_type_depth)
-                end
-                # see if the type is still too big, and limit it further if required
-                newsig = limit_type_size(newsig, comparison, sv.linfo.specTypes)
+                # TODO: break here and restart from "topmost" call-site
             end
-            if newsig !== sig
-                sig = newsig
-                sigtuple = unwrap_unionall(sig)
-                sparams = svec()
-            end
+            sig = newsig
+            sparams = svec()
         end
     end
 
@@ -3425,6 +3482,10 @@ function optimize(me::InferenceState)
             force_noinline = popmeta!(code, :noinline)[1]
         end
         reindex_labels!(me)
+    elseif me.cached && me.parent !== nothing
+        # top parent will be cached still, but not this intermediate work
+        me.cached = false
+        me.linfo.inInference = false
     end
 
     # convert all type information into the form consumed by the code-generator
@@ -3549,13 +3610,14 @@ function finish(me::InferenceState)
             if !toplevel
                 if !me.const_api
                     def = me.linfo.def::Method
-                    keeptree = me.src.inlineable || ccall(:jl_is_cacheable_sig, Int32, (Any, Any, Any),
-                        me.linfo.specTypes, def.sig, def) != 0
-                    if !keeptree
-                        inferred_result = nothing
-                    else
+                    keeptree = me.optimize &&
+                        (me.src.inlineable ||
+                         ccall(:jl_is_cacheable_sig, Int32, (Any, Any, Any), me.linfo.specTypes, def.sig, def) != 0)
+                    if keeptree
                         # compress code for non-toplevel thunks
                         inferred_result = ccall(:jl_compress_ast, Any, (Any, Any), def, inferred_result)
+                    else
+                        inferred_result = nothing
                     end
                 end
             end

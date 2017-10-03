@@ -628,10 +628,20 @@ function _collect_indices(indsA, A)
     copy!(B, CartesianRange(indices(B)), A, CartesianRange(indsA))
 end
 
+# define this as a macro so that the call to Inference
+# gets inlined into the caller before recursion detection
+# gets a chance to see it, so that recursive calls to the caller
+# don't trigger the inference limiter
 if isdefined(Core, :Inference)
-    _default_eltype(@nospecialize itrt) = Core.Inference.return_type(first, Tuple{itrt})
+    macro default_eltype(itrt)
+        return quote
+            Core.Inference.return_type(first, Tuple{$(esc(itrt))})
+        end
+    end
 else
-    _default_eltype(@nospecialize itr) = Any
+    macro default_eltype(itrt)
+        return :(Any)
+    end
 end
 
 _array_for(::Type{T}, itr, ::HasLength) where {T} = Array{T,1}(Int(length(itr)::Integer))
@@ -639,7 +649,7 @@ _array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, indices(itr
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
-    et = _default_eltype(typeof(itr))
+    et = @default_eltype(typeof(itr))
     if isa(isz, SizeUnknown)
         return grow_to!(Array{et,1}(0), itr)
     else
@@ -653,12 +663,12 @@ function collect(itr::Generator)
 end
 
 _collect(c, itr, ::EltypeUnknown, isz::SizeUnknown) =
-    grow_to!(_similar_for(c, _default_eltype(typeof(itr)), itr, isz), itr)
+    grow_to!(_similar_for(c, @default_eltype(typeof(itr)), itr, isz), itr)
 
 function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
     st = start(itr)
     if done(itr,st)
-        return _similar_for(c, _default_eltype(typeof(itr)), itr, isz)
+        return _similar_for(c, @default_eltype(typeof(itr)), itr, isz)
     end
     v1, st = next(itr, st)
     collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)
