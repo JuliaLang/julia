@@ -227,30 +227,23 @@ function do_status!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
             cmderror("`status` does not take arguments")
         end
     end
-    if env.git == nothing
-        if mode == :project
-            info("Status ", pathrepr(env.project_file))
-            print_project(env.project["deps"])
-        elseif mode == :manifest
-            cmderror("`status -m` only supported in git-saved environments")
-        else
-            error("this should not happen")
-        end
+    if env.git != nothing
+        git_path = LibGit2.path(env.git)
+        project_path = relpath(env.project_file, git_path)
+        manifest_path = relpath(env.manifest_file, git_path)
+    end
+    if mode == :project
+        project = env.git == nothing ? env.project :
+            read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
+        info("Status ", pathrepr(env.project_file))
+        print_project_diff(project["deps"], env.project["deps"], true)
+    elseif mode == :manifest
+        manifest = env.git == nothing ? env.manifest :
+            read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
+        info("Status ", pathrepr(env.manifest_file))
+        print_manifest_diff(manifest, env.manifest, true)
     else
-        path = LibGit2.path(env.git)
-        if mode == :project
-            project_path = relpath(env.project_file, path)
-            project = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
-            info("Status ", pathrepr(env.project_file))
-            print_project_diff(project["deps"], env.project["deps"], true)
-        elseif mode == :manifest
-            manifest_path = relpath(env.manifest_file, path)
-            manifest = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
-            info("Status ", pathrepr(env.manifest_file))
-            print_manifest_diff(manifest, env.manifest, true)
-        else
-            error("this should not happen")
-        end
+        error("this should not happen")
     end
 end
 

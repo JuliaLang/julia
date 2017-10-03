@@ -3,7 +3,7 @@ module Display
 using Base.Random: UUID
 using Pkg3.Types
 
-export print_project, print_project_diff, print_manifest_diff
+export print_project_diff, print_manifest_diff
 
 const colors = Dict(
     ' ' => :white,
@@ -15,21 +15,9 @@ const colors = Dict(
 )
 const color_dark = :light_black
 
-function emit_project(name::String, uuid::String)
-    print_with_color(color_dark, " [$(uuid[1:8])]")
-    print_with_color(colors[' '], " $name\n")
-end
-
 function emit_project(x::Char, name::String, uuid::String)
     print_with_color(color_dark, " [$(uuid[1:8])]")
     print_with_color(colors[x], " $x $name\n")
-end
-
-function print_project(deps::Dict)
-    isempty(deps) && return print_with_color(color_dark, " [empty]\n")
-    for name in sort!(collect(keys(deps)), by=lowercase)
-        emit_project(name, get(deps, name, ""))
-    end
 end
 
 function print_project_diff(deps₀::Dict, deps₁::Dict, all::Bool=false)
