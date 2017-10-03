@@ -5,12 +5,19 @@ using Pkg3.Types
 
 export print_project_diff, print_manifest_diff
 
+const colors = Dict(
+    ' ' => :white,
+    '+' => :light_green,
+    '-' => :light_red,
+    '↑' => :light_yellow,
+    '~' => :light_yellow,
+    '↓' => :light_magenta,
+)
+const color_dark = :light_black
+
 function emit_project(x::Char, name::String, uuid::String)
-    color = x == '+' ? :light_green :
-            x == '-' ? :light_red   :
-                       :light_blue
-    print_with_color(:light_black, " [$(uuid[1:8])]")
-    print_with_color(color, " $x $name\n")
+    print_with_color(color_dark, " [$(uuid[1:8])]")
+    print_with_color(colors[x], " $x $name\n")
 end
 
 function print_project_diff(deps₀::Dict, deps₁::Dict, all::Bool=false)
@@ -18,14 +25,14 @@ function print_project_diff(deps₀::Dict, deps₁::Dict, all::Bool=false)
     for name in sort!(union(keys(deps₀), keys(deps₁)), by=lowercase)
         uuid₀, uuid₁ = get(deps₀, name, ""), get(deps₁, name, "")
         if uuid₀ == uuid₁
-            all && emit_project('=', name, uuid₁)
+            all && emit_project(' ', name, uuid₁)
         else
             isempty(uuid₀) || emit_project('-', name, uuid₀)
             isempty(uuid₁) || emit_project('+', name, uuid₁)
             clean = false
         end
     end
-    clean && print_with_color(:light_black, " [no changes]\n")
+    clean && print_with_color(color_dark, " [no changes]\n")
     return nothing
 end
 print_project_diff(env₀::EnvCache, env₁::EnvCache) =
@@ -74,7 +81,7 @@ v_str(x::ManifestEntry) =
 
 function emit_manifest_diff(emit::Function, diff::ManifestDiff, all::Bool=false)
     if isempty(diff)
-        print_with_color(:light_black, " [no changes]\n")
+        print_with_color(color_dark, " [no changes]\n")
         return
     end
     for (info₀, info₁) in diff
@@ -85,8 +92,8 @@ function emit_manifest_diff(emit::Function, diff::ManifestDiff, all::Bool=false)
             v₀, v₁ = v_str(info₀), v_str(info₁)
             x = info₀.version == nothing || info₁.version == nothing ? '~' :
                 info₀.version < info₁.version ? '↑' :
-                info₀.version > info₁.version ? '↓' : '='
-            emit(uuid, name, x, x == '=' ? v₀ : "$v₀ ⇒ $v₁")
+                info₀.version > info₁.version ? '↓' : ' '
+            emit(uuid, name, x, x == ' ' ? v₀ : "$v₀ ⇒ $v₁")
         elseif info₀ != nothing
             emit(uuid, name, '-', v_str(info₀))
         elseif info₁ != nothing
@@ -103,15 +110,8 @@ function print_manifest_diff(
     all::Bool = false,
 )::Void
     emit_manifest_diff(manifest_diff(infos₀, infos₁, all)) do uuid, name, x, vers
-        color = x == '+' ? :light_green   :
-                x == '-' ? :light_red     :
-                x == '↑' ? :light_yellow  :
-                x == '↓' ? :light_magenta :
-                x == '~' ? :light_magenta :
-                x == '=' ? :light_blue    :
-                           :white
-        print_with_color(:light_black, " [$(string(uuid)[1:8])] ")
-        print_with_color(color, "$x $name $vers\n")
+        print_with_color(color_dark, " [$(string(uuid)[1:8])] ")
+        print_with_color(colors[x], "$x $name $vers\n")
     end
 end
 print_manifest_diff(infos₀::Dict, infos₁::Dict, all::Bool=false) =
