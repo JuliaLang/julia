@@ -1226,13 +1226,21 @@ function test_22922()
             @test length(filename) == 6
         end
     else
-        # '/' as the only character as prefix fails.
-        @test_throws Base.UVError mktempdir(; prefix="/")
-
         # '/' is accepted in a prefix but depends on the overall path and permissions.
         # A carefully crafted parent directory and prefix combination can actually
         # create a directory as the example below.
         # The file created will be of format "/tmp/XXXXXX"
+        mktempdir(; prefix="/") do tmpdir
+            @test startswith(tmpdir, "/tmp/")
+            filename = basename(tmpdir)
+            @test length(filename) == 6
+        end
+
+        mktempdir(; prefix="////abc") do tmpdir
+            @test startswith(tmpdir, "/tmp/")
+            filename = basename(tmpdir)
+            @test length(filename) == 9
+        end
 
         mktempdir("/"; prefix="tmp/") do tmpdir
             @test startswith(tmpdir, "/tmp/")

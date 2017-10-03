@@ -346,8 +346,18 @@ If `parent` does not exist, throw an error.
 An optional `prefix` to the directory name can be provided.
 """
 function mktempdir(parent=tempdir(); prefix="$temp_prefix")
-    template = prefix*"XXXXXX"
-    tpath = joinpath(parent, template)
+    i = endof(parent)
+    while i >= 1 && parent[i:i] == path_separator
+        i -= 1
+    end
+    parent = parent[1:i]
+    i = 1
+    while i <= endof(prefix) && prefix[i:i] == path_separator
+        i += 1
+    end
+    prefix = prefix[i:end]
+    
+    tpath = "$(parent)$(path_separator)$(prefix)XXXXXX"
 
     req = Libc.malloc(_sizeof_uv_fs)
     try
