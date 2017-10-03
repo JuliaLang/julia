@@ -105,7 +105,7 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
     try
         tokens = tokenize(input)
         local cmd::Symbol
-        local env_opt::Union{String,Void} = nothing
+        local env_opt::Union{String,Void} = get(ENV, "JULIA_ENV", nothing)
         while !isempty(tokens)
             token = shift!(tokens)
             if token[1] == :cmd
@@ -227,21 +227,30 @@ function do_status!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
             cmderror("`status` does not take arguments")
         end
     end
-    env.git == nothing &&
-        cmderror("`status` only supported in git-saved environments")
-    path = LibGit2.path(env.git)
-    if mode == :project
-        project_path = relpath(env.project_file, path)
-        project = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
-        info("Status ", repr(relpath(env.project_file)))
-        print_project_diff(project["deps"], env.project["deps"], true)
-    elseif mode == :manifest
-        manifest_path = relpath(env.manifest_file, path)
-        manifest = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
-        info("Status ", repr(relpath(env.manifest_file)))
-        print_manifest_diff(manifest, env.manifest, true)
+    if env.git == nothing
+        if mode == :project
+            info("Status ", pathrepr(env.project_file))
+            print_project(env.project["deps"])
+        elseif mode == :manifest
+            cmderror("`status -m` only supported in git-saved environments")
+        else
+            error("this should not happen")
+        end
     else
-        error("this should not happen")
+        path = LibGit2.path(env.git)
+        if mode == :project
+            project_path = relpath(env.project_file, path)
+            project = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
+            info("Status ", pathrepr(env.project_file))
+            print_project_diff(project["deps"], env.project["deps"], true)
+        elseif mode == :manifest
+            manifest_path = relpath(env.manifest_file, path)
+            manifest = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
+            info("Status ", pathrepr(env.manifest_file))
+            print_manifest_diff(manifest, env.manifest, true)
+        else
+            error("this should not happen")
+        end
     end
 end
 

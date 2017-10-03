@@ -12,7 +12,16 @@ export SHA1, VersionRange, VersionSpec, Package, PackageVersion, UpgradeLevel, E
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, registry_resolve!, ensure_resolved, manifest_info,
     registered_uuids, registered_paths, registered_uuid, registered_name,
-    git_file_stream, read_project, read_manifest
+    git_file_stream, read_project, read_manifest, pathrepr
+
+## utility functions ##
+
+let prefix = joinpath("..", "..", "")
+    global function pathrepr(path::String, base::String=pwd())
+        r = relpath(path, base)
+        repr(startswith(r, joinpath("..", "..", "")) ? r : abspath(path))
+    end
+end
 
 ## ordering of UUIDs ##
 
@@ -285,7 +294,7 @@ function write_env(env::EnvCache)
     old_env = EnvCache(env.env)
     # update the project file
     if !isempty(env.project) || ispath(env.project_file)
-        info("Updating $(repr(relpath(env.project_file)))")
+        info("Updating $(pathrepr(env.project_file))")
         Pkg3.Display.print_project_diff(old_env, env)
         project = deepcopy(env.project)
         isempty(project["deps"]) && delete!(project, "deps")
@@ -296,7 +305,7 @@ function write_env(env::EnvCache)
     end
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
-        info("Updating $(repr(relpath(env.manifest_file)))")
+        info("Updating $(pathrepr(env.manifest_file))")
         Pkg3.Display.print_manifest_diff(old_env, env)
         manifest = deepcopy(env.manifest)
         uniques = sort!(collect(keys(manifest)), by=lowercase)
