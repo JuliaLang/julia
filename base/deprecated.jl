@@ -1637,6 +1637,9 @@ export hex2num
 # issue #5148, PR #23259
 # warning for `const` on locals should be changed to an error in julia-syntax.scm
 
+# issue #22789
+# remove code for `importall` in src/
+
 # issue #17886
 # deprecations for filter[!] with 2-arg functions are in associative.jl
 

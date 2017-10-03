@@ -112,6 +112,9 @@ Language changes
     and `-` no longer do automatic broadcasting. Hence the methods for `UniformScaling` and `Number` are
     no longer deprecated ([#23923]).
 
+  * The keyword `importall` is deprecated. Use `using` and/or individual `import` statements
+    instead ([#22789]).
+
 Breaking changes
 ----------------
 
