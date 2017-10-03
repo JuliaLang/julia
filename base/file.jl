@@ -356,7 +356,7 @@ function mktempdir(parent=tempdir(); prefix="$temp_prefix")
         i += 1
     end
     prefix = prefix[i:end]
-    
+
     tpath = "$(parent)$(path_separator)$(prefix)XXXXXX"
 
     req = Libc.malloc(_sizeof_uv_fs)
