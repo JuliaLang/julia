@@ -281,6 +281,12 @@ constant in this way.
 ```julia
 const x = 5
 ```
+
+Multiple variables can be declared within a single `const`:
+```julia
+const y, z = 7, 11
+```
+
 Note that "constant-ness" is not enforced inside containers, so if `x` is an array or
 dictionary (for example) you can still add and remove elements.
 
