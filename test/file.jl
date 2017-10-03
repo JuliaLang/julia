@@ -1183,8 +1183,13 @@ if !Sys.iswindows()
 end  # !Sys.iswindows
 
 function test_22922()
+<<<<<<< HEAD
     def_prefix = "jl_"
     tst_prefix = "ABCDEF"
+=======
+    const def_prefix = "jl_"
+    const tst_prefix = "ABCDEF"
+>>>>>>> mktempdir() now supports prefix.
     mktempdir() do tmpdir
         filename = basename(tmpdir)
         @test startswith(filename, def_prefix)
@@ -1194,11 +1199,16 @@ function test_22922()
         @test startswith(filename, tst_prefix)
     end
     # Special character prefix tests
+<<<<<<< HEAD
     tst_prefix="#!@%^&()"
+=======
+    tst_prefix="#!@%^&*()"
+>>>>>>> mktempdir() now supports prefix.
     mktempdir(; prefix=tst_prefix) do tmpdir
         filename = basename(tmpdir)
         @test startswith(filename, tst_prefix)
     end
+<<<<<<< HEAD
 
     # Behavioral differences across OS types
     if Sys.iswindows()
@@ -1216,8 +1226,8 @@ function test_22922()
             @test length(filename) == 6
         end
 
-        # Although, underlying directory created is of type c:\\xxx\\yyy\\..., the returned 
-        # directory name by the API is in the format as specified in the prefix 
+        # Although, underlying directory created is of type c:\\xxx\\yyy\\..., the returned
+        # directory name by the API is in the format as specified in the prefix
         # parameter.
         mktempdir("C:/dir_notexisting"; prefix=replace(tempdir(), '\\', '/')) do tmpdir
             @test startswith(tmpdir, replace(tempdir(), '\\', '/'))
@@ -1227,12 +1237,12 @@ function test_22922()
             @test length(filename) == 6
         end
     else
-        # '/' as the only character as prefix fails. 
+        # '/' as the only character as prefix fails.
         @test_throws Base.UVError mktempdir(; prefix="/")
 
         # '/' is accepted in a prefix but depends on the overall path and permissions.
         # A carefully crafted parent directory and prefix combination can actually
-        # create a directory as the example below. 
+        # create a directory as the example below.
         # The file created will be of format "/tmp/XXXXXX"
 
         mktempdir("/"; prefix="tmp/") do tmpdir
