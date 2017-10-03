@@ -280,7 +280,7 @@ Building Julia requires that the following software be installed:
 - **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
 - **[patch]**                   — for modifying source code.
-- **[cmake]**                   — needed to build `libgit2`.
+- **[cmake]** (>= 3.4.3)        — needed to build `libgit2`.
 - **[pkg-config]**              - needed to build `libgit2` correctly, especially for proxy support
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
