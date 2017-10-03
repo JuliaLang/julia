@@ -228,6 +228,24 @@ julia> str[6:6]
 The former is a single character value of type `Char`, while the latter is a string value that
 happens to contain only a single character. In Julia these are very different things.
 
+Range indexing makes a copy of the selected part of the original string.
+Alternatively, it is possible to create a view into a string using the type `SubString`,
+for example:
+
+```jldoctest
+julia> str = "long string"
+"long string"
+
+julia> substr = SubString(str, 1, 4)
+"long"
+
+julia> typeof(substr)
+SubString{String}
+```
+
+Several standard functions like [`chop`](@ref), [`chomp`](@ref) or [`strip`](@ref)
+return a `SubString`.
+
 ## Unicode and UTF-8
 
 Julia fully supports Unicode characters and strings. As [discussed above](@ref man-characters), in character
