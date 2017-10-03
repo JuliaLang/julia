@@ -657,6 +657,8 @@ end
     @test sincos(1) === (sin(1), cos(1))
     @test sincos(big(1)) == (sin(big(1)), cos(big(1)))
     @test sincos(big(1.0)) == (sin(big(1.0)), cos(big(1.0)))
+    @test sincos(NaN) === (NaN, NaN)
+    @test sincos(NaN32) === (NaN32, NaN32)
 end
 
 @testset "test fallback definitions" begin

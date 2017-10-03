@@ -174,7 +174,7 @@ Simultaneously compute the sine and cosine of `x`, where the `x` is in radians.
         end
         return sincos_kernel(x)
     elseif isnan(x)
-        return T(NaN)
+        return T(NaN), T(NaN)
     elseif isinf(x)
         sincos_domain_error(x)
     end
