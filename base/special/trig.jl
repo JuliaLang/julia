@@ -98,7 +98,7 @@ end
     absx = abs(x)
     if absx < T(pi)/4
         if absx < sqrt(eps(T)/T(2.0))
-            return x
+            return T(1.0)
         end
         return cos_kernel(x)
     elseif isnan(x)
