@@ -578,3 +578,8 @@ end
 
 # ref issue #17351
 @test @inferred(flipdim(view([1 2; 3 4], :, 1), 1)) == [3, 1]
+
+let
+    s = view(reshape(1:6, 2, 3), 1:2, 1:2)
+    @test @inferred(s[2,2,1]) === 4
+end

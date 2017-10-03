@@ -292,21 +292,27 @@ module IteratorsMD
     end
 
     # Split out the first N elements of a tuple
-    @inline split(t, V::Val) = _split((), t, V)
-    @inline _split(tN, trest, V::Val) = _split((tN..., trest[1]), tail(trest), V)
-    # exit either when we've exhausted the input tuple or when tN has length N
-    @inline _split(tN::NTuple{N,Any}, ::Tuple{}, ::Val{N}) where {N} = tN, ()  # ambig.
-    @inline _split(tN,                ::Tuple{}, ::Val{N}) where {N} = tN, ()
-    @inline _split(tN::NTuple{N,Any},  trest,    ::Val{N}) where {N} = tN, trest
+    @inline function split(t, V::Val)
+        ref = ntuple(d->true, V)  # create a reference tuple of length N
+        _split1(t, ref), _splitrest(t, ref)
+    end
+    @inline _split1(t, ref) = (t[1], _split1(tail(t), tail(ref))...)
+    @inline _splitrest(t, ref) = _splitrest(tail(t), tail(ref))
+    # exit either when we've exhausted the input or reference tuple
+    _split1(::Tuple{}, ::Tuple{}) = ()
+    _split1(::Tuple{}, ref) = ()
+    _split1(t, ::Tuple{}) = ()
+    _splitrest(::Tuple{}, ::Tuple{}) = ()
+    _splitrest(t, ::Tuple{}) = t
+    _splitrest(::Tuple{}, ref) = ()
 
     @inline function split(I::CartesianIndex, V::Val)
         i, j = split(I.I, V)
         CartesianIndex(i), CartesianIndex(j)
     end
     function split(R::CartesianRange, V::Val)
-        istart, jstart = split(first(R), V)
-        istop,  jstop  = split(last(R), V)
-        CartesianRange(istart, istop), CartesianRange(jstart, jstop)
+        i, j = split(R.indices, V)
+        CartesianRange(i), CartesianRange(j)
     end
 end  # IteratorsMD
 
