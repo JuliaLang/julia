@@ -16,6 +16,9 @@ New language features
    For example, `+̂ₐ″` is parsed as an infix operator with the same
    precedence as `+` ([#22089]).
 
+ * The macro call syntax `@macroname[args]` is now available and is parsed
+   as `@macroname([args])` ([#23519]).
+
 Language changes
 ----------------
 
@@ -99,6 +102,18 @@ Language changes
 
   * Prefix `&` for by-reference arguments to `ccall` has been deprecated in favor of
     `Ref` argument types ([#6080]).
+
+  * All line numbers in ASTs are represented by `LineNumberNode`s; the `:line` expression
+    head is no longer used. `QuoteNode`s are also consistently used for quoted symbols instead
+    of the `:quote` expression head (though `:quote` `Expr`s are still used for quoted
+    expressions) ([#23885]).
+
+  * The `+` and `-` methods for `Number` and `UniformScaling` are not ambiguous anymore since `+`
+    and `-` no longer do automatic broadcasting. Hence the methods for `UniformScaling` and `Number` are
+    no longer deprecated ([#23923]).
+
+  * The keyword `importall` is deprecated. Use `using` and/or individual `import` statements
+    instead ([#22789]).
 
 Breaking changes
 ----------------
@@ -231,6 +246,9 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
+  * The functions `nextind` and `prevind` now accept `nchar` argument that indicates
+    number of characters to move ([#23805]).
+
   * The functions `strip`, `lstrip` and `rstrip` now return `SubString` ([#22496]).
 
   * The functions `strwidth` and `charwidth` have been merged into `textwidth`([#20816]).
@@ -291,6 +309,9 @@ Library improvements
   * `BigFloat` random numbers can now be generated ([#22720]).
 
   * REPL Undo via Ctrl-/ and Ctrl-_
+
+  * New function `equalto(x)`, which returns a function that compares its argument to `x`
+    using `isequal` ([#23812]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -446,7 +467,7 @@ Deprecated or removed
     `Irrational{:ℯ}` ([#23427]).
 
   * The mathematical constants `π`, `pi`, `ℯ`, `e`, `γ`, `eulergamma`, `catalan`, `φ` and
-    `golden` have been have been moved from `Base` to a new module; `Base.MathConstants`.
+    `golden` have been moved from `Base` to a new module; `Base.MathConstants`.
     Only `π`, `pi` and `ℯ` are now exported by default from `Base` ([#23427]).
 
   * `eu` (previously an alias for `ℯ`) has been deprecated in favor of `ℯ` (or `MathConstants.e`) ([#23427]).
@@ -483,6 +504,12 @@ Deprecated or removed
 
   * The timing functions `tic`, `toc`, and `toq` are deprecated in favor of `@time` and `@elapsed`
     ([#17046]).
+
+  * Methods of `findfirst`, `findnext`, `findlast`, and `findprev` that accept a value to
+    search for are deprecated in favor of passing a predicate ([#19186], [#10593]).
+
+  * `find` functions now operate only on booleans by default. To look for non-zeros, use
+    `x->x!=0` or `!iszero` ([#23120]).
 
 Command-line option changes
 ---------------------------

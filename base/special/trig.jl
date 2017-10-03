@@ -438,6 +438,107 @@ function asin(x::T) where T<:Union{Float32, Float64}
     return asin_kernel(t, x)
 end
 
+# atan2 methods
+ATAN2_PI_LO(::Type{Float32}) = -8.7422776573f-08
+ATAN2_RATIO_BIT_SHIFT(::Type{Float32}) = 23
+ATAN2_RATIO_THRESHOLD(::Type{Float32}) = 26
+
+ATAN2_PI_LO(::Type{Float64}) = 1.2246467991473531772E-16
+ATAN2_RATIO_BIT_SHIFT(::Type{Float64}) = 20
+ATAN2_RATIO_THRESHOLD(::Type{Float64}) = 60
+
+function atan2(y::T, x::T) where T<:Union{Float32, Float64}
+    # Method :
+    #    M1) Reduce y to positive by atan2(y,x)=-atan2(-y,x).
+    #    M2) Reduce x to positive by (if x and y are unexceptional):
+    #        ARG (x+iy) = arctan(y/x)          ... if x > 0,
+    #        ARG (x+iy) = pi - arctan[y/(-x)]   ... if x < 0,
+    #
+    # Special cases:
+    #
+    #    S1) ATAN2((anything), NaN ) is NaN;
+    #    S2) ATAN2(NAN , (anything) ) is NaN;
+    #    S3) ATAN2(+-0, +(anything but NaN)) is +-0  ;
+    #    S4) ATAN2(+-0, -(anything but NaN)) is +-pi ;
+    #    S5) ATAN2(+-(anything but 0 and NaN), 0) is +-pi/2;
+    #    S6) ATAN2(+-(anything but INF and NaN), +INF) is +-0 ;
+    #    S7) ATAN2(+-(anything but INF and NaN), -INF) is +-pi;
+    #    S8) ATAN2(+-INF,+INF ) is +-pi/4 ;
+    #    S9) ATAN2(+-INF,-INF ) is +-3pi/4;
+    #    S10) ATAN2(+-INF, (anything but,0,NaN, and INF)) is +-pi/2;
+    if isnan(x) || isnan(y) # S1 or S2
+        return T(NaN)
+    end
+
+    if x == T(1.0) # then y/x = y and x > 0, see M2
+        return atan(y)
+    end
+    # generate an m ∈ {0, 1, 2, 3} to branch off of
+    m = 2*signbit(x) + 1*signbit(y)
+
+    if iszero(y)
+        if m == 0 || m == 1
+            return y # atan(+-0, +anything) = +-0
+        elseif m == 2
+            return T(pi) # atan(+0, -anything) = pi
+        elseif m == 3
+            return -T(pi) # atan(-0, -anything) =-pi
+        end
+    elseif iszero(x)
+        return flipsign(T(pi)/2, y)
+    end
+
+    if isinf(x)
+        if isinf(y)
+            if m == 0
+                return T(pi)/4  # atan(+Inf), +Inf))
+            elseif m == 1
+                return -T(pi)/4 # atan(-Inf), +Inf))
+            elseif m == 2
+                return 3*T(pi)/4 # atan(+Inf, -Inf)
+            elseif m == 3
+                return -3*T(pi)/4 # atan(-Inf,-Inf)
+            end
+        else
+            if m == 0
+                return zero(T)  # atan(+...,+Inf) */
+            elseif m == 1
+                return -zero(T) # atan(-...,+Inf) */
+            elseif m == 2
+                return T(pi)    # atan(+...,-Inf) */
+            elseif m == 3
+                return -T(pi)   # atan(-...,-Inf) */
+            end
+        end
+    end
+
+    # x wasn't Inf, but y is
+    isinf(y) && return copysign(T(pi)/2, y)
+
+    ypw = poshighword(y)
+    xpw = poshighword(x)
+    # compute y/x for Float32
+    k = reinterpret(Int32, ypw-xpw)>>ATAN2_RATIO_BIT_SHIFT(T)
+
+    if k > ATAN2_RATIO_THRESHOLD(T) # |y/x| >  threshold
+        z=T(pi)/2+T(0.5)*ATAN2_PI_LO(T)
+        m&=1;
+    elseif x<0 && k < -ATAN2_RATIO_THRESHOLD(T) # 0 > |y|/x > threshold
+        z = zero(T)
+    else #safe to do y/x
+        z = atan(abs(y/x))
+    end
+
+    if m == 0
+        return z # atan(+,+)
+    elseif m == 1
+        return -z # atan(-,+)
+    elseif m == 2
+        return T(pi)-(z-ATAN2_PI_LO(T)) # atan(+,-)
+    else # default case m == 3
+        return (z-ATAN2_PI_LO(T))-T(pi) # atan(-,-)
+    end
+end
 # acos methods
 ACOS_X_MIN_THRESHOLD(::Type{Float32}) = 2.0f0^-26
 ACOS_X_MIN_THRESHOLD(::Type{Float64}) = 2.0^-57

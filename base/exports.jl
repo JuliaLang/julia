@@ -9,10 +9,8 @@ export
     Profile,
     Dates,
     Sys,
-    Test,
     Libc,
     Libdl,
-    Mmap,
     LinAlg,
     BLAS,
     LAPACK,
@@ -105,9 +103,6 @@ export
     AbstractSerializer,
     SerializationState,
     Set,
-    SharedArray,
-    SharedMatrix,
-    SharedVector,
     StepRange,
     StepRangeLen,
     StridedArray,
@@ -859,6 +854,7 @@ export
     identity,
     isbits,
     isequal,
+    equalto,
     isimmutable,
     isless,
     ifelse,
@@ -1047,7 +1043,6 @@ export
     readbytes!,
     readchomp,
     readdir,
-    readdlm,
     readline,
     readlines,
     readuntil,
@@ -1069,7 +1064,6 @@ export
     unmark,
     watch_file,
     write,
-    writedlm,
     TCPSocket,
     UDPSocket,
 
@@ -1089,11 +1083,6 @@ export
     redisplay,
     HTML,
     Text,
-
-# shared arrays
-    sdata,
-    indexpids,
-    localindexes,
 
 # paths and file names
     abspath,

@@ -76,7 +76,8 @@ codeunit(s::AbstractString, i::Integer)
     @gc_preserve s unsafe_load(pointer(s, i))
 end
 
-write(io::IO, s::String) = unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
+write(io::IO, s::String) =
+    @gc_preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
 
 ## comparison ##
 
@@ -107,6 +108,25 @@ function prevind(s::String, i::Integer)
     j
 end
 
+function prevind(s::String, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    j = Int(i)
+    e = sizeof(s)
+    while nchar > 0
+        if j > e
+            j = endof(s)
+        else
+            j -= 1
+            @inbounds while j > 0 && is_valid_continuation(codeunit(s,j))
+                j -= 1
+            end
+        end
+        nchar -= 1
+        j <= 0 && return j - nchar
+    end
+    j
+end
+
 function nextind(s::String, i::Integer)
     j = Int(i)
     if j < 1
@@ -116,6 +136,25 @@ function nextind(s::String, i::Integer)
     j += 1
     @inbounds while j <= e && is_valid_continuation(codeunit(s,j))
         j += 1
+    end
+    j
+end
+
+function nextind(s::String, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    j = Int(i)
+    e = sizeof(s)
+    while nchar > 0
+        if j < 1
+            j = 1
+        else
+            j += 1
+            @inbounds while j <= e && is_valid_continuation(codeunit(s,j))
+                j += 1
+            end
+        end
+        nchar -= 1
+        j > e && return j + nchar
     end
     j
 end

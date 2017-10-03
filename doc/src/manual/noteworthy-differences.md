@@ -63,7 +63,7 @@ may trip up Julia users accustomed to MATLAB:
     bitwise operations equivalent to `and`, `or`, and `xor` respectively in MATLAB, and have precedence
     similar to Python's bitwise operators (unlike C). They can operate on scalars or element-wise
     across arrays and can be used to combine logical arrays, but note the difference in order of operations:
-    parentheses may be required (e.g., to select elements of `A` equal to 1 or 2 use `(A .== 1) | (A .== 2)`).
+    parentheses may be required (e.g., to select elements of `A` equal to 1 or 2 use `(A .== 1) .| (A .== 2)`).
   * In Julia, the elements of a collection can be passed as arguments to a function using the splat
     operator `...`, as in `xs=[1,2]; f(xs...)`.
   * Julia's [`svd`](@ref) returns singular values as a vector instead of as a dense diagonal matrix.
@@ -107,6 +107,10 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Like many languages, Julia does not always allow operations on vectors of different lengths, unlike
     R where the vectors only need to share a common index range.  For example, `c(1, 2, 3, 4) + c(1, 2)`
     is valid R but the equivalent `[1, 2, 3, 4] + [1, 2]` will throw an error in Julia.
+  * Julia allows an optional trailing comma when that comma does not change the meaning of code.
+    This can cause confusion among R users when indexing into arrays. For example, `x[1,]` in R
+    would return the first row of a matrix; in Julia, however, the comma is ignored, so
+    `x[1,] == x[1]`, and will return the first element. To extract a row, be sure to use `:`, as in `x[1,:]`.
   * Julia's [`map`](@ref) takes the function first, then its arguments, unlike `lapply(<structure>, function, ...)`
     in R. Similarly Julia's equivalent of `apply(X, MARGIN, FUN, ...)` in R is [`mapslices`](@ref)
     where the function is the first argument.

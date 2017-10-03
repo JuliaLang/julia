@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using DelimitedFiles
+
 mktempdir() do dir
 
 tasks = []
@@ -94,7 +96,6 @@ s = io(text)
 close(s)
 push!(l, ("PipeEndpoint", io))
 
-
 #FIXME See https://github.com/JuliaLang/julia/issues/14747
 #      Reading from open(::Command) seems to deadlock on Linux/Travis
 #=
@@ -136,10 +137,38 @@ end
 
 verbose = false
 
-
 for (name, f) in l
     local f
-    io = ()->(s=f(text); push!(open_streams, s); s)
+    local function io(text=text)
+        local s = f(text)
+        push!(open_streams, s)
+        return s
+    end
+
+    verbose && println("$name readuntil...")
+    for (t, s, m) in [
+            ("a", "ab", "a"),
+            ("b", "ab", "b"),
+            ("α", "αγ", "α"),
+            ("ab", "abc", "ab"),
+            ("bc", "abc", "bc"),
+            ("αβ", "αβγ", "αβ"),
+            ("aaabc", "ab", "aaab"),
+            ("aaabc", "ac", "aaabc"),
+            ("aaabc", "aab", "aaab"),
+            ("aaabc", "aac", "aaabc"),
+            ("αααβγ", "αβ", "αααβ"),
+            ("αααβγ", "ααβ", "αααβ"),
+            ("αααβγ", "αγ", "αααβγ"),
+            ("barbarbarians", "barbarian", "barbarbarian")]
+        local t, s, m
+        @test readuntil(io(t), s) == m
+        @test readuntil(io(t), SubString(s, start(s), endof(s))) == m
+        @test readuntil(io(t), GenericString(s)) == m
+        @test readuntil(io(t), Vector{UInt8}(s)) == Vector{UInt8}(m)
+        @test readuntil(io(t), collect(s)::Vector{Char}) == Vector{Char}(m)
+    end
+    cleanup()
 
     write(filename, text)
 
@@ -494,3 +523,17 @@ close(f2)
 rm(f)
 
 end # mktempdir() do dir
+
+@testset "countlines" begin
+    @test countlines(IOBuffer("\n")) == 1
+    @test countlines(IOBuffer("\n"),'\r') == 0
+    @test countlines(IOBuffer("\n\n\n\n\n\n\n\n\n\n")) == 10
+    @test countlines(IOBuffer("\n \n \n \n \n \n \n \n \n \n")) == 10
+    @test countlines(IOBuffer("\r\n \r\n \r\n \r\n \r\n")) == 5
+    file = tempname()
+    write(file,"Spiffy header\nspectacular first row\neven better 2nd row\nalmost done\n")
+    @test countlines(file) == 4
+    @test countlines(file,'\r') == 0
+    @test countlines(file,'\n') == 4
+    rm(file)
+end

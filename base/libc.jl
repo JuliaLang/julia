@@ -249,7 +249,7 @@ function gethostname()
         ccall(:gethostname, Int32, (Ptr{UInt8}, UInt), hn, length(hn))
     end
     systemerror("gethostname", err != 0)
-    return unsafe_string(pointer(hn))
+    return Base.@gc_preserve hn unsafe_string(pointer(hn))
 end
 
 ## system error handling ##
@@ -305,7 +305,7 @@ if Sys.iswindows()
         p = lpMsgBuf[]
         len == 0 && return ""
         buf = Vector{UInt16}(len)
-        unsafe_copy!(pointer(buf), p, len)
+        Base.@gc_preserve buf unsafe_copy!(pointer(buf), p, len)
         ccall(:LocalFree, stdcall, Ptr{Void}, (Ptr{Void},), p)
         return transcode(String, buf)
     end

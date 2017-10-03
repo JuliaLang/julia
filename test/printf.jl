@@ -272,3 +272,18 @@ end
 
 # Check bug with trailing nul printing BigFloat
 @test (@sprintf("%.330f", BigFloat(1)))[end] != '\0'
+
+# Check utf8 strings #23880
+@test (@sprintf("X%d", 2)) == "X2"
+@test (@sprintf("\u00d0%d", 2)) == "\u00d02"
+@test (@sprintf("\u0f00%d", 2)) == "\u0f002"
+@test (@sprintf("\U0001ffff%d", 2)) == "\U0001ffff2"
+@test (@sprintf("%dX%d", 1, 2)) == "1X2"
+@test (@sprintf("%d\u00d0%d", 1, 2)) == "1\u00d02"
+@test (@sprintf("%d\u0f00%d", 1, 2)) == "1\u0f002"
+@test (@sprintf("%d\U0001ffff%d", 1, 2)) == "1\U0001ffff2"
+@test (@sprintf("%d\u2203%d\u0203", 1, 2)) == "1\u22032\u0203"
+@test_throws ArgumentError @macroexpand(@sprintf("%y%d", 1, 2))
+@test_throws ArgumentError @macroexpand(@sprintf("%\u00d0%d", 1, 2))
+@test_throws ArgumentError @macroexpand(@sprintf("%\u0f00%d", 1, 2))
+@test_throws ArgumentError @macroexpand(@sprintf("%\U0001ffff%d", 1, 2))

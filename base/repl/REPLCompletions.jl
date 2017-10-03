@@ -102,7 +102,7 @@ const sorted_keywords = [
     "abstract type", "baremodule", "begin", "break", "catch", "ccall",
     "const", "continue", "do", "else", "elseif", "end", "export", "false",
     "finally", "for", "function", "global", "if", "import",
-    "importall", "let", "local", "macro", "module", "mutable struct",
+    "let", "local", "macro", "module", "mutable struct",
     "primitive type", "quote", "return", "struct",
     "true", "try", "using", "while"]
 

@@ -819,7 +819,6 @@ precompile(Tuple{Type{BoundsError}, Array{Int64, 2}, Tuple{Base.UnitRange{Int64}
 precompile(Tuple{typeof(Base.throw_boundserror), Array{Int64, 2}, Tuple{Base.UnitRange{Int64}, Int64}})
 precompile(Tuple{getfield(Base.Cartesian, Symbol("#@nexprs")), Int64, Expr})
 precompile(Tuple{typeof(Base.Cartesian._nexprs), Int64, Expr})
-precompile(Tuple{typeof(Core.Inference.findnext), Array{Function, 1}, typeof(===), Int64})
 precompile(Tuple{typeof(Core.Inference.builtin_tfunction), typeof(===), Array{Any, 1}, Core.Inference.InferenceState, Core.Inference.InferenceParams})
 precompile(Tuple{typeof(Core.Inference.typeinf_frame), Core.MethodInstance, Bool, Bool, Core.Inference.InferenceParams})
 precompile(Tuple{typeof(Core.Inference.typeinf), Core.Inference.InferenceState})

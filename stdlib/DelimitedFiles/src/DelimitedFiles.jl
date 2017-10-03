@@ -1,12 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## file formats ##
+__precompile__(true)
 
-module DataFmt
+module DelimitedFiles
+
+using Mmap
 
 import Base: _default_delims, tryparse_internal, show
 
-export countlines, readdlm, writedlm
+export readdlm, writedlm
+
+Base.@deprecate readcsv(io; opts...) readdlm(io, ','; opts...)
+Base.@deprecate readcsv(io, T::Type; opts...) readdlm(io, ',', T; opts...)
+Base.@deprecate writecsv(io, a; opts...) writedlm(io, a, ','; opts...)
 
 invalid_dlm(::Type{Char})   = reinterpret(Char, 0xfffffffe)
 invalid_dlm(::Type{UInt8})  = 0xfe
@@ -14,29 +20,6 @@ invalid_dlm(::Type{UInt16}) = 0xfffe
 invalid_dlm(::Type{UInt32}) = 0xfffffffe
 
 const offs_chunk_size = 5000
-
-countlines(f::AbstractString, eol::Char='\n') = open(io->countlines(io,eol), f)::Int
-
-"""
-    countlines(io::IO, eol::Char='\\n')
-
-Read `io` until the end of the stream/file and count the number of lines. To specify a file
-pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
-passing them as the second argument.
-"""
-function countlines(io::IO, eol::Char='\n')
-    isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
-    aeol = UInt8(eol)
-    a = Vector{UInt8}(8192)
-    nl = 0
-    while !eof(io)
-        nb = readbytes!(io, a)
-        @simd for i=1:nb
-            @inbounds nl += a[i] == aeol
-        end
-    end
-    nl
-end
 
 """
     readdlm(source, T::Type; options...)
@@ -130,7 +113,7 @@ function readdlm_auto(input::AbstractString, dlm::Char, T::Type, eol::Char, auto
         # TODO: It would be nicer to use String(a) without making a copy,
         # but because the mmap'ed array is not NUL-terminated this causes
         # jl_try_substrtod to segfault below.
-        return readdlm_string(unsafe_string(pointer(a),length(a)), dlm, T, eol, auto, optsd)
+        return readdlm_string(Base.@gc_preserve(a, unsafe_string(pointer(a),length(a))), dlm, T, eol, auto, optsd)
     else
         return readdlm_string(read(input, String), dlm, T, eol, auto, optsd)
     end
@@ -220,7 +203,7 @@ function DLMStore(::Type{T}, dims::NTuple{2,Integer},
 end
 
 _chrinstr(sbuff::String, chr::UInt8, startpos::Int, endpos::Int) =
-    (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8},
+    Base.@gc_preserve sbuff (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8},
     (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff)+startpos-1, chr, endpos-startpos+1))
 
 function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
@@ -370,7 +353,7 @@ function val_opts(opts)
     for (opt_name, opt_val) in opts
         in(opt_name, valid_opts) ||
             throw(ArgumentError("unknown option $opt_name"))
-        opt_typ = valid_opt_types[findfirst(valid_opts, opt_name)]
+        opt_typ = valid_opt_types[findfirst(equalto(opt_name), valid_opts)]
         isa(opt_val, opt_typ) ||
             throw(ArgumentError("$opt_name should be of type $opt_typ, got $(typeof(opt_val))"))
         d[opt_name] = opt_val
@@ -698,4 +681,4 @@ writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)
 show(io::IO, ::MIME"text/csv", a) = writedlm(io, a, ',')
 show(io::IO, ::MIME"text/tab-separated-values", a) = writedlm(io, a, '\t')
 
-end # module DataFmt
+end # module DelimitedFiles

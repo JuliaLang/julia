@@ -381,7 +381,7 @@ end
 @test_throws ErrorException "ab" ∈ "abc"
 
 # issue #15723
-@test findfirst("⨳(", '(') == 4
-@test findnext("(⨳(", '(', 2) == 5
-@test findlast("(⨳(", '(') == 5
-@test findprev("(⨳(", '(', 2) == 1
+@test findfirst(equalto('('), "⨳(") == 4
+@test findnext(equalto('('), "(⨳(", 2) == 5
+@test findlast(equalto('('), "(⨳(") == 5
+@test findprev(equalto('('), "(⨳(", 2) == 1

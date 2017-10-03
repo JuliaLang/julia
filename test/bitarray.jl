@@ -1069,9 +1069,9 @@ timesofar("datamove")
 
         @check_bit_operation findfirst(b1) Int
 
-        @check_bit_operation findfirst(b1, true)  Int
-        @check_bit_operation findfirst(b1, false) Int
-        @check_bit_operation findfirst(b1, 3)     Int
+        @check_bit_operation findfirst(!iszero, b1)    Int
+        @check_bit_operation findfirst(iszero, b1)     Int
+        @check_bit_operation findfirst(equalto(3), b1) Int
 
         @check_bit_operation findfirst(x->x, b1)     Int
         @check_bit_operation findfirst(x->!x, b1)    Int

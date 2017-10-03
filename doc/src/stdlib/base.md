@@ -54,6 +54,40 @@ Base.workspace
 ans
 ```
 
+## Keywords
+
+```@docs
+module
+export
+import
+using
+baremodule
+function
+macro
+return
+do
+begin
+end
+let
+if
+for
+while
+break
+continue
+try
+finally
+quote
+local
+global
+const
+struct
+mutable struct
+abstract type
+primitive type
+...
+;
+```
+
 ## All Objects
 
 ```@docs
@@ -134,8 +168,10 @@ Base.method_exists
 Core.applicable
 Core.invoke
 Base.invokelatest
+new
 Base.:(|>)
 Base.:(∘)
+Base.equalto
 ```
 
 ## Syntax

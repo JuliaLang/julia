@@ -264,7 +264,7 @@ end
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
     olb = lb = length(b)
     nr = 0
-    while nr < nb
+    @gc_preserve b while nr < nb
         if lb < nr+1
             lb = max(65536, (nr+1) * 2)
             resize!(b, lb)
@@ -284,8 +284,8 @@ function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
     if nb > lb
         resize!(b, nb)
     end
-    nr = Int(ccall(:ios_read, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t),
-                   s.ios, pointer(b), nb))
+    nr = @gc_preserve b Int(ccall(:ios_read, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t),
+                                  s.ios, pointer(b), nb))
     if lb > olb && lb > nr
         resize!(b, nr)
     end

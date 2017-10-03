@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 srand(123)
 
@@ -37,10 +37,16 @@ end
     @test UniformScaling(4.32) ≉ 4.3*ones(2,2) rtol=0.1 atol=0.01
 end
 
-@testset "* and / with number" begin
+@testset "arithmetic with Number" begin
     α = randn()
+    @test α + I == α + 1
+    @test I + α == α + 1
+    @test α - I == α - 1
+    @test I - α == 1 - α
     @test α .* UniformScaling(1.0) == UniformScaling(1.0) .* α
     @test UniformScaling(α)./α == UniformScaling(1.0)
+    @test α * UniformScaling(1.0) == UniformScaling(1.0) * α
+    @test UniformScaling(α)/α == UniformScaling(1.0)
 end
 
 @testset "det and logdet" begin

@@ -53,7 +53,7 @@ elseif Sys.isapple()
                         (Cstring, Ptr{Void}, Ptr{Void}, Csize_t, Culong),
                         path, attr_list, buf, sizeof(buf), FSOPT_NOFOLLOW)
             systemerror(:getattrlist, ret ≠ 0)
-            filename_length = unsafe_load(
+            filename_length = @gc_preserve buf unsafe_load(
               convert(Ptr{UInt32}, pointer(buf) + 8))
             if (filename_length + header_size) > length(buf)
                 resize!(buf, filename_length + header_size)
@@ -103,7 +103,7 @@ function find_in_path(name::String, wd::Union{Void,String})
     isabspath(name) && return name
     base = name
     if endswith(name,".jl")
-        base = name[1:end-3]
+        base = name[1:prevind(name, end-2)]
     else
         name = string(base,".jl")
     end

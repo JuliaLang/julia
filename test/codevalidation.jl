@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 function f22938(a, b, x...)
     d = 1
@@ -49,7 +49,8 @@ end
     errors = Core.Inference.validate_code(c)
     @test length(errors) == 10
     @test count(e.kind === Core.Inference.INVALID_RVALUE for e in errors) == 7
-    @test count(e.kind === Core.Inference.INVALID_EXPR_NARGS for e in errors) == 3
+    @test count(e.kind === Core.Inference.INVALID_EXPR_NARGS for e in errors) == 2
+    @test count(e.kind === Core.Inference.INVALID_EXPR_HEAD for e in errors) == 1
 end
 
 @testset "INVALID_CALL_ARG/INVALID_EXPR_NARGS" begin
@@ -63,7 +64,8 @@ end
     errors = Core.Inference.validate_code(c)
     @test length(errors) == 10
     @test count(e.kind === Core.Inference.INVALID_CALL_ARG for e in errors) == 7
-    @test count(e.kind === Core.Inference.INVALID_EXPR_NARGS for e in errors) == 3
+    @test count(e.kind === Core.Inference.INVALID_EXPR_NARGS for e in errors) == 2
+    @test count(e.kind === Core.Inference.INVALID_EXPR_HEAD for e in errors) == 1
 end
 
 @testset "EMPTY_SLOTNAMES" begin

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 # Tests for @__LINE__ inside and outside of macros
 @test (@__LINE__) == 6

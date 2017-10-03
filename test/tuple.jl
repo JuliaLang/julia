@@ -9,16 +9,6 @@ struct BitPerm_19352
     BitPerm_19352(xs::Vararg{Any,8}) = BitPerm(map(UInt8, xs))
 end
 
-# ntuples
-nttest1(x::NTuple{n, Int}) where {n} = n
-@test nttest1(()) == 0
-@test nttest1((1, 2)) == 2
-@test NTuple <: Tuple
-@test (NTuple{T, Int32} where T) <: Tuple{Vararg{Int32}}
-@test !((NTuple{T, Int32} where T) <: Tuple{Int32, Vararg{Int32}})
-@test Tuple{Vararg{Int32}} <: (NTuple{T, Int32} where T)
-@test Tuple{Int32, Vararg{Int32}} <: (NTuple{T, Int32} where T)
-
 # #17198
 @test_throws BoundsError convert(Tuple{Int}, (1.0, 2.0, 3.0))
 # #21238
@@ -290,6 +280,14 @@ end
 end
 
 @testset "ntuple" begin
+    nttest1(x::NTuple{n, Int}) where {n} = n
+    @test nttest1(()) == 0
+    @test nttest1((1, 2)) == 2
+    @test NTuple <: Tuple
+    @test (NTuple{T, Int32} where T) <: Tuple{Vararg{Int32}}
+    @test !((NTuple{T, Int32} where T) <: Tuple{Int32, Vararg{Int32}})
+    @test Tuple{Vararg{Int32}} <: (NTuple{T, Int32} where T)
+    @test Tuple{Int32, Vararg{Int32}} <: (NTuple{T, Int32} where T)
     @test @inferred(ntuple(abs2, Val(0))) == ()
     @test @inferred(ntuple(abs2, Val(2))) == (1, 4)
     @test @inferred(ntuple(abs2, Val(3))) == (1, 4, 9)
@@ -318,16 +316,14 @@ end
     end
 end
 
-# issue #15703
-let
-    struct A_15703{N}
-        keys::NTuple{N, Int}
-    end
+struct A_15703{N}
+    keys::NTuple{N, Int}
+end
 
-    struct B_15703
-        x::A_15703
-    end
-
+struct B_15703
+    x::A_15703
+end
+@testset "issue #15703" begin
     function bug_15703(xs...)
         [x for x in xs]
     end
@@ -343,15 +339,17 @@ let
     test_15703()
 end
 
-# https://github.com/JuliaLang/julia/issues/21026#issuecomment-317113307
-const VecTuple21026{T} = Tuple{VecElement{T}}
-@test convert(VecTuple21026, (1,)) === (VecElement(1),)
+@testset "#21026" begin
+    # https://github.com/JuliaLang/julia/issues/21026#issuecomment-317113307
+    VecTuple21026{T} = Tuple{VecElement{T}}
+    @test convert(VecTuple21026, (1,)) === (VecElement(1),)
 
-@test convert(Tuple{Complex{T}, Complex{T}} where T<:Real, (1, 2)) ===
-    (Complex(1), Complex(2))
-@test convert(Tuple{Complex{T}, Complex{T}} where T<:Real, (1, 2.0)) ===
-    (Complex(1), Complex(2.0))
-@test convert(Tuple{Complex, Complex}, (1, 2)) ===
-    (Complex(1), Complex(2))
-@test convert(Tuple{Complex, Complex}, (1, 2.0)) ===
-    (Complex(1), Complex(2.0))
+    @test convert(Tuple{Complex{T}, Complex{T}} where T<:Real, (1, 2)) ===
+        (Complex(1), Complex(2))
+    @test convert(Tuple{Complex{T}, Complex{T}} where T<:Real, (1, 2.0)) ===
+        (Complex(1), Complex(2.0))
+    @test convert(Tuple{Complex, Complex}, (1, 2)) ===
+        (Complex(1), Complex(2))
+    @test convert(Tuple{Complex, Complex}, (1, 2.0)) ===
+        (Complex(1), Complex(2.0))
+end

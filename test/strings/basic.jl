@@ -552,3 +552,74 @@ end
     @test_throws ParseError parse("\"\\.\"")
     @test_throws ParseError parse("\'\\.\'")
 end
+
+@testset "prevind and nextind" begin
+    let strs = Any["∀α>β:α+1>β", GenericString("∀α>β:α+1>β")]
+        for i in 1:2
+            @test prevind(strs[i], 1) == 0
+            @test prevind(strs[i], 1, 1) == 0
+            @test prevind(strs[i], 2) == 1
+            @test prevind(strs[i], 2, 1) == 1
+            @test prevind(strs[i], 4) == 1
+            @test prevind(strs[i], 4, 1) == 1
+            @test prevind(strs[i], 5) == 4
+            @test prevind(strs[i], 5, 1) == 4
+            @test prevind(strs[i], 5, 2) == 1
+            @test prevind(strs[i], 5, 3) == 0
+            @test prevind(strs[i], 15) == 14
+            @test prevind(strs[i], 15, 1) == 14
+            @test prevind(strs[i], 15, 2) == 13
+            @test prevind(strs[i], 15, 3) == 12
+            @test prevind(strs[i], 15, 4) == 10
+            @test prevind(strs[i], 15, 10) == 0
+            @test prevind(strs[i], 15, 9) == 1
+            @test prevind(strs[i], 15, 10) == 0
+            @test prevind(strs[i], 16) == 15
+            @test prevind(strs[i], 16, 1) == 15
+            @test prevind(strs[i], 16, 2) == 14
+            @test prevind(strs[i], 20) == 15
+            @test prevind(strs[i], 20, 1) == 15
+            @test prevind(strs[i], 20, 10) == 1
+            @test_throws ArgumentError prevind(strs[i], 20, 0)
+
+            @test nextind(strs[i], -1) == 1
+            @test nextind(strs[i], -1, 1) == 1
+            @test nextind(strs[i], 0, 2) == 4
+            @test nextind(strs[i], 0, 20) == 26
+            @test nextind(strs[i], 0, 10) == 15
+            @test nextind(strs[i], 1) == 4
+            @test nextind(strs[i], 1, 1) == 4
+            @test nextind(strs[i], 1, 2) == 6
+            @test nextind(strs[i], 1, 9) == 15
+            @test nextind(strs[i], 1, 10) == 17
+            @test nextind(strs[i], 2) == 4
+            @test nextind(strs[i], 2, 1) == 4
+            @test nextind(strs[i], 3) == 4
+            @test nextind(strs[i], 3, 1) == 4
+            @test nextind(strs[i], 4) == 6
+            @test nextind(strs[i], 4, 1) == 6
+            @test nextind(strs[i], 14) == 15
+            @test nextind(strs[i], 14, 1) == 15
+            @test nextind(strs[i], 15) == 17
+            @test nextind(strs[i], 15, 1) == 17
+            @test nextind(strs[i], 20) == 21
+            @test nextind(strs[i], 20, 1) == 21
+            @test_throws ArgumentError nextind(strs[i], 20, 0)
+
+            for x in -10:20
+                n = p = x
+                for j in 1:40
+                    p = prevind(strs[i], p)
+                    @test prevind(strs[i], x, j) == p
+                    n = nextind(strs[i], n)
+                    @test nextind(strs[i], x, j) == n
+                end
+            end
+        end
+        @test prevind(strs[1], -1) == -2
+        @test prevind(strs[1], -1, 1) == -2
+
+        @test prevind(strs[2], -1) == 0
+        @test prevind(strs[2], -1, 1) == 0
+    end
+end

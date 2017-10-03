@@ -122,13 +122,13 @@ static void jl_module_load_time_initialize(jl_module_t *m)
 
 void jl_register_root_module(jl_value_t *key, jl_module_t *m)
 {
-    static jl_value_t *register_module_func=NULL;
-    if (register_module_func == NULL && jl_base_module != NULL)
+    static jl_value_t *register_module_func = NULL;
+    assert(jl_base_module);
+    if (register_module_func == NULL)
         register_module_func = jl_get_global(jl_base_module, jl_symbol("register_root_module"));
-    if (register_module_func != NULL) {
-        jl_value_t *rmargs[3] = {register_module_func, key, (jl_value_t*)m};
-        jl_apply(rmargs, 3);
-    }
+    assert(register_module_func);
+    jl_value_t *rmargs[3] = {register_module_func, key, (jl_value_t*)m};
+    jl_apply(rmargs, 3);
 }
 
 jl_array_t *jl_get_loaded_modules(void)
@@ -162,6 +162,8 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
         jl_type_error("module", (jl_value_t*)jl_sym_type, (jl_value_t*)name);
     }
     jl_module_t *newm = jl_new_module(name);
+    jl_value_t *defaultdefs = NULL, *form = NULL;
+    JL_GC_PUSH4(&last_module, &defaultdefs, &form, &newm);
     if (jl_base_module &&
         (jl_value_t*)parent_module == jl_get_global(jl_base_module, jl_symbol("__toplevel__"))) {
         newm->parent = newm;
@@ -184,6 +186,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
         b->value = (jl_value_t*)newm;
         jl_gc_wb_binding(b, newm);
     }
+    // Assume `newm` is globally reachable at this point.
 
     if (parent_module == jl_main_module && name == jl_symbol("Base")) {
         // pick up Base module during bootstrap
@@ -197,8 +200,6 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
         }
     }
 
-    jl_value_t *defaultdefs = NULL, *form = NULL;
-    JL_GC_PUSH3(&last_module, &defaultdefs, &form);
     size_t last_age = ptls->world_age;
     jl_module_t *task_last_m = ptls->current_task->current_module;
     ptls->current_task->current_module = ptls->current_module = newm;
@@ -492,6 +493,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
     }
     else if (ex->head == importall_sym) {
         jl_sym_t *name = NULL;
+        jl_depwarn("`importall` is deprecated, use `using` or individual `import` statements instead",
+                   (jl_value_t*)jl_symbol("importall"));
         jl_module_t *import = eval_import_path(m, ex->args, &name, "importall");
         if (name != NULL) {
             import = (jl_module_t*)jl_eval_global_var(import, name);
@@ -538,10 +541,6 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
                 jl_error("syntax: malformed \"export\" statement");
             jl_module_export(m, name);
         }
-        return jl_nothing;
-    }
-    else if (ex->head == line_sym) {
-        jl_lineno = jl_unbox_long(jl_exprarg(ex, 0));
         return jl_nothing;
     }
     else if (ex->head == global_sym) {

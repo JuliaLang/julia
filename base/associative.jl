@@ -286,7 +286,7 @@ Dict{String,Float64} with 3 entries:
 ```
 """
 merge(d::Associative, others::Associative...) =
-    merge!(emptymergedict(d, others...), d, others...)
+    merge!(_typeddict(d, others...), others...)
 
 """
     merge(combine, d::Associative, others::Associative...)
@@ -316,16 +316,16 @@ Dict{String,Float64} with 3 entries:
 ```
 """
 merge(combine::Function, d::Associative, others::Associative...) =
-    merge!(combine, emptymergedict(d, others...), d, others...)
+    merge!(combine, _typeddict(d, others...), others...)
 
 promoteK(K) = K
 promoteV(V) = V
 promoteK(K, d, ds...) = promoteK(promote_type(K, keytype(d)), ds...)
 promoteV(V, d, ds...) = promoteV(promote_type(V, valtype(d)), ds...)
-function emptymergedict(d::Associative, others::Associative...)
+function _typeddict(d::Associative, others::Associative...)
     K = promoteK(keytype(d), others...)
     V = promoteV(valtype(d), others...)
-    Dict{K,V}()
+    Dict{K,V}(d)
 end
 
 """

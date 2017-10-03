@@ -45,7 +45,7 @@ julia> randn(rng, Complex64, (2, 3))
 end
 
 # this unlikely branch is put in a separate function for better efficiency
-function randn_unlikely(rng, idx, rabs, x)
+@noinline function randn_unlikely(rng, idx, rabs, x)
     @inbounds if idx == 0
         while true
             xx = -ziggurat_nor_inv_r*log(rand(rng))
@@ -93,7 +93,7 @@ julia> randexp(rng, 3, 3)
  0.695867  0.693292  0.643644
 ```
 """
-@inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
+function randexp(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
         ri = rand_ui52(rng)
         idx = ri & 0xFF
@@ -103,7 +103,7 @@ julia> randexp(rng, 3, 3)
     end
 end
 
-function randexp_unlikely(rng, idx, x)
+@noinline function randexp_unlikely(rng, idx, x)
     @inbounds if idx == 0
         return ziggurat_exp_r - log(rand(rng))
     elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)

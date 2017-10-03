@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 script = """
 # Issue #11948
@@ -48,7 +48,7 @@ mktempdir() do dir
             end
         """)
         write(joinpath(dir, "testdriver.jl"), """
-            using Base.Test
+            using Test
             insert!(LOAD_PATH, 1, $(repr(dir)))
             insert!(Base.LOAD_CACHE_PATH, 1, $(repr(dir)))
             @test !isdefined(Main, :f22101)

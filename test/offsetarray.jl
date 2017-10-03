@@ -2,6 +2,7 @@
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using Main.TestHelpers.OAs
+using DelimitedFiles
 
 const OAs_name = join(fullname(OAs), ".")
 
@@ -364,7 +365,7 @@ I,J,N = findnz(z)
 @test I == [-1]
 @test J == [0]
 @test N == [2]
-@test find(h) == [-2:1;]
+@test find(!iszero,h) == [-2:1;]
 @test find(x->x>0, h) == [-1,1]
 @test find(x->x<0, h) == [-2,0]
 @test find(x->x==0, h) == [2]
@@ -434,7 +435,7 @@ end # let
 # StackOverflowError if no appropriate method has been defined
 # (#18107)
 module SimilarUR
-    using Base.Test
+    using Test
     struct MyURange <: AbstractUnitRange{Int}
         start::Int
         stop::Int

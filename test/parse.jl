@@ -111,8 +111,6 @@ macro test999_str(args...); args; end
                                                Expr(:using, :A, :b),
                                                Expr(:using, :A, :c, :d)))
 
-@test parse(":(importall A)") == Expr(:quote, Expr(:importall, :A))
-
 @test parse(":(import A)") == Expr(:quote, Expr(:import, :A))
 @test parse(":(import A.b, B)") == Expr(:quote,
                                         Expr(:toplevel,
@@ -862,7 +860,7 @@ end
 
 # Issue #16578 (Lowering) mismatch between push_loc and pop_loc
 module TestMeta_16578
-using Base.Test
+using Test
 function get_expr_list(ex::CodeInfo)
     return ex.code::Array{Any,1}
 end
@@ -1101,7 +1099,7 @@ end
 # issue #20653
 @test_throws UndefVarError Base.call(::Int) = 1
 module Test20653
-using Base.Test
+using Test
 struct A
 end
 call(::A) = 1
@@ -1212,7 +1210,7 @@ end
 
 # comment 298107224 on pull #21607
 module Test21607
-    using Base.Test
+    using Test
     const Any = Integer
 
     # check that X <: Core.Any, not Integer
@@ -1346,3 +1344,31 @@ end
             x::Int -> 2
         end
     end) == Expr(:error, "local variable Int cannot be used in closure declaration")
+
+# some issues with backquote
+# preserve QuoteNode and LineNumberNode
+@test eval(Expr(:quote, QuoteNode(Expr(:tuple, 1, Expr(:$, :(1+2)))))) == QuoteNode(Expr(:tuple, 1, 3))
+@test eval(Expr(:quote, Expr(:line, Expr(:$, :(1+2))))) === LineNumberNode(3, nothing)
+# splicing at the top level should be an error
+xs23917 = [1,2,3]
+@test_throws ErrorException eval(:(:($(xs23917...))))
+let ex2 = eval(:(:(:($$(xs23917...)))))
+    @test ex2 isa Expr
+    @test_throws ErrorException eval(ex2)
+    @test eval(:($(xs23917...),)) == (1,2,3)  # adding a comma gives a tuple
+end
+# multi-unquote of splice in nested quote
+let xs = [:(1+2), :(3+4), :(5+6)]
+    ex = quote quote $$(xs...) end end
+    @test ex.args[2].args[1].args[2].args[2] == :(3 + 4)
+    ex2 = eval(ex)
+    @test ex2.args[2:end] == [3,7,11]
+end
+
+# issue #23519
+@test parse("@foo[1]") == parse("@foo([1])")
+@test parse("@foo[1 2; 3 4]") == parse("@foo([1 2; 3 4])")
+@test parse("@foo[1] + [2]") == parse("@foo([1]) + [2]")
+@test parse("@foo [1] + [2]") == parse("@foo([1] + [2])")
+@test parse("@Mdl.foo[1] + [2]") == parse("@Mdl.foo([1]) + [2]")
+@test parse("@Mdl.foo [1] + [2]") == parse("@Mdl.foo([1] + [2])")
