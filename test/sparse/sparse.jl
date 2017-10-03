@@ -236,7 +236,7 @@ end
         b = sprandn(5, 5, 0.2)
         @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*eps())
 
-        a = spdiagm(randn(5)) + im*spdiagm(randn(5))
+        a = sparse(Diagonal(randn(5) + im*randn(5)))
         b = randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
         @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
@@ -481,12 +481,6 @@ end
             @test isequal(f(spzeros(0, 1), 3), f(Array{Int}(0,1), 3))
         end
     end
-end
-
-@testset "construction of diagonal SparseMatrixCSCs" begin
-    @test Array(spdiagm((ones(2), ones(2)), (0, -1), 3, 3)) ==
-                           [1.0  0.0  0.0; 1.0  1.0  0.0;  0.0  1.0  0.0]
-    @test Array(spdiagm(ones(2), -1, 3, 3)) == diagm(ones(2), -1)
 end
 
 @testset "issue #5190" begin
@@ -1302,10 +1296,6 @@ end
     @test norm(Array(D) - Array(S)) == 0.0
 end
 
-@testset "spdiagm promotion" begin
-    @test spdiagm(([1,2],[3.5],[4+5im]), (0,1,-1), 2,2) == [1 3.5; 4+5im 2]
-end
-
 @testset "error conditions for reshape, and squeeze" begin
     local A = sprand(Bool, 5, 5, 0.2)
     @test_throws DimensionMismatch reshape(A,(20, 2))
@@ -1419,10 +1409,18 @@ end
 end
 
 @testset "spdiagm" begin
-    v = sprand(10, 0.4)
-    @test spdiagm(v)::SparseMatrixCSC                == diagm(Vector(v))
-    @test spdiagm(sparse(ones(5)))::SparseMatrixCSC  == speye(5)
-    @test spdiagm(sparse(zeros(5)))::SparseMatrixCSC == spzeros(5,5)
+    @test spdiagm(0 => ones(2), -1 => ones(2)) == [1.0 0.0 0.0; 1.0 1.0 0.0; 0.0 1.0 0.0]
+    @test spdiagm(0 => ones(2),  1 => ones(2)) == [1.0 1.0 0.0; 0.0 1.0 1.0; 0.0 0.0 0.0]
+
+    for (x, y) in ((rand(5), rand(4)),(sparse(rand(5)), sparse(rand(4))))
+        @test spdiagm(-1 => x)::SparseMatrixCSC         == diagm(x, -1)
+        @test spdiagm( 0 => x)::SparseMatrixCSC         == diagm(x,  0) == sparse(Diagonal(x))
+        @test spdiagm(-1 => x)::SparseMatrixCSC         == diagm(x, -1)
+        @test spdiagm(0 => x, -1 => y)::SparseMatrixCSC == diagm(x) + diagm(y, -1)
+        @test spdiagm(0 => x,  1 => y)::SparseMatrixCSC == diagm(x) + diagm(y,  1)
+    end
+    # promotion
+    @test spdiagm(0 => [1,2], 1 => [3.5], -1 => [4+5im]) == [1 3.5; 4+5im 2]
 end
 
 @testset "diag" begin
@@ -1699,16 +1697,16 @@ end
 
 @testset "factorization" begin
     local A
-    A = spdiagm(rand(5)) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
+    A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
     A = A + A'
     @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
-    A = spdiagm(rand(5)) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
+    A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2) + im*sprandn(5, 5, 0.2)
     A = A*A'
     @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
-    A = spdiagm(rand(5)) + sprandn(5, 5, 0.2)
+    A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2)
     A = A + A.'
     @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
-    A = spdiagm(rand(5)) + sprandn(5, 5, 0.2)
+    A = sparse(Diagonal(rand(5))) + sprandn(5, 5, 0.2)
     A = A*A.'
     @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
     @test factorize(triu(A)) == triu(A)
@@ -1778,7 +1776,7 @@ end
     N = 4
     densevec = ones(N)
     densemat = diagm(ones(N))
-    spmat = spdiagm(ones(N))
+    spmat = sparse(Diagonal(ones(N)))
     # Test that concatenations of pairs of sparse matrices yield sparse arrays
     @test issparse(vcat(spmat, spmat))
     @test issparse(hcat(spmat, spmat))
@@ -1819,7 +1817,8 @@ end
 # are called. (Issue #18705.) EDIT: #19239 unified broadcast over a single sparse matrix,
 # eliminating the former operation classes.
 @testset "issue #18705" begin
-    @test isa(sin.(spdiagm(1.0:5.0)), SparseMatrixCSC)
+    S = sparse(Diagonal(collect(1.0:5.0)))
+    @test isa(sin.(S), SparseMatrixCSC)
 end
 
 @testset "issue #19225" begin
@@ -1857,7 +1856,8 @@ end
 # Check that `broadcast` methods specialized for unary operations over
 # `SparseMatrixCSC`s determine a reasonable return type.
 @testset "issue #18974" begin
-    @test eltype(sin.(spdiagm(Int64(1):Int64(4)))) == Float64
+    S = sparse(Diagonal(collect(Int64(1):Int64(4))))
+    @test eltype(sin.(S)) == Float64
 end
 
 # Check calling of unary minus method specialized for SparseMatrixCSCs

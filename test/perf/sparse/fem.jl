@@ -5,7 +5,7 @@
 # assemble the finite-difference laplacian
 function fdlaplacian(N)
     # create a 1D laplacian and a sparse identity
-    fdl1 = spdiagm((ones(N-1),-2*ones(N),ones(N-1)), [-1,0,1])
+    fdl1 = spdiagm(-1 => ones(N-1), 0 => -2*ones(N), 1 => ones(N-1))
     # laplace operator on the full grid
     return kron(speye(N), fdl1) + kron(fdl1, speye(N))
 end
