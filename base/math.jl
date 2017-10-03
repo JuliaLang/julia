@@ -536,9 +536,6 @@ quadrant of the return value.
 atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
 atan2(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan2", T)
 
-atan2(y::Float64, x::Float64) = ccall((:atan2,libm), Float64, (Float64, Float64,), y, x)
-atan2(y::Float32, x::Float32) = ccall((:atan2f,libm), Float32, (Float32, Float32), y, x)
-
 max(x::T, y::T) where {T<:AbstractFloat} = ifelse((y > x) | (signbit(y) < signbit(x)),
                                     ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
 
