@@ -95,7 +95,11 @@ end
 # cos methods
 @noinline cos_domain_error(x) = throw(DomainError(x, "cos(x) is only defined for finite x."))
 @inline function cos(x::T) where T<:Union{Float32, Float64}
-    if abs(x) < T(pi)/4
+    absx = abs(x)
+    if absx < T(pi)/4
+        if absx < sqrt(eps(T))/sqrt(T(2.0))
+            return x
+        end
         return cos_kernel(x)
     elseif isnan(x)
         return T(NaN)
