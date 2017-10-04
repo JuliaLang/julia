@@ -639,8 +639,7 @@ julia> pop!(d, "a")
 
 julia> pop!(d, "d")
 ERROR: KeyError: key "d" not found
-Stacktrace:
- [1] pop!(::Dict{String,Int64}, ::String) at ./dict.jl:539
+[...]
 
 julia> pop!(d, "e", 4)
 4

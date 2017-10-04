@@ -961,10 +961,7 @@ The argument `val` to a function or constructor is outside the valid domain.
 julia> sqrt(-1)
 ERROR: DomainError with -1.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
-Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt(::Int64) at ./math.jl:472
+[...]
 ```
 """
 DomainError
@@ -1091,8 +1088,7 @@ Inf
 
 julia> div(2, 0)
 ERROR: DivideError: integer division error
-Stacktrace:
- [1] div(::Int64, ::Int64) at ./int.jl:220
+[...]
 ```
 """
 DivideError

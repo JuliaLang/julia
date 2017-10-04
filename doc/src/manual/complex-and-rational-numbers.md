@@ -142,10 +142,7 @@ when applied to `-1` versus `-1 + 0im` even though `-1 == -1 + 0im`:
 julia> sqrt(-1)
 ERROR: DomainError with -1.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
-Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt(::Int64) at ./math.jl:472
+[...]
 
 julia> sqrt(-1 + 0im)
 0.0 + 1.0im
@@ -284,9 +281,7 @@ Trying to construct a [`NaN`](@ref) rational value, however, is not:
 ```jldoctest
 julia> 0//0
 ERROR: ArgumentError: invalid rational: zero(Int64)//zero(Int64)
-Stacktrace:
- [1] Rational{Int64}(::Int64, ::Int64) at ./rational.jl:13
- [2] //(::Int64, ::Int64) at ./rational.jl:40
+[...]
 ```
 
 As usual, the promotion system makes interactions with other numeric types effortless:

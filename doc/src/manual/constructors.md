@@ -93,7 +93,6 @@ julia> struct OrderedPair
            y::Real
            OrderedPair(x,y) = x > y ? error("out of order") : new(x,y)
        end
-
 ```
 
 Now `OrderedPair` objects can only be constructed such that `x <= y`:
