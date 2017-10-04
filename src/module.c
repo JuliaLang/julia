@@ -233,7 +233,7 @@ void jl_binding_deprecation_warning(jl_binding_t *b);
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *b = jl_get_binding_(m, var, NULL);
+    jl_binding_t *b = jl_get_binding(m, var);
     if (b == NULL)
         jl_undefined_var_error(var);
     if (b->deprecated)
@@ -283,15 +283,20 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                   jl_symbol_name(to->name));
     }
     else {
-        if (b->deprecated && to != jl_main_module && to != jl_base_module &&
-            jl_options.depwarn != JL_OPTIONS_DEPWARN_OFF) {
-            /* with #22763, external packages wanting to replace
-               deprecated Base bindings should simply export the new
-               binding */
-            jl_printf(JL_STDERR,
-                      "WARNING: importing deprecated binding %s.%s into %s.\n",
-                      jl_symbol_name(from->name), jl_symbol_name(s),
-                      jl_symbol_name(to->name));
+        if (b->deprecated) {
+            if (b->value == jl_nothing) {
+                return;
+            }
+            else if (to != jl_main_module && to != jl_base_module &&
+                     jl_options.depwarn != JL_OPTIONS_DEPWARN_OFF) {
+                /* with #22763, external packages wanting to replace
+                   deprecated Base bindings should simply export the new
+                   binding */
+                jl_printf(JL_STDERR,
+                          "WARNING: importing deprecated binding %s.%s into %s.\n",
+                          jl_symbol_name(from->name), jl_symbol_name(s),
+                          jl_symbol_name(to->name));
+            }
         }
 
         jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&to->bindings, s);
