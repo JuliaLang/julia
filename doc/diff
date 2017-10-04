@@ -1,0 +1,47 @@
+diff --git a/base/markdown/Common/block.jl b/base/markdown/Common/block.jl
+index 0594ffe..113806f 100644
+--- a/base/markdown/Common/block.jl
++++ b/base/markdown/Common/block.jl
+@@ -6,9 +6,10 @@
+ 
+ mutable struct Paragraph
+     content
++    tag::Bool
+ end
+ 
+-Paragraph() = Paragraph([])
++Paragraph() = Paragraph([], true)
+ 
+ function paragraph(stream::IO, md::MD)
+     buffer = IOBuffer()
+@@ -328,6 +329,13 @@ function list(stream::IO, block::MD)
+ end
+ pushitem!(list, buffer) = push!(list.items, parse(String(take!(buffer))).content)
+ 
++function pushitem!(list, buffer)
++    content = parse(String(take!(buffer))).content
++    # Strip paragraphs
++    foreach(x -> isa(x, Paragraph) ? (x.tag = false) : nothing, content)
++    #map!(x -> isa(x, Paragraph) ? x.content : x, content, content)
++    push!(list.items, content)
++end
+ # ––––––––––––––
+ # HorizontalRule
+ # ––––––––––––––
+diff --git a/base/markdown/render/html.jl b/base/markdown/render/html.jl
+index 7e2f256..2b2e668 100644
+--- a/base/markdown/render/html.jl
++++ b/base/markdown/render/html.jl
+@@ -76,7 +76,11 @@ function html(io::IO, code::Code)
+ end
+ 
+ function html(io::IO, md::Paragraph)
+-    withtag(io, :p) do
++    if md.tag
++        withtag(io, :p) do
++            htmlinline(io, md.content)
++        end
++    else
+         htmlinline(io, md.content)
+     end
+ end

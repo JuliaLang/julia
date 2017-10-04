@@ -1,16 +1,21 @@
 # Install dependencies needed to build the documentation.
 ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
+#=
 Pkg.init()
 cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); remove_destination = true)
 Pkg.update()
 Pkg.resolve()
+=#
+@eval Base begin
+    have_color = true
+end
 
 using Documenter
 
 # Include the `build_sysimg` file.
 
 baremodule GenStdLib end
-isdefined(:build_sysimg) || @eval module BuildSysImg
+@isdefined(build_sysimg) || @eval module BuildSysImg
     include(joinpath(@__DIR__, "..", "contrib", "build_sysimg.jl"))
 end
 
@@ -135,11 +140,15 @@ const PAGES = [
 
 using DelimitedFiles, Test, Mmap, SharedArrays
 
+
+
+@show Base.have_color
+
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
     modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays],
     clean     = false,
-    doctest   = "doctest" in ARGS,
+    doctest   = true,
     linkcheck = "linkcheck" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     strict    = true,
