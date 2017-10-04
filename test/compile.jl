@@ -207,6 +207,11 @@ try
         discard_module = mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3])
         @test modules == Dict(Foo_module => Base.module_uuid(Foo))
         @test map(x -> x[1],  sort(discard_module.(deps))) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
+        srctxt = Base.read_dependency_src(cachefile, Foo_file)
+        @test !isempty(srctxt) && srctxt == read(Foo_file, String)
+        @test_throws ErrorException Base.read_dependency_src(cachefile, "/tmp/nonexistent.txt")
+        # dependencies declared with `include_dependency` should not be stored
+        @test_throws ErrorException Base.read_dependency_src(cachefile, joinpath(dir, "foo.jl"))
 
         modules, deps1 = Base.cache_dependencies(cachefile)
         @test modules == merge(Dict(s => Base.module_uuid(getfield(Foo, s)) for s in

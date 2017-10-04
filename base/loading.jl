@@ -690,7 +690,8 @@ function parse_cache_header(f::IO)
         push!(files, (modname, filename, ntoh(read(f, Float64))))
         totbytes -= 8 + n1 + n2 + 8
     end
-    @assert totbytes == 4 "header of cache file appears to be corrupt"
+    @assert totbytes == 12 "header of cache file appears to be corrupt"
+    srctextpos = ntoh(read(f, Int64))
     # read the list of modules that are required to be present during loading
     required_modules = Dict{Symbol,UInt64}()
     while true
@@ -700,7 +701,7 @@ function parse_cache_header(f::IO)
         uuid = ntoh(read(f, UInt64)) # module UUID
         required_modules[sym] = uuid
     end
-    return modules, files, required_modules
+    return modules, files, required_modules, srctextpos
 end
 
 function parse_cache_header(cachefile::String)
@@ -723,6 +724,33 @@ function cache_dependencies(cachefile::String)
     try
         !isvalid_cache_header(io) && throw(ArgumentError("Invalid header in cache file $cachefile."))
         return cache_dependencies(io)
+    finally
+        close(io)
+    end
+end
+
+function read_dependency_src(io::IO, filename::AbstractString)
+    modules, files, required_modules, srctextpos = parse_cache_header(io)
+    srctextpos == 0 && error("no source-text stored in cache file")
+    seek(io, srctextpos)
+    while !eof(io)
+        filenamelen = ntoh(read(io, Int32))
+        filenamelen == 0 && break
+        fn = String(read(io, filenamelen))
+        len = ntoh(read(io, UInt64))
+        if fn == filename
+            return String(read(io, len))
+        end
+        seek(io, position(io) + len)
+    end
+    error(filename, " is not stored in the source-text cache")
+end
+
+function read_dependency_src(cachefile::String, filename::AbstractString)
+    io = open(cachefile, "r")
+    try
+        !isvalid_cache_header(io) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        return read_dependency_src(io, filename)
     finally
         close(io)
     end
