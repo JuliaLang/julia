@@ -15,6 +15,27 @@ const colors = Dict(
 )
 const color_dark = :light_black
 
+function status(env::EnvCache, mode::Symbol)
+    if env.git != nothing
+        git_path = LibGit2.path(env.git)
+        project_path = relpath(env.project_file, git_path)
+        manifest_path = relpath(env.manifest_file, git_path)
+    end
+    if mode == :project
+        project = env.git == nothing ? env.project :
+            read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
+        info("Status ", pathrepr(env, env.project_file))
+        print_project_diff(project["deps"], env.project["deps"], true)
+    elseif mode == :manifest
+        manifest = env.git == nothing ? env.manifest :
+            read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
+        info("Status ", pathrepr(env, env.manifest_file))
+        print_manifest_diff(manifest, env.manifest, true)
+    else
+        error("unexpected mode: $mode")
+    end
+end
+
 function emit_project(x::Char, name::String, uuid::String)
     print_with_color(color_dark, " [$(uuid[1:8])]")
     print_with_color(colors[x], " $x $name\n")
