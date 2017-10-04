@@ -77,6 +77,7 @@ similar(::EnvHash) = Dict{String,String}()
 
 getindex(::EnvHash, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
 get(::EnvHash, k::AbstractString, def) = access_env(k->def, k)
+get(f::Callable, ::EnvHash, k::AbstractString) = access_env(k->f(), k)
 in(k::AbstractString, ::KeyIterator{EnvHash}) = _hasenv(k)
 pop!(::EnvHash, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvHash, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
@@ -98,7 +99,7 @@ if Sys.iswindows()
         blk = block[2]
         len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
         buf = Vector{UInt16}(len)
-        unsafe_copy!(pointer(buf), pos, len)
+        @gc_preserve buf unsafe_copy!(pointer(buf), pos, len)
         env = transcode(String, buf)
         m = match(r"^(=?[^=]+)=(.*)$"s, env)
         if m === nothing
@@ -142,7 +143,7 @@ end
 """
     withenv(f::Function, kv::Pair...)
 
-Execute `f()` in an environment that is temporarily modified (not replaced as in `setenv`)
+Execute `f` in an environment that is temporarily modified (not replaced as in `setenv`)
 by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
 `withenv(kv...) do ... end` syntax. A value of `nothing` can be used to temporarily unset an
 environment variable (if it is set). When `withenv` returns, the original environment has

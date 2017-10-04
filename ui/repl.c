@@ -10,7 +10,6 @@
 #include <stdarg.h>
 #include <setjmp.h>
 #include <signal.h>
-#include <assert.h>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -22,6 +21,8 @@
 
 #include "uv.h"
 #include "../src/julia.h"
+#include "../src/julia_assert.h"
+
 JULIA_DEFINE_FAST_TLS()
 
 #ifdef __cplusplus
@@ -71,13 +72,6 @@ static int exec_program(char *program)
 }
 
 void jl_lisp_prompt();
-
-#ifndef _WIN32
-JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
-{
-    return raise(SIGTSTP);
-}
-#endif
 
 #ifdef JL_GF_PROFILE
 static void print_profile(void)

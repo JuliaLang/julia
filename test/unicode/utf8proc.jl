@@ -266,16 +266,17 @@ end
 end
 
 @testset "#3721, #6939 up-to-date character widths" begin
-    @test charwidth('\U1f355') == 2
-    @test strwidth("\U1f355") == 2
-    @test strwidth(GenericString("\U1f355")) == 2
-    @test strwidth("\U1f355\u0302") == 2
-    @test strwidth(GenericString("\U1f355\u0302")) == 2
+    @test textwidth("") == 0
+    @test textwidth('\U1f355') == 2
+    @test textwidth("\U1f355") == 2
+    @test textwidth(GenericString("\U1f355")) == 2
+    @test textwidth("\U1f355\u0302") == 2
+    @test textwidth(GenericString("\U1f355\u0302")) == 2
 end
 
 @testset "#10958 handling of embedded NUL chars" begin
     @test length("\0w") == length("\0α") == 2
-    @test strwidth("\0w") == strwidth("\0α") == 1
+    @test textwidth("\0w") == textwidth("\0α") == 1
     @test normalize_string("\0W", casefold=true) == "\0w"
 end
 

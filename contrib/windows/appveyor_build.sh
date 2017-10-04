@@ -167,7 +167,7 @@ fi
 chmod +x usr/bin/* usr/tools/*
 
 for lib in SUITESPARSE ARPACK BLAS LAPACK \
-    GMP MPFR PCRE LIBUNWIND OPENSPECFUN; do
+    GMP MPFR PCRE LIBUNWIND; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
 echo 'override LIBLAPACK = $(LIBBLAS)' >> Make.user

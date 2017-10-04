@@ -18,7 +18,8 @@ the exported interfaces of Julia.
 As an overview, the steps are:
 
   * replace many uses of `size` with `indices`
-  * replace `1:length(A)` with `linearindices(A)`, and `length(A)` with `length(linearindices(A))`
+  * replace `1:length(A)` with `eachindex(A)`, or in some cases `linearindices(A)`
+  * replace `length(A)` with `length(linearindices(A))`
   * replace explicit allocations like `Array{Int}(size(B))` with `similar(Array{Int}, indices(B))`
 
 These are described in more detail below.
@@ -75,20 +76,12 @@ can sometimes simplify such tests.
 
 ### Linear indexing (`linearindices`)
 
-Some algorithms are most conveniently (or efficiently) written in terms of a single linear index,
-`A[i]` even if `A` is multi-dimensional.  In "true" linear indexing, the indices always range
-from `1:length(A)`. However, this raises an ambiguity for one-dimensional arrays (a.k.a., [`AbstractVector`](@ref)):
-does `v[i]` mean linear indexing, or Cartesian indexing with the array's native indices?
 
-For this reason, if you want to use linear indexing in an algorithm, your best option is to get
-the index range by calling `linearindices(A)`.  This will return `indices(A, 1)` if `A` is an
-`AbstractVector`, and the equivalent of `1:length(A)` otherwise.
+Some algorithms are most conveniently (or efficiently) written in terms of a single linear index, `A[i]` even if `A` is multi-dimensional. Regardless of the array's native indices, linear indices always range from `1:length(A)`. However, this raises an ambiguity for one-dimensional arrays (a.k.a., [`AbstractVector`](@ref)): does `v[i]` mean linear indexing , or Cartesian indexing with the array's native indices?
 
-In a sense, one can say that 1-dimensional arrays always use Cartesian indexing. To help enforce
-this, it's worth noting that `sub2ind(shape, i...)` and `ind2sub(shape, ind)` will throw an error
-if `shape` indicates a 1-dimensional array with unconventional indexing (i.e., is a `Tuple{UnitRange}`
-rather than a tuple of `OneTo`).  For arrays with conventional indexing, these functions continue
-to work the same as always.
+For this reason, your best option may be to iterate over the array with `eachindex(A)`, or, if you require the indices to be sequential integers, to get the index range by calling `linearindices(A)`. This will return `indices(A, 1)` if A is an AbstractVector, and the equivalent of `1:length(A)` otherwise.
+
+By this definition, 1-dimensional arrays always use Cartesian indexing with the array's native indices. To help enforce this, it's worth noting that sub2ind(shape, i...) and ind2sub(shape, ind) will throw an error if shape indicates a 1-dimensional array with unconventional indexing (i.e., is a `Tuple{UnitRange}` rather than a tuple of `OneTo`). For arrays with conventional indexing, these functions continue to work the same as always.
 
 Using `indices` and `linearindices`, here is one way you could rewrite `mycopy!`:
 
@@ -109,7 +102,8 @@ to match the indices of some other array, this may not always suffice. The gener
 for such patterns is to use `similar(storagetype, shape)`.  `storagetype` indicates the kind of
 underlying "conventional" behavior you'd like, e.g., `Array{Int}` or `BitArray` or even `dims->zeros(Float32, dims)`
 (which would allocate an all-zeros array). `shape` is a tuple of [`Integer`](@ref) or
-`AbstractUnitRange` values, specifying the indices that you want the result to use.
+`AbstractUnitRange` values, specifying the indices that you want the result to use. Note that
+a convenient way of producing an all-zeros array that matches the indices of A is simply `zeros(A)`.
 
 Let's walk through a couple of explicit examples. First, if `A` has conventional indices, then
 `similar(Array{Int}, indices(A))` would end up calling `Array{Int}(size(A))`, and thus return

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 script = """
 # Issue #11948
@@ -48,7 +48,7 @@ mktempdir() do dir
             end
         """)
         write(joinpath(dir, "testdriver.jl"), """
-            using Base.Test
+            using Test
             insert!(LOAD_PATH, 1, $(repr(dir)))
             insert!(Base.LOAD_CACHE_PATH, 1, $(repr(dir)))
             @test !isdefined(Main, :f22101)
@@ -67,7 +67,7 @@ mktempdir() do dir
             nothing
         """)
         # Ensure that STDIO doesn't get swallowed (helps with debugging)
-        cmd = `$(Base.julia_cmd()) --startup-file=no --precompiled=yes --compilecache=yes $(joinpath(dir, "testdriver.jl"))`
+        cmd = `$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=yes --compiled-modules=yes $(joinpath(dir, "testdriver.jl"))`
         @test success(pipeline(cmd, stdout=STDOUT, stderr=STDERR))
     end
 end

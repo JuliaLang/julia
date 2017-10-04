@@ -2304,7 +2304,6 @@ static const builtinspec_t core_builtin_info[] = {
 
 extern void builtins_init(fl_context_t *fl_ctx);
 extern void comparehash_init(fl_context_t *fl_ctx);
-extern void jl_charmap_init(fl_context_t *fl_ctx);
 
 static void lisp_init(fl_context_t *fl_ctx, size_t initial_heapsize)
 {
@@ -2337,7 +2336,6 @@ static void lisp_init(fl_context_t *fl_ctx, size_t initial_heapsize)
     fl_ctx->consflags = bitvector_new(fl_ctx->heapsize/sizeof(cons_t), 1);
     fl_print_init(fl_ctx);
     comparehash_init(fl_ctx);
-    jl_charmap_init(fl_ctx);
     fl_ctx->N_STACK = 262144;
     fl_ctx->Stack = (value_t*)malloc(fl_ctx->N_STACK*sizeof(value_t));
     CHECK_ALIGN8(fl_ctx->Stack);

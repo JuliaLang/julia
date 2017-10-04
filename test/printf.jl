@@ -1,5 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+macro test_throws(ty, ex)
+    return quote
+        Test.@test_throws $(esc(ty)) try
+            $(esc(ex))
+        catch err
+            @test err isa LoadError
+            @test err.file === $(string(__source__.file))
+            @test err.line === $(__source__.line)
+            rethrow(err.error)
+        end
+    end
+end
+
 # printf
 # int
 @test (@sprintf "%d" typemax(Int64)) == "9223372036854775807"
@@ -189,14 +202,14 @@ end
 # escape %
 @test (@sprintf "%%") == "%"
 @test (@sprintf "%%s") == "%s"
-@test_throws ArgumentError eval(:(@sprintf "%"))
+@test_throws ArgumentError("invalid printf format string: \"%\"") @macroexpand(@sprintf "%") #" (fixes syntax highlighting)
 
 # argument count
-@test_throws ArgumentError eval(:(@sprintf "%s"))
-@test_throws ArgumentError eval(:(@sprintf "%s" "1" "2"))
+@test_throws ArgumentError("@sprintf: wrong number of arguments (0) should be (1)") @macroexpand(@sprintf "%s")
+@test_throws ArgumentError("@sprintf: wrong number of arguments (2) should be (1)") @macroexpand(@sprintf "%s" "1" "2")
 
 # no interpolation
-@test_throws ArgumentError eval(:(@sprintf "$n"))
+@test_throws ArgumentError("@sprintf: format must be a plain static string (no interpolation or prefix)") @macroexpand(@sprintf "$n")
 
 # type width specifier parsing (ignored)
 @test (@sprintf "%llf" 1.2) == "1.200000"
@@ -242,7 +255,7 @@ end
 # invalid format specifiers, not "diouxXDOUeEfFgGaAcCsSpn"
 for c in "bBhHIjJkKlLmMNPqQrRtTvVwWyYzZ"
     fmt_str = string("%", c)
-    @test_throws ArgumentError eval(:(@sprintf $fmt_str 1))
+    @test_throws ArgumentError("@sprintf: first argument must be a format string") @macroexpand(@sprintf $fmt_str 1)
 end
 
 # combo
@@ -255,7 +268,22 @@ end
 @test (@sprintf "%s %s %s %d %d %d %f %f %f" Any[10^x+y for x=1:3,y=1:3 ]...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
 
 # @printf
-@test_throws ArgumentError eval(:(@printf 1))
+@test_throws ArgumentError("@printf: first or second argument must be a format string") @macroexpand(@printf 1)
 
 # Check bug with trailing nul printing BigFloat
 @test (@sprintf("%.330f", BigFloat(1)))[end] != '\0'
+
+# Check utf8 strings #23880
+@test (@sprintf("X%d", 2)) == "X2"
+@test (@sprintf("\u00d0%d", 2)) == "\u00d02"
+@test (@sprintf("\u0f00%d", 2)) == "\u0f002"
+@test (@sprintf("\U0001ffff%d", 2)) == "\U0001ffff2"
+@test (@sprintf("%dX%d", 1, 2)) == "1X2"
+@test (@sprintf("%d\u00d0%d", 1, 2)) == "1\u00d02"
+@test (@sprintf("%d\u0f00%d", 1, 2)) == "1\u0f002"
+@test (@sprintf("%d\U0001ffff%d", 1, 2)) == "1\U0001ffff2"
+@test (@sprintf("%d\u2203%d\u0203", 1, 2)) == "1\u22032\u0203"
+@test_throws ArgumentError @macroexpand(@sprintf("%y%d", 1, 2))
+@test_throws ArgumentError @macroexpand(@sprintf("%\u00d0%d", 1, 2))
+@test_throws ArgumentError @macroexpand(@sprintf("%\u0f00%d", 1, 2))
+@test_throws ArgumentError @macroexpand(@sprintf("%\U0001ffff%d", 1, 2))

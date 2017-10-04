@@ -188,7 +188,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     cmd = `cd $dir '&&' $tval $exename $exeflags`
 
     # shell login (-l) with string command (-c) to launch julia process
-    cmd = `sh -l -c $(Base.shell_escape(cmd))`
+    cmd = `sh -l -c $(shell_escape(cmd))`
 
     # remote launch with ssh with given ssh flags / host / port information
     # -T → disable pseudo-terminal allocation
@@ -196,7 +196,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     # -x → disable X11 forwarding
     # -o ClearAllForwardings → option if forwarding connections and
     #                          forwarded connections are causing collisions
-    cmd = `ssh -T -a -x -o ClearAllForwardings=yes $sshflags $host $(Base.shell_escape(cmd))`
+    cmd = `ssh -T -a -x -o ClearAllForwardings=yes $sshflags $host $(shell_escape(cmd))`
 
     # launch the remote Julia process
 
@@ -381,7 +381,7 @@ connection to worker with id `pid`, specified by `config` and return a pair of `
 objects. Messages from `pid` to current process will be read off `instrm`, while messages to
 be sent to `pid` will be written to `outstrm`. The custom transport implementation must
 ensure that messages are delivered and received completely and in order.
-`Base.connect(manager::ClusterManager.....)` sets up TCP/IP socket connections in-between
+`connect(manager::ClusterManager.....)` sets up TCP/IP socket connections in-between
 workers.
 """
 function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
@@ -485,7 +485,7 @@ end
 function bind_client_port(s)
     err = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, UInt16, UInt32, Cuint),
                             s.handle, hton(client_port[]), hton(UInt32(0)), 0)
-    Base.uv_error("bind() failed", err)
+    uv_error("bind() failed", err)
 
     _addr, port = getsockname(s)
     client_port[] = port
@@ -520,7 +520,7 @@ end
 Implemented by cluster managers.
 It is called on the master process, by [`rmprocs`](@ref).
 It should cause the remote worker specified by `pid` to exit.
-`Base.kill(manager::ClusterManager.....)` executes a remote `exit()`
+`kill(manager::ClusterManager.....)` executes a remote `exit()`
 on `pid`.
 """
 function kill(manager::ClusterManager, pid::Int, config::WorkerConfig)

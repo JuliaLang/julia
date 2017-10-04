@@ -10,12 +10,12 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include "julia.h"
 #include "julia_internal.h"
 #ifndef _OS_WINDOWS_
 #include <unistd.h>
 #endif
+#include "julia_assert.h"
 
 // @nospecialize has no effect if the number of overlapping methods is greater than this
 #define MAX_UNSPECIALIZED_CONFLICTS 32
@@ -435,13 +435,15 @@ static int get_method_unspec_list(jl_typemap_entry_t *def, void *closure)
     return 1;
 }
 
-void jl_foreach_mtable_in_module(
+static void foreach_mtable_in_module(
         jl_module_t *m,
         void (*visit)(jl_methtable_t *mt, void *env),
-        void *env)
+        void *env,
+        jl_array_t *visited)
 {
     size_t i;
     void **table = m->bindings.table;
+    jl_eqtable_put(visited, m, jl_true);
     for (i = 1; i < m->bindings.size; i += 2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
@@ -458,14 +460,36 @@ void jl_foreach_mtable_in_module(
                 }
                 else if (jl_is_module(v)) {
                     jl_module_t *child = (jl_module_t*)v;
-                    if (child != m && child->parent == m && child->name == b->name) {
+                    if (child != m && child->parent == m && child->name == b->name &&
+                        !jl_eqtable_get(visited, v, NULL)) {
                         // this is the original/primary binding for the submodule
-                        jl_foreach_mtable_in_module(child, visit, env);
+                        foreach_mtable_in_module(child, visit, env, visited);
                     }
                 }
             }
         }
     }
+}
+
+void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), void *env)
+{
+    jl_array_t *visited = jl_alloc_vec_any(16);
+    jl_array_t *mod_array = NULL;
+    JL_GC_PUSH2(&visited, &mod_array);
+    mod_array = jl_get_loaded_modules();
+    if (mod_array) {
+        int i;
+        for (i = 0; i < jl_array_len(mod_array); i++) {
+            jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
+            assert(jl_is_module(m));
+            if (!jl_eqtable_get(visited, (jl_value_t*)m, NULL))
+                foreach_mtable_in_module(m, visit, env, visited);
+        }
+    }
+    else {
+        foreach_mtable_in_module(jl_main_module, visit, env, visited);
+    }
+    JL_GC_POP();
 }
 
 static void reset_mt_caches(jl_methtable_t *mt, void *env)
@@ -489,7 +513,7 @@ JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
     // TODO: also reinfer if max_world != ~(size_t)0
     jl_array_t *unspec = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&unspec);
-    jl_foreach_mtable_in_module(jl_main_module, reset_mt_caches, (void*)unspec);
+    jl_foreach_reachable_mtable(reset_mt_caches, (void*)unspec);
     size_t i, l;
     for (i = 0, l = jl_array_len(unspec); i < l; i++) {
         jl_method_instance_t *li = (jl_method_instance_t*)jl_array_ptr_ref(unspec, i);
@@ -1552,7 +1576,7 @@ jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_
         JL_UNLOCK(&mt->writelock);
         return linfo;
     }
-    if (jl_is_leaf_type((jl_value_t*)types))
+    if (jl_is_leaf_type((jl_value_t*)types)) // FIXME: this is the wrong predicate
         cache = 1;
     jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, types, cache, allow_exec, world);
     if (cache) {
@@ -1745,9 +1769,25 @@ JL_DLLEXPORT jl_value_t *jl_get_spec_lambda(jl_tupletype_t *types, size_t world)
     return li ? (jl_value_t*)li : jl_nothing;
 }
 
+// see if a call to m with computed from `types` is ambiguous
+JL_DLLEXPORT int jl_is_call_ambiguous(jl_tupletype_t *types, jl_method_t *m)
+{
+    if (m->ambig == jl_nothing)
+        return 0;
+    for (size_t i = 0; i < jl_array_len(m->ambig); i++) {
+        jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(m->ambig, i);
+        if (jl_subtype((jl_value_t*)types, (jl_value_t*)mambig->sig))
+            return 1;
+    }
+    return 0;
+}
+
+// see if a call to m with a subtype of `types` might be ambiguous
+// if types is from a call signature (approximated by isleaftype), this is the same as jl_is_call_ambiguous above
 JL_DLLEXPORT int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m)
 {
-    if (m->ambig == jl_nothing) return 0;
+    if (m->ambig == jl_nothing)
+        return 0;
     for (size_t i = 0; i < jl_array_len(m->ambig); i++) {
         jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(m->ambig, i);
         if (!jl_has_empty_intersection((jl_value_t*)mambig->sig, (jl_value_t*)types))
@@ -1950,6 +1990,8 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_datatype_t *types, size_t world)
             mt->defs, types, /*env*/&env, /*subtype*/1, /*offs*/0, world);
     JL_GC_POP();
     if (!entry)
+        return jl_nothing;
+    if (jl_is_call_ambiguous(types, entry->func.method))
         return jl_nothing;
     return (jl_value_t*)entry;
 }

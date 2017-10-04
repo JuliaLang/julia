@@ -162,7 +162,7 @@ UInt8
 ```
 
 The minimum and maximum representable values of primitive numeric types such as integers are given
-by the [`typemin()`](@ref) and [`typemax()`](@ref) functions:
+by the [`typemin`](@ref) and [`typemax`](@ref) functions:
 
 ```jldoctest
 julia> (typemin(Int32), typemax(Int32))
@@ -183,7 +183,7 @@ julia> for T in [Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt12
 UInt128: [0,340282366920938463463374607431768211455]
 ```
 
-The values returned by [`typemin()`](@ref) and [`typemax()`](@ref) are always of the given argument
+The values returned by [`typemin`](@ref) and [`typemax`](@ref) are always of the given argument
 type. (The above expression uses several features we have yet to introduce, including [for loops](@ref man-loops),
 [Strings](@ref man-strings), and [Interpolation](@ref), but should be easy enough to understand for users
 with some existing programming experience.)
@@ -212,7 +212,7 @@ is recommended instead.
 ### Division errors
 
 Integer division (the `div` function) has two exceptional cases: dividing by zero, and dividing
-the lowest negative number ([`typemin()`](@ref)) by -1. Both of these cases throw a [`DivideError`](@ref).
+the lowest negative number ([`typemin`](@ref)) by -1. Both of these cases throw a [`DivideError`](@ref).
 The remainder and modulus functions (`rem` and `mod`) throw a [`DivideError`](@ref) when their
 second argument is zero.
 
@@ -371,7 +371,7 @@ julia> 0 * Inf
 NaN
 ```
 
-The [`typemin()`](@ref) and [`typemax()`](@ref) functions also apply to floating-point types:
+The [`typemin`](@ref) and [`typemax`](@ref) functions also apply to floating-point types:
 
 ```jldoctest
 julia> (typemin(Float16),typemax(Float16))
@@ -390,7 +390,7 @@ Most real numbers cannot be represented exactly with floating-point numbers, and
 it is important to know the distance between two adjacent representable floating-point numbers,
 which is often known as [machine epsilon](https://en.wikipedia.org/wiki/Machine_epsilon).
 
-Julia provides [`eps()`](@ref), which gives the distance between `1.0` and the next larger representable
+Julia provides [`eps`](@ref), which gives the distance between `1.0` and the next larger representable
 floating-point value:
 
 ```jldoctest
@@ -405,7 +405,7 @@ julia> eps() # same as eps(Float64)
 ```
 
 These values are `2.0^-23` and `2.0^-52` as [`Float32`](@ref) and [`Float64`](@ref) values,
-respectively. The [`eps()`](@ref) function can also take a floating-point value as an
+respectively. The [`eps`](@ref) function can also take a floating-point value as an
 argument, and gives the absolute difference between that value and the next representable
 floating point value. That is, `eps(x)` yields a value of the same type as `x` such that
 `x + eps(x)` is the next representable floating-point value larger than `x`:
@@ -430,7 +430,7 @@ numbers are densest in the real number line near zero, and grow sparser exponent
 farther away from zero. By definition, `eps(1.0)` is the same as `eps(Float64)` since `1.0` is
 a 64-bit floating-point value.
 
-Julia also provides the [`nextfloat()`](@ref) and [`prevfloat()`](@ref) functions which return
+Julia also provides the [`nextfloat`](@ref) and [`prevfloat`](@ref) functions which return
 the next largest or smallest representable floating-point number to the argument respectively:
 
 ```jldoctest
@@ -478,8 +478,8 @@ The default mode used is always [`RoundNearest`](@ref), which rounds to the near
 value, with ties rounded towards the nearest value with an even least significant bit.
 
 !!! warning
-    Rounding is generally only correct for basic arithmetic functions ([`+()`](@ref), [`-()`](@ref),
-    [`*()`](@ref), [`/()`](@ref) and [`sqrt()`](@ref)) and type conversion operations. Many other
+    Rounding is generally only correct for basic arithmetic functions ([`+`](@ref), [`-`](@ref),
+    [`*`](@ref), [`/`](@ref) and [`sqrt`](@ref)) and type conversion operations. Many other
     functions assume the default [`RoundNearest`](@ref) mode is set, and can give erroneous results
     when operating under other rounding modes.
 
@@ -511,7 +511,7 @@ the [GNU Multiple Precision Arithmetic Library (GMP)](https://gmplib.org) and th
 respectively. The [`BigInt`](@ref) and [`BigFloat`](@ref) types are available in Julia for arbitrary
 precision integer and floating point numbers respectively.
 
-Constructors exist to create these types from primitive numerical types, and [`parse()`](@ref)
+Constructors exist to create these types from primitive numerical types, and [`parse`](@ref)
 can be used to construct them from `AbstractString`s.  Once created, they participate in arithmetic
 with all other numeric types thanks to Julia's [type promotion and conversion mechanism](@ref conversion-and-promotion):
 
@@ -556,7 +556,7 @@ BigInt
 ```
 
 The default precision (in number of bits of the significand) and rounding mode of [`BigFloat`](@ref)
-operations can be changed globally by calling [`setprecision()`](@ref) and [`setrounding()`](@ref),
+operations can be changed globally by calling [`setprecision`](@ref) and [`setrounding`](@ref),
 and all further calculations will take these changes in account.  Alternatively, the precision
 or the rounding can be changed only within the execution of a particular block of code by using
 the same functions with a `do` block:

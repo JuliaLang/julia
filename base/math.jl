@@ -201,7 +201,6 @@ log(b::Number, x::Number) = log(promote(b,x)...)
 # type specific math functions
 
 const libm = Base.libm_name
-const openspecfun = "libopenspecfun"
 
 # functions with no domain error
 """
@@ -436,7 +435,7 @@ julia> log1p(0)
 ```
 """
 log1p(x)
-for f in (:sin, :cos, :tan, :acos, :acosh, :atanh, :log, :log2, :log10,
+for f in (:sin, :cos, :tan, :acosh, :atanh, :log, :log2, :log10,
           :lgamma, :log1p)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
@@ -446,6 +445,7 @@ for f in (:sin, :cos, :tan, :acos, :acosh, :atanh, :log, :log2, :log10,
 end
 
 @inline asin(x::Real) = asin(float(x))
+@inline acos(x::Real) = acos(float(x))
 
 """
     sincos(x)
@@ -535,9 +535,6 @@ quadrant of the return value.
 """
 atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
 atan2(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan2", T)
-
-atan2(y::Float64, x::Float64) = ccall((:atan2,libm), Float64, (Float64, Float64,), y, x)
-atan2(y::Float32, x::Float32) = ccall((:atan2f,libm), Float32, (Float32, Float32), y, x)
 
 max(x::T, y::T) where {T<:AbstractFloat} = ifelse((y > x) | (signbit(y) < signbit(x)),
                                     ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))

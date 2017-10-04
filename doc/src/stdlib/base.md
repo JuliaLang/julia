@@ -54,6 +54,40 @@ Base.workspace
 ans
 ```
 
+## Keywords
+
+```@docs
+module
+export
+import
+using
+baremodule
+function
+macro
+return
+do
+begin
+end
+let
+if
+for
+while
+break
+continue
+try
+finally
+quote
+local
+global
+const
+struct
+mutable struct
+abstract type
+primitive type
+...
+;
+```
+
 ## All Objects
 
 ```@docs
@@ -83,7 +117,7 @@ Base.widen
 Base.identity
 ```
 
-## Types
+## Dealing with Types
 
 ```@docs
 Base.supertype
@@ -106,12 +140,24 @@ Base.fieldoffset
 Core.fieldtype
 Base.isimmutable
 Base.isbits
-Base.isleaftype
+Base.isconcrete
 Base.typejoin
 Base.typeintersect
-Base.Val
-Base.Enums.@enum
 Base.instances
+```
+
+## Special Types
+
+```@docs
+Core.Void
+Core.Any
+Base.Enums.@enum
+Core.Union
+Union{}
+Core.UnionAll
+Core.Tuple
+Base.Val
+Core.Vararg
 ```
 
 ## Generic Functions
@@ -122,8 +168,10 @@ Base.method_exists
 Core.applicable
 Core.invoke
 Base.invokelatest
+new
 Base.:(|>)
 Base.:(∘)
+Base.equalto
 ```
 
 ## Syntax
@@ -134,11 +182,14 @@ Base.@eval
 Base.evalfile
 Base.esc
 Base.@inbounds
+Base.@boundscheck
 Base.@inline
 Base.@noinline
 Base.@nospecialize
 Base.gensym
 Base.@gensym
+Base.@goto
+Base.@label
 Base.@polly
 Base.parse(::AbstractString, ::Int)
 Base.parse(::AbstractString)
@@ -178,9 +229,6 @@ Base.getipaddr
 Base.Libc.getpid
 Base.Libc.time()
 Base.time_ns
-Base.tic
-Base.toc
-Base.toq
 Base.@time
 Base.@timev
 Base.@timed

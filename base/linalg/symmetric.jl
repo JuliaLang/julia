@@ -321,7 +321,7 @@ A_mul_Bt(A::AbstractTriangular, B::RealHermSymComplexSym) = A*B
 Ac_mul_B(A::RealHermSymComplexHerm, B::AbstractTriangular) = A*B
 A_mul_Bc(A::AbstractTriangular, B::RealHermSymComplexHerm) = A*B
 
-for T in (:Symmetric, :Hermitian), op in (:+, :-, :*, :/)
+for T in (:Symmetric, :Hermitian), op in (:*, :/)
     # Deal with an ambiguous case
     @eval ($op)(A::$T, x::Bool) = ($T)(($op)(A.data, x), Symbol(A.uplo))
     S = T == :Hermitian ? :Real : :Number
@@ -589,11 +589,11 @@ function ^(A::Hermitian{T}, p::Real) where T
     end
 end
 
-function expm(A::Symmetric)
+function exp(A::Symmetric)
     F = eigfact(A)
     return Symmetric((F.vectors * Diagonal(exp.(F.values))) * F.vectors')
 end
-function expm(A::Hermitian{T}) where T
+function exp(A::Hermitian{T}) where T
     n = checksquare(A)
     F = eigfact(A)
     retmat = (F.vectors * Diagonal(exp.(F.values))) * F.vectors'
@@ -607,9 +607,9 @@ function expm(A::Hermitian{T}) where T
     end
 end
 
-for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
+for func in (:log, :sqrt)
     @eval begin
-        function ($funm)(A::Symmetric{T}) where T<:Real
+        function ($func)(A::Symmetric{T}) where T<:Real
             F = eigfact(A)
             if all(λ -> λ ≥ 0, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
@@ -619,7 +619,7 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
             return Symmetric(retmat)
         end
 
-        function ($funm)(A::Hermitian{T}) where T
+        function ($func)(A::Hermitian{T}) where T
             n = checksquare(A)
             F = eigfact(A)
             if all(λ -> λ ≥ 0, F.values)

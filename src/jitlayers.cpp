@@ -60,25 +60,23 @@ namespace llvm {
 #include <llvm/ADT/StringSet.h>
 #include <llvm/ADT/SmallSet.h>
 #include "codegen_shared.h"
-#include "fix_llvm_assert.h"
 
 using namespace llvm;
 
 #include "julia.h"
 #include "julia_internal.h"
 #include "jitlayers.h"
+#include "julia_assert.h"
+
 RTDyldMemoryManager* createRTDyldMemoryManager(void);
 
-static Type *T_void;
 static IntegerType *T_uint32;
 static IntegerType *T_uint64;
 static IntegerType *T_size;
 static Type *T_psize;
-static Type *T_pvoidfunc;
 static Type *T_pjlvalue;
 void jl_init_jit(Type *T_pjlvalue_)
 {
-    T_void = Type::getVoidTy(jl_LLVMContext);
     T_uint32 = Type::getInt32Ty(jl_LLVMContext);
     T_uint64 = Type::getInt64Ty(jl_LLVMContext);
     if (sizeof(size_t) == 8)
@@ -86,13 +84,19 @@ void jl_init_jit(Type *T_pjlvalue_)
     else
         T_size = T_uint32;
     T_psize = PointerType::get(T_size, 0);
-    T_pvoidfunc = FunctionType::get(T_void, /*isVarArg*/false)->getPointerTo();
     T_pjlvalue = T_pjlvalue_;
 }
 
 // Except for parts of this file which were copied from LLVM, under the UIUC license (marked below).
 
-// this defines the set of optimization passes defined for Julia at various optimization levels
+void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
+{
+    PM->add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
+    PM->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
+}
+
+// this defines the set of optimization passes defined for Julia at various optimization levels.
+// it assumes that the TLI and TTI wrapper passes have already been added.
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
 {
 #ifdef JL_DEBUG_BUILD
@@ -132,7 +136,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
-    PM->add(createTargetTransformInfoWrapperPass(jl_TargetMachine->getTargetIRAnalysis()));
     PM->add(createTypeBasedAAWrapperPass());
     if (jl_options.opt_level >= 3) {
         PM->add(createBasicAAWrapperPass());
@@ -485,6 +488,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
             CompilerT(this)
         )
 {
+    addTargetPasses(&PM, &TM);
     addOptimizationPasses(&PM, jl_generating_output() ? 0 : jl_options.opt_level);
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
@@ -585,7 +589,13 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 #endif
     // Force LLVM to emit the module so that we can register the symbols
     // in our lookup table.
+#if JL_LLVM_VERSION >= 50000
+    auto Err = CompileLayer.emitAndFinalize(modset);
+    // Check for errors to prevent LLVM from crashing the program.
+    assert(!Err);
+#else
     CompileLayer.emitAndFinalize(modset);
+#endif
 }
 
 void JuliaOJIT::removeModule(ModuleHandleT H)
@@ -1137,7 +1147,7 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
         ));
 
     legacy::PassManager PM;
-    PM.add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
+    addTargetPasses(&PM, TM.get());
 
     // set up optimization passes
     std::unique_ptr<raw_fd_ostream> unopt_bc_OS;
@@ -1269,6 +1279,7 @@ public:
         (void)jl_init_llvm();
         PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
         TPMAdapter Adapter(TPM);
+        addTargetPasses(&Adapter, jl_TargetMachine);
         addOptimizationPasses(&Adapter, OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}

@@ -77,6 +77,11 @@ istril(::UniformScaling) = true
 issymmetric(::UniformScaling) = true
 ishermitian(J::UniformScaling) = isreal(J.λ)
 
+(+)(J::UniformScaling, x::Number) = J.λ + x
+(+)(x::Number, J::UniformScaling) = x + J.λ
+(-)(J::UniformScaling, x::Number) = J.λ - x
+(-)(x::Number, J::UniformScaling) = x - J.λ
+
 (+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
 (+)(B::BitArray{2}, J::UniformScaling)      = Array(B) + J
 (+)(J::UniformScaling, B::BitArray{2})      = J + Array(B)

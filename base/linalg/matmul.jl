@@ -41,7 +41,7 @@ end
 vecdot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasReal} = BLAS.dot(x, y)
 vecdot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasComplex} = BLAS.dotc(x, y)
 
-function dot(x::Vector{T}, rx::Union{UnitRange{TI},Range{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},Range{TI}}) where {T<:BlasReal,TI<:Integer}
+function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasReal,TI<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
@@ -51,10 +51,10 @@ function dot(x::Vector{T}, rx::Union{UnitRange{TI},Range{TI}}, y::Vector{T}, ry:
     if minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError(y, ry))
     end
-    BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    Base.@gc_preserve x y BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 
-function dot(x::Vector{T}, rx::Union{UnitRange{TI},Range{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},Range{TI}}) where {T<:BlasComplex,TI<:Integer}
+function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasComplex,TI<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
@@ -64,7 +64,7 @@ function dot(x::Vector{T}, rx::Union{UnitRange{TI},Range{TI}}, y::Vector{T}, ry:
     if minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError(y, ry))
     end
-    BLAS.dotc(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    Base.@gc_preserve x y BLAS.dotc(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 
 At_mul_B(x::StridedVector{T}, y::StridedVector{T}) where {T<:BlasComplex} = BLAS.dotu(x, y)
@@ -503,6 +503,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
     @inbounds begin
     if tile_size > 0
         sz = (tile_size, tile_size)
+        # FIXME: This code is completely invalid!!!
         Atile = unsafe_wrap(Array, convert(Ptr{T}, pointer(Abuf)), sz)
         Btile = unsafe_wrap(Array, convert(Ptr{S}, pointer(Bbuf)), sz)
 
@@ -524,6 +525,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                 end
             end
         else
+            # FIXME: This code is completely invalid!!!
             Ctile = unsafe_wrap(Array, convert(Ptr{R}, pointer(Cbuf)), sz)
             for jb = 1:tile_size:nB
                 jlim = min(jb+tile_size-1,nB)

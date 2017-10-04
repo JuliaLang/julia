@@ -69,13 +69,13 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include "llvm/IR/AssemblyAnnotationWriter.h"
-#include "fix_llvm_assert.h"
 
 #include "julia.h"
 #include "julia_internal.h"
 
 using namespace llvm;
 #include "debuginfo.h"
+#include "julia_assert.h"
 
 // helper class for tracking inlining context while printing debug info
 class DILineInfoPrinter {
@@ -661,8 +661,12 @@ static void jl_dump_asm_internal(
 
     std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
     MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
+#if JL_LLVM_VERSION >= 60000
+    MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false, Ctx);
+#else
     MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false,
                                CodeModel::Default, Ctx);
+#endif
 
     // Set up Subtarget and Disassembler
     std::unique_ptr<MCSubtargetInfo>

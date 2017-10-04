@@ -23,16 +23,16 @@
 end
 
 @testset "constants" begin
-    @test pi != e
-    @test e != 1//2
-    @test 1//2 <= e
-    @test e <= 15//3
-    @test big(1//2) < e
-    @test e < big(20//6)
-    @test e^pi == exp(pi)
-    @test e^2 == exp(2)
-    @test e^2.4 == exp(2.4)
-    @test e^(2//3) == exp(2//3)
+    @test pi != ℯ
+    @test ℯ != 1//2
+    @test 1//2 <= ℯ
+    @test ℯ <= 15//3
+    @test big(1//2) < ℯ
+    @test ℯ < big(20//6)
+    @test ℯ^pi == exp(pi)
+    @test ℯ^2 == exp(2)
+    @test ℯ^2.4 == exp(2.4)
+    @test ℯ^(2//3) == exp(2//3)
 
     @test Float16(3.0) < pi
     @test pi < Float16(4.0)
@@ -171,19 +171,19 @@ end
             @test isequal(cos(T(0)), T(1))
             @test cos(T(pi)/2) ≈ T(0) atol=eps(T)
             @test isequal(cos(T(pi)), T(-1))
-            @test exp(T(1)) ≈ T(e) atol=10*eps(T)
+            @test exp(T(1)) ≈ T(ℯ) atol=10*eps(T)
             @test isequal(exp10(T(1)), T(10))
             @test isequal(exp2(T(1)), T(2))
             @test isequal(expm1(T(0)), T(0))
-            @test expm1(T(1)) ≈ T(e)-1 atol=10*eps(T)
+            @test expm1(T(1)) ≈ T(ℯ)-1 atol=10*eps(T)
             @test isequal(hypot(T(3),T(4)), T(5))
             @test isequal(log(T(1)), T(0))
-            @test isequal(log(e,T(1)), T(0))
-            @test log(T(e)) ≈ T(1) atol=eps(T)
+            @test isequal(log(ℯ,T(1)), T(0))
+            @test log(T(ℯ)) ≈ T(1) atol=eps(T)
             @test isequal(log10(T(1)), T(0))
             @test isequal(log10(T(10)), T(1))
             @test isequal(log1p(T(0)), T(0))
-            @test log1p(T(e)-1) ≈ T(1) atol=eps(T)
+            @test log1p(T(ℯ)-1) ≈ T(1) atol=eps(T)
             @test isequal(log2(T(1)), T(0))
             @test isequal(log2(T(2)), T(1))
             @test isequal(sin(T(0)), T(0))
@@ -294,11 +294,11 @@ end
     TAA = rand(2,2)
     TAA = (TAA + TAA.')/2.
     STAA = Symmetric(TAA)
-    @test full(atanh.(STAA)) == atanh.(TAA)
-    @test full(asinh.(STAA)) == asinh.(TAA)
-    @test full(acosh.(STAA+Symmetric(ones(TAA)))) == acosh.(TAA+ones(TAA))
-    @test full(acsch.(STAA+Symmetric(ones(TAA)))) == acsch.(TAA+ones(TAA))
-    @test full(acoth.(STAA+Symmetric(ones(TAA)))) == acoth.(TAA+ones(TAA))
+    @test Array(atanh.(STAA)) == atanh.(TAA)
+    @test Array(asinh.(STAA)) == asinh.(TAA)
+    @test Array(acosh.(STAA+Symmetric(ones(TAA)))) == acosh.(TAA+ones(TAA))
+    @test Array(acsch.(STAA+Symmetric(ones(TAA)))) == acsch.(TAA+ones(TAA))
+    @test Array(acoth.(STAA+Symmetric(ones(TAA)))) == acoth.(TAA+ones(TAA))
 end
 
 @testset "check exp2(::Integer) matches exp2(::Float)" begin
@@ -402,7 +402,7 @@ end
 end
 
 @testset "Irrational args to sinpi/cospi/sinc/cosc" begin
-    for x in (pi, e, golden)
+    for x in (pi, ℯ, Base.MathConstants.golden)
         @test sinpi(x) ≈ Float64(sinpi(big(x)))
         @test cospi(x) ≈ Float64(cospi(big(x)))
         @test sinc(x)  ≈ Float64(sinc(big(x)))
@@ -662,8 +662,8 @@ end
 @testset "test fallback definitions" begin
     @test exp10(5) ≈ exp10(5.0)
     @test exp10(50//10) ≈ exp10(5.0)
-    @test log10(exp10(e)) ≈ e
-    @test log(e) === 1
+    @test log10(exp10(ℯ)) ≈ ℯ
+    @test log(ℯ) === 1
     @test exp2(Float16(2.0)) ≈ exp2(2.0)
     @test exp2(Float16(1.0)) === Float16(exp2(1.0))
     @test exp10(Float16(1.0)) === Float16(exp10(1.0))
@@ -693,10 +693,10 @@ end
         @test asin(one(T)) === T(pi)/2
         @test asin(-one(T)) === -T(pi)/2
         for x in (0.45, 0.6, 0.98)
-            by = T(asin(big(x)))
-            @test abs(asin(T(x)) - by)/eps(by) <= one(T)
-            bym = T(asin(big(-x)))
-            @test abs(asin(T(-x)) - bym)/eps(bym) <= one(T)
+            by = asin(big(T(x)))
+            @test T(abs(asin(T(x)) - by))/eps(T(abs(by))) <= 1
+            bym = asin(big(T(-x)))
+            @test T(abs(asin(T(-x)) - bym))/eps(T(abs(bym))) <= 1
         end
         @test_throws DomainError asin(-T(Inf))
         @test_throws DomainError asin(T(Inf))
@@ -727,5 +727,78 @@ end
             by = T(asin(big(x)))
             @test abs(asin(x) - by)/eps(by) <= one(T)
         end
+    end
+end
+@testset "atan2" begin
+    for T in (Float32, Float64)
+        @test atan2(T(NaN), T(NaN)) === T(NaN)
+        @test atan2(T(NaN), T(0.1)) === T(NaN)
+        @test atan2(T(0.1), T(NaN)) === T(NaN)
+        r = T(randn())
+        absr = abs(r)
+        # y zero
+        @test atan2(T(r), one(T)) === atan(T(r))
+        @test atan2(zero(T), absr) === zero(T)
+        @test atan2(-zero(T), absr) === -zero(T)
+        @test atan2(zero(T), -absr) === T(pi)
+        @test atan2(-zero(T), -absr) === -T(pi)
+        # x zero and y not zero
+        @test atan2(one(T), zero(T)) === T(pi)/2
+        @test atan2(-one(T), zero(T)) === -T(pi)/2
+        # isinf(x) == true && isinf(y) == true
+        @test atan2(T(Inf), T(Inf)) === T(pi)/4 # m == 0 (see atan2 code)
+        @test atan2(-T(Inf), T(Inf)) === -T(pi)/4 # m == 1
+        @test atan2(T(Inf), -T(Inf)) === 3*T(pi)/4 # m == 2
+        @test atan2(-T(Inf), -T(Inf)) === -3*T(pi)/4 # m == 3
+        # isinf(x) == true && isinf(y) == false
+        @test atan2(absr, T(Inf)) === zero(T) # m == 0
+        @test atan2(-absr, T(Inf)) === -zero(T) # m == 1
+        @test atan2(absr, -T(Inf)) === T(pi) # m == 2
+        @test atan2(-absr, -T(Inf)) === -T(pi) # m == 3
+        # isinf(y) == true && isinf(x) == false
+        @test atan2(T(Inf), absr) === T(pi)/2
+        @test atan2(-T(Inf), absr) === -T(pi)/2
+        @test atan2(T(Inf), -absr) === T(pi)/2
+        @test atan2(-T(Inf), -absr) === -T(pi)/2
+        # |y/x| above high threshold
+        atanpi = T(1.5707963267948966)
+        @test atan2(T(2.0^61), T(1.0)) === atanpi # m==0
+        @test atan2(-T(2.0^61), T(1.0)) === -atanpi # m==1
+        @test atan2(T(2.0^61), -T(1.0)) === atanpi # m==2
+        @test atan2(-T(2.0^61), -T(1.0)) === -atanpi # m==3
+        @test atan2(-T(Inf), -absr) === -T(pi)/2
+        # |y|/x between 0 and low threshold
+        @test atan2(T(2.0^-61), -T(1.0)) === T(pi) # m==2
+        @test atan2(-T(2.0^-61), -T(1.0)) === -T(pi) # m==3
+        # y/x is "safe" ("arbitrary values", just need to hit the branch)
+        _ATAN2_PI_LO(::Type{Float32}) = -8.7422776573f-08
+        _ATAN2_PI_LO(::Type{Float64}) = 1.2246467991473531772E-16
+        @test atan2(T(5.0), T(2.5)) === atan(abs(T(5.0)/T(2.5)))
+        @test atan2(-T(5.0), T(2.5)) === -atan(abs(-T(5.0)/T(2.5)))
+        @test atan2(T(5.0), -T(2.5)) === T(pi)-(atan(abs(T(5.0)/-T(2.5)))-_ATAN2_PI_LO(T))
+        @test atan2(-T(5.0), -T(2.5)) === -(T(pi)-atan(abs(-T(5.0)/-T(2.5)))-_ATAN2_PI_LO(T))
+        @test atan2(T(1235.2341234), T(2.5)) === atan(abs(T(1235.2341234)/T(2.5)))
+        @test atan2(-T(1235.2341234), T(2.5)) === -atan(abs(-T(1235.2341234)/T(2.5)))
+        @test atan2(T(1235.2341234), -T(2.5)) === T(pi)-(atan(abs(T(1235.2341234)/-T(2.5)))-_ATAN2_PI_LO(T))
+        @test atan2(-T(1235.2341234), -T(2.5)) === -(T(pi)-(atan(abs(-T(1235.2341234)/T(2.5)))-_ATAN2_PI_LO(T)))
+    end
+end
+@testset "acos #23283" begin
+    for T in (Float32, Float64)
+        @test acos(zero(T)) === T(pi)/2
+        @test acos(-zero(T)) === T(pi)/2
+        @test acos(nextfloat(zero(T))) === T(pi)/2
+        @test acos(prevfloat(zero(T))) === T(pi)/2
+        @test acos(one(T)) === T(0.0)
+        @test acos(-one(T)) === T(pi)
+        for x in (0.45, 0.6, 0.98)
+            by = acos(big(T(x)))
+            @test T((acos(T(x)) - by))/eps(abs(T(by))) <= 1
+            bym = acos(big(T(-x)))
+            @test T(abs(acos(T(-x)) - bym))/eps(abs(T(bym))) <= 1
+        end
+        @test_throws DomainError acos(-T(Inf))
+        @test_throws DomainError acos(T(Inf))
+        @test acos(T(NaN)) === T(NaN)
     end
 end

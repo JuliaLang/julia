@@ -75,8 +75,8 @@ LLVM_LIBS := support
 endif
 
 # headers are used for dependency tracking, while public headers will be part of the dist
-HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_threads.h tls.h locks.h atomics.h julia_internal.h options.h timing.h)
-PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_threads.h tls.h locks.h atomics.h)
+HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h tls.h locks.h atomics.h julia_internal.h options.h timing.h)
+PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h tls.h locks.h atomics.h)
 ifeq ($(USE_SYSTEM_LIBUV),0)
 ifeq ($(OS),WINNT)
 HEADERS += $(build_includedir)/tree.h

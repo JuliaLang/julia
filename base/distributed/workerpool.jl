@@ -190,7 +190,7 @@ const _default_worker_pool = Ref{Nullable}(Nullable{WorkerPool}())
 """
     default_worker_pool()
 
-`WorkerPool` containing idle `workers()` - used by `remote(f)` and [`pmap`](@ref) (by default).
+`WorkerPool` containing idle `workers` - used by `remote(f)` and [`pmap`](@ref) (by default).
 """
 function default_worker_pool()
     # On workers retrieve the default worker pool from the master when accessed

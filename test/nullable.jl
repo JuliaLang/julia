@@ -115,12 +115,13 @@ for (i, T) in enumerate(types)
 end
 
 module NullableTestEnum
+import Test
 # For curmod_*
 include("testenv.jl")
 io = IOBuffer()
 @enum TestEnum a b
 show(io, Nullable(a))
-Base.Test.@test String(take!(io)) == "Nullable{$(curmod_prefix)TestEnum}(a)"
+Test.@test String(take!(io)) == "Nullable{$(curmod_prefix)TestEnum}(a)"
 end
 
 # showcompact(io::IO, x::Nullable)

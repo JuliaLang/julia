@@ -100,7 +100,42 @@ function length(s::AbstractString)
 end
 
 ## string comparison functions ##
+"""
+    cmp(a::AbstractString, b::AbstractString)
 
+Compare two strings for equality.
+
+Return `0` if both strings have the same length and the character
+at each index is the same in both strings.
+Return `-1` if `a` is a substring of `b`, or if `a` comes before
+`b` in alphabetical order.
+Return `1` if `b` is a substring of `a`, or if `b` comes before
+`a` in alphabetical order.
+
+# Examples
+```jldoctest
+julia> cmp("abc", "abc")
+0
+
+julia> cmp("ab", "abc")
+-1
+
+julia> cmp("abc", "ab")
+1
+
+julia> cmp("ab", "ac")
+-1
+
+julia> cmp("ac", "ab")
+1
+
+julia> cmp("α", "a")
+1
+
+julia> cmp("b", "β")
+-1
+```
+"""
 function cmp(a::AbstractString, b::AbstractString)
     if a === b
         return 0
@@ -120,7 +155,39 @@ function cmp(a::AbstractString, b::AbstractString)
     done(b,j) ? 0 : -1
 end
 
+"""
+    ==(a::AbstractString, b::AbstractString)
+
+Test whether two strings are equal character by character.
+
+# Examples
+```jldoctest
+julia> "abc" == "abc"
+true
+
+julia> "abc" == "αβγ"
+false
+```
+"""
 ==(a::AbstractString, b::AbstractString) = cmp(a,b) == 0
+
+"""
+    isless(a::AbstractString, b::AbstractString)
+
+Test whether string `a` comes before string `b` in alphabetical order.
+
+# Examples
+```jldoctest
+julia> isless("a", "b")
+true
+
+julia> isless("β", "α")
+false
+
+julia> isless("a", "a")
+false
+```
+"""
 isless(a::AbstractString, b::AbstractString) = cmp(a,b) < 0
 
 # faster comparisons for symbols
@@ -136,7 +203,7 @@ isvalid(s::DirectIndexString, i::Integer) = (start(s) <= i <= endof(s))
 """
     isvalid(str::AbstractString, i::Integer)
 
-Tells whether index `i` is valid for the given string.
+Tell whether index `i` is valid for the given string.
 
 # Examples
 ```jldoctest
@@ -170,15 +237,25 @@ end
 ## Generic indexing functions ##
 
 prevind(s::DirectIndexString, i::Integer) = Int(i)-1
-prevind(s::AbstractArray    , i::Integer) = Int(i)-1
 nextind(s::DirectIndexString, i::Integer) = Int(i)+1
-nextind(s::AbstractArray    , i::Integer) = Int(i)+1
+
+function prevind(s::DirectIndexString, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    Int(i)-nchar
+end
+
+function nextind(s::DirectIndexString, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    Int(i)+nchar
+end
+
 
 """
-    prevind(str::AbstractString, i::Integer)
+    prevind(str::AbstractString, i::Integer, nchar::Integer=1)
 
 Get the previous valid string index before `i`.
 Returns a value less than `1` at the beginning of the string.
+If the `nchar` argument is given the function goes back `nchar` characters.
 
 # Examples
 ```jldoctest
@@ -187,6 +264,10 @@ julia> prevind("αβγdef", 3)
 
 julia> prevind("αβγdef", 1)
 0
+
+julia> prevind("αβγdef", 3, 2)
+0
+
 ```
 """
 function prevind(s::AbstractString, i::Integer)
@@ -204,11 +285,32 @@ function prevind(s::AbstractString, i::Integer)
     return 0 # out of range
 end
 
+function prevind(s::AbstractString, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    e = endof(s)
+    j = Int(i)
+    j < 1 && return 0
+    while nchar > 0
+        if j > e
+            j = e
+        else
+            j -= 1
+            while j >= 1 && !isvalid(s,j)
+                j -= 1
+            end
+        end
+        j < 1 && return 0
+        nchar -= 1
+    end
+    j
+end
+
 """
-    nextind(str::AbstractString, i::Integer)
+    nextind(str::AbstractString, i::Integer, nchar::Integer=1)
 
 Get the next valid string index after `i`.
 Returns a value greater than `endof(str)` at or after the end of the string.
+If the `nchar` argument is given the function goes forward `nchar` characters.
 
 # Examples
 ```jldoctest
@@ -216,6 +318,9 @@ julia> str = "αβγdef";
 
 julia> nextind(str, 1)
 3
+
+julia> nextind(str, 1, 2)
+5
 
 julia> endof(str)
 9
@@ -240,8 +345,27 @@ function nextind(s::AbstractString, i::Integer)
     next(s,e)[2] # out of range
 end
 
+function nextind(s::AbstractString, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    e = endof(s)
+    j = Int(i)
+    while nchar > 0
+        if j < 1
+            j = 1
+        else
+            j > e && return j + nchar
+            j == e && return next(s,e)[2] + nchar - 1
+            for outer j = j+1:e
+                isvalid(s,j) && break
+            end
+        end
+        nchar -= 1
+    end
+    j
+end
+
 checkbounds(s::AbstractString, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError(s, i))
-checkbounds(s::AbstractString, r::Range{<:Integer}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
+checkbounds(s::AbstractString, r::AbstractRange{<:Integer}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
 # The following will end up using a deprecated checkbounds, when the covariant parameter is not Integer
 checkbounds(s::AbstractString, I::AbstractArray{<:Real}) = all(i -> checkbounds(s, i), I)
 checkbounds(s::AbstractString, I::AbstractArray{<:Integer}) = all(i -> checkbounds(s, i), I)
@@ -316,7 +440,7 @@ unsafe_chr2ind(s::AbstractString, i::Integer) = map_chr_ind(s, i, first, last)
 struct EachStringIndex{T<:AbstractString}
     s::T
 end
-eachindex(s::AbstractString) = EachStringIndex(s)
+keys(s::AbstractString) = EachStringIndex(s)
 
 length(e::EachStringIndex) = length(e.s)
 start(e::EachStringIndex) = start(e.s)
@@ -324,26 +448,26 @@ next(e::EachStringIndex, state) = (state, nextind(e.s, state))
 done(e::EachStringIndex, state) = done(e.s, state)
 eltype(::Type{EachStringIndex}) = Int
 
-## character column width function ##
-
-"""
-    strwidth(s::AbstractString)
-
-Gives the number of columns needed to print a string.
-
-# Examples
-```jldoctest
-julia> strwidth("March")
-5
-```
-"""
-strwidth(s::AbstractString) = (w=0; for c in s; w += charwidth(c); end; w)
-
 """
     isascii(c::Union{Char,AbstractString}) -> Bool
 
-Tests whether a character belongs to the ASCII character set, or whether this is true for
+Test whether a character belongs to the ASCII character set, or whether this is true for
 all elements of a string.
+
+# Examples
+```jldoctest
+julia> isascii('a')
+true
+
+julia> isascii('α')
+false
+
+julia> isascii("abc")
+true
+
+julia> isascii("αβγ")
+false
+```
 """
 isascii(c::Char) = c < Char(0x80)
 isascii(s::AbstractString) = all(isascii, s)
@@ -355,7 +479,7 @@ promote_rule(::Type{<:AbstractString}, ::Type{<:AbstractString}) = String
 """
     isxdigit(c::Char) -> Bool
 
-Tests whether a character is a valid hexadecimal digit. Note that this does not
+Test whether a character is a valid hexadecimal digit. Note that this does not
 include `x` (as in the standard `0x` prefix).
 
 # Examples
@@ -374,7 +498,7 @@ isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 """
     uppercase(s::AbstractString)
 
-Returns `s` with all characters converted to uppercase.
+Return `s` with all characters converted to uppercase.
 
 # Examples
 ```jldoctest
@@ -387,7 +511,7 @@ uppercase(s::AbstractString) = map(uppercase, s)
 """
     lowercase(s::AbstractString)
 
-Returns `s` with all characters converted to lowercase.
+Return `s` with all characters converted to lowercase.
 
 # Examples
 ```jldoctest
@@ -400,7 +524,7 @@ lowercase(s::AbstractString) = map(lowercase, s)
 """
     titlecase(s::AbstractString)
 
-Capitalizes the first character of each word in `s`.
+Capitalize the first character of each word in `s`.
 See also [`ucfirst`](@ref) to capitalize only the first
 character in `s`.
 
@@ -428,7 +552,7 @@ end
 """
     ucfirst(s::AbstractString)
 
-Returns `string` with the first character converted to uppercase
+Return `string` with the first character converted to uppercase
 (technically "title case" for Unicode).
 See also [`titlecase`](@ref) to capitalize the first character of
 every word in `s`.
@@ -449,7 +573,7 @@ end
 """
     lcfirst(s::AbstractString)
 
-Returns `string` with the first character converted to lowercase.
+Return `string` with the first character converted to lowercase.
 
 # Examples
 ```jldoctest

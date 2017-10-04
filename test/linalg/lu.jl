@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 import Base.LinAlg.BlasInt, Base.LinAlg.BlasFloat
 
 n = 10
@@ -10,8 +10,6 @@ n1 = div(n, 2)
 n2 = 2*n1
 
 srand(1234321)
-
-a = rand(n,n)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -68,27 +66,39 @@ dimg  = randn(n)/2
 
             lstring = sprint(show,l)
             ustring = sprint(show,u)
-            @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring\nsuccessful: true"
-            let Bs = b, Cs = c
-                @testset for atype in ("Array", "SubArray")
-                    if atype == "Array"
-                        b = Bs
-                        c = Cs
-                    else
-                        b = view(Bs, 1:n, 1)
-                        c = view(Cs, 1:n)
-                    end
-                    @test norm(a*(lua\b) - b, 1) < ε*κ*n*2 # Two because the right hand side has two columns
-                    @test norm(a'*(lua'\b) - b, 1) < ε*κ*n*2 # Two because the right hand side has two columns
+            @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
+            let Bs = copy(b), Cs = copy(c)
+                for (bb, cc) in ((Bs, Cs), (view(Bs, 1:n, 1), view(Cs, 1:n)))
+                    @test norm(a*(lua\bb) - bb, 1) < ε*κ*n*2 # Two because the right hand side has two columns
+                    @test norm(a'*(lua'\bb) - bb, 1) < ε*κ*n*2 # Two because the right hand side has two columns
                     @test norm(a'*(lua'\a') - a', 1) < ε*κ*n^2
-                    @test norm(a*(lua\c) - c, 1) < ε*κ*n # c is a vector
-                    @test norm(a'*(lua'\c) - c, 1) < ε*κ*n # c is a vector
+                    @test norm(a*(lua\cc) - cc, 1) < ε*κ*n # cc is a vector
+                    @test norm(a'*(lua'\cc) - cc, 1) < ε*κ*n # cc is a vector
                     @test AbstractArray(lua) ≈ a
-                    if eltya <: Real && eltyb <: Real
-                        @test norm(a.'*(lua.'\b) - b,1) < ε*κ*n*2 # Two because the right hand side has two columns
-                        @test norm(a.'*(lua.'\c) - c,1) < ε*κ*n
-                    end
+                    @test norm(a.'*(lua.'\bb) - bb,1) < ε*κ*n*2 # Two because the right hand side has two columns
+                    @test norm(a.'*(lua.'\cc) - cc,1) < ε*κ*n
                 end
+
+                # Test whether Ax_ldiv_B!(y, LU, x) indeed overwrites y
+                resultT = typeof(oneunit(eltyb) / oneunit(eltya))
+
+                b_dest = similar(b, resultT)
+                c_dest = similar(c, resultT)
+
+                A_ldiv_B!(b_dest, lua, b)
+                A_ldiv_B!(c_dest, lua, c)
+                @test norm(b_dest - lua \ b, 1) < ε*κ*2n
+                @test norm(c_dest - lua \ c, 1) < ε*κ*n
+
+                At_ldiv_B!(b_dest, lua, b)
+                At_ldiv_B!(c_dest, lua, c)
+                @test norm(b_dest - lua.' \ b, 1) < ε*κ*2n
+                @test norm(c_dest - lua.' \ c, 1) < ε*κ*n
+
+                Ac_ldiv_B!(b_dest, lua, b)
+                Ac_ldiv_B!(c_dest, lua, c)
+                @test norm(b_dest - lua' \ b, 1) < ε*κ*2n
+                @test norm(c_dest - lua' \ c, 1) < ε*κ*n
             end
             if eltya <: BlasFloat && eltyb <: BlasFloat
                 e = rand(eltyb,n,n)
@@ -109,23 +119,17 @@ dimg  = randn(n)/2
             @test_throws DimensionMismatch lud.'\f
             @test_throws DimensionMismatch lud'\f
             @test_throws DimensionMismatch Base.LinAlg.At_ldiv_B!(lud, f)
-            let Bs = b
-                @testset for atype in ("Array", "SubArray")
-                    if atype == "Array"
-                        b = Bs
-                    else
-                        b = view(Bs, 1:n, 1)
-                    end
-
-                    @test norm(d*(lud\b) - b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+            let Bs = copy(b)
+                for bb in (Bs, view(Bs, 1:n, 1))
+                    @test norm(d*(lud\bb) - bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                     if eltya <: Real
-                        @test norm((lud.'\b) - Array(d.')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+                        @test norm((lud.'\bb) - Array(d.')\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                         if eltya != Int && eltyb != Int
-                            @test norm(Base.LinAlg.At_ldiv_B!(lud, copy(b)) - Array(d.')\b, 1) < ε*κd*n*2
+                            @test norm(Base.LinAlg.At_ldiv_B!(lud, copy(bb)) - Array(d.')\bb, 1) < ε*κd*n*2
                         end
                     end
                     if eltya <: Complex
-                        @test norm((lud'\b) - Array(d')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+                        @test norm((lud'\bb) - Array(d')\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                     end
                 end
             end
@@ -182,12 +186,7 @@ end
     @test l[invperm(p),:]*u ≈ a
     @test a*inv(lua) ≈ eye(n)
     let Bs = b
-        for atype in ("Array", "SubArray")
-            if atype == "Array"
-                b = Bs
-            else
-                b = view(Bs, 1:n, 1)
-            end
+        for b in (Bs, view(Bs, 1:n, 1))
             @test a*(lua\b) ≈ b
         end
     end

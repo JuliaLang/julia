@@ -43,6 +43,6 @@ Base.start(r::StepRange{<:TimeType}) = 0
 Base.next(r::StepRange{<:TimeType}, i::Int) = (r.start + r.step*i, i + 1)
 Base.done(r::StepRange{<:TimeType,<:Period}, i::Integer) = length(r) <= i
 
-+(x::Period, r::Range{<:TimeType}) = (x + first(r)):step(r):(x + last(r))
-+(r::Range{<:TimeType}, x::Period) = x + r
--(r::Range{<:TimeType}, x::Period) = (first(r)-x):step(r):(last(r)-x)
++(x::Period, r::AbstractRange{<:TimeType}) = (x + first(r)):step(r):(x + last(r))
++(r::AbstractRange{<:TimeType}, x::Period) = x + r
+-(r::AbstractRange{<:TimeType}, x::Period) = (first(r)-x):step(r):(last(r)-x)

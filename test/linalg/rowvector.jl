@@ -49,6 +49,9 @@
 
     y = rand(Complex{Float64},3)
     @test sum(abs2, imag.(diag(y .+ y'))) < 1e-20
+
+    @test parent(rv) === v
+    @test vec(rv) === v
 end
 
 @testset "Diagonal ambiguity methods" begin
@@ -284,6 +287,10 @@ end
     rv[CartesianIndex((1, 1, 1))] = 5
     @test_throws BoundsError getindex(rv, CartesianIndex((5, 4, 3)))
     @test rv[1] == 5
+
+    @test rv[:, 2]::Vector == [v[2]]
+    @test rv[:, 2:3]::RowVector == v[2:3].'
+    @test rv[:, :]::RowVector == rv
 
     v = [1]
     rv = v.'

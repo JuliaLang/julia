@@ -194,7 +194,7 @@ function qrfactPivotedUnblocked!(A::StridedMatrix)
 end
 
 # LAPACK version
-qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
+qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(min(size(A)...), 36))...)
 qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
 qrfact!(A::StridedMatrix{<:BlasFloat}) = qrfact!(A, Val(false))
 
@@ -207,6 +207,34 @@ qrfact!(A::StridedMatrix{<:BlasFloat}) = qrfact!(A, Val(false))
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
+
+# Examples
+```jldoctest
+julia> a = [1. 2.; 3. 4.]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> qrfact!(a)
+Base.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:
+[-0.316228 -0.948683; -0.948683 0.316228]
+[-3.16228 -4.42719; 0.0 -0.632456]
+
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> qrfact!(a)
+ERROR: InexactError: convert(Int64, -3.1622776601683795)
+Stacktrace:
+ [1] convert at ./float.jl:703 [inlined]
+ [2] setindex! at ./array.jl:806 [inlined]
+ [3] setindex! at ./subarray.jl:245 [inlined]
+ [4] reflector! at ./linalg/generic.jl:1196 [inlined]
+ [5] qrfactUnblocked!(::Array{Int64,2}) at ./linalg/qr.jl:141
+ [6] qrfact!(::Array{Int64,2}) at ./linalg/qr.jl:213
+```
 """
 qrfact!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
 qrfact!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
@@ -293,11 +321,13 @@ qr(A::Union{Number, AbstractMatrix}, pivot::Union{Val{false}, Val{true}}=Val(fal
     _qr(A, pivot, thin=thin)
 function _qr(A::Union{Number, AbstractMatrix}, ::Val{false}; thin::Bool=true)
     F = qrfact(A, Val(false))
-    full(getq(F), thin=thin), F[:R]::Matrix{eltype(F)}
+    Q, R = getq(F), F[:R]::Matrix{eltype(F)}
+    return (thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))), R
 end
 function _qr(A::Union{Number, AbstractMatrix}, ::Val{true}; thin::Bool=true)
     F = qrfact(A, Val(true))
-    full(getq(F), thin=thin), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
+    Q, R, p = getq(F), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
+    return (thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))), R, p
 end
 
 """
@@ -345,6 +375,20 @@ and `r`, the norm of `v`.
 
 See also [`normalize`](@ref), [`normalize!`](@ref),
 and [`qr`](@ref).
+
+# Examples
+```jldoctest
+julia> v = [1.; 2.]
+2-element Array{Float64,1}:
+ 1.0
+ 2.0
+
+julia> w, r = Base.LinAlg.qr!(v)
+([0.447214, 0.894427], 2.23606797749979)
+
+julia> w === v
+true
+```
 """
 function qr!(v::AbstractVector)
     nrm = norm(v)
@@ -458,7 +502,7 @@ convert(::Type{AbstractMatrix{T}}, Q::QRPackedQ) where {T} = convert(QRPackedQ{T
 convert(::Type{QRCompactWYQ{S}}, Q::QRCompactWYQ) where {S} = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
 convert(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ{S}) where {S} = Q
 convert(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ) where {S} = convert(QRCompactWYQ{S}, Q)
-convert(::Type{Matrix}, A::AbstractQ{T}) where {T} = A_mul_B!(A, eye(T, size(A.factors, 1), minimum(size(A.factors))))
+convert(::Type{Matrix}, A::AbstractQ{T}) where {T} = A_mul_B!(A, eye(T, size(A.factors, 1), min(size(A.factors)...)))
 convert(::Type{Array}, A::AbstractQ) = convert(Matrix, A)
 
 """
@@ -471,6 +515,39 @@ Optionally takes a `thin` Boolean argument, which if `true` omits the columns th
 rows of `R` in the QR factorization that are zero. The resulting matrix is the `Q` in a thin
 QR factorization (sometimes called the reduced QR factorization). If `false`, returns a `Q`
 that spans all rows of `R` in its corresponding QR factorization.
+
+# Examples
+```jldoctest
+julia> a = [1. 2.; 3. 4.; 5. 6.];
+
+julia> qra = qrfact(a, Val(true));
+
+julia> full(qra[:Q], thin=true)
+3×2 Array{Float64,2}:
+ -0.267261   0.872872
+ -0.534522   0.218218
+ -0.801784  -0.436436
+
+julia> full(qra[:Q], thin=false)
+3×3 Array{Float64,2}:
+ -0.267261   0.872872   0.408248
+ -0.534522   0.218218  -0.816497
+ -0.801784  -0.436436   0.408248
+
+julia> qra = qrfact(a, Val(false));
+
+julia> full(qra[:Q], thin=true)
+3×2 Array{Float64,2}:
+ -0.169031   0.897085
+ -0.507093   0.276026
+ -0.845154  -0.345033
+
+julia> full(qra[:Q], thin=false)
+3×3 Array{Float64,2}:
+ -0.169031   0.897085   0.408248
+ -0.507093   0.276026  -0.816497
+ -0.845154  -0.345033   0.408248
+```
 """
 function full(A::AbstractQ{T}; thin::Bool = true) where T
     if thin
@@ -732,8 +809,10 @@ function A_ldiv_B!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:B
     B[1:nA,:] = view(B, 1:nA, :)[invperm(A[:p]::Vector{BlasInt}),:]
     return B, rnk
 end
-A_ldiv_B!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} = vec(A_ldiv_B!(A,reshape(B,length(B),1)))
-A_ldiv_B!(A::QRPivoted{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = A_ldiv_B!(A, B, maximum(size(A))*eps(real(float(one(eltype(B))))))[1]
+A_ldiv_B!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} =
+    vec(A_ldiv_B!(A,reshape(B,length(B),1)))
+A_ldiv_B!(A::QRPivoted{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+    A_ldiv_B!(A, B, min(size(A)...)*eps(real(float(one(eltype(B))))))[1]
 function A_ldiv_B!(A::QR{T}, B::StridedMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)

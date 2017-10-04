@@ -186,6 +186,7 @@ function find_tvar10930(arg)
 end
 @test find_tvar10930(Vararg{Int}) === 1
 
+const isleaftype = Base._isleaftype
 
 # issue #12474
 @generated function f12474(::Any)
@@ -253,35 +254,6 @@ function foo9222()
     SimpleTest9222(0.0, mu_actual, nu_actual, v0, 0.0, [1.0,1.0], 0.5, 5.0, 20.0)
 end
 @test 0.0 == foo9222()
-
-# make sure none of the slottypes are left as Core.Inference.Const objects
-function f18679()
-    for i = 1:2
-        if i == 1
-            a = ((),)
-        else
-            return a[1]
-        end
-    end
-end
-g18679(x::Tuple) = ()
-g18679() = g18679(any_undef_global::Union{Int,Tuple{}})
-for code in Any[
-        @code_typed(f18679())[1]
-        @code_typed(g18679())[1]]
-    @test all(x->isa(x, Type), code.slottypes)
-    local notconst(@nospecialize(other)) = true
-    notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
-    function notconst(expr::Expr)
-        @test isa(expr.typ, Type)
-        for a in expr.args
-            notconst(a)
-        end
-    end
-    for e in code.code
-        notconst(e)
-    end
-end
 
 # branching based on inferrable conditions
 let f(x) = isa(x,Int) ? 1 : ""
@@ -470,11 +442,62 @@ function test_inferred_static(arrow::Pair)
     end
 end
 
+function f18679()
+    local a
+    for i = 1:2
+        if i == 1
+            a = ((),)
+        else
+            return a[1]
+        end
+    end
+end
+g18679(x::Tuple) = ()
+g18679() = g18679(any_undef_global::Union{Int, Tuple{}})
+function h18679()
+    for i = 1:2
+        local a
+        if i == 1
+            a = ((),)
+        else
+            @isdefined(a) && return "BAD"
+        end
+    end
+end
+
 function g19348(x)
     a, b = x
-    return a + b
+    g = 1
+    g = 2
+    c = Base.indexed_next(x, g, g)
+    return a + b + c[1]
 end
-test_inferred_static(@code_typed g19348((1, 2.0)))
+
+for codetype in Any[
+        @code_typed(f18679()),
+        @code_typed(g18679()),
+        @code_typed(h18679()),
+        @code_typed(g19348((1, 2.0)))]
+    # make sure none of the slottypes are left as Core.Inference.Const objects
+    code = codetype[1]
+    @test all(x->isa(x, Type), code.slottypes)
+    local notconst(@nospecialize(other)) = true
+    notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
+    function notconst(expr::Expr)
+        @test isa(expr.typ, Type)
+        for a in expr.args
+            notconst(a)
+        end
+    end
+    for e in code.code
+        notconst(e)
+    end
+    test_inferred_static(code)
+end
+@test f18679() === ()
+@test_throws UndefVarError(:any_undef_global) g18679()
+@test h18679() === nothing
+
 
 # issue #5575
 f5575() = zeros(Type[Float64][1], 1)
@@ -543,7 +566,7 @@ tpara18457(::Type{A}) where {A<:AbstractMyType18457} = tpara18457(supertype(A))
 @test tpara18457(MyType18457{true}) === true
 
 @testset "type inference error #19322" begin
-    Y_19322 = reshape(round.(Int, abs.(randn(5*1000)))+1,1000,5)
+    Y_19322 = reshape(round.(Int, abs.(randn(5*1000))) .+ 1, 1000, 5)
 
     function FOO_19322(Y::AbstractMatrix; frac::Float64=0.3, nbins::Int=100, n_sims::Int=100)
         num_iters, num_chains = size(Y)
@@ -755,7 +778,8 @@ end
 
 # issue #21410
 f21410(::V, ::Pair{V,E}) where {V, E} = E
-@test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second == Type{Ref{T}} where T<:Number
+@test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second ==
+    Type{E} where E <: (Ref{T} where T<:Number)
 
 # issue #21369
 function inf_error_21369(arg)
@@ -795,7 +819,7 @@ end
 struct NArray_17003{T,N} <: AArray_17003{Nable_17003{T},N}
 end
 
-(::Type{NArray_17003})(::Array{T,N}) where {T,N} = NArray_17003{T,N}()
+NArray_17003(::Array{T,N}) where {T,N} = NArray_17003{T,N}()
 
 gl_17003 = [1, 2, 3]
 
@@ -1078,7 +1102,7 @@ isdefined_f3(x) = isdefined(x, 3)
 @test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]).code, isdefined, 3)
 
 let isa_tfunc = Core.Inference.t_ffunc_val[
-        findfirst(Core.Inference.t_ffunc_key, isa)][3]
+        findfirst(x->x===isa, Core.Inference.t_ffunc_key)][3]
     @test isa_tfunc(Array, Const(AbstractArray)) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray}) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray{Int}}) == Bool
@@ -1118,7 +1142,7 @@ let isa_tfunc = Core.Inference.t_ffunc_val[
 end
 
 let subtype_tfunc = Core.Inference.t_ffunc_val[
-        findfirst(Core.Inference.t_ffunc_key, <:)][3]
+        findfirst(x->x===(<:), Core.Inference.t_ffunc_key)][3]
     @test subtype_tfunc(Type{<:Array}, Const(AbstractArray)) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray}) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray{Int}}) == Bool
@@ -1176,3 +1200,28 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 @test Base.return_types(f23024, (DataType, Any)) == Any[Int]
 @test Base.return_types(g23024, (Tuple{DataType},)) == Any[Int]
 @test g23024((UInt8,)) === 2
+
+@test !Core.Inference.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
+@test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any]
+
+# issue #23685
+struct Node23685{T}
+end
+@inline function update23685!(::Node23685{T}) where T
+    convert(Node23685{T}, Node23685{Float64}())
+end
+h23685 = Node23685{Float64}()
+f23685() = update23685!(h23685)
+@test f23685() === h23685
+
+let c(::Type{T}, x) where {T<:Array} = T,
+    f() = c(Vector{Any[Int][1]}, [1])
+    @test f() === Vector{Int}
+end
+
+# issue #23786
+struct T23786{D<:Tuple{Vararg{Vector{T} where T}}, N}
+end
+let t = Tuple{Type{T23786{D, N} where N where D<:Tuple{Vararg{Array{T, 1} where T, N} where N}}}
+    @test Core.Inference.limit_type_depth(t, 4) >: t
+end

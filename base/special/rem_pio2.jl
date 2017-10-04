@@ -58,6 +58,7 @@ Return the high word of `x` as a `UInt32`.
 Return positive part of the high word of `x` as a `UInt32`.
 """
 @inline poshighword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)&0x7fffffff
+@inline poshighword(x::Float32) = reinterpret(UInt32, x)&0x7fffffff
 @inline poshighword(x::Float64) = poshighword(reinterpret(UInt64, x))
 
 @inline function cody_waite_2c_pio2(x::Float64, fn, n)

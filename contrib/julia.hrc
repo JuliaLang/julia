@@ -146,8 +146,8 @@
             <word name="Dict"/>
             <word name="Function"/>
             <word name="SubArray"/>
-            <word name="Range"/>
-            <word name="Range1"/>
+            <word name="AbstractRange"/>
+            <word name="UnitRange"/>
             <word name="Symbol"/>
             <word name="Expr"/>
          </keywords>

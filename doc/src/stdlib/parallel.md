@@ -83,16 +83,6 @@ Base.cluster_cookie()
 Base.cluster_cookie(::Any)
 ```
 
-## Shared Arrays
-
-```@docs
-Base.SharedArray
-Base.procs(::SharedArray)
-Base.sdata
-Base.indexpids
-Base.localindexes
-```
-
 ## Multi-Threading
 
 This experimental interface supports Julia's multi-threading capabilities. Types and functions

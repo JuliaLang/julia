@@ -63,8 +63,8 @@ end
 function transposeblock!(f, B::AbstractMatrix, A::AbstractMatrix, m::Int, n::Int, offseti::Int, offsetj::Int)
     if m*n<=transposebaselength
         @inbounds begin
-            for j = offsetj+(1:n)
-                for i = offseti+(1:m)
+            for j = offsetj .+ (1:n)
+                for i = offseti .+ (1:m)
                     B[j,i] = f(A[i,j])
                 end
             end
@@ -128,8 +128,8 @@ end
 @inline adjoint(A::AbstractVector{<:Real}) = transpose(A)
 @inline adjoint(A::AbstractMatrix{<:Real}) = transpose(A)
 
-function copy_transpose!(B::AbstractVecOrMat, ir_dest::Range{Int}, jr_dest::Range{Int},
-                         A::AbstractVecOrMat, ir_src::Range{Int}, jr_src::Range{Int})
+function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+                         A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int})
     if length(ir_dest) != length(jr_src)
         throw(ArgumentError(string("source and destination must have same size (got ",
                                    length(jr_src)," and ",length(ir_dest),")")))

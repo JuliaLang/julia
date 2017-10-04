@@ -81,7 +81,15 @@ As in the example above, we recommend following some simple conventions when wri
    ...
    """
    ```
-5. Include any code examples in an `# Examples` section.
+5. Provide hints to related functions.
+
+   Sometimes there are functions of related functionality. To increase discoverability please provide
+   a short list of these in a `See also:` paragraph.
+
+   ```
+   See also: [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref)
+   ```
+6. Include any code examples in an `# Examples` section.
 
    Examples should, whenever possible, be written as *doctests*. A *doctest* is a fenced code block
    (see [Code blocks](@ref)) starting with ````` ```jldoctest````` and contains any number of `julia>`
@@ -95,7 +103,6 @@ As in the example above, we recommend following some simple conventions when wri
    Some nice documentation here.
 
    # Examples
-
    ```jldoctest
    julia> a = [1 2; 3 4]
    2×2 Array{Int64,2}:
@@ -127,13 +134,13 @@ As in the example above, we recommend following some simple conventions when wri
    !!! tip
        Wherever possible examples should be **self-contained** and **runnable** so that readers are able
        to try them out without having to include any dependencies.
-6. Use backticks to identify code and equations.
+7. Use backticks to identify code and equations.
 
    Julia identifiers and code excerpts should always appear between backticks ``` ` ``` to enable
    highlighting. Equations in the LaTeX syntax can be inserted between double backticks ``` `` ```.
    Use Unicode characters rather than their LaTeX escape sequence, i.e. ``` ``α = 1`` ``` rather
    than ``` ``\\alpha = 1`` ```.
-7. Place the starting and ending `"""` characters on lines by themselves.
+8. Place the starting and ending `"""` characters on lines by themselves.
 
    That is, write:
 
@@ -156,7 +163,7 @@ As in the example above, we recommend following some simple conventions when wri
    ```
 
    This makes it more clear where docstrings start and end.
-8. Respect the line length limit used in the surrounding code.
+9. Respect the line length limit used in the surrounding code.
 
    Docstrings are edited using the same tools as code. Therefore, the same conventions should apply.
    It it advised to add line breaks after 92 characters.
@@ -254,13 +261,13 @@ Documentation written in non-toplevel blocks, such as `begin`, `if`, `for`, and 
 added to the documentation system as blocks are evaluated. For example:
 
 ```julia
-if VERSION > v"0.5"
+if condition()
     "..."
     f(x) = x
 end
 ```
 
-will add documentation to `f(x)` when the condition is `true`. Note that even if `f(x)` goes
+will add documentation to `f(x)` when `condition()` is `true`. Note that even if `f(x)` goes
 out of scope at the end of the block, its documentation will remain.
 
 ### Dynamic documentation

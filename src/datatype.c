@@ -8,9 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-#include <assert.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -490,21 +490,17 @@ typedef struct {
     int64_t b;
 } bits128_t;
 
-// Note that this function updates len
-static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
+// TODO: do we care that this has invalid alignment assumptions?
+JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, void *data)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(jl_is_datatype(dt));
     jl_datatype_t *bt = (jl_datatype_t*)dt;
     size_t nb = jl_datatype_size(bt);
-    if (nb == 0)
-        return jl_new_struct_uninit(bt);
-    *len = LLT_ALIGN(*len, jl_datatype_align(bt));
-    data = (char*)data + (*len);
-    *len += nb;
+    if (nb == 0)               return jl_new_struct_uninit(bt); // returns bt->instance
     if (bt == jl_uint8_type)   return jl_box_uint8(*(uint8_t*)data);
     if (bt == jl_int64_type)   return jl_box_int64(*(int64_t*)data);
-    if (bt == jl_bool_type)    return (*(int8_t*)data) ? jl_true:jl_false;
+    if (bt == jl_bool_type)    return (*(int8_t*)data) ? jl_true : jl_false;
     if (bt == jl_int32_type)   return jl_box_int32(*(int32_t*)data);
     if (bt == jl_float64_type) return jl_box_float64(*(double*)data);
 
@@ -518,12 +514,6 @@ static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
     default: memcpy(jl_data_ptr(v), data, nb);
     }
     return v;
-}
-
-JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *bt, void *data)
-{
-    size_t len = 0;
-    return jl_new_bits_internal(bt, data, &len);
 }
 
 // used by boot.jl
@@ -717,7 +707,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
     size_t nf = jl_datatype_nfields(type);
     va_start(args, type);
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
-    for(size_t i=0; i < nf; i++) {
+    for (size_t i = 0; i < nf; i++) {
         jl_set_nth_field(jv, i, va_arg(args, jl_value_t*));
     }
     va_end(args);
@@ -731,7 +721,10 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
     if (type->instance != NULL) return type->instance;
     size_t nf = jl_datatype_nfields(type);
     jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
-    for(size_t i=0; i < na; i++) {
+    for (size_t i = 0; i < na; i++) {
+        jl_value_t *ft = jl_field_type(type, i);
+        if (!jl_isa(args[i], ft))
+            jl_type_error("new", ft, args[i]);
         jl_set_nth_field(jv, i, args[i]);
     }
     for(size_t i=na; i < nf; i++) {
@@ -781,6 +774,8 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
     if (jl_is_uniontype(ty)) {
         uint8_t sel = ((uint8_t*)v)[offs + jl_field_size(st, i) - 1];
         ty = jl_nth_union_component(ty, sel);
+        if (jl_is_datatype_singleton((jl_datatype_t*)ty))
+            return ((jl_datatype_t*)ty)->instance;
     }
     return jl_new_bits(ty, (char*)v + offs);
 }

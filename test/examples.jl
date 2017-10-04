@@ -75,17 +75,4 @@ put!(dc, "Hello", "World")
 # At least make sure code loads
 include(joinpath(dir, "wordcount.jl"))
 
-# the 0mq clustermanager depends on package ZMQ. Just making sure the
-# code loads using a stub module definition for ZMQ.
-zmq_found=true
-try
-    using ZMQ
-catch
-    zmq_found=false
-end
-
-if !zmq_found
-    eval(Main, parse("module ZMQ end"))
-end
-
 include(joinpath(dir, "clustermanager/0mq/ZMQCM.jl"))

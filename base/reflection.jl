@@ -56,13 +56,17 @@ julia> fullname(Main)
 ```
 """
 function fullname(m::Module)
-    m === Main && return ()
-    m === Base && return (:Base,)  # issue #10653
     mn = module_name(m)
+    if m === Main || m === Base || m === Core
+        return (mn,)
+    end
     mp = module_parent(m)
     if mp === m
-        # not Main, but is its own parent, means a prior Main module
-        n = ()
+        if mn !== :Main
+            return (mn,)
+        end
+        # top-level module, not Main, called :Main => prior Main module
+        n = (:Main,)
         this = Main
         while this !== m
             if isdefined(this, :LastMain)
@@ -167,7 +171,7 @@ datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
 """
     Base.datatype_module(t::DataType) -> Module
 
-Determine the module containing the definition of a `DataType`.
+Determine the module containing the definition of a (potentially UnionAll-wrapped) `DataType`.
 
 # Examples
 ```jldoctest
@@ -184,6 +188,7 @@ Foo
 ```
 """
 datatype_module(t::DataType) = t.name.module
+datatype_module(t::UnionAll) = datatype_module(unwrap_unionall(t))
 
 """
     isconst(m::Module, s::Symbol) -> Bool
@@ -286,28 +291,41 @@ isbits(t::DataType) = (@_pure_meta; !t.mutable & (t.layout != C_NULL) && datatyp
 isbits(t::Type) = (@_pure_meta; false)
 isbits(x) = (@_pure_meta; isbits(typeof(x)))
 
-"""
-    isleaftype(T)
+_isleaftype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
-Determine whether `T`'s only subtypes are itself and `Union{}`. This means `T` is
-a concrete type that can have instances.
+"""
+    isconcrete(T)
+
+Determine whether `T` is a concrete type, meaning it can have direct instances
+(values `x` such that `typeof(x) === T`).
 
 # Examples
 ```jldoctest
-julia> isleaftype(Complex)
+julia> isconcrete(Complex)
 false
 
-julia> isleaftype(Complex{Float32})
+julia> isconcrete(Complex{Float32})
 true
 
-julia> isleaftype(Vector{Complex})
+julia> isconcrete(Vector{Complex})
 true
 
-julia> isleaftype(Vector{Complex{Float32}})
+julia> isconcrete(Vector{Complex{Float32}})
 true
+
+julia> isconcrete(Union{})
+false
+
+julia> isconcrete(Union{Int,String})
+false
 ```
 """
-isleaftype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
+function isconcrete(@nospecialize(t))
+    @_pure_meta
+    return (isa(t, DataType) && !t.abstract &&
+            !t.hasfreetypevars &&
+            (t.name !== Tuple.name || all(isconcrete, t.parameters)))
+end
 
 """
     Base.isabstract(T)
@@ -516,14 +534,21 @@ function _subtypes(m::Module, x::Union{DataType,UnionAll},
     end
     return sts
 end
-function subtypes(m::Module, x::Union{DataType,UnionAll})
-    if isabstract(x)
-        sort!(collect(_subtypes(m, x)), by=string)
-    else
+
+function _subtypes_in(mods::Array, x::Union{DataType,UnionAll})
+    if !isabstract(x)
         # Fast path
-        Union{DataType,UnionAll}[]
+        return Union{DataType,UnionAll}[]
     end
+    sts = Set{Union{DataType,UnionAll}}()
+    visited = Set{Module}()
+    for m in mods
+        _subtypes(m, x, sts, visited)
+    end
+    return sort!(collect(sts), by=string)
 end
+
+subtypes(m::Module, x::Union{DataType,UnionAll}) = _subtypes_in([m], x)
 
 """
     subtypes(T::DataType)
@@ -541,7 +566,7 @@ julia> subtypes(Integer)
  Unsigned
 ```
 """
-subtypes(x::Union{DataType,UnionAll}) = subtypes(Main, x)
+subtypes(x::Union{DataType,UnionAll}) = _subtypes_in(loaded_modules_array(), x)
 
 function to_tuple_type(@nospecialize(t))
     @_pure_meta
@@ -723,41 +748,27 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt = type
     return results
 end
 
-# this type mirrors jl_cghooks_t (documented in julia.h)
-struct CodegenHooks
-    module_setup::Ptr{Void}
-    module_activation::Ptr{Void}
-    raise_exception::Ptr{Void}
-
-    CodegenHooks(;module_setup=nothing, module_activation=nothing, raise_exception=nothing) =
-        new(pointer_from_objref(module_setup),
-            pointer_from_objref(module_activation),
-            pointer_from_objref(raise_exception))
-end
-
 # this type mirrors jl_cgparams_t (documented in julia.h)
 struct CodegenParams
     cached::Cint
 
-    runtime::Cint
-    exceptions::Cint
     track_allocations::Cint
     code_coverage::Cint
     static_alloc::Cint
-    dynamic_alloc::Cint
+    prefer_specsig::Cint
 
-    hooks::CodegenHooks
+    module_setup::Any
+    module_activation::Any
+    raise_exception::Any
 
     CodegenParams(;cached::Bool=true,
-                   runtime::Bool=true, exceptions::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
-                   static_alloc::Bool=true, dynamic_alloc::Bool=true,
-                   hooks::CodegenHooks=CodegenHooks()) =
+                   static_alloc::Bool=true, prefer_specsig::Bool=false,
+                   module_setup=nothing, module_activation=nothing, raise_exception=nothing) =
         new(Cint(cached),
-            Cint(runtime), Cint(exceptions),
             Cint(track_allocations), Cint(code_coverage),
-            Cint(static_alloc), Cint(dynamic_alloc),
-            hooks)
+            Cint(static_alloc), Cint(prefer_specsig),
+            module_setup, module_activation, raise_exception)
 end
 
 # Printing code representations in IR and assembly
@@ -804,15 +815,15 @@ function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::B
     end
 
     # TODO: use jl_is_cacheable_sig instead of isleaftype
-    isleaftype(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" * str)
+    _isleaftype(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" * str)
     return str
 end
 
 """
-    code_llvm([io], f, types)
+    code_llvm([io=STDOUT,], f, types)
 
 Prints the LLVM bitcodes generated for running the method matching the given generic
-function and type signature to `io` which defaults to `STDOUT`.
+function and type signature to `io`.
 
 All metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.
 """
@@ -822,11 +833,11 @@ code_llvm(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, t
 code_llvm_raw(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, types, false)
 
 """
-    code_native([io], f, types, [syntax])
+    code_native([io=STDOUT,], f, types, syntax=:att)
 
 Prints the native assembly instructions generated for running the method matching the given
-generic function and type signature to `io` which defaults to `STDOUT`.
-Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax. Output is AT&T syntax by default.
+generic function and type signature to `io`.
+Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax.
 """
 code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple), syntax::Symbol=:att) =
     print(io, _dump_function(f, types, true, false, false, false, syntax))
@@ -835,7 +846,7 @@ code_native(::IO, ::Any, ::Symbol) = error("illegal code_native call") # resolve
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
 function func_for_method_checked(m::Method, @nospecialize types)
-    if isdefined(m,:generator) && !isdefined(m,:source) && !isleaftype(types)
+    if isdefined(m,:generator) && !isdefined(m,:source) && !_isleaftype(types)
         error("cannot call @generated function `", m, "` ",
               "with abstract argument types: ", types)
     end
@@ -897,23 +908,12 @@ function which(@nospecialize(f), @nospecialize(t))
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)
-    if isleaftype(t)
-        ms = methods(f, t)
-        isempty(ms) && error("no method found for the specified argument types")
-        length(ms)!=1 && error("no unique matching method for the specified argument types")
-        return first(ms)
-    else
-        tt = signature_type(f, t)
-        m = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tt, typemax(UInt))
-        if m === nothing
-            error("no method found for the specified argument types")
-        end
-        meth = m.func::Method
-        if ccall(:jl_has_call_ambiguities, Cint, (Any, Any), tt, meth) != 0
-            error("method match is ambiguous for the specified argument types")
-        end
-        return meth
+    tt = signature_type(f, t)
+    m = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tt, typemax(UInt))
+    if m === nothing
+        error("no unique matching method found for the specified argument types")
     end
+    return m.func::Method
 end
 
 """

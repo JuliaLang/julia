@@ -88,7 +88,7 @@ lufact(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}},
 
 # for all other types we must promote to a type which is stable under division
 """
-    lufact(A [,pivot=Val(true)]) -> F::LU
+    lufact(A, pivot=Val(true)) -> F::LU
 
 Compute the LU factorization of `A`.
 
@@ -133,7 +133,6 @@ julia> F = lufact(A)
 Base.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:
 [1.0 0.0; 1.5 1.0]
 [4.0 3.0; 0.0 -1.5]
-successful: true
 
 julia> F[:L] * F[:U] == A[F[:p], :]
 true
@@ -234,41 +233,65 @@ end
 issuccess(F::LU) = F.info == 0
 
 function show(io::IO, F::LU)
-    println(io, "$(typeof(F)) with factors L and U:")
-    show(io, F[:L])
-    println(io)
-    show(io, F[:U])
-    print(io, "\nsuccessful: $(issuccess(F))")
+    if issuccess(F)
+        println(io, "$(typeof(F)) with factors L and U:")
+        show(io, F[:L])
+        println(io)
+        show(io, F[:U])
+    else
+        print(io, "Failed factorization of type $(typeof(F))")
+    end
+end
+
+_apply_ipiv!(A::LU, B::StridedVecOrMat) = _ipiv!(A, 1 : length(A.ipiv), B)
+_apply_inverse_ipiv!(A::LU, B::StridedVecOrMat) = _ipiv!(A, length(A.ipiv) : -1 : 1, B)
+
+function _ipiv!(A::LU, order::OrdinalRange, B::StridedVecOrMat)
+    for i = order
+        if i != A.ipiv[i]
+            _swap_rows!(B, i, A.ipiv[i])
+        end
+    end
+    B
+end
+
+function _swap_rows!(B::StridedVector, i::Integer, j::Integer)
+    B[i], B[j] = B[j], B[i]
+    B
+end
+
+function _swap_rows!(B::StridedMatrix, i::Integer, j::Integer)
+    for col = 1 : size(B, 2)
+        B[i,col], B[j,col] = B[j,col], B[i,col]
+    end
+    B
 end
 
 A_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
-A_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, b::StridedVector) =
-    A_ldiv_B!(UpperTriangular(A.factors),
-    A_ldiv_B!(UnitLowerTriangular(A.factors), b[ipiv2perm(A.ipiv, length(b))]))
-A_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedMatrix) =
-    A_ldiv_B!(UpperTriangular(A.factors),
-    A_ldiv_B!(UnitLowerTriangular(A.factors), B[ipiv2perm(A.ipiv, size(B, 1)),:]))
+
+function A_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
+    _apply_ipiv!(A, B)
+    A_ldiv_B!(UpperTriangular(A.factors), A_ldiv_B!(UnitLowerTriangular(A.factors), B))
+end
 
 At_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, B) A.info
-At_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, b::StridedVector) =
-    At_ldiv_B!(UnitLowerTriangular(A.factors),
-    At_ldiv_B!(UpperTriangular(A.factors), b))[invperm(ipiv2perm(A.ipiv, length(b)))]
-At_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedMatrix) =
-    At_ldiv_B!(UnitLowerTriangular(A.factors),
-    At_ldiv_B!(UpperTriangular(A.factors), B))[invperm(ipiv2perm(A.ipiv, size(B,1))),:]
+
+function At_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
+    At_ldiv_B!(UnitLowerTriangular(A.factors), At_ldiv_B!(UpperTriangular(A.factors), B))
+    _apply_inverse_ipiv!(A, B)
+end
 
 Ac_ldiv_B!(F::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:Real} =
     At_ldiv_B!(F, B)
 Ac_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
     @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, B) A.info
-Ac_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, b::StridedVector) =
-    Ac_ldiv_B!(UnitLowerTriangular(A.factors),
-    Ac_ldiv_B!(UpperTriangular(A.factors), b))[invperm(ipiv2perm(A.ipiv, length(b)))]
-Ac_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedMatrix) =
-    Ac_ldiv_B!(UnitLowerTriangular(A.factors),
-    Ac_ldiv_B!(UpperTriangular(A.factors), B))[invperm(ipiv2perm(A.ipiv, size(B,1))),:]
+
+function Ac_ldiv_B!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
+    Ac_ldiv_B!(UnitLowerTriangular(A.factors), Ac_ldiv_B!(UpperTriangular(A.factors), B))
+    _apply_inverse_ipiv!(A, B)
+end
 
 At_ldiv_Bt(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, transpose(B)) A.info

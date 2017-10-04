@@ -14,7 +14,6 @@
 #ifndef _MSC_VER
 #include <strings.h>
 #endif
-#include <assert.h>
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_internal.h"
@@ -25,6 +24,7 @@
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 #endif
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -188,7 +188,7 @@ typedef struct {
     uint8_t bits; // GC bits of the module (the bits to mark the binding buffer with)
 } gc_mark_binding_t;
 
-// Finalizer list
+// Finalizer (or object) list
 typedef struct {
     jl_value_t **begin;
     jl_value_t **end;

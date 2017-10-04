@@ -18,6 +18,14 @@ macro _noinline_meta()
     Expr(:meta, :noinline)
 end
 
+macro _gc_preserve_begin(arg1)
+    Expr(:gc_preserve_begin, esc(arg1))
+end
+
+macro _gc_preserve_end(token)
+    Expr(:gc_preserve_end, esc(token))
+end
+
 """
     @nospecialize
 
@@ -379,7 +387,7 @@ function append_any(xs...)
                 ccall(:jl_array_grow_end, Void, (Any, UInt), out, 16)
                 l += 16
             end
-            Core.arrayset(out, y, i)
+            Core.arrayset(true, out, y, i)
             i += 1
         end
     end
@@ -388,7 +396,7 @@ function append_any(xs...)
 end
 
 # simple Array{Any} operations needed for bootstrap
-setindex!(A::Array{Any}, @nospecialize(x), i::Int) = Core.arrayset(A, x, i)
+@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = Core.arrayset($(Expr(:boundscheck)), A, x, i)
 
 """
     precompile(f, args::Tuple{Vararg{Any}})
@@ -412,11 +420,48 @@ section of the Metaprogramming chapter of the manual for more details and exampl
 """
 esc(@nospecialize(e)) = Expr(:escape, e)
 
+"""
+    @boundscheck(blk)
+
+Annotates the expression `blk` as a bounds checking block, allowing it to be elided by [`@inbounds`](@ref).
+
+Note that the function in which `@boundscheck` is written must be inlined into
+its caller with [`@inline`](@ref) in order for `@inbounds` to have effect.
+
+```jldoctest
+julia> @inline function g(A, i)
+           @boundscheck checkbounds(A, i)
+           return "accessing (\$A)[\$i]"
+       end
+       f1() = return g(1:2, -1)
+       f2() = @inbounds return g(1:2, -1)
+f2 (generic function with 1 method)
+
+julia> f1()
+ERROR: BoundsError: attempt to access 2-element UnitRange{Int64} at index [-1]
+Stacktrace:
+ [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:428
+ [2] checkbounds at ./abstractarray.jl:392 [inlined]
+ [3] g at ./REPL[20]:2 [inlined]
+ [4] f1() at ./REPL[20]:5
+
+julia> f2()
+"accessing (1:2)[-1]"
+```
+
+!!! warning
+
+    The `@boundscheck` annotation allows you, as a library writer, to opt-in to
+    allowing *other code* to remove your bounds checks with [`@inbounds`](@ref).
+    As noted there, the caller must verify—using information they can access—that
+    their accesses are valid before using `@inbounds`. For indexing into your
+    [`AbstractArray`](@ref) subclasses, for example, this involves checking the
+    indices against its [`size`](@ref). Therefore, `@boundscheck` annotations
+    should only be added to a [`getindex`](@ref) or [`setindex!`](@ref)
+    implementation after you are certain its behavior is correct.
+"""
 macro boundscheck(blk)
-    # hack: use this syntax since it avoids introducing line numbers
-    :($(Expr(:boundscheck,true));
-      $(esc(blk));
-      $(Expr(:boundscheck,:pop)))
+    return Expr(:if, Expr(:boundscheck), esc(blk))
 end
 
 """
@@ -424,7 +469,8 @@ end
 
 Eliminates array bounds checking within expressions.
 
-In the example below the bound check of array A is skipped to improve performance.
+In the example below the in-range check for referencing
+element `i` of array `A` is skipped to improve performance.
 
 ```julia
 function sum(A::AbstractArray)
@@ -440,17 +486,34 @@ end
 
     Using `@inbounds` may return incorrect results/crashes/corruption
     for out-of-bounds indices. The user is responsible for checking it manually.
+    Only use `@inbounds` when it is certain from the information locally available
+    that all accesses are in bounds.
 """
 macro inbounds(blk)
-    :($(Expr(:inbounds,true));
-      $(esc(blk));
-      $(Expr(:inbounds,:pop)))
+    return Expr(:block,
+        Expr(:inbounds, true),
+        esc(blk),
+        Expr(:inbounds, :pop))
 end
 
+"""
+    @label name
+
+Labels a statement with the symbolic label `name`. The label marks the end-point
+of an unconditional jump with [`@goto name`](@ref).
+"""
 macro label(name::Symbol)
     return esc(Expr(:symboliclabel, name))
 end
 
+"""
+    @goto name
+
+`@goto name` unconditionally jumps to the statement at the location [`@label name`](@ref).
+
+`@label` and `@goto` cannot create jumps to different top-level statements. Attempts cause an
+error. To still use `@goto`, enclose the `@label` and `@goto` in a block.
+"""
 macro goto(name::Symbol)
     return esc(Expr(:symbolicgoto, name))
 end
@@ -458,16 +521,23 @@ end
 # SimpleVector
 
 function getindex(v::SimpleVector, i::Int)
-    if !(1 <= i <= length(v))
+    @boundscheck if !(1 <= i <= length(v))
         throw(BoundsError(v,i))
     end
+    t = @_gc_preserve_begin v
     x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
     x == C_NULL && throw(UndefRefError())
-    return unsafe_pointer_to_objref(x)
+    o = unsafe_pointer_to_objref(x)
+    @_gc_preserve_end t
+    return o
 end
 
-# TODO: add gc use intrinsic call instead of noinline
-length(v::SimpleVector) = (@_noinline_meta; unsafe_load(convert(Ptr{Int},data_pointer_from_objref(v))))
+function length(v::SimpleVector)
+    t = @_gc_preserve_begin v
+    l = unsafe_load(convert(Ptr{Int},data_pointer_from_objref(v)))
+    @_gc_preserve_end t
+    return l
+end
 endof(v::SimpleVector) = length(v)
 start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
@@ -518,7 +588,9 @@ function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
+    t = @_gc_preserve_begin v
     x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    @_gc_preserve_end t
     return x != C_NULL
 end
 
@@ -560,12 +632,12 @@ end
 
 Val(x) = (@_pure_meta; Val{x}())
 
-# used by interpolating quote and some other things in the front end
+# used by keyword arg call lowering
 function vector_any(@nospecialize xs...)
     n = length(xs)
     a = Vector{Any}(n)
     @inbounds for i = 1:n
-        Core.arrayset(a,xs[i],i)
+        Core.arrayset(false, a, xs[i], i)
     end
     a
 end
@@ -677,3 +749,13 @@ false
 ```
 """
 isempty(itr) = done(itr, start(itr))
+
+"""
+    values(iterator)
+
+For an iterator or collection that has keys and values, return an iterator
+over the values.
+This function simply returns its argument by default, since the elements
+of a general iterator are normally considered its "values".
+"""
+values(itr) = itr

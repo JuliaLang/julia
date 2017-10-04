@@ -1,12 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(@__DIR__, "TestHelpers.jl"))
-import TestHelpers: challenge_prompt
+import Main.TestHelpers: challenge_prompt
 
 const LIBGIT2_MIN_VER = v"0.23.0"
 const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
 
 const KEY_DIR = joinpath(@__DIR__, "libgit2")
+const HOME = Sys.iswindows() ? "USERPROFILE" : "HOME"  # Environment variable name for home
 
 function get_global_dir()
     buf = Ref(LibGit2.Buffer())
@@ -50,8 +51,8 @@ end
 
 @testset "Check library features" begin
     f = LibGit2.features()
-    @test findfirst(f, LibGit2.Consts.FEATURE_SSH) > 0
-    @test findfirst(f, LibGit2.Consts.FEATURE_HTTPS) > 0
+    @test findfirst(equalto(LibGit2.Consts.FEATURE_SSH), f) > 0
+    @test findfirst(equalto(LibGit2.Consts.FEATURE_HTTPS), f) > 0
 end
 
 @testset "OID" begin
@@ -76,6 +77,8 @@ end
     a = Base.cconvert(Ptr{LibGit2.StrArrayStruct}, p)
     b = Base.unsafe_convert(Ptr{LibGit2.StrArrayStruct}, a)
     @test p == convert(Vector{String}, unsafe_load(b))
+    @noinline gcuse(a) = a
+    gcuse(a)
 end
 
 @testset "Signature" begin
@@ -123,7 +126,7 @@ end
         @test m[:password] == "pass"
         @test m[:host] == "server.com"
         @test m[:port] == "80"
-        @test m[:path] == "/org/project.git"
+        @test m[:path] == "org/project.git"
     end
 
     @testset "SSH URL" begin
@@ -133,7 +136,7 @@ end
         @test m[:password] == "pass"
         @test m[:host] == "server"
         @test m[:port] == "22"
-        @test m[:path] == "/project.git"
+        @test m[:path] == "project.git"
     end
 
     @testset "SSH URL, scp-like syntax" begin
@@ -165,7 +168,7 @@ end
         @test m[:password] === nothing
         @test m[:host] == "github.com"
         @test m[:port] === nothing
-        @test m[:path] == "/JuliaLang/Example.jl.git"
+        @test m[:path] == "JuliaLang/Example.jl.git"
     end
 
     @testset "SSH URL, realistic" begin
@@ -216,7 +219,7 @@ end
             password="pass",
             host="server.com",
             port=80,
-            path="/org/project.git")
+            path="org/project.git")
         @test url == "https://user:pass@server.com:80/org/project.git"
     end
 
@@ -227,7 +230,7 @@ end
             password="pass",
             host="server",
             port="22",
-            path="/project.git")
+            path="project.git")
         @test url == "ssh://user:pass@server:22/project.git"
     end
 
@@ -244,7 +247,7 @@ end
         url = LibGit2.git_url(
             scheme="https",
             host="github.com",
-            path="/JuliaLang/Example.jl.git")
+            path="JuliaLang/Example.jl.git")
         @test url == "https://github.com/JuliaLang/Example.jl.git"
     end
 
@@ -273,11 +276,11 @@ end
         @test url == "user@server.com"
     end
 
-    @testset "HTTP URL, path missing slash prefix" begin
+    @testset "HTTP URL, path includes slash prefix" begin
         url = LibGit2.git_url(
             scheme="http",
             host="server.com",
-            path="path")
+            path="/path")
         @test url == "http://server.com/path"
     end
 
@@ -775,10 +778,13 @@ mktempdir() do dir
                 show_strs = split(sprint(show, tag1ref), "\n")
                 @test show_strs[1] == "GitReference:"
                 @test show_strs[2] == "Tag with name refs/tags/$tag1"
-                tag1tag = LibGit2.peel(LibGit2.GitTag,tag1ref)
+                tag1tag = LibGit2.peel(LibGit2.GitTag, tag1ref)
                 @test LibGit2.name(tag1tag) == tag1
                 @test LibGit2.target(tag1tag) == commit_oid1
                 @test sprint(show, tag1tag) == "GitTag:\nTag name: $tag1 target: $commit_oid1"
+                # peels to the commit the tag points to
+                tag1cmt = LibGit2.peel(tag1ref)
+                @test LibGit2.GitHash(tag1cmt) == commit_oid1
                 tag_oid2 = LibGit2.tag_create(repo, tag2, commit_oid2)
                 @test !LibGit2.iszero(tag_oid2)
                 tags = LibGit2.tag_list(repo)
@@ -1035,6 +1041,23 @@ mktempdir() do dir
             # from branch/ff_c using branch name
             @test LibGit2.merge!(repo, branch="refs/heads/branch/ff_c")
             @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+
+            LibGit2.branch!(repo, "branch/ff_d")
+            open(joinpath(LibGit2.path(repo),"ff_file7"),"w") do f
+                write(f, "777\n")
+            end
+            LibGit2.add!(repo, "ff_file7")
+            LibGit2.commit(repo, "add ff_file7")
+            branchhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "master")
+            # switch back, now try to ff-merge the changes
+            # from branch/a
+            # set up the merge using GitAnnotated objects
+            # from a fetchhead
+            fh = LibGit2.fetchheads(repo)
+            upst_ann = LibGit2.GitAnnotated(repo, fh[1])
+            @test LibGit2.merge!(repo, [upst_ann], true)
+            @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
         finally
             close(repo)
         end
@@ -1256,8 +1279,16 @@ mktempdir() do dir
             repo = LibGit2.GitRepo(test_repo)
             cache = LibGit2.GitRepo(cache_repo)
             try
+                # test map with oid
                 oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
                     LibGit2.map((oid,repo)->(oid,repo), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)
+                end
+                @test length(oids) == 1
+                # test map with range
+                str_1 = string(commit_oid1)
+                str_3 = string(commit_oid3)
+                oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
+                    LibGit2.map((oid,repo)->(oid,repo), walker, range="$str_1..$str_3", by=LibGit2.Consts.SORT_TIME)
                 end
                 @test length(oids) == 1
 
@@ -1270,8 +1301,13 @@ mktempdir() do dir
                 for i in eachindex(oids)
                     @test cache_oids[i] == test_oids[i]
                 end
+                # test with specified oid
                 LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
                     @test count((oid,repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME) == 1
+                end
+                # test without specified oid
+                LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
+                    @test count((oid,repo)->(oid == commit_oid1), walker, by=LibGit2.Consts.SORT_TIME) == 1
                 end
             finally
                 close(repo)
@@ -1586,16 +1622,10 @@ mktempdir() do dir
         creds_user = "USER"
         creds_pass = "PASS"
         creds = LibGit2.UserPasswordCredentials(creds_user, creds_pass)
-        @test !LibGit2.checkused!(creds)
-        @test !LibGit2.checkused!(creds)
-        @test !LibGit2.checkused!(creds)
-        @test LibGit2.checkused!(creds)
         @test creds.user == creds_user
         @test creds.pass == creds_pass
         creds2 = LibGit2.UserPasswordCredentials(creds_user, creds_pass)
         @test creds == creds2
-        LibGit2.reset!(creds)
-        @test !LibGit2.checkused!(creds)
         sshcreds = LibGit2.SSHCredentials(creds_user, creds_pass)
         @test sshcreds.user == creds_user
         @test sshcreds.pass == creds_pass
@@ -1605,72 +1635,102 @@ mktempdir() do dir
         @test sshcreds == sshcreds2
     end
 
+    @testset "CachedCredentials" begin
+        cache = LibGit2.CachedCredentials()
+
+        url = "https://github.com/JuliaLang/Example.jl"
+        cred_id = LibGit2.credential_identifier(url)
+        cred = LibGit2.UserPasswordCredentials(deepcopy("julia"), deepcopy("password"))
+
+        @test !haskey(cache, cred_id)
+
+        # Attempt to reject a credential which wasn't stored
+        LibGit2.reject(cache, cred, url)
+        @test !haskey(cache, cred_id)
+        @test cred.user == "julia"
+        @test cred.pass == "password"
+
+        # Approve a credential which causes it to be stored
+        LibGit2.approve(cache, cred, url)
+        @test haskey(cache, cred_id)
+        @test cache[cred_id] === cred
+
+        # Reject an approved should cause it to be removed and erased
+        LibGit2.reject(cache, cred, url)
+        @test !haskey(cache, cred_id)
+        @test cred.user != "julia"
+        @test cred.pass != "password"
+    end
+
     # The following tests require that we can fake a TTY so that we can provide passwords
     # which use the `getpass` function. At the moment we can only fake this on UNIX based
     # systems.
     if Sys.isunix()
+        git_ok = LibGit2.GitError(
+            LibGit2.Error.None, LibGit2.Error.GIT_OK,
+            "No errors")
+
         abort_prompt = LibGit2.GitError(
-            LibGit2.Error.Callback, LibGit2.Error.EAUTH,
+            LibGit2.Error.Callback, LibGit2.Error.EUSER,
             "Aborting, user cancelled credential request.")
+
+        prompt_limit = LibGit2.GitError(
+            LibGit2.Error.Callback, LibGit2.Error.EAUTH,
+            "Aborting, maximum number of prompts reached.")
 
         incompatible_error = LibGit2.GitError(
             LibGit2.Error.Callback, LibGit2.Error.EAUTH,
             "The explicitly provided credential is incompatible with the requested " *
             "authentication methods.")
 
-        eauth_error = LibGit2.GitError(
-            LibGit2.Error.None, LibGit2.Error.EAUTH,
-            "No errors")
+        exhausted_error = LibGit2.GitError(
+            LibGit2.Error.Callback, LibGit2.Error.EAUTH,
+            "All authentication methods have failed.")
 
         @testset "SSH credential prompt" begin
             url = "git@github.com:test/package.jl"
+            username = "git"
 
             valid_key = joinpath(KEY_DIR, "valid")
-            invalid_key = joinpath(KEY_DIR, "invalid")
+            valid_cred = LibGit2.SSHCredentials(username, "", valid_key, valid_key * ".pub")
+
             valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
-            username = "git"
             passphrase = "secret"
+            valid_p_cred = LibGit2.SSHCredentials(username, passphrase, valid_p_key, valid_p_key * ".pub")
 
-            ssh_cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.SSHCredentials("$username", "", "$valid_key", "$valid_key.pub")
-            err, auth_attempts = credential_loop(valid_cred, "$url", "$username")
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
-            """
+            invalid_key = joinpath(KEY_DIR, "invalid")
 
-            ssh_p_cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.SSHCredentials("$username", "$passphrase", "$valid_p_key", "$valid_p_key.pub")
-            err, auth_attempts = credential_loop(valid_cred, "$url", "$username")
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
-            """
+            function gen_ex(cred; username="git")
+                url = username !== nothing && !isempty(username) ? "$username@" : ""
+                url *= "github.com:test/package.jl"
+                quote
+                    include($LIBGIT2_HELPER_PATH)
+                    credential_loop($cred, $url, Nullable{String}($username))
+                end
+            end
 
-            # SSH requires username
-            ssh_u_cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.SSHCredentials("$username", "", "$valid_key", "$valid_key.pub")
-            err, auth_attempts = credential_loop(valid_cred, "$url")
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
-            """
+            ssh_ex = gen_ex(valid_cred)
+            ssh_p_ex = gen_ex(valid_p_cred)
+            ssh_u_ex = gen_ex(valid_cred, username=nothing)
 
             # Note: We cannot use the default ~/.ssh/id_rsa for tests since we cannot be
             # sure a users will actually have these files. Instead we will use the ENV
             # variables to set the default values.
 
-            # Default credentials are valid
+            # ENV credentials are valid
             withenv("SSH_KEY_PATH" => valid_key) do
-                err, auth_attempts = challenge_prompt(ssh_cmd, [])
-                @test err == 0
+                err, auth_attempts = challenge_prompt(ssh_ex, [])
+                @test err == git_ok
                 @test auth_attempts == 1
             end
 
-            # Default credentials are valid but requires a passphrase
+            # ENV credentials are valid but requires a passphrase
             withenv("SSH_KEY_PATH" => valid_p_key) do
                 challenges = [
                     "Passphrase for $valid_p_key:" => "$passphrase\n",
                 ]
-                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
-                @test err == 0
+                err, auth_attempts = challenge_prompt(ssh_p_ex, challenges)
+                @test err == git_ok
                 @test auth_attempts == 1
 
                 # User mistypes passphrase.
@@ -1679,18 +1739,18 @@ mktempdir() do dir
                 # could also just re-call the credential callback like they do for HTTP.
                 challenges = [
                     "Passphrase for $valid_p_key:" => "foo\n",
-                    # "Private key location for 'git@github.com' [$valid_p_key]:" => "\n",
+                    "Private key location for 'git@github.com' [$valid_p_key]:" => "\n",
                     "Passphrase for $valid_p_key:" => "$passphrase\n",
                 ]
-                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
-                @test err == 0
-                @test auth_attempts == 5
+                err, auth_attempts = challenge_prompt(ssh_p_ex, challenges)
+                @test err == git_ok
+                @test auth_attempts == 2
 
                 # User sends EOF in passphrase prompt which aborts the credential request
                 challenges = [
                     "Passphrase for $valid_p_key:" => "\x04",
                 ]
-                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
+                err, auth_attempts = challenge_prompt(ssh_p_ex, challenges)
                 @test err == abort_prompt
                 @test auth_attempts == 1
 
@@ -1698,14 +1758,15 @@ mktempdir() do dir
                 challenges = [
                     "Passphrase for $valid_p_key:" => "\n",
                 ]
-                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
+                err, auth_attempts = challenge_prompt(ssh_p_ex, challenges)
                 @test err == abort_prompt
                 @test auth_attempts == 1
             end
 
+            # ENV credential requiring passphrase
             withenv("SSH_KEY_PATH" => valid_p_key, "SSH_KEY_PASS" => passphrase) do
-                err, auth_attempts = challenge_prompt(ssh_p_cmd, [])
-                @test err == 0
+                err, auth_attempts = challenge_prompt(ssh_p_ex, [])
+                @test err == git_ok
                 @test auth_attempts == 1
             end
 
@@ -1715,15 +1776,15 @@ mktempdir() do dir
                 challenges = [
                     "Username for 'github.com':" => "$username\n",
                 ]
-                err, auth_attempts = challenge_prompt(ssh_u_cmd, challenges)
-                @test err == 0
+                err, auth_attempts = challenge_prompt(ssh_u_ex, challenges)
+                @test err == git_ok
                 @test auth_attempts == 1
 
                 # User sends EOF in username prompt which aborts the credential request
                 challenges = [
                     "Username for 'github.com':" => "\x04",
                 ]
-                err, auth_attempts = challenge_prompt(ssh_u_cmd, challenges)
+                err, auth_attempts = challenge_prompt(ssh_u_ex, challenges)
                 @test err == abort_prompt
                 @test auth_attempts == 1
 
@@ -1732,34 +1793,29 @@ mktempdir() do dir
                     "Username for 'github.com':" => "\n",
                     "Username for 'github.com':" => "\x04",
                 ]
-                err, auth_attempts = challenge_prompt(ssh_u_cmd, challenges)
+                err, auth_attempts = challenge_prompt(ssh_u_ex, challenges)
                 @test err == abort_prompt
-                @test auth_attempts == 5  # Should ideally be <= 2
+                @test auth_attempts == 2
 
                 # User repeatedly chooses an invalid username
                 challenges = [
                     "Username for 'github.com':" => "foo\n",
                     "Username for 'github.com' [foo]:" => "\n",
+                    "Private key location for 'foo@github.com' [$valid_key]:" => "\n",
                     "Username for 'github.com' [foo]:" => "\x04",  # Need to manually abort
                 ]
-                err, auth_attempts = challenge_prompt(ssh_u_cmd, challenges)
+                err, auth_attempts = challenge_prompt(ssh_u_ex, challenges)
                 @test err == abort_prompt
-                @test auth_attempts == 6
+                @test auth_attempts == 3
 
                 # Credential callback is given an empty string in the `username_ptr`
-                # instead of the typical C_NULL.
-                ssh_user_empty_cmd = """
-                include("$LIBGIT2_HELPER_PATH")
-                valid_cred = LibGit2.SSHCredentials("$username", "", "$valid_key", "$valid_key.pub")
-                err, auth_attempts = credential_loop(valid_cred, "$url", "")
-                (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
-                """
-
+                # instead of the C_NULL in the other missing username tests.
+                ssh_user_empty_ex = gen_ex(valid_cred, username="")
                 challenges = [
                     "Username for 'github.com':" => "$username\n",
                 ]
-                err, auth_attempts = challenge_prompt(ssh_user_empty_cmd, challenges)
-                @test err == 0
+                err, auth_attempts = challenge_prompt(ssh_user_empty_ex, challenges)
+                @test err == git_ok
                 @test auth_attempts == 1
             end
 
@@ -1768,7 +1824,7 @@ mktempdir() do dir
             withenv("SSH_KEY_PATH" => nothing,
                     "SSH_PUB_KEY_PATH" => nothing,
                     "SSH_KEY_PASS" => nothing,
-                    (Sys.iswindows() ? "USERPROFILE" : "HOME") => tempdir()) do
+                    HOME => dir) do
 
                 # Set the USERPROFILE / HOME above to be a directory that does not contain
                 # the "~/.ssh/id_rsa" file. If this file exists the credential callback
@@ -1779,8 +1835,8 @@ mktempdir() do dir
                 challenges = [
                     "Private key location for 'git@github.com':" => "$valid_key\n",
                 ]
-                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
-                @test err == 0
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
+                @test err == git_ok
                 @test auth_attempts == 1
 
                 # User provides valid credentials that requires a passphrase
@@ -1788,60 +1844,89 @@ mktempdir() do dir
                     "Private key location for 'git@github.com':" => "$valid_p_key\n",
                     "Passphrase for $valid_p_key:" => "$passphrase\n",
                 ]
-                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
-                @test err == 0
+                err, auth_attempts = challenge_prompt(ssh_p_ex, challenges)
+                @test err == git_ok
                 @test auth_attempts == 1
 
                 # User sends EOF in private key prompt which aborts the credential request
                 challenges = [
                     "Private key location for 'git@github.com':" => "\x04",
                 ]
-                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
                 @test err == abort_prompt
                 @test auth_attempts == 1
 
                 # User provides an empty private key which triggers a re-prompt
                 challenges = [
                     "Private key location for 'git@github.com':" => "\n",
-                    "Public key location for 'git@github.com' [.pub]:" => "\n",
                     "Private key location for 'git@github.com':" => "\x04",
                 ]
-                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
                 @test err == abort_prompt
                 @test auth_attempts == 2
+
+                # User provides an invalid private key until prompt limit reached.
+                # Note: the prompt should not supply an invalid default.
+                challenges = [
+                    "Private key location for 'git@github.com':" => "foo\n",
+                    "Private key location for 'git@github.com' [foo]:" => "foo\n",
+                    "Private key location for 'git@github.com' [foo]:" => "foo\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
+                @test err == prompt_limit
+                @test auth_attempts == 3
             end
 
-            # TODO: Tests are currently broken. Credential callback currently infinite loops
-            # and never prompts user to change private keys.
-            #=
             # Explicitly setting these env variables to an existing but invalid key pair
             # means the user will be given a prompt with that defaults to the given values.
-            withenv("SSH_KEY_PATH" => invalid_key, "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
+            withenv("SSH_KEY_PATH" => invalid_key,
+                    "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
                 challenges = [
                     "Private key location for 'git@github.com' [$invalid_key]:" => "$valid_key\n",
                 ]
-                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
-                @test err == 0
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
+                @test err == git_ok
                 @test auth_attempts == 2
-            end
-            =#
 
-            # TODO: Tests are currently broken. Credential callback currently infinite loops
-            # and never prompts user to change private keys.
-            #=
-            withenv("SSH_KEY_PATH" => valid_key, "SSH_PUB_KEY_PATH" => valid_key * ".public") do
+                # User repeatedly chooses the default invalid private key until prompt limit reached
+                challenges = [
+                    "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
+                    "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
+                    "Private key location for 'git@github.com' [$invalid_key]:" => "\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
+                @test err == prompt_limit
+                @test auth_attempts == 4
+            end
+
+            # Explicitly set the public key ENV variable to a non-existent file.
+            withenv("SSH_KEY_PATH" => valid_key,
+                    "SSH_PUB_KEY_PATH" => valid_key * ".public") do
                 @test !isfile(ENV["SSH_PUB_KEY_PATH"])
 
-                # User explicitly sets the SSH_PUB_KEY_PATH incorrectly.
+                challenges = [
+                    # "Private key location for 'git@github.com' [$valid_key]:" => "\n"
+                    "Public key location for 'git@github.com' [$valid_key.public]:" => "$valid_key.pub\n"
+                ]
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
+                @test err == git_ok
+                @test auth_attempts == 1
+            end
+
+            # Explicitly set the public key ENV variable to a public key that doesn't match
+            # the private key.
+            withenv("SSH_KEY_PATH" => valid_key,
+                    "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
+                @test isfile(ENV["SSH_PUB_KEY_PATH"])
+
                 challenges = [
                     "Private key location for 'git@github.com' [$valid_key]:" => "\n"
-                    "Public key location for 'git@github.com':" => "$valid_key.pub\n"
+                    "Public key location for 'git@github.com' [$invalid_key.pub]:" => "$valid_key.pub\n"
                 ]
-                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
-                @test err == 0
+                err, auth_attempts = challenge_prompt(ssh_ex, challenges)
+                @test err == git_ok
                 @test auth_attempts == 2
             end
-            =#
         end
 
         @testset "HTTPS credential prompt" begin
@@ -1849,28 +1934,27 @@ mktempdir() do dir
 
             valid_username = "julia"
             valid_password = randstring(16)
+            valid_cred = LibGit2.UserPasswordCredentials(valid_username, valid_password)
 
-            https_cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.UserPasswordCredentials("$valid_username", "$valid_password")
-            err, auth_attempts = credential_loop(valid_cred, "$url")
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
-            """
+            https_ex = quote
+                include($LIBGIT2_HELPER_PATH)
+                credential_loop($valid_cred, $url)
+            end
 
             # User provides a valid username and password
             challenges = [
                 "Username for 'https://github.com':" => "$valid_username\n",
                 "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
             ]
-            err, auth_attempts = challenge_prompt(https_cmd, challenges)
-            @test err == 0
+            err, auth_attempts = challenge_prompt(https_ex, challenges)
+            @test err == git_ok
             @test auth_attempts == 1
 
             # User sends EOF in username prompt which aborts the credential request
             challenges = [
                 "Username for 'https://github.com':" => "\x04",
             ]
-            err, auth_attempts = challenge_prompt(https_cmd, challenges)
+            err, auth_attempts = challenge_prompt(https_ex, challenges)
             @test err == abort_prompt
             @test auth_attempts == 1
 
@@ -1879,7 +1963,7 @@ mktempdir() do dir
                 "Username for 'https://github.com':" => "foo\n",
                 "Password for 'https://foo@github.com':" => "\x04",
             ]
-            err, auth_attempts = challenge_prompt(https_cmd, challenges)
+            err, auth_attempts = challenge_prompt(https_ex, challenges)
             @test err == abort_prompt
             @test auth_attempts == 1
 
@@ -1889,7 +1973,7 @@ mktempdir() do dir
                 "Username for 'https://github.com':" => "foo\n",
                 "Password for 'https://foo@github.com':" => "\n",
             ]
-            err, auth_attempts = challenge_prompt(https_cmd, challenges)
+            err, auth_attempts = challenge_prompt(https_ex, challenges)
             @test err == abort_prompt
             @test auth_attempts == 1
 
@@ -1898,86 +1982,209 @@ mktempdir() do dir
             challenges = [
                 "Username for 'https://github.com':" => "foo\n",
                 "Password for 'https://foo@github.com':" => "bar\n",
-                "Username for 'https://github.com' [foo]:" => "$valid_username\n",
-                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+                "Username for 'https://github.com' [foo]:" => "foo\n",
+                "Password for 'https://foo@github.com':" => "bar\n",
+                "Username for 'https://github.com' [foo]:" => "foo\n",
+                "Password for 'https://foo@github.com':" => "bar\n",
             ]
-            err, auth_attempts = challenge_prompt(https_cmd, challenges)
-            @test err == 0
-            @test auth_attempts == 5
+            err, auth_attempts = challenge_prompt(https_ex, challenges)
+            @test err == prompt_limit
+            @test auth_attempts == 3
+        end
+
+        @testset "SSH agent username" begin
+            url = "github.com:test/package.jl"
+
+            valid_key = joinpath(KEY_DIR, "valid")
+            valid_cred = LibGit2.SSHCredentials("git", "", valid_key, valid_key * ".pub")
+
+            function gen_ex(; username="git")
+                quote
+                    include($LIBGIT2_HELPER_PATH)
+                    payload = CredentialPayload(allow_ssh_agent=true, allow_prompt=false)
+                    credential_loop($valid_cred, $url, Nullable{String}($username), payload)
+                end
+            end
+
+            # An empty string username_ptr
+            ex = gen_ex(username="")
+            err, auth_attempts = challenge_prompt(ex, [])
+            @test err == exhausted_error
+            @test auth_attempts == 3
+
+            # A null username_ptr passed into `git_cred_ssh_key_from_agent` can cause a
+            # segfault.
+            ex = gen_ex(username=nothing)
+            err, auth_attempts = challenge_prompt(ex, [])
+            @test err == exhausted_error
+            @test auth_attempts == 2
+        end
+
+        @testset "SSH default" begin
+            mktempdir() do home_dir
+                url = "github.com:test/package.jl"
+
+                default_key = joinpath(home_dir, ".ssh", "id_rsa")
+                mkdir(dirname(default_key))
+
+                valid_key = joinpath(KEY_DIR, "valid")
+                valid_cred = LibGit2.SSHCredentials("git", "", valid_key, valid_key * ".pub")
+
+                valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
+                passphrase = "secret"
+                valid_p_cred = LibGit2.SSHCredentials("git", passphrase, valid_p_key, valid_p_key * ".pub")
+
+                function gen_ex(cred)
+                    quote
+                        valid_cred = $cred
+
+                        default_cred = deepcopy(valid_cred)
+                        default_cred.prvkey = $default_key
+                        default_cred.pubkey = $default_key * ".pub"
+
+                        cp(valid_cred.prvkey, default_cred.prvkey)
+                        cp(valid_cred.pubkey, default_cred.pubkey)
+
+                        try
+                            include($LIBGIT2_HELPER_PATH)
+                            credential_loop(default_cred, $url, "git")
+                        finally
+                            rm(default_cred.prvkey)
+                            rm(default_cred.pubkey)
+                        end
+                    end
+                end
+
+                withenv("SSH_KEY_PATH" => nothing,
+                        "SSH_PUB_KEY_PATH" => nothing,
+                        "SSH_KEY_PASS" => nothing,
+                        HOME => home_dir) do
+
+                    # Automatically use the default key
+                    ex = gen_ex(valid_cred)
+                    err, auth_attempts = challenge_prompt(ex, [])
+                    @test err == git_ok
+                    @test auth_attempts == 1
+
+                    # Confirm the private key if any other prompting is required
+                    ex = gen_ex(valid_p_cred)
+                    challenges = [
+                        "Private key location for 'git@github.com' [$default_key]:" => "\n",
+                        "Passphrase for $default_key:" => "$passphrase\n",
+                    ]
+                    err, auth_attempts = challenge_prompt(ex, challenges)
+                    @test err == git_ok
+                    @test auth_attempts == 1
+                end
+            end
+        end
+
+        @testset "SSH expand tilde" begin
+            url = "git@github.com:test/package.jl"
+
+            valid_key = joinpath(KEY_DIR, "valid")
+            valid_cred = LibGit2.SSHCredentials("git", "", valid_key, valid_key * ".pub")
+
+            invalid_key = joinpath(KEY_DIR, "invalid")
+
+            ssh_ex = quote
+                include($LIBGIT2_HELPER_PATH)
+                payload = CredentialPayload(allow_ssh_agent=false, allow_prompt=true)
+                err, auth_attempts = credential_loop($valid_cred, $url, "git", payload)
+                (err, auth_attempts, payload.credential)
+            end
+
+            withenv("SSH_KEY_PATH" => nothing,
+                    "SSH_PUB_KEY_PATH" => nothing,
+                    "SSH_KEY_PASS" => nothing,
+                    HOME => KEY_DIR) do
+
+                # Expand tilde during the private key prompt
+                challenges = [
+                    "Private key location for 'git@github.com':" => "~/valid\n",
+                ]
+                err, auth_attempts, credential = challenge_prompt(ssh_ex, challenges)
+                @test err == git_ok
+                @test auth_attempts == 1
+                @test get(credential).prvkey == abspath(valid_key)
+            end
+
+            withenv("SSH_KEY_PATH" => valid_key,
+                    "SSH_PUB_KEY_PATH" => invalid_key * ".pub",
+                    "SSH_KEY_PASS" => nothing,
+                    HOME => KEY_DIR) do
+
+                # Expand tilde during the public key prompt
+                challenges = [
+                    "Private key location for 'git@github.com' [$valid_key]:" => "\n",
+                    "Public key location for 'git@github.com' [$invalid_key.pub]:" => "~/valid.pub\n",
+                ]
+                err, auth_attempts, credential = challenge_prompt(ssh_ex, challenges)
+                @test err == git_ok
+                @test auth_attempts == 2
+                @test get(credential).pubkey == abspath(valid_key * ".pub")
+            end
         end
 
         @testset "SSH explicit credentials" begin
             url = "git@github.com:test/package.jl"
+            username = "git"
+
+            valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
+            passphrase = "secret"
+            valid_cred = LibGit2.SSHCredentials(username, passphrase, valid_p_key, valid_p_key * ".pub")
 
             invalid_key = joinpath(KEY_DIR, "invalid")
-            valid_p_key = joinpath(KEY_DIR, "valid-passphrase")
-            username = "git"
-            passphrase = "secret"
+            invalid_cred = LibGit2.SSHCredentials(username, "", invalid_key, invalid_key * ".pub")
 
-            valid_cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.SSHCredentials("$username", "$passphrase", "$valid_p_key", "$valid_p_key.pub")
-            payload = CredentialPayload(Nullable(valid_cred))
-            err, auth_attempts = credential_loop(valid_cred, "$url", "$username", payload)
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
-            """
+            function gen_ex(cred; allow_prompt=true, allow_ssh_agent=false)
+                quote
+                    include($LIBGIT2_HELPER_PATH)
+                    payload = CredentialPayload($cred, allow_ssh_agent=$allow_ssh_agent,
+                        allow_prompt=$allow_prompt)
+                    credential_loop($valid_cred, $url, $username, payload)
+                end
+            end
 
-            invalid_cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.SSHCredentials("$username", "$passphrase", "$valid_p_key", "$valid_p_key.pub")
-            invalid_cred = LibGit2.SSHCredentials("$username", "", "$invalid_key", "$invalid_key.pub")
-            invalid_cred.usesshagent = "N"  # Disable SSH agent use
-            payload = CredentialPayload(Nullable(invalid_cred))
-            err, auth_attempts = credential_loop(valid_cred, "$url", "$username", payload)
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
-            """
-
-            # Explicitly provided credential is correct
-            err, auth_attempts = challenge_prompt(valid_cmd, [])
-            @test err == 0
+            # Explicitly provided credential is correct. Note: allowing prompting and
+            # SSH agent to ensure they are skipped.
+            ex = gen_ex(valid_cred, allow_prompt=true, allow_ssh_agent=true)
+            err, auth_attempts = challenge_prompt(ex, [])
+            @test err == git_ok
             @test auth_attempts == 1
 
             # Explicitly provided credential is incorrect
-            # TODO: Unless the SSH agent is disabled we may get caught in an infinite loop
-            err, auth_attempts = challenge_prompt(invalid_cmd, [])
-            @test err == eauth_error
-            @test auth_attempts == 4
+            ex = gen_ex(invalid_cred, allow_prompt=false, allow_ssh_agent=false)
+            err, auth_attempts = challenge_prompt(ex, [])
+            @test err == exhausted_error
+            @test auth_attempts == 3
         end
 
         @testset "HTTPS explicit credentials" begin
             url = "https://github.com/test/package.jl"
 
-            valid_username = "julia"
-            valid_password = randstring(16)
-            invalid_username = "alice"
-            invalid_password = randstring(15)
+            valid_cred = LibGit2.UserPasswordCredentials("julia", randstring(16))
+            invalid_cred = LibGit2.UserPasswordCredentials("alice", randstring(15))
 
-            valid_cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.UserPasswordCredentials("$valid_username", "$valid_password")
-            payload = CredentialPayload(Nullable(valid_cred))
-            err, auth_attempts = credential_loop(valid_cred, "$url", "", payload)
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
-            """
-
-            invalid_cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.UserPasswordCredentials("$valid_username", "$valid_password")
-            invalid_cred = LibGit2.UserPasswordCredentials("$invalid_username", "$invalid_password")
-            payload = CredentialPayload(Nullable(invalid_cred))
-            err, auth_attempts = credential_loop(valid_cred, "$url", "", payload)
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
-            """
+            function gen_ex(cred; allow_prompt=true)
+                quote
+                    include($LIBGIT2_HELPER_PATH)
+                    payload = CredentialPayload($cred, allow_prompt=$allow_prompt)
+                    credential_loop($valid_cred, $url, "", payload)
+                end
+            end
 
             # Explicitly provided credential is correct
-            err, auth_attempts = challenge_prompt(valid_cmd, [])
-            @test err == 0
+            ex = gen_ex(valid_cred, allow_prompt=true)
+            err, auth_attempts = challenge_prompt(ex, [])
+            @test err == git_ok
             @test auth_attempts == 1
 
             # Explicitly provided credential is incorrect
-            err, auth_attempts = challenge_prompt(invalid_cmd, [])
-            @test err == eauth_error
-            @test auth_attempts == 4
+            ex = gen_ex(invalid_cred, allow_prompt=false)
+            err, auth_attempts = challenge_prompt(ex, [])
+            @test err == exhausted_error
+            @test auth_attempts == 2
         end
 
         @testset "Cached credentials" begin
@@ -1986,95 +2193,98 @@ mktempdir() do dir
 
             valid_username = "julia"
             valid_password = randstring(16)
+            valid_cred = LibGit2.UserPasswordCredentials(valid_username, valid_password)
+
             invalid_username = "alice"
             invalid_password = randstring(15)
+            invalid_cred = LibGit2.UserPasswordCredentials(invalid_username, invalid_password)
 
-            valid_cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.UserPasswordCredentials("$valid_username", "$valid_password")
-            cache = CachedCredentials()
-            LibGit2.get_creds!(cache, "$cred_id", valid_cred)
-            payload = CredentialPayload(Nullable(cache))
-            err, auth_attempts = credential_loop(valid_cred, "$url", "", payload)
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
-            """
-
-            add_cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.UserPasswordCredentials("$valid_username", "$valid_password")
-            cache = CachedCredentials()
-            payload = CredentialPayload(Nullable(cache))
-            err, auth_attempts = credential_loop(valid_cred, "$url", "", payload)
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts, cache)
-            """
-
-            replace_cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.UserPasswordCredentials("$valid_username", "$valid_password")
-            invalid_cred = LibGit2.UserPasswordCredentials("$invalid_username", "$invalid_password", true)
-            cache = CachedCredentials()
-            LibGit2.get_creds!(cache, "$cred_id", invalid_cred)
-            payload = CredentialPayload(Nullable(cache))
-            err, auth_attempts = credential_loop(valid_cred, "$url", "", payload)
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts, cache)
-            """
+            function gen_ex(; cached_cred=nothing, allow_prompt=true)
+                quote
+                    include($LIBGIT2_HELPER_PATH)
+                    cache = CachedCredentials()
+                    $(cached_cred !== nothing && :(LibGit2.approve(cache, $cached_cred, $url)))
+                    payload = CredentialPayload(cache, allow_prompt=$allow_prompt)
+                    err, auth_attempts = credential_loop($valid_cred, $url, "", payload)
+                    (err, auth_attempts, cache)
+                end
+            end
 
             # Cache contains a correct credential
-            err, auth_attempts = challenge_prompt(valid_cmd, [])
-            @test err == 0
+            err, auth_attempts = challenge_prompt(gen_ex(cached_cred=valid_cred), [])
+            @test err == git_ok
             @test auth_attempts == 1
 
             # Add a credential into the cache
+            ex = gen_ex()
             challenges = [
                 "Username for 'https://github.com':" => "$valid_username\n",
                 "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
             ]
-            expected_cred = LibGit2.UserPasswordCredentials(valid_username, valid_password)
-            err, auth_attempts, cache = challenge_prompt(add_cmd, challenges)
-            @test err == 0
+            err, auth_attempts, cache = challenge_prompt(ex, challenges)
+            @test err == git_ok
             @test auth_attempts == 1
             @test typeof(cache) == LibGit2.CachedCredentials
-            @test cache.cred == Dict(cred_id => expected_cred)
+            @test cache.cred == Dict(cred_id => valid_cred)
 
             # Replace a credential in the cache
+            ex = gen_ex(cached_cred=invalid_cred)
             challenges = [
                 "Username for 'https://github.com' [alice]:" => "$valid_username\n",
                 "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
             ]
-            expected_cred = LibGit2.UserPasswordCredentials(valid_username, valid_password)
-            err, auth_attempts, cache = challenge_prompt(replace_cmd, challenges)
-            @test err == 0
-            @test auth_attempts == 4
+            err, auth_attempts, cache = challenge_prompt(ex, challenges)
+            @test err == git_ok
+            @test auth_attempts == 2
             @test typeof(cache) == LibGit2.CachedCredentials
-            @test cache.cred == Dict(cred_id => expected_cred)
+            @test cache.cred == Dict(cred_id => valid_cred)
+
+            # Canceling a credential request should leave the cache unmodified
+            ex = gen_ex(cached_cred=invalid_cred)
+            challenges = [
+                "Username for 'https://github.com' [alice]:" => "foo\n",
+                "Password for 'https://foo@github.com':" => "bar\n",
+                "Username for 'https://github.com' [foo]:" => "\x04",
+            ]
+            err, auth_attempts, cache = challenge_prompt(ex, challenges)
+            @test err == abort_prompt
+            @test auth_attempts == 3
+            @test typeof(cache) == LibGit2.CachedCredentials
+            @test cache.cred == Dict(cred_id => invalid_cred)
+
+            # An EAUTH error should remove credentials from the cache
+            ex = gen_ex(cached_cred=invalid_cred, allow_prompt=false)
+            err, auth_attempts, cache = challenge_prompt(ex, [])
+            @test err == exhausted_error
+            @test auth_attempts == 2
+            @test typeof(cache) == LibGit2.CachedCredentials
+            @test cache.cred == Dict()
         end
 
         @testset "Incompatible explicit credentials" begin
             # User provides a user/password credential where a SSH credential is required.
-            expect_ssh_cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.UserPasswordCredentials("foo", "bar")
-            payload = CredentialPayload(Nullable(valid_cred))
-            err, auth_attempts = credential_loop(valid_cred, "ssh://github.com/repo",
-                Nullable(""), Cuint(LibGit2.Consts.CREDTYPE_SSH_KEY), payload)
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
-            """
+            expect_ssh_ex = quote
+                include($LIBGIT2_HELPER_PATH)
+                valid_cred = LibGit2.UserPasswordCredentials("foo", "bar")
+                payload = CredentialPayload(valid_cred, allow_ssh_agent=false)
+                credential_loop(valid_cred, "ssh://github.com/repo", Nullable(""),
+                    Cuint(LibGit2.Consts.CREDTYPE_SSH_KEY), payload)
+            end
 
-            # User provides a SSH credential where a user/password credential is required.
-            expect_https_cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.SSHCredentials("foo", "", "", "")
-            payload = CredentialPayload(Nullable(valid_cred))
-            err, auth_attempts = credential_loop(valid_cred, "https://github.com/repo",
-                Nullable(""), Cuint(LibGit2.Consts.CREDTYPE_USERPASS_PLAINTEXT), payload)
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
-            """
-
-            err, auth_attempts = challenge_prompt(expect_ssh_cmd, [])
+            err, auth_attempts = challenge_prompt(expect_ssh_ex, [])
             @test err == incompatible_error
             @test auth_attempts == 1
 
-            err, auth_attempts = challenge_prompt(expect_https_cmd, [])
+            # User provides a SSH credential where a user/password credential is required.
+            expect_https_ex = quote
+                include($LIBGIT2_HELPER_PATH)
+                valid_cred = LibGit2.SSHCredentials("foo", "", "", "")
+                payload = CredentialPayload(valid_cred, allow_ssh_agent=false)
+                credential_loop(valid_cred, "https://github.com/repo", Nullable(""),
+                    Cuint(LibGit2.Consts.CREDTYPE_USERPASS_PLAINTEXT), payload)
+            end
+
+            err, auth_attempts = challenge_prompt(expect_https_ex, [])
             @test err == incompatible_error
             @test auth_attempts == 1
         end
@@ -2086,196 +2296,57 @@ mktempdir() do dir
                 Cuint(LibGit2.Consts.CREDTYPE_USERPASS_PLAINTEXT)
 
             # User provides a user/password credential where a SSH credential is required.
-            cmd = """
-            include("$LIBGIT2_HELPER_PATH")
-            valid_cred = LibGit2.UserPasswordCredentials("foo", "bar")
-            payload = CredentialPayload(Nullable(valid_cred))
-            err, auth_attempts = credential_loop(valid_cred, "foo://github.com/repo",
-                Nullable(""), Cuint($allowed_types), payload)
-            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
-            """
+            ex = quote
+                include($LIBGIT2_HELPER_PATH)
+                valid_cred = LibGit2.UserPasswordCredentials("foo", "bar")
+                payload = CredentialPayload(valid_cred, allow_ssh_agent=false)
+                credential_loop(valid_cred, "foo://github.com/repo", Nullable(""),
+                    $allowed_types, payload)
+            end
 
-            err, auth_attempts = challenge_prompt(cmd, [])
-            @test err == 0
+            err, auth_attempts = challenge_prompt(ex, [])
+            @test err == git_ok
+            @test auth_attempts == 1
+        end
+
+        @testset "CredentialPayload reset" begin
+            urls = [
+                "https://github.com/test/package.jl"
+                "https://myhost.com/demo.jl"
+            ]
+
+            valid_username = "julia"
+            valid_password = randstring(16)
+
+            # Users should be able to re-use the same payload if the state is reset
+            ex = quote
+                include($LIBGIT2_HELPER_PATH)
+                valid_cred = LibGit2.UserPasswordCredentials($valid_username, $valid_password)
+                user = Nullable{String}()
+                payload = CredentialPayload()
+                first_result = credential_loop(valid_cred, $(urls[1]), user, payload)
+                LibGit2.reset!(payload)
+                second_result = credential_loop(valid_cred, $(urls[2]), user, payload)
+                (first_result, second_result)
+            end
+
+            challenges = [
+                "Username for 'https://github.com':" => "$valid_username\n",
+                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+                "Username for 'https://myhost.com':" => "$valid_username\n",
+                "Password for 'https://$valid_username@myhost.com':" => "$valid_password\n",
+            ]
+            first_result, second_result = challenge_prompt(ex, challenges)
+
+            err, auth_attempts = first_result
+            @test err == git_ok
+            @test auth_attempts == 1
+
+            err, auth_attempts = second_result
+            @test err == git_ok
             @test auth_attempts == 1
         end
     end
-
-    #= temporarily disabled until working on the buildbots, ref https://github.com/JuliaLang/julia/pull/17651#issuecomment-238211150
-    @testset "SSH" begin
-        sshd_command = ""
-        ssh_repo = joinpath(dir, "Example.SSH")
-        if !Sys.iswindows()
-            try
-                # SSHD needs to be executed by its full absolute path
-                sshd_command = strip(read(`which sshd`, String))
-            catch
-                warn("Skipping SSH tests (Are `which` and `sshd` installed?)")
-            end
-        end
-        if !isempty(sshd_command)
-            mktempdir() do fakehomedir
-                mkdir(joinpath(fakehomedir,".ssh"))
-                # Unsetting the SSH agent serves two purposes. First, we make
-                # sure that we don't accidentally pick up an existing agent,
-                # and second we test that we fall back to using a key file
-                # if the agent isn't present.
-                withenv("HOME"=>fakehomedir,"SSH_AUTH_SOCK"=>nothing) do
-                    # Generate user file, first an unencrypted one
-                    wait(spawn(`ssh-keygen -N "" -C juliatest@localhost -f $fakehomedir/.ssh/id_rsa`))
-
-                    # Generate host keys
-                    wait(spawn(`ssh-keygen -f $fakehomedir/ssh_host_rsa_key -N '' -t rsa`))
-                    wait(spawn(`ssh-keygen -f $fakehomedir/ssh_host_dsa_key -N '' -t dsa`))
-
-                    our_ssh_port = rand(13000:14000) # Chosen arbitrarily
-
-                    key_option = "AuthorizedKeysFile $fakehomedir/.ssh/id_rsa.pub"
-                    pidfile_option = "PidFile $fakehomedir/sshd.pid"
-                    sshp = agentp = nothing
-                    logfile = tempname()
-                    ssh_debug = false
-                    function spawn_sshd()
-                        debug_flags = ssh_debug ? `-d -d` : ``
-                        _p = open(logfile, "a") do logfilestream
-                            spawn(pipeline(pipeline(`$sshd_command
-                            -e -f /dev/null $debug_flags
-                            -h $fakehomedir/ssh_host_rsa_key
-                            -h $fakehomedir/ssh_host_dsa_key -p $our_ssh_port
-                            -o $pidfile_option
-                            -o 'Protocol 2'
-                            -o $key_option
-                            -o 'UsePrivilegeSeparation no'
-                            -o 'StrictModes no'`,STDOUT),stderr=logfilestream))
-                        end
-                        # Give the SSH server 5 seconds to start up
-                        yield(); sleep(5)
-                        _p
-                    end
-                    sshp = spawn_sshd()
-
-                    TIOCSCTTY_str = "ccall(:ioctl, Void, (Cint, Cint, Int64), 0,
-                        (Sys.isbsd() || Sys.isapple()) ? 0x20007461 : Sys.islinux() ? 0x540E :
-                        error(\"Fill in TIOCSCTTY for this OS here\"), 0)"
-
-                    # To fail rather than hang
-                    function killer_task(p, master)
-                        @async begin
-                            sleep(10)
-                            kill(p)
-                            if isopen(master)
-                                nb_available(master) > 0 &&
-                                    write(logfile,
-                                        readavailable(master))
-                                close(master)
-                            end
-                        end
-                    end
-
-                    try
-                        function try_clone(challenges = [])
-                            cmd = """
-                            repo = nothing
-                            try
-                                $TIOCSCTTY_str
-                                reponame = "ssh://$(ENV["USER"])@localhost:$our_ssh_port$cache_repo"
-                                repo = LibGit2.clone(reponame, "$ssh_repo")
-                            catch err
-                                open("$logfile","a") do f
-                                    println(f,"HOME: ",ENV["HOME"])
-                                    println(f, err)
-                                end
-                            finally
-                                close(repo)
-                            end
-                            """
-                            # We try to be helpful by desperately looking for
-                            # a way to prompt the password interactively. Pretend
-                            # to be a TTY to suppress those shenanigans. Further, we
-                            # need to detach and change the controlling terminal with
-                            # TIOCSCTTY, since getpass opens the controlling terminal
-                            TestHelpers.with_fake_pty() do slave, master
-                                err = Base.Pipe()
-                                let p = spawn(detach(
-                                    `$(Base.julia_cmd()) --startup-file=no -e $cmd`),slave,slave,STDERR)
-                                    killer_task(p, master)
-                                    for (challenge, response) in challenges
-                                        readuntil(master, challenge)
-                                        sleep(1)
-                                        print(master, response)
-                                    end
-                                    sleep(2)
-                                    wait(p)
-                                    close(master)
-                                end
-                            end
-                            @test isfile(joinpath(ssh_repo,"testfile"))
-                            rm(ssh_repo, recursive = true)
-                        end
-
-                        # Should use the default files, no interaction required.
-                        try_clone()
-                        ssh_debug && (kill(sshp); sshp = spawn_sshd())
-
-                        # Ok, now encrypt the file and test with that (this also
-                        # makes sure that we don't accidentally fall back to the
-                        # unencrypted version)
-                        wait(spawn(`ssh-keygen -p -N "xxxxx" -f $fakehomedir/.ssh/id_rsa`))
-
-                        # Try with the encrypted file. Needs a password.
-                        try_clone(["Passphrase"=>"xxxxx\r\n"])
-                        ssh_debug && (kill(sshp); sshp = spawn_sshd())
-
-                        # Move the file. It should now ask for the location and
-                        # then the passphrase
-                        mv("$fakehomedir/.ssh/id_rsa","$fakehomedir/.ssh/id_rsa2")
-                        cp("$fakehomedir/.ssh/id_rsa.pub","$fakehomedir/.ssh/id_rsa2.pub")
-                        try_clone(["location"=>"$fakehomedir/.ssh/id_rsa2\n",
-                                   "Passphrase"=>"xxxxx\n"])
-                        mv("$fakehomedir/.ssh/id_rsa2","$fakehomedir/.ssh/id_rsa")
-                        rm("$fakehomedir/.ssh/id_rsa2.pub")
-
-                        # Ok, now start an agent
-                        agent_sock = tempname()
-                        agentp = spawn(`ssh-agent -a $agent_sock -d`)
-                        while stat(agent_sock).mode == 0 # Wait until the agent is started
-                            sleep(1)
-                        end
-
-                        # fake pty is required for the same reason as in try_clone
-                        # above
-                        withenv("SSH_AUTH_SOCK" => agent_sock) do
-                            TestHelpers.with_fake_pty() do slave, master
-                                cmd = """
-                                    $TIOCSCTTY_str
-                                    run(pipeline(`ssh-add $fakehomedir/.ssh/id_rsa`,
-                                        stderr = DevNull))
-                                """
-                                addp = spawn(detach(`$(Base.julia_cmd()) --startup-file=no -e $cmd`),
-                                        slave, slave, STDERR)
-                                killer_task(addp, master)
-                                sleep(2)
-                                write(master, "xxxxx\n")
-                                wait(addp)
-                            end
-
-                            # Should now use the agent
-                            try_clone()
-                        end
-                    catch err
-                        println("SSHD logfile contents follows:")
-                        println(read(logfile, String))
-                        rethrow(err)
-                    finally
-                        rm(logfile)
-                        sshp !== nothing && kill(sshp)
-                        agentp !== nothing && kill(agentp)
-                    end
-                end
-            end
-        end
-    end
-    =#
 
     # Note: Tests only work on linux as SSL_CERT_FILE is only respected on linux systems.
     @testset "Hostname verification" begin
@@ -2325,7 +2396,7 @@ mktempdir() do dir
                 pem = joinpath(root, common_name * ".pem")
 
                 # Generated a certificate which has the CN set correctly but no subjectAltName
-                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=DevNull))
+                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=DevNull))
                 run(`openssl x509 -in $cert -out $pem -outform PEM`)
 
                 # Find an available port by listening

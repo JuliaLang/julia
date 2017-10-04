@@ -111,8 +111,8 @@ end
 ```
 
 The Julia standard library uses this convention throughout and contains examples of functions
-with both copying and modifying forms (e.g., [`sort()`](@ref) and [`sort!()`](@ref)), and others
-which are just modifying (e.g., [`push!()`](@ref), [`pop!()`](@ref), [`splice!()`](@ref)).  It
+with both copying and modifying forms (e.g., [`sort`](@ref) and [`sort!`](@ref)), and others
+which are just modifying (e.g., [`push!`](@ref), [`pop!`](@ref), [`splice!`](@ref)).  It
 is typical for such functions to also return the modified array for convenience.
 
 ## Avoid strange type `Union`s
@@ -156,11 +156,11 @@ uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 ## Use naming conventions consistent with Julia's `base/`
 
   * modules and type names use capitalization and camel case: `module SparseArrays`, `struct UnitRange`.
-  * functions are lowercase ([`maximum()`](@ref), [`convert()`](@ref)) and, when readable, with multiple
-    words squashed together ([`isequal()`](@ref), [`haskey()`](@ref)). When necessary, use underscores
-    as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch()`](@ref)
-    as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers ([`sum_kbn()`](@ref)).
-  * conciseness is valued, but avoid abbreviation ([`indexin()`](@ref) rather than `indxin()`) as
+  * functions are lowercase ([`maximum`](@ref), [`convert`](@ref)) and, when readable, with multiple
+    words squashed together ([`isequal`](@ref), [`haskey`](@ref)). When necessary, use underscores
+    as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch`](@ref)
+    as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers ([`sum_kbn`](@ref)).
+  * conciseness is valued, but avoid abbreviation ([`indexin`](@ref) rather than `indxin`) as
     it becomes difficult to remember whether and how particular words are abbreviated.
 
 If a function name requires multiple words, consider whether it might represent more than one
@@ -235,7 +235,7 @@ with the "values" as subtypes.
 
 Be aware of when a macro could really be a function instead.
 
-Calling [`eval()`](@ref) inside a macro is a particularly dangerous warning sign; it means the
+Calling [`eval`](@ref) inside a macro is a particularly dangerous warning sign; it means the
 macro will only work when called at the top level. If such a macro is written as a function instead,
 it will naturally have access to the run-time values it needs.
 
@@ -307,7 +307,7 @@ higher-level, Julia-friendly API.
 
 ## Be careful with type equality
 
-You generally want to use [`isa()`](@ref) and [`<:`](@ref) for testing types,
+You generally want to use [`isa`](@ref) and [`<:`](@ref) for testing types,
 not `==`. Checking types for exact equality typically only makes sense when comparing to a known
 concrete type (e.g. `T == Float64`), or if you *really, really* know what you're doing.
 

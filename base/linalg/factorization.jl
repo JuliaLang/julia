@@ -22,15 +22,15 @@ end
 Test that a factorization of a matrix succeeded.
 
 ```jldoctest
-julia> cholfact([1 0; 0 1])
-Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
-[1.0 0.0; 0.0 1.0]
-successful: true
+julia> F = cholfact([1 0; 0 1]);
 
-julia> cholfact([1 0; 0 -1])
-Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
-[1.0 0.0; 0.0 -1.0]
-successful: false
+julia> LinAlg.issuccess(F)
+true
+
+julia> F = lufact([1 0; 0 0]);
+
+julia> LinAlg.issuccess(F)
+false
 ```
 """
 issuccess(F::Factorization)

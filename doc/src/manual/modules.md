@@ -17,8 +17,6 @@ using BigLib: thing1, thing2
 
 import Base.show
 
-importall OtherLib
-
 export MyType, foo
 
 struct MyType
@@ -53,9 +51,6 @@ from `using` in that functions must be imported using `import` to be extended wi
 In `MyModule` above we wanted to add a method to the standard `show` function, so we had to write
 `import Base.show`. Functions whose names are only visible via `using` cannot be extended.
 
-The keyword `importall` explicitly imports all names exported by the specified module, as if
-`import` were individually used on all of them.
-
 Once a variable is made visible via `using` or `import`, a module may not create its own variable
 with the same name. Imported variables are read-only; assigning to a global variable always affects
 a variable owned by the current module, or else raises an error.
@@ -89,7 +84,6 @@ functions into the current workspace:
 | `import MyModule`               | `MyModule.x`, `MyModule.y` and `MyModule.p`                                     | `MyModule.x`, `MyModule.y` and `MyModule.p` |
 | `import MyModule.x, MyModule.p` | `x` and `p`                                                                     | `x` and `p`                                 |
 | `import MyModule: x, p`         | `x` and `p`                                                                     | `x` and `p`                                 |
-| `importall MyModule`            | All `export`ed names (`x` and `y`)                                              | `x` and `y`                                 |
 
 ### Modules and files
 
@@ -158,14 +152,14 @@ end
 
 ### Relative and absolute module paths
 
-Given the statement `using Foo`, the system looks for `Foo` within `Main`. If the module does
-not exist, the system attempts to `require("Foo")`, which typically results in loading code from
-an installed package.
+Given the statement `using Foo`, the system consults an internal table of top-level modules
+to look for one named `Foo`. If the module does not exist, the system attempts to `require(:Foo)`,
+which typically results in loading code from an installed package.
 
-However, some modules contain submodules, which means you sometimes need to access a module that
-is not directly available in `Main`. There are two ways to do this. The first is to use an absolute
-path, for example `using Base.Sort`. The second is to use a relative path, which makes it easier
-to import submodules of the current module or any of its enclosing modules:
+However, some modules contain submodules, which means you sometimes need to access a non-top-level
+module. There are two ways to do this. The first is to use an absolute path, for example
+`using Base.Sort`. The second is to use a relative path, which makes it easier to import submodules
+of the current module or any of its enclosing modules:
 
 ```
 module Parent
@@ -382,9 +376,9 @@ A few other points to be aware of:
    of these and to create a single unique instance of others.
 
 It is sometimes helpful during module development to turn off incremental precompilation. The
-command line flag `--compilecache={yes|no}` enables you to toggle module precompilation on and
-off. When Julia is started with `--compilecache=no` the serialized modules in the compile cache
-are ignored when loading modules and module dependencies. `Base.compilecache()` can still be called
+command line flag `--compiled-modules={yes|no}` enables you to toggle module precompilation on and
+off. When Julia is started with `--compiled-modules=no` the serialized modules in the compile cache
+are ignored when loading modules and module dependencies. `Base.compilecache` can still be called
 manually and it will respect `__precompile__()` directives for the module. The state of this command
-line flag is passed to [`Pkg.build()`](@ref) to disable automatic precompilation triggering when installing,
+line flag is passed to [`Pkg.build`](@ref) to disable automatic precompilation triggering when installing,
 updating, and explicitly building packages.

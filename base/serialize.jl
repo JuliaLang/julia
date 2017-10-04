@@ -24,7 +24,8 @@ SerializationState(io::IO) = SerializationState{typeof(io)}(io)
 # types AbstractSerializer and Serializer  # defined in dict.jl
 
 const n_int_literals = 33
-const n_reserved_slots = 12
+const n_reserved_slots = 25
+const n_reserved_tags = 12
 
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
@@ -48,6 +49,8 @@ const TAGS = Any[
     Symbol, # OBJECT_TAG
     Symbol, # REF_OBJECT_TAG
     Symbol, # FULL_GLOBALREF_TAG
+    Symbol, # HEADER_TAG
+    fill(Symbol, n_reserved_tags)...,
 
     (), Bool, Any, Bottom, Core.TypeofBottom, Type, svec(), Tuple{}, false, true, nothing,
     :Any, :Array, :TypeVar, :Box, :Tuple, :Ptr, :return, :call, Symbol("::"), :Function,
@@ -64,9 +67,9 @@ const TAGS = Any[
     (Int64(0):Int64(n_int_literals-1))...
 ]
 
-@assert length(TAGS) <= 255
+@assert length(TAGS) == 255
 
-const ser_version = 6 # do not make changes without bumping the version #!
+const ser_version = 7 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
@@ -120,6 +123,7 @@ const WRAPPER_DATATYPE_TAG = Int32(o0+11)
 const OBJECT_TAG           = Int32(o0+12)
 const REF_OBJECT_TAG       = Int32(o0+13)
 const FULL_GLOBALREF_TAG   = Int32(o0+14)
+const HEADER_TAG           = Int32(o0+15)
 
 writetag(s::IO, tag) = write(s, UInt8(tag))
 
@@ -343,9 +347,10 @@ function serialize(s::AbstractSerializer, d::Dict)
 end
 
 function serialize_mod_names(s::AbstractSerializer, m::Module)
-    p = module_parent(m)
-    if m !== p
-        serialize_mod_names(s, p)
+    if Base.is_root_module(m)
+        serialize(s, Base.root_module_key(m))
+    else
+        serialize_mod_names(s, module_parent(m))
         serialize(s, module_name(m))
     end
 end
@@ -638,15 +643,54 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
 end
 
 """
-    serialize(stream, value)
+    Serializer.writeheader(s::AbstractSerializer)
+
+Write an identifying header to the specified serializer. The header consists of
+8 bytes as follows:
+
+| Offset | Description                                     |
+|:-------|:------------------------------------------------|
+|   0    | tag byte (0x37)                                 |
+|   1-2  | signature bytes "JL"                            |
+|   3    | protocol version                                |
+|   4    | bits 0-1: endianness: 0 = little, 1 = big       |
+|   4    | bits 2-3: platform: 0 = 32-bit, 1 = 64-bit      |
+|   5-7  | reserved                                        |
+"""
+function writeheader(s::AbstractSerializer)
+    io = s.io
+    writetag(io, HEADER_TAG)
+    write(io, "JL")  # magic bytes
+    write(io, UInt8(ser_version))
+    endianness = (ENDIAN_BOM == 0x04030201 ? 0 :
+                  ENDIAN_BOM == 0x01020304 ? 1 :
+                  error("unsupported endianness in serializer"))
+    machine = (sizeof(Int) == 4 ? 0 :
+               sizeof(Int) == 8 ? 1 :
+               error("unsupported word size in serializer"))
+    write(io, UInt8(endianness) | (UInt8(machine) << 2))
+    write(io, b"\x00\x00\x00")  # 3 reserved bytes
+    nothing
+end
+
+"""
+    serialize(stream::IO, value)
 
 Write an arbitrary value to a stream in an opaque format, such that it can be read back by
-[`deserialize`](@ref). The read-back value will be as identical as possible to the original. In
-general, this process will not work if the reading and writing are done by different
+[`deserialize`](@ref). The read-back value will be as identical as possible to the original.
+In general, this process will not work if the reading and writing are done by different
 versions of Julia, or an instance of Julia with a different system image. `Ptr` values are
 serialized as all-zero bit patterns (`NULL`).
+
+An 8-byte identifying header is written to the stream first. To avoid writing the header,
+construct a `SerializationState` and use it as the first argument to `serialize` instead.
+See also [`Serializer.writeheader`](@ref).
 """
-serialize(s::IO, x) = serialize(SerializationState(s), x)
+function serialize(s::IO, x)
+    ss = SerializationState(s)
+    writeheader(ss)
+    serialize(ss, x)
+end
 
 ## deserializing values ##
 
@@ -745,6 +789,11 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return s.table[Int(id)]
     elseif b == LONGSYMBOL_TAG
         return deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
+    elseif b == HEADER_TAG
+        for _ = 1:7
+            read(s.io, UInt8)
+        end
+        return deserialize(s)
     end
     t = desertag(b)
     if t.mutable && length(t.types) > 0  # manual specialization of fieldcount
@@ -772,21 +821,25 @@ function deserialize_svec(s::AbstractSerializer)
 end
 
 function deserialize_module(s::AbstractSerializer)
-    path = deserialize(s)
-    m = Main
-    if isa(path,Tuple) && path !== ()
-        # old version
-        for mname in path
-            m = getfield(m,mname)::Module
+    mkey = deserialize(s)
+    if isa(mkey, Tuple)
+        # old version, TODO: remove
+        if mkey === ()
+            return Main
+        end
+        m = Base.root_module(mkey[1])
+        for i = 2:length(mkey)
+            m = getfield(m, mkey[i])::Module
         end
     else
-        mname = path
+        m = Base.root_module(mkey)
+        mname = deserialize(s)
         while mname !== ()
-            m = getfield(m,mname)::Module
+            m = getfield(m, mname)::Module
             mname = deserialize(s)
         end
     end
-    m
+    return m
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Method})

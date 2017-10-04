@@ -30,7 +30,7 @@ scale!(s::T, X::Array{T}) where {T<:BlasFloat} = scale!(X, s)
 scale!(X::Array{T}, s::Number) where {T<:BlasFloat} = scale!(X, convert(T, s))
 function scale!(X::Array{T}, s::Real) where T<:BlasComplex
     R = typeof(real(zero(T)))
-    BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
+    Base.@gc_preserve X BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
     X
 end
 
@@ -115,11 +115,11 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
 stride1(x::Array) = 1
 stride1(x::StridedVector) = stride(x, 1)::Int
 
-function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},Range{TI}}) where {T<:BlasFloat,TI<:Integer}
+function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
     end
-    BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
+    Base.@gc_preserve x BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
 vecnorm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =
@@ -155,8 +155,9 @@ julia> triu!(M, 1)
 """
 function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
-    if (k > 0 && k > n) || (k < 0 && -k > m)
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m,$n)"))
+    if !(-m + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-m + 1) and at most $(n + 1) in an $m-by-$n matrix")))
     end
     idx = 1
     for j = 0:n-1
@@ -198,8 +199,9 @@ julia> tril!(M, 2)
 """
 function tril!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
-    if (k > 0 && k > n) || (k < 0 && -k > m)
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m,$n)"))
+    if !(-m - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-m - 1) and at most $(n - 1) in an $m-by-$n matrix")))
     end
     idx = 1
     for j = 0:n-1
@@ -213,26 +215,10 @@ function tril!(M::AbstractMatrix, k::Integer)
 end
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
-function gradient(F::AbstractVector, h::Vector)
-    n = length(F)
-    T = typeof(oneunit(eltype(F))/oneunit(eltype(h)))
-    g = similar(F, T)
-    if n == 1
-        g[1] = zero(T)
-    elseif n > 1
-        g[1] = (F[2] - F[1]) / (h[2] - h[1])
-        g[n] = (F[n] - F[n-1]) / (h[end] - h[end-1])
-        if n > 2
-            h = h[3:n] - h[1:n-2]
-            g[2:n-1] = (F[3:n] - F[1:n-2]) ./ h
-        end
-    end
-    g
-end
-
 function diagind(m::Integer, n::Integer, k::Integer=0)
     if !(-m <= k <= n)
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m,$n)"))
+        throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) and ",
+            "at most $n in an $m-by-$n matrix")))
     end
     k <= 0 ? range(1-k, m+1, min(m+k, n)) : range(k*m+1, m+1, min(m, n-k))
 end
@@ -240,7 +226,7 @@ end
 """
     diagind(M, k::Integer=0)
 
-A `Range` giving the indices of the `k`th diagonal of the matrix `M`.
+An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
 
 # Examples
 ```jldoctest
@@ -357,9 +343,15 @@ kron(a::AbstractMatrix, b::AbstractVector) = kron(a, reshape(b, length(b), 1))
 kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
 
 # Matrix power
-(^)(A::AbstractMatrix, p::Integer) = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
+(^)(A::AbstractMatrix, p::Integer) = p < 0 ? power_by_squaring(inv(A), -p) : power_by_squaring(A, p)
+function (^)(A::AbstractMatrix{T}, p::Integer) where T<:Integer
+    # make sure that e.g. [1 1;1 0]^big(3)
+    # gets promotes in a similar way as 2^big(3)
+    TT = promote_op(^, T, typeof(p))
+    return power_by_squaring(convert(AbstractMatrix{TT}, A), p)
+end
 function integerpow(A::AbstractMatrix{T}, p) where T
-    TT = Base.promote_op(^, T, typeof(p))
+    TT = promote_op(^, T, typeof(p))
     return (TT == T ? A : copy!(similar(A, TT), A))^Integer(p)
 end
 function schurpow(A::AbstractMatrix, p)
@@ -368,8 +360,8 @@ function schurpow(A::AbstractMatrix, p)
         retmat = A ^ floor(p)
         # Real part
         if p - floor(p) == 0.5
-            # special case: A^0.5 === sqrtm(A)
-            retmat = retmat * sqrtm(A)
+            # special case: A^0.5 === sqrt(A)
+            retmat = retmat * sqrt(A)
         else
             retmat = retmat * powm!(UpperTriangular(float.(A)), real(p - floor(p)))
         end
@@ -379,8 +371,8 @@ function schurpow(A::AbstractMatrix, p)
         R = S ^ floor(p)
         # Real part
         if p - floor(p) == 0.5
-            # special case: A^0.5 === sqrtm(A)
-            R = R * sqrtm(S)
+            # special case: A^0.5 === sqrt(A)
+            R = R * sqrt(S)
         else
             R = R * powm!(UpperTriangular(float.(S)), real(p - floor(p)))
         end
@@ -399,7 +391,8 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
 
     # Quicker return if A is diagonal
     if isdiag(A)
-        retmat = copy(A)
+        TT = promote_op(^, T, typeof(p))
+        retmat = copy_oftype(A, TT)
         for i in 1:n
             retmat[i, i] = retmat[i, i] ^ p
         end
@@ -420,12 +413,12 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Otherwise, use Schur decomposition
     return schurpow(A, p)
 end
-(^)(A::AbstractMatrix, p::Number) = expm(p*logm(A))
+(^)(A::AbstractMatrix, p::Number) = exp(p*log(A))
 
 # Matrix exponential
 
 """
-    expm(A)
+    exp(A::AbstractMatrix)
 
 Compute the matrix exponential of `A`, defined by
 
@@ -445,22 +438,26 @@ julia> A = eye(2, 2)
  1.0  0.0
  0.0  1.0
 
-julia> expm(A)
+julia> exp(A)
 2×2 Array{Float64,2}:
  2.71828  0.0
  0.0      2.71828
 ```
 """
-expm(A::StridedMatrix{<:BlasFloat}) = expm!(copy(A))
-expm(A::StridedMatrix{<:Integer}) = expm!(float(A))
-expm(x::Number) = exp(x)
+exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
+exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
-function expm!(A::StridedMatrix{T}) where T<:BlasFloat
+function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     n = checksquare(A)
+    if T <: Real
+        if issymmetric(A)
+            return full(exp(Symmetric(A)))
+        end
+    end
     if ishermitian(A)
-        return full(expm(Hermitian(A)))
+        return full(exp(Hermitian(A)))
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = norm(A, 1)
@@ -551,7 +548,7 @@ function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
 end
 
 """
-    logm(A{T}::StridedMatrix{T})
+    log(A{T}::StridedMatrix{T})
 
 If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
 the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
@@ -575,25 +572,27 @@ julia> A = 2.7182818 * eye(2)
  2.71828  0.0
  0.0      2.71828
 
-julia> logm(A)
+julia> log(A)
 2×2 Symmetric{Float64,Array{Float64,2}}:
  1.0  0.0
  0.0  1.0
 ```
 """
-function logm(A::StridedMatrix{T}) where T
+function log(A::StridedMatrix{T}) where T
     # If possible, use diagonalization
-    if issymmetric(A) && T <: Real
-        return logm(Symmetric(A))
+    if T <: Real
+        if issymmetric(A)
+            return full(log(Symmetric(A)))
+        end
     end
     if ishermitian(A)
-        return logm(Hermitian(A))
+        return full(log(Hermitian(A)))
     end
 
     # Use Schur decomposition
     n = checksquare(A)
     if istriu(A)
-        return full(logm(UpperTriangular(complex(A))))
+        return full(log(UpperTriangular(complex(A))))
     else
         if isreal(A)
             SchurF = schurfact(real(A))
@@ -602,22 +601,17 @@ function logm(A::StridedMatrix{T}) where T
         end
         if !istriu(SchurF.T)
             SchurS = schurfact(complex(SchurF.T))
-            logT = SchurS.Z * logm(UpperTriangular(SchurS.T)) * SchurS.Z'
+            logT = SchurS.Z * log(UpperTriangular(SchurS.T)) * SchurS.Z'
             return SchurF.Z * logT * SchurF.Z'
         else
-            R = logm(UpperTriangular(complex(SchurF.T)))
+            R = log(UpperTriangular(complex(SchurF.T)))
             return SchurF.Z * R * SchurF.Z'
         end
     end
 end
-function logm(a::Number)
-    b = log(complex(a))
-    return imag(b) == 0 ? real(b) : b
-end
-logm(a::Complex) = log(a)
 
 """
-    sqrtm(A)
+    sqrt(A::AbstractMatrix)
 
 If `A` has no negative real eigenvalues, compute the principal matrix square root of `A`,
 that is the unique matrix ``X`` with eigenvalues having positive real part such that
@@ -641,40 +635,38 @@ julia> A = [4 0; 0 4]
  4  0
  0  4
 
-julia> sqrtm(A)
+julia> sqrt(A)
 2×2 Array{Float64,2}:
  2.0  0.0
  0.0  2.0
 ```
 """
-function sqrtm(A::StridedMatrix{<:Real})
+function sqrt(A::StridedMatrix{<:Real})
     if issymmetric(A)
-        return full(sqrtm(Symmetric(A)))
+        return full(sqrt(Symmetric(A)))
     end
     n = checksquare(A)
     if istriu(A)
-        return full(sqrtm(UpperTriangular(A)))
+        return full(sqrt(UpperTriangular(A)))
     else
         SchurF = schurfact(complex(A))
-        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        R = full(sqrt(UpperTriangular(SchurF[:T])))
         return SchurF[:vectors] * R * SchurF[:vectors]'
     end
 end
-function sqrtm(A::StridedMatrix{<:Complex})
+function sqrt(A::StridedMatrix{<:Complex})
     if ishermitian(A)
-        return full(sqrtm(Hermitian(A)))
+        return full(sqrt(Hermitian(A)))
     end
     n = checksquare(A)
     if istriu(A)
-        return full(sqrtm(UpperTriangular(A)))
+        return full(sqrt(UpperTriangular(A)))
     else
         SchurF = schurfact(A)
-        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        R = full(sqrt(UpperTriangular(SchurF[:T])))
         return SchurF[:vectors] * R * SchurF[:vectors]'
     end
 end
-sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
-sqrtm(a::Complex) = sqrt(a)
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
@@ -892,7 +884,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv(A::StridedMatrix{T}) where T
-    tol = eps(real(float(one(T))))*maximum(size(A))
+    tol = eps(real(float(one(T))))*min(size(A)...)
     return pinv(A, tol)
 end
 function pinv(x::Number)

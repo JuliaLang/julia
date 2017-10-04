@@ -231,7 +231,7 @@
       <keyword>Any|Void</keyword>
       <keyword>Type(Constructor|Name|Var|_Array)?|(Union|Data|NonTuple)Type</keyword>
       <keyword>(Abstract|Strided|Bit)?(Array|Matrix|Vector)</keyword>
-      <keyword>Abstract(Cmd|RNG|SparseMatrix)</keyword>
+      <keyword>Abstract(Cmd|Range|RNG|SparseMatrix)</keyword>
       <keyword>(Abstract|Strided)?VecOrMat</keyword>
       <keyword>SparseMatrixCSC</keyword>
       <keyword>(D|Sub((Or)?D)?)Array</keyword>
@@ -301,7 +301,7 @@
       <keyword>Process(Chain(OrNot)?|Group)?</keyword>
       <keyword>Ptr</keyword>
       <keyword>QR(Pivoted)?</keyword>
-      <keyword>Range(s|1|Index|VecIntList)?</keyword>
+      <keyword>Range(Index|VecIntList)?</keyword>
       <keyword>RawOrBoxedHandle</keyword>
       <keyword>Redirectable</keyword>
       <keyword>Regex(Match(Iterator)?)?</keyword>
@@ -325,6 +325,7 @@
       <keyword>UV(Handle|PollingWatcher|Stream)</keyword>
       <keyword>UDPSocket</keyword>
       <keyword>Undef(RefTag)?</keyword>
+      <keyword>UnitRange</keyword>
       <keyword>VarTable</keyword>
       <keyword>Vararg</keyword>
       <keyword>VersionNumber</keyword>
