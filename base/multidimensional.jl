@@ -90,6 +90,11 @@ module IteratorsMD
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
     eltype(index::CartesianIndex) = eltype(index.I)
 
+    # iteration
+    start(::CartesianIndex) = 1
+    next(::CartesianIndex, i::Int) = (c.I[i], i + 1)
+    done(::CartesianIndex{N}, i::Int) where N = N < i
+
     # access to index tuple
     Tuple(index::CartesianIndex) = index.I
 
