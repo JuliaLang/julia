@@ -14,15 +14,6 @@ export SHA1, VersionRange, VersionSpec, Package, PackageVersion, UpgradeLevel, E
     registered_uuids, registered_paths, registered_uuid, registered_name,
     git_file_stream, read_project, read_manifest, pathrepr
 
-## utility functions ##
-
-let prefix = joinpath("..", "..", "")
-    global function pathrepr(path::String, base::String=pwd())
-        r = relpath(path, base)
-        repr(startswith(r, joinpath("..", "..", "")) ? r : abspath(path))
-    end
-end
-
 ## ordering of UUIDs ##
 
 Base.isless(a::UUID, b::UUID) = a.value < b.value
@@ -294,7 +285,7 @@ function write_env(env::EnvCache)
     old_env = EnvCache(env.env)
     # update the project file
     if !isempty(env.project) || ispath(env.project_file)
-        info("Updating $(pathrepr(env.project_file))")
+        info("Updating $(pathrepr(env, env.project_file))")
         Pkg3.Display.print_project_diff(old_env, env)
         project = deepcopy(env.project)
         isempty(project["deps"]) && delete!(project, "deps")
@@ -305,7 +296,7 @@ function write_env(env::EnvCache)
     end
     # update the manifest file
     if !isempty(env.manifest) || ispath(env.manifest_file)
-        info("Updating $(pathrepr(env.manifest_file))")
+        info("Updating $(pathrepr(env, env.manifest_file))")
         Pkg3.Display.print_manifest_diff(old_env, env)
         manifest = deepcopy(env.manifest)
         uniques = sort!(collect(keys(manifest)), by=lowercase)
@@ -716,6 +707,30 @@ function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Void}
         return convert(Dict{String,Any}, info)
     end
     return nothing
+end
+
+iswindows() = @static VERSION < v"0.7-" ? Sys.is_windows() : Sys.iswindows()
+
+"Give a short path string representation"
+function pathrepr(env::EnvCache, path::String, base::String=pwd())
+    path = abspath(base, path)
+    if env.git != nothing
+        repo = LibGit2.path(env.git)
+        if startswith(base, repo)
+            # we're in the repo => path relative to pwd()
+            path = relpath(path, base)
+        elseif startswith(path, repo)
+            # we're not in repo but path is => path relative to repo
+            path = relpath(path, repo)
+        end
+    end
+    if !iswindows() && isabspath(path)
+        home = joinpath(homedir(), "")
+        if startswith(path, home)
+            path = joinpath("~", path[nextind(path,endof(home)):end])
+        end
+    end
+    return repr(path)
 end
 
 end # module
