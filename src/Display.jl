@@ -16,21 +16,22 @@ const colors = Dict(
 const color_dark = :light_black
 
 function status(env::EnvCache, mode::Symbol)
+    project = env.project
+    manifest = env.manifest
     if env.git != nothing
         git_path = LibGit2.path(env.git)
         project_path = relpath(env.project_file, git_path)
         manifest_path = relpath(env.manifest_file, git_path)
+        project = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
+        manifest = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
     end
+    diff = manifest_diff(manifest, env.manifest, true)
     if mode == :project
-        project = env.git == nothing ? env.project :
-            read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
         info("Status ", pathrepr(env, env.project_file))
         print_project_diff(project["deps"], env.project["deps"], true)
     elseif mode == :manifest
-        manifest = env.git == nothing ? env.manifest :
-            read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
         info("Status ", pathrepr(env, env.manifest_file))
-        print_manifest_diff(manifest, env.manifest, true)
+        print_manifest_diff(diff)
     else
         error("unexpected mode: $mode")
     end
@@ -96,11 +97,13 @@ function manifest_diff(
     end
     sort!(diff, by=pair->lowercase(pair[pair[2]!=nothing ? 2 : 1].name))
 end
+manifest_diff(infos₀::Dict, infos₁::Dict, all::Bool=false) =
+    manifest_diff(manifest_entries(infos₀), manifest_entries(infos₁), all)
 
 v_str(x::ManifestEntry) =
     x.version == nothing ? "[$(string(x.hash)[1:16])]" : "v$(x.version)"
 
-function emit_manifest_diff(emit::Function, diff::ManifestDiff, all::Bool=false)
+function print_manifest_diff(diff::ManifestDiff)
     if isempty(diff)
         print_with_color(color_dark, " [no changes]\n")
         return
@@ -108,64 +111,24 @@ function emit_manifest_diff(emit::Function, diff::ManifestDiff, all::Bool=false)
     for (info₀, info₁) in diff
         uuid = info₁ != nothing ? info₁.uuid : info₀.uuid
         name = info₁ != nothing ? info₁.name : info₀.name
-        u = string(uuid)[1:8]
         if info₀ != nothing && info₁ != nothing
             v₀, v₁ = v_str(info₀), v_str(info₁)
             x = info₀.version == nothing || info₁.version == nothing ? '~' :
                 info₀.version < info₁.version ? '↑' :
                 info₀.version > info₁.version ? '↓' : ' '
-            emit(uuid, name, x, x == ' ' ? v₀ : "$v₀ ⇒ $v₁")
+            v = x == ' ' ? v₀ : "$v₀ ⇒ $v₁"
         elseif info₀ != nothing
-            emit(uuid, name, '-', v_str(info₀))
+            x, v = '-', v_str(info₀)
         elseif info₁ != nothing
-            emit(uuid, name, '+', v_str(info₁))
+            x, v = '+', v_str(info₁)
         else
             error("this should not happen")
         end
-    end
-end
-
-function print_manifest_diff(
-    infos₀::Dict{UUID,ManifestEntry},
-    infos₁::Dict{UUID,ManifestEntry},
-    all::Bool = false,
-)::Void
-    emit_manifest_diff(manifest_diff(infos₀, infos₁, all)) do uuid, name, x, vers
         print_with_color(color_dark, " [$(string(uuid)[1:8])] ")
-        print_with_color(colors[x], "$x $name $vers\n")
+        print_with_color(colors[x], "$x $name $v\n")
     end
 end
-print_manifest_diff(infos₀::Dict, infos₁::Dict, all::Bool=false) =
-    print_manifest_diff(manifest_entries(infos₀), manifest_entries(infos₁), all)
-print_manifest_diff(env₀::EnvCache, env₁::EnvCache, all::Bool=false) =
-    print_manifest_diff(env₀.manifest, env₁.manifest, all)
+print_manifest_diff(env₀::EnvCache, env₁::EnvCache) =
+    print_manifest_diff(manifest_diff(env₀.manifest, env₁.manifest))
 
-function print_package_tree(
-    io::IO,
-    env::EnvCache,
-    deps::Dict = env.project["deps"],
-    seen::Dict{UUID,Bool} = Dict{UUID,Bool}(),
-    depth::Int = 0,
-)::Void
-    for (name::String, uuid::UUID) in sort!(collect(deps), by=lowercase∘first)
-        print(io, "  "^depth, name, " [", string(uuid)[1:8], "]")
-        if haskey(seen, uuid)
-            seen[uuid] && print(io, " ⋯")
-            println(io)
-        else
-            println(io)
-            seen[uuid] = false # no deps
-            for (name′, infos) in env.manifest, info in infos
-                uuid == UUID(info["uuid"]) || continue
-                haskey(info, "deps") && !isempty(info["deps"]) || continue
-                print_package_tree(io, env, info["deps"], seen, depth+1)
-                seen[uuid] = true # has deps
-                break # stop searching manifest
-            end
-        end
-    end
-end
-print_package_tree(env::EnvCache = EnvCache()) =
-    print_package_tree(STDOUT, env)
-
-end
+end # module
