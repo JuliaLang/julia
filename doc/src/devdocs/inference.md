@@ -97,7 +97,8 @@ params = Core.Inference.InferenceParams(typemax(UInt))
 # Get the CodeInfo object
 ci = (@code_typed fill(3, (5, 5)))[1]  # we'll try this on the code for `fill(3, (5, 5))`
 # Calculate cost of each statement
-cost(stmt) = Core.Inference.statement_cost(stmt, ci, Base, params)
+cost(stmt::Expr) = Core.Inference.statement_cost(stmt, 0, ci, Base, params)
+cost(stmt) = 0
 cst = map(cost, ci.code)
 ```
 
