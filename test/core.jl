@@ -3339,10 +3339,6 @@ end
 @test EmptyIIOtherField13175(EmptyImmutable13175(), 1.0) == EmptyIIOtherField13175(EmptyImmutable13175(), 1.0)
 @test EmptyIIOtherField13175(EmptyImmutable13175(), 1.0) != EmptyIIOtherField13175(EmptyImmutable13175(), 2.0)
 
-# issue #13183
-gg13183(x::X...) where {X} = 1==0 ? gg13183(x, x) : 0
-@test gg13183(5) == 0
-
 # issue 8932 (llvm return type legalizer error)
 struct Vec3_8932
     x::Float32

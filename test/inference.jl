@@ -2,6 +2,20 @@
 
 # tests for Core.Inference correctness and precision
 import Core.Inference: Const, Conditional, ⊑
+const isleaftype = Core.Inference._isleaftype
+
+# demonstrate some of the type-size limits
+@test Core.Inference.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 0) == Ref
+@test Core.Inference.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 0) == Ref{Complex{T} where T}
+let comparison = Tuple{X, X} where X<:Tuple
+    sig = Tuple{X, X} where X<:comparison
+    ref = Tuple{X, X} where X
+    @test Core.Inference.limit_type_size(sig, comparison, comparison, 10) == comparison
+    @test Core.Inference.limit_type_size(sig, ref, comparison,  10) == comparison
+    @test Core.Inference.limit_type_size(Tuple{sig}, Tuple{ref}, comparison,  10) == Tuple{comparison}
+    @test Core.Inference.limit_type_size(sig, ref, Tuple{comparison},  10) == sig
+end
+
 
 # issue 9770
 @noinline x9770() = false
@@ -186,7 +200,6 @@ function find_tvar10930(arg)
 end
 @test find_tvar10930(Vararg{Int}) === 1
 
-const isleaftype = Base._isleaftype
 
 # issue #12474
 @generated function f12474(::Any)
@@ -1225,3 +1238,8 @@ end
 let t = Tuple{Type{T23786{D, N} where N where D<:Tuple{Vararg{Array{T, 1} where T, N} where N}}}
     @test Core.Inference.limit_type_depth(t, 4) >: t
 end
+
+# issue #13183
+_false13183 = false
+gg13183(x::X...) where {X} = (_false13183 ? gg13183(x, x) : 0)
+@test gg13183(5) == 0

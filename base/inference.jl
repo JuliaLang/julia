@@ -909,8 +909,8 @@ end
 function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source), allowed_tuplelen::Int)
     source = svec(unwrap_unionall(compare), unwrap_unionall(source))
     source[1] === source[2] && (source = svec(source[1]))
-    type_more_complex(t, compare, source, TUPLE_COMPLEXITY_LIMIT_DEPTH, allowed_tuplelen) || return t
-    r = _limit_type_size(t, compare, source, allowed_tuplelen)
+    type_more_complex(t, compare, source, 1, TUPLE_COMPLEXITY_LIMIT_DEPTH, allowed_tuplelen) || return t
+    r = _limit_type_size(t, compare, source, 1, allowed_tuplelen)
     @assert t <: r
     #@assert r === _limit_type_size(r, t, source) # this monotonicity constraint is slightly stronger than actually required,
       # since we only actually need to demonstrate that repeated application would reaches a fixed point,
@@ -920,7 +920,7 @@ end
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
-function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVector, tupledepth::Int, allowed_tuplelen::Int)
+function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, tupledepth::Int, allowed_tuplelen::Int)
     # detect cases where the comparison is trivial
     if t === c
         return false
@@ -930,7 +930,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         return false # fastpath: unparameterized types are always finite
     elseif tupledepth > 0 && isa(unwrap_unionall(t), DataType) && isa(c, Type) && c !== Union{} && c <: t
         return false # t is already wider than the comparison in the type lattice
-    elseif tupledepth > 0 && is_derived_type_from_any(unwrap_unionall(t), sources)
+    elseif tupledepth > 0 && is_derived_type_from_any(unwrap_unionall(t), sources, depth)
         return false # t isn't something new
     end
     # peel off wrappers
@@ -944,19 +944,20 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     end
     # rules for various comparison types
     if isa(c, TypeVar)
+        tupledepth = 1 # allow replacing a TypeVar with a concrete value (since we know the UnionAll must be in covariant position)
         if isa(t, TypeVar)
             return !(t.lb === Union{} || t.lb === c.lb) || # simplify lb towards Union{}
-                   type_more_complex(t.ub, c.ub, sources, tupledepth, 0)
+                   type_more_complex(t.ub, c.ub, sources, depth + 1, tupledepth, 0)
         end
         c.lb === Union{} || return true
-        return type_more_complex(t, c.ub, sources, max(tupledepth, 1), 0) # allow replacing a TypeVar with a concrete value
+        return type_more_complex(t, c.ub, sources, depth, tupledepth, 0)
     elseif isa(c, Union)
         if isa(t, Union)
-            return type_more_complex(t.a, c.a, sources, tupledepth, allowed_tuplelen) ||
-                   type_more_complex(t.b, c.b, sources, tupledepth, allowed_tuplelen)
+            return type_more_complex(t.a, c.a, sources, depth, tupledepth, allowed_tuplelen) ||
+                   type_more_complex(t.b, c.b, sources, depth, tupledepth, allowed_tuplelen)
         end
-        return type_more_complex(t, c.a, sources, tupledepth, allowed_tuplelen) &&
-               type_more_complex(t, c.b, sources, tupledepth, allowed_tuplelen)
+        return type_more_complex(t, c.a, sources, depth, tupledepth, allowed_tuplelen) &&
+               type_more_complex(t, c.b, sources, depth, tupledepth, allowed_tuplelen)
     elseif isa(t, Int) && isa(c, Int)
         return t !== 1 # alternatively, could use !(0 <= t < c)
     end
@@ -989,16 +990,16 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
                         end
                     end
                 end
-                type_more_complex(tPi, cPi, sources, tupledepth, 0) && return true
+                type_more_complex(tPi, cPi, sources, depth + 1, tupledepth, 0) && return true
             end
             return false
         elseif isvarargtype(c)
-            return type_more_complex(t, unwrapva(c), sources, tupledepth, 0)
+            return type_more_complex(t, unwrapva(c), sources, depth, tupledepth, 0)
         end
         if isType(t) # allow taking typeof any source type anywhere as Type{...}, as long as it isn't nesting Type{Type{...}}
             tt = unwrap_unionall(t.parameters[1])
             if isa(tt, DataType) && !isType(tt)
-                is_derived_type_from_any(tt, sources) || return true
+                is_derived_type_from_any(tt, sources, depth) || return true
                 return false
             end
         end
@@ -1006,17 +1007,24 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     return true
 end
 
-function is_derived_type(@nospecialize(t), @nospecialize(c)) # try to find `type` somewhere in `comparison` type
-    t === c && return true
+# try to find `type` somewhere in `comparison` type
+# at a minimum nesting depth of `mindepth`
+function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
+    if mindepth > 0
+        mindepth -= 1
+    end
+    if t === c
+        return mindepth == 0
+    end
     if isa(c, TypeVar)
         # see if it is replacing a TypeVar upper bound with something simpler
-        return is_derived_type(t, c.ub)
+        return is_derived_type(t, c.ub, mindepth)
     elseif isa(c, Union)
         # see if it is one of the elements of the union
-        return is_derived_type(t, c.a) || is_derived_type(t, c.b)
+        return is_derived_type(t, c.a, mindepth + 1) || is_derived_type(t, c.b, mindepth + 1)
     elseif isa(c, UnionAll)
         # see if it is derived from the body
-        return is_derived_type(t, c.body)
+        return is_derived_type(t, c.body, mindepth)
     elseif isa(c, DataType)
         if isa(t, DataType)
             # see if it is one of the supertypes of a parameter
@@ -1029,7 +1037,7 @@ function is_derived_type(@nospecialize(t), @nospecialize(c)) # try to find `type
         # see if it was extracted from a type parameter
         cP = c.parameters
         for p in cP
-            is_derived_type(t, p) && return true
+            is_derived_type(t, p, mindepth) && return true
         end
         if isleaftype(c) && isbits(c)
             # see if it was extracted from a fieldtype
@@ -1040,21 +1048,22 @@ function is_derived_type(@nospecialize(t), @nospecialize(c)) # try to find `type
             # it cannot have a reference cycle in the type graph
             cF = c.types
             for f in cF
-                is_derived_type(t, f) && return true
+                is_derived_type(t, f, mindepth) && return true
             end
         end
     end
     return false
 end
 
-function is_derived_type_from_any(@nospecialize(t), sources::SimpleVector)
+function is_derived_type_from_any(@nospecialize(t), sources::SimpleVector, mindepth::Int)
     for s in sources
-        is_derived_type(t, s) && return true
+        is_derived_type(t, s, mindepth) && return true
     end
     return false
 end
 
-function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector, allowed_tuplelen::Int) # type vs. comparison which was derived from source
+# type vs. comparison or which was derived from source
+function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, allowed_tuplelen::Int)
     if t === c
         return t # quick egal test
     elseif t === Union{}
@@ -1063,7 +1072,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         return t # fast path: unparameterized are always simple
     elseif isa(unwrap_unionall(t), DataType) && isa(c, Type) && c !== Union{} && c <: t
         return t # t is already wider than the comparison in the type lattice
-    elseif is_derived_type_from_any(unwrap_unionall(t), sources)
+    elseif is_derived_type_from_any(unwrap_unionall(t), sources, depth)
         return t # t isn't something new
     end
     if isa(t, TypeVar)
@@ -1074,8 +1083,8 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         end
     elseif isa(t, Union)
         if isa(c, Union)
-            a = _limit_type_size(t.a, c.a, sources, allowed_tuplelen)
-            b = _limit_type_size(t.b, c.b, sources, allowed_tuplelen)
+            a = _limit_type_size(t.a, c.a, sources, depth, allowed_tuplelen)
+            b = _limit_type_size(t.b, c.b, sources, depth, allowed_tuplelen)
             return Union{a, b}
         end
     elseif isa(t, UnionAll)
@@ -1084,11 +1093,11 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
             cv = c.var
             if tv.ub === cv.ub
                 if tv.lb === cv.lb
-                    return UnionAll(tv, _limit_type_size(t.body, c.body, sources, allowed_tuplelen))
+                    return UnionAll(tv, _limit_type_size(t.body, c.body, sources, depth + 1, allowed_tuplelen))
                 end
                 ub = tv.ub
             else
-                ub = _limit_type_size(tv.ub, cv.ub, sources, 0)
+                ub = _limit_type_size(tv.ub, cv.ub, sources, depth + 1, 0)
             end
             if tv.lb === cv.lb
                 lb = tv.lb
@@ -1097,21 +1106,21 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                 lb = Bottom
             end
             v2 = TypeVar(tv.name, lb, ub)
-            return UnionAll(v2, _limit_type_size(t{v2}, c{v2}, sources, allowed_tuplelen))
+            return UnionAll(v2, _limit_type_size(t{v2}, c{v2}, sources, depth + 1, allowed_tuplelen))
         end
-        tbody = _limit_type_size(t.body, c, sources, allowed_tuplelen)
+        tbody = _limit_type_size(t.body, c, sources, depth + 1, allowed_tuplelen)
         tbody === t.body && return t
         return UnionAll(t.var, tbody)
     elseif isa(c, UnionAll)
         # peel off non-matching wrapper of comparison
-        return _limit_type_size(t, c.body, sources, allowed_tuplelen)
+        return _limit_type_size(t, c.body, sources, depth, allowed_tuplelen)
     elseif isa(t, DataType)
         if isa(c, DataType)
             tP = t.parameters
             cP = c.parameters
             if t.name === c.name && !isempty(cP)
                 if isvarargtype(t)
-                    VaT = _limit_type_size(tP[1], cP[1], sources, 0)
+                    VaT = _limit_type_size(tP[1], cP[1], sources, depth + 1, 0)
                     N = tP[2]
                     if isa(N, TypeVar) || N === cP[2]
                         return Vararg{VaT, N}
@@ -1138,19 +1147,19 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                         else
                             cPi = Any
                         end
-                        Q[i] = _limit_type_size(Q[i], cPi, sources, 0)
+                        Q[i] = _limit_type_size(Q[i], cPi, sources, depth + 1, 0)
                     end
                     return Tuple{Q...}
                 end
             elseif isvarargtype(c)
                 # Tuple{Vararg{T}} --> Tuple{T} is OK
-                return _limit_type_size(t, cP[1], sources, 0)
+                return _limit_type_size(t, cP[1], sources, depth, 0)
             end
         end
         if isType(t) # allow taking typeof as Type{...}, but ensure it doesn't start nesting
             tt = unwrap_unionall(t.parameters[1])
             if isa(tt, DataType) && !isType(tt)
-                is_derived_type_from_any(tt, sources) && return t
+                is_derived_type_from_any(tt, sources, depth) && return t
             end
         end
         if isvarargtype(t)
@@ -1866,10 +1875,9 @@ function abstract_call_method(method::Method, @nospecialize(f), @nospecialize(si
     end
 
     if limited
-        newsig = sig
         sigtuple = unwrap_unionall(sig)::DataType
         msig = unwrap_unionall(method.sig)::DataType
-        max_spec_len = length(msig.parameters) + 1
+        spec_len = length(msig.parameters) + 1
         ls = length(sigtuple.parameters)
         if method === sv.linfo.def
             # direct self-recursion permits much greater use of reducers
@@ -1877,32 +1885,13 @@ function abstract_call_method(method::Method, @nospecialize(f), @nospecialize(si
             # here we assume that complexity(specTypes) :>= complexity(sig)
             comparison = sv.linfo.specTypes
             l_comparison = length(unwrap_unionall(comparison).parameters)
-            max_spec_len = max(max_spec_len, l_comparison)
+            spec_len = max(spec_len, l_comparison)
         else
             comparison = method.sig
         end
-        if method.isva && ls > max_spec_len
-            # limit length based on size of definition signature.
-            # for example, given function f(T, Any...), limit to 3 arguments
-            # instead of the default (MAX_TUPLETYPE_LEN)
-            fst = sigtuple.parameters[max_spec_len]
-            allsame = true
-            # allow specializing on longer arglists if all the trailing
-            # arguments are the same, since there is no exponential
-            # blowup in this case.
-            for i = (max_spec_len + 1):ls
-                if sigtuple.parameters[i] != fst
-                    allsame = false
-                    break
-                end
-            end
-            if !allsame
-                sigtuple = limit_tuple_type_n(sigtuple, max_spec_len)
-                newsig = rewrap_unionall(sigtuple, newsig)
-            end
-        end
-        # see if the type is still too big, and limit it further if still required
-        newsig = limit_type_size(newsig, comparison, sv.linfo.specTypes, max_spec_len)
+        # see if the type is too big, and limit it if required
+        newsig = limit_type_size(sig, comparison, sv.linfo.specTypes, spec_len)
+
         if newsig !== sig
             if !sv.limited
                 # continue inference, but limit parameter complexity to ensure (quick) convergence
@@ -1939,6 +1928,7 @@ function abstract_call_method(method::Method, @nospecialize(f), @nospecialize(si
         end
         sparams = recomputed[2]::SimpleVector
     end
+
     rt, edge = typeinf_edge(method, sig, sparams, sv)
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
     return rt
