@@ -470,6 +470,11 @@ julia> const e  = 2.71828182845904523536;
 julia> const pi = 3.14159265358979323846;
 ```
 
+Multiple variables can be declared in a single `const` statement:
+```jldoctest
+julia> const a, b = 1, 2
+```
+
 The `const` declaration should only be used in global scope on globals.
 It is difficult for the compiler to optimize code involving global variables, since
 their values (or even their types) might change at almost any time. If a global variable will
