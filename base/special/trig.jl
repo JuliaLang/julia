@@ -234,9 +234,11 @@ function atan(x::T) where T<:Union{Float32, Float64}
     #      [11/16.19/16] atan(x) = atan( 1 ) + atan( (t-1)/(1+t) )
     #      [19/16,39/16] atan(x) = atan(3/2) + atan( (t-1.5)/(1+1.5t) )
     #      [39/16,INF]   atan(x) = atan(INF) + atan( -1/t )
+    #
+    #  If isnan(x) is true, then the nan value will eventually be passed to
+    #  atan_pq(x) and return the appropriate nan value.
 
     absx = abs(x)
-    isnan(x) && return T(NaN)
     if absx >= ATAN_LARGE_X(T)
         return copysign(T(1.5707963267948966), x)
     end
