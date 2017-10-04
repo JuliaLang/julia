@@ -4756,6 +4756,8 @@ function statement_cost(ex::Expr, line::Int, src::CodeInfo, mod::Module, params:
                     return argcost
                 elseif f == Main.Core.arrayref
                     return plus_saturate(argcost, isknowntype(ex.typ) ? 4 : params.inline_nonleaf_penalty)
+                elseif f == Main.Core.throw
+                    return 0 # errors are not part of the typical runtime cost, don't penalize error branches
                 end
                 fidx = findfirst(x->x===f, t_ffunc_key)
                 if fidx == 0

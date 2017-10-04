@@ -123,3 +123,21 @@ end
     @test f19122()
     @test g19122()
 end
+
+function stmtcost_throw1(x)
+    x < 0 && throw(InexactError(:stmtcost, Float64, x)) # produces an Expr(:call, throw, ...)
+    sqrt(x)
+end
+function stmtcost_throw2(x)
+    x < 0 && throw(DivideError())        # produces an Expr(:invoke, ...)
+    sqrt(x)
+end
+@testset "inlining statement costs" begin
+    params = Core.Inference.InferenceParams(typemax(UInt))
+    ci = (@code_typed stmtcost_throw1(-3))[1]
+    cost(stmt::Expr) = Core.Inference.statement_cost(stmt, 0, ci, Base, params)
+    cost(stmt) = 0
+    @test 20 <= sum(map(cost, ci.code)) < 30
+    ci = (@code_typed stmtcost_throw2(-3))[1]
+    @test 20 <= sum(map(cost, ci.code)) < 30
+end
