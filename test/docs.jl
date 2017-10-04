@@ -1077,7 +1077,7 @@ end
 
     for M in exported_submodules(Base)
         docstring = string(Docs.doc(M))
-        M == Base && continue  # TODO fix
+        M == Base && continue  # Base is documented as a keyword
         @test !contains(docstring, "No documentation found.")
     end
 end

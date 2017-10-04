@@ -1494,6 +1494,6 @@ Tuple
 
 @doc """
 The standard library of Julia.
-""" -> Base
+""" -> kw"Base"
 
 end
