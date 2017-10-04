@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module Threads
-@doc """
+"""
 Experimental multithreading support.
-""" -> Threads
+"""
+module Threads
 
 include("threadingconstructs.jl")
 include("atomics.jl")

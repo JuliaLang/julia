@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Provide the [`SharedArray`](@ref) type. It represents an array, which is shared across multiple processes, on a single machine.
+"""
 module SharedArrays
 
 using Mmap, Base.Distributed
