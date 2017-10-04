@@ -2,6 +2,10 @@
 
 module Distributed
 
+@doc """
+Tools for distributed parallel calculations.
+""" -> Distributed
+
 # imports for extension
 import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
              hash, ==, connect, kill, serialize, deserialize, close, showerror

@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Libc
+@doc """
+Interface to libc, the C standard library.
+""" -> Libc
 
 import Base: transcode
 

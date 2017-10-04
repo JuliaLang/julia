@@ -709,7 +709,11 @@ module Collections
         @eval Base.@deprecate_moved $f "DataStructures"
     end
 end
+@doc """
+Collections will be removed from Base. Use DataStructures instead.
+""" -> Collections
 export Collections
+
 
 # Broadcast now returns a BitArray when the resulting eltype is Bool (#17623)
 @deprecate bitbroadcast broadcast
@@ -1324,6 +1328,9 @@ module Operators
         end
     end
 end
+@doc """
+Base.Operators is deprecated, use Base instead.
+""" -> Operators
 export Operators
 
 # PR #21956
@@ -1355,6 +1362,15 @@ module DSP
 end
 using .DSP
 export conv, conv2, deconv, filt, filt!, xcorr
+@doc """
+DFT will be removed from Base. Use the package with the same name instead.
+""" -> DFT
+@doc """
+DSP will be removed from Base. Use the package with the same name instead.
+""" -> DSP
+@doc """
+FFTW will be removed from Base. Use the package with the same name instead.
+""" -> FFTW
 
 module Test
 for f in [Symbol("@inferred"), Symbol("@test"), Symbol("@test_approx_eq"),

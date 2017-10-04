@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Meta
-#
-# convenience functions for metaprogramming
-#
+@doc """
+Convenience functions for metaprogramming.
+""" -> Meta
 
 export quot,
        isexpr,

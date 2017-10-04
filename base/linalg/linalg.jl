@@ -1,6 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module LinAlg
+@doc """
+Linear algebra module. Provides array arithmetic,
+matrix factorizations and other linear algebra related
+functionality.
+""" -> LinAlg
 
 import Base: \, /, *, ^, +, -, ==
 import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac_mul_B,
