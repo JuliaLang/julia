@@ -89,7 +89,7 @@ module IteratorsMD
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
     eltype(index::CartesianIndex) = eltype(index.I)
-    
+
     # iteration
     start(::CartesianIndex) = 1
     next(::CartesianIndex, i::Int) = (c.I[i], i + 1)
