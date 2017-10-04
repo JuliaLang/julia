@@ -293,7 +293,6 @@ atan2_fast(x::Float64, y::Float64) =
     ccall(("atan2",libm), Float64, (Float64,Float64), x, y)
 
 asin_fast(x::FloatTypes) = asin(x)
-atan_fast(x) = atan(x)
 
 # explicit implementations
 
