@@ -727,6 +727,9 @@ end
             by = T(asin(big(x)))
             @test abs(asin(x) - by)/eps(by) <= one(T)
         end
+        # This case was used to find a bug, but it isn't special in itself
+        @test atan(1.7581305072934137) ≈ 1.053644580517088
+
     end
 end
 @testset "atan2" begin

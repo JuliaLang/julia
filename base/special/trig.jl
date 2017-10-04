@@ -262,7 +262,7 @@ function atan(x::T) where T<:Union{Float32, Float64}
     else
         if absx < T(39/16)  # 19/16 <= |x| < 39/16
             hi = ATAN_3_O_2_HI(T)
-            lo = ATAN_3_O_2_HI(T)
+            lo = ATAN_3_O_2_LO(T)
             x = (absx - T(1.5))/(T(1.0) + T(1.5)*absx)
         else # 39/16 <= |x| < upper threshold (2.0^66 or 2.0f0^26)
         hi = ATAN_INF_HI(T)
