@@ -959,29 +959,49 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     return x == y || jl_egal(x, y);
 }
 
+static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
+
 static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
+    if (obviously_egal(x, y)) return 1;
+
     jl_unionstate_t oldLunions = e->Lunions;
     memset(e->Lunions.stack, 0, sizeof(e->Lunions.stack));
-    int lastset = 0;
     int sub;
-    while (1) {
-        e->Lunions.more = 0;
+
+    if (!jl_has_free_typevars(x) || !jl_has_free_typevars(y)) {
+        jl_unionstate_t oldRunions = e->Runions;
+        memset(e->Runions.stack, 0, sizeof(e->Runions.stack));
+        e->Runions.depth = 0;
+        e->Runions.more = 0;
         e->Lunions.depth = 0;
-        sub = subtype(x, y, e, 2);
-        int set = e->Lunions.more;
-        if (!sub || !set)
-            break;
-        for (int i = set; i <= lastset; i++)
-            statestack_set(&e->Lunions, i, 0);
-        lastset = set - 1;
-        statestack_set(&e->Lunions, lastset, 1);
+        e->Lunions.more = 0;
+
+        sub = forall_exists_subtype(x, y, e, 2);
+
+        e->Runions = oldRunions;
     }
+    else {
+        int lastset = 0;
+        while (1) {
+            e->Lunions.more = 0;
+            e->Lunions.depth = 0;
+            sub = subtype(x, y, e, 2);
+            int set = e->Lunions.more;
+            if (!sub || !set)
+                break;
+            for (int i = set; i <= lastset; i++)
+                statestack_set(&e->Lunions, i, 0);
+            lastset = set - 1;
+            statestack_set(&e->Lunions, lastset, 1);
+        }
+    }
+
     e->Lunions = oldLunions;
     return sub && subtype(y, x, e, 0);
 }
 
-static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_t *saved, jl_savedenv_t *se)
+static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_t *saved, jl_savedenv_t *se, int param)
 {
     memset(e->Runions.stack, 0, sizeof(e->Runions.stack));
     int lastset = 0;
@@ -990,7 +1010,7 @@ static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_
         e->Runions.more = 0;
         e->Lunions.depth = 0;
         e->Lunions.more = 0;
-        if (subtype(x, y, e, 0))
+        if (subtype(x, y, e, param))
             return 1;
         restore_env(e, saved, se);
         int set = e->Runions.more;
@@ -1003,7 +1023,7 @@ static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_
     }
 }
 
-static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
 {
     // The depth recursion has the following shape, after simplification:
     // ∀₁
@@ -1018,7 +1038,7 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     int lastset = 0;
     int sub;
     while (1) {
-        sub = exists_subtype(x, y, e, saved, &se);
+        sub = exists_subtype(x, y, e, saved, &se, param);
         int set = e->Lunions.more;
         if (!sub || !set)
             break;
@@ -1072,7 +1092,7 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
     if (envsz == 0 && (y == (jl_value_t*)jl_any_type || x == jl_bottom_type || x == y))
         return 1;
     init_stenv(&e, env, envsz);
-    return forall_exists_subtype(x, y, &e);
+    return forall_exists_subtype(x, y, &e, 0);
 }
 
 static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
@@ -1085,7 +1105,7 @@ static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     e2.envsz = e->envsz;
     e2.envout = e->envout;
     e2.envidx = e->envidx;
-    return forall_exists_subtype(x, y, &e2);
+    return forall_exists_subtype(x, y, &e2, 0);
 }
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *x, jl_value_t *y)
