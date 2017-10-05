@@ -1356,17 +1356,7 @@ end
 using .DSP
 export conv, conv2, deconv, filt, filt!, xcorr
 
-module Test
-for f in [Symbol("@inferred"), Symbol("@test"), Symbol("@test_approx_eq"),
-          Symbol("@test_approx_eq_eps"), Symbol("@test_broken"), Symbol("@test_nowarn"),
-          Symbol("@test_skip"), Symbol("@test_throws"), Symbol("@test_warn"),
-          Symbol("@testset"), :GenericArray, :GenericDict, :GenericSet, :GenericString,
-          :detect_ambiguities, :detect_unbound_args]
-    @eval Base.@deprecate_moved $f "Test" true true
-end
-end
-export Test
-deprecate(@__MODULE__, :Test)
+@deprecate_binding Test nothing true ", run `using Test` instead"
 
 @deprecate_moved SharedArray "SharedArrays" true true
 
