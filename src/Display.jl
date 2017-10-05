@@ -12,123 +12,161 @@ const colors = Dict(
     '↑' => :light_yellow,
     '~' => :light_yellow,
     '↓' => :light_magenta,
+    '?' => :red,
 )
 const color_dark = :light_black
 
 function status(env::EnvCache, mode::Symbol)
-    project = env.project
-    manifest = env.manifest
+    project₀ = project₁ = env.project
+    manifest₀ = manifest₁ = env.manifest
     if env.git != nothing
         git_path = LibGit2.path(env.git)
         project_path = relpath(env.project_file, git_path)
         manifest_path = relpath(env.manifest_file, git_path)
-        project = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
-        manifest = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
+        project₀ = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
+        manifest₀ = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
     end
-    diff = manifest_diff(manifest, env.manifest, true)
     if mode == :project
         info("Status ", pathrepr(env, env.project_file))
-        print_project_diff(project["deps"], env.project["deps"], true)
+        # TODO: handle project deps missing from manifest
+        pm₀ = filter_manifest(in_project(project₀["deps"]), manifest₀)
+        pm₁ = filter_manifest(in_project(project₁["deps"]), manifest₁)
+        print_diff(manifest_diff(pm₀, pm₁))
     elseif mode == :manifest
         info("Status ", pathrepr(env, env.manifest_file))
-        print_manifest_diff(diff)
+        print_diff(manifest_diff(manifest₀, manifest₁))
     else
-        error("unexpected mode: $mode")
+        error("unexpected status mode: $mode")
     end
 end
 
-function emit_project(x::Char, name::String, uuid::String)
-    print_with_color(color_dark, " [$(uuid[1:8])]")
-    print_with_color(colors[x], " $x $name\n")
+function print_project_diff(env₀::EnvCache, env₁::EnvCache)
+    pm₀ = filter_manifest(in_project(env₀.project["deps"]), env₀.manifest)
+    pm₁ = filter_manifest(in_project(env₁.project["deps"]), env₁.manifest)
+    diff = manifest_diff(pm₀, pm₁)
+    print_diff(filter!(x->x.old != x.new, diff))
 end
 
-function print_project_diff(deps₀::Dict, deps₁::Dict, all::Bool=false)
-    clean = !all
-    for name in sort!(union(keys(deps₀), keys(deps₁)), by=lowercase)
-        uuid₀, uuid₁ = get(deps₀, name, ""), get(deps₁, name, "")
-        if uuid₀ == uuid₁
-            all && emit_project(' ', name, uuid₁)
-        else
-            isempty(uuid₀) || emit_project('-', name, uuid₀)
-            isempty(uuid₁) || emit_project('+', name, uuid₁)
-            clean = false
-        end
-    end
-    clean && print_with_color(color_dark, " [no changes]\n")
-    return nothing
+function print_manifest_diff(env₀::EnvCache, env₁::EnvCache)
+    diff = manifest_diff(env₀.manifest, env₁.manifest)
+    print_diff(filter!(x->x.old != x.new, diff))
 end
-print_project_diff(env₀::EnvCache, env₁::EnvCache) =
-    print_project_diff(env₀.project["deps"], env₁.project["deps"])
 
-struct ManifestEntry
-    name::String
-    uuid::UUID
+struct VerInfo
     hash::SHA1
-    version::Union{VersionNumber,Void}
+    ver::Union{VersionNumber,Void}
 end
 
-function manifest_entries(manifest::Dict)
-    entries = Dict{UUID,ManifestEntry}()
+vstring(a::VerInfo) =
+    a.ver == nothing ? "[$(string(a.hash)[1:16])]" : "v$(a.ver)"
+
+Base.:(==)(a::VerInfo, b::VerInfo) =
+    a.hash == b.hash && a.ver == b.ver
+
+≈(a::VerInfo, b::VerInfo) = a.hash == b.hash &&
+    (a.ver == nothing || b.ver == nothing || a.ver == b.ver)
+
+struct DiffEntry
+    uuid::UUID
+    name::String
+    old::Union{VerInfo,Void}
+    new::Union{VerInfo,Void}
+end
+
+function print_diff(io::IO, diff::Vector{DiffEntry})
+    same = all(x.old == x.new for x in diff)
+    for x in diff
+        warnings = String[]
+        if x.old != nothing && x.new != nothing
+            if x.old ≈ x.new
+                verb = ' '
+                vstr = vstring(x.new)
+            else
+                if x.old.hash != x.new.hash && x.old.ver != x.new.ver
+                    verb = x.old.ver == nothing || x.new.ver == nothing ||
+                           x.old.ver == x.new.ver ? '~' :
+                           x.old.ver < x.new.ver  ? '↑' : '↓'
+                else
+                    verb = '?'
+                    msg = x.old.hash == x.new.hash ?
+                        "hashes match but versions don't: $(x.old.ver) ≠ $(x.new.ver)" :
+                        "versions match but hashes don't: $(x.old.hash) ≠ $(x.new.hash)"
+                    push!(warnings, msg)
+                end
+                vstr = x.old.ver == x.new.ver ? vstring(x.new) :
+                    vstring(x.old) * " ⇒ " * vstring(x.new)
+            end
+        elseif x.new != nothing
+            verb = '+'
+            vstr = vstring(x.new)
+        elseif x.old != nothing
+            verb = '-'
+            vstr = vstring(x.old)
+        else
+            verb = '?'
+            vstr = "[unknown]"
+        end
+        v = same ? "" : " $verb"
+        print_with_color(color_dark, " [$(string(x.uuid)[1:8])]")
+        print_with_color(colors[verb], "$v $(x.name) $vstr\n")
+    end
+end
+print_diff(diff::Vector{DiffEntry}) = print_diff(STDOUT, diff)
+
+function manifest_by_uuid(manifest::Dict)
+    entries = Dict{UUID,Dict}()
     for (name, infos) in manifest, info in infos
         uuid = UUID(info["uuid"])
-        hash = SHA1(info["hash-sha1"])
-        ver = get(info, "version", nothing)
-        version = ver != nothing ? VersionNumber(ver) : nothing
-        entries[uuid] = ManifestEntry(name, uuid, hash, version)
+        haskey(entries, uuid) && warn("Duplicate UUID in manifest: $uuid")
+        entries[uuid] = merge(info, Dict("name" => name))
     end
     return entries
 end
-manifest_entries(env::EnvCache) = manifest_entries(env.manifest)
 
-const ManifestDiff = Vector{NTuple{2,Union{ManifestEntry,Void}}}
-
-function manifest_diff(
-    infos₀::Dict{UUID,ManifestEntry},
-    infos₁::Dict{UUID,ManifestEntry},
-    all::Bool = false
-)::ManifestDiff
-    uuids = sort!(union(keys(infos₀), keys(infos₁)), by=uuid->uuid.value)
-    diff = eltype(ManifestDiff)[
-        (get(infos₀, uuid, nothing), get(infos₁, uuid, nothing))
-        for uuid in uuids]
-    all || filter!(diff) do infos
-        info₀, info₁ = infos
-        info₀ == nothing || info₁ == nothing || info₀.hash != info₁.hash
-    end
-    sort!(diff, by=pair->lowercase(pair[pair[2]!=nothing ? 2 : 1].name))
+function name_ver_info(info::Dict)
+    name = info["name"]
+    hash = haskey(info, "hash-sha1") ? SHA1(info["hash-sha1"]) : nothing
+    ver = haskey(info, "version") ? VersionNumber(info["version"]) : nothing
+    name, VerInfo(hash, ver)
 end
-manifest_diff(infos₀::Dict, infos₁::Dict, all::Bool=false) =
-    manifest_diff(manifest_entries(infos₀), manifest_entries(infos₁), all)
 
-v_str(x::ManifestEntry) =
-    x.version == nothing ? "[$(string(x.hash)[1:16])]" : "v$(x.version)"
-
-function print_manifest_diff(diff::ManifestDiff)
-    if isempty(diff)
-        print_with_color(color_dark, " [no changes]\n")
-        return
-    end
-    for (info₀, info₁) in diff
-        uuid = info₁ != nothing ? info₁.uuid : info₀.uuid
-        name = info₁ != nothing ? info₁.name : info₀.name
-        if info₀ != nothing && info₁ != nothing
-            v₀, v₁ = v_str(info₀), v_str(info₁)
-            x = info₀.version == nothing || info₁.version == nothing ? '~' :
-                info₀.version < info₁.version ? '↑' :
-                info₀.version > info₁.version ? '↓' : ' '
-            v = x == ' ' ? v₀ : "$v₀ ⇒ $v₁"
-        elseif info₀ != nothing
-            x, v = '-', v_str(info₀)
-        elseif info₁ != nothing
-            x, v = '+', v_str(info₁)
+function manifest_diff(manifest₀::Dict, manifest₁::Dict)
+    diff = DiffEntry[]
+    entries₀ = manifest_by_uuid(manifest₀)
+    entries₁ = manifest_by_uuid(manifest₁)
+    for uuid in union(keys(entries₀), keys(entries₁))
+        name₀ = name₁ = v₀ = v₁ = nothing
+        haskey(entries₀, uuid) && ((name₀, v₀) = name_ver_info(entries₀[uuid]))
+        haskey(entries₁, uuid) && ((name₁, v₁) = name_ver_info(entries₁[uuid]))
+        name₀ == nothing && (name₀ = name₁)
+        name₁ == nothing && (name₁ = name₀)
+        if name₀ == name₁
+            push!(diff, DiffEntry(uuid, name₀, v₀, v₁))
         else
-            error("this should not happen")
+            push!(diff, DiffEntry(uuid, name₀, v₀, nothing))
+            push!(diff, DiffEntry(uuid, name₁, nothing, v₁))
         end
-        print_with_color(color_dark, " [$(string(uuid)[1:8])] ")
-        print_with_color(colors[x], "$x $name $v\n")
     end
+    sort!(diff, by=x->(x.name, x.uuid))
 end
-print_manifest_diff(env₀::EnvCache, env₁::EnvCache) =
-    print_manifest_diff(manifest_diff(env₀.manifest, env₁.manifest))
+
+function filter_manifest!(predicate::Function, manifest::Dict)
+    empty = String[]
+    for (name, infos) in manifest
+        filter!(infos) do info
+            predicate(name, info)
+        end
+        isempty(infos) && push!(empty, name)
+    end
+    for name in empty
+        pop!(manifest, name)
+    end
+    return manifest
+end
+filter_manifest(predicate::Function, manifest::Dict) =
+    filter_manifest!(predicate, deepcopy(manifest))
+
+in_project(deps::Dict) = (name::String, info::Dict) ->
+    haskey(deps, name) && haskey(info, "uuid") && deps[name] == info["uuid"]
 
 end # module
