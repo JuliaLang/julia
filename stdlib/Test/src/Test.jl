@@ -25,27 +25,24 @@ export GenericString, GenericSet, GenericDict, GenericArray
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
-function ip_matches_func_and_name(ip, func::Symbol, dir::String, file::String)
-    for fr in StackTraces.lookup(ip)
-        if fr === StackTraces.UNKNOWN || fr.from_c
-            return false
-        end
-        path = string(fr.file)
-        fr.func == func && dirname(path) == dir && basename(path) == file && return true
-    end
-    return false
+function ip_has_file_and_func(ip, file, func)
+    return any(fr -> (string(fr.file) == file && fr.func in func), StackTraces.lookup(ip))
+end
+
+function is_c_frame(ip)
+   return any(fr -> fr.from_c, StackTraces.lookup(ip))
 end
 
 function scrub_backtrace(bt)
-    do_test_ind = findfirst(addr->ip_matches_func_and_name(addr, :do_test, ".", "test.jl"), bt)
-    if do_test_ind != 0 && length(bt) > do_test_ind
-        bt = bt[do_test_ind + 1:end]
-    end
-    name_ind = findfirst(addr->ip_matches_func_and_name(addr, Symbol("macro expansion"), ".", "test.jl"), bt)
-    if name_ind != 0 && length(bt) != 0
-        bt = bt[1:name_ind]
-    end
-    return bt
+    do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (:do_test, :do_test_throws)), bt)
+    name_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (Symbol("macro expansion"),)), bt)
+
+    bt = bt[do_test_ind+1:name_ind]
+
+    num_c_frames = count(is_c_frame, bt)
+    has_call_from_testset_to_test = name_ind - do_test_ind - num_c_frames != 1
+
+    return has_call_from_testset_to_test, bt
 end
 
 """
@@ -94,9 +91,12 @@ mutable struct Fail <: Result
     orig_expr
     data
     value
+    source::LineNumberNode
 end
 function Base.show(io::IO, t::Fail)
-    print_with_color(Base.error_color(), io, "Test Failed\n"; bold = true)
+    print_with_color(Base.error_color(), io, "Test Failed"; bold = true)
+    print(io, " at ")
+    print_with_color(:default, t.source.file, ":", t.source.line, "\n"; bold = true)
     print(io, "  Expression: ", t.orig_expr)
     if t.test_type == :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
@@ -126,9 +126,12 @@ mutable struct Error <: Result
     orig_expr
     value
     backtrace
+    source::LineNumberNode
 end
 function Base.show(io::IO, t::Error)
-    print_with_color(Base.error_color(), io, "Error During Test\n"; bold = true)
+    print_with_color(Base.error_color(), io, "Error During Test"; bold = true)
+    print(io, " at ")
+    print_with_color(:default, t.source.file, ":", t.source.line, "\n"; bold = true)
     if t.test_type == :test_nonbool
         println(io, "  Expression evaluated to non-Boolean")
         println(io, "  Expression: ", t.orig_expr)
@@ -137,7 +140,7 @@ function Base.show(io::IO, t::Error)
         println(io, "  Test threw an exception of type ", typeof(t.value))
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
-        errmsg = sprint(showerror, t.value, scrub_backtrace(t.backtrace))
+        errmsg = sprint(showerror, t.value, scrub_backtrace(t.backtrace)[2])
         print(io, join(map(line->string("  ",line),
                             split(errmsg, "\n")), "\n"))
     elseif t.test_type == :test_unbroken
@@ -181,14 +184,16 @@ abstract type ExecutionResult end
 struct Returned <: ExecutionResult
     value
     data
+    source::LineNumberNode
 end
 
 struct Threw <: ExecutionResult
     exception
     backtrace
+    source::LineNumberNode
 end
 
-function eval_test(evaluated::Expr, quoted::Expr)
+function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode)
     res = true
     i = 1
     evaled_args = evaluated.args
@@ -225,7 +230,7 @@ function eval_test(evaluated::Expr, quoted::Expr)
     else
         throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
     end
-    Returned(res, quoted)
+    Returned(res, quoted, source)
 end
 
 const comparison_prec = Base.operator_precedence(:(==))
@@ -272,7 +277,7 @@ is a call expression and the rest are assignments (`k=v`).
 macro test(ex, kws...)
     test_expr!("@test", ex, kws...)
     orig_ex = Expr(:inert, ex)
-    result = get_test_result(ex)
+    result = get_test_result(ex, __source__)
     :(do_test($result, $orig_ex))
 end
 
@@ -290,7 +295,7 @@ The `@test_broken f(args...) key=val...` form works as for the `@test` macro.
 macro test_broken(ex, kws...)
     test_expr!("@test_broken", ex, kws...)
     orig_ex = Expr(:inert, ex)
-    result = get_test_result(ex)
+    result = get_test_result(ex, __source__)
     # code to call do_test with execution result and original expr
     :(do_broken_test($result, $orig_ex))
 end
@@ -317,7 +322,7 @@ end
 # In the special case of a comparison, e.g. x == 5, generate code to
 # evaluate each term in the comparison individually so the results
 # can be displayed nicely.
-function get_test_result(ex)
+function get_test_result(ex, source)
     # Normalize non-dot comparison operator calls to :comparison expressions
     is_splat = x -> isa(x, Expr) && x.head == :...
     if isa(ex, Expr) && ex.head == :call && length(ex.args) == 3 &&
@@ -332,6 +337,7 @@ function get_test_result(ex)
         testret = :(eval_test(
             Expr(:comparison, $(escaped_terms...)),
             Expr(:comparison, $(quoted_terms...)),
+            $(QuoteNode(source)),
         ))
     elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox)
         escaped_func = esc(ex.args[1])
@@ -374,15 +380,16 @@ function get_test_result(ex)
         testret = :(eval_test(
             Expr(:call, $escaped_func, Expr(:parameters, $(escaped_kwargs...)), $(escaped_args...)),
             Expr(:call, $quoted_func),
+            $(QuoteNode(source)),
         ))
     else
-        testret = :(Returned($(esc(ex)), nothing))
+        testret = :(Returned($(esc(ex)), nothing, $(QuoteNode(source))))
     end
     result = quote
         try
             $testret
         catch _e
-            Threw(_e, catch_backtrace())
+            Threw(_e, catch_backtrace(), $(QuoteNode(source)))
         end
     end
     Base.remove_linenums!(result)
@@ -404,16 +411,16 @@ function do_test(result::ExecutionResult, orig_expr)
         testres = if isa(value, Bool)
             # a true value Passes
             value ? Pass(:test, nothing, nothing, value) :
-                    Fail(:test, orig_expr, result.data, value)
+                    Fail(:test, orig_expr, result.data, value, result.source)
         else
             # If the result is non-Boolean, this counts as an Error
-            Error(:test_nonbool, orig_expr, value, nothing)
+            Error(:test_nonbool, orig_expr, value, nothing, result.source)
         end
     else
         # The predicate couldn't be evaluated without throwing an
         # exception, so that is an Error and not a Fail
         @assert isa(result, Threw)
-        testres = Error(:test_error, orig_expr, result.exception, result.backtrace)
+        testres = Error(:test_error, orig_expr, result.exception, result.backtrace, result.source)
     end
     record(get_testset(), testres)
 end
@@ -424,7 +431,7 @@ function do_broken_test(result::ExecutionResult, orig_expr)
     if isa(result, Returned)
         value = result.value
         if isa(value, Bool) && value
-            testres = Error(:test_unbroken, orig_expr, value, nothing)
+            testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
         end
     end
     record(get_testset(), testres)
@@ -444,9 +451,9 @@ macro test_throws(extype, ex)
     orig_ex = Expr(:inert, ex)
     result = quote
         try
-            Returned($(esc(ex)), nothing)
+            Returned($(esc(ex)), nothing, $(QuoteNode(__source__)))
         catch _e
-            Threw(_e, nothing)
+            Threw(_e, nothing, $(QuoteNode(__source__)))
         end
     end
     Base.remove_linenums!(result)
@@ -476,10 +483,10 @@ function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), @nosp
         if success
             testres = Pass(:test_throws, nothing, nothing, exc)
         else
-            testres = Fail(:test_throws_wrong, orig_expr, extype, exc)
+            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, result.source)
         end
     else
-        testres = Fail(:test_throws_nothing, orig_expr, extype, nothing)
+        testres = Fail(:test_throws_nothing, orig_expr, extype, nothing, result.source)
     end
     record(get_testset(), testres)
 end
@@ -514,6 +521,7 @@ macro test_warn(msg, expr)
                     end
                 end
                 @test ismatch_warn($(esc(msg)), read(fname, String))
+                eval(Base, Expr(:(=), :have_color, have_color))
                 ret
             finally
                 eval(Base, Expr(:(=), :have_color, have_color))
@@ -647,7 +655,12 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error})
         print(t)
         # don't print the backtrace for Errors because it gets printed in the show
         # method
-        isa(t, Error) || Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
+        if isa(t, Fail)
+            has_call_from_testset_to_test, bt = scrub_backtrace(backtrace())
+            if has_call_from_testset_to_test
+                Base.show_backtrace(STDOUT, bt)
+            end
+        end
         println()
     end
     push!(ts.results, t)
@@ -908,16 +921,16 @@ macro testset(args...)
     end
 
     if tests.head == :for
-        return testset_forloop(args, tests)
+        return testset_forloop(args, tests, __source__)
     else
-        return testset_beginend(args, tests)
+        return testset_beginend(args, tests, __source__)
     end
 end
 
 """
 Generate the code for a `@testset` with a `begin`/`end` argument
 """
-function testset_beginend(args, tests)
+function testset_beginend(args, tests, source)
     desc, testsettype, options = parse_testset_args(args[1:end-1])
     if desc === nothing
         desc = "test set"
@@ -943,7 +956,7 @@ function testset_beginend(args, tests)
         catch err
             # something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace()))
+            record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
         end
         pop_testset()
         finish(ts)
@@ -954,7 +967,7 @@ end
 """
 Generate the code for a `@testset` with a `for` loop argument
 """
-function testset_forloop(args, testloop)
+function testset_forloop(args, testloop, source)
     # Pull out the loop variables. We might need them for generating the
     # description and we'll definitely need them for generating the
     # comprehension expression at the end
@@ -1004,7 +1017,7 @@ function testset_forloop(args, testloop)
         catch err
             # Something in the test block threw an error. Count that as an
             # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace()))
+            record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
         end
     end
     quote
