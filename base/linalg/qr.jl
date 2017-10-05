@@ -227,6 +227,7 @@ julia> a = [1 2; 3 4]
 
 julia> qrfact!(a)
 ERROR: InexactError: convert(Int64, -3.1622776601683795)
+Stacktrace:
 [...]
 ```
 """

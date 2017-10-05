@@ -305,6 +305,7 @@ julia> parse("x = ")
 
 julia> parse("1.0.2")
 ERROR: ParseError("invalid numeric constant \\\"1.0.\\\"")
+Stacktrace:
 [...]
 
 julia> parse("1.0.2"; raise = false)

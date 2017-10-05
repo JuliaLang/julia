@@ -195,6 +195,7 @@ julia> take!(c)
 
 julia> put!(c,1);
 ERROR: foo
+Stacktrace:
 [...]
 ```
 """

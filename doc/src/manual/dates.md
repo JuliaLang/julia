@@ -333,6 +333,7 @@ function `dayabbr` will error.
 ```jldoctest tdate2
 julia> Dates.dayabbr(t;locale="french")
 ERROR: BoundsError: attempt to access 1-element Array{String,1} at index [5]
+Stacktrace:
 [...]
 ```
 

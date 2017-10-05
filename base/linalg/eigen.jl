@@ -224,6 +224,7 @@ julia> A = [0 im; -1 0]
 julia> eigmax(A)
 ERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:
 `A` cannot have complex eigenvalues.
+Stacktrace:
 [...]
 ```
 """
@@ -264,6 +265,7 @@ julia> A = [0 im; -1 0]
 julia> eigmin(A)
 ERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:
 `A` cannot have complex eigenvalues.
+Stacktrace:
 [...]
 ```
 """

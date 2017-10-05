@@ -12,6 +12,7 @@ Nullable{Int64}()
 
 julia> get(a)
 ERROR: NullException()
+Stacktrace:
 [...]
 ```
 """
@@ -102,6 +103,7 @@ julia> get(Nullable(5))
 
 julia> get(Nullable())
 ERROR: NullException()
+Stacktrace:
 [...]
 ```
 """
@@ -137,6 +139,7 @@ Nullable{String}()
 
 julia> unsafe_get(x)
 ERROR: UndefRefError: access to undefined reference
+Stacktrace:
 [...]
 
 julia> x = 1

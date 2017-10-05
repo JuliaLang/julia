@@ -368,6 +368,7 @@ If `T` does not have a specific size, an error is thrown.
 ```jldoctest
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
+Stacktrace:
 [...]
 ```
 """

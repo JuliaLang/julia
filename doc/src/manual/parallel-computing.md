@@ -125,6 +125,7 @@ julia> rand2(2,2)
 
 julia> fetch(@spawn rand2(2,2))
 ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))
+Stacktrace:
 [...]
 ```
 
@@ -567,6 +568,7 @@ julia> close(c);
 
 julia> put!(c, 2) # `put!` on a closed channel throws an exception.
 ERROR: InvalidStateException("Channel is closed.",:closed)
+Stacktrace:
 [...]
 ```
 
@@ -585,6 +587,7 @@ julia> take!(c) # The first `take!` removes the value.
 
 julia> take!(c) # No more data available on a closed channel.
 ERROR: InvalidStateException("Channel is closed.",:closed)
+Stacktrace:
 [...]
 ```
 

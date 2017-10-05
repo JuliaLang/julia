@@ -572,6 +572,7 @@ real value:
 julia> sqrt(-1)
 ERROR: DomainError with -1.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+Stacktrace:
 [...]
 ```
 
@@ -761,6 +762,7 @@ julia> sqrt_second(9)
 julia> sqrt_second(-9)
 ERROR: DomainError with -9.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+Stacktrace:
 [...]
 ```
 

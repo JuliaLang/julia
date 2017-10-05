@@ -639,6 +639,7 @@ julia> pop!(d, "a")
 
 julia> pop!(d, "d")
 ERROR: KeyError: key "d" not found
+Stacktrace:
 [...]
 
 julia> pop!(d, "e", 4)

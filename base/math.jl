@@ -488,6 +488,7 @@ julia> hypot(a, a)
 julia> √(a^2 + a^2) # a^2 overflows
 ERROR: DomainError with -2.914184810805068e18:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+Stacktrace:
 [...]
 ```
 """

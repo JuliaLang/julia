@@ -226,12 +226,14 @@ Certain operations make mathematical sense but result in errors:
 julia> sqrt(-2.0)
 ERROR: DomainError with -2.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+Stacktrace:
 [...]
 
 julia> 2^-5
 ERROR: DomainError with -5:
 Cannot raise an integer x to a negative power -5.
 Make x a float by adding a zero decimal (e.g., 2.0^-5 instead of 2^-5), or write 1/x^5, float(x)^-5, or (x//1)^-5
+Stacktrace:
 [...]
 ```
 
@@ -490,6 +492,7 @@ julia> module Foo
 julia> Foo.foo()
 ERROR: On worker 2:
 UndefVarError: Foo not defined
+Stacktrace:
 [...]
 ```
 
@@ -510,6 +513,7 @@ julia> @everywhere module Foo
 julia> Foo.foo()
 ERROR: On worker 2:
 UndefVarError: gvar not defined
+Stacktrace:
 [...]
 ```
 

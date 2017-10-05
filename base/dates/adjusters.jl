@@ -228,6 +228,7 @@ julia> Date(date -> Dates.year(date) == 2010, 2000, 01, 01)
 
 julia> Date(date -> Dates.month(date) == 10, 2000, 01, 01; limit = 5)
 ERROR: ArgumentError: Adjustment limit reached: 5 iterations
+Stacktrace:
 [...]
 ```
 """
@@ -252,6 +253,7 @@ julia> DateTime(dt -> Dates.second(dt) == 40, 2010, 10, 20, 10; step = Dates.Sec
 
 julia> DateTime(dt -> Dates.hour(dt) == 20, 2010, 10, 20, 10; step = Dates.Hour(1), limit = 5)
 ERROR: ArgumentError: Adjustment limit reached: 5 iterations
+Stacktrace:
 [...]
 ```
 """
@@ -302,6 +304,7 @@ julia> Dates.Time(t -> Dates.minute(t) == 0, 20)
 
 julia> Dates.Time(t -> Dates.hour(t) == 10, 3; limit = 5)
 ERROR: ArgumentError: Adjustment limit reached: 5 iterations
+Stacktrace:
 [...]
 ```
 """

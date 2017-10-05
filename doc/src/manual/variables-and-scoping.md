@@ -275,6 +275,7 @@ julia> f = y -> y + a
 
 julia> f(3)
 ERROR: UndefVarError: a not defined
+Stacktrace:
 [...]
 
 julia> a = 1

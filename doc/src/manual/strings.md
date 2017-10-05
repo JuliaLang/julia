@@ -205,6 +205,7 @@ ERROR: BoundsError: attempt to access "Hello, world.\n"
 julia> str[end+1]
 ERROR: BoundsError: attempt to access "Hello, world.\n"
   at index [15]
+Stacktrace:
 [...]
 ```
 

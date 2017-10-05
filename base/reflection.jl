@@ -443,6 +443,7 @@ julia> struct Foo
 
 julia> Base.fieldindex(Foo, :z)
 ERROR: type Foo has no field z
+Stacktrace:
 [...]
 
 julia> Base.fieldindex(Foo, :z, false)
