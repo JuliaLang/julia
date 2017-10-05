@@ -19,6 +19,10 @@ a2img  = randn(n,n)/2
 breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
+# helper functions to unambiguously recover explicit forms of an implicit QR Q
+squareQ(Q::LinAlg.AbstractQ) = A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))
+truncatedQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
+
 @testset for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     raw_a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     raw_a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
@@ -47,15 +51,15 @@ bimg  = randn(n,2)/2
                 @inferred qr(a)
                 q, r  = qra[:Q], qra[:R]
                 @test_throws KeyError qra[:Z]
-                @test q'*full(q, thin=false) ≈ eye(a_1)
-                @test q*full(q, thin=false)' ≈ eye(a_1)
-                @test q'*eye(a_1)' ≈ full(q, thin=false)'
-                @test full(q, thin=false)'q ≈ eye(a_1)
-                @test eye(a_1)'q' ≈ full(q, thin=false)'
+                @test q'*squareQ(q) ≈ eye(a_1)
+                @test q*squareQ(q)' ≈ eye(a_1)
+                @test q'*eye(a_1)' ≈ squareQ(q)'
+                @test squareQ(q)'q ≈ eye(a_1)
+                @test eye(a_1)'q' ≈ squareQ(q)'
                 @test q*r ≈ a
                 @test a*(qra\b) ≈ b atol=3000ε
-                @test full(qra) ≈ a
-                @test A_mul_Bc(eye(eltyb, size(q.factors, 2)), q) * full(q, thin=false) ≈ eye(size(q.factors, 2)) atol=5000ε
+                @test Array(qra) ≈ a
+                @test A_mul_Bc(eye(eltyb, size(q.factors, 2)), q) * squareQ(q) ≈ eye(size(q.factors, 2)) atol=5000ε
                 if eltya != Int
                     @test eye(eltyb, a_1)*q ≈ convert(AbstractMatrix{tab}, q)
                     ac = copy(a)
@@ -70,14 +74,14 @@ bimg  = randn(n,2)/2
                 @inferred qr(a[:, 1:n1], Val(false))
                 q,r   = qra[:Q], qra[:R]
                 @test_throws KeyError qra[:Z]
-                @test q'*full(q, thin=false) ≈ eye(a_1)
-                @test q'*full(q) ≈ eye(a_1, n1)
+                @test q'*squareQ(q) ≈ eye(a_1)
+                @test q'*truncatedQ(q) ≈ eye(a_1, n1)
                 @test q*r ≈ a[:, 1:n1]
-                @test q*b[1:n1] ≈ full(q)*b[1:n1] atol=100ε
-                @test q*b ≈ full(q, thin=false)*b atol=100ε
+                @test q*b[1:n1] ≈ truncatedQ(q)*b[1:n1] atol=100ε
+                @test q*b ≈ squareQ(q)*b atol=100ε
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch b[1:n1 + 1]*q'
-                @test A_mul_Bc(UpperTriangular(eye(eltyb, size(q.factors,2))), q)*full(q, thin=false) ≈ eye(n1, a_1) atol=5000ε
+                @test A_mul_Bc(UpperTriangular(eye(eltyb, size(q.factors,2))), q)*squareQ(q) ≈ eye(n1, a_1) atol=5000ε
                 if eltya != Int
                     @test eye(eltyb, a_1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
@@ -90,14 +94,14 @@ bimg  = randn(n,2)/2
                 q,r = qrpa[:Q], qrpa[:R]
                 @test_throws KeyError qrpa[:Z]
                 p = qrpa[:p]
-                @test q'*full(q, thin=false) ≈ eye(n1)
-                @test q*full(q, thin=false)' ≈ eye(n1)
-                @test (UpperTriangular(eye(eltya,size(q,2)))*q')*full(q, thin=false) ≈ eye(n1)
+                @test q'*squareQ(q) ≈ eye(n1)
+                @test q*squareQ(q)' ≈ eye(n1)
+                @test (UpperTriangular(eye(eltya,size(q,2)))*q')*squareQ(q) ≈ eye(n1)
                 @test q*r ≈ (isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:])
                 @test q*r[:,invperm(p)] ≈ a[1:n1,:]
                 @test q*r*qrpa[:P].' ≈ a[1:n1,:]
                 @test a[1:n1,:]*(qrpa\b[1:n1]) ≈ b[1:n1] atol=5000ε
-                @test full(qrpa) ≈ a[1:5,:]
+                @test Array(qrpa) ≈ a[1:5,:]
                 @test_throws DimensionMismatch q*b[1:n1+1]
                 @test_throws DimensionMismatch b[1:n1+1]*q'
                 if eltya != Int
@@ -109,14 +113,14 @@ bimg  = randn(n,2)/2
                 q,r = qrpa[:Q], qrpa[:R]
                 @test_throws KeyError qrpa[:Z]
                 p = qrpa[:p]
-                @test q'*full(q, thin=false) ≈ eye(a_1)
-                @test q*full(q, thin=false)' ≈ eye(a_1)
+                @test q'*squareQ(q) ≈ eye(a_1)
+                @test q*squareQ(q)' ≈ eye(a_1)
                 @test q*r ≈ a[:,p]
                 @test q*r[:,invperm(p)] ≈ a[:,1:n1]
-                @test full(qrpa) ≈ a[:,1:5]
+                @test Array(qrpa) ≈ a[:,1:5]
                 @test_throws DimensionMismatch q*b[1:n1+1]
                 @test_throws DimensionMismatch b[1:n1+1]*q'
-                @test A_mul_Bc(UpperTriangular(eye(eltyb, size(q.factors, 2))), q)*full(q, thin=false) ≈ eye(n1, a_1) atol=5000ε
+                @test A_mul_Bc(UpperTriangular(eye(eltyb, size(q.factors, 2))), q)*squareQ(q) ≈ eye(n1, a_1) atol=5000ε
                 if eltya != Int
                     @test eye(eltyb, a_1)*q ≈ convert(AbstractMatrix{tab},q)
                 end
@@ -127,9 +131,9 @@ bimg  = randn(n,2)/2
                 a = raw_a
                 qrpa = factorize(a[:,1:n1])
                 q, r = qrpa[:Q], qrpa[:R]
-                @test A_mul_B!(full(q, thin=false)',q) ≈ eye(n)
+                @test A_mul_B!(squareQ(q)', q) ≈ eye(n)
                 @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
-                @test A_mul_Bc!(full(q, thin=false),q) ≈ eye(n)
+                @test A_mul_Bc!(squareQ(q), q) ≈ eye(n)
                 @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
                 @test_throws BoundsError size(q,-1)
                 @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(q,zeros(eltya,n1+1))
@@ -137,9 +141,9 @@ bimg  = randn(n,2)/2
 
                 qra = qrfact(a[:,1:n1], Val(false))
                 q, r = qra[:Q], qra[:R]
-                @test A_mul_B!(full(q, thin=false)',q) ≈ eye(n)
+                @test A_mul_B!(squareQ(q)', q) ≈ eye(n)
                 @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
-                @test A_mul_Bc!(full(q, thin=false),q) ≈ eye(n)
+                @test A_mul_Bc!(squareQ(q), q) ≈ eye(n)
                 @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
                 @test_throws BoundsError size(q,-1)
                 @test_throws DimensionMismatch q * eye(Int8,n+4)
@@ -159,7 +163,7 @@ end
 
 @testset "Issue 7304" begin
     A = [-√.5 -√.5; -√.5 √.5]
-    Q = full(qrfact(A)[:Q])
+    Q = truncatedQ(qrfact(A)[:Q])
     @test vecnorm(A-Q) < eps()
 end
 
