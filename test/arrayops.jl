@@ -1170,6 +1170,14 @@ end
     end
 end
 
+# issue #24002
+module I24002
+s1() = 1
+y = Int[i for i in 1:10]
+end
+@test I24002.y == [1:10;]
+@test I24002.s1() == 1
+
 @testset "eachindexvalue" begin
     A14 = [11 13; 12 14]
     R = CartesianRange(indices(A14))
