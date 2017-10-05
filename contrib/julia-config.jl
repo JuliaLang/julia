@@ -4,7 +4,8 @@
 const options = [
     "--cflags",
     "--ldflags",
-    "--ldlibs"
+    "--ldlibs",
+    "--all"
 ];
 
 threadingOn() = ccall(:jl_threading_enabled, Cint, ()) != 0
@@ -87,6 +88,8 @@ function main()
             println(cflags())
         elseif args == "--ldlibs"
             println(ldlibs())
+        elseif args == "--all"
+            println("$(cflags()) $(ldflags()) $(ldlibs())")
         end
     end
 end
