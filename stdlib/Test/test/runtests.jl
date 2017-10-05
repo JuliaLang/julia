@@ -631,3 +631,42 @@ Test.print_test_results(Test.DefaultTestSet(""))'`), stderr=DevNull), String), "
     @test orig == Base.GLOBAL_RNG
     @test rand(orig) == rand()
 end
+
+@testset "file info in test errors" begin
+     f = tempname()
+     for str in ["@test 1==2", "@test_throws UndefVarError 1", "@test_broken 1 == 1"]
+         write(f,
+         """
+         using Test
+         $str
+         """)
+
+         msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=DevNull), String)
+         @test contains(msg, "at " * f * ":" * "2")
+
+         write(f,
+         """
+         using Test
+         @testset begin
+             $str
+         end
+         """)
+
+         msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=DevNull), String)
+         @test contains(msg, "at " * f * ":" * "3")
+
+         write(f,
+         """
+         using Test
+
+         g(x) = @test x == 1
+         @testset begin
+             g(2)
+         end
+         """)
+         msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=DevNull), String)
+
+         @test contains(msg, "at " * f * ":" * "3")
+     end
+     rm(f; force=true)
+ end
