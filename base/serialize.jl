@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module Serializer
-@doc """
+"""
 Provide serialization of Julia code via the functions
 * [`serialize`](@ref)
 * [`deserialize`](@ref)
-""" -> Serializer
+"""
+module Serializer
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
 import Core: svec

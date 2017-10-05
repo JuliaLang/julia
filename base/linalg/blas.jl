@@ -2,7 +2,7 @@
 
 module BLAS
 @doc """
-Interfaces to BLAS subroutines.
+Interface to BLAS subroutines.
 """ -> BLAS
 
 import ..axpy!, ..axpby!

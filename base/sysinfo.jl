@@ -2,7 +2,7 @@
 
 module Sys
 @doc """
-Methods for retrieving informations about hardware and the operating system.
+Provide methods for retrieving information about hardware and the operating system.
 """ -> Sys
 
 export CPU_CORES,

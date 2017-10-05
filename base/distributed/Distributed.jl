@@ -1,10 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module Distributed
-
-@doc """
+"""
 Tools for distributed parallel calculations.
-""" -> Distributed
+"""
+module Distributed
 
 # imports for extension
 import Base: getindex, wait, put!, take!, fetch, isready, push!, length,

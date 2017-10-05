@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module Profile
-@doc """
+"""
 Profiling support, main entry point is the [`@profile`](@ref) macro.
-""" -> Profile
+"""
+module Profile
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo
 using Base: iszero

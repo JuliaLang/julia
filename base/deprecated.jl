@@ -1363,7 +1363,7 @@ end
 using .DSP
 export conv, conv2, deconv, filt, filt!, xcorr
 @doc """
-DFT will be removed from Base. Use the package with the same name instead.
+DFT will be removed from Base. Use `AbstractFFTs` instead.
 """ -> DFT
 @doc """
 DSP will be removed from Base. Use the package with the same name instead.

@@ -1493,7 +1493,7 @@ See the manual section on [Tuple Types](@ref).
 Tuple
 
 @doc """
-The standard library of Julia.
+The base library of Julia.
 """ -> kw"Base"
 
 end

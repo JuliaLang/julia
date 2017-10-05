@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module SparseArrays
-@doc """
+"""
 Support for sparse arrays. Provides [`AbstractSparseArray`](@ref) and subtypes.
-""" -> SparseArrays
+"""
+module SparseArrays
 
 using Base: ReshapedArray, promote_op, setindex_shape_check, to_shape, tail
 using Base.Sort: Forward
