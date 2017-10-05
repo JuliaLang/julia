@@ -2393,11 +2393,10 @@
         (oneresult (make-ssavalue))
         (lengths   (map (lambda (x) (make-ssavalue)) ranges))
         (states    (map (lambda (x) (gensy)) ranges))
-        (is        (map (lambda (x) (gensy)) ranges))
         (rv        (map (lambda (x) (make-ssavalue)) ranges)))
 
     ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges rv is states lengths)
+    (define (construct-loops ranges rv states lengths)
       (if (null? ranges)
           `(block (= ,oneresult ,expr)
                   (inbounds true)
@@ -2406,28 +2405,27 @@
                   (= ,ri (call (top +) ,ri 1)))
           `(block
             (= ,(car states) (call (top start) ,(car rv)))
-            (local (:: ,(car is) (call (core typeof) ,(car lengths))))
-            (= ,(car is) 0)
-            (while (call (top !=) ,(car is) ,(car lengths))
+            (while (call (top !) (call (top done) ,(car rv) ,(car states)))
                    (scope-block
                    (block
-                    (= ,(car is) (call (top +) ,(car is) 1))
                     (= (tuple ,(cadr (car ranges)) ,(car states))
                        (call (top next) ,(car rv) ,(car states)))
                     ;; *** either this or force all for loop vars local
                     ,.(map (lambda (r) `(local ,r))
                            (lhs-vars (cadr (car ranges))))
-                    ,(construct-loops (cdr ranges) (cdr rv) (cdr is) (cdr states) (cdr lengths))))))))
+                    ,(construct-loops (cdr ranges) (cdr rv) (cdr states) (cdr lengths))))))))
 
     ;; Evaluate the comprehension
     `(block
+      ,.(map (lambda (v) `(local ,v)) states)
+      (local ,ri)
       ,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
       ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
       (scope-block
        (block
         (= ,result (call (curly Array ,atype ,(length lengths)) ,@lengths))
         (= ,ri 1)
-        ,(construct-loops (reverse ranges) (reverse rv) is states (reverse lengths))
+        ,(construct-loops (reverse ranges) (reverse rv) states (reverse lengths))
         ,result)))))
 
 (define (lhs-vars e)
