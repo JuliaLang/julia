@@ -37,7 +37,6 @@ JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t 
     JL_TYPECHK(pointerref, pointer, p);
     JL_TYPECHK(pointerref, long, i)
     JL_TYPECHK(pointerref, long, align);
-    // TODO: alignment
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     if (ety == (jl_value_t*)jl_any_type) {
         jl_value_t **pp = (jl_value_t**)(jl_unbox_long(p) + (jl_unbox_long(i)-1)*sizeof(void*));
@@ -58,7 +57,6 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
     JL_TYPECHK(pointerset, pointer, p);
     JL_TYPECHK(pointerset, long, i);
     JL_TYPECHK(pointerref, long, align);
-    // TODO: alignment
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     if (ety == (jl_value_t*)jl_any_type) {
         jl_value_t **pp = (jl_value_t**)(jl_unbox_long(p) + (jl_unbox_long(i)-1)*sizeof(void*));
@@ -67,11 +65,12 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
     else {
         if (!jl_is_datatype(ety))
             jl_error("pointerset: invalid pointer");
-        size_t nb = LLT_ALIGN(jl_datatype_size(ety), jl_datatype_align(ety));
+        size_t elsz = jl_datatype_size(ety);
+        size_t nb = LLT_ALIGN(elsz, jl_datatype_align(ety));
         char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
         if (jl_typeof(x) != ety)
             jl_error("pointerset: type mismatch in assign");
-        jl_assign_bits(pp, x);
+        memcpy(pp, x, elsz);
     }
     return p;
 }

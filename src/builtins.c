@@ -36,10 +36,11 @@ static int bits_equal(void *a, void *b, int sz)
 {
     switch (sz) {
     case 1:  return *(int8_t*)a == *(int8_t*)b;
-    case 2:  return *(int16_t*)a == *(int16_t*)b;
-    case 4:  return *(int32_t*)a == *(int32_t*)b;
-    case 8:  return *(int64_t*)a == *(int64_t*)b;
-    default: return memcmp(a, b, sz)==0;
+        // Let compiler constant folds the following.
+    case 2:  return memcmp(a, b, 2) == 0;
+    case 4:  return memcmp(a, b, 4) == 0;
+    case 8:  return memcmp(a, b, 8) == 0;
+    default: return memcmp(a, b, sz) == 0;
     }
 }
 
@@ -198,22 +199,22 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
 
 // object_id ------------------------------------------------------------------
 
-static uintptr_t bits_hash(void *b, size_t sz)
+static uintptr_t bits_hash(const void *b, size_t sz)
 {
     switch (sz) {
-    case 1:  return int32hash(*(int8_t*)b);
-    case 2:  return int32hash(*(int16_t*)b);
-    case 4:  return int32hash(*(int32_t*)b);
+    case 1:  return int32hash(*(const int8_t*)b);
+    case 2:  return int32hash(jl_load_unaligned_i16(b));
+    case 4:  return int32hash(jl_load_unaligned_i32(b));
 #ifdef _P64
-    case 8:  return int64hash(*(int64_t*)b);
+    case 8:  return int64hash(jl_load_unaligned_i64(b));
 #else
-    case 8:  return int64to32hash(*(int64_t*)b);
+    case 8:  return int64to32hash(jl_load_unaligned_i64(b));
 #endif
     default:
 #ifdef _P64
-        return memhash((char*)b, sz);
+        return memhash((const char*)b, sz);
 #else
-        return memhash32((char*)b, sz);
+        return memhash32((const char*)b, sz);
 #endif
     }
 }
