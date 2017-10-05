@@ -25,23 +25,16 @@ export GenericString, GenericSet, GenericDict, GenericArray
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
-function ip_matches_func_and_name(ip, func::Symbol, dir::String, file::String)
-    for fr in StackTraces.lookup(ip)
-        if fr === StackTraces.UNKNOWN || fr.from_c
-            return false
-        end
-        path = string(fr.file)
-        fr.func == func && dirname(path) == dir && basename(path) == file && return true
-    end
-    return false
+function ip_has_file_and_func(ip, file, funcs)
+    return any(fr -> (string(fr.file) == file && fr.func in funcs), StackTraces.lookup(ip))
 end
 
 function scrub_backtrace(bt)
-    do_test_ind = findfirst(addr->ip_matches_func_and_name(addr, :do_test, ".", "test.jl"), bt)
+    do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (:do_test, :do_test_throws)), bt)
     if do_test_ind != 0 && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end
-    name_ind = findfirst(addr->ip_matches_func_and_name(addr, Symbol("macro expansion"), ".", "test.jl"), bt)
+    name_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (Symbol("macro expansion"),)), bt)
     if name_ind != 0 && length(bt) != 0
         bt = bt[1:name_ind]
     end
