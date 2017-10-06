@@ -196,8 +196,7 @@ julia> take!(c)
 julia> put!(c,1);
 ERROR: foo
 Stacktrace:
- [1] check_channel_state at ./channels.jl:132 [inlined]
- [2] put!(::Channel{Any}, ::Int64) at ./channels.jl:263
+[...]
 ```
 """
 function bind(c::Channel, task::Task)

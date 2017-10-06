@@ -75,7 +75,7 @@ Error During Test
     length(::MethodTable) at reflection.jl:597
     ...
   Stacktrace:
-   [...]
+  [...]
 ERROR: There was an error during testing
 ```
 
@@ -154,8 +154,7 @@ julia> @testset "Foo Tests" begin
 Arrays: Test Failed
   Expression: foo(ones(4)) == 15
    Evaluated: 16 == 15
-Stacktrace:
-    [...]
+[...]
 Test Summary: | Pass  Fail  Total
 Foo Tests     |    3     1      4
   Animals     |    2            2

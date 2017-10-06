@@ -220,6 +220,7 @@ false
 
 julia> str[2]
 ERROR: UnicodeError: invalid character index
+Stacktrace:
 [...]
 ```
 """

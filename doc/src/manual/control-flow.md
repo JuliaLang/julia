@@ -573,9 +573,7 @@ julia> sqrt(-1)
 ERROR: DomainError with -1.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt(::Int64) at ./math.jl:472
+[...]
 ```
 
 You may define your own exceptions in the following way:
@@ -765,10 +763,7 @@ julia> sqrt_second(-9)
 ERROR: DomainError with -9.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt at ./math.jl:472 [inlined]
- [4] sqrt_second(::Int64) at ./none:7
+[...]
 ```
 
 Note that the symbol following `catch` will always be interpreted as a name for the exception,

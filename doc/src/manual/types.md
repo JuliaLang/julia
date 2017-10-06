@@ -1423,7 +1423,7 @@ You can safely access the value of a `Nullable` object using [`get`](@ref):
 julia> get(Nullable{Float64}())
 ERROR: NullException()
 Stacktrace:
- [1] get(::Nullable{Float64}) at ./nullable.jl:118
+[...]
 
 julia> get(Nullable(1.0))
 1.0

@@ -13,7 +13,7 @@ Nullable{Int64}()
 julia> get(a)
 ERROR: NullException()
 Stacktrace:
- [1] get(::Nullable{Int64}) at ./nullable.jl:118
+[...]
 ```
 """
 struct NullException <: Exception
@@ -104,7 +104,7 @@ julia> get(Nullable(5))
 julia> get(Nullable())
 ERROR: NullException()
 Stacktrace:
- [1] get(::Nullable{Union{}}) at ./nullable.jl:102
+[...]
 ```
 """
 @inline function get(x::Nullable{T}, y) where T
@@ -140,7 +140,7 @@ Nullable{String}()
 julia> unsafe_get(x)
 ERROR: UndefRefError: access to undefined reference
 Stacktrace:
- [1] unsafe_get(::Nullable{String}) at ./nullable.jl:152
+[...]
 
 julia> x = 1
 1

@@ -228,12 +228,7 @@ julia> a = [1 2; 3 4]
 julia> qrfact!(a)
 ERROR: InexactError: convert(Int64, -3.1622776601683795)
 Stacktrace:
- [1] convert at ./float.jl:703 [inlined]
- [2] setindex! at ./array.jl:806 [inlined]
- [3] setindex! at ./subarray.jl:245 [inlined]
- [4] reflector! at ./linalg/generic.jl:1196 [inlined]
- [5] qrfactUnblocked!(::Array{Int64,2}) at ./linalg/qr.jl:141
- [6] qrfact!(::Array{Int64,2}) at ./linalg/qr.jl:213
+[...]
 ```
 """
 qrfact!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)

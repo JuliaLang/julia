@@ -243,6 +243,7 @@ julia> g(2, 3.0)
 
 julia> g(2.0, 3.0)
 ERROR: MethodError: g(::Float64, ::Float64) is ambiguous.
+Stacktrace:
 [...]
 ```
 

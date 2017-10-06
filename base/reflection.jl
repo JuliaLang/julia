@@ -444,7 +444,7 @@ julia> struct Foo
 julia> Base.fieldindex(Foo, :z)
 ERROR: type Foo has no field z
 Stacktrace:
- [1] fieldindex at ./reflection.jl:319 [inlined] (repeats 2 times)
+[...]
 
 julia> Base.fieldindex(Foo, :z, false)
 0
