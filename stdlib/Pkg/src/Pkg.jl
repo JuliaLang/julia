@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 """
     Pkg
 
@@ -83,13 +85,6 @@ which are typically not provided. Explicit (non-default) arguments can be used t
 custom METADATA setup.
 """
 init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Dir.init(meta,branch)
-
-function __init__()
-    vers = "v$(VERSION.major).$(VERSION.minor)"
-    vers = ccall(:jl_uses_cpuid_tag, Cint, ()) == 0 ? vers :
-        joinpath(vers,hex(ccall(:jl_cpuid_tag, UInt64, ()), 2*sizeof(UInt64)))
-    unshift!(Base.LOAD_CACHE_PATH, abspath(Dir._pkgroot(), "lib", vers))
-end
 
 """
     edit()

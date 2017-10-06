@@ -4,8 +4,9 @@ module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
-using ...LibGit2
-import ...Pkg.PkgError
+using LibGit2
+import ..Pkg
+import ..Pkg.PkgError
 using ..Types
 
 macro recover(ex)
@@ -590,6 +591,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
         append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
         empty!(Base.DL_LOAD_PATH)
         append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
+        using Pkg
         open("$(escape_string(errfile))", "a") do f
             pkg, build_file = "$pkg", "$(escape_string(build_file))"
             try
@@ -598,7 +600,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
                     evalfile(build_file)
                 end
             catch err
-                Base.Pkg.Entry.warnbanner(err, label="[ ERROR: \$pkg ]")
+                Pkg.Entry.warnbanner(err, label="[ ERROR: \$pkg ]")
                 serialize(f, pkg)
                 serialize(f, err)
             end

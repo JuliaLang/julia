@@ -53,62 +53,6 @@ function with_fake_pty(f)
     end
 end
 
-function challenge_prompt(code::Expr, challenges; timeout::Integer=10, debug::Bool=true)
-    output_file = tempname()
-    wrapped_code = """
-    result = let
-        $code
-    end
-    open("$output_file", "w") do fp
-        serialize(fp, result)
-    end
-    """
-    cmd = `$(Base.julia_cmd()) --startup-file=no -e $wrapped_code`
-    try
-        challenge_prompt(cmd, challenges, timeout=timeout, debug=debug)
-        return open(output_file, "r") do fp
-            deserialize(fp)
-        end
-    finally
-        isfile(output_file) && rm(output_file)
-    end
-    return nothing
-end
-
-function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool=true)
-    function format_output(output)
-        debug ? "Process output found:\n\"\"\"\n$(read(seekstart(out), String))\n\"\"\"" : ""
-    end
-    out = IOBuffer()
-    with_fake_pty() do slave, master
-        p = spawn(detach(cmd), slave, slave, slave)
-        # Kill the process if it takes too long. Typically occurs when process is waiting for input
-        @async begin
-            sleep(timeout)
-            kill(p)
-            close(master)
-        end
-        try
-            for (challenge, response) in challenges
-                process_exited(p) && error("Too few prompts. $(format_output(out))")
-
-                write(out, readuntil(master, challenge))
-                if !isopen(master)
-                    error("Could not locate challenge: \"$challenge\". $(format_output(out))")
-                end
-                write(master, response)
-            end
-            wait(p)
-        finally
-            kill(p)
-        end
-        # Determine if the process was explicitly killed
-        killed = process_exited(p) && (p.exitcode != 0 || p.termsignal != 0)
-        killed && error("Too many prompts. $(format_output(out))")
-    end
-    nothing
-end
-
 # OffsetArrays (arrays with indexing that doesn't start at 1)
 
 # This test file is designed to exercise support for generic indexing,

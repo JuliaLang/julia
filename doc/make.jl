@@ -1,5 +1,6 @@
 # Install dependencies needed to build the documentation.
 ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
+using Pkg
 Pkg.init()
 cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); remove_destination = true)
 Pkg.update()
@@ -25,11 +26,15 @@ if Sys.iswindows()
     cp_q("../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
     cp_q("../stdlib/Mmap/docs/src/index.md", "src/stdlib/mmap.md")
     cp_q("../stdlib/SharedArrays/docs/src/index.md", "src/stdlib/sharedarrays.md")
+    cp_q("../stdlib/Pkg/docs/src/index.md", "src/stdlib/pkg.md")
+    cp_q("../stdlib/LibGit2/docs/src/index.md", "src/devdocs/libgit2.md")
 else
     symlink_q("../../../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
     symlink_q("../../../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
     symlink_q("../../../stdlib/Mmap/docs/src/index.md", "src/stdlib/mmap.md")
     symlink_q("../../../stdlib/SharedArrays/docs/src/index.md", "src/stdlib/sharedarrays.md")
+    symlink_q("../../../stdlib/Pkg/docs/src/index.md", "src/stdlib/pkg.md")
+    symlink_q("../../../stdlib/LibGit2/docs/src/index.md", "src/devdocs/libgit2.md")
 end
 
 const PAGES = [
@@ -133,11 +138,11 @@ const PAGES = [
     ],
 ]
 
-using DelimitedFiles, Test, Mmap, SharedArrays
+using DelimitedFiles, Test, Mmap, SharedArrays, Pkg, LibGit2
 
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays],
+    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Pkg, LibGit2],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,

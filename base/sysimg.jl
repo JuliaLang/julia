@@ -387,12 +387,6 @@ const × = cross
 # statistics
 include("statistics.jl")
 
-# libgit2 support
-include("libgit2/libgit2.jl")
-
-# package manager
-include("pkg/pkg.jl")
-
 # profiler
 include("profile.jl")
 using .Profile
@@ -434,12 +428,12 @@ function __init__()
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_load_path()
+    init_cache_path()
     Distributed.init_parallel()
     init_threadcall()
 end
 
 INCLUDE_STATE = 3 # include = include_relative
-include(Base, "precompile.jl")
 
 end # baremodule Base
 
@@ -451,7 +445,10 @@ Base.init_load_path(ccall(:jl_get_julia_home, Any, ()))
 # load some stdlib packages but don't put their names in Main
 Base.require(:DelimitedFiles)
 Base.require(:Test)
+#Base.require(:Pkg)
 
 empty!(LOAD_PATH)
+
+Base.include(Base, "precompile.jl")
 
 Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")

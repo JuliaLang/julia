@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+__precompile__(true)
+
 module LibGit2
 
 import Base: merge!, ==
@@ -939,5 +941,87 @@ function __init__()
     end
 end
 
+# 0.7 deprecations
+
+# #19660
+@deprecate finalize(sa::LibGit2.StrArrayStruct) LibGit2.free(sa)
+@deprecate finalize(sa::LibGit2.Buffer) LibGit2.free(sa)
+
+# LibGit2 refactor (#19839)
+Base.@deprecate_binding Oid GitHash
+Base.@deprecate_binding GitAnyObject GitUnknownObject
+
+@deprecate owner(x) repository(x) false
+@deprecate get(::Type{T}, repo::GitRepo, x) where {T<:GitObject} T(repo, x) false
+@deprecate get(::Type{T}, repo::GitRepo, oid::GitHash, oid_size::Int) where {T<:GitObject} T(repo, GitShortHash(oid, oid_size)) false
+@deprecate revparse(repo::GitRepo, objname::AbstractString) GitObject(repo, objname) false
+@deprecate object(repo::GitRepo, te::GitTreeEntry) GitObject(repo, te) false
+@deprecate commit(ann::GitAnnotated) GitHash(ann) false
+@deprecate lookup(repo::GitRepo, oid::GitHash) GitBlob(repo, oid) false
+function Base.cat(repo::GitRepo, ::Type{T}, spec::Union{AbstractString,AbstractGitHash}) where T<:GitObject
+    Base.depwarn("cat(repo::GitRepo, T, spec) is deprecated, use content(T(repo, spec))", :cat)
+    try
+        return content(GitBlob(repo, spec))
+    catch e
+        isa(e, LibGit2.GitError) && return nothing
+        rethrow(e)
+    end
+end
+Base.cat(repo::GitRepo, spec::Union{AbstractString,AbstractGitHash}) = cat(repo, GitBlob, spec)
+
+# PR #22062
+function set_remote_url(repo::LibGit2.GitRepo, url::AbstractString; remote::AbstractString="origin")
+    Base.depwarn(string(
+        "`LibGit2.set_remote_url(repo, url; remote=remote)` is deprecated, use ",
+        "`LibGit2.set_remote_url(repo, remote, url)` instead."), :set_remote_url)
+    LibGit2.set_remote_url(repo, remote, url)
+end
+function set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
+    Base.depwarn(string(
+        "`LibGit2.set_remote_url(path, url; remote=remote)` is deprecated, use ",
+        "`LibGit2.set_remote_url(path, remote, url)` instead."), :set_remote_url)
+    LibGit2.set_remote_url(path, remote, url)
+end
+
+# PR #23092
+function prompt(msg::AbstractString; default::AbstractString="", password::Bool=false)
+    Base.depwarn(string(
+        "`LibGit2.prompt(msg::AbstractString; default::AbstractString=\"\", password::Bool=false)` is deprecated, use ",
+        "`get(Base.prompt(msg, default=default, password=password), \"\")` instead."), :prompt)
+    Base.get(Base.prompt(msg, default=default, password=password), "")
+end
+
+# PR #23640
+# when this deprecation is deleted, remove all calls to it, and replace all keywords of:
+# `payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}` with
+# `payload::CredentialPayload` from base/libgit2/libgit2.jl
+function deprecate_nullable_creds(f, sig, payload)
+    if isa(payload, Nullable{<:AbstractCredentials})
+        # Note: Be careful not to show the contents of the credentials as it could reveal a
+        # password.
+        if isnull(payload)
+            msg = "LibGit2.$f($sig; payload=Nullable()) is deprecated, use "
+            msg *= "LibGit2.$f($sig; payload=LibGit2.CredentialPayload()) instead."
+            p = CredentialPayload()
+        else
+            cred = unsafe_get(payload)
+            C = typeof(cred)
+            msg = "LibGit2.$f($sig; payload=Nullable($C(...))) is deprecated, use "
+            msg *= "LibGit2.$f($sig; payload=LibGit2.CredentialPayload($C(...))) instead."
+            p = CredentialPayload(cred)
+        end
+        Base.depwarn(msg, f)
+    else
+        p = payload::CredentialPayload
+    end
+    return p
+end
+
+# PR #23690
+# `SSHCredentials` and `UserPasswordCredentials` constructors using `prompt_if_incorrect`
+# are deprecated in base/libgit2/types.jl.
+
+# PR #23711
+@deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)
 
 end # module

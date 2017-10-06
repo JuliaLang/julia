@@ -7,7 +7,8 @@ include(joinpath("resolve", "interface.jl"))
 include(joinpath("resolve", "maxsum.jl"))
 
 using ..Types, ..Query, .PkgToMaxSumInterface, .MaxSum
-import ...Pkg.PkgError
+import ..Pkg
+import ..Pkg.PkgError
 
 export resolve, sanity_check
 
@@ -152,5 +153,9 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
 
     return sort!(problematic)
 end
+
+# 0.7 deprecations
+
+@deprecate abs(f::MaxSum.Field) abs.(f)
 
 end # module

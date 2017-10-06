@@ -3,23 +3,13 @@
 module Dir
 
 import ..Pkg: DEFAULT_META, META_BRANCH, PkgError
-import ...LibGit2, ...LibGit2.with
+import LibGit2, LibGit2.with
 
-const DIR_NAME = ".julia"
-
-_pkgroot() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))
 isversioned(p::AbstractString) = ((x,y) = (VERSION.major, VERSION.minor); basename(p) == "v$x.$y")
 
-function path()
-    b = _pkgroot()
-    x, y = VERSION.major, VERSION.minor
-    d = joinpath(b,"v$x.$y")
-    if isdir(d) || !isdir(b) || !isdir(joinpath(b, "METADATA"))
-        return d
-    end
-    return b
-end
-path(pkg::AbstractString...) = normpath(path(),pkg...)
+import Base._pkgroot
+
+path(pkg...) = Base.pkgdir(pkg...)
 
 function cd(f::Function, args...; kws...)
     dir = path()
