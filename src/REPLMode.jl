@@ -212,7 +212,7 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
 end
 
 function do_status!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
-    mode = :project
+    mode = :combined
     while !isempty(tokens)
         token = shift!(tokens)
         if token[1] == :opt

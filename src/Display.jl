@@ -26,17 +26,25 @@ function status(env::EnvCache, mode::Symbol)
         project₀ = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
         manifest₀ = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
     end
-    if mode == :project
-        info("Status ", pathrepr(env, env.project_file))
+    if mode in (:project, :combined)
         # TODO: handle project deps missing from manifest
-        pm₀ = filter_manifest(in_project(project₀["deps"]), manifest₀)
-        pm₁ = filter_manifest(in_project(project₁["deps"]), manifest₁)
-        print_diff(manifest_diff(pm₀, pm₁))
-    elseif mode == :manifest
+        m₀ = filter_manifest(in_project(project₀["deps"]), manifest₀)
+        m₁ = filter_manifest(in_project(project₁["deps"]), manifest₁)
+        info("Status ", pathrepr(env, env.project_file))
+        print_diff(manifest_diff(m₀, m₁))
+    end
+    if mode == :manifest
         info("Status ", pathrepr(env, env.manifest_file))
         print_diff(manifest_diff(manifest₀, manifest₁))
-    else
-        error("unexpected status mode: $mode")
+    elseif mode == :combined
+        p = !in_project(merge(project₀["deps"], project₁["deps"]))
+        m₀ = filter_manifest(p, manifest₀)
+        m₁ = filter_manifest(p, manifest₁)
+        diff = filter!(x->x.old != x.new, manifest_diff(m₀, m₁))
+        if !isempty(diff)
+            info("Status ", pathrepr(env, env.manifest_file))
+            print_diff(diff)
+        end
     end
 end
 
