@@ -746,7 +746,9 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
     if (needs_saddr) {
 #if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && !defined(JL_DISABLE_LIBUNWIND)
         unw_proc_info_t pip;
-        if (unw_get_proc_info_by_ip(unw_local_addr_space, pointer, &pip, NULL) == 0) {
+        // Seems that libunwind may return NULL IP depending on what info it finds...
+        if (unw_get_proc_info_by_ip(unw_local_addr_space, pointer,
+                                    &pip, NULL) == 0 && pip.start_ip) {
             *saddr = (void*)pip.start_ip;
             needs_saddr = false;
         }
