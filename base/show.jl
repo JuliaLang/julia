@@ -876,9 +876,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         ex.head == :return)
         show_type = false
     end
-    if !emphstate && ex.typ === Any
+    #if !emphstate && ex.typ === Any
         show_type = false
-    end
+    #end
     # dot (i.e. "x.y"), but not compact broadcast exps
     if head === :(.) && !is_expr(args[2], :tuple)
         func_prec = operator_precedence(head)
@@ -1219,7 +1219,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, "))")
     end
-    show_type && show_expr_type(io, ex.typ, emphstate)
+         #show_type && show_expr_type(io, ex.typ, emphstate)
     nothing
 end
 
