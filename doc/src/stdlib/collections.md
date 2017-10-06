@@ -47,6 +47,7 @@ Fully implemented by:
   * `EachLine`
   * `AbstractString`
   * [`Set`](@ref)
+  * `Pair`
 
 ## General Collections
 
