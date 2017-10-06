@@ -22,7 +22,7 @@ c0 = Core.Inference.retrieve_code_info(mi)
 
 @testset "INVALID_EXPR_HEAD" begin
     c = Core.Inference.copy_code_info(c0)
-    insert!(c.code, 4, Expr(:(=), SlotNumber(2), Expr(:invalid, 1)))
+    insert!(c.code, 4, Expr(:invalid, 1))
     errors = Core.Inference.validate_code(c)
     @test length(errors) == 1
     @test errors[1].kind === Core.Inference.INVALID_EXPR_HEAD
@@ -47,25 +47,21 @@ end
         push!(c.code, Expr(:(=), SlotNumber(2), Expr(h)))
     end
     errors = Core.Inference.validate_code(c)
-    @test length(errors) == 10
+    @test length(errors) == 7
     @test count(e.kind === Core.Inference.INVALID_RVALUE for e in errors) == 7
-    @test count(e.kind === Core.Inference.INVALID_EXPR_NARGS for e in errors) == 2
-    @test count(e.kind === Core.Inference.INVALID_EXPR_HEAD for e in errors) == 1
 end
 
-@testset "INVALID_CALL_ARG/INVALID_EXPR_NARGS" begin
+@testset "INVALID_CALL_ARG" begin
     c = Core.Inference.copy_code_info(c0)
-    insert!(c.code, 2, Expr(:(=), SlotNumber(2), Expr(:call, :+, SlotNumber(2), GotoNode(1))))
-    insert!(c.code, 4, Expr(:call, :-, Expr(:call, :sin, LabelNode(2)), 3))
+    insert!(c.code, 2, Expr(:(=), SlotNumber(2), Expr(:call, GlobalRef(Base,:+), SlotNumber(2), GotoNode(1))))
+    insert!(c.code, 4, Expr(:call, GlobalRef(Base,:-), Expr(:call, GlobalRef(Base,:sin), LabelNode(2)), 3))
     insert!(c.code, 10, Expr(:call, LineNumberNode(2)))
     for h in (:gotoifnot, :line, :const, :meta)
-        push!(c.code, Expr(:call, :f, Expr(h)))
+        push!(c.code, Expr(:call, GlobalRef(@__MODULE__,:f), Expr(h)))
     end
     errors = Core.Inference.validate_code(c)
-    @test length(errors) == 10
+    @test length(errors) == 7
     @test count(e.kind === Core.Inference.INVALID_CALL_ARG for e in errors) == 7
-    @test count(e.kind === Core.Inference.INVALID_EXPR_NARGS for e in errors) == 2
-    @test count(e.kind === Core.Inference.INVALID_EXPR_HEAD for e in errors) == 1
 end
 
 @testset "EMPTY_SLOTNAMES" begin

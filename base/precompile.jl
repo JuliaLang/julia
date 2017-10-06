@@ -856,7 +856,6 @@ precompile(Tuple{typeof(Core.Inference._widen_all_consts!), Expr, Array{Bool, 1}
 precompile(Tuple{typeof(Core.Inference._delete!), Core.Inference.BitSet, Int64})
 precompile(Tuple{typeof(Core.Inference.promote_type), Type{Float16}, Type{Int64}})
 precompile(Tuple{typeof(Core.Inference.mk_tuplecall), Array{Any, 1}, Core.Inference.InferenceState})
-precompile(Tuple{typeof(Core.Inference.inlining_pass), Expr, Core.Inference.InferenceState, Array{Any, 1}, Int64})
 precompile(Tuple{typeof(Core.Inference.annotate_slot_load!), Expr, Array{Any, 1}, Core.Inference.InferenceState, Array{Bool, 1}})
 precompile(Tuple{typeof(Core.Inference.record_slot_assign!), Core.Inference.InferenceState})
 precompile(Tuple{typeof(Core.Inference.type_annotate!), Core.Inference.InferenceState})
