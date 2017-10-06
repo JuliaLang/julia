@@ -339,13 +339,13 @@ is an open file object for this path.
 mktemp(parent)
 
 """
-    mktempdir(parent=tempdir(); prefix="$temp_prefix")
+    mktempdir(parent=tempdir(); prefix="$(repr(temp_prefix))")
 
 Create a temporary directory in the `parent` directory and return its path.
 If `parent` does not exist, throw an error.
 An optional `prefix` to the directory name can be provided.
 """
-function mktempdir(parent=tempdir(); prefix="$temp_prefix")
+function mktempdir(parent=tempdir(); prefix=temp_prefix)
     i = endof(parent)
     while i >= 1 && parent[i:i] == path_separator
         i -= 1
@@ -393,13 +393,13 @@ function mktemp(fn::Function, parent=tempdir())
 end
 
 """
-    mktempdir(f::Function, parent=tempdir(); prefix="$temp_prefix")
+    mktempdir(f::Function, parent=tempdir(); prefix="$(repr(temp_prefix))")
 
 Apply the function `f` to the result of [`mktempdir(parent; prefix)`](@ref) and remove the
 temporary directory upon completion.
 An optional `prefix` to the directory name can be provided.
 """
-function mktempdir(fn::Function, parent=tempdir(); prefix="$temp_prefix")
+function mktempdir(fn::Function, parent=tempdir(); prefix=temp_prefix)
     tmpdir = mktempdir(parent; prefix=prefix)
     try
         fn(tmpdir)
