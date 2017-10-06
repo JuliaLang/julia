@@ -223,7 +223,7 @@ $$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIA
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
 	if $$(call spawn,$3) $2 -C "$$(JULIA_CPU_TARGET)" --output-o $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
 		--startup-file=no --warn-overwrite=yes --sysimage $$(call cygpath_w,$$<) sysimg.jl $$(RELBUILDROOT); then \
-		mv $$(call cygpath_w,$$@).tmp $$(call cygpath_w,$$@); \
+		mv $$@.tmp $$@; \
 	else \
 		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; \
 	fi )
