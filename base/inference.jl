@@ -2446,8 +2446,6 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
     e = e::Expr
     if e.head === :call
         t = abstract_eval_call(e, vtypes, sv)
-    elseif e.head === :null
-        t = Void
     elseif e.head === :new
         t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))[1]
         for i = 2:length(e.args)
@@ -4119,7 +4117,7 @@ function inline_as_constant(@nospecialize(val), argexprs, sv::InferenceState, @n
 end
 
 function is_self_quoting(@nospecialize(x))
-    return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type)
+    return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type) || isa(x,Char) || x === nothing
 end
 
 function countunionsplit(atypes)

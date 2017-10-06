@@ -10,7 +10,6 @@ const VALID_EXPR_HEADS = ObjectIdDict(
     :(=) => 2:2,
     :method => 1:4,
     :const => 1:1,
-    :null => 0:0, # TODO from @vtjnash: remove this + any :null handling code in Base
     :new => 1:typemax(Int),
     :return => 1:1,
     :the_exception => 0:0,
@@ -33,6 +32,7 @@ const INVALID_EXPR_HEAD = "invalid expression head"
 const INVALID_EXPR_NARGS = "invalid number of expression args"
 const INVALID_LVALUE = "invalid LHS value"
 const INVALID_RVALUE = "invalid RHS value"
+const INVALID_RETURN = "invalid argument to :return"
 const INVALID_CALL_ARG = "invalid :call argument"
 const EMPTY_SLOTNAMES = "slotnames field is empty"
 const SLOTFLAGS_MISMATCH = "length(slotnames) != length(slotflags)"
@@ -41,6 +41,7 @@ const SLOTTYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo slottypes field is no
 const SSAVALUETYPES_MISMATCH = "not all SSAValues in AST have a type in ssavaluetypes"
 const SSAVALUETYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
 const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
+const NON_TOP_LEVEL_GLOBAL = "encountered `Expr` head `:global` in non-top-level code (i.e. `nargs` > 0)"
 const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of method arguments"
 const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
 
@@ -57,18 +58,38 @@ InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
 Validate `c`, logging any violation by pushing an `InvalidCodeError` into `errors`.
 """
 function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_level::Bool = false)
+    function validate_val!(@nospecialize(x))
+        if isa(x, Expr)
+            if x.head == :call || x.head == :invoke
+                for arg in x.args
+                    if !is_valid_argument(arg)
+                        push!(errors, InvalidCodeError(INVALID_CALL_ARG, arg))
+                    else
+                        validate_val!(arg)
+                    end
+                end
+            end
+        elseif isa(x, SSAValue)
+            id = x.id + 1 # ensures that id > 0 for use with IntSet
+            !in(id, ssavals) && push!(ssavals, id)
+        end
+    end
+
     ssavals = IntSet()
     lhs_slotnums = IntSet()
-    walkast(c.code) do x
+    for x in c.code
         if isa(x, Expr)
-            !is_top_level && x.head == :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
+            if !is_top_level
+                x.head === :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
+                x.head === :global && push!(errors, InvalidCodeError(NON_TOP_LEVEL_GLOBAL))
+            end
             narg_bounds = get(VALID_EXPR_HEADS, x.head, -1:-1)
             nargs = length(x.args)
             if narg_bounds == -1:-1
                 push!(errors, InvalidCodeError(INVALID_EXPR_HEAD, (x.head, x)))
             elseif !in(nargs, narg_bounds)
                 push!(errors, InvalidCodeError(INVALID_EXPR_NARGS, (x.head, nargs, x)))
-            elseif x.head == :(=)
+            elseif x.head === :(=)
                 lhs, rhs = x.args
                 if !is_valid_lvalue(lhs)
                     push!(errors, InvalidCodeError(INVALID_LVALUE, lhs))
@@ -76,19 +97,33 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                     n = lhs.id
                     push!(lhs_slotnums, n)
                 end
-                if !is_valid_rvalue(rhs)
+                if !is_valid_rvalue(lhs, rhs)
                     push!(errors, InvalidCodeError(INVALID_RVALUE, rhs))
                 end
-            elseif x.head == :call || x.head == :invoke
-                for arg in x.args
-                    if !is_valid_rvalue(arg)
-                        push!(errors, InvalidCodeError(INVALID_CALL_ARG, arg))
-                    end
+                validate_val!(lhs)
+                validate_val!(rhs)
+            elseif x.head === :gotoifnot
+                if !is_valid_argument(x.args[1])
+                    push!(errors, InvalidCodeError(INVALID_CALL_ARG, x.args[1]))
                 end
+                validate_val!(x.args[1])
+            elseif x.head === :return
+                if !is_valid_return(x.args[1])
+                    push!(errors, InvalidCodeError(INVALID_RETURN, x.args[1]))
+                end
+                validate_val!(x.args[1])
+            else
+                validate_val!(x)
             end
-        elseif isa(x, SSAValue)
-            id = x.id + 1 # ensures that id > 0 for use with IntSet
-            !in(id, ssavals) && push!(ssavals, id)
+        elseif isa(x, NewvarNode)
+        elseif isa(x, LabelNode)
+        elseif isa(x, GotoNode)
+        elseif x === nothing
+        elseif isa(x, SlotNumber)
+        elseif isa(x, GlobalRef)
+        elseif isa(x, LineNumberNode)
+        else
+            push!(errors, InvalidCodeError("invalid statement", x))
         end
     end
     nslotnames = length(c.slotnames)
@@ -133,18 +168,28 @@ end
 
 validate_code(args...) = validate_code!(Vector{InvalidCodeError}(), args...)
 
-function walkast(f, stmts::Array)
-    for stmt in stmts
-        f(stmt)
-        isa(stmt, Expr) && walkast(f, stmt.args)
+is_valid_lvalue(x) = isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef)
+
+function is_valid_argument(x)
+    if isa(x, Slot) || isa(x, SSAValue) || isa(x, GlobalRef) || isa(x, QuoteNode) ||
+        (isa(x,Expr) && (x.head in (:static_parameter, :boundscheck, :copyast))) ||
+        isa(x, Number) || isa(x, AbstractString) || isa(x, Char) || isa(x, Tuple) ||
+        isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
+        return true
     end
+    # TODO: consider being stricter about what needs to be wrapped with QuoteNode
+    return !(isa(x,Expr) || isa(x,Symbol) || isa(x,GotoNode) || isa(x,LabelNode) ||
+             isa(x,LineNumberNode) || isa(x,NewvarNode))
 end
 
-is_valid_lvalue(x) = isa(x, SlotNumber) || isa(x, SSAValue) || isa(x, GlobalRef)
-
-function is_valid_rvalue(x)
-    isa(x, Expr) && return !in(x.head, (:gotoifnot, :line, :const, :meta))
-    return !isa(x, GotoNode) && !isa(x, LabelNode) && !isa(x, LineNumberNode)
+function is_valid_rvalue(lhs, x)
+    is_valid_argument(x) && return true
+    if isa(x, Expr) && x.head in (:new, :the_exception, :isdefined, :call, :invoke, :foreigncall, :gc_preserve_begin)
+        return isa(lhs, SSAValue) || isa(lhs, Slot)
+    end
+    return false
 end
+
+is_valid_return(x) = is_valid_argument(x) || (isa(x,Expr) && x.head in (:new, :lambda))
 
 is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag
