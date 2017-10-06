@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Support for sparse arrays. Provides [`AbstractSparseArray`](@ref) and subtypes.
+Support for sparse arrays. Provides `AbstractSparseArray` and subtypes.
 """
 module SparseArrays
 

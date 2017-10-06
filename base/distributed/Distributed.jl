@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Tools for distributed parallel calculations.
+Tools for distributed parallel processing.
 """
 module Distributed
 

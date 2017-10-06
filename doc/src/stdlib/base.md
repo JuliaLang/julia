@@ -88,6 +88,29 @@ primitive type
 ;
 ```
 
+## Base Modules
+```@docs
+Base.BLAS
+Base.Dates
+Base.Distributed
+Base.Docs
+Base.Iterators
+Base.LAPACK
+Base.LibGit2
+Base.Libc
+Base.Libdl
+Base.LinAlg
+Base.Markdown
+Base.Meta
+Base.Pkg
+Base.Profile
+Base.Serializer
+Base.SparseArrays
+Base.StackTraces
+Base.Sys
+Base.Threads
+```
+
 ## All Objects
 
 ```@docs

@@ -1066,18 +1066,3 @@ end
 end
 @test Main.f23011() == 2
 @test docstrings_equal(@doc(Main.f23011), doc"second")
-
-@testset "exported modules are documented" begin
-    function exported_submodules(M)
-        symbols = filter(names(M)) do name
-            getfield(M, name) isa Module
-        end
-        getfield.(M, collect(symbols))
-    end
-
-    for M in exported_submodules(Base)
-        docstring = string(Docs.doc(M))
-        M == Base && continue  # Base is documented as a keyword
-        @test !contains(docstring, "No documentation found.")
-    end
-end
