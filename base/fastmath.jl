@@ -274,9 +274,9 @@ sqrt_fast(x::FloatTypes) = sqrt_llvm(x)
 
 const libm = Base.libm_name
 
-for f in (:acosh, :asinh, :atanh, :cbrt, :cos,
+for f in (:acosh, :asinh, :atanh, :cbrt,
           :cosh, :exp2, :expm1, :log10, :log1p, :log2,
-          :log, :sin, :sinh, :tan, :tanh)
+          :log, :sinh, :tanh)
     f_fast = fast_op[f]
     @eval begin
         $f_fast(x::Float32) =
@@ -291,35 +291,12 @@ pow_fast(x::Float32, y::Float32) =
 pow_fast(x::Float64, y::Float64) =
     ccall(("pow",libm), Float64, (Float64,Float64), x, y)
 
-atan_fast(x::Float32, y::Float32) =
-    ccall(("atan2f",libm), Float32, (Float32,Float32), x, y)
-atan_fast(x::Float64, y::Float64) =
-    ccall(("atan2",libm), Float64, (Float64,Float64), x, y)
-
-asin_fast(x::FloatTypes) = asin(x)
-acos_fast(x::FloatTypes) = acos(x)
-
-# explicit implementations
-
-@inline function sincos_fast(v::Float64)
-     s = Ref{Cdouble}()
-     c = Ref{Cdouble}()
-     ccall((:sincos, libm), Cvoid, (Cdouble, Ptr{Cdouble}, Ptr{Cdouble}), v, s, c)
-     return (s[], c[])
-end
-
-@inline function sincos_fast(v::Float32)
-     s = Ref{Cfloat}()
-     c = Ref{Cfloat}()
-     ccall((:sincosf, libm), Cvoid, (Cfloat, Ptr{Cfloat}, Ptr{Cfloat}), v, s, c)
-     return (s[], c[])
-end
+sincos_fast(v::FloatTypes) = sincos(v)
 
 @inline function sincos_fast(v::Float16)
     s, c = sincos_fast(Float32(v))
     return Float16(s), Float16(c)
 end
-
 sincos_fast(v::AbstractFloat) = (sin_fast(v), cos_fast(v))
 sincos_fast(v::Real) = sincos_fast(float(v)::AbstractFloat)
 sincos_fast(v) = (sin_fast(v), cos_fast(v))
