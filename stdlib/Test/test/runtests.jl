@@ -549,6 +549,7 @@ end
     @test !contains(msg, "include(")
     @test contains(msg, "at " * f * ":3")
     @test contains(msg, "at " * f * ":4")
+    rm(f; force=true)
 end
 
 let io = IOBuffer()
