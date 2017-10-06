@@ -1,5 +1,5 @@
 using Compat
-using Base.Test
+using Compat.Test
 
 # Issue #291
 # 0.6
@@ -513,7 +513,7 @@ module Test18839
 
 using Compat
 using Compat.Iterators
-using Base.Test
+using Compat.Test
 
 @test collect(take(countfrom(2), 3)) == [2, 3, 4]
 @test collect(take(cycle(5:8), 9)) == [5:8; 5:8; 5]
@@ -627,7 +627,8 @@ b = Compat.collect(a)
 
 # PR 22064
 module Test22064
-using Base.Test, Compat
+using Compat
+using Compat.Test
 @test (@__MODULE__) === Test22064
 end
 
@@ -824,6 +825,18 @@ end
 @test isconcrete(Int)
 
 # 0.7
+module Test23876
+    using Compat
+    using Compat.Test
+    import Compat.DelimitedFiles
+    using Compat.Mmap, Compat.SharedArrays
+    @test isdefined(@__MODULE__, :DelimitedFiles)
+    @test isdefined(SharedArrays, :SharedArray)
+    @test isdefined(@__MODULE__, :SharedArray)
+    @test isdefined(@__MODULE__, :procs)
+    @test isdefined(Mmap, :mmap)
+end
+
 let a = [0,1,2,3,0,1,2,3]
     @test findfirst(equalto(3), [1,2,4,1,2,3,4]) == 6
     @test findfirst(!equalto(1), [1,2,4,1,2,3,4]) == 2
