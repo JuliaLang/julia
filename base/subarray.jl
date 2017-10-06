@@ -107,7 +107,9 @@ _maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A
 Like [`getindex`](@ref), but returns a view into the parent array `A` with the
 given indices instead of making a copy.  Calling [`getindex`](@ref) or
 [`setindex!`](@ref) on the returned `SubArray` computes the
-indices to the parent array on the fly without checking bounds.
+indices to the parent array on the fly without checking bounds. Note that bounds
+are still checked on the indices themselves – `view(x, 10:20)[0]` will throw an
+error because `0` is not a valid index for the range `10:20`."
 
 ```jldoctest
 julia> A = [1 2; 3 4]
