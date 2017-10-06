@@ -22,65 +22,328 @@ end
 ## software is freely granted, provided that this notice
 ## is preserved.
 
-function sin_kernel(x::DoubleFloat64)
-    S1 = -1.66666666666666324348e-01
-    S2 =  8.33333333332248946124e-03
-    S3 = -1.98412698298579493134e-04
-    S4 =  2.75573137070700676789e-06
-    S5 = -2.50507602534068634195e-08
-    S6 =  1.58969099521155010221e-10
-
-    z = x.hi*x.hi
-    w = z*z
-    r = S2+z*(S3+z*S4) + z*w*(S5+z*S6)
-    v = z*x.hi
-    x.hi-((z*(0.5*x.lo-v*r)-x.lo)-v*S1)
+# Trigonometric functions
+# sin methods
+@noinline sin_domain_error(x) = throw(DomainError(x, "sin(x) is only defined for finite x."))
+@inline function sin(x::T) where T<:Union{Float32, Float64}
+    absx = abs(x)
+    if absx < T(pi)/4 #|x| ~<= pi/4, no need for reduction
+        if absx < sqrt(eps(T))
+            return x
+        end
+        return sin_kernel(x)
+    elseif isnan(x)
+        return T(NaN)
+    elseif isinf(x)
+        sin_domain_error(x)
+    end
+    n, y = rem_pio2_kernel(x)
+    n = n&3
+    if n == 0
+        return sin_kernel(y)
+    elseif n == 1
+        return cos_kernel(y)
+    elseif n == 2
+        return -sin_kernel(y)
+    else
+        return -cos_kernel(y)
+    end
 end
 
-function cos_kernel(x::DoubleFloat64)
-    C1 =  4.16666666666666019037e-02
-    C2 = -1.38888888888741095749e-03
-    C3 =  2.48015872894767294178e-05
-    C4 = -2.75573143513906633035e-07
-    C5 =  2.08757232129817482790e-09
-    C6 = -1.13596475577881948265e-11
+# Coefficients in 13th order polynomial approximation on [0; π/4]
+#     sin(x) ≈ x + S1*x³ + S2*x⁵ + S3*x⁷ + S4*x⁹ + S5*x¹¹ + S6*x¹³
+# D for double, S for sin, number is the order of x-1
 
-    z = x.hi*x.hi
-    w = z*z
-    r = z*(C1+z*(C2+z*C3)) + w*w*(C4+z*(C5+z*C6))
-    hz = 0.5*z
-    w = 1.0-hz
-    w + (((1.0-w)-hz) + (z*r-x.hi*x.lo))
+const DS1 = -1.66666666666666324348e-01
+const DS2 = 8.33333333332248946124e-03
+const DS3 = -1.98412698298579493134e-04
+const DS4 = 2.75573137070700676789e-06
+const DS5 = -2.50507602534068634195e-08
+const DS6 = 1.58969099521155010221e-10
+"""
+    sin_kernel(yhi, ylo)
+
+Computes the sine on the interval [-π/4; π/4].
+"""
+@inline function sin_kernel(y::DoubleFloat64)
+    y² = y.hi*y.hi
+    y⁴ = y²*y²
+    r  = @horner(y², DS2, DS3, DS4) + y²*y⁴*@horner(y², DS5, DS6)
+    y³ = y²*y.hi
+    y.hi-((y²*(0.5*y.lo-y³*r)-y.lo)-y³*DS1)
+end
+@inline function sin_kernel(y::Float64)
+    y² =  y*y
+    y⁴ =  y²*y²
+    r  =  @horner(y², DS2, DS3, DS4) + y²*y⁴*@horner(y², DS5, DS6)
+    y³ =  y²*y
+    y+y³*(DS1+y²*r)
 end
 
-function sin_kernel(x::DoubleFloat32)
+# sin_kernels accepting values from rem_pio2 in the Float32 case
+@inline sin_kernel(x::Float32) = sin_kernel(DoubleFloat32(x))
+@inline function sin_kernel(y::DoubleFloat32)
     S1 = -0.16666666641626524
     S2 = 0.008333329385889463
-    S3 = -0.00019839334836096632
-    S4 = 2.718311493989822e-6
-
-    z = x.hi*x.hi
+    z = y.hi*y.hi
     w = z*z
-    r = S3+z*S4
-    s = z*x.hi
-    Float32((x.hi + s*(S1+z*S2)) + s*w*r)
+    r = @horner(z, -0.00019839334836096632, 2.718311493989822e-6)
+    s = z*y.hi
+    Float32((y.hi + s*@horner(z, S1, S2)) + s*w*r)
 end
 
-function cos_kernel(x::DoubleFloat32)
+# cos methods
+@noinline cos_domain_error(x) = throw(DomainError(x, "cos(x) is only defined for finite x."))
+@inline function cos(x::T) where T<:Union{Float32, Float64}
+    absx = abs(x)
+    if absx < T(pi)/4
+        if absx < sqrt(eps(T)/T(2.0))
+            return T(1.0)
+        end
+        return cos_kernel(x)
+    elseif isnan(x)
+        return T(NaN)
+    elseif isinf(x)
+        cos_domain_error(x)
+    else
+        n, y = rem_pio2_kernel(x)
+        n = n&3
+        if n == 0
+            return cos_kernel(y)
+        elseif n == 1
+            return -sin_kernel(y)
+        elseif n == 2
+            return -cos_kernel(y)
+        else
+            return sin_kernel(y)
+        end
+    end
+end
+
+const DC1 = 4.16666666666666019037e-02
+const DC2 = -1.38888888888741095749e-03
+const DC3 = 2.48015872894767294178e-05
+const DC4 = -2.75573143513906633035e-07
+const DC5 = 2.08757232129817482790e-09
+const DC6 = -1.13596475577881948265e-11
+"""
+    cos_kernel(y)
+
+Compute the cosine on the interval y∈[-π/4; π/4].
+"""
+@inline function cos_kernel(y::DoubleFloat64)
+    y² = y.hi*y.hi
+    y⁴ = y²*y²
+    r  = y²*@horner(y², DC1, DC2, DC3) + y⁴*y⁴*@horner(y², DC4, DC5, DC6)
+    half_y² = 0.5*y²
+    w  = 1.0-half_y²
+    w + (((1.0-w)-half_y²) + (y²*r-y.hi*y.lo))
+end
+@inline function cos_kernel(y::Float64)
+    y² = y*y
+    y⁴ = y²*y²
+    r  = y²*@horner(y², DC1, DC2, DC3) + y⁴*y⁴*@horner(y², DC4, DC5, DC6)
+    half_y² = 0.5*y²
+    w  = 1.0-half_y²
+    w + (((1.0-w)-half_y²) + (y²*r))
+end
+
+# cos_kernels accepting values from rem_pio2 in the Float32 case
+cos_kernel(x::Float32) = cos_kernel(DoubleFloat32(x))
+@inline function cos_kernel(y::DoubleFloat32)
     C0 = -0.499999997251031
     C1 = 0.04166662332373906
-    C2 = -0.001388676377460993
-    C3 = 2.439044879627741e-5
+    y² = y.hi*y.hi
+    y⁴ = y²*y²
+    r = @horner(y², -0.001388676377460993, 2.439044879627741e-5)
+    Float32(((1.0+y²*C0) + y⁴*C1) + (y⁴*y²)*r)
+end
 
-    z = x.hi*x.hi
-    w = z*z
-    r = C2+z*C3
-    Float32(((1.0+z*C0) + w*C1) + (w*z)*r)
+### sincos methods
+@noinline sincos_domain_error(x) = throw(DomainError(x, "sincos(x) is only defined for finite x."))
+
+"""
+    sincos(x)
+
+Simultaneously compute the sine and cosine of `x`, where the `x` is in radians.
+"""
+@inline function sincos(x::T) where T<:Union{Float32, Float64}
+    if abs(x) < T(pi)/4
+        if x == zero(T)
+            return x, one(T)
+        end
+        return sincos_kernel(x)
+    elseif isnan(x)
+        return T(NaN), T(NaN)
+    elseif isinf(x)
+        sincos_domain_error(x)
+    end
+    n, y = rem_pio2_kernel(x)
+    n = n&3
+    # calculate both kernels at the reduced y...
+    si, co = sincos_kernel(y)
+    # ... and use the same selection scheme as above: (sin, cos, -sin, -cos) for
+    # for sin and (cos, -sin, -cos, sin) for cos
+    if n == 0
+        return si, co
+    elseif n == 1
+        return co, -si
+    elseif n == 2
+        return -si, -co
+    else
+        return -co, si
+    end
+end
+
+# There's no need to write specialized kernels, as inlining takes care of remo-
+# ving superfluous calculations.
+@inline sincos_kernel(y::Union{Float32, Float64, DoubleFloat32, DoubleFloat64}) = (sin_kernel(y), cos_kernel(y))
+
+# tangent methods
+@noinline tan_domain_error(x) = throw(DomainError(x, "tan(x) is only defined for finite x."))
+function tan(x::T) where T<:Union{Float32, Float64}
+    absx = abs(x)
+    if absx < T(pi)/4
+        if absx < sqrt(eps(T))/2 # first order dominates, but also allows tan(-0)=-0
+            return x
+        end
+        return tan_kernel(x)
+    elseif isnan(x)
+        return T(NaN)
+    elseif isinf(x)
+        tan_domain_error(x)
+    end
+    n, y = rem_pio2_kernel(x)
+    if iseven(n)
+        return tan_kernel(y,1)
+    else
+        return tan_kernel(y,-1)
+    end
+end
+@inline tan_kernel(y::Float64) = tan_kernel(DoubleFloat64(y, 0.0), 1)
+@inline function tan_kernel(y::DoubleFloat64, k)
+    # kernel tan function on ~[-pi/4, pi/4] (except on -0)
+    # Input y is assumed to be bounded by ~pi/4 in magnitude.
+    # Input k indicates whether tan (if k = 1) or -1/tan (if k = -1) is returned.
+
+    # Algorithm
+    #    1. Since tan(-y) = -tan(y), we need only to consider positive y.
+    #    2. Callers must return tan(-0) = -0 without calling here since our
+    #       odd polynomial is not evaluated in a way that preserves -0.
+    #       Callers may do the optimization tan(y) ~ y for tiny y.
+    #    3. tan(y) is approximated by a odd polynomial of degree 27 on
+    #       [0,0.67434]
+    #                       3             27
+    #           tan(y) ~ y + T1*y + ... + T13*y ≡ P(y)
+    #       where
+    #
+    #                          |tan(y)         2     4            26   |     -59.2
+    #        (tan(y)-P(y))/y = |----- - (1+T1*y +T2*y +.... +T13*y    )| <= 2
+    #                          |  y                                    |
+    #
+    #       Note: tan(y+z) = tan(y) + tan'(y)*z
+    #                  ~ tan(y) + (1+y*y)*z
+    #       Therefore, for better accuracz in computing tan(y+z), let
+    #             3      2      2       2       2
+    #        r = y *(T2+y *(T3+y *(...+y *(T12+y *T13))))
+    #       then
+    #                     3    2
+    #        tan(y+z) = y + (T1*y + (y *(r+z)+z))
+    #
+    #   4. For y in [0.67434,pi/4],  let z = pi/4 - y, then
+    #        tan(y) = tan(pi/4-z) = (1-tan(z))/(1+tan(z))
+    #               = 1 - 2*(tan(z) - (tan(z)^2)/(1+tan(z)))
+
+    yhi = y.hi
+    ylo = y.lo
+
+    if abs(yhi) >= 0.6744
+        if yhi < 0.0
+            yhi = -yhi
+            ylo = -ylo
+        end
+        # Then, accurately reduce y as "pio4hi"-yhi+"pio4lo"-ylo
+        yhi = (pi/4 - yhi) + (3.06161699786838301793e-17 - ylo)
+        # yhi is guaranteed to be exact, so ylo is identically zero
+        ylo = 0.0
+    end
+    y² = yhi * yhi
+    y⁴ = y² * y²
+
+    # Break P(y)-T1*y³ = y^5*(T[2]+y^2*T[3]+...) into y⁵*r + y⁵*v where
+    # r = T[2]+y^4*T[4]+...+y^20*T[12])
+    # v = (y^2*(T[3]+y^4*T[5]+...+y^22*[T13]))
+    r = @horner(y⁴,
+        1.33333333333201242699e-01, # T2
+        2.18694882948595424599e-02, # T4
+        3.59207910759131235356e-03, # T6
+        5.88041240820264096874e-04, # T8
+        7.81794442939557092300e-05, # T10
+        -1.85586374855275456654e-05) # T12
+    v = y² * @horner(y⁴,
+        5.39682539762260521377e-02, # T3
+        8.86323982359930005737e-03, # T5
+        1.45620945432529025516e-03, # T7
+        2.46463134818469906812e-04, # T9
+        7.14072491382608190305e-05, # T11
+        2.59073051863633712884e-05) # T13
+    # Precompute y³
+    y³ = y² * yhi
+    # Calculate  P(y)-y-T1*y³ =  y⁵*r + y⁵*v  = y²(y³*(r+v))
+    r = ylo + y² * (y³ * (r + v) + ylo)
+    # Calculate P(y)-y = r+T1*y³
+    r += 3.33333333333334091986e-01*y³
+    # Calculate w = r+y = P(y)
+    Px = yhi + r
+    if abs(y.hi) >= 0.6744
+        # If the original y was above the threshold, then we calculate
+        #     tan(y) = 1 - 2*(tan(y) - (tan(y)^2)/(1+tan(y)))
+        #            ≈ 1 - 2*(P(z) - (P(z)^2)/(1+P(z)))
+        # where z = y-π/4.
+        return (signbit(y.hi) ? -1.0 : 1.0)*(k - 2*(yhi-(Px^2/(k+Px)-r)))
+    end
+    if k == 1
+        # Else, we simply return w = P(y) if k == 1 (integer multiple from argument
+        # reduction was even)...
+        return Px
+    else
+        # ...or tan(y) ≈ -1.0/(y+r) if !(k == 1) (integer multiple from argument
+        # reduction was odd). If 2ulp error is allowed, simply return the frac-
+        # tion directly. Instead, we calculate it accurately.
+
+        # Px0 is w with zeroed out low word
+        Px0 = reinterpret(Float64, (reinterpret(UInt64, Px) >> 32) << 32)
+        v = r - (Px0 - yhi) # Px0+v = r+y
+        t = a = -1.0 / Px
+        # zero out low word of t
+        t = reinterpret(Float64, (reinterpret(UInt64, t) >> 32) << 32)
+        s = 1.0 + t * Px0
+        return t + a * (s + t * v)
+    end
+end
+
+@inline tan_kernel(y::Float32) = tan_kernel(DoubleFloat32(y), 1)
+@inline function tan_kernel(y::DoubleFloat32, k)
+    # |tan(y)/y - t(y)| < 2**-25.5 (~[-2e-08, 2e-08]). */
+    y² = y.hi*y.hi
+    r  = @horner(y², 0.00297435743359967304927, 0.00946564784943673166728)
+    t  = @horner(y², 0.0533812378445670393523, 0.0245283181166547278873)
+    y⁴ = y²*y²
+    y³ = y²*y.hi
+    u  = @horner(y², 0.333331395030791399758, 0.133392002712976742718)
+    Py  = (y.hi+y³*u)+(y³*y⁴)*(t+y⁴*r)
+    if k == 1
+        return Float32(Py)
+    end
+
+    return Float32(-1.0/Py)
 end
 
 # fallback methods
 sin_kernel(x::Real) = sin(x)
 cos_kernel(x::Real) = cos(x)
+tan_kernel(x::Real) = tan(x)
+sincos_kernel(x::Real) = sincos(x)
 
 # Inverse trigonometric functions
 # asin methods
