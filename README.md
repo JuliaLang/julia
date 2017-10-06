@@ -176,6 +176,8 @@ Currently, the `@compat` macro supports the following syntaxes:
   `cov(::AbstractVector; corrected=)` and `cov(::AbstractVector, ::AbstractVector; corrected=)`
   are only available on 0.6. ([#21709])
 
+* `equalto` constructs an `EqualTo` object that can be used as a predicate ([#23812]).
+
 ## Renaming
 
 
@@ -337,4 +339,5 @@ includes this fix. Find the minimum version from there.
 [#23427]: https://github.com/JuliaLang/julia/issues/23427
 [#23570]: https://github.com/JuliaLang/julia/issues/23570
 [#23666]: https://github.com/JuliaLang/julia/issues/23666
+[#23812]: https://github.com/JuliaLang/julia/issues/23812
 [#23931]: https://github.com/JuliaLang/julia/issues/23931

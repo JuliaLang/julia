@@ -681,6 +681,28 @@ else
     import Test, SharedArrays, Mmap, DelimitedFiles
 end
 
+# 0.7.0-DEV.1993
+@static if !isdefined(Base, :EqualTo)
+    if VERSION >= v"0.6.0"
+        include_string(@__MODULE__, """
+            struct EqualTo{T} <: Function
+                x::T
+
+                EqualTo(x::T) where {T} = new{T}(x)
+            end
+        """)
+    else
+        include_string(@__MODULE__, """
+            immutable EqualTo{T} <: Function
+                x::T
+            end
+        """)
+    end
+    (f::EqualTo)(y) = isequal(f.x, y)
+    const equalto = EqualTo
+    export equalto
+end
+
 include("deprecated.jl")
 
 end # module Compat
