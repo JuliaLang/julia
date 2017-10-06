@@ -195,20 +195,21 @@ end
     wait(tsk)
 end
 
-let
+# test connecting to a named port
+let localhost = getaddrinfo("localhost")
     global randport
-    randport, server = listenany(defaultport)
+    randport, server = listenany(localhost, defaultport)
     @async connect("localhost", randport)
     s1 = accept(server)
     @test_throws ErrorException("client TCPSocket is not in initialization state") accept(server, s1)
     @test_throws Base.UVError("listen", Base.UV_EADDRINUSE) listen(randport)
-    port2, server2 = listenany(randport)
+    port2, server2 = listenany(localhost, randport)
     @test randport != port2
     close(server)
     close(server2)
 end
 
-@test_throws Base.DNSError connect(".invalid",80)
+@test_throws Base.DNSError connect(".invalid", 80)
 
 @testset "UDPSocket" begin
     a = UDPSocket()
