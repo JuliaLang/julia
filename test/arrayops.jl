@@ -416,6 +416,14 @@ end
         @test X32[i:(i+1), j:(j+2)] == X
     end
 end
+@testset "fallback hvcat" begin
+    #Issue #23994
+    A23994 = [1 "two"; 3im 4.0; 5 6//1]
+    @test A23994[2] isa Complex{Int}
+    @test A23994[3] isa Int
+    @test A23994[5] isa Float64
+    @test A23994[6] isa Rational{Int}
+end
 @testset "end" begin
     X = [ i+2j for i=1:5, j=1:5 ]
     @test X[end,end] == 15
