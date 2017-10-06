@@ -614,8 +614,10 @@ for (fname, op) in [(:sum, :+), (:prod, :*),
                     (:maximum, :scalarmax), (:minimum, :scalarmin),
                     (:all, :&), (:any, :|)]
     function compose_promote_sys_size(x)
-        if fname in [:sum, :prod]
-            :(promote_sys_size ∘ $x)
+        if fname === :sum
+            :(promote_sys_size_add ∘ $x)
+        elseif fname === :prod
+            :(promote_sys_size_mul ∘ $x)
         else
             x
         end

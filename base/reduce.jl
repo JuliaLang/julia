@@ -12,11 +12,17 @@ else
     const SmallUnsigned = Union{UInt8,UInt16,UInt32}
 end
 
-# Certain reductions like sum and prod may wish to promote the items being
-# reduced over to an appropriate size.
-promote_sys_size(x) = x
-promote_sys_size(x::Union{Bool, SmallSigned}) = Int(x)
-promote_sys_size(x::SmallUnsigned) = UInt(x)
+# Certain reductions like sum and prod may wish to promote the items being reduced over to
+# an appropriate size. Note we need x + zero(x) because some types like Bool have their sum
+# lie in a larger type.
+promote_sys_size(T::Type) = T
+promote_sys_size(::Type{<:SmallSigned}) = Int
+promote_sys_size(::Type{<:SmallUnsigned}) = UInt
+
+promote_sys_size_add(x) = convert(promote_sys_size(typeof(x + zero(x))), x)
+promote_sys_size_mul(x) = convert(promote_sys_size(typeof(x * one(x))), x)
+const _PromoteSysSizeFunction = Union{typeof(promote_sys_size_add),
+                                      typeof(promote_sys_size_mul)}
 
 ## foldl && mapfoldl
 
@@ -240,8 +246,8 @@ reduce_empty(::typeof(|), ::Type{Bool}) = false
 
 mapreduce_empty(f, op, T) = _empty_reduce_error()
 mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
-mapreduce_empty(::typeof(promote_sys_size), op, T) =
-    promote_sys_size(mapreduce_empty(identity, op, T))
+mapreduce_empty(f::_PromoteSysSizeFunction, op, T) =
+    f(mapreduce_empty(identity, op, T))
 mapreduce_empty(::typeof(abs), ::typeof(+), T) = abs(zero(T))
 mapreduce_empty(::typeof(abs2), ::typeof(+), T) = abs2(zero(T))
 mapreduce_empty(::typeof(abs), ::Union{typeof(scalarmax), typeof(max)}, T) =
@@ -251,8 +257,8 @@ mapreduce_empty(::typeof(abs2), ::Union{typeof(scalarmax), typeof(max)}, T) =
 
 # Allow mapreduce_empty to “see through” promote_sys_size
 let ComposedFunction = typename(typeof(identity ∘ identity)).wrapper
-    global mapreduce_empty(f::ComposedFunction{typeof(promote_sys_size)}, op, T) =
-        promote_sys_size(mapreduce_empty(f.g, op, T))
+    global mapreduce_empty(f::ComposedFunction{<:_PromoteSysSizeFunction}, op, T) =
+        f.f(mapreduce_empty(f.g, op, T))
 end
 
 mapreduce_empty_iter(f, op, itr, ::HasEltype) = mapreduce_empty(f, op, eltype(itr))
@@ -366,7 +372,7 @@ In the former case, the integers are widened to system word size and therefore
 the result is 128. In the latter case, no such widening happens and integer
 overflow results in -128.
 """
-sum(f::Callable, a) = mapreduce(promote_sys_size ∘ f, +, a)
+sum(f::Callable, a) = mapreduce(promote_sys_size_add ∘ f, +, a)
 
 """
     sum(itr)
@@ -382,7 +388,7 @@ julia> sum(1:20)
 210
 ```
 """
-sum(a) = mapreduce(promote_sys_size, +, a)
+sum(a) = mapreduce(promote_sys_size_add, +, a)
 sum(a::AbstractArray{Bool}) = count(a)
 
 
@@ -397,7 +403,7 @@ summation algorithm for additional accuracy.
 """
 function sum_kbn(A)
     T = _default_eltype(typeof(A))
-    c = promote_sys_size(zero(T)::T)
+    c = promote_sys_size_add(zero(T)::T)
     i = start(A)
     if done(A, i)
         return c
@@ -432,7 +438,7 @@ julia> prod(abs2, [2; 3; 4])
 576
 ```
 """
-prod(f::Callable, a) = mapreduce(promote_sys_size ∘ f, *, a)
+prod(f::Callable, a) = mapreduce(promote_sys_size_mul ∘ f, *, a)
 
 """
     prod(itr)
@@ -448,7 +454,7 @@ julia> prod(1:20)
 2432902008176640000
 ```
 """
-prod(a) = mapreduce(promote_sys_size, *, a)
+prod(a) = mapreduce(promote_sys_size_mul, *, a)
 
 ## maximum & minimum
 
