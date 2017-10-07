@@ -201,12 +201,16 @@ const package_locks = Dict{Symbol,Condition}()
 # Callbacks take the form (mod::Symbol) -> nothing.
 # WARNING: This is an experimental feature and might change later, without deprecation.
 const package_callbacks = Any[]
+# to notify downstream consumers that a file has been included into a particular module
+# Callbacks take the form (mod::Module, filename::String) -> nothing
+# WARNING: This is an experimental feature and might change later, without deprecation.
+const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Any[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
-const _require_dependencies = Any[] # a list of (path, mtime) tuples that are the file dependencies of the module currently being precompiled
+const _require_dependencies = Any[] # a list of (mod, path, mtime) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
-function _include_dependency(_path::AbstractString)
+function _include_dependency(modstring::AbstractString, _path::AbstractString)
     prev = source_path(nothing)
     if prev === nothing
         path = abspath(_path)
@@ -214,7 +218,7 @@ function _include_dependency(_path::AbstractString)
         path = joinpath(dirname(prev), _path)
     end
     if _track_dependencies[]
-        push!(_require_dependencies, (path, mtime(path)))
+        push!(_require_dependencies, (modstring, path, mtime(path)))
     end
     return path, prev
 end
@@ -230,7 +234,7 @@ This is only needed if your module depends on a file that is not used via `inclu
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
-    _include_dependency(path)
+    _include_dependency("#__external__", path)
     return nothing
 end
 
@@ -518,7 +522,10 @@ end
 
 include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
 function include_relative(mod::Module, _path::String)
-    path, prev = _include_dependency(_path)
+    path, prev = _include_dependency(string(mod), _path)
+    for callback in include_callbacks # to preserve order, must come before Core.include
+        invokelatest(callback, mod, path)
+    end
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
     local result
@@ -671,15 +678,20 @@ function parse_cache_header(f::IO)
     end
     totbytes = ntoh(read(f, Int64)) # total bytes for file dependencies
     # read the list of files
-    files = Tuple{String,Float64}[]
+    files = Tuple{String,String,Float64}[]
     while true
-        n = ntoh(read(f, Int32))
-        n == 0 && break
-        totbytes -= 4 + n + 8
-        @assert n >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
-        push!(files, (String(read(f, n)), ntoh(read(f, Float64))))
+        n1 = ntoh(read(f, Int32))
+        n1 == 0 && break
+        @assert n1 >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
+        modname = String(read(f, n1))
+        n2 = ntoh(read(f, Int32))
+        @assert n2 >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
+        filename = String(read(f, n2))
+        push!(files, (modname, filename, ntoh(read(f, Float64))))
+        totbytes -= 8 + n1 + n2 + 8
     end
-    @assert totbytes == 4 "header of cache file appears to be corrupt"
+    @assert totbytes == 12 "header of cache file appears to be corrupt"
+    srctextpos = ntoh(read(f, Int64))
     # read the list of modules that are required to be present during loading
     required_modules = Dict{Symbol,UInt64}()
     while true
@@ -689,7 +701,7 @@ function parse_cache_header(f::IO)
         uuid = ntoh(read(f, UInt64)) # module UUID
         required_modules[sym] = uuid
     end
-    return modules, files, required_modules
+    return modules, files, required_modules, srctextpos
 end
 
 function parse_cache_header(cachefile::String)
@@ -704,7 +716,7 @@ end
 
 function cache_dependencies(f::IO)
     defs, files, modules = parse_cache_header(f)
-    return modules, files
+    return modules, map(mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3]), files)  # discard the module
 end
 
 function cache_dependencies(cachefile::String)
@@ -712,6 +724,33 @@ function cache_dependencies(cachefile::String)
     try
         !isvalid_cache_header(io) && throw(ArgumentError("Invalid header in cache file $cachefile."))
         return cache_dependencies(io)
+    finally
+        close(io)
+    end
+end
+
+function read_dependency_src(io::IO, filename::AbstractString)
+    modules, files, required_modules, srctextpos = parse_cache_header(io)
+    srctextpos == 0 && error("no source-text stored in cache file")
+    seek(io, srctextpos)
+    while !eof(io)
+        filenamelen = ntoh(read(io, Int32))
+        filenamelen == 0 && break
+        fn = String(read(io, filenamelen))
+        len = ntoh(read(io, UInt64))
+        if fn == filename
+            return String(read(io, len))
+        end
+        seek(io, position(io) + len)
+    end
+    error(filename, " is not stored in the source-text cache")
+end
+
+function read_dependency_src(cachefile::String, filename::AbstractString)
+    io = open(cachefile, "r")
+    try
+        !isvalid_cache_header(io) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        return read_dependency_src(io, filename)
     finally
         close(io)
     end
@@ -756,11 +795,11 @@ function stale_cachefile(modpath::String, cachefile::String)
         end
 
         # now check if this file is fresh relative to its source files
-        if !samefile(files[1][1], modpath)
-            DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it is for file $(files[1][1])) not file $modpath.")
+        if !samefile(files[1][2], modpath)
+            DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it is for file $(files[1][2])) not file $modpath.")
             return true # cache file was compiled from a different path
         end
-        for (f, ftime_req) in files
+        for (_, f, ftime_req) in files
             # Issue #13606: compensate for Docker images rounding mtimes
             # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
             ftime = mtime(f)
