@@ -28,7 +28,6 @@ kw"help", kw"?", kw"julia", kw""
 available for direct use. Names can also be used via dot syntax (e.g. `Foo.foo` to access
 the name `foo`), whether they are `export`ed or not.
 See the [manual section about modules](@ref modules) for details.
-```
 """
 kw"using"
 
