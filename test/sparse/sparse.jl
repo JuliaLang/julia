@@ -2041,3 +2041,56 @@ end
         @test isfinite.(cov_sparse) == isfinite.(cov_dense)
     end
 end
+
+@testset "dense-sparse matrix multiplication" begin
+    using Base.LinAlg: *, A_mul_B!,
+        A_mul_Bt,  A_mul_Bt!,  A_mul_Bc,  A_mul_Bc!,
+        At_mul_B,  At_mul_B!,  Ac_mul_B,  Ac_mul_B!,
+        At_mul_Bt, At_mul_Bt!, Ac_mul_Bc, Ac_mul_Bc!
+    # out-of-place dense-sparse ops, i.e. A[t|c]_mul_B[t|c](dense, sparse)
+    #
+    # exercise kernels, which are shared with corresponding in-place ops
+    for (m, k, n) in ((5, 5, 5), (5, 10, 15), (15, 10, 5))
+        densemat = rand(Complex{Float64}, m, k)
+        sparsemat = sprand(Complex{Float64}, k, n, 0.4)
+        tdensemat = transpose(densemat)
+        tsparsemat = transpose(sparsemat)
+        @test *(densemat, sparsemat) ≈ *(densemat, Matrix(sparsemat))
+        @test A_mul_Bt(densemat, tsparsemat) ≈ A_mul_Bt(densemat, Matrix(tsparsemat))
+        @test A_mul_Bc(densemat, tsparsemat) ≈ A_mul_Bc(densemat, Matrix(tsparsemat))
+        @test At_mul_B(tdensemat, sparsemat) ≈ At_mul_B(tdensemat, Matrix(sparsemat))
+        @test Ac_mul_B(tdensemat, sparsemat) ≈ Ac_mul_B(tdensemat, Matrix(sparsemat))
+        @test At_mul_Bt(tdensemat, tsparsemat) ≈ At_mul_Bt(tdensemat, Matrix(tsparsemat))
+        @test Ac_mul_Bc(tdensemat, tsparsemat) ≈ Ac_mul_Bc(tdensemat, Matrix(tsparsemat))
+    end
+    # exercise inner-dimensions-match checks
+    n, x = 3, 4
+    Cnn, Cxn, Cnx = zeros(n, n), zeros(x, n), zeros(n, x)
+    Ann, Axn, Anx = zeros(n, n), zeros(x, n), spzeros(n, x)
+    Snn, Sxn, Snx = spzeros(n, n), spzeros(x, n), spzeros(n, x)
+    @test_throws DimensionMismatch (*)(Ann, Sxn)
+    @test_throws DimensionMismatch A_mul_Bt(Ann, Snx)
+    @test_throws DimensionMismatch A_mul_Bc(Ann, Snx)
+    @test_throws DimensionMismatch At_mul_B(Axn, Snn)
+    @test_throws DimensionMismatch Ac_mul_B(Axn, Snn)
+    @test_throws DimensionMismatch At_mul_Bt(Ann, Snx)
+    @test_throws DimensionMismatch Ac_mul_Bc(Ann, Snx)
+
+    # in-place dense-sparse ops, i.e. A[t|c]_mul_B[t|c]!(dense, dense, sparse)
+    # the kernels were exercised through the out-of-place calls above,
+    # so below exercise only the entry points (shape checks)
+    #
+    # exercise matmul outer-dimensions-match checks
+    for op! in (A_mul_B!, A_mul_Bt!, A_mul_Bc!, At_mul_B!, Ac_mul_B!, At_mul_Bt!, Ac_mul_Bc!)
+        @test_throws DimensionMismatch op!(Cxn, Ann, Snn)
+        @test_throws DimensionMismatch op!(Cnx, Ann, Snn)
+    end
+    # exercise matul inner-dimensions-match checks
+    @test_throws DimensionMismatch A_mul_B!(Cnn, Ann, Sxn)
+    @test_throws DimensionMismatch A_mul_Bt!(Cnn, Ann, Snx)
+    @test_throws DimensionMismatch A_mul_Bc!(Cnn, Ann, Snx)
+    @test_throws DimensionMismatch At_mul_B!(Cnn, Axn, Snn)
+    @test_throws DimensionMismatch Ac_mul_B!(Cnn, Axn, Snn)
+    @test_throws DimensionMismatch At_mul_Bt!(Cnn, Ann, Snx)
+    @test_throws DimensionMismatch Ac_mul_Bc!(Cnn, Ann, Snx)
+end

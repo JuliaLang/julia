@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.LinAlg: checksquare
+using Base: @propagate_inbounds
 
 ## Functions to switch to 0-based indexing to call external sparse solvers
 
@@ -41,8 +42,10 @@ function sppromote(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) whe
     A, B
 end
 
-# In matrix-vector multiplication, the correct orientation of the vector is assumed.
 
+### sparse-dense matrix multiplication: A[c|t]_mul_B[c|t][!]([dense,] sparse, dense)
+
+# In matrix-vector multiplication, the correct orientation of the vector is assumed.
 for (f, op, transp) in ((:A_mul_B, :identity, false),
                         (:Ac_mul_B, :adjoint, true),
                         (:At_mul_B, :transpose, true))
@@ -98,17 +101,128 @@ Ac_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = Ac_mul_B
 At_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = At_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
 
 
-function (*)(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA}
-    mX, nX = size(X)
-    nX == A.m || throw(DimensionMismatch())
-    Y = zeros(promote_type(TX,TvA), mX, A.n)
-    rowval = A.rowval
-    nzval = A.nzval
-    @inbounds for multivec_row=1:mX, col = 1:A.n, k=A.colptr[col]:(A.colptr[col+1]-1)
-        Y[multivec_row, col] += X[multivec_row, rowval[k]] * nzval[k]
-    end
-    Y
+### dense-sparse matrix multiplication: A[c|t]_mul_B[c|t][!]([dense,] dense, sparse)
+
+# */A_mul_B[!]([dense,] dense, sparse)
+function *(A::StridedMatrix, B::SparseMatrixCSC)
+    @boundscheck size(A, 2) == size(B, 1) || throw(DimensionMismatch())
+    C = zeros(promote_type(eltype(A), eltype(B)), size(A, 1), size(B, 2))
+    return unchecked_A_mul_B!(C, A, B)
 end
+function A_mul_B!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC)
+    @boundscheck size(A, 2) == size(B, 1) || throw(DimensionMismatch())
+    @boundscheck size(C, 1) == size(A, 1) || throw(DimensionMismatch())
+    @boundscheck size(C, 2) == size(B, 2) || throw(DimensionMismatch())
+    return unchecked_A_mul_B!(C, A, B)
+end
+function unchecked_A_mul_B!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC)
+    mA = size(A, 1)
+    nB = size(B, 2)
+    fill!(C, zero(eltype(C)))
+    @inbounds for jB in 1:nB
+        for kB in B.colptr[jB]:(B.colptr[jB+1] - 1)
+            iB = B.rowval[kB]
+            xB = B.nzval[kB]
+            @simd for iA in 1:mA
+                C[iA, jB] = muladd(A[iA, iB], xB, C[iA, jB])
+            end
+        end
+    end
+    return C
+end
+
+# A_mul_B(c|t)[!]([dense,] dense, sparse)
+@propagate_inbounds A_mul_Bt(A::StridedMatrix, B::SparseMatrixCSC) = _A_mul_Bq(A, B, identity)
+@propagate_inbounds A_mul_Bc(A::StridedMatrix, B::SparseMatrixCSC) = _A_mul_Bq(A, B, conj)
+function _A_mul_Bq(A::StridedMatrix, B::SparseMatrixCSC, op::TF) where TF
+    @boundscheck size(A, 2) == size(B, 2) || throw(DimensionMismatch())
+    C = zeros(promote_type(eltype(A), eltype(B)), size(A, 1), size(B, 1))
+    return unchecked_A_mul_Bq!(C, A, B, op)
+end
+@propagate_inbounds A_mul_Bt!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC) = _A_mul_Bq!(C, A, B, identity)
+@propagate_inbounds A_mul_Bc!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC) = _A_mul_Bq!(C, A, B, conj)
+function _A_mul_Bq!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC, op::TF) where TF
+    @boundscheck size(A, 2) == size(B, 2) || throw(DimensionMismatch())
+    @boundscheck size(C, 1) == size(A, 1) || throw(DimensionMismatch())
+    @boundscheck size(C, 2) == size(B, 1) || throw(DimensionMismatch())
+    return unchecked_A_mul_Bq!(C, A, B, op)
+end
+function unchecked_A_mul_Bq!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC, op::TF) where TF
+    mA = size(A, 1)
+    nB = size(B, 2)
+    fill!(C, zero(eltype(C)))
+    @inbounds for jB in 1:nB
+        for kB in B.colptr[jB]:(B.colptr[jB+1] - 1)
+            iB = B.rowval[kB]
+            qxB = op(B.nzval[kB])
+            @simd for iA in 1:mA
+                C[iA, iB] = muladd(A[iA, jB], qxB, C[iA, iB])
+            end
+        end
+    end
+    return C
+end
+
+# A(c|t)_mul_B[!]([dense,] dense, sparse)
+@propagate_inbounds At_mul_B(A::StridedMatrix, B::SparseMatrixCSC) = _Aq_mul_B(A, B, identity)
+@propagate_inbounds Ac_mul_B(A::StridedMatrix, B::SparseMatrixCSC) = _Aq_mul_B(A, B, conj)
+function _Aq_mul_B(A::StridedMatrix, B::SparseMatrixCSC, op::TF) where TF
+    @boundscheck size(A, 1) == size(B, 1) || throw(DimensionMismatch())
+    C = zeros(promote_type(eltype(A), eltype(B)), size(A, 2), size(B, 2))
+    return unchecked_Aq_mul_B!(C, A, B, op)
+end
+@propagate_inbounds At_mul_B!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC) = _Aq_mul_B!(C, A, B, identity)
+@propagate_inbounds Ac_mul_B!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC) = _Aq_mul_B!(C, A, B, conj)
+function _Aq_mul_B!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC, op::TF) where TF
+    @boundscheck size(A, 1) == size(B, 1) || throw(DimensionMismatch())
+    @boundscheck size(C, 1) == size(A, 2) || throw(DimensionMismatch())
+    @boundscheck size(C, 2) == size(B, 2) || throw(DimensionMismatch())
+    return unchecked_Aq_mul_B!(C, A, B, op)
+end
+function unchecked_Aq_mul_B!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC, op::TF) where TF
+    # Without some additional storage into which to reorder data prior to performing multiplication,
+    # memory access patterns for this operation aren't particularly happy. For now, perform the
+    # operation in two steps --- an explicit adjoint/transpose followed by an efficient multiplication.
+    # For the future, test the various possible access patterns to determine whether any best this
+    # approach all around, and if so replace this implementation.
+    return twostep_Aq_mul_B!(C, A, B, op)
+end
+twostep_Aq_mul_B!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC, ::typeof(identity)) =
+    unchecked_A_mul_B!(C, transpose(A), B)
+twostep_Aq_mul_B!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC, ::typeof(conj)) =
+    unchecked_A_mul_B!(C, adjoint(A), B)
+
+# A(t|c)_mul_B(t|c)[!]([dense,] dense, sparse)
+@propagate_inbounds At_mul_Bt(A::StridedMatrix, B::SparseMatrixCSC) = _Aq_mul_Bq(A, B, identity)
+@propagate_inbounds Ac_mul_Bc(A::StridedMatrix, B::SparseMatrixCSC) = _Aq_mul_Bq(A, B, conj)
+function _Aq_mul_Bq(A::StridedMatrix, B::SparseMatrixCSC, op::TF) where TF
+    @boundscheck size(A, 1) == size(B, 2) || throw(DimensionMismatch())
+    C = zeros(promote_type(eltype(A), eltype(B)), size(A, 2), size(B, 1))
+    return unchecked_Aq_mul_Bq!(C, A, B, op)
+end
+@propagate_inbounds At_mul_Bt!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC) = _Aq_mul_Bq!(C, A, B, identity)
+@propagate_inbounds Ac_mul_Bc!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC) = _Aq_mul_Bq!(C, A, B, conj)
+function _Aq_mul_Bq!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC, op::TF) where TF
+    @boundscheck size(A, 1) == size(B, 2) || throw(DimensionMismatch())
+    @boundscheck size(C, 1) == size(A, 2) || throw(DimensionMismatch())
+    @boundscheck size(C, 2) == size(B, 1) || throw(DimensionMismatch())
+    return unchecked_Aq_mul_Bq!(C, A, B, op)
+end
+function unchecked_Aq_mul_Bq!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC, op::TF) where TF
+    # Without some additional storage into which to reorder data prior to performing multiplication,
+    # memory access patterns for this operation aren't particularly happy. For now, perform the
+    # operation in two steps --- a relatively efficient multiplication in reverse order
+    # followed by a transposition. For the future, test the various possible access patterns
+    # to determine whether any best this approach all around, and if so replace this implementation.
+    return twostep_Aq_mul_Bq!(C, A, B, op)
+end
+twostep_Aq_mul_Bq!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC, ::typeof(identity)) =
+    transpose!(C, *(B, A))
+twostep_Aq_mul_Bq!(C::StridedMatrix, A::StridedMatrix, B::SparseMatrixCSC, ::typeof(conj)) =
+    adjoint!(C, *(B, A))
+
+
+### other mixed sparse-?/?-sparse matrix multiplication
 
 function (*)(D::Diagonal, A::SparseMatrixCSC)
     T = Base.promote_op(*, eltype(D), eltype(A))
