@@ -961,15 +961,18 @@ mktempdir() do dir
         end
     end
 
-    # TO DO: add more tests for various merge
-    # preference options
-    @testset "Fastforward merges" begin
-        path = joinpath(dir, "Example.FF")
+    function setup_clone_repo(cache_repo::AbstractString, path::AbstractString; name="AAAA", email="BBBB@BBBB.COM")
         repo = LibGit2.clone(cache_repo, path)
         # need to set this for merges to succeed
         cfg = LibGit2.GitConfig(repo)
-        LibGit2.set!(cfg, "user.name", "AAAA")
-        LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
+        LibGit2.set!(cfg, "user.name", name)
+        LibGit2.set!(cfg, "user.email", email)
+        return repo
+    end
+    # TO DO: add more tests for various merge
+    # preference options
+    @testset "Fastforward merges" begin
+        repo = setup_clone_repo(cache_repo, joinpath(dir, "Example.FF"))
         try
             # Sets up a branch "branch/ff_a" which will be two commits ahead
             # of "master". It's possible to fast-forward merge "branch/ff_a"
@@ -1064,12 +1067,7 @@ mktempdir() do dir
     end
 
     @testset "Cherrypick" begin
-        path = joinpath(dir, "Example.Cherrypick")
-        repo = LibGit2.clone(cache_repo, path)
-        # need to set this for merges to succeed
-        cfg = LibGit2.GitConfig(repo)
-        LibGit2.set!(cfg, "user.name", "AAAA")
-        LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
+        repo = setup_clone_repo(cache_repo, joinpath(dir, "Example.Cherrypick"))
         try
             # Create a commit on the new branch and cherry-pick it over to
             # master. Since the cherry-pick does *not* make a new commit on
@@ -1094,12 +1092,7 @@ mktempdir() do dir
     end
 
     @testset "Merges" begin
-        path = joinpath(dir, "Example.Merge")
-        repo = LibGit2.clone(cache_repo, path)
-        # need to set this for merges to succeed
-        cfg = LibGit2.GitConfig(repo)
-        LibGit2.set!(cfg, "user.name", "AAAA")
-        LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
+        repo = setup_clone_repo(cache_repo, joinpath(dir, "Example.Merge"))
         try
             oldhead = LibGit2.head_oid(repo)
             LibGit2.branch!(repo, "branch/merge_a")
@@ -1155,16 +1148,8 @@ mktempdir() do dir
 
     @testset "push" begin
         up_path = joinpath(dir, "Example.PushUp")
-        up_repo = LibGit2.clone(cache_repo, up_path)
-        our_path = joinpath(dir, "Example.Push")
-        our_repo = LibGit2.clone(cache_repo, our_path)
-        # need to set this for merges to succeed
-        our_cfg = LibGit2.GitConfig(our_repo)
-        LibGit2.set!(our_cfg, "user.name", "AAAA")
-        LibGit2.set!(our_cfg, "user.email", "BBBB@BBBB.COM")
-        up_cfg = LibGit2.GitConfig(up_repo)
-        LibGit2.set!(up_cfg, "user.name", "AAAA")
-        LibGit2.set!(up_cfg, "user.email", "BBBB@BBBB.COM")
+        up_repo = setup_clone_repo(cache_repo, up_path)
+        our_repo = setup_clone_repo(cache_repo, joinpath(dir, "Example.Push"))
         try
             open(joinpath(LibGit2.path(our_repo),"file1"),"w") do f
                 write(f, "111\n")
@@ -1536,11 +1521,7 @@ mktempdir() do dir
     end
 
     @testset "merge" begin
-        path = joinpath(dir, "Example.simple_merge")
-        repo = LibGit2.clone(cache_repo, path)
-        cfg = LibGit2.GitConfig(repo)
-        LibGit2.set!(cfg, "user.name", "AAAA")
-        LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
+        repo = setup_clone_repo(cache_repo, joinpath(dir, "Example.simple_merge"))
         try
             LibGit2.branch!(repo, "branch/merge_a")
 
