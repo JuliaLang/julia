@@ -145,6 +145,21 @@ getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
     ismatch(r::Regex, s::AbstractString) -> Bool
 
 Test whether a string contains a match of the given regular expression.
+
+# Examples
+```jldoctest
+julia> rx = r"a.a"
+r"a.a"
+
+julia> ismatch(rx, "aba")
+true
+
+julia> ismatch(rx, "abba")
+false
+
+julia> rx("aba")
+true
+```
 """
 function ismatch(r::Regex, s::AbstractString, offset::Integer=0)
     compile(r)
@@ -167,6 +182,25 @@ Search for the first match of the regular expression `r` in `s` and return a `Re
 object containing the match, or nothing if the match failed. The matching substring can be
 retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
 `m.captures` The optional `idx` argument specifies an index at which to start the search.
+
+# Examples
+```jldoctest
+julia> rx = r"a(.)a"
+r"a.a"
+
+julia> m = match(rx, "cabac")
+RegexMatch("aba")
+
+julia> julia> m.captures
+1-element Array{Union{SubString{String}, Void},1}:
+ "b"
+
+julia> m.match
+"aba"
+
+julia> match(rx, "cabac", 3) == nothing
+true
+```
 """
 function match end
 
@@ -194,6 +228,24 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
     matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
 
 Return a vector of the matching substrings from [`eachmatch`](@ref).
+
+
+# Examples
+```jldoctest
+julia> rx = r"a.a"
+r"a.a"
+
+julia> matchall(rx, "a1a2a3a")
+2-element Array{SubString{String},1}:
+ "a1a"
+ "a3a"
+
+julia> matchall(rx, "a1a2a3a", true)
+3-element Array{SubString{String},1}:
+ "a1a"
+ "a2a"
+ "a3a"
+```
 """
 function matchall(re::Regex, str::String, overlap::Bool=false)
     regex = compile(re).regex
@@ -388,6 +440,26 @@ end
 Search for all matches of a the regular expression `r` in `s` and return a iterator over the
 matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from distinct character ranges.
+
+# Examples
+```jldoctest
+julia> rx = r"a.a"
+r"a.a"
+
+julia> m = eachmatch(rx, "a1a2a3a")
+Base.RegexMatchIterator(r"a.a", "a1a2a3a", false)
+
+julia> collect(m)
+2-element Array{RegexMatch,1}:
+ RegexMatch("a1a")
+ RegexMatch("a3a")
+
+julia> collect(eachmatch(rx, "a1a2a3a", true))
+3-element Array{RegexMatch,1}:
+ RegexMatch("a1a")
+ RegexMatch("a2a")
+ RegexMatch("a3a")
+```
 """
 eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
 
