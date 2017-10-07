@@ -735,6 +735,11 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
         if (jl_field_isptr(type, i)) {
             *(jl_value_t**)((char*)jl_data_ptr(jv)+jl_field_offset(type,i)) = NULL;
         }
+        jl_value_t *ft = jl_field_type(type, i);
+        if (jl_is_uniontype(ft)) {
+            uint8_t *psel = &((uint8_t *)jv)[jl_field_offset(type, i) + jl_field_size(type, i) - 1];
+            *psel = 0;
+        }
     }
     return jv;
 }
