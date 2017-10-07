@@ -1007,6 +1007,64 @@ void jl_register_fptrs(uint64_t sysimage_base, const char *base, const int32_t *
 
 extern arraylist_t partial_inst;
 
+STATIC_INLINE uint64_t jl_load_unaligned_i64(const void *ptr)
+{
+    uint64_t val;
+    memcpy(&val, ptr, 8);
+    return val;
+}
+STATIC_INLINE uint32_t jl_load_unaligned_i32(const void *ptr)
+{
+    uint32_t val;
+    memcpy(&val, ptr, 4);
+    return val;
+}
+STATIC_INLINE uint16_t jl_load_unaligned_i16(const void *ptr)
+{
+    uint16_t val;
+    memcpy(&val, ptr, 2);
+    return val;
+}
+
+STATIC_INLINE void jl_store_unaligned_i64(void *ptr, uint64_t val)
+{
+    memcpy(ptr, &val, 8);
+}
+STATIC_INLINE void jl_store_unaligned_i32(void *ptr, uint32_t val)
+{
+    memcpy(ptr, &val, 4);
+}
+STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val)
+{
+    memcpy(ptr, &val, 2);
+}
+
+#if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
+#define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
+#elif defined(_COMPILER_INTEL_)
+#define jl_assume_aligned(ptr, align) (__extension__ ({         \
+                __typeof__(ptr) ptr_ = (ptr);                   \
+                __assume_aligned(ptr_, align);                  \
+                ptr_;                                           \
+            }))
+#elif defined(__GNUC__)
+#define jl_assume_aligned(ptr, align) (__extension__ ({         \
+                __typeof__(ptr) ptr_ = (ptr);                   \
+                jl_assume(((uintptr_t)ptr) % (align) == 0);     \
+                ptr_;                                           \
+            }))
+#elif defined(__cplusplus)
+template<typename T>
+static inline T
+jl_assume_aligned(T ptr, unsigned align)
+{
+    (void)jl_assume(((uintptr_t)ptr) % align == 0);
+    return ptr;
+}
+#else
+#define jl_assume_aligned(ptr, align) (ptr)
+#endif
+
 #ifdef __cplusplus
 }
 #endif
