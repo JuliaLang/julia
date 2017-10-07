@@ -57,12 +57,12 @@ endif
 	@echo "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
 	@echo "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@
 ifeq ($(OS),WINNT)
-	@echo 'const SYSCONFDIR = "$(subst /,\\,$(sysconfdir_rel))"' >> $@
-	@echo 'const DATAROOTDIR = "$(subst /,\\,$(datarootdir_rel))"' >> $@
-	@echo 'const DOCDIR = "$(subst /,\\,$(docdir_rel))"' >> $@
-	@echo 'const LIBDIR = "$(subst /,\\,$(libdir_rel))"' >> $@
-	@echo 'const PRIVATE_LIBDIR = "$(subst /,\\,$(private_libdir_rel))"' >> $@
-	@echo 'const INCLUDEDIR = "$(subst /,\\,$(includedir_rel))"' >> $@
+	@echo 'const SYSCONFDIR = "$(subst /,\\\\,$(sysconfdir_rel))"' >> $@
+	@echo 'const DATAROOTDIR = "$(subst /,\\\\,$(datarootdir_rel))"' >> $@
+	@echo 'const DOCDIR = "$(subst /,\\\\,$(docdir_rel))"' >> $@
+	@echo 'const LIBDIR = "$(subst /,\\\\,$(libdir_rel))"' >> $@
+	@echo 'const PRIVATE_LIBDIR = "$(subst /,\\\\,$(private_libdir_rel))"' >> $@
+	@echo 'const INCLUDEDIR = "$(subst /,\\\\,$(includedir_rel))"' >> $@
 else
 	@echo "const SYSCONFDIR = \"$(sysconfdir_rel)\"" >> $@
 	@echo "const DATAROOTDIR = \"$(datarootdir_rel)\"" >> $@
