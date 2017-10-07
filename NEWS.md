@@ -233,7 +233,8 @@ This section lists changes that do not have deprecation warnings.
   * All command line arguments passed via `-e`, `-E`, and `-L` will be executed in the order
     given on the command line ([#23665]).
 
-  * The return type of `reinterpret` has changed to `ReinterpretArray`.
+  * The return type of `reinterpret` has changed to `ReinterpretArray`. `reinterpret` on sparse
+    arrays has been discontinued.
 
 Library improvements
 --------------------

@@ -210,7 +210,7 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
     end
 end
 
-## Reinterpret and Reshape
+## Reshape
 
 function sparse_compute_reshaped_colptr_and_rowval(colptrS::Vector{Ti}, rowvalS::Vector{Ti},
                                                    mS::Int, nS::Int, colptrA::Vector{Ti},
