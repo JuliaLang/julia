@@ -29,7 +29,7 @@ Returns `true` if the given value is valid for that type. Types currently can
 be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt32`](@ref).
 Values for `String` can be of that type, or `Vector{UInt8}`.
 
-#Examples
+# Examples
 ```jldoctest
 julia> isvalid(Char(0xd800))
 false
@@ -205,7 +205,7 @@ options (which all default to `false` except for `compose`) are specified:
 
 For example, NFKC corresponds to the options `compose=true, compat=true, stable=true`.
 
-#Examples
+# Examples
 ```jldoctest
 julia> "μ" == normalize_string("µ", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5
 true
@@ -277,7 +277,7 @@ category_string(c) = category_strings[category_code(c)+1]
 
 Returns `true` if the given char or integer is an assigned Unicode code point.
 
-#Examples
+# Examples
 ```jldoctest
 julia> is_assigned_char(101)
 true
@@ -473,8 +473,6 @@ category Zs.
 
 # Examples
 ```jldoctest
-
-```
 julia> isspace('\n')
 true
 
@@ -486,6 +484,7 @@ true
 
 julia> isspace('\x20')
 true
+```
 """
 @inline isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == '\u85' || '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
 
