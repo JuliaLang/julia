@@ -8,7 +8,8 @@ end
 """
     Symmetric(A, uplo=:U)
 
-Construct a `Symmetric` matrix from the upper (if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A`.
+Construct a `Symmetric` view of the upper (if `uplo = :U`) or lower (if `uplo = :L`)
+triangle of the matrix `A`.
 
 # Example
 
@@ -57,7 +58,8 @@ end
 """
     Hermitian(A, uplo=:U)
 
-Construct a `Hermitian` matrix from the upper (if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A`.
+Construct a `Hermitian` view of the upper (if `uplo = :U`) or lower (if `uplo = :L`)
+triangle of the matrix `A`.
 
 # Example
 
@@ -447,6 +449,8 @@ eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatr
     LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : B.data')[1]
 eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix} =
     LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : B.data')[1]
+
+eigvecs(A::HermOrSym) = eigvecs(eigfact(A))
 
 function svdvals!(A::RealHermSymComplexHerm)
     vals = eigvals!(A)

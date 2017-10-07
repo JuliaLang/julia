@@ -140,7 +140,7 @@ symdiff!(s::IntSet, ns) = (for n in ns; symdiff!(s, n); end; s)
 The set `s` is destructively modified to toggle the inclusion of integer `n`.
 """
 function symdiff!(s::IntSet, n::Integer)
-    0 <= n < typemax(Int) || _throw_intset_bounds_err()
+    0 < n < typemax(Int) || _throw_intset_bounds_err()
     val = !(n in s)
     _setint!(s, n, val)
     s

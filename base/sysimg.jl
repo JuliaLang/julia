@@ -21,7 +21,6 @@ include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)
 eval(m, x) = Core.eval(m, x)
-(::Type{T})(arg) where {T} = convert(T, arg)::T # Hidden from the REPL.
 VecElement{T}(arg) where {T} = VecElement{T}(convert(T, arg))
 convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
 convert(::Type{T}, arg::T) where {T<:VecElement} = arg
@@ -72,6 +71,10 @@ include("pointer.jl")
 include("refpointer.jl")
 include("checked.jl")
 importall .Checked
+
+# buggy handling of ispure in type-inference means this should be
+# after re-defining the basic operations that they might try to call
+(::Type{T})(arg) where {T} = convert(T, arg)::T # Hidden from the REPL.
 
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
@@ -141,7 +144,7 @@ using .Iterators: zip, enumerate
 using .Iterators: Flatten, product  # for generators
 
 # Definition of StridedArray
-StridedReshapedArray{T,N,A<:DenseArray} = ReshapedArray{T,N,A}
+StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}
 StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
     I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
     Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}

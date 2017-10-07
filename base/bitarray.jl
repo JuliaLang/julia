@@ -1145,6 +1145,7 @@ end
 
 Performs a bitwise not operation on `B`. See [`~`](@ref).
 
+# Example
 ```jldoctest
 julia> A = trues(2,2)
 2×2 BitArray{2}:
@@ -1497,6 +1498,7 @@ Performs a left rotation operation, returning a new `BitVector`.
 `i` controls how far to rotate the bits.
 See also [`rol!`](@ref).
 
+# Examples
 ```jldoctest
 julia> A = BitArray([true, true, false, false, true])
 5-element BitArray{1}:
@@ -1566,6 +1568,7 @@ Performs a right rotation operation on `B`, returning a new `BitVector`.
 `i` controls how far to rotate the bits.
 See also [`ror!`](@ref).
 
+# Examples
 ```jldoctest
 julia> A = BitArray([true, true, false, false, true])
 5-element BitArray{1}:

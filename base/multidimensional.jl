@@ -27,6 +27,37 @@ module IteratorsMD
 
     A `CartesianIndex` is sometimes produced by [`eachindex`](@ref), and
     always when iterating with an explicit [`CartesianRange`](@ref).
+
+    # Example
+
+    ```jldoctest
+    julia> A = reshape(collect(1:16), (2, 2, 2, 2))
+    2×2×2×2 Array{Int64,4}:
+    [:, :, 1, 1] =
+     1  3
+     2  4
+
+    [:, :, 2, 1] =
+     5  7
+     6  8
+
+    [:, :, 1, 2] =
+      9  11
+     10  12
+
+    [:, :, 2, 2] =
+     13  15
+     14  16
+
+    julia> A[CartesianIndex((1, 1, 1, 1))]
+    1
+
+    julia> A[CartesianIndex((1, 1, 1, 2))]
+    9
+
+    julia> A[CartesianIndex((1, 1, 2, 1))]
+    5
+    ```
     """
     struct CartesianIndex{N} <: AbstractCartesianIndex{N}
         I::NTuple{N,Int}
@@ -92,6 +123,16 @@ module IteratorsMD
     _isless(ret, ::Tuple{}, ::Tuple{}) = ifelse(ret==1, true, false)
     icmp(a, b) = ifelse(isless(a,b), 1, ifelse(a==b, 0, -1))
 
+    # hashing
+    const cartindexhash_seed = UInt == UInt64 ? 0xd60ca92f8284b8b0 : 0xf2ea7c2e
+    function Base.hash(ci::CartesianIndex, h::UInt)
+        h += cartindexhash_seed
+        for i in ci.I
+            h = hash(i, h)
+        end
+        return h
+    end
+
     # Iteration
     """
         CartesianRange(Istart::CartesianIndex, Istop::CartesianIndex) -> R
@@ -111,6 +152,18 @@ module IteratorsMD
 
     Consequently these can be useful for writing algorithms that
     work in arbitrary dimensions.
+
+    ```jldoctest
+    julia> foreach(println, CartesianRange((2, 2, 2)))
+    CartesianIndex{3}((1, 1, 1))
+    CartesianIndex{3}((2, 1, 1))
+    CartesianIndex{3}((1, 2, 1))
+    CartesianIndex{3}((2, 2, 1))
+    CartesianIndex{3}((1, 1, 2))
+    CartesianIndex{3}((2, 1, 2))
+    CartesianIndex{3}((1, 2, 2))
+    CartesianIndex{3}((2, 2, 2))
+    ```
     """
     struct CartesianRange{I<:CartesianIndex}
         start::I
@@ -850,7 +903,7 @@ Circularly shift the data in `src`, storing the result in
 The `dest` array must be distinct from the `src` array (they cannot
 alias each other).
 
-See also `circshift`.
+See also [`circshift`](@ref).
 """
 @noinline function circshift!(dest::AbstractArray{T,N}, src, shiftamt::DimsInteger) where {T,N}
     dest === src && throw(ArgumentError("dest and src must be separate arrays"))
@@ -903,6 +956,7 @@ their indices; any offset results in a (circular) wraparound. If the
 arrays have overlapping indices, then on the domain of the overlap
 `dest` agrees with `src`.
 
+# Example
 ```julia-repl
 julia> src = reshape(collect(1:16), (4,4))
 4×4 Array{Int64,2}:
@@ -1440,26 +1494,23 @@ function extrema(A::AbstractArray, dims)
     return extrema!(B, A)
 end
 
-@generated function extrema!(B, A::AbstractArray{T,N}) where {T,N}
-    return quote
-        sA = size(A)
-        sB = size(B)
-        @nloops $N i B begin
-            AI = @nref $N A i
-            (@nref $N B i) = (AI, AI)
-        end
-        Bmax = sB
-        Istart = Int[sB[i] == 1 != sA[i] ? 2 : 1 for i = 1:ndims(A)]
-        @inbounds @nloops $N i d->(Istart[d]:size(A,d)) begin
-            AI = @nref $N A i
-            @nexprs $N d->(j_d = min(Bmax[d], i_{d}))
-            BJ = @nref $N B j
-            if AI < BJ[1]
-                (@nref $N B j) = (AI, BJ[2])
-            elseif AI > BJ[2]
-                (@nref $N B j) = (BJ[1], AI)
-            end
-        end
-        return B
+@noinline function extrema!(B, A)
+    sA = size(A)
+    sB = size(B)
+    for I in CartesianRange(sB)
+        AI = A[I]
+        B[I] = (AI, AI)
     end
+    Bmax = CartesianIndex(sB)
+    @inbounds @simd for I in CartesianRange(sA)
+        J = min(Bmax,I)
+        BJ = B[J]
+        AI = A[I]
+        if AI < BJ[1]
+            B[J] = (AI, BJ[2])
+        elseif AI > BJ[2]
+            B[J] = (BJ[1], AI)
+        end
+    end
+    return B
 end

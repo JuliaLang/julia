@@ -5,12 +5,18 @@
 # Assumes that row values in rowval for each column are sorted
 #      issorted(rowval[colptr[i]:(colptr[i+1]-1)]) == true
 
+"""
+    SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+
+Matrix type for storing sparse matrices in the
+[Compressed Sparse Column](@ref man-csc) format.
+"""
 struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
-    rowval::Vector{Ti}      # Row values of nonzeros
-    nzval::Vector{Tv}       # Nonzero values
+    rowval::Vector{Ti}      # Row indices of stored values
+    nzval::Vector{Tv}       # Stored values, typically nonzeros
 
     function SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti},
                                     nzval::Vector{Tv}) where {Tv,Ti<:Integer}
@@ -32,6 +38,7 @@ size(S::SparseMatrixCSC) = (S.m, S.n)
 
 Returns the number of stored (filled) elements in a sparse array.
 
+# Example
 ```jldoctest
 julia> A = speye(3)
 3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
@@ -56,6 +63,7 @@ vector points directly to the internal nonzero storage of `A`, and any
 modifications to the returned vector will mutate `A` as well. See
 [`rowvals`](@ref) and [`nzrange`](@ref).
 
+# Example
 ```jldoctest
 julia> A = speye(3)
 3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
@@ -80,6 +88,7 @@ vector will mutate `A` as well. Providing access to how the row indices are
 stored internally can be useful in conjunction with iterating over structural
 nonzero values. See also [`nonzeros`](@ref) and [`nzrange`](@ref).
 
+# Example
 ```jldoctest
 julia> A = speye(3)
 3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
@@ -348,6 +357,7 @@ full(S::SparseMatrixCSC) = convert(Array, S)
 
 Convert a sparse matrix or vector `S` into a dense matrix or vector.
 
+# Example
 ```jldoctest
 julia> A = speye(3)
 3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
@@ -378,6 +388,7 @@ vec(S::SparseMatrixCSC) = S[:]
 
 Convert an AbstractMatrix `A` into a sparse matrix.
 
+# Example
 ```jldoctest
 julia> A = eye(3)
 3×3 Array{Float64,2}:
@@ -458,6 +469,7 @@ retained as structural nonzeros; to drop numerical zeros, use [`dropzeros!`](@re
 
 For additional documentation and an expert driver, see `Base.SparseArrays.sparse!`.
 
+# Example
 ```jldoctest
 julia> Is = [1; 2; 3];
 
@@ -524,8 +536,8 @@ Parent of and expert driver for [`sparse`](@ref);
 see [`sparse`](@ref) for basic usage. This method
 allows the user to provide preallocated storage for `sparse`'s intermediate objects and
 result as described below. This capability enables more efficient successive construction
-of `SparseMatrixCSC`s from coordinate representations, and also enables extraction of an
-unsorted-column representation of the result's transpose at no additional cost.
+of [`SparseMatrixCSC`](@ref)s from coordinate representations, and also enables extraction
+of an unsorted-column representation of the result's transpose at no additional cost.
 
 This method consists of three major steps: (1) Counting-sort the provided coordinate
 representation into an unsorted-row CSR form including repeated entries. (2) Sweep through
@@ -725,8 +737,8 @@ and  `length(X.nzval) >= nnz(A)`). Column-permutation `q`'s length must match `A
 count (`length(q) == A.n`).
 
 This method is the parent of several methods performing transposition and permutation
-operations on `SparseMatrixCSC`s. As this method performs no argument checking, prefer
-the safer child methods (`[c]transpose[!]`, `permute[!]`) to direct use.
+operations on [`SparseMatrixCSC`](@ref)s. As this method performs no argument checking,
+prefer the safer child methods (`[c]transpose[!]`, `permute[!]`) to direct use.
 
 This method implements the `HALFPERM` algorithm described in F. Gustavson, "Two fast
 algorithms for sparse matrices: multiplication and permuted transposition," ACM TOMS 4(3),
@@ -844,8 +856,8 @@ end
         C::SparseMatrixCSC{Tv,Ti}, workcolptr::Vector{Ti})
 
 See [`permute!`](@ref) for basic usage. Parent of `permute!`
-methods operating on `SparseMatrixCSC`s where the source and destination matrices are the
-same. See `unchecked_noalias_permute!`
+methods operating on [`SparseMatrixCSC`](@ref)s where the source and destination matrices
+are the same. See `unchecked_noalias_permute!`
 for additional information; these methods are identical but for this method's requirement of
 the additional `workcolptr`, `length(workcolptr) >= A.n + 1`, which enables efficient
 handling of the source-destination aliasing.
@@ -1001,7 +1013,7 @@ For additional (algorithmic) information, and for versions of these methods that
 argument checking, see (unexported) parent methods `unchecked_noalias_permute!`
 and `unchecked_aliasing_permute!`.
 
-See also: [`permute`](@ref)
+See also: [`permute`](@ref).
 """
 function permute!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
         p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer})
@@ -1054,6 +1066,39 @@ match `A`'s column count (`length(q) == A.n`). Row-permutation `p`'s length must
 row count (`length(p) == A.m`).
 
 For expert drivers and additional information, see [`permute!`](@ref).
+
+# Example
+```jldoctest
+julia> A = spdiagm([1, 2, 3, 4], 0, 4, 4) + spdiagm([5, 6, 7], 1, 4, 4)
+4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:
+  [1, 1]  =  1
+  [1, 2]  =  5
+  [2, 2]  =  2
+  [2, 3]  =  6
+  [3, 3]  =  3
+  [3, 4]  =  7
+  [4, 4]  =  4
+
+julia> permute(A, [4, 3, 2, 1], [1, 2, 3, 4])
+4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:
+  [4, 1]  =  1
+  [3, 2]  =  2
+  [4, 2]  =  5
+  [2, 3]  =  3
+  [3, 3]  =  6
+  [1, 4]  =  4
+  [2, 4]  =  7
+
+julia> permute(A, [1, 2, 3, 4], [4, 3, 2, 1])
+4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:
+  [3, 1]  =  7
+  [4, 1]  =  4
+  [2, 2]  =  6
+  [3, 2]  =  3
+  [1, 3]  =  5
+  [2, 3]  =  2
+  [1, 4]  =  1
+```
 """
 function permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
         q::AbstractVector{<:Integer})
@@ -1078,6 +1123,21 @@ value. This method makes a single sweep
 through `A`, requiring `O(A.n, nnz(A))`-time for matrices and `O(nnz(A))`-time for vectors
 and no space beyond that passed in. If `trim` is `true`, this method trims `A.rowval` or `A.nzind` and
 `A.nzval` to length `nnz(A)` after dropping elements.
+
+# Example
+```jldoctest
+julia> A = spdiagm([1, 2, 3, 4])
+4×4 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
+  [1, 1]  =  1
+  [2, 2]  =  2
+  [3, 3]  =  3
+  [4, 4]  =  4
+
+julia> Base.SparseArrays.fkeep!(A, (i, j, v) -> isodd(v))
+4×4 SparseMatrixCSC{Int64,Int64} with 2 stored entries:
+  [1, 1]  =  1
+  [3, 3]  =  3
+```
 """
 function fkeep!(A::SparseMatrixCSC, f, trim::Bool = true)
     An = A.n
@@ -1153,6 +1213,20 @@ Generates a copy of `A` and removes stored numerical zeros from that copy, optio
 trimming excess space from the result's `rowval` and `nzval` arrays when `trim` is `true`.
 
 For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
+
+# Example
+```jldoctest
+julia> A = sparse([1, 2, 3], [1, 2, 3], [1.0, 0.0, 1.0])
+3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  0.0
+  [3, 3]  =  1.0
+
+julia> dropzeros(A)
+3×3 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
+  [1, 1]  =  1.0
+  [3, 3]  =  1.0
+```
 """
 dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
 
@@ -1263,6 +1337,7 @@ values are sampled from the distribution specified by `rfn` and have the type `t
 distribution is used in case `rfn` is not specified. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 
+# Example
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1314,6 +1389,7 @@ with the specified (independent) probability `p` of any entry being nonzero,
 where nonzero values are sampled from the normal distribution. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 
+# Example
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1334,6 +1410,7 @@ sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n
 Create a sparse array with the same structure as that of `S`, but with every nonzero
 element having the value `1.0`.
 
+# Example
 ```jldoctest
 julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
 4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
@@ -1363,6 +1440,7 @@ sparse array will not contain any nonzero values. No storage will be allocated
 for nonzero values during construction. The type defaults to [`Float64`](@ref) if not
 specified.
 
+# Examples
 ```jldoctest
 julia> spzeros(3, 3)
 3×3 SparseMatrixCSC{Float64,Int64} with 0 stored entries
@@ -1391,6 +1469,7 @@ speye(m::Integer, n::Integer) = speye(Float64, m, n)
 
 Create a sparse identity matrix with the same size as `S`.
 
+# Example
 ```jldoctest
 julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
 4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
@@ -2817,6 +2896,22 @@ stored and otherwise do nothing. Derivative forms:
 
     dropstored!(A::SparseMatrixCSC, i::Integer, J::AbstractVector{<:Integer})
     dropstored!(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, j::Integer)
+
+# Example
+```jldoctest
+julia> A = spdiagm([1, 2, 3, 4])
+4×4 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
+  [1, 1]  =  1
+  [2, 2]  =  2
+  [3, 3]  =  3
+  [4, 4]  =  4
+
+julia> Base.SparseArrays.dropstored!(A, [1, 2], [1, 1])
+4×4 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+  [2, 2]  =  2
+  [3, 3]  =  3
+  [4, 4]  =  4
+```
 """
 function dropstored!(A::SparseMatrixCSC,
         I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer})
@@ -3199,6 +3294,7 @@ one diagonal, `B` can be a vector (instead of a tuple) and `d` can be the diagon
 (instead of a tuple), defaulting to 0 (diagonal). Optionally, `m` and `n` specify the size
 of the resulting sparse matrix.
 
+# Example
 ```jldoctest
 julia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))
 5×5 SparseMatrixCSC{Int64,Int64} with 8 stored entries:

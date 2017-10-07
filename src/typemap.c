@@ -1045,6 +1045,8 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
             newrec->isleafsig = 0; // Type{} may have a higher priority than DataType
         else if (decl == (jl_value_t*)jl_unionall_type)
             newrec->isleafsig = 0; // Type{} may have a higher priority than UnionAll
+        else if (decl == (jl_value_t*)jl_uniontype_type)
+            newrec->isleafsig = 0; // Type{} may have a higher priority than Union
         else if (jl_is_type_type(decl))
             newrec->isleafsig = 0; // Type{} may need special processing to compute the match
         else if (jl_is_vararg_type(decl))

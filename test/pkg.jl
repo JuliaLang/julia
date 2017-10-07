@@ -39,6 +39,12 @@ function temp_pkg_dir(fn::Function, tmp_dir=joinpath(tempdir(), randstring()),
     end
 end
 
+function write_build(pkg, content)
+    build_filename = Pkg.dir(pkg, "deps", "build.jl")
+    mkpath(dirname(build_filename))
+    write(build_filename, content)
+end
+
 # Test basic operations: adding or removing a package, status, free
 # Also test for the existence of REQUIRE and META_BRANCH
 temp_pkg_dir() do
@@ -531,6 +537,23 @@ temp_pkg_dir() do
             "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`))
         @test contains(msg, "- $package\nRestart Julia to use the updated versions.")
     end
+
+    let package = "Output"
+        stdout_file = Pkg.dir(package, "stdout.txt")
+        stderr_file = Pkg.dir(package, "stderr.txt")
+        content = """
+            println(STDOUT, "stdout")
+            println(STDERR, "stderr")
+            """
+        write_build(package, content)
+
+        code = "Pkg.build(\"$package\")"
+        msg = run(pipeline(
+            `$(Base.julia_cmd()) --startup-file=no -e $code`,
+            stdout=stdout_file, stderr=stderr_file))
+        @test last(readlines(stdout_file)) == "stdout"
+        @test last(readlines(stderr_file)) == "stderr"
+    end
 end
 
 @testset "Pkg functions with .jl extension" begin
@@ -539,6 +562,7 @@ end
         Pkg.add("Example.jl")
         @test [keys(Pkg.installed())...] == ["Example"]
         iob = IOBuffer()
+        Pkg.update("Example.jl")
         Pkg.checkout("Example.jl")
         Pkg.status("Example.jl", iob)
         str = chomp(String(take!(iob)))
@@ -594,12 +618,6 @@ end
 end
 
 temp_pkg_dir(initialize=false) do
-    function write_build(pkg, content)
-        build_filename = Pkg.dir(pkg, "deps", "build.jl")
-        mkpath(dirname(build_filename))
-        write(build_filename, content)
-    end
-
     write_build("Normal", "")
     write_build("Error", "error(\"An error has occurred while building a package\")")
     write_build("Exit", "exit()")

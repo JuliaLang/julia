@@ -88,8 +88,9 @@ function serialize(s::ClusterSerializer, g::GlobalRef)
     # Record if required and then invoke the default GlobalRef serializer.
     sym = g.name
     if g.mod === Main && isdefined(g.mod, sym)
-        v = getfield(Main, sym)
-         if (binding_module(Main, sym) === Main) && (s.anonfunc_id != 0)
+        if (binding_module(Main, sym) === Main) && (s.anonfunc_id != 0) &&
+            !startswith(string(sym), "#") # Anonymous functions are handled via FULL_GLOBALREF_TAG
+
             push!(get!(s.glbs_in_tnobj, s.anonfunc_id, []), sym)
         end
     end

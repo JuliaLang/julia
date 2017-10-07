@@ -406,3 +406,9 @@ end
 @testset "product iterator infinite loop" begin
     @test collect(product(1:1, (1, "2"))) == [(1, 1) (1, "2")]
 end
+
+@testset "filter empty iterable #16704" begin
+    arr = filter(n -> true, 1:0)
+    @test length(arr) == 0
+    @test eltype(arr) == Int
+end

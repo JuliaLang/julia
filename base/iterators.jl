@@ -43,6 +43,8 @@ for indexing `iter`; it's also possible that `x != iter[i]`, if `iter`
 has indices that do not start at 1. See the `enumerate(IndexLinear(),
 iter)` method if you want to ensure that `i` is an index.
 
+# Example
+
 ```jldoctest
 julia> a = ["a", "b", "c"];
 
@@ -89,6 +91,8 @@ Specifying `IndexLinear()` ensures that `i` will be an integer;
 specifying `IndexCartesian()` ensures that `i` will be a
 `CartesianIndex`; specifying `IndexStyle(A)` chooses whichever has
 been defined as the native indexing style for array `A`.
+
+# Examples
 
 ```jldoctest
 julia> A = ["a" "d"; "b" "e"; "c" "f"];
@@ -201,6 +205,8 @@ For a set of iterable objects, returns an iterable of tuples, where the `i`th tu
 the `i`th component of each input iterable.
 
 Note that [`zip`](@ref) is its own inverse: `collect(zip(zip(a...)...)) == collect(a)`.
+
+# Example
 
 ```jldoctest
 julia> a = 1:5
@@ -357,6 +363,8 @@ end
 
 An iterator that generates at most the first `n` elements of `iter`.
 
+# Example
+
 ```jldoctest
 julia> a = 1:2:11
 1:2:11
@@ -411,6 +419,8 @@ end
     drop(iter, n)
 
 An iterator that generates all but the first `n` elements of `iter`.
+
+# Example
 
 ```jldoctest
 julia> a = 1:2:11
@@ -505,6 +515,8 @@ repeated(x) = Repeated(x)
 An iterator that generates the value `x` forever. If `n` is specified, generates `x` that
 many times (equivalent to `take(repeated(x), n)`).
 
+# Example
+
 ```jldoctest
 julia> a = Iterators.repeated([1 2], 4);
 
@@ -594,6 +606,8 @@ Returns an iterator over the product of several iterators. Each generated elemen
 a tuple whose `i`th element comes from the `i`th argument iterator. The first iterator
 changes the fastest. Example:
 
+# Example
+
 ```jldoctest
 julia> collect(Iterators.product(1:2,3:5))
 2×3 Array{Tuple{Int64,Int64},2}:
@@ -669,7 +683,9 @@ end
 
 Given an iterator that yields iterators, return an iterator that yields the
 elements of those iterators.
-Put differently, the elements of the argument iterator are concatenated. Example:
+Put differently, the elements of the argument iterator are concatenated.
+
+# Example
 
 ```jldoctest
 julia> collect(Iterators.flatten((1:2, 8:9)))
@@ -723,6 +739,8 @@ end
     partition(collection, n)
 
 Iterate over a collection `n` elements at a time.
+
+# Example
 
 ```jldoctest
 julia> collect(Iterators.partition([1,2,3,4,5], 2))

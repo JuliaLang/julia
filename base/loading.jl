@@ -269,10 +269,17 @@ const _require_dependencies = Any[] # a list of (path, mtime) tuples that are th
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 function _include_dependency(_path::AbstractString)
     prev = source_path(nothing)
-    path = (prev === nothing) ? abspath(_path) : joinpath(dirname(prev), _path)
+    if prev === nothing
+        if myid() == 1
+            path = abspath(_path)
+        else
+            path = joinpath(remotecall_fetch(abspath, 1, "."), _path)
+        end
+    else
+        path = joinpath(dirname(prev), _path)
+    end
     if myid() == 1 && _track_dependencies[]
-        apath = abspath(path)
-        push!(_require_dependencies, (apath, mtime(apath)))
+        push!(_require_dependencies, (path, mtime(path)))
     end
     return path, prev
 end

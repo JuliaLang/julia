@@ -201,3 +201,9 @@ let a = ones(2,2), b = ones(2,2)
     local c = 0
     @test @fastmath(c |= 1) == 1
 end
+
+# issue #23218
+let a = zeros(1), b = ones(1), idx = (1,)
+    @fastmath a[idx...] += b[idx...]
+    @test a == b
+end

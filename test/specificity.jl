@@ -172,3 +172,8 @@ let A = Tuple{T, Array{T, 1}} where T,
     @test args_morespecific(C, B)
     @test args_morespecific(C, A)
 end
+
+# issue #22908
+f22908(::Union) = 2
+f22908(::Type{Union{Int, Float32}}) = 1
+@test f22908(Union{Int, Float32}) == 1

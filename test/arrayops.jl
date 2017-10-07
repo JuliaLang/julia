@@ -107,6 +107,7 @@ end
         @test_throws MethodError convert(Array{Int,2}, r)
         @test convert(Array{Int}, r) == [2,3,4]
         @test Base.unsafe_convert(Ptr{Int}, r) == Base.unsafe_convert(Ptr{Int}, s)
+        @test isa(r, StridedArray)  # issue #22411
     end
     @testset "linearslow" begin
         s = view(a, :, [2,3,5])
@@ -791,6 +792,11 @@ end
     @test R == [1, 2, 1, 2]
     R = repeat(1:2, inner=(3,), outer=(2,))
     @test R == [1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2]
+
+    # Arrays of arrays
+    @test repeat([[1], [2]], inner=2) == [[1], [1], [2], [2]]
+    @test repeat([[1], [2]], outer=2) == [[1], [2], [1], [2]]
+    @test repeat([[1], [2]], inner=2, outer=2) == [[1], [1], [2], [2], [1], [1], [2], [2]]
 
     @test size(repeat([1], inner=(0,))) == (0,)
     @test size(repeat([1], outer=(0,))) == (0,)
@@ -1548,6 +1554,11 @@ end
     @test CartesianRange((3,-7:7)) == CartesianRange(CartesianIndex{2}(3,-7),CartesianIndex{2}(3,7))
 end
 
+# All we really care about is that we have an optimized
+# implementation, but the seed is a useful way to check that.
+@test hash(CartesianIndex()) == Base.IteratorsMD.cartindexhash_seed
+@test hash(CartesianIndex(1, 2)) != hash((1, 2))
+
 @testset "itr, start, done, next" begin
     r = 2:3
     itr = eachindex(r)
@@ -1971,6 +1982,10 @@ end # module AutoRetType
         @test isa(hvcat((2,), densearray, densearray), Array)
         @test isa(cat((1,2), densearray, densearray), Array)
     end
+    @test isa([[1,2,3]'; [1,2,3]'], Matrix{Int})
+    @test isa([[1,2,3]' [1,2,3]'], RowVector{Int, Vector{Int}})
+    @test isa([Any[1.0, 2]'; Any[2.0, 2]'], Matrix{Any})
+    @test isa([Any[1.0, 2]' Any[2.0, 2']'], RowVector{Any, Vector{Any}})
     # Test that concatenations of heterogeneous Matrix-Vector pairs yield dense matrices
     @test isa(hcat(densemat, densevec), Array)
     @test isa(hcat(densevec, densemat), Array)
@@ -2104,3 +2119,8 @@ Base.:(==)(a::T11053, b::T11053) = a.a == b.a
 
 #15907
 @test typeof(Array{Int,0}()) == Array{Int,0}
+
+@testset "issue 23629" begin
+    @test_throws BoundsError zeros(2,3,0)[2,3]
+    @test_throws BoundsError checkbounds(zeros(2,3,0), 2, 3)
+end

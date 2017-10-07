@@ -1277,8 +1277,8 @@ static void jl_collect_backedges_to(jl_method_instance_t *caller, jl_array_t *di
     jl_array_t **pcallees = (jl_array_t**)ptrhash_bp(&edges_map, (void*)caller),
                 *callees = *pcallees;
     if (callees != HT_NOTFOUND) {
-        arraylist_push(to_restore, (void*)pcallees);
         arraylist_push(to_restore, (void*)callees);
+        arraylist_push(to_restore, (void*)pcallees);
         *pcallees = (jl_array_t*) HT_NOTFOUND;
         jl_array_ptr_1d_append(direct_callees, callees);
         size_t i, l = jl_array_len(callees);

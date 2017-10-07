@@ -613,7 +613,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
         --eval $code
     ```
 
-    success(pipeline(cmd, stderr=STDERR))
+    success(pipeline(cmd, stdout=STDOUT, stderr=STDERR))
 end
 
 function build!(pkgs::Vector, seen::Set, errfile::AbstractString)

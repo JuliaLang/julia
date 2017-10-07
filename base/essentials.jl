@@ -59,13 +59,13 @@ end
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
-tuple_type_head(T::UnionAll) = tuple_type_head(T.body)
+tuple_type_head(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_head(T.body)))
 function tuple_type_head(T::DataType)
     @_pure_meta
     T.name === Tuple.name || throw(MethodError(tuple_type_head, (T,)))
     return unwrapva(T.parameters[1])
 end
-tuple_type_tail(T::UnionAll) = tuple_type_tail(T.body)
+tuple_type_tail(T::UnionAll) = (@_pure_meta; UnionAll(T.var, tuple_type_tail(T.body)))
 function tuple_type_tail(T::DataType)
     @_pure_meta
     T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
@@ -314,7 +314,7 @@ end
 Colons (:) are used to signify indexing entire objects or dimensions at once.
 
 Very few operations are defined on Colons directly; instead they are converted
-by `to_indices` to an internal vector type (`Base.Slice`) to represent the
+by [`to_indices`](@ref) to an internal vector type (`Base.Slice`) to represent the
 collection of indices they span before being used.
 """
 struct Colon

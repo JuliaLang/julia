@@ -34,6 +34,20 @@ macro macro_doctest() end
 
 @test (@doc @macro_doctest) !== nothing
 
+# test that random stuff interpolated into docstrings doesn't break search or other methods here
+doc"""
+break me:
+
+    code
+
+$:asymbol # a symbol
+$1 # a number
+$string # a function
+$$latex literal$$
+### header!
+"""
+function break_me_docs end
+
 # issue #11548
 
 module ModuleMacroDoc
@@ -996,3 +1010,10 @@ end
     """
 )
 
+# issue #23011
+@test_nowarn @eval Main begin
+    @doc "first" f23011() = 1
+    @doc "second" f23011() = 2
+end
+@test Main.f23011() == 2
+@test docstrings_equal(@doc(Main.f23011), doc"second")

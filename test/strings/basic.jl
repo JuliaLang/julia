@@ -461,6 +461,10 @@ Base.endof(x::CharStr) = endof(x.chars)
 @test cmp("\U1f596\U1f596", CharStr("\U1f596")) == 1   # Gives BoundsError with bug
 @test cmp(CharStr("\U1f596"), "\U1f596\U1f596") == -1
 
+# repeat function
+@test repeat("xx",3) == repeat("x",6) == "xxxxxx"
+@test repeat("αα",3) == repeat("α",6) == "αααααα"
+
 # issue #12495: check that logical indexing attempt raises ArgumentError
 @test_throws ArgumentError "abc"[[true, false, true]]
 @test_throws ArgumentError "abc"[BitArray([true, false, true])]

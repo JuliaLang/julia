@@ -1204,6 +1204,23 @@ module Test21607
     end === 1.0
 end
 
+# let-bound functions with `where` and static parameters
+@test let f()::Int = 2.0
+    f()
+end === 2
+@test let (f(x::T)::Tuple{Int,Any}) where {T} = (3.0, T)
+    f("")
+end === (3, String)
+
 # issue #19351
 # adding return type decl should not affect parse of function body
 @test :(t(abc) = 3).args[2] == :(t(abc)::Int = 3).args[2]
+
+# issue #23234
+let
+    f = function (x=0)
+        x
+    end
+    @test f() == 0
+    @test f(2) == 2
+end

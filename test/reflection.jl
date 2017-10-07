@@ -92,6 +92,11 @@ show(iob, expand(:(x->x^2)))
 str = String(take!(iob))
 @test isempty(search(str, tag))
 
+# Make sure non used variables are not emphasized
+has_unused() = (a = rand(5))
+@test !warntype_hastag(has_unused, Tuple{}, tag)
+@test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
+
 module ImportIntrinsics15819
 # Make sure changing the lookup path of an intrinsic doesn't break
 # the heuristic for type instability warning.

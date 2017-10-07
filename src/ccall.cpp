@@ -1977,7 +1977,6 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         else {
             if (jl_is_abstract_ref_type(jargty)) {
                 emit_error("ccall: & on a Ref{T} argument is invalid", ctx);
-                JL_GC_POP();
                 return jl_cgval_t();
             }
             v = julia_to_address(largty, jargty_in_env, unionall_env, arg,
@@ -1986,7 +1985,6 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         }
 
         if (isa<UndefValue>(v)) {
-            JL_GC_POP();
             return jl_cgval_t();
         }
         assert(v->getType() == pargty);

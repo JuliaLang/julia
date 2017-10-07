@@ -61,6 +61,7 @@ end
 
 Returns `true` if `v` is a valid permutation.
 
+# Examples
 ```jldoctest
 julia> isperm([1; 2])
 true
@@ -112,8 +113,9 @@ to verify that `p` is a permutation.
 To return a new permutation, use `v[p]`. Note that this is generally faster than
 `permute!(v,p)` for large vectors.
 
-See also [`ipermute!`](@ref)
+See also [`ipermute!`](@ref).
 
+# Example
 ```jldoctest
 julia> A = [1, 1, 3, 4];
 
@@ -157,8 +159,9 @@ end
 """
     ipermute!(v, p)
 
-Like `permute!`, but the inverse of the given permutation is applied.
+Like [`permute!`](@ref), but the inverse of the given permutation is applied.
 
+# Example
 ```jldoctest
 julia> A = [1, 1, 3, 4];
 
@@ -182,6 +185,7 @@ ipermute!(a, p::AbstractVector) = ipermute!!(a, copymutable(p))
 Return the inverse permutation of `v`.
 If `B = A[v]`, then `A == B[invperm(v)]`.
 
+# Example
 ```jldoctest
 julia> v = [2; 4; 3; 1];
 
@@ -233,6 +237,7 @@ invperm(a::Tuple) = (invperm([a...])...,)
 Next integer greater than or equal to `n` that can be written as ``\\prod k_i^{p_i}`` for integers
 ``p_1``, ``p_2``, etc.
 
+# Example
 ```jldoctest
 julia> nextprod([2, 3], 105)
 108

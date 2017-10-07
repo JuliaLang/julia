@@ -69,27 +69,29 @@ end
 # test show() function for UDPSocket()
 @test repr(UDPSocket()) == "UDPSocket(init)"
 
-port = Channel(1)
 defaultport = rand(2000:4000)
-tsk = @async begin
-    p, s = listenany(defaultport)
-    put!(port, p)
-    sock = accept(s)
-    # test write call
-    write(sock,"Hello World\n")
+for testport in [0, defaultport]
+    port = Channel(1)
+    tsk = @async begin
+        p, s = listenany(testport)
+        put!(port, p)
+        sock = accept(s)
+        # test write call
+        write(sock,"Hello World\n")
 
-    # test "locked" println to a socket
-    @sync begin
-        for i in 1:100
-            @async println(sock, "a", 1)
+        # test "locked" println to a socket
+        @sync begin
+            for i in 1:100
+                @async println(sock, "a", 1)
+            end
         end
+        close(s)
+        close(sock)
     end
-    close(s)
-    close(sock)
+    wait(port)
+    @test readstring(connect(fetch(port))) == "Hello World\n" * ("a1\n"^100)
+    wait(tsk)
 end
-wait(port)
-@test readstring(connect(fetch(port))) == "Hello World\n" * ("a1\n"^100)
-wait(tsk)
 
 mktempdir() do tmpdir
     socketname = is_windows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")

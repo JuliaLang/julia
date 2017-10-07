@@ -392,7 +392,7 @@ interprets a string as a number in some base. The `base` argument defaults to `1
 can be expressed concisely as:
 
 ```julia
-function parse(type, num, base=10)
+function parse(T, num, base=10)
     ###
 end
 ```

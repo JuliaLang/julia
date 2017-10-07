@@ -332,6 +332,7 @@ function Symbol(a::Array{UInt8,1})
                  ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
                  Intrinsics.arraylen(a))
 end
+Symbol(s::Symbol) = s
 
 # docsystem basics
 macro doc(x...)
@@ -370,10 +371,10 @@ end
 
 show(io::IO, x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any), io_pointer(io), x)
 print(io::IO, x::Char) = ccall(:jl_uv_putc, Void, (Ptr{Void}, Char), io_pointer(io), x)
-print(io::IO, x::String) = write(io, x)
+print(io::IO, x::String) = (write(io, x); nothing)
 print(io::IO, x::ANY) = show(io, x)
 print(io::IO, x::ANY, a::ANY...) = (print(io, x); print(io, a...))
-println(io::IO) = write(io, 0x0a) # 0x0a = '\n'
+println(io::IO) = (write(io, 0x0a); nothing) # 0x0a = '\n'
 println(io::IO, x::ANY...) = (print(io, x...); println(io))
 
 show(a::ANY) = show(STDOUT, a)

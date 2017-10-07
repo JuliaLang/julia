@@ -68,7 +68,7 @@ function homedir()
         if rc == 0
             resize!(buf, sz[])
             return String(buf)
-        elseif rc == UV_ENOBUFS
+        elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1)
         else
             error("unable to retrieve home directory")

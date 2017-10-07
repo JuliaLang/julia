@@ -420,9 +420,10 @@ static int subtype_ufirst(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, int param)
 {
     if (vb != NULL && param) {
-        if (param == 2 && e->invdepth > vb->depth0)
+        // saturate counters at 2; we don't need values bigger than that
+        if (param == 2 && e->invdepth > vb->depth0 && vb->occurs_inv < 2)
             vb->occurs_inv++;
-        else
+        else if (vb->occurs_cov < 2)
             vb->occurs_cov++;
     }
 }
@@ -883,21 +884,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         }
         if (jl_is_type_type(y) && !jl_is_type_type(x) && x != (jl_value_t*)jl_typeofbottom_type) {
             jl_value_t *tp0 = jl_tparam0(yd);
-            if (!jl_is_typevar(tp0))
+            if (!jl_is_typevar(tp0) || !jl_is_kind(x))
                 return 0;
-            if (!jl_is_kind(x)) return 0;
-            jl_varbinding_t *yy = lookup(e, (jl_tvar_t*)tp0);
-            jl_value_t *ub = yy ? yy->ub : ((jl_tvar_t*)tp0)->ub;
-            int ans;
-            if (ub == (jl_value_t*)jl_any_type) {
-                ans = subtype((jl_value_t*)jl_type_type, y, e, param);
-            }
-            else {
-                e->invdepth++;
-                ans = forall_exists_equal(x, tp0, e);
-                e->invdepth--;
-            }
-            return ans;
+            return subtype((jl_value_t*)jl_type_type, y, e, param);
         }
         while (xd != jl_any_type && xd->name != yd->name) {
             if (xd->super == NULL)
@@ -2158,20 +2147,9 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         else {
             sz = szb;
             // TODO: compute better `env` directly during intersection.
-            // we assume that if the intersection is a leaf type, we have
-            // full information in `env`. however the intersection algorithm
-            // does not yet provide that in all cases so use subtype.
+            // for now, we attempt to compute env by using subtype on the intersection result
             if (szb > 0 && !jl_types_equal(b, (jl_value_t*)jl_type_type)) {
-                if (jl_subtype_env(*ans, b, env, szb)) {
-                    if (jl_is_leaf_type(*ans)) {
-                        for(i=0; i < sz; i++) {
-                            if (jl_is_typevar(env[i])) {
-                                *ans = jl_bottom_type; goto bot;
-                            }
-                        }
-                    }
-                }
-                else {
+                if (!jl_subtype_env(*ans, b, env, szb)) {
                     sz = 0;
                 }
             }

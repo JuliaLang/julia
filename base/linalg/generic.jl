@@ -702,6 +702,21 @@ values of `M` have magnitude greater than `tol`.
 By default, the value of `tol` is the largest
 dimension of `M` multiplied by the [`eps`](@ref)
 of the [`eltype`](@ref) of `M`.
+
+# Example
+```jldoctest
+julia> rank(eye(3))
+3
+
+julia> rank(diagm([1, 0, 2]))
+2
+
+julia> rank(diagm([1, 0.001, 2]), 0.1)
+2
+
+julia> rank(diagm([1, 0.001, 2]), 0.00001)
+3
+```
 """
 rank(A::AbstractMatrix, tol::Real) = mapreduce(x -> x > tol, +, 0, svdvals(A))
 function rank(A::AbstractMatrix)
@@ -834,13 +849,15 @@ condskeel(A::AbstractMatrix, p::Real=Inf) = norm(abs.(inv(A))*abs.(A), p)
     condskeel(M, [x, p::Real=Inf])
 
 ```math
-\\kappa_S(M, p) & = \\left\\Vert \\left\\vert M \\right\\vert \\left\\vert M^{-1} \\right\\vert  \\right\\Vert_p \\\\
-\\kappa_S(M, x, p) & = \\left\\Vert \\left\\vert M \\right\\vert \\left\\vert M^{-1} \\right\\vert \\left\\vert x \\right\\vert \\right\\Vert_p
+\\kappa_S(M, p) = \\left\\Vert \\left\\vert M \\right\\vert \\left\\vert M^{-1} \\right\\vert \\right\\Vert_p \\\\
+\\kappa_S(M, x, p) = \\left\\Vert \\left\\vert M \\right\\vert \\left\\vert M^{-1} \\right\\vert \\left\\vert x \\right\\vert \\right\\Vert_p
 ```
 
 Skeel condition number ``\\kappa_S`` of the matrix `M`, optionally with respect to the
-vector `x`, as computed using the operator `p`-norm.
-`p` is `Inf` by default, if not provided. Valid values for `p` are `1`, `2`, or `Inf`.
+vector `x`, as computed using the operator `p`-norm. ``\\left\\vert M \\right\\vert``
+denotes the matrix of (entry wise) absolute values of ``M``;
+``\\left\\vert M \\right\\vert_{ij} = \\left\\vert M_{ij} \\right\\vert``.
+Valid values for `p` are `1`, `2` and `Inf` (default).
 
 This quantity is also known in the literature as the Bauer condition number, relative
 condition number, or componentwise relative condition number.
@@ -852,7 +869,7 @@ condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs.(inv(A))
 
 Test whether a matrix is symmetric.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -892,7 +909,7 @@ issymmetric(x::Number) = x == x
 
 Test whether a matrix is Hermitian.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -932,7 +949,7 @@ ishermitian(x::Number) = (x == conj(x))
 
 Test whether a matrix is upper triangular.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -967,7 +984,7 @@ end
 
 Test whether a matrix is lower triangular.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -1002,7 +1019,7 @@ end
 
 Test whether a matrix is diagonal.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -1224,7 +1241,7 @@ logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
 Log of matrix determinant. Equivalent to `log(det(M))`, but may provide
 increased accuracy and/or speed.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> M = [1 0; 2 2]
@@ -1322,7 +1339,7 @@ Normalize the vector `v` so that its `p`-norm equals unity,
 i.e. `norm(v, p) == vecnorm(v, p) == 1`.
 See also [`normalize!`](@ref) and [`vecnorm`](@ref).
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1,2,4];

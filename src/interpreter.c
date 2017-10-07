@@ -85,7 +85,7 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     for (i = 1; i < nargs; i++)
         argv[i - 1] = eval(args[i], s);
     jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
-    assert(jl_is_method_instance(meth) && !meth->inInference);
+    assert(jl_is_method_instance(meth));
     jl_value_t *result = jl_call_method_internal(meth, argv, nargs - 1);
     JL_GC_POP();
     return result;

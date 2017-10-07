@@ -258,6 +258,10 @@ This section lists changes that do not have deprecation warnings.
   * `homedir` now determines the user's home directory via `libuv`'s `uv_os_homedir`,
     rather than from environment variables ([#19636]).
 
+  * Workers now listen on an ephemeral port assigned by the OS. Previously workers would
+    listen on the first free port available from 9009 ([#21818]).
+
+
 Library improvements
 --------------------
 

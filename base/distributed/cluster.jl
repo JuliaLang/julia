@@ -153,8 +153,8 @@ function start_worker(out::IO, cookie::AbstractString)
     init_worker(cookie)
     interface = IPv4(LPROC.bind_addr)
     if LPROC.bind_port == 0
-        (actual_port,sock) = listenany(interface, UInt16(9009))
-        LPROC.bind_port = actual_port
+        (port, sock) = listenany(interface, UInt16(0))
+        LPROC.bind_port = port
     else
         sock = listen(interface, LPROC.bind_port)
     end
@@ -256,9 +256,9 @@ end
 function parse_connection_info(str)
     m = match(r"^julia_worker:(\d+)#(.*)", str)
     if m !== nothing
-        (m.captures[2], parse(Int16, m.captures[1]))
+        (m.captures[2], parse(UInt16, m.captures[1]))
     else
-        ("", Int16(-1))
+        ("", UInt16(0))
     end
 end
 

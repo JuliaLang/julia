@@ -9,10 +9,15 @@ import Base.LinAlg: promote_to_array_type, promote_to_arrays_
 
 ### Types
 
+"""
+    SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
+
+Vector type for storing sparse vectors.
+"""
 struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
-    n::Int              # the number of elements
-    nzind::Vector{Ti}   # the indices of nonzeros
-    nzval::Vector{Tv}   # the values of nonzeros
+    n::Int              # Length of the sparse vector
+    nzind::Vector{Ti}   # Indices of stored values
+    nzval::Vector{Tv}   # Stored values, typically nonzeros
 
     function SparseVector{Tv,Ti}(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti<:Integer}
         n >= 0 || throw(ArgumentError("The number of elements must be non-negative."))
@@ -253,6 +258,7 @@ setindex!(x::SparseVector{Tv,Ti}, v, i::Integer) where {Tv,Ti<:Integer} =
 
 Drop entry `x[i]` from `x` if `x[i]` is stored and otherwise do nothing.
 
+# Examples
 ```jldoctest
 julia> x = sparsevec([1, 3], [1.0, 2.0])
 3-element SparseVector{Float64,Int64} with 2 stored entries:
@@ -305,6 +311,7 @@ convert(::Type{SparseVector}, s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} =
 
 Convert a vector `A` into a sparse vector of length `m`.
 
+# Example
 ```jldoctest
 julia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])
 6-element SparseVector{Float64,Int64} with 3 stored entries:
@@ -927,7 +934,7 @@ vcat(X::Union{Vector,SparseVector}...) = vcat(map(sparse, X)...)
 
 # TODO: A definition similar to the third exists in base/linalg/bidiag.jl. These definitions
 # should be consolidated in a more appropriate location, e.g. base/linalg/special.jl.
-const _SparseArrays = Union{SparseVector, SparseMatrixCSC}
+const _SparseArrays = Union{SparseVector, SparseMatrixCSC, RowVector{<:Any, <:SparseVector}}
 const _SpecialArrays = Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}
 const _SparseConcatArrays = Union{_SpecialArrays, _SparseArrays}
 
@@ -942,9 +949,9 @@ const _Triangular_DenseArrays{T,A<:Matrix} = Base.LinAlg.AbstractTriangular{T,A}
 const _Annotated_DenseArrays = Union{_Triangular_DenseArrays, _Symmetric_DenseArrays, _Hermitian_DenseArrays}
 const _Annotated_Typed_DenseArrays{T} = Union{_Triangular_DenseArrays{T}, _Symmetric_DenseArrays{T}, _Hermitian_DenseArrays{T}}
 
-const _SparseConcatGroup = Union{Vector, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
-const _DenseConcatGroup = Union{Vector, Matrix, _Annotated_DenseArrays}
-const _TypedDenseConcatGroup{T} = Union{Vector{T}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
+const _SparseConcatGroup = Union{Vector, RowVector{<:Any, <:Vector}, Matrix, _SparseConcatArrays, _Annotated_SparseConcatArrays, _Annotated_DenseArrays}
+const _DenseConcatGroup = Union{Vector, RowVector{<:Any, <:Vector}, Matrix, _Annotated_DenseArrays}
+const _TypedDenseConcatGroup{T} = Union{Vector{T}, RowVector{T,Vector{T}}, Matrix{T}, _Annotated_Typed_DenseArrays{T}}
 
 # Concatenations involving un/annotated sparse/special matrices/vectors should yield sparse arrays
 function cat(catdims, Xin::_SparseConcatGroup...)
@@ -1928,6 +1935,20 @@ Generates a copy of `x` and removes numerical zeros from that copy, optionally t
 excess space from the result's `nzind` and `nzval` arrays when `trim` is `true`.
 
 For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
+
+# Example
+```jldoctest
+julia> A = sparsevec([1, 2, 3], [1.0, 0.0, 1.0])
+3-element SparseVector{Float64,Int64} with 3 stored entries:
+  [1]  =  1.0
+  [2]  =  0.0
+  [3]  =  1.0
+
+julia> dropzeros(A)
+3-element SparseVector{Float64,Int64} with 2 stored entries:
+  [1]  =  1.0
+  [3]  =  1.0
+```
 """
 dropzeros(x::SparseVector, trim::Bool = true) = dropzeros!(copy(x), trim)
 

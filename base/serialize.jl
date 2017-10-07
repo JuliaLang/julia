@@ -130,7 +130,7 @@ end
 
 # cycle handling
 function serialize_cycle(s::AbstractSerializer, x)
-    offs = get(s.table, x, -1)
+    offs = get(s.table, x, -1)::Int
     if offs != -1
         if offs <= typemax(UInt16)
             writetag(s.io, SHORTBACKREF_TAG)
@@ -212,8 +212,8 @@ function serialize(s::AbstractSerializer, x::Symbol)
 end
 
 function serialize_array_data(s::IO, a)
-    elty = eltype(a)
-    if elty === Bool && !isempty(a)
+    isempty(a) && return 0
+    if eltype(a) === Bool
         last = a[1]
         count = 1
         for i = 2:length(a)
@@ -246,7 +246,8 @@ function serialize(s::AbstractSerializer, a::Array)
     if isbits(elty)
         serialize_array_data(s.io, a)
     else
-        for i in eachindex(a)
+        sizehint!(s.table, div(length(a),4))  # prepare for lots of pointers
+        @inbounds for i in eachindex(a)
             if isassigned(a, i)
                 serialize(s, a[i])
             else
@@ -434,7 +435,9 @@ function serialize(s::AbstractSerializer, t::Task)
 end
 
 function serialize(s::AbstractSerializer, g::GlobalRef)
-    if g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name)
+    if (g.mod === __deserialized_types__ ) ||
+        (g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name))
+
         v = getfield(g.mod, g.name)
         unw = unwrap_unionall(v)
         if isa(unw,DataType) && v === unw.name.wrapper && should_send_whole_type(s, unw)
@@ -865,10 +868,11 @@ function deserialize_array(s::AbstractSerializer)
     end
     A = Array{elty, length(dims)}(dims)
     s.table[slot] = A
+    sizehint!(s.table, s.counter + div(length(A),4))
     for i = eachindex(A)
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG
-            A[i] = handle_deserialize(s, tag)
+            @inbounds A[i] = handle_deserialize(s, tag)
         end
     end
     return A

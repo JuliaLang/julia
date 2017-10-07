@@ -263,6 +263,8 @@ static void ti_initthread(int16_t tid)
 #ifndef _OS_WINDOWS_
     ptls->system_id = pthread_self();
 #endif
+    assert(ptls->world_age == 0);
+    ptls->world_age = 1; // OK to run Julia code on this thread
     ptls->tid = tid;
     ptls->pgcstack = NULL;
     ptls->gc_state = 0; // GC unsafe

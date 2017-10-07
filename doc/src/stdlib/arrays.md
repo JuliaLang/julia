@@ -172,12 +172,14 @@ Base.ror!
 Base.ror
 ```
 
-## Sparse Vectors and Matrices
+## [Sparse Vectors and Matrices](@id stdlib-sparse-arrays)
 
 Sparse vectors and matrices largely support the same set of operations as their dense counterparts.
 The following functions are specific to sparse arrays.
 
 ```@docs
+Base.SparseArrays.SparseVector
+Base.SparseArrays.SparseMatrixCSC
 Base.SparseArrays.sparse
 Base.SparseArrays.sparsevec
 Base.SparseArrays.issparse

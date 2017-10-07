@@ -272,6 +272,26 @@ end
 
 `m`-by-`n` identity matrix.
 The default element type is [`Float64`](@ref).
+
+# Examples
+
+```jldoctest
+julia> eye(3, 4)
+3×4 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0
+ 0.0  1.0  0.0  0.0
+ 0.0  0.0  1.0  0.0
+
+julia> eye(2, 2)
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
+
+julia> eye(Int, 2, 2)
+2×2 Array{Int64,2}:
+ 1  0
+ 0  1
+```
 """
 function eye(::Type{T}, m::Integer, n::Integer) where T
     a = zeros(T,m,n)
@@ -293,6 +313,19 @@ eye(::Type{T}, n::Integer) where {T} = eye(T, n, n)
 
 `n`-by-`n` identity matrix.
 The default element type is [`Float64`](@ref).
+
+# Examples
+```jldoctest
+julia> eye(Int, 2)
+2×2 Array{Int64,2}:
+ 1  0
+ 0  1
+
+julia> eye(2)
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
+```
 """
 eye(n::Integer) = eye(Float64, n)
 
@@ -382,6 +415,7 @@ Return an `Array` of all items in a collection or iterator. For associative coll
 `Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the `HasShape()`
 trait, the result will have the same shape and number of dimensions as the argument.
 
+# Example
 ```jldoctest
 julia> collect(1:2:13)
 7-element Array{Int64,1}:
@@ -658,6 +692,7 @@ end
 
 Insert the elements of `items` to the beginning of `a`.
 
+# Example
 ```jldoctest
 julia> prepend!([3],[1,2])
 3-element Array{Int64,1}:
@@ -710,25 +745,27 @@ Resize `a` to contain `n` elements. If `n` is smaller than the current collectio
 length, the first `n` elements will be retained. If `n` is larger, the new elements are not
 guaranteed to be initialized.
 
+# Examples
 ```jldoctest
 julia> resize!([6, 5, 4, 3, 2, 1], 3)
 3-element Array{Int64,1}:
  6
  5
  4
-```
 
-```julia-repl
-julia> resize!([6, 5, 4, 3, 2, 1], 8)
-8-element Array{Int64,1}:
+julia> a = resize!([6, 5, 4, 3, 2, 1], 8);
+
+julia> length(a)
+8
+
+julia> a[1:6]
+6-element Array{Int64,1}:
  6
  5
  4
  3
  2
  1
- 0
- 0
 ```
 """
 function resize!(a::Vector, nl::Integer)
@@ -763,6 +800,7 @@ end
 
 Insert one or more `items` at the beginning of `collection`.
 
+# Example
 ```jldoctest
 julia> unshift!([1, 2, 3, 4], 5, 6)
 6-element Array{Int64,1}:
@@ -796,6 +834,7 @@ end
 Insert an `item` into `a` at the given `index`. `index` is the index of `item` in
 the resulting `a`.
 
+# Example
 ```jldoctest
 julia> insert!([6, 5, 4, 2, 1], 4, 3)
 6-element Array{Int64,1}:
@@ -822,6 +861,7 @@ end
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
 
+# Example
 ```jldoctest
 julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
 5-element Array{Int64,1}:
@@ -849,6 +889,7 @@ Subsequent items are shifted to fill the resulting gap.
 `inds` can be either an iterator or a collection of sorted and unique integer indices,
 or a boolean vector of the same length as `a` with `true` indicating entries to delete.
 
+# Examples
 ```jldoctest
 julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 3-element Array{Int64,1}:
@@ -865,8 +906,8 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], [true, false, true, false, true, false])
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
 Stacktrace:
- [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:885
- [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:872
+ [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:926
+ [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:913
 ```
 """
 deleteat!(a::Vector, inds) = _deleteat!(a, inds)
@@ -924,6 +965,7 @@ Subsequent items are shifted left to fill the resulting gap.
 If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
 
+# Examples
 ```jldoctest splice!
 julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
 2
@@ -994,6 +1036,7 @@ place of the removed items.
 To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
 
+# Example
 ```jldoctest splice!
 julia> splice!(A, 4:3, 2)
 0-element Array{Int64,1}
@@ -1150,6 +1193,7 @@ cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x
 
 Find the next linear index >= `i` of a non-zero element of `A`, or `0` if not found.
 
+# Examples
 ```jldoctest
 julia> A = [0 0; 1 0]
 2×2 Array{Int64,2}:
@@ -1178,6 +1222,7 @@ end
 Return the linear index of the first non-zero value in `A` (determined by `A[i]!=0`).
 Returns `0` if no such value is found.
 
+# Examples
 ```jldoctest
 julia> A = [0 0; 1 0]
 2×2 Array{Int64,2}:
@@ -1186,6 +1231,9 @@ julia> A = [0 0; 1 0]
 
 julia> findfirst(A)
 2
+
+julia> findfirst(zeros(3))
+0
 ```
 """
 findfirst(A) = findnext(A, 1)
@@ -1195,6 +1243,7 @@ findfirst(A) = findnext(A, 1)
 
 Find the next linear index >= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
 
+# Examples
 ```jldoctest
 julia> A = [1 4; 2 2]
 2×2 Array{Int64,2}:
@@ -1222,6 +1271,7 @@ end
 Return the linear index of the first element equal to `v` in `A`.
 Returns `0` if `v` is not found.
 
+# Examples
 ```jldoctest
 julia> A = [4 6; 2 2]
 2×2 Array{Int64,2}:
@@ -1242,6 +1292,7 @@ findfirst(A, v) = findnext(A, v, 1)
 
 Find the next linear index >= `i` of an element of `A` for which `predicate` returns `true`, or `0` if not found.
 
+# Examples
 ```jldoctest
 julia> A = [1 4; 2 2]
 2×2 Array{Int64,2}:
@@ -1270,6 +1321,7 @@ end
 Return the linear index of the first element of `A` for which `predicate` returns `true`.
 Returns `0` if there is no such element.
 
+# Examples
 ```jldoctest
 julia> A = [1 4; 2 2]
 2×2 Array{Int64,2}:
@@ -1290,6 +1342,7 @@ findfirst(testf::Function, A) = findnext(testf, A, 1)
 
 Find the previous linear index <= `i` of a non-zero element of `A`, or `0` if not found.
 
+# Examples
 ```jldoctest
 julia> A = [0 0; 1 2]
 2×2 Array{Int64,2}:
@@ -1316,6 +1369,7 @@ end
 Return the linear index of the last non-zero value in `A` (determined by `A[i]!=0`).
 Returns `0` if there is no non-zero value in `A`.
 
+# Examples
 ```jldoctest
 julia> A = [1 0; 1 0]
 2×2 Array{Int64,2}:
@@ -1341,6 +1395,7 @@ findlast(A) = findprev(A, length(A))
 
 Find the previous linear index <= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
 
+# Examples
 ```jldoctest
 julia> A = [0 0; 1 2]
 2×2 Array{Int64,2}:
@@ -1367,6 +1422,7 @@ end
 Return the linear index of the last element equal to `v` in `A`.
 Returns `0` if there is no element of `A` equal to `v`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 2 1]
 2×2 Array{Int64,2}:
@@ -1391,6 +1447,7 @@ findlast(A, v) = findprev(A, v, length(A))
 Find the previous linear index <= `i` of an element of `A` for which `predicate` returns `true`, or
 `0` if not found.
 
+# Examples
 ```jldoctest
 julia> A = [4 6; 1 2]
 2×2 Array{Int64,2}:
@@ -1417,6 +1474,7 @@ end
 Return the linear index of the last element of `A` for which `predicate` returns `true`.
 Returns `0` if there is no such element.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -1438,6 +1496,7 @@ findlast(testf::Function, A) = findprev(testf, A, length(A))
 Return a vector `I` of the linear indexes of `A` where `f(A[I])` returns `true`.
 If there are no such elements of `A`, find returns an empty array.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -1448,6 +1507,9 @@ julia> find(isodd,A)
 2-element Array{Int64,1}:
  1
  2
+
+julia> find(isodd, [2, 4])
+0-element Array{Int64,1}
 ```
 """
 function find(testf::Function, A)
@@ -1474,6 +1536,7 @@ Return a vector of the linear indexes of the non-zeros in `A` (determined by `A[
 common use of this is to convert a boolean array to an array of indexes of the `true`
 elements. If there are no non-zero elements of `A`, `find` returns an empty array.
 
+# Examples
 ```jldoctest
 julia> A = [true false; false true]
 2×2 Array{Bool,2}:
@@ -1484,6 +1547,9 @@ julia> find(A)
 2-element Array{Int64,1}:
  1
  4
+
+julia> find(zeros(3))
+0-element Array{Int64,1}
 ```
 """
 function find(A)
@@ -1512,6 +1578,7 @@ Return a vector of indexes for each dimension giving the locations of the non-ze
 (determined by `A[i]!=0`).
 If there are no non-zero elements of `A`, `findn` returns a 2-tuple of empty arrays.
 
+# Examples
 ```jldoctest
 julia> A = [1 2 0; 0 0 3; 0 4 0]
 3×3 Array{Int64,2}:
@@ -1552,6 +1619,7 @@ end
 Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of the non-zero
 values in matrix `A`, and `V` is a vector of the non-zero values.
 
+# Example
 ```jldoctest
 julia> A = [1 2 0; 0 0 3; 0 4 0]
 3×3 Array{Int64,2}:
@@ -1592,6 +1660,7 @@ all elements are `NaN`.
 
 The collection must not be empty.
 
+# Examples
 ```jldoctest
 julia> findmax([8,0.1,-9,pi])
 (8.0, 1)
@@ -1630,6 +1699,7 @@ all elements are `NaN`.
 
 The collection must not be empty.
 
+# Examples
 ```jldoctest
 julia> findmin([8,0.1,-9,pi])
 (-9.0, 3)
@@ -1668,6 +1738,7 @@ elements are `NaN`.
 
 The collection must not be empty.
 
+# Examples
 ```jldoctest
 julia> indmax([8,0.1,-9,pi])
 1
@@ -1690,6 +1761,7 @@ elements are `NaN`.
 
 The collection must not be empty.
 
+# Examples
 ```jldoctest
 julia> indmin([8,0.1,-9,pi])
 3
@@ -1711,6 +1783,7 @@ Returns a vector containing the highest index in `b` for
 each value in `a` that is a member of `b` . The output
 vector contains 0 wherever `a` is not a member of `b`.
 
+# Examples
 ```jldoctest
 julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
 
@@ -1742,6 +1815,7 @@ end
 
 Returns the indices of elements in collection `a` that appear in collection `b`.
 
+# Examples
 ```jldoctest
 julia> a = collect(1:3:15)
 5-element Array{Int64,1}:
@@ -1803,6 +1877,7 @@ end
 Return a copy of `collection`, removing elements for which `function` is `false`. For
 associative collections, the function is passed two arguments (key and value).
 
+# Examples
 ```jldocttest
 julia> a = 1:10
 1:10
@@ -1814,6 +1889,15 @@ julia> filter(isodd, a)
  5
  7
  9
+
+julia> d = Dict(1=>"a", 2=>"b")
+Dict{Int64,String} with 2 entries:
+  2 => "b"
+  1 => "a"
+
+julia> filter((x,y)->isodd(x), d)
+Dict{Int64,String} with 1 entry:
+  1 => "a"
 ```
 """
 filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
@@ -1889,6 +1973,7 @@ both arguments must be collections, and both will be iterated over. In particula
 `setdiff(set,element)` where `element` is a potential member of `set`, will not work in
 general.
 
+# Example
 ```jldoctest
 julia> setdiff([1,2,3],[3,4,5])
 2-element Array{Int64,1}:
@@ -1922,6 +2007,7 @@ symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
 Construct the symmetric difference of elements in the passed in sets or arrays.
 Maintains order with arrays.
 
+# Example
 ```jldoctest
 julia> symdiff([1,2,3],[3,4,5],[4,5,6])
 3-element Array{Int64,1}:

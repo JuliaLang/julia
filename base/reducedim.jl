@@ -219,6 +219,7 @@ reducedim!(op, R::AbstractArray{RT}, A::AbstractArray) where {RT} =
 Evaluates to the same as `reducedim(op, map(f, A), region, f(v0))`, but is generally
 faster because the intermediate array is avoided.
 
+# Examples
 ```jldoctest
 julia> a = reshape(collect(1:16), (4,4))
 4×4 Array{Int64,2}:
@@ -252,6 +253,7 @@ The associativity of the reduction is implementation-dependent; if you need a pa
 associativity, e.g. left-to-right, you should write your own loop. See documentation for
 [`reduce`](@ref).
 
+# Examples
 ```jldoctest
 julia> a = reshape(collect(1:16), (4,4))
 4×4 Array{Int64,2}:
@@ -282,6 +284,7 @@ reducedim(op, A::AbstractArray, region) = mapreducedim(identity, op, A, region)
 
 Sum elements of an array over the given dimensions.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -305,6 +308,7 @@ sum(A, dims)
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -328,6 +332,7 @@ sum!(r, A)
 
 Multiply elements of an array over the given dimensions.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -351,6 +356,7 @@ prod(A, dims)
 
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -399,6 +405,7 @@ maximum(A, dims)
 
 Compute the maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -424,6 +431,7 @@ Compute the minimum value of an array over the given dimensions. See also the
 [`min(a,b)`](@ref) function to take the minimum of two or more arguments,
 which can be applied elementwise to arrays via `min.(a,b)`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -447,6 +455,7 @@ minimum(A, dims)
 
 Compute the minimum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -470,6 +479,7 @@ minimum!(r, A)
 
 Test whether all values along the given dimensions of an array are `true`.
 
+# Examples
 ```jldoctest
 julia> A = [true false; true true]
 2×2 Array{Bool,2}:
@@ -493,6 +503,7 @@ all(A::AbstractArray, dims)
 
 Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
 
+# Examples
 ```jldoctest
 julia> A = [true false; true false]
 2×2 Array{Bool,2}:
@@ -516,6 +527,7 @@ all!(r, A)
 
 Test whether any values along the given dimensions of an array are `true`.
 
+# Examples
 ```jldoctest
 julia> A = [true false; true false]
 2×2 Array{Bool,2}:
@@ -540,6 +552,7 @@ any(::AbstractArray,dims)
 Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write
 results to `r`.
 
+# Examples
 ```jldoctest
 julia> A = [true false; true false]
 2×2 Array{Bool,2}:
@@ -637,6 +650,7 @@ end
 
 For an array input, returns the value and index of the minimum over the given region.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -675,6 +689,7 @@ end
 
 For an array input, returns the value and index of the maximum over the given region.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
