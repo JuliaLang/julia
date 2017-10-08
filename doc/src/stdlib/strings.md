@@ -3,7 +3,7 @@
 ```@docs
 Base.length(::AbstractString)
 Base.sizeof(::AbstractString)
-Base.:*(::AbstractString, ::AbstractString...)
+Base.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)
 Base.:^(::AbstractString, ::Integer)
 Base.string
 Base.repeat(::AbstractString, ::Integer)
