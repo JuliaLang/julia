@@ -237,31 +237,6 @@ function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, d
     end
 end
 
-function free(pkg::AbstractString)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
-    Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
-    avail = Read.available(pkg)
-    isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
-    with(GitRepo, pkg) do repo
-        LibGit2.isdirty(repo) && throw(PkgError("$pkg cannot be freed – repo is dirty"))
-        info("Freeing $pkg")
-        vers = sort!(collect(keys(avail)), rev=true)
-        while true
-            for ver in vers
-                sha1 = avail[ver].sha1
-                LibGit2.iscommit(sha1, repo) || continue
-                LibGit2.transact(repo) do r
-                    LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
-                    LibGit2.checkout!(repo, sha1)
-                end
-                return resolve()
-            end
-            isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
-            throw(PkgError("can't find any registered versions of $pkg to checkout"))
-        end
-    end
-end
-
 function free(pkgs)
     try
         for pkg in pkgs
@@ -287,6 +262,8 @@ function free(pkgs)
         resolve()
     end
 end
+
+free(pkg::AbstractString) = free([pkg])
 
 function pin(pkg::AbstractString, head::AbstractString)
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
