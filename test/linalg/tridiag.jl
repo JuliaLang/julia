@@ -14,8 +14,8 @@ function test_approx_eq_vecs(a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, error
     end
 end
 
-let n = 12 #Size of matrix problem to test
-    srand(123)
+guardsrand(123) do
+    n = 12 #Size of matrix problem to test
     @testset for elty in (Float32, Float64, Complex64, Complex128, Int)
         if elty == Int
             srand(61516384)
