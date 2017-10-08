@@ -250,11 +250,11 @@ function free(pkg::AbstractString)
             for ver in vers
                 sha1 = avail[ver].sha1
                 LibGit2.iscommit(sha1, repo) || continue
-                return LibGit2.transact(repo) do r
+                LibGit2.transact(repo) do r
                     LibGit2.isdirty(repo) && throw(PkgError("$pkg is dirty, bailing"))
                     LibGit2.checkout!(repo, sha1)
-                    resolve()
                 end
+                return resolve()
             end
             isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
             throw(PkgError("can't find any registered versions of $pkg to checkout"))
