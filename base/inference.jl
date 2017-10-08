@@ -5334,6 +5334,10 @@ function get_replacement(table::ObjectIdDict, var::Union{SlotNumber, SSAValue}, 
             end
             return rep
         end
+    elseif isa(init, GlobalRef)
+        if isdefined(init.mod, init.name) && isconst(init.mod, init.name)
+            return init
+        end
     end
     return var
 end
