@@ -1496,4 +1496,9 @@ See the manual section on [Tuple Types](@ref).
 """
 Tuple
 
+"""
+The base library of Julia.
+"""
+kw"Base"
+
 end

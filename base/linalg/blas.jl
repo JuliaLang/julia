@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module BLAS
+@doc """
+Interface to BLAS subroutines.
+""" -> BLAS
 
 import ..axpy!, ..axpby!
 import Base: copy!

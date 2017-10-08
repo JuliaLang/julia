@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Provide serialization of Julia code via the functions
+* [`serialize`](@ref)
+* [`deserialize`](@ref)
+"""
 module Serializer
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
