@@ -711,7 +711,6 @@ module Collections
 end
 export Collections
 
-
 # Broadcast now returns a BitArray when the resulting eltype is Bool (#17623)
 @deprecate bitbroadcast broadcast
 
