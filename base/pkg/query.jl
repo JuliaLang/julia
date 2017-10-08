@@ -42,9 +42,9 @@ end
 
 # Specialized copy for the avail argument below because the deepcopy is slow
 function availcopy(avail)
-    new_avail = similar(avail)
+    new_avail = empty(avail)
     for (pkg, vers_avail) in avail
-        new_vers_avail = similar(vers_avail)
+        new_vers_avail = empty(vers_avail)
         for (version, pkg_avail) in vers_avail
             new_vers_avail[version] = copy(pkg_avail)
         end

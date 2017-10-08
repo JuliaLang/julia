@@ -105,7 +105,7 @@ function deepcopy_internal(x::Dict, stackdict::ObjectIdDict)
         return (stackdict[x] = copy(x))
     end
 
-    dest = similar(x)
+    dest = empty(x)
     stackdict[x] = dest
     for (k, v) in x
         dest[deepcopy_internal(k, stackdict)] = deepcopy_internal(v, stackdict)
