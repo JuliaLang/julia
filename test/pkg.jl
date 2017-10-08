@@ -675,3 +675,17 @@ temp_pkg_dir(initialize=false) do
                     "INFO: Building Normal") Pkg.Entry.build!(["Exit", "Normal", "Exit", "Normal"], errors)
     end
 end
+
+@testset "issue #17994" begin
+    temp_pkg_dir() do
+        @test Pkg.installed("Example.jl") === nothing
+        Pkg.add("Example.jl")
+        @test [keys(Pkg.installed())...] == ["Example"]
+        Pkg.checkout("Example.jl")
+        Pkg.rm("Example.jl")
+        Pkg.free("Example.jl")
+        iob = IOBuffer()
+        Pkg.status("Example.jl", iob)
+        @test String(take!(iob)) == "No packages installed\n"
+    end
+end
