@@ -61,6 +61,12 @@ The following properties are in common use:
  - `:displaysize`: A `Tuple{Int,Int}` giving the size in rows and columns to use for text
    output. This can be used to override the display size for called functions, but to
    get the size of the screen use the `displaysize` function.
+ - `:typeinfo`: a `Type` characterizing the information already printed
+   concerning the type of the object about to be displayed. This is mainly useful when
+   displaying a collection of objects of the same type, so that redundant type information
+   can be avoided (e.g. `[Float16(0)]` can be shown as "Float16[0.0]" instead
+   of "Float16[Float16(0.0)]" : while displaying the elements of the array, the `:typeinfo`
+   property will be set to `Float16`).
 
 # Examples
 ```jldoctest
@@ -133,7 +139,8 @@ function show_default(io::IO, @nospecialize(x))
     nb = sizeof(x)
     if nf != 0 || nb == 0
         if !show_circular(io, x)
-            recur_io = IOContext(io, Pair{Symbol,Any}(:SHOWN_SET, x))
+            recur_io = IOContext(io, Pair{Symbol,Any}(:SHOWN_SET, x),
+                                 Pair{Symbol,Any}(:typeinfo, Any))
             for i in 1:nf
                 f = fieldname(t, i)
                 if !isdefined(x, f)

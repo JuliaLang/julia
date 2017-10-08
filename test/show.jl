@@ -4,11 +4,13 @@
 include("testenv.jl")
 
 replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
+showstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), x), x)
+
 
 @test replstr(Array{Any}(uninitialized, 2)) == "2-element Array{Any,1}:\n #undef\n #undef"
 @test replstr(Array{Any}(uninitialized, 2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
 @test replstr(Array{Any}(uninitialized, 2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
-@test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0f10"
+@test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0e10"
 
 struct T5589
     names::Vector{String}
@@ -692,9 +694,9 @@ let io = IOBuffer()
 end
 
 # PR 17117
-# test show array
+# test print_array
 let s = IOBuffer(Vector{UInt8}(), true, true)
-    Base.showarray(s, [1, 2, 3], false, header = false)
+    Base.print_array(s, [1, 2, 3])
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
 end
 
@@ -926,8 +928,7 @@ end
 @testset "Array printing with limited rows" begin
     arrstr = let buf = IOBuffer()
         function (A, rows)
-            Base.showarray(IOContext(buf, :displaysize => (rows, 80), :limit => true),
-                           A, false, header=true)
+            Base._display(IOContext(buf, :displaysize => (rows, 80), :limit => true), A)
             String(take!(buf))
         end
     end
@@ -1024,4 +1025,20 @@ end
     b = IOBuffer()
     show(IOContext(b, :module => @__MODULE__), TypeA)
     @test String(take!(b)) == "TypeA"
+end
+
+@testset "typeinfo" begin
+    @test replstr([[Int16(1)]]) == "1-element Array{Array{Int16,1},1}:\n [1]"
+    @test showstr([[Int16(1)]]) == "Array{Int16,1}[[1]]"
+    @test showstr(Set([[Int16(1)]])) == "Set(Array{Int16,1}[[1]])"
+    @test showstr([Float16(1)]) == "Float16[1.0]"
+    @test showstr([[Float16(1)]]) == "Array{Float16,1}[[1.0]]"
+    @test replstr(Real[Float16(1)]) == "1-element Array{Real,1}:\n Float16(1.0)"
+    @test replstr(Array{Real}[Real[1]]) == "1-element Array{Array{Real,N} where N,1}:\n [1]"
+    @testset "nested Any eltype" begin
+        x = Any[Any[Any[1]]]
+        # The element of x (i.e. x[1]) has an eltype which can't be deduced
+        # from eltype(x), so this must also be printed
+        @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[1]]"
+    end
 end
