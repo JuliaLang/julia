@@ -19,6 +19,15 @@ export normalize_string, graphemes, is_assigned_char, textwidth, isvalid,
 
 Returns `true` if the given value is valid for its type, which currently can be either
 `Char` or `String`.
+
+# Examples
+```jldoctest
+julia> isvalid(Char(0xd800))
+false
+
+julia> isvalid(Char(0xd799))
+true
+```
 """
 isvalid(value)
 
@@ -31,10 +40,10 @@ Values for `String` can be of that type, or `Vector{UInt8}`.
 
 # Examples
 ```jldoctest
-julia> isvalid(Char(0xd800))
+julia> isvalid(Char, 0xd800)
 false
 
-julia> isvalid(Char(0xd799))
+julia> isvalid(Char, 0xd799)
 true
 ```
 """
