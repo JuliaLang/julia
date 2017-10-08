@@ -723,6 +723,7 @@ end
 end
 
 @testset "Check that Symmetric{SparseMatrixCSC} can be constructed from CHOLMOD.Sparse" begin
+    Int === Int32 && srand(124)
     A = sprandn(10, 10, 0.1)
     B = CHOLMOD.Sparse(A)
     C = B'B

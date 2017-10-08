@@ -922,6 +922,14 @@ this behavior can be customized in other testset types. If a `for` loop is used
 then the macro collects and returns a list of the return values of the `finish`
 method, which by default will return a list of the testset objects used in
 each iteration.
+
+Before the execution of the body of a `@testset`, there is an implicit
+call to `srand(seed)` where `seed` is the current seed of the global RNG.
+Moreover, after the execution of the body, the state of the global RNG is
+restored to what it was before the `@testset`. This is meant to ease
+reproducibility in case of failure, and to allow seamless
+re-arrangements of `@testset`s regardless of their side-effect on the
+global RNG state.
 """
 macro testset(args...)
     isempty(args) && error("No arguments to @testset")
@@ -964,12 +972,20 @@ function testset_beginend(args, tests, source)
         # which is needed for backtrace scrubbing to work correctly.
         while false; end
         push_testset(ts)
+        # we reproduce the logic of guardsrand, but this function
+        # cannot be used as it changes slightly the semantic of @testset,
+        # by wrapping the body in a function
+        oldrng = copy(Base.GLOBAL_RNG)
         try
+            # GLOBAL_RNG is re-seeded with its own seed to ease reproduce a failed test
+            srand(Base.GLOBAL_RNG.seed)
             $(esc(tests))
         catch err
             # something in the test block threw an error. Count that as an
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, catch_backtrace(), $(QuoteNode(source))))
+        finally
+            copy!(Base.GLOBAL_RNG, oldrng)
         end
         pop_testset()
         finish(ts)
@@ -1026,6 +1042,9 @@ function testset_forloop(args, testloop, source)
         if !first_iteration
             pop_testset()
             push!(arr, finish(ts))
+            # it's 1000 times faster to copy from tmprng rather than calling srand
+            copy!(Base.GLOBAL_RNG, tmprng)
+
         end
         ts = $(testsettype)($desc; $options...)
         push_testset(ts)
@@ -1042,6 +1061,9 @@ function testset_forloop(args, testloop, source)
         arr = Vector{Any}()
         local first_iteration = true
         local ts
+        local oldrng = copy(Base.GLOBAL_RNG)
+        srand(Base.GLOBAL_RNG.seed)
+        local tmprng = copy(Base.GLOBAL_RNG)
         try
             $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
         finally
@@ -1050,6 +1072,7 @@ function testset_forloop(args, testloop, source)
                 pop_testset()
                 push!(arr, finish(ts))
             end
+            copy!(Base.GLOBAL_RNG, oldrng)
         end
         arr
     end
@@ -1477,7 +1500,7 @@ end
 
 "`guardsrand(f, seed)` is equivalent to running `srand(seed); f()` and
 then restoring the state of the global RNG as it was before."
-guardsrand(f::Function, seed::Integer) = guardsrand() do
+guardsrand(f::Function, seed::Union{Vector{UInt32},Integer}) = guardsrand() do
     srand(seed)
     f()
 end

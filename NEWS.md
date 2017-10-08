@@ -439,6 +439,10 @@ Library improvements
     definition relies on `ncodeunits` however, so for optimal performance you may need to
     define a custom method for that function.
 
+  * The global RNG is being re-seeded with its own seed at the beginning of each `@testset`,
+    and have its original state restored at the end ([#24445]). This is breaking for testsets
+    relying implicitly on the global RNG being in a specific state.
+
   * `permutedims(m::AbstractMatrix)` is now short for `permutedims(m, (2,1))`, and is now a
     more convenient way of making a "shallow transpose" of a 2D array. This is the
     recommended approach for manipulating arrays of data, rather than the recursively
