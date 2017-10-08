@@ -4937,6 +4937,166 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/base/#Base.LinAlg.BLAS",
+    "page": "Essentials",
+    "title": "Base.LinAlg.BLAS",
+    "category": "Module",
+    "text": "Interface to BLAS subroutines.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Dates",
+    "page": "Essentials",
+    "title": "Base.Dates",
+    "category": "Module",
+    "text": "Dates\n\nThe Dates module provides Date, DateTime, Time types, and related functions.\n\nThe types are not aware of time zones, based on UT seconds (86400 seconds a day, avoiding leap seconds), and use the proleptic Gregorian calendar, as specified in ISO 8601. For time zone functionality, see the TimeZones.jl package.\n\njulia> dt = DateTime(2017,12,31,23,59,59,999)\n2017-12-31T23:59:59.999\n\njulia> d1 = Date(Dates.Month(12), Dates.Year(2017))\n2017-12-01\n\njulia> d2 = Date(\"2017-12-31\", Dates.DateFormat(\"y-m-d\"))\n2017-12-31\n\njulia> Dates.yearmonthday(d2)\n(2017, 12, 31)\n\njulia> d2-d1\n30 days\n\nPlease see the manual section on Date and DateTime for more information.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Distributed",
+    "page": "Essentials",
+    "title": "Base.Distributed",
+    "category": "Module",
+    "text": "Tools for distributed parallel processing.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Docs",
+    "page": "Essentials",
+    "title": "Base.Docs",
+    "category": "Module",
+    "text": "Docs\n\nThe Docs module provides the @doc macro which can be used to set and retrieve documentation metadata for Julia objects.\n\nPlease see the manual section on documentation for more information.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Iterators",
+    "page": "Essentials",
+    "title": "Base.Iterators",
+    "category": "Module",
+    "text": "Methods for working with Iterators.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.LinAlg.LAPACK",
+    "page": "Essentials",
+    "title": "Base.LinAlg.LAPACK",
+    "category": "Module",
+    "text": "Interfaces to LAPACK subroutines.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.LibGit2",
+    "page": "Essentials",
+    "title": "Base.LibGit2",
+    "category": "Module",
+    "text": "Interface to libgit2.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Libc",
+    "page": "Essentials",
+    "title": "Base.Libc",
+    "category": "Module",
+    "text": "Interface to libc, the C standard library.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Libdl",
+    "page": "Essentials",
+    "title": "Base.Libdl",
+    "category": "Module",
+    "text": "Interface to libdl. Provides dynamic linking support.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.LinAlg",
+    "page": "Essentials",
+    "title": "Base.LinAlg",
+    "category": "Module",
+    "text": "Linear algebra module. Provides array arithmetic, matrix factorizations and other linear algebra related functionality.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Markdown",
+    "page": "Essentials",
+    "title": "Base.Markdown",
+    "category": "Module",
+    "text": "Tools for working with the Markdown file format. Mainly for documentation.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Meta",
+    "page": "Essentials",
+    "title": "Base.Meta",
+    "category": "Module",
+    "text": "Convenience functions for metaprogramming.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Pkg",
+    "page": "Essentials",
+    "title": "Base.Pkg",
+    "category": "Module",
+    "text": "Pkg\n\nThe Pkg module provides package management for Julia. Use Pkg.status() for a list of installed packages, Pkg.add(\"<pkg name>\") to add a package, Pkg.update() to update the installed packages.\n\nPlease see the manual section on packages for more information.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Profile",
+    "page": "Essentials",
+    "title": "Base.Profile",
+    "category": "Module",
+    "text": "Profiling support, main entry point is the @profile macro.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Serializer",
+    "page": "Essentials",
+    "title": "Base.Serializer",
+    "category": "Module",
+    "text": "Provide serialization of Julia code via the functions\n\nserialize\ndeserialize\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.SparseArrays",
+    "page": "Essentials",
+    "title": "Base.SparseArrays",
+    "category": "Module",
+    "text": "Support for sparse arrays. Provides AbstractSparseArray and subtypes.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.StackTraces",
+    "page": "Essentials",
+    "title": "Base.StackTraces",
+    "category": "Module",
+    "text": "Tools for collecting and manipulating stack traces. Mainly used for building errors.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Sys",
+    "page": "Essentials",
+    "title": "Base.Sys",
+    "category": "Module",
+    "text": "Provide methods for retrieving information about hardware and the operating system.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base.Threads",
+    "page": "Essentials",
+    "title": "Base.Threads",
+    "category": "Module",
+    "text": "Experimental multithreading support.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base/#Base-Modules-1",
+    "page": "Essentials",
+    "title": "Base Modules",
+    "category": "section",
+    "text": "Base.BLAS\nBase.Dates\nBase.Distributed\nBase.Docs\nBase.Iterators\nBase.LAPACK\nBase.LibGit2\nBase.Libc\nBase.Libdl\nBase.LinAlg\nBase.Markdown\nBase.Meta\nBase.Pkg\nBase.Profile\nBase.Serializer\nBase.SparseArrays\nBase.StackTraces\nBase.Sys\nBase.Threads"
+},
+
+{
     "location": "stdlib/base/#Core.:===",
     "page": "Essentials",
     "title": "Core.:===",
@@ -7301,7 +7461,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nSee also: IndexStyle, indices.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nSee also: IndexStyle, indices.\n\n\n\n"
 },
 
 {
@@ -7589,7 +7749,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\n"
 },
 
 {
@@ -13069,7 +13229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A) -> QRSparse\n\nCompute the QR factorization of a sparse matrix A. Fill-reducing row and column permutations are used such that F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]. The main application of this type is to solve least squares or underdetermined problems with \\. The function calls the C library SPQR.\n\nExamples\n\njulia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))\n4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 1]  =  1.0\n  [3, 2]  =  1.0\n  [4, 2]  =  1.0\n\njulia> qrfact(A)\nBase.SparseArrays.SPQR.QRSparse{Float64,Int64}\nQ factor:\n4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:\n -0.707107   0.0        0.0       -0.707107\n  0.0       -0.707107  -0.707107   0.0\n  0.0       -0.707107   0.707107   0.0\n -0.707107   0.0        0.0        0.707107\nR factor:\n2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  -1.41421\n  [2, 2]  =  -1.41421\nRow permutation:\n4-element Array{Int64,1}:\n 1\n 3\n 4\n 2\nColumn permutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\nqrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExamples\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\n"
+    "text": "qrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExamples\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\nqrfact(A) -> QRSparse\n\nCompute the QR factorization of a sparse matrix A. Fill-reducing row and column permutations are used such that F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]. The main application of this type is to solve least squares or underdetermined problems with \\. The function calls the C library SPQR.\n\nExamples\n\njulia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))\n4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 1]  =  1.0\n  [3, 2]  =  1.0\n  [4, 2]  =  1.0\n\njulia> qrfact(A)\nBase.SparseArrays.SPQR.QRSparse{Float64,Int64}\nQ factor:\n4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:\n -0.707107   0.0        0.0       -0.707107\n  0.0       -0.707107  -0.707107   0.0\n  0.0       -0.707107   0.707107   0.0\n -0.707107   0.0        0.0        0.707107\nR factor:\n2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  -1.41421\n  [2, 2]  =  -1.41421\nRow permutation:\n4-element Array{Int64,1}:\n 1\n 3\n 4\n 2\nColumn permutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
 },
 
 {
