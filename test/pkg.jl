@@ -684,8 +684,10 @@ end
         Pkg.checkout("Example.jl")
         Pkg.rm("Example.jl")
         Pkg.free("Example.jl")
+        @test [keys(Pkg.installed())...] == ["Example"]
         iob = IOBuffer()
         Pkg.status("Example.jl", iob)
-        @test String(take!(iob)) == "No packages installed\n"
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
     end
 end

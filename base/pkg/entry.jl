@@ -255,6 +255,9 @@ function free(pkgs)
                     break
                 end
             end
+            # Add package to REQUIRE if it wasn't present already
+            # so that resolve() does not remove it
+            edit(Reqs.add, pkg)
             isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
             throw(PkgError("Can't find any registered versions of $pkg to checkout"))
         end
