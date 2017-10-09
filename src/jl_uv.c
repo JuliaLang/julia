@@ -165,6 +165,7 @@ void jl_uv_flush(uv_stream_t *stream)
 }
 
 // getters and setters
+JL_DLLEXPORT int jl_uv_process_pid(uv_process_t *p) { return p->pid; }
 JL_DLLEXPORT void *jl_uv_process_data(uv_process_t *p) { return p->data; }
 JL_DLLEXPORT void *jl_uv_buf_base(const uv_buf_t *buf) { return buf->base; }
 JL_DLLEXPORT size_t jl_uv_buf_len(const uv_buf_t *buf) { return buf->len; }

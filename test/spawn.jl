@@ -225,10 +225,12 @@ if valgrind_off
 end
 
 # setup_stdio for AbstractPipe
-let out = Pipe(), proc = run(pipeline(`$echocmd "Hello World"`, stdout=IOContext(out,stdout)), wait=false)
+let out = Pipe(), proc = run(pipeline(`$exename --startup-file=no -e 'println(getpid())`, stdout=IOContext(out,stdout)), wait=false)
+    pid = getpid(proc)
     close(out.in)
-    @test read(out, String) == "Hello World\n"
+    @test parse(Int, read(out, String)) == pid
     @test success(proc)
+    @test getpid(proc) === -1
 end
 
 # issue #5904

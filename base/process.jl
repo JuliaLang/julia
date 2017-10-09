@@ -331,6 +331,20 @@ end
 pipe_reader(p::Process) = p.out
 pipe_writer(p::Process) = p.in
 
+"""
+    getpid(p::Process) -> Int32
+
+Get the process ID of a running process. Returns `-1` if the
+process is not running.
+"""
+function Base.getpid(p::Process)
+    if p.handle != C_NULL
+        ccall(:jl_uv_process_pid, Cint, (Ptr{Void},), p.handle)
+    else
+        Cint(-1)
+    end
+end
+
 struct ProcessChain <: AbstractPipe
     processes::Vector{Process}
     in::Redirectable
