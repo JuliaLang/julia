@@ -188,13 +188,7 @@ end
 
 abstract type Payload end
 
-"""
-    LibGit2.RemoteCallbacks
-
-Callback settings.
-Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks) struct.
-"""
-@kwdef struct RemoteCallbacks
+@kwdef struct RemoteCallbacksStruct
     version::Cuint                    = 1
     sideband_progress::Ptr{Void}
     completion::Ptr{Void}
@@ -210,12 +204,24 @@ Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/ty
     payload::Ptr{Void}
 end
 
-function RemoteCallbacks(credentials_cb::Ptr{Void}, payload::Ref{<:Payload})
-    RemoteCallbacks(credentials=credentials_cb, payload=pointer_from_objref(payload))
-end
+"""
+    LibGit2.RemoteCallbacks
 
-function RemoteCallbacks(credentials_cb::Ptr{Void}, payload::Payload)
-    RemoteCallbacks(credentials_cb, Ref(payload))
+Callback settings.
+Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks) struct.
+"""
+struct RemoteCallbacks
+    cb::RemoteCallbacksStruct
+    gcroot::Ref{Any}
+    function RemoteCallbacks(; payload::Union{Payload, Void}=nothing, kwargs...)
+        p = Ref{Any}(payload)
+        if payload === nothing
+            pp = C_NULL
+        else
+            pp = unsafe_load(Ptr{Ptr{Void}}(Base.unsafe_convert(Ptr{Any}, p)))
+        end
+        return new(RemoteCallbacksStruct(; kwargs..., payload=pp), p)
+    end
 end
 
 """
@@ -245,9 +251,8 @@ The fields represent:
 
 # Examples
 ```julia-repl
-julia> fo = LibGit2.FetchOptions();
-
-julia> fo.proxy_opts = LibGit2.ProxyOptions(url=Cstring("https://my_proxy_url.com"))
+julia> fo = LibGit2.FetchOptions(
+           proxy_opts = LibGit2.ProxyOptions(url = Cstring("https://my_proxy_url.com")))
 
 julia> fetch(remote, "master", options=fo)
 ```
@@ -261,6 +266,19 @@ julia> fetch(remote, "master", options=fo)
     payload::Ptr{Void}
 end
 
+@kwdef struct FetchOptionsStruct
+    version::Cuint                  = 1
+    callbacks::RemoteCallbacksStruct
+    prune::Cint                     = Consts.FETCH_PRUNE_UNSPECIFIED
+    update_fetchhead::Cint          = 1
+    download_tags::Cint             = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
+    @static if LibGit2.VERSION >= v"0.25.0"
+        proxy_opts::ProxyOptions
+    end
+    @static if LibGit2.VERSION >= v"0.24.0"
+        custom_headers::StrArrayStruct
+    end
+end
 
 """
     LibGit2.FetchOptions
@@ -281,18 +299,26 @@ The fields represent:
   * `custom_headers`: any extra headers needed for the fetch. Only present on libgit2 versions
      newer than or equal to 0.24.0.
 """
-@kwdef struct FetchOptions
-    version::Cuint                  = 1
-    callbacks::RemoteCallbacks
-    prune::Cint                     = Consts.FETCH_PRUNE_UNSPECIFIED
-    update_fetchhead::Cint          = 1
-    download_tags::Cint             = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
-    @static if LibGit2.VERSION >= v"0.25.0"
-        proxy_opts::ProxyOptions
+struct FetchOptions
+    opts::FetchOptionsStruct
+    cb_gcroot::Ref{Any}
+    function FetchOptions(; callbacks::RemoteCallbacks=RemoteCallbacks(), kwargs...)
+        return new(FetchOptionsStruct(; kwargs..., callbacks=callbacks.cb), callbacks.gcroot)
     end
-    @static if LibGit2.VERSION >= v"0.24.0"
-        custom_headers::StrArrayStruct
-    end
+end
+
+
+@kwdef struct CloneOptionsStruct
+    version::Cuint                      = 1
+    checkout_opts::CheckoutOptions
+    fetch_opts::FetchOptionsStruct
+    bare::Cint
+    localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
+    checkout_branch::Cstring
+    repository_cb::Ptr{Void}
+    repository_cb_payload::Ptr{Void}
+    remote_cb::Ptr{Void}
+    remote_cb_payload::Ptr{Void}
 end
 
 """
@@ -317,17 +343,12 @@ The fields represent:
   * `remote_cb`: An optional callback used to create the [`GitRemote`](@ref) before making the clone from it.
   * `remote_cb_payload`: The payload for the remote callback.
 """
-@kwdef struct CloneOptions
-    version::Cuint                      = 1
-    checkout_opts::CheckoutOptions
-    fetch_opts::FetchOptions
-    bare::Cint
-    localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
-    checkout_branch::Cstring
-    repository_cb::Ptr{Void}
-    repository_cb_payload::Ptr{Void}
-    remote_cb::Ptr{Void}
-    remote_cb_payload::Ptr{Void}
+struct CloneOptions
+    opts::CloneOptionsStruct
+    cb_gcroot::Ref{Any}
+    function CloneOptions(; fetch_opts::FetchOptions=FetchOptions(), kwargs...)
+        return new(CloneOptionsStruct(; kwargs..., fetch_opts=fetch_opts.opts), fetch_opts.cb_gcroot)
+    end
 end
 
 """
@@ -588,6 +609,18 @@ The fields represent:
     max_line::Csize_t                 = 0
 end
 
+@kwdef struct PushOptionsStruct
+    version::Cuint                     = 1
+    parallelism::Cint                  = 1
+    callbacks::RemoteCallbacksStruct
+    @static if LibGit2.VERSION >= v"0.25.0"
+        proxy_opts::ProxyOptions
+    end
+    @static if LibGit2.VERSION >= v"0.24.0"
+        custom_headers::StrArrayStruct
+    end
+end
+
 """
     LibGit2.PushOptions
 
@@ -605,15 +638,11 @@ The fields represent:
   * `custom_headers`: only relevant if the LibGit2 version is greater than or equal to `0.24.0`.
      Extra headers needed for the push operation.
 """
-@kwdef struct PushOptions
-    version::Cuint                     = 1
-    parallelism::Cint                  = 1
-    callbacks::RemoteCallbacks
-    @static if LibGit2.VERSION >= v"0.25.0"
-        proxy_opts::ProxyOptions
-    end
-    @static if LibGit2.VERSION >= v"0.24.0"
-        custom_headers::StrArrayStruct
+struct PushOptions
+    opts::PushOptionsStruct
+    cb_gcroot::Ref{Any}
+    function PushOptions(; callbacks::RemoteCallbacks=RemoteCallbacks(), kwargs...)
+        return new(PushOptionsStruct(; kwargs..., callbacks=callbacks.cb), callbacks.gcroot)
     end
 end
 
