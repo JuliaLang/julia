@@ -338,11 +338,8 @@ Get the process ID of a running process. Returns `-1` if the
 process is not running.
 """
 function Base.getpid(p::Process)
-    if p.handle != C_NULL
-        ccall(:jl_uv_process_pid, Cint, (Ptr{Void},), p.handle)
-    else
-        Cint(-1)
-    end
+    p.handle != C_NULL || error("process not running")
+    ccall(:jl_uv_process_pid, Cint, (Ptr{Void},), p.handle)
 end
 
 struct ProcessChain <: AbstractPipe

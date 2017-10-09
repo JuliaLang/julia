@@ -230,7 +230,7 @@ let out = Pipe(), proc = run(pipeline(`$exename --startup-file=no -e 'println(ge
     close(out.in)
     @test parse(Int, read(out, String)) == pid
     @test success(proc)
-    @test getpid(proc) === -1
+    @test_throws ErrorException getpid(proc)
 end
 
 # issue #5904
