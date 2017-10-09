@@ -721,6 +721,25 @@ static bool isLoadFromImmut(LoadInst *LI)
     return false;
 }
 
+// Check if this is a load from an constant global.
+static bool isLoadFromConstGV(LoadInst *LI)
+{
+    // We only emit single slot GV in codegen
+    // but LLVM global merging can change the pointer operands to GEPs/bitcasts
+    if (!isa<GlobalVariable>(LI->getPointerOperand()->stripInBoundsOffsets()))
+        return false;
+    MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
+    if (!TBAA)
+        return false;
+    while (TBAA->getNumOperands() > 1) {
+        TBAA = cast<MDNode>(TBAA->getOperand(1).get());
+        if (cast<MDString>(TBAA->getOperand(0))->getString() == "jtbaa_const") {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool LooksLikeFrameRef(Value *V) {
     if (isSpecialPtr(V->getType()))
         return false;
@@ -804,6 +823,11 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // Loads from a jlcall argument array
                     RefinedPtr = -1;
                 }
+                else if (isLoadFromConstGV(LI)) {
+                    // If this is a const load from a global,
+                    // we know that the object is a constant as well and doesn't need rooting.
+                    RefinedPtr = -1;
+                }
                 MaybeNoteDef(S, BBS, LI, BBS.Safepoints, RefinedPtr);
                 NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
             } else if (SelectInst *SI = dyn_cast<SelectInst>(&I)) {
@@ -837,8 +861,16 @@ State LateLowerGCFrame::LocalScan(Function &F) {
             } else if (isa<StoreInst>(&I) || isa<ReturnInst>(&I)) {
                 NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
             } else if (auto *ASCI = dyn_cast<AddrSpaceCastInst>(&I)) {
-                if (getValueAddrSpace(ASCI) == AddressSpace::Tracked)
-                    MaybeNoteDef(S, BBS, ASCI, BBS.Safepoints);
+                if (getValueAddrSpace(ASCI) == AddressSpace::Tracked) {
+                    int RefinedPtr = -2;
+                    auto origin = ASCI->getPointerOperand()->stripPointerCasts();
+                    if (auto LI = dyn_cast<LoadInst>(origin)) {
+                        if (isLoadFromConstGV(LI)) {
+                            RefinedPtr = -1;
+                        }
+                    }
+                    MaybeNoteDef(S, BBS, ASCI, BBS.Safepoints, RefinedPtr);
+                }
             } else if (auto *AI = dyn_cast<AllocaInst>(&I)) {
                 if (isSpecialPtr(AI->getAllocatedType()) && !AI->isArrayAllocation() &&
                     cast<PointerType>(AI->getAllocatedType())->getAddressSpace() == AddressSpace::Tracked)
