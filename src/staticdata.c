@@ -1607,7 +1607,8 @@ static void jl_init_serializer2(int for_serialize)
                      jl_globalref_type->name, jl_typeofbottom_type->name,
                      jl_string_type->name, jl_abstractstring_type->name,
 
-                     jl_int32_type, jl_int64_type, jl_bool_type, jl_uint8_type,
+                     jl_int32_type, jl_int64_type, jl_bool_type,
+                     jl_uint8_type, jl_uint32_type, jl_uint64_type,
 
                      // empirical list of very common symbols
                      #include "common_symbols1.inc"

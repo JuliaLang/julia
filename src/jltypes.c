@@ -1858,6 +1858,10 @@ void jl_init_types(void)
                                          jl_any_type, jl_emptysvec, 64);
     jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"), core,
                                          jl_any_type, jl_emptysvec, 8);
+    jl_uint32_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt32"), core,
+                                         jl_any_type, jl_emptysvec, 32);
+    jl_uint64_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt64"), core,
+                                         jl_any_type, jl_emptysvec, 64);
 
     jl_ssavalue_type = jl_new_datatype(jl_symbol("SSAValue"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(1, "id"),
