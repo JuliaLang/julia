@@ -325,6 +325,10 @@ let a = Docs.docstrloc(DocsTest.f)
                 (@__FILE__, DocsTest.F2_LINE_NUMBER)]
 end
 
+let a = Docs.docstrloc(DocsTest.Foo)
+    @test a == []
+end
+
 "BareModule"
 baremodule BareModule
 
