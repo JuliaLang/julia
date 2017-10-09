@@ -412,6 +412,8 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
         elseif ex0.head == :call
             return Expr(:call, fcn, esc(ex0.args[1]),
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...))
+        elseif ex0.head === :(=)
+            return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
         end
     end
     if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
