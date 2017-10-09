@@ -489,12 +489,6 @@ end
     @test Array(spdiagm(ones(2), -1, 3, 3)) == diagm(ones(2), -1)
 end
 
-@testset "issue #4986, reinterpret" begin
-    sfe22 = speye(Float64, 2)
-    mfe22 = eye(Float64, 2)
-    @test reinterpret(Int64, sfe22) == reinterpret(Int64, mfe22)
-end
-
 @testset "issue #5190" begin
     @test_throws ArgumentError sparsevec([3,5,7],[0.1,0.0,3.2],4)
 end
@@ -964,10 +958,6 @@ end
     ACPY = copy(A)
     B = reshape(A,25,1)
     @test A == ACPY
-    C = reinterpret(Int64, A, (25, 1))
-    @test A == ACPY
-    D = reinterpret(Int64, copy(B))
-    @test C == D
 end
 
 @testset "issue #8225" begin
@@ -1316,11 +1306,8 @@ end
     @test spdiagm(([1,2],[3.5],[4+5im]), (0,1,-1), 2,2) == [1 3.5; 4+5im 2]
 end
 
-@testset "error conditions for reinterpret, reshape, and squeeze" begin
+@testset "error conditions for reshape, and squeeze" begin
     local A = sprand(Bool, 5, 5, 0.2)
-    @test_throws ArgumentError reinterpret(Complex128, A)
-    @test_throws ArgumentError reinterpret(Complex128, A,(5, 5))
-    @test_throws DimensionMismatch reinterpret(Int8, A,(20,))
     @test_throws DimensionMismatch reshape(A,(20, 2))
     @test_throws ArgumentError squeeze(A,(1, 1))
 end

@@ -592,7 +592,6 @@ void AllocOpt::replaceUsesWith(Instruction *orig_inst, Instruction *new_inst,
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             if (ptr_from_objref && ptr_from_objref == call->getCalledFunction()) {
-                new_i = new PtrToIntInst(new_i, T_size, "", call);
                 call->replaceAllUsesWith(new_i);
                 call->eraseFromParent();
                 return;

@@ -321,19 +321,11 @@ unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
     reinterpret(type, A)
 
 Change the type-interpretation of a block of memory.
-For arrays, this constructs an array with the same binary data as the given
+For arrays, this constructs a view of the array with the same binary data as the given
 array, but with the specified element type.
 For example,
 `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
 [`Float32`](@ref).
-
-!!! warning
-
-    It is not allowed to `reinterpret` an array to an element type with a larger alignment then
-    the alignment of the array. For a normal `Array`, this is the alignment of its element type.
-    For a reinterpreted array, this is the alignment of the `Array` it was reinterpreted from.
-    For example, `reinterpret(UInt32, UInt8[0, 0, 0, 0])` is not allowed but
-    `reinterpret(UInt32, reinterpret(UInt8, Float32[1.0]))` is allowed.
 
 # Examples
 ```jldoctest

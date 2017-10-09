@@ -761,6 +761,9 @@ JL_DLLEXPORT jl_value_t *jl_udiv_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_srem_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_urem_int(jl_value_t *a, jl_value_t *b);
 
+JL_DLLEXPORT jl_value_t *jl_add_ptr(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_sub_ptr(jl_value_t *a, jl_value_t *b);
+
 JL_DLLEXPORT jl_value_t *jl_neg_float(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_add_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_sub_float(jl_value_t *a, jl_value_t *b);

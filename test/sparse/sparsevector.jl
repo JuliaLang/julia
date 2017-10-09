@@ -281,11 +281,6 @@ let a = SparseVector(8, [2, 5, 6], Int32[12, 35, 72])
     # vec
     @test vec(a) == a
 
-    # reinterpret
-    au = reinterpret(UInt32, a)
-    @test isa(au, SparseVector{UInt32,Int})
-    @test exact_equal(au, SparseVector(8, [2, 5, 6], UInt32[12, 35, 72]))
-
     # float
     af = float(a)
     @test float(af) == af

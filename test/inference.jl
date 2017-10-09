@@ -830,7 +830,7 @@ f2_17003(::Any) = f2_17003(NArray_17003(gl_17003))
 
 # issue #20847
 function segfaultfunction_20847(A::Vector{NTuple{N, T}}) where {N, T}
-    B = reinterpret(T, A, (N, length(A)))
+    B = reshape(reinterpret(T, A), (N, length(A)))
     return nothing
 end
 

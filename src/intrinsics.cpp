@@ -269,6 +269,37 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
 
 static jl_cgval_t ghostValue(jl_value_t *ty);
 
+static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
+{
+    Type *ty = unboxed->getType();
+    assert(ty != T_void);
+    bool frompointer = ty->isPointerTy();
+    bool topointer = to->isPointerTy();
+    if (frompointer && topointer) {
+        unboxed = emit_bitcast(ctx, unboxed, to);
+    }
+    else if (frompointer) {
+        Type *INTT_to = INTT(to);
+        unboxed = ctx.builder.CreatePtrToInt(unboxed, INTT_to);
+        if (INTT_to != to)
+            unboxed = ctx.builder.CreateBitCast(unboxed, to);
+    }
+    else if (topointer) {
+        Type *INTT_to = INTT(to);
+        if (to != INTT_to)
+            unboxed = ctx.builder.CreateBitCast(unboxed, INTT_to);
+        unboxed = ctx.builder.CreateIntToPtr(unboxed, to);
+    }
+    else if (ty == T_int1 && to == T_int8) {
+        // bools may be stored internally as int8
+        unboxed = ctx.builder.CreateZExt(unboxed, T_int8);
+    }
+    else if (ty != to) {
+        unboxed = ctx.builder.CreateBitCast(unboxed, to);
+    }
+    return unboxed;
+}
+
 // emit code to unpack a raw value from a box into registers or a stack slot
 static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *dest, bool volatile_store)
 {
@@ -287,33 +318,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
 
     Constant *c = x.constant ? julia_const_to_llvm(x.constant) : NULL;
     if (!x.ispointer() || c) { // already unboxed, but sometimes need conversion
-        Value *unboxed = c ? c : x.V;
-        Type *ty = unboxed->getType();
-        assert(ty != T_void);
-        bool frompointer = ty->isPointerTy();
-        bool topointer = to->isPointerTy();
-        if (frompointer && topointer) {
-            unboxed = emit_bitcast(ctx, unboxed, to);
-        }
-        else if (frompointer) {
-            Type *INTT_to = INTT(to);
-            unboxed = ctx.builder.CreatePtrToInt(unboxed, INTT_to);
-            if (INTT_to != to)
-                unboxed = ctx.builder.CreateBitCast(unboxed, to);
-        }
-        else if (topointer) {
-            Type *INTT_to = INTT(to);
-            if (to != INTT_to)
-                unboxed = ctx.builder.CreateBitCast(unboxed, INTT_to);
-            unboxed = ctx.builder.CreateIntToPtr(unboxed, to);
-        }
-        else if (ty == T_int1 && to == T_int8) {
-            // bools may be stored internally as int8
-            unboxed = ctx.builder.CreateZExt(unboxed, T_int8);
-        }
-        else if (ty != to) {
-            unboxed = ctx.builder.CreateBitCast(unboxed, to);
-        }
+        Value *unboxed = emit_unboxed_coercion(ctx, to, c ? c : x.V);
         if (!dest)
             return unboxed;
         Type *dest_ty = unboxed->getType()->getPointerTo();
@@ -326,14 +331,12 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     // bools stored as int8, so an extra Trunc is needed to get an int1
     Value *p = x.constant ? literal_pointer_val(ctx, x.constant) : x.V;
     Type *ptype = (to == T_int1 ? T_pint8 : to->getPointerTo());
-    if (p->getType() != ptype)
-        p = emit_bitcast(ctx, p, ptype);
 
     Value *unboxed = NULL;
     if (to == T_int1)
-        unboxed = ctx.builder.CreateTrunc(tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(p)), T_int1);
+        unboxed = ctx.builder.CreateTrunc(tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(maybe_bitcast(ctx, p, ptype))), T_int1);
     else if (jt == (jl_value_t*)jl_bool_type)
-        unboxed = ctx.builder.CreateZExt(ctx.builder.CreateTrunc(tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(p)), T_int1), to);
+        unboxed = ctx.builder.CreateZExt(ctx.builder.CreateTrunc(tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(maybe_bitcast(ctx, p, ptype))), T_int1), to);
     if (unboxed) {
         if (!dest)
             return unboxed;
@@ -354,6 +357,27 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         return NULL;
     }
     else {
+        if (p->getType() != ptype && isa<AllocaInst>(p)) {
+            // LLVM's mem2reg can't handle coercion if the load/store type does
+            // not match the type of the alloca. As such, it is better to
+            // perform the load using the alloca's type and then perform the
+            // appropriate coercion manually.
+            AllocaInst *AI = cast<AllocaInst>(p);
+            Type *AllocType = AI->getAllocatedType();
+#if JL_LLVM_VERSION >= 40000
+            const DataLayout &DL = jl_data_layout;
+#else
+            const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
+#endif
+            if (!AI->isArrayAllocation() &&
+                    (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
+                    (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
+                    DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
+                Instruction *load = ctx.builder.CreateAlignedLoad(p, alignment);
+                return emit_unboxed_coercion(ctx, to, tbaa_decorate(x.tbaa, load));
+            }
+        }
+        p = maybe_bitcast(ctx, p, ptype);
         Instruction *load = ctx.builder.CreateAlignedLoad(p, alignment);
         return tbaa_decorate(x.tbaa, load);
     }
@@ -439,7 +463,8 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         if (isboxed)
             vxt = llvmt;
         vx = tbaa_decorate(v.tbaa, ctx.builder.CreateLoad(
-                    data_pointer(ctx, v, vxt == T_int1 ? T_pint8 : vxt->getPointerTo())));
+                    emit_bitcast(ctx, data_pointer(ctx, v),
+                        vxt == T_int1 ? T_pint8 : vxt->getPointerTo())));
     }
 
     vxt = vx->getType();
@@ -898,6 +923,26 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case udiv_int: return ctx.builder.CreateUDiv(x, y);
     case srem_int: return ctx.builder.CreateSRem(x, y);
     case urem_int: return ctx.builder.CreateURem(x, y);
+
+    // LLVM will not fold ptrtoint+arithmetic+inttoptr to GEP. The reason for this
+    // has to do with alias analysis. When adding two integers, either one of them
+    // could be the pointer base. With getelementptr, it is clear which of the
+    // operands is the pointer base. We also have this information at the julia
+    // level. Thus, to not lose information, we need to have a separate intrinsic
+    // for pointer arithmetic which lowers to getelementptr.
+    case add_ptr: {
+        return ctx.builder.CreatePtrToInt(
+            ctx.builder.CreateGEP(T_int8,
+                ctx.builder.CreateIntToPtr(x, T_pint8), y), t);
+
+    }
+
+    case sub_ptr: {
+        return ctx.builder.CreatePtrToInt(
+            ctx.builder.CreateGEP(T_int8,
+                ctx.builder.CreateIntToPtr(x, T_pint8), ctx.builder.CreateNeg(y)), t);
+
+    }
 
 // Implements IEEE negate. See issue #7868
     case neg_float: return math_builder(ctx)().CreateFSub(ConstantFP::get(t, -0.0), x);

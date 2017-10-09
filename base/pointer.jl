@@ -147,8 +147,8 @@ eltype(::Type{Ptr{T}}) where {T} = T
 isless(x::Ptr, y::Ptr) = isless(UInt(x), UInt(y))
 -(x::Ptr, y::Ptr) = UInt(x) - UInt(y)
 
-+(x::Ptr, y::Integer) = oftype(x, (UInt(x) + (y % UInt) % UInt))
--(x::Ptr, y::Integer) = oftype(x, (UInt(x) - (y % UInt) % UInt))
++(x::Ptr, y::Integer) = oftype(x, Intrinsics.add_ptr(UInt(x), (y % UInt) % UInt))
+-(x::Ptr, y::Integer) = oftype(x, Intrinsics.sub_ptr(UInt(x), (y % UInt) % UInt))
 +(x::Integer, y::Ptr) = y + x
 
 """

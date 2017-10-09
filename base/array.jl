@@ -218,33 +218,6 @@ original.
 """
 copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
 
-function reinterpret(::Type{T}, a::Array{S,1}) where T where S
-    nel = Int(div(length(a) * sizeof(S), sizeof(T)))
-    # TODO: maybe check that remainder is zero?
-    return reinterpret(T, a, (nel,))
-end
-
-function reinterpret(::Type{T}, a::Array{S}) where T where S
-    if sizeof(S) != sizeof(T)
-        throw(ArgumentError("result shape not specified"))
-    end
-    reinterpret(T, a, size(a))
-end
-
-function reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where T where S where N
-    function throwbits(::Type{S}, ::Type{T}, ::Type{U}) where {S,T,U}
-        @_noinline_meta
-        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(U) is not a bits type"))
-    end
-    isbits(T) || throwbits(S, T, T)
-    isbits(S) || throwbits(S, T, S)
-    nel = div(length(a) * sizeof(S), sizeof(T))
-    if prod(dims) != nel
-        _throw_dmrsa(dims, nel)
-    end
-    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
-end
-
 # reshaping to same # of dimensions
 function reshape(a::Array{T,N}, dims::NTuple{N,Int}) where T where N
     if prod(dims) != length(a)
