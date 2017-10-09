@@ -136,6 +136,7 @@ static Instruction *emit_ptls_tp(LLVMContext &ctx, Value *offset, Type *T_ppjlva
 #elif defined(_CPU_X86_)
     const char *asm_str = "movl %gs:0, $0";
 #else
+    const char *asm_str = nullptr;
     assert(0 && "Cannot emit thread pointer for this architecture.");
 #endif
     if (!offset) {
