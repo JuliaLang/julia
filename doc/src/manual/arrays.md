@@ -260,7 +260,7 @@ Example:
 
 ```jldoctest
 julia> x = reshape(1:16, 4, 4)
-4×4 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
+4×4 reshape(::UnitRange{Int64}, 4, 4) with eltype Int64:
  1  5   9  13
  2  6  10  14
  3  7  11  15
@@ -444,7 +444,7 @@ indices directly instead of first calling [`find`](@ref).
 
 ```jldoctest
 julia> x = reshape(1:16, 4, 4)
-4×4 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
+4×4 reshape(::UnitRange{Int64}, 4, 4) with eltype Int64:
  1  5   9  13
  2  6  10  14
  3  7  11  15
@@ -497,12 +497,12 @@ julia> B = view(A, 1:3, 2:3);
 julia> for i in eachindex(B)
            @show i
        end
-i = CartesianIndex{2}((1, 1))
-i = CartesianIndex{2}((2, 1))
-i = CartesianIndex{2}((3, 1))
-i = CartesianIndex{2}((1, 2))
-i = CartesianIndex{2}((2, 2))
-i = CartesianIndex{2}((3, 2))
+i = CartesianIndex(1, 1)
+i = CartesianIndex(2, 1)
+i = CartesianIndex(3, 1)
+i = CartesianIndex(1, 2)
+i = CartesianIndex(2, 2)
+i = CartesianIndex(3, 2)
 ```
 
 In contrast with `for i = 1:length(A)`, iterating with `eachindex` provides an efficient way to

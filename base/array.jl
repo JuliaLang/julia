@@ -1710,7 +1710,7 @@ Find the previous linear index <= `i` of a `true` element of `A`, or `0` if not 
 julia> A = [false false; true true]
 2×2 Array{Bool,2}:
  false  false
-  true  true
+  true   true
 
 julia> findprev(A,2)
 2

@@ -152,7 +152,7 @@ julia> λ, ϕ = eigs(A, B, nev = 2);
 julia> λ
 2-element Array{Float64,1}:
  1.0
- 0.5
+ 0.4999999999999999
 ```
 
 !!! note

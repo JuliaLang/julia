@@ -35,9 +35,9 @@ julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]
 
 julia> eigvals(A)
 3-element Array{Complex{Float64},1}:
-  9.31908+0.0im
- -2.40954+2.72095im
- -2.40954-2.72095im
+  9.319084268422866 + 0.0im
+ -2.409542134211437 + 2.7209481982433124im
+ -2.409542134211437 - 2.7209481982433124im
 
 julia> eigvecs(A)
 3×3 Array{Complex{Float64},2}:
@@ -62,7 +62,6 @@ julia> factorize(A)
 Base.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:
 [1.0 0.0 0.0; -0.15 1.0 0.0; -0.3 -0.132196 1.0]
 [-10.0 2.3 4.0; 0.0 2.345 -3.4; 0.0 0.0 -5.24947]
-successful: true
 ```
 
 Since `A` is not Hermitian, symmetric, triangular, tridiagonal, or bidiagonal, an LU factorization may be the
@@ -78,7 +77,7 @@ julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
 julia> factorize(B)
 Base.LinAlg.BunchKaufman{Float64,Array{Float64,2}}
 D factor:
-3×3 Tridiagonal{Float64}:
+3×3 Tridiagonal{Float64,Array{Float64,1}}:
  -1.64286   0.0   ⋅
   0.0      -2.8  0.0
    ⋅        0.0  5.0
@@ -92,7 +91,6 @@ permutation:
  1
  2
  3
-successful: true
 ```
 
 Here, Julia was able to detect that `B` is in fact symmetric, and used a more appropriate factorization.
@@ -139,9 +137,9 @@ julia> x = [1; 2; 3]
 
 julia> sB\x
 3-element Array{Float64,1}:
- -1.73913
- -1.1087
- -1.45652
+ -1.7391304347826084
+ -1.1086956521739126
+ -1.4565217391304346
 ```
 The `\` operation here performs the linear solution. Julia's parser provides convenient dispatch
 to specialized methods for the *transpose* of a matrix left-divided by a vector, or for the various combinations

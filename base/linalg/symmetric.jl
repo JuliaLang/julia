@@ -452,20 +452,20 @@ e.g. the 2nd to 8th eigenvalues.
 
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64}:
+3×3 SymTridiagonal{Float64,Array{Float64,1}}:
  1.0  2.0   ⋅
  2.0  2.0  3.0
   ⋅   3.0  1.0
 
 julia> eigvals(A, 2:2)
 1-element Array{Float64,1}:
- 1.0
+ 0.9999999999999996
 
 julia> eigvals(A)
 3-element Array{Float64,1}:
- -2.14005
-  1.0
-  5.14005
+ -2.1400549446402604
+  1.0000000000000002
+  5.140054944640259
 ```
 """
 function eigvals(A::RealHermSymComplexHerm, irange::UnitRange)
@@ -491,20 +491,20 @@ by specifying a pair `vl` and `vu` for the lower and upper boundaries of the eig
 
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64}:
+3×3 SymTridiagonal{Float64,Array{Float64,1}}:
  1.0  2.0   ⋅
  2.0  2.0  3.0
   ⋅   3.0  1.0
 
 julia> eigvals(A, -1, 2)
 1-element Array{Float64,1}:
- 1.0
+ 1.0000000000000009
 
 julia> eigvals(A)
 3-element Array{Float64,1}:
- -2.14005
-  1.0
-  5.14005
+ -2.1400549446402604
+  1.0000000000000002
+  5.140054944640259
 ```
 """
 function eigvals(A::RealHermSymComplexHerm, vl::Real, vh::Real)

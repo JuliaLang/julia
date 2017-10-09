@@ -52,7 +52,7 @@ julia> fullname(Base.Pkg)
 (:Base, :Pkg)
 
 julia> fullname(Main)
-()
+(:Main,)
 ```
 """
 function fullname(m::Module)
@@ -565,8 +565,7 @@ are included, including those not visible in the current module.
 # Examples
 ```jldoctest
 julia> subtypes(Integer)
-4-element Array{Union{DataType, UnionAll},1}:
- BigInt
+3-element Array{Union{DataType, UnionAll},1}:
  Bool
  Signed
  Unsigned

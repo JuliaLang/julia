@@ -707,7 +707,7 @@ WARNING: Hi
 julia> error("Hi"); 1+1
 ERROR: Hi
 Stacktrace:
- [1] error(::String) at ./error.jl:21
+ [1] error(::String) at ./error.jl:33
 ```
 
 ### The `try/catch` statement

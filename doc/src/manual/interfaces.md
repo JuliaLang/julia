@@ -273,7 +273,7 @@ julia> s[s .> 20]
  49
 
 julia> s \ [1 2; 3 4; 5 6; 7 8; 9 10; 11 12; 13 14]
-1×2 Array{Float64,2}:
+1×2 RowVector{Float64,Array{Float64,1}}:
  0.305389  0.335329
 
 julia> s ⋅ s # dot(s, s)
