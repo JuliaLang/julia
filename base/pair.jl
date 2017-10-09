@@ -8,7 +8,9 @@ Construct a `Pair` object with type `Pair{typeof(x), typeof(y)}`. The elements
 are stored in the fields `first` and `second`. They can also be accessed via
 iteration.
 
-See also [`Dict`].
+See also [`Dict`](@ref).
+
+# Examples
 
 ```jldoctest
 julia> p = "foo" => 7
@@ -31,7 +33,6 @@ struct Pair{A,B}
     first::A
     second::B
 end
-
 const => = Pair
 
 start(p::Pair) = 1
