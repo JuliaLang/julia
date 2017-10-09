@@ -191,8 +191,8 @@ r"a.a"
 julia> m = match(rx, "cabac")
 RegexMatch("aba")
 
-julia> julia> m.captures
-1-element Array{Union{SubString{String}, Void},1}:
+julia> m.captures
+1-element Array{Union{Void, SubString{String}},1}:
  "b"
 
 julia> m.match

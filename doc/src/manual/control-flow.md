@@ -476,9 +476,9 @@ julia> while true
 4
 5
 
-julia> for i = 1:1000
-           println(i)
-           if i >= 5
+julia> for j = 1:1000
+           println(j)
+           if j >= 5
                break
            end
        end

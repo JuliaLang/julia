@@ -458,8 +458,7 @@ adjustment criterion.
 For example:
 
 ```jldoctest
-julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday # Returns true if the day of the week of x is Tuesday
-(::#1) (generic function with 1 method)
+julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday; # Returns true if the day of the week of x is Tuesday
 
 julia> Dates.tonext(istuesday, Date(2014,7,13)) # 2014-07-13 is a Sunday
 2014-07-15

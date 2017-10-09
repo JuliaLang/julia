@@ -50,7 +50,7 @@ julia> ℯ
 Euler's constant.
 
 ```jldoctest
-julia> MathConstants.eulergamma
+julia> Base.MathConstants.eulergamma
 γ = 0.5772156649015...
 ```
 """
@@ -63,7 +63,7 @@ julia> MathConstants.eulergamma
 The golden ratio.
 
 ```jldoctest
-julia> MathConstants.golden
+julia> Base.MathConstants.golden
 φ = 1.6180339887498...
 ```
 """
@@ -75,7 +75,7 @@ julia> MathConstants.golden
 Catalan's constant.
 
 ```jldoctest
-julia> MathConstants.catalan
+julia> Base.MathConstants.catalan
 catalan = 0.9159655941772...
 ```
 """

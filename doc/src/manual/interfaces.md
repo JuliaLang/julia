@@ -289,9 +289,9 @@ julia> struct SparseArray{T,N} <: AbstractArray{T,N}
            dims::NTuple{N,Int}
        end
 
-julia> SparseArray{T}(::Type{T}, dims::Int...) = SparseArray(T, dims);
+julia> SparseArray(::Type{T}, dims::Int...) where {T} = SparseArray(T, dims);
 
-julia> SparseArray{T,N}(::Type{T}, dims::NTuple{N,Int}) = SparseArray{T,N}(Dict{NTuple{N,Int}, T}(), dims);
+julia> SparseArray(::Type{T}, dims::NTuple{N,Int}) where {T,N} = SparseArray{T,N}(Dict{NTuple{N,Int}, T}(), dims);
 
 julia> Base.size(A::SparseArray) = A.dims
 
