@@ -175,3 +175,11 @@ end
 f22908(::Union) = 2
 f22908(::Type{Union{Int, Float32}}) = 1
 @test f22908(Union{Int, Float32}) == 1
+
+let x = Type{Union{Tuple{T}, Tuple{Ptr{T}, Ptr{T}, Any}} where T},
+    y = Type{Union{Tuple{T}, Tuple{Array{T, N} where N, Any, Array{T, N} where N, Any, Any}} where T}
+    @test !args_morespecific(x, y)
+    @test !args_morespecific(y, x)
+    @test !args_morespecific(x.parameters[1], y.parameters[1])
+    @test !args_morespecific(y.parameters[1], x.parameters[1])
+end
