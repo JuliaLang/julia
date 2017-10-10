@@ -338,7 +338,7 @@ function f end
 f
 ```
 
-Adds docstring `"..."` to function `f`. The first version is the preferred syntax, however both
+Adds docstring `"..."` to the `Function` `f`. The first version is the preferred syntax, however both
 are equivalent.
 
 ```julia
