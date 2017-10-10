@@ -1629,6 +1629,28 @@ function _depwarn_for_trailing_indices(t::Tuple)
     true
 end
 
+# issue #...: nonscalar indexed assignment of many values to many locations
+@generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, X::AbstractArray, I::Union{Real,AbstractArray}...)
+    N = length(I)
+    quote
+        if ndims(A) == ndims(X)
+            depwarn("using nonscalar indexed assignment to implicitly broadcast the values of an array to many indices is deprecated. Use `A[I...] .= values` to explicitly opt-in to broadcasting.", :setindex!)
+        else
+            depwarn("using nonscalar indexed assignment to implicitly broadcast the values of an array to many indices is deprecated. Use `A[I...] .= reshape(values` to explicitly opt-in to broadcasting.", :setindex!)
+        @nexprs $N d->(I_d = I[d])
+        idxlens = @ncall $N index_lengths I
+        @ncall $N setindex_shape_check X (d->idxlens[d])
+        Xs = start(X)
+        @inbounds @nloops $N i d->I_d begin
+            v, Xs = next(X, Xs)
+            @ncall $N setindex! A v i
+        end
+        A
+    end
+end
+@deprecate setindex!(B::BitArray, X::StridedArray, I::Union{Colon,UnitRange{Int}}) B[I] .= X
+@deprecate setindex!(B::BitArray, X::StridedArray, I0::Union{Colon,AbstractUnitRange}, I::Union{Int,Colon,AbstractUnitRange}...) B[I0, I...] .= X
+
 # issue #22791
 @deprecate select partialsort
 @deprecate select! partialsort!
