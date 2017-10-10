@@ -37,6 +37,14 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
         #getindex
         @test_throws KeyError capd[:Z]
 
+        @testset "throw for non-square input" begin
+            A = rand(eltya, 2, 3)
+            @test_throws DimensionMismatch chol(A)
+            @test_throws DimensionMismatch Base.LinAlg.chol!(A)
+            @test_throws DimensionMismatch cholfact(A)
+            @test_throws DimensionMismatch cholfact!(A)
+        end
+
         #Test error bound on reconstruction of matrix: LAWNS 14, Lemma 2.1
 
         #these tests were failing on 64-bit linux when inside the inner loop
@@ -187,6 +195,29 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
                 end
             end
         end
+        if eltya <: BlasFloat
+            @testset "throw for non positive definite matrix" begin
+                A = eltya[1 2; 2 1]; B = eltya[1, 1]
+                C = cholfact(A)
+                @test !isposdef(C)
+                @test !LinAlg.issuccess(C)
+                @test_throws PosDefException C\B
+                @test_throws PosDefException det(C)
+                @test_throws PosDefException logdet(C)
+            end
+
+            # Test generic cholfact!
+            @testset "generic cholfact!" begin
+                if eltya <: Complex
+                    A = complex.(randn(5,5), randn(5,5))
+                else
+                    A = randn(5,5)
+                end
+                A = convert(Matrix{eltya}, A'A)
+                @test Matrix(cholfact(A)[:L]) ≈ Matrix(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular)[1])
+                @test Matrix(cholfact(A)[:U]) ≈ Matrix(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular)[1])
+            end
+        end
     end
 end
 
@@ -200,19 +231,6 @@ end
     @test sum(sum(norm, U'*U - XX)) < eps()
 end
 
-# Test generic cholfact!
-@testset "generic cholfact!" begin
-    for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
-        if elty <: Complex
-            A = complex.(randn(5,5), randn(5,5))
-        else
-            A = randn(5,5)
-        end
-        A = convert(Matrix{elty}, A'A)
-        @test Matrix(cholfact(A)[:L]) ≈ Matrix(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular)[1])
-        @test Matrix(cholfact(A)[:U]) ≈ Matrix(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular)[1])
-    end
-end
 
 @testset "cholesky up- and downdates" begin
     A = complex.(randn(10,5), randn(10, 5))
@@ -272,26 +290,6 @@ end
     end
 end
 
-@testset "throw for non-square input" begin
-    A = rand(2,3)
-    @test_throws DimensionMismatch chol(A)
-    @test_throws DimensionMismatch Base.LinAlg.chol!(A)
-    @test_throws DimensionMismatch cholfact(A)
-    @test_throws DimensionMismatch cholfact!(A)
-end
-
 @testset "fail for non-BLAS element types" begin
     @test_throws ArgumentError cholfact!(Hermitian(rand(Float16, 5,5)), Val(true))
-end
-
-@testset "throw for non positive definite matrix" begin
-    for T in (Float32, Float64, Complex64, Complex128)
-        A = T[1 2; 2 1]; B = T[1, 1]
-        C = cholfact(A)
-        @test !isposdef(C)
-        @test !LinAlg.issuccess(C)
-        @test_throws PosDefException C\B
-        @test_throws PosDefException det(C)
-        @test_throws PosDefException logdet(C)
-    end
 end
