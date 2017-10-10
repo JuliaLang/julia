@@ -588,7 +588,7 @@ function copyto!(S::SharedArray, R::SharedArray)
         p = ps[i]
         idx = i < nw ?  ((i-1)*partlen+1:i*partlen) : ((i-1)*partlen+1:l)
         @spawnat p begin
-            S.s[idx] = R.s[idx]
+            S.s[idx] .= R.s[idx]
         end
     end
 

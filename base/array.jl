@@ -690,54 +690,26 @@ function setindex! end
 @eval setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
     (@_inline_meta; arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1, i2, I...))
 
-# These are redundant with the abstract fallbacks but needed for bootstrap
-function setindex!(A::Array, x, I::AbstractVector{Int})
-    @_propagate_inbounds_meta
-    A === I && (I = copy(I))
-    for i in I
-        A[i] = x
-    end
-    return A
-end
-function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
-    @_propagate_inbounds_meta
-    @boundscheck setindex_shape_check(X, length(I))
-    count = 1
-    if X === A
-        X = copy(X)
-        I===A && (I = X::typeof(I))
-    elseif I === A
-        I = copy(I)
-    end
-    for i in I
-        @inbounds x = X[count]
-        A[i] = x
-        count += 1
-    end
-    return A
-end
-
-# Faster contiguous setindex! with copyto!
-function setindex!(A::Array{T}, X::Array{T}, I::UnitRange{Int}) where T
-    @_inline_meta
-    @boundscheck checkbounds(A, I)
-    lI = length(I)
-    @boundscheck setindex_shape_check(X, lI)
-    if lI > 0
-        unsafe_copyto!(A, first(I), X, 1, lI)
-    end
-    return A
-end
-function setindex!(A::Array{T}, X::Array{T}, c::Colon) where T
-    @_inline_meta
-    lI = length(A)
-    @boundscheck setindex_shape_check(X, lI)
-    if lI > 0
-        unsafe_copyto!(A, 1, X, 1, lI)
-    end
-    return A
-end
-
+# Faster contiguous setindex! with copyto! TODO: Transform to Broadcasts impls
+# function setindex!(A::Array{T}, X::Array{T}, I::UnitRange{Int}) where T
+#     @_inline_meta
+#     @boundscheck checkbounds(A, I)
+#     lI = length(I)
+#     @boundscheck setindex_shape_check(X, lI)
+#     if lI > 0
+#         unsafe_copyto!(A, first(I), X, 1, lI)
+#     end
+#     return A
+# end
+# function setindex!(A::Array{T}, X::Array{T}, c::Colon) where T
+#     @_inline_meta
+#     lI = length(A)
+#     @boundscheck setindex_shape_check(X, lI)
+#     if lI > 0
+#         unsafe_copyto!(A, 1, X, 1, lI)
+#     end
+#     return A
+# end
 setindex!(A::Array, x::Number, ::Colon) = fill!(A, x)
 setindex!(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) where {T, N} = fill!(A, x)
 
