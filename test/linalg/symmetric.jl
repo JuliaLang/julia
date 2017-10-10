@@ -82,6 +82,11 @@ end
                 @test asym === parent(Symmetric(asym))
                 @test aherm === parent(Hermitian(aherm))
             end
+            # Unary minus for Symmetric/Hermitian matrices
+            @testset "Unary minus for Symmetric/Hermitian matrices" begin
+                @test (-Symmetric(asym))::typeof(Symmetric(asym)) == -asym
+                @test (-Hermitian(aherm))::typeof(Hermitian(aherm)) == -aherm
+            end
 
             @testset "getindex and unsafe_getindex" begin
                 @test aherm[1,1] == Hermitian(aherm)[1,1]
@@ -184,6 +189,17 @@ end
                     @test inv(Symmetric(a, uplo))::Symmetric ≈ inv(Matrix(Symmetric(a, uplo)))
                     if eltya <: Real
                         @test inv(Hermitian(a, uplo))::Hermitian ≈ inv(Matrix(Hermitian(a, uplo)))
+                    end
+                end
+                if eltya <: Base.LinAlg.BlasComplex
+                    @testset "inverse edge case with complex Hermitian" begin
+                        # Hermitian matrix, where inv(lufact(A)) generates non-real diagonal elements
+                        for T in (Complex64, Complex128)
+                            A = T[0.650488+0.0im 0.826686+0.667447im; 0.826686-0.667447im 1.81707+0.0im]
+                            H = Hermitian(A)
+                            @test inv(H) ≈ inv(A)
+                            @test ishermitian(Matrix(inv(H)))
+                        end
                     end
                 end
             end
@@ -354,15 +370,6 @@ end
     @test_throws ArgumentError Hermitian(A)
 end
 
-# Unary minus for Symmetric/Hermitian matrices
-@testset "Unary minus for Symmetric/Hermitian matrices" begin
-    A = randn(5, 5)
-    for SH in (Symmetric(A), Hermitian(A))
-        F = Matrix(SH)
-        @test (-SH)::typeof(SH) == -F
-    end
-end
-
 @testset "Issue #17780" begin
     a = randn(2,2)
     a = a'a
@@ -435,15 +442,5 @@ end
         H = T[1/(i + j - 1) for i in 1:8, j in 1:8]
         @test norm(inv(Symmetric(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
         @test norm(inv(Hermitian(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
-    end
-end
-
-@testset "inverse edge case with complex Hermitian" begin
-    # Hermitian matrix, where inv(lufact(A)) generates non-real diagonal elements
-    for T in (Complex64, Complex128)
-        A = T[0.650488+0.0im 0.826686+0.667447im; 0.826686-0.667447im 1.81707+0.0im]
-        H = Hermitian(A)
-        @test inv(H) ≈ inv(A)
-        @test ishermitian(Matrix(inv(H)))
     end
 end
