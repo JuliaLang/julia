@@ -57,7 +57,8 @@ bin/perf%: perf.c perf.h
 
 bin/fperf%: perf.f90
 	mkdir -p mods/$@ #Modules for each binary go in separate directories
-	$(FC) $(FFLAGS) -Jmods/$@ -O$* $< -o $@ $(LIBBLAS) -L$(LIBMDIR) $(LIBM) -lpthread
+#	$(FC) $(FFLAGS) -Jmods/$@ -O$* $< -o $@ $(LIBBLAS) -L$(LIBMDIR) $(LIBM) -lpthread
+	$(FC) $(FFLAGS) -Jmods/$@ -O$* $< -o $@ -lblas -L$(LIBMDIR) $(LIBM) -lpthread
 
 benchmarks/c.csv: \
 	benchmarks/c0.csv \
@@ -73,6 +74,7 @@ benchmarks/fortran.csv: \
 	benchmarks/fortran3.csv
 	cat $^ > $@
 
+
 benchmarks/c%.csv: bin/perf%
 	for t in 1 2 3 4 5; do $<; done >$@
 
@@ -81,7 +83,8 @@ benchmarks/fortran%.csv: bin/fperf%
 
 benchmarks/go.csv: export GOPATH=$(abspath gopath)
 benchmarks/go.csv: perf.go
-	CGO_LDFLAGS="$(LIBBLAS) $(LIBM)" go get github.com/gonum/blas/cgo
+	#CGO_LDFLAGS="$(LIBBLAS) $(LIBM)" go get github.com/gonum/blas/cgo
+	CGO_LDFLAGS="-lblas $(LIBM)" go get github.com/gonum/blas/cgo
 	go get github.com/gonum/matrix/mat64
 	go get github.com/gonum/stat
 	for t in 1 2 3 4 5; do go run $<; done >$@
