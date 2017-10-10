@@ -2439,24 +2439,11 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
     }
 
     if (jl_is_uniontype(a)) {
-        if (sub_msp(b, a, env))
-            return 0;
-        else if (sub_msp(a, b, env))
-            return 1;
-        // Union a is more specific than b if some element of a is more specific than b,
-        // and b is not more specific than any element of a.
+        // Union a is more specific than b if some element of a is more specific than b, but
+        // not vice-versa.
         jl_uniontype_t *u = (jl_uniontype_t*)a;
-        if (partially_morespecific(u->a, b, invariant, env) && !type_morespecific_(b, u->a, invariant, env)) {
-            if (partially_morespecific(b, a, invariant, env))
-                return 0;
-            return 1;
-        }
-        if (partially_morespecific(u->b, b, invariant, env) && !type_morespecific_(b, u->b, invariant, env)) {
-            if (partially_morespecific(b, a, invariant, env))
-                return 0;
-            return 1;
-        }
-        return 0;
+        return ((partially_morespecific(u->a, b, invariant, env) || partially_morespecific(u->b, b, invariant, env)) &&
+                !partially_morespecific(b, a, invariant, env));
     }
 
     if (jl_is_type_type(a) && !invariant) {
@@ -2508,6 +2495,9 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
                 for(size_t i=0; i < jl_nparams(tta); i++) {
                     jl_value_t *apara = jl_tparam(tta,i);
                     jl_value_t *bpara = jl_tparam(ttb,i);
+                    if (!jl_has_free_typevars(apara) && !jl_has_free_typevars(bpara) &&
+                        !jl_types_equal(apara, bpara))
+                        return 0;
                     if (type_morespecific_(apara, bpara, 1, env))
                         ascore += 1;
                     else if (type_morespecific_(bpara, apara, 1, env))
