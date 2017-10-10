@@ -329,9 +329,8 @@ define stringreplace
 	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
 endef
 
-install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
-	@$(MAKE) $(QUIET_MAKE) all
-	@for subdir in $(bindir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
+install-nodoc: all $(build_depsbindir)/stringreplace
+	@for subdir in $(bindir) $(datarootdir)/julia/site/$(VERSDIR) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
 	done
 
@@ -374,16 +373,11 @@ endif
 	$(INSTALL_M) $(JULIAHOME)/contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
-	# Copy documentation
-	cp -R -L $(build_docdir)/* $(DESTDIR)$(docdir)/
-	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
 	# Remove perf suite
 	-rm -rf $(DESTDIR)$(datarootdir)/julia/test/perf/
 	# Remove various files which should not be installed
 	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
 	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
-	# Copy in beautiful new man page
-	$(INSTALL_F) $(build_man1dir)/julia.1 $(DESTDIR)$(man1dir)/
 	# Copy icon and .desktop file
 	mkdir -p $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
 	$(INSTALL_F) $(JULIAHOME)/contrib/julia.svg $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
@@ -415,6 +409,17 @@ endif
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
 	cp -R $(build_sysconfdir)/julia $(DESTDIR)$(sysconfdir)/
+
+install: install-nodoc $(BUILDROOT)/doc/_build/html/en/index.html
+	@for subdir in $(docdir) $(man1dir); do \
+		mkdir -p $(DESTDIR)$$subdir; \
+	done
+
+	# Copy documentation
+	cp -R -L $(build_docdir)/* $(DESTDIR)$(docdir)/
+	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
+	# Copy in beautiful new man page
+	$(INSTALL_F) $(build_man1dir)/julia.1 $(DESTDIR)$(man1dir)/
 
 distclean dist-clean:
 	-rm -fr $(BUILDROOT)/julia-*.tar.gz $(BUILDROOT)/julia*.exe $(BUILDROOT)/julia-*.7z $(BUILDROOT)/julia-$(JULIA_COMMIT)
