@@ -109,7 +109,7 @@
 ; operators that are special forms, not function names
 (define syntactic-operators
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻=))
-           '(:= --> $= && |\|\|| |.| ... ->)))
+           '(:= --> $= && |\|\|| |.| ->)))
 (define syntactic-unary-operators '($ & |::|))
 
 (define syntactic-op? (Set syntactic-operators))

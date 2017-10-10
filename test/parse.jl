@@ -1372,3 +1372,14 @@ end
 @test parse("@foo [1] + [2]") == parse("@foo([1] + [2])")
 @test parse("@Mdl.foo[1] + [2]") == parse("@Mdl.foo([1]) + [2]")
 @test parse("@Mdl.foo [1] + [2]") == parse("@Mdl.foo([1] + [2])")
+
+# Allow ... as an identifier without borking splatting
+let ... = (:)
+    f(x...) = x
+    @test f(1,2) == (1,2)
+    @test f([1,2]...) == (1,2)
+    A = rand(2,3)
+    @test A[..., ...] == A[..., :] == A[:, ...] == A[:, :]
+    ... = 1
+    @test A[..., ..., ...] == A[1, ...] == A[1, 1]
+end
