@@ -50,10 +50,11 @@ gc(); gc()
 s = open(f->f,file,"w")
 @test Mmap.mmap(file) == Array{UInt8}(0) # requested len=0 on empty file
 @test Mmap.mmap(file,Vector{UInt8},0) == Array{UInt8}(0)
-m = Mmap.mmap(file,Vector{UInt8},12)
+s = open(file, "w")
+m = Mmap.mmap(s,Vector{UInt8},12)
 m[:] = b"Hello World\n"
 Mmap.sync!(m)
-finalize(m); m=nothing; gc()
+close(s); finalize(m); m=nothing; gc()
 @test open(x->read(x, String),file) == "Hello World\n"
 
 s = open(file, "r")
