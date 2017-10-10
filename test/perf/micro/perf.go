@@ -227,7 +227,7 @@ var benchmarks = []struct {
 	fn   func(*testing.B)
 }{
 	{
-		name: "fib",
+		name: "recursion_fibonacci",
 		fn: func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				if fib(20) != 6765 {
@@ -238,7 +238,7 @@ var benchmarks = []struct {
 	},
 
 	{
-		name: "parse_int",
+		name: "parse_integers",
 		fn: func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				for k := 0; k < 1000; k++ {
@@ -253,7 +253,7 @@ var benchmarks = []struct {
 	},
 
 	{
-		name: "mandel",
+		name: "iteration_mandelbrot",
 		fn: func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				if mandelperf() != 14791 {
@@ -264,7 +264,7 @@ var benchmarks = []struct {
 	},
 
 	{
-		name: "quicksort",
+		name: "recursion_quicksort",
 		fn: func(b *testing.B) {
 			lst := make([]float64, 5000)
 			b.ResetTimer()
@@ -278,7 +278,7 @@ var benchmarks = []struct {
 	},
 
 	{
-		name: "pi_sum",
+		name: "iteration_pi_sum",
 		fn: func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				if math.Abs(pisum()-1.644834071848065) >= 1e-6 {
@@ -289,7 +289,7 @@ var benchmarks = []struct {
 	},
 
 	{
-		name: "rand_mat_stat",
+		name: "matrix_statistics",
 		fn: func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				c1, c2 := randmatstat(1000)
@@ -302,7 +302,7 @@ var benchmarks = []struct {
 	},
 
 	{
-		name: "rand_mat_mul",
+		name: "matrix_multiply",
 		fn: func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				c := randmatmul(1000)
