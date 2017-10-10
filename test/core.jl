@@ -350,6 +350,20 @@ c23558(n,k) =
     end
 @test c23558(10, 5) == 252
 
+# issue #23996
+function foo23996(xs...)
+    rets = []
+    bar(::Int) = push!(rets, 1)
+    foobar() = push!(rets, 3)
+    bar(::AbstractFloat) = push!(rets, 2)
+    bar(::Bool) = foobar()
+    for x in xs
+	bar(x)
+    end
+    rets
+end
+@test foo23996(1,2.0,false) == [1,2,3]
+
 # variable scope, globals
 glob_x = 23
 function glotest()
