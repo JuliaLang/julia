@@ -295,11 +295,11 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
     // keep this function small, since we want to keep the stack frame
     // leading up to this also quite small
-    _julia_init(rel);
 #ifdef COPY_STACKS
     char __stk;
     jl_set_base_ctx(&__stk); // separate function, to record the size of a stack frame
 #endif
+    _julia_init(rel);
 }
 
 static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
