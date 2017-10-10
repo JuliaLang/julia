@@ -284,7 +284,7 @@ void NOINLINE jl_set_base_ctx(char *__stk)
     jl_ptls_t ptls = jl_get_ptls_states();
     ptls->stackbase = (char*)(((uintptr_t)__stk + sizeof(*__stk))&-16); // also ensures stackbase is 16-byte aligned
 #ifndef ASM_COPY_STACKS
-    if (jl_setjmp(ptls->base_ctx, 1)) {
+    if (jl_setjmp(ptls->base_ctx, 0)) {
         start_task();
     }
 #endif
