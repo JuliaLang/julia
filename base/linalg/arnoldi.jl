@@ -370,8 +370,10 @@ iterations derived from [`eigs`](@ref).
 **Outputs**
 
 * `svd`: An `SVD` object containing the left singular vectors, the requested values, and the
-  right singular vectors. If `ritzvec = false`, the left and right singular vectors will be
-  empty.
+right singular vectors. If `ritzvec = false`, the left and right singular vectors will be empty.
+`U`, `S`, `V` and `Vt` can be obtained from the SVD object with `Z[:U]`, `Z[:S]`, `Z[:V]`
+and `Z[:Vt]` (where `Z = svds(A)[1]`), such that `A = U*diagm(S)*Vt`. Internally `Vt` is stored
+and hence `Vt` is more efficient to extract than `V`.
 * `nconv`: Number of converged singular values.
 * `niter`: Number of iterations.
 * `nmult`: Number of matrix--vector products used.
@@ -379,14 +381,35 @@ iterations derived from [`eigs`](@ref).
 
 # Examples
 ```jldoctest
-julia> A = spdiagm(1:4);
+julia> A = spdiagm(1:5);
 
-julia> s = svds(A, nsv = 2)[1];
+julia> Z = svds(A, nsv = 2)[1];
 
-julia> s[:S]
+julia> Z[:U]
+5×2 Array{Float64,2}:
+ -2.35514e-16   2.35514e-16
+ -3.14018e-16  -3.92523e-17
+ -7.85046e-16  -5.88785e-17
+  7.85046e-16   1.0
+  1.0           5.49532e-16
+
+julia> Z[:S]
 2-element Array{Float64,1}:
+ 5.0
  4.0
- 3.0
+
+julia> Z[:Vt]
+5×2 Array{Float64,2}:
+ -2.35514e-16  1.57009e-16
+  0.0          0.0
+ -7.85046e-16  5.88785e-17
+  7.06542e-16  1.0
+  1.0          3.92523e-16
+
+julia> Z[:V]
+2×5 Array{Float64,2}:
+ -2.35514e-16  0.0  -7.85046e-16  7.06542e-16  1.0
+  1.57009e-16  0.0   5.88785e-17  1.0          3.92523e-16
 ```
 
 !!! note "Implementation"
