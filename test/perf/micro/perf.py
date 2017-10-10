@@ -43,13 +43,13 @@ def randmatstat(t):
     n = 5
     v = zeros(t)
     w = zeros(t)
-    for i in range(1,t):
+    for i in range(t):
         a = randn(n, n)
         b = randn(n, n)
         c = randn(n, n)
         d = randn(n, n)
-        P = concatenate((a, b, c, d))
-        Q = concatenate((concatenate((a, b)), concatenate((c, d))),axis=1)
+        P = concatenate((a, b, c, d), axis=1)
+        Q = concatenate((concatenate((a, b), axis=1), concatenate((c, d), axis=1)), axis=0)
         v[i] = trace(matrix_power(dot(P.T,P), 4))
         w[i] = trace(matrix_power(dot(Q.T,Q), 4))
     return (std(v)/mean(v), std(w)/mean(w))
