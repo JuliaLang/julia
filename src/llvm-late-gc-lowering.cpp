@@ -255,9 +255,9 @@ struct State {
     // The result of the local analysis
     std::map<BasicBlock *, BBState> BBStates;
 
-    // Load refinement map. All uses of the keys can be combined with uses
-    // of the value (but not the other way around).
-    std::map<int, int> LoadRefinements;
+    // Refinement map. If all of the values are rooted (-1 means a globally rooted value),
+    // the key is already rooted (but not the other way around).
+    std::map<int, SmallVector<int, 1>> Refinements;
 
     // GC preserves map. All safepoints dominated by the map key, but not any
     // of its uses need to preserve the values listed in the map value.
@@ -334,7 +334,7 @@ private:
     Function *big_alloc_func;
     CallInst *ptlsStates;
 
-    void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, int RefinedPtr = -2);
+    void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
     void NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses);
     void NoteUse(State &S, BBState &BBS, Value *V) {
         NoteUse(S, BBS, V, BBS.UpExposedUses);
@@ -575,7 +575,7 @@ static void NoteDef(State &S, BBState &BBS, int Num, const std::vector<int> &Saf
     }
 }
 
-void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, int RefinedPtr) {
+void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr) {
     int Num = -1;
     Type *RT = Def->getType();
     if (isSpecialPtr(RT)) {
@@ -591,8 +591,8 @@ void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const st
         std::vector<int> Nums = NumberVector(S, Def);
         for (int Num : Nums) {
             NoteDef(S, BBS, Num, SafepointsSoFar);
-            if (RefinedPtr != -2)
-                S.LoadRefinements[Num] = RefinedPtr;
+            if (!RefinedPtr.empty())
+                S.Refinements[Num] = RefinedPtr;
         }
         return;
     }
@@ -600,8 +600,8 @@ void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const st
         return;
     }
     NoteDef(S, BBS, Num, SafepointsSoFar);
-    if (RefinedPtr != -2)
-        S.LoadRefinements[Num] = RefinedPtr;
+    if (!RefinedPtr.empty())
+        S.Refinements[Num] = std::move(RefinedPtr);
 }
 
 static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI) {
@@ -814,21 +814,21 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 // object we're loading from is, so we can refine uses
                 // of this object to uses of the object we're loading
                 // from.
-                int RefinedPtr = -2;
+                SmallVector<int, 1> RefinedPtr{};
                 if (isLoadFromImmut(LI) && isSpecialPtr(LI->getPointerOperand()->getType())) {
-                    RefinedPtr = Number(S, LI->getPointerOperand());
+                    RefinedPtr.push_back(Number(S, LI->getPointerOperand()));
                 } else if (LI->getType()->isPointerTy() &&
                     isSpecialPtr(LI->getType()) &&
                     LooksLikeFrameRef(LI->getPointerOperand())) {
                     // Loads from a jlcall argument array
-                    RefinedPtr = -1;
+                    RefinedPtr.push_back(-1);
                 }
                 else if (isLoadFromConstGV(LI)) {
                     // If this is a const load from a global,
                     // we know that the object is a constant as well and doesn't need rooting.
-                    RefinedPtr = -1;
+                    RefinedPtr.push_back(-1);
                 }
-                MaybeNoteDef(S, BBS, LI, BBS.Safepoints, RefinedPtr);
+                MaybeNoteDef(S, BBS, LI, BBS.Safepoints, std::move(RefinedPtr));
                 NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
             } else if (SelectInst *SI = dyn_cast<SelectInst>(&I)) {
                 // We need to insert an extra select for the GC root
@@ -837,23 +837,40 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 if (getValueAddrSpace(SI) != AddressSpace::Tracked) {
                     if (S.AllPtrNumbering.find(SI) != S.AllPtrNumbering.end())
                         continue;
-                    LiftSelect(S, SI);
+                    auto Num = LiftSelect(S, SI);
+                    if (Num == -1)
+                        continue;
+                    auto SelectBase = cast<SelectInst>(S.ReversePtrNumbering[Num]);
+                    SmallVector<int, 1> RefinedPtr{Number(S, SelectBase->getTrueValue()),
+                            Number(S, SelectBase->getFalseValue())};
+                    S.Refinements[Num] = std::move(RefinedPtr);
                 } else {
-                    MaybeNoteDef(S, BBS, SI, BBS.Safepoints);
+                    SmallVector<int, 1> RefinedPtr{Number(S, SI->getTrueValue()),
+                            Number(S, SI->getFalseValue())};
+                    MaybeNoteDef(S, BBS, SI, BBS.Safepoints, std::move(RefinedPtr));
                     NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
                 }
             } else if (PHINode *Phi = dyn_cast<PHINode>(&I)) {
                 if (!isSpecialPtr(Phi->getType())) {
                     continue;
                 }
+                auto nIncoming = Phi->getNumIncomingValues();
                 // We need to insert an extra phi for the GC root
                 if (getValueAddrSpace(Phi) != AddressSpace::Tracked) {
                     if (S.AllPtrNumbering.find(Phi) != S.AllPtrNumbering.end())
                         continue;
-                    LiftPhi(S, Phi);
+                    auto Num = LiftPhi(S, Phi);
+                    auto lift = cast<PHINode>(S.ReversePtrNumbering[Num]);
+                    SmallVector<int, 1> RefinedPtr(nIncoming);
+                    for (unsigned i = 0; i < nIncoming; ++i)
+                        RefinedPtr[i] = Number(S, lift->getIncomingValue(i));
+                    S.Refinements[Num] = std::move(RefinedPtr);
                 } else {
-                    MaybeNoteDef(S, BBS, Phi, BBS.Safepoints);
-                    for (unsigned i = 0; i < Phi->getNumIncomingValues(); ++i) {
+                    SmallVector<int, 1> RefinedPtr(nIncoming);
+                    for (unsigned i = 0; i < nIncoming; ++i)
+                        RefinedPtr[i] = Number(S, Phi->getIncomingValue(i));
+                    MaybeNoteDef(S, BBS, Phi, BBS.Safepoints, std::move(RefinedPtr));
+                    for (unsigned i = 0; i < nIncoming; ++i) {
                         BBState &IncomingBBS = S.BBStates[Phi->getIncomingBlock(i)];
                         NoteUse(S, IncomingBBS, Phi->getIncomingValue(i), IncomingBBS.PhiOuts);
                     }
@@ -862,14 +879,14 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
             } else if (auto *ASCI = dyn_cast<AddrSpaceCastInst>(&I)) {
                 if (getValueAddrSpace(ASCI) == AddressSpace::Tracked) {
-                    int RefinedPtr = -2;
+                    SmallVector<int, 1> RefinedPtr{};
                     auto origin = ASCI->getPointerOperand()->stripPointerCasts();
                     if (auto LI = dyn_cast<LoadInst>(origin)) {
                         if (isLoadFromConstGV(LI)) {
-                            RefinedPtr = -1;
+                            RefinedPtr.push_back(-1);
                         }
                     }
-                    MaybeNoteDef(S, BBS, ASCI, BBS.Safepoints, RefinedPtr);
+                    MaybeNoteDef(S, BBS, ASCI, BBS.Safepoints, std::move(RefinedPtr));
                 }
             } else if (auto *AI = dyn_cast<AllocaInst>(&I)) {
                 if (isSpecialPtr(AI->getAllocatedType()) && !AI->isArrayAllocation() &&
@@ -982,11 +999,21 @@ void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
         }
         // Apply refinements
         for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
-            if (!S.LoadRefinements.count(Idx))
+            if (!S.Refinements.count(Idx))
                 continue;
-            int RefinedPtr = S.LoadRefinements[Idx];
-            if (RefinedPtr == -1 || HasBitSet(LS, RefinedPtr))
+            auto &RefinedPtr = S.Refinements[Idx];
+            if (RefinedPtr.empty())
+                continue;
+            bool rooted = true;
+            for (auto RefPtr: RefinedPtr) {
+                if (RefPtr == -1 || HasBitSet(LS, RefPtr))
+                    continue;
+                rooted = false;
+                break;
+            }
+            if (rooted) {
                 LS[Idx] = 0;
+            }
         }
         // If the function has GC preserves, figure out whether we need to
         // add in any extra live values.
