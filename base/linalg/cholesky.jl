@@ -460,6 +460,7 @@ function A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix)
     end
 end
 
+isposdef(C::CholeskyPivoted) = C.rank > 0
 isposdef(C::Cholesky) = C.info == 0
 
 function det(C::Cholesky)
