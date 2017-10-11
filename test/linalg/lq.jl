@@ -20,6 +20,10 @@ a2img  = randn(n,n)/2
 breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
+# helper functions to unambiguously recover explicit forms of an LQPackedQ
+squareQ(Q::LinAlg.LQPackedQ) = A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 2)))
+truncatedQ(Q::LinAlg.LQPackedQ) = convert(Array, Q)
+
 @testset for eltya in (Float32, Float64, Complex64, Complex128)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
@@ -50,13 +54,13 @@ bimg  = randn(n,2)/2
                     @test size(lqa[:Q],3) == 1
                     @test Base.LinAlg.getq(lqa) == lqa[:Q]
                     @test_throws KeyError lqa[:Z]
-                    @test full(lqa') ≈ a'
+                    @test Array(lqa') ≈ a'
                     @test lqa * lqa' ≈ a * a'
                     @test lqa' * lqa ≈ a' * a
-                    @test q*full(q, thin = false)' ≈ eye(eltya,n)
+                    @test q*squareQ(q)' ≈ eye(eltya,n)
                     @test l*q ≈ a
-                    @test full(lqa) ≈ a
-                    @test full(copy(lqa)) ≈ a
+                    @test Array(lqa) ≈ a
+                    @test Array(copy(lqa)) ≈ a
                     lstring = sprint(show,l)
                     qstring = sprint(show,q)
                     @test sprint(show,lqa) == "$(typeof(lqa)) with factors L and Q:\n$lstring\n$qstring"
@@ -64,18 +68,18 @@ bimg  = randn(n,2)/2
                 @testset "Binary ops" begin
                     @test a*(lqa\b) ≈ b atol=3000ε
                     @test lqa*b ≈ qra[:Q]*qra[:R]*b atol=3000ε
-                    @test A_mul_Bc(eye(eltyb,size(q.factors,2)),q)*full(q,thin=false) ≈ eye(n) atol=5000ε
+                    @test A_mul_Bc(eye(eltyb,size(q.factors,2)),q)*squareQ(q) ≈ eye(n) atol=5000ε
                     if eltya != Int
                         @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                     end
-                    @test q*b ≈ full(q,thin=false)*b atol=100ε
-                    @test q.'*b ≈ full(q,thin=false).'*b atol=100ε
-                    @test q'*b ≈ full(q,thin=false)'*b atol=100ε
-                    @test a*q ≈ a*full(q,thin=false) atol=100ε
-                    @test a*q.' ≈ a*full(q,thin=false).' atol=100ε
-                    @test a*q' ≈ a*full(q,thin=false)' atol=100ε
-                    @test a'*q ≈ a'*full(q,thin=false) atol=100ε
-                    @test a'*q' ≈ a'*full(q,thin=false)' atol=100ε
+                    @test q*b ≈ squareQ(q)*b atol=100ε
+                    @test q.'*b ≈ squareQ(q).'*b atol=100ε
+                    @test q'*b ≈ squareQ(q)'*b atol=100ε
+                    @test a*q ≈ a*squareQ(q) atol=100ε
+                    @test a*q.' ≈ a*squareQ(q).' atol=100ε
+                    @test a*q' ≈ a*squareQ(q)' atol=100ε
+                    @test a'*q ≈ a'*squareQ(q) atol=100ε
+                    @test a'*q' ≈ a'*squareQ(q)' atol=100ε
                     @test_throws DimensionMismatch q*b[1:n1 + 1]
                     @test_throws DimensionMismatch Ac_mul_B(q,ones(eltya,n+2,n+2))
                     @test_throws DimensionMismatch ones(eltyb,n+2,n+2)*q
@@ -83,9 +87,9 @@ bimg  = randn(n,2)/2
                         # use this to test 2nd branch in mult code
                         pad_a = vcat(eye(a), a)
                         pad_b = hcat(eye(b), b)
-                        @test pad_a*q ≈ pad_a*full(q,thin=false) atol=100ε
-                        @test q.'*pad_b ≈ full(q,thin=false).'*pad_b atol=100ε
-                        @test q'*pad_b ≈ full(q,thin=false)'*pad_b atol=100ε
+                        @test pad_a*q ≈ pad_a*squareQ(q) atol=100ε
+                        @test q.'*pad_b ≈ squareQ(q).'*pad_b atol=100ε
+                        @test q'*pad_b ≈ squareQ(q)'*pad_b atol=100ε
                     end
                 end
             end
@@ -94,10 +98,10 @@ bimg  = randn(n,2)/2
         @testset "Matmul with LQ factorizations" begin
             lqa = lqfact(a[:,1:n1])
             l,q = lqa[:L], lqa[:Q]
-            @test full(q)*full(q)' ≈ eye(eltya,n1)
-            @test full(q,thin=false)'*full(q,thin=false) ≈ eye(eltya, n1)
+            @test truncatedQ(q)*truncatedQ(q)' ≈ eye(eltya,n1)
+            @test squareQ(q)'*squareQ(q) ≈ eye(eltya, n1)
             @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
-            @test Ac_mul_B!(q,full(q)) ≈ eye(eltya,n1)
+            @test Ac_mul_B!(q, truncatedQ(q)) ≈ eye(eltya,n1)
             @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
             @test_throws BoundsError size(q,-1)
         end
