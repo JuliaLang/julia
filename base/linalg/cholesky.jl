@@ -460,7 +460,7 @@ function A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix)
     end
 end
 
-isposdef(C::Cholesky) = C.info == 0
+isposdef(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
 
 function det(C::Cholesky)
     isposdef(C) || throw(PosDefException(C.info))
