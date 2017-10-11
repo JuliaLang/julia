@@ -743,6 +743,130 @@ begin
     @test try error() end === nothing
 end
 
+# issue #12806
+let i = 0, x = 0
+    for outer i = 1:10
+        try
+            break
+        finally
+            x = 1
+        end
+    end
+    @test i == 1
+    @test x == 1
+end
+
+let i = 1, a = []
+    while true
+        try
+            push!(a, i)
+            i += 1
+            i < 5 && continue
+            break
+        catch
+            push!(a, "catch")
+        finally
+            push!(a, "finally")
+        end
+    end
+    @test a == [1, "finally", 2, "finally", 3, "finally", 4, "finally"]
+end
+
+function _two_finally(n)
+    a = []
+    for i = 1:5
+        push!(a, i)
+        try
+            try
+                n == 1 && break
+                n == 2 && i > 1 && return [copy(a), a]
+            finally
+                push!(a, "finally 1")
+            end
+        finally
+            push!(a, "finally 2")
+        end
+    end
+    return a
+end
+@test _two_finally(1) == [1, "finally 1", "finally 2"]
+@test _two_finally(2) == [[1, "finally 1", "finally 2", 2],
+                          [1, "finally 1", "finally 2", 2, "finally 1", "finally 2"]]
+
+let i = 0
+    caught = nothing
+    try
+        try
+            error("oops")
+        catch
+            throw(42)
+        finally
+            i = 1
+        end
+    catch e
+        caught = e
+    end
+    @test caught == 42
+    @test i == 1
+end
+
+let i = 0, a = []
+    for i = 1:2
+        try
+            continue
+        finally
+            push!(a, "finally")
+        end
+        push!(a, "oops")
+    end
+    @test a == ["finally", "finally"]
+end
+
+# test from #13660
+let x = 0, y = 0, z = 0
+    for i = 1:2
+        try
+            i == 1 && continue
+        finally
+            x = 11
+        end
+        try
+            i == 2 && throw(42)
+        catch
+            break
+        finally
+            y = 12
+        end
+    end
+    for i = 1:2
+        try i == 1 && break
+        finally z = 13
+        end
+    end
+    @test x == 11
+    @test y == 12
+    @test z == 13
+end
+
+function test12806()
+    let catchb = false, catchc = false, catchr = false, a = []
+        for i in 1:3
+            try
+                throw("try err")
+            catch e
+                i == 1 && break
+                i == 2 && continue
+                i == 3 && return (catchb, catchc, catchr, a)
+            finally
+                i == 1 && (catchb = true; continue)
+                i == 2 && (catchc = true; )
+                i == 3 && (catchr = true; push!(a, 1))
+            end
+        end
+    end
+end
+@test test12806() == (true, true, false, [1])
+
 # finalizers
 let A = [1]
     local x = 0
@@ -4358,6 +4482,16 @@ end
 (g1090(x::T)::T) where {T} = x+1.0
 @test g1090(1) === 2
 @test g1090(Float32(3)) === Float32(4)
+
+# error during conversion to return type
+function f1090_err()::Int
+    try
+        return ""
+    catch
+        8
+    end
+end
+@test_throws MethodError f1090_err()
 
 function f17613_2(x)::Float64
     try
