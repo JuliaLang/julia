@@ -194,37 +194,39 @@ c = 3::Int64
 If Julia were a language that made more liberal use of ASCII characters, the splatting operator
 might have been written as `...->` instead of `...`.
 
-### Is the last assigned variable always returned?
+### What is the return value of an assignment?
 
-No! The operator `=` always returns the right-hand side, therefore:
+The operator `=` always returns the right-hand side, therefore:
 
 ```jldoctest
-function getthree()
+function threeint()
     x::Int = 3.
     x # returns variable x
 end
-function getthreequick()
+function threefloat()
     x::Int = 3. # returns 3.
 end
 
-typeof(getthree()) === Int
-typeof(getthreequick()) === Float64
+typeof(threeint()) === Int
+typeof(threefloat()) === Float64
 ```
 
 and similarly:
 
 ```jldoctest
 function threetup()
-    x,y = [3,3]
+    x,y = [3, 3]
     x,y # returns a tuple
 end
-threearr() = x,y = [3,3] # returns an array
+function threearr()
+    x,y = [3, 3] # returns an array
+end
 
 typeof(threetup()) === Tuple{Int,Int}
 typeof(threearr()) === Array{Int64,1}
 ```
 
-Thus, for the sake of readability, it is often worth writing explicit return statements.
+Thus, for the sake of readability, it is often worth writing return statements on a new line.
 
 ## Types, type declarations, and constructors
 
