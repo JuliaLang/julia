@@ -316,6 +316,8 @@ Library improvements
 
   * REPL Undo via Ctrl-/ and Ctrl-_
 
+  * `diagm` now accepts several diagonal index/vector pairs ([#24047]).
+
   * New function `equalto(x)`, which returns a function that compares its argument to `x`
     using `isequal` ([#23812]).
 
@@ -467,10 +469,16 @@ Deprecated or removed
   * The tuple-of-types form of `cfunction`, `cfunction(f, returntype, (types...))`, has been deprecated
     in favor of the tuple-type form `cfunction(f, returntype, Tuple{types...})` ([#23066]).
 
+  * `diagm(v::AbstractVector, k::Integer=0)` has been deprecated in favor of
+    `diagm(k => v)` ([#24047]).
+
+  * `diagm(x::Number)` has been deprecated in favor of `fill(x, 1, 1)` ([#24047]).
+
   * `diagm(A::SparseMatrixCSC)` has been deprecated in favor of
     `spdiagm(sparsevec(A))` ([#23341]).
 
-  * `diagm(A::BitMatrix)` has been deprecated, use `diagm(vec(A))` instead ([#23373]).
+  * `diagm(A::BitMatrix)` has been deprecated, use `diagm(0 => vec(A))` or
+    `BitMatrix(Diagonal(vec(A)))` instead ([#23373], [#24047]).
 
   * `ℯ` (written as `\mscre<TAB>` or `\euler<TAB>`) is now the only (by default) exported
     name for Euler's number, and the type has changed from `Irrational{:e}` to

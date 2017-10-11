@@ -232,7 +232,7 @@ end
     tmp[rng...] = A[rng...]
     @test  tmp == cat(3,zeros(Int,2,3),[0 0 0; 0 47 52],zeros(Int,2,3),[0 0 0; 0 127 132])
 
-    @test cat([1,2],1,2,3.,4.,5.) == diagm([1,2,3.,4.,5.])
+    @test cat([1,2],1,2,3.,4.,5.) == diagm(0 => [1,2,3.,4.,5.])
     blk = [1 2;3 4]
     tmp = cat([1,3],blk,blk)
     @test tmp[1:2,1:2,1] == blk
@@ -2044,7 +2044,7 @@ end # module AutoRetType
 @testset "concatenations of dense matrices/vectors yield dense matrices/vectors" begin
     N = 4
     densevec = ones(N)
-    densemat = diagm(ones(N))
+    densemat = diagm(0 => ones(N))
     # Test that concatenations of homogeneous pairs of either dense matrices or dense vectors
     # (i.e., Matrix-Matrix concatenations, and Vector-Vector concatenations) yield dense arrays
     for densearray in (densevec, densemat)

@@ -598,7 +598,7 @@ end
     a116 = reshape(1:(ni*nj), ni, nj)
     s116 = sparse(a116)
 
-    ad116 = diagm(diag(a116))
+    ad116 = diagm(0 => diag(a116))
     sd116 = sparse(ad116)
 
     for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
@@ -1413,11 +1413,11 @@ end
     @test spdiagm(0 => ones(2),  1 => ones(2)) == [1.0 1.0 0.0; 0.0 1.0 1.0; 0.0 0.0 0.0]
 
     for (x, y) in ((rand(5), rand(4)),(sparse(rand(5)), sparse(rand(4))))
-        @test spdiagm(-1 => x)::SparseMatrixCSC         == diagm(x, -1)
-        @test spdiagm( 0 => x)::SparseMatrixCSC         == diagm(x,  0) == sparse(Diagonal(x))
-        @test spdiagm(-1 => x)::SparseMatrixCSC         == diagm(x, -1)
-        @test spdiagm(0 => x, -1 => y)::SparseMatrixCSC == diagm(x) + diagm(y, -1)
-        @test spdiagm(0 => x,  1 => y)::SparseMatrixCSC == diagm(x) + diagm(y,  1)
+        @test spdiagm(-1 => x)::SparseMatrixCSC         == diagm(-1 => x)
+        @test spdiagm( 0 => x)::SparseMatrixCSC         == diagm( 0 => x) == sparse(Diagonal(x))
+        @test spdiagm(-1 => x)::SparseMatrixCSC         == diagm(-1 => x)
+        @test spdiagm(0 => x, -1 => y)::SparseMatrixCSC == diagm(0 => x, -1 => y)
+        @test spdiagm(0 => x,  1 => y)::SparseMatrixCSC == diagm(0 => x,  1 => y)
     end
     # promotion
     @test spdiagm(0 => [1,2], 1 => [3.5], -1 => [4+5im]) == [1 3.5; 4+5im 2]
@@ -1777,8 +1777,8 @@ end
 @testset "sparse and dense concatenations" begin
     N = 4
     densevec = ones(N)
-    densemat = diagm(ones(N))
-    spmat = sparse(Diagonal(ones(N)))
+    densemat = diagm(0 => densevec)
+    spmat = spdiagm(0 => densevec)
     # Test that concatenations of pairs of sparse matrices yield sparse arrays
     @test issparse(vcat(spmat, spmat))
     @test issparse(hcat(spmat, spmat))

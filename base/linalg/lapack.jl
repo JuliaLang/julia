@@ -1161,17 +1161,17 @@ of `A`. `fact` may be `E`, in which case `A` will be equilibrated and copied
 to `AF`; `F`, in which case `AF` and `ipiv` from a previous `LU` factorization
 are inputs; or `N`, in which case `A` will be copied to `AF` and then
 factored. If `fact = F`, `equed` may be `N`, meaning `A` has not been
-equilibrated; `R`, meaning `A` was multiplied by `diagm(R)` from the left;
-`C`, meaning `A` was multiplied by `diagm(C)` from the right; or `B`, meaning
-`A` was multiplied by `diagm(R)` from the left and `diagm(C)` from the right.
+equilibrated; `R`, meaning `A` was multiplied by `Diagonal(R)` from the left;
+`C`, meaning `A` was multiplied by `Diagonal(C)` from the right; or `B`, meaning
+`A` was multiplied by `Diagonal(R)` from the left and `Diagonal(C)` from the right.
 If `fact = F` and `equed = R` or `B` the elements of `R` must all be positive.
 If `fact = F` and `equed = C` or `B` the elements of `C` must all be positive.
 
 Returns the solution `X`; `equed`, which is an output if `fact` is not `N`,
 and describes the equilibration that was performed; `R`, the row equilibration
 diagonal; `C`, the column equilibration diagonal; `B`, which may be overwritten
-with its equilibrated form `diagm(R)*B` (if `trans = N` and `equed = R,B`) or
-`diagm(C)*B` (if `trans = T,C` and `equed = C,B`); `rcond`, the reciprocal
+with its equilibrated form `Diagonal(R)*B` (if `trans = N` and `equed = R,B`) or
+`Diagonal(C)*B` (if `trans = T,C` and `equed = C,B`); `rcond`, the reciprocal
 condition number of `A` after equilbrating; `ferr`, the forward error bound for
 each solution vector in `X`; `berr`, the forward error bound for each solution
 vector in `X`; and `work`, the reciprocal pivot growth factor.

@@ -17,7 +17,7 @@ srand(1)
         UU+=im*convert(Matrix{elty}, randn(n,n))
     end
     D = Diagonal(dd)
-    DM = diagm(dd)
+    DM = Matrix(Diagonal(dd))
 
     @testset "constructor" begin
         for x in (dd, GenericArray(dd))
@@ -121,7 +121,7 @@ srand(1)
     end
     d = convert(Vector{elty}, randn(n))
     D2 = Diagonal(d)
-    DM2= diagm(d)
+    DM2= Matrix(Diagonal(d))
     @testset "Binary operations" begin
         for op in (+, -, *)
             @test Array(op(D, D2)) ≈ op(DM, DM2)
@@ -222,7 +222,7 @@ srand(1)
     #logdet
     if relty <: Real
         ld=convert(Vector{relty},rand(n))
-        @test logdet(Diagonal(ld)) ≈ logdet(diagm(ld))
+        @test logdet(Diagonal(ld)) ≈ logdet(Matrix(Diagonal(ld)))
     end
 
     @testset "similar" begin

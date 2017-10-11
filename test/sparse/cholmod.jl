@@ -643,9 +643,9 @@ Fnew = deserialize(b)
 
 # test \ for Factor and StridedVecOrMat
 let x = rand(5),
-    A = cholfact(sparse(diagm(x.\1)))
+    A = cholfact(sparse(Diagonal(x.\1)))
     @test A\view(ones(10),1:2:10) ≈ x
-    @test A\view(eye(5,5),:,:) ≈ diagm(x)
+    @test A\view(eye(5,5),:,:) ≈ Matrix(Diagonal(x))
 end
 
 # Real factorization and complex rhs
