@@ -223,7 +223,7 @@ function threearr()
 end
 
 typeof(threetup()) === Tuple{Int,Int}
-typeof(threearr()) === Array{Int64,1}
+typeof(threearr()) === Array{Int,1}
 ```
 
 Thus, for the sake of readability, it is often worth writing return statements on a new line.
