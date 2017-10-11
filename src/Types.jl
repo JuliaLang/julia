@@ -10,8 +10,8 @@ import Pkg3: depots
 
 export SHA1, VersionRange, VersionSpec, PackageSpec, UpgradeLevel, EnvCache,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
-    project_resolve!, registry_resolve!, ensure_resolved, manifest_info,
-    registered_uuids, registered_paths, registered_uuid, registered_name,
+    project_resolve!, manifest_resolve!, registry_resolve!, ensure_resolved,
+    manifest_info, registered_uuids, registered_paths, registered_uuid, registered_name,
     git_file_stream, read_project, read_manifest, pathrepr
 
 ## ordering of UUIDs ##
@@ -169,7 +169,7 @@ mutable struct PackageSpec
     version::VersionTypes
     mode::Symbol
     PackageSpec(name::String, uuid::UUID, version::VersionTypes) =
-        new(name, uuid, version)
+        new(name, uuid, version, :project)
 end
 PackageSpec(name::String, uuid::UUID) =
     PackageSpec(name, uuid, VersionSpec())
@@ -424,28 +424,51 @@ end
 ## resolving packages from name or uuid ##
 
 """
-Disambiguate name-only and uuid-only package specifications using only
-information in the project file.
+Disambiguate name/uuid package specifications using project info.
 """
 function project_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
-    deps = env.project["deps"]
-    depr = Dict(uuid => name for (uuid, name) in deps)
-    length(deps) == length(depr) || # TODO: handle this somehow?
+    uuids = env.project["deps"]
+    names = Dict(uuid => name for (uuid, name) in uuids)
+    length(uuids) < length(names) && # TODO: handle this somehow?
         warn("duplicate UUID found in project file's [deps] section")
     for pkg in pkgs
-        if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(deps)
-            pkg.uuid = deps[pkg.name]
+        pkg.mode == :project || continue
+        if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(uuids)
+            pkg.uuid = uuids[pkg.name]
         end
-        if has_uuid(pkg) && !has_name(pkg) && pkg.uuid in keys(depr)
-            pkg.name = depr[pkg.uuid]
+        if has_uuid(pkg) && !has_name(pkg) && pkg.uuid in keys(names)
+            pkg.name = names[pkg.uuid]
         end
     end
     return pkgs
 end
 
 """
-Disambiguate name-only and uuid-only package specifications using only
-information from registries.
+Disambiguate name/uuid package specifications using manifest info.
+"""
+function manifest_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
+    uuids = Dict{String,Vector{String}}()
+    names = Dict{String,String}()
+    for (name, infos) in env.manifest, info in infos
+        haskey(info, "uuid") || continue
+        uuid = info["uuid"]
+        push!(get!(uuids, name, String[]), uuid)
+        names[uuid] = name # can be duplicate but doesn't matter
+    end
+    for pkg in pkgs
+        pkg.mode == :manifest || continue
+        if has_name(pkg) && !has_uuid(pkg) && pkg.name in keys(uuids)
+            length(uuids[pkg.name]) == 1 && (pkg.uuid = uuids[pkg.name][1])
+        end
+        if has_uuid(pkg) && !has_name(pkg) && pkg.uuid in keys(names)
+            pkg.name = names[pkg.uuid]
+        end
+    end
+    return pkgs
+end
+
+"""
+Disambiguate name/uuid package specifications using registry info.
 """
 function registry_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     # if there are no half-specified packages, return early

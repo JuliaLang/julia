@@ -162,6 +162,7 @@ function do_rm!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     isempty(pkgs) &&
         cmderror("`rm` – list packages to remove")
     project_resolve!(env, pkgs)
+    manifest_resolve!(env, pkgs)
     ensure_resolved(env, pkgs)
     Pkg3.Operations.rm(env, pkgs)
 end
@@ -224,6 +225,7 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         last_token_type = token[1]
     end
     project_resolve!(env, pkgs)
+    manifest_resolve!(env, pkgs)
     ensure_resolved(env, pkgs)
     if isempty(pkgs)
         for (name::String, uuid::UUID) in env.project["deps"]
