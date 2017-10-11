@@ -503,6 +503,13 @@ Deprecated or removed
 
   * `contains(eq, itr, item)` is deprecated in favor of `any` with a predicate ([#23716]).
 
+  * `spdiagm(x::AbstractVector)` has been deprecated in favor of `sparse(Diagonal(x))`
+    alternatively `spdiagm(0 => x)` ([#23757]).
+
+  * `spdiagm(x::AbstractVector, d::Integer)` and `spdiagm(x::Tuple{<:AbstractVector}, d::Tuple{<:Integer})`
+    have been deprecated in favor of `spdiagm(d => x)` and `spdiagm(d[1] => x[1], d[2] => x[2], ...)`
+    respectively. The new `spdiagm` implementation now always returns a square matrix ([#23757]).
+
   * Constructors for `LibGit2.UserPasswordCredentials` and `LibGit2.SSHCredentials` which take a
     `prompt_if_incorrect` argument are deprecated. Instead, prompting behavior is controlled using
     the `allow_prompt` keyword in the `LibGit2.CredentialPayload` constructor ([#23690]).

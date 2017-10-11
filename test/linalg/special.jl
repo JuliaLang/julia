@@ -141,7 +141,7 @@ end
     # dense matrices, or dense vectors
     densevec = ones(N)
     densemat = diagm(ones(N))
-    spmat = spdiagm(ones(N))
+    spmat = sparse(Diagonal(ones(N)))
     for specialmat in specialmats
         # --> Tests applicable only to pairs of matrices
         for othermat in (spmat, densemat)

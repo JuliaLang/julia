@@ -564,7 +564,7 @@ Asp = As[p,p]
 LDp = sparse(ldltfact(Asp, perm=[1,2,3])[:LD])
 # LDp = sparse(Fs[:LD])
 Lp, dp = Base.SparseArrays.CHOLMOD.getLd!(copy(LDp))
-Dp = spdiagm(dp)
+Dp = sparse(Diagonal(dp))
 @test Fs\b ≈ Af\b
 @test Fs[:UP]\(Fs[:PtLD]\b) ≈ Af\b
 @test Fs[:DUP]\(Fs[:PtL]\b) ≈ Af\b
