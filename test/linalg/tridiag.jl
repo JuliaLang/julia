@@ -291,6 +291,12 @@ guardsrand(123) do
                             @test isa(similar(Ts, Int), SymTridiagonal{Int})
                             @test isa(similar(Ts, Int, (3,2)), Matrix{Int})
                         end
+
+                        @test first(logabsdet(Tldlt)) ≈ first(logabsdet(Fs))
+                        @test last(logabsdet(Tldlt))  ≈ last(logabsdet(Fs))
+                        # just test that the det method exists. The numerical value of the
+                        # determinant is unreliable
+                        det(Tldlt)
                     end
                 end
             else # mat_type is Tridiagonal
