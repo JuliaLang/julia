@@ -74,10 +74,11 @@ end
 gc(); gc()
 
 sz = filesize(file)
-m = Mmap.mmap(file, Vector{UInt8}, sz+1)
+s = open(file, "r+")
+m = Mmap.mmap(s, Vector{UInt8}, sz+1)
 @test length(m) == sz+1 # test growing
 @test m[end] == 0x00
-finalize(m); m=nothing; gc()
+close(s); finalize(m); m=nothing; gc()
 sz = filesize(file)
 m = Mmap.mmap(file, Vector{UInt8}, 1, sz)
 @test length(m) == 1
@@ -85,10 +86,11 @@ m = Mmap.mmap(file, Vector{UInt8}, 1, sz)
 finalize(m); m=nothing; gc()
 sz = filesize(file)
 # test where offset is actually > than size of file; file is grown with zeroed bytes
-m = Mmap.mmap(file, Vector{UInt8}, 1, sz+1)
+s = open(file, "r+")
+m = Mmap.mmap(s, Vector{UInt8}, 1, sz+1)
 @test length(m) == 1
 @test m[1] == 0x00
-finalize(m); m=nothing; gc()
+close(s); finalize(m); m=nothing; gc()
 
 s = open(file, "r")
 m = Mmap.mmap(s)
