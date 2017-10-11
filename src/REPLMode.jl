@@ -142,12 +142,12 @@ function do_rm!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     # tokens: package names and/or uuids
     isempty(tokens) &&
         cmderror("`rm` – list packages to remove")
-    pkgs = Package[]
+    pkgs = PackageSpec[]
     while !isempty(tokens)
         token = shift!(tokens)
         token[1] != :pkg &&
             cmderror("`rm` only accepts package names and/or UUIDs")
-        push!(pkgs, Package(token[2:end]...))
+        push!(pkgs, PackageSpec(token[2:end]...))
     end
     project_resolve!(env, pkgs)
     ensure_resolved(env, pkgs)
@@ -160,11 +160,11 @@ function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     cmderror("`add` – list packages to add")
     tokens[1][1] == :ver &&
         cmderror("package name/uuid must precede version spec `@$(tokens[1][2])`")
-    pkgs = PackageVersion[]
+    pkgs = PackageSpec[]
     while !isempty(tokens)
         token = shift!(tokens)
         if token[1] == :pkg
-            push!(pkgs, PackageVersion(Package(token[2:end]...)))
+            push!(pkgs, PackageSpec(token[2:end]...))
         elseif token[1] == :ver
             pkgs[end].version = VersionSpec(token[2])
             isempty(tokens) || tokens[1][1] == :pkg ||
@@ -185,12 +185,12 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     #  - package names and/or uuids, optionally followed by version specs
     !isempty(tokens) && tokens[1][1] == :ver &&
         cmderror("package name/uuid must precede version spec `@$(tokens[1][2])`")
-    pkgs = PackageVersion[]
+    pkgs = PackageSpec[]
     level = UpgradeLevel(:major)
     while !isempty(tokens)
         token = shift!(tokens)
         if token[1] == :pkg
-            push!(pkgs, PackageVersion(Package(token[2:end]...), level))
+            push!(pkgs, PackageSpec(token[2:end]..., level))
         elseif token[1] == :ver
             pkgs[end].version = VersionSpec(token[2])
             isempty(tokens) || tokens[1][1] == :pkg ||
@@ -205,7 +205,7 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     ensure_resolved(env, pkgs)
     if isempty(pkgs)
         for (name::String, uuid::UUID) in env.project["deps"]
-            push!(pkgs, PackageVersion(Package(name, uuid), level))
+            push!(pkgs, PackageSpec(name, uuid, level))
         end
     end
     Pkg3.Operations.up(env, pkgs)

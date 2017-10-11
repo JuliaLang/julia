@@ -8,7 +8,7 @@ using Pkg3.TerminalMenus
 import Pkg3
 import Pkg3: depots
 
-export SHA1, VersionRange, VersionSpec, Package, PackageVersion, UpgradeLevel, EnvCache,
+export SHA1, VersionRange, VersionSpec, PackageSpec, UpgradeLevel, EnvCache,
     CommandError, cmderror, has_name, has_uuid, write_env, parse_toml, find_registered!,
     project_resolve!, registry_resolve!, ensure_resolved, manifest_info,
     registered_uuids, registered_paths, registered_uuid, registered_name,
@@ -149,24 +149,6 @@ cmderror(msg::String...) = throw(CommandError(join(msg)))
 
 ## type for expressing operations ##
 
-mutable struct Package
-    name::String
-    uuid::UUID
-end
-Package(name::AbstractString) = Package(name, UUID(zero(UInt128)))
-Package(uuid::UUID) = Package("", uuid)
-
-has_name(pkg::Package) = !isempty(pkg.name)
-has_uuid(pkg::Package) = pkg.uuid != UUID(zero(UInt128))
-
-function Base.show(io::IO, pkg::Package)
-    print(io, "Package(")
-    has_name(pkg) && show(io, pkg.name)
-    has_name(pkg) && has_uuid(pkg) && print(io, ", ")
-    has_uuid(pkg) && show(io, pkg.uuid)
-    print(io, ")")
-end
-
 @enum UpgradeLevel fixed=0 patch=1 minor=2 major=3
 
 function Base.convert(::Type{UpgradeLevel}, s::Symbol)
@@ -179,11 +161,32 @@ end
 Base.convert(::Type{UpgradeLevel}, s::String) = UpgradeLevel(Symbol(s))
 Base.convert(::Type{Union{VersionSpec,UpgradeLevel}}, v::VersionRange) = VersionSpec(v)
 
-mutable struct PackageVersion
-    package::Package
-    version::Union{VersionNumber,VersionSpec,UpgradeLevel}
+const VersionTypes = Union{VersionNumber,VersionSpec,UpgradeLevel}
+
+mutable struct PackageSpec
+    name::String
+    uuid::UUID
+    version::VersionTypes
 end
-PackageVersion(pkg::Package) = PackageVersion(pkg, VersionSpec("*"))
+PackageSpec(name::String, uuid::UUID) = PackageSpec(name, uuid, VersionSpec())
+PackageSpec(name::AbstractString) = PackageSpec(name, UUID(zero(UInt128)))
+PackageSpec(uuid::UUID) = PackageSpec("", uuid)
+
+has_name(pkg::PackageSpec) = !isempty(pkg.name)
+has_uuid(pkg::PackageSpec) = pkg.uuid != UUID(zero(UInt128))
+
+function Base.show(io::IO, pkg::PackageSpec)
+    print(io, "PackageSpec(")
+    has_name(pkg) && show(io, pkg.name)
+    has_name(pkg) && has_uuid(pkg) && print(io, ", ")
+    has_uuid(pkg) && show(io, pkg.uuid)
+    vstr = repr(pkg.version)
+    if vstr != "VersionSpec(\"*\")"
+        (has_name(pkg) || has_uuid(pkg)) && print(io, ", ")
+        print(io, vstr)
+    end
+    print(io, ")")
+end
 
 ## environment & registry loading & caching ##
 
@@ -418,7 +421,7 @@ end
 Disambiguate name-only and uuid-only package specifications using only
 information in the project file.
 """
-function project_resolve!(env::EnvCache, pkgs::AbstractVector{Package})
+function project_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     deps = env.project["deps"]
     depr = Dict(uuid => name for (uuid, name) in deps)
     length(deps) == length(depr) || # TODO: handle this somehow?
@@ -433,14 +436,12 @@ function project_resolve!(env::EnvCache, pkgs::AbstractVector{Package})
     end
     return pkgs
 end
-project_resolve!(env::EnvCache, pkgs::AbstractVector{PackageVersion}) =
-    project_resolve!(env, [v.package for v in pkgs])
 
 """
 Disambiguate name-only and uuid-only package specifications using only
 information from registries.
 """
-function registry_resolve!(env::EnvCache, pkgs::AbstractVector{Package})
+function registry_resolve!(env::EnvCache, pkgs::AbstractVector{PackageSpec})
     # if there are no half-specified packages, return early
     any(pkg->has_name(pkg) ⊻ has_uuid(pkg), pkgs) || return
     # collect all names and uuids since we're looking anyway
@@ -458,13 +459,11 @@ function registry_resolve!(env::EnvCache, pkgs::AbstractVector{Package})
     end
     return pkgs
 end
-registry_resolve!(env::EnvCache, pkgs::AbstractVector{PackageVersion}) =
-    registry_resolve!(env, [v.package for v in pkgs])
 
 "Ensure that all packages are fully resolved"
 function ensure_resolved(
     env::EnvCache,
-    pkgs::AbstractVector{Package},
+    pkgs::AbstractVector{PackageSpec},
     registry::Bool = false,
 )::Void
     unresolved = Dict{String,Vector{UUID}}()
@@ -499,11 +498,6 @@ function ensure_resolved(
     end
     cmderror(msg)
 end
-ensure_resolved(
-    env::EnvCache,
-    pkgs::AbstractVector{PackageVersion},
-    registry::Bool = false,
-) = ensure_resolved(env, [v.package for v in pkgs], registry)
 
 const DEFAULT_REGISTRIES = Dict(
     "Uncurated" => "https://github.com/JuliaRegistries/Uncurated.git"

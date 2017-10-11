@@ -84,9 +84,9 @@ end
 load_package_data(f::Base.Callable, path::String, version::VersionNumber) =
     get(load_package_data(f, path, [version]), version, nothing)
 
-function deps_graph(env::EnvCache, pkgs::Vector{PackageVersion})
+function deps_graph(env::EnvCache, pkgs::Vector{PackageSpec})
     deps = Dict{UUID,Dict{VersionNumber,Tuple{SHA1,Dict{UUID,VersionSpec}}}}()
-    uuids = [pkg.package.uuid for pkg in pkgs]
+    uuids = [pkg.uuid for pkg in pkgs]
     seen = UUID[]
     while true
         unseen = setdiff(uuids, seen)
@@ -117,43 +117,43 @@ function deps_graph(env::EnvCache, pkgs::Vector{PackageVersion})
 end
 
 "Resolve a set of versions given package version specs"
-function resolve_versions!(env::EnvCache, pkgs::Vector{PackageVersion})::Dict{UUID,VersionNumber}
+function resolve_versions!(env::EnvCache, pkgs::Vector{PackageSpec})::Dict{UUID,VersionNumber}
     info("Resolving package versions")
     # anything not mentioned is fixed
-    uuids = UUID[pkg.package.uuid for pkg in pkgs]
+    uuids = UUID[pkg.uuid for pkg in pkgs]
     for (name::String, uuid::UUID) in env.project["deps"]
         uuid in uuids && continue
         info = manifest_info(env, uuid)
         haskey(info, "version") || continue
         ver = VersionNumber(info["version"])
-        push!(pkgs, PackageVersion(Package(name, uuid), ver))
+        push!(pkgs, PackageSpec(name, uuid, ver))
     end
     # construct data structures for resolver and call it
-    reqs = Dict{String,Pkg.Types.VersionSet}(string(pkg.package.uuid) => pkg.version for pkg in pkgs)
+    reqs = Dict{String,Pkg.Types.VersionSet}(string(pkg.uuid) => pkg.version for pkg in pkgs)
     deps = convert(Dict{String,Dict{VersionNumber,Pkg.Types.Available}}, deps_graph(env, pkgs))
     deps = Pkg.Query.prune_dependencies(reqs, deps)
     vers = convert(Dict{UUID,VersionNumber}, Pkg.Resolve.resolve(reqs, deps))
     find_registered!(env, collect(keys(vers)))
     # update vector of package versions
     for pkg in pkgs
-        pkg.version = vers[pkg.package.uuid]
+        pkg.version = vers[pkg.uuid]
     end
-    uuids = UUID[pkg.package.uuid for pkg in pkgs]
+    uuids = UUID[pkg.uuid for pkg in pkgs]
     for (uuid, ver) in vers
         uuid in uuids && continue
         name = registered_name(env, uuid)
-        push!(pkgs, PackageVersion(Package(name, uuid), ver))
+        push!(pkgs, PackageSpec(name, uuid, ver))
     end
     return vers
 end
 
 "Find names, repos and hashes for each package UUID & version"
-function version_data(env::EnvCache, pkgs::Vector{PackageVersion})
+function version_data(env::EnvCache, pkgs::Vector{PackageSpec})
     names = Dict{UUID,String}()
     hashes = Dict{UUID,SHA1}()
     upstreams = Dict{UUID,Vector{String}}()
     for pkg in pkgs
-        uuid = pkg.package.uuid
+        uuid = pkg.uuid
         ver = pkg.version::VersionNumber
         upstreams[uuid] = String[]
         for path in registered_paths(env, uuid)
@@ -281,11 +281,11 @@ function prune_manifest(env::EnvCache)
     end
 end
 
-function apply_versions(env::EnvCache, pkgs::Vector{PackageVersion})
+function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})
     names, hashes, urls = version_data(env, pkgs)
     # install & update manifest
     for pkg in pkgs
-        uuid = pkg.package.uuid
+        uuid = pkg.uuid
         version = pkg.version::VersionNumber
         name, hash = names[uuid], hashes[uuid]
         install(env, uuid, name, hash, urls[uuid], version)
@@ -294,7 +294,7 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageVersion})
     prune_manifest(env)
 end
 
-function rm(env::EnvCache, pkgs::Vector{Package})
+function rm(env::EnvCache, pkgs::Vector{PackageSpec})
     # drop the indicated packages
     drop = UUID[]
     for pkg in pkgs
@@ -329,10 +329,10 @@ function rm(env::EnvCache, pkgs::Vector{Package})
     write_env(env)
 end
 
-function add(env::EnvCache, pkgs::Vector{PackageVersion})
+function add(env::EnvCache, pkgs::Vector{PackageSpec})
     # copy added name/UUIDs into project
     for pkg in pkgs
-        env.project["deps"][pkg.package.name] = string(pkg.package.uuid)
+        env.project["deps"][pkg.name] = string(pkg.uuid)
     end
     # if a package is in the project file and
     # the manifest version in the specified version set
@@ -342,7 +342,7 @@ function add(env::EnvCache, pkgs::Vector{PackageVersion})
         info != nothing && haskey(info, "version") || continue
         version = VersionNumber(info["version"])
         for pkg in pkgs
-            pkg.package.uuid == uuid && version ∈ pkg.version || continue
+            pkg.uuid == uuid && version ∈ pkg.version || continue
             pkg.version = version
         end
     end
@@ -352,12 +352,12 @@ function add(env::EnvCache, pkgs::Vector{PackageVersion})
     write_env(env)
 end
 
-function up(env::EnvCache, pkgs::Vector{PackageVersion})
+function up(env::EnvCache, pkgs::Vector{PackageSpec})
     # resolve upgrade levels to version specs
     for pkg in pkgs
         pkg.version isa UpgradeLevel || continue
         level = pkg.version
-        info = manifest_info(env, pkg.package.uuid)
+        info = manifest_info(env, pkg.uuid)
         ver = VersionNumber(info["version"])
         if level == UpgradeLevel(:fixed)
             pkg.version = VersionNumber(info["version"])

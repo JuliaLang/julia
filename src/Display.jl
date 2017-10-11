@@ -26,7 +26,7 @@ function status(env::EnvCache, mode::Symbol)
         project₀ = read_project(git_file_stream(env.git, "HEAD:$project_path", fakeit=true))
         manifest₀ = read_manifest(git_file_stream(env.git, "HEAD:$manifest_path", fakeit=true))
     end
-    if mode in (:project, :combined)
+    if mode == :project || mode == :combined
         # TODO: handle project deps missing from manifest
         m₀ = filter_manifest(in_project(project₀["deps"]), manifest₀)
         m₁ = filter_manifest(in_project(project₁["deps"]), manifest₁)
