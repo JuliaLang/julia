@@ -576,7 +576,7 @@ public:
     }
 };
 
-static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr);
+static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, jl_value_t *etype = (jl_value_t*)jl_any_type);
 static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
 static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, bool isvol, MDNode *tbaa);
@@ -2983,12 +2983,12 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, jl_llvm_fu
     return mark_julia_type(ctx, ret, true, inferred_retty);
 }
 
-static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex)
+static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *etype)
 {
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t arglen = jl_array_dim0(ex->args);
     size_t nargs = arglen - 1;
-    jl_value_t *rt = ex->etype;
+    jl_value_t *rt = etype;
     assert(arglen >= 2);
 
     jl_cgval_t lival = emit_expr(ctx, args[0]);
@@ -3028,12 +3028,12 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex)
     return result;
 }
 
-static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex)
+static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *etype)
 {
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t nargs = jl_array_dim0(ex->args);
     assert(nargs >= 1);
-    jl_value_t *rt = ex->etype;
+    jl_value_t *rt = etype;
     jl_cgval_t f = emit_expr(ctx, args[0]);
 
     if (f.constant && jl_typeis(f.constant, jl_intrinsic_type)) {
@@ -3460,18 +3460,13 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
         ssize_t idx = ((jl_ssavalue_t*)l)->id;
         assert(idx >= 0);
         assert(!ctx.ssavalue_assigned.at(idx));
-        jl_cgval_t slot = emit_expr(ctx, r); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)
-        if (slot.isboxed || slot.TIndex) {
-            // see if inference suggested a different type for the ssavalue than the expression
-            // e.g. sometimes the information is inconsistent after inlining getfield on a Tuple
-            jl_value_t *ssavalue_types = (jl_value_t*)ctx.source->ssavaluetypes;
-            if (jl_is_array(ssavalue_types)) {
-                jl_value_t *declType = jl_array_ptr_ref(ssavalue_types, idx);
-                if (declType != slot.typ) {
-                    slot = update_julia_type(ctx, slot, declType);
-                }
-            }
+        jl_value_t *declType = (jl_value_t*)jl_any_type;
+        // get expr type from its ssavalue
+        jl_value_t *ssavalue_types = (jl_value_t*)ctx.source->ssavaluetypes;
+        if (jl_is_array(ssavalue_types)) {
+            declType = jl_array_ptr_ref(ssavalue_types, idx);
         }
+        jl_cgval_t slot = emit_expr(ctx, r, declType); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)
         if (!slot.isboxed && !slot.isimmutable) {
             // emit a copy of values stored in mutable slots
             Value *dest;
@@ -3544,7 +3539,15 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r)
     int sl = jl_slot_number(l) - 1;
     // it's a local variable
     jl_varinfo_t &vi = ctx.slots[sl];
-    jl_cgval_t rval_info = emit_expr(ctx, r);
+    jl_cgval_t rval_info;
+    if (jl_typeis(l, jl_typedslot_type)) {
+        // type of a call can be stored as a TypedSlot on the LHS
+        jl_value_t *declType = jl_typedslot_get_type(l);
+        rval_info = emit_expr(ctx, r, declType);
+    }
+    else {
+        rval_info = emit_expr(ctx, r);
+    }
     if (!vi.used)
         return;
 
@@ -3691,7 +3694,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr)
     }
 }
 
-static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
+static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, jl_value_t *etype)
 {
     if (jl_is_symbol(expr)) {
         jl_sym_t *sym = (jl_sym_t*)expr;
@@ -3761,15 +3764,14 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
         return emit_isdefined(ctx, args[0]);
     }
     else if (head == invoke_sym) {
-        return emit_invoke(ctx, ex);
+        return emit_invoke(ctx, ex, etype);
     }
     else if (head == call_sym) {
-        jl_cgval_t res = emit_call(ctx, ex);
+        jl_cgval_t res = emit_call(ctx, ex, etype);
         // some intrinsics (e.g. typeassert) can return a wider type
         // than what's actually possible
-        jl_value_t *expr_t = ex->etype;
-        res = update_julia_type(ctx, res, expr_t);
-        if (res.typ == jl_bottom_type || expr_t == jl_bottom_type) {
+        res = update_julia_type(ctx, res, etype);
+        if (res.typ == jl_bottom_type || etype == jl_bottom_type) {
             CreateTrap(ctx.builder);
         }
         return res;

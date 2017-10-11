@@ -34,7 +34,6 @@ end
 
 copy(e::Expr) = (n = Expr(e.head);
                  n.args = copy_exprargs(e.args);
-                 n.typ = e.typ;
                  n)
 
 # copy parts of an AST that the compiler mutates

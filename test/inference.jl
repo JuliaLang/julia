@@ -424,34 +424,25 @@ end
 @inferred cat10880(Tuple{Int8,Int16}, Tuple{Int32})
 
 # issue #19348
-function is_typed_expr(e::Expr)
-    if e.head === :call ||
-       e.head === :invoke ||
-       e.head === :new ||
-       e.head === :copyast ||
-       e.head === :inert
-        return true
-    end
-    return false
-end
-test_inferred_static(@nospecialize(other)) = true
-test_inferred_static(slot::TypedSlot) = @test isleaftype(slot.typ)
-function test_inferred_static(expr::Expr)
-    if is_typed_expr(expr)
-        @test isleaftype(expr.typ)
-    end
-    for a in expr.args
-        test_inferred_static(a)
+function test_inferred_static(code::CodeInfo)
+    @test all(isleaftype, code.slottypes)
+    @test all(isleaftype, code.ssavaluetypes)
+    for e in code.code
+        test_inferred_static_expr(e)
     end
 end
 function test_inferred_static(arrow::Pair)
     code, rt = arrow
     @test isleaftype(rt)
     @test code.inferred
-    @test all(x->isleaftype(x), code.slottypes)
-    @test all(x->isleaftype(x), code.ssavaluetypes)
-    for e in code.code
-        test_inferred_static(e)
+    test_inferred_static(code)
+end
+
+test_inferred_static_expr(@nospecialize(other)) = true
+test_inferred_static_expr(slot::TypedSlot) = @test isleaftype(slot.typ)
+function test_inferred_static_expr(expr::Expr)
+    for a in expr.args
+        test_inferred_static_expr(a)
     end
 end
 
@@ -497,7 +488,6 @@ for codetype in Any[
     local notconst(@nospecialize(other)) = true
     notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
     function notconst(expr::Expr)
-        @test isa(expr.typ, Type)
         for a in expr.args
             notconst(a)
         end
@@ -1062,12 +1052,24 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
     end
 end
 
-function find_call(code, func, narg)
+function find_def(code, ssav::SSAValue)
+    for ex in code
+        if isa(ex, Expr) && ex.head === :(=) && ex.args[1] === ssav
+            return ex.args[2]
+        end
+    end
+    error("SSAValue assignment not found")
+end
+
+function find_call(code, func, narg, code0 = code)
     for ex in code
         isa(ex, Expr) || continue
         ex = ex::Expr
         if ex.head === :call && length(ex.args) == narg
             farg = ex.args[1]
+            while isa(farg, SSAValue)
+                farg = find_def(code0, farg)
+            end
             if isa(farg, GlobalRef)
                 farg = farg::GlobalRef
                 if isdefined(farg.mod, farg.name) && isconst(farg.mod, farg.name)
@@ -1080,7 +1082,7 @@ function find_call(code, func, narg)
         elseif Core.Inference.is_meta_expr(ex)
             continue
         end
-        find_call(ex.args, func, narg) && return true
+        find_call(ex.args, func, narg, code0) && return true
     end
     return false
 end
