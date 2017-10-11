@@ -1420,6 +1420,12 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             (jl_tupletype_t*)type, simpletype, jl_emptysvec, (jl_value_t*)method, 0, &method_defs,
             method->min_world, ~(size_t)0, &oldvalue);
     if (oldvalue) {
+        if (oldvalue == (jl_value_t*)method) {
+            // redundant add of same method; no need to do anything
+            JL_UNLOCK(&mt->writelock);
+            JL_GC_POP();
+            return;
+        }
         method->ambig = ((jl_method_t*)oldvalue)->ambig;
         method_overwrite(newentry, (jl_method_t*)oldvalue);
     }
