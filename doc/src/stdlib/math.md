@@ -59,7 +59,7 @@ Base.:(!)
 Base.isapprox
 Base.sin(::Number)
 Base.cos(::Number)
-Base.sincos(::Number)
+Base.sincos(::Float64)
 Base.tan(::Number)
 Base.Math.sind
 Base.Math.cosd
