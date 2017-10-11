@@ -539,7 +539,7 @@ end
     @test x == [5,6,35,4]
     x[Y[2:3]] .= 7:8
     @test x == [5,8,7,4]
-    @. x[(3,)..., ()...] += 3 # @. should convert to .+=, test compatibility with @views
+    x[(3,)..., ()...] += 3
     @test x == [5,8,10,4]
     i = Int[]
     # test that lhs expressions in update operations are evaluated only once:

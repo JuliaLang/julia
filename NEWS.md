@@ -660,6 +660,9 @@ This section lists changes that do not have deprecation warnings.
     functions yielding a boolean result.  If you want `Array{Bool}`, use
     `broadcast!` or `.=` ([#17623]).
 
+  * Broadcast `A[I...] .= X` with entirely scalar indices `I` is deprecated as
+    its behavior will change in the future.  Use `A[I...] = X` instead.
+
   * Operations like `.+` and `.*` on `Range` objects are now generic
     `broadcast` calls (see [above](#language-changes)) and produce an `Array`.
     If you want a `Range` result, use `+` and `*`, etcetera ([#17623]).

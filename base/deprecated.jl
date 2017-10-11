@@ -1797,6 +1797,14 @@ function toc()
     return t
 end
 
+# A[I...] .= with scalar indices should modify the element at A[I...]
+function Broadcast.dotview(A::AbstractArray, args::Number...)
+    depwarn("the behavior of `A[I...] .= X` with scalar indices will change in the future. Use `A[I...] = X` instead.", :broadcast!)
+    view(A, args...)
+end
+Broadcast.dotview(A::AbstractArray{<:AbstractArray}, args::Integer...) = getindex(A, args...)
+# Upon removing deprecations, also enable the @testset "scalar .=" in test/broadcast.jl
+
 # PR #23816: deprecation of gradient
 export gradient
 @eval Base.LinAlg begin

@@ -525,3 +525,16 @@ let t = (0, 1, 2)
     o = 1
     @test @inferred(broadcast(+, t, o)) == (1, 2, 3)
 end
+
+# TODO: Enable after deprecations introduced in 0.7 are removed.
+# @testset "scalar .=" begin
+#     A = [[1,2,3],4:5,6]
+#     A[1] .= 0
+#     @test A[1] == [0,0,0]
+#     @test_throws ErrorException A[2] .= 0
+#     @test_throws MethodError A[3] .= 0
+#     A = [[1,2,3],4:5]
+#     A[1] .= 0
+#     @test A[1] == [0,0,0]
+#     @test_throws ErrorException A[2] .= 0
+# end
