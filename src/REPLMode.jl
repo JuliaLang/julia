@@ -140,15 +140,27 @@ end
 
 function do_rm!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     # tokens: package names and/or uuids
-    isempty(tokens) &&
-        cmderror("`rm` – list packages to remove")
+    mode = :project
     pkgs = PackageSpec[]
     while !isempty(tokens)
         token = shift!(tokens)
-        token[1] != :pkg &&
-            cmderror("`rm` only accepts package names and/or UUIDs")
-        push!(pkgs, PackageSpec(token[2:end]...))
+        if token[1] == :pkg
+            push!(pkgs, PackageSpec(token[2:end]...))
+            pkgs[end].mode = mode
+        elseif token[1] == :ver
+            cmderror("`rm` does not take version specs")
+        elseif token[1] == :opt
+            if token[2] in (:project, :manifest)
+                length(token) == 2 ||
+                    cmderror("the --$(token[2]) option does not take an argument")
+                mode = token[2]
+            else
+                cmderror("invalid option for `rm`: --$(token[2])")
+            end
+        end
     end
+    isempty(pkgs) &&
+        cmderror("`rm` – list packages to remove")
     project_resolve!(env, pkgs)
     ensure_resolved(env, pkgs)
     Pkg3.Operations.rm(env, pkgs)
@@ -157,7 +169,7 @@ end
 function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     # tokens: package names and/or uuids, optionally followed by version specs
     isempty(tokens) &&
-    cmderror("`add` – list packages to add")
+        cmderror("`add` – list packages to add")
     tokens[1][1] == :ver &&
         cmderror("package name/uuid must precede version spec `@$(tokens[1][2])`")
     pkgs = PackageSpec[]
@@ -170,7 +182,7 @@ function do_add!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
             isempty(tokens) || tokens[1][1] == :pkg ||
                 cmderror("package name/uuid must precede version spec `@$(tokens[1][2])`")
         elseif token[1] == :opt
-            cmderror("`add` doesn't take options: --$(join(token[2:end], '='))\ninvalid command: $input")
+            cmderror("`add` doesn't take options: --$(join(token[2:end], '='))")
         end
     end
     project_resolve!(env, pkgs)
@@ -183,23 +195,33 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     # tokens:
     #  - upgrade levels as options: --[fixed|patch|minor|major]
     #  - package names and/or uuids, optionally followed by version specs
-    !isempty(tokens) && tokens[1][1] == :ver &&
-        cmderror("package name/uuid must precede version spec `@$(tokens[1][2])`")
+    mode = :project
     pkgs = PackageSpec[]
     level = UpgradeLevel(:major)
+    last_token_type = :cmd
     while !isempty(tokens)
         token = shift!(tokens)
         if token[1] == :pkg
             push!(pkgs, PackageSpec(token[2:end]..., level))
+            pkgs[end].mode = mode
         elseif token[1] == :ver
             pkgs[end].version = VersionSpec(token[2])
-            isempty(tokens) || tokens[1][1] == :pkg ||
-                cmderror("package name/uuid must precede version spec `@$(tokens[1][2])`")
+            last_token_type == :pkg ||
+                cmderror("package name/uuid must precede version spec `@$(token[2])`")
         elseif token[1] == :opt
-            level = UpgradeLevel(token[2])
-            length(token) == 3 &&
-                cmderror("the --$(token[2]) option does not take an argument")
+            if token[2] in (:project, :manifest)
+                length(token) == 2 ||
+                    cmderror("the --$(token[2]) option does not take an argument")
+                mode = token[2]
+            elseif token[2] in (:major, :minor, :patch, :fixed)
+                length(token) == 2 ||
+                    cmderror("the --$(token[2]) option does not take an argument")
+                level = UpgradeLevel(token[2])
+            else
+                cmderror("invalid option for `up`: --$(token[2])")
+            end
         end
+        last_token_type = token[1]
     end
     project_resolve!(env, pkgs)
     ensure_resolved(env, pkgs)

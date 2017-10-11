@@ -167,10 +167,16 @@ mutable struct PackageSpec
     name::String
     uuid::UUID
     version::VersionTypes
+    mode::Symbol
+    PackageSpec(name::String, uuid::UUID, version::VersionTypes) =
+        new(name, uuid, version)
 end
-PackageSpec(name::String, uuid::UUID) = PackageSpec(name, uuid, VersionSpec())
-PackageSpec(name::AbstractString) = PackageSpec(name, UUID(zero(UInt128)))
-PackageSpec(uuid::UUID) = PackageSpec("", uuid)
+PackageSpec(name::String, uuid::UUID) =
+    PackageSpec(name, uuid, VersionSpec())
+PackageSpec(name::AbstractString, version::VersionTypes=VersionSpec()) =
+    PackageSpec(name, UUID(zero(UInt128)), version)
+PackageSpec(uuid::UUID, version::VersionTypes=VersionSpec()) =
+    PackageSpec("", uuid, version)
 
 has_name(pkg::PackageSpec) = !isempty(pkg.name)
 has_uuid(pkg::PackageSpec) = pkg.uuid != UUID(zero(UInt128))
