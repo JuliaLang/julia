@@ -32,8 +32,10 @@ Standard library changes
 
 * The methods of `mktemp` and `mktempdir` which take a function body to pass temporary paths to no longer throw errors if the path is already deleted when the function body returns ([#33091]).
 
-#### Libdl
+* A new `squeeze(f, A, dims)` method computes the reduction `f` over the region in
+`A` described by `dims` and then drops those dimensions from the result ([#23500]).
 
+#### Libdl
 
 #### LinearAlgebra
 
