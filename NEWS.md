@@ -183,6 +183,9 @@ Library improvements
   * The function `randn` now accepts complex arguments (`Complex{T <: AbstractFloat}`)
     ([#21973]).
 
+  * A new `squeeze(f, A, dims)` method computes the reduction `f` over the region in
+    `A` described by `dims` and then drops those dimensions from the result ([#23500]).
+
   * The function `rand` can now pick up random elements from strings, associatives
     and sets ([#22228], [#21960], [#18155], [#22224]).
 
