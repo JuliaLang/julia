@@ -873,23 +873,8 @@ _cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
 _cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
 
 ## append right hand side with zeros if necessary
-function _append_zeros(b::AbstractVector, T::Type, n)
-    if n > length(b)
-        x = zeros(T, n)
-        return copy!(x, b)
-    else
-        return copy_oftype(b, T)
-    end
-end
-function _append_zeros(B::AbstractMatrix, T::Type, n)
-    if n > size(B, 1)
-        X = zeros(T, (n, size(B, 2)))
-        X[1:size(B,1), :] = B
-        return X
-    else
-        return copy_oftype(B, T)
-    end
-end
+_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
+_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
 
 function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB}) where {TA,TB}
     S = promote_type(TA,TB)
@@ -898,7 +883,10 @@ function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat
 
     AA = convert(Factorization{S}, A)
 
-    X = A_ldiv_B!(AA, _append_zeros(B, S, n))
+    X = _zeros(S, B, n)
+    X[1:size(B, 1), :] = B
+
+    A_ldiv_B!(AA, X)
 
     return _cut_B(X, 1:n)
 end
@@ -920,7 +908,10 @@ function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{
 #                                                 |x4|y4|
     B = reshape(transpose(reinterpret(T, reshape(BIn, (1, length(BIn))))), size(BIn, 1), 2*size(BIn, 2))
 
-    X = A_ldiv_B!(A, _append_zeros(B, T, n))
+    X = _zeros(T, B, n)
+    X[1:size(B, 1), :] = B
+
+    A_ldiv_B!(A, X)
 
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      <-       |y1|y2|y3|y4|     <-      |x2|y2|     <-    |x2|y2|x4|y4|
