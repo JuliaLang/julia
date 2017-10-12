@@ -1758,8 +1758,25 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
     jl_code_info_t *src = NULL;
     if (!jl_is_rettype_inferred(li))
         src = jl_type_infer(&li, world, 0);
-    if (li->jlcall_api != 2)
-        jl_compile_linfo(&li, src, world, &jl_default_cgparams);
+    if (li->jlcall_api != 2) {
+        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc) {
+            // If we are saving LLVM or native code, generate the LLVM IR so that it'll
+            // be included in the saved LLVM module.
+            jl_compile_linfo(&li, src, world, &jl_default_cgparams);
+        }
+        else if (!jl_options.outputji) {
+            // If we are only saving ji files (e.g. package pre-compilation for now),
+            // don't bother generating anything since it won't be saved.
+            // Otherwise (this branch), assuming we are at runtime (normal JIT) and
+            // we should generate the native code.
+            jl_ptls_t ptls = jl_get_ptls_states();
+            size_t last_age = ptls->world_age;
+            ptls->world_age = world;
+            jl_generic_fptr_t fptr;
+            jl_compile_method_internal(&fptr, li);
+            ptls->world_age = last_age;
+        }
+    }
     return 1;
 }
 
