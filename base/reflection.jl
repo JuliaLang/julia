@@ -390,10 +390,10 @@ Return a collection of all instances of the given type, if applicable. Mostly us
 enumerated types (see `@enum`).
 
 ```jldoctest
-julia> @enum Colors Red Blue Green
+julia> @enum Color red blue green
 
-julia> instances(Colors)
-(Red::Colors = 0, Blue::Colors = 1, Green::Colors = 2)
+julia> instances(Color)
+(red::Color = 0, blue::Color = 1, green::Color = 2)
 ```
 """
 function instances end
