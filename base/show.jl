@@ -1202,6 +1202,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif head === :meta && length(args) == 1 && args[1] === :pop_loc
         print(io, "# meta: pop location")
         show_type = false
+    elseif head === :meta && length(args) == 2 && args[1] === :pop_loc
+        print(io, "# meta: pop locations ($(args[2]))")
+        show_type = false
     # print anything else as "Expr(head, args...)"
     else
         if head !== :invoke
