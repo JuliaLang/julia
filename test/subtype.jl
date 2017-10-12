@@ -1202,3 +1202,15 @@ let X = Ref{Tuple{Array{Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16
     Y = Ref{Tuple{Array{Union{Int8, UInt128, UInt16, UInt32, UInt64, UInt8, S}, 1}, Array{Union{Int8, UInt128, UInt16, UInt32, UInt64, UInt8, T}, 1}}} where S where T
     @test X <: Y
 end
+
+# issue #23764
+@test Tuple{Ref{Union{T,Int}} where {T}} <: Tuple{Ref{T}} where {T}
+@test Tuple{Ref{Union{T,Int}} where {T}} <: Tuple{Ref{T} where {T}}
+@test (Tuple{Ref{Union{T,Int}}} where T) <: Tuple{Ref{T}} where {T}
+@test (Tuple{Ref{Union{T,Int}}} where T) <: Tuple{Ref{T} where {T}}
+@test Tuple{Tuple{Tuple{R}} where R} <: Tuple{Tuple{S}} where S
+struct A23764{T, N, S} <: AbstractArray{Union{T, S}, N}; end
+@test Tuple{A23764{Int, 1, T} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
+struct A23764_2{T, N, S} <: AbstractArray{Union{Ref{T}, S}, N}; end
+@test Tuple{A23764_2{T, 1, Void} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
+@test Tuple{A23764_2{T, 1, Void} where T} <: Tuple{AbstractArray{T,N} where {T,N}}
