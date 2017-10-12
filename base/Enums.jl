@@ -29,10 +29,10 @@ end
 @noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
 
 """
-    @enum EnumName[::BaseType] EnumValue1[=x] EnumValue2[=y]
+    @enum EnumName[::BaseType] value1[=x] value2[=y]
 
 Create an `Enum{BaseType}` subtype with name `EnumName` and enum member values of
-`EnumValue1` and `EnumValue2` with optional assigned values of `x` and `y`, respectively.
+`value1` and `value2` with optional assigned values of `x` and `y`, respectively.
 `EnumName` can be used just like other types and enum member values as regular values, such as
 
 # Examples
