@@ -237,6 +237,9 @@ struct BBState {
 };
 
 struct State {
+    Function *const F;
+    DominatorTree *DT;
+
     // The maximum assigned value number
     int MaxPtrNumber;
     // The maximum assigned safepoint number
@@ -255,8 +258,11 @@ struct State {
     // The result of the local analysis
     std::map<BasicBlock *, BBState> BBStates;
 
-    // Refinement map. If all of the values are rooted (-1 means a globally rooted value),
+    // Refinement map. If all of the values are rooted (-1 means an externally rooted value),
     // the key is already rooted (but not the other way around).
+    // At the end of `LocalScan` this map has a few properties
+    // 1. Values are either -1 or dominates the key
+    // 2. Therefore this is a DAG
     std::map<int, SmallVector<int, 1>> Refinements;
 
     // GC preserves map. All safepoints dominated by the map key, but not any
@@ -284,7 +290,7 @@ struct State {
     // We don't bother doing liveness on Allocas that were not mem2reg'ed.
     // they just get directly sunk into the root array.
     std::vector<AllocaInst *> Allocas;
-    State() : MaxPtrNumber(-1), MaxSafepointNumber(-1) {}
+    State(Function &F) : F(&F), DT(nullptr), MaxPtrNumber(-1), MaxSafepointNumber(-1) {}
 };
 
 namespace llvm {
@@ -347,19 +353,22 @@ private:
         NoteOperandUses(S, BBS, UI, BBS.UpExposedUses);
     }
     State LocalScan(Function &F);
-    void ComputeLiveness(Function &F, State &S);
-    void ComputeLiveSets(Function &F, State &S);
+    void ComputeLiveness(State &S);
+    void ComputeLiveSets(State &S);
     void PushGCFrame(AllocaInst *gcframe, unsigned NRoots, Instruction *InsertAfter);
     void PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore);
     std::vector<int> ColorRoots(const State &S);
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint);
-    void PlaceGCFrameStores(Function &F, State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
-    void PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
+    void PlaceGCFrameStores(State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
+    void PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
     bool DefineFunctions(Module &M);
     bool runOnFunction(Function &F) override;
     Instruction *get_pgcstack(Instruction *ptlsStates);
     bool CleanupIR(Function &F);
     void NoteUseChain(State &S, BBState &BBS, User *TheUser);
+    SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
+    void FixUpRefinements(ArrayRef<int> PHINumbers, State &S);
+    void RefineLiveSet(BitVector &LS, State &S);
 };
 
 static unsigned getValueAddrSpace(Value *V) {
@@ -748,8 +757,143 @@ static bool LooksLikeFrameRef(Value *V) {
     return isa<Argument>(V);
 }
 
+SmallVector<int, 1> LateLowerGCFrame::GetPHIRefinements(PHINode *Phi, State &S)
+{
+    // The returned vector can violate the domination property of the Refinements map.
+    // However, we can't know for sure if this is valid here since incoming values
+    // that does not dominate the PHI node may be externally rooted (i.e. can be refined to -1)
+    // We only know that after scaning the whole function so we'll record the possibly invalid
+    // edges here and fix them up at the end of `LocalScan`. (See `FixUpRefinements` below).
+    auto nIncoming = Phi->getNumIncomingValues();
+    SmallVector<int, 1> RefinedPtr(nIncoming);
+    for (unsigned i = 0; i < nIncoming; ++i)
+        RefinedPtr[i] = Number(S, Phi->getIncomingValue(i));
+    return RefinedPtr;
+}
+
+void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
+{
+    // Now we have all the possible refinement information, we can remove ones for the invalid
+
+    // * First find all values that must be externally rooted.
+    //   Values that might not be externally rooted must either have no refinement (the majority)
+    //   or have one of the value it's derived from (one of its refinements) be possibly
+    //   not externally rooted.
+    //
+    //   All other values can only possibly be externally rooted values,
+    //   which can include loops (of phi nodes).
+    //   We do this by first assuming all values to be externally rooted and then removing
+    //   values that are or can be derived from non-externally rooted values recursively.
+    BitVector extern_rooted(S.MaxPtrNumber + 1, true);
+    //   * First clear all values that are not derived from anything.
+    //     This only needs to be done once.
+    for (int i = 0; i <= S.MaxPtrNumber; i++) {
+        auto it = S.Refinements.find(i);
+        if (it == S.Refinements.end() || it->second.empty()) {
+            extern_rooted[i] = false;
+        }
+    }
+    //   * Then remove values reachable from those values recursively
+    bool changed;
+    do {
+        changed = false;
+        for (auto &kv: S.Refinements) {
+            int Num = kv.first;
+            // Already cleared.
+            if (!HasBitSet(extern_rooted, Num))
+                continue;
+            for (auto refine: kv.second) {
+                if (refine == -1)
+                    continue;
+                if (!HasBitSet(extern_rooted, refine)) {
+                    changed = true;
+                    extern_rooted[Num] = false;
+                    break;
+                }
+            }
+        }
+    } while (changed);
+    //   * Now the `extern_rooted` map is accurate, normalize all externally rooted values.
+    for (auto &kv: S.Refinements) {
+        int Num = kv.first;
+        if (HasBitSet(extern_rooted, Num)) {
+            // For externally rooted values, set their refinements simply to `{-1}`
+            kv.second.resize(1);
+            kv.second[0] = -1;
+            continue;
+        }
+        for (auto &refine: kv.second) {
+            // For other values,
+            // remove all externally rooted values from their refinements (replace with -1)
+            if (HasBitSet(extern_rooted, refine)) {
+                refine = -1;
+            }
+        }
+    }
+    // Scan all phi node refinements and remove all invalid ones.
+    // As a generalization to what we did to externally rooted values above,
+    // we can also relax non-dominating (invalid) refinements to the refinements of those values
+    // If all of those values dominate the phi node then the phi node can be refined to
+    // those values instead.
+    // While we recursively relax the refinement, we need to keep track of the the values we've
+    // visited in order to not scan them again.
+    BitVector visited(S.MaxPtrNumber + 1, false);
+    for (auto Num: PHINumbers) {
+        // Not sure if `Num` can be `-1`
+        if (Num == -1 || HasBitSet(extern_rooted, Num))
+            continue;
+        visited[Num] = true;
+        auto Phi = cast<PHINode>(S.ReversePtrNumbering[Num]);
+        auto &RefinedPtr = S.Refinements[Num];
+        unsigned j = 0; // new length
+        for (unsigned i = 0; i < RefinedPtr.size(); i++) {
+            auto refine = RefinedPtr[i];
+            if (refine == -1 || visited[refine])
+                continue;
+            visited[refine] = true;
+            if (i != j)
+                RefinedPtr[j] = refine;
+            j++;
+            if (auto inst = dyn_cast<Instruction>(S.ReversePtrNumbering[refine])) {
+                if (!S.DT)
+                    S.DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+                if (S.DT->dominates(inst, Phi))
+                    continue;
+                // Decrement `j` so we'll overwrite/igore it.
+                j--;
+                // Non-dominating refinement
+                auto it = S.Refinements.find(refine);
+                if (it != S.Refinements.end() && !it->second.empty()) {
+                    // Found a replacement, replace current element.
+                    auto &NewRefinedPtr = it->second;
+                    unsigned n = NewRefinedPtr.size();
+                    // First fill in the gap between `i` and `j`
+                    unsigned k = 0;
+                    for (; k < n && i >= j + k; k++)
+                        RefinedPtr[i - k] = NewRefinedPtr[k];
+                    i = i - k;
+                    if (k < n)
+                        RefinedPtr.append(it->second.begin() + k, it->second.end());
+                    continue;
+                }
+                // Invalid
+                RefinedPtr = SmallVector<int, 1>{};
+                break;
+            }
+        }
+        if (!RefinedPtr.empty()) {
+            // `j == 0` here means that everything is externally rooted.
+            // This should have been handled by the first loop above.
+            assert(j != 0 && j <= RefinedPtr.size());
+            RefinedPtr.resize(j);
+        }
+        visited.reset();
+    }
+}
+
 State LateLowerGCFrame::LocalScan(Function &F) {
-    State S;
+    State S(F);
+    SmallVector<int, 16> PHINumbers;
     for (BasicBlock &BB : F) {
         BBState &BBS = S.BBStates[&BB];
         for (auto it = BB.rbegin(); it != BB.rend(); ++it) {
@@ -861,17 +1005,11 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         continue;
                     auto Num = LiftPhi(S, Phi);
                     auto lift = cast<PHINode>(S.ReversePtrNumbering[Num]);
-                    SmallVector<int, 1> RefinedPtr(0);
-                    // DISABLED DUE TO BUG IN THE ALGORITHM (#24098)
-                    //for (unsigned i = 0; i < nIncoming; ++i)
-                    //    RefinedPtr[i] = Number(S, lift->getIncomingValue(i));
-                    S.Refinements[Num] = std::move(RefinedPtr);
+                    S.Refinements[Num] = GetPHIRefinements(lift, S);
+                    PHINumbers.push_back(Num);
                 } else {
-                    SmallVector<int, 1> RefinedPtr(0);
-                    // DISABLED DUE TO BUG IN THE ALGORITHM (#24098)
-                    //for (unsigned i = 0; i < nIncoming; ++i)
-                    //    RefinedPtr[i] = Number(S, Phi->getIncomingValue(i));
-                    MaybeNoteDef(S, BBS, Phi, BBS.Safepoints, std::move(RefinedPtr));
+                    MaybeNoteDef(S, BBS, Phi, BBS.Safepoints, GetPHIRefinements(Phi, S));
+                    PHINumbers.push_back(Number(S, Phi));
                     for (unsigned i = 0; i < nIncoming; ++i) {
                         BBState &IncomingBBS = S.BBStates[Phi->getIncomingBlock(i)];
                         NoteUse(S, IncomingBBS, Phi->getIncomingValue(i), IncomingBBS.PhiOuts);
@@ -904,6 +1042,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
         BBS.UnrootedOut = BBS.DownExposedUnrooted;
         BBS.Done = true;
     }
+    FixUpRefinements(PHINumbers, S);
     return S;
 }
 
@@ -917,7 +1056,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
  * We'll perform textbook iterative dataflow to compute this. There are better
  * algorithms. If this starts becoming a problem, we should use one of them.
  */
-void LateLowerGCFrame::ComputeLiveness(Function &F, State &S) {
+void LateLowerGCFrame::ComputeLiveness(State &S) {
     bool Converged = false;
     /* Liveness is a reverse problem. Our problem is slightly more general,
      * because the Unrooted* variables are forward problems. Nevertheless,
@@ -925,7 +1064,7 @@ void LateLowerGCFrame::ComputeLiveness(Function &F, State &S) {
      * variables, in anticipation of the live ranges being larger than the
      * unrooted ranges (since those terminate at any safe point).
      */
-    ReversePostOrderTraversal<Function *> RPOT(&F);
+    ReversePostOrderTraversal<Function *> RPOT(S.F);
     while (!Converged) {
         bool AnyChanged = false;
         for (BasicBlock *BB : RPOT) {
@@ -964,7 +1103,7 @@ void LateLowerGCFrame::ComputeLiveness(Function &F, State &S) {
         }
         Converged = !AnyChanged;
     }
-    ComputeLiveSets(F, S);
+    ComputeLiveSets(S);
 }
 
 // For debugging
@@ -982,8 +1121,57 @@ JL_USED_FUNC static void dumpSafepointsForBBName(Function &F, State &S, const ch
     }
 }
 
-void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
-    DominatorTree *DT = nullptr;
+void LateLowerGCFrame::RefineLiveSet(BitVector &LS, State &S)
+{
+    BitVector FullLS(S.MaxPtrNumber + 1, false);
+    FullLS |= LS;
+    // First expand the live set according to the refinement map
+    // so that we can see all the values that are effectively live.
+    bool changed;
+    do {
+        changed = false;
+        for (auto &kv: S.Refinements) {
+            int Num = kv.first;
+            if (Num == -1 || HasBitSet(FullLS, Num) || kv.second.empty())
+                continue;
+            bool live = true;
+            for (auto &refine: kv.second) {
+                if (refine == -1 || HasBitSet(FullLS, refine))
+                    continue;
+                live = false;
+                break;
+            }
+            if (live) {
+                changed = true;
+                FullLS[Num] = 1;
+            }
+        }
+    } while (changed);
+    // Now remove all values from the LiveSet that's kept alive by other objects
+    do {
+        changed = false;
+        for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
+            if (!S.Refinements.count(Idx))
+                continue;
+            auto &RefinedPtr = S.Refinements[Idx];
+            if (RefinedPtr.empty())
+                continue;
+            bool rooted = true;
+            for (auto RefPtr: RefinedPtr) {
+                if (RefPtr == -1 || HasBitSet(FullLS, RefPtr))
+                    continue;
+                rooted = false;
+                break;
+            }
+            if (rooted) {
+                changed = true;
+                LS[Idx] = 0;
+            }
+        }
+    } while (changed);
+}
+
+void LateLowerGCFrame::ComputeLiveSets(State &S) {
     // Iterate over all safe points. Add to live sets all those variables that
     // are now live across their parent block.
     for (auto it : S.SafepointNumbering) {
@@ -999,38 +1187,21 @@ void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
             if (HasBitSet(BBS.LiveOut, Live))
                 LS[Live] = 1;
         }
-        // Apply refinements
-        for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
-            if (!S.Refinements.count(Idx))
-                continue;
-            auto &RefinedPtr = S.Refinements[Idx];
-            if (RefinedPtr.empty())
-                continue;
-            bool rooted = true;
-            for (auto RefPtr: RefinedPtr) {
-                if (RefPtr == -1 || HasBitSet(LS, RefPtr))
-                    continue;
-                rooted = false;
-                break;
-            }
-            if (rooted) {
-                LS[Idx] = 0;
-            }
-        }
+        RefineLiveSet(LS, S);
         // If the function has GC preserves, figure out whether we need to
         // add in any extra live values.
         if (!S.GCPreserves.empty()) {
-            if (!DT) {
-                DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+            if (!S.DT) {
+                S.DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
             }
             for (auto it2 : S.GCPreserves) {
-                if (!DT->dominates(it2.first, Safepoint))
+                if (!S.DT->dominates(it2.first, Safepoint))
                     continue;
                 bool OutsideRange = false;
                 for (const User *U : it2.first->users()) {
                     // If this is dominated by an end, we don't need to add
                     // the values to our live set.
-                    if (DT->dominates(cast<Instruction>(U), Safepoint)) {
+                    if (S.DT->dominates(cast<Instruction>(U), Safepoint)) {
                         OutsideRange = true;
                         break;
                     }
@@ -1430,10 +1601,10 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     new StoreInst(Val, gep, InsertionPoint);
 }
 
-void LateLowerGCFrame::PlaceGCFrameStores(Function &F, State &S, unsigned MinColorRoot,
+void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
                                           const std::vector<int> &Colors, Value *GCFrame)
 {
-    for (auto &BB : F) {
+    for (auto &BB : *S.F) {
         const BBState &BBS = S.BBStates[&BB];
         if (!BBS.HasSafepoint) {
             continue;
@@ -1455,7 +1626,8 @@ void LateLowerGCFrame::PlaceGCFrameStores(Function &F, State &S, unsigned MinCol
     }
 }
 
-void LateLowerGCFrame::PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>) {
+void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>) {
+    auto F = S.F;
     int MaxColor = -1;
     for (auto C : Colors)
         if (C > MaxColor)
@@ -1469,18 +1641,18 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &C
            0,
 #endif
         ConstantInt::get(T_int32, NRoots+2), "gcframe");
-        gcframe->insertBefore(&*F.getEntryBlock().begin());
+        gcframe->insertBefore(&*F->getEntryBlock().begin());
         // Zero out gcframe
-        BitCastInst *tempSlot_i8 = new BitCastInst(gcframe, Type::getInt8PtrTy(F.getContext()), "");
+        BitCastInst *tempSlot_i8 = new BitCastInst(gcframe, Type::getInt8PtrTy(F->getContext()), "");
         tempSlot_i8->insertAfter(gcframe);
         Type *argsT[2] = {tempSlot_i8->getType(), T_int32};
-        Function *memset = Intrinsic::getDeclaration(F.getParent(), Intrinsic::memset, makeArrayRef(argsT));
+        Function *memset = Intrinsic::getDeclaration(F->getParent(), Intrinsic::memset, makeArrayRef(argsT));
         Value *args[5] = {
             tempSlot_i8, // dest
-            ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
+            ConstantInt::get(Type::getInt8Ty(F->getContext()), 0), // val
             ConstantInt::get(T_int32, sizeof(jl_value_t*)*(NRoots+2)), // len
             ConstantInt::get(T_int32, 0), // align
-            ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
+            ConstantInt::get(Type::getInt1Ty(F->getContext()), 0)}; // volatile
         CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
         zeroing->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
         zeroing->insertAfter(tempSlot_i8);
@@ -1512,9 +1684,9 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &C
         }
         unsigned MinColorRoot = AllocaSlot;
         // Insert GC frame stores
-        PlaceGCFrameStores(F, S, MinColorRoot, Colors, gcframe);
+        PlaceGCFrameStores(S, MinColorRoot, Colors, gcframe);
         // Insert GCFrame pops
-        for(Function::iterator I = F.begin(), E = F.end(); I != E; ++I) {
+        for(Function::iterator I = F->begin(), E = F->end(); I != E; ++I) {
             if (isa<ReturnInst>(I->getTerminator())) {
                 PopGCFrame(gcframe, I->getTerminator());
             }
@@ -1605,10 +1777,10 @@ bool LateLowerGCFrame::runOnFunction(Function &F) {
     if (!ptlsStates)
         return CleanupIR(F);
     State S = LocalScan(F);
-    ComputeLiveness(F, S);
+    ComputeLiveness(S);
     std::vector<int> Colors = ColorRoots(S);
     std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
-    PlaceRootsAndUpdateCalls(F, Colors, S, CallFrames);
+    PlaceRootsAndUpdateCalls(Colors, S, CallFrames);
     CleanupIR(F);
     return true;
 }

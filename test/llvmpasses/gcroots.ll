@@ -289,27 +289,6 @@ top:
     ret %jl_value_t addrspace(10)* %v1
 }
 
-define void @refine_select_phi(%jl_value_t addrspace(10)* %x, %jl_value_t addrspace(10)* %y, i1 %b) {
-; CHECK-LABEL: @refine_select_phi
-; CHECK-NOT: %gcframe
-top:
-  %ptls = call %jl_value_t*** @julia.ptls_states()
-  %s = select i1 %b, %jl_value_t addrspace(10)* %x, %jl_value_t addrspace(10)* %y
-  br i1 %b, label %L1, label %L2
-
-L1:
-  br label %L3
-
-L2:
-  br label %L3
-
-L3:
-  %p = phi %jl_value_t addrspace(10)* [ %x, %L1 ], [ %y, %L2 ]
-  call void @one_arg_boxed(%jl_value_t addrspace(10)* %s)
-  call void @one_arg_boxed(%jl_value_t addrspace(10)* %p)
-  ret void
-}
-
 !0 = !{!"jtbaa"}
 !1 = !{!"jtbaa_const", !0, i64 0}
 !2 = !{!1, !1, i64 0, i64 1}

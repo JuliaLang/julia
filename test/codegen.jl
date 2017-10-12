@@ -284,15 +284,25 @@ function g22421_2(x, y, b)
     return f22421_3(x, y, b ? x : y, 1)
 end
 
+struct A24108
+    x::Vector{Int}
+end
+struct B24108
+    x::A24108
+end
+@noinline f24108(x) = length(x)
+# Test no gcframe is allocated for `x.x.x` even though `x.x` isn't live at the call site
+g24108(x::B24108) = f24108(x.x.x)
+
 @test g22421_1(Ref(1), Ref(2), true) === 7
 @test g22421_1(Ref(3), Ref(4), false) === 16
 @test g22421_2(Ref(5), Ref(6), true) === 17
 @test g22421_2(Ref(7), Ref(8), false) === 24
 
 if opt_level > 0
-    # Disable temporarily. Don't use `@test_broken` since these won't reliably fail either
-    # @test !contains(get_llvm(g22421_1, Tuple{Base.RefValue{Int},Base.RefValue{Int},Bool}),
-    #                 "%gcframe")
-    # @test !contains(get_llvm(g22421_2, Tuple{Base.RefValue{Int},Base.RefValue{Int},Bool}),
-    #                 "%gcframe")
+    @test !contains(get_llvm(g22421_1, Tuple{Base.RefValue{Int},Base.RefValue{Int},Bool}),
+                    "%gcframe")
+    @test !contains(get_llvm(g22421_2, Tuple{Base.RefValue{Int},Base.RefValue{Int},Bool}),
+                    "%gcframe")
+    @test !contains(get_llvm(g24108, Tuple{B24108}), "%gcframe")
 end
