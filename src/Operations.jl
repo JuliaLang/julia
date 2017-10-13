@@ -193,9 +193,10 @@ function install(
     hash::SHA1,
     urls::Vector{String},
     version::Union{VersionNumber,Void} = nothing
-)
+)::Tuple{String,Bool}
+    # returns path to version & if it's newly installed
     version_path = find_installed(uuid, hash)
-    ispath(version_path) && return nothing
+    ispath(version_path) && return version_path, false
     upstream_dir = joinpath(depots()[1], "upstream")
     ispath(upstream_dir) || mkpath(upstream_dir)
     repo_path = joinpath(upstream_dir, string(uuid))
@@ -231,7 +232,7 @@ function install(
     vstr = version != nothing ? "v$version [$h]" : "[$h]"
     info("Installing $name $vstr")
     LibGit2.checkout_tree(repo, tree, options=opts)
-    return nothing
+    return version_path, true
 end
 
 function update_manifest(env::EnvCache, uuid::UUID, name::String, hash::SHA1, version::VersionNumber)
@@ -284,14 +285,56 @@ end
 function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})
     names, hashes, urls = version_data(env, pkgs)
     # install & update manifest
+    builds = Tuple{String,UUID,SHA1,String}[]
     for pkg in pkgs
         uuid = pkg.uuid
         version = pkg.version::VersionNumber
         name, hash = names[uuid], hashes[uuid]
-        install(env, uuid, name, hash, urls[uuid], version)
+        path, new = install(env, uuid, name, hash, urls[uuid], version)
         update_manifest(env, uuid, name, hash, version)
+        new || continue
+        build_file = joinpath(path, "deps", "build.jl")
+        ispath(build_file) && push!(builds, (name, uuid, hash, build_file))
     end
     prune_manifest(env)
+    # build new package versions with deps/build.jl files
+    LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
+    for (name, uuid, hash, build_file) in builds
+        info("Building [$(string(uuid)[1:8])] $name $(string(hash)[1:16])...")
+        log_file = splitext(build_file)[1] * ".log"
+        code = """
+            empty!(Base.LOAD_PATH)
+            append!(Base.LOAD_PATH, $(repr(LOAD_PATH)))
+            empty!(Base.LOAD_CACHE_PATH)
+            append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
+            empty!(Base.DL_LOAD_PATH)
+            append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
+            open($(repr(log_file)), "w") do f
+                name = $(repr(name))
+                build_file = $(repr(build_file))
+                try cd(dirname(build_file)) do
+                        evalfile(build_file)
+                    end
+                catch err
+                    serialize(f, name)
+                    serialize(f, err)
+                end
+            end
+            """
+        cmd = ```
+            $(Base.julia_cmd()) -O0
+            --color=$(Base.have_color ? "yes" : "no")
+            --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
+            --history-file=no
+            --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
+            --eval $code
+            ```
+        if success(pipeline(cmd, stdout=STDOUT, stderr=STDERR))
+            Base.rm(log_file, force=true)
+        else
+            warn("Error building `$name`!\nBuild log left at $(repr(log_file))")
+        end
+    end
 end
 
 function rm(env::EnvCache, pkgs::Vector{PackageSpec})
