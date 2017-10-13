@@ -81,7 +81,7 @@ m = Mmap.mmap(s, Vector{UInt8}, sz+1)
 close(s); finalize(m); m=nothing; gc()
 sz = filesize(file)
 s = open(file, "r+")
-m = Mmap.mmap(file, Vector{UInt8}, 1, sz)
+m = Mmap.mmap(s, Vector{UInt8}, 1, sz)
 @test length(m) == 1
 @test m[1] == 0x00
 close(s); finalize(m); m=nothing; gc()
