@@ -1938,6 +1938,8 @@ map(f, A::Union{AbstractArray,AbstractSet}) = collect_similar(A, Generator(f,A))
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise.
 
+See also: [`mapslices`](@ref)
+
 # Examples
 ```jldoctest
 julia> map(x -> x * 2, [1, 2, 3])
