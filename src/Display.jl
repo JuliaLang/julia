@@ -51,13 +51,22 @@ end
 function print_project_diff(env₀::EnvCache, env₁::EnvCache)
     pm₀ = filter_manifest(in_project(env₀.project["deps"]), env₀.manifest)
     pm₁ = filter_manifest(in_project(env₁.project["deps"]), env₁.manifest)
-    diff = manifest_diff(pm₀, pm₁)
-    print_diff(filter!(x->x.old != x.new, diff))
+    diff = filter!(x->x.old != x.new, manifest_diff(pm₀, pm₁))
+    if isempty(diff)
+        print_with_color(color_dark, " [no changes]\n")
+    else
+        print_diff(diff)
+    end
 end
 
 function print_manifest_diff(env₀::EnvCache, env₁::EnvCache)
     diff = manifest_diff(env₀.manifest, env₁.manifest)
-    print_diff(filter!(x->x.old != x.new, diff))
+    diff = filter!(x->x.old != x.new, diff)
+    if isempty(diff)
+        print_with_color(color_dark, " [no changes]\n")
+    else
+        print_diff(diff)
+    end
 end
 
 struct VerInfo

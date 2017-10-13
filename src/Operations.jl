@@ -341,8 +341,13 @@ function rm(env::EnvCache, pkgs::Vector{PackageSpec})
         warn("`$str` not in project, ignoring")
     end
     # delete drops from project
+    n = length(env.project["deps"])
     filter!(env.project["deps"]) do _, uuid
         UUID(uuid) ∉ drop
+    end
+    if length(env.project["deps"]) == n
+        info("No changes")
+        return
     end
     # only keep reachable manifest entires
     prune_manifest(env)
