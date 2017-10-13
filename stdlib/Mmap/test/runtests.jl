@@ -221,10 +221,11 @@ open(file,"w") do f
     write(f,UInt8(1))
 end
 @test filesize(file) == 9
-m = Mmap.mmap(file, BitArray, (72,))
+s = open(file, "r+")
+m = Mmap.mmap(s, BitArray, (72,))
 @test Base._check_bitarray_consistency(m)
 @test length(m) == 72
-finalize(m); m = nothing; gc()
+close(s); finalize(m); m = nothing; gc()
 rm(file)
 
 # Mmap.mmap with an offset
