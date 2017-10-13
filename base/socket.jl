@@ -312,10 +312,11 @@ mutable struct TCPServer <: LibuvServer
         return tcp
     end
 end
-function TCPServer()
+function TCPServer(; delay=true)
     tcp = TCPServer(Libc.malloc(_sizeof_uv_tcp), StatusUninit)
-    err = ccall(:uv_tcp_init, Cint, (Ptr{Void}, Ptr{Void}),
-                eventloop(), tcp.handle)
+    af_spec = delay ? 0 : 2   # AF_UNSPEC is 0, AF_INET is 2
+    err = ccall(:uv_tcp_init_ex, Cint, (Ptr{Void}, Ptr{Void}, Cuint),
+                eventloop(), tcp.handle, af_spec)
     uv_error("failed to create tcp server", err)
     tcp.status = StatusInit
     return tcp
