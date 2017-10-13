@@ -235,6 +235,7 @@ static MDNode *tbaa_arraylen;       // The len in a jl_array_t
 static MDNode *tbaa_arrayflags;     // The flags in a jl_array_t
 static MDNode *tbaa_const;      // Memory that is immutable by the time LLVM can see it
 static MDNode *tbaa_arrayselbyte;   // a selector byte in a isbits Union jl_array_t
+static MDNode *tbaa_unionselbyte;   // a selector byte in isbits Union struct fields
 
 // Basic DITypes
 static DICompositeType *jl_value_dillvmt;
@@ -5959,6 +5960,7 @@ static void init_julia_llvm_meta(void)
     tbaa_arrayflags = tbaa_make_child("jtbaa_arrayflags", tbaa_array_scalar).first;
     tbaa_const = tbaa_make_child("jtbaa_const", nullptr, true).first;
     tbaa_arrayselbyte = tbaa_make_child("jtbaa_arrayselbyte", tbaa_array_scalar).first;
+    tbaa_unionselbyte = tbaa_make_child("jtbaa_unionselbyte", tbaa_data_scalar).first;
 }
 
 static void init_julia_llvm_env(Module *m)
