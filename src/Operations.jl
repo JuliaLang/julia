@@ -295,15 +295,16 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})
 end
 
 function rm(env::EnvCache, pkgs::Vector{PackageSpec})
-    # drop the indicated packages
     drop = UUID[]
+    # find manifest-mode drops
     for pkg in pkgs
+        pkg.mode == :manifest || continue
         info = manifest_info(env, pkg.uuid)
-        if info == nothing
-            str = has_name(pkg) ? pkg.name : string(pkg.uuid)
-            warn("`$str` not in environemnt, ignoring")
+        if info != nothing
+            pkg.uuid in drop || push!(drop, pkg.uuid)
         else
-            push!(drop, pkg.uuid)
+            str = has_name(pkg) ? pkg.name : string(pkg.uuid)
+            warn("`$str` not in manifest, ignoring")
         end
     end
     # drop reverse dependencies
@@ -320,12 +321,32 @@ function rm(env::EnvCache, pkgs::Vector{PackageSpec})
         end
         clean && break
     end
-    # TODO: prompt for removal of other project deps
+    # find project-mode drops
+    for pkg in pkgs
+        pkg.mode == :project || continue
+        found = false
+        for (name::String, uuid::UUID) in env.project["deps"]
+            has_name(pkg) && pkg.name == name ||
+            has_uuid(pkg) && pkg.uuid == uuid || continue
+            !has_name(pkg) || pkg.name == name ||
+                error("project file name mismatch for `$uuid`: $(pkg.name) ≠ $name")
+            !has_uuid(pkg) || pkg.uuid == uuid ||
+                error("project file UUID mismatch for `$name`: $(pkg.uuid) ≠ $uuid")
+            uuid in drop || push!(drop, uuid)
+            found = true
+            break
+        end
+        found && continue
+        str = has_name(pkg) ? pkg.name : string(pkg.uuid)
+        warn("`$str` not in project, ignoring")
+    end
+    # delete drops from project
     filter!(env.project["deps"]) do _, uuid
         UUID(uuid) ∉ drop
     end
-    # update project & manifest files
+    # only keep reachable manifest entires
     prune_manifest(env)
+    # update project & manifest
     write_env(env)
 end
 

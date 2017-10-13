@@ -163,7 +163,6 @@ function do_rm!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
         cmderror("`rm` – list packages to remove")
     project_resolve!(env, pkgs)
     manifest_resolve!(env, pkgs)
-    ensure_resolved(env, pkgs)
     Pkg3.Operations.rm(env, pkgs)
 end
 
