@@ -121,12 +121,14 @@ end
     @test ""[10:9] == ""
     @test "hello"[10:9] == ""
     @test "hellø"[10:9] == ""
-    @test SubString("hello", 1, 6)[10:9] == ""
+    @test SubString("hello", 1, 5)[10:9] == ""
     @test SubString("hello", 1, 0)[10:9] == ""
-    @test SubString("hellø", 1, 6)[10:9] == ""
+    @test SubString("hellø", 1, 5)[10:9] == ""
     @test SubString("hellø", 1, 0)[10:9] == ""
-    @test SubString("", 1, 6)[10:9] == ""
     @test SubString("", 1, 0)[10:9] == ""
+
+    @test_throws BoundsError SubString("", 1, 6)
+    @test_throws BoundsError SubString("", 1, 1)
 end
 
 @testset "issue #22500 (using `get()` to index strings with default returns)" begin

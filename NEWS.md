@@ -640,6 +640,9 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * The constructor of `SubString` now checks if the requsted view range
+    is defined by valid indices in the parent `AbstractString` ([#22511]).
+
   * `readline`, `readlines` and `eachline` return lines without line endings by default.
     You *must* use `readline(s, chomp=false)`, etc. to get the old behavior where
     returned lines include trailing end-of-line character(s) ([#19944]).
