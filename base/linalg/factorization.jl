@@ -6,7 +6,7 @@ abstract type Factorization{T} end
 
 eltype(::Type{Factorization{T}}) where {T} = T
 transpose(F::Factorization) = error("transpose not implemented for $(typeof(F))")
-ctranspose(F::Factorization) = error("ctranspose not implemented for $(typeof(F))")
+adjoint(F::Factorization) = error("adjoint not implemented for $(typeof(F))")
 
 macro assertposdef(A, info)
    :($(esc(info)) == 0 ? $(esc(A)) : throw(PosDefException($(esc(info)))))
@@ -22,15 +22,15 @@ end
 Test that a factorization of a matrix succeeded.
 
 ```jldoctest
-julia> cholfact([1 0; 0 1])
-Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
-[1.0 0.0; 0.0 1.0]
-successful: true
+julia> F = cholfact([1 0; 0 1]);
 
-julia> cholfact([1 0; 0 -1])
-Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
-[1.0 0.0; 0.0 -1.0]
-successful: false
+julia> LinAlg.issuccess(F)
+true
+
+julia> F = lufact([1 0; 0 0]);
+
+julia> LinAlg.issuccess(F)
+false
 ```
 """
 issuccess(F::Factorization)
@@ -56,9 +56,9 @@ Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F,
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::Factorization{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
-    c2r = reshape(transpose(reinterpret(T, B, (2, length(B)))), size(B, 1), 2*size(B, 2))
+    c2r = reshape(transpose(reinterpret(T, reshape(B, (1, length(B))))), size(B, 1), 2*size(B, 2))
     x = A_ldiv_B!(F, c2r)
-    return reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)), _ret_size(F, B))
+    return reshape(collect(reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)))), _ret_size(F, B))
 end
 
 for (f1, f2) in ((:\, :A_ldiv_B!),

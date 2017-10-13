@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Interface to [libgit2](https://libgit2.github.com/).
+"""
 module LibGit2
 
 import Base: merge!, ==
@@ -250,26 +253,34 @@ The keyword arguments are:
   * `remoteurl::AbstractString=""`: the URL of `remote`. If not specified,
     will be assumed based on the given name of `remote`.
   * `refspecs=AbstractString[]`: determines properties of the fetch.
-  * `payload=Nullable{AbstractCredentials}()`: provides credentials, if necessary,
-    for instance if `remote` is a private repository.
+  * `payload=CredentialPayload()`: provides credentials and/or settings when authenticating
+    against a private `remote`.
 
 Equivalent to `git fetch [<remoteurl>|<repo>] [<refspecs>]`.
 """
 function fetch(repo::GitRepo; remote::AbstractString="origin",
                remoteurl::AbstractString="",
                refspecs::Vector{<:AbstractString}=AbstractString[],
-               payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
+               payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}=CredentialPayload())
+    p = reset!(deprecate_nullable_creds(:fetch, "repo", payload))
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
         GitRemoteAnon(repo, remoteurl)
     end
-    try
-        fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
+    result = try
+        fo = FetchOptions(callbacks=RemoteCallbacks(credentials=credentials_cb(), payload=p))
         fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
+    catch err
+        if isa(err, GitError) && err.code == Error.EAUTH
+            reject(payload)
+        end
+        rethrow()
     finally
         close(rmt)
     end
+    approve(payload)
+    return result
 end
 
 """
@@ -283,8 +294,8 @@ The keyword arguments are:
   * `refspecs=AbstractString[]`: determines properties of the push.
   * `force::Bool=false`: determines if the push will be a force push,
      overwriting the remote branch.
-  * `payload=Nullable{AbstractCredentials}()`: provides credentials, if necessary,
-    for instance if `remote` is a private repository.
+  * `payload=CredentialPayload()`: provides credentials and/or settings when authenticating
+    against a private `remote`.
 
 Equivalent to `git push [<remoteurl>|<repo>] [<refspecs>]`.
 """
@@ -292,18 +303,26 @@ function push(repo::GitRepo; remote::AbstractString="origin",
               remoteurl::AbstractString="",
               refspecs::Vector{<:AbstractString}=AbstractString[],
               force::Bool=false,
-              payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
+              payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}=CredentialPayload())
+    p = reset!(deprecate_nullable_creds(:push, "repo", payload))
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
         GitRemoteAnon(repo, remoteurl)
     end
-    try
-        push_opts=PushOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
+    result = try
+        push_opts = PushOptions(callbacks=RemoteCallbacks(credentials=credentials_cb(), payload=p))
         push(rmt, refspecs, force=force, options=push_opts)
+    catch err
+        if isa(err, GitError) && err.code == Error.EAUTH
+            reject(payload)
+        end
+        rethrow()
     finally
         close(rmt)
     end
+    approve(payload)
+    return result
 end
 
 """
@@ -482,9 +501,8 @@ The keyword arguments are:
   * `remote_cb::Ptr{Void}=C_NULL`: a callback which will be used to create the remote
     before it is cloned. If `C_NULL` (the default), no attempt will be made to create
     the remote - it will be assumed to already exist.
-  * `payload::Nullable{P<:AbstractCredentials}=Nullable{AbstractCredentials}()`:
-    provides credentials if necessary, for instance if the remote is a private
-    repository.
+  * `payload::CredentialPayload=CredentialPayload()`: provides credentials and/or settings
+    when authenticating against a private repository.
 
 Equivalent to `git clone [-b <branch>] [--bare] <repo_url> <repo_path>`.
 
@@ -501,17 +519,29 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Void} = C_NULL,
-               payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
+               payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}=CredentialPayload())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
-    fetch_opts=FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), payload))
-    clone_opts = CloneOptions(
-                bare = Cint(isbare),
-                checkout_branch = isempty(lbranch) ? Cstring(C_NULL) : Base.unsafe_convert(Cstring, lbranch),
-                fetch_opts=fetch_opts,
-                remote_cb = remote_cb
-            )
-    return clone(repo_url, repo_path, clone_opts)
+    @Base.gc_preserve lbranch begin
+        p = reset!(deprecate_nullable_creds(:clone, "repo_url, repo_path", payload))
+        fetch_opts = FetchOptions(callbacks = RemoteCallbacks(credentials=credentials_cb(), payload=p))
+        clone_opts = CloneOptions(
+                    bare = Cint(isbare),
+                    checkout_branch = isempty(lbranch) ? Cstring(C_NULL) : Base.unsafe_convert(Cstring, lbranch),
+                    fetch_opts = fetch_opts,
+                    remote_cb = remote_cb
+                )
+        repo = try
+            clone(repo_url, repo_path, clone_opts)
+        catch err
+            if isa(err, GitError) && err.code == Error.EAUTH
+                reject(payload)
+            end
+            rethrow()
+        end
+    end
+    approve(payload)
+    return repo
 end
 
 """ git reset [<committish>] [--] <pathspecs>... """
@@ -522,7 +552,7 @@ function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractSt
 end
 
 """
-    reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED)
+    reset!(repo::GitRepo, id::GitHash, mode::Cint=Consts.RESET_MIXED)
 
 Reset the repository `repo` to its state at `id`, using one of three modes
 set by `mode`:
@@ -861,6 +891,14 @@ function restore(s::State, repo::GitRepo)
     reset!(repo, s.head, Consts.RESET_SOFT) # restore head
 end
 
+"""
+    transact(f::Function, repo::GitRepo)
+
+Apply function `f` to the git repository `repo`, taking a [`snapshot`](@ref) before
+applying `f`. If an error occurs within `f`, `repo` will be returned to its snapshot
+state using [`restore`](@ref). The error which occurred will be rethrown, but the
+state of `repo` will not be corrupted.
+"""
 function transact(f::Function, repo::GitRepo)
     state = snapshot(repo)
     try f(repo) catch

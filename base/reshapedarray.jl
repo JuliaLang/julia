@@ -232,7 +232,7 @@ end
 end
 
 # helpful error message for a common failure case
-const ReshapedRange{T,N,A<:Range} = ReshapedArray{T,N,A,Tuple{}}
+const ReshapedRange{T,N,A<:AbstractRange} = ReshapedArray{T,N,A,Tuple{}}
 setindex!(A::ReshapedRange, val, index::Int) = _rs_setindex!_err()
 setindex!(A::ReshapedRange{T,N}, val, indexes::Vararg{Int,N}) where {T,N} = _rs_setindex!_err()
 setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()

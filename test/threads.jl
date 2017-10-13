@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 using Base.Threads
 
 # threading constructs
@@ -25,7 +25,7 @@ function test_threaded_loop_and_atomic_add()
     @test x[] == 10000
     # Next test checks that all loop iterations ran,
     # and were unique (via pigeon-hole principle).
-    @test findfirst(found,false) == 0
+    @test !(false in found)
     if was_inorder
         println(STDERR, "Warning: threaded loop executed in order")
     end
@@ -159,7 +159,7 @@ end
 end
 
 module M14726_2
-using Base.Test
+using Test
 using Base.Threads
 @threads for i in 1:100
     # Make sure current module is the same as the one on the thread that

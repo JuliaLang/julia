@@ -271,32 +271,7 @@ function diff(A::AbstractMatrix, dim::Integer=1)
     end
 end
 
-
-gradient(F::AbstractVector) = gradient(F, [1:length(F);])
-
-"""
-    gradient(F::AbstractVector, [h::Real])
-
-Compute differences along vector `F`, using `h` as the spacing between points. The default
-spacing is one.
-
-# Examples
-```jldoctest
-julia> a = [2,4,6,8];
-
-julia> gradient(a)
-4-element Array{Float64,1}:
- 2.0
- 2.0
- 2.0
- 2.0
-```
-"""
-gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F));])
-
 diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to construct a diagonal matrix"))
-
-#diagm(v::AbstractVecOrMat{T}) where {T}
 
 ###########################################################################################
 # Inner products and norms
@@ -451,6 +426,27 @@ end
     vecnorm(x::Number, p::Real=2)
 
 For numbers, return ``\\left( |x|^p \\right) ^{1/p}``.
+
+# Examples
+```jldoctest
+julia> vecnorm(2, 1)
+2
+
+julia> vecnorm(-2, 1)
+2
+
+julia> vecnorm(2, 2)
+2
+
+julia> vecnorm(-2, 2)
+2
+
+julia> vecnorm(2, Inf)
+2
+
+julia> vecnorm(-2, Inf)
+2
+```
 """
 @inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : oneunit(abs(x))) : abs(x)
 
@@ -591,6 +587,31 @@ value `p = q/(q-1)`. They coincide at `p = q = 2`.
 The difference in norm between a vector space and its dual arises to preserve
 the relationship between duality and the inner product, and the result is
 consistent with the p-norm of `1 × n` matrix.
+
+# Examples
+```jldoctest
+julia> v = [1; im];
+
+julia> vc = v';
+
+julia> norm(vc, 1)
+1.0
+
+julia> norm(v, 1)
+2.0
+
+julia> norm(vc, 2)
+1.4142135623730951
+
+julia> norm(v, 2)
+1.4142135623730951
+
+julia> norm(vc, Inf)
+2.0
+
+julia> norm(v, Inf)
+1.0
+```
 """
 @inline norm(tv::RowVector, q::Real) = q == Inf ? norm(transpose(tv), 1) : norm(transpose(tv), q/(q-1))
 
@@ -705,13 +726,13 @@ dot(x::AbstractVector{<:Number}, y::AbstractVector{<:Number}) = vecdot(x, y)
 ###########################################################################################
 
 """
-    rank(M[, tol::Real])
+    rank(A[, tol::Real])
 
 Compute the rank of a matrix by counting how many singular
-values of `M` have magnitude greater than `tol`.
-By default, the value of `tol` is the largest
-dimension of `M` multiplied by the [`eps`](@ref)
-of the [`eltype`](@ref) of `M`.
+values of `A` have magnitude greater than `tol*σ₁` where `σ₁` is
+`A`'s largest singular values. By default, the value of `tol` is the smallest
+dimension of `A` multiplied by the [`eps`](@ref)
+of the [`eltype`](@ref) of `A`.
 
 # Examples
 ```jldoctest
@@ -728,14 +749,11 @@ julia> rank(diagm([1, 0.001, 2]), 0.00001)
 3
 ```
 """
-rank(A::AbstractMatrix, tol::Real) = mapreduce(x -> x > tol, +, 0, svdvals(A))
-function rank(A::AbstractMatrix)
-    m,n = size(A)
-    (m == 0 || n == 0) && return 0
-    sv = svdvals(A)
-    return sum(sv .> maximum(size(A))*eps(sv[1]))
+function rank(A::AbstractMatrix, tol::Real = min(size(A)...)*eps(real(float(one(eltype(A))))))
+    s = svdvals(A)
+    sum(x -> x > tol*s[1], s)
 end
-rank(x::Number) = x==0 ? 0 : 1
+rank(x::Number) = x == 0 ? 0 : 1
 
 """
     trace(M)
@@ -794,6 +812,19 @@ function inv(A::AbstractMatrix{T}) where T
     A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S0, checksquare(A)))
 end
 
+function pinv(v::AbstractVector{T}, tol::Real=real(zero(T))) where T
+    res = similar(v, typeof(zero(T) / (abs2(one(T)) + abs2(one(T)))))'
+    den = sum(abs2, v)
+    # as tol is the threshold relative to the maximum singular value, for a vector with
+    # single singular value σ=√den, σ ≦ tol*σ is equivalent to den=0 ∨ tol≥1
+    if iszero(den) || tol >= one(tol)
+        fill!(res, zero(eltype(res)))
+    else
+        res .= v' ./ den
+    end
+    return res
+end
+
 """
     \\(A, B)
 
@@ -841,10 +872,11 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
     return qrfact(A,Val(true)) \ B
 end
 
-(\)(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
+(\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
 (/)(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
 # /(x::Number,A::StridedMatrix) = x*inv(A)
+/(x::Number, v::AbstractVector) = x*pinv(v)
 
 cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)
@@ -942,7 +974,7 @@ function ishermitian(A::AbstractMatrix)
         return false
     end
     for i = indsn, j = i:last(indsn)
-        if A[i,j] != ctranspose(A[j,i])
+        if A[i,j] != adjoint(A[j,i])
             return false
         end
     end
@@ -952,9 +984,9 @@ end
 ishermitian(x::Number) = (x == conj(x))
 
 """
-    istriu(A) -> Bool
+    istriu(A::AbstractMatrix, k::Integer = 0) -> Bool
 
-Test whether a matrix is upper triangular.
+Test whether `A` is upper triangular starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
@@ -966,6 +998,9 @@ julia> a = [1 2; 2 -1]
 julia> istriu(a)
 false
 
+julia> istriu(a, -1)
+true
+
 julia> b = [1 im; 0 -1]
 2×2 Array{Complex{Int64},2}:
  1+0im   0+1im
@@ -973,22 +1008,26 @@ julia> b = [1 im; 0 -1]
 
 julia> istriu(b)
 true
+
+julia> istriu(b, 1)
+false
 ```
 """
-function istriu(A::AbstractMatrix)
+function istriu(A::AbstractMatrix, k::Integer = 0)
     m, n = size(A)
-    for j = 1:min(n,m-1), i = j+1:m
-        if !iszero(A[i,j])
-            return false
+    for j in 1:min(n, m + k - 1)
+        for i in max(1, j - k + 1):m
+            iszero(A[i, j]) || return false
         end
     end
     return true
 end
+istriu(x::Number) = true
 
 """
-    istril(A) -> Bool
+    istril(A::AbstractMatrix, k::Integer = 0) -> Bool
 
-Test whether a matrix is lower triangular.
+Test whether `A` is lower triangular starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
@@ -1000,6 +1039,9 @@ julia> a = [1 2; 2 -1]
 julia> istril(a)
 false
 
+julia> istril(a, 1)
+true
+
 julia> b = [1 0; -im -1]
 2×2 Array{Complex{Int64},2}:
  1+0im   0+0im
@@ -1007,17 +1049,54 @@ julia> b = [1 0; -im -1]
 
 julia> istril(b)
 true
+
+julia> istril(b, -1)
+false
 ```
 """
-function istril(A::AbstractMatrix)
+function istril(A::AbstractMatrix, k::Integer = 0)
     m, n = size(A)
-    for j = 2:n, i = 1:min(j-1,m)
-        if !iszero(A[i,j])
-            return false
+    for j in max(1, k + 2):n
+        for i in 1:min(j - k - 1, m)
+            iszero(A[i, j]) || return false
         end
     end
     return true
 end
+istril(x::Number) = true
+
+"""
+    isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) -> Bool
+
+Test whether `A` is banded with lower bandwidth starting from the `kl`th superdiagonal
+and upper bandwidth extending through the `ku`th superdiagonal.
+
+# Examples
+```jldoctest
+julia> a = [1 2; 2 -1]
+2×2 Array{Int64,2}:
+ 1   2
+ 2  -1
+
+julia> isbanded(a, 0, 0)
+false
+
+julia> isbanded(a, -1, 1)
+true
+
+julia> b = [1 0; -im -1] # lower bidiagonal
+2×2 Array{Complex{Int64},2}:
+ 1+0im   0+0im
+ 0-1im  -1+0im
+
+julia> isbanded(b, 0, 0)
+false
+
+julia> isbanded(b, -1, 0)
+true
+```
+"""
+isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril(A, ku)
 
 """
     isdiag(A) -> Bool
@@ -1043,11 +1122,9 @@ julia> isdiag(b)
 true
 ```
 """
-isdiag(A::AbstractMatrix) = istril(A) && istriu(A)
-
-istriu(x::Number) = true
-istril(x::Number) = true
+isdiag(A::AbstractMatrix) = isbanded(A, 0, 0)
 isdiag(x::Number) = true
+
 
 """
     linreg(x, y)
@@ -1151,6 +1228,16 @@ function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractAr
     end
     for (IY, IX) in zip(eachindex(ry), eachindex(rx))
         @inbounds y[ry[IY]] += x[rx[IX]]*α
+    end
+    y
+end
+
+function axpby!(α, x::AbstractArray, β, y::AbstractArray)
+    if _length(x) != _length(y)
+        throw(DimensionMismatch("x has length $(_length(x)), but y has length $(_length(y))"))
+    end
+    for (IX, IY) in zip(eachindex(x), eachindex(y))
+        @inbounds y[IY] = x[IX]*α + y[IY]*β
     end
     y
 end

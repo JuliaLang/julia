@@ -8,7 +8,7 @@
 An indexing operation into an `Associative` (`Dict`) or `Set` like object tried to access or
 delete a non-existent element.
 """
-mutable struct KeyError <: Exception
+struct KeyError <: Exception
     key
 end
 
@@ -69,11 +69,18 @@ end
 
 in(k, v::KeyIterator) = get(v.dict, k, secret_table_token) !== secret_table_token
 
+"""
+    keys(iterator)
+
+For an iterator or collection that has keys and values (e.g. arrays and dictionaries),
+return an iterator over the keys.
+"""
+function keys end
 
 """
     keys(a::Associative)
 
-Return an iterator over all keys in a collection.
+Return an iterator over all keys in an associative collection.
 `collect(keys(a))` returns an array of keys.
 Since the keys are stored internally in a hash table,
 the order in which they are returned may vary.
@@ -94,7 +101,6 @@ julia> collect(keys(a))
 ```
 """
 keys(a::Associative) = KeyIterator(a)
-eachindex(a::Associative) = KeyIterator(a)
 
 """
     values(a::Associative)
@@ -120,6 +126,15 @@ julia> collect(values(a))
 ```
 """
 values(a::Associative) = ValueIterator(a)
+
+"""
+    pairs(collection)
+
+Return an iterator over `key => value` pairs for any
+collection that maps a set of keys to a set of values.
+This includes arrays, where the keys are the array indices.
+"""
+pairs(collection) = Generator(=>, keys(collection), values(collection))
 
 function copy(a::Associative)
     b = similar(a)
@@ -271,7 +286,7 @@ Dict{String,Float64} with 3 entries:
 ```
 """
 merge(d::Associative, others::Associative...) =
-    merge!(emptymergedict(d, others...), d, others...)
+    merge!(_typeddict(d, others...), others...)
 
 """
     merge(combine, d::Associative, others::Associative...)
@@ -301,23 +316,23 @@ Dict{String,Float64} with 3 entries:
 ```
 """
 merge(combine::Function, d::Associative, others::Associative...) =
-    merge!(combine, emptymergedict(d, others...), d, others...)
+    merge!(combine, _typeddict(d, others...), others...)
 
 promoteK(K) = K
 promoteV(V) = V
 promoteK(K, d, ds...) = promoteK(promote_type(K, keytype(d)), ds...)
 promoteV(V, d, ds...) = promoteV(promote_type(V, valtype(d)), ds...)
-function emptymergedict(d::Associative, others::Associative...)
+function _typeddict(d::Associative, others::Associative...)
     K = promoteK(keytype(d), others...)
     V = promoteV(valtype(d), others...)
-    Dict{K,V}()
+    Dict{K,V}(d)
 end
 
 """
     filter!(f, d::Associative)
 
 Update `d`, removing elements for which `f` is `false`.
-The function `f` is passed two arguments (key and value).
+The function `f` is passed `key=>value` pairs.
 
 # Example
 ```jldoctest
@@ -327,7 +342,7 @@ Dict{Int64,String} with 3 entries:
   3 => "c"
   1 => "a"
 
-julia> filter!((x,y)->isodd(x), d)
+julia> filter!(p->isodd(p.first), d)
 Dict{Int64,String} with 2 entries:
   3 => "c"
   1 => "a"
@@ -335,13 +350,35 @@ Dict{Int64,String} with 2 entries:
 """
 function filter!(f, d::Associative)
     badkeys = Vector{keytype(d)}(0)
-    for (k,v) in d
-        # don't delete!(d, k) here, since associative types
-        # may not support mutation during iteration
-        f(k,v) || push!(badkeys, k)
+    try
+        for (k,v) in d
+            # don't delete!(d, k) here, since associative types
+            # may not support mutation during iteration
+            f(k => v) || push!(badkeys, k)
+        end
+    catch e
+        return filter!_dict_deprecation(e, f, d)
     end
     for k in badkeys
         delete!(d, k)
+    end
+    return d
+end
+
+function filter!_dict_deprecation(e, f, d::Associative)
+    if isa(e, MethodError) && e.f === f
+        depwarn("In `filter!(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter!)
+        badkeys = Vector{keytype(d)}(0)
+        for (k,v) in d
+            # don't delete!(d, k) here, since associative types
+            # may not support mutation during iteration
+            f(k, v) || push!(badkeys, k)
+        end
+        for k in badkeys
+            delete!(d, k)
+        end
+    else
+        rethrow(e)
     end
     return d
 end
@@ -350,7 +387,7 @@ end
     filter(f, d::Associative)
 
 Return a copy of `d`, removing elements for which `f` is `false`.
-The function `f` is passed two arguments (key and value).
+The function `f` is passed `key=>value` pairs.
 
 # Examples
 ```jldoctest
@@ -359,7 +396,7 @@ Dict{Int64,String} with 2 entries:
   2 => "b"
   1 => "a"
 
-julia> filter((x,y)->isodd(x), d)
+julia> filter(p->isodd(p.first), d)
 Dict{Int64,String} with 1 entry:
   1 => "a"
 ```
@@ -367,9 +404,22 @@ Dict{Int64,String} with 1 entry:
 function filter(f, d::Associative)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
     df = similar(d)
-    for (k,v) in d
-        if f(k,v)
-            df[k] = v
+    try
+        for (k, v) in d
+            if f(k => v)
+                df[k] = v
+            end
+        end
+    catch e
+        if isa(e, MethodError) && e.f === f
+            depwarn("In `filter(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter)
+            for (k, v) in d
+                if f(k, v)
+                    df[k] = v
+                end
+            end
+        else
+            rethrow(e)
         end
     end
     return df

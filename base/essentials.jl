@@ -18,6 +18,14 @@ macro _noinline_meta()
     Expr(:meta, :noinline)
 end
 
+macro _gc_preserve_begin(arg1)
+    Expr(:gc_preserve_begin, esc(arg1))
+end
+
+macro _gc_preserve_end(token)
+    Expr(:gc_preserve_end, esc(token))
+end
+
 """
     @nospecialize
 
@@ -60,6 +68,77 @@ end
 macro _propagate_inbounds_meta()
     Expr(:meta, :inline, :propagate_inbounds)
 end
+
+"""
+    convert(T, x)
+
+Convert `x` to a value of type `T`.
+
+If `T` is an [`Integer`](@ref) type, an [`InexactError`](@ref) will be raised if `x`
+is not representable by `T`, for example if `x` is not integer-valued, or is outside the
+range supported by `T`.
+
+# Examples
+```jldoctest
+julia> convert(Int, 3.0)
+3
+
+julia> convert(Int, 3.5)
+ERROR: InexactError: convert(Int64, 3.5)
+Stacktrace:
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:701
+```
+
+If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
+then it will return the closest value to `x` representable by `T`.
+
+```jldoctest
+julia> x = 1/3
+0.3333333333333333
+
+julia> convert(Float32, x)
+0.33333334f0
+
+julia> convert(Rational{Int32}, x)
+1//3
+
+julia> convert(Rational{Int64}, x)
+6004799503160661//18014398509481984
+```
+
+If `T` is a collection type and `x` a collection, the result of `convert(T, x)` may alias
+`x`.
+```jldoctest
+julia> x = Int[1,2,3];
+
+julia> y = convert(Vector{Int}, x);
+
+julia> y === x
+true
+```
+Similarly, if `T` is a composite type and `x` a related instance, the result of
+`convert(T, x)` may alias part or all of `x`.
+```jldoctest
+julia> x = speye(5);
+
+julia> typeof(x)
+SparseMatrixCSC{Float64,Int64}
+
+julia> y = convert(SparseMatrixCSC{Float64,Int64}, x);
+
+julia> z = convert(SparseMatrixCSC{Float32,Int64}, y);
+
+julia> y === x
+true
+
+julia> z === x
+false
+
+julia> z.colptr === x.colptr
+true
+```
+"""
+function convert end
 
 convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
@@ -201,7 +280,12 @@ convert(::Type{T}, x::Tuple{Any, Vararg{Any}}) where {T<:Tuple} =
 #convert(::Type{Tuple{}}, ::Tuple{}) = ()
 #convert(::Type{Tuple{Vararg{S}}} where S, ::Tuple{}) = ()
 
-oftype(x, c) = convert(typeof(x), c)
+"""
+    oftype(x, y)
+
+Convert `y` to the type of `x` (`convert(typeof(x), y)`).
+"""
+oftype(x, y) = convert(typeof(x), y)
 
 unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)
@@ -211,16 +295,75 @@ ptr_arg_cconvert(::Type{Ptr{T}}, x) where {T} = cconvert(T, x)
 ptr_arg_unsafe_convert(::Type{Ptr{T}}, x) where {T} = unsafe_convert(T, x)
 ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
 
+"""
+    cconvert(T,x)
+
+Convert `x` to a value to be passed to C code as type `T`, typically by calling `convert(T, x)`.
+
+In cases where `x` cannot be safely converted to `T`, unlike [`convert`](@ref), `cconvert` may
+return an object of a type different from `T`, which however is suitable for
+[`unsafe_convert`](@ref) to handle. The result of this function should be kept valid (for the GC)
+until the result of [`unsafe_convert`](@ref) is not needed anymore.
+This can be used to allocate memory that will be accessed by the `ccall`.
+If multiple objects need to be allocated, a tuple of the objects can be used as return value.
+
+Neither `convert` nor `cconvert` should take a Julia object and turn it into a `Ptr`.
+"""
+function cconvert end
+
 cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
 unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 
+"""
+    reinterpret(type, A)
+
+Change the type-interpretation of a block of memory.
+For arrays, this constructs a view of the array with the same binary data as the given
+array, but with the specified element type.
+For example,
+`reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
+[`Float32`](@ref).
+
+# Examples
+```jldoctest
+julia> reinterpret(Float32, UInt32(7))
+1.0f-44
+
+julia> reinterpret(Float32, UInt32[1 2 3 4 5])
+1×5 Array{Float32,2}:
+ 1.4013f-45  2.8026f-45  4.2039f-45  5.60519f-45  7.00649f-45
+```
+"""
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
 reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 
+"""
+    sizeof(T)
+
+Size, in bytes, of the canonical binary representation of the given DataType `T`, if any.
+
+# Examples
+```jldoctest
+julia> sizeof(Float32)
+4
+
+julia> sizeof(Complex128)
+16
+```
+
+If `T` does not have a specific size, an error is thrown.
+
+```jldoctest
+julia> sizeof(Base.LinAlg.LU)
+ERROR: argument is an abstract type; size is indeterminate
+Stacktrace:
+[...]
+```
+"""
 sizeof(x) = Core.sizeof(x)
 
 function append_any(xs...)
@@ -236,7 +379,7 @@ function append_any(xs...)
                 ccall(:jl_array_grow_end, Void, (Any, UInt), out, 16)
                 l += 16
             end
-            Core.arrayset(out, y, i)
+            Core.arrayset(true, out, y, i)
             i += 1
         end
     end
@@ -245,8 +388,13 @@ function append_any(xs...)
 end
 
 # simple Array{Any} operations needed for bootstrap
-setindex!(A::Array{Any}, @nospecialize(x), i::Int) = Core.arrayset(A, x, i)
+@eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = Core.arrayset($(Expr(:boundscheck)), A, x, i)
 
+"""
+    precompile(f, args::Tuple{Vararg{Any}})
+
+Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
+"""
 function precompile(@nospecialize(f), args::Tuple)
     ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
 end
@@ -264,11 +412,48 @@ section of the Metaprogramming chapter of the manual for more details and exampl
 """
 esc(@nospecialize(e)) = Expr(:escape, e)
 
+"""
+    @boundscheck(blk)
+
+Annotates the expression `blk` as a bounds checking block, allowing it to be elided by [`@inbounds`](@ref).
+
+Note that the function in which `@boundscheck` is written must be inlined into
+its caller with [`@inline`](@ref) in order for `@inbounds` to have effect.
+
+```jldoctest
+julia> @inline function g(A, i)
+           @boundscheck checkbounds(A, i)
+           return "accessing (\$A)[\$i]"
+       end
+       f1() = return g(1:2, -1)
+       f2() = @inbounds return g(1:2, -1)
+f2 (generic function with 1 method)
+
+julia> f1()
+ERROR: BoundsError: attempt to access 2-element UnitRange{Int64} at index [-1]
+Stacktrace:
+ [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:428
+ [2] checkbounds at ./abstractarray.jl:392 [inlined]
+ [3] g at ./REPL[20]:2 [inlined]
+ [4] f1() at ./REPL[20]:5
+
+julia> f2()
+"accessing (1:2)[-1]"
+```
+
+!!! warning
+
+    The `@boundscheck` annotation allows you, as a library writer, to opt-in to
+    allowing *other code* to remove your bounds checks with [`@inbounds`](@ref).
+    As noted there, the caller must verify—using information they can access—that
+    their accesses are valid before using `@inbounds`. For indexing into your
+    [`AbstractArray`](@ref) subclasses, for example, this involves checking the
+    indices against its [`size`](@ref). Therefore, `@boundscheck` annotations
+    should only be added to a [`getindex`](@ref) or [`setindex!`](@ref)
+    implementation after you are certain its behavior is correct.
+"""
 macro boundscheck(blk)
-    # hack: use this syntax since it avoids introducing line numbers
-    :($(Expr(:boundscheck,true));
-      $(esc(blk));
-      $(Expr(:boundscheck,:pop)))
+    return Expr(:if, Expr(:boundscheck), esc(blk))
 end
 
 """
@@ -276,7 +461,8 @@ end
 
 Eliminates array bounds checking within expressions.
 
-In the example below the bound check of array A is skipped to improve performance.
+In the example below the in-range check for referencing
+element `i` of array `A` is skipped to improve performance.
 
 ```julia
 function sum(A::AbstractArray)
@@ -292,38 +478,62 @@ end
 
     Using `@inbounds` may return incorrect results/crashes/corruption
     for out-of-bounds indices. The user is responsible for checking it manually.
+    Only use `@inbounds` when it is certain from the information locally available
+    that all accesses are in bounds.
 """
 macro inbounds(blk)
-    :($(Expr(:inbounds,true));
-      $(esc(blk));
-      $(Expr(:inbounds,:pop)))
+    return Expr(:block,
+        Expr(:inbounds, true),
+        esc(blk),
+        Expr(:inbounds, :pop))
 end
 
+"""
+    @label name
+
+Labels a statement with the symbolic label `name`. The label marks the end-point
+of an unconditional jump with [`@goto name`](@ref).
+"""
 macro label(name::Symbol)
-    Expr(:symboliclabel, name)
+    return esc(Expr(:symboliclabel, name))
 end
 
+"""
+    @goto name
+
+`@goto name` unconditionally jumps to the statement at the location [`@label name`](@ref).
+
+`@label` and `@goto` cannot create jumps to different top-level statements. Attempts cause an
+error. To still use `@goto`, enclose the `@label` and `@goto` in a block.
+"""
 macro goto(name::Symbol)
-    Expr(:symbolicgoto, name)
+    return esc(Expr(:symbolicgoto, name))
 end
 
 # SimpleVector
 
 function getindex(v::SimpleVector, i::Int)
-    if !(1 <= i <= length(v))
+    @boundscheck if !(1 <= i <= length(v))
         throw(BoundsError(v,i))
     end
+    t = @_gc_preserve_begin v
     x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
     x == C_NULL && throw(UndefRefError())
-    return unsafe_pointer_to_objref(x)
+    o = unsafe_pointer_to_objref(x)
+    @_gc_preserve_end t
+    return o
 end
 
-# TODO: add gc use intrinsic call instead of noinline
-length(v::SimpleVector) = (@_noinline_meta; unsafe_load(convert(Ptr{Int},data_pointer_from_objref(v))))
+function length(v::SimpleVector)
+    t = @_gc_preserve_begin v
+    l = unsafe_load(convert(Ptr{Int},data_pointer_from_objref(v)))
+    @_gc_preserve_end t
+    return l
+end
 endof(v::SimpleVector) = length(v)
 start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
-done(v::SimpleVector,i) = (i > length(v))
+done(v::SimpleVector,i) = (length(v) < i)
 isempty(v::SimpleVector) = (length(v) == 0)
 indices(v::SimpleVector) = (OneTo(length(v)),)
 linearindices(v::SimpleVector) = indices(v, 1)
@@ -370,7 +580,9 @@ function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
+    t = @_gc_preserve_begin v
     x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    @_gc_preserve_end t
     return x != C_NULL
 end
 
@@ -412,12 +624,12 @@ end
 
 Val(x) = (@_pure_meta; Val{x}())
 
-# used by interpolating quote and some other things in the front end
+# used by keyword arg call lowering
 function vector_any(@nospecialize xs...)
     n = length(xs)
     a = Vector{Any}(n)
     @inbounds for i = 1:n
-        Core.arrayset(a,xs[i],i)
+        Core.arrayset(false, a, xs[i], i)
     end
     a
 end
@@ -442,8 +654,6 @@ function as_kwargs(xs)
     return to
 end
 
-isempty(itr) = done(itr, start(itr))
-
 """
     invokelatest(f, args...; kwargs...)
 
@@ -459,3 +669,85 @@ function invokelatest(f, args...; kwargs...)
     inner() = f(args...; kwargs...)
     Core._apply_latest(inner)
 end
+
+# iteration protocol
+
+"""
+    next(iter, state) -> item, state
+
+For a given iterable object and iteration state, return the current item and the next iteration state.
+
+# Examples
+```jldoctest
+julia> next(1:5, 3)
+(3, 4)
+
+julia> next(1:5, 5)
+(5, 6)
+```
+"""
+function next end
+
+"""
+    start(iter) -> state
+
+Get initial iteration state for an iterable object.
+
+# Examples
+```jldoctest
+julia> start(1:5)
+1
+
+julia> start([1;2;3])
+1
+
+julia> start([4;2;3])
+1
+```
+"""
+function start end
+
+"""
+    done(iter, state) -> Bool
+
+Test whether we are done iterating.
+
+# Examples
+```jldoctest
+julia> done(1:5, 3)
+false
+
+julia> done(1:5, 5)
+false
+
+julia> done(1:5, 6)
+true
+```
+"""
+function done end
+
+"""
+    isempty(collection) -> Bool
+
+Determine whether a collection is empty (has no elements).
+
+# Examples
+```jldoctest
+julia> isempty([])
+true
+
+julia> isempty([1 2 3])
+false
+```
+"""
+isempty(itr) = done(itr, start(itr))
+
+"""
+    values(iterator)
+
+For an iterator or collection that has keys and values, return an iterator
+over the values.
+This function simply returns its argument by default, since the elements
+of a general iterator are normally considered its "values".
+"""
+values(itr) = itr

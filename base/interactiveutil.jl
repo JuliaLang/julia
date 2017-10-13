@@ -33,8 +33,7 @@ by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 function edit(path::AbstractString, line::Integer=0)
     command = editor()
     name = basename(first(command))
-    issrc = length(path)>2 && path[end-2:end] == ".jl"
-    if issrc
+    if endswith(path, ".jl")
         f = find_source_file(path)
         f !== nothing && (path = f)
     end
@@ -330,8 +329,13 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
     if packages || verbose
         println(io, "Packages:")
         println(io, "  Package Directory: ", Pkg.dir())
-        println(io, "  Package Status:")
-        Pkg.status(io)
+        print(io, "  Package Status:")
+        if isdir(Pkg.dir())
+            println(io, "")
+            Pkg.status(io)
+        else
+            println(io, " no packages installed")
+        end
     end
 end
 
@@ -347,24 +351,44 @@ problematic for performance, so the results need to be used judiciously.
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
 function code_warntype(io::IO, f, @nospecialize(t))
+    function slots_used(ci, slotnames)
+        used = falses(length(slotnames))
+        scan_exprs!(used, ci.code)
+        return used
+    end
+
+    function scan_exprs!(used, exprs)
+        for ex in exprs
+            if isa(ex, Slot)
+                used[ex.id] = true
+            elseif isa(ex, Expr)
+                scan_exprs!(used, ex.args)
+            end
+        end
+    end
+
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
     for (src, rettype) in code_typed(f, t)
         println(emph_io, "Variables:")
         slotnames = sourceinfo_slotnames(src)
+        used_slotids = slots_used(src, slotnames)
         for i = 1:length(slotnames)
-            print(emph_io, "  ", slotnames[i])
-            if isa(src.slottypes, Array)
-                show_expr_type(emph_io, src.slottypes[i], true)
+            if used_slotids[i]
+                print(emph_io, "  ", slotnames[i])
+                if isa(src.slottypes, Array)
+                    show_expr_type(emph_io, src.slottypes[i], true)
+                end
+                print(emph_io, '\n')
+            elseif !('#' in slotnames[i] || '@' in slotnames[i])
+                print(emph_io, "  ", slotnames[i], "<optimized out>\n")
             end
-            print(emph_io, '\n')
         end
         print(emph_io, "\nBody:\n  ")
         body = Expr(:body)
         body.args = src.code
         body.typ = rettype
         # Fix slot names and types in function body
-        show_unquoted(IOContext(IOContext(emph_io, :SOURCEINFO => src),
-                                          :SOURCE_SLOTNAMES => slotnames),
+        show_unquoted(IOContext(emph_io, :SOURCEINFO => src, :SOURCE_SLOTNAMES => slotnames),
                       body, 2)
         print(emph_io, '\n')
     end
@@ -390,13 +414,12 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...))
         end
     end
-    exret = Expr(:none)
-    is_macro = false
-    ex = expand(__module__, ex0)
     if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
-        is_macro = true
-        exret = Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
-    elseif !isa(ex, Expr)
+        return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
+    end
+    ex = expand(__module__, ex0)
+    exret = Expr(:none)
+    if !isa(ex, Expr)
         exret = Expr(:call, :error, "expression is not a function call or symbol")
     elseif ex.head == :call
         if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
@@ -420,12 +443,12 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
             end
         end
     end
-    if (!is_macro && ex.head == :thunk) || exret.head == :none
+    if ex.head == :thunk || exret.head == :none
         exret = Expr(:call, :error, "expression is not a function call, "
                                   * "or is too complex for @$fcn to analyze; "
                                   * "break it down to simpler parts if possible")
     end
-    exret
+    return exret
 end
 
 for fname in [:which, :less, :edit, :functionloc, :code_warntype,
@@ -531,7 +554,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
 function type_close_enough(@nospecialize(x), @nospecialize(t))
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
-            !isleaftype(t) && x <: t) ||
+            !_isleaftype(t) && x <: t) ||
            (isa(x,Union) && isa(t,DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
 end
 
@@ -542,7 +565,7 @@ end
 Return an array of methods with an argument of type `typ`.
 
 The optional second argument restricts the search to a particular module or function
-(the default is all modules, starting from Main).
+(the default is all top-level modules).
 
 If optional `showparents` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
@@ -564,7 +587,7 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
     return meths
 end
 
-function methodswith(t::Type, m::Module, showparents::Bool=false)
+function _methodswith(t::Type, m::Module, showparents::Bool)
     meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
@@ -577,17 +600,12 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
     return unique(meths)
 end
 
+methodswith(t::Type, m::Module, showparents::Bool=false) = _methodswith(t, m, showparents)
+
 function methodswith(t::Type, showparents::Bool=false)
     meths = Method[]
-    mainmod = Main
-    # find modules in Main
-    for nm in names(mainmod)
-        if isdefined(mainmod, nm)
-            mod = getfield(mainmod, nm)
-            if isa(mod, Module)
-                append!(meths, methodswith(t, mod, showparents))
-            end
-        end
+    for mod in loaded_modules_array()
+        append!(meths, _methodswith(t, mod, showparents))
     end
     return unique(meths)
 end
@@ -623,7 +641,7 @@ else
                 rethrow()
             end
         elseif downloadcmd == :curl
-            run(`curl -L -f -o $filename $url`)
+            run(`curl -g -L -f -o $filename $url`)
         elseif downloadcmd == :fetch
             run(`fetch -f $filename $url`)
         else
@@ -654,8 +672,10 @@ download(url, filename)
     workspace()
 
 Replace the top-level module (`Main`) with a new one, providing a clean workspace. The
-previous `Main` module is made available as `LastMain`. A previously-loaded package can be
-accessed using a statement such as `using LastMain.Package`.
+previous `Main` module is made available as `LastMain`.
+
+If `Package` was previously loaded, `using Package` in the new `Main` will re-use the
+loaded copy. Run `reload("Package")` first to load a fresh copy.
 
 This function should only be used interactively.
 """
@@ -666,9 +686,9 @@ function workspace()
     m = Core.Main # now grab a handle to the new Main module
     ccall(:jl_add_standard_imports, Void, (Any,), m)
     eval(m, Expr(:toplevel,
-        :(const Base = $b),
-        :(const LastMain = $last),
-        :(include(x) = $include($m, x))))
+                 :(const Base = $b),
+                 :(const LastMain = $last),
+                 :(using Base.MainInclude)))
     empty!(package_locks)
     return m
 end
@@ -676,15 +696,24 @@ end
 # testing
 
 """
-    runtests([tests=["all"] [, numcores=ceil(Int, Sys.CPU_CORES / 2) ]])
+    Base.runtests(tests=["all"], numcores=ceil(Int, Sys.CPU_CORES / 2);
+                  exit_on_error=false, [seed])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
-strings, using `numcores` processors. (not exported)
+strings, using `numcores` processors. If `exit_on_error` is `false`, when one test
+fails, all remaining tests in other files will still be run; they are otherwise discarded,
+when `exit_on_error == true`.
+If a seed is provided via the keyword argument, it is used to seed the
+global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2))
+function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
+                  exit_on_error=false,
+                  seed::Union{BitInteger,Void}=nothing)
     if isa(tests,AbstractString)
         tests = split(tests)
     end
+    exit_on_error && push!(tests, "--exit-on-error")
+    seed != nothing && push!(tests, "--seed=0x$(hex(seed % UInt128))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     try

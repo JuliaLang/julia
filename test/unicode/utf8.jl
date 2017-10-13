@@ -4,7 +4,7 @@
     let ch = 0x10000
         for hi = 0xd800:0xdbff
             for lo = 0xdc00:0xdfff
-                @test convert(String, Vector{UInt8}(String(Char[hi, lo]))) == string(Char(ch))
+                @test String(Vector{UInt8}(String(Char[hi, lo]))) == string(Char(ch))
                 ch += 1
             end
         end
@@ -41,7 +41,7 @@ end
 end
 
 @testset "string convert" begin
-    @test convert(String, b"this is a test\xed\x80\x80") == "this is a test\ud000"
+    @test String(b"this is a test\xed\x80\x80") == "this is a test\ud000"
     ## Specifically check UTF-8 string whose lead byte is same as a surrogate
-    @test convert(String, b"\xed\x9f\xbf") == "\ud7ff"
+    @test String(b"\xed\x9f\xbf") == "\ud7ff"
 end

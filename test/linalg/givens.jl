@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 # Test givens rotations
 @testset for elty in (Float32, Float64, Complex64, Complex128)
@@ -22,8 +22,8 @@ using Base.Test
                 @test A_mul_B!(G,eye(elty,10,10)) == [G[i,j] for i=1:10,j=1:10]
 
                 @testset "transposes" begin
-                    @test ctranspose(G)*G*eye(10) ≈ eye(elty, 10)
-                    @test ctranspose(R)*(R*eye(10)) ≈ eye(elty, 10)
+                    @test adjoint(G)*G*eye(10) ≈ eye(elty, 10)
+                    @test adjoint(R)*(R*eye(10)) ≈ eye(elty, 10)
                     @test_throws ErrorException transpose(G)
                     @test_throws ErrorException transpose(R)
                 end
@@ -38,9 +38,9 @@ using Base.Test
         @test norm(R*eye(elty, 10)) ≈ one(elty)
 
         G, _ = givens(one(elty),zero(elty),9,10)
-        @test ctranspose(G*eye(elty,10))*(G*eye(elty,10)) ≈ eye(elty, 10)
+        @test adjoint(G*eye(elty,10))*(G*eye(elty,10)) ≈ eye(elty, 10)
         K, _ = givens(zero(elty),one(elty),9,10)
-        @test ctranspose(K*eye(elty,10))*(K*eye(elty,10)) ≈ eye(elty, 10)
+        @test adjoint(K*eye(elty,10))*(K*eye(elty,10)) ≈ eye(elty, 10)
 
         @testset "Givens * vectors" begin
             if isa(A, Array)

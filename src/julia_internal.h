@@ -475,6 +475,7 @@ jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
 jl_svec_t *jl_outer_unionall_vars(jl_value_t *u);
 int jl_count_union_components(jl_value_t *v);
 jl_value_t *jl_nth_union_component(jl_value_t *v, int i);
+int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth);
 jl_datatype_t *jl_new_uninitialized_datatype(void);
 void jl_precompute_memoized_dt(jl_datatype_t *dt);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
@@ -484,6 +485,7 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
 jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw);
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
+jl_array_t *jl_get_loaded_modules(void);
 
 jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);
 
@@ -759,6 +761,9 @@ JL_DLLEXPORT jl_value_t *jl_udiv_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_srem_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_urem_int(jl_value_t *a, jl_value_t *b);
 
+JL_DLLEXPORT jl_value_t *jl_add_ptr(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_sub_ptr(jl_value_t *a, jl_value_t *b);
+
 JL_DLLEXPORT jl_value_t *jl_neg_float(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_add_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_sub_float(jl_value_t *a, jl_value_t *b);
@@ -995,10 +1000,73 @@ extern jl_sym_t *meta_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *inert_sym; extern jl_sym_t *static_parameter_sym;
 extern jl_sym_t *polly_sym; extern jl_sym_t *inline_sym;
 extern jl_sym_t *propagate_inbounds_sym;
-extern jl_sym_t *isdefined_sym; extern jl_sym_t *nospecialize_sym;
+extern jl_sym_t *isdefined_sym;
+extern jl_sym_t *nospecialize_sym;
+extern jl_sym_t *boundscheck_sym;
+extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
 
 void jl_register_fptrs(uint64_t sysimage_base, const char *base, const int32_t *offsets,
                        jl_method_instance_t **linfos, size_t n);
+
+extern arraylist_t partial_inst;
+
+STATIC_INLINE uint64_t jl_load_unaligned_i64(const void *ptr)
+{
+    uint64_t val;
+    memcpy(&val, ptr, 8);
+    return val;
+}
+STATIC_INLINE uint32_t jl_load_unaligned_i32(const void *ptr)
+{
+    uint32_t val;
+    memcpy(&val, ptr, 4);
+    return val;
+}
+STATIC_INLINE uint16_t jl_load_unaligned_i16(const void *ptr)
+{
+    uint16_t val;
+    memcpy(&val, ptr, 2);
+    return val;
+}
+
+STATIC_INLINE void jl_store_unaligned_i64(void *ptr, uint64_t val)
+{
+    memcpy(ptr, &val, 8);
+}
+STATIC_INLINE void jl_store_unaligned_i32(void *ptr, uint32_t val)
+{
+    memcpy(ptr, &val, 4);
+}
+STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val)
+{
+    memcpy(ptr, &val, 2);
+}
+
+#if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
+#define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
+#elif defined(_COMPILER_INTEL_)
+#define jl_assume_aligned(ptr, align) (__extension__ ({         \
+                __typeof__(ptr) ptr_ = (ptr);                   \
+                __assume_aligned(ptr_, align);                  \
+                ptr_;                                           \
+            }))
+#elif defined(__GNUC__)
+#define jl_assume_aligned(ptr, align) (__extension__ ({         \
+                __typeof__(ptr) ptr_ = (ptr);                   \
+                jl_assume(((uintptr_t)ptr) % (align) == 0);     \
+                ptr_;                                           \
+            }))
+#elif defined(__cplusplus)
+template<typename T>
+static inline T
+jl_assume_aligned(T ptr, unsigned align)
+{
+    (void)jl_assume(((uintptr_t)ptr) % align == 0);
+    return ptr;
+}
+#else
+#define jl_assume_aligned(ptr, align) (ptr)
+#endif
 
 #ifdef __cplusplus
 }

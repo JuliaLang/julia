@@ -63,6 +63,8 @@ const NF = NotFound()
 const LineNum = Int
 const VarTable = Array{Any,1}
 
+const isleaftype = _isleaftype
+
 # The type of a variable load is either a value or an UndefVarError
 mutable struct VarState
     typ
@@ -150,6 +152,7 @@ mutable struct InferenceState
     # TODO: put these in InferenceParams (depends on proper multi-methodcache support)
     optimize::Bool
     cached::Bool
+    limited::Bool
 
     inferred::Bool
 
@@ -199,7 +202,7 @@ mutable struct InferenceState
                     end
                     vararg_type = Tuple
                 else
-                    vararg_type_container = limit_tuple_depth(params, tupletype_tail(atypes, la))
+                    vararg_type_container = limit_tuple_depth(params, tupleparam_tail(atypes.parameters, la))
                     vararg_type = tuple_tfunc(vararg_type_container) # returns a Const object, if applicable
                     vararg_type = rewrap(vararg_type, linfo.specTypes)
                 end
@@ -229,7 +232,7 @@ mutable struct InferenceState
                     # replace singleton types with their equivalent Const object
                     atyp = Const(atyp.instance)
                 elseif isconstType(atyp)
-                    atype = Const(atyp.parameters[1])
+                    atyp = Const(atyp.parameters[1])
                 else
                     atyp = rewrap_unionall(atyp, linfo.specTypes)
                 end
@@ -280,7 +283,7 @@ mutable struct InferenceState
             Vector{Tuple{InferenceState,LineNum}}(), # backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
-            false, false, optimize, cached, false, false)
+            false, false, optimize, cached, false, false, false)
         return frame
     end
 end
@@ -312,9 +315,13 @@ end
 
 function print_callstack(sv::InferenceState)
     while sv !== nothing
-        println(sv.linfo)
+        print(sv.linfo)
+        sv.limited && print("  [limited]")
+        println()
         for cycle in sv.callers_in_cycle
-            println(' ', cycle.linfo)
+            print(' ', cycle.linfo)
+            cycle.limited && print("  [limited]")
+            println()
         end
         sv = sv.parent
     end
@@ -389,7 +396,18 @@ isknownlength(t::DataType) = !isvatuple(t) ||
     (length(t.parameters) > 0 && isa(unwrap_unionall(t.parameters[end]).parameters[2],Int))
 
 # t[n:end]
-tupletype_tail(@nospecialize(t), n) = Tuple{t.parameters[n:end]...}
+function tupleparam_tail(t::SimpleVector, n)
+    lt = length(t)
+    if n > lt
+        va = t[lt]
+        if isvarargtype(va)
+            # assumes that we should never see Vararg{T, x}, where x is a constant (should be guaranteed by construction)
+            return Tuple{va}
+        end
+        return Tuple{}
+    end
+    return Tuple{t[n:lt]...}
+end
 
 function is_specializable_vararg_slot(arg, sv::InferenceState)
     return (isa(arg, Slot) && slot_id(arg) == sv.nargs &&
@@ -403,7 +421,16 @@ const _Type_name = Type.body.name
 isType(@nospecialize t) = isa(t, DataType) && (t::DataType).name === _Type_name
 
 # true if Type is inlineable as constant (is a singleton)
-isconstType(@nospecialize t) = isType(t) && (isleaftype(t.parameters[1]) || t.parameters[1] === Union{})
+function isconstType(@nospecialize t)
+    isType(t) || return false
+    p1 = t.parameters[1]
+    # typeof(Bottom) is special since even though it is as leaftype,
+    # at runtime, it might be Type{Union{}} instead, so don't attempt inference of it
+    p1 === typeof(Union{}) && return false
+    p1 === Union{} && return true
+    isleaftype(p1) && return true
+    return false
+end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 
@@ -493,6 +520,8 @@ add_tfunc(sdiv_int, 2, 2, math_tfunc, 30)
 add_tfunc(udiv_int, 2, 2, math_tfunc, 30)
 add_tfunc(srem_int, 2, 2, math_tfunc, 30)
 add_tfunc(urem_int, 2, 2, math_tfunc, 30)
+add_tfunc(add_ptr, 2, 2, math_tfunc, 1)
+add_tfunc(sub_ptr, 2, 2, math_tfunc, 1)
 add_tfunc(neg_float, 1, 1, math_tfunc, 1)
 add_tfunc(add_float, 2, 2, math_tfunc, 1)
 add_tfunc(sub_float, 2, 2, math_tfunc, 1)
@@ -826,7 +855,7 @@ function limit_type_depth(@nospecialize(t), d::Int, cov::Bool, vars::Vector{Type
             end
             ub = Any
         else
-            ub = limit_type_depth(v.ub, d - 1, true)
+            ub = limit_type_depth(v.ub, d - 1, cov, vars)
         end
         if v.lb === Bottom || type_depth(v.lb) > d
             # note: lower bounds need to be widened by making them lower
@@ -844,7 +873,8 @@ function limit_type_depth(@nospecialize(t), d::Int, cov::Bool, vars::Vector{Type
     if d < 0
         if isvarargtype(t)
             # never replace Vararg with non-Vararg
-            return Vararg{limit_type_depth(P[1], d, cov, vars), P[2]}
+            # passing depth=0 avoids putting a bare typevar here, for the diagonal rule
+            return Vararg{limit_type_depth(P[1], 0, cov, vars), P[2]}
         end
         widert = t.name.wrapper
         if !(t <: widert)
@@ -859,7 +889,11 @@ function limit_type_depth(@nospecialize(t), d::Int, cov::Bool, vars::Vector{Type
         return var
     end
     stillcov = cov && (t.name === Tuple.name)
-    Q = map(x -> limit_type_depth(x, d - 1, stillcov, vars), P)
+    newdepth = d - 1
+    if isvarargtype(t)
+        newdepth = max(newdepth, 0)
+    end
+    Q = map(x -> limit_type_depth(x, newdepth, stillcov, vars), P)
     R = t.name.wrapper{Q...}
     if cov && !stillcov
         for var in vars
@@ -871,11 +905,12 @@ end
 
 # limit the complexity of type `t` to be simpler than the comparison type `compare`
 # no new values may be introduced, so the parameter `source` encodes the set of all values already present
-function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source))
+# the outermost tuple type is permitted to have up to `allowed_tuplelen` parameters
+function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source), allowed_tuplelen::Int)
     source = svec(unwrap_unionall(compare), unwrap_unionall(source))
     source[1] === source[2] && (source = svec(source[1]))
-    type_more_complex(t, compare, source, TUPLE_COMPLEXITY_LIMIT_DEPTH) || return t
-    r = _limit_type_size(t, compare, source)
+    type_more_complex(t, compare, source, 1, TUPLE_COMPLEXITY_LIMIT_DEPTH, allowed_tuplelen) || return t
+    r = _limit_type_size(t, compare, source, 1, allowed_tuplelen)
     @assert t <: r
     #@assert r === _limit_type_size(r, t, source) # this monotonicity constraint is slightly stronger than actually required,
       # since we only actually need to demonstrate that repeated application would reaches a fixed point,
@@ -885,7 +920,7 @@ end
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
-function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVector, tupledepth::Int)
+function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, tupledepth::Int, allowed_tuplelen::Int)
     # detect cases where the comparison is trivial
     if t === c
         return false
@@ -895,7 +930,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         return false # fastpath: unparameterized types are always finite
     elseif tupledepth > 0 && isa(unwrap_unionall(t), DataType) && isa(c, Type) && c !== Union{} && c <: t
         return false # t is already wider than the comparison in the type lattice
-    elseif tupledepth > 0 && is_derived_type_from_any(unwrap_unionall(t), sources)
+    elseif tupledepth > 0 && is_derived_type_from_any(unwrap_unionall(t), sources, depth)
         return false # t isn't something new
     end
     # peel off wrappers
@@ -909,19 +944,20 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     end
     # rules for various comparison types
     if isa(c, TypeVar)
+        tupledepth = 1 # allow replacing a TypeVar with a concrete value (since we know the UnionAll must be in covariant position)
         if isa(t, TypeVar)
             return !(t.lb === Union{} || t.lb === c.lb) || # simplify lb towards Union{}
-                   type_more_complex(t.ub, c.ub, sources, tupledepth)
+                   type_more_complex(t.ub, c.ub, sources, depth + 1, tupledepth, 0)
         end
         c.lb === Union{} || return true
-        return type_more_complex(t, c.ub, sources, max(tupledepth, 1)) # allow replacing a TypeVar with a concrete value
+        return type_more_complex(t, c.ub, sources, depth, tupledepth, 0)
     elseif isa(c, Union)
         if isa(t, Union)
-            return type_more_complex(t.a, c.a, sources, tupledepth) ||
-                   type_more_complex(t.b, c.b, sources, tupledepth)
+            return type_more_complex(t.a, c.a, sources, depth, tupledepth, allowed_tuplelen) ||
+                   type_more_complex(t.b, c.b, sources, depth, tupledepth, allowed_tuplelen)
         end
-        return type_more_complex(t, c.a, sources, tupledepth) &&
-               type_more_complex(t, c.b, sources, tupledepth)
+        return type_more_complex(t, c.a, sources, depth, tupledepth, allowed_tuplelen) &&
+               type_more_complex(t, c.b, sources, depth, tupledepth, allowed_tuplelen)
     elseif isa(t, Int) && isa(c, Int)
         return t !== 1 # alternatively, could use !(0 <= t < c)
     end
@@ -954,14 +990,16 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
                         end
                     end
                 end
-                type_more_complex(tPi, cPi, sources, tupledepth) && return true
+                type_more_complex(tPi, cPi, sources, depth + 1, tupledepth, 0) && return true
             end
             return false
+        elseif isvarargtype(c)
+            return type_more_complex(t, unwrapva(c), sources, depth, tupledepth, 0)
         end
         if isType(t) # allow taking typeof any source type anywhere as Type{...}, as long as it isn't nesting Type{Type{...}}
             tt = unwrap_unionall(t.parameters[1])
             if isa(tt, DataType) && !isType(tt)
-                is_derived_type_from_any(tt, sources) || return true
+                is_derived_type_from_any(tt, sources, depth) || return true
                 return false
             end
         end
@@ -969,17 +1007,24 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     return true
 end
 
-function is_derived_type(@nospecialize(t), @nospecialize(c)) # try to find `type` somewhere in `comparison` type
-    t === c && return true
+# try to find `type` somewhere in `comparison` type
+# at a minimum nesting depth of `mindepth`
+function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
+    if mindepth > 0
+        mindepth -= 1
+    end
+    if t === c
+        return mindepth == 0
+    end
     if isa(c, TypeVar)
         # see if it is replacing a TypeVar upper bound with something simpler
-        return is_derived_type(t, c.ub)
+        return is_derived_type(t, c.ub, mindepth)
     elseif isa(c, Union)
         # see if it is one of the elements of the union
-        return is_derived_type(t, c.a) || is_derived_type(t, c.b)
+        return is_derived_type(t, c.a, mindepth + 1) || is_derived_type(t, c.b, mindepth + 1)
     elseif isa(c, UnionAll)
         # see if it is derived from the body
-        return is_derived_type(t, c.body)
+        return is_derived_type(t, c.body, mindepth)
     elseif isa(c, DataType)
         if isa(t, DataType)
             # see if it is one of the supertypes of a parameter
@@ -992,7 +1037,7 @@ function is_derived_type(@nospecialize(t), @nospecialize(c)) # try to find `type
         # see if it was extracted from a type parameter
         cP = c.parameters
         for p in cP
-            is_derived_type(t, p) && return true
+            is_derived_type(t, p, mindepth) && return true
         end
         if isleaftype(c) && isbits(c)
             # see if it was extracted from a fieldtype
@@ -1003,21 +1048,22 @@ function is_derived_type(@nospecialize(t), @nospecialize(c)) # try to find `type
             # it cannot have a reference cycle in the type graph
             cF = c.types
             for f in cF
-                is_derived_type(t, f) && return true
+                is_derived_type(t, f, mindepth) && return true
             end
         end
     end
     return false
 end
 
-function is_derived_type_from_any(@nospecialize(t), sources::SimpleVector)
+function is_derived_type_from_any(@nospecialize(t), sources::SimpleVector, mindepth::Int)
     for s in sources
-        is_derived_type(t, s) && return true
+        is_derived_type(t, s, mindepth) && return true
     end
     return false
 end
 
-function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector) # type vs. comparison which was derived from source
+# type vs. comparison or which was derived from source
+function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVector, depth::Int, allowed_tuplelen::Int)
     if t === c
         return t # quick egal test
     elseif t === Union{}
@@ -1026,7 +1072,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         return t # fast path: unparameterized are always simple
     elseif isa(unwrap_unionall(t), DataType) && isa(c, Type) && c !== Union{} && c <: t
         return t # t is already wider than the comparison in the type lattice
-    elseif is_derived_type_from_any(unwrap_unionall(t), sources)
+    elseif is_derived_type_from_any(unwrap_unionall(t), sources, depth)
         return t # t isn't something new
     end
     if isa(t, TypeVar)
@@ -1037,8 +1083,8 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         end
     elseif isa(t, Union)
         if isa(c, Union)
-            a = _limit_type_size(t.a, c.a, sources)
-            b = _limit_type_size(t.b, c.b, sources)
+            a = _limit_type_size(t.a, c.a, sources, depth, allowed_tuplelen)
+            b = _limit_type_size(t.b, c.b, sources, depth, allowed_tuplelen)
             return Union{a, b}
         end
     elseif isa(t, UnionAll)
@@ -1047,11 +1093,11 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
             cv = c.var
             if tv.ub === cv.ub
                 if tv.lb === cv.lb
-                    return UnionAll(tv, _limit_type_size(t.body, c.body, sources))
+                    return UnionAll(tv, _limit_type_size(t.body, c.body, sources, depth + 1, allowed_tuplelen))
                 end
                 ub = tv.ub
             else
-                ub = _limit_type_size(tv.ub, cv.ub, sources)
+                ub = _limit_type_size(tv.ub, cv.ub, sources, depth + 1, 0)
             end
             if tv.lb === cv.lb
                 lb = tv.lb
@@ -1060,43 +1106,60 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                 lb = Bottom
             end
             v2 = TypeVar(tv.name, lb, ub)
-            return UnionAll(v2, _limit_type_size(t{v2}, c{v2}, sources))
+            return UnionAll(v2, _limit_type_size(t{v2}, c{v2}, sources, depth + 1, allowed_tuplelen))
         end
-        tbody = _limit_type_size(t.body, c, sources)
+        tbody = _limit_type_size(t.body, c, sources, depth + 1, allowed_tuplelen)
         tbody === t.body && return t
         return UnionAll(t.var, tbody)
+    elseif isa(c, UnionAll)
+        # peel off non-matching wrapper of comparison
+        return _limit_type_size(t, c.body, sources, depth, allowed_tuplelen)
     elseif isa(t, DataType)
         if isa(c, DataType)
             tP = t.parameters
             cP = c.parameters
             if t.name === c.name && !isempty(cP)
                 if isvarargtype(t)
-                    VaT = _limit_type_size(tP[1], cP[1], sources)
+                    VaT = _limit_type_size(tP[1], cP[1], sources, depth + 1, 0)
                     N = tP[2]
                     if isa(N, TypeVar) || N === cP[2]
                         return Vararg{VaT, N}
                     end
                     return Vararg{VaT}
                 elseif t.name === Tuple.name
-                    # for covariant datatypes (aka Tuple),
-                    # apply type-size limit elementwise
-                    np = min(length(tP), length(cP))
+                    # for covariant datatypes (Tuple),
+                    # apply type-size limit element-wise
+                    ltP = length(tP)
+                    lcP = length(cP)
+                    np = min(ltP, max(lcP, allowed_tuplelen))
                     Q = Any[ tP[i] for i in 1:np ]
-                    if length(tP) > np # implies Tuple
+                    if ltP > np
                         # combine tp[np:end] into tP[np] using Vararg
-                        Q[np] = tuple_tail_elem(Bottom, Any[ tP[i] for i in np:length(tP) ])
+                        Q[np] = tuple_tail_elem(Bottom, Any[ tP[i] for i in np:ltP ])
                     end
                     for i = 1:np
-                        Q[i] = _limit_type_size(Q[i], cP[i], sources)
+                        # now apply limit element-wise to Q
+                        # padding out the comparison as needed to allowed_tuplelen elements
+                        if i <= lcP
+                            cPi = cP[i]
+                        elseif isvarargtype(cP[lcP])
+                            cPi = cP[lcP]
+                        else
+                            cPi = Any
+                        end
+                        Q[i] = _limit_type_size(Q[i], cPi, sources, depth + 1, 0)
                     end
                     return Tuple{Q...}
                 end
+            elseif isvarargtype(c)
+                # Tuple{Vararg{T}} --> Tuple{T} is OK
+                return _limit_type_size(t, cP[1], sources, depth, 0)
             end
         end
         if isType(t) # allow taking typeof as Type{...}, but ensure it doesn't start nesting
             tt = unwrap_unionall(t.parameters[1])
             if isa(tt, DataType) && !isType(tt)
-                is_derived_type_from_any(tt, sources) && return t
+                is_derived_type_from_any(tt, sources, depth) && return t
             end
         end
         if isvarargtype(t)
@@ -1135,6 +1198,8 @@ function const_datatype_getfield_tfunc(sv, fld)
     return nothing
 end
 
+getfield_tfunc(@nospecialize(s00), @nospecialize(name), @nospecialize(inbounds)) =
+    getfield_tfunc(s00, name)
 function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     if isa(s00, TypeVar)
         s00 = s00.ub
@@ -1145,13 +1210,9 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
                       rewrap(getfield_tfunc(s.b, name),s00))
     elseif isa(s, Conditional)
         return Bottom # Bool has no fields
-    elseif isa(s, Const) || isType(s)
+    elseif isa(s, Const) || isconstType(s)
         if !isa(s, Const)
-            p1 = s.parameters[1]
-            if !isleaftype(p1)
-                return Any
-            end
-            sv = p1
+            sv = s.parameters[1]
         else
             sv = s.val
         end
@@ -1187,7 +1248,7 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
         end
         s = typeof(sv)
     end
-    if !isa(s,DataType) || s.abstract
+    if isType(s) || !isa(s, DataType) || s.abstract
         return Any
     end
     if s <: Tuple && name ⊑ Symbol
@@ -1255,8 +1316,10 @@ function getfield_tfunc(@nospecialize(s00), @nospecialize(name))
     # in the current type system
     return rewrap_unionall(limit_type_depth(R, MAX_TYPE_DEPTH), s00)
 end
-add_tfunc(getfield, 2, 2, (@nospecialize(s), @nospecialize(name)) -> getfield_tfunc(s, name), 1)
+add_tfunc(getfield, 2, 3, getfield_tfunc, 1)
 add_tfunc(setfield!, 3, 3, (@nospecialize(o), @nospecialize(f), @nospecialize(v)) -> v, 3)
+fieldtype_tfunc(@nospecialize(s0), @nospecialize(name), @nospecialize(inbounds)) =
+    fieldtype_tfunc(s0, name)
 function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
     if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
         return Type
@@ -1316,7 +1379,7 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
     end
     return Type{<:ft}
 end
-add_tfunc(fieldtype, 2, 2, fieldtype_tfunc, 0)
+add_tfunc(fieldtype, 2, 3, fieldtype_tfunc, 0)
 
 function valid_tparam(@nospecialize(x))
     if isa(x,Tuple)
@@ -1510,27 +1573,25 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
     elseif f === svec
         return SimpleVector
     elseif f === arrayset
-        if length(argtypes) < 3 && !isva
+        if length(argtypes) < 4
+            isva && return Any
             return Bottom
         end
-        a1 = argtypes[1]
-        if isvarargtype(a1)
-            return unwrap_unionall(a1).parameters[1]
-        end
-        return a1
+        return argtypes[2]
     elseif f === arrayref
-        if length(argtypes) < 2 && !isva
+        if length(argtypes) < 3
+            isva && return Any
             return Bottom
         end
-        a = widenconst(argtypes[1])
+        a = widenconst(argtypes[2])
         if a <: Array
-            if isa(a,DataType) && (isa(a.parameters[1],Type) || isa(a.parameters[1],TypeVar))
+            if isa(a, DataType) && (isa(a.parameters[1], Type) || isa(a.parameters[1], TypeVar))
                 # TODO: the TypeVar case should not be needed here
                 a = a.parameters[1]
-                return isa(a,TypeVar) ? a.ub : a
-            elseif isa(a,UnionAll) && !has_free_typevars(a)
+                return isa(a, TypeVar) ? a.ub : a
+            elseif isa(a, UnionAll) && !has_free_typevars(a)
                 unw = unwrap_unionall(a)
-                if isa(unw,DataType)
+                if isa(unw, DataType)
                     return rewrap_unionall(unw.parameters[1], a)
                 end
             end
@@ -1569,7 +1630,7 @@ function builtin_tfunction(@nospecialize(f), argtypes::Array{Any,1},
         end
         tf = t_ifunc[iidx]
     else
-        fidx = findfirst(t_ffunc_key, f)
+        fidx = findfirst(x->x===f, t_ffunc_key)
         if fidx == 0
             # unknown/unhandled builtin function
             return Any
@@ -1753,37 +1814,54 @@ function abstract_call_gf_by_type(@nospecialize(f), @nospecialize(atype), sv::In
 end
 
 function abstract_call_method(method::Method, @nospecialize(f), @nospecialize(sig), sparams::SimpleVector, sv::InferenceState)
-    sigtuple = unwrap_unionall(sig)::DataType
-
-    tm = _topmod(sv)
-    if (# promote_typeof signature may be used with many arguments
-          !istopfunction(tm, f, :promote_typeof)
-        # assume getindex methods aren't directly recursive, since wrappers like ReshapedArrays won't look like it here
-        # should still manage to detect recursive growth either via other intermediate methods or actual type-equal signature recursion
-       && !istopfunction(tm, f, :getindex)
-       && !istopfunction(tm, f, :setindex!)
-        # the construct-to-convert method is a bottleneck in inference,
-        # so just assume that recursion will get prevented at some other point
-       && !(method.sig == Tuple{Type, Any}))
+    limited = sv.limited
+    # If we are operating without inference limits,
+    # see if we need to enable those.
+    # The limit will be imposed if we recur on the same method.
+    topmost = nothing
+    if !limited && !istopfunction(_topmod(sv), f, :promote_typeof)
+        # since promote_typeof signature may be used with many arguments, here we'll just assume it is defined non-recursively
         # otherwise: limit argument type tuple growth of all other functions
-        msig = unwrap_unionall(method.sig)
-        lsig = length(msig.parameters)
-        ls = length(sigtuple.parameters)
         # look through the parents list to find the topmost
         # function call to the same method
         cyclei = 0
         infstate = sv
-        topmost = nothing
         while infstate !== nothing
             infstate = infstate::InferenceState
             if method === infstate.linfo.def
                 if infstate.linfo.specTypes == sig
                     # avoid widening when detecting self-recursion
                     # TODO: merge call cycle and return right away
-                    topmost = nothing
+                    # TODO: this'll improve convergence speed and give better results,
+                    #       but is it correct and valid?
+                    limited = false
                     break
                 end
-                topmost === nothing && (topmost = infstate)
+                if topmost === nothing
+                    # inspect the parent of this edge,
+                    # to see if they are the same Method as sv
+                    # in which case we'll need to ensure it is convergent
+                    # otherwise, we don't
+                    for parent in infstate.callers_in_cycle
+                        # check in the cycle list first
+                        # all items in here are mutual parents of all others
+                        if parent.linfo.def === sv.linfo.def
+                            limited = true
+                            topmost = infstate
+                            break
+                        end
+                    end
+                    let parent = infstate.parent
+                        # then check the parent link
+                        if topmost === nothing && parent !== nothing
+                            parent = parent::InferenceState
+                            if parent.cached && parent.linfo.def === sv.linfo.def
+                                limited = true
+                                topmost = infstate
+                            end
+                        end
+                    end
+                end
             end
             # iterate through the cycle before walking to the parent
             if cyclei < length(infstate.callers_in_cycle)
@@ -1794,52 +1872,50 @@ function abstract_call_method(method::Method, @nospecialize(f), @nospecialize(si
                 infstate = infstate.parent
             end
         end
+    end
 
-        # TODO: FIXME: this heuristic depends on non-local state making type-inference unpredictable
-        # it also should be integrated into the cycle resolution and iterated to convergence
-        if topmost !== nothing
-            # impose limit if we recur on the same method and the argument type complexity is growing or is beyond MAX_TYPE_DEPTH
-            newsig = sig
-            if !isempty(topmost.callers_in_cycle)
-                # already discovered this method causes dependent self-recursion
-                # widen fully to avoid making the cycle any larger
-                newsig = method.sig
-            else
-                comparison = topmost.linfo.specTypes
-                if ls > lsig + 1 && ls > length(unwrap_unionall(comparison).parameters)
-                    # limit length based on size of definition signature.
-                    # for example, given function f(T, Any...), limit to 3 arguments
-                    # instead of the default (MAX_TUPLETYPE_LEN)
-                    fst = sigtuple.parameters[lsig + 1]
-                    allsame = true
-                    # allow specializing on longer arglists if all the trailing
-                    # arguments are the same, since there is no exponential
-                    # blowup in this case.
-                    for i = (lsig + 2):ls
-                        if sigtuple.parameters[i] != fst
-                            allsame = false
-                            break
+    if limited
+        sigtuple = unwrap_unionall(sig)::DataType
+        msig = unwrap_unionall(method.sig)::DataType
+        spec_len = length(msig.parameters) + 1
+        ls = length(sigtuple.parameters)
+        if method === sv.linfo.def
+            # direct self-recursion permits much greater use of reducers
+            # without using non-local state (just the total edge)
+            # here we assume that complexity(specTypes) :>= complexity(sig)
+            comparison = sv.linfo.specTypes
+            l_comparison = length(unwrap_unionall(comparison).parameters)
+            spec_len = max(spec_len, l_comparison)
+        else
+            comparison = method.sig
+        end
+        # see if the type is too big, and limit it if required
+        newsig = limit_type_size(sig, comparison, sv.linfo.specTypes, spec_len)
+
+        if newsig !== sig
+            if !sv.limited
+                # continue inference, but limit parameter complexity to ensure (quick) convergence
+                topmost = topmost::InferenceState
+                infstate = sv
+                while infstate !== topmost.parent
+                    # TODO: avoid this non-local mutation
+                    infstate.limited = true
+                    if infstate.parent !== nothing
+                        infstate.optimize = false
+                    end
+                    for infstate_cycle in infstate.callers_in_cycle
+                        infstate_cycle.limited = true
+                        if infstate_cycle.parent !== nothing
+                            infstate_cycle.optimize = false
                         end
                     end
-                    if !allsame
-                        sigtuple = limit_tuple_type_n(sigtuple, lsig + 1)
-                        newsig = rewrap_unionall(sigtuple, newsig)
-                    end
+                    infstate = infstate.parent
+                    infstate === nothing && break
                 end
-                td = type_depth(newsig)
-                max_type_depth = min(MAX_TYPE_DEPTH, type_depth(comparison))
-                if td > max_type_depth
-                    # limit growth in type depth
-                    newsig = limit_type_depth(newsig, max_type_depth)
-                end
-                # see if the type is still too big, and limit it further if required
-                newsig = limit_type_size(newsig, comparison, sv.linfo.specTypes)
+                # TODO: break here and restart from "topmost" call-site
             end
-            if newsig !== sig
-                sig = newsig
-                sigtuple = unwrap_unionall(sig)
-                sparams = svec()
-            end
+            sig = newsig
+            sparams = svec()
         end
     end
 
@@ -1852,6 +1928,7 @@ function abstract_call_method(method::Method, @nospecialize(f), @nospecialize(si
         end
         sparams = recomputed[2]::SimpleVector
     end
+
     rt, edge = typeinf_edge(method, sig, sparams, sv)
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
     return rt
@@ -2423,15 +2500,13 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         t = Any
         if 1 <= n <= length(sv.sp)
             val = sv.sp[n]
-            if isa(val, TypeVar) && Any <: val.ub
-                # static param bound to typevar
-                # if the tvar is not known to refer to anything more specific than Any,
-                # the static param might actually be an integer, symbol, etc.
-            elseif has_free_typevars(val)
-                vs = ccall(:jl_find_free_typevars, Any, (Any,), val)
-                t = Type{val}
-                for v in vs
-                    t = UnionAll(v, t)
+            if isa(val, TypeVar)
+                if Any <: val.ub
+                    # static param bound to typevar
+                    # if the tvar is not known to refer to anything more specific than Any,
+                    # the static param might actually be an integer, symbol, etc.
+                else
+                    t = UnionAll(val, Type{val})
                 end
             else
                 t = abstract_eval_constant(val)
@@ -2445,6 +2520,8 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
         return abstract_eval_constant(e.args[1])
     elseif e.head === :invoke
         error("type inference data-flow error: tried to double infer a function")
+    elseif e.head === :boundscheck
+        return Bool
     elseif e.head === :isdefined
         sym = e.args[1]
         t = Bool
@@ -3153,6 +3230,10 @@ function typeinf_work(frame::InferenceState)
                     # directly forward changes to an SSAValue to the applicable line
                     record_ssa_assign(changes_var.id + 1, changes.vtype.typ, frame)
                 end
+            elseif isa(stmt, NewvarNode)
+                sn = slot_id(stmt.slot)
+                changes = changes::VarTable
+                changes[sn] = VarState(Bottom, true)
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
             elseif isa(stmt, Expr)
@@ -3365,7 +3446,7 @@ function optimize(me::InferenceState)
     type_annotate!(me)
 
     # run optimization passes on fulltree
-    force_noinline = false
+    force_noinline = true
     if me.optimize
         # This pass is required for the AST to be valid in codegen
         # if any `SSAValue` is created by type inference. Ref issue #6068
@@ -3373,11 +3454,7 @@ function optimize(me::InferenceState)
         # if we start to create `SSAValue` in type inference when not
         # optimizing and use unoptimized IR in codegen.
         gotoifnot_elim_pass!(me)
-        inlining_pass!(me)
-        # probably not an ideal location for most of these steps,
-        # but boundscheck elimination is not idempotent and needs to run as part of inlining
-        code = me.src.code::Array{Any,1}
-        meta_elim_pass!(code, me.src.propagate_inbounds, coverage_enabled())
+        inlining_pass!(me, me.src.propagate_inbounds)
         # Clean up after inlining
         gotoifnot_elim_pass!(me)
         basic_dce_pass!(me)
@@ -3388,10 +3465,17 @@ function optimize(me::InferenceState)
         getfield_elim_pass!(me)
         # Clean up for `alloc_elim_pass!` and `getfield_elim_pass!`
         void_use_elim_pass!(me)
-        filter!(x -> x !== nothing, code)
         # Pop metadata before label reindexing
-        force_noinline = popmeta!(code, :noinline)[1]
+        let code = me.src.code::Array{Any,1}
+            meta_elim_pass!(code, coverage_enabled())
+            filter!(x -> x !== nothing, code)
+            force_noinline = popmeta!(code, :noinline)[1]
+        end
         reindex_labels!(me)
+    elseif me.cached && me.parent !== nothing
+        # top parent will be cached still, but not this intermediate work
+        me.cached = false
+        me.linfo.inInference = false
     end
 
     # convert all type information into the form consumed by the code-generator
@@ -3516,13 +3600,14 @@ function finish(me::InferenceState)
             if !toplevel
                 if !me.const_api
                     def = me.linfo.def::Method
-                    keeptree = me.src.inlineable || ccall(:jl_is_cacheable_sig, Int32, (Any, Any, Any),
-                        me.linfo.specTypes, def.sig, def) != 0
-                    if !keeptree
-                        inferred_result = nothing
-                    else
+                    keeptree = me.optimize &&
+                        (me.src.inlineable ||
+                         ccall(:jl_is_cacheable_sig, Int32, (Any, Any, Any), me.linfo.specTypes, def.sig, def) != 0)
+                    if keeptree
                         # compress code for non-toplevel thunks
                         inferred_result = ccall(:jl_compress_ast, Any, (Any, Any), def, inferred_result)
+                    else
+                        inferred_result = nothing
                     end
                 end
             end
@@ -3563,7 +3648,7 @@ function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, unde
         elseif isa(subex, Slot)
             id = slot_id(subex)
             s = vtypes[id]
-            vt = widenconst(s.typ)
+            vt = s.typ
             if s.undef
                 # find used-undef variables
                 undefs[id] = true
@@ -3618,9 +3703,9 @@ end
 function type_annotate!(sv::InferenceState)
     # remove all unused ssa values
     gt = sv.src.ssavaluetypes
-    for i = 1:length(gt)
-        if gt[i] === NF
-            gt[i] = Union{}
+    for j = 1:length(gt)
+        if gt[j] === NF
+            gt[j] = Union{}
         end
     end
 
@@ -3661,7 +3746,7 @@ function type_annotate!(sv::InferenceState)
                 continue
             end
             # This can create `Expr(:gotoifnot)` with dangling label, which we
-            # will clean up in `reindex_labels!`
+            # will clean up by replacing them with the conditions later.
             deleteat!(body, i)
             deleteat!(states, i)
             nexpr -= 1
@@ -3671,37 +3756,63 @@ function type_annotate!(sv::InferenceState)
     end
 
     # finish marking used-undef variables
-    for i = 1:nslots
-        if undefs[i]
-            src.slotflags[i] |= Slot_UsedUndef
+    for j = 1:nslots
+        if undefs[j]
+            src.slotflags[j] |= Slot_UsedUndef
+        end
+    end
+
+    # The dead code elimination can delete the target of a reachable node. This
+    # must mean that the target is unreachable. Later optimization passes will
+    # assume that all branches lead to labels that exist, so we must replace
+    # the node with the branch condition (which may have side effects).
+    labelmap = get_label_map(body, sv)
+    for i in 1:length(body)
+        expr = body[i]
+        if isa(expr, Expr) && expr.head === :gotoifnot
+            labelnum = labelmap[expr.args[2]::Int]
+            if labelnum === 0
+                body[i] = expr.args[1]
+            end
         end
     end
     nothing
 end
 
 # widen all Const elements in type annotations
-function _widen_all_consts!(e::Expr, untypedload::Vector{Bool})
+function _widen_all_consts!(e::Expr, untypedload::Vector{Bool}, slottypes::Vector{Any})
     e.typ = widenconst(e.typ)
     for i = 1:length(e.args)
         x = e.args[i]
         if isa(x, Expr)
-            _widen_all_consts!(x, untypedload)
-        elseif isa(x, Slot) && (i != 1 || e.head !== :(=))
-            untypedload[slot_id(x)] = true
+            _widen_all_consts!(x, untypedload, slottypes)
+        elseif isa(x, TypedSlot)
+            vt = widenconst(x.typ)
+            if !(vt === x.typ)
+                if slottypes[x.id] <: vt
+                    x = SlotNumber(x.id)
+                    untypedload[x.id] = true
+                else
+                    x = TypedSlot(x.id, vt)
+                end
+                e.args[i] = x
+            end
+        elseif isa(x, SlotNumber) && (i != 1 || e.head !== :(=))
+            untypedload[x.id] = true
         end
     end
     nothing
 end
+
 function widen_all_consts!(src::CodeInfo)
     for i = 1:length(src.ssavaluetypes)
         src.ssavaluetypes[i] = widenconst(src.ssavaluetypes[i])
     end
     nslots = length(src.slottypes)
     untypedload = fill(false, nslots)
-    for i = 1:length(src.code)
-        x = src.code[i]
-        isa(x, Expr) && _widen_all_consts!(x, untypedload)
-    end
+    e = Expr(:body)
+    e.args = src.code
+    _widen_all_consts!(e, untypedload, src.slottypes)
     for i = 1:nslots
         src.slottypes[i] = widen_slot_type(src.slottypes[i], untypedload[i])
     end
@@ -3734,7 +3845,10 @@ end
 
 # replace slots 1:na with argexprs, static params with spvals, and increment
 # other slots by offset.
-function substitute!(@nospecialize(e), na::Int, argexprs::Vector{Any}, @nospecialize(spsig), spvals::Vector{Any}, offset::Int)
+function substitute!(
+        @nospecialize(e), na::Int, argexprs::Vector{Any},
+        @nospecialize(spsig), spvals::Vector{Any},
+        offset::Int, boundscheck::Symbol)
     if isa(e, Slot)
         id = slot_id(e)
         if 1 <= id <= na
@@ -3751,15 +3865,17 @@ function substitute!(@nospecialize(e), na::Int, argexprs::Vector{Any}, @nospecia
         end
     end
     if isa(e, NewvarNode)
-        return NewvarNode(substitute!(e.slot, na, argexprs, spsig, spvals, offset))
+        return NewvarNode(substitute!(e.slot, na, argexprs, spsig, spvals, offset, boundscheck))
     end
     if isa(e, Expr)
         e = e::Expr
         head = e.head
         if head === :static_parameter
-            return spvals[e.args[1]]
+            sp = spvals[e.args[1]]
+            is_self_quoting(sp) && return sp
+            return QuoteNode(sp)
         elseif head === :foreigncall
-            @assert !isa(spsig,UnionAll) || !isempty(spvals)
+            @assert !isa(spsig, UnionAll) || !isempty(spvals)
             for i = 1:length(e.args)
                 if i == 2
                     e.args[2] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, spvals)
@@ -3774,12 +3890,20 @@ function substitute!(@nospecialize(e), na::Int, argexprs::Vector{Any}, @nospecia
                 elseif i == 5
                     @assert isa(e.args[5], Int)
                 else
-                    e.args[i] = substitute!(e.args[i], na, argexprs, spsig, spvals, offset)
+                    e.args[i] = substitute!(e.args[i], na, argexprs, spsig, spvals, offset, boundscheck)
                 end
+            end
+        elseif head === :boundscheck
+            if boundscheck === :propagate
+                return e
+            elseif boundscheck === :off
+                return false
+            else
+                return true
             end
         elseif !is_meta_expr_head(head)
             for i = 1:length(e.args)
-                e.args[i] = substitute!(e.args[i], na, argexprs, spsig, spvals, offset)
+                e.args[i] = substitute!(e.args[i], na, argexprs, spsig, spvals, offset, boundscheck)
             end
         end
     end
@@ -3895,9 +4019,10 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
                     if is_known_call(e, arrayref, src, mod) || is_known_call(e, arraylen, src, mod)
                         return false
                     elseif is_known_call(e, getfield, src, mod)
-                        length(ea) == 3 || return false
+                        nargs = length(ea)
+                        (nargs == 3 || nargs == 4) || return false
                         et = exprtype(e, src, mod)
-                        if !isa(et,Const) && !(isType(et) && isleaftype(et))
+                        if !isa(et, Const) && !(isType(et) && isleaftype(et))
                             # first argument must be immutable to ensure e is affect_free
                             a = ea[2]
                             typ = widenconst(exprtype(a, src, mod))
@@ -3923,12 +4048,19 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
                 return false
             end
         elseif head === :new
-            if !allow_volatile
-                a = ea[1]
-                typ = widenconst(exprtype(a, src, mod))
-                if !isType(typ) || !isa((typ::Type).parameters[1],DataType) || ((typ::Type).parameters[1]::DataType).mutable
-                    return false
-                end
+            a = ea[1]
+            typ = exprtype(a, src, mod)
+            # `Expr(:new)` of unknown type could raise arbitrary TypeError.
+            typ, isexact = instanceof_tfunc(typ)
+            isexact || return false
+            (isleaftype(typ) && !iskindtype(typ)) || return false
+            typ = typ::DataType
+            if !allow_volatile && typ.mutable
+                return false
+            end
+            fieldcount(typ) >= length(ea) - 1 || return false
+            for fld_idx in 1:(length(ea) - 1)
+                exprtype(ea[fld_idx + 1], src, mod) ⊑ fieldtype(typ, fld_idx) || return false
             end
             # fall-through
         elseif head === :return
@@ -4160,8 +4292,9 @@ end
 # `ft` is the type of the function. `f` is the exact function if known, or else `nothing`.
 # `pending_stmts` is an array of statements from functions inlined so far, so
 # we can estimate the total size of the enclosing function after inlining.
-function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector{Any}, sv::InferenceState,
-                    pending_stmts)
+function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector{Any},
+                    pending_stmt::Vector{Any}, boundscheck::Symbol,
+                    sv::InferenceState)
     argexprs = e.args
 
     if (f === typeassert || ft ⊑ typeof(typeassert)) && length(atypes)==3
@@ -4340,8 +4473,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     @assert na == length(argexprs)
 
     for i = 1:length(methsp)
-        si = methsp[i]
-        isa(si, TypeVar) && return NF
+        isa(methsp[i], TypeVar) && return NF
     end
 
     # some gf have special tfunc, meaning they wouldn't have been inferred yet
@@ -4459,22 +4591,10 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         add_backedge!(linfo, sv)
     end
 
-    spvals = Any[]
-    for i = 1:length(methsp)
-        push!(spvals, methsp[i])
-    end
-    for i = 1:length(spvals)
-        si = spvals[i]
-        if isa(si, Symbol) || isa(si, SSAValue) || isa(si, Slot)
-            spvals[i] = QuoteNode(si)
-        end
-    end
-
     nm = length(unwrap_unionall(metharg).parameters)
 
     body = Expr(:block)
     body.args = ast
-    propagate_inbounds = src.propagate_inbounds
 
     # see if each argument occurs only once in the body expression
     stmts = []
@@ -4535,7 +4655,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
     end
 
     # ok, substitute argument expressions for argument names in the body
-    body = substitute!(body, na, argexprs, method.sig, spvals, length(sv.src.slotnames) - na)
+    body = substitute!(body, na, argexprs, method.sig, Any[methsp...], length(sv.src.slotnames) - na, boundscheck)
     append!(sv.src.slotnames, src.slotnames[(na + 1):end])
     append!(sv.src.slottypes, src.slottypes[(na + 1):end])
     append!(sv.src.slotflags, src.slotflags[(na + 1):end])
@@ -4656,22 +4776,6 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
             push!(stmts, Expr(:meta, :pop_loc))
         end
     end
-    if !isempty(stmts) && !propagate_inbounds
-        # avoid redundant inbounds annotations
-        s_1, s_end = stmts[1], stmts[end]
-        i = 2
-        while length(stmts) > i && ((isa(s_1,Expr)&&s_1.head===:line) || isa(s_1,LineNumberNode))
-            s_1 = stmts[i]
-            i += 1
-        end
-        if isa(s_1, Expr) && s_1.head === :inbounds && s_1.args[1] === false &&
-            isa(s_end, Expr) && s_end.head === :inbounds && s_end.args[1] === :pop
-        else
-            # inlined statements are out-of-bounds by default
-            unshift!(stmts, Expr(:inbounds, false))
-            push!(stmts, Expr(:inbounds, :pop))
-        end
-    end
 
     if isa(expr, Expr)
         old_t = e.typ
@@ -4694,17 +4798,16 @@ plus_saturate(x, y) = max(x, y, x+y)
 # known return type
 isknowntype(T) = (T == Union{}) || isleaftype(T)
 
-statement_cost(::Any, src::CodeInfo, mod::Module, params::InferenceParams) = 0
-statement_cost(qn::QuoteNode, src::CodeInfo, mod::Module, params::InferenceParams) =
-    statement_cost(qn.value, src, mod, params)
-function statement_cost(ex::Expr, src::CodeInfo, mod::Module, params::InferenceParams)
+function statement_cost(ex::Expr, line::Int, src::CodeInfo, mod::Module, params::InferenceParams)
     head = ex.head
     if is_meta_expr(ex) || head == :copyast # not sure if copyast is right
         return 0
     end
     argcost = 0
     for a in ex.args
-        argcost = plus_saturate(argcost, statement_cost(a, src, mod, params))
+        if a isa Expr
+            argcost = plus_saturate(argcost, statement_cost(a, line, src, mod, params))
+        end
     end
     if head == :return || head == :(=)
         return argcost
@@ -4737,7 +4840,7 @@ function statement_cost(ex::Expr, src::CodeInfo, mod::Module, params::InferenceP
                 elseif f == Main.Core.arrayref
                     return plus_saturate(argcost, isknowntype(ex.typ) ? 4 : params.inline_nonleaf_penalty)
                 end
-                fidx = findfirst(t_ffunc_key, f)
+                fidx = findfirst(x->x===f, t_ffunc_key)
                 if fidx == 0
                     # unknown/unhandled builtin or anonymous function
                     # Use the generic cost of a direct function call
@@ -4756,10 +4859,20 @@ function statement_cost(ex::Expr, src::CodeInfo, mod::Module, params::InferenceP
         return ex.typ == Union{} ? 0 : plus_saturate(20, argcost)
     elseif head == :llvmcall
         return plus_saturate(10, argcost) # a wild guess at typical cost
-    elseif (head == :&)
-        return plus_saturate(length(ex.args), argcost)
+    elseif head == :enter
+        # try/catch is a couple function calls,
+        # but don't inline functions with try/catch
+        # since these aren't usually performance-sensitive functions,
+        # and llvm is more likely to miscompile them when these functions get large
+        return typemax(Int)
+    elseif head == :gotoifnot
+        target = ex.args[2]::Int
+        # loops are generally always expensive
+        # but assume that forward jumps are already counted for from
+        # summing the cost of the not-taken branch
+        return target < line ? plus_saturate(40, argcost) : argcost
     end
-    argcost
+    return argcost
 end
 
 function inline_worthy(body::Array{Any,1}, src::CodeInfo, mod::Module,
@@ -4768,23 +4881,33 @@ function inline_worthy(body::Array{Any,1}, src::CodeInfo, mod::Module,
     bodycost = 0
     for line = 1:length(body)
         stmt = body[line]
-        thiscost = statement_cost(stmt, src, mod, params)
+        if stmt isa Expr
+            thiscost = statement_cost(stmt, line, src, mod, params)::Int
+        elseif stmt isa GotoNode
+            # loops are generally always expensive
+            # but assume that forward jumps are already counted for from
+            # summing the cost of the not-taken branch
+            thiscost = stmt.label < line ? 40 : 0
+        else
+            continue
+        end
         bodycost = plus_saturate(bodycost, thiscost)
+        bodycost == typemax(Int) && return false
     end
-    bodycost <= cost_threshold
+    return bodycost <= cost_threshold
 end
 
 function inline_worthy(body::Expr, src::CodeInfo, mod::Module, params::InferenceParams,
                        cost_threshold::Integer=params.inline_cost_threshold)
-    bodycost = statement_cost(body, src, mod, params)
-    bodycost <= cost_threshold
+    bodycost = statement_cost(body, typemax(Int), src, mod, params)
+    return bodycost <= cost_threshold
 end
 
 function inline_worthy(@nospecialize(body), src::CodeInfo, mod::Module, params::InferenceParams,
                        cost_threshold::Integer=params.inline_cost_threshold)
     newbody = exprtype(body, src, mod)
     !isa(newbody, Expr) && return true
-    inline_worthy(newbody, src, mod, params, cost_threshold)
+    return inline_worthy(newbody, src, mod, params, cost_threshold)
 end
 
 ssavalue_increment(@nospecialize(body), incr) = body
@@ -4814,18 +4937,54 @@ function mk_tuplecall(args, sv::InferenceState)
     return e
 end
 
-function inlining_pass!(sv::InferenceState)
+function inlining_pass!(sv::InferenceState, propagate_inbounds::Bool)
+    # Also handles bounds check elision:
+    #
+    #    1. If check_bounds is always on, set `Expr(:boundscheck)` true
+    #    2. If check_bounds is always off, set `Expr(:boundscheck)` false
+    #    3. If check_bounds is default, figure out whether each boundscheck
+    #         is true, false, or propagate based on the enclosing inbounds directives
+    _opt_check_bounds = JLOptions().check_bounds
+    opt_check_bounds = (_opt_check_bounds == 0 ? :default :
+                        _opt_check_bounds == 1 ? :on :
+                        :off)
+    # Number of stacked inbounds
+    inbounds_depth = 0
+
     eargs = sv.src.code
     i = 1
     stmtbuf = []
     while i <= length(eargs)
         ei = eargs[i]
         if isa(ei, Expr)
-            eargs[i] = inlining_pass(ei, sv, stmtbuf, 1)
-            if !isempty(stmtbuf)
-                splice!(eargs, i:i-1, stmtbuf)
-                i += length(stmtbuf)
-                empty!(stmtbuf)
+            if ei.head === :inbounds
+                eargs[i] = nothing
+                arg1 = ei.args[1]
+                if arg1 === true # push
+                    inbounds_depth += 1
+                elseif arg1 === false # clear
+                    inbounds_depth = 0
+                elseif inbounds_depth > 0 # pop
+                    inbounds_depth -= 1
+                end
+            else
+                if opt_check_bounds === :off
+                     boundscheck = :off
+                elseif opt_check_bounds === :on
+                     boundscheck = :on
+                elseif inbounds_depth > 0
+                     boundscheck = :off
+                elseif propagate_inbounds
+                     boundscheck = :propagate
+                else
+                     boundscheck = :on
+                end
+                eargs[i] = inlining_pass(ei, sv, stmtbuf, 1, boundscheck)
+                if !isempty(stmtbuf)
+                    splice!(eargs, i:(i - 1), stmtbuf)
+                    i += length(stmtbuf)
+                    empty!(stmtbuf)
+                end
             end
         end
         i += 1
@@ -4836,7 +4995,7 @@ const corenumtype = Union{Int32, Int64, Float32, Float64}
 
 # return inlined replacement for `e`, inserting new needed statements
 # at index `ins` in `stmts`.
-function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
+function inlining_pass(e::Expr, sv::InferenceState, stmts::Vector{Any}, ins, boundscheck::Symbol)
     if e.head === :meta
         # ignore meta nodes
         return e
@@ -4846,10 +5005,14 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
         return e
     end
     # inliners for special expressions
+    if e.head === :boundscheck
+        return e
+    end
     if e.head === :isdefined
         isa(e.typ, Const) && return e.typ.val
         return e
     end
+
     eargs = e.args
     if length(eargs) < 1
         return e
@@ -4892,7 +5055,7 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
                 argloc = eargs
             end
             sl0 = length(stmts)
-            res = inlining_pass(ei, sv, stmts, ins)
+            res = inlining_pass(ei, sv, stmts, ins, boundscheck)
             ns = length(stmts) - sl0  # number of new statements just added
             if isccallee
                 restype = exprtype(res, sv.src, sv.mod)
@@ -4984,11 +5147,11 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
                                            exprtype(a1, sv.src, sv.mod) ⊑ basenumtype)
                     if square
                         e.args = Any[GlobalRef(Main.Base,:*), a1, a1]
-                        res = inlining_pass(e, sv, stmts, ins)
+                        res = inlining_pass(e, sv, stmts, ins, boundscheck)
                     else
                         e.args = Any[GlobalRef(Main.Base,:*), Expr(:call, GlobalRef(Main.Base,:*), a1, a1), a1]
                         e.args[2].typ = e.typ
-                        res = inlining_pass(e, sv, stmts, ins)
+                        res = inlining_pass(e, sv, stmts, ins, boundscheck)
                     end
                     return res
                 end
@@ -5004,7 +5167,7 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
             (a === Bottom || isvarargtype(a)) && return e
             ata[i] = a
         end
-        res = inlineable(f, ft, e, ata, sv, stmts)
+        res = inlineable(f, ft, e, ata, stmts, boundscheck, sv)
         if isa(res,Tuple)
             if isa(res[2],Array) && !isempty(res[2])
                 splice!(stmts, ins:ins-1, res[2])
@@ -5303,7 +5466,7 @@ function find_sa_vars(src::CodeInfo, nargs::Int)
             end
         end
     end
-    filter!((v, _) -> !haskey(av2, v), av)
+    filter!(p -> !haskey(av2, p.first), av)
     return av
 end
 
@@ -5403,7 +5566,7 @@ function void_use_elim_pass!(sv::InferenceState)
     nothing
 end
 
-function meta_elim_pass!(code::Array{Any,1}, propagate_inbounds::Bool, do_coverage::Bool)
+function meta_elim_pass!(code::Array{Any,1}, do_coverage::Bool)
     # 1. Remove place holders
     #
     # 2. If coverage is off, remove line number nodes that don't mark any
@@ -5411,54 +5574,6 @@ function meta_elim_pass!(code::Array{Any,1}, propagate_inbounds::Bool, do_covera
     #
     # 3. Remove top level SSAValue
     #
-    # 4. Handle bounds check elision
-    #
-    #    4.1. If check_bounds is always on, delete all `Expr(:boundscheck)`
-    #    4.2. If check_bounds is always off, delete all boundscheck blocks.
-    #    4.3. If check_bounds is default, figure out whether each checkbounds
-    #         blocks needs to be eliminated or could be eliminated when inlined
-    #         into another function. Delete the blocks that should be eliminated
-    #         and delete the `Expr(:boundscheck)` for blocks that will never be
-    #         deleted. (i.e. the ones that are not eliminated with
-    #         `length(inbounds_stack) >= 2`)
-    #
-    #    When deleting IR with boundscheck, keep the label node in order to not
-    #    confuse later passes or codegen. (we could also track if  any SSAValue
-    #    is deleted while still having uses that are not but that's a little
-    #    expensive).
-    #
-    # 5. Clean up `Expr(:inbounds)`
-    #
-    #    Delete all `Expr(:inbounds)` that is unnecessary, which is all of them
-    #    for non-default check_bounds. For default check_bounds this includes
-    #
-    #    * `Expr(:inbounds, true)` in `Expr(:inbounds, true)`
-    #    * `Expr(:inbounds, false)` when
-    #      `!is_inbounds && length(inbounds_stack) >= 2`
-    #
-    #    Functions without `propagate_inbounds` have an implicit `false` on the
-    #    `inbounds_stack`
-    #
-    #    There are other cases in which we can eliminate `Expr(:inbounds)` or
-    #    `Expr(:boundscheck)` (e.g. when they don't enclose any non-meta
-    #    expressions). Those are a little harder to detect and are hopefully
-    #    not too common.
-    check_bounds = JLOptions().check_bounds
-
-    inbounds_stack = propagate_inbounds ? Bool[] : Bool[false]
-    # Whether the push is deleted (therefore if the pop has to be too)
-    # Shared for `Expr(:boundscheck)` and `Expr(:inbounds)`
-    bounds_elim_stack = Bool[]
-    # The expression index of the push, set to `0` when encountering a
-    # non-meta expression that might be affect by the push.
-    # The clearing needs to be propagated up during pop
-    # This is not pushed to if the push is already eliminated
-    # Also shared for `Expr(:boundscheck)` and `Expr(:inbounds)`
-    bounds_push_pos_stack = Int[0] # always non-empty
-    # Number of boundscheck pushes in a eliminated boundscheck block
-    void_boundscheck_depth = 0
-    is_inbounds = check_bounds == 2
-    enabled = true
 
     # Position of the last line number node without any non-meta expressions
     # in between.
@@ -5486,140 +5601,16 @@ function meta_elim_pass!(code::Array{Any,1}, propagate_inbounds::Bool, do_covera
             prev_dbg_stack[end] = i
             continue
         elseif !isa(ex, Expr)
-            if enabled
-                prev_dbg_stack[end] = 0
-                push_loc_pos_stack[end] = 0
-                bounds_push_pos_stack[end] = 0
-            else
-                code[i] = nothing
-            end
+            prev_dbg_stack[end] = 0
+            push_loc_pos_stack[end] = 0
             continue
         end
         ex = ex::Expr
         args = ex.args
         head = ex.head
-        if head === :boundscheck
-            if !enabled
-                # we are in an eliminated boundscheck, simply record the number
-                # of push/pop
-                if !(args[1] === :pop)
-                    void_boundscheck_depth += 1
-                elseif void_boundscheck_depth == 0
-                    # There must have been a push
-                    pop!(bounds_elim_stack)
-                    enabled = true
-                else
-                    void_boundscheck_depth -= 1
-                end
-                code[i] = nothing
-            elseif args[1] === :pop
-                # This will also delete pops that don't match
-                if (isempty(bounds_elim_stack) ? true :
-                    pop!(bounds_elim_stack))
-                    code[i] = nothing
-                    continue
-                end
-                push_idx = bounds_push_pos_stack[end]
-                if length(bounds_push_pos_stack) > 1
-                    pop!(bounds_push_pos_stack)
-                end
-                if push_idx > 0
-                    code[push_idx] = nothing
-                    code[i] = nothing
-                else
-                    bounds_push_pos_stack[end] = 0
-                end
-            elseif is_inbounds
-                code[i] = nothing
-                push!(bounds_elim_stack, true)
-                enabled = false
-            elseif check_bounds == 1 || length(inbounds_stack) >= 2
-                # Not inbounds and at least two levels deep, this will never
-                # be eliminated when inlined to another function.
-                code[i] = nothing
-                push!(bounds_elim_stack, true)
-            else
-                push!(bounds_elim_stack, false)
-                push!(bounds_push_pos_stack, i)
-            end
-            continue
-        end
-        if !enabled && !(do_coverage && head === :meta)
-            code[i] = nothing
-            continue
-        end
-        if head === :inbounds
-            if check_bounds != 0
-                code[i] = nothing
-                continue
-            end
-            arg1 = args[1]
-            if arg1 === true
-                if !isempty(inbounds_stack) && inbounds_stack[end]
-                    code[i] = nothing
-                    push!(bounds_elim_stack, true)
-                else
-                    is_inbounds = true
-                    push!(bounds_elim_stack, false)
-                    push!(bounds_push_pos_stack, i)
-                end
-                push!(inbounds_stack, true)
-            elseif arg1 === false
-                if is_inbounds
-                    # There must have been a `true` on the stack so
-                    # `inbounds_stack` must not be empty
-                    if !inbounds_stack[end]
-                        is_inbounds = false
-                    end
-                    push!(bounds_elim_stack, false)
-                    push!(bounds_push_pos_stack, i)
-                elseif length(inbounds_stack) >= 2
-                    code[i] = nothing
-                    push!(bounds_elim_stack, true)
-                else
-                    push!(bounds_elim_stack, false)
-                    push!(bounds_push_pos_stack, i)
-                end
-                push!(inbounds_stack, false)
-            else
-                # pop
-                inbounds_len = length(inbounds_stack)
-                if inbounds_len != 0
-                    pop!(inbounds_stack)
-                    inbounds_len -= 1
-                end
-                # This will also delete pops that don't match
-                if (isempty(bounds_elim_stack) ? true :
-                    pop!(bounds_elim_stack))
-                    # No need to update `is_inbounds` since the push was a no-op
-                    code[i] = nothing
-                    continue
-                end
-                if inbounds_len >= 2
-                    is_inbounds = (inbounds_stack[inbounds_len] ||
-                                   inbounds_stack[inbounds_len - 1])
-                elseif inbounds_len == 1
-                    is_inbounds = inbounds_stack[inbounds_len]
-                else
-                    is_inbounds = false
-                end
-                push_idx = bounds_push_pos_stack[end]
-                if length(bounds_push_pos_stack) > 1
-                    pop!(bounds_push_pos_stack)
-                end
-                if push_idx > 0
-                    code[push_idx] = nothing
-                    code[i] = nothing
-                else
-                    bounds_push_pos_stack[end] = 0
-                end
-            end
-            continue
-        end
         if head !== :meta
             prev_dbg_stack[end] = 0
             push_loc_pos_stack[end] = 0
-            bounds_push_pos_stack[end] = 0
             continue
         end
         nargs = length(args)
@@ -5670,11 +5661,14 @@ function getfield_elim_pass!(sv::InferenceState)
 end
 
 function _getfield_elim_pass!(e::Expr, sv::InferenceState)
-    for i = 1:length(e.args)
+    nargs = length(e.args)
+    for i = 1:nargs
         e.args[i] = _getfield_elim_pass!(e.args[i], sv)
     end
-    if is_known_call(e, getfield, sv.src, sv.mod) && length(e.args)==3 &&
-        (isa(e.args[3],Int) || isa(e.args[3],QuoteNode))
+    if is_known_call(e, getfield, sv.src, sv.mod) &&
+            (nargs == 3 || nargs == 4) &&
+            (isa(e.args[3], Int) || isa(e.args[3], QuoteNode)) &&
+            (nargs == 3 || isa(e.args[4], Bool))
         e1 = e.args[2]
         j = e.args[3]
         single_use = true
@@ -5693,7 +5687,7 @@ function _getfield_elim_pass!(e::Expr, sv::InferenceState)
             if alloc !== false
                 flen, fnames = alloc
                 if isa(j, QuoteNode)
-                    j = findfirst(fnames, j.value)
+                    j = findfirst(equalto(j.value), fnames)
                 end
                 if 1 <= j <= flen
                     ok = true
@@ -5807,8 +5801,7 @@ function basic_dce_pass!(sv::InferenceState)
         elseif isa(expr, Expr)
             label = 0
             if expr.head === :gotoifnot
-                label = labelmap[expr.args[2]::Int]
-                label === 0 || push!(W, label) # inference must have computed that this condition is always true
+                push!(W, labelmap[expr.args[2]::Int])
             elseif expr.head === :enter
                 push!(W, labelmap[expr.args[1]::Int])
             elseif expr.head === :return
@@ -5988,7 +5981,7 @@ function replace_getfield!(e::Expr, tupname, vals, field_names, sv::InferenceSta
                 a.args[3]
             else
                 @assert isa(a.args[3], QuoteNode)
-                findfirst(field_names, a.args[3].value)
+                findfirst(equalto(a.args[3].value), field_names)
             end
             @assert(idx > 0) # clients should check that all getfields are valid
             val = vals[idx]
@@ -6040,10 +6033,7 @@ function reindex_labels!(sv::InferenceState)
     for i = 1:length(body)
         el = body[i]
         # For goto and enter, the statement and the target has to be
-        # both reachable or both not. For gotoifnot, the dead code
-        # elimination in type_annotate! can delete the target
-        # of a reachable (but never taken) node. In which case we can
-        # just replace the node with the branch condition.
+        # both reachable or both not.
         if isa(el, LabelNode)
             labelnum = mapping[el.label]
             @assert labelnum !== 0
@@ -6055,12 +6045,8 @@ function reindex_labels!(sv::InferenceState)
         elseif isa(el, Expr)
             if el.head === :gotoifnot
                 labelnum = mapping[el.args[2]::Int]
-                if labelnum === 0
-                    # Might still have side effects
-                    body[i] = el.args[1]
-                else
-                    el.args[2] = labelnum
-                end
+                @assert labelnum !== 0
+                el.args[2] = labelnum
             elseif el.head === :enter
                 labelnum = mapping[el.args[1]::Int]
                 @assert labelnum !== 0

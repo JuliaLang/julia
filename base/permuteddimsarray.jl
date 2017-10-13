@@ -148,7 +148,7 @@ function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
         copy!(parent(P), src) # it's not permuted
     else
         R1 = CartesianRange(indices(src)[1:d])
-        d1 = findfirst(perm, d+1)  # first permuted dim of dest
+        d1 = findfirst(equalto(d+1), perm)  # first permuted dim of dest
         R2 = CartesianRange(indices(src)[d+2:d1-1])
         R3 = CartesianRange(indices(src)[d1+1:end])
         _permutedims!(P, src, R1, R2, R3, d+1, d1)
@@ -184,6 +184,13 @@ end
         end
     end
     P
+end
+
+function Base.showarg(io::IO, A::PermutedDimsArray{T,N,perm}, toplevel) where {T,N,perm}
+    print(io, "PermutedDimsArray(")
+    Base.showarg(io, parent(A), false)
+    print(io, ", ", perm, ')')
+    toplevel && print(io, " with eltype ", eltype(A))
 end
 
 end

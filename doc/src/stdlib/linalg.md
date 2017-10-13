@@ -92,9 +92,6 @@ Base.repmat
 Base.kron
 Base.SparseArrays.blkdiag
 Base.LinAlg.linreg
-Base.LinAlg.expm
-Base.LinAlg.logm
-Base.LinAlg.sqrtm
 Base.LinAlg.lyap
 Base.LinAlg.sylvester
 Base.LinAlg.issuccess
@@ -109,8 +106,8 @@ Base.LinAlg.RowVector
 Base.LinAlg.ConjArray
 Base.transpose
 Base.transpose!
-Base.ctranspose
-Base.ctranspose!
+Base.adjoint
+Base.adjoint!
 Base.LinAlg.eigs(::Any)
 Base.LinAlg.eigs(::Any, ::Any)
 Base.LinAlg.svds

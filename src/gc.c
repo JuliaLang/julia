@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -857,6 +858,9 @@ static size_t array_nbytes(jl_array_t *a)
         sz = a->elsize * a->maxsize + (a->elsize == 1 ? 1 : 0);
     else
         sz = a->elsize * jl_array_len(a);
+    if (!a->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(a))))
+        // account for isbits Union array selector bytes
+        sz += jl_array_len(a);
     return sz;
 }
 
@@ -1974,7 +1978,7 @@ module_binding: {
     }
 
 finlist: {
-        // Scan a finalizer list. see `gc_mark_finlist_t`
+        // Scan a finalizer (or format compatible) list. see `gc_mark_finlist_t`
         gc_mark_finlist_t *finlist = gc_pop_markdata(&sp, gc_mark_finlist_t);
         jl_value_t **begin = finlist->begin;
         jl_value_t **end = finlist->end;
@@ -2273,6 +2277,8 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
     // constants
     gc_mark_queue_obj(gc_cache, sp, jl_typetype_type);
     gc_mark_queue_obj(gc_cache, sp, jl_emptytuple_type);
+
+    gc_mark_queue_finlist(gc_cache, sp, &partial_inst, 0);
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".

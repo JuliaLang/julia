@@ -38,7 +38,14 @@ $(BIN)/embedding$(EXE): $(SRCDIR)/embedding.c
 $(BIN)/embedding-debug$(EXE): $(SRCDIR)/embedding.c
 	$(CC) $^ -o $@ $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS) $(DEBUGFLAGS)
 
-check: $(BIN)/embedding$(EXE)
+ifneq ($(abspath $(BIN)),$(abspath $(SRCDIR)))
+# for demonstration purposes, our demo code is also installed
+# in $BIN, although this would likely not be typical
+$(BIN)/LocalModule.jl: $(SRCDIR)/LocalModule.jl
+	cp $< $@
+endif
+
+check: $(BIN)/embedding$(EXE) $(BIN)/LocalModule.jl
 	$(JULIA) $(SRCDIR)/embedding-test.jl $<
 	@echo SUCCESS
 

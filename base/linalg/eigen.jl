@@ -225,8 +225,7 @@ julia> eigmax(A)
 ERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:
 `A` cannot have complex eigenvalues.
 Stacktrace:
- [1] #eigmax#52(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:238
- [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:236
+[...]
 ```
 """
 function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
@@ -267,8 +266,7 @@ julia> eigmin(A)
 ERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:
 `A` cannot have complex eigenvalues.
 Stacktrace:
- [1] #eigmin#53(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:280
- [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:278
+[...]
 ```
 """
 function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)

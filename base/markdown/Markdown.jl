@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Tools for working with the Markdown file format. Mainly for documentation.
+"""
 module Markdown
 
 import Base: show, ==
@@ -56,8 +59,8 @@ macro doc_str(s::AbstractString, t...)
     docexpr(__source__, __module__, s, t...)
 end
 
-function Base.display(d::Base.REPL.REPLDisplay, md::Vector{MD})
-    for md in md
+function Base.display(d::Base.REPL.REPLDisplay, mds::Vector{MD})
+    for md in mds
         display(d, md)
     end
 end

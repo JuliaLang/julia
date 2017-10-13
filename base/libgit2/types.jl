@@ -50,6 +50,12 @@ end
 
 An action signature (e.g. for committers, taggers, etc).
 Matches the [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) struct.
+
+The fields represent:
+  * `name`: The full name of the committer or author of the commit.
+  * `email`: The email at which the committer/author can be contacted.
+  * `when`: a [`TimeStruct`](@ref) indicating when the commit was
+     authored/committed into the repository.
 """
 struct SignatureStruct
     name::Ptr{UInt8}  # full name of the author
@@ -116,19 +122,38 @@ function free(buf_ref::Base.Ref{Buffer})
     ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ref)
 end
 
-"Abstract credentials payload"
-abstract type AbstractCredentials end
-
-"Checks if credentials were used"
-checkused!(p::AbstractCredentials) = true
-checkused!(p::Void) = false
-"Resets credentials for another use"
-reset!(p::AbstractCredentials, cnt::Int=3) = nothing
-
 """
     LibGit2.CheckoutOptions
 
 Matches the [`git_checkout_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_checkout_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `checkout_strategy`: determine how to handle conflicts and whether to force the
+     checkout/recreate missing files.
+  * `disable_filters`: if nonzero, do not apply filters like CLRF (to convert file newlines between UNIX and DOS).
+  * `dir_mode`: read/write/access mode for any directories involved in the checkout. Default is `0755`.
+  * `file_mode`: read/write/access mode for any files involved in the checkout.
+     Default is `0755` or `0644`, depending on the blob.
+  * `file_open_flags`: bitflags used to open any files during the checkout.
+  * `notify_flags`: Flags for what sort of conflicts the user should be notified about.
+  * `notify_cb`: An optional callback function to notify the user if a checkout conflict occurs.
+     If this function returns a non-zero value, the checkout will be cancelled.
+  * `notify_payload`: Payload for the notify callback function.
+  * `progress_cb`: An optional callback function to display checkout progress.
+  * `progress_payload`: Payload for the progress callback.
+  * `paths`: If not empty, describes which paths to search during the checkout.
+     If empty, the checkout will occur over all files in the repository.
+  * `baseline`: Expected content of the [`workdir`](@ref), captured in a (pointer to a)
+     [`GitTree`](@ref). Defaults to the state of the tree at HEAD.
+  * `baseline_index`: Expected content of the [`workdir`](@ref), captured in a (pointer to a)
+     `GitIndex`. Defaults to the state of the index at HEAD.
+  * `target_directory`: If not empty, checkout to this directory instead of the `workdir`.
+  * `ancestor_label`: In case of conflicts, the name of the common ancestor side.
+  * `our_label`: In case of conflicts, the name of "our" side.
+  * `their_label`: In case of conflicts, the name of "their" side.
+  * `perfdata_cb`: An optional callback function to display performance data.
+  * `perfdata_payload`: Payload for the performance callback.
 """
 @kwdef struct CheckoutOptions
     version::Cuint = 1
@@ -163,13 +188,7 @@ end
 
 abstract type Payload end
 
-"""
-    LibGit2.RemoteCallbacks
-
-Callback settings.
-Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks) struct.
-"""
-@kwdef struct RemoteCallbacks
+@kwdef struct RemoteCallbacksStruct
     version::Cuint                    = 1
     sideband_progress::Ptr{Void}
     completion::Ptr{Void}
@@ -185,16 +204,24 @@ Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/ty
     payload::Ptr{Void}
 end
 
-function RemoteCallbacks(credentials_cb::Ptr{Void}, payload::Ref{<:Payload})
-    RemoteCallbacks(credentials=credentials_cb, payload=pointer_from_objref(payload))
-end
+"""
+    LibGit2.RemoteCallbacks
 
-function RemoteCallbacks(credentials_cb::Ptr{Void}, payload::Payload)
-    RemoteCallbacks(credentials_cb, Ref(payload))
-end
-
-function RemoteCallbacks(credentials_cb::Ptr{Void}, credentials)
-    RemoteCallbacks(credentials_cb, CredentialPayload(credentials))
+Callback settings.
+Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks) struct.
+"""
+struct RemoteCallbacks
+    cb::RemoteCallbacksStruct
+    gcroot::Ref{Any}
+    function RemoteCallbacks(; payload::Union{Payload, Void}=nothing, kwargs...)
+        p = Ref{Any}(payload)
+        if payload === nothing
+            pp = C_NULL
+        else
+            pp = unsafe_load(Ptr{Ptr{Void}}(Base.unsafe_convert(Ptr{Any}, p)))
+        end
+        return new(RemoteCallbacksStruct(; kwargs..., payload=pp), p)
+    end
 end
 
 """
@@ -224,9 +251,8 @@ The fields represent:
 
 # Examples
 ```julia-repl
-julia> fo = LibGit2.FetchOptions();
-
-julia> fo.proxy_opts = LibGit2.ProxyOptions(url=Cstring("https://my_proxy_url.com"))
+julia> fo = LibGit2.FetchOptions(
+           proxy_opts = LibGit2.ProxyOptions(url = Cstring("https://my_proxy_url.com")))
 
 julia> fetch(remote, "master", options=fo)
 ```
@@ -240,15 +266,9 @@ julia> fetch(remote, "master", options=fo)
     payload::Ptr{Void}
 end
 
-
-"""
-    LibGit2.FetchOptions
-
-Matches the [`git_fetch_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_fetch_options) struct.
-"""
-@kwdef struct FetchOptions
+@kwdef struct FetchOptionsStruct
     version::Cuint                  = 1
-    callbacks::RemoteCallbacks
+    callbacks::RemoteCallbacksStruct
     prune::Cint                     = Consts.FETCH_PRUNE_UNSPECIFIED
     update_fetchhead::Cint          = 1
     download_tags::Cint             = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
@@ -261,14 +281,37 @@ Matches the [`git_fetch_options`](https://libgit2.github.com/libgit2/#HEAD/type/
 end
 
 """
-    LibGit2.CloneOptions
+    LibGit2.FetchOptions
 
-Matches the [`git_clone_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_clone_options) struct.
+Matches the [`git_fetch_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_fetch_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `callbacks`: remote callbacks to use during the fetch.
+  * `prune`: whether to perform a prune after the fetch or not. The default is to
+     use the setting from the `GitConfig`.
+  * `update_fetchhead`: whether to update the [`FetchHead`](@ref) after the fetch.
+     The default is to perform the update, which is the normal git behavior.
+  * `download_tags`: whether to download tags present at the remote or not. The default
+     is to request the tags for objects which are being downloaded anyway from the server.
+  * `proxy_opts`: options for connecting to the remote through a proxy. See [`ProxyOptions`](@ref).
+     Only present on libgit2 versions newer than or equal to 0.25.0.
+  * `custom_headers`: any extra headers needed for the fetch. Only present on libgit2 versions
+     newer than or equal to 0.24.0.
 """
-@kwdef struct CloneOptions
+struct FetchOptions
+    opts::FetchOptionsStruct
+    cb_gcroot::Ref{Any}
+    function FetchOptions(; callbacks::RemoteCallbacks=RemoteCallbacks(), kwargs...)
+        return new(FetchOptionsStruct(; kwargs..., callbacks=callbacks.cb), callbacks.gcroot)
+    end
+end
+
+
+@kwdef struct CloneOptionsStruct
     version::Cuint                      = 1
     checkout_opts::CheckoutOptions
-    fetch_opts::FetchOptions
+    fetch_opts::FetchOptionsStruct
     bare::Cint
     localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
     checkout_branch::Cstring
@@ -279,9 +322,65 @@ Matches the [`git_clone_options`](https://libgit2.github.com/libgit2/#HEAD/type/
 end
 
 """
+    LibGit2.CloneOptions
+
+Matches the [`git_clone_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_clone_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `checkout_opts`: The options for performing the checkout of the remote as part of the clone.
+  * `fetch_opts`: The options for performing the pre-checkout fetch of the remote as part of the clone.
+  * `bare`: If `0`, clone the full remote repository. If non-zero, perform a bare clone, in which
+     there is no local copy of the source files in the repository and the [`gitdir`](@ref) and [`workdir`](@ref)
+     are the same.
+  * `localclone`: Flag whether to clone a local object database or do a fetch. The default is to let git decide.
+     It will not use the git-aware transport for a local clone, but will use it for URLs which begin with `file://`.
+  * `checkout_branch`: The name of the branch to checkout. If an empty string, the default branch of the
+     remote will be checked out.
+  * `repository_cb`: An optional callback which will be used to create the *new* repository into which
+     the clone is made.
+  * `repository_cb_payload`: The payload for the repository callback.
+  * `remote_cb`: An optional callback used to create the [`GitRemote`](@ref) before making the clone from it.
+  * `remote_cb_payload`: The payload for the remote callback.
+"""
+struct CloneOptions
+    opts::CloneOptionsStruct
+    cb_gcroot::Ref{Any}
+    function CloneOptions(; fetch_opts::FetchOptions=FetchOptions(), kwargs...)
+        return new(CloneOptionsStruct(; kwargs..., fetch_opts=fetch_opts.opts), fetch_opts.cb_gcroot)
+    end
+end
+
+"""
     LibGit2.DiffOptionsStruct
 
 Matches the [`git_diff_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `flags`: flags controlling which files will appear in the diff. Defaults to `DIFF_NORMAL`.
+  * `ignore_submodules`: whether to look at files in submodules or not. Defaults to
+    `SUBMODULE_IGNORE_UNSPECIFIED`, which means the submodule's configuration will control
+     whether it appears in the diff or not.
+  * `pathspec`: path to files to include in the diff. Default is to use all files in the repository.
+  * `notify_cb`: optional callback which will notify the user of changes to the diff as file deltas are
+     added to it.
+  * `progress_cb`: optional callback which will display diff progress. Only relevant on libgit2 versions
+     at least as new as 0.24.0.
+  * `payload`: the payload to pass to `notify_cb` and `progress_cb`.
+  * `context_lines`: the number of *unchanged* lines used to define the edges of a hunk.
+     This is also the number of lines which will be shown before/after a hunk to provide
+     context. Default is 3.
+  * `interhunk_lines`: the maximum number of *unchanged* lines *between* two separate
+     hunks allowed before the hunks will be combined. Default is 0.
+  * `id_abbrev`: sets the length of the abbreviated [`GitHash`](@ref) to print.
+     Default is `7`.
+  * `max_size`: the maximum file size of a blob. Above this size, it will be treated
+     as a binary blob. The default is 512 MB.
+  * `old_prefix`: the virtual file directory in which to place old files on one side
+     of the diff. Default is `"a"`.
+  * `new_prefix`: the virtual file directory in which to place new files on one side
+     of the diff. Default is `"b"`.
 """
 @kwdef struct DiffOptionsStruct
     version::Cuint                           = Consts.DIFF_OPTIONS_VERSION
@@ -309,6 +408,20 @@ end
     LibGit2.DescribeOptions
 
 Matches the [`git_describe_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_describe_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `max_candidates_tags`: consider this many most recent tags in `refs/tags` to describe a commit.
+     Defaults to 10 (so that the 10 most recent tags would be examined to see if they describe a commit).
+  * `describe_strategy`: whether to consider all entries in `refs/tags` (equivalent to `git-describe --tags`)
+     or all entries in `refs/` (equivalent to `git-describe --all`). The default is to only show annotated tags.
+     If `Consts.DESCRIBE_TAGS` is passed, all tags, annotated or not, will be considered.
+     If `Consts.DESCRIBE_ALL` is passed, any ref in `refs/` will be considered.
+  * `pattern`: only consider tags which match `pattern`. Supports glob expansion.
+  * `only_follow_first_parent`: when finding the distance from a matching reference to the described
+     object, only consider the distance from the first parent.
+  * `show_commit_oid_as_fallback`: if no matching reference can be found which describes a commit, show the
+     commit's [`GitHash`](@ref) instead of throwing an error (the default behavior).
 """
 @kwdef struct DescribeOptions
     version::Cuint             = 1
@@ -412,6 +525,44 @@ end
     LibGit2.MergeOptions
 
 Matches the [`git_merge_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_merge_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `flags`: an `enum` for flags describing merge behavior.
+     Defined in [`git_merge_flag_t`](https://github.com/libgit2/libgit2/blob/HEAD/include/git2/merge.h#L95).
+     The corresponding Julia enum is `GIT_MERGE` and has values:
+     - `MERGE_FIND_RENAMES`: detect if a file has been renamed between the common
+       ancestor and the "ours" or "theirs" side of the merge. Allows merges where
+       a file has been renamed.
+     - `MERGE_FAIL_ON_CONFLICT`: exit immediately if a conflict is found rather
+       than trying to resolve it.
+     - `MERGE_SKIP_REUC`: do not write the REUC extension on the index resulting
+       from the merge.
+     - `MERGE_NO_RECURSIVE`: if the commits being merged have multiple merge bases,
+       use the first one, rather than trying to recursively merge the bases.
+  * `rename_threshold`: how similar two files must to consider one a rename of the other.
+    This is an integer that sets the percentage similarity. The default is 50.
+  * `target_limit`: the maximum number of files to compare with to look for renames.
+    The default is 200.
+  * `metric`: optional custom function to use to determine the similarity between two
+    files for rename detection.
+  * `recursion_limit`: the upper limit on the number of merges of common ancestors to
+    perform to try to build a new virtual merge base for the merge. The default is no
+    limit. This field is only present on libgit2 versions newer than 0.24.0.
+  * `default_driver`: the merge driver to use if both sides have changed. This field
+    is only present on libgit2 versions newer than 0.25.0.
+  * `file_favor`: how to handle conflicting file contents for the `text` driver.
+    - `MERGE_FILE_FAVOR_NORMAL`: if both sides of the merge have changes to a section,
+       make a note of the conflict in the index which `git checkout` will use to create
+       a merge file, which the user can then reference to resolve the conflicts. This is
+       the default.
+    - `MERGE_FILE_FAVOR_OURS`: if both sides of the merge have changes to a section,
+       use the version in the "ours" side of the merge in the index.
+    - `MERGE_FILE_FAVOR_THEIRS`: if both sides of the merge have changes to a section,
+       use the version in the "theirs" side of the merge in the index.
+    - `MERGE_FILE_FAVOR_UNION`: if both sides of the merge have changes to a section,
+       include each unique line from both sides in the file which is put into the index.
+  * `file_flags`: guidelines for merging files.
 """
 @kwdef struct MergeOptions
     version::Cuint                    = 1
@@ -433,6 +584,20 @@ end
     LibGit2.BlameOptions
 
 Matches the [`git_blame_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_blame_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `flags`: one of `Consts.BLAME_NORMAL` or `Consts.BLAME_FIRST_PARENT` (the other blame flags
+     are not yet implemented by libgit2).
+  * `min_match_characters`: the minimum number of *alphanumeric* characters which much change
+    in a commit in order for the change to be associated with that commit. The default is 20.
+    Only takes effect if one of the `Consts.BLAME_*_COPIES` flags are used, which libgit2 does
+    not implement yet.
+  * `newest_commit`: the [`GitHash`](@ref) of the newest commit from which to look at changes.
+  * `oldest_commit`: the [`GitHash`](@ref) of the oldest commit from which to look at changes.
+  * `min_line`: the first line of the file from which to starting blaming. The default is `1`.
+  * `max_line`: the last line of the file to which to blame. The default is `0`, meaning the
+    last line of the file.
 """
 @kwdef struct BlameOptions
     version::Cuint                    = 1
@@ -442,6 +607,18 @@ Matches the [`git_blame_options`](https://libgit2.github.com/libgit2/#HEAD/type/
     oldest_commit::GitHash
     min_line::Csize_t                 = 1
     max_line::Csize_t                 = 0
+end
+
+@kwdef struct PushOptionsStruct
+    version::Cuint                     = 1
+    parallelism::Cint                  = 1
+    callbacks::RemoteCallbacksStruct
+    @static if LibGit2.VERSION >= v"0.25.0"
+        proxy_opts::ProxyOptions
+    end
+    @static if LibGit2.VERSION >= v"0.24.0"
+        custom_headers::StrArrayStruct
+    end
 end
 
 """
@@ -461,15 +638,11 @@ The fields represent:
   * `custom_headers`: only relevant if the LibGit2 version is greater than or equal to `0.24.0`.
      Extra headers needed for the push operation.
 """
-@kwdef struct PushOptions
-    version::Cuint                     = 1
-    parallelism::Cint                  = 1
-    callbacks::RemoteCallbacks
-    @static if LibGit2.VERSION >= v"0.25.0"
-        proxy_opts::ProxyOptions
-    end
-    @static if LibGit2.VERSION >= v"0.24.0"
-        custom_headers::StrArrayStruct
+struct PushOptions
+    opts::PushOptionsStruct
+    cb_gcroot::Ref{Any}
+    function PushOptions(; callbacks::RemoteCallbacks=RemoteCallbacks(), kwargs...)
+        return new(PushOptionsStruct(; kwargs..., callbacks=callbacks.cb), callbacks.gcroot)
     end
 end
 
@@ -477,6 +650,15 @@ end
     LibGit2.CherrypickOptions
 
 Matches the [`git_cherrypick_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_cherrypick_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `mainline`: if cherrypicking a merge commit, specifies the parent number (starting at `1`)
+    which will allow cherrypick to apply the changes relative to that parent. Only relevant if
+    cherrypicking a merge commit. Default is `0`.
+  * `merge_opts`: options for merging the changes in. See [`MergeOptions`](@ref) for more information.
+  * `checkout_opts`: options for the checkout of the commit being cherrypicked. See [`CheckoutOptions`](@ref)
+     for more information.
 """
 @kwdef struct CherrypickOptions
     version::Cuint = 1
@@ -526,6 +708,20 @@ Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
     LibGit2.RebaseOptions
 
 Matches the `git_rebase_options` struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `quiet`: inform other git clients helping with/working on the rebase that the rebase
+    should be done "quietly". Used for interoperability. The default is `1`.
+  * `inmemory`: start an in-memory rebase. Callers working on the rebase can go through its
+    steps and commit any changes, but cannot rewind HEAD or update the repository. The
+    [`workdir`](@ref) will not be modified. Only present on libgit2 versions newer than or equal to 0.24.0.
+  * `rewrite_notes_ref`: name of the reference to notes to use to rewrite the commit notes as
+    the rebase is finished.
+  * `merge_opts`: merge options controlling how the trees will be merged at each rebase step.
+     Only present on libgit2 versions newer than or equal to 0.24.0.
+  * `checkout_opts`: checkout options for writing files when initializing the rebase, stepping
+    through it, and aborting it. See [`CheckoutOptions`](@ref) for more information.
 """
 @kwdef struct RebaseOptions
     version::Cuint                 = 1
@@ -545,6 +741,23 @@ end
 
 Describes a single instruction/operation to be performed during the rebase.
 Matches the [`git_rebase_operation`](https://libgit2.github.com/libgit2/#HEAD/type/git_rebase_operation_t) struct.
+
+The fields represent:
+  * `optype`: the type of rebase operation currently being performed. The options are:
+      - `REBASE_OPERATION_PICK`: cherry-pick the commit in question.
+      - `REBASE_OPERATION_REWORD`: cherry-pick the commit in question, but rewrite its
+        message using the prompt.
+      - `REBASE_OPERATION_EDIT`: cherry-pick the commit in question, but allow the user
+        to edit the commit's contents and its message.
+      - `REBASE_OPERATION_SQUASH`: squash the commit in question into the previous commit.
+        The commit messages of the two commits will be merged.
+      - `REBASE_OPERATION_FIXUP`: squash the commit in question into the previous commit.
+        Only the commit message of the previous commit will be used.
+      - `REBASE_OPERATION_EXEC`: do not cherry-pick a commit. Run a command and continue if
+        the command exits successfully.
+  * `id`: the [`GitHash`](@ref) of the commit being worked on during this rebase step.
+  * `exec`: in case `REBASE_OPERATION_EXEC` is used, the command to run during this step
+    (for instance, running the test suite after each commit).
 """
 struct RebaseOperation
     optype::Cint
@@ -561,6 +774,14 @@ end
 
 Options to control how `git_status_foreach_ext()` will issue callbacks.
 Matches the [`git_status_opt_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_status_opt_t) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `show`: a flag for which files to examine and in which order.
+    The default is `Consts.STATUS_SHOW_INDEX_AND_WORKDIR`.
+  * `flags`: flags for controlling any callbacks used in a status call.
+  * `pathspec`: an array of paths to use for path-matching. The behavior of the path-matching
+    will vary depending on the values of `show` and `flags`.
 """
 @kwdef struct StatusOptions
     version::Cuint           = 1
@@ -578,6 +799,14 @@ end
 Providing the differences between the file as it exists in HEAD and the index, and
 providing the differences between the index and the working directory.
 Matches the `git_status_entry` struct.
+
+The fields represent:
+  * `status`: contains the status flags for the file, indicating if it is current,
+    or has been changed in some way in the index or work tree.
+  * `head_to_index`: a pointer to a [`DiffDelta`](@ref) which encapsulates the difference(s)
+    between the file as it exists in HEAD and in the index.
+  * `index_to_workdir`: a pointer to a `DiffDelta` which encapsulates the difference(s)
+    between the file as it exists in the index and in the [`workdir`](@ref).
 """
 struct StatusEntry
     status::Cuint
@@ -591,6 +820,15 @@ end
 Contains the information about HEAD during a fetch, including the name and URL
 of the branch fetched from, the oid of the HEAD, and whether the fetched HEAD
 has been merged locally.
+
+The fields represent:
+  * `name`: The name in the local reference database of the fetch head, for example,
+     `"refs/heads/master"`.
+  * `url`: The URL of the fetch head.
+  * `oid`: The [`GitHash`](@ref) of the tip of the fetch head.
+  * `ismerge`: Boolean flag indicating whether the changes at the
+     remote have been merged into the local copy yet or not. If `true`, the local
+     copy is up to date with the remote fetch head.
 """
 struct FetchHead
     name::String
@@ -777,8 +1015,12 @@ The fields represent:
     boundary::Char
 end
 
+"""
+    with(f::Function, obj)
 
-""" Resource management helper function
+Resource management helper function. Applies `f` to `obj`, making sure to call
+`close` on `obj` after `f` successfully returns or throws an error. Ensures that
+allocated git resources are finalized as soon as they are no longer needed.
 """
 function with(f::Function, obj)
     try
@@ -790,6 +1032,15 @@ end
 
 with(f::Function, ::Type{T}, args...) where {T} = with(f, T(args...))
 
+"""
+    with_warn(f::Function, ::Type{T}, args...)
+
+Resource management helper function. Apply `f` to `args`, first constructing
+an instance of type `T` from `args`. Makes sure to call `close` on the resulting
+object after `f` successfully returns or throws an error. Ensures that
+allocated git resources are finalized as soon as they are no longer needed. If an
+error is thrown by `f`, a warning is shown containing the error.
+"""
 function with_warn(f::Function, ::Type{T}, args...) where T
     obj = T(args...)
     try
@@ -837,29 +1088,49 @@ end
 
 import Base.securezero!
 
+"Abstract credentials payload"
+abstract type AbstractCredentials end
+
+"""
+    isfilled(cred::AbstractCredentials) -> Bool
+
+Verifies that a credential is ready for use in authentication.
+"""
+isfilled(::AbstractCredentials)
+
 "Credentials that support only `user` and `password` parameters"
 mutable struct UserPasswordCredentials <: AbstractCredentials
     user::String
     pass::String
-    prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
-    count::Int                   # authentication failure protection count
-    function UserPasswordCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,prompt_if_incorrect,3)
+    function UserPasswordCredentials(user::AbstractString="", pass::AbstractString="")
+        c = new(user, pass)
         finalizer(c, securezero!)
         return c
     end
-    UserPasswordCredentials(prompt_if_incorrect::Bool=false) = UserPasswordCredentials("","",prompt_if_incorrect)
+
+    # Deprecated constructors
+    function UserPasswordCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool)
+        Base.depwarn(string(
+            "`UserPasswordCredentials` no longer supports the `prompt_if_incorrect` parameter. ",
+            "Use the `allow_prompt` keyword in supported by `LibGit2.CredentialPayload` ",
+            "instead."), :UserPasswordCredentials)
+        UserPasswordCredentials(u, p)
+    end
+    UserPasswordCredentials(prompt_if_incorrect::Bool) = UserPasswordCredentials("","",prompt_if_incorrect)
 end
 
 function securezero!(cred::UserPasswordCredentials)
     securezero!(cred.user)
     securezero!(cred.pass)
-    cred.count = 0
     return cred
 end
 
 function Base.:(==)(a::UserPasswordCredentials, b::UserPasswordCredentials)
     a.user == b.user && a.pass == b.pass
+end
+
+function isfilled(cred::UserPasswordCredentials)
+    !isempty(cred.user) && !isempty(cred.pass)
 end
 
 "SSH credentials type"
@@ -868,16 +1139,23 @@ mutable struct SSHCredentials <: AbstractCredentials
     pass::String
     prvkey::String
     pubkey::String
-    usesshagent::String  # used for ssh-agent authentication
-    prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
-    count::Int
-    function SSHCredentials(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,prvkey,pubkey,"Y",prompt_if_incorrect,3)
+    function SSHCredentials(user::AbstractString="", pass::AbstractString="",
+                            prvkey::AbstractString="", pubkey::AbstractString="")
+        c = new(user, pass, prvkey, pubkey)
         finalizer(c, securezero!)
         return c
     end
-    SSHCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false) = SSHCredentials(u,p,"","",prompt_if_incorrect)
-    SSHCredentials(prompt_if_incorrect::Bool=false) = SSHCredentials("","","","",prompt_if_incorrect)
+
+    # Deprecated constructors
+    function SSHCredentials(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool)
+        Base.depwarn(string(
+            "`SSHCredentials` no longer supports the `prompt_if_incorrect` parameter. ",
+            "Use the `allow_prompt` keyword in supported by `LibGit2.CredentialPayload` ",
+            "instead."), :SSHCredentials)
+        SSHCredentials(u, p, prvkey, pubkey)
+    end
+    SSHCredentials(u::AbstractString, p::AbstractString, prompt_if_incorrect::Bool) = SSHCredentials(u,p,"","",prompt_if_incorrect)
+    SSHCredentials(prompt_if_incorrect::Bool) = SSHCredentials("","","","",prompt_if_incorrect)
 end
 
 function securezero!(cred::SSHCredentials)
@@ -885,7 +1163,6 @@ function securezero!(cred::SSHCredentials)
     securezero!(cred.pass)
     securezero!(cred.prvkey)
     securezero!(cred.pubkey)
-    cred.count = 0
     return cred
 end
 
@@ -893,68 +1170,130 @@ function Base.:(==)(a::SSHCredentials, b::SSHCredentials)
     a.user == b.user && a.pass == b.pass && a.prvkey == b.prvkey && a.pubkey == b.pubkey
 end
 
+function isfilled(cred::SSHCredentials)
+    !isempty(cred.user) && isfile(cred.prvkey) && isfile(cred.pubkey) &&
+    (!isempty(cred.pass) || !is_passphrase_required(cred.prvkey))
+end
+
 "Credentials that support caching"
-mutable struct CachedCredentials <: AbstractCredentials
+struct CachedCredentials <: AbstractCredentials
     cred::Dict{String,AbstractCredentials}
-    count::Int            # authentication failure protection count
-    CachedCredentials() = new(Dict{String,AbstractCredentials}(),3)
+    CachedCredentials() = new(Dict{String,AbstractCredentials}())
 end
 
-"Checks if credentials were used or failed authentication, see `LibGit2.credentials_callback`"
-function checkused!(p::Union{UserPasswordCredentials, SSHCredentials})
-    p.count <= 0 && return true
-    p.count -= 1
-    return false
-end
-reset!(p::Union{UserPasswordCredentials, SSHCredentials}, cnt::Int=3) = (p.count = cnt; p)
-reset!(p::CachedCredentials) = (foreach(reset!, values(p.cred)); p)
-
-"Obtain the cached credentials for the given host+protocol (credid), or return and store the default if not found"
-get_creds!(collection::CachedCredentials, credid, default) = get!(collection.cred, credid, default)
-get_creds!(creds::AbstractCredentials, credid, default) = creds
-get_creds!(creds::Void, credid, default) = default
-function get_creds!(creds::Ref{Nullable{AbstractCredentials}}, credid, default)
-    if isnull(creds[])
-        creds[] = Nullable{AbstractCredentials}(default)
-        return default
-    else
-        get_creds!(Base.get(creds[]), credid, default)
-    end
-end
+Base.haskey(cache::CachedCredentials, cred_id) = Base.haskey(cache.cred, cred_id)
+Base.getindex(cache::CachedCredentials, cred_id) = Base.getindex(cache.cred, cred_id)
+Base.get!(cache::CachedCredentials, cred_id, default) = Base.get!(cache.cred, cred_id, default)
 
 function securezero!(p::CachedCredentials)
     foreach(securezero!, values(p.cred))
     return p
 end
 
+function approve(cache::CachedCredentials, cred::AbstractCredentials, url::AbstractString)
+    cred_id = credential_identifier(url)
+    cache.cred[cred_id] = cred
+    nothing
+end
+
+function reject(cache::CachedCredentials, cred::AbstractCredentials, url::AbstractString)
+    cred_id = credential_identifier(url)
+    if haskey(cache.cred, cred_id)
+        securezero!(cache.cred[cred_id])  # Wipe out invalid credentials
+        delete!(cache.cred, cred_id)
+    end
+    nothing
+end
+
 """
     LibGit2.CredentialPayload
 
-Retains state between multiple calls to the credential callback. A single
-`CredentialPayload` instance will be used when authentication fails for a URL but different
-instances will be used when the URL has changed.
+Retains the state between multiple calls to the credential callback for the same URL.
+A `CredentialPayload` instance is expected to be `reset!` whenever it will be used with a
+different URL.
 """
 mutable struct CredentialPayload <: Payload
-    credential::Nullable{AbstractCredentials}
+    explicit::Nullable{AbstractCredentials}
     cache::Nullable{CachedCredentials}
+    allow_ssh_agent::Bool  # Allow the use of the SSH agent to get credentials
+    allow_prompt::Bool     # Allow prompting the user for credentials
+
+    # Ephemeral state fields
+    credential::Nullable{AbstractCredentials}
+    first_pass::Bool
+    use_ssh_agent::Bool
+    use_env::Bool
+    remaining_prompts::Int
+
+    url::String
     scheme::String
     username::String
     host::String
-    path::String
 
-    function CredentialPayload(credential::Nullable{<:AbstractCredentials}, cache::Nullable{CachedCredentials})
-        new(credential, cache, "", "", "", "")
+    function CredentialPayload(
+            credential::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}(),
+            cache::Nullable{CachedCredentials}=Nullable{CachedCredentials}();
+            allow_ssh_agent::Bool=true,
+            allow_prompt::Bool=true)
+        payload = new(credential, cache, allow_ssh_agent, allow_prompt)
+        return reset!(payload)
     end
 end
 
-function CredentialPayload(credential::Nullable{<:AbstractCredentials})
-    CredentialPayload(credential, Nullable{CachedCredentials}())
+function CredentialPayload(credential::AbstractCredentials; kwargs...)
+    CredentialPayload(Nullable(credential), Nullable{CachedCredentials}(); kwargs...)
 end
 
-function CredentialPayload(cache::Nullable{CachedCredentials})
-    CredentialPayload(Nullable{AbstractCredentials}(), cache)
+function CredentialPayload(cache::CachedCredentials; kwargs...)
+    CredentialPayload(Nullable{AbstractCredentials}(), Nullable(cache); kwargs...)
 end
 
-function CredentialPayload()
-    CredentialPayload(Nullable{AbstractCredentials}(), Nullable{CachedCredentials}())
+"""
+    reset!(payload) -> CredentialPayload
+
+Reset the `payload` state back to the initial values so that it can be used again within
+the credential callback.
+"""
+function reset!(p::CredentialPayload)
+    p.credential = Nullable{AbstractCredentials}()
+    p.first_pass = true
+    p.use_ssh_agent = p.allow_ssh_agent
+    p.use_env = true
+    p.remaining_prompts = p.allow_prompt ? 3 : 0
+    p.url = ""
+    p.scheme = ""
+    p.username = ""
+    p.host = ""
+
+    return p
+end
+
+"""
+    approve(payload::CredentialPayload) -> Void
+
+Store the `payload` credential for re-use in a future authentication. Should only be called
+when authentication was successful.
+"""
+function approve(p::CredentialPayload)
+    isnull(p.credential) && return  # No credentials were used
+    cred = unsafe_get(p.credential)
+
+    if !isnull(p.cache)
+        approve(unsafe_get(p.cache), cred, p.url)
+    end
+end
+
+"""
+    reject(payload::CredentialPayload) -> Void
+
+Discard the `payload` credential from begin re-used in future authentication. Should only be
+called when authentication was unsuccessful.
+"""
+function reject(p::CredentialPayload)
+    isnull(p.credential) && return  # No credentials were used
+    cred = unsafe_get(p.credential)
+
+    if !isnull(p.cache)
+        reject(unsafe_get(p.cache), cred, p.url)
+    end
 end

@@ -926,37 +926,34 @@ end
 # vectors/matrices in mixedargs in their orginal order, and such that the result of
 # broadcast(parevalf, passedargstup...) is broadcast(f, mixedargs...)
 @inline function capturescalars(f, mixedargs)
-    let makeargs = _capturescalars(mixedargs...),
-        parevalf = (passed...) -> f(makeargs(passed...)...),
-        passedsrcargstup = _capturenonscalars(mixedargs...)
+    let (passedsrcargstup, makeargs) = _capturescalars(mixedargs...)
+        parevalf = (passed...) -> f(makeargs(passed...)...)
         return (parevalf, passedsrcargstup)
     end
 end
 
-@inline _capturenonscalars(nonscalararg::SparseVecOrMat, mixedargs...) =
-    (nonscalararg, _capturenonscalars(mixedargs...)...)
-@inline _capturenonscalars(scalararg, mixedargs...) =
-    _capturenonscalars(mixedargs...)
-@inline _capturenonscalars() = ()
+nonscalararg(::SparseVecOrMat) = true
+nonscalararg(::Any) = false
 
-@inline _capturescalars(nonscalararg::SparseVecOrMat, mixedargs...) =
-    let f = _capturescalars(mixedargs...)
-        (head, tail...) -> (head, f(tail...)...) # pass-through
-    end
-@inline _capturescalars(scalararg, mixedargs...) =
-    let f = _capturescalars(mixedargs...)
-        (tail...) -> (scalararg, f(tail...)...) # add scalararg
-    end
-# TODO: use the implicit version once inference can handle it
-# handle too-many-arguments explicitly
 @inline function _capturescalars()
-    too_many_arguments() = ()
-    too_many_arguments(tail...) = throw(ArgumentError("too many"))
+    return (), () -> ()
 end
-#@inline _capturescalars(nonscalararg::SparseVecOrMat) =
-#    (head,) -> (head,) # pass-through
-#@inline _capturescalars(scalararg) =
-#    () -> (scalararg,) # add scalararg
+@inline function _capturescalars(arg, mixedargs...)
+    let (rest, f) = _capturescalars(mixedargs...)
+        if nonscalararg(arg)
+            return (arg, rest...), (head, tail...) -> (head, f(tail...)...) # pass-through to broadcast
+        else
+            return rest, (tail...) -> (arg, f(tail...)...) # add back scalararg after (in makeargs)
+        end
+    end
+end
+@inline function _capturescalars(arg) # this definition is just an optimization (to bottom out the recursion slightly sooner)
+    if nonscalararg(arg)
+        return (arg,), (head,) -> (head,) # pass-through
+    else
+        return (), () -> (arg,) # add scalararg
+    end
+end
 
 # NOTE: The following two method definitions work around #19096.
 broadcast(f::Tf, ::Type{T}, A::SparseMatrixCSC) where {Tf,T} = broadcast(y -> f(T, y), A)

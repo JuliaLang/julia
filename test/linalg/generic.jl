@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: -, *, /, \
-using Base.Test
+using Test
 
 # A custom Quaternion type with minimal defined interface and methods.
 # Used to test scale and scale! methods to show non-commutativity.
@@ -160,8 +160,9 @@ end
 @testset "generic axpy" begin
     x = ['a','b','c','d','e']
     y = ['a','b','c','d','e']
-    α = 'f'
+    α, β = 'f', 'g'
     @test_throws DimensionMismatch Base.LinAlg.axpy!(α,x,['g'])
+    @test_throws DimensionMismatch Base.LinAlg.axpby!(α,x,β,['g'])
     @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(-1:5),y,collect(1:7))
     @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(1:7),y,collect(-1:5))
     @test_throws BoundsError Base.LinAlg.axpy!(α,x,collect(1:7),y,collect(1:7))
@@ -276,12 +277,17 @@ end
     @test norm(x, 3) ≈ cbrt(sqrt(125)+125)
 end
 
-@testset "LinAlg.axpy! for element type without commutative multiplication" begin
-    α = ones(Int, 2, 2)
-    x = fill([1 0; 1 1], 3)
-    y = fill(zeros(Int, 2, 2), 3)
-    @test LinAlg.axpy!(α, x, deepcopy(y)) == x .* Matrix{Int}[α]
-    @test LinAlg.axpy!(α, x, deepcopy(y)) != Matrix{Int}[α] .* x
+@testset "LinAlg.axp(b)y! for element type without commutative multiplication" begin
+    α = [1 2; 3 4]
+    β = [5 6; 7 8]
+    x = fill([ 9 10; 11 12], 3)
+    y = fill([13 14; 15 16], 3)
+    axpy = LinAlg.axpy!(α, x, deepcopy(y))
+    axpby = LinAlg.axpby!(α, x, β, deepcopy(y))
+    @test axpy == x .* [α] .+ y
+    @test axpy != [α] .* x .+ y
+    @test axpby == x .* [α] .+ y .* [β]
+    @test axpby != [α] .* x .+ [β] .* y
 end
 
 @testset "LinAlg.axpy! for x and y of different dimensions" begin
@@ -371,6 +377,60 @@ Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 end
 
 @testset "fallback throws properly for AbstractArrays with dimension > 2" begin
-    @test_throws ErrorException ctranspose(rand(2,2,2,2))
+    @test_throws ErrorException adjoint(rand(2,2,2,2))
     @test_throws ErrorException transpose(rand(2,2,2,2))
+end
+
+@testset "generic functions for checking whether matrices have banded structure" begin
+    using Base.LinAlg: isbanded
+    pentadiag = [1 2 3; 4 5 6; 7 8 9]
+    tridiag   = [1 2 0; 4 5 6; 0 8 9]
+    ubidiag   = [1 2 0; 0 5 6; 0 0 9]
+    lbidiag   = [1 0 0; 4 5 0; 0 8 9]
+    adiag     = [1 0 0; 0 5 0; 0 0 9]
+    @testset "istriu" begin
+        @test !istriu(pentadiag)
+        @test istriu(pentadiag, -2)
+        @test !istriu(tridiag)
+        @test istriu(tridiag, -1)
+        @test istriu(ubidiag)
+        @test !istriu(ubidiag, 1)
+        @test !istriu(lbidiag)
+        @test istriu(lbidiag, -1)
+        @test istriu(adiag)
+    end
+    @testset "istril" begin
+        @test !istril(pentadiag)
+        @test istril(pentadiag, 2)
+        @test !istril(tridiag)
+        @test istril(tridiag, 1)
+        @test !istril(ubidiag)
+        @test istril(ubidiag, 1)
+        @test istril(lbidiag)
+        @test !istril(lbidiag, -1)
+        @test istril(adiag)
+    end
+    @testset "isbanded" begin
+        @test isbanded(pentadiag, -2, 2)
+        @test !isbanded(pentadiag, -1, 2)
+        @test !isbanded(pentadiag, -2, 1)
+        @test isbanded(tridiag, -1, 1)
+        @test !isbanded(tridiag, 0, 1)
+        @test !isbanded(tridiag, -1, 0)
+        @test isbanded(ubidiag, 0, 1)
+        @test !isbanded(ubidiag, 1, 1)
+        @test !isbanded(ubidiag, 0, 0)
+        @test isbanded(lbidiag, -1, 0)
+        @test !isbanded(lbidiag, 0, 0)
+        @test !isbanded(lbidiag, -1, -1)
+        @test isbanded(adiag, 0, 0)
+        @test !isbanded(adiag, -1, -1)
+        @test !isbanded(adiag, 1, 1)
+    end
+    @testset "isdiag" begin
+        @test !isdiag(tridiag)
+        @test !isdiag(ubidiag)
+        @test !isdiag(lbidiag)
+        @test isdiag(adiag)
+    end
 end

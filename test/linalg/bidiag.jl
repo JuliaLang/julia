@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 import Base.LinAlg: BlasReal, BlasFloat
 
 n = 10 #Size of test matrix
@@ -105,7 +105,7 @@ srand(1)
             @test Array(imag(T)) == imag(diagm(dv)) + imag(diagm(ev, uplo == :U ? 1 : -1))
         end
 
-        @testset for func in (conj, transpose, ctranspose)
+        @testset for func in (conj, transpose, adjoint)
             @test func(func(T)) == T
         end
 
@@ -121,7 +121,8 @@ srand(1)
             @test tril!(bidiagcopy(dv,ev,:L),1)  == Bidiagonal(dv,ev,:L)
             @test tril!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,zeros(ev),:U)
             @test tril!(bidiagcopy(dv,ev,:L))    == Bidiagonal(dv,ev,:L)
-            @test_throws ArgumentError tril!(bidiagcopy(dv,ev,:U),n+1)
+            @test_throws ArgumentError tril!(bidiagcopy(dv, ev, :U), -n - 2)
+            @test_throws ArgumentError tril!(bidiagcopy(dv, ev, :U), n)
 
             @test istriu(Bidiagonal(dv,ev,:U))
             @test !istriu(Bidiagonal(dv,ev,:L))
@@ -133,7 +134,8 @@ srand(1)
             @test triu!(bidiagcopy(dv,ev,:L),-1) == Bidiagonal(dv,ev,:L)
             @test triu!(bidiagcopy(dv,ev,:L))    == Bidiagonal(dv,zeros(ev),:L)
             @test triu!(bidiagcopy(dv,ev,:U))    == Bidiagonal(dv,ev,:U)
-            @test_throws ArgumentError triu!(bidiagcopy(dv,ev,:U),n+1)
+            @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), -n)
+            @test_throws ArgumentError triu!(bidiagcopy(dv, ev, :U), n + 2)
         end
 
         Tfull = Array(T)
@@ -213,7 +215,8 @@ srand(1)
 
         @testset "Diagonals" begin
             @test diag(T,2) == zeros(elty, n-2)
-            @test_throws ArgumentError diag(T,n+1)
+            @test_throws ArgumentError diag(T, -n - 1)
+            @test_throws ArgumentError diag(T, n + 1)
         end
 
         @testset "Eigensystems" begin
@@ -286,7 +289,9 @@ end
     C = Tridiagonal(rand(Float64,9),rand(Float64,10),rand(Float64,9))
     @test promote_rule(Matrix{Float64}, Bidiagonal{Float64}) == Matrix{Float64}
     @test promote(B,A) == (B, convert(Matrix{Float64}, A))
+    @test promote(B,A) isa Tuple{Matrix{Float64}, Matrix{Float64}}
     @test promote(C,A) == (C,Tridiagonal(zeros(Float64,9),convert(Vector{Float64},A.dv),convert(Vector{Float64},A.ev)))
+    @test promote(C,A) isa Tuple{Tridiagonal, Tridiagonal}
 end
 
 import Base.LinAlg: fillslots!, UnitLowerTriangular

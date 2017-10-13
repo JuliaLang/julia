@@ -167,7 +167,7 @@ fi
 chmod +x usr/bin/* usr/tools/*
 
 for lib in SUITESPARSE ARPACK BLAS LAPACK \
-    GMP MPFR PCRE LIBUNWIND OPENSPECFUN; do
+    GMP MPFR PCRE LIBUNWIND; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
 echo 'override LIBLAPACK = $(LIBBLAS)' >> Make.user
@@ -204,6 +204,7 @@ fi
 echo 'FORCE_ASSERTIONS = 1' >> Make.user
 
 cat Make.user
+make -j3 VERBOSE=1 all
 make -j3 VERBOSE=1 install
 make VERBOSE=1 -C examples
 cp usr/bin/busybox.exe julia-*/bin

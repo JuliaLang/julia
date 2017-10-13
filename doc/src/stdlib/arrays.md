@@ -42,7 +42,6 @@ Base.length(::AbstractArray)
 Base.eachindex
 Base.linearindices
 Base.IndexStyle
-Base.countnz
 Base.conj!
 Base.stride
 Base.strides
@@ -107,23 +106,18 @@ Base.flipdim
 Base.circshift
 Base.circshift!
 Base.circcopy!
-Base.contains(::Function, ::Any, ::Any)
 Base.find(::Any)
 Base.find(::Function, ::Any)
 Base.findn
 Base.findnz
 Base.findfirst(::Any)
-Base.findfirst(::Any, ::Any)
 Base.findfirst(::Function, ::Any)
 Base.findlast(::Any)
-Base.findlast(::Any, ::Any)
 Base.findlast(::Function, ::Any)
 Base.findnext(::Any, ::Integer)
 Base.findnext(::Function, ::Any, ::Integer)
-Base.findnext(::Any, ::Any, ::Integer)
 Base.findprev(::Any, ::Integer)
 Base.findprev(::Function, ::Any, ::Integer)
-Base.findprev(::Any, ::Any, ::Integer)
 Base.permutedims
 Base.permutedims!
 Base.PermutedDimsArray
@@ -142,7 +136,6 @@ Base.cumsum!
 Base.cumsum_kbn
 Base.crc32c
 Base.LinAlg.diff
-Base.LinAlg.gradient
 Base.repeat(::AbstractArray)
 Base.rot180
 Base.rotl90
@@ -179,10 +172,6 @@ and can be converted to/from the latter via `Array(bitarray)` and `BitArray(arra
 
 ```@docs
 Base.flipbits!
-Base.rol!
-Base.rol
-Base.ror!
-Base.ror
 ```
 
 ## [Sparse Vectors and Matrices](@id stdlib-sparse-arrays)

@@ -177,7 +177,7 @@ function copy!(dest::Hermitian, src::Hermitian)
     if src.uplo == dest.uplo
         copy!(dest.data, src.data)
     else
-        ctranspose!(dest.data, src.data)
+        adjoint!(dest.data, src.data)
     end
     return dest
 end
@@ -212,16 +212,16 @@ issymmetric(A::Hermitian{<:Complex}) = isreal(A)
 issymmetric(A::Symmetric) = true
 transpose(A::Symmetric) = A
 transpose(A::Hermitian{<:Real}) = A
-ctranspose(A::Symmetric{<:Real}) = A
-function ctranspose(A::Symmetric)
-    AC = ctranspose(A.data)
+adjoint(A::Symmetric{<:Real}) = A
+function adjoint(A::Symmetric)
+    AC = adjoint(A.data)
     return Symmetric(AC, ifelse(A.uplo == 'U', :L, :U))
 end
 function transpose(A::Hermitian)
     AT = transpose(A.data)
     return Hermitian(AT, ifelse(A.uplo == 'U', :L, :U))
 end
-ctranspose(A::Hermitian) = A
+adjoint(A::Hermitian) = A
 trace(A::Hermitian) = real(trace(A.data))
 
 Base.conj(A::HermOrSym) = typeof(A)(conj(A.data), A.uplo)
@@ -307,7 +307,7 @@ A_mul_B!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatri
 At_mul_B(A::RealHermSymComplexSym, B::AbstractVector) = A*B
 At_mul_B(A::RealHermSymComplexSym, B::AbstractMatrix) = A*B
 A_mul_Bt(A::AbstractMatrix, B::RealHermSymComplexSym) = A*B
-## Hermitian{<:Number} and Symmetric{<:Real} are invariant to ctranspose; peel off the c
+## Hermitian{<:Number} and Symmetric{<:Real} are invariant to adjoint; peel off the c
 Ac_mul_B(A::RealHermSymComplexHerm, B::AbstractVector) = A*B
 Ac_mul_B(A::RealHermSymComplexHerm, B::AbstractMatrix) = A*B
 A_mul_Bc(A::AbstractMatrix, B::RealHermSymComplexHerm) = A*B
@@ -321,7 +321,7 @@ A_mul_Bt(A::AbstractTriangular, B::RealHermSymComplexSym) = A*B
 Ac_mul_B(A::RealHermSymComplexHerm, B::AbstractTriangular) = A*B
 A_mul_Bc(A::AbstractTriangular, B::RealHermSymComplexHerm) = A*B
 
-for T in (:Symmetric, :Hermitian), op in (:+, :-, :*, :/)
+for T in (:Symmetric, :Hermitian), op in (:*, :/)
     # Deal with an ambiguous case
     @eval ($op)(A::$T, x::Bool) = ($T)(($op)(A.data, x), Symbol(A.uplo))
     S = T == :Hermitian ? :Real : :Number
@@ -589,11 +589,11 @@ function ^(A::Hermitian{T}, p::Real) where T
     end
 end
 
-function expm(A::Symmetric)
+function exp(A::Symmetric)
     F = eigfact(A)
     return Symmetric((F.vectors * Diagonal(exp.(F.values))) * F.vectors')
 end
-function expm(A::Hermitian{T}) where T
+function exp(A::Hermitian{T}) where T
     n = checksquare(A)
     F = eigfact(A)
     retmat = (F.vectors * Diagonal(exp.(F.values))) * F.vectors'
@@ -607,9 +607,9 @@ function expm(A::Hermitian{T}) where T
     end
 end
 
-for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
+for func in (:log, :sqrt)
     @eval begin
-        function ($funm)(A::Symmetric{T}) where T<:Real
+        function ($func)(A::Symmetric{T}) where T<:Real
             F = eigfact(A)
             if all(λ -> λ ≥ 0, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
@@ -619,7 +619,7 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
             return Symmetric(retmat)
         end
 
-        function ($funm)(A::Hermitian{T}) where T
+        function ($func)(A::Hermitian{T}) where T
             n = checksquare(A)
             F = eigfact(A)
             if all(λ -> λ ≥ 0, F.values)

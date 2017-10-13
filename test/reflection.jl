@@ -5,7 +5,7 @@
 # sufficient to catch segfault bugs.
 
 module ReflectionTest
-using Base.Test
+using Test
 
 function test_ast_reflection(freflect, f, types)
     @test !isempty(freflect(f, types))
@@ -46,7 +46,7 @@ test_code_reflections(test_bin_reflection, code_native)
 mktemp() do f, io
     OLDSTDOUT = STDOUT
     redirect_stdout(io)
-    @test try @code_native map(abs, rand(3)); true; catch false; end
+    @test try @code_native map(abs, rand(3)); true; catch; false; end
     redirect_stdout(OLDSTDOUT)
     nothing
 end
@@ -55,7 +55,7 @@ end # module ReflectionTest
 
 # code_warntype
 module WarnType
-using Base.Test
+using Test
 
 function warntype_hastag(f, types, tag)
     iob = IOBuffer()
@@ -67,7 +67,7 @@ end
 pos_stable(x) = x > 0 ? x : zero(x)
 pos_unstable(x) = x > 0 ? x : 0
 
-tag = Base.have_color ? Base.error_color() : "UNION"
+tag = Base.have_color ? Base.text_colors[Base.error_color()] : "UNION"
 @test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
 @test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
@@ -80,17 +80,22 @@ end
 Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
-tag = Base.have_color ? Base.error_color() : "ARRAY{FLOAT64,N}"
+tag = Base.have_color ? Base.text_colors[Base.error_color()] : "ARRAY{FLOAT64,N}"
 @test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
 @test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
 @test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
 
 # Make sure emphasis is not used for other functions
-tag = Base.have_color ? Base.error_color() : "ANY"
+tag = Base.have_color ? Base.text_colors[Base.error_color()] : "ANY"
 iob = IOBuffer()
 show(iob, expand(Main, :(x -> x^2)))
 str = String(take!(iob))
 @test isempty(search(str, tag))
+
+# Make sure non used variables are not emphasized
+has_unused() = (a = rand(5))
+@test !warntype_hastag(has_unused, Tuple{}, tag)
+@test warntype_hastag(has_unused, Tuple{}, "<optimized out>")
 
 module ImportIntrinsics15819
 # Make sure changing the lookup path of an intrinsic doesn't break
@@ -100,7 +105,8 @@ import Core.Intrinsics: sqrt_llvm, bitcast
 sqrt15819(x::Float64) = bitcast(Float64, sqrt_llvm(x))
 # Use fully qualified name
 sqrt15819(x::Float32) = bitcast(Float32, Core.Intrinsics.sqrt_llvm(x))
-end
+end # module ImportIntrinsics15819
+
 foo11122(x) = @fastmath x - 1.0
 
 # issue #11122, #13568 and #15819
@@ -118,7 +124,7 @@ foo11122(x) = @fastmath x - 1.0
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float64}, tag)
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float32}, tag)
 
-end
+end # module WarnType
 
 # isbits
 
@@ -133,11 +139,35 @@ end
 @test isbits(Tuple{Vararg{Any, 0}})
 
 # issue #16670
-@test isleaftype(Tuple{Int, Vararg{Int, 2}})
-@test !isleaftype(Tuple{Integer, Vararg{Int, 2}})
-@test !isleaftype(Tuple{Int, Vararg{Int}})
-@test isleaftype(Type{Tuple{Integer, Vararg{Int}}})
-@test isleaftype(Type{Vector})
+@test Base._isleaftype(Tuple{Int, Vararg{Int, 2}})
+@test !Base._isleaftype(Tuple{Integer, Vararg{Int, 2}})
+@test !Base._isleaftype(Tuple{Int, Vararg{Int}})
+@test Base._isleaftype(Type{Tuple{Integer, Vararg{Int}}})
+@test Base._isleaftype(Type{Vector})
+@test isconcrete(Int)
+@test isconcrete(Vector{Int})
+@test isconcrete(Tuple{Int, Vararg{Int, 2}})
+@test !isconcrete(Tuple{Any})
+@test !isconcrete(Tuple{Integer, Vararg{Int, 2}})
+@test !isconcrete(Tuple{Int, Vararg{Int}})
+@test !isconcrete(Type{Tuple{Integer, Vararg{Int}}})
+@test !isconcrete(Type{Vector})
+@test !isconcrete(Type{Int})
+@test !isconcrete(Tuple{Type{Int}})
+@test isconcrete(DataType)
+@test isconcrete(Union)
+@test !isconcrete(Union{})
+@test !isconcrete(Tuple{Union{}})
+@test !isconcrete(Complex)
+@test !isconcrete(Complex.body)
+@test !isconcrete(AbstractArray{Int,1})
+struct AlwaysHasLayout{T}
+    x
+end
+@test !isconcrete(AlwaysHasLayout) && !isconcrete(AlwaysHasLayout.body)
+@test isconcrete(AlwaysHasLayout{Any})
+@test isconcrete(Ptr{Void})
+@test !isconcrete(Ptr) && !isconcrete(Ptr.body)
 
 # issue #10165
 i10165(::Type) = 0
@@ -167,7 +197,7 @@ not_const = 1
 include("testenv.jl")
 
 module TestMod7648
-using Base.Test
+using Test
 import Base.convert
 import ..curmod_name, ..curmod
 export a9475, foo9475, c7648, foo7648, foo7648_nomethods, Foo7648
@@ -180,7 +210,7 @@ function foo7648_nomethods end
 mutable struct Foo7648 end
 
 module TestModSub9475
-    using Base.Test
+    using Test
     using ..TestMod7648
     import ..curmod_name
     export a9475, foo9475
@@ -240,26 +270,27 @@ let
     @test TestMod7648.TestModSub9475 == @which a9475
 end
 
-@test_throws ArgumentError which(===, Tuple{Int, Int})
-@test_throws ArgumentError code_typed(===, Tuple{Int, Int})
-@test_throws ArgumentError code_llvm(===, Tuple{Int, Int})
-@test_throws ArgumentError code_native(===, Tuple{Int, Int})
-@test_throws ArgumentError Base.return_types(===, Tuple{Int, Int})
+@test_throws ArgumentError("argument is not a generic function") which(===, Tuple{Int, Int})
+@test_throws ArgumentError("argument is not a generic function") code_typed(===, Tuple{Int, Int})
+@test_throws ArgumentError("argument is not a generic function") code_llvm(===, Tuple{Int, Int})
+@test_throws ArgumentError("argument is not a generic function") code_native(===, Tuple{Int, Int})
+@test_throws ArgumentError("argument is not a generic function") Base.return_types(===, Tuple{Int, Int})
 
 module TestingExported
-using Base.Test
+using Test
+include("testenv.jl") # for curmod_str
 import Base.isexported
 global this_is_not_defined
 export this_is_not_defined
-@test_throws ErrorException which(:this_is_not_defined)
-@test_throws ErrorException @which this_is_not_defined
-@test_throws ErrorException which(:this_is_not_exported)
+@test_throws ErrorException("\"this_is_not_defined\" is not defined in module Main") which(:this_is_not_defined)
+@test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
+@test_throws ErrorException("\"this_is_not_exported\" is not defined in module Main") which(:this_is_not_exported)
 @test isexported(@__MODULE__, :this_is_not_defined)
 @test !isexported(@__MODULE__, :this_is_not_exported)
 const a_value = 1
 @test Base.which_module(@__MODULE__, :a_value) === @__MODULE__
 @test @which(a_value) === @__MODULE__
-@test_throws ErrorException which(:a_value)
+@test_throws ErrorException("\"a_value\" is not defined in module Main") which(:a_value)
 @test which(:Core) === Main
 @test !isexported(@__MODULE__, :a_value)
 end
@@ -489,7 +520,7 @@ end
 tracefoo(x, y) = x+y
 didtrace = false
 tracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
-ccall(:jl_register_method_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, (Ptr{Void},)))
+ccall(:jl_register_method_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, Tuple{Ptr{Void}}))
 meth = which(tracefoo,Tuple{Any,Any})
 ccall(:jl_trace_method, Void, (Any,), meth)
 @test tracefoo(1, 2) == 3
@@ -502,7 +533,7 @@ ccall(:jl_register_method_tracer, Void, (Ptr{Void},), C_NULL)
 
 # Method Tracing test
 methtracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
-ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), cfunction(methtracer, Void, (Ptr{Void},)))
+ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), cfunction(methtracer, Void, Tuple{Ptr{Void}}))
 tracefoo2(x, y) = x*y
 @test didtrace
 didtrace = false
@@ -603,7 +634,7 @@ end
 
 mutable struct A18434
 end
-(::Type{A18434})(x; y=1) = 1
+A18434(x; y=1) = 1
 
 global counter18434 = 0
 function get_A18434()
@@ -662,7 +693,8 @@ let
     @test @inferred wrapperT(ReflectionExample{T, Int64} where T) == ReflectionExample
     @test @inferred wrapperT(ReflectionExample) == ReflectionExample
     @test @inferred wrapperT(Union{ReflectionExample{Union{},1},ReflectionExample{Float64,1}}) == ReflectionExample
-    @test_throws ErrorException Base.typename(Union{Int, Float64})
+    @test_throws(ErrorException("typename does not apply to unions whose components have different typenames"),
+                 Base.typename(Union{Int, Float64}))
 end
 
 # Issue #20086
@@ -689,8 +721,8 @@ end
 @test sizeof(Symbol("")) == 0
 @test_throws(ErrorException("argument is an abstract type; size is indeterminate"),
              sizeof(Real))
-@test_throws ErrorException sizeof(Union{Complex64,Complex128})
-@test_throws ErrorException sizeof(Union{Int8,UInt8})
+@test sizeof(Union{Complex64,Complex128}) == 16
+@test sizeof(Union{Int8,UInt8}) == 1
 @test_throws ErrorException sizeof(AbstractArray)
 @test_throws ErrorException sizeof(Tuple)
 @test_throws ErrorException sizeof(Tuple{Any,Any})
@@ -713,3 +745,32 @@ end
 @test_throws ErrorException fieldcount(Real)
 @test_throws ErrorException fieldcount(AbstractArray)
 @test_throws ErrorException fieldcount(Tuple{Any,Vararg{Any}})
+
+# PR #22979
+
+function test_similar_codeinfo(a, b)
+    @test a.code == b.code
+    @test a.slotnames == b.slotnames
+    @test a.slotflags == b.slotflags
+end
+
+@generated f22979(x...) = (y = 1; :(x[1] + x[2]))
+x22979 = (1, 2.0, 3.0 + im)
+T22979 = Tuple{typeof(f22979),typeof.(x22979)...}
+world = typemax(UInt)
+mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[]
+instance = Core.Inference.code_for_method(m, mtypes, msp, world, false)
+cinfo_generated = Core.Inference.get_staged(instance)
+cinfo_ungenerated = Base.uncompressed_ast(m)
+
+test_similar_codeinfo(@code_lowered(f22979(x22979...)), cinfo_generated)
+
+cinfos = code_lowered(f22979, typeof.(x22979), true)
+@test length(cinfos) == 1
+cinfo = cinfos[]
+test_similar_codeinfo(cinfo, cinfo_generated)
+
+cinfos = code_lowered(f22979, typeof.(x22979), false)
+@test length(cinfos) == 1
+cinfo = cinfos[]
+test_similar_codeinfo(cinfo, cinfo_ungenerated)

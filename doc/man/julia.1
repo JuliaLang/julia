@@ -68,7 +68,7 @@ Print help message
 Start up with the given system image file
 
 .TP
---precompiled={yes|no}
+--sysimage-native-code={yes|no}
 Use precompiled code from system image if available
 
 .TP
@@ -89,7 +89,7 @@ Evaluate <expr>
 
 .TP
 -E, --print <expr>
-Evaluate and show <expr>
+Evaluate <expr> and display the result
 
 .TP
 -L, --load <file>
@@ -108,8 +108,8 @@ Run processes on hosts listed in <file>
 Interactive mode; REPL runs and isinteractive() is true
 
 .TP
--q, --quiet
-Quiet startup without banner
+--banner={yes|no}
+Enable or disable startup banner
 
 .TP
 --color={yes|no}

@@ -289,7 +289,7 @@ function levsort(search, candidates)
     scores = map(cand -> (levenshtein(search, cand), -fuzzyscore(search, cand)), candidates)
     candidates = candidates[sortperm(scores)]
     i = 0
-    for i = 1:length(candidates)
+    for outer i = 1:length(candidates)
         levenshtein(search, candidates[i]) > 3 && break
     end
     return candidates[1:i]
@@ -328,7 +328,7 @@ printmatches(args...; cols = displaysize(STDOUT)[2]) = printmatches(STDOUT, args
 function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = displaysize(io)[2])
     i = 0
     total = 0
-    for i = 1:length(ss)
+    for outer i = 1:length(ss)
         total += length(ss[i])
         total + max(i-2,0)*length(delim) + (i>1 ? 1 : 0)*length(last) > cols && (i-=1; break)
     end
@@ -353,7 +353,7 @@ print_correction(word) = print_correction(STDOUT, word)
 const builtins = ["abstract type", "baremodule", "begin", "break",
                   "catch", "ccall", "const", "continue", "do", "else",
                   "elseif", "end", "export", "finally", "for", "function",
-                  "global", "if", "import", "importall", "let",
+                  "global", "if", "import", "let",
                   "local", "macro", "module", "mutable struct", "primitive type",
                   "quote", "return", "struct", "try", "using", "while"]
 

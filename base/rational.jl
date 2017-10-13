@@ -11,8 +11,8 @@ struct Rational{T<:Integer} <: Real
 
     function Rational{T}(num::Integer, den::Integer) where T<:Integer
         num == den == zero(T) && throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
-        g = den < 0 ? -gcd(den, num) : gcd(den, num)
-        new(div(num, g), div(den, g))
+        num2, den2 = (sign(den) < 0) ? divgcd(-num, -den) : divgcd(num, den)
+        new(num2, den2)
     end
 end
 Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n,d)
@@ -114,7 +114,6 @@ widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 
 Approximate floating point number `x` as a [`Rational`](@ref) number with components
 of the given integer type. The result will differ from `x` by no more than `tol`.
-If `T` is not provided, it defaults to `Int`.
 
 ```jldoctest
 julia> rationalize(5.6)
@@ -232,7 +231,7 @@ typemax(::Type{Rational{T}}) where {T<:Integer} = one(T)//zero(T)
 isinteger(x::Rational) = x.den == 1
 
 -(x::Rational) = (-x.num) // x.den
-function -(x::Rational{T}) where T<:Signed
+function -(x::Rational{T}) where T<:BitSigned
     x.num == typemin(T) && throw(OverflowError("rational numerator is typemin(T)"))
     (-x.num) // x.den
 end

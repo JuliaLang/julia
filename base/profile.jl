@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Profiling support, main entry point is the [`@profile`](@ref) macro.
+"""
 module Profile
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo
@@ -640,14 +643,14 @@ function rtruncto(str::String, w::Int)
     if length(str) <= w
         return str
     else
-        return string("...", str[end-w+4:end])
+        return string("...", str[chr2ind(str, length(str)-w+4):end])
     end
 end
 function ltruncto(str::String, w::Int)
     if length(str) <= w
         return str
     else
-        return string(str[1:w-4], "...")
+        return string(str[1:chr2ind(str,w-4)], "...")
     end
 end
 

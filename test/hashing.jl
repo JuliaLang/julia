@@ -8,13 +8,13 @@ types = Any[
 ]
 vals = vcat(
     typemin(Int64),
-    -Int64(maxintfloat(Float64))+Int64[-4:1;],
+    -Int64(maxintfloat(Float64)) .+ Int64[-4:1;],
     typemin(Int32),
-    -Integer(maxintfloat(Float32))+(-4:1),
+    -Integer(maxintfloat(Float32)) .+ (-4:1),
     -2:2,
-    Integer(maxintfloat(Float32))+(-1:4),
+    Integer(maxintfloat(Float32)) .+ (-1:4),
     typemax(Int32),
-    Int64(maxintfloat(Float64))+Int64[-1:4;],
+    Int64(maxintfloat(Float64)) .+ Int64[-1:4;],
     typemax(Int64),
 )
 
@@ -28,14 +28,17 @@ function coerce(T::Type, x)
     end
 end
 
-for T=types[2:end], x=vals
-    a = coerce(T,x)
+for T = types[2:end],
+    x = vals,
+    a = coerce(T, x)
     @test hash(a,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
 end
 
-for T=types, S=types, x=vals
-    a = coerce(T,x)
-    b = coerce(S,x)
+for T = types,
+    S = types,
+    x = vals,
+    a = coerce(T, x),
+    b = coerce(S, x)
     #println("$(typeof(a)) $a")
     #println("$(typeof(b)) $b")
     @test isequal(a,b) == (hash(a)==hash(b))
@@ -120,3 +123,19 @@ end
 
 # issue #20744
 @test hash(:c, hash(:b, hash(:a))) != hash(:a, hash(:b, hash(:c)))
+
+# issue #5849, object_id of types
+@test Vector === (Array{T,1} where T)
+@test (Pair{A,B} where A where B) !== (Pair{A,B} where B where A)
+let vals_expr = :(Any[Vector, (Array{T,1} where T), 1, 2, Union{Int, String}, Union{String, Int},
+                      (Union{String, T} where T), Ref{Ref{T} where T}, (Ref{Ref{T}} where T),
+                      (Vector{T} where T<:Real), (Vector{T} where T<:Integer),
+                      (Vector{T} where T>:Integer),
+                      (Pair{A,B} where A where B), (Pair{A,B} where B where A)])
+    vals_a = eval(vals_expr)
+    vals_b = eval(vals_expr)
+    for (i, a) in enumerate(vals_a), (j, b) in enumerate(vals_b)
+        @test i != j || (a === b)
+        @test (a === b) == (object_id(a) == object_id(b))
+    end
+end

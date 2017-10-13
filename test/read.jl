@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using DelimitedFiles
+
 mktempdir() do dir
 
 tasks = []
@@ -94,7 +96,6 @@ s = io(text)
 close(s)
 push!(l, ("PipeEndpoint", io))
 
-
 #FIXME See https://github.com/JuliaLang/julia/issues/14747
 #      Reading from open(::Command) seems to deadlock on Linux/Travis
 #=
@@ -123,8 +124,8 @@ end
 
 open_streams = []
 function cleanup()
-    for s in open_streams
-        try close(s) end
+    for s_ in open_streams
+        try close(s_) end
     end
     empty!(open_streams)
     for tsk in tasks
@@ -136,9 +137,38 @@ end
 
 verbose = false
 
-
 for (name, f) in l
-    io = ()->(s=f(text); push!(open_streams, s); s)
+    local f
+    local function io(text=text)
+        local s = f(text)
+        push!(open_streams, s)
+        return s
+    end
+
+    verbose && println("$name readuntil...")
+    for (t, s, m) in [
+            ("a", "ab", "a"),
+            ("b", "ab", "b"),
+            ("α", "αγ", "α"),
+            ("ab", "abc", "ab"),
+            ("bc", "abc", "bc"),
+            ("αβ", "αβγ", "αβ"),
+            ("aaabc", "ab", "aaab"),
+            ("aaabc", "ac", "aaabc"),
+            ("aaabc", "aab", "aaab"),
+            ("aaabc", "aac", "aaabc"),
+            ("αααβγ", "αβ", "αααβ"),
+            ("αααβγ", "ααβ", "αααβ"),
+            ("αααβγ", "αγ", "αααβγ"),
+            ("barbarbarians", "barbarian", "barbarbarian")]
+        local t, s, m
+        @test readuntil(io(t), s) == m
+        @test readuntil(io(t), SubString(s, start(s), endof(s))) == m
+        @test readuntil(io(t), GenericString(s)) == m
+        @test readuntil(io(t), Vector{UInt8}(s)) == Vector{UInt8}(m)
+        @test readuntil(io(t), collect(s)::Vector{Char}) == Vector{Char}(m)
+    end
+    cleanup()
 
     write(filename, text)
 
@@ -176,13 +206,14 @@ for (name, f) in l
     old_text = text
     cleanup()
 
-    for text in [
+    for text_ in [
         old_text,
         String(Char['A' + i % 52 for i in 1:(div(Base.SZ_UNBUFFERED_IO,2))]),
         String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO -1)]),
         String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO   )]),
         String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO +1)])
     ]
+        text = text_
         write(filename, text)
 
         verbose && println("$name read(io, String)...")
@@ -259,9 +290,9 @@ for (name, f) in l
         verbose && println("$name countlines...")
         @test countlines(io()) == countlines(IOBuffer(text))
 
-        verbose && println("$name readcsv...")
-        @test readcsv(io()) == readcsv(IOBuffer(text))
-        @test readcsv(io()) == readcsv(filename)
+        verbose && println("$name readdlm...")
+        @test readdlm(io(), ',') == readdlm(IOBuffer(text), ',')
+        @test readdlm(io(), ',') == readdlm(filename, ',')
 
         cleanup()
     end
@@ -311,7 +342,7 @@ function test_read_nbyte()
     fn = tempname()
     # Write one byte. One byte read should work once
     # but 2-byte read should throw EOFError.
-    f = open(fn, "w+") do f
+    open(fn, "w+") do f
         write(f, 0x55)
         flush(f)
         seek(f, 0)
@@ -492,3 +523,17 @@ close(f2)
 rm(f)
 
 end # mktempdir() do dir
+
+@testset "countlines" begin
+    @test countlines(IOBuffer("\n")) == 1
+    @test countlines(IOBuffer("\n"),'\r') == 0
+    @test countlines(IOBuffer("\n\n\n\n\n\n\n\n\n\n")) == 10
+    @test countlines(IOBuffer("\n \n \n \n \n \n \n \n \n \n")) == 10
+    @test countlines(IOBuffer("\r\n \r\n \r\n \r\n \r\n")) == 5
+    file = tempname()
+    write(file,"Spiffy header\nspectacular first row\neven better 2nd row\nalmost done\n")
+    @test countlines(file) == 4
+    @test countlines(file,'\r') == 0
+    @test countlines(file,'\n') == 4
+    rm(file)
+end

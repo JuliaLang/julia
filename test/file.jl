@@ -52,6 +52,7 @@ end
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
+@test !isfile(Base.Filesystem.StatStruct())
 @test isdir(dir)
 @test !isfile(dir)
 @test !islink(dir)
@@ -191,12 +192,12 @@ function test_file_poll(channel,interval,timeout_s)
 end
 
 function test_timeout(tval)
-    tic()
-    channel = Channel(1)
-    @async test_file_poll(channel, 10, tval)
-    tr = take!(channel)
-    t_elapsed = toq()
-    @test !ispath(tr[1]) && !ispath(tr[2])
+    t_elapsed = @elapsed begin
+        channel = Channel(1)
+        @async test_file_poll(channel, 10, tval)
+        tr = take!(channel)
+    end
+    @test tr[1] === Base.Filesystem.StatStruct() && tr[2] === EOFError()
     @test tval <= t_elapsed
 end
 
@@ -268,7 +269,9 @@ test_watch_file_timeout(0.1)
 test_watch_file_change(6)
 
 @test_throws Base.UVError watch_file("____nonexistent_file", 10)
-@test_throws Base.UVError poll_file("____nonexistent_file", 2, 10)
+@test(@elapsed(
+    @test(poll_file("____nonexistent_file", 1, 3.1) ===
+          (Base.Filesystem.StatStruct(), EOFError()))) > 3)
 
 ##############
 # mark/reset #
@@ -931,6 +934,7 @@ for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpat
         stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch,
         isblockdev, ischardev, isdir, isfifo, isfile, islink, ispath, issetgid,
         issetuid, issocket, issticky, realpath, watch_file, poll_file)
+    local f
     @test_throws ArgumentError f("adir\0bad")
 end
 @test_throws ArgumentError chmod("ba\0d", 0o222)
@@ -1118,22 +1122,36 @@ function test_13559()
     fn = tempname()
     run(`mkfifo $fn`)
     # use subprocess to write 127 bytes to FIFO
-    writer_cmds = "x=open(\"$fn\", \"w\"); for i=1:127 write(x,0xaa); flush(x); sleep(0.1) end; close(x); quit()"
-    open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $writer_cmds`, stderr=STDERR))
-    #quickly read FIFO, draining it and blocking but not failing with EOFError yet
+    writer_cmds = """
+        using Test
+        x = open($(repr(fn)), "w")
+        for i in 1:120
+            write(x, 0xaa)
+        end
+        flush(x)
+        Test.@test read(STDIN, Int8) == 31
+        for i in 1:7
+            write(x, 0xaa)
+        end
+        close(x)
+    """
+    p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $writer_cmds`, stderr=STDERR), "w")
+    # quickly read FIFO, draining it and blocking but not failing with EOFError yet
     r = open(fn, "r")
     # 15 proper reads
-    for i=1:15
-        @test read(r, Int64) == -6148914691236517206
+    for i in 1:15
+        @test read(r, UInt64) === 0xaaaaaaaaaaaaaaaa
     end
-    # last read should throw EOFError when FIFO closes, since there are only 7 bytes available.
-    @test_throws EOFError read(r, Int64)
+    write(p, 0x1f)
+    # last read should throw EOFError when FIFO closes, since there are only 7 bytes (or less) available.
+    @test_throws EOFError read(r, UInt64)
     close(r)
+    @test success(p)
     rm(fn)
 end
 test_13559()
 end
-@test_throws ArgumentError mkpath("fakepath",-1)
+@test_throws ArgumentError mkpath("fakepath", -1)
 
 # issue #22566
 if !Sys.iswindows()
@@ -1141,13 +1159,22 @@ if !Sys.iswindows()
         fn = tempname()
         run(`mkfifo $fn`)
 
-        script = "x = open(\"$fn\", \"w\"); close(x)"
+        script = """
+            using Test
+            x = open($(repr(fn)), "w")
+            write(x, 0x42)
+            flush(x)
+            Test.@test read(STDIN, Int8) == 21
+            close(x)
+        """
         cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
-        open(pipeline(cmd, stderr=STDERR))
+        p = open(pipeline(cmd, stderr=STDERR), "w")
 
         r = open(fn, "r")
+        @test read(r, Int8) == 66
+        write(p, 0x15)
         close(r)
-
+        @test success(p)
         rm(fn)
     end
 

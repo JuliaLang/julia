@@ -1,15 +1,20 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Linear algebra module. Provides array arithmetic,
+matrix factorizations and other linear algebra related
+functionality.
+"""
 module LinAlg
 
 import Base: \, /, *, ^, +, -, ==
 import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac_mul_B,
     Ac_ldiv_B, Ac_ldiv_Bc, At_mul_Bt, A_rdiv_Bt, At_mul_B
 import Base: USE_BLAS64, abs, big, broadcast, ceil, conj, convert, copy, copy!,
-    ctranspose, eltype, eye, findmax, findmin, fill!, floor, full, getindex,
-    hcat, imag, indices, inv, isapprox, isone, IndexStyle, kron, length, map,
+    adjoint, eltype, exp, eye, findmax, findmin, fill!, floor, full, getindex,
+    hcat, imag, indices, inv, isapprox, isone, IndexStyle, kron, length, log, map,
     ndims, oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round,
-    setindex!, show, similar, size, transpose, trunc, typed_hcat
+    setindex!, show, similar, size, sqrt, transpose, trunc, typed_hcat, vec
 using Base: hvcat_fill, iszero, IndexLinear, _length, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_vcat
 # We use `_length` because of non-1 indices; releases after julia 0.5
@@ -53,6 +58,7 @@ export
 
 # Functions
     axpy!,
+    axpby!,
     bkfact,
     bkfact!,
     chol,
@@ -63,8 +69,8 @@ export
     copy!,
     copy_transpose!,
     cross,
-    ctranspose,
-    ctranspose!,
+    adjoint,
+    adjoint!,
     det,
     diag,
     diagind,
@@ -80,11 +86,9 @@ export
     eigvals,
     eigvals!,
     eigvecs,
-    expm,
     eye,
     factorize,
     givens,
-    gradient,
     hessfact,
     hessfact!,
     isdiag,
@@ -101,7 +105,6 @@ export
     linreg,
     logabsdet,
     logdet,
-    logm,
     lu,
     lufact,
     lufact!,
@@ -125,7 +128,6 @@ export
     schur,
     schurfact!,
     schurfact,
-    sqrtm,
     svd,
     svdfact!,
     svdfact,

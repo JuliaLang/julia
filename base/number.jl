@@ -49,6 +49,7 @@ ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
 endof(x::Number) = 1
 iteratorsize(::Type{<:Number}) = HasShape()
+keys(::Number) = OneTo(1)
 
 getindex(x::Number) = x
 function getindex(x::Number, i::Integer)
@@ -146,11 +147,26 @@ julia> flipsign(5, -3)
 ```
 """
 flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, +x) # the + is for type-stability on Bool
+
+"""
+    copysign(x, y) -> z
+
+Return `z` which has the magnitude of `x` and the same sign as `y`.
+
+# Examples
+```jldoctest
+julia> copysign(1, -2)
+-1
+
+julia> copysign(-1, 2)
+1
+```
+"""
 copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
 
 conj(x::Real) = x
 transpose(x::Number) = x
-ctranspose(x::Number) = conj(x)
+adjoint(x::Number) = conj(x)
 angle(z::Real) = atan2(zero(z), z)
 
 """
@@ -291,7 +307,8 @@ julia> factorial(6)
 720
 
 julia> factorial(21)
-ERROR: OverflowError()
+ERROR: OverflowError: 21 is too large to look up in the table
+Stacktrace:
 [...]
 
 julia> factorial(21.0)

@@ -74,13 +74,16 @@ srand(100)
                 @test BLAS.iamax(z) == indmax(map(x -> abs(real(x)) + abs(imag(x)), z))
             end
         end
-        @testset "axpy" begin
+        @testset "axp(b)y" begin
             if elty <: Real
                 x1 = convert(Vector{elty}, randn(n))
                 x2 = convert(Vector{elty}, randn(n))
                 α  = rand(elty)
-                @test BLAS.axpy!(α,copy(x1),copy(x2)) ≈ x2 + α*x1
+                β  = rand(elty)
+                @test BLAS.axpy!(α,copy(x1),copy(x2)) ≈ α*x1 + x2
+                @test BLAS.axpby!(α,copy(x1),β,copy(x2)) ≈ α*x1 + β*x2
                 @test_throws DimensionMismatch BLAS.axpy!(α, copy(x1), rand(elty, n + 1))
+                @test_throws DimensionMismatch BLAS.axpby!(α, copy(x1), β, rand(elty, n + 1))
                 @test_throws DimensionMismatch BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 1:n)
                 @test_throws ArgumentError BLAS.axpy!(α, copy(x1), 0:div(n,2), copy(x2), 1:(div(n, 2) + 1))
                 @test_throws ArgumentError BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 0:(div(n, 2) - 1))

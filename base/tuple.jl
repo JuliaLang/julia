@@ -17,11 +17,11 @@ NTuple
 
 length(t::Tuple) = nfields(t)
 endof(t::Tuple) = length(t)
-size(t::Tuple, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
-getindex(t::Tuple, i::Int) = getfield(t, i)
-getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i))
+size(t::Tuple, d) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
+@eval getindex(t::Tuple, i::Int) = getfield(t, i, $(Expr(:boundscheck)))
+@eval getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...)
-getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t,find(b)) : throw(BoundsError(t, b))
+getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, find(b)) : throw(BoundsError(t, b))
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
 setindex(x::Tuple, v, i::Integer) = (@_inline_meta; _setindex(v, i, x...))
@@ -38,9 +38,12 @@ start(t::Tuple) = 1
 done(t::Tuple, i::Int) = (length(t) < i)
 next(t::Tuple, i::Int) = (t[i], i+1)
 
-eachindex(t::Tuple) = 1:length(t)
+keys(t::Tuple) = 1:length(t)
 
-function eachindex(t::Tuple, t2::Tuple...)
+prevind(t::Tuple, i::Integer) = Int(i)-1
+nextind(t::Tuple, i::Integer) = Int(i)+1
+
+function keys(t::Tuple, t2::Tuple...)
     @_inline_meta
     1:_maxlength(t, t2...)
 end

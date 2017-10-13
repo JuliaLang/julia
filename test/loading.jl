@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 # Tests for @__LINE__ inside and outside of macros
 @test (@__LINE__) == 6
@@ -31,7 +31,11 @@ end
 @test @nested_LINE_expansion() == ((@__LINE__() - 4, @__LINE__() - 12), @__LINE__())
 @test @nested_LINE_expansion2() == ((@__LINE__() - 5, @__LINE__() - 9), @__LINE__())
 
+loaded_files = String[]
+push!(Base.include_callbacks, (mod::Module, fn::String) -> push!(loaded_files, fn))
 include("test_sourcepath.jl")
+@test length(loaded_files) == 1 && endswith(loaded_files[1], "test_sourcepath.jl")
+pop!(Base.include_callbacks)
 thefname = "the fname!//\\&\1*"
 include_string_test_func = include_string(@__MODULE__, "include_string_test() = @__FILE__", thefname)
 @test include_string_test_func() == thefname
@@ -41,7 +45,7 @@ include_string_test_func = include_string(@__MODULE__, "include_string_test() = 
 
 @test isdir(@__DIR__)
 @test @__DIR__() == dirname(@__FILE__)
-let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`,
+let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
     wd = sprint(show, abspath(pwd(), "")),
     s_dir = sprint(show, joinpath(realpath(tempdir()), ""))
     @test wd != s_dir

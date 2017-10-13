@@ -41,7 +41,7 @@ end
 vecdot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasReal} = BLAS.dot(x, y)
 vecdot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasComplex} = BLAS.dotc(x, y)
 
-function dot(x::Vector{T}, rx::Union{UnitRange{TI},Range{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},Range{TI}}) where {T<:BlasReal,TI<:Integer}
+function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasReal,TI<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
@@ -51,10 +51,10 @@ function dot(x::Vector{T}, rx::Union{UnitRange{TI},Range{TI}}, y::Vector{T}, ry:
     if minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError(y, ry))
     end
-    BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    Base.@gc_preserve x y BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 
-function dot(x::Vector{T}, rx::Union{UnitRange{TI},Range{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},Range{TI}}) where {T<:BlasComplex,TI<:Integer}
+function dot(x::Vector{T}, rx::Union{UnitRange{TI},AbstractRange{TI}}, y::Vector{T}, ry::Union{UnitRange{TI},AbstractRange{TI}}) where {T<:BlasComplex,TI<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
@@ -64,7 +64,7 @@ function dot(x::Vector{T}, rx::Union{UnitRange{TI},Range{TI}}, y::Vector{T}, ry:
     if minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError(y, ry))
     end
-    BLAS.dotc(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    Base.@gc_preserve x y BLAS.dotc(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 
 At_mul_B(x::StridedVector{T}, y::StridedVector{T}) where {T<:BlasComplex} = BLAS.dotu(x, y)
@@ -90,7 +90,7 @@ A_mul_B!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) where 
 for elty in (Float32,Float64)
     @eval begin
         function A_mul_B!(y::StridedVector{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, x::StridedVector{$elty})
-            Afl = reinterpret($elty,A,(2size(A,1),size(A,2)))
+            Afl = reinterpret($elty,A)
             yfl = reinterpret($elty,y)
             gemv!(yfl,'N',Afl,x)
             return y
@@ -148,8 +148,8 @@ A_mul_B!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) wher
 for elty in (Float32,Float64)
     @eval begin
         function A_mul_B!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty})
-            Afl = reinterpret($elty, A, (2size(A,1), size(A,2)))
-            Cfl = reinterpret($elty, C, (2size(C,1), size(C,2)))
+            Afl = reinterpret($elty, A)
+            Cfl = reinterpret($elty, C)
             gemm_wrapper!(Cfl, 'N', 'N', Afl, B)
             return C
         end
@@ -190,8 +190,8 @@ A_mul_Bt!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) whe
 for elty in (Float32,Float64)
     @eval begin
         function A_mul_Bt!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty})
-            Afl = reinterpret($elty, A, (2size(A,1), size(A,2)))
-            Cfl = reinterpret($elty, C, (2size(C,1), size(C,2)))
+            Afl = reinterpret($elty, A)
+            Cfl = reinterpret($elty, C)
             gemm_wrapper!(Cfl, 'N', 'T', Afl, B)
             return C
         end
@@ -503,6 +503,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
     @inbounds begin
     if tile_size > 0
         sz = (tile_size, tile_size)
+        # FIXME: This code is completely invalid!!!
         Atile = unsafe_wrap(Array, convert(Ptr{T}, pointer(Abuf)), sz)
         Btile = unsafe_wrap(Array, convert(Ptr{S}, pointer(Bbuf)), sz)
 
@@ -524,6 +525,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                 end
             end
         else
+            # FIXME: This code is completely invalid!!!
             Ctile = unsafe_wrap(Array, convert(Ptr{R}, pointer(Cbuf)), sz)
             for jb = 1:tile_size:nB
                 jlim = min(jb+tile_size-1,nB)
@@ -663,14 +665,14 @@ function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
     if tA == 'T'
         A11 = transpose(A[1,1]); A12 = transpose(A[2,1]); A21 = transpose(A[1,2]); A22 = transpose(A[2,2])
     elseif tA == 'C'
-        A11 = ctranspose(A[1,1]); A12 = ctranspose(A[2,1]); A21 = ctranspose(A[1,2]); A22 = ctranspose(A[2,2])
+        A11 = adjoint(A[1,1]); A12 = adjoint(A[2,1]); A21 = adjoint(A[1,2]); A22 = adjoint(A[2,2])
     else
         A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
     end
     if tB == 'T'
         B11 = transpose(B[1,1]); B12 = transpose(B[2,1]); B21 = transpose(B[1,2]); B22 = transpose(B[2,2])
     elseif tB == 'C'
-        B11 = ctranspose(B[1,1]); B12 = ctranspose(B[2,1]); B21 = ctranspose(B[1,2]); B22 = ctranspose(B[2,2])
+        B11 = adjoint(B[1,1]); B12 = adjoint(B[2,1]); B21 = adjoint(B[1,2]); B22 = adjoint(B[2,2])
     else
         B11 = B[1,1]; B12 = B[1,2]; B21 = B[2,1]; B22 = B[2,2]
     end
@@ -697,9 +699,9 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         A21 = transpose(A[1,2]); A22 = transpose(A[2,2]); A23 = transpose(A[3,2])
         A31 = transpose(A[1,3]); A32 = transpose(A[2,3]); A33 = transpose(A[3,3])
     elseif tA == 'C'
-        A11 = ctranspose(A[1,1]); A12 = ctranspose(A[2,1]); A13 = ctranspose(A[3,1])
-        A21 = ctranspose(A[1,2]); A22 = ctranspose(A[2,2]); A23 = ctranspose(A[3,2])
-        A31 = ctranspose(A[1,3]); A32 = ctranspose(A[2,3]); A33 = ctranspose(A[3,3])
+        A11 = adjoint(A[1,1]); A12 = adjoint(A[2,1]); A13 = adjoint(A[3,1])
+        A21 = adjoint(A[1,2]); A22 = adjoint(A[2,2]); A23 = adjoint(A[3,2])
+        A31 = adjoint(A[1,3]); A32 = adjoint(A[2,3]); A33 = adjoint(A[3,3])
     else
         A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3]
         A21 = A[2,1]; A22 = A[2,2]; A23 = A[2,3]
@@ -711,9 +713,9 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         B21 = transpose(B[1,2]); B22 = transpose(B[2,2]); B23 = transpose(B[3,2])
         B31 = transpose(B[1,3]); B32 = transpose(B[2,3]); B33 = transpose(B[3,3])
     elseif tB == 'C'
-        B11 = ctranspose(B[1,1]); B12 = ctranspose(B[2,1]); B13 = ctranspose(B[3,1])
-        B21 = ctranspose(B[1,2]); B22 = ctranspose(B[2,2]); B23 = ctranspose(B[3,2])
-        B31 = ctranspose(B[1,3]); B32 = ctranspose(B[2,3]); B33 = ctranspose(B[3,3])
+        B11 = adjoint(B[1,1]); B12 = adjoint(B[2,1]); B13 = adjoint(B[3,1])
+        B21 = adjoint(B[1,2]); B22 = adjoint(B[2,2]); B23 = adjoint(B[3,2])
+        B31 = adjoint(B[1,3]); B32 = adjoint(B[2,3]); B33 = adjoint(B[3,3])
     else
         B11 = B[1,1]; B12 = B[1,2]; B13 = B[1,3]
         B21 = B[2,1]; B22 = B[2,2]; B23 = B[2,3]

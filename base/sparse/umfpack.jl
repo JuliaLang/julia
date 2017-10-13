@@ -7,12 +7,12 @@ export UmfpackLU
 import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
 import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact
 
-importall ..SparseArrays
+using ..SparseArrays
 import ..SparseArrays: increment, increment!, decrement, decrement!, nnz
 
 include("umfpack_h.jl")
-mutable struct MatrixIllConditionedException <: Exception
-    message::AbstractString
+struct MatrixIllConditionedException <: Exception
+    msg::AbstractString
 end
 
 function umferror(status::Integer)
@@ -337,11 +337,11 @@ for itype in UmfpackIndexTypes
                         (Ptr{$itype},Ptr{$itype},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Void},
-                         Ptr{$itype},Ptr{Float64},Ptr{Void}),
+                         Ref{$itype},Ptr{Float64},Ptr{Void}),
                         Lp,Lj,Lx,
                         Up,Ui,Ux,
                         P, Q, C_NULL,
-                        &0, Rs, lu.numeric)
+                        0, Rs, lu.numeric)
             (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), Lx)),
              SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), Ux),
              increment!(P), increment!(Q), Rs)
@@ -364,11 +364,11 @@ for itype in UmfpackIndexTypes
                         (Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Void}, Ptr{Void},
-                         Ptr{$itype},Ptr{Float64},Ptr{Void}),
+                         Ref{$itype},Ptr{Float64},Ptr{Void}),
                         Lp,Lj,Lx,Lz,
                         Up,Ui,Ux,Uz,
                         P, Q, C_NULL, C_NULL,
-                        &0, Rs, lu.numeric)
+                        0, Rs, lu.numeric)
             (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex.(Lx, Lz))),
              SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex.(Ux, Uz)),
              increment!(P), increment!(Q), Rs)

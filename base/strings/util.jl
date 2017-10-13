@@ -79,7 +79,7 @@ julia> chop(a)
 "Marc"
 ```
 """
-chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
+chop(s::AbstractString) = SubString(s, 1, prevind(s, endof(s)))
 
 """
     chomp(s::AbstractString)
@@ -96,17 +96,17 @@ function chomp(s::AbstractString)
     i = endof(s)
     (i < 1 || s[i] != '\n') && (return SubString(s, 1, i))
     j = prevind(s,i)
-    (j < 1 || s[j] != '\r') && (return SubString(s, 1, i-1))
-    return SubString(s, 1, j-1)
+    (j < 1 || s[j] != '\r') && (return SubString(s, 1, j))
+    return SubString(s, 1, prevind(s,j))
 end
 function chomp(s::String)
     i = endof(s)
     if i < 1 || codeunit(s,i) != 0x0a
         SubString(s, 1, i)
     elseif i < 2 || codeunit(s,i-1) != 0x0d
-        SubString(s, 1, i-1)
+        SubString(s, 1, prevind(s, i))
     else
-        SubString(s, 1, i-2)
+        SubString(s, 1, prevind(s, i-1))
     end
 end
 
@@ -204,9 +204,9 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 ## string padding functions ##
 
 function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
-    m = n - strwidth(s)
+    m = n - textwidth(s)
     (m <= 0) && (return s)
-    l = strwidth(p)
+    l = textwidth(p)
     if l==1
         return string(p^m, s)
     end
@@ -217,9 +217,9 @@ function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
 end
 
 function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
-    m = n - strwidth(s)
+    m = n - textwidth(s)
     (m <= 0) && (return s)
-    l = strwidth(p)
+    l = textwidth(p)
     if l==1
         return string(s, p^m)
     end
@@ -415,6 +415,18 @@ is a function, each occurrence is replaced with `r(s)` where `s` is the matched 
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
+
+# Examples
+```jldoctest
+julia> replace("Python is a programming language.", "Python", "Julia")
+"Julia is a programming language."
+
+julia> replace("The quick foxes run quickly.", "quick", "slow", 1)
+"The slow foxes run quickly."
+
+julia> replace("The quick foxes run quickly.", "quick", "", 1)
+"The  foxes run quickly."
+```
 """
 replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int))
 # TODO: change this to the following when `replace` is removed from deprecated.jl:
@@ -425,50 +437,76 @@ replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int)
 # hex <-> bytes conversion
 
 """
-    hex2bytes(s::AbstractString)
+    hex2bytes(s::Union{AbstractString,AbstractVector{UInt8}})
 
-Convert an arbitrarily long hexadecimal string to its binary representation. Returns an
-`Array{UInt8,1}`, i.e. an array of bytes.
+Given a string or array `s` of ASCII codes for a sequence of hexadecimal digits, returns a
+`Vector{UInt8}` of bytes  corresponding to the binary representation: each successive pair
+of hexadecimal digits in `s` gives the value of one byte in the return vector.
+
+The length of `s` must be even, and the returned array has half of the length of `s`.
+See also [`hex2bytes!`](@ref) for an in-place version, and [`bytes2hex`](@ref) for the inverse.
 
 # Examples
 ```jldoctest
-julia> a = hex(12345)
+julia> s = hex(12345)
 "3039"
 
-julia> hex2bytes(a)
+julia> hex2bytes(s)
 2-element Array{UInt8,1}:
  0x30
  0x39
+
+julia> a = b"01abEF"
+6-element Array{UInt8,1}:
+ 0x30
+ 0x31
+ 0x61
+ 0x62
+ 0x45
+ 0x46
+
+julia> hex2bytes(a)
+3-element Array{UInt8,1}:
+ 0x01
+ 0xab
+ 0xef
 ```
 """
-function hex2bytes(s::AbstractString)
-    a = zeros(UInt8, div(endof(s), 2))
-    i, j = start(s), 0
-    while !done(s, i)
-        c, i = next(s, i)
-        n = '0' <= c <= '9' ? c - '0' :
-            'a' <= c <= 'f' ? c - 'a' + 10 :
-            'A' <= c <= 'F' ? c - 'A' + 10 :
-            throw(ArgumentError("not a hexadecimal string: $(repr(s))"))
-        done(s, i) &&
-            throw(ArgumentError("string length must be even: length($(repr(s))) == $(length(s))"))
-        c, i = next(s, i)
-        n = '0' <= c <= '9' ? n << 4 + c - '0' :
-            'a' <= c <= 'f' ? n << 4 + c - 'a' + 10 :
-            'A' <= c <= 'F' ? n << 4 + c - 'A' + 10 :
-            throw(ArgumentError("not a hexadecimal string: $(repr(s))"))
-        a[j += 1] = n
+function hex2bytes end
+
+hex2bytes(s::AbstractString) = hex2bytes(Vector{UInt8}(String(s)))
+hex2bytes(s::AbstractVector{UInt8}) = hex2bytes!(Vector{UInt8}(length(s) >> 1), s)
+
+"""
+    hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
+
+Convert an array `s` of bytes representing a hexadecimal string to its binary
+representation, similar to [`hex2bytes`](@ref) except that the output is written in-place
+in `d`.   The length of `s` must be exactly twice the length of `d`.
+"""
+function hex2bytes!(d::AbstractVector{UInt8}, s::AbstractVector{UInt8})
+    if 2length(d) != length(s)
+        isodd(length(s)) && throw(ArgumentError("input hex array must have even length"))
+        throw(ArgumentError("output array must be half length of input array"))
     end
-    resize!(a, j)
-    return a
+    j = first(eachindex(d)) - 1
+    for i = first(eachindex(s)):2:endof(s)
+        @inbounds d[j += 1] = number_from_hex(s[i]) << 4 + number_from_hex(s[i+1])
+    end
+    return d
 end
+
+@inline number_from_hex(c) =
+    (UInt8('0') <= c <= UInt8('9')) ? c - UInt8('0') :
+    (UInt8('A') <= c <= UInt8('F')) ? c - (UInt8('A') - 0x0a) :
+    (UInt8('a') <= c <= UInt8('f')) ? c - (UInt8('a') - 0x0a) :
+    throw(ArgumentError("byte is not an ASCII hexadecimal digit"))
 
 """
     bytes2hex(bin_arr::Array{UInt8, 1}) -> String
 
 Convert an array of bytes to its hexadecimal representation.
 All characters are in lower-case.
-
 # Examples
 ```jldoctest
 julia> a = hex(12345)
@@ -513,7 +551,7 @@ throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 julia> ascii("abcdeγfgh")
 ERROR: ArgumentError: invalid ASCII at index 6 in "abcdeγfgh"
 Stacktrace:
- [1] ascii(::String) at ./strings/util.jl:479
+[...]
 
 julia> ascii("abcdefgh")
 "abcdefgh"

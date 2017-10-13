@@ -35,6 +35,7 @@ Base.isreadable
 Base.isopen
 Base.Serializer.serialize
 Base.Serializer.deserialize
+Base.Serializer.writeheader
 Base.Grisu.print_shortest
 Base.fd
 Base.redirect_stdout
@@ -46,7 +47,7 @@ Base.redirect_stdin(::Function, ::Any)
 Base.readchomp
 Base.truncate
 Base.skipchars
-Base.DataFmt.countlines
+Base.countlines
 Base.PipeBuffer
 Base.readavailable
 Base.IOContext
@@ -76,15 +77,6 @@ Base.readline
 Base.readuntil
 Base.readlines
 Base.eachline
-Base.DataFmt.readdlm(::Any, ::Char, ::Type, ::Char)
-Base.DataFmt.readdlm(::Any, ::Char, ::Char)
-Base.DataFmt.readdlm(::Any, ::Char, ::Type)
-Base.DataFmt.readdlm(::Any, ::Char)
-Base.DataFmt.readdlm(::Any, ::Type)
-Base.DataFmt.readdlm(::Any)
-Base.DataFmt.writedlm
-Base.DataFmt.readcsv
-Base.DataFmt.writecsv
 Base.Base64.Base64EncodePipe
 Base.Base64.Base64DecodePipe
 Base.Base64.base64encode
@@ -144,15 +136,6 @@ Base.Multimedia.TextDisplay
 Base.Multimedia.istextmime
 ```
 
-## Memory-mapped I/O
-
-```@docs
-Base.Mmap.Anonymous
-Base.Mmap.mmap(::Any, ::Type, ::Any, ::Any)
-Base.Mmap.mmap(::Any, ::BitArray, ::Any, ::Any)
-Base.Mmap.sync!
-```
-
 ## Network I/O
 
 ```@docs
@@ -161,6 +144,8 @@ Base.connect(::AbstractString)
 Base.listen(::Any)
 Base.listen(::AbstractString)
 Base.getaddrinfo
+Base.getalladdrinfo
+Base.getnameinfo
 Base.getsockname
 Base.getpeername
 Base.IPv4

@@ -52,13 +52,14 @@ Julia is built and tested regularly on the following platforms:
 |                  | ARM v7 (32-bit)  |    | ✓        | Official      |
 |                  | ARM v8 (64-bit)  |    | ✓        | Official      |
 |                  | PowerPC (64-bit) |    |          | Community     |
+|                  | PTX (64-bit)     | [✓](http://ci.maleadt.net:8010/)  |          | [External](https://github.com/JuliaGPU/CUDAnative.jl)     |
 | macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 | Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Official      |
 |                  | i686 (32-bit)    | ✓  | ✓        | Official      |
 | FreeBSD 11.0+    | x86-64 (64-bit)  | ✓  |          | Community     |
 
 All systems marked with ✓ for CI are tested using continuous integration for every commit.
-Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly.
+Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly. The PTX backend needs a source build and the [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) package.
 The systems listed here with neither CI nor official binaries are known to build and work, but ongoing support for those platforms is dependent on community efforts.
 It's possible that Julia will build and work on other platforms too, and we're always looking to better our platform coverage.
 If you're using Julia on a platform not listed here, let us know!
@@ -87,11 +88,11 @@ Building Julia requires 1.5GiB of disk space and approximately 700MiB of virtual
 
 For builds of julia starting with 0.5.0-dev, you can create out-of-tree builds of Julia by specifying `make O=<build-directory> configure` on the command line. This will create a directory mirror, with all of the necessary Makefiles to build Julia, in the specified directory. These builds will share the source files in Julia and `deps/srccache`. Each out-of-tree build directory can have its own `Make.user` file to override the global `Make.user` file in the top-level folder.
 
-If you need to build Julia in an environment that does not allow access to the outside world, use `make -C deps getall` to download all the necessary files. Then, copy the `julia` directory over to the target environment and build with `make`.
+If you need to build Julia on a machine without internet access, use `make -C deps getall` to download all the necessary files. Then, copy the `julia` directory over to the target environment and build with `make`.
 
-**Note:** the build process will fail badly if any of the build directory's parent directories have spaces or other shell meta-characters such as `$` or `:` in their names (this is due to a limitation in GNU make).
+**Note:** The build process will fail badly if any of the build directory's parent directories have spaces or other shell meta-characters such as `$` or `:` in their names (this is due to a limitation in GNU make).
 
-Once it is built, you can run the `julia` executable using its full path in the directory created above (the `julia` directory), or, to run it from anywhere, either
+Once it is built, you can run the `julia` executable using its full path in the directory created above (the `julia` directory). To run julia from anywhere you can:
 - add an alias (in `bash`: `echo "alias julia='/path/to/install/folder/bin/julia'" >> ~/.bashrc && source ~/.bashrc`), or
 - add a soft link to the `julia` executable in the `julia` directory to `/usr/local/bin` (or any suitable directory already in your path), or
 
@@ -106,13 +107,11 @@ Now you should be able to run Julia like this:
 
     julia
 
-If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation. (Errors related to libraries might be caused by old, incompatible libraries sitting around in your PATH. In that case, try moving the `julia` directory earlier in the PATH).
+If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation. (Errors related to libraries might be caused by old, incompatible libraries sitting around in your PATH. In this case, try moving the `julia` directory earlier in the PATH).
 
-Your first test of Julia should be to determine whether your
-build is working properly. From the UNIX/Windows command prompt inside
-the `julia` source directory, type `make testall`. You should see output
-that lists a series of tests being run; if they complete without
-error, you should be in good shape to start using Julia.
+Your first test of Julia determines whether your build is working properly. From the UNIX/Windows command prompt inside
+the `julia` source directory, type `make testall`. You should see output that lists a series of running tests;
+if they complete without error, you should be in good shape to start using Julia.
 
 You can read about [getting started](https://docs.julialang.org/en/stable/manual/getting-started/) in the manual.
 
@@ -258,6 +257,9 @@ Some known issues on FreeBSD are:
 * The x86 architecture does not support threading due to lack of compiler runtime library support, so you may need to
   set `JULIA_THREADS=0` in your `Make.user` if you're on a 32-bit system.
 
+* The `Pkg` test suite segfaults on FreeBSD 11.1, likely due to a change in FreeBSD's default handling of stack guarding.
+  See [issue #23328](https://github.com/JuliaLang/julia/issues/23328) for more information.
+
 ### Windows
 
 In order to build Julia on Windows, see [README.windows](https://github.com/JuliaLang/julia/blob/master/README.windows.md).
@@ -278,7 +280,7 @@ Building Julia requires that the following software be installed:
 - **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
 - **[patch]**                   — for modifying source code.
-- **[cmake]**                   — needed to build `libgit2`.
+- **[cmake]** (>= 3.4.3)        — needed to build `libgit2`.
 - **[pkg-config]**              - needed to build `libgit2` correctly, especially for proxy support
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
@@ -287,12 +289,10 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv]**                — portable, high-performance event-based I/O library
 - **[OpenLibm]**             — portable libm library containing elementary math functions.
-- **[OpenSpecFun]** (>= 0.4) — library containing Bessel and error functions of complex arguments.
 - **[DSFMT]**                — fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](https://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](https://www.tacc.utexas.edu/research-development/tacc-software/gotoblas2).
 - **[LAPACK]** (>= 3.5)      — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
 - **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
-- **[AMOS]**                 — subroutines for computing Bessel and Airy functions.
 - **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices.
 - **[ARPACK]**               — collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[PCRE]** (>= 10.00)      — Perl-compatible regular expressions library.
@@ -318,13 +318,11 @@ Julia uses the following external libraries, which are automatically downloaded 
 [perl]:         http://www.perl.org
 [cmake]:        http://www.cmake.org
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
-[OpenSpecFun]:  https://github.com/JuliaLang/openspecfun
 [DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS
 [LAPACK]:       http://www.netlib.org/lapack
 [MKL]:          http://software.intel.com/en-us/articles/intel-mkl
 [SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
-[AMOS]:         http://netlib.org/amos
 [ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng
 [PCRE]:         http://www.pcre.org
 [LLVM]:         http://www.llvm.org
@@ -374,11 +372,12 @@ It is highly recommended to start with a fresh clone of the Julia repository.
 
 The Julia source code is organized as follows:
 
-    base/          source code for Julia's standard library
+    base/          source code for the Base module (part of Julia's standard library)
+    stdlib/        source code for other standard library packages
     contrib/       editor support for Julia source, miscellaneous scripts
     deps/          external dependencies
-    doc/manual     source for the user manual
-    doc/stdlib     source for standard library function help text
+    doc/src/manual source for the user manual
+    doc/src/stdlib source for standard library function reference
     examples/      example Julia programs
     src/           source for Julia language core
     test/          test suites
@@ -403,26 +402,9 @@ On Windows, double-click `usr/bin/julia.exe`.
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](https://julialang.org/manual/getting-started) in the manual.
 
-The following distributions include julia, but the versions may be out of date due to rapid development:
-
-* [Alpine Linux](http://pkgs.alpinelinux.org/package/edge/testing/x86_64/julia)
-* [Arch Linux](https://www.archlinux.org/packages/community/i686/julia/)
-* [Debian GNU/Linux](http://packages.debian.org/sid/julia)
-* [Fedora Linux](https://admin.fedoraproject.org/pkgdb/package/julia/), RHEL/CentOS/OEL/Scientific Linux (EPEL)
-  * [Current stable release for Fedora/EPEL](https://copr.fedoraproject.org/coprs/nalimilan/julia/)
-  * [Nightly builds for Fedora/EPEL](https://copr.fedoraproject.org/coprs/nalimilan/julia-nightlies/)
-* [Gentoo Linux](https://packages.gentoo.org/package/dev-lang/julia)
-  * Git Package in the [Science overlay](https://wiki.gentoo.org/wiki/Project:Science/Overlay)
-* openSUSE
-  * Stable package for openSUSE: [OBS page](https://build.opensuse.org/package/show/science/julia), [1 Click Install](http://software.opensuse.org/download.html?project=science&package=julia)
-  * Git package for openSUSE: [OBS page](https://build.opensuse.org/package/show/science/julia-unstable), [1 Click Install](http://software.opensuse.org/download.html?project=science&package=julia-unstable)
-* [NixOS](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/compilers/julia)
-* Ubuntu
-  * [Ubuntu](http://packages.ubuntu.com/search?keywords=julia)
-  * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
-* [MacPorts](https://trac.macports.org/browser/trunk/dports/lang/julia/Portfile)
-* [OS X Homebrew Tap](https://github.com/staticfloat/homebrew-julia/)
-* [FreeBSD Ports](https://www.freshports.org/lang/julia/)
+**Note**: While some system package managers have Julia installers available,
+these are not maintained nor endorsed by the Julia project. They may be outdated
+and/or unmaintained. We recommend you use the official Julia binaries instead.
 
 ## Editor and Terminal Setup
 
@@ -434,8 +416,10 @@ editors. While Julia modes for
 others such as Textmate, Notepad++, and Kate, are in
 `contrib/`.
 
-Two major IDEs are supported for Julia: [Juno](http://junolab.org/),
-which is based on [Atom](https://atom.io/), and
+Three major IDEs are supported for Julia: [Juno](http://junolab.org/)
+which is based on [Atom](https://atom.io/),
+[julia-vscode](https://github.com/JuliaEditorSupport/julia-vscode)
+based on [VS Code](https://code.visualstudio.com/), and
 [JuliaDT](https://github.com/JuliaComputing/JuliaDT), which is an
 [Eclipse](http://eclipse.org) plugin. A [Jupyter](http://jupyter.org/) notebooks interface
 is available through

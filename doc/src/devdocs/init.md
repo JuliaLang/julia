@@ -70,8 +70,8 @@ an integer code for each [intrinsic function](https://github.com/JuliaLang/julia
 these symbols into LLVM instructions during code generation.
 
 [`jl_init_primitives()`](https://github.com/JuliaLang/julia/blob/master/src/builtins.c) hooks C
-functions up to Julia function symbols. e.g. the symbol `Base.is()` is bound to C function pointer
-`jl_f_is()` by calling `add_builtin_func("eval", jl_f_top_eval)`.
+functions up to Julia function symbols. e.g. the symbol `Core.:(===)()` is bound to C function pointer
+`jl_f_is()` by calling `add_builtin_func("===", jl_f_is)`.
 
 [`jl_new_main_module()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) creates
 the global "Main" module and sets `jl_current_task->current_module = jl_main_module`.

@@ -495,7 +495,7 @@ tndict[AbstractArray.name] = AbstractArrayT.T.T.name
 tndict[Array.name] = ArrayT.T.T.name
 tndict[Pair.name] = PairT.T.T.name
 
-using Base.Test
+using Test
 
 issub_strict(x,y) = issub(x,y) && !issub(y,x)
 

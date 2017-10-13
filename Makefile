@@ -19,7 +19,7 @@ default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
 # sort is used to remove potential duplicates
-DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_man1dir))
+DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/site $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
 BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src ui doc deps test test/perf examples examples/embedding)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS))
@@ -49,7 +49,10 @@ configure:
 endif
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,base test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia)))
+$(foreach link,base test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia,$(link))))
+
+build_defaultpkgdir = $(build_datarootdir)/julia/site/$(shell echo $(VERSDIR))
+$(eval $(call symlink_target,$(JULIAHOME)/stdlib,$(build_datarootdir)/julia/site,$(shell echo $(VERSDIR))))
 
 julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
@@ -81,7 +84,7 @@ ifndef JULIA_VAGRANT_BUILD
 endif
 endif
 
-julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
+julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_defaultpkgdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
 julia-base: julia-deps $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl
@@ -210,7 +213,7 @@ BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl) $(shell find $(B
 
 $(build_private_libdir)/inference.ji: $(CORE_SRCS) | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) \
+	$(call spawn,$(JULIA_EXECUTABLE)) -C "$(JULIA_CPU_TARGET)" --output-ji $(call cygpath_w,$@) \
 		--startup-file=no -g0 -O0 coreimg.jl)
 
 RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/")
@@ -218,9 +221,12 @@ COMMA:=,
 define sysimg_builder
 $$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS)
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
-	$$(call spawn,$3) $2 -C $$(JULIA_CPU_TARGET) --output-o $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) \
-		--startup-file=no --warn-overwrite=yes --sysimage $$(call cygpath_w,$$<) sysimg.jl $$(RELBUILDROOT) \
-		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; } )
+	if $$(call spawn,$3) $2 -C "$$(JULIA_CPU_TARGET)" --output-o $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
+		--startup-file=no --warn-overwrite=yes --sysimage $$(call cygpath_w,$$<) sysimg.jl $$(RELBUILDROOT); then \
+		mv $$@.tmp $$@; \
+	else \
+		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; \
+	fi )
 .SECONDARY: $(build_private_libdir)/sys$1.o
 endef
 ifneq ($(CPUID_SPECIFIC_BINARIES),0)
@@ -250,9 +256,6 @@ ifeq ($(USE_SYSTEM_OPENLIBM),0)
 ifeq ($(USE_SYSTEM_LIBM),0)
 JL_PRIVATE_LIBS += openlibm
 endif
-endif
-ifeq ($(USE_SYSTEM_OPENSPECFUN),0)
-JL_PRIVATE_LIBS += openspecfun
 endif
 ifeq ($(USE_SYSTEM_DSFMT),0)
 JL_PRIVATE_LIBS += dSFMT
@@ -551,9 +554,9 @@ test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 ifeq ($(JULIA_BUILD_MODE),release)
-JULIA_SYSIMG=$(build_private_libdir)/sys$(JULIA_LIBSUFFIX).$(SHLIB_EXT)
+JULIA_SYSIMG=$(build_private_libdir)/sys$(JULIA_LIBSUFFIX)$(CPUID_TAG).$(SHLIB_EXT)
 else
-JULIA_SYSIMG=$(build_private_libdir)/sys-$(JULIA_BUILD_MODE)$(JULIA_LIBSUFFIX).$(SHLIB_EXT)
+JULIA_SYSIMG=$(build_private_libdir)/sys-$(JULIA_BUILD_MODE)$(JULIA_LIBSUFFIX)$(CPUID_TAG).$(SHLIB_EXT)
 endif
 testall: check-whitespace $(JULIA_BUILD_MODE)
 	cp $(JULIA_SYSIMG) $(BUILDROOT)/local.$(SHLIB_EXT) && $(JULIA_EXECUTABLE) -J $(call cygpath_w,$(BUILDROOT)/local.$(SHLIB_EXT)) -e 'true' && rm $(BUILDROOT)/local.$(SHLIB_EXT)

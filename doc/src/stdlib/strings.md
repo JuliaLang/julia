@@ -3,7 +3,7 @@
 ```@docs
 Base.length(::AbstractString)
 Base.sizeof(::AbstractString)
-Base.:*(::AbstractString, ::Any...)
+Base.:*(::Union{Char, AbstractString}, ::Union{Char, AbstractString}...)
 Base.:^(::AbstractString, ::Integer)
 Base.string
 Base.repeat(::AbstractString, ::Integer)
@@ -27,6 +27,9 @@ Base.ismatch
 Base.match
 Base.eachmatch
 Base.matchall
+Base.isless(::AbstractString, ::AbstractString)
+Base.:(==)(::AbstractString, ::AbstractString)
+Base.cmp(::AbstractString, ::AbstractString)
 Base.lpad
 Base.rpad
 Base.search
@@ -56,8 +59,7 @@ Base.chr2ind
 Base.nextind
 Base.prevind
 Base.Random.randstring
-Base.UTF8proc.charwidth
-Base.strwidth
+Base.UTF8proc.textwidth
 Base.UTF8proc.isalnum
 Base.UTF8proc.isalpha
 Base.isascii

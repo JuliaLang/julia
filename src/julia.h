@@ -63,6 +63,7 @@ typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
 #include "atomics.h"
 #include "tls.h"
 #include "julia_threads.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -648,6 +649,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_1w(void);
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_2w(void);
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void);
 JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz);
+JL_DLLEXPORT void jl_gc_use(jl_value_t *a);
 
 JL_DLLEXPORT void jl_clear_malloc_data(void);
 
@@ -997,7 +999,7 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_unwrap_unionall(jl_value_t *v);
 jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
 
-#if defined(NDEBUG) && defined(JL_NDEBUG)
+#if defined(JL_NDEBUG)
 STATIC_INLINE int jl_is_leaf_type_(jl_value_t *v)
 {
     return jl_is_datatype(v) && ((jl_datatype_t*)v)->isleaftype;
@@ -1180,6 +1182,7 @@ JL_DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i,
 JL_DLLEXPORT int         jl_field_isdefined(jl_value_t *v, size_t i);
 JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld);
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
+JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al);
 
 // arrays
 JL_DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims);
@@ -1423,6 +1426,8 @@ JL_DLLEXPORT uint8_t jl_ast_flag_pure(jl_array_t *data);
 JL_DLLEXPORT void jl_fill_argnames(jl_array_t *data, jl_array_t *names);
 
 JL_DLLEXPORT int jl_is_operator(char *sym);
+JL_DLLEXPORT int jl_is_unary_operator(char *sym);
+JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym);
 JL_DLLEXPORT int jl_operator_precedence(char *sym);
 
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
@@ -1671,11 +1676,10 @@ JL_DLLEXPORT void jl_(void *jl_value);
 // NOTE: This struct needs to be kept in sync with JLOptions type in base/options.jl
 typedef struct {
     int8_t quiet;
+    int8_t banner;
     const char *julia_home;
     const char *julia_bin;
-    const char *eval;
-    const char *print;
-    const char *load;
+    const char **cmds;
     const char *image_file;
     const char *cpu_target;
     int32_t nprocs;
@@ -1698,8 +1702,8 @@ typedef struct {
     int8_t worker;
     const char *cookie;
     int8_t handle_signals;
-    int8_t use_precompiled;
-    int8_t use_compilecache;
+    int8_t use_sysimage_native_code;
+    int8_t use_compiled_modules;
     const char *bindto;
     const char *outputbc;
     const char *outputunoptbc;
@@ -1765,11 +1769,11 @@ JL_DLLEXPORT int jl_generating_output(void);
 #define JL_OPTIONS_HANDLE_SIGNALS_ON 1
 #define JL_OPTIONS_HANDLE_SIGNALS_OFF 0
 
-#define JL_OPTIONS_USE_PRECOMPILED_YES 1
-#define JL_OPTIONS_USE_PRECOMPILED_NO 0
+#define JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES 1
+#define JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_NO 0
 
-#define JL_OPTIONS_USE_COMPILECACHE_YES 1
-#define JL_OPTIONS_USE_COMPILECACHE_NO 0
+#define JL_OPTIONS_USE_COMPILED_MODULES_YES 1
+#define JL_OPTIONS_USE_COMPILED_MODULES_NO 0
 
 // Version information
 #include "julia_version.h"
@@ -1802,7 +1806,15 @@ typedef struct {
 // codegen interface ----------------------------------------------------------
 
 typedef struct {
-    // to disable a hook: set to NULL or nothing
+    int cached;             // can the compiler use/populate the compilation cache?
+
+    int track_allocations;  // can we track allocations?
+    int code_coverage;      // can we measure coverage?
+    int static_alloc;       // is the compiler allowed to allocate statically?
+    int prefer_specsig;     // are specialized function signatures preferred?
+
+
+    // hooks
 
     // module setup: prepare a module for code emission (data layout, DWARF version, ...)
     // parameters: LLVMModuleRef as Ptr{Void}
@@ -1818,20 +1830,6 @@ typedef struct {
     // parameters: LLVMBasicBlockRef as Ptr{Void}, LLVMValueRef as Ptr{Void}
     // return value: none
     jl_value_t *raise_exception;
-} jl_cghooks_t;
-
-typedef struct {
-    int cached;             // can the compiler use/populate the compilation cache?
-
-    // language features (C-style integer booleans)
-    int runtime;            // can we call into the runtime?
-    int exceptions;         // are exceptions supported (requires runtime)?
-    int track_allocations;  // can we track allocations (don't if disallowed)?
-    int code_coverage;      // can we measure coverage (don't if disallowed)?
-    int static_alloc;       // is the compiler allowed to allocate statically?
-    int dynamic_alloc;      // is the compiler allowed to allocate dynamically (requires runtime)?
-
-    jl_cghooks_t hooks;
 } jl_cgparams_t;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
 

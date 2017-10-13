@@ -74,6 +74,28 @@ end
 read_tree!(idx::GitIndex, hash::AbstractGitHash) =
     read_tree!(idx, GitTree(repository(idx), hash))
 
+"""
+    add!(repo::GitRepo, files::AbstractString...; flags::Cuint = Consts.INDEX_ADD_DEFAULT)
+    add!(idx::GitIndex, files::AbstractString...; flags::Cuint = Consts.INDEX_ADD_DEFAULT)
+
+Add all the files with paths specified by `files` to the index `idx` (or the index
+of the `repo`). If the file already exists, the index entry will be updated.
+If the file does not exist already, it will be newly added into the index.
+`files` may contain glob patterns which will be expanded and any matching files will
+be added (unless `INDEX_ADD_DISABLE_PATHSPEC_MATCH` is set, see below).
+If a file has been ignored (in `.gitignore` or in the config), it *will not* be
+added, *unless* it is already being tracked in the index, in which case it *will* be
+updated. The keyword argument `flags` is a set of bit-flags which control the behavior
+with respect to ignored files:
+  * `Consts.INDEX_ADD_DEFAULT` - default, described above.
+  * `Consts.INDEX_ADD_FORCE` - disregard the existing ignore rules and force addition of
+    the file to the index even if it is already ignored.
+  * `Consts.INDEX_ADD_CHECK_PATHSPEC` - cannot be used at the same time as `INDEX_ADD_FORCE`.
+    Check that each file in `files` which exists on disk is not in the ignore list. If one
+    of the files *is* ignored, the function will return `EINVALIDSPEC`.
+  * `Consts.INDEX_ADD_DISABLE_PATHSPEC_MATCH` - turn off glob matching, and only add files
+    to the index which exactly match the paths specified in `files`.
+"""
 function add!(idx::GitIndex, files::AbstractString...;
               flags::Cuint = Consts.INDEX_ADD_DEFAULT)
     @check ccall((:git_index_add_all, :libgit2), Cint,
@@ -81,12 +103,28 @@ function add!(idx::GitIndex, files::AbstractString...;
                  idx.ptr, collect(files), flags, C_NULL, C_NULL)
 end
 
+"""
+    update!(repo::GitRepo, files::AbstractString...)
+    update!(idx::GitIndex, files::AbstractString...)
+
+Update all the files with paths specified by `files` in the index `idx` (or the index
+of the `repo`). Match the state of each file in the index with the current state on
+disk, removing it if it has been removed on disk, or updating its entry in the object
+database.
+"""
 function update!(idx::GitIndex, files::AbstractString...)
     @check ccall((:git_index_update_all, :libgit2), Cint,
                  (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
                  idx.ptr, collect(files), C_NULL, C_NULL)
 end
 
+"""
+    remove!(repo::GitRepo, files::AbstractString...)
+    remove!(idx::GitIndex, files::AbstractString...)
+
+Remove all the files with paths specified by `files` in the index `idx` (or the index
+of the `repo`).
+"""
 function remove!(idx::GitIndex, files::AbstractString...)
     @check ccall((:git_index_remove_all, :libgit2), Cint,
                  (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),

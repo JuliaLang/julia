@@ -7,7 +7,7 @@ using ..Terminals
 import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
-import Base: ensureroom, peek, show, AnyDict
+import Base: ensureroom, peek, show, AnyDict, position
 
 abstract type TextInterface end
 abstract type ModeState end
@@ -27,7 +27,7 @@ mutable struct Prompt <: TextInterface
     # Same as prefix except after the prompt
     prompt_suffix::Union{String,Function}
     keymap_dict::Dict{Char}
-    keymap_func_data # ::AbstractREPL
+    repl # ::AbstractREPL
     complete # ::REPLCompletionProvider
     on_enter::Function
     on_done::Function
@@ -37,19 +37,25 @@ end
 
 show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), "\",...)"))
 
+"Maximum number of entries in the kill ring queue.
+Beyond this number, oldest entries are discarded first."
+const KILL_RING_MAX = Ref(100)
+
 mutable struct MIState
     interface::ModalInterface
     current_mode::TextInterface
     aborted::Bool
     mode_state::Dict
-    kill_buffer::String
-    previous_key::Array{Char,1}
+    kill_ring::Vector{String}
+    kill_idx::Int
+    previous_key::Vector{Char}
     key_repeats::Int
+    last_action::Symbol
 end
-MIState(i, c, a, m) = MIState(i, c, a, m, "", Char[], 0)
+MIState(i, c, a, m) = MIState(i, c, a, m, String[], 0, Char[], 0, :begin)
 
 function show(io::IO, s::MIState)
-    print(io, "MI State (", s.current_mode, " active)")
+    print(io, "MI State (", mode(s), " active)")
 end
 
 struct InputAreaState
@@ -61,11 +67,36 @@ mutable struct PromptState <: ModeState
     terminal::AbstractTerminal
     p::Prompt
     input_buffer::IOBuffer
+    undo_buffers::Vector{IOBuffer}
+    undo_idx::Int
     ias::InputAreaState
     # indentation of lines which do not include the prompt
     # if negative, the width of the prompt is used
     indent::Int
+    refresh_lock::Threads.AbstractLock
+    # this would better be Threads.Atomic{Float64}, but not supported on some platforms
+    beeping::Float64
 end
+
+options(s::PromptState) = isdefined(s.p, :repl) ? s.p.repl.options : Base.REPL.Options()
+
+setmark(s) = mark(buffer(s))
+
+# the default mark is 0
+getmark(s) = max(0, buffer(s).mark)
+
+const Region = Pair{<:Integer,<:Integer}
+
+_region(s) = getmark(s) => position(s)
+region(s) = Pair(extrema(_region(s))...)
+
+bufend(s) = buffer(s).size
+
+indexes(reg::Region) = first(reg)+1:last(reg)
+
+content(s, reg::Region = 0=>bufend(s)) = String(buffer(s).data[indexes(reg)])
+
+const REGION_ANIMATION_DURATION = Ref(0.2)
 
 input_string(s::PromptState) = String(take!(copy(s.input_buffer)))
 
@@ -73,7 +104,7 @@ input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
     str = input_string(s)
     isempty(str) && return 0
-    rest = str[nextind(str, position(s.input_buffer)):end]
+    rest = str[nextind(str, position(s)):end]
     return count(c->(c == '\n'), rest)
 end
 
@@ -90,11 +121,65 @@ complete_line(c::EmptyCompletionProvider, s) = [], true, true
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
-for f in [:terminal, :edit_insert, :on_enter, :add_history, :buffer, :edit_backspace, :(Base.isempty),
-        :replace_line, :refresh_multi_line, :input_string, :edit_move_left, :edit_move_right,
-        :edit_move_word_left, :edit_move_word_right, :update_display_buffer]
-    @eval ($f)(s::MIState, args...) = $(f)(s.mode_state[s.current_mode], args...)
+
+# these may be better stored in Prompt or LineEditREPL
+const BEEP_DURATION = Ref(0.2)
+const BEEP_BLINK = Ref(0.2)
+const BEEP_MAXDURATION = Ref(1.0)
+const BEEP_COLORS = ["\e[90m"] # gray (text_colors not yet available)
+const BEEP_USE_CURRENT = Ref(true)
+
+function beep(s::PromptState, duration::Real=BEEP_DURATION[], blink::Real=BEEP_BLINK[],
+              maxduration::Real=BEEP_MAXDURATION[];
+              colors=BEEP_COLORS, use_current::Bool=BEEP_USE_CURRENT[])
+    isinteractive() || return # some tests fail on some platforms
+    s.beeping = min(s.beeping + duration, maxduration)
+    @async begin
+        trylock(s.refresh_lock) || return
+        orig_prefix = s.p.prompt_prefix
+        colors = Base.copymutable(colors)
+        use_current && push!(colors, orig_prefix)
+        i = 0
+        while s.beeping > 0.0
+            prefix = colors[mod1(i+=1, end)]
+            s.p.prompt_prefix = prefix
+            refresh_multi_line(s, beeping=true)
+            sleep(blink)
+            s.beeping -= blink
+        end
+        s.p.prompt_prefix = orig_prefix
+        refresh_multi_line(s, beeping=true)
+        s.beeping = 0.0
+        unlock(s.refresh_lock)
+    end
 end
+
+function cancel_beep(s::PromptState)
+    # wait till beeping finishes
+    while !trylock(s.refresh_lock)
+        s.beeping = 0.0
+        sleep(.05)
+    end
+    unlock(s.refresh_lock)
+end
+
+beep(::ModeState) = nothing
+cancel_beep(::ModeState) = nothing
+
+for f in [:terminal, :on_enter, :add_history, :buffer, :(Base.isempty),
+          :replace_line, :refresh_multi_line, :input_string, :update_display_buffer,
+          :empty_undo, :push_undo, :pop_undo, :options, :cancel_beep, :beep]
+    @eval ($f)(s::MIState, args...) = $(f)(state(s), args...)
+end
+
+for f in [:edit_insert, :edit_insert_newline, :edit_backspace, :edit_move_left,
+          :edit_move_right, :edit_move_word_left, :edit_move_word_right]
+    @eval function ($f)(s::MIState, args...)
+        $(f)(state(s), args...)
+        return $(Expr(:quote, f))
+    end
+end
+
 
 function common_prefix(completions)
     ret = ""
@@ -139,32 +224,41 @@ function show_completions(s::PromptState, completions)
 end
 
 # Prompt Completions
-complete_line(s::MIState) = complete_line(s.mode_state[s.current_mode], s.key_repeats)
+function complete_line(s::MIState)
+    if complete_line(state(s), s.key_repeats)
+        refresh_line(s)
+        :complete_line
+    else
+        beep(s)
+        :ignore
+    end
+end
+
 function complete_line(s::PromptState, repeats)
     completions, partial, should_complete = complete_line(s.p.complete, s)
-    if isempty(completions)
-        beep(terminal(s))
-    elseif !should_complete
+    isempty(completions) && return false
+    if !should_complete
         # should_complete is false for cases where we only want to show
         # a list of possible completions but not complete, e.g. foo(\t
         show_completions(s, completions)
     elseif length(completions) == 1
         # Replace word by completion
-        prev_pos = position(s.input_buffer)
-        seek(s.input_buffer, prev_pos-sizeof(partial))
-        edit_replace(s, position(s.input_buffer), prev_pos, completions[1])
+        prev_pos = position(s)
+        push_undo(s)
+        edit_splice!(s, prev_pos-sizeof(partial) => prev_pos, completions[1])
     else
         p = common_prefix(completions)
         if !isempty(p) && p != partial
             # All possible completions share the same prefix, so we might as
             # well complete that
-            prev_pos = position(s.input_buffer)
-            seek(s.input_buffer, prev_pos-sizeof(partial))
-            edit_replace(s, position(s.input_buffer), prev_pos, p)
+            prev_pos = position(s)
+            push_undo(s)
+            edit_splice!(s, prev_pos-sizeof(partial) => prev_pos, p)
         elseif repeats > 0
             show_completions(s, completions)
         end
     end
+    true
 end
 
 clear_input_area(terminal, s) = (_clear_input_area(terminal, s.ias); s.ias = InputAreaState(0, 0))
@@ -190,9 +284,9 @@ prompt_string(p::Prompt) = prompt_string(p.prompt)
 prompt_string(s::AbstractString) = s
 prompt_string(f::Function) = Base.invokelatest(f)
 
-refresh_multi_line(s::ModeState) = refresh_multi_line(terminal(s), s)
-refresh_multi_line(termbuf::TerminalBuffer, s::ModeState) = refresh_multi_line(termbuf, terminal(s), s)
-refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState) = (@assert term == terminal(s); refresh_multi_line(termbuf,s))
+refresh_multi_line(s::ModeState; kw...) = refresh_multi_line(terminal(s), s; kw...)
+refresh_multi_line(termbuf::TerminalBuffer, s::ModeState; kw...) = refresh_multi_line(termbuf, terminal(s), s; kw...)
+refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState; kw...) = (@assert term == terminal(s); refresh_multi_line(termbuf,s; kw...))
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf, state::InputAreaState, prompt = ""; indent = 0)
     _clear_input_area(termbuf, state)
 
@@ -213,8 +307,8 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     while moreinput
         l = readline(buf, chomp=false)
         moreinput = endswith(l, "\n")
-        # We need to deal with on-screen characters, so use strwidth to compute occupied columns
-        llength = strwidth(l)
+        # We need to deal with on-screen characters, so use textwidth to compute occupied columns
+        llength = textwidth(l)
         slength = sizeof(l)
         cur_row += 1
         cmove_col(termbuf, lindent + 1)
@@ -225,7 +319,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
             # in this case, we haven't yet written the cursor position
             line_pos -= slength # '\n' gets an extra pos
             if line_pos < 0 || !moreinput
-                num_chars = (line_pos >= 0 ? llength : strwidth(l[1:(line_pos + slength)]))
+                num_chars = (line_pos >= 0 ? llength : textwidth(l[1:prevind(l, line_pos + slength + 1)]))
                 curs_row, curs_pos = divrem(lindent + num_chars - 1, cols)
                 curs_row += cur_row
                 curs_pos += 1
@@ -257,7 +351,6 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
 
     #columns are 1 based
     cmove_col(termbuf, curs_pos + 1)
-
     # Updated cur_row,curs_row
     return InputAreaState(cur_row, curs_row)
 end
@@ -286,6 +379,17 @@ function reset_key_repeats(f::Function, s::MIState)
     end
 end
 
+edit_exchange_point_and_mark(s::MIState) =
+    edit_exchange_point_and_mark(buffer(s)) && (refresh_line(s); true)
+
+function edit_exchange_point_and_mark(buf::IOBuffer)
+    m = getmark(buf)
+    m == position(buf) && return false
+    mark(buf)
+    seek(buf, m)
+    true
+end
+
 char_move_left(s::PromptState) = char_move_left(s.input_buffer)
 function char_move_left(buf::IOBuffer)
     while position(buf) > 0
@@ -304,7 +408,7 @@ function edit_move_left(buf::IOBuffer)
         #move to the next base UTF8 character to the left
         while true
             c = char_move_left(buf)
-            if charwidth(c) != 0 || c == '\n' || position(buf) == 0
+            if textwidth(c) != 0 || c == '\n' || position(buf) == 0
                 break
             end
         end
@@ -315,7 +419,7 @@ end
 edit_move_left(s::PromptState) = edit_move_left(s.input_buffer) && refresh_line(s)
 
 function edit_move_word_left(s)
-    if position(s.input_buffer) > 0
+    if position(s) > 0
         char_move_word_left(s.input_buffer)
         refresh_line(s)
     end
@@ -362,7 +466,7 @@ function edit_move_right(buf::IOBuffer)
             pos = position(buf)
             nextc = read(buf,Char)
             seek(buf,pos)
-            (charwidth(nextc) != 0 || nextc == '\n') && break
+            (textwidth(nextc) != 0 || nextc == '\n') && break
         end
         return true
     end
@@ -386,7 +490,7 @@ function edit_move_up(buf::IOBuffer)
     npos = rsearch(buf.data, '\n', position(buf))
     npos == 0 && return false # we're in the first line
     # We're interested in character count, not byte count
-    offset = length(String(buf.data[(npos+1):(position(buf))]))
+    offset = length(content(buf, npos => position(buf)))
     npos2 = rsearch(buf.data, '\n', npos-1)
     seek(buf, npos2)
     for _ = 1:offset
@@ -428,38 +532,42 @@ function edit_move_down(s)
     changed
 end
 
-# splice! for IOBuffer: convert from 0-indexed positions, update the size,
-# and keep the cursor position stable with the text
-function splice_buffer!(buf::IOBuffer, r::UnitRange{<:Integer}, ins::AbstractString = "")
+# splice! for IOBuffer: convert from close-open region to index, update the size,
+# and keep the cursor position and mark stable with the text
+# returns the removed portion as a String
+function edit_splice!(s, r::Region=region(s), ins::AbstractString = "")
+    A, B = first(r), last(r)
+    A >= B && isempty(ins) && return String(ins)
+    buf = buffer(s)
     pos = position(buf)
-    if !isempty(r) && pos in r
-        seek(buf, first(r))
-    elseif pos > last(r)
-        seek(buf, pos - length(r))
+    if A <= pos < B
+        seek(buf, A)
+    elseif B <= pos
+        seek(buf, pos - B + A)
     end
-    splice!(buf.data, r + 1, Vector{UInt8}(ins)) # position(), etc, are 0-indexed
-    buf.size = buf.size + sizeof(ins) - length(r)
+    if A < buf.mark  < B
+        buf.mark = A
+    elseif A < B <= buf.mark
+        buf.mark += sizeof(ins) - B + A
+    end
+    ret = splice!(buf.data, A+1:B, Vector{UInt8}(ins)) # position(), etc, are 0-indexed
+    buf.size = buf.size + sizeof(ins) - B + A
     seek(buf, position(buf) + sizeof(ins))
+    String(ret)
 end
 
-function edit_replace(s, from, to, str)
-    splice_buffer!(buffer(s), from:to-1, str)
-end
+edit_splice!(s, ins::AbstractString) = edit_splice!(s, region(s), ins)
 
 function edit_insert(s::PromptState, c)
+    push_undo(s)
     buf = s.input_buffer
-    function line_size()
-        p = position(buf)
-        seek(buf, rsearch(buf.data, '\n', p))
-        ls = p - position(buf)
-        seek(buf, p)
-        return ls
-    end
     str = string(c)
     edit_insert(buf, str)
-    offset = s.ias.curs_row == 1 ? sizeof(prompt_string(s.p.prompt)) : s.indent
+    offset = s.ias.curs_row == 1 || s.indent < 0 ?
+        sizeof(prompt_string(s.p.prompt)) : s.indent
     if !('\n' in str) && eof(buf) &&
-        ((line_size() + offset + sizeof(str) - 1) < width(terminal(s)))
+        ((position(buf) - beginofline(buf) + # size of current line
+          offset + sizeof(str) - 1) < width(terminal(s)))
         # Avoid full update when appending characters to the end
         # and an update of curs_row isn't necessary (conservatively estimated)
         write(terminal(s), str)
@@ -473,35 +581,95 @@ function edit_insert(buf::IOBuffer, c)
         return write(buf, c)
     else
         s = string(c)
-        splice_buffer!(buf, position(buf):position(buf)-1, s)
+        edit_splice!(buf, position(buf) => position(buf), s)
         return sizeof(s)
     end
 end
 
-function edit_backspace(s::PromptState)
-    if edit_backspace(s.input_buffer)
+# align: number of ' ' to insert after '\n'
+# if align < 0: align like line above
+function edit_insert_newline(s::PromptState, align=-1)
+    push_undo(s)
+    buf = buffer(s)
+    if align < 0
+        beg = beginofline(buf)
+        align = min(findnext(_notspace, buf.data[beg+1:buf.size], 1) - 1,
+                    position(buf) - beg) # indentation must not increase
+        align < 0 && (align = buf.size-beg)
+    end
+    edit_insert(buf, '\n' * ' '^align)
+    refresh_line(s)
+end
+
+# align: delete up to 4 spaces to align to a multiple of 4 chars
+# adjust: also delete spaces on the right of the cursor to try to keep aligned what is
+# on the right
+function edit_backspace(s::PromptState, align::Bool=options(s).backspace_align,
+                        adjust=options(s).backspace_adjust)
+    push_undo(s)
+    if edit_backspace(buffer(s), align, adjust)
         refresh_line(s)
     else
-        beep(terminal(s))
-    end
-end
-function edit_backspace(buf::IOBuffer)
-    if position(buf) > 0
-        oldpos = position(buf)
-        char_move_left(buf)
-        splice_buffer!(buf, position(buf):oldpos-1)
-        return true
-    else
-        return false
+        pop_undo(s)
+        beep(s)
     end
 end
 
-edit_delete(s) = edit_delete(buffer(s)) ? refresh_line(s) : beep(terminal(s))
+const _newline =  UInt8('\n')
+const _space = UInt8(' ')
+
+_notspace(c) = c != _space
+
+beginofline(buf, pos=position(buf)) = findprev(equalto(_newline), buf.data, pos)
+
+function endofline(buf, pos=position(buf))
+    eol = findnext(equalto(_newline), buf.data[pos+1:buf.size], 1)
+    eol == 0 ? buf.size : pos + eol - 1
+end
+
+function edit_backspace(buf::IOBuffer, align::Bool=false, adjust::Bool=false)
+    !align && adjust &&
+        throw(DomainError((align, adjust),
+                          "if `adjust` is `true`, `align` must be `true`"))
+    oldpos = position(buf)
+    oldpos == 0 && return false
+    c = char_move_left(buf)
+    newpos = position(buf)
+    if align && c == ' ' # maybe delete multiple spaces
+        beg = beginofline(buf, newpos)
+        align = textwidth(String(buf.data[1+beg:newpos])) % 4
+        nonspace = findprev(_notspace, buf.data, newpos)
+        if newpos - align >= nonspace
+            newpos -= align
+            seek(buf, newpos)
+            if adjust
+                spaces = findnext(_notspace, buf.data[newpos+2:buf.size], 1)
+                oldpos = spaces == 0 ? buf.size :
+                    buf.data[newpos+1+spaces] == _newline ? newpos+spaces :
+                    newpos + min(spaces, 4)
+            end
+        end
+    end
+    edit_splice!(buf, newpos => oldpos)
+    return true
+end
+
+function edit_delete(s)
+    push_undo(s)
+    if edit_delete(buffer(s))
+        refresh_line(s)
+    else
+        pop_undo(s)
+        beep(s)
+    end
+    :edit_delete
+end
+
 function edit_delete(buf::IOBuffer)
     eof(buf) && return false
     oldpos = position(buf)
     char_move_right(buf)
-    splice_buffer!(buf, oldpos:position(buf)-1)
+    edit_splice!(buf, oldpos => position(buf))
     true
 end
 
@@ -509,59 +677,140 @@ function edit_werase(buf::IOBuffer)
     pos1 = position(buf)
     char_move_word_left(buf, isspace)
     pos0 = position(buf)
-    pos0 < pos1 || return false
-    splice_buffer!(buf, pos0:pos1-1)
-    true
+    edit_splice!(buf, pos0 => pos1)
 end
-function edit_werase(s)
-    edit_werase(buffer(s)) && refresh_line(s)
+
+function edit_werase(s::MIState)
+    push_undo(s)
+    if push_kill!(s, edit_werase(buffer(s)), rev=true)
+        refresh_line(s)
+        :edit_werase
+    else
+        pop_undo(s)
+        :ignore
+    end
 end
 
 function edit_delete_prev_word(buf::IOBuffer)
     pos1 = position(buf)
     char_move_word_left(buf)
     pos0 = position(buf)
-    pos0 < pos1 || return false
-    splice_buffer!(buf, pos0:pos1-1)
-    true
+    edit_splice!(buf, pos0 => pos1)
 end
-function edit_delete_prev_word(s)
-    edit_delete_prev_word(buffer(s)) && refresh_line(s)
+
+function edit_delete_prev_word(s::MIState)
+    push_undo(s)
+    if push_kill!(s, edit_delete_prev_word(buffer(s)), rev=true)
+        refresh_line(s)
+        :edit_delete_prev_word
+    else
+        pop_undo(s)
+        :ignore
+    end
 end
 
 function edit_delete_next_word(buf::IOBuffer)
     pos0 = position(buf)
     char_move_word_right(buf)
     pos1 = position(buf)
-    pos0 < pos1 || return false
-    splice_buffer!(buf, pos0:pos1-1)
-    true
+    edit_splice!(buf, pos0 => pos1)
 end
+
 function edit_delete_next_word(s)
-    edit_delete_next_word(buffer(s)) && refresh_line(s)
+    push_undo(s)
+    if push_kill!(s, edit_delete_next_word(buffer(s)))
+        refresh_line(s)
+        :edit_delete_next_word
+    else
+        pop_undo(s)
+        :ignore
+    end
 end
 
 function edit_yank(s::MIState)
-    edit_insert(buffer(s), s.kill_buffer)
+    if isempty(s.kill_ring)
+        beep(s)
+        return :ignore
+    end
+    setmark(s) # necessary for edit_yank_pop
+    push_undo(s)
+    edit_insert(buffer(s), s.kill_ring[mod1(s.kill_idx, end)])
     refresh_line(s)
+    :edit_yank
+end
+
+function edit_yank_pop(s::MIState, require_previous_yank=true)
+    repeat = s.last_action ∈ (:edit_yank, :edit_yank_pop)
+    if require_previous_yank && !repeat || isempty(s.kill_ring)
+        beep(s)
+        :ignore
+    else
+        require_previous_yank || repeat || setmark(s)
+        push_undo(s)
+        edit_splice!(s, s.kill_ring[mod1(s.kill_idx-=1, end)])
+        refresh_line(s)
+        :edit_yank_pop
+    end
+end
+
+function push_kill!(s::MIState, killed::String, concat = s.key_repeats > 0; rev=false)
+    isempty(killed) && return false
+    if concat && !isempty(s.kill_ring)
+        s.kill_ring[end] = rev ?
+            killed * s.kill_ring[end] : # keep expected order for backward deletion
+            s.kill_ring[end] * killed
+    else
+        push!(s.kill_ring, killed)
+        length(s.kill_ring) > KILL_RING_MAX[] && shift!(s.kill_ring)
+    end
+    s.kill_idx = endof(s.kill_ring)
+    true
 end
 
 function edit_kill_line(s::MIState)
+    push_undo(s)
     buf = buffer(s)
     pos = position(buf)
-    killbuf = readline(buf, chomp=false)
-    if length(killbuf) > 1 && killbuf[end] == '\n'
-        killbuf = killbuf[1:end-1]
-        char_move_left(buf)
+    endpos = endofline(buf)
+    endpos == pos && buf.size > pos && (endpos += 1)
+    if push_kill!(s, edit_splice!(s, pos => endpos))
+        refresh_line(s)
+        :edit_kill_line
+    else
+        pop_undo(s)
+        :ignore
     end
-    s.kill_buffer = s.key_repeats > 0 ? s.kill_buffer * killbuf : killbuf
-
-    splice_buffer!(buf, pos:position(buf)-1)
-    refresh_line(s)
 end
 
-edit_transpose(s) = edit_transpose(buffer(s)) && refresh_line(s)
-function edit_transpose(buf::IOBuffer)
+function edit_copy_region(s::MIState)
+    buf = buffer(s)
+    push_kill!(s, content(buf, region(buf)), false) || return :ignore
+    if REGION_ANIMATION_DURATION[] > 0.0
+        edit_exchange_point_and_mark(s)
+        sleep(REGION_ANIMATION_DURATION[])
+        edit_exchange_point_and_mark(s)
+    end
+    :edit_copy_region
+end
+
+function edit_kill_region(s::MIState)
+    push_undo(s)
+    if push_kill!(s, edit_splice!(s), false)
+        refresh_line(s)
+        :edit_kill_region
+    else
+        pop_undo(s)
+        :ignore
+    end
+end
+
+function edit_transpose_chars(s::MIState)
+    push_undo(s)
+    edit_transpose_chars(buffer(s)) ? refresh_line(s) : pop_undo(s)
+    :edit_transpose
+end
+
+function edit_transpose_chars(buf::IOBuffer)
     position(buf) == 0 && return false
     eof(buf) && char_move_left(buf)
     char_move_left(buf)
@@ -572,18 +821,76 @@ function edit_transpose(buf::IOBuffer)
     return true
 end
 
+function edit_transpose_words(s)
+    push_undo(s)
+    edit_transpose_words(buffer(s)) ? refresh_line(s) : pop_undo(s)
+    :edit_transpose_words
+end
+
+function edit_transpose_words(buf::IOBuffer, mode=:emacs)
+    mode in [:readline, :emacs] ||
+        throw(ArgumentError("`mode` must be `:readline` or `:emacs`"))
+    pos = position(buf)
+    if mode == :emacs
+        char_move_word_left(buf)
+        char_move_word_right(buf)
+    end
+    char_move_word_right(buf)
+    e2 = position(buf)
+    char_move_word_left(buf)
+    b2 = position(buf)
+    char_move_word_left(buf)
+    b1 = position(buf)
+    char_move_word_right(buf)
+    e1 = position(buf)
+    e1 >= b2 && (seek(buf, pos); return false)
+    word2 = edit_splice!(buf, b2 => e2, content(buf, b1 => e1))
+    edit_splice!(buf, b1 => e1, word2)
+    seek(buf, e2)
+    true
+end
+
+
+edit_upper_case(s) = (edit_replace_word_right(s, uppercase); :edit_upper_case)
+edit_lower_case(s) = (edit_replace_word_right(s, lowercase); :edit_lower_case)
+edit_title_case(s) = (edit_replace_word_right(s, ucfirst);   :edit_title_case)
+
+function edit_replace_word_right(s, replace::Function)
+    push_undo(s)
+    edit_replace_word_right(buffer(s), replace) ? refresh_line(s) : pop_undo(s)
+end
+
+function edit_replace_word_right(buf::IOBuffer, replace::Function)
+    # put the cursor at the beginning of the next word
+    skipchars(buf, is_non_word_char)
+    b = position(buf)
+    char_move_word_right(buf)
+    e = position(buf)
+    e == b && return false
+    edit_splice!(buf, b => e, replace(content(buf, b => e)))
+    true
+end
+
 edit_clear(buf::IOBuffer) = truncate(buf, 0)
 
 function edit_clear(s::MIState)
-    edit_clear(buffer(s))
-    refresh_line(s)
+    push_undo(s)
+    if push_kill!(s, edit_splice!(s, 0 => bufend(s)), false)
+        refresh_line(s)
+        :edit_clear
+    else
+        pop_undo(s)
+        :ignore
+    end
 end
 
 function replace_line(s::PromptState, l::IOBuffer)
+    empty_undo(s)
     s.input_buffer = copy(l)
 end
 
-function replace_line(s::PromptState, l)
+function replace_line(s::PromptState, l, keep_undo=false)
+    keep_undo || empty_undo(s)
     s.input_buffer.ptr = 1
     s.input_buffer.size = 0
     write(s.input_buffer, l)
@@ -606,7 +913,7 @@ function history_prev(s, hist)
         move_input_start(s)
         refresh_line(s)
     else
-        beep(terminal(s))
+        beep(s)
     end
 end
 function history_next(s, hist)
@@ -616,7 +923,7 @@ function history_next(s, hist)
         move_input_end(s)
         refresh_line(s)
     else
-        beep(terminal(s))
+        beep(s)
     end
 end
 
@@ -643,21 +950,23 @@ end
 function write_prompt(terminal, s::Union{AbstractString,Function})
     promptstr = prompt_string(s)
     write(terminal, promptstr)
-    strwidth(promptstr)
+    textwidth(promptstr)
 end
 
 ### Keymap Support
 
+const wildcard = Char(0x0010f7ff) # "Private Use" Char
+
 normalize_key(key::Char) = string(key)
 normalize_key(key::Integer) = normalize_key(Char(key))
 function normalize_key(key::AbstractString)
-    '\0' in key && error("Matching \\0 not currently supported.")
+    wildcard in key && error("Matching Char(0x0010f7ff) not supported.")
     buf = IOBuffer()
     i = start(key)
     while !done(key, i)
         c, i = next(key, i)
         if c == '*'
-            write(buf, '\0')
+            write(buf, wildcard)
         elseif c == '^'
             c, i = next(key, i)
             write(buf, uppercase(c)-64)
@@ -699,20 +1008,14 @@ function add_nested_key!(keymap::Dict, key, value; override = false)
     i = start(key)
     while !done(key, i)
         c, i = next(key, i)
-        if c in keys(keymap)
-            if done(key, i) && override
-                # isa(keymap[c], Dict) - In this case we're overriding a prefix of an existing command
-                keymap[c] = value
-                break
-            else
-                if !isa(keymap[c], Dict)
-                    error("Conflicting definitions for keyseq " * escape_string(key) * " within one keymap")
-                end
-            end
-        elseif done(key, i)
+        if !override && c in keys(keymap) && (done(key, i) || !isa(keymap[c], Dict))
+            error("Conflicting definitions for keyseq " * escape_string(key) *
+                  " within one keymap")
+        end
+        if done(key, i)
             keymap[c] = value
             break
-        else
+        elseif !(c in keys(keymap) && isa(keymap[c], Dict))
             keymap[c] = Dict{Char,Any}()
         end
         keymap = keymap[c]
@@ -727,19 +1030,25 @@ struct KeyAlias
     KeyAlias(seq) = new(normalize_key(seq))
 end
 
-match_input(k::Function, s, term, cs, keymap) = (update_key_repeats(s, cs); return keymap_fcn(k, String(cs)))
+function match_input(k::Function, s, term, cs, keymap)
+    update_key_repeats(s, cs)
+    return keymap_fcn(k, String(cs))
+end
+
 match_input(k::Void, s, term, cs, keymap) = (s,p) -> return :ok
-match_input(k::KeyAlias, s, term, cs, keymap) = match_input(keymap, s, IOBuffer(k.seq), Char[], keymap)
+match_input(k::KeyAlias, s, term, cs, keymap) =
+    match_input(keymap, s, IOBuffer(k.seq), Char[], keymap)
+
 function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     # if we run out of characters to match before resolving an action,
     # return an empty keymap function
     eof(term) && return keymap_fcn(nothing, "")
     c = read(term, Char)
-    # Ignore any '\0' (eg, CTRL-space in xterm), as this is used as a
+    # Ignore any `wildcard` as this is used as a
     # placeholder for the wildcard (see normalize_key("*"))
-    c != '\0' || return keymap_fcn(nothing, "")
+    c == wildcard && return keymap_fcn(nothing, "")
     push!(cs, c)
-    key = haskey(k, c) ? c : '\0'
+    key = haskey(k, c) ? c : wildcard
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
     return match_input(get(k, key, nothing), s, term, cs, keymap)
 end
@@ -830,12 +1139,12 @@ function fixup_keymaps!(dict::Dict, level, s, subkeymap)
 end
 
 function add_specialisations(dict, subdict, level)
-    default_branch = subdict['\0']
+    default_branch = subdict[wildcard]
     if isa(default_branch, Dict)
         # Go through all the keymaps in the default branch
         # and copy them over to dict
         for s in keys(default_branch)
-            s == '\0' && add_specialisations(dict, default_branch, level+1)
+            s == wildcard && add_specialisations(dict, default_branch, level+1)
             fixup_keymaps!(dict, level, s, default_branch[s])
         end
     end
@@ -844,11 +1153,11 @@ end
 postprocess!(others) = nothing
 function postprocess!(dict::Dict)
     # needs to be done first for every branch
-    if haskey(dict, '\0')
+    if haskey(dict, wildcard)
         add_specialisations(dict, dict, 1)
     end
     for (k,v) in dict
-        k == '\0' && continue
+        k == wildcard && continue
         postprocess!(v)
     end
 end
@@ -868,7 +1177,7 @@ end
 # source is the keymap specified by the user (with normalized keys)
 function keymap_merge(target,source)
     ret = copy(target)
-    direct_keys = filter((k,v) -> isa(v, Union{Function, KeyAlias, Void}), source)
+    direct_keys = filter(p -> isa(p.second, Union{Function, KeyAlias, Void}), source)
     # first direct entries
     for key in keys(direct_keys)
         add_nested_key!(ret, key, source[key]; override = true)
@@ -932,7 +1241,7 @@ function keymap(keymaps::Array{<:Dict})
 end
 
 const escape_defaults = merge!(
-    AnyDict(Char(i) => nothing for i=vcat(1:26, 28:31)), # Ignore control characters by default
+    AnyDict(Char(i) => nothing for i=vcat(0:26, 28:31)), # Ignore control characters by default
     AnyDict( # And ignore other escape sequences by default
         "\e*" => nothing,
         "\e[*" => nothing,
@@ -996,12 +1305,12 @@ end
 terminal(s::SearchState) = s.terminal
 
 function update_display_buffer(s::SearchState, data)
-    history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, false) || beep(terminal(s))
+    history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, false) || beep(s)
     refresh_line(s)
 end
 
 function history_next_result(s::MIState, data::SearchState)
-    history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, true) || beep(terminal(s))
+    history_search(data.histprompt.hp, data.query_buffer, data.response_buffer, data.backward, true) || beep(s)
     refresh_line(data)
 end
 
@@ -1054,9 +1363,11 @@ function show(io::IO, s::PrefixSearchState)
      isdefined(s,:mi) ? s.mi : "no MI")
 end
 
-refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
-    s::Union{PromptState,PrefixSearchState}) = s.ias =
-    refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s, indent = s.indent)
+function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
+                            s::Union{PromptState,PrefixSearchState}; beeping=false)
+    beeping || cancel_beep(s)
+    s.ias = refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s, indent = s.indent)
+end
 
 input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
 
@@ -1120,8 +1431,8 @@ function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     s.ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(forward-i-search)`")
 end
 
-state(s::MIState, p) = s.mode_state[p]
-state(s::PromptState, p) = (@assert s.p == p; s)
+state(s::MIState, p=mode(s)) = s.mode_state[p]
+state(s::PromptState, p=mode(s)) = (@assert s.p == p; s)
 mode(s::MIState) = s.current_mode
 mode(s::PromptState) = s.p
 mode(s::SearchState) = @assert false
@@ -1132,9 +1443,9 @@ function complete_line(s::SearchState, repeats)
     completions, partial, should_complete = complete_line(s.histprompt.complete, s)
     # For now only allow exact completions in search mode
     if length(completions) == 1
-        prev_pos = position(s.query_buffer)
-        seek(s.query_buffer, prev_pos-sizeof(partial))
-        edit_replace(s, position(s.query_buffer), prev_pos, completions[1])
+        prev_pos = position(s)
+        push_undo(s)
+        edit_splice!(s, prev_pos-sizeof(partial) => prev_pos, completions[1])
     end
 end
 
@@ -1203,15 +1514,15 @@ function setup_search_keymap(hp)
 
         # Backspace/^H
         '\b'      => (s,data,c)->(edit_backspace(data.query_buffer) ?
-                        update_display_buffer(s, data) : beep(terminal(s))),
+                        update_display_buffer(s, data) : beep(s)),
         127       => KeyAlias('\b'),
         # Meta Backspace
-        "\e\b"    => (s,data,c)->(edit_delete_prev_word(data.query_buffer) ?
-                        update_display_buffer(s, data) : beep(terminal(s))),
+        "\e\b"    => (s,data,c)->(isempty(edit_delete_prev_word(data.query_buffer)) ?
+                                  beep(s) : update_display_buffer(s, data)),
         "\e\x7f"  => "\e\b",
         # Word erase to whitespace
-        "^W"      => (s,data,c)->(edit_werase(data.query_buffer) ?
-                        update_display_buffer(s, data) : beep(terminal(s))),
+        "^W"      => (s,data,c)->(isempty(edit_werase(data.query_buffer)) ?
+                                  beep(s) : update_display_buffer(s, data)),
         # ^C and ^D
         "^C"      => (s,data,c)->(edit_clear(data.query_buffer);
                        edit_clear(data.response_buffer);
@@ -1261,7 +1572,8 @@ function setup_search_keymap(hp)
         # Bracketed paste mode
         "\e[200~" => (s,data,c)-> begin
             ps = state(s, mode(s))
-            input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
+            str = readuntil(ps.terminal, "\e[201~")
+            input = str[1:prevind(str, end-5)]
             edit_insert(data.query_buffer, input); update_display_buffer(s, data)
         end,
         "*"       => (s,data,c)->(edit_insert(data.query_buffer, c); update_display_buffer(s, data))
@@ -1293,11 +1605,13 @@ function move_line_start(s::MIState)
     else
         seek(buf, rsearch(buf.data, '\n', curpos))
     end
+    :move_line_start
 end
 function move_line_end(s::MIState)
     s.key_repeats > 0 ?
         move_input_end(s) :
         move_line_end(buffer(s))
+    :move_line_end
 end
 function move_line_end(buf::IOBuffer)
     eof(buf) && return
@@ -1310,6 +1624,7 @@ function move_line_end(buf::IOBuffer)
 end
 
 function commit_line(s)
+    cancel_beep(s)
     move_input_end(s)
     refresh_line(s)
     println(terminal(s))
@@ -1328,7 +1643,8 @@ global tabwidth = 8
 
 function bracketed_paste(s)
     ps = state(s, mode(s))
-    input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
+    str = readuntil(ps.terminal, "\e[201~")
+    input = str[1:prevind(str, end-5)]
     input = replace(input, '\r', '\n')
     if position(buffer(s)) == 0
         indent = Base.indentation(input; tabwidth=tabwidth)[1]
@@ -1337,37 +1653,67 @@ function bracketed_paste(s)
     return replace(input, '\t', " "^tabwidth)
 end
 
+function tab_should_complete(s)
+    # Yes, we are ignoring the possiblity
+    # the we could be in the middle of a multi-byte
+    # sequence, here but that's ok, since any
+    # whitespace we're interested in is only one byte
+    buf = buffer(s)
+    pos = position(buf)
+    pos == 0 && return true
+    c = buf.data[pos]
+    c != _newline && c != UInt8('\t') &&
+        # hack to allow path completion in cmds
+        # after a space, e.g., `cd <tab>`, while still
+        # allowing multiple indent levels
+        (c != _space || pos <= 3 || buf.data[pos-1] != _space)
+end
+
+# jump_spaces: if cursor is on a ' ', move it to the first non-' ' char on the right
+# if `delete_trailing`, ignore trailing ' ' by deleting them
+function edit_tab(s::MIState, jump_spaces=false, delete_trailing=jump_spaces)
+    if tab_should_complete(s)
+        complete_line(s)
+    else
+        push_undo(s)
+        edit_insert_tab(buffer(s), jump_spaces, delete_trailing) || pop_undo(s)
+        refresh_line(s)
+        :edit_insert_tab
+    end
+end
+
+# return true iff the content of the buffer is modified
+# return false when only the position changed
+function edit_insert_tab(buf::IOBuffer, jump_spaces=false, delete_trailing=jump_spaces)
+    i = position(buf)
+    if jump_spaces && i < buf.size && buf.data[i+1] == _space
+        spaces = findnext(_notspace, buf.data[i+1:buf.size], 1)
+        if delete_trailing && (spaces == 0 || buf.data[i+spaces] == _newline)
+            edit_splice!(buf, i => (spaces == 0 ? buf.size : i+spaces-1))
+        else
+            jump = spaces == 0 ? buf.size : i+spaces-1
+            seek(buf, jump)
+            return false
+        end
+    end
+    # align to multiples of 4:
+    align = 4 - textwidth(String(buf.data[1+beginofline(buf, i):i])) % 4
+    edit_insert(buf, ' '^align)
+    return true
+end
+
+
 const default_keymap =
 AnyDict(
     # Tab
-    '\t' => (s,o...)->begin
-        buf = buffer(s)
-        # Yes, we are ignoring the possiblity
-        # the we could be in the middle of a multi-byte
-        # sequence, here but that's ok, since any
-        # whitespace we're interested in is only one byte
-        i = position(buf)
-        if i != 0
-            c = buf.data[i]
-            if c == UInt8('\n') || c == UInt8('\t') ||
-               # hack to allow path completion in cmds
-               # after a space, e.g., `cd <tab>`, while still
-               # allowing multiple indent levels
-               (c == UInt8(' ') && i > 3 && buf.data[i-1] == UInt8(' '))
-                edit_insert(s, " "^4)
-                return
-            end
-        end
-        complete_line(s)
-        refresh_line(s)
-    end,
+    '\t' => (s,o...)->edit_tab(s, true),
     # Enter
     '\r' => (s,o...)->begin
         if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)
             commit_line(s)
             return :done
         else
-            edit_insert(s, '\n')
+            edit_insert_newline(s)
         end
     end,
     '\n' => KeyAlias('\r'),
@@ -1386,8 +1732,13 @@ AnyDict(
             return :abort
         end
     end,
+    # Ctrl-Space
+    "\0" => (s,o...)->setmark(s),
+    "^X^X" => (s,o...)->edit_exchange_point_and_mark(s),
     "^B" => (s,o...)->edit_move_left(s),
     "^F" => (s,o...)->edit_move_right(s),
+    "^P" => (s,o...)->edit_move_up(s),
+    "^N" => (s,o...)->edit_move_down(s),
     # Meta B
     "\eb" => (s,o...)->edit_move_word_left(s),
     # Meta F
@@ -1401,13 +1752,18 @@ AnyDict(
     # Ctrl-Right Arrow on rxvt
     "\eOc" => "\ef",
     # Meta Enter
-    "\e\r" => (s,o...)->(edit_insert(s, '\n')),
+    "\e\r" => (s,o...)->edit_insert_newline(s),
     "\e\n" => "\e\r",
+    "^_" => (s,o...)->edit_undo!(s),
+    "\e_" => (s,o...)->edit_redo!(s),
     # Simply insert it into the buffer by default
     "*" => (s,data,c)->(edit_insert(s, c)),
     "^U" => (s,o...)->edit_clear(s),
     "^K" => (s,o...)->edit_kill_line(s),
     "^Y" => (s,o...)->edit_yank(s),
+    "\ey" => (s,o...)->edit_yank_pop(s),
+    "\ew" => (s,o...)->edit_copy_region(s),
+    "\eW" => (s,o...)->edit_kill_region(s),
     "^A" => (s,o...)->(move_line_start(s); refresh_line(s)),
     "^E" => (s,o...)->(move_line_end(s); refresh_line(s)),
     # Try to catch all Home/End keys
@@ -1421,6 +1777,7 @@ AnyDict(
         try # raise the debugger if present
             ccall(:jl_raise_debugger, Int, ())
         end
+        cancel_beep(s)
         move_input_end(s)
         refresh_line(s)
         print(terminal(s), "^C\n\n")
@@ -1443,12 +1800,18 @@ AnyDict(
         input = bracketed_paste(s)
         edit_insert(s, input)
     end,
-    "^T" => (s,o...)->edit_transpose(s)
+    "^T" => (s,o...)->edit_transpose_chars(s),
+    "\et" => (s,o...)->edit_transpose_words(s),
+    "\eu" => (s,o...)->edit_upper_case(s),
+    "\el" => (s,o...)->edit_lower_case(s),
+    "\ec" => (s,o...)->edit_title_case(s),
 )
 
 const history_keymap = AnyDict(
-    "^P" => (s,o...)->(history_prev(s, mode(s).hist)),
-    "^N" => (s,o...)->(history_next(s, mode(s).hist)),
+    "^P" => (s,o...)->(edit_move_up(s) || history_prev(s, mode(s).hist)),
+    "^N" => (s,o...)->(edit_move_down(s) || history_next(s, mode(s).hist)),
+    "\ep" => (s,o...)->(history_prev(s, mode(s).hist)),
+    "\en" => (s,o...)->(history_next(s, mode(s).hist)),
     # Up Arrow
     "\e[A" => (s,o...)->(edit_move_up(s) || history_prev(s, mode(s).hist)),
     # Down Arrow
@@ -1463,6 +1826,8 @@ const history_keymap = AnyDict(
 
 const prefix_history_keymap = merge!(
     AnyDict(
+        "^P" => (s,data,c)->history_prev_prefix(data, data.histprompt.hp, data.prefix),
+        "^N" => (s,data,c)->history_next_prefix(data, data.histprompt.hp, data.prefix),
         # Up Arrow
         "\e[A" => (s,data,c)->history_prev_prefix(data, data.histprompt.hp, data.prefix),
         # Down Arrow
@@ -1493,6 +1858,8 @@ function setup_prefix_keymap(hp, parent_prompt)
     p = PrefixHistoryPrompt(hp, parent_prompt)
     p.keymap_dict = keymap([prefix_history_keymap])
     pkeymap = AnyDict(
+        "^P" => (s,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
+        "^N" => (s,o...)->(edit_move_down(s) || enter_prefix_search(s, p, false)),
         # Up Arrow
         "\e[A" => (s,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
         # Down Arrow
@@ -1512,31 +1879,33 @@ function activate(p::TextInterface, s::ModeState, termbuf, term::TextTerminal)
 end
 
 function activate(p::TextInterface, s::MIState, termbuf, term::TextTerminal)
-    @assert p == s.current_mode
-    activate(p, s.mode_state[s.current_mode], termbuf, term)
+    @assert p == mode(s)
+    activate(p, state(s), termbuf, term)
 end
 activate(m::ModalInterface, s::MIState, termbuf, term::TextTerminal) =
-    activate(s.current_mode, s, termbuf, term)
+    activate(mode(s), s, termbuf, term)
 
 commit_changes(t::UnixTerminal, termbuf) = write(t, take!(termbuf.out_stream))
-function transition(f::Function, s::MIState, mode)
-    if mode === :abort
+
+function transition(f::Function, s::MIState, newmode)
+    cancel_beep(s)
+    if newmode === :abort
         s.aborted = true
         return
     end
-    if mode === :reset
+    if newmode === :reset
         reset_state(s)
         return
     end
-    if !haskey(s.mode_state,mode)
-        s.mode_state[mode] = init_state(terminal(s), mode)
+    if !haskey(s.mode_state, newmode)
+        s.mode_state[newmode] = init_state(terminal(s), newmode)
     end
     termbuf = TerminalBuffer(IOBuffer())
     t = terminal(s)
-    s.mode_state[s.current_mode] = deactivate(s.current_mode, s.mode_state[s.current_mode], termbuf, t)
-    s.current_mode = mode
+    s.mode_state[mode(s)] = deactivate(mode(s), state(s), termbuf, t)
+    s.current_mode = newmode
     f()
-    activate(mode, s.mode_state[mode], termbuf, t)
+    activate(newmode, state(s, newmode), termbuf, t)
     commit_changes(t, termbuf)
 end
 transition(s::MIState, mode) = transition((args...)->nothing, s, mode)
@@ -1546,11 +1915,12 @@ function reset_state(s::PromptState)
         s.input_buffer.size = 0
         s.input_buffer.ptr = 1
     end
+    empty_undo(s)
     s.ias = InputAreaState(0, 0)
 end
 
 function reset_state(s::MIState)
-    for (mode,state) in s.mode_state
+    for (mode, state) in s.mode_state
         reset_state(state)
     end
 end
@@ -1561,22 +1931,22 @@ function Prompt(prompt;
     prompt_prefix = "",
     prompt_suffix = "",
     keymap_dict = default_keymap_dict,
-    keymap_func_data = nothing,
+    repl = nothing,
     complete = EmptyCompletionProvider(),
     on_enter = default_enter_cb,
     on_done = ()->nothing,
     hist = EmptyHistoryProvider(),
     sticky = false)
 
-    Prompt(prompt, prompt_prefix, prompt_suffix, keymap_dict, keymap_func_data,
+    Prompt(prompt, prompt_prefix, prompt_suffix, keymap_dict, repl,
         complete, on_enter, on_done, hist, sticky)
 end
 
 run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
-    PromptState(terminal, prompt, IOBuffer(), InputAreaState(1, 1),
-    #=indent(spaces)=# -1)
+    PromptState(terminal, prompt, IOBuffer(), IOBuffer[], 1, InputAreaState(1, 1),
+                #=indent(spaces)=# -1, Threads.SpinLock(), 0.0)
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, m.modes[1], false, Dict{Any,Any}())
@@ -1598,7 +1968,7 @@ function run_interface(terminal, m::ModalInterface)
             Expr(:body,
                 Expr(:return,
                      Expr(:call,
-                          QuoteNode(mode(state(s, s.current_mode)).on_done),
+                          QuoteNode(mode(state(s)).on_done),
                           QuoteNode(s),
                           QuoteNode(buf),
                           QuoteNode(ok)))))
@@ -1608,11 +1978,70 @@ end
 buffer(s::PromptState) = s.input_buffer
 buffer(s::SearchState) = s.query_buffer
 buffer(s::PrefixSearchState) = s.response_buffer
+buffer(s::IOBuffer) = s
+
+position(s::Union{MIState,ModeState}) = position(buffer(s))
+
+function empty_undo(s::PromptState)
+    empty!(s.undo_buffers)
+    s.undo_idx = 1
+end
+
+empty_undo(s) = nothing
+
+function push_undo(s::PromptState, advance=true)
+    resize!(s.undo_buffers, s.undo_idx)
+    s.undo_buffers[end] = copy(s.input_buffer)
+    advance && (s.undo_idx += 1)
+end
+
+push_undo(s) = nothing
+
+# must be called after a push_undo
+function pop_undo(s::PromptState)
+    pop!(s.undo_buffers)
+    s.undo_idx -= 1
+end
+
+function edit_undo!(s::MIState)
+    s.last_action ∉ (:edit_redo!, :edit_undo!) && push_undo(s, false)
+    if edit_undo!(state(s))
+        :edit_undo!
+    else
+        beep(s)
+        :ignore
+    end
+end
+
+function edit_undo!(s::PromptState)
+    s.undo_idx > 1 || return false
+    s.input_buffer = s.undo_buffers[s.undo_idx -=1]
+    refresh_line(s)
+    true
+end
+edit_undo!(s) = nothing
+
+function edit_redo!(s::MIState)
+    if s.last_action ∈ (:edit_redo!, :edit_undo!) && edit_redo!(state(s))
+        :edit_redo!
+    else
+        beep(s)
+        :ignore
+    end
+end
+
+function edit_redo!(s::PromptState)
+    s.undo_idx < length(s.undo_buffers) || return false
+    s.input_buffer = s.undo_buffers[s.undo_idx += 1]
+    refresh_line(s)
+    true
+end
+edit_redo!(s) = nothing
 
 keymap(s::PromptState, prompt::Prompt) = prompt.keymap_dict
-keymap_data(s::PromptState, prompt::Prompt) = prompt.keymap_func_data
-keymap(ms::MIState, m::ModalInterface) = keymap(ms.mode_state[ms.current_mode], ms.current_mode)
-keymap_data(ms::MIState, m::ModalInterface) = keymap_data(ms.mode_state[ms.current_mode], ms.current_mode)
+keymap_data(s::PromptState, prompt::Prompt) = prompt.repl
+keymap(ms::MIState, m::ModalInterface) = keymap(state(ms), mode(ms))
+keymap_data(ms::MIState, m::ModalInterface) = keymap_data(state(ms), mode(ms))
 
 function prompt!(term, prompt, s = init_state(term, prompt))
     Base.reseteof(term)
@@ -1625,34 +2054,34 @@ function prompt!(term, prompt, s = init_state(term, prompt))
             kmap = keymap(s, prompt)
             fcn = match_input(kmap, s)
             kdata = keymap_data(s, prompt)
+            local action
             # errors in keymaps shouldn't cause the REPL to fail, so wrap in a
             # try/catch block
-            local state
             try
-                state = fcn(s, kdata)
+                action = fcn(s, kdata)
             catch e
                 bt = catch_backtrace()
                 warn(e, bt = bt, prefix = "ERROR (in the keymap): ")
                 # try to cleanup and get `s` back to its original state before returning
                 transition(s, :reset)
                 transition(s, old_state)
-                state = :done
+                action = :done
             end
-            if state === :abort
+            action != :ignore && (s.last_action = action)
+            if action === :abort
                 return buffer(s), false, false
-            elseif state === :done
+            elseif action === :done
                 return buffer(s), true, false
-            elseif state === :suspend
+            elseif action === :suspend
                 if Sys.isunix()
                     return buffer(s), true, true
                 end
-            else
-                @assert state === :ok
             end
         end
     finally
         raw!(term, false) && disable_bracketed_paste(term)
     end
 end
+
 
 end # module
