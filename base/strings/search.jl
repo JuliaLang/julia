@@ -225,9 +225,9 @@ function _search(s, t, i::Integer)
 end
 
 search(s::AbstractString, t::AbstractString, i::Integer) = _search(s, t, i)
-search(s::AbstractString, t::AbstractString) = s == "" ? 0:-1 : _search(s, t, start(s))
+search(s::AbstractString, t::AbstractString) = s == "" ? (0:-1) : _search(s, t, start(s))
 search(s::ByteArray, t::ByteArray, i::Integer) = _search(s, t, i)
-search(s::ByteArray, t::ByteArray) = length(s)==0 ? 0:-1 : _search(s, t, 1)
+search(s::ByteArray, t::ByteArray) = length(s)==0 ? (0:-1) : _search(s, t, 1)
 
 function rsearch(s::AbstractString, c::Chars)
     j = search(RevString(s), c)
