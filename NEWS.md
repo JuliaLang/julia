@@ -253,7 +253,7 @@ Library improvements
 --------------------
 
   * The function `chop` now accepts two arguments `head` and `tail` allowing to specify
-    number of characters to remove from the head and tail tail of the string ([#?????]).
+    number of characters to remove from the head and tail tail of the string ([#24126]).
 
   * Functions `first` and `last` now accept `nchar` argument for `AbstractString`.
     If this argument is used they return a string consisting of first/last `nchar`
