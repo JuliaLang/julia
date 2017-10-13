@@ -1437,7 +1437,7 @@ function DomainError()
 end
 
 # PR #22761
-                                                                                                               function OverflowError()
+function OverflowError()
     depwarn("OverflowError now supports a message string, use `OverflowError(msg)` instead.", :OverflowError)
     OverflowError("")
 end
