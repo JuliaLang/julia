@@ -807,22 +807,74 @@ end
     end
 end
 
-@testset "acos #23283" begin
+@testset "sinh" begin
     for T in (Float32, Float64)
-        @test acos(zero(T)) === T(pi)/2
-        @test acos(-zero(T)) === T(pi)/2
-        @test acos(nextfloat(zero(T))) === T(pi)/2
-        @test acos(prevfloat(zero(T))) === T(pi)/2
-        @test acos(one(T)) === T(0.0)
-        @test acos(-one(T)) === T(pi)
-        for x in (0.45, 0.6, 0.98)
-            by = acos(big(T(x)))
-            @test T((acos(T(x)) - by))/eps(abs(T(by))) <= 1
-            bym = acos(big(T(-x)))
-            @test T(abs(acos(T(-x)) - bym))/eps(abs(T(bym))) <= 1
-        end
-        @test_throws DomainError acos(-T(Inf))
-        @test_throws DomainError acos(T(Inf))
-        @test isnan_type(T, acos(T(NaN)))
+        @test sinh(zero(T)) === zero(T)
+        @test sinh(-zero(T)) === -zero(T)
+        @test sinh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test sinh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test sinh(T(1000)) === T(Inf)
+        @test sinh(-T(1000)) === -T(Inf)
+        @test isnan_type(T, sinh(T(NaN)))
+    end
+    for x in (5.0, 9.0, 22.0, 25.0, 709.0, 710.0)
+        by = sinh(big(x))
+        @test Float64((sinh(x) - by))/eps(abs(Float64(by))) <= 1
+        bym = sinh(big(-x))
+        @test Float64(abs(sinh(-x) - bym))/eps(abs(Float64(bym))) <= 1
+    end
+    for x in (5f0, 8f0, 12f0, 25f0, 88f0, 89f0)
+        by = sinh(big(x))
+        @test Float32((sinh(x) - by))/eps(abs(Float32(by))) <= 1
+        bym = sinh(big(-x))
+        @test Float32(abs(sinh(-x) - bym))/eps(abs(Float32(bym))) <= 1
+    end
+end
+
+@testset "cosh" begin
+    for T in (Float32, Float64)
+        @test cosh(zero(T)) === zero(T)
+        @test cosh(-zero(T)) === -zero(T)
+        @test cosh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test cosh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test cosh(T(1000)) === T(Inf)
+        @test cosh(-T(1000)) === -T(Inf)
+        @test isnan_type(T, cosh(T(NaN)))
+    end
+    for x in (0.1, 9.0, 22.0, 25.0,709.0, 710.0)
+        by = cosh(big(x))
+        @test Float64((cosh(x) - by))/eps(abs(Float64(by))) <= 1
+        bym = cosh(big(-x))
+        @test Float64(abs(cosh(-x) - bym))/eps(abs(Float64(bym))) <= 1
+    end
+    for x in (0.1f0, 8f0, 12f0, 25f0, 88f0, 89f0)
+        by = cosh(big(x))
+        @test Float32((cosh(x) - by))/eps(abs(Float32(by))) <= 1
+        bym = cosh(big(-x))
+        @test Float32(abs(cosh(-x) - bym))/eps(abs(Float32(bym))) <= 1
+    end
+end
+
+@testset "tanh" begin
+    for T in (Float32, Float64)
+        @test cosh(zero(T)) === zero(T)
+        @test cosh(-zero(T)) === -zero(T)
+        @test cosh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test cosh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test cosh(T(1000)) === T(Inf)
+        @test cosh(-T(1000)) === -T(Inf)
+        @test isnan_type(T, cosh(T(NaN)))
+    end
+    for x in (0.1, 9.0, 21.0)
+        by = cosh(big(x))
+        @test Float64((cosh(x) - by))/eps(abs(Float64(by))) <= 1
+        bym = cosh(big(-x))
+        @test Float64(abs(cosh(-x) - bym))/eps(abs(Float64(bym))) <= 1
+    end
+    for x in (0.1f0, 8f0)
+        by = cosh(big(x))
+        @test Float32((cosh(x) - by))/eps(abs(Float32(by))) <= 1
+        bym = cosh(big(-x))
+        @test Float32(abs(cosh(-x) - bym))/eps(abs(Float32(bym))) <= 1
     end
 end
