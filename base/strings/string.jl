@@ -306,14 +306,8 @@ function getindex(s::String, r::UnitRange{Int})
     unsafe_string(pointer(s,i), j-i)
 end
 
-function search(s::String, c::Char, i::Integer = 1)
-    if i < 1 || i > sizeof(s)
-        i == sizeof(s) + 1 && return 0
-        throw(BoundsError(s, i))
-    end
-    @inbounds if is_valid_continuation(codeunit(s,i))
-        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, codeunit(s,i)))
-    end
+function search(s::String, c::Char, i::Integer)
+    isvalid(s, i) || throw(ArgumentError("index $i is invalid"))
     c < Char(0x80) && return search(s, c%UInt8, i)
     while true
         i = search(s, first_utf8_byte(c), i)
@@ -321,27 +315,28 @@ function search(s::String, c::Char, i::Integer = 1)
         i = next(s,i)[2]
     end
 end
+search(s::String, c::Char) = s == "" ? 0 : search(s, c, 1)
 
-function search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
-    if i < 1
-        throw(BoundsError(a, i))
-    end
+function search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer)
     n = sizeof(a)
-    if i > n
-        return i == n+1 ? 0 : throw(BoundsError(a, i))
+    if !(1 <= i <= n)
+        throw(BoundsError(s, i))
     end
     p = pointer(a)
-    q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
-    q == C_NULL ? 0 : Int(q-p+1)
+    q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p + i - 1, b, n - i + 1)
+    q == C_NULL ? 0 : Int(q - p + 1)
 end
+search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}) =
+    sizeof(a) == 0 ? 0 : search(a, b, 1)
 
-function search(a::ByteArray, b::Char, i::Integer = 1)
+function search(a::ByteArray, b::Char, i::Integer)
     if isascii(b)
-        search(a,UInt8(b),i)
+        search(a, UInt8(b), i)
     else
-        search(a,Vector{UInt8}(string(b)),i).start
+        search(a, Vector{UInt8}(string(b)), i).start
     end
 end
+search(a::ByteArray, b::Char) = length(a) == 0 ? 0 : search(a, b, 1)
 
 function rsearch(s::String, c::Char, i::Integer = sizeof(s))
     c < Char(0x80) && return rsearch(s, c%UInt8, i)
