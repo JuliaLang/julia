@@ -312,6 +312,10 @@ mutable struct TCPServer <: LibuvServer
         return tcp
     end
 end
+
+# Keyword arg "delay": if true, libuv delays creation of socket fd till bind.
+# It can be set to false if there is a need to set socket options before
+# further calls to `bind` and `listen`, e.g. `SO_REUSEPORT`.
 function TCPServer(; delay=true)
     tcp = TCPServer(Libc.malloc(_sizeof_uv_tcp), StatusUninit)
     af_spec = delay ? 0 : 2   # AF_UNSPEC is 0, AF_INET is 2

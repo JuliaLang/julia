@@ -407,3 +407,10 @@ end
         @test test_connect(addr)
     end
 end
+
+@testset "TCPServer constructor" begin
+    s = Base.TCPServer(; delay=false)
+    if ccall(:jl_has_so_reuseport, Int32, ()) == 1
+        @test 0 == ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)
+    end
+end
