@@ -252,6 +252,9 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
+  * The function `chop` now accepts two arguments `head` and `tail` allowing to specify
+    number of characters to remove from the head and tail tail of the string ([#?????]).
+
   * Functions `first` and `last` now accept `nchar` argument for `AbstractString`.
     If this argument is used they return a string consisting of first/last `nchar`
     characters from the original string ([#23960]).
