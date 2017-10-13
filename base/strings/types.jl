@@ -10,6 +10,17 @@
 
 Like [`getindex`](@ref), but returns a view into the parent string `s`
 within range `i:j` or `r` respectively instead of making a copy.
+
+# Examples
+```jldoctest
+julia> SubString("abc", 1, 2)
+"ab"
+
+julia> SubString("abc", 1:2)
+"ab"
+
+julia> SubString("abc", 2)
+"bc"
 """
 struct SubString{T<:AbstractString} <: AbstractString
     string::T

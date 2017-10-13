@@ -10,6 +10,7 @@ Base.repeat(::AbstractString, ::Integer)
 Base.repeat(::Char, ::Integer)
 Base.repr
 Core.String(::AbstractString)
+Base.SubString
 Base.transcode
 Base.unsafe_string
 Base.codeunit(::AbstractString, ::Integer)
