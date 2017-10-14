@@ -36,7 +36,7 @@ end
 function ldflags()
     fl = "-L$(shell_escape(libDir()))"
     if Sys.iswindows()
-        fl = fl * " -Wl,--stack,8388608"
+        fl = fl * " -Wl,--export-all-symbols -Wl,--stack,8388608"
     elseif Sys.islinux()
         fl = fl * " -Wl,--export-dynamic"
     end
@@ -50,7 +50,7 @@ function ldlibs()
         "julia"
     end
     if Sys.isunix()
-        return "-Wl,-rpath,$(shell_escape(libDir())) -Wl,-rpath,$(shell_escape(private_libDir())) -l$libname"
+        return "-Wl,-rpath,$(shell_escape(libDir())) -Wl,-rpath,$(shell_escape(private_libDir())) -Wl,-rpath,\$ORIGIN -l$libname"
     else
         return "-l$libname -lopenlibm"
     end
