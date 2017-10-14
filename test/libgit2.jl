@@ -511,36 +511,26 @@ mktempdir() do dir
     end
 
     @testset "Cloning repository" begin
+        function bare_repo_tests(repo, repo_path)
+            @test isdir(repo_path)
+            @test LibGit2.path(repo) == LibGit2.posixpath(realpath(repo_path))
+            @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
+            @test LibGit2.isattached(repo)
+            @test LibGit2.remotes(repo) == ["origin"]
+        end
         @testset "bare" begin
             repo_path = joinpath(dir, "Example.Bare1")
-            repo = LibGit2.clone(cache_repo, repo_path, isbare = true)
-            try
-                @test isdir(repo_path)
-                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(repo_path))
-                @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
-                @test LibGit2.isattached(repo)
-                @test LibGit2.remotes(repo) == ["origin"]
-            finally
-                close(repo)
+            LibGit2.with(LibGit2.clone(cache_repo, repo_path, isbare = true)) do repo
+                bare_repo_tests(repo, repo_path)
             end
         end
         @testset "bare with remote callback" begin
             repo_path = joinpath(dir, "Example.Bare2")
-            repo = LibGit2.clone(cache_repo, repo_path, isbare = true, remote_cb = LibGit2.mirror_cb())
-            try
-                @test isdir(repo_path)
-                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(repo_path))
-                @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
-                rmt = LibGit2.get(LibGit2.GitRemote, repo, "origin")
-                try
+            LibGit2.with(LibGit2.clone(cache_repo, repo_path, isbare = true, remote_cb = LibGit2.mirror_cb())) do repo
+                bare_repo_tests(repo, repo_path)
+                LibGit2.with(LibGit2.get(LibGit2.GitRemote, repo, "origin")) do rmt
                     @test LibGit2.fetch_refspecs(rmt)[1] == "+refs/*:refs/*"
-                    @test LibGit2.isattached(repo)
-                    @test LibGit2.remotes(repo) == ["origin"]
-                finally
-                    close(rmt)
                 end
-            finally
-                close(repo)
             end
         end
         @testset "normal" begin
@@ -971,6 +961,13 @@ mktempdir() do dir
     end
     # TO DO: add more tests for various merge
     # preference options
+    function add_and_commit_file(repo, filenm, filecontent)
+        open(joinpath(LibGit2.path(repo), filenm),"w") do f
+            write(f, filecontent)
+        end
+        LibGit2.add!(repo, filenm)
+        return LibGit2.commit(repo, "add $filenm")
+    end
     @testset "Fastforward merges" begin
         repo = setup_clone_repo(cache_repo, joinpath(dir, "Example.FF"))
         try
@@ -979,17 +976,8 @@ mktempdir() do dir
             # into "master", which is the default behavior.
             oldhead = LibGit2.head_oid(repo)
             LibGit2.branch!(repo, "branch/ff_a")
-            open(joinpath(LibGit2.path(repo),"ff_file1"),"w") do f
-                write(f, "111\n")
-            end
-            LibGit2.add!(repo, "ff_file1")
-            LibGit2.commit(repo, "add ff_file1")
-
-            open(joinpath(LibGit2.path(repo),"ff_file2"),"w") do f
-                write(f, "222\n")
-            end
-            LibGit2.add!(repo, "ff_file2")
-            LibGit2.commit(repo, "add ff_file2")
+            add_and_commit_file(repo, "ff_file1", "111\n")
+            add_and_commit_file(repo, "ff_file2", "222\n")
             LibGit2.branch!(repo, "master")
             # switch back, now try to ff-merge the changes
             # from branch/a
@@ -1005,17 +993,8 @@ mktempdir() do dir
             # to a branch name or GitAnnotated.
             oldhead = LibGit2.head_oid(repo)
             LibGit2.branch!(repo, "branch/ff_b")
-            open(joinpath(LibGit2.path(repo),"ff_file3"),"w") do f
-                write(f, "333\n")
-            end
-            LibGit2.add!(repo, "ff_file3")
-            LibGit2.commit(repo, "add ff_file3")
-
-            open(joinpath(LibGit2.path(repo),"ff_file4"),"w") do f
-                write(f, "444\n")
-            end
-            LibGit2.add!(repo, "ff_file4")
-            LibGit2.commit(repo, "add ff_file4")
+            add_and_commit_file(repo, "ff_file3", "333\n")
+            add_and_commit_file(repo, "ff_file4", "444\n")
             branchhead = LibGit2.head_oid(repo)
             LibGit2.branch!(repo, "master")
             # switch back, now try to ff-merge the changes
@@ -1027,17 +1006,8 @@ mktempdir() do dir
             # to a commit or GitAnnotated.
             oldhead = LibGit2.head_oid(repo)
             LibGit2.branch!(repo, "branch/ff_c")
-            open(joinpath(LibGit2.path(repo),"ff_file5"),"w") do f
-                write(f, "555\n")
-            end
-            LibGit2.add!(repo, "ff_file5")
-            LibGit2.commit(repo, "add ff_file5")
-
-            open(joinpath(LibGit2.path(repo),"ff_file6"),"w") do f
-                write(f, "666\n")
-            end
-            LibGit2.add!(repo, "ff_file6")
-            LibGit2.commit(repo, "add ff_file6")
+            add_and_commit_file(repo, "ff_file5", "555\n")
+            add_and_commit_file(repo, "ff_file6", "666\n")
             branchhead = LibGit2.head_oid(repo)
             LibGit2.branch!(repo, "master")
             # switch back, now try to ff-merge the changes
@@ -1046,11 +1016,7 @@ mktempdir() do dir
             @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
 
             LibGit2.branch!(repo, "branch/ff_d")
-            open(joinpath(LibGit2.path(repo),"ff_file7"),"w") do f
-                write(f, "777\n")
-            end
-            LibGit2.add!(repo, "ff_file7")
-            LibGit2.commit(repo, "add ff_file7")
+            add_and_commit_file(repo, "ff_file7", "777\n")
             branchhead = LibGit2.head_oid(repo)
             LibGit2.branch!(repo, "master")
             # switch back, now try to ff-merge the changes
@@ -1074,11 +1040,7 @@ mktempdir() do dir
             # master, we have to create our own commit of the dirty state.
             oldhead = LibGit2.head_oid(repo)
             LibGit2.branch!(repo, "branch/cherry_a")
-            open(joinpath(LibGit2.path(repo),"file1"),"w") do f
-                write(f, "111\n")
-            end
-            LibGit2.add!(repo, "file1")
-            cmt_oid = LibGit2.commit(repo, "add file1")
+            cmt_oid = add_and_commit_file(repo, "file1", "111\n")
             cmt = LibGit2.GitCommit(repo, cmt_oid)
             # switch back, try to cherrypick
             # from branch/cherry_a
@@ -1096,12 +1058,7 @@ mktempdir() do dir
         try
             oldhead = LibGit2.head_oid(repo)
             LibGit2.branch!(repo, "branch/merge_a")
-            open(joinpath(LibGit2.path(repo),"file1"),"w") do f
-                write(f, "111\n")
-            end
-            LibGit2.add!(repo, "file1")
-            LibGit2.commit(repo, "add file1")
-
+            add_and_commit_file(repo, "file1", "111\n")
             # switch back, add a commit, try to merge
             # from branch/merge_a
             LibGit2.branch!(repo, "master")
@@ -1115,12 +1072,7 @@ mktempdir() do dir
             @test show_strs[2] == "Branch with name refs/heads/branch/merge_a"
             @test show_strs[3] == "Branch is not HEAD."
 
-            open(joinpath(LibGit2.path(repo), "file2"), "w") do f
-                write(f, "222\n")
-            end
-            LibGit2.add!(repo, "file2")
-            LibGit2.commit(repo, "add file2")
-
+            add_and_commit_file(repo, "file2", "222\n")
             upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
             head_ann = LibGit2.GitAnnotated(repo, "master")
 
@@ -1151,11 +1103,7 @@ mktempdir() do dir
         up_repo = setup_clone_repo(cache_repo, up_path)
         our_repo = setup_clone_repo(cache_repo, joinpath(dir, "Example.Push"))
         try
-            open(joinpath(LibGit2.path(our_repo),"file1"),"w") do f
-                write(f, "111\n")
-            end
-            LibGit2.add!(our_repo, "file1")
-            LibGit2.commit(our_repo, "add file1")
+            add_and_commit_file(our_repo, "file1", "111\n")
             if LibGit2.version() >= v"0.26.0" # See #21872, #21639 and #21597
                 # we cannot yet locally push to non-bare repos
                 @test_throws LibGit2.GitError LibGit2.push(our_repo, remoteurl=up_path)
@@ -1432,18 +1380,8 @@ mktempdir() do dir
             LibGit2.branch!(repo, "branch/a")
 
             oldhead = LibGit2.head_oid(repo)
-            open(joinpath(LibGit2.path(repo),"file1"),"w") do f
-                write(f, "111\n")
-            end
-            LibGit2.add!(repo, "file1")
-            LibGit2.commit(repo, "add file1")
-
-            open(joinpath(LibGit2.path(repo),"file2"),"w") do f
-                write(f, "222\n")
-            end
-            LibGit2.add!(repo, "file2")
-            LibGit2.commit(repo, "add file2")
-
+            add_and_commit_file(repo, "file1", "111\n")
+            add_and_commit_file(repo, "file2", "222\n")
             LibGit2.branch!(repo, "branch/b")
 
             # squash last 2 commits
@@ -1452,11 +1390,7 @@ mktempdir() do dir
             LibGit2.commit(repo, "squash file1 and file2")
 
             # add another file
-            open(joinpath(LibGit2.path(repo),"file3"),"w") do f
-                write(f, "333\n")
-            end
-            LibGit2.add!(repo, "file3")
-            LibGit2.commit(repo, "add file3")
+            add_and_commit_file(repo, "file3", "333\n")
 
             newhead = LibGit2.head_oid(repo)
 
@@ -1472,12 +1406,7 @@ mktempdir() do dir
             @test newnewhead == newhead
 
             # add yet another file
-            open(joinpath(LibGit2.path(repo),"file4"),"w") do f
-                write(f, "444\n")
-            end
-            LibGit2.add!(repo, "file4")
-            LibGit2.commit(repo, "add file4")
-
+            add_and_commit_file(repo, "file4", "444\n")
             # rebase with onto
             newhead = LibGit2.rebase!(repo, "branch/a", "master")
 
@@ -1485,17 +1414,8 @@ mktempdir() do dir
             @test newerhead == newhead
 
             # add yet more files
-            open(joinpath(LibGit2.path(repo),"file5"),"w") do f
-                write(f, "555\n")
-            end
-            LibGit2.add!(repo, "file5")
-            LibGit2.commit(repo, "add file5")
-            open(joinpath(LibGit2.path(repo),"file6"),"w") do f
-                write(f, "666\n")
-            end
-            LibGit2.add!(repo, "file6")
-            LibGit2.commit(repo, "add file6")
-
+            add_and_commit_file(repo, "file5", "555\n")
+            add_and_commit_file(repo, "file6", "666\n")
             pre_abort_head = LibGit2.head_oid(repo)
             # Rebase type
             head_ann = LibGit2.GitAnnotated(repo, "branch/a")
@@ -1526,11 +1446,7 @@ mktempdir() do dir
             LibGit2.branch!(repo, "branch/merge_a")
 
             a_head = LibGit2.head_oid(repo)
-            open(joinpath(LibGit2.path(repo),"merge_file1"),"w") do f
-                write(f, "111\n")
-            end
-            LibGit2.add!(repo, "merge_file1")
-            LibGit2.commit(repo, "add merge_file1")
+            add_and_commit_file(repo, "merge_file1", "111\n")
             LibGit2.branch!(repo, "master")
             a_head_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
             @test_warn "INFO: Review and commit merged changes." LibGit2.merge!(repo, [a_head_ann]) #merge returns true if successful
