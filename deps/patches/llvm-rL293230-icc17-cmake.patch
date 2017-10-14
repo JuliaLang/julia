@@ -1,0 +1,35 @@
+From eca8aa608d962e09ea9710670f1c412f608a6f12 Mon Sep 17 00:00:00 2001
+From: Yichao Yu <yyc1992@gmail.com>
+Date: Thu, 26 Jan 2017 23:50:18 +0000
+Subject: [PATCH] CMake is funky on detecting Intel 17 as GCC compatible.
+
+Summary: This adds a fallback in case that the Intel compiler is failed to be detected correctly.
+
+Reviewers: chapuni
+
+Reviewed By: chapuni
+
+Subscribers: llvm-commits, mgorny
+
+Differential Revision: https://reviews.llvm.org/D27610
+
+git-svn-id: https://llvm.org/svn/llvm-project/llvm/trunk@293230 91177308-0d34-0410-b5e6-96231b3b80d8
+---
+ cmake/modules/DetermineGCCCompatible.cmake | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/cmake/modules/DetermineGCCCompatible.cmake b/cmake/modules/DetermineGCCCompatible.cmake
+index 1bf15fcba72..1369ebe9d0e 100644
+--- a/cmake/modules/DetermineGCCCompatible.cmake
++++ b/cmake/modules/DetermineGCCCompatible.cmake
+@@ -7,5 +7,7 @@ if(NOT DEFINED LLVM_COMPILER_IS_GCC_COMPATIBLE)
+     set(LLVM_COMPILER_IS_GCC_COMPATIBLE OFF)
+   elseif( "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" )
+     set(LLVM_COMPILER_IS_GCC_COMPATIBLE ON)
++  elseif( "${CMAKE_CXX_COMPILER_ID}" MATCHES "Intel" )
++    set(LLVM_COMPILER_IS_GCC_COMPATIBLE ON)
+   endif()
+ endif()
+-- 
+2.11.0
+

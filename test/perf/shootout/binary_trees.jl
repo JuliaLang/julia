@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #
 # The Computer Language Benchmarks Game
@@ -8,12 +8,12 @@
 # Ported from an OCaml version
 #
 
-abstract BTree
+abstract type BTree end
 
-type Empty <: BTree
+mutable struct Empty <: BTree
 end
 
-type Node <: BTree
+mutable struct Node <: BTree
     info
     left::BTree
     right::BTree
@@ -44,9 +44,9 @@ function loop_depths(d, min_depth, max_depth)
 end
 
 function binary_trees(N::Int=10)
-    const min_depth = 4
-    const max_depth = N
-    const stretch_depth = max_depth + 1
+    min_depth = 4
+    max_depth = N
+    stretch_depth = max_depth + 1
 
     # create and check stretch tree
     let c = check(make(0, stretch_depth))

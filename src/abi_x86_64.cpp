@@ -129,7 +129,7 @@ void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) con
     else if (jl_datatype_size(dt) == 0) {
     }
     // BitsTypes and not float, write as Integers
-    else if (jl_is_bitstype(dt)) {
+    else if (jl_is_primitivetype(dt)) {
         if (jl_datatype_size(dt) <= 8) {
             accum.addField(offset, Integer);
         }

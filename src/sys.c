@@ -1,18 +1,18 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   sys.c
   I/O and operating system utility functions
 */
-#include "julia.h"
-#include "julia_internal.h"
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
+
+#include "julia.h"
+#include "julia_internal.h"
 
 #ifdef _OS_WINDOWS_
 #include <psapi.h>
@@ -55,6 +55,8 @@
 #ifdef JL_MSAN_ENABLED
 #include <sanitizer/msan_interface.h>
 #endif
+
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -250,15 +252,19 @@ JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
     return a;
 }
 
-JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str)
+JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint8_t chomp)
 {
     jl_array_t *a;
     // manually inlined common case
-    char *pd = (char*)memchr(s->buf+s->bpos, delim, (size_t)(s->size - s->bpos));
+    char *pd = (char*)memchr(s->buf + s->bpos, delim, (size_t)(s->size - s->bpos));
     if (pd) {
-        size_t n = pd-(s->buf+s->bpos)+1;
+        size_t n = pd - (s->buf + s->bpos) + 1;
         if (str) {
-            jl_value_t *str = jl_pchar_to_string(s->buf + s->bpos, n);
+            size_t nchomp = 0;
+            if (chomp) {
+                nchomp = ios_nchomp(s, n);
+            }
+            jl_value_t *str = jl_pchar_to_string(s->buf + s->bpos, n - nchomp);
             s->bpos += n;
             return str;
         }
@@ -272,6 +278,15 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str)
         ios_mem(&dest, 0);
         ios_setbuf(&dest, (char*)a->data, 80, 0);
         size_t n = ios_copyuntil(&dest, s, delim);
+        if (chomp && n > 0 && dest.buf[n - 1] == '\n') {
+            n--;
+            if (n > 0 && dest.buf[n - 1] == '\r') {
+                n--;
+            }
+            int truncret = ios_trunc(&dest, n); // it should always be possible to truncate dest
+            assert(truncret == 0);
+            (void)truncret; // ensure the variable is used to avoid warnings
+        }
         if (dest.buf != a->data) {
             a = jl_take_buffer(&dest);
         }
@@ -656,20 +671,6 @@ JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 #endif
 }
 
-JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
-{
-    if (ty->layout == NULL || field > jl_datatype_nfields(ty) || field < 1)
-        jl_bounds_error_int((jl_value_t*)ty, field);
-    return jl_field_offset(ty, field - 1);
-}
-
-JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
-{
-    if (ty->layout == NULL)
-        jl_error("non-leaf type doesn't have an alignment");
-    return ty->layout->alignment;
-}
-
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 {
@@ -678,7 +679,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
 #ifdef __APPLE__
     // Iterate through all images currently in memory
-    for (int32_t i = _dyld_image_count(); i >= 0 ; i--) {
+    for (int32_t i = _dyld_image_count() - 1; i >= 0 ; i--) {
         // dlopen() each image, check handle
         const char *image_name = _dyld_get_image_name(i);
         void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT);
@@ -778,11 +779,13 @@ JL_DLLEXPORT size_t jl_maxrss(void)
     GetProcessMemoryInfo( GetCurrentProcess( ), &counter, sizeof(counter) );
     return (size_t)counter.PeakWorkingSetSize;
 
+// FIXME: `rusage` is available on OpenBSD, DragonFlyBSD and NetBSD as well.
+//        All of them return `ru_maxrss` in kilobytes.
 #elif defined(_OS_LINUX_) || defined(_OS_DARWIN_) || defined (_OS_FREEBSD_)
     struct rusage rusage;
     getrusage( RUSAGE_SELF, &rusage );
 
-#if defined(_OS_LINUX_)
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
     return (size_t)(rusage.ru_maxrss * 1024);
 #else
     return (size_t)rusage.ru_maxrss;

@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #ifndef JL_OPTIONS_H
 #define JL_OPTIONS_H
@@ -89,6 +89,7 @@
 
 // print all signatures type inference is invoked on
 //#define TRACE_INFERENCE
+//#define TRACE_COMPILE
 
 // print all generic method dispatches (excludes inlined and specialized call
 // sites). this generally prints too much output to be useful.

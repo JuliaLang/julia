@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # editing files
 
@@ -7,10 +7,10 @@
 
 Determines the editor to use when running functions like `edit`. Returns an Array compatible
 for use within backticks. You can change the editor by setting `JULIA_EDITOR`, `VISUAL` or
-`EDITOR` as an environmental variable.
+`EDITOR` as an environment variable.
 """
 function editor()
-    if is_windows() || is_apple()
+    if Sys.iswindows() || Sys.isapple()
         default_editor = "open"
     elseif isfile("/etc/alternatives/editor")
         default_editor = "/etc/alternatives/editor"
@@ -28,31 +28,34 @@ end
 
 Edit a file or directory optionally providing a line number to edit the file at.
 Returns to the `julia` prompt when you quit the editor. The editor can be changed
-by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environmental variable.
+by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 """
 function edit(path::AbstractString, line::Integer=0)
     command = editor()
     name = basename(first(command))
-    issrc = length(path)>2 && path[end-2:end] == ".jl"
-    if issrc
+    if endswith(path, ".jl")
         f = find_source_file(path)
         f !== nothing && (path = f)
     end
     background = true
     line_unsupported = false
-    if startswith(name, "emacs") || name == "gedit"
-        cmd = line != 0 ? `$command +$line $path` : `$command $path`
-    elseif startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
+    if startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" ||
+            name == "mvim" || name == "nano" ||
+            name == "emacs" && contains(in, command, ["-nw", "--no-window-system" ]) ||
+            name == "emacsclient" && contains(in, command, ["-nw", "-t", "-tty"])
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
         background = false
+    elseif startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
+        cmd = line != 0 ? `$command +$line $path` : `$command $path`
     elseif name == "textmate" || name == "mate" || name == "kate"
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
-    elseif is_windows() && (name == "start" || name == "open")
-        cmd = `cmd /c start /b $path`
-        line_unsupported = true
-    elseif is_apple() && (name == "start" || name == "open")
+    elseif name == "code" || (Sys.iswindows() && uppercase(name) == "CODE.EXE")
+        cmd = line != 0 ? `$command -g $path:$line` : `$command -g $path`
+    elseif startswith(name, "notepad++")
+        cmd = line != 0 ? `$command $path -n$line` : `$command $path`
+    elseif Sys.isapple() && name == "open"
         cmd = `open -t $path`
         line_unsupported = true
     else
@@ -61,7 +64,12 @@ function edit(path::AbstractString, line::Integer=0)
         line_unsupported = true
     end
 
-    if background
+    if Sys.iswindows() && name == "open"
+        @static Sys.iswindows() && # don't emit this ccall on other platforms
+            systemerror(:edit, ccall((:ShellExecuteW, "shell32"), stdcall, Int,
+                                     (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
+                                     C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
+    elseif background
         spawn(pipeline(cmd, stderr=STDERR))
     else
         run(cmd)
@@ -76,23 +84,23 @@ end
 
 Edit the definition of a function, optionally specifying a tuple of types to
 indicate which method to edit. The editor can be changed by setting `JULIA_EDITOR`,
-`VISUAL` or `EDITOR` as an environmental variable.
+`VISUAL` or `EDITOR` as an environment variable.
 """
-edit(f)          = edit(functionloc(f)...)
-edit(f, t::ANY)  = edit(functionloc(f,t)...)
+edit(f)                   = edit(functionloc(f)...)
+edit(f, @nospecialize t)  = edit(functionloc(f,t)...)
 edit(file, line::Integer) = error("could not find source file for function")
 
 # terminal pager
 
-if is_windows()
+if Sys.iswindows()
     function less(file::AbstractString, line::Integer)
-        pager = get(ENV, "PAGER", "more")
-        g = pager == "more" ? "" : "g"
+        pager = shell_split(get(ENV, "PAGER", "more"))
+        g = pager[1] == "more" ? "" : "g"
         run(Cmd(`$pager +$(line)$(g) \"$file\"`, windows_verbatim = true))
     end
 else
     function less(file::AbstractString, line::Integer)
-        pager = get(ENV, "PAGER", "less")
+        pager = shell_split(get(ENV, "PAGER", "less"))
         run(`$pager +$(line)g $file`)
     end
 end
@@ -111,21 +119,21 @@ less(file::AbstractString) = less(file, 1)
 Show the definition of a function using the default pager, optionally specifying a tuple of
 types to indicate which method to see.
 """
-less(f)          = less(functionloc(f)...)
-less(f, t::ANY)  = less(functionloc(f,t)...)
+less(f)                   = less(functionloc(f)...)
+less(f, @nospecialize t)  = less(functionloc(f,t)...)
 less(file, line::Integer) = error("could not find source file for function")
 
 # clipboard copy and paste
 
-if is_apple()
+if Sys.isapple()
     function clipboard(x)
         open(pipeline(`pbcopy`, stderr=STDERR), "w") do io
             print(io, x)
         end
     end
-    clipboard() = readstring(`pbpaste`)
+    clipboard() = read(`pbpaste`, String)
 
-elseif is_linux()
+elseif Sys.islinux()
     _clipboardcmd = nothing
     function clipboardcmd()
         global _clipboardcmd
@@ -149,10 +157,10 @@ elseif is_linux()
         cmd = c == :xsel  ? `xsel --nodetach --output --clipboard` :
               c == :xclip ? `xclip -quiet -out -selection clipboard` :
             error("unexpected clipboard command: $c")
-        readstring(pipeline(cmd, stderr=STDERR))
+        read(pipeline(cmd, stderr=STDERR), String)
     end
 
-elseif is_windows()
+elseif Sys.iswindows()
     # TODO: these functions leak memory and memory locks if they throw an error
     function clipboard(x::AbstractString)
         if containsnul(x)
@@ -172,7 +180,7 @@ elseif is_windows()
         systemerror(:SetClipboardData, pdata!=p)
         ccall((:CloseClipboard, "user32"), stdcall, Void, ())
     end
-    clipboard(x) = clipboard(sprint(io->print(io,x))::String)
+    clipboard(x) = clipboard(sprint(print, x)::String)
     function clipboard()
         systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
         pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{UInt16}, (UInt32,), 13)
@@ -239,74 +247,99 @@ end
 
 
 """
-    versioninfo(io::IO=STDOUT, verbose::Bool=false)
+    versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
 
-Print information about the version of Julia in use. If the `verbose` argument is `true`,
-detailed system information is shown as well.
+Print information about the version of Julia in use. The output is
+controlled with boolean keyword arguments:
+
+- `packages`: print information about installed packages
+- `verbose`: print all additional information
 """
-function versioninfo(io::IO=STDOUT, verbose::Bool=false)
-    println(io,             "Julia Version $VERSION")
+function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
+    println(io, "Julia Version $VERSION")
     if !isempty(GIT_VERSION_INFO.commit_short)
-        println(io,         "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
+        println(io, "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
     end
     if ccall(:jl_is_debugbuild, Cint, ())!=0
         println(io, "DEBUG build")
     end
-    println(io,             "Platform Info:")
-    println(io,             "  OS: ", is_windows() ? "Windows" : is_apple() ?
+    println(io, "Platform Info:")
+    println(io, "  OS: ", Sys.iswindows() ? "Windows" : Sys.isapple() ?
         "macOS" : Sys.KERNEL, " (", Sys.MACHINE, ")")
 
-    cpu = Sys.cpu_info()
-    println(io,             "  CPU: ", cpu[1].model)
-    println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""
-        if is_linux()
+        if Sys.islinux()
             try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=DevNull)) end
         end
-        if is_windows()
-            try lsb = strip(readstring(`$(ENV["COMSPEC"]) /c ver`)) end
+        if Sys.iswindows()
+            try lsb = strip(read(`$(ENV["COMSPEC"]) /c ver`, String)) end
         end
-        if lsb != ""
-            println(io,     "           ", lsb)
+        if !isempty(lsb)
+            println(io, "      ", lsb)
         end
-        if is_unix()
-            println(io,         "  uname: ", readchomp(`uname -mprsv`))
+        if Sys.isunix()
+            println(io, "  uname: ", readchomp(`uname -mprsv`))
         end
-        println(io,         "Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
-        try println(io,     "Uptime: $(Sys.uptime()) sec") end
-        print(io,           "Load Avg: ")
-        print_matrix(io,    Sys.loadavg()')
-        println(io          )
-        Sys.cpu_summary(io)
-        println(io          )
     end
+
+    if verbose
+        cpuio = IOBuffer() # print cpu_summary with correct alignment
+        Sys.cpu_summary(cpuio)
+        for (i, line) in enumerate(split(String(take!(cpuio)), "\n"))
+            prefix = i == 1 ? "  CPU: " : "       "
+            println(io, prefix, line)
+        end
+    else
+        cpu = Sys.cpu_info()
+        println(io, "  CPU: ", cpu[1].model)
+    end
+
+    if verbose
+        println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
+        try println(io, "  Uptime: $(Sys.uptime()) sec") end
+        print(io, "  Load Avg: ")
+        print_matrix(io, Sys.loadavg()')
+        println(io)
+    end
+    println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     if Base.libblas_name == "libopenblas" || BLAS.vendor() == :openblas || BLAS.vendor() == :openblas64
         openblas_config = BLAS.openblas_get_config()
-        println(io,         "  BLAS: libopenblas (", openblas_config, ")")
+        println(io, "  BLAS: libopenblas (", openblas_config, ")")
     else
-        println(io,         "  BLAS: ",libblas_name)
+        println(io, "  BLAS: ",libblas_name)
     end
-    println(io,             "  LAPACK: ",liblapack_name)
-    println(io,             "  LIBM: ",libm_name)
-    println(io,             "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.cpu_name, ")")
+    println(io, "  LAPACK: ",liblapack_name)
+    println(io, "  LIBM: ",libm_name)
+    println(io, "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.cpu_name, ")")
+
+    println(io, "Environment:")
+    for (k,v) in ENV
+        if ismatch(r"JULIA", String(k))
+            println(io, "  $(k) = $(v)")
+        end
+    end
     if verbose
-        println(io,         "Environment:")
         for (k,v) in ENV
-            if match(r"JULIA|PATH|FLAG|^TERM$|HOME", String(k)) !== nothing
+            if ismatch(r"PATH|FLAG|^TERM$|HOME", String(k))
                 println(io, "  $(k) = $(v)")
             end
         end
-        println(io          )
-        println(io,         "Package Directory: ", Pkg.dir())
-        Pkg.status(io)
+    end
+    if packages || verbose
+        println(io, "Packages:")
+        println(io, "  Package Directory: ", Pkg.dir())
+        print(io, "  Package Status:")
+        if isdir(Pkg.dir())
+            println(io, "")
+            Pkg.status(io)
+        else
+            println(io, " no packages installed")
+        end
     end
 end
-versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 # displaying type-ambiguity warnings
-
-
 """
     code_warntype([io::IO], f, types)
 
@@ -317,36 +350,55 @@ This serves as a warning of potential type instability. Not all non-leaf types a
 problematic for performance, so the results need to be used judiciously.
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
-function code_warntype(io::IO, f, t::ANY)
+function code_warntype(io::IO, f, @nospecialize(t))
+    function slots_used(ci, slotnames)
+        used = falses(length(slotnames))
+        scan_exprs!(used, ci.code)
+        return used
+    end
+
+    function scan_exprs!(used, exprs)
+        for ex in exprs
+            if isa(ex, Slot)
+                used[ex.id] = true
+            elseif isa(ex, Expr)
+                scan_exprs!(used, ex.args)
+            end
+        end
+    end
+
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
     for (src, rettype) in code_typed(f, t)
         println(emph_io, "Variables:")
         slotnames = sourceinfo_slotnames(src)
+        used_slotids = slots_used(src, slotnames)
         for i = 1:length(slotnames)
-            print(emph_io, "  ", slotnames[i])
-            if isa(src.slottypes, Array)
-                show_expr_type(emph_io, src.slottypes[i], true)
+            if used_slotids[i]
+                print(emph_io, "  ", slotnames[i])
+                if isa(src.slottypes, Array)
+                    show_expr_type(emph_io, src.slottypes[i], true)
+                end
+                print(emph_io, '\n')
+            elseif !('#' in slotnames[i] || '@' in slotnames[i])
+                print(emph_io, "  ", slotnames[i], "<optimized out>\n")
             end
-            print(emph_io, '\n')
         end
         print(emph_io, "\nBody:\n  ")
         body = Expr(:body)
         body.args = src.code
         body.typ = rettype
         # Fix slot names and types in function body
-        show_unquoted(IOContext(IOContext(emph_io, :SOURCEINFO => src),
-                                          :SOURCE_SLOTNAMES => slotnames),
+        show_unquoted(IOContext(emph_io, :SOURCEINFO => src, :SOURCE_SLOTNAMES => slotnames),
                       body, 2)
         print(emph_io, '\n')
     end
     nothing
 end
-code_warntype(f, t::ANY) = code_warntype(STDOUT, f, t)
+code_warntype(f, @nospecialize(t)) = code_warntype(STDOUT, f, t)
 
-typesof(args...) = Tuple{map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)...}
+typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
 
-gen_call_with_extracted_types(fcn, ex0::Symbol) = Expr(:call, fcn, Meta.quot(ex0))
-function gen_call_with_extracted_types(fcn, ex0)
+function gen_call_with_extracted_types(__module__, fcn, ex0)
     if isa(ex0, Expr)
         if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
             # remove keyword args, but call the kwfunc
@@ -362,13 +414,12 @@ function gen_call_with_extracted_types(fcn, ex0)
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...))
         end
     end
+    if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
+        return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
+    end
+    ex = expand(__module__, ex0)
     exret = Expr(:none)
-    is_macro = false
-    ex = expand(ex0)
-    if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro
-        is_macro = true
-        exret = Expr(:call, fcn,  esc(ex0.args[1]), typesof(ex0.args[2:end]...))
-    elseif !isa(ex, Expr)
+    if !isa(ex, Expr)
         exret = Expr(:call, :error, "expression is not a function call or symbol")
     elseif ex.head == :call
         if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
@@ -392,27 +443,31 @@ function gen_call_with_extracted_types(fcn, ex0)
             end
         end
     end
-    if (!is_macro && ex.head == :thunk) || exret.head == :none
+    if ex.head == :thunk || exret.head == :none
         exret = Expr(:call, :error, "expression is not a function call, "
                                   * "or is too complex for @$fcn to analyze; "
                                   * "break it down to simpler parts if possible")
     end
-    exret
+    return exret
 end
 
 for fname in [:which, :less, :edit, :functionloc, :code_warntype,
               :code_llvm, :code_llvm_raw, :code_native]
     @eval begin
         macro ($fname)(ex0)
-            gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
+            gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0)
         end
     end
+end
+macro which(ex0::Symbol)
+    ex0 = QuoteNode(ex0)
+    return :(which_module($__module__, $ex0))
 end
 
 for fname in [:code_typed, :code_lowered]
     @eval begin
         macro ($fname)(ex0)
-            thecall = gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
+            thecall = gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0)
             quote
                 results = $thecall
                 length(results) == 1 ? results[1] : results
@@ -496,10 +551,10 @@ Evaluates the arguments to the function or macro call, determines their types, a
 """
 :@code_native
 
-function type_close_enough(x::ANY, t::ANY)
+function type_close_enough(@nospecialize(x), @nospecialize(t))
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
-            !isleaftype(t) && x <: t) ||
+            !_isleaftype(t) && x <: t) ||
            (isa(x,Union) && isa(t,DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
 end
 
@@ -510,7 +565,7 @@ end
 Return an array of methods with an argument of type `typ`.
 
 The optional second argument restricts the search to a particular module or function
-(the default is all modules, starting from Main).
+(the default is all top-level modules).
 
 If optional `showparents` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
@@ -522,7 +577,7 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
                        (type_close_enough(x, t) ||
                         (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                          (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
-                        x != Any && x != ANY)
+                        x != Any)
                    end
                end,
                unwrap_unionall(d.sig).parameters)
@@ -532,7 +587,7 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
     return meths
 end
 
-function methodswith(t::Type, m::Module, showparents::Bool=false)
+function _methodswith(t::Type, m::Module, showparents::Bool)
     meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
@@ -545,17 +600,12 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
     return unique(meths)
 end
 
+methodswith(t::Type, m::Module, showparents::Bool=false) = _methodswith(t, m, showparents)
+
 function methodswith(t::Type, showparents::Bool=false)
     meths = Method[]
-    mainmod = Main
-    # find modules in Main
-    for nm in names(mainmod)
-        if isdefined(mainmod, nm)
-            mod = getfield(mainmod, nm)
-            if isa(mod, Module)
-                append!(meths, methodswith(t, mod, showparents))
-            end
-        end
+    for mod in loaded_modules_array()
+        append!(meths, _methodswith(t, mod, showparents))
     end
     return unique(meths)
 end
@@ -563,7 +613,7 @@ end
 # file downloading
 
 downloadcmd = nothing
-if is_windows()
+if Sys.iswindows()
     function download(url::AbstractString, filename::AbstractString)
         res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
                     (Ptr{Void},Cwstring,Cwstring,Cuint,Ptr{Void}),C_NULL,url,filename,0,C_NULL)
@@ -584,9 +634,14 @@ else
             end
         end
         if downloadcmd == :wget
-            run(`wget -O $filename $url`)
+            try
+                run(`wget -O $filename $url`)
+            catch
+                rm(filename)  # wget always creates a file
+                rethrow()
+            end
         elseif downloadcmd == :curl
-            run(`curl -o $filename -L $url`)
+            run(`curl -g -L -f -o $filename $url`)
         elseif downloadcmd == :fetch
             run(`fetch -f $filename $url`)
         else
@@ -617,37 +672,48 @@ download(url, filename)
     workspace()
 
 Replace the top-level module (`Main`) with a new one, providing a clean workspace. The
-previous `Main` module is made available as `LastMain`. A previously-loaded package can be
-accessed using a statement such as `using LastMain.Package`.
+previous `Main` module is made available as `LastMain`.
+
+If `Package` was previously loaded, `using Package` in the new `Main` will re-use the
+loaded copy. Run `reload("Package")` first to load a fresh copy.
 
 This function should only be used interactively.
 """
 function workspace()
-    last = Core.Main
-    b = last.Base
-    ccall(:jl_new_main_module, Any, ())
-    m = Core.Main
+    last = Core.Main # ensure to reference the current Main module
+    b = Base # this module
+    ccall(:jl_new_main_module, Any, ()) # make Core.Main a new baremodule
+    m = Core.Main # now grab a handle to the new Main module
     ccall(:jl_add_standard_imports, Void, (Any,), m)
-    eval(m,
-         Expr(:toplevel,
-              :(const Base = $(Expr(:quote, b))),
-              :(const LastMain = $(Expr(:quote, last)))))
+    eval(m, Expr(:toplevel,
+                 :(const Base = $b),
+                 :(const LastMain = $last),
+                 :(using Base.MainInclude)))
     empty!(package_locks)
-    nothing
+    return m
 end
 
 # testing
 
 """
-    runtests([tests=["all"] [, numcores=ceil(Int, Sys.CPU_CORES / 2) ]])
+    Base.runtests(tests=["all"], numcores=ceil(Int, Sys.CPU_CORES / 2);
+                  exit_on_error=false, [seed])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
-strings, using `numcores` processors. (not exported)
+strings, using `numcores` processors. If `exit_on_error` is `false`, when one test
+fails, all remaining tests in other files will still be run; they are otherwise discarded,
+when `exit_on_error == true`.
+If a seed is provided via the keyword argument, it is used to seed the
+global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2))
+function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
+                  exit_on_error=false,
+                  seed::Union{BitInteger,Void}=nothing)
     if isa(tests,AbstractString)
         tests = split(tests)
     end
+    exit_on_error && push!(tests, "--exit-on-error")
+    seed != nothing && push!(tests, "--seed=0x$(hex(seed % UInt128))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     try
@@ -657,7 +723,7 @@ function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2))
         buf = PipeBuffer()
         versioninfo(buf)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
-              "including error messages above and the output of versioninfo():\n$(readstring(buf))")
+              "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end
 end
 
@@ -665,13 +731,13 @@ end
 
 
 """
-    whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
+    whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
 
 Print information about exported global variables in a module, optionally restricted to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 """
-function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
+function whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
     maxline = displaysize(io)[2]
     line = zeros(UInt8, maxline)
     head = PipeBuffer(maxline + 1)
@@ -715,152 +781,4 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
     end
 end
 whos(m::Module, pat::Regex=r"") = whos(STDOUT, m, pat)
-whos(pat::Regex) = whos(STDOUT, current_module(), pat)
-
-#################################################################################
-
-"""
-    Base.summarysize(obj; exclude=Union{Module,DataType,TypeName}) -> Int
-
-Compute the amount of memory used by all unique objects reachable from the argument.
-Keyword argument `exclude` specifies a type of objects to exclude from the traversal.
-"""
-summarysize(obj; exclude = Union{Module,DataType,TypeName}) =
-    summarysize(obj, ObjectIdDict(), exclude)
-
-summarysize(obj::Symbol, seen, excl) = 0
-
-function summarysize(obj::UnionAll, seen, excl)
-    return 2*sizeof(Int) + summarysize(obj.body, seen, excl) + summarysize(obj.var, seen, excl)
-end
-
-function summarysize(obj::DataType, seen, excl)
-    key = pointer_from_objref(obj)
-    haskey(seen, key) ? (return 0) : (seen[key] = true)
-    size = 7*sizeof(Int) + 6*sizeof(Int32) + 4*nfields(obj) + ifelse(Sys.WORD_SIZE == 64, 4, 0)
-    size += summarysize(obj.parameters, seen, excl)::Int
-    size += summarysize(obj.types, seen, excl)::Int
-    return size
-end
-
-function summarysize(obj::TypeName, seen, excl)
-    key = pointer_from_objref(obj)
-    haskey(seen, key) ? (return 0) : (seen[key] = true)
-    return Core.sizeof(obj) + (isdefined(obj,:mt) ? summarysize(obj.mt, seen, excl) : 0)
-end
-
-summarysize(obj::ANY, seen, excl) = _summarysize(obj, seen, excl)
-# define the general case separately to make sure it is not specialized for every type
-function _summarysize(obj::ANY, seen, excl)
-    key = pointer_from_objref(obj)
-    haskey(seen, key) ? (return 0) : (seen[key] = true)
-    size = Core.sizeof(obj)
-    ft = typeof(obj).types
-    for i in 1:nfields(obj)
-        if !isbits(ft[i]) && isdefined(obj,i)
-            val = getfield(obj, i)
-            if !isa(val,excl)
-                size += summarysize(val, seen, excl)::Int
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Array, seen, excl)
-    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size = Core.sizeof(obj)
-    # TODO: add size of jl_array_t
-    if !isbits(eltype(obj))
-        for i in 1:length(obj)
-            if ccall(:jl_array_isassigned, Cint, (Any, UInt), obj, i-1) == 1
-                val = obj[i]
-                if !isa(val, excl)
-                    size += summarysize(val, seen, excl)::Int
-                end
-            end
-        end
-    end
-    return size
-end
-
-summarysize(s::String, seen, excl) = sizeof(Int) + sizeof(s)
-
-function summarysize(obj::SimpleVector, seen, excl)
-    key = pointer_from_objref(obj)
-    haskey(seen, key) ? (return 0) : (seen[key] = true)
-    size = Core.sizeof(obj)
-    for i in 1:length(obj)
-        if isassigned(obj, i)
-            val = obj[i]
-            if !isa(val, excl)
-                size += summarysize(val, seen, excl)::Int
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Module, seen, excl)
-    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size::Int = Core.sizeof(obj)
-    for binding in names(obj, true)
-        if isdefined(obj, binding) && !isdeprecated(obj, binding)
-            value = getfield(obj, binding)
-            if !isa(value, Module) || module_parent(value) === obj
-                size += summarysize(value, seen, excl)::Int
-                vt = isa(value,DataType) ? value : typeof(value)
-                if vt.name.module === obj
-                    if vt !== value
-                        size += summarysize(vt, seen, excl)::Int
-                    end
-                    # charge a TypeName to its module
-                    size += summarysize(vt.name, seen, excl)::Int
-                end
-            end
-        end
-    end
-    return size
-end
-
-function summarysize(obj::Task, seen, excl)
-    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size::Int = Core.sizeof(obj)
-    if isdefined(obj, :code)
-        size += summarysize(obj.code, seen, excl)::Int
-    end
-    size += summarysize(obj.storage, seen, excl)::Int
-    size += summarysize(obj.backtrace, seen, excl)::Int
-    size += summarysize(obj.donenotify, seen, excl)::Int
-    size += summarysize(obj.exception, seen, excl)::Int
-    size += summarysize(obj.result, seen, excl)::Int
-    # TODO: add stack size, and possibly traverse stack roots
-    return size
-end
-
-function summarysize(obj::MethodTable, seen, excl)
-    haskey(seen, obj) ? (return 0) : (seen[obj] = true)
-    size::Int = Core.sizeof(obj)
-    size += summarysize(obj.defs, seen, excl)::Int
-    size += summarysize(obj.cache, seen, excl)::Int
-    if isdefined(obj, :kwsorter)
-        size += summarysize(obj.kwsorter, seen, excl)::Int
-    end
-    return size
-end
-
-function summarysize(m::TypeMapEntry, seen, excl)
-    size::Int = 0
-    while true # specialized to prevent stack overflow while following this linked list
-        haskey(seen, m) ? (return size) : (seen[m] = true)
-        size += Core.sizeof(m)
-        if isdefined(m, :func)
-            size += summarysize(m.func, seen, excl)::Int
-        end
-        size += summarysize(m.sig, seen, excl)::Int
-        size += summarysize(m.tvars, seen, excl)::Int
-        m.next === nothing && break
-        m = m.next::TypeMapEntry
-    end
-    return size
-end
+whos(pat::Regex) = whos(STDOUT, Main, pat)

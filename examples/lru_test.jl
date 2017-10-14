@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using .LRUExample
 
@@ -7,8 +7,8 @@ TestBLRU = LRUExample.BoundedLRU{String, String}(1000)
 
 get_str(i) = String(vcat(map(x->[x>>4; x&0x0F], reinterpret(UInt8, [Int32(i)]))...))
 
-isbounded{L<:LRUExample.LRU}(::Type{L}) = any(map(n->n==:maxsize, fieldnames(L)))
-isbounded{L<:LRUExample.LRU}(l::L) = isbounded(L)
+isbounded(::Type{L}) where {L<:LRUExample.LRU} = any(map(n->n==:maxsize, fieldnames(L)))
+isbounded(l::L) where {L<:LRUExample.LRU} = isbounded(L)
 
 nmax = round.(Int, logspace(2, 5, 4))
 

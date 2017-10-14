@@ -6,11 +6,7 @@ include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
 
 override CFLAGS += $(JCFLAGS)
-ifeq ($(LLVM_VER),3.3)
-override CXXFLAGS += $(JCXXFLAGS) -std=c++11
-else
 override CXXFLAGS += $(JCXXFLAGS)
-endif
 override CPPFLAGS += $(JCPPFLAGS)
 
 # -I BUILDDIR comes before -I SRCDIR so that the user can override <options.h> on a per-build-directory basis
@@ -35,12 +31,17 @@ else
 FLAGS += -DJL_BUILD_UNAME='"$(OS)"'
 endif
 
+ifeq ($(OS),FreeBSD)
+FLAGS += -I$(LOCALBASE)/include
+endif
+
 SRCS := \
-	jltypes gf typemap ast builtins module interpreter \
-	alloc dlload sys init task array dump toplevel jl_uv \
-	simplevector APInt-C runtime_intrinsics runtime_ccall \
-	threadgroup threading stackwalk gc gc-debug gc-pages \
-	jlapi signal-handling safepoint jloptions timing subtype
+	jltypes gf typemap ast builtins module interpreter symbol \
+	dlload sys init task array dump staticdata toplevel jl_uv datatype \
+	simplevector APInt-C runtime_intrinsics runtime_ccall precompile \
+	threadgroup threading stackwalk gc gc-debug gc-pages method \
+	jlapi signal-handling safepoint jloptions timing subtype rtutils \
+	crc32c
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
@@ -49,7 +50,9 @@ endif
 LLVMLINK :=
 
 ifeq ($(JULIACODEGEN),LLVM)
-SRCS += codegen jitlayers disasm debuginfo llvm-simdloop llvm-ptls llvm-gcroot cgmemmgr
+SRCS += codegen jitlayers disasm debuginfo llvm-simdloop llvm-ptls llvm-muladd \
+	llvm-late-gc-lowering llvm-lower-handlers llvm-gc-invariant-verifier \
+	llvm-propagate-addrspaces llvm-alloc-opt cgmemmgr
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -57,6 +60,14 @@ LLVMLINK += -lPolly -lPollyISL
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/include
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --obj-root)/tools/polly/include
 FLAGS += -DUSE_POLLY
+ifeq ($(USE_POLLY_OPENMP),1)
+FLAGS += -fopenmp
+endif
+ifeq ($(USE_POLLY_ACC),1)
+LLVMLINK += -lPollyPPCG -lGPURuntime
+FLAGS += -DUSE_POLLY_ACC
+FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/tools # Required to find GPURuntime/GPUJIT.h
+endif
 endif
 else
 SRCS += anticodegen
@@ -64,8 +75,8 @@ LLVM_LIBS := support
 endif
 
 # headers are used for dependency tracking, while public headers will be part of the dist
-HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_threads.h julia_internal.h options.h timing.h)
-PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_threads.h)
+HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h tls.h locks.h atomics.h julia_internal.h options.h timing.h)
+PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h tls.h locks.h atomics.h)
 ifeq ($(USE_SYSTEM_LIBUV),0)
 ifeq ($(OS),WINNT)
 HEADERS += $(build_includedir)/tree.h
@@ -81,15 +92,7 @@ PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLI
 ifneq ($(USE_LLVM_SHLIB),1)
 LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
 else
-ifeq ($(LLVM_USE_CMAKE),1)
 LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
-else
-ifeq ($(OS),WINNT)
-LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(LLVM_VER_SHORT)
-else
-LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG_HOST) --version)
-endif # OS == WINNT
-endif # LLVM_USE_CMAKE == 1
 FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
 
@@ -134,7 +137,7 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
@@ -174,7 +177,7 @@ julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE_release)
 	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE_release)) $(call cygpath_w,$(SRCDIR)/bin2hex.scm) < $< > $@)
 
-$(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm \
+$(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliases.scm flisp/profile.scm \
 		julia-parser.scm julia-syntax.scm match.scm utils.scm ast.scm macroexpand.scm mk_julia_flisp_boot.scm) \
 		$(FLISP_EXECUTABLE_release)
 	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE_release)) \
@@ -182,10 +185,11 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm \
 
 # additional dependency links
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
-$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.cpp jitlayers.h intrinsics.h codegen_internal.h cgutils.cpp ccall.cpp abi_*.cpp)
+$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,\
+	intrinsics.cpp jitlayers.h intrinsics.h debuginfo.h codegen_shared.h cgutils.cpp ccall.cpp abi_*.cpp)
 $(BUILDDIR)/anticodegen.o $(BUILDDIR)/anticodegen.dbg.obj: $(SRCDIR)/intrinsics.h
-$(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: $(SRCDIR)/codegen_internal.h
-$(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(SRCDIR)/codegen_internal.h
+$(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: $(SRCDIR)/debuginfo.h
+$(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(SRCDIR)/debuginfo.h
 $(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/table.c
 $(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc.h
@@ -213,8 +217,8 @@ $(BUILDDIR)/flisp/libflisp-debug.a: $(addprefix $(SRCDIR)/,flisp/*.h flisp/*.c) 
 
 $(BUILDDIR)/julia_version.h: $(JULIAHOME)/VERSION
 	@echo "// This is an autogenerated header file" > $@.$(JULIA_BUILD_MODE).tmp
-	@echo "#ifndef JULIA_VERSION_H" >> $@.$(JULIA_BUILD_MODE).tmp
-	@echo "#define JULIA_VERSION_H" >> $@.$(JULIA_BUILD_MODE).tmp
+	@echo "#ifndef JL_VERSION_H" >> $@.$(JULIA_BUILD_MODE).tmp
+	@echo "#define JL_VERSION_H" >> $@.$(JULIA_BUILD_MODE).tmp
 	@echo "#define JULIA_VERSION_STRING" \"$(JULIA_VERSION)\" >> $@.$(JULIA_BUILD_MODE).tmp
 	@echo $(JULIA_VERSION) | awk 'BEGIN {FS="[.,-]"} \
 	{print "#define JULIA_VERSION_MAJOR " $$1 "\n" \

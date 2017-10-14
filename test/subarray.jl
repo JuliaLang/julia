@@ -1,6 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 ######## Utilities ###########
 
@@ -34,17 +34,19 @@ _Agen(A, i1, i2, i3, i4) = [A[j1,j2,j3,j4] for j1 in i1, j2 in i2, j3 in i3, j4 
 
 function replace_colon(A::AbstractArray, I)
     Iout = Array{Any}(length(I))
-    for d = 1:length(I)-1
+    I == (:,) && return (1:length(A),)
+    for d = 1:length(I)
         Iout[d] = isa(I[d], Colon) ? (1:size(A,d)) : I[d]
     end
-    d = length(I)
-    Iout[d] = isa(I[d], Colon) ? (1:prod(size(A)[d:end])) : I[d]
     (Iout...,)
 end
 
 ensure_iterable(::Tuple{}) = ()
 ensure_iterable(t::Tuple{Union{Number, CartesianIndex}, Vararg{Any}}) = ((t[1],), ensure_iterable(Base.tail(t))...)
 ensure_iterable(t::Tuple{Any, Vararg{Any}}) = (t[1], ensure_iterable(Base.tail(t))...)
+
+index_ndims(t::Tuple) = tup2val(Base.index_ndims(t))
+tup2val(::NTuple{N}) where {N} = Val(N)
 
 # To avoid getting confused by manipulations that are implemented for SubArrays,
 # it's good to copy the contents to an Array. This version protects against
@@ -86,10 +88,10 @@ function single_stride_dim(A::Array)
     end
     ld
 end
-single_stride_dim(A::ANY) = single_stride_dim(copy_to_array(A))
+single_stride_dim(@nospecialize(A)) = single_stride_dim(copy_to_array(A))
 
 # Testing equality of AbstractArrays, using several different methods to access values
-function test_cartesian(A::ANY, B::ANY)
+function test_cartesian(@nospecialize(A), @nospecialize(B))
     isgood = true
     for (IA, IB) in zip(eachindex(A), eachindex(B))
         if A[IA] != B[IB]
@@ -105,7 +107,7 @@ function test_cartesian(A::ANY, B::ANY)
     end
 end
 
-function test_linear(A::ANY, B::ANY)
+function test_linear(@nospecialize(A), @nospecialize(B))
     length(A) == length(B) || error("length mismatch")
     isgood = true
     for (iA, iB) in zip(1:length(A), 1:length(B))
@@ -123,16 +125,15 @@ function test_linear(A::ANY, B::ANY)
 end
 
 # "mixed" means 2 indexes even for N-dimensional arrays
-test_mixed{T}(::AbstractArray{T,1}, ::Array) = nothing
-test_mixed{T}(::AbstractArray{T,2}, ::Array) = nothing
+test_mixed(::AbstractArray{T,1}, ::Array) where {T} = nothing
+test_mixed(::AbstractArray{T,2}, ::Array) where {T} = nothing
 test_mixed(A, B::Array) = _test_mixed(A, reshape(B, size(A)))
-function _test_mixed(A::ANY, B::ANY)
-    L = length(A)
+function _test_mixed(@nospecialize(A), @nospecialize(B))
     m = size(A, 1)
-    n = div(L, m)
+    n = size(A, 2)
     isgood = true
-    for j = 1:n, i = 1:m
-        if A[i,j] != B[i,j]
+    for J in CartesianRange(size(A)[2:end]), i in 1:m
+        if A[i,J] != B[i,J]
             isgood = false
             break
         end
@@ -145,19 +146,32 @@ function _test_mixed(A::ANY, B::ANY)
     nothing
 end
 
-function test_bounds(A::ANY)
+function test_bounds(@nospecialize(A))
     @test_throws BoundsError A[0]
     @test_throws BoundsError A[end+1]
-    @test_throws BoundsError A[1, 0]
-    @test_throws BoundsError A[1, end+1]
-    @test_throws BoundsError A[1, 1, 0]
-    @test_throws BoundsError A[1, 1, end+1]
-    @test_throws BoundsError A[0, 1]
-    @test_throws BoundsError A[end+1, 1]
-    @test_throws BoundsError A[0, 1, 1]
-    @test_throws BoundsError A[end+1, 1, 1]
-    @test_throws BoundsError A[1, 0, 1]
-    @test_throws BoundsError A[1, end+1, 1]
+    trailing2 = ntuple(x->1, max(ndims(A)-2, 0))
+    trailing3 = ntuple(x->1, max(ndims(A)-3, 0))
+    @test_throws BoundsError A[1, 0, trailing2...]
+    @test_throws BoundsError A[1, end+1, trailing2...]
+    @test_throws BoundsError A[1, 1, 0, trailing3...]
+    @test_throws BoundsError A[1, 1, end+1, trailing3...]
+    @test_throws BoundsError A[0, 1, trailing2...]
+    @test_throws BoundsError A[end+1, 1, trailing2...]
+    @test_throws BoundsError A[0, 1, 1, trailing3...]
+    @test_throws BoundsError A[end+1, 1, 1, trailing3...]
+    @test_throws BoundsError A[1, 0, 1, trailing3...]
+    @test_throws BoundsError A[1, end+1, 1, trailing3...]
+    # TODO: PLI (re-enable after 0.7)
+    # @test_throws BoundsError A[1, 0]
+    # @test_throws BoundsError A[1, end+1]
+    # @test_throws BoundsError A[1, 1, 0]
+    # @test_throws BoundsError A[1, 1, end+1]
+    # @test_throws BoundsError A[0, 1]
+    # @test_throws BoundsError A[end+1, 1]
+    # @test_throws BoundsError A[0, 1, 1]
+    # @test_throws BoundsError A[end+1, 1, 1]
+    # @test_throws BoundsError A[1, 0, 1]
+    # @test_throws BoundsError A[1, end+1, 1]
 end
 
 function dim_break_linindex(I)
@@ -181,7 +195,7 @@ function runsubarraytests(A::Array, I...)
     test_mixed(S, C)
 end
 
-function runsubarraytests(A::ANY, I...)
+function runsubarraytests(@nospecialize(A), I...)
     # When A was created with view, we have to check bounds, since some
     # of the "residual" dimensions have size 1. It's possible that we
     # need dedicated tests for view.
@@ -224,17 +238,30 @@ end
 function runviews(SB::AbstractArray, indexN, indexNN, indexNNN)
     @assert ndims(SB) > 2
     for i3 in indexN, i2 in indexN, i1 in indexN
-        runsubarraytests(SB, i1, i2, i3)
+        runsubarraytests(SB, i1, i2, i3, ntuple(x->1, max(ndims(SB)-3, 0))...)
     end
-    for i2 in indexNN, i1 in indexN
-        runsubarraytests(SB, i1, i2)
+    for i2 in indexN, i1 in indexN
+        runsubarraytests(SB, i1, i2, ntuple(x->1, max(ndims(SB)-2, 0))...)
     end
     for i1 in indexNNN
         runsubarraytests(SB, i1)
     end
 end
 
-function runviews{T}(SB::AbstractArray{T,2}, indexN, indexNN, indexNNN)
+function runviews(SB::AbstractArray{T, 3} where T, indexN, indexNN, indexNNN)
+    @assert ndims(SB) > 2
+    for i3 in indexN, i2 in indexN, i1 in indexN
+        runsubarraytests(SB, i1, i2, i3)
+    end
+    for i2 in indexN, i1 in indexN
+        runsubarraytests(SB, i1, i2, 1)
+    end
+    for i1 in indexNNN
+        runsubarraytests(SB, i1)
+    end
+end
+
+function runviews(SB::AbstractArray{T,2}, indexN, indexNN, indexNNN) where T
     for i2 in indexN, i1 in indexN
         runsubarraytests(SB, i1, i2)
     end
@@ -243,13 +270,13 @@ function runviews{T}(SB::AbstractArray{T,2}, indexN, indexNN, indexNNN)
     end
 end
 
-function runviews{T}(SB::AbstractArray{T,1}, indexN, indexNN, indexNNN)
+function runviews(SB::AbstractArray{T,1}, indexN, indexNN, indexNNN) where T
     for i1 in indexN
         runsubarraytests(SB, i1)
     end
 end
 
-runviews{T}(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) = nothing
+runviews(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) where {T} = nothing
 
 ######### Tests #########
 
@@ -271,6 +298,9 @@ end
 # "outer" indexes create snips that have at least size 5 along each dimension,
 # with the exception of Int-slicing
 oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9])
+
+_ndims(::AbstractArray{T,N}) where {T,N} = N
+_ndims(x) = 1
 
 if testfull
     let B = copy(reshape(1:13^3, 13, 13, 13))
@@ -298,8 +328,7 @@ if !testfull
                      (CartesianIndex(13,6),[8,4,6,12,5,7]),
                      (1,:,view(1:13,[9,12,4,13,1])),
                      (view(1:13,[9,12,4,13,1]),2:6,4),
-                     ([1:5 2:6 3:7 4:8 5:9], :, 3),
-                     (:, [46:-1:42 88:-1:84 22:-1:18 49:-1:45 8:-1:4]))
+                     ([1:5 2:6 3:7 4:8 5:9], :, 3))
             runsubarraytests(B, oind...)
             viewB = view(B, oind...)
             runviews(viewB, index5, index25, index125)
@@ -402,9 +431,10 @@ sA = view(A, 1:2:3, 3, 1:2:8)
 @test sA[:] == A[sA.indexes...][:]
 test_bounds(sA)
 
-a = [5:8;]
-@test parent(a) == a
-@test parentindexes(a) == (1:4,)
+let a = [5:8;]
+    @test parent(a) == a
+    @test parentindexes(a) == (1:4,)
+end
 
 # issue #6218 - logical indexing
 A = rand(2, 2, 3)
@@ -412,7 +442,7 @@ msk = ones(Bool, 2, 2)
 msk[2,1] = false
 sA = view(A, :, :, 1)
 sA[msk] = 1.0
-@test sA[msk] == ones(countnz(msk))
+@test sA[msk] == ones(count(msk))
 
 # bounds checking upon construction; see #4044, #10296
 @test_throws BoundsError view(1:10, 8:11)
@@ -447,7 +477,7 @@ let a = [1,2,3],
     @test b == view(a, UInt(1):UInt(2)) == view(view(a, :), UInt(1):UInt(2)) == [1,2]
 end
 
-let A = reshape(1:4, 2, 2)
+let A = reshape(1:4, 2, 2),
     B = view(A, :, :)
     @test parent(B) === A
     @test parent(view(B, 0x1, :)) === parent(view(B, 0x1, :)) === A
@@ -464,19 +494,16 @@ end
 @test collect(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6:6, :), 1:2:5, :, 1:2:5)) ==
     cat(3,[68,70,72],[406,408,410],[744,746,748])
 
-
-
 # tests @view (and replace_ref_end!)
 X = reshape(1:24,2,3,4)
 Y = 4:-1:1
 
 @test isa(@view(X[1:3]), SubArray)
 
-
-@test X[1:end] == @view X[1:end]
+@test X[1:end] == @.(@view X[1:end]) # test compatibility of @. and @view
 @test X[1:end-3] == @view X[1:end-3]
 @test X[1:end,2,2] == @view X[1:end,2,2]
-@test X[1,1:end-2] == @view X[1,1:end-2]
+@test X[1,1:end-2,1] == @view X[1,1:end-2,1]
 @test X[1,2,1:end-2] == @view X[1,2,1:end-2]
 @test X[1,2,Y[2:end]] == @view X[1,2,Y[2:end]]
 @test X[1:end,2,Y[2:end]] == @view X[1:end,2,Y[2:end]]
@@ -486,18 +513,73 @@ u = (1,2:3)
 @test X[(1,)...,(2,)...,2:end] == @view X[(1,)...,(2,)...,2:end]
 
 # test macro hygiene
-let size=(x,y)-> error("should not happen")
+let size=(x,y)-> error("should not happen"), Base=nothing
     @test X[1:end,2,2] == @view X[1:end,2,2]
 end
 
+# test that side effects occur only once
+let foo = [X]
+    @test X[2:end-1] == @view (push!(foo,X)[1])[2:end-1]
+    @test foo == [X, X]
+end
+
+# test @views macro
+@views let f!(x) = x[1:end-1] .+= x[2:end].^2
+    x = [1,2,3,4]
+    f!(x)
+    @test x == [5,11,19,4]
+    @test x[1:3] isa SubArray
+    @test x[2] === 11
+    @test Dict((1:3) => 4)[1:3] === 4
+    x[1:2] = 0
+    @test x == [0,0,19,4]
+    x[1:2] .= 5:6
+    @test x == [5,6,19,4]
+    f!(x[3:end])
+    @test x == [5,6,35,4]
+    x[Y[2:3]] .= 7:8
+    @test x == [5,8,7,4]
+    @. x[(3,)..., ()...] += 3 # @. should convert to .+=, test compatibility with @views
+    @test x == [5,8,10,4]
+    i = Int[]
+    # test that lhs expressions in update operations are evaluated only once:
+    x[push!(i,4)[1]] += 5
+    @test x == [5,8,10,9] && i == [4]
+    x[push!(i,3)[end]] += 2
+    @test x == [5,8,12,9] && i == [4,3]
+    @. x[3:end] = 0       # make sure @. works with end expressions in @views
+    @test x == [5,8,0,0]
+end
+@views @test isa(X[1:3], SubArray)
+@test X[1:end] == @views X[1:end]
+@test X[1:end-3] == @views X[1:end-3]
+@test X[1:end,2,2] == @views X[1:end,2,2]
+@test X[1,2,1:end-2] == @views X[1,2,1:end-2]
+@test X[1,2,Y[2:end]] == @views X[1,2,Y[2:end]]
+@test X[1:end,2,Y[2:end]] == @views X[1:end,2,Y[2:end]]
+@test X[u...,2:end] == @views X[u...,2:end]
+@test X[(1,)...,(2,)...,2:end] == @views X[(1,)...,(2,)...,2:end]
+# test macro hygiene
+let size=(x,y)-> error("should not happen"), Base=nothing
+    @test X[1:end,2,2] == @views X[1:end,2,2]
+end
+
 # issue #18034
-# ensure that it is possible to create an isbits, LinearFast view of an immutable Array
+# ensure that it is possible to create an isbits, IndexLinear view of an immutable Array
 let
-    immutable ImmutableTestArray{T, N} <: Base.DenseArray{T, N}
+    struct ImmutableTestArray{T, N} <: Base.DenseArray{T, N}
     end
     Base.size(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = (0, 0)
-    Base.linearindexing(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = Base.LinearFast()
+    Base.IndexStyle(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = Base.IndexLinear()
     a = ImmutableTestArray{Float64, 2}()
-    @test Base.linearindexing(view(a, :, :)) == Base.LinearFast()
+    @test Base.IndexStyle(view(a, :, :)) == Base.IndexLinear()
     @test isbits(view(a, :, :))
+end
+
+# ref issue #17351
+@test @inferred(flipdim(view([1 2; 3 4], :, 1), 1)) == [3, 1]
+
+let
+    s = view(reshape(1:6, 2, 3), 1:2, 1:2)
+    @test @inferred(s[2,2,1]) === 4
 end

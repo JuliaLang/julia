@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # some test strings
 astr = "Hello, world.\n"
@@ -29,7 +29,7 @@ end
 # @test_throws ErrorException in("foobar","bar")
 @test_throws BoundsError search(b"\x1\x2",0x1,0)
 @test rsearchindex(b"foo",b"o",0) == 0
-@test rsearchindex(SubString("",1,1),SubString("",1,1)) == 1
+@test rsearchindex(SubString("",1,0),SubString("",1,0)) == 1
 
 @test search(b"foo",'o') == 2
 @test rsearch(b"foo",'o') == 3
@@ -354,6 +354,10 @@ end
 @test searchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
 @test searchindex("\U1f596\U1f596", "\U1f596\U1f596", 1) == 1
 
+# contains with a String and Char needle
+@test contains("foo", "o")
+@test contains("foo", 'o')
+
 # string rsearchindex with a two-char UTF-8 (2 byte) string literal
 @test rsearchindex("ééé", "éé") == 3
 @test rsearchindex("ééé", "éé", endof("ééé")) == 3
@@ -375,3 +379,9 @@ end
 @test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 1
 
 @test_throws ErrorException "ab" ∈ "abc"
+
+# issue #15723
+@test findfirst(equalto('('), "⨳(") == 4
+@test findnext(equalto('('), "(⨳(", 2) == 5
+@test findlast(equalto('('), "(⨳(") == 5
+@test findprev(equalto('('), "(⨳(", 2) == 1

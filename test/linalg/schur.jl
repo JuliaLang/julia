@@ -1,6 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
@@ -19,14 +19,10 @@ aimg  = randn(n,n)/2
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     asym = a'+a                  # symmetric indefinite
     apd  = a'*a                 # symmetric positive-definite
-    @testset for atype in ("Array", "SubArray")
-        if atype == "Array"
-            a = a
-        else
-            a = view(a, 1:n, 1:n)
-            asym = view(asym, 1:n, 1:n)
-            apd = view(apd, 1:n, 1:n)
-        end
+    for (a, asym, apd) in ((a, asym, apd),
+                           (view(a, 1:n, 1:n),
+                            view(asym, 1:n, 1:n),
+                            view(apd, 1:n, 1:n)))
         ε = εa = eps(abs(float(one(eltya))))
 
         d,v = eig(a)
@@ -38,6 +34,19 @@ aimg  = randn(n,n)/2
         @test AbstractArray(f) ≈ a
         @test_throws KeyError f[:A]
 
+        sch, vecs, vals = schur(UpperTriangular(triu(a)))
+        @test vecs*sch*vecs' ≈ triu(a)
+        sch, vecs, vals = schur(LowerTriangular(tril(a)))
+        @test vecs*sch*vecs' ≈ tril(a)
+        sch, vecs, vals = schur(Hermitian(asym))
+        @test vecs*sch*vecs' ≈ asym
+        sch, vecs, vals = schur(Symmetric(a+a.'))
+        @test vecs*sch*vecs' ≈ a + a.'
+
+        tstring = sprint(show,f[:T])
+        zstring = sprint(show,f[:Z])
+        vstring = sprint(show,f[:values])
+        @test sprint(show,f) == "$(typeof(f)) with factors T and Z:\n$tstring\n$(zstring)\nand values:\n$vstring"
         @testset "Reorder Schur" begin
             # use asym for real schur to enforce tridiag structure
             # avoiding partly selection of conj. eigenvalues
@@ -54,7 +63,7 @@ aimg  = randn(n,n)/2
             @test O[:Schur] ≈ SchurNew[:Schur]
         end
 
-        if atype == "Array"
+        if isa(a, Array)
             a1_sf = a[1:n1, 1:n1]
             a2_sf = a[n1+1:n2, n1+1:n2]
         else
@@ -95,5 +104,11 @@ aimg  = randn(n,n)/2
             @test NS[:S] ≈ sS
             @test NS[:Z] ≈ sZ
         end
+    end
+    @testset "0x0 matrix" for A in (zeros(eltya, 0, 0), view(rand(eltya, 2, 2), 1:0, 1:0))
+        T, Z, λ = Base.LinAlg.schur(A)
+        @test T == A
+        @test Z == A
+        @test λ == zeros(0)
     end
 end

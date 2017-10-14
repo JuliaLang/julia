@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 include("block.jl")
 include("inline.jl")
@@ -7,4 +7,5 @@ include("inline.jl")
                 paragraph,
 
                 linebreak, escapes, inline_code,
-                asterisk_bold, asterisk_italic, image, footnote_link, link]
+                asterisk_bold, asterisk_italic, image, footnote_link, link, autolink]
+

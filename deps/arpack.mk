@@ -37,24 +37,24 @@ ARPACK_FLAGS := --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" \
     CFLAGS="$(CFLAGS) $(ARPACK_CFLAGS)" LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN)"
 
 # ARPACK-NG upstream keeps changing their download filenames
-$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz: | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ https://s3.amazonaws.com/julialang/src/arpack-ng-$(ARPACK_VER).tar.gz
+$(SRCCACHE)/arpack-ng-$(ARPACK_VER).tar.gz: | $(SRCCACHE)
+	$(JLDOWNLOAD) $@ https://julialang-s3.julialang.org/src/arpack-ng-$(ARPACK_VER).tar.gz
 	touch -c $@
-$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx: | $(SRCDIR)/srccache
+$(SRCCACHE)/arpack-ng-$(ARPACK_VER)-testA.mtx: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://raw.githubusercontent.com/opencollab/arpack-ng/$(ARPACK_VER)/TESTS/testA.mtx
 	touch -c $@
 
-$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/source-extracted: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz
+$(SRCCACHE)/arpack-ng-$(ARPACK_VER)/source-extracted: $(SRCCACHE)/arpack-ng-$(ARPACK_VER).tar.gz
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) -zxf $<
-	touch -c $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure # old target
+	touch -c $(SRCCACHE)/arpack-ng-$(ARPACK_VER)/configure # old target
 	echo 1 > $@
 
-$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/source-extracted
+$(SRCCACHE)/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied: $(SRCCACHE)/arpack-ng-$(ARPACK_VER)/source-extracted
 	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/arpack-tests-blasint.patch
 	echo 1 > $@
 
-$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-configured: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/source-extracted $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied
+$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-configured: $(SRCCACHE)/arpack-ng-$(ARPACK_VER)/source-extracted $(SRCCACHE)/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) $(ARPACK_FLAGS)
@@ -64,7 +64,7 @@ $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-compiled: $(BUILDDIR)/arpack-ng-$(ARPA
 	$(MAKE) -C $(dir $<) $(ARPACK_MFLAGS)
 	echo 1 > $@
 
-$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-checked: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-compiled
+$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-checked: $(SRCCACHE)/arpack-ng-$(ARPACK_VER)-testA.mtx $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-compiled
 	$(JLCHECKSUM) $<
 	cp $< $(dir $@)/TESTS/testA.mtx
 ifeq ($(OS),$(BUILD_OS))
@@ -89,14 +89,14 @@ clean-arpack:
 	-$(MAKE) -C $(BUILDDIR)/arpack-ng-$(ARPACK_VER) clean
 
 distclean-arpack:
-	-rm -rf $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz \
-		$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER) \
-		$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx \
+	-rm -rf $(SRCCACHE)/arpack-ng-$(ARPACK_VER).tar.gz \
+		$(SRCCACHE)/arpack-ng-$(ARPACK_VER) \
+		$(SRCCACHE)/arpack-ng-$(ARPACK_VER)-testA.mtx \
 		$(BUILDDIR)/arpack-ng-$(ARPACK_VER)
 
 
-get-arpack: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx
-extract-arpack: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/source-extracted
+get-arpack: $(SRCCACHE)/arpack-ng-$(ARPACK_VER).tar.gz $(SRCCACHE)/arpack-ng-$(ARPACK_VER)-testA.mtx
+extract-arpack: $(SRCCACHE)/arpack-ng-$(ARPACK_VER)/source-extracted
 configure-arpack: $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-configured
 compile-arpack: $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-compiled
 # XXX: bug_1315 ARPACK tests fail stochastically

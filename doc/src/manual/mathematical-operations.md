@@ -21,7 +21,7 @@ are supported on all primitive numeric types:
 | `x ^ y`    | power          | raises `x` to the `y`th power          |
 | `x % y`    | remainder      | equivalent to `rem(x,y)`               |
 
-as well as the negation on `Bool` types:
+as well as the negation on [`Bool`](@ref) types:
 
 | Expression | Name     | Description                              |
 |:---------- |:-------- |:---------------------------------------- |
@@ -33,7 +33,7 @@ system.
 
 Here are some simple examples using arithmetic operators:
 
-```julia
+```jldoctest
 julia> 1 + 2 + 3
 6
 
@@ -65,7 +65,7 @@ are supported on all primitive integer types:
 
 Here are some examples with bitwise operators:
 
-```julia
+```jldoctest
 julia> ~123
 -124
 
@@ -95,7 +95,7 @@ of the operation back into its left operand. The updating version of the binary 
 by placing a `=` immediately after the operator. For example, writing `x += 3` is equivalent to
 writing `x = x + 3`:
 
-```julia
+```jldoctest
 julia> x = 1
 1
 
@@ -116,40 +116,51 @@ The updating versions of all the binary arithmetic and bitwise operators are:
     An updating operator rebinds the variable on the left-hand side. As a result, the type of the
     variable may change.
 
-    ```julia
+    ```jldoctest
     julia> x = 0x01; typeof(x)
     UInt8
 
-    julia> x *= 2 #Same as x = x * 2
+    julia> x *= 2 # Same as x = x * 2
     2
 
-    julia> isa(x, Int)
-    true
+    julia> typeof(x)
+    Int64
     ```
 
 ## [Vectorized "dot" operators](@id man-dot-operators)
 
 For *every* binary operation like `^`, there is a corresponding
 "dot" operation `.^` that is *automatically* defined
-to perform `^` element-by-element on arrays.   For example,
+to perform `^` element-by-element on arrays. For example,
 `[1,2,3] ^ 3` is not defined, since there is no standard
 mathematical meaning to "cubing" an array, but `[1,2,3] .^ 3`
 is defined as computing the elementwise
-(or "vectorized") result `[1^3, 2^3, 3^3]`.
+(or "vectorized") result `[1^3, 2^3, 3^3]`.  Similarly for unary
+operators like `!` or `√`, there is a corresponding `.√` that
+applies the operator elementwise.
+
+```jldoctest
+julia> [1,2,3] .^ 3
+3-element Array{Int64,1}:
+  1
+  8
+ 27
+```
 
 More specifically, `a .^ b` is parsed as the ["dot" call](@ref man-vectorized)
 `(^).(a,b)`, which performs a [broadcast](@ref Broadcasting) operation:
 it can combine arrays and scalars, arrays of the same size (performing
 the operation elementwise), and even arrays of different shapes (e.g.
-combining row and column vectors to produce a matrix).   Moreover, like
+combining row and column vectors to produce a matrix). Moreover, like
 all vectorized "dot calls," these "dot operators" are
-*fusing*.  For example, if you compute `2 .* A.^2 .+ sin.(A)` for an
-array `A`, it performs a *single* loop over `A`, computing `2a^2 + sin(a)`
-for each element of `A`.  In particular, nested dot calls like `f.(g.(x))`
+*fusing*. For example, if you compute `2 .* A.^2 .+ sin.(A)` (or
+equivalently `@. 2A^2 + sin(A)`, using the [`@.`](@ref @__dot__) macro) for
+an array `A`, it performs a *single* loop over `A`, computing `2a^2 + sin(a)`
+for each element of `A`. In particular, nested dot calls like `f.(g.(x))`
 are fused, and "adjacent" binary operators like `x .+ 3 .* x.^2` are
 equivalent to nested dot calls `(+).(x, (*).(3, (^).(x, 2)))`.
 
-Furthermore, "dotted" updating operators like `a .+= b` are parsed
+Furthermore, "dotted" updating operators like `a .+= b` (or `@. a += b`) are parsed
 as `a .= a .+ b`, where `.=` is a fused *in-place* assignment operation
 (see the [dot syntax documentation](@ref man-vectorized)).
 
@@ -157,6 +168,11 @@ Note the dot syntax is also applicable to user-defined operators.
 For example, if you define `⊗(A,B) = kron(A,B)` to give a convenient
 infix syntax `A ⊗ B` for Kronecker products ([`kron`](@ref)), then
 `[A,B] .⊗ [C,D]` will compute `[A⊗C, B⊗D]` with no additional coding.
+
+Combining dot operators with numeric literals can be ambiguous.
+For example, it is not clear whether `1.+x` means `1. + x` or `1 .+ x`.
+Therefore this syntax is disallowed, and spaces must be used around
+the operator in such cases.
 
 ## Numeric Comparisons
 
@@ -173,7 +189,7 @@ Standard comparison operations are defined for all the primitive numeric types:
 
 Here are some simple examples:
 
-```julia
+```jldoctest
 julia> 1 == 1
 true
 
@@ -219,7 +235,7 @@ are compared according to the [IEEE 754 standard](https://en.wikipedia.org/wiki/
 
 The last point is potentially surprising and thus worth noting:
 
-```julia
+```jldoctest
 julia> NaN == NaN
 false
 
@@ -235,7 +251,7 @@ false
 
 and can cause especial headaches with [Arrays](@ref):
 
-```julia
+```jldoctest
 julia> [1 NaN] == [1 NaN]
 false
 ```
@@ -250,22 +266,22 @@ situations like hash key comparisons:
 | [`isinf(x)`](@ref)      | `x` is infinite           |
 | [`isnan(x)`](@ref)      | `x` is not a number       |
 
-[`isequal()`](@ref) considers `NaN`s equal to each other:
+[`isequal`](@ref) considers `NaN`s equal to each other:
 
-```julia
-julia> isequal(NaN,NaN)
+```jldoctest
+julia> isequal(NaN, NaN)
 true
 
 julia> isequal([1 NaN], [1 NaN])
 true
 
-julia> isequal(NaN,NaN32)
+julia> isequal(NaN, NaN32)
 true
 ```
 
-[`isequal()`](@ref) can also be used to distinguish signed zeros:
+`isequal` can also be used to distinguish signed zeros:
 
-```julia
+```jldoctest
 julia> -0.0 == 0.0
 true
 
@@ -276,9 +292,9 @@ false
 Mixed-type comparisons between signed integers, unsigned integers, and floats can be tricky. A
 great deal of care has been taken to ensure that Julia does them correctly.
 
-For other types, [`isequal()`](@ref) defaults to calling [`==()`](@ref), so if you want to define
-equality for your own types then you only need to add a [`==()`](@ref) method.  If you define
-your own equality function, you should probably define a corresponding [`hash()`](@ref) method
+For other types, `isequal` defaults to calling [`==`](@ref), so if you want to define
+equality for your own types then you only need to add a [`==`](@ref) method.  If you define
+your own equality function, you should probably define a corresponding [`hash`](@ref) method
 to ensure that `isequal(x,y)` implies `hash(x) == hash(y)`.
 
 ### Chaining comparisons
@@ -286,7 +302,7 @@ to ensure that `isequal(x,y)` implies `hash(x) == hash(y)`.
 Unlike most languages, with the [notable exception of Python](https://en.wikipedia.org/wiki/Python_syntax_and_semantics#Comparison_operators),
 comparisons can be arbitrarily chained:
 
-```julia
+```jldoctest
 julia> 1 < 2 <= 2 < 3 == 3 > 2 >= 1 == 1 < 3 != 5
 true
 ```
@@ -298,7 +314,7 @@ are true where the corresponding elements of `A` are between 0 and 1.
 
 Note the evaluation behavior of chained comparisons:
 
-```julia
+```jldoctest
 julia> v(x) = (println(x); x)
 v (generic function with 1 method)
 
@@ -320,33 +336,66 @@ comparison is undefined. It is strongly recommended not to use expressions with 
 as printing) in chained comparisons. If side effects are required, the short-circuit `&&` operator
 should be used explicitly (see [Short-Circuit Evaluation](@ref)).
 
-### Operator Precedence
-
-Julia applies the following order of operations, from highest precedence to lowest:
-
-| Category       | Operators                                                                                         |
-|:-------------- |:------------------------------------------------------------------------------------------------- |
-| Syntax         | `.` followed by `::`                                                                              |
-| Exponentiation | `^`                                                                                               |
-| Fractions      | `//`                                                                                              |
-| Multiplication | `* / % & \`                                                                                       |
-| Bitshifts      | `<< >> >>>`                                                                                       |
-| Addition       | `+ - \| ⊻`                                                                                        |
-| Syntax         | `: ..` followed by `\|>`                                                                          |
-| Comparisons    | `> < >= <= == === != !== <:`                                                                      |
-| Control flow   | `&&` followed by `\|\|` followed by `?`                                                           |
-| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            |
-
 ### Elementary Functions
 
 Julia provides a comprehensive collection of mathematical functions and operators. These mathematical
 operations are defined over as broad a class of numerical values as permit sensible definitions,
-including integers, floating-point numbers, rationals, and complexes, wherever such definitions
-make sense.
+including integers, floating-point numbers, rationals, and complex numbers,
+wherever such definitions make sense.
 
 Moreover, these functions (like any Julia function) can be applied in "vectorized" fashion to
 arrays and other collections with the [dot syntax](@ref man-vectorized) `f.(A)`,
-e.g. `sin.(A)` will compute the elementwise sine of each element of an array `A`.
+e.g. `sin.(A)` will compute the sine of each element of an array `A`.
+
+## Operator Precedence and Associativity
+
+Julia applies the following order and associativity of operations, from highest precedence to lowest:
+
+| Category       | Operators                                                                                         | Associativity              |
+|:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
+| Syntax         | `.` followed by `::`                                                                              | Left                       |
+| Exponentiation | `^`                                                                                               | Right                      |
+| Unary          | `+ - √`                                                                                           | Right[^1]                   |
+| Fractions      | `//`                                                                                              | Left                       |
+| Multiplication | `* / % & \`                                                                                       | Left[^2]                    |
+| Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
+| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                    |
+| Syntax         | `: ..` followed by `\|>`                                                                          | Left                       |
+| Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
+| Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
+| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
+
+[^1]:
+    The unary operators `+` and `-` require explicit parentheses around their argument to disambiguate them from the operator `++`, etc. Other compositions of unary operators are parsed with right-associativity, e. g., `√√-a` as `√(√(-a))`.
+[^2]:
+    The operators `+`, `++` and `*` are non-associative. `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),
+    c)`. However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.
+
+For a complete list of *every* Julia operator's precedence, see the top of this file:
+[`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm)
+
+You can also find the numerical precedence for any given operator via the built-in function `Base.operator_precedence`, where higher numbers take precedence:
+
+```jldoctest
+julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
+(9, 11, 15)
+
+julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
+(0, 1, 1)
+```
+
+A symbol representing the operator associativity can also be found by calling the built-in function `Base.operator_associativity`:
+
+```jldoctest
+julia> Base.operator_associativity(:-), Base.operator_associativity(:+), Base.operator_associativity(:^)
+(:left, :none, :right)
+
+julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Base.operator_associativity(:→)
+(:left, :none, :right)
+```
+
+Note that symbols such as `:sin` return precedence `0`. This value represents invalid operators and not
+operators of lowest precedence. Similarly, such operators are assigned associativity `:none`.
 
 ## Numerical Conversions
 
@@ -366,29 +415,32 @@ conversions.
 
 The following examples show the different forms.
 
-```julia
+```jldoctest
 julia> Int8(127)
 127
 
 julia> Int8(128)
-ERROR: InexactError()
- in Int8(::Int64) at ./sysimg.jl:66
- ...
+ERROR: InexactError: trunc(Int8, 128)
+Stacktrace:
+ [1] throw_inexacterror(::Symbol, ::Type{Int8}, ::Int64) at ./int.jl:34
+ [2] checked_trunc_sint at ./int.jl:419 [inlined]
+ [3] convert at ./int.jl:439 [inlined]
+ [4] Int8(::Int64) at ./sysimg.jl:102
 
 julia> Int8(127.0)
 127
 
 julia> Int8(3.14)
-ERROR: InexactError()
- in convert(::Type{Int8}, ::Float64) at ./float.jl:635
- in Int8(::Float64) at ./sysimg.jl:66
- ...
+ERROR: InexactError: convert(Int8, 3.14)
+Stacktrace:
+ [1] convert at ./float.jl:660 [inlined]
+ [2] Int8(::Float64) at ./sysimg.jl:102
 
 julia> Int8(128.0)
-ERROR: InexactError()
- in convert(::Type{Int8}, ::Float64) at ./float.jl:635
- in Int8(::Float64) at ./sysimg.jl:66
- ...
+ERROR: InexactError: convert(Int8, 128.0)
+Stacktrace:
+ [1] convert at ./float.jl:660 [inlined]
+ [2] Int8(::Float64) at ./sysimg.jl:102
 
 julia> 127 % Int8
 127
@@ -400,10 +452,10 @@ julia> round(Int8,127.4)
 127
 
 julia> round(Int8,127.6)
-ERROR: InexactError()
- in trunc(::Type{Int8}, ::Float64) at ./float.jl:628
- in round(::Type{Int8}, ::Float64) at ./float.jl:332
- ...
+ERROR: InexactError: trunc(Int8, 128.0)
+Stacktrace:
+ [1] trunc at ./float.jl:653 [inlined]
+ [2] round(::Type{Int8}, ::Float64) at ./float.jl:338
 ```
 
 See [Conversion and Promotion](@ref conversion-and-promotion) for how to define your own conversions and promotions.
@@ -430,7 +482,7 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`cld(x,y)`](@ref)    | ceiling division; quotient rounded towards `+Inf`                                                         |
 | [`rem(x,y)`](@ref)    | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
 | [`mod(x,y)`](@ref)    | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
-| [`mod1(x,y)`](@ref)   | `mod()` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
+| [`mod1(x,y)`](@ref)   | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
 | [`mod2pi(x)`](@ref)   | modulus with respect to 2pi;  `0 <= mod2pi(x)    < 2pi`                                                   |
 | [`divrem(x,y)`](@ref) | returns `(div(x,y),rem(x,y))`                                                                             |
 | [`fldmod(x,y)`](@ref) | returns `(fld(x,y),mod(x,y))`                                                                             |
@@ -466,9 +518,9 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`exponent(x)`](@ref)    | binary exponent of `x`                                                     |
 | [`significand(x)`](@ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
 
-For an overview of why functions like [`hypot()`](@ref), [`expm1()`](@ref), and [`log1p()`](@ref)
-are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](http://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),
-and [hypot](http://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/).
+For an overview of why functions like [`hypot`](@ref), [`expm1`](@ref), and [`log1p`](@ref)
+are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](https://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),
+and [hypot](https://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/).
 
 ### Trigonometric and hyperbolic functions
 
@@ -502,40 +554,8 @@ asind  acosd  atand  acotd  asecd  acscd
 
 | Function                                                      | Description                                                                                                                                                     |
 |:------------------------------------------------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`erf(x)`](@ref)                                              | [error function](https://en.wikipedia.org/wiki/Error_function) at `x`                                                                                           |
-| [`erfc(x)`](@ref)                                             | complementary error function, i.e. the accurate version of `1-erf(x)` for large `x`                                                                             |
-| [`erfinv(x)`](@ref)                                           | inverse function to [`erf()`](@ref)                                                                                                                             |
-| `erfcinv(x)`                                                  | inverse function to [`erfc()`](@ref)                                                                                                                            |
-| [`erfi(x)`](@ref)                                             | imaginary error function defined as `-im * erf(x * im)`, where [`im`](@ref) is the imaginary unit                                                               |
-| [`erfcx(x)`](@ref)                                            | scaled complementary error function, i.e. accurate `exp(x^2) * erfc(x)` for large `x`                                                                           |
-| [`dawson(x)`](@ref)                                           | scaled imaginary error function, a.k.a. Dawson function, i.e. accurate `exp(-x^2) * erfi(x) * sqrt(pi) / 2` for large `x`                                       |
 | [`gamma(x)`](@ref)                                            | [gamma function](https://en.wikipedia.org/wiki/Gamma_function) at `x`                                                                                           |
 | [`lgamma(x)`](@ref)                                           | accurate `log(gamma(x))` for large `x`                                                                                                                          |
 | [`lfact(x)`](@ref)                                            | accurate `log(factorial(x))` for large `x`; same as `lgamma(x+1)` for `x > 1`, zero otherwise                                                                   |
-| [`digamma(x)`](@ref)                                          | [digamma function](https://en.wikipedia.org/wiki/Digamma_function) (i.e. the derivative of [`lgamma()`](@ref)) at `x`                                           |
 | [`beta(x,y)`](@ref)                                           | [beta function](https://en.wikipedia.org/wiki/Beta_function) at `x,y`                                                                                           |
 | [`lbeta(x,y)`](@ref)                                          | accurate `log(beta(x,y))` for large `x` or `y`                                                                                                                  |
-| [`eta(x)`](@ref)                                              | [Dirichlet eta function](https://en.wikipedia.org/wiki/Dirichlet_eta_function) at `x`                                                                           |
-| [`zeta(x)`](@ref)                                             | [Riemann zeta function](https://en.wikipedia.org/wiki/Riemann_zeta_function) at `x`                                                                             |
-| [`airyai(z)`](@ref)                                           | [Airy Ai function](https://en.wikipedia.org/wiki/Airy_function) at `z`                                                                                          |
-| [`airyaiprime(z)`](@ref)                                      | derivative of the Airy Ai function at `z`                                                                                                                       |
-| [`airybi(z)`](@ref)                                           | [Airy Bi function](https://en.wikipedia.org/wiki/Airy_function) at `z`                                                                                          |
-| [`airybiprime(z)`](@ref)                                      | derivative of the Airy Bi function at `z`                                                                                                                       |
-| [`airyaix(z)`](@ref), [`airyaiprimex(z)`](@ref), [`airybix(z)`](@ref), [`airybiprimex(z)`](@ref) | scaled Airy AI function and `k` th derivatives at `z`                                                                                                           |
-| [`besselj(nu,z)`](@ref)                                       | [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the first kind of order `nu` at `z`                                                         |
-| [`besselj0(z)`](@ref)                                         | `besselj(0,z)`                                                                                                                                                  |
-| [`besselj1(z)`](@ref)                                         | `besselj(1,z)`                                                                                                                                                  |
-| [`besseljx(nu,z)`](@ref)                                      | scaled Bessel function of the first kind of order `nu` at `z`                                                                                                   |
-| [`bessely(nu,z)`](@ref)                                       | [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the second kind of order `nu` at `z`                                                        |
-| [`bessely0(z)`](@ref)                                         | `bessely(0,z)`                                                                                                                                                  |
-| [`bessely1(z)`](@ref)                                         | `bessely(1,z)`                                                                                                                                                  |
-| [`besselyx(nu,z)`](@ref)                                      | scaled Bessel function of the second kind of order `nu` at `z`                                                                                                  |
-| [`besselh(nu,k,z)`](@ref)                                     | [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the third kind (a.k.a. Hankel function) of order `nu` at `z`; `k` must be either `1` or `2` |
-| [`hankelh1(nu,z)`](@ref)                                      | `besselh(nu, 1, z)`                                                                                                                                             |
-| [`hankelh1x(nu,z)`](@ref)                                     | scaled `besselh(nu, 1, z)`                                                                                                                                      |
-| [`hankelh2(nu,z)`](@ref)                                      | `besselh(nu, 2, z)`                                                                                                                                             |
-| [`hankelh2x(nu,z)`](@ref)                                     | scaled `besselh(nu, 2, z)`                                                                                                                                      |
-| [`besseli(nu,z)`](@ref)                                       | modified [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the first kind of order `nu` at `z`                                                |
-| [`besselix(nu,z)`](@ref)                                      | scaled modified Bessel function of the first kind of order `nu` at `z`                                                                                          |
-| [`besselk(nu,z)`](@ref)                                       | modified [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the second kind of order `nu` at `z`                                               |
-| [`besselkx(nu,z)`](@ref)                                      | scaled modified Bessel function of the second kind of order `nu` at `z`                                                                                         |

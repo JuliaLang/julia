@@ -54,13 +54,69 @@ Base.workspace
 ans
 ```
 
+## Keywords
+
+```@docs
+module
+export
+import
+using
+baremodule
+function
+macro
+return
+do
+begin
+end
+let
+if
+for
+while
+break
+continue
+try
+finally
+quote
+local
+global
+const
+struct
+mutable struct
+abstract type
+primitive type
+...
+;
+```
+
+## Base Modules
+```@docs
+Base.BLAS
+Base.Dates
+Base.Distributed
+Base.Docs
+Base.Iterators
+Base.LAPACK
+Base.LibGit2
+Base.Libc
+Base.Libdl
+Base.LinAlg
+Base.Markdown
+Base.Meta
+Base.Pkg
+Base.Profile
+Base.Serializer
+Base.SparseArrays
+Base.StackTraces
+Base.Sys
+Base.Threads
+```
+
 ## All Objects
 
 ```@docs
 Core.:(===)
 Core.isa
-Base.isequal(::Any, ::Any)
-Base.isequal(::Nullable, ::Nullable)
+Base.isequal
 Base.isless
 Base.isless(::Nullable, ::Nullable)
 Base.ifelse
@@ -76,6 +132,7 @@ Base.finalize
 Base.copy
 Base.deepcopy
 Core.isdefined
+Base.@isdefined
 Base.convert
 Base.promote
 Base.oftype
@@ -83,12 +140,12 @@ Base.widen
 Base.identity
 ```
 
-## Types
+## Dealing with Types
 
 ```@docs
 Base.supertype
-Core.issubtype
-Base.:(<:)
+Core.:(<:)
+Base.:(>:)
 Base.subtypes
 Base.typemin
 Base.typemax
@@ -96,8 +153,7 @@ Base.realmin
 Base.realmax
 Base.maxintfloat
 Base.sizeof(::Type)
-Base.eps(::Union{Type{BigFloat},Type{Float64},Type{Float32},Type{Float16}})
-Base.eps()
+Base.eps(::Type{<:AbstractFloat})
 Base.eps(::AbstractFloat)
 Base.promote_type
 Base.promote_rule
@@ -107,22 +163,38 @@ Base.fieldoffset
 Core.fieldtype
 Base.isimmutable
 Base.isbits
-Base.isleaftype
+Base.isconcrete
 Base.typejoin
 Base.typeintersect
-Base.Val
-Base.Enums.@enum
 Base.instances
+```
+
+## Special Types
+
+```@docs
+Core.Void
+Core.Any
+Base.Enums.@enum
+Core.Union
+Union{}
+Core.UnionAll
+Core.Tuple
+Base.Val
+Core.Vararg
 ```
 
 ## Generic Functions
 
 ```@docs
+Core.Function
 Base.method_exists
 Core.applicable
 Core.invoke
+Base.invokelatest
+new
 Base.:(|>)
 Base.:(∘)
+Base.equalto
 ```
 
 ## Syntax
@@ -133,13 +205,17 @@ Base.@eval
 Base.evalfile
 Base.esc
 Base.@inbounds
+Base.@boundscheck
 Base.@inline
 Base.@noinline
+Base.@nospecialize
 Base.gensym
 Base.@gensym
+Base.@goto
+Base.@label
 Base.@polly
-Base.parse(::Any, ::Any)
-Base.parse(::Any)
+Base.parse(::AbstractString, ::Int)
+Base.parse(::AbstractString)
 ```
 
 ## Nullables
@@ -176,9 +252,6 @@ Base.getipaddr
 Base.Libc.getpid
 Base.Libc.time()
 Base.time_ns
-Base.tic
-Base.toc
-Base.toq
 Base.@time
 Base.@timev
 Base.@timed
@@ -186,11 +259,11 @@ Base.@elapsed
 Base.@allocated
 Base.EnvHash
 Base.ENV
-Base.is_unix
-Base.is_apple
-Base.is_linux
-Base.is_bsd
-Base.is_windows
+Base.Sys.isunix
+Base.Sys.isapple
+Base.Sys.islinux
+Base.Sys.isbsd
+Base.Sys.iswindows
 Base.Sys.windows_version
 Base.@static
 ```
@@ -248,12 +321,13 @@ Base.AsyncCondition(::Function)
 ```@docs
 Base.module_name
 Base.module_parent
-Base.current_module
+Base.@__MODULE__
 Base.fullname
 Base.names
 Core.nfields
 Base.fieldnames
 Base.fieldname
+Base.fieldcount
 Base.datatype_module
 Base.datatype_name
 Base.isconst
@@ -272,6 +346,7 @@ Base.gc
 Base.gc_enable
 Base.macroexpand
 Base.@macroexpand
+Base.@macroexpand1
 Base.expand
 Base.code_lowered
 Base.@code_lowered

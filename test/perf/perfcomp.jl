@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # usage: perfcomp.jl <baseline file> [<suite>]
 # This will run the specified suite (default "all") and compare it to stored

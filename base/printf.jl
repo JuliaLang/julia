@@ -1,7 +1,7 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Printf
-using Base.Grisu
+using Base: Grisu, GMP
 export @printf, @sprintf
 
 ### printf formatter generation ###
@@ -36,28 +36,29 @@ end
 ### printf format string parsing ###
 
 function parse(s::AbstractString)
-    # parse format string in to stings and format tuples
+    # parse format string into strings and format tuples
     list = []
     i = j = start(s)
+    j1 = 0 # invariant: j1 == prevind(s, j)
     while !done(s,j)
         c, k = next(s,j)
         if c == '%'
-            isempty(s[i:j-1]) || push!(list, s[i:j-1])
+            i > j1 || push!(list, s[i:j1])
             flags, width, precision, conversion, k = parse1(s,k)
             '\'' in flags && error("printf format flag ' not yet supported")
             conversion == 'n'    && error("printf feature %n not supported")
             push!(list, conversion == '%' ? "%" : (flags,width,precision,conversion))
-            i = j = k
-        else
-            j = k
+            i = k
         end
+        j1 = j
+        j = k
     end
-    isempty(s[i:end]) || push!(list, s[i:end])
+    i > endof(s) || push!(list, s[i:end])
     # coalesce adjacent strings
     i = 1
     while i < length(list)
         if isa(list[i],AbstractString)
-            for j = i+1:length(list)
+            for outer j = i+1:length(list)
                 if !isa(list[j],AbstractString)
                     j -= 1
                     break
@@ -98,7 +99,7 @@ function parse1(s::AbstractString, k::Integer)
     while c in "#0- + '"
         c, k = next_or_die(s,k)
     end
-    flags = String(s[j:k-2])
+    flags = String(s[j:prevind(s,k)-1]) # exploiting that all flags are one-byte.
     # parse width
     while '0' <= c <= '9'
         width = 10*width + c-'0'
@@ -299,8 +300,8 @@ function gen_d(flags::String, width::Int, precision::Int, c::Char)
         push!(blk.args, pad(width-precision, padding, ' '))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg?'-':'+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
+    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
                    push!(blk.args, :(neg && write(out, '-')))
     # print prefix
     for ch in prefix
@@ -362,8 +363,8 @@ function gen_f(flags::String, width::Int, precision::Int, c::Char)
         push!(blk.args, pad(width-1, padding, ' '))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg?'-':'+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
+    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
                    push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
     if padding !== nothing && !('-' in flags) && '0' in flags
@@ -456,8 +457,8 @@ function gen_e(flags::String, width::Int, precision::Int, c::Char, inside_g::Boo
         push!(blk.args, pad(width, padding, ' '))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg?'-':'+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
+    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
                    push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
     if padding !== nothing && !('-' in flags) && '0' in flags
@@ -554,7 +555,7 @@ function gen_a(flags::String, width::Int, precision::Int, c::Char)
         if '#' in flags
             padding = :($padding - (len-1))
         else
-            padding = :($padding - (len>1?len:0))
+            padding = :($padding - (len>1 ? len : 0))
         end
     end
     # print space padding
@@ -562,8 +563,8 @@ function gen_a(flags::String, width::Int, precision::Int, c::Char)
         push!(blk.args, pad(width, padding, ' '))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg?'-':'+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
+    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
                     push!(blk.args, :(neg && write(out, '-')))
     # hex prefix
     for ch in hexmark
@@ -617,11 +618,11 @@ function gen_c(flags::String, width::Int, precision::Int, c::Char)
     blk = Expr(:block, :($x = Char($x)))
     if width > 1 && !('-' in flags)
         p = '0' in flags ? '0' : ' '
-        push!(blk.args, pad(width-1, :($width-charwidth($x)), p))
+        push!(blk.args, pad(width-1, :($width-textwidth($x)), p))
     end
     push!(blk.args, :(write(out, $x)))
     if width > 1 && '-' in flags
-        push!(blk.args, pad(width-1, :($width-charwidth($x)), ' '))
+        push!(blk.args, pad(width-1, :($width-textwidth($x)), ' '))
     end
     :(($x)::Integer), blk
 end
@@ -630,7 +631,7 @@ function _limit(s, prec)
     prec >= sizeof(s) && return s
     p = prevind(s, prec+1)
     n = nextind(s, p)-1
-    s[1:(prec>=n?n:prevind(s,p))]
+    s[1:(prec>=n ? n : prevind(s,p))]
 end
 
 function gen_s(flags::String, width::Int, precision::Int, c::Char)
@@ -652,11 +653,11 @@ function gen_s(flags::String, width::Int, precision::Int, c::Char)
             push!(blk.args, :($x = _limit($x, $precision)))
         end
         if !('-' in flags)
-            push!(blk.args, pad(width, :($width-strwidth($x)), ' '))
+            push!(blk.args, pad(width, :($width-textwidth($x)), ' '))
         end
         push!(blk.args, :(write(out, $x)))
         if '-' in flags
-            push!(blk.args, pad(width, :($width-strwidth($x)), ' '))
+            push!(blk.args, pad(width, :($width-textwidth($x)), ' '))
         end
     else
         if precision!=-1
@@ -755,8 +756,8 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
                           $padexpr; end))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg?'-':'+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
+    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
                    push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
     if !('-' in flags) && '0' in flags
@@ -881,8 +882,7 @@ function decode(b::Int, x::BigInt)
     pt = Base.ndigits(x, abs(b))
     length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
     neg && (x.size = -x.size)
-    ccall((:__gmpz_get_str, :libgmp), Cstring,
-          (Ptr{UInt8}, Cint, Ptr{BigInt}), DIGITS, b, &x)
+    GMP.MPZ.get_str!(DIGITS, b, x)
     neg && (x.size = -x.size)
     return Int32(pt), Int32(pt), neg
 end
@@ -901,8 +901,7 @@ function decode_0ct(x::BigInt)
     length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
     neg && (x.size = -x.size)
     p = convert(Ptr{UInt8}, DIGITS) + 1
-    ccall((:__gmpz_get_str, :libgmp), Cstring,
-          (Ptr{UInt8}, Cint, Ptr{BigInt}), p, 8, &x)
+    GMP.MPZ.get_str!(p, 8, x)
     neg && (x.size = -x.size)
     return neg, Int32(pt), Int32(pt)
 end
@@ -1104,7 +1103,7 @@ ini_hex(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::In
 ini_HEX(out, d::BigFloat, ndigits::Int, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
 ini_hex(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
 ini_HEX(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char) = bigfloat_printf(out, d, flags, width, precision, c)
-function bigfloat_printf(out, d, flags::String, width::Int, precision::Int, c::Char)
+function bigfloat_printf(out, d::BigFloat, flags::String, width::Int, precision::Int, c::Char)
     fmt_len = sizeof(flags)+4
     if width > 0
         fmt_len += ndigits(width)
@@ -1130,10 +1129,12 @@ function bigfloat_printf(out, d, flags::String, width::Int, precision::Int, c::C
     write(fmt, UInt8(0))
     printf_fmt = take!(fmt)
     @assert length(printf_fmt) == fmt_len
-    bufsiz = length(DIGITS) - 1
-    lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), DIGITS, bufsiz, printf_fmt, &d)
+    bufsiz = length(DIGITS)
+    lng = ccall((:mpfr_snprintf,:libmpfr), Int32,
+                (Ptr{UInt8}, Culong, Ptr{UInt8}, Ref{BigFloat}...),
+                DIGITS, bufsiz, printf_fmt, d)
     lng > 0 || error("invalid printf formatting for BigFloat")
-    unsafe_write(out, pointer(DIGITS), min(lng,bufsiz))
+    unsafe_write(out, pointer(DIGITS), min(lng, bufsiz-1))
     return (false, ())
 end
 
@@ -1188,24 +1189,28 @@ function _printf(macroname, io, fmt, args)
     end
 
     unshift!(blk.args, :(out = $io))
-    Expr(:let, blk)
+    Expr(:let, Expr(:block), blk)
 end
 
 """
     @printf([io::IOStream], "%Fmt", args...)
 
-Print `args` using C `printf()` style format specification string, with some caveats:
+Print `args` using C `printf` style format specification string, with some caveats:
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
-`%e`, `%E`, `%f`, `%F`, `%g`, and `%G`.
+`%e`, `%E`, `%f`, `%F`, `%g`, and `%G`. Furthermore, if a floating point number is
+equally close to the numeric values of two possible output strings, the output
+string further away from zero is chosen.
 
 Optionally, an `IOStream`
 may be passed as the first argument to redirect output.
 
 # Examples
-
 ```jldoctest
 julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
 Inf Inf NaN NaN\n
+
+julia> @printf "%.0f %.1f %f\\n" 0.5 0.025 -0.0078125
+1 0.0 -0.007813
 ```
 """
 macro printf(args...)
@@ -1225,7 +1230,6 @@ end
 Return `@printf` formatted output as string.
 
 # Examples
-
 ```jldoctest
 julia> s = @sprintf "this is a %s %15.1f" "test" 34.567;
 
@@ -1238,7 +1242,7 @@ macro sprintf(args...)
     isa(args[1], AbstractString) || is_str_expr(args[1]) ||
         throw(ArgumentError("@sprintf: first argument must be a format string"))
     letexpr = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
-    push!(letexpr.args[1].args, :(String(take!(out))))
+    push!(letexpr.args[2].args, :(String(take!(out))))
     letexpr
 end
 

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 export threadid, nthreads, @threads
 
@@ -18,16 +18,25 @@ on `threadid()`.
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
+# Only read/written by the main thread
+const in_threaded_loop = Ref(false)
+
 function _threadsfor(iter,lbody)
-    fun = gensym("_threadsfor")
     lidx = iter.args[1]         # index
     range = iter.args[2]
     quote
-        function $fun()
-            tid = threadid()
-            r = $(esc(range))
+        range = $(esc(range))
+        function threadsfor_fun(onethread=false)
+            r = range # Load into local variable
+            lenr = length(r)
             # divide loop iterations among threads
-            len, rem = divrem(length(r), nthreads())
+            if onethread
+                tid = 1
+                len, rem = lenr, 0
+            else
+                tid = threadid()
+                len, rem = divrem(lenr, nthreads())
+            end
             # not enough iterations for all the threads?
             if len == 0
                 if tid > rem
@@ -54,7 +63,17 @@ function _threadsfor(iter,lbody)
                 $(esc(lbody))
             end
         end
-        ccall(:jl_threading_run, Void, (Any,), Core.svec($fun))
+        # Hack to make nested threaded loops kinda work
+        if threadid() != 1 || in_threaded_loop[]
+            # We are in a nested threaded loop
+            threadsfor_fun(true)
+        else
+            in_threaded_loop[] = true
+            # the ccall is not expected to throw
+            ccall(:jl_threading_run, Ref{Void}, (Any,), threadsfor_fun)
+            in_threaded_loop[] = false
+        end
+        nothing
     end
 end
 """
@@ -80,4 +99,3 @@ macro threads(args...)
         throw(ArgumentError("unrecognized argument to @threads"))
     end
 end
-

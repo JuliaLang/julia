@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## core string functions ##
 
@@ -10,20 +10,15 @@ next(s::AbstractString, i::Integer) = next(s,Int(i))
 string() = ""
 string(s::AbstractString) = s
 
-"""
-    String(s::AbstractString)
+(::Type{Vector{UInt8}})(s::AbstractString) = Vector{UInt8}(String(s))
+(::Type{Array{UInt8}})(s::AbstractString) = Vector{UInt8}(s)
+(::Type{Vector{Char}})(s::AbstractString) = collect(s)
 
-Convert a string to a contiguous byte array representation encoded as UTF-8 bytes.
-This representation is often appropriate for passing strings to C.
-"""
-String(s::AbstractString) = print_to_string(s)
+Symbol(s::AbstractString) = Symbol(String(s))
 
-convert(::Type{Vector{UInt8}}, s::AbstractString) = convert(Vector{UInt8}, String(s))
-convert(::Type{Array{UInt8}}, s::AbstractString) = convert(Vector{UInt8}, s)
-convert(::Type{String}, s::AbstractString) = String(s)
-convert(::Type{Vector{Char}}, s::AbstractString) = collect(s)
-convert(::Type{Symbol}, s::AbstractString) = Symbol(s)
-convert(::Type{String}, s::Symbol) = unsafe_string(Cstring(s))
+# string types are convertible
+convert(::Type{T}, s::T) where {T<:AbstractString} = s
+convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
 
 ## generic supplied functions ##
 
@@ -32,18 +27,21 @@ done(s::AbstractString,i) = (i > endof(s))
 getindex(s::AbstractString, i::Int) = next(s,i)[1]
 getindex(s::AbstractString, i::Integer) = s[Int(i)]
 getindex(s::AbstractString, i::Colon) = s
-getindex{T<:Integer}(s::AbstractString, r::UnitRange{T}) = s[Int(first(r)):Int(last(r))]
+getindex(s::AbstractString, r::UnitRange{<:Integer}) = s[Int(first(r)):Int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
-getindex(s::AbstractString, v::AbstractVector) =
+getindex(s::AbstractString, v::AbstractVector{<:Integer}) =
     sprint(length(v), io->(for i in v; write(io,s[i]) end))
+getindex(s::AbstractString, v::AbstractVector{Bool}) =
+    throw(ArgumentError("logical indexing not supported for strings"))
 
-Symbol(s::AbstractString) = Symbol(String(s))
+get(s::AbstractString, i::Integer, default) = isvalid(s,i) ? s[i] : default
 
 """
     sizeof(s::AbstractString)
 
 The number of bytes in string `s`.
 
+# Examples
 ```jldoctest
 julia> sizeof("❤")
 3
@@ -51,23 +49,26 @@ julia> sizeof("❤")
 """
 sizeof(s::AbstractString) = error("type $(typeof(s)) has no canonical binary representation")
 
-eltype{T<:AbstractString}(::Type{T}) = Char
+eltype(::Type{<:AbstractString}) = Char
 
 """
-```
-*(s::AbstractString, t::AbstractString)
-```
+    *(s::Union{AbstractString, Char}, t::Union{AbstractString, Char}...)
 
-Concatenate strings. The `*` operator is an alias to this function.
+Concatenate strings and/or characters, producing a [`String`](@ref). This is equivalent
+to calling the [`string`](@ref) function on the arguments.
 
+# Examples
 ```jldoctest
 julia> "Hello " * "world"
 "Hello world"
+
+julia> 'j' * "ulia"
+"julia"
 ```
 """
-(*)(s1::AbstractString, ss::AbstractString...) = string(s1, ss...)
+(*)(s1::Union{Char, AbstractString}, ss::Union{Char, AbstractString}...) = string(s1, ss...)
 
-one{T<:AbstractString}(::Union{T,Type{T}}) = convert(T, "")
+one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
 
 length(s::DirectIndexString) = endof(s)
 
@@ -75,6 +76,12 @@ length(s::DirectIndexString) = endof(s)
     length(s::AbstractString)
 
 The number of characters in string `s`.
+
+# Examples
+```jldoctest
+julia> length("jμΛIα")
+5
+```
 """
 function length(s::AbstractString)
     i = start(s)
@@ -93,7 +100,42 @@ function length(s::AbstractString)
 end
 
 ## string comparison functions ##
+"""
+    cmp(a::AbstractString, b::AbstractString)
 
+Compare two strings for equality.
+
+Return `0` if both strings have the same length and the character
+at each index is the same in both strings.
+Return `-1` if `a` is a substring of `b`, or if `a` comes before
+`b` in alphabetical order.
+Return `1` if `b` is a substring of `a`, or if `b` comes before
+`a` in alphabetical order.
+
+# Examples
+```jldoctest
+julia> cmp("abc", "abc")
+0
+
+julia> cmp("ab", "abc")
+-1
+
+julia> cmp("abc", "ab")
+1
+
+julia> cmp("ab", "ac")
+-1
+
+julia> cmp("ac", "ab")
+1
+
+julia> cmp("α", "a")
+1
+
+julia> cmp("b", "β")
+-1
+```
+"""
 function cmp(a::AbstractString, b::AbstractString)
     if a === b
         return 0
@@ -113,7 +155,39 @@ function cmp(a::AbstractString, b::AbstractString)
     done(b,j) ? 0 : -1
 end
 
+"""
+    ==(a::AbstractString, b::AbstractString)
+
+Test whether two strings are equal character by character.
+
+# Examples
+```jldoctest
+julia> "abc" == "abc"
+true
+
+julia> "abc" == "αβγ"
+false
+```
+"""
 ==(a::AbstractString, b::AbstractString) = cmp(a,b) == 0
+
+"""
+    isless(a::AbstractString, b::AbstractString)
+
+Test whether string `a` comes before string `b` in alphabetical order.
+
+# Examples
+```jldoctest
+julia> isless("a", "b")
+true
+
+julia> isless("β", "α")
+false
+
+julia> isless("a", "a")
+false
+```
+"""
 isless(a::AbstractString, b::AbstractString) = cmp(a,b) < 0
 
 # faster comparisons for symbols
@@ -129,7 +203,26 @@ isvalid(s::DirectIndexString, i::Integer) = (start(s) <= i <= endof(s))
 """
     isvalid(str::AbstractString, i::Integer)
 
-Tells whether index `i` is valid for the given string.
+Tell whether index `i` is valid for the given string.
+
+# Examples
+```jldoctest
+julia> str = "αβγdef";
+
+julia> isvalid(str, 1)
+true
+
+julia> str[1]
+'α': Unicode U+03b1 (category Ll: Letter, lowercase)
+
+julia> isvalid(str, 2)
+false
+
+julia> str[2]
+ERROR: UnicodeError: invalid character index
+Stacktrace:
+[...]
+```
 """
 function isvalid(s::AbstractString, i::Integer)
     i < 1 && return false
@@ -145,15 +238,38 @@ end
 ## Generic indexing functions ##
 
 prevind(s::DirectIndexString, i::Integer) = Int(i)-1
-prevind(s::AbstractArray    , i::Integer) = Int(i)-1
 nextind(s::DirectIndexString, i::Integer) = Int(i)+1
-nextind(s::AbstractArray    , i::Integer) = Int(i)+1
+
+function prevind(s::DirectIndexString, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    Int(i)-nchar
+end
+
+function nextind(s::DirectIndexString, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    Int(i)+nchar
+end
+
 
 """
-    prevind(str::AbstractString, i::Integer)
+    prevind(str::AbstractString, i::Integer, nchar::Integer=1)
 
 Get the previous valid string index before `i`.
 Returns a value less than `1` at the beginning of the string.
+If the `nchar` argument is given the function goes back `nchar` characters.
+
+# Examples
+```jldoctest
+julia> prevind("αβγdef", 3)
+1
+
+julia> prevind("αβγdef", 1)
+0
+
+julia> prevind("αβγdef", 3, 2)
+0
+
+```
 """
 function prevind(s::AbstractString, i::Integer)
     e = endof(s)
@@ -170,11 +286,49 @@ function prevind(s::AbstractString, i::Integer)
     return 0 # out of range
 end
 
+function prevind(s::AbstractString, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    e = endof(s)
+    j = Int(i)
+    j < 1 && return 0
+    while nchar > 0
+        if j > e
+            j = e
+        else
+            j -= 1
+            while j >= 1 && !isvalid(s,j)
+                j -= 1
+            end
+        end
+        j < 1 && return 0
+        nchar -= 1
+    end
+    j
+end
+
 """
-    nextind(str::AbstractString, i::Integer)
+    nextind(str::AbstractString, i::Integer, nchar::Integer=1)
 
 Get the next valid string index after `i`.
 Returns a value greater than `endof(str)` at or after the end of the string.
+If the `nchar` argument is given the function goes forward `nchar` characters.
+
+# Examples
+```jldoctest
+julia> str = "αβγdef";
+
+julia> nextind(str, 1)
+3
+
+julia> nextind(str, 1, 2)
+5
+
+julia> endof(str)
+9
+
+julia> nextind(str, 9)
+10
+```
 """
 function nextind(s::AbstractString, i::Integer)
     e = endof(s)
@@ -192,11 +346,30 @@ function nextind(s::AbstractString, i::Integer)
     next(s,e)[2] # out of range
 end
 
+function nextind(s::AbstractString, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    e = endof(s)
+    j = Int(i)
+    while nchar > 0
+        if j < 1
+            j = 1
+        else
+            j > e && return j + nchar
+            j == e && return next(s,e)[2] + nchar - 1
+            for outer j = j+1:e
+                isvalid(s,j) && break
+            end
+        end
+        nchar -= 1
+    end
+    j
+end
+
 checkbounds(s::AbstractString, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError(s, i))
-checkbounds{T<:Integer}(s::AbstractString, r::Range{T}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
-# The following will end up using a deprecated checkbounds, when T is not Integer
-checkbounds{T<:Real}(s::AbstractString, I::AbstractArray{T}) = all(i -> checkbounds(s, i), I)
-checkbounds{T<:Integer}(s::AbstractString, I::AbstractArray{T}) = all(i -> checkbounds(s, i), I)
+checkbounds(s::AbstractString, r::AbstractRange{<:Integer}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
+# The following will end up using a deprecated checkbounds, when the covariant parameter is not Integer
+checkbounds(s::AbstractString, I::AbstractArray{<:Real}) = all(i -> checkbounds(s, i), I)
+checkbounds(s::AbstractString, I::AbstractArray{<:Integer}) = all(i -> checkbounds(s, i), I)
 
 ind2chr(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
 chr2ind(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
@@ -207,44 +380,68 @@ chr2ind(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
 
 Convert a byte index `i` to a character index with
 respect to string `s`.
+
+See also [`chr2ind`](@ref).
+
+# Examples
+```jldoctest
+julia> str = "αβγdef";
+
+julia> ind2chr(str, 3)
+2
+
+julia> chr2ind(str, 2)
+3
+```
 """
 function ind2chr(s::AbstractString, i::Integer)
     s[i] # throws error if invalid
-    j = 1
-    k = start(s)
-    while true
-        c, l = next(s,k)
-        if i <= k
-            return j
-        end
-        j += 1
-        k = l
-    end
+    unsafe_ind2chr(s, i)
 end
 
 """
     chr2ind(s::AbstractString, i::Integer)
 
 Convert a character index `i` to a byte index.
+
+See also [`ind2chr`](@ref).
+
+# Examples
+```jldoctest
+julia> str = "αβγdef";
+
+julia> chr2ind(str, 2)
+3
+
+julia> ind2chr(str, 3)
+2
+```
 """
 function chr2ind(s::AbstractString, i::Integer)
     i < start(s) && throw(BoundsError(s, i))
+    k = unsafe_chr2ind(s, i)
+    s[k] # throws error if invalid
+    k
+end
+
+function map_chr_ind(s::AbstractString, i::Integer, stop, ret)
     j = 1
     k = start(s)
     while true
-        c, l = next(s,k)
-        if i == j
-            return k
-        end
+        i == stop((j, k)) && return ret((j, k)) # k could point after the last character
+        _, k = next(s, k)
         j += 1
-        k = l
     end
 end
 
-immutable EachStringIndex{T<:AbstractString}
+unsafe_ind2chr(s::AbstractString, i::Integer) = map_chr_ind(s, i, last, first)
+unsafe_chr2ind(s::AbstractString, i::Integer) = map_chr_ind(s, i, first, last)
+
+
+struct EachStringIndex{T<:AbstractString}
     s::T
 end
-eachindex(s::AbstractString) = EachStringIndex(s)
+keys(s::AbstractString) = EachStringIndex(s)
 
 length(e::EachStringIndex) = length(e.s)
 start(e::EachStringIndex) = start(e.s)
@@ -252,56 +449,59 @@ next(e::EachStringIndex, state) = (state, nextind(e.s, state))
 done(e::EachStringIndex, state) = done(e.s, state)
 eltype(::Type{EachStringIndex}) = Int
 
-## character column width function ##
-
-"""
-    strwidth(s::AbstractString)
-
-Gives the number of columns needed to print a string.
-
-```jldoctest
-julia> strwidth("March")
-5
-```
-"""
-strwidth(s::AbstractString) = (w=0; for c in s; w += charwidth(c); end; w)
-
 """
     isascii(c::Union{Char,AbstractString}) -> Bool
 
-Tests whether a character belongs to the ASCII character set, or whether this is true for
+Test whether a character belongs to the ASCII character set, or whether this is true for
 all elements of a string.
+
+# Examples
+```jldoctest
+julia> isascii('a')
+true
+
+julia> isascii('α')
+false
+
+julia> isascii("abc")
+true
+
+julia> isascii("αβγ")
+false
+```
 """
 isascii(c::Char) = c < Char(0x80)
 isascii(s::AbstractString) = all(isascii, s)
 
 ## string promotion rules ##
 
-promote_rule{S<:AbstractString,T<:AbstractString}(::Type{S}, ::Type{T}) = String
+promote_rule(::Type{<:AbstractString}, ::Type{<:AbstractString}) = String
 
 """
-    isxdigit(c::Union{Char,AbstractString}) -> Bool
+    isxdigit(c::Char) -> Bool
 
-Tests whether a character is a valid hexadecimal digit, or whether this is true for all elements of a string.
+Test whether a character is a valid hexadecimal digit. Note that this does not
+include `x` (as in the standard `0x` prefix).
 
+# Examples
 ```jldoctest
-julia> isxdigit("abc")
+julia> isxdigit('a')
 true
 
-julia> isxdigit("0x9")
+julia> isxdigit('x')
 false
 ```
 """
 isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
-isxdigit(s::AbstractString) = all(isxdigit, s)
 
 ## uppercase, lowercase, and titlecase transformations ##
 
 """
     uppercase(s::AbstractString)
 
-Returns `s` with all characters converted to uppercase.
+Return `s` with all characters converted to uppercase.
 
+# Examples
 ```jldoctest
 julia> uppercase("Julia")
 "JULIA"
@@ -312,8 +512,9 @@ uppercase(s::AbstractString) = map(uppercase, s)
 """
     lowercase(s::AbstractString)
 
-Returns `s` with all characters converted to lowercase.
+Return `s` with all characters converted to lowercase.
 
+# Examples
 ```jldoctest
 julia> lowercase("STRINGS AND THINGS")
 "strings and things"
@@ -324,8 +525,11 @@ lowercase(s::AbstractString) = map(lowercase, s)
 """
     titlecase(s::AbstractString)
 
-Capitalizes the first character of each word in `s`.
+Capitalize the first character of each word in `s`.
+See also [`ucfirst`](@ref) to capitalize only the first
+character in `s`.
 
+# Examples
 ```jldoctest
 julia> titlecase("the julia programming language")
 "The Julia Programming Language"
@@ -349,22 +553,30 @@ end
 """
     ucfirst(s::AbstractString)
 
-Returns `string` with the first character converted to uppercase.
+Return `string` with the first character converted to uppercase
+(technically "title case" for Unicode).
+See also [`titlecase`](@ref) to capitalize the first character of
+every word in `s`.
 
+# Examples
 ```jldoctest
 julia> ucfirst("python")
 "Python"
 ```
 """
 function ucfirst(s::AbstractString)
-    isempty(s) || isupper(s[1]) ? s : string(uppercase(s[1]),s[nextind(s,1):end])
+    isempty(s) && return s
+    c = s[1]
+    tc = titlecase(c)
+    return c==tc ? s : string(tc,s[nextind(s,1):end])
 end
 
 """
     lcfirst(s::AbstractString)
 
-Returns `string` with the first character converted to lowercase.
+Return `string` with the first character converted to lowercase.
 
+# Examples
 ```jldoctest
 julia> lcfirst("Julia")
 "julia"

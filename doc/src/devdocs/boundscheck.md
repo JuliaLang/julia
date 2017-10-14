@@ -5,17 +5,15 @@ accessing arrays. In tight inner loops or other performance critical situations,
 to skip these bounds checks to improve runtime performance. For instance, in order to emit vectorized
 (SIMD) instructions, your loop body cannot contain branches, and thus cannot contain bounds checks.
 Consequently, Julia includes an `@inbounds(...)` macro to tell the compiler to skip such bounds
-checks within the given block. For the built-in `Array` type, the magic happens inside the `arrayref`
-and `arrayset` intrinsics. User-defined array types instead use the `@boundscheck(...)` macro
+checks within the given block. User-defined array types can use the `@boundscheck(...)` macro
 to achieve context-sensitive code selection.
 
 ## Eliding bounds checks
 
-The `@boundscheck(...)` macro marks blocks of code that perform bounds checking. When such blocks
-appear inside of an `@inbounds(...)` block, the compiler removes these blocks. When the `@boundscheck(...)`
-is nested inside of a calling function containing an `@inbounds(...)`, the compiler will remove
-the `@boundscheck` block *only if it is inlined* into the calling function. For example, you might
-write the method `sum` as:
+The `@boundscheck(...)` macro marks blocks of code that perform bounds checking.
+When such blocks are inlined into an `@inbounds(...)` block, the compiler may remove these blocks.
+The compiler removes the `@boundscheck` block *only if it is inlined* into the calling function.
+For example, you might write the method `sum` as:
 
 ```julia
 function sum(A::AbstractArray)
@@ -42,8 +40,8 @@ code further up the stack.
 
 There may be certain scenarios where for code-organization reasons you want more than one layer
 between the `@inbounds` and `@boundscheck` declarations. For instance, the default `getindex`
-methods have the chain `getindex(A::AbstractArray, i::Real)` calls `getindex(linearindexing(A), A, i)`
-calls `_getindex(::LinearFast, A, i)`.
+methods have the chain `getindex(A::AbstractArray, i::Real)` calls `getindex(IndexStyle(A), A, i)`
+calls `_getindex(::IndexLinear, A, i)`.
 
 To override the "one layer of inlining" rule, a function may be marked with `@propagate_inbounds`
 to propagate an inbounds context (or out of bounds context) through one additional layer of inlining.

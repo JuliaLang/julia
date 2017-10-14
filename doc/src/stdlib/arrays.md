@@ -1,5 +1,36 @@
 # [Arrays](@id lib-arrays)
 
+## Constructors and Types
+
+```@docs
+Core.AbstractArray
+Base.AbstractVector
+Base.AbstractMatrix
+Core.Array
+Core.Array(::Any)
+Base.Vector
+Base.Vector(::Any)
+Base.Matrix
+Base.Matrix(::Any, ::Any)
+Base.getindex(::Type, ::Any...)
+Base.zeros
+Base.ones
+Base.BitArray
+Base.BitArray(::Integer...)
+Base.BitArray(::Any)
+Base.trues
+Base.falses
+Base.fill
+Base.fill!
+Base.similar(::AbstractArray)
+Base.similar(::Any, ::Tuple)
+Base.eye
+Base.linspace
+Base.logspace
+Base.Random.randsubseq
+Base.Random.randsubseq!
+```
+
 ## Basic functions
 
 ```@docs
@@ -10,8 +41,7 @@ Base.indices(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
 Base.eachindex
 Base.linearindices
-Base.linearindexing
-Base.countnz
+Base.IndexStyle
 Base.conj!
 Base.stride
 Base.strides
@@ -20,51 +50,54 @@ Base.sub2ind
 Base.LinAlg.checksquare
 ```
 
-## Constructors
+## Broadcast and vectorization
 
-```@docs
-Core.Array
-Base.getindex(::Type, ::Any...)
-Base.zeros
-Base.ones
-Base.BitArray
-Base.trues
-Base.falses
-Base.fill
-Base.fill!
-Base.reshape
-Base.similar(::AbstractArray)
-Base.similar(::Any, ::Tuple)
-Base.reinterpret
-Base.eye
-Base.linspace
-Base.logspace
-```
-
-## Mathematical operators and functions
-
-All mathematical operations and functions are supported for arrays
+See also the [dot syntax for vectorizing functions](@ref man-vectorized);
+for example, `f.(args...)` implicitly calls `broadcast(f, args...)`.
+Rather than relying on "vectorized" methods of functions like `sin`
+to operate on arrays, you should use `sin.(a)` to vectorize via `broadcast`.
 
 ```@docs
 Base.broadcast
 Base.Broadcast.broadcast!
+Base.@__dot__
+Base.Broadcast.broadcast_getindex
+Base.Broadcast.broadcast_setindex!
 ```
 
-## Indexing, Assignment, and Concatenation
+## Indexing and assignment
 
 ```@docs
 Base.getindex(::AbstractArray, ::Any...)
+Base.setindex!(::AbstractArray, ::Any, ::Any...)
+Base.copy!(::AbstractArray, ::CartesianRange, ::AbstractArray, ::CartesianRange)
+Base.isassigned
+Base.Colon
+Base.CartesianIndex
+Base.CartesianRange
+Base.to_indices
+Base.checkbounds
+Base.checkindex
+```
+
+## Views (SubArrays and other view types)
+
+```@docs
 Base.view
 Base.@view
-Base.to_indices
-Base.Colon
+Base.@views
 Base.parent
 Base.parentindexes
 Base.slicedim
-Base.setindex!(::AbstractArray, ::Any, ::Any...)
-Base.Broadcast.broadcast_getindex
-Base.Broadcast.broadcast_setindex!
-Base.isassigned
+Base.reinterpret
+Base.reshape
+Base.squeeze
+Base.vec
+```
+
+## Concatenation and permutation
+
+```@docs
 Base.cat
 Base.vcat
 Base.hcat
@@ -78,26 +111,17 @@ Base.find(::Function, ::Any)
 Base.findn
 Base.findnz
 Base.findfirst(::Any)
-Base.findfirst(::Any, ::Any)
 Base.findfirst(::Function, ::Any)
 Base.findlast(::Any)
-Base.findlast(::Any, ::Any)
 Base.findlast(::Function, ::Any)
 Base.findnext(::Any, ::Integer)
 Base.findnext(::Function, ::Any, ::Integer)
-Base.findnext(::Any, ::Any, ::Integer)
 Base.findprev(::Any, ::Integer)
 Base.findprev(::Function, ::Any, ::Integer)
-Base.findprev(::Any, ::Any, ::Integer)
 Base.permutedims
 Base.permutedims!
-Base.squeeze
-Base.vec
+Base.PermutedDimsArray
 Base.promote_shape
-Base.checkbounds
-Base.checkindex
-Base.Random.randsubseq
-Base.Random.randsubseq!
 ```
 
 ## Array functions
@@ -110,8 +134,9 @@ Base.cumprod!
 Base.cumsum
 Base.cumsum!
 Base.cumsum_kbn
+Base.crc32c
 Base.LinAlg.diff
-Base.LinAlg.gradient
+Base.repeat(::AbstractArray)
 Base.rot180
 Base.rotl90
 Base.rotr90
@@ -125,11 +150,13 @@ Base.sum_kbn
 
 ```@docs
 Base.Random.randperm
+Base.Random.randperm!
 Base.invperm
 Base.isperm
-Base.permute!{T}(::Any, ::AbstractArray{T, 1})
+Base.permute!(::Any, ::AbstractVector)
 Base.ipermute!
 Base.Random.randcycle
+Base.Random.randcycle!
 Base.Random.shuffle
 Base.Random.shuffle!
 Base.reverse
@@ -139,24 +166,22 @@ Base.reverse!
 
 ## BitArrays
 
-`BitArray`s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
- They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
+[`BitArray`](@ref)s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
+They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
 and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
 
 ```@docs
 Base.flipbits!
-Base.rol!
-Base.rol
-Base.ror!
-Base.ror
 ```
 
-## Sparse Vectors and Matrices
+## [Sparse Vectors and Matrices](@id stdlib-sparse-arrays)
 
 Sparse vectors and matrices largely support the same set of operations as their dense counterparts.
 The following functions are specific to sparse arrays.
 
 ```@docs
+Base.SparseArrays.SparseVector
+Base.SparseArrays.SparseMatrixCSC
 Base.SparseArrays.sparse
 Base.SparseArrays.sparsevec
 Base.SparseArrays.issparse

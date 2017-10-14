@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## File Operations (Libuv-based) ##
 
@@ -21,7 +21,6 @@ export File,
        StatStruct,
        # open,
        futime,
-       unlink,
        write,
        JL_O_WRONLY,
        JL_O_RDONLY,
@@ -45,7 +44,7 @@ import Base:
     skip, stat, unsafe_read, unsafe_write, transcode, uv_error, uvhandle,
     uvtype, write
 
-if is_windows()
+if Sys.iswindows()
     import Base: cwstring
 end
 
@@ -53,13 +52,13 @@ include("path.jl")
 include("stat.jl")
 include("file.jl")
 include("poll.jl")
-include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
+include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
 
 ## Operations with File (fd) objects ##
 
-abstract AbstractFile <: IO
+abstract type AbstractFile <: IO end
 
-type File <: AbstractFile
+mutable struct File <: AbstractFile
     open::Bool
     handle::RawFD
     File(fd::RawFD) = new(true, fd)
@@ -69,7 +68,8 @@ end
 uvhandle(file::File) = convert(Ptr{Void}, Base.cconvert(Cint, file.handle) % UInt)
 uvtype(::File) = Base.UV_RAW_FD
 
-function open(path::AbstractString, flags::Integer, mode::Integer=0) # FS.open, not Base.open
+# Filesystem.open, not Base.open
+function open(path::AbstractString, flags::Integer, mode::Integer=0)
     req = Libc.malloc(_sizeof_uv_fs)
     local handle
     try

@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # ––––––––––
 # Paragraphs
 # ––––––––––
 
-type Paragraph
+mutable struct Paragraph
     content
 end
 
@@ -40,7 +40,7 @@ end
 # Headers
 # –––––––
 
-type Header{level}
+mutable struct Header{level}
     text
 end
 
@@ -61,7 +61,7 @@ function hashheader(stream::IO, md::MD)
             return false
 
         if c != '\n' # Empty header
-            h = readline(stream) |> strip
+            h = strip(readline(stream))
             h = match(r"(.*?)( +#+)?$", h).captures[1]
             buffer = IOBuffer()
             print(buffer, h)
@@ -76,11 +76,11 @@ end
 function setextheader(stream::IO, md::MD)
     withstream(stream) do
         eatindent(stream) || return false
-        header = readline(stream) |> strip
-        header == "" && return false
+        header = strip(readline(stream))
+        isempty(header) && return false
 
         eatindent(stream) || return false
-        underline = readline(stream) |> strip
+        underline = strip(readline(stream))
         length(underline) < 3 && return false
         u = underline[1]
         u in "-=" || return false
@@ -96,7 +96,7 @@ end
 # Code
 # ––––
 
-type Code
+mutable struct Code
     language::String
     code::String
 end
@@ -108,7 +108,7 @@ function indentcode(stream::IO, block::MD)
         buffer = IOBuffer()
         while !eof(stream)
             if startswith(stream, "    ") || startswith(stream, "\t")
-                write(buffer, readline(stream))
+                write(buffer, readline(stream, chomp=false))
             elseif blankline(stream)
                 write(buffer, '\n')
             else
@@ -125,7 +125,7 @@ end
 # Footnote
 # --------
 
-type Footnote
+mutable struct Footnote
     id::String
     text
 end
@@ -139,10 +139,10 @@ function footnote(stream::IO, block::MD)
         else
             ref = match(regex, str).captures[1]
             buffer = IOBuffer()
-            write(buffer, readline(stream))
+            write(buffer, readline(stream, chomp=false))
             while !eof(stream)
                 if startswith(stream, "    ")
-                    write(buffer, readline(stream))
+                    write(buffer, readline(stream, chomp=false))
                 elseif blankline(stream)
                     write(buffer, '\n')
                 else
@@ -160,7 +160,7 @@ end
 # Quotes
 # ––––––
 
-type BlockQuote
+mutable struct BlockQuote
     content
 end
 
@@ -174,7 +174,7 @@ function blockquote(stream::IO, block::MD)
         empty = true
         while eatindent(stream) && startswith(stream, '>')
             startswith(stream, " ")
-            write(buffer, readline(stream))
+            write(buffer, readline(stream, chomp=false))
             empty = false
         end
         empty && return false
@@ -189,7 +189,7 @@ end
 # Admonitions
 # -----------
 
-type Admonition
+mutable struct Admonition
     category::String
     title::String
     content::Vector
@@ -229,7 +229,7 @@ function admonition(stream::IO, block::MD)
         buffer = IOBuffer()
         while !eof(stream)
             if startswith(stream, "    ")
-                write(buffer, readline(stream))
+                write(buffer, readline(stream, chomp=false))
             elseif blankline(stream)
                 write(buffer, '\n')
             else
@@ -247,7 +247,7 @@ end
 # Lists
 # –––––
 
-type List
+mutable struct List
     items::Vector{Any}
     ordered::Int # `-1` is unordered, `>= 0` is ordered.
 
@@ -305,7 +305,7 @@ function list(stream::IO, block::MD)
                 newline = false
                 if startswith(stream, " "^indent)
                     # Indented text that is part of the current list item.
-                    print(buffer, readline(stream))
+                    print(buffer, readline(stream, chomp=false))
                 else
                     matched = startswith(stream, regex)
                     if isempty(matched)
@@ -316,7 +316,7 @@ function list(stream::IO, block::MD)
                         # Start of a new list item.
                         count += 1
                         count > 1 && pushitem!(list, buffer)
-                        print(buffer, readline(stream))
+                        print(buffer, readline(stream, chomp=false))
                     end
                 end
             end
@@ -332,7 +332,7 @@ pushitem!(list, buffer) = push!(list.items, parse(String(take!(buffer))).content
 # HorizontalRule
 # ––––––––––––––
 
-type HorizontalRule
+mutable struct HorizontalRule
 end
 
 function horizontalrule(stream::IO, block::MD)

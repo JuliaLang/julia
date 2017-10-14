@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## Unary operators ##
 
@@ -8,14 +8,28 @@
 Transform an array to its complex conjugate in-place.
 
 See also [`conj`](@ref).
-"""
-conj!{T<:Number}(A::AbstractArray{T}) = (@inbounds broadcast!(conj, A, A); A)
 
-for f in (:-, :~, :conj, :sign, :real, :imag)
+# Examples
+```jldoctest
+julia> A = [1+im 2-im; 2+2im 3+im]
+2×2 Array{Complex{Int64},2}:
+ 1+1im  2-1im
+ 2+2im  3+1im
+
+julia> conj!(A);
+
+julia> A
+2×2 Array{Complex{Int64},2}:
+ 1-1im  2+1im
+ 2-2im  3-1im
+```
+"""
+conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
+
+for f in (:-, :conj, :real, :imag)
     @eval ($f)(A::AbstractArray) = broadcast($f, A)
 end
 
-!(A::AbstractArray{Bool}) = broadcast(!, A)
 
 ## Binary arithmetic operators ##
 
@@ -26,18 +40,18 @@ for f in (:+, :-)
     end
 end
 
-for f in (:/, :\, :*, :+, :-)
+for f in (:/, :\, :*)
     if f != :/
-        @eval ($f){T}(A::Number, B::AbstractArray{T}) = broadcast($f, A, B)
+        @eval ($f)(A::Number, B::AbstractArray) = broadcast($f, A, B)
     end
     if f != :\
-        @eval ($f){T}(A::AbstractArray{T}, B::Number) = broadcast($f, A, B)
+        @eval ($f)(A::AbstractArray, B::Number) = broadcast($f, A, B)
     end
 end
 
 ## data movement ##
 
-function flipdim{T}(A::Array{T}, d::Integer)
+function flipdim(A::Array{T}, d::Integer) where T
     nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
@@ -103,6 +117,7 @@ end
 
 Rotate matrix `A` left 90 degrees.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -130,6 +145,7 @@ end
 
 Rotate matrix `A` right 90 degrees.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -156,6 +172,7 @@ end
 
 Rotate matrix `A` 180 degrees.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -183,6 +200,7 @@ end
 Rotate matrix `A` left 90 degrees an integer `k` number of times.
 If `k` is zero or a multiple of four, this is equivalent to a `copy`.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -222,6 +240,7 @@ end
 Rotate matrix `A` right 90 degrees an integer `k` number of times. If `k` is zero or a
 multiple of four, this is equivalent to a `copy`.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -256,6 +275,7 @@ rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 Rotate matrix `A` 180 degrees an integer `k` number of times.
 If `k` is even, this is equivalent to a `copy`.
 
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:

@@ -38,11 +38,11 @@
       <item> for </item>
       <item> function </item>
       <item> if </item>
-      <item> immutable </item>
+      <item> struct </item>
       <item> let </item>
       <item> quote </item>
       <item> try </item>
-      <item> type </item>
+      <item> mutable struct </item>
       <item> while </item>
     </list>
     <list name="block_eb">
@@ -55,8 +55,8 @@
       <item> end </item>
     </list>
     <list name="keywords">
-      <item> abstract </item>
-      <item> bitstype </item>
+      <item> abstract type </item>
+      <item> primitive type </item>
       <item> break </item>
       <item> ccall </item>
       <item> const </item>
@@ -77,6 +77,7 @@
     <list name="types">
       <item> AbstractArray </item>
       <item> AbstractMatrix </item>
+      <item> AbstractRange </item>
       <item> AbstractRemoteRef </item>
       <item> AbstractSparseMatrix </item>
       <item> AbstractVector </item>
@@ -148,10 +149,7 @@
       <item> PipeBuffer </item>
       <item> ProcessGroup </item>
       <item> Ptr </item>
-      <item> Range </item>
-      <item> Range1 </item>
       <item> RangeIndex </item>
-      <item> Ranges </item>
       <item> Rational </item>
       <item> Real </item>
       <item> Regex </item>
@@ -193,6 +191,7 @@
       <item> UInt64 </item>
       <item> UInt128 </item>
       <item> Union </item>
+      <item> UnitRange </item>
       <item> Unsigned </item>
       <item> UVError </item>
       <item> VecOrMat </item>
@@ -263,7 +262,6 @@
       <item> TypeError </item>
 
       <item> Collections </item>
-      <item> FFTW </item>
       <item> Order </item>
       <item> Sys </item>
       <item> Test </item>
@@ -307,8 +305,8 @@
       <item> im </item>
       <item> π </item>
       <item> pi </item>
+      <item> ℯ </item>
       <item> e </item>
-      <item> eu </item>
       <item> γ </item>
       <item> eulergamma </item>
       <item> catalan </item>

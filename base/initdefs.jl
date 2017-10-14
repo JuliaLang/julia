@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## initdefs.jl - initialization and runtime management definitions
 
@@ -9,7 +9,7 @@ A string containing the script name passed to Julia from the command line. Note 
 script name remains unchanged from within included files. Alternatively see
 [`@__FILE__`](@ref).
 """
-PROGRAM_FILE = ""
+global PROGRAM_FILE = ""
 
 """
     ARGS
@@ -18,57 +18,65 @@ An array of the command line arguments passed to Julia, as strings.
 """
 const ARGS = String[]
 
+"""
+    exit(code=0)
+
+Quit the program with an exit code. The default exit code is zero, indicating that the
+program completed successfully (see also [`quit`](@ref)). In an interactive session,
+`exit()` can be called with the keyboard shorcut `^D`.
+
+"""
 exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
+
+"""
+    quit()
+
+Quit the program indicating successful completion. This function is equivalent to
+`exit(0)` (see [`exit`](@ref)). In an interactive session, `quit()` can be called
+with the keyboard shorcut `^D`.
+"""
 quit() = exit()
 
 const roottask = current_task()
 
 is_interactive = false
+
+"""
+    isinteractive() -> Bool
+
+Determine whether Julia is running an interactive session.
+"""
 isinteractive() = (is_interactive::Bool)
 
 """
     LOAD_PATH
 
-An array of paths (as strings) where the `require` function looks for code.
-"""
-const LOAD_PATH = String[]
+An array of paths as strings or custom loader objects for the `require`
+function and `using` and `import` statements to consider when loading
+code. To create a custom loader type, define the type and then add
+appropriate methods to the `Base.load_hook` function with the following
+signature:
 
+    Base.load_hook(loader::Loader, name::String, found::Any)
+
+The `loader` argument is the current value in `LOAD_PATH`, `name` is the
+name of the module to load, and `found` is the path of any previously
+found code to provide `name`. If no provider has been found earlier in
+`LOAD_PATH` then the value of `found` will be `nothing`. Custom loader
+functionality is experimental and may break or change in Julia 1.0.
+"""
+const LOAD_PATH = Any[]
 const LOAD_CACHE_PATH = String[]
-function init_load_path()
+
+function init_load_path(JULIA_HOME = JULIA_HOME)
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV, "JULIA_LOAD_PATH")
-        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @static is_windows() ? ';' : ':'))
+        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @static Sys.iswindows() ? ';' : ':'))
     end
     push!(LOAD_PATH, abspath(JULIA_HOME, "..", "local", "share", "julia", "site", vers))
     push!(LOAD_PATH, abspath(JULIA_HOME, "..", "share", "julia", "site", vers))
     #push!(LOAD_CACHE_PATH, abspath(JULIA_HOME, "..", "lib", "julia")) #TODO: add a builtin location?
-end
-
-# initialize the local proc network address / port
-function init_bind_addr()
-    opts = JLOptions()
-    if opts.bindto != C_NULL
-        bind_to = split(unsafe_string(opts.bindto), ":")
-        bind_addr = string(parse(IPAddr, bind_to[1]))
-        if length(bind_to) > 1
-            bind_port = parse(Int,bind_to[2])
-        else
-            bind_port = 0
-        end
-    else
-        bind_port = 0
-        try
-            bind_addr = string(getipaddr())
-        catch
-            # All networking is unavailable, initialize bind_addr to the loopback address
-            # Will cause an exception to be raised only when used.
-            bind_addr = "127.0.0.1"
-        end
-    end
-    global LPROC
-    LPROC.bind_addr = bind_addr
-    LPROC.bind_port = UInt16(bind_port)
 end
 
 function early_init()
@@ -89,23 +97,14 @@ A string containing the full path to the directory containing the `julia` execut
 """
 :JULIA_HOME
 
-function init_parallel()
-    start_gc_msgs_task()
-    atexit(terminate_all_workers)
-
-    init_bind_addr()
-
-    # start in "head node" mode, if worker, will override later.
-    global PGRP
-    global LPROC
-    LPROC.id = 1
-    cluster_cookie(randstring(HDR_COOKIE_LEN))
-    assert(isempty(PGRP.workers))
-    register_worker(LPROC)
-end
-
 const atexit_hooks = []
 
+"""
+    atexit(f)
+
+Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
+called in last in first out (LIFO) order and run before object finalizers.
+"""
 atexit(f::Function) = (unshift!(atexit_hooks, f); nothing)
 
 function _atexit()

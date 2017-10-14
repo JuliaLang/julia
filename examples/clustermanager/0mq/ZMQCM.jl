@@ -1,6 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using ZMQ
+# the 0mq clustermanager depends on package ZMQ. For testing purposes, at least
+# make sure the code loads without it.
+try
+    using ZMQ
+end
 
 import Base: launch, manage, connect, kill
 
@@ -17,7 +21,7 @@ const REQUEST_ACK = "R"
 const ACK_MSG = "A"
 const KILL_MSG = "K"
 
-type ZMQCMan <: ClusterManager
+mutable struct ZMQCMan <: ClusterManager
     map_zmq_julia::Dict{Int, Tuple}
     c::Condition
     isfree::Bool
@@ -271,7 +275,7 @@ end
 function print_worker_stdout(io, pid)
     @schedule while !eof(io)
         line = readline(io)
-        print("\tFrom worker $(pid):\t$line")
+        println("\tFrom worker $(pid):\t$line")
     end
 end
 

@@ -1,12 +1,11 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
-#
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # These tests cover the higher order functions specialized for sparse arrays defined in
 # base/sparse/higherorderfns.jl, particularly map[!]/broadcast[!] for SparseVectors and
 # SparseMatrixCSCs at present.
 
 @testset "map[!] implementation specialized for a single (input) sparse vector/matrix" begin
     N, M = 10, 12
-    # (also the implementation for broadcast[!] over a single (input) sparse vector/matrix)
     for shapeA in ((N,), (N, M))
         A = sprand(shapeA..., 0.4); fA = Array(A)
         # --> test map entry point
@@ -76,18 +75,87 @@ end
     end
 end
 
-@testset "broadcast[!] implementation specialized for a single (input) sparse vector/matrix" begin
-    # broadcast[!] for a single sparse vector/matrix falls back to map[!], tested extensively
-    # above. here we simply lightly exercise the relevant broadcast[!] entry points.
+@testset "broadcast! implementation specialized for solely an output sparse vector/matrix (no inputs)" begin
+    N, M, p = 10, 12, 0.4
+    V, C = sprand(N, p), sprand(N, M, p)
+    fV, fC = Array(V), Array(C)
+    @test broadcast!(() -> 0, V) == sparse(broadcast!(() -> 0, fV))
+    @test broadcast!(() -> 0, C) == sparse(broadcast!(() -> 0, fC))
+    @test let z = 0, fz = 0; broadcast!(() -> z += 1, V) == broadcast!(() -> fz += 1, fV); end
+    @test let z = 0, fz = 0; broadcast!(() -> z += 1, C) == broadcast!(() -> fz += 1, fC); end
+end
+
+@testset "broadcast implementation specialized for a single (input) sparse vector/matrix" begin
+    # broadcast for a single (input) sparse vector/matrix falls back to map, tested
+    # extensively above. here we simply lightly exercise the relevant broadcast entry
+    # point.
     N, M, p = 10, 12, 0.4
     a, A = sprand(N, p), sprand(N, M, p)
     fa, fA = Array(a), Array(A)
     @test broadcast(sin, a) == sparse(broadcast(sin, fa))
     @test broadcast(sin, A) == sparse(broadcast(sin, fA))
-    @test broadcast!(sin, copy(a), a) == sparse(broadcast!(sin, copy(fa), fa))
-    @test broadcast!(sin, copy(A), A) == sparse(broadcast!(sin, copy(fA), fA))
-    @test broadcast!(identity, copy(a), a) == sparse(broadcast!(identity, copy(fa), fa))
-    @test broadcast!(identity, copy(A), A) == sparse(broadcast!(identity, copy(fA), fA))
+end
+
+@testset "broadcast! implementation specialized for a single (input) sparse vector/matrix" begin
+    N, M, p = 10, 12, 0.3
+    f(x, y) = x + y + 1
+    mats = (sprand(N, M, p), sprand(N, 1, p), sprand(1, M, p), sprand(1, 1, 1.0), spzeros(1, 1))
+    vecs = (sprand(N, p), sprand(1, 1.0), spzeros(1))
+    # --> test with matrix destination (Z/fZ)
+    fZ = Array(first(mats))
+    for Xo in (mats..., vecs...)
+        X = ndims(Xo) == 1 ? SparseVector{Float32,Int32}(Xo) : SparseMatrixCSC{Float32,Int32}(Xo)
+        shapeX, fX = size(X), Array(X)
+        # --> test broadcast! entry point / zero-preserving op
+        broadcast!(sin, fZ, fX); Z = sparse(fZ)
+        broadcast!(sin, Z, X); Z = sparse(fZ) # warmup for @allocated
+        @test (@allocated broadcast!(sin, Z, X)) == 0
+        @test broadcast!(sin, Z, X) == sparse(broadcast!(sin, fZ, fX))
+        # --> test broadcast! entry point / not-zero-preserving op
+        broadcast!(cos, fZ, fX); Z = sparse(fZ)
+        broadcast!(cos, Z, X); Z = sparse(fZ) # warmup for @allocated
+        @test (@allocated broadcast!(cos, Z, X)) == 0
+        @test broadcast!(cos, Z, X) == sparse(broadcast!(cos, fZ, fX))
+        # --> test shape checks for broadcast! entry point
+        # TODO strengthen this test, avoiding dependence on checking whether
+        # broadcast_indices throws to determine whether sparse broadcast should throw
+        try
+            Base.Broadcast.check_broadcast_indices(indices(Z), spzeros((shapeX .- 1)...))
+        catch
+            @test_throws DimensionMismatch broadcast!(sin, Z, spzeros((shapeX .- 1)...))
+        end
+    end
+    # --> test with vector destination (V/fV)
+    fV = Array(first(vecs))
+    for Xo in vecs # vector target
+        X = SparseVector{Float32,Int32}(Xo)
+        shapeX, fX = size(X), Array(X)
+        # --> test broadcast! entry point / zero-preserving op
+        broadcast!(sin, fV, fX); V = sparse(fV)
+        broadcast!(sin, V, X); V = sparse(fV) # warmup for @allocated
+        @test (@allocated broadcast!(sin, V, X)) == 0
+        @test broadcast!(sin, V, X) == sparse(broadcast!(sin, fV, fX))
+        # --> test broadcast! entry point / not-zero-preserving
+        broadcast!(cos, fV, fX); V = sparse(fV)
+        broadcast!(cos, V, X); V = sparse(fV) # warmup for @allocated
+        @test (@allocated broadcast!(cos, V, X)) == 0
+        @test broadcast!(cos, V, X) == sparse(broadcast!(cos, fV, fX))
+        # --> test shape checks for broadcast! entry point
+        # TODO strengthen this test, avoiding dependence on checking whether
+        # broadcast_indices throws to determine whether sparse broadcast should throw
+        try
+            Base.Broadcast.check_broadcast_indices(indices(V), spzeros((shapeX .- 1)...))
+        catch
+            @test_throws DimensionMismatch broadcast!(sin, V, spzeros((shapeX .- 1)...))
+        end
+    end
+    # Tests specific to #19895, i.e. for broadcast!(identity, C, A) specializations
+    Z = copy(first(mats)); fZ = Array(Z)
+    V = copy(first(vecs)); fV = Array(V)
+    for X in (mats..., vecs...)
+        @test broadcast!(identity, Z, X) == sparse(broadcast!(identity, fZ, Array(X)))
+        X isa SparseVector && @test broadcast!(identity, V, X) == sparse(broadcast!(identity, fV, Array(X)))
+    end
 end
 
 @testset "broadcast[!] implementation specialized for pairs of (input) sparse vectors/matrices" begin
@@ -96,6 +164,7 @@ end
     mats = (sprand(N, M, p), sprand(N, 1, p), sprand(1, M, p), sprand(1, 1, 1.0), spzeros(1, 1))
     vecs = (sprand(N, p), sprand(1, 1.0), spzeros(1))
     tens = (mats..., vecs...)
+    fZ = Array(first(mats))
     for Xo in tens
         X = ndims(Xo) == 1 ? SparseVector{Float32,Int32}(Xo) : SparseMatrixCSC{Float32,Int32}(Xo)
         # use different types to check internal type stability via allocation tests below
@@ -104,6 +173,7 @@ end
             fY = Array(Y)
             # --> test broadcast entry point
             @test broadcast(+, X, Y) == sparse(broadcast(+, fX, fY))
+            @test broadcast(-, X, Y) == sparse(broadcast(-, fX, fY))
             @test broadcast(*, X, Y) == sparse(broadcast(*, fX, fY))
             @test broadcast(f, X, Y) == sparse(broadcast(f, fX, fY))
             # TODO strengthen this test, avoiding dependence on checking whether
@@ -114,17 +184,17 @@ end
                 @test_throws DimensionMismatch broadcast(+, spzeros((shapeX .- 1)...), Y)
             end
             # --> test broadcast! entry point / +-like zero-preserving op
-            fZ = broadcast(+, fX, fY); Z = sparse(fZ)
+            broadcast!(+, fZ, fX, fY); Z = sparse(fZ)
             broadcast!(+, Z, X, Y); Z = sparse(fZ) # warmup for @allocated
             @test (@allocated broadcast!(+, Z, X, Y)) == 0
             @test broadcast!(+, Z, X, Y) == sparse(broadcast!(+, fZ, fX, fY))
             # --> test broadcast! entry point / *-like zero-preserving op
-            fZ = broadcast(*, fX, fY); Z = sparse(fZ)
+            broadcast!(*, fZ, fX, fY); Z = sparse(fZ)
             broadcast!(*, Z, X, Y); Z = sparse(fZ) # warmup for @allocated
             @test (@allocated broadcast!(*, Z, X, Y)) == 0
             @test broadcast!(*, Z, X, Y) == sparse(broadcast!(*, fZ, fX, fY))
             # --> test broadcast! entry point / not zero-preserving op
-            fZ = broadcast(f, fX, fY); Z = sparse(fZ)
+            broadcast!(f, fZ, fX, fY); Z = sparse(fZ)
             broadcast!(f, Z, X, Y); Z = sparse(fZ) # warmup for @allocated
             @test (@allocated broadcast!(f, Z, X, Y)) == 0
             @test broadcast!(f, Z, X, Y) == sparse(broadcast!(f, fZ, fX, fY))
@@ -182,6 +252,8 @@ end
             # up with --track-allocation=user. allocation shows up on the first line of the
             # entry point for broadcast! with --track-allocation=all, but that first line
             # almost certainly should not allocate. so not certain what's going on.
+            # additional info: occurs for broadcast!(f, Z, X) for Z and X of different
+            # shape, but not for Z and X of the same shape.
             @test broadcast!(f, Q, X, Y, Z) == sparse(broadcast!(f, fQ, fX, fY, fZ))
             # --> test shape checks for both broadcast and broadcast! entry points
             # TODO strengthen this test, avoiding dependence on checking whether
@@ -195,14 +267,24 @@ end
     end
 end
 
-
 @testset "sparse map/broadcast with result eltype not a concrete subtype of Number (#19561/#19589)" begin
-    intoneorfloatzero(x) = x != 0.0 ? Int(1) : Float64(x)
-    stringorfloatzero(x) = x != 0.0 ? "Hello" : Float64(x)
-    @test map(intoneorfloatzero, speye(4)) == sparse(map(intoneorfloatzero, eye(4)))
-    @test map(stringorfloatzero, speye(4)) == sparse(map(stringorfloatzero, eye(4)))
-    @test broadcast(intoneorfloatzero, speye(4)) == sparse(broadcast(intoneorfloatzero, eye(4)))
-    @test broadcast(stringorfloatzero, speye(4)) == sparse(broadcast(stringorfloatzero, eye(4)))
+    N = 4
+    A, fA = speye(N), eye(N)
+    B, fB = spzeros(1, N), zeros(1, N)
+    intorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : Int(1)
+    stringorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : "hello"
+    intorfloat_notzeropres(xs...) = all(iszero, xs) ? Int(1) : zero(Float64)
+    stringorfloat_notzeropres(xs...) = all(iszero, xs) ? "hello" : zero(Float64)
+    for fn in (intorfloat_zeropres, intorfloat_notzeropres,
+                stringorfloat_zeropres, stringorfloat_notzeropres)
+        @test map(fn, A) == sparse(map(fn, fA))
+        @test broadcast(fn, A) == sparse(broadcast(fn, fA))
+        @test broadcast(fn, A, B) == sparse(broadcast(fn, fA, fB))
+        @test broadcast(fn, B, A) == sparse(broadcast(fn, fB, fA))
+    end
+    for fn in (intorfloat_zeropres, stringorfloat_zeropres)
+        @test broadcast(fn, A, B, A) == sparse(broadcast(fn, fA, fB, fA))
+    end
 end
 
 @testset "broadcast[!] over combinations of scalars and sparse vectors/matrices" begin
@@ -285,7 +367,7 @@ end
     end
 end
 
-@testset "broadcast[!] over combinations of scalars, structured matrices, and sparse vectors/matrices" begin
+@testset "broadcast[!] over combinations of scalars, sparse arrays, structured matrices, and dense vectors/matrices" begin
     N, p = 10, 0.4
     s = rand()
     V = sprand(N, p)
@@ -294,7 +376,7 @@ end
     sparsearrays = (V, A)
     fV, fA = map(Array, sparsearrays)
     D = Diagonal(rand(N))
-    B = Bidiagonal(rand(N), rand(N - 1), true)
+    B = Bidiagonal(rand(N), rand(N - 1), :U)
     T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
     S = SymTridiagonal(rand(N), rand(N - 1))
     structuredarrays = (D, B, T, S)
@@ -317,6 +399,44 @@ end
             @test broadcast!(*, Z, X, Y) == sparse(broadcast(*, fX, fY))
         end
     end
+    C = Array(sprand(N, 0.4))
+    M = Array(sprand(N, N, 0.4))
+    densearrays = (C, M)
+    fD, fB = Array(D), Array(B)
+    for X in densearrays
+        @test broadcast(+, D, X)::SparseMatrixCSC == sparse(broadcast(+, fD, X))
+        @test broadcast!(+, Z, D, X) == sparse(broadcast(+, fD, X))
+        @test broadcast(*, s, B, X)::SparseMatrixCSC == sparse(broadcast(*, s, fB, X))
+        @test broadcast!(*, Z, s, B, X) == sparse(broadcast(*, s, fB, X))
+        @test broadcast(+, V, B, X)::SparseMatrixCSC == sparse(broadcast(+, fV, fB, X))
+        @test broadcast!(+, Z, V, B, X) == sparse(broadcast(+, fV, fB, X))
+        @test broadcast(+, V, A, X)::SparseMatrixCSC == sparse(broadcast(+, fV, fA, X))
+        @test broadcast!(+, Z, V, A, X) == sparse(broadcast(+, fV, fA, X))
+        @test broadcast(*, s, V, A, X)::SparseMatrixCSC == sparse(broadcast(*, s, fV, fA, X))
+        @test broadcast!(*, Z, s, V, A, X) == sparse(broadcast(*, s, fV, fA, X))
+        # Issue #20954 combinations of sparse arrays and RowVectors
+        @test broadcast(+, A, X')::SparseMatrixCSC == sparse(broadcast(+, fA, X'))
+        @test broadcast(*, V, X')::SparseMatrixCSC == sparse(broadcast(*, fV, X'))
+    end
+end
+
+@testset "broadcast! where the destination is a structured matrix" begin
+    # Where broadcast!'s destination is a structured matrix, broadcast! should fall back
+    # to the generic AbstractArray broadcast! code (at least for now).
+    N, p = 5, 0.4
+    A = sprand(N, N, p)
+    sA = A + transpose(A)
+    D = Diagonal(rand(N))
+    B = Bidiagonal(rand(N), rand(N - 1), :U)
+    T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
+    @test broadcast!(sin, copy(D), D) == Diagonal(sin.(D))
+    @test broadcast!(sin, copy(B), B) == Bidiagonal(sin.(B), :U)
+    @test broadcast!(sin, copy(T), T) == Tridiagonal(sin.(T))
+    @test broadcast!(*, copy(D), D, A) == Diagonal(broadcast(*, D, A))
+    @test broadcast!(*, copy(B), B, A) == Bidiagonal(broadcast(*, B, A), :U)
+    @test broadcast!(*, copy(T), T, A) == Tridiagonal(broadcast(*, T, A))
+    # SymTridiagonal (and similar symmetric matrix types) do not support setindex!
+    # off the diagonal, and so cannot serve as a destination for broadcast!
 end
 
 @testset "map[!] over combinations of sparse and structured matrices" begin
@@ -324,7 +444,7 @@ end
     A = sprand(N, N, p)
     Z, fA = copy(A), Array(A)
     D = Diagonal(rand(N))
-    B = Bidiagonal(rand(N), rand(N - 1), true)
+    B = Bidiagonal(rand(N), rand(N - 1), :U)
     T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
     S = SymTridiagonal(rand(N), rand(N - 1))
     structuredarrays = (D, B, T, S)

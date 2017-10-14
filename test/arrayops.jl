@@ -1,10 +1,12 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Array test
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using Main.TestHelpers.OAs
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
-    @test countnz([1, 2, 3]) == 3
+    @test count(!iszero, [1, 2, 3]) == 3
 
     let a = ones(4), b = a+a, c = a-a
         @test b[1] === 2. && b[2] === 2. && b[3] === 2. && b[4] === 2.
@@ -14,32 +16,31 @@
     @test length((1,)) == 1
     @test length((1,2)) == 2
 
-    @test isequal(1.+[1,2,3], [2,3,4])
-    @test isequal([1,2,3].+1, [2,3,4])
-    @test isequal(1.-[1,2,3], [0,-1,-2])
-    @test isequal([1,2,3].-1, [0,1,2])
+    @test isequal(1 .+ [1,2,3], [2,3,4])
+    @test isequal([1,2,3] .+ 1, [2,3,4])
+    @test isequal(1 .- [1,2,3], [0,-1,-2])
+    @test isequal([1,2,3] .- 1, [0,1,2])
 
     @test isequal(5*[1,2,3], [5,10,15])
     @test isequal([1,2,3]*5, [5,10,15])
-    @test isequal(1./[1,2,5], [1.0,0.5,0.2])
+    @test isequal(1 ./ [1,2,5], [1.0,0.5,0.2])
     @test isequal([1,2,3]/5, [0.2,0.4,0.6])
 
-    @test isequal(2.%[1,2,3], [0,0,2])
-    @test isequal([1,2,3].%2, [1,0,1])
-    @test isequal(2.÷[1,2,3], [2,1,0])
-    @test isequal([1,2,3].÷2, [0,1,1])
-    @test isequal(-2.%[1,2,3], [0,0,-2])
+    @test isequal(2 .% [1,2,3], [0,0,2])
+    @test isequal([1,2,3] .% 2, [1,0,1])
+    @test isequal(2 .÷ [1,2,3], [2,1,0])
+    @test isequal([1,2,3] .÷ 2, [0,1,1])
+    @test isequal(-2 .% [1,2,3], [0,0,-2])
     @test isequal([-1,-2,-3].%2, [-1,0,-1])
-    @test isequal(-2.÷[1,2,3], [-2,-1,0])
-    @test isequal([-1,-2,-3].÷2, [0,-1,-1])
+    @test isequal(-2 .÷ [1,2,3], [-2,-1,0])
+    @test isequal([-1,-2,-3] .÷ 2, [0,-1,-1])
 
-    @test isequal(1.<<[1,2,5], [2,4,32])
-    @test isequal(128.>>[1,2,5], [64,32,4])
-    @test isequal(2.>>1, 1)
-    @test isequal(1.<<1, 2)
-    @test isequal([1,2,5].<<[1,2,5], [2,8,160])
-    @test isequal([10,20,50].>>[1,2,5], [5,5,1])
-
+    @test isequal(1 .<< [1,2,5], [2,4,32])
+    @test isequal(128 .>> [1,2,5], [64,32,4])
+    @test isequal(2 .>> 1, 1)
+    @test isequal(1 .<< 1, 2)
+    @test isequal([1,2,5] .<< [1,2,5], [2,8,160])
+    @test isequal([10,20,50] .>> [1,2,5], [5,5,1])
 
     a = ones(2,2)
     a[1,1] = 1
@@ -67,19 +68,15 @@
     @test a[1,2,1,1,2] == 20
     @test a[1,1,2,2,1] == 30
 
-    @test_throws ArgumentError reinterpret(Int8, a)
-
     b = reshape(a, (32,))
     @test b[1]  == 10
     @test b[19] == 20
     @test b[13] == 30
     @test_throws DimensionMismatch reshape(b,(5,7))
     @test_throws DimensionMismatch reshape(b,(35,))
-    @test_throws DimensionMismatch reinterpret(Int, b, (35,))
-    @test_throws ArgumentError reinterpret(Any, b, (32,))
-    @test_throws DimensionMismatch reinterpret(Complex128, b, (32,))
+    @test_throws ArgumentError reinterpret(Any, b)
     c = ["hello", "world"]
-    @test_throws ArgumentError reinterpret(Float32, c, (2,))
+    @test_throws ArgumentError reinterpret(Float32, c)
     a = Vector(ones(5))
     @test_throws ArgumentError resize!(a, -2)
 
@@ -88,6 +85,13 @@
     @test ndims(a) == 5
     @test a[2,1,2,2,1] == b[14]
     @test a[2,2,2,2,2] == b[end]
+
+    # issue #23107
+    a = [1,2,3]
+    @test typeof(a)(a) !== a
+    @test Array(a) !== a
+    @test Array{eltype(a)}(a) !== a
+    @test Vector(a) !== a
 end
 @testset "reshaping SubArrays" begin
     a = collect(reshape(1:5, 1, 5))
@@ -105,6 +109,7 @@ end
         @test_throws MethodError convert(Array{Int,2}, r)
         @test convert(Array{Int}, r) == [2,3,4]
         @test Base.unsafe_convert(Ptr{Int}, r) == Base.unsafe_convert(Ptr{Int}, s)
+        @test isa(r, StridedArray)  # issue #22411
     end
     @testset "linearslow" begin
         s = view(a, :, [2,3,5])
@@ -127,12 +132,33 @@ end
         @test length(reshape(s, length(s))) == 0
     end
 end
-@testset "reshape(a, Val{N})" begin
+@testset "reshape(a, Val(N))" begin
     a = ones(Int,3,3)
     s = view(a, 1:2, 1:2)
     for N in (1,3)
-        @test isa(reshape(a, Val{N}), Array{Int,N})
-        @test isa(reshape(s, Val{N}), Base.ReshapedArray{Int,N})
+        @test isa(reshape(a, Val(N)), Array{Int,N})
+        @test isa(reshape(s, Val(N)), Base.ReshapedArray{Int,N})
+    end
+end
+@testset "reshape with colon" begin
+    # Reshape with an omitted dimension
+    let A = linspace(1, 60, 60)
+        @test size(reshape(A, :))         == (60,)
+        @test size(reshape(A, :, 1))      == (60, 1)
+        @test size(reshape(A, (:, 2)))    == (30, 2)
+        @test size(reshape(A, 3, :))      == (3, 20)
+        @test size(reshape(A, 2, 3, :))   == (2, 3, 10)
+        @test size(reshape(A, (2, :, 5))) == (2, 6, 5)
+        @test_throws DimensionMismatch reshape(A, 7, :)
+        @test_throws DimensionMismatch reshape(A, :, 2, 3, 4)
+        @test_throws DimensionMismatch reshape(A, (:, :))
+
+        B = rand(2,2,2,2)
+        @test size(reshape(B, :)) == (16,)
+        @test size(reshape(B, :, 4)) == (4, 4)
+        @test size(reshape(B, (2, 1, :))) == (2, 1, 8)
+        @test_throws DimensionMismatch reshape(B, 3, :)
+        @test_throws DimensionMismatch reshape(B, :, :, 2, 2)
     end
 end
 
@@ -168,7 +194,7 @@ end
     @test convert(Vector{Float64}, b) == b
 end
 
-@testset "operations with LinearFast ReshapedArray" begin
+@testset "operations with IndexLinear ReshapedArray" begin
     b = collect(1:12)
     a = Base.ReshapedArray(b, (4,3), ())
     @test a[3,2] == 7
@@ -179,7 +205,7 @@ end
     @test b[5] == -4
     @test b[6] == -3
     @test b[7] == -2
-    b = reinterpret(Int, a, (3,4))
+    b = reinterpret(Int, a)
     b[1] = -1
     @test vec(b) == vec(a)
 
@@ -200,7 +226,7 @@ end
     @test A[2:6] == [2:6;]
     @test A[1:3,2,2:4] == cat(2,46:48,86:88,126:128)
     @test A[:,7:-3:1,5] == [191 176 161; 192 177 162; 193 178 163; 194 179 164; 195 180 165]
-    @test A[:,3:9] == reshape(11:45,5,7)
+    @test reshape(A, Val(2))[:,3:9] == reshape(11:45,5,7)
     rng = (2,2:3,2:2:5)
     tmp = zeros(Int,map(maximum,rng)...)
     tmp[rng...] = A[rng...]
@@ -234,12 +260,35 @@ end
     B[4,[2,3]] = 7
     @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
 
-    @test isequal(reshape(1:27, 3, 3, 3)[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
+    @test isequal(reshape(reshape(1:27, 3, 3, 3), Val(2))[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
 
     a = [3, 5, -7, 6]
     b = [4, 6, 2, -7, 1]
     ind = findin(a, b)
     @test ind == [3,4]
+    @test findin(a, Int[]) == Int[]
+    @test findin(Int[], a) == Int[]
+
+    a = [1,2,3,4,5]
+    b = [2,3,4,6]
+    @test findin(a, b) == [2,3,4]
+    @test findin(b, a) == [1,2,3]
+    @test findin(a, Int[]) == Int[]
+    @test findin(Int[], a) == Int[]
+
+    a = collect(1:3:15)
+    b = collect(2:4:10)
+    @test findin(a, b) == [4]
+    @test findin([a[1:4]; a[4:end]], b) == [4,5]
+
+    @test findin([1.0, NaN, 2.0], NaN) == [2]
+    @test findin([1.0, 2.0, NaN], NaN) == [3]
+
+    @testset "findin for uncomparable element types" begin
+        a = [1 + 1im, 1 - 1im]
+        @test findin(a, 1 + 1im) == [1]
+        @test findin(a, a)       == [1,2]
+    end
 
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
     @test length(rt) == 1 && rt[1] == Array{Int32, 3}
@@ -250,43 +299,53 @@ end
     @test typeof(Vector(3)) == Vector{Any}
     @test typeof(Vector()) == Vector{Any}
     @test typeof(Matrix{Int}(2,3)) == Matrix{Int}
-    @test typeof(Matrix{Int}()) == Matrix{Int}
     @test typeof(Matrix(2,3)) == Matrix{Any}
-    @test typeof(Matrix()) == Matrix{Any}
 
     @test size(Vector{Int}(3)) == (3,)
     @test size(Vector{Int}()) == (0,)
     @test size(Vector(3)) == (3,)
     @test size(Vector()) == (0,)
     @test size(Matrix{Int}(2,3)) == (2,3)
-    @test size(Matrix{Int}()) == (0,0)
     @test size(Matrix(2,3)) == (2,3)
-    @test size(Matrix()) == (0,0)
+
+    # TODO: will throw MethodError after 0.6 deprecations are deleted
+    dw = Base.JLOptions().depwarn
+    if dw == 2
+        @test_throws ErrorException Matrix{Int}()
+        @test_throws ErrorException Matrix()
+    elseif dw == 1
+        @test_warn "deprecated" Matrix{Int}()
+        @test_warn "deprecated" Matrix()
+    elseif dw == 0
+        @test size(Matrix{Int}()) == (0,0)
+        @test size(Matrix()) == (0,0)
+    else
+        error("unexpected depwarn value")
+    end
+    @test_throws MethodError Array{Int,3}()
 end
 @testset "get" begin
-    let
-        A = reshape(1:24, 3, 8)
-        x = get(A, 32, -12)
-        @test x == -12
-        x = get(A, 14, -12)
-        @test x == 14
-        x = get(A, (2,4), -12)
-        @test x == 11
-        x = get(A, (4,4), -12)
-        @test x == -12
-        X = get(A, -5:5, NaN32)
-        @test eltype(X) == Float32
-        @test Base.elsize(X) == sizeof(Float32)
-        @test !all(isinteger, X)
-        @test isnan.(X) == [trues(6);falses(5)]
-        @test X[7:11] == [1:5;]
-        X = get(A, (2:4, 9:-2:-13), 0)
-        Xv = zeros(Int, 3, 12)
-        Xv[1:2, 2:5] = A[2:3, 7:-2:1]
-        @test X == Xv
-        X2 = get(A, Vector{Int}[[2:4;], [9:-2:-13;]], 0)
-        @test X == X2
-    end
+    A = reshape(1:24, 3, 8)
+    x = get(A, 32, -12)
+    @test x == -12
+    x = get(A, 14, -12)
+    @test x == 14
+    x = get(A, (2,4), -12)
+    @test x == 11
+    x = get(A, (4,4), -12)
+    @test x == -12
+    X = get(A, -5:5, NaN32)
+    @test eltype(X) == Float32
+    @test Base.elsize(X) == sizeof(Float32)
+    @test !all(isinteger, X)
+    @test isnan.(X) == [trues(6);falses(5)]
+    @test X[7:11] == [1:5;]
+    X = get(A, (2:4, 9:-2:-13), 0)
+    Xv = zeros(Int, 3, 12)
+    Xv[1:2, 2:5] = A[2:3, 7:-2:1]
+    @test X == Xv
+    X2 = get(A, Vector{Int}[[2:4;], [9:-2:-13;]], 0)
+    @test X == X2
 end
 @testset "arrays as dequeues" begin
     l = Any[1]
@@ -346,12 +405,11 @@ end
 end
 
 @testset "typed hvcat" begin
-    let X = Float64[1 2 3; 4 5 6]
-        X32 = Float32[X X; X X]
-        @test eltype(X32) <: Float32
-        for i=[1,3], j=[1,4]
-            @test X32[i:(i+1), j:(j+2)] == X
-        end
+    X = Float64[1 2 3; 4 5 6]
+    X32 = Float32[X X; X X]
+    @test eltype(X32) <: Float32
+    for i=[1,3], j=[1,4]
+        @test X32[i:(i+1), j:(j+2)] == X
     end
 end
 @testset "end" begin
@@ -365,47 +423,46 @@ end
     @test X[Y[end],1] == 5
     @test X[end,Y[end]] == 11
 end
+
 @testset "find, findfirst, findnext, findlast, findprev" begin
     a = [0,1,2,3,0,1,2,3]
-    @test find(a) == [2,3,4,6,7,8]
+    @test find(!iszero, a) == [2,3,4,6,7,8]
     @test find(a.==2) == [3,7]
     @test find(isodd,a) == [2,4,6,8]
-    @test findfirst(a) == 2
+    @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == 0
-    @test findfirst([1,2,4,1,2,3,4], 3) == 6
+    @test findfirst(equalto(3), [1,2,4,1,2,3,4]) == 6
+    @test findfirst(!equalto(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
     @test findfirst(isodd, [2,4,6,2,0]) == 0
-    @test findnext(a,4) == 4
-    @test findnext(a,5) == 6
-    @test findnext(a,1) == 2
-    @test findnext(a,1,4) == 6
-    @test findnext(a,5,4) == 0
-    @test findlast(a) == 8
+    @test findnext(!iszero,a,4) == 4
+    @test findnext(!iszero,a,5) == 6
+    @test findnext(!iszero,a,1) == 2
+    @test findnext(equalto(1),a,4) == 6
+    @test findnext(equalto(5),a,4) == 0
+    @test findlast(!iszero, a) == 8
     @test findlast(a.==0) == 5
     @test findlast(a.==5) == 0
-    @test findlast([1,2,4,1,2,3,4], 3) == 6
+    @test findlast(equalto(3), [1,2,4,1,2,3,4]) == 6
     @test findlast(isodd, [2,4,6,3,9,2,0]) == 5
     @test findlast(isodd, [2,4,6,2,0]) == 0
-    @test findprev(a,4) == 4
-    @test findprev(a,5) == 4
-    @test findprev(a,1) == 0
-    @test findprev(a,1,4) == 2
-    @test findprev(a,1,8) == 6
+    @test findprev(!iszero,a,4) == 4
+    @test findprev(!iszero,a,5) == 4
+    @test findprev(!iszero,a,1) == 0
+    @test findprev(equalto(1),a,4) == 2
+    @test findprev(equalto(1),a,8) == 6
     @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
     @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
 end
 @testset "find with general iterables" begin
     s = "julia"
-    # FIXME once 16269 is resolved
-    # @test find(s) == [1,2,3,4,5]
     @test find(c -> c == 'l', s) == [3]
     g = graphemes("日本語")
-    @test find(g) == [1,2,3]
     @test find(isascii, g) == Int[]
+    @test find(!iszero, (i % 2 for i in 1:10)) == collect(1:2:9)
 end
 @testset "findn" begin
-
     b = findn(ones(2,2,2,2))
     @test (length(b[1]) == 16)
     @test (length(b[2]) == 16)
@@ -424,12 +481,12 @@ end
 @testset "findmin findmax indmin indmax" begin
     @test indmax([10,12,9,11]) == 2
     @test indmin([10,12,9,11]) == 3
-    @test findmin([NaN,3.2,1.8]) == (1.8,3)
-    @test findmax([NaN,3.2,1.8]) == (3.2,2)
-    @test findmin([NaN,3.2,1.8,NaN]) == (1.8,3)
-    @test findmax([NaN,3.2,1.8,NaN]) == (3.2,2)
-    @test findmin([3.2,1.8,NaN,2.0]) == (1.8,2)
-    @test findmax([3.2,1.8,NaN,2.0]) == (3.2,1)
+    @test findmin([NaN,3.2,1.8]) === (NaN,1)
+    @test findmax([NaN,3.2,1.8]) === (NaN,1)
+    @test findmin([NaN,3.2,1.8,NaN]) === (NaN,1)
+    @test findmax([NaN,3.2,1.8,NaN]) === (NaN,1)
+    @test findmin([3.2,1.8,NaN,2.0]) === (NaN,3)
+    @test findmax([3.2,1.8,NaN,2.0]) === (NaN,3)
 
     #14085
     @test findmax(4:9) == (9,6)
@@ -440,10 +497,23 @@ end
     @test indmax(5:-2:1) == 1
     @test findmin(5:-2:1) == (1,3)
     @test indmin(5:-2:1) == 3
+
+    #23094
+    @test_throws MethodError findmax(Set(["abc"]))
+    @test findmin(["abc", "a"]) === ("a", 2)
+    @test_throws MethodError findmax([Set([1]), Set([2])])
+    @test findmin([0.0, -0.0]) === (-0.0, 2)
+    @test findmax([0.0, -0.0]) === (0.0, 1)
+    @test findmin([-0.0, 0.0]) === (-0.0, 1)
+    @test findmax([-0.0, 0.0]) === (0.0, 2)
+    @test isnan(findmin([NaN, NaN, 0.0/0.0])[1])
+    @test findmin([NaN, NaN, 0.0/0.0])[2] == 1
+    @test isnan(findmax([NaN, NaN, 0.0/0.0])[1])
+    @test findmax([NaN, NaN, 0.0/0.0])[2] == 1
+
 end
 
 @testset "permutedims" begin
-
     # keeps the num of dim
     p = randperm(5)
     q = randperm(5)
@@ -480,12 +550,18 @@ end
     c = convert(Array, s)
     for p in ([1,2,3], [1,3,2], [2,1,3], [2,3,1], [3,1,2], [3,2,1])
         @test permutedims(s, p) == permutedims(c, p)
-        @test Base.PermutedDimsArrays.PermutedDimsArray(s, p) == permutedims(c, p)
+        @test PermutedDimsArray(s, p) == permutedims(c, p)
     end
     @test_throws ArgumentError permutedims(a, (1,1,1))
     @test_throws ArgumentError permutedims(s, (1,1,1))
-    @test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(a, (1,1,1))
-    @test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(s, (1,1,1))
+    @test_throws ArgumentError PermutedDimsArray(a, (1,1,1))
+    @test_throws ArgumentError PermutedDimsArray(s, (1,1,1))
+    cp = PermutedDimsArray(c, (3,2,1))
+    @test pointer(cp) == pointer(c)
+    @test_throws ArgumentError pointer(cp, 2)
+    @test strides(cp) == (9,3,1)
+    ap = PermutedDimsArray(collect(a), (2,1,3))
+    @test strides(ap) == (3,1,12)
 
     for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
         perm = randperm(4)
@@ -505,30 +581,34 @@ end
 
 # unique across dim
 
-# All rows and columns unique
-A = ones(10, 10)
-A[diagind(A)] = shuffle!([1:10;])
-@test unique(A, 1) == A
-@test unique(A, 2) == A
-
-# 10 repeats of each row
-B = A[shuffle!(repmat(1:10, 10)), :]
-C = unique(B, 1)
-@test sortrows(C) == sortrows(A)
-@test unique(B, 2) == B
-@test unique(B.', 2).' == C
-
-# Along third dimension
-D = cat(3, B, B)
-@test unique(D, 1) == cat(3, C, C)
-@test unique(D, 3) == cat(3, B)
-
 # With hash collisions
-immutable HashCollision
+struct HashCollision
     x::Float64
 end
 Base.hash(::HashCollision, h::UInt) = h
-@test map(x->x.x, unique(map(HashCollision, B), 1)) == C
+
+# All rows and columns unique
+let A, B, C, D
+    A = ones(10, 10)
+    A[diagind(A)] = shuffle!([1:10;])
+    @test unique(A, 1) == A
+    @test unique(A, 2) == A
+
+    # 10 repeats of each row
+    B = A[shuffle!(repmat(1:10, 10)), :]
+    C = unique(B, 1)
+    @test sortrows(C) == sortrows(A)
+    @test unique(B, 2) == B
+    @test unique(B.', 2).' == C
+
+    # Along third dimension
+    D = cat(3, B, B)
+    @test unique(D, 1) == cat(3, C, C)
+    @test unique(D, 3) == cat(3, B)
+
+    # With hash collisions
+    @test map(x -> x.x, unique(map(HashCollision, B), 1)) == C
+end
 
 @testset "large matrices transpose" begin
     for i = 1 : 3
@@ -538,252 +618,274 @@ Base.hash(::HashCollision, h::UInt) = h
 end
 
 @testset "repmat and repeat" begin
-    let
-        local A, A1, A2, A3, v, v2, cv, cv2, c, R, T
-        A = ones(Int,2,3,4)
-        A1 = reshape(repmat([1,2],1,12),2,3,4)
-        A2 = reshape(repmat([1 2 3],2,4),2,3,4)
-        A3 = reshape(repmat([1 2 3 4],6,1),2,3,4)
-        @test isequal(cumsum(A),A1)
-        @test isequal(cumsum(A,1),A1)
-        @test isequal(cumsum(A,2),A2)
-        @test isequal(cumsum(A,3),A3)
+    local A, A1, A2, A3, v, v2, cv, cv2, c, R, T
+    A = ones(Int,2,3,4)
+    A1 = reshape(repmat([1,2],1,12),2,3,4)
+    A2 = reshape(repmat([1 2 3],2,4),2,3,4)
+    A3 = reshape(repmat([1 2 3 4],6,1),2,3,4)
+    @test isequal(cumsum(A),A1)
+    @test isequal(cumsum(A,1),A1)
+    @test isequal(cumsum(A,2),A2)
+    @test isequal(cumsum(A,3),A3)
 
-        R = repeat([1, 2])
-        @test R == [1, 2]
-        R = repeat([1, 2], inner=1)
-        @test R == [1, 2]
-        R = repeat([1, 2], outer=1)
-        @test R == [1, 2]
-        R = repeat([1, 2], inner=(1,))
-        @test R == [1, 2]
-        R = repeat([1, 2], outer=(1,))
-        @test R == [1, 2]
-        R = repeat([1, 2], inner=[1])
-        @test R == [1, 2]
-        R = repeat([1, 2], outer=[1])
-        @test R == [1, 2]
-        R = repeat([1, 2], inner=1, outer=1)
-        @test R == [1, 2]
-        R = repeat([1, 2], inner=(1,), outer=(1,))
-        @test R == [1, 2]
-        R = repeat([1, 2], inner=[1], outer=[1])
-        @test R == [1, 2]
+    # issue 20112
+    A3 = reshape(repmat([1 2 3 4],UInt32(6),UInt32(1)),2,3,4)
+    @test isequal(cumsum(A,3),A3)
+    @test repmat([1,2,3,4], UInt32(1)) == [1,2,3,4]
+    @test repmat([1 2], UInt32(2)) == repmat([1 2], UInt32(2), UInt32(1))
 
-        R = repeat([1, 2], inner=2)
-        @test R == [1, 1, 2, 2]
-        R = repeat([1, 2], outer=2)
-        @test R == [1, 2, 1, 2]
-        R = repeat([1, 2], inner=(2,))
-        @test R == [1, 1, 2, 2]
-        R = repeat([1, 2], outer=(2,))
-        @test R == [1, 2, 1, 2]
-        R = repeat([1, 2], inner=[2])
-        @test R == [1, 1, 2, 2]
-        R = repeat([1, 2], outer=[2])
-        @test R == [1, 2, 1, 2]
+    # issue 20564
+    @test_throws MethodError repmat(1, 2, 3)
+    @test_throws MethodError repmat([1, 2], 1, 2, 3)
 
-        R = repeat([1, 2], inner=2, outer=2)
-        @test R == [1, 1, 2, 2, 1, 1, 2, 2]
-        R = repeat([1, 2], inner=(2,), outer=(2,))
-        @test R == [1, 1, 2, 2, 1, 1, 2, 2]
-        R = repeat([1, 2], inner=[2], outer=[2])
-        @test R == [1, 1, 2, 2, 1, 1, 2, 2]
+    R = repeat([1, 2])
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=1)
+    @test R == [1, 2]
+    R = repeat([1, 2], outer=1)
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=(1,))
+    @test R == [1, 2]
+    R = repeat([1, 2], outer=(1,))
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=[1])
+    @test R == [1, 2]
+    R = repeat([1, 2], outer=[1])
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=1, outer=1)
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=(1,), outer=(1,))
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=[1], outer=[1])
+    @test R == [1, 2]
 
-        R = repeat([1, 2], inner = (1, 1), outer = (1, 1))
-        @test R == reshape([1, 2], (2,1))
-        R = repeat([1, 2], inner = (2, 1), outer = (1, 1))
-        @test R == reshape([1, 1, 2, 2], (4,1))
-        R = repeat([1, 2], inner = (1, 2), outer = (1, 1))
-        @test R == [1 1; 2 2]
-        R = repeat([1, 2], inner = (1, 1), outer = (2, 1))
-        @test R == reshape([1, 2, 1, 2], (4,1))
-        R = repeat([1, 2], inner = (1, 1), outer = (1, 2))
-        @test R == [1 1; 2 2]
+    R = repeat([1, 2], inner=2)
+    @test R == [1, 1, 2, 2]
+    R = repeat([1, 2], outer=2)
+    @test R == [1, 2, 1, 2]
+    R = repeat([1, 2], inner=(2,))
+    @test R == [1, 1, 2, 2]
+    R = repeat([1, 2], outer=(2,))
+    @test R == [1, 2, 1, 2]
+    R = repeat([1, 2], inner=[2])
+    @test R == [1, 1, 2, 2]
+    R = repeat([1, 2], outer=[2])
+    @test R == [1, 2, 1, 2]
 
-        R = repeat([1 2;
-                    3 4], inner = (1, 1), outer = (1, 1))
-        @test R == [1 2;
-                      3 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 1), outer = (2, 1))
-        @test R == [1 2;
-                      3 4;
-                      1 2;
-                      3 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 1), outer = (1, 2))
-        @test R == [1 2 1 2;
-                      3 4 3 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 1), outer = (2, 2))
-        @test R == [1 2 1 2;
-                      3 4 3 4;
-                      1 2 1 2;
-                      3 4 3 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 1), outer = (1, 1))
-        @test R == [1 2;
-                      1 2;
-                      3 4;
-                      3 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 1), outer = (2, 1))
-        @test R == [1 2;
-                      1 2;
-                      3 4;
-                      3 4;
-                      1 2;
-                      1 2;
-                      3 4;
-                      3 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 1), outer = (1, 2))
-        @test R == [1 2 1 2;
-                      1 2 1 2;
-                      3 4 3 4;
-                      3 4 3 4;]
-        R = repeat([1 2;
-                    3 4], inner = (2, 1), outer = (2, 2))
-        @test R == [1 2 1 2;
-                      1 2 1 2;
-                      3 4 3 4;
-                      3 4 3 4;
-                      1 2 1 2;
-                      1 2 1 2;
-                      3 4 3 4;
-                      3 4 3 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 2), outer = (1, 1))
-        @test R == [1 1 2 2;
-                      3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 2), outer = (2, 1))
-        @test R == [1 1 2 2;
-                      3 3 4 4;
-                      1 1 2 2;
-                      3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 2), outer = (1, 2))
-        @test R == [1 1 2 2 1 1 2 2;
-                      3 3 4 4 3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (1, 2), outer = (2, 2))
-        @test R == [1 1 2 2 1 1 2 2;
-                      3 3 4 4 3 3 4 4;
-                      1 1 2 2 1 1 2 2;
-                      3 3 4 4 3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 2), outer = [1, 1])
-        @test R == [1 1 2 2;
-                      1 1 2 2;
-                      3 3 4 4;
-                      3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 2), outer = (2, 1))
-        @test R == [1 1 2 2;
-                      1 1 2 2;
-                      3 3 4 4;
-                      3 3 4 4;
-                      1 1 2 2;
-                      1 1 2 2;
-                      3 3 4 4;
-                      3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 2), outer = (1, 2))
-        @test R == [1 1 2 2 1 1 2 2;
-                      1 1 2 2 1 1 2 2;
-                      3 3 4 4 3 3 4 4;
-                      3 3 4 4 3 3 4 4]
-        R = repeat([1 2;
-                    3 4], inner = (2, 2), outer = (2, 2))
-        @test R == [1 1 2 2 1 1 2 2;
-                      1 1 2 2 1 1 2 2;
-                      3 3 4 4 3 3 4 4;
-                      3 3 4 4 3 3 4 4;
-                      1 1 2 2 1 1 2 2;
-                      1 1 2 2 1 1 2 2;
-                      3 3 4 4 3 3 4 4;
-                      3 3 4 4 3 3 4 4]
-        @test_throws ArgumentError repeat([1 2;
-                                           3 4], inner=2, outer=(2, 2))
-        @test_throws ArgumentError repeat([1 2;
-                                           3 4], inner=(2, 2), outer=2)
-        @test_throws ArgumentError repeat([1 2;
-                                           3 4], inner=(2,), outer=(2, 2))
-        @test_throws ArgumentError repeat([1 2;
-                                           3 4], inner=(2, 2), outer=(2,))
+    R = repeat([1, 2], inner=2, outer=2)
+    @test R == [1, 1, 2, 2, 1, 1, 2, 2]
+    R = repeat([1, 2], inner=(2,), outer=(2,))
+    @test R == [1, 1, 2, 2, 1, 1, 2, 2]
+    R = repeat([1, 2], inner=[2], outer=[2])
+    @test R == [1, 1, 2, 2, 1, 1, 2, 2]
 
-        A = reshape(1:8, 2, 2, 2)
-        R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
-        T = reshape([1:4; 1:4; 5:8; 5:8], 2, 2, 4)
-        @test R == T
-        A = Array{Int}(2, 2, 2)
-        A[:, :, 1] = [1 2;
-                      3 4]
-        A[:, :, 2] = [5 6;
-                      7 8]
-        R = repeat(A, inner = (2, 2, 2), outer = (2, 2, 2))
-        @test R[1, 1, 1] == 1
-        @test R[2, 2, 2] == 1
-        @test R[3, 3, 3] == 8
-        @test R[4, 4, 4] == 8
-        @test R[5, 5, 5] == 1
-        @test R[6, 6, 6] == 1
-        @test R[7, 7, 7] == 8
-        @test R[8, 8, 8] == 8
+    R = repeat([1, 2], inner = (1, 1), outer = (1, 1))
+    @test R == reshape([1, 2], (2,1))
+    R = repeat([1, 2], inner = (2, 1), outer = (1, 1))
+    @test R == reshape([1, 1, 2, 2], (4,1))
+    R = repeat([1, 2], inner = (1, 2), outer = (1, 1))
+    @test R == [1 1; 2 2]
+    R = repeat([1, 2], inner = (1, 1), outer = (2, 1))
+    @test R == reshape([1, 2, 1, 2], (4,1))
+    R = repeat([1, 2], inner = (1, 1), outer = (1, 2))
+    @test R == [1 1; 2 2]
 
-        R = repeat(1:2)
-        @test R == [1, 2]
-        R = repeat(1:2, inner=1)
-        @test R == [1, 2]
-        R = repeat(1:2, inner=2)
-        @test R == [1, 1, 2, 2]
-        R = repeat(1:2, outer=1)
-        @test R == [1, 2]
-        R = repeat(1:2, outer=2)
-        @test R == [1, 2, 1, 2]
-        R = repeat(1:2, inner=(3,), outer=(2,))
-        @test R == [1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2]
+    R = repeat([1 2;
+                3 4], inner = (1, 1), outer = (1, 1))
+    @test R == [1 2;
+                    3 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 1), outer = (2, 1))
+    @test R == [1 2;
+                    3 4;
+                    1 2;
+                    3 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 1), outer = (1, 2))
+    @test R == [1 2 1 2;
+                    3 4 3 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 1), outer = (2, 2))
+    @test R == [1 2 1 2;
+                    3 4 3 4;
+                    1 2 1 2;
+                    3 4 3 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 1), outer = (1, 1))
+    @test R == [1 2;
+                    1 2;
+                    3 4;
+                    3 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 1), outer = (2, 1))
+    @test R == [1 2;
+                    1 2;
+                    3 4;
+                    3 4;
+                    1 2;
+                    1 2;
+                    3 4;
+                    3 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 1), outer = (1, 2))
+    @test R == [1 2 1 2;
+                    1 2 1 2;
+                    3 4 3 4;
+                    3 4 3 4;]
+    R = repeat([1 2;
+                3 4], inner = (2, 1), outer = (2, 2))
+    @test R == [1 2 1 2;
+                    1 2 1 2;
+                    3 4 3 4;
+                    3 4 3 4;
+                    1 2 1 2;
+                    1 2 1 2;
+                    3 4 3 4;
+                    3 4 3 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 2), outer = (1, 1))
+    @test R == [1 1 2 2;
+                    3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 2), outer = (2, 1))
+    @test R == [1 1 2 2;
+                    3 3 4 4;
+                    1 1 2 2;
+                    3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 2), outer = (1, 2))
+    @test R == [1 1 2 2 1 1 2 2;
+                    3 3 4 4 3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (1, 2), outer = (2, 2))
+    @test R == [1 1 2 2 1 1 2 2;
+                    3 3 4 4 3 3 4 4;
+                    1 1 2 2 1 1 2 2;
+                    3 3 4 4 3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 2), outer = [1, 1])
+    @test R == [1 1 2 2;
+                    1 1 2 2;
+                    3 3 4 4;
+                    3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 2), outer = (2, 1))
+    @test R == [1 1 2 2;
+                    1 1 2 2;
+                    3 3 4 4;
+                    3 3 4 4;
+                    1 1 2 2;
+                    1 1 2 2;
+                    3 3 4 4;
+                    3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 2), outer = (1, 2))
+    @test R == [1 1 2 2 1 1 2 2;
+                    1 1 2 2 1 1 2 2;
+                    3 3 4 4 3 3 4 4;
+                    3 3 4 4 3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 2), outer = (2, 2))
+    @test R == [1 1 2 2 1 1 2 2;
+                    1 1 2 2 1 1 2 2;
+                    3 3 4 4 3 3 4 4;
+                    3 3 4 4 3 3 4 4;
+                    1 1 2 2 1 1 2 2;
+                    1 1 2 2 1 1 2 2;
+                    3 3 4 4 3 3 4 4;
+                    3 3 4 4 3 3 4 4]
+    @test_throws ArgumentError repeat([1 2;
+                                        3 4], inner=2, outer=(2, 2))
+    @test_throws ArgumentError repeat([1 2;
+                                        3 4], inner=(2, 2), outer=2)
+    @test_throws ArgumentError repeat([1 2;
+                                        3 4], inner=(2,), outer=(2, 2))
+    @test_throws ArgumentError repeat([1 2;
+                                        3 4], inner=(2, 2), outer=(2,))
 
-        A = rand(4,4)
-        for s in Any[A[1:2:4, 1:2:4], view(A, 1:2:4, 1:2:4)]
-            c = cumsum(s, 1)
-            @test c[1,1] == A[1,1]
-            @test c[2,1] == A[1,1]+A[3,1]
-            @test c[1,2] == A[1,3]
-            @test c[2,2] == A[1,3]+A[3,3]
+    A = reshape(1:8, 2, 2, 2)
+    R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
+    T = reshape([1:4; 1:4; 5:8; 5:8], 2, 2, 4)
+    @test R == T
+    A = Array{Int}(2, 2, 2)
+    A[:, :, 1] = [1 2;
+                    3 4]
+    A[:, :, 2] = [5 6;
+                    7 8]
+    R = repeat(A, inner = (2, 2, 2), outer = (2, 2, 2))
+    @test R[1, 1, 1] == 1
+    @test R[2, 2, 2] == 1
+    @test R[3, 3, 3] == 8
+    @test R[4, 4, 4] == 8
+    @test R[5, 5, 5] == 1
+    @test R[6, 6, 6] == 1
+    @test R[7, 7, 7] == 8
+    @test R[8, 8, 8] == 8
 
-            c = cumsum(s, 2)
-            @test c[1,1] == A[1,1]
-            @test c[2,1] == A[3,1]
-            @test c[1,2] == A[1,1]+A[1,3]
-            @test c[2,2] == A[3,1]+A[3,3]
-        end
+    R = repeat(1:2)
+    @test R == [1, 2]
+    R = repeat(1:2, inner=1)
+    @test R == [1, 2]
+    R = repeat(1:2, inner=2)
+    @test R == [1, 1, 2, 2]
+    R = repeat(1:2, outer=1)
+    @test R == [1, 2]
+    R = repeat(1:2, outer=2)
+    @test R == [1, 2, 1, 2]
+    R = repeat(1:2, inner=(3,), outer=(2,))
+    @test R == [1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2]
 
-        v   = [1,1e100,1,-1e100]*1000
-        v2  = [1,-1e100,1,1e100]*1000
+    # Arrays of arrays
+    @test repeat([[1], [2]], inner=2) == [[1], [1], [2], [2]]
+    @test repeat([[1], [2]], outer=2) == [[1], [2], [1], [2]]
+    @test repeat([[1], [2]], inner=2, outer=2) == [[1], [1], [2], [2], [1], [1], [2], [2]]
 
-        cv  = [1,1e100,1e100,2]*1000
-        cv2 = [1,-1e100,-1e100,2]*1000
+    @test size(repeat([1], inner=(0,))) == (0,)
+    @test size(repeat([1], outer=(0,))) == (0,)
+    @test size(repeat([1 1], inner=(0, 1))) == (0, 2)
+    @test size(repeat([1 1], outer=(1, 0))) == (1, 0)
+    @test size(repeat([1 1], inner=(2, 0), outer=(2, 1))) == (4, 0)
+    @test size(repeat([1 1], inner=(2, 0), outer=(0, 1))) == (0, 0)
 
-        @test isequal(cumsum_kbn(v), cv)
-        @test isequal(cumsum_kbn(v2), cv2)
+    A = rand(4,4)
+    for s in Any[A[1:2:4, 1:2:4], view(A, 1:2:4, 1:2:4)]
+        c = cumsum(s, 1)
+        @test c[1,1] == A[1,1]
+        @test c[2,1] == A[1,1]+A[3,1]
+        @test c[1,2] == A[1,3]
+        @test c[2,2] == A[1,3]+A[3,3]
 
-        A = [v reverse(v) v2 reverse(v2)]
-
-        c = cumsum_kbn(A, 1)
-
-        @test isequal(c[:,1], cv)
-        @test isequal(c[:,3], cv2)
-        @test isequal(c[4,:], [2.0, 2.0, 2.0, 2.0]*1000)
-
-        c = cumsum_kbn(A, 2)
-
-        @test isequal(c[1,:], cv2)
-        @test isequal(c[3,:], cv)
-        @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
+        c = cumsum(s, 2)
+        @test c[1,1] == A[1,1]
+        @test c[2,1] == A[3,1]
+        @test c[1,2] == A[1,1]+A[1,3]
+        @test c[2,2] == A[3,1]+A[3,3]
     end
+
+    v   = [1,1e100,1,-1e100]*1000
+    v2  = [1,-1e100,1,1e100]*1000
+
+    cv  = [1,1e100,1e100,2]*1000
+    cv2 = [1,-1e100,-1e100,2]*1000
+
+    @test isequal(cumsum_kbn(v), cv)
+    @test isequal(cumsum_kbn(v2), cv2)
+
+    A = [v reverse(v) v2 reverse(v2)]
+
+    c = cumsum_kbn(A, 1)
+
+    @test isequal(c[:,1], cv)
+    @test isequal(c[:,3], cv2)
+    @test isequal(c[4,:], [2.0, 2.0, 2.0, 2.0]*1000)
+
+    c = cumsum_kbn(A, 2)
+
+    @test isequal(c[1,:], cv2)
+    @test isequal(c[3,:], cv)
+    @test isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
+
+    @test repeat(BitMatrix(eye(2)), inner = (2,1), outer = (1,2)) == repeat(eye(2), inner = (2,1), outer = (1,2))
 end
 
 @testset "indexing with bools" begin
@@ -854,69 +956,73 @@ end
 end
 
 @testset "mapslices" begin
-    let
-        local a,h,i
-        a = rand(5,5)
-        s = mapslices(sort, a, [1])
-        S = mapslices(sort, a, [2])
-        for i = 1:5
-            @test s[:,i] == sort(a[:,i])
-            @test vec(S[i,:]) == sort(vec(a[i,:]))
-        end
-
-        # issue #3613
-        b = mapslices(sum, ones(2,3,4), [1,2])
-        @test size(b) === (1,1,4)
-        @test all(b.==6)
-
-        # issue #5141
-        ## Update Removed the version that removes the dimensions when dims==1:ndims(A)
-        c1 = mapslices(x-> maximum(-x), a, [])
-        @test c1 == -a
-
-        # other types than Number
-        @test mapslices(prod,["1" "2"; "3" "4"],1) == ["13" "24"]
-        @test mapslices(prod,["1"],1) == ["1"]
-
-        # issue #5177
-
-        c = ones(2,3,4)
-        m1 = mapslices(x-> ones(2,3), c, [1,2])
-        m2 = mapslices(x-> ones(2,4), c, [1,3])
-        m3 = mapslices(x-> ones(3,4), c, [2,3])
-        @test size(m1) == size(m2) == size(m3) == size(c)
-
-        n1 = mapslices(x-> ones(6), c, [1,2])
-        n2 = mapslices(x-> ones(6), c, [1,3])
-        n3 = mapslices(x-> ones(6), c, [2,3])
-        n1a = mapslices(x-> ones(1,6), c, [1,2])
-        n2a = mapslices(x-> ones(1,6), c, [1,3])
-        n3a = mapslices(x-> ones(1,6), c, [2,3])
-        @test size(n1a) == (1,6,4) && size(n2a) == (1,3,6)  && size(n3a) == (2,1,6)
-        @test size(n1) == (6,1,4) && size(n2) == (6,3,1)  && size(n3) == (2,6,1)
-
-        # mutating functions
-        o = ones(3, 4)
-        m = mapslices(x->fill!(x, 0), o, 2)
-        @test m == zeros(3, 4)
-        @test o == ones(3, 4)
+    local a, b, c, m, h, s
+    a = rand(5,5)
+    s = mapslices(sort, a, [1])
+    S = mapslices(sort, a, [2])
+    for i = 1:5
+        @test s[:,i] == sort(a[:,i])
+        @test vec(S[i,:]) == sort(vec(a[i,:]))
     end
+
+    # issue #3613
+    b = mapslices(sum, ones(2,3,4), [1,2])
+    @test size(b) === (1,1,4)
+    @test all(b.==6)
+
+    # issue #5141
+    ## Update Removed the version that removes the dimensions when dims==1:ndims(A)
+    c1 = mapslices(x-> maximum(-x), a, [])
+    @test c1 == -a
+
+    # other types than Number
+    @test mapslices(prod,["1" "2"; "3" "4"],1) == ["13" "24"]
+    @test mapslices(prod,["1"],1) == ["1"]
+
+    # issue #5177
+
+    c = ones(2,3,4)
+    m1 = mapslices(x-> ones(2,3), c, [1,2])
+    m2 = mapslices(x-> ones(2,4), c, [1,3])
+    m3 = mapslices(x-> ones(3,4), c, [2,3])
+    @test size(m1) == size(m2) == size(m3) == size(c)
+
+    n1 = mapslices(x-> ones(6), c, [1,2])
+    n2 = mapslices(x-> ones(6), c, [1,3])
+    n3 = mapslices(x-> ones(6), c, [2,3])
+    n1a = mapslices(x-> ones(1,6), c, [1,2])
+    n2a = mapslices(x-> ones(1,6), c, [1,3])
+    n3a = mapslices(x-> ones(1,6), c, [2,3])
+    @test size(n1a) == (1,6,4) && size(n2a) == (1,3,6)  && size(n3a) == (2,1,6)
+    @test size(n1) == (6,1,4) && size(n2) == (6,3,1)  && size(n3) == (2,6,1)
+
+    # mutating functions
+    o = ones(3, 4)
+    m = mapslices(x->fill!(x, 0), o, 2)
+    @test m == zeros(3, 4)
+    @test o == ones(3, 4)
+
+    # issue #18524
+    m = mapslices(x->tuple(x), [1 2; 3 4], 1)
+    @test m[1,1] == ([1,3],)
+    @test m[1,2] == ([2,4],)
+
+    # issue #21123
+    @test mapslices(nnz, speye(3), 1) == [1 1 1]
 end
 
 @testset "single multidimensional index" begin
-    let
-        a = rand(6,6)
-        I = [1 4 5; 4 2 6; 5 6 3]
-        a2 = a[I]
-        @test size(a2) == size(I)
-        for i = 1:length(a2)
-            @test a2[i] == a[I[i]]
-        end
-        a = [1,3,5]
-        b = [1 3]
-        a[b] = 8
-        @test a == [8,3,8]
+    a = rand(6,6)
+    I = [1 4 5; 4 2 6; 5 6 3]
+    a2 = a[I]
+    @test size(a2) == size(I)
+    for i = 1:length(a2)
+        @test a2[i] == a[I[i]]
     end
+    a = [1,3,5]
+    b = [1 3]
+    a[b] = 8
+    @test a == [8,3,8]
 end
 
 @testset "assigning an array into itself" begin
@@ -942,63 +1048,56 @@ end
 end
 
 @testset "sort on arrays" begin
-    let
-        local a = rand(3,3)
+    local a = rand(3,3)
 
-        asr = sortrows(a)
-        @test lexless(asr[1,:],asr[2,:])
-        @test lexless(asr[2,:],asr[3,:])
+    asr = sortrows(a)
+    @test lexless(asr[1,:],asr[2,:])
+    @test lexless(asr[2,:],asr[3,:])
 
-        asc = sortcols(a)
-        @test lexless(asc[:,1],asc[:,2])
-        @test lexless(asc[:,2],asc[:,3])
+    asc = sortcols(a)
+    @test lexless(asc[:,1],asc[:,2])
+    @test lexless(asc[:,2],asc[:,3])
 
-        # mutating functions
-        o = ones(3, 4)
-        m = mapslices(x->fill!(x, 0), o, 2)
-        @test m == zeros(3, 4)
-        @test o == ones(3, 4)
+    # mutating functions
+    o = ones(3, 4)
+    m = mapslices(x->fill!(x, 0), o, 2)
+    @test m == zeros(3, 4)
+    @test o == ones(3, 4)
 
-        # issue #18524
-        m = mapslices(x->tuple(x), [1 2; 3 4], 1)
-        @test m[1,1] == ([1,3],)
-        @test m[1,2] == ([2,4],)
+    asr = sortrows(a, rev=true)
+    @test lexless(asr[2,:],asr[1,:])
+    @test lexless(asr[3,:],asr[2,:])
 
-        asr = sortrows(a, rev=true)
-        @test lexless(asr[2,:],asr[1,:])
-        @test lexless(asr[3,:],asr[2,:])
+    asc = sortcols(a, rev=true)
+    @test lexless(asc[:,2],asc[:,1])
+    @test lexless(asc[:,3],asc[:,2])
 
-        asc = sortcols(a, rev=true)
-        @test lexless(asc[:,2],asc[:,1])
-        @test lexless(asc[:,3],asc[:,2])
+    as = sort(a, 1)
+    @test issorted(as[:,1])
+    @test issorted(as[:,2])
+    @test issorted(as[:,3])
 
-        as = sort(a, 1)
-        @test issorted(as[:,1])
-        @test issorted(as[:,2])
-        @test issorted(as[:,3])
+    as = sort(a, 2)
+    @test issorted(as[1,:])
+    @test issorted(as[2,:])
+    @test issorted(as[3,:])
 
-        as = sort(a, 2)
-        @test issorted(as[1,:])
-        @test issorted(as[2,:])
-        @test issorted(as[3,:])
+    local b = rand(21,21,2)
 
-        local b = rand(21,21,2)
-
-        bs = sort(b, 1)
-        for i in 1:21
-            @test issorted(bs[:,i,1])
-            @test issorted(bs[:,i,2])
-        end
-
-        bs = sort(b, 2)
-        for i in 1:21
-            @test issorted(bs[i,:,1])
-            @test issorted(bs[i,:,2])
-        end
-
-        bs = sort(b, 3)
-        @test all(bs[:,:,1] .<= bs[:,:,2])
+    bs = sort(b, 1)
+    for i in 1:21
+        @test issorted(bs[:,i,1])
+        @test issorted(bs[:,i,2])
     end
+
+    bs = sort(b, 2)
+    for i in 1:21
+        @test issorted(bs[i,:,1])
+        @test issorted(bs[i,:,2])
+    end
+
+    bs = sort(b, 3)
+    @test all(bs[:,:,1] .<= bs[:,:,2])
 end
 
 @testset "fill" begin
@@ -1025,18 +1124,57 @@ end
     for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                    8:9, 9:10, 6:9, 7:10]
         for repl in Any[[], [11], [11,22], [11,22,33,44,55]]
-            a = [1:10;]; acopy = copy(a)
+            local a
+            a = [1:10;]
+            acopy = copy(a)
             @test splice!(a, idx, repl) == acopy[idx]
             @test a == [acopy[1:(first(idx)-1)]; repl; acopy[(last(idx)+1):end]]
         end
     end
 end
 
+@testset "filter!" begin
+    # base case w/ Vector
+    a = collect(1:10)
+    filter!(x -> x > 5, a)
+    @test a == collect(6:10)
+
+    # different subtype of AbstractVector
+    ba = rand(10) .> 0.5
+    @test isa(ba, BitArray)
+    filter!(x -> x, ba)
+    @test all(ba)
+
+    # empty array
+    ea = []
+    filter!(x -> x > 5, ea)
+    @test isempty(ea)
+
+    # non-1-indexed array
+    oa = OffsetArray(collect(1:10), -5)
+    filter!(x -> x > 5, oa)
+    @test oa == OffsetArray(collect(6:10), -5)
+
+    # empty non-1-indexed array
+    eoa = OffsetArray([], -5)
+    filter!(x -> x > 5, eoa)
+    @test isempty(eoa)
+end
+
 @testset "deleteat!" begin
     for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                    8:9, 9:10, 6:9, 7:10]
+        # integer indexing with AbstractArray
         a = [1:10;]; acopy = copy(a)
         @test deleteat!(a, idx) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
+
+        # integer indexing with non-AbstractArray iterable
+        a = [1:10;]; acopy = copy(a)
+        @test deleteat!(a, (i for i in idx)) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
+
+        # logical indexing
+        a = [1:10;]; acopy = copy(a)
+        @test deleteat!(a, map(i -> i in idx, 1:length(a))) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
     end
     a = [1:10;]
     @test deleteat!(a, 11:10) == [1:10;]
@@ -1045,6 +1183,9 @@ end
     @test_throws BoundsError deleteat!(a, [1,13])
     @test_throws ArgumentError deleteat!(a, [5,3])
     @test_throws BoundsError deleteat!(a, 5:20)
+    @test_throws BoundsError deleteat!(a, Bool[])
+    @test_throws BoundsError deleteat!(a, [true])
+    @test_throws BoundsError deleteat!(a, falses(11))
 end
 
 @testset "comprehensions" begin
@@ -1067,9 +1208,26 @@ end
             @test [1,2] ⊙ [3,4] == 11
         end
 
-        @test_throws DomainError (10.^[-1])[1] == 0.1
-        @test (10.^[-1.])[1] == 0.1
+        @test_throws DomainError (10 .^ [-1])[1] == 0.1
+        @test (10 .^ [-1.])[1] == 0.1
     end
+end
+
+# issue #24002
+module I24002
+s1() = 1
+y = Int[i for i in 1:10]
+end
+@test I24002.y == [1:10;]
+@test I24002.s1() == 1
+
+@testset "eachindexvalue" begin
+    A14 = [11 13; 12 14]
+    R = CartesianRange(indices(A14))
+    @test [a for (a,b) in pairs(IndexLinear(),    A14)] == [1,2,3,4]
+    @test [a for (a,b) in pairs(IndexCartesian(), A14)] == vec(collect(R))
+    @test [b for (a,b) in pairs(IndexLinear(),    A14)] == [11,12,13,14]
+    @test [b for (a,b) in pairs(IndexCartesian(), A14)] == [11,12,13,14]
 end
 
 @testset "reverse" begin
@@ -1118,12 +1276,10 @@ end
 end
 
 # issue 4228
-A = [[i i; i i] for i=1:2]
-@test cumsum(A) == Any[[1 1; 1 1], [3 3; 3 3]]
-@test cumprod(A) == Any[[1 1; 1 1], [4 4; 4 4]]
-
-isdefined(Main, :TestHelpers) || eval(Main, :(include("TestHelpers.jl")))
-using TestHelpers.OAs
+let A = [[i i; i i] for i=1:2]
+    @test cumsum(A) == Any[[1 1; 1 1], [3 3; 3 3]]
+    @test cumprod(A) == Any[[1 1; 1 1], [4 4; 4 4]]
+end
 
 @testset "prepend/append" begin
     # PR #4627
@@ -1148,9 +1304,10 @@ using TestHelpers.OAs
     @test prepend!([1,2], OffsetArray([9,8], (-3,))) == [9,8,1,2]
 end
 
-A = [1,2]
-s = Set([1,2,3])
-@test sort(append!(A, s)) == [1,1,2,2,3]
+let A = [1,2]
+    s = Set([1,2,3])
+    @test sort(append!(A, s)) == [1,1,2,2,3]
+end
 
 @testset "cases where shared arrays can/can't be grown" begin
     A = [1 3;2 4]
@@ -1186,10 +1343,11 @@ for N = 1:Nmax
 end
 
 # issue #6645 (32-bit)
-let
-    x = Float64[]
-    for i=1:5; push!(x, 1.0); end
-    @test dot(zeros(5),x) == 0.0
+let x = Float64[]
+    for i = 1:5
+        push!(x, 1.0)
+    end
+    @test dot(zeros(5), x) == 0.0
 end
 
 # issue #6977
@@ -1202,10 +1360,12 @@ end
 @test map(join, ["z", "я"]) == ["z", "я"]
 
 # Handle block matrices
-A = [randn(2,2) for i = 1:2, j = 1:2]
-@test issymmetric(A.'A)
-A = [complex.(randn(2,2), randn(2,2)) for i = 1:2, j = 1:2]
-@test ishermitian(A'A)
+let A = [randn(2, 2) for i = 1:2, j = 1:2]
+    @test issymmetric(A.'A)
+end
+let A = [complex.(randn(2, 2), randn(2, 2)) for i = 1:2, j = 1:2]
+    @test ishermitian(A'A)
+end
 
 # issue #7197
 function i7197()
@@ -1223,8 +1383,7 @@ end
 @test pr8622() == [0,3,1,0]
 
 #6828 - size of specific dimensions
-let
-    a = Array{Float64}(10)
+let a = Array{Float64}(10)
     @test size(a) == (10,)
     @test size(a, 1) == 10
     @test size(a,2,1) == (1,10)
@@ -1286,11 +1445,11 @@ end
 
 @testset "linear indexing" begin
     a = [1:5;]
-    @test isa(Base.linearindexing(a), Base.LinearFast)
+    @test isa(Base.IndexStyle(a), Base.IndexLinear)
     b = view(a, :)
-    @test isa(Base.linearindexing(b), Base.LinearFast)
-    @test isa(Base.linearindexing(trues(2)), Base.LinearFast)
-    @test isa(Base.linearindexing(BitArray{2}), Base.LinearFast)
+    @test isa(Base.IndexStyle(b), Base.IndexLinear)
+    @test isa(Base.IndexStyle(trues(2)), Base.IndexLinear)
+    @test isa(Base.IndexStyle(BitArray{2}), Base.IndexLinear)
     aa = fill(99, 10)
     aa[1:2:9] = a
     shp = [5]
@@ -1300,7 +1459,7 @@ end
         @test mdsum2(A) == 15
         AA = reshape(aa, tuple(2, shp...))
         B = view(AA, 1:1, ntuple(i->Colon(), i)...)
-        @test isa(Base.linearindexing(B), Base.IteratorsMD.LinearSlow)
+        @test isa(Base.IndexStyle(B), Base.IteratorsMD.IndexCartesian)
         @test mdsum(B) == 15
         @test mdsum2(B) == 15
         unshift!(shp, 1)
@@ -1354,11 +1513,13 @@ end
         @test a[:, [CartesianIndex()], :, :] == (@view a[:, [CartesianIndex()], :, :]) == reshape(a, 3, 1, 4, 5)
         @test a[:, :, [CartesianIndex()], :] == (@view a[:, :, [CartesianIndex()], :]) == reshape(a, 3, 4, 1, 5)
         @test a[:, :, :, [CartesianIndex()]] == (@view a[:, :, :, [CartesianIndex()]]) == reshape(a, 3, 4, 5, 1)
-        @test a[[CartesianIndex()], :, :]    == (@view a[[CartesianIndex()], :, :])    == reshape(a, 1, 3, 20)
-        @test a[:, [CartesianIndex()], :]    == (@view a[:, [CartesianIndex()], :])    == reshape(a, 3, 1, 20)
-        @test a[:, :, [CartesianIndex()]]    == (@view a[:, :, [CartesianIndex()]])    == reshape(a, 3, 20, 1)
-        @test a[[CartesianIndex()], :]       == (@view a[[CartesianIndex()], :])       == reshape(a, 1, 60)
-        @test a[:, [CartesianIndex()]]       == (@view a[:, [CartesianIndex()]])       == reshape(a, 60, 1)
+        a2 = reshape(a, Val(2))
+        @test a2[[CartesianIndex()], :, :]   == (@view a2[[CartesianIndex()], :, :])   == reshape(a, 1, 3, 20)
+        @test a2[:, [CartesianIndex()], :]   == (@view a2[:, [CartesianIndex()], :])   == reshape(a, 3, 1, 20)
+        @test a2[:, :, [CartesianIndex()]]   == (@view a2[:, :, [CartesianIndex()]])   == reshape(a, 3, 20, 1)
+        a1 = reshape(a, Val(1))
+        @test a1[[CartesianIndex()], :]      == (@view a1[[CartesianIndex()], :])      == reshape(a, 1, 60)
+        @test a1[:, [CartesianIndex()]]      == (@view a1[:, [CartesianIndex()]])      == reshape(a, 60, 1)
 
         @test_throws BoundsError a[[CartesianIndex(1,5),CartesianIndex(2,4)],3:3]
         @test_throws BoundsError a[1:4, [CartesianIndex(1,3),CartesianIndex(2,4)]]
@@ -1397,6 +1558,8 @@ end
     @test min(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((2,2))
     @test max(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((5,3))
 
+    @test Tuple(I1) == (2,3,0)
+
     # CartesianIndex allows construction at a particular dimensionality
     @test length(CartesianIndex{3}()) == 3
     @test length(CartesianIndex{3}(1,2)) == 3
@@ -1422,9 +1585,10 @@ end
     @test a[1,2] == 7
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
 
-    R = CartesianRange(CartesianIndex{2}(2,3),CartesianIndex{2}(5,5))
+    R = CartesianRange(2:5, 3:5)
     @test eltype(R) <: CartesianIndex{2}
     @test eltype(typeof(R)) <: CartesianIndex{2}
+    @test eltype(CartesianRange{2}) <: CartesianIndex{2}
     indexes = collect(R)
     @test indexes[1] == CartesianIndex{2}(2,3)
     @test indexes[2] == CartesianIndex{2}(3,3)
@@ -1443,9 +1607,17 @@ end
     @test !in(CartesianIndex((3,6)), R)
     @test !in(CartesianIndex((6,5)), R)
 
-    @test CartesianRange((3:5,-7:7)) == CartesianRange(CartesianIndex{2}(3,-7),CartesianIndex{2}(5,7))
-    @test CartesianRange((3,-7:7)) == CartesianRange(CartesianIndex{2}(3,-7),CartesianIndex{2}(3,7))
+    @test @inferred(convert(NTuple{2,UnitRange}, R)) === (2:5, 3:5)
+    @test @inferred(convert(Tuple{Vararg{UnitRange}}, R)) === (2:5, 3:5)
+
+    @test CartesianRange((3:5,-7:7)) == CartesianRange(3:5,-7:7)
+    @test CartesianRange((3,-7:7)) == CartesianRange(3:3,-7:7)
 end
+
+# All we really care about is that we have an optimized
+# implementation, but the seed is a useful way to check that.
+@test hash(CartesianIndex()) == Base.IteratorsMD.cartindexhash_seed
+@test hash(CartesianIndex(1, 2)) != hash((1, 2))
 
 @testset "itr, start, done, next" begin
     r = 2:3
@@ -1476,11 +1648,10 @@ R = CartesianRange((0,3))
 R = CartesianRange((3,0))
 @test done(R, start(R)) == true
 
-@test @inferred(eachindex(Base.LinearSlow(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
-@test @inferred(eachindex(Base.LinearFast(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
+@test @inferred(eachindex(Base.IndexCartesian(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
+@test @inferred(eachindex(Base.IndexLinear(),zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
 @test @inferred(eachindex(zeros(3),view(zeros(3,3),1:2,1:2),zeros(2,2,2),zeros(2,2))) == CartesianRange((3,2,2))
 @test @inferred(eachindex(zeros(3),zeros(2,2),zeros(2,2,2),zeros(2,2))) == 1:8
-
 
 @testset "rotates" begin
     a = [1 0 0; 0 0 0]
@@ -1511,21 +1682,21 @@ end
 
 @testset "binary ops on bool arrays" begin
     A = Array(trues(5))
-    @test A + true == [2,2,2,2,2]
+    @test A .+ true == [2,2,2,2,2]
     A = Array(trues(5))
-    @test A + false == [1,1,1,1,1]
+    @test A .+ false == [1,1,1,1,1]
     A = Array(trues(5))
-    @test true + A == [2,2,2,2,2]
+    @test true .+ A == [2,2,2,2,2]
     A = Array(trues(5))
-    @test false + A == [1,1,1,1,1]
+    @test false .+ A == [1,1,1,1,1]
     A = Array(trues(5))
-    @test A - true == [0,0,0,0,0]
+    @test A .- true == [0,0,0,0,0]
     A = Array(trues(5))
-    @test A - false == [1,1,1,1,1]
+    @test A .- false == [1,1,1,1,1]
     A = Array(trues(5))
-    @test true - A == [0,0,0,0,0]
+    @test true .- A == [0,0,0,0,0]
     A = Array(trues(5))
-    @test false - A == [-1,-1,-1,-1,-1]
+    @test false .- A == [-1,-1,-1,-1,-1]
 end
 
 @testset "simple transposes" begin
@@ -1535,12 +1706,12 @@ end
     d = ones(Complex,6)
     @test_throws DimensionMismatch transpose!(a,d)
     @test_throws DimensionMismatch transpose!(d,a)
-    @test_throws DimensionMismatch ctranspose!(a,d)
-    @test_throws DimensionMismatch ctranspose!(d,a)
+    @test_throws DimensionMismatch adjoint!(a,d)
+    @test_throws DimensionMismatch adjoint!(d,a)
     @test_throws DimensionMismatch transpose!(b,c)
-    @test_throws DimensionMismatch ctranspose!(b,c)
+    @test_throws DimensionMismatch adjoint!(b,c)
     @test_throws DimensionMismatch transpose!(c,b)
-    @test_throws DimensionMismatch ctranspose!(c,b)
+    @test_throws DimensionMismatch adjoint!(c,b)
     transpose!(b,a)
     @test b == ones(Complex,5)
     b = ones(Complex,5)
@@ -1548,10 +1719,10 @@ end
     transpose!(a,b)
     @test a == ones(Complex,1,5)
     b = zeros(Complex,5)
-    ctranspose!(b,a)
+    adjoint!(b,a)
     @test b == ones(Complex,5)
     a = zeros(Complex,1,5)
-    ctranspose!(a,b)
+    adjoint!(a,b)
     @test a == ones(Complex,1,5)
 end
 
@@ -1564,25 +1735,25 @@ end
 end
 
 module RetTypeDecl
-    using Base.Test
+    using Test
     import Base: +, *, broadcast, convert
 
-    immutable MeterUnits{T,P} <: Number
+    struct MeterUnits{T,P} <: Number
         val::T
     end
-    MeterUnits{T}(val::T, pow::Int) = MeterUnits{T,pow}(val)
+    MeterUnits(val::T, pow::Int) where {T} = MeterUnits{T,pow}(val)
 
     m  = MeterUnits(1.0, 1)   # 1.0 meter, i.e. units of length
     m2 = MeterUnits(1.0, 2)   # 1.0 meter^2, i.e. units of area
 
-    (+){T,pow}(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) = MeterUnits{T,pow}(x.val+y.val)
-    (*){T,pow}(x::Int, y::MeterUnits{T,pow}) = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
-    (*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
-    broadcast{T}(::typeof(*), x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
-    convert{T,pow}(::Type{MeterUnits{T,pow}}, y::Real) = MeterUnits{T,pow}(convert(T,y))
+    (+)(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{T,pow}(x.val+y.val)
+    (*)(x::Int, y::MeterUnits{T,pow}) where {T,pow} = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
+    (*)(x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
+    broadcast(::typeof(*), x::MeterUnits{T,1}, y::MeterUnits{T,1}) where {T} = MeterUnits{T,2}(x.val*y.val)
+    convert(::Type{MeterUnits{T,pow}}, y::Real) where {T,pow} = MeterUnits{T,pow}(convert(T,y))
 
-    @test @inferred(m+[m,m]) == [m+m,m+m]
-    @test @inferred([m,m]+m) == [m+m,m+m]
+    @test @inferred(m .+ [m,m]) == [m+m,m+m]
+    @test @inferred([m,m] .+ m) == [m+m,m+m]
     @test @inferred(broadcast(*,m,[m,m])) == [m2,m2]
     @test @inferred(broadcast(*,[m,m],m)) == [m2,m2]
     @test @inferred([m 2m; m m]*[m,m]) == [3m2,2m2]
@@ -1590,30 +1761,30 @@ module RetTypeDecl
 end
 
 # range, range ops
-A = 1:5
-B = 1.5:5.5
-@test A + B == 2.5:2.0:10.5
+@test (1:5) + (1.5:5.5) == 2.5:2.0:10.5
 
 @testset "slicedim" begin
     for A in (reshape(collect(1:20), 4, 5),
               reshape(1:20, 4, 5))
+        local A
         @test slicedim(A, 1, 2) == collect(2:4:20)
         @test slicedim(A, 2, 2) == collect(5:8)
         @test_throws ArgumentError slicedim(A,0,1)
         @test slicedim(A, 3, 1) == A
         @test_throws BoundsError slicedim(A, 3, 2)
+        @test @inferred(slicedim(A, 1, 2:2)) == collect(2:4:20)'
     end
 end
 
 ###
-### LinearSlow workout
+### IndexCartesian workout
 ###
-immutable LinSlowMatrix{T} <: DenseArray{T,2}
+struct LinSlowMatrix{T} <: DenseArray{T,2}
     data::Matrix{T}
 end
 
 # This is the default, but just to be sure
-Base.linearindexing{A<:LinSlowMatrix}(::Type{A}) = Base.LinearSlow()
+Base.IndexStyle(::Type{A}) where {A<:LinSlowMatrix} = Base.IndexCartesian()
 
 Base.size(A::LinSlowMatrix) = size(A.data)
 
@@ -1633,31 +1804,43 @@ S = view(A, :, :)
 @test isequal(B, A)
 
 for (a,b) in zip(A, B)
+    local a,b
     @test a == b
 end
 for (a,s) in zip(A, S)
+    local a,s
     @test a == s
 end
 
-C = copy(B)
-@test A == C
-@test B == C
+let C = copy(B)
+    @test A == C
+    @test B == C
+end
 
 @test vec(A) == vec(B) == vec(S)
 @test minimum(A) == minimum(B) == minimum(S)
 @test maximum(A) == maximum(B) == maximum(S)
 
-a, ai = findmin(A)
-b, bi = findmin(B)
-s, si = findmin(S)
-@test a == b == s
-@test ai == bi == si
+let
+    a, ai = findmin(A)
+    b, bi = findmin(B)
+    s, si = findmin(S)
+    @test a == b == s
+    @test ai == bi == si
+end
 
-a, ai = findmax(A)
-b, bi = findmax(B)
-s, si = findmax(S)
-@test a == b == s
-@test ai == bi == si
+let
+    a, ai = findmax(A)
+    b, bi = findmax(B)
+    s, si = findmax(S)
+    @test a == b == s
+    @test ai == bi == si
+end
+
+for X in (A, B, S)
+    @test findmin(X) == findmin(Dict(pairs(X)))
+    @test findmax(X) == findmax(Dict(pairs(X)))
+end
 
 fill!(B, 2)
 @test all(x->x==2, B)
@@ -1687,7 +1870,7 @@ copy!(S, A)
 @test flipdim(A, 1) == flipdim(B, 1) == flipdim(S, 2)
 @test flipdim(A, 2) == flipdim(B, 2) == flipdim(S, 2)
 
-@test A + 1 == B + 1 == S + 1
+@test A .+ 1 == B .+ 1 == S .+ 1
 @test 2*A == 2*B == 2*S
 @test A/3 == B/3 == S/3
 
@@ -1698,11 +1881,11 @@ x13250[UInt(1):UInt(2)] = 1.0
 @test x13250[2] == 1.0
 @test x13250[3] == 0.0
 
-immutable SquaresVector <: AbstractArray{Int, 1}
+struct SquaresVector <: AbstractArray{Int, 1}
     count::Int
 end
 Base.size(S::SquaresVector) = (S.count,)
-Base.linearindexing(::Type{SquaresVector}) = Base.LinearFast()
+Base.IndexStyle(::Type{SquaresVector}) = Base.IndexLinear()
 Base.getindex(S::SquaresVector, i::Int) = i*i
 foo_squares = SquaresVector(5)
 @test convert(Array{Int}, foo_squares) == [1,4,9,16,25]
@@ -1756,7 +1939,7 @@ let A = zeros(Int, 2, 2), B = zeros(Float64, 2, 2)
     for f in [f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16,
               f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30,
               f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42]
-        @test isleaftype(Base.return_types(f, ())[1])
+        @test Base._isleaftype(Base.return_types(f, ())[1])
     end
 end
 
@@ -1764,12 +1947,11 @@ end
 @inferred map(Int8, Int[0])
 
 # make sure @inbounds isn't used too much
-type OOB_Functor{T}; a::T; end
+mutable struct OOB_Functor{T}; a::T; end
 (f::OOB_Functor)(i::Int) = f.a[i]
 let f = OOB_Functor([1,2])
     @test_throws BoundsError map(f, [1,2,3,4,5])
 end
-
 
 # issue 15654
 @test cumprod([5], 2) == [5]
@@ -1792,12 +1974,12 @@ end
 
 #issue #18336
 @test cumsum([-0.0, -0.0])[1] === cumsum([-0.0, -0.0])[2] === -0.0
-@test cumprod(-0.0im + (0:0))[1] === Complex(0.0, -0.0)
+@test cumprod(-0.0im .+ (0:0))[1] === Complex(0.0, -0.0)
 
 module TestNLoops15895
 
 using Base.Cartesian
-using Base.Test
+using Test
 
 # issue 15894
 function f15894(d)
@@ -1811,26 +1993,29 @@ end
 end
 
 @testset "sign, conj, ~" begin
-    let A = [-10,0,3], B = [-10.0,0.0,3.0], C = [1,im,0]
-        @test sign(A) == [-1,0,1]
-        @test sign(B) == [-1,0,1]
-        @test typeof(sign(A)) == Vector{Int}
-        @test typeof(sign(B)) == Vector{Float64}
+    local A, B, C
+    A = [-10,0,3]
+    B = [-10.0,0.0,3.0]
+    C = [1,im,0]
 
-        @test conj(A) == A
-        @test conj(B) == A
-        @test conj(C) == [1,-im,0]
-        @test typeof(conj(A)) == Vector{Int}
-        @test typeof(conj(B)) == Vector{Float64}
-        @test typeof(conj(C)) == Vector{Complex{Int}}
+    @test sign.(A) == [-1,0,1]
+    @test sign.(B) == [-1,0,1]
+    @test typeof(sign.(A)) == Vector{Int}
+    @test typeof(sign.(B)) == Vector{Float64}
 
-        @test ~A == [9,-1,-4]
-        @test typeof(~A) == Vector{Int}
-    end
+    @test conj(A) == A
+    @test conj(B) == A
+    @test conj(C) == [1,-im,0]
+    @test typeof(conj(A)) == Vector{Int}
+    @test typeof(conj(B)) == Vector{Float64}
+    @test typeof(conj(C)) == Vector{Complex{Int}}
+
+    @test .~A == [9,-1,-4]
+    @test typeof(.~A) == Vector{Int}
 end
 
-# issue #16247
-let A = zeros(3,3)
+@testset "issue #16247" begin
+    local A = zeros(3,3)
     @test size(A[:,0x1:0x2]) == (3, 2)
     @test size(A[:,UInt(1):UInt(2)]) == (3,2)
     @test size(similar(A, UInt(3), 0x3)) == size(similar(A, (UInt(3), 0x3))) == (3,3)
@@ -1839,70 +2024,70 @@ end
 # issue 17254
 module AutoRetType
 
-using Base.Test
+using Test
 
-immutable Foo end
+struct Foo end
 for op in (:+, :*, :÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
     @eval import Base.$(op)
     @eval $(op)(::Foo, ::Foo) = Foo()
 end
-A = fill(Foo(), 10, 10)
-@test typeof(A+A) == Matrix{Foo}
-@test typeof(A-A) == Matrix{Foo}
-for op in (:.+, :.*, :.÷, :.%, :.<<, :.>>, :.-, :./, :.\, :.//, :.^)
-    @eval @test typeof($(op)(A,A)) == Matrix{Foo}
+let A = fill(Foo(), 10, 10)
+    @test isa(A + A, Matrix{Foo})
+    @test isa(A - A, Matrix{Foo})
+    for op in (:+, :*, :÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
+        @test isa(broadcast(eval(op), A, A), Matrix{Foo})
+    end
 end
 
-end
+end # module AutoRetType
 
 @testset "concatenations of dense matrices/vectors yield dense matrices/vectors" begin
-    let
-        N = 4
-        densevec = ones(N)
-        densemat = diagm(ones(N))
-        # Test that concatenations of homogeneous pairs of either dense matrices or dense vectors
-        # (i.e., Matrix-Matrix concatenations, and Vector-Vector concatenations) yield dense arrays
-        for densearray in (densevec, densemat)
-            @test isa(vcat(densearray, densearray), Array)
-            @test isa(hcat(densearray, densearray), Array)
-            @test isa(hvcat((2,), densearray, densearray), Array)
-            @test isa(cat((1,2), densearray, densearray), Array)
-        end
-        # Test that concatenations of heterogeneous Matrix-Vector pairs yield dense matrices
-        @test isa(hcat(densemat, densevec), Array)
-        @test isa(hcat(densevec, densemat), Array)
-        @test isa(hvcat((2,), densemat, densevec), Array)
-        @test isa(hvcat((2,), densevec, densemat), Array)
-        @test isa(cat((1,2), densemat, densevec), Array)
-        @test isa(cat((1,2), densevec, densemat), Array)
+    N = 4
+    densevec = ones(N)
+    densemat = diagm(ones(N))
+    # Test that concatenations of homogeneous pairs of either dense matrices or dense vectors
+    # (i.e., Matrix-Matrix concatenations, and Vector-Vector concatenations) yield dense arrays
+    for densearray in (densevec, densemat)
+        @test isa(vcat(densearray, densearray), Array)
+        @test isa(hcat(densearray, densearray), Array)
+        @test isa(hvcat((2,), densearray, densearray), Array)
+        @test isa(cat((1,2), densearray, densearray), Array)
     end
+    @test isa([[1,2,3]'; [1,2,3]'], Matrix{Int})
+    @test isa([[1,2,3]' [1,2,3]'], RowVector{Int, Vector{Int}})
+    @test isa([Any[1.0, 2]'; Any[2.0, 2]'], Matrix{Any})
+    @test isa([Any[1.0, 2]' Any[2.0, 2']'], RowVector{Any, Vector{Any}})
+    # Test that concatenations of heterogeneous Matrix-Vector pairs yield dense matrices
+    @test isa(hcat(densemat, densevec), Array)
+    @test isa(hcat(densevec, densemat), Array)
+    @test isa(hvcat((2,), densemat, densevec), Array)
+    @test isa(hvcat((2,), densevec, densemat), Array)
+    @test isa(cat((1,2), densemat, densevec), Array)
+    @test isa(cat((1,2), densevec, densemat), Array)
 end
 
 @testset "type constructor Array{T, N}(d...) works (especially for N>3)" begin
-    let
-        a = Array{Float64}(10)
-        b = Array{Float64, 1}(10)
-        @test size(a) == (10,)
-        @test size(a, 1) == 10
-        @test size(a,2,1) == (1,10)
-        @test size(a) == size(b)
-        a = Array{Float64}(2,3)
-        b = Array{Float64, 2}(2,3)
-        @test size(a) == (2,3)
-        @test size(a,4,3,2,1) == (1,1,3,2)
-        @test size(a,1,2) == (2,3)
-        @test size(a) == size(b)
-        a = Array{Float64}(9,8,7,6,5,4,3,2,1)
-        b = Array{Float64, 9}(9,8,7,6,5,4,3,2,1)
-        @test size(a,1,1) == (9,9)
-        @test size(a,4) == 6
-        @test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
-        @test size(a) == size(b)
-    end
+    a = Array{Float64}(10)
+    b = Array{Float64, 1}(10)
+    @test size(a) == (10,)
+    @test size(a, 1) == 10
+    @test size(a,2,1) == (1,10)
+    @test size(a) == size(b)
+    a = Array{Float64}(2,3)
+    b = Array{Float64, 2}(2,3)
+    @test size(a) == (2,3)
+    @test size(a,4,3,2,1) == (1,1,3,2)
+    @test size(a,1,2) == (2,3)
+    @test size(a) == size(b)
+    a = Array{Float64}(9,8,7,6,5,4,3,2,1)
+    b = Array{Float64, 9}(9,8,7,6,5,4,3,2,1)
+    @test size(a,1,1) == (9,9)
+    @test size(a,4) == 6
+    @test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
+    @test size(a) == size(b)
 end
 
 @testset "accumulate, accumulate!" begin
-
     @test accumulate(+, [1,2,3]) == [1, 3, 6]
     @test accumulate(min, [1 2; 3 4], 1) == [1 2; 1 2]
     @test accumulate(max, [1 2; 3 0], 2) == [1 2; 3 3]
@@ -1956,6 +2141,28 @@ end
     @test accumulate(op, [10 20 30], 2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
 end
 
+struct F21666{T <: Base.TypeArithmetic}
+    x::Float32
+end
+
+Base.TypeArithmetic(::Type{F21666{T}}) where {T} = T()
+Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
+Base.convert(::Type{Float64}, x::F21666) = Float64(x.x)
+@testset "Exactness of cumsum # 21666" begin
+    # test that cumsum uses more stable algorithm
+    # for types with unknown/rounding arithmetic
+    # we make v pretty large, because stable algorithm may have a large base case
+    v = zeros(300); v[1] = 2; v[200:end] = eps(Float32)
+
+    f_rounds = Float64.(cumsum(F21666{Base.ArithmeticRounds}.(v)))
+    f_unknown = Float64.(cumsum(F21666{Base.ArithmeticUnknown}.(v)))
+    f_truth = cumsum(v)
+    f_inexact = Float64.(accumulate(+, Float32.(v)))
+    @test f_rounds == f_unknown
+    @test f_rounds != f_inexact
+    @test norm(f_truth - f_rounds) < norm(f_truth - f_inexact)
+end
+
 @testset "zeros and ones" begin
     @test ones([1,2], Float64, (2,3)) == ones(2,3)
     @test ones(2) == ones(Int, 2) == ones([2,3], Float32, 2) ==  [1,1]
@@ -1983,12 +2190,11 @@ end
     zs = zeros(SparseMatrixCSC([1 2; 3 4]), Complex{Float64}, (2,3))
     test_zeros(zs, SparseMatrixCSC{Complex{Float64}}, (2, 3))
 
-    @testset "#19265" begin
-        @test_throws MethodError zeros(Float64, [1.])
-        x = [1.]
-        test_zeros(zeros(x, Float64), Vector{Float64}, (1,))
-        @test x == [1.]
-    end
+    # #19265"
+    @test_throws ErrorException zeros(Float64, [1.]) # TODO change to MethodError, when v0.6 deprecations are done
+    x = [1.]
+    test_zeros(zeros(x, Float64), Vector{Float64}, (1,))
+    @test x == [1.]
 
     # exotic indexing
     oarr = zeros(randn(3), UInt16, 1:3, -1:0)
@@ -1997,9 +2203,41 @@ end
 end
 
 # issue #11053
-type T11053
+mutable struct T11053
     a::Float64
 end
 Base.:*(a::T11053, b::Real) = T11053(a.a*b)
 Base.:(==)(a::T11053, b::T11053) = a.a == b.a
 @test [T11053(1)] * 5 == [T11053(1)] .* 5 == [T11053(5.0)]
+
+#15907
+@test typeof(Array{Int,0}()) == Array{Int,0}
+
+# check a == b for arrays of Union type (#22403)
+let TT = Union{UInt8, Int8}
+    a = TT[0x0, 0x1]
+    b = TT[0x0, 0x0]
+    pa = pointer(a)
+    pb = pointer(b)
+    resize!(a, 1) # sets a[2] = 0
+    resize!(b, 1)
+    @assert pointer(a) == pa
+    @assert pointer(b) == pb
+    unsafe_store!(pa, 0x1, 2) # reset a[2] to 1
+    @test length(a) == length(b) == 1
+    @test a[1] == b[1] == 0x0
+    @test a == b
+end
+
+let a = Vector{Int}[[1]],
+    b = Vector{Float64}[[2.0]],
+    c = Vector{Char}[['a']]
+    @test eltype([a;b]) == Vector{Float64}
+    @test eltype([a;c]) == Vector
+end
+
+# Issue #23629
+@testset "issue 23629" begin
+    @test_throws BoundsError zeros(2,3,0)[2,3]
+    @test_throws BoundsError checkbounds(zeros(2,3,0), 2, 3)
+end

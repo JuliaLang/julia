@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Method and method table pretty-printing
 
@@ -43,61 +43,72 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
 end
 
 function arg_decl_parts(m::Method)
-    tv = m.tvars
-    if !isa(tv,SimpleVector)
-        tv = Any[tv]
-    else
-        tv = Any[tv...]
-    end
-    if isdefined(m, :source)
-        src = m.source
-    else
-        src = nothing
+    tv = Any[]
+    sig = m.sig
+    while isa(sig, UnionAll)
+        push!(tv, sig.var)
+        sig = sig.body
     end
     file = m.file
     line = m.line
-    if src !== nothing && src.slotnames !== nothing
-        argnames = src.slotnames[1:m.nargs]
-        sig = unwrap_unionall(m.sig)
-        decls = Any[argtype_decl(:tvar_env => tv, argnames[i], sig, i, m.nargs, m.isva)
+    if isdefined(m, :source) || isdefined(m, :generator)
+        argnames = Vector{Any}(m.nargs)
+        ccall(:jl_fill_argnames, Void, (Any, Any), isdefined(m, :source) ? m.source : m.generator.inferred, argnames)
+        show_env = ImmutableDict{Symbol, Any}()
+        for t in tv
+            show_env = ImmutableDict(show_env, :unionall_env => t)
+        end
+        decls = Any[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
                     for i = 1:m.nargs]
     else
-        decls = Any[("", "") for i = 1:length(unwrap_unionall(m.sig).parameters)]
+        decls = Any[("", "") for i = 1:length(sig.parameters)]
     end
     return tv, decls, file, line
 end
 
 function kwarg_decl(m::Method, kwtype::DataType)
     sig = rewrap_unionall(Tuple{kwtype, Core.AnyVector, unwrap_unionall(m.sig).parameters...}, m.sig)
-    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, max_world(m))
+    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, typemax(UInt))
     if kwli !== nothing
         kwli = kwli::Method
-        src = kwli.source
-        kws = filter(x->!('#' in string(x)), src.slotnames[kwli.nargs+1:end])
+        src = uncompressed_ast(kwli)
+        kws = filter(x -> !('#' in string(x)), src.slotnames[(kwli.nargs + 1):end])
         # ensure the kwarg... is always printed last. The order of the arguments are not
         # necessarily the same as defined in the function
         i = findfirst(x -> endswith(string(x), "..."), kws)
-        i==0 && return kws
+        i == 0 && return kws
         push!(kws, kws[i])
-        return deleteat!(kws,i)
+        return deleteat!(kws, i)
     end
     return ()
+end
+
+function show_method_params(io::IO, tv)
+    if !isempty(tv)
+        print(io, " where ")
+        if length(tv) == 1
+            show(io, tv[1])
+        else
+            show_delim_array(io, tv, '{', ',', '}', false)
+        end
+    end
 end
 
 function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
-    ft = sig.parameters[1]
+    ft0 = sig.parameters[1]
+    ft = unwrap_unionall(ft0)
     d1 = decls[1]
     if sig === Tuple
         print(io, m.name)
         decls = Any[(), ("...", "")]
-    elseif ft <: Function &&
+    elseif ft <: Function && isa(ft, DataType) &&
             isdefined(ft.name.module, ft.name.mt.name) &&
                 # TODO: more accurate test? (tn.name === "#" name)
-            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.body.name
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)
@@ -106,9 +117,6 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
         end
     else
         print(io, "(", d1[1], "::", d1[2], ")")
-    end
-    if !isempty(tv)
-        show_delim_array(io, tv, '{', ',', '}', false)
     end
     print(io, "(")
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
@@ -120,7 +128,9 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
             join(io, kwargs, ", ", ", ")
         end
     end
-    print(io, ") in ", m.module)
+    print(io, ")")
+    show_method_params(io, tv)
+    print(io, " in ", m.module)
     if line > 0
         print(io, " at ", file, ":", line)
     end
@@ -134,18 +144,23 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     n = length(ms)
     if header
         m = n==1 ? "method" : "methods"
-        ns = isself ? string(name) : string("(::", name, ")")
+        sname = string(name)
+        ns = (isself || '#' in sname) ? sname : string("(::", name, ")")
         what = startswith(ns, '@') ? "macro" : "generic function"
         print(io, "# $n $m for ", what, " \"", ns, "\":")
     end
     kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
     n = rest = 0
     local last
+
+    resize!(LAST_SHOWN_LINE_INFOS, 0)
     for meth in ms
        if max==-1 || n<max
-            println(io)
-            show(io, meth; kwtype=kwtype)
             n += 1
+            println(io)
+            print(io, "[$(n)] ")
+            show(io, meth; kwtype=kwtype)
+            push!(LAST_SHOWN_LINE_INFOS, (string(meth.file), meth.line))
         else
             rest += 1
             last = meth
@@ -180,7 +195,7 @@ function url(m::Method)
     file = string(m.file)
     line = m.line
     line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
-    is_windows() && (file = replace(file, '\\', '/'))
+    Sys.iswindows() && (file = replace(file, '\\', '/'))
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
             # this url will only work if we're on a tagged release
@@ -213,13 +228,14 @@ end
 function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
-    ft = sig.parameters[1]
+    ft0 = sig.parameters[1]
+    ft = unwrap_unionall(ft0)
     d1 = decls[1]
-    if ft <: Function &&
+    if ft <: Function && isa(ft, DataType) &&
             isdefined(ft.name.module, ft.name.mt.name) &&
-            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.body.name
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)
@@ -276,7 +292,16 @@ end
 
 show(io::IO, mime::MIME"text/html", mt::MethodTable) = show(io, mime, MethodList(mt))
 
-# pretty-printing of Vector{Method} for output of methodswith:
+# pretty-printing of AbstractVector{Method} for output of methodswith:
+function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
+    resize!(LAST_SHOWN_LINE_INFOS, 0)
+    for (i, m) in enumerate(mt)
+        print(io, "[$(i)] ")
+        show(io, m)
+        println(io)
+        push!(LAST_SHOWN_LINE_INFOS, (string(m.file), m.line))
+    end
+end
 
 function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
     print(io, summary(mt))

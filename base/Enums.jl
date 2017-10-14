@@ -1,18 +1,18 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Enums
 
-import Core.Intrinsics.box
+import Core.Intrinsics.bitcast
 export Enum, @enum
 
 function basetype end
 
-abstract Enum{T<:Integer}
+abstract type Enum{T<:Integer} end
 
-Base.convert{T<:Integer}(::Type{Integer}, x::Enum{T}) = box(T, x)
-Base.convert{T<:Integer,T2<:Integer}(::Type{T}, x::Enum{T2}) = convert(T, box(T2, x))
-Base.write{T<:Integer}(io::IO, x::Enum{T}) = write(io, T(x))
-Base.read{T<:Enum}(io::IO, ::Type{T}) = T(read(io, Enums.basetype(T)))
+Base.convert(::Type{Integer}, x::Enum{T}) where {T<:Integer} = bitcast(T, x)
+Base.convert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = convert(T, bitcast(T2, x))
+Base.write(io::IO, x::Enum{T}) where {T<:Integer} = write(io, T(x))
+Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, Enums.basetype(T)))
 
 # generate code to test whether expr is in the given set of values
 function membershiptest(expr, values)
@@ -29,12 +29,13 @@ end
 @noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
 
 """
-    @enum EnumName[::BaseType] EnumValue1[=x] EnumValue2[=y]
+    @enum EnumName[::BaseType] value1[=x] value2[=y]
 
 Create an `Enum{BaseType}` subtype with name `EnumName` and enum member values of
-`EnumValue1` and `EnumValue2` with optional assigned values of `x` and `y`, respectively.
+`value1` and `value2` with optional assigned values of `x` and `y`, respectively.
 `EnumName` can be used just like other types and enum member values as regular values, such as
 
+# Examples
 ```jldoctest
 julia> @enum Fruit apple=1 orange=2 kiwi=3
 
@@ -45,37 +46,38 @@ julia> f(apple)
 "I'm a Fruit with value: 1"
 ```
 
-`BaseType`, which defaults to `Int32`, must be a bitstype subtype of Integer. Member values can be converted between
-the enum type and `BaseType`. `read` and `write` perform these conversions automatically.
+`BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
+Member values can be converted between the enum type and `BaseType`. `read` and `write`
+perform these conversions automatically.
 """
-macro enum(T,syms...)
+macro enum(T, syms...)
     if isempty(syms)
         throw(ArgumentError("no arguments given for Enum $T"))
     end
     basetype = Int32
     typename = T
-    if isa(T,Expr) && T.head == :(::) && length(T.args) == 2 && isa(T.args[1], Symbol)
+    if isa(T, Expr) && T.head == :(::) && length(T.args) == 2 && isa(T.args[1], Symbol)
         typename = T.args[1]
-        basetype = eval(current_module(),T.args[2])
+        basetype = eval(__module__, T.args[2])
         if !isa(basetype, DataType) || !(basetype <: Integer) || !isbits(basetype)
-            throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer bitstype"))
+            throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer primitive type"))
         end
-    elseif !isa(T,Symbol)
+    elseif !isa(T, Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
-    vals = Array{Tuple{Symbol,Integer}}(0)
+    vals = Vector{Tuple{Symbol,Integer}}(0)
     lo = hi = 0
     i = zero(basetype)
     hasexpr = false
     for s in syms
-        if isa(s,Symbol)
+        if isa(s, Symbol)
             if i == typemin(basetype) && !isempty(vals)
                 throw(ArgumentError("overflow in value \"$s\" of Enum $typename"))
             end
-        elseif isa(s,Expr) &&
+        elseif isa(s, Expr) &&
                (s.head == :(=) || s.head == :kw) &&
-               length(s.args) == 2 && isa(s.args[1],Symbol)
-            i = eval(current_module(),s.args[2]) # allow exprs, e.g. uint128"1"
+               length(s.args) == 2 && isa(s.args[1], Symbol)
+            i = eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
             if !isa(i, Integer)
                 throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
             end
@@ -95,7 +97,7 @@ macro enum(T,syms...)
             lo = min(lo, i)
             hi = max(hi, i)
         end
-        i += one(i)
+        i += oneunit(i)
     end
     values = basetype[i[2] for i in vals]
     if hasexpr && values != unique(values)
@@ -103,10 +105,10 @@ macro enum(T,syms...)
     end
     blk = quote
         # enum definition
-        Base.@__doc__(bitstype $(sizeof(basetype) * 8) $(esc(typename)) <: Enum{$(basetype)})
+        Base.@__doc__(primitive type $(esc(typename)) <: Enum{$(basetype)} $(sizeof(basetype) * 8) end)
         function Base.convert(::Type{$(esc(typename))}, x::Integer)
             $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
-            box($(esc(typename)), convert($(basetype), x))
+            return bitcast($(esc(typename)), convert($(basetype), x))
         end
         Enums.basetype(::Type{$(esc(typename))}) = $(esc(basetype))
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
@@ -143,7 +145,7 @@ macro enum(T,syms...)
             end
         end
     end
-    if isa(typename,Symbol)
+    if isa(typename, Symbol)
         for (sym,i) in vals
             push!(blk.args, :(const $(esc(sym)) = $(esc(typename))($i)))
         end

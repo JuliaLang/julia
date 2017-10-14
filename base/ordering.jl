@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Order
 
@@ -11,33 +11,33 @@ export # not exported by Base
     DirectOrdering,
     lt, ord, ordtype
 
-abstract Ordering
+abstract type Ordering end
 
-immutable ForwardOrdering <: Ordering end
-immutable ReverseOrdering{Fwd<:Ordering} <: Ordering
+struct ForwardOrdering <: Ordering end
+struct ReverseOrdering{Fwd<:Ordering} <: Ordering
     fwd::Fwd
 end
 
 ReverseOrdering(rev::ReverseOrdering) = rev.fwd
-ReverseOrdering{Fwd}(fwd::Fwd) = ReverseOrdering{Fwd}(fwd)
+ReverseOrdering(fwd::Fwd) where {Fwd} = ReverseOrdering{Fwd}(fwd)
 
-typealias DirectOrdering Union{ForwardOrdering,ReverseOrdering{ForwardOrdering}}
+const DirectOrdering = Union{ForwardOrdering,ReverseOrdering{ForwardOrdering}}
 
 const Forward = ForwardOrdering()
 const Reverse = ReverseOrdering(Forward)
 
-immutable LexicographicOrdering <: Ordering end
+struct LexicographicOrdering <: Ordering end
 const Lexicographic = LexicographicOrdering()
 
-immutable By{T} <: Ordering
+struct By{T} <: Ordering
     by::T
 end
 
-immutable Lt{T} <: Ordering
+struct Lt{T} <: Ordering
     lt::T
 end
 
-immutable Perm{O<:Ordering,V<:AbstractVector} <: Ordering
+struct Perm{O<:Ordering,V<:AbstractVector} <: Ordering
     order::O
     data::V
 end
@@ -48,12 +48,12 @@ lt(o::By,                    a, b) = isless(o.by(a),o.by(b))
 lt(o::Lt,                    a, b) = o.lt(a,b)
 lt(o::LexicographicOrdering, a, b) = lexcmp(a,b) < 0
 
-function lt(p::Perm, a::Integer, b::Integer)
+Base.@propagate_inbounds function lt(p::Perm, a::Integer, b::Integer)
     da = p.data[a]
     db = p.data[b]
     lt(p.order, da, db) | (!lt(p.order, db, da) & (a < b))
 end
-function lt(p::Perm{LexicographicOrdering}, a::Integer, b::Integer)
+Base.@propagate_inbounds function lt(p::Perm{LexicographicOrdering}, a::Integer, b::Integer)
     c = lexcmp(p.data[a], p.data[b])
     c != 0 ? c < 0 : a < b
 end

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #############################################
 # Create some temporary files & directories #
@@ -26,7 +26,7 @@ let err = nothing
     end
 end
 
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
     # relative link
@@ -37,7 +37,7 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     cd(pwd_)
 end
 
-if !is_windows()
+if !Sys.iswindows()
     link = joinpath(dir, "afilelink.txt")
     symlink(file, link)
     # relative link
@@ -52,6 +52,7 @@ end
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
+@test !isfile(Base.Filesystem.StatStruct())
 @test isdir(dir)
 @test !isfile(dir)
 @test !islink(dir)
@@ -67,7 +68,7 @@ chmod(file, filemode(file) | 0o222)
 @test filemode(file) & 0o111 == 0
 @test filesize(file) == 0
 
-if is_windows()
+if Sys.iswindows()
     permissions = 0o444
     @test filemode(dir) & 0o777 != permissions
     @test filemode(subdir) & 0o777 != permissions
@@ -103,7 +104,7 @@ end
 
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
-if is_windows()
+if Sys.iswindows()
     @test filesize(dir) == 0
 else
     @test filesize(dir) > 0
@@ -118,15 +119,15 @@ end
 #@test Int(time()) >= Int(mtime(file)) >= Int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
 # test links
-if is_unix()
+if Sys.isunix()
     @test islink(link) == true
     @test readlink(link) == file
 end
 
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     @test islink(dirlink) == true
     @test isdir(dirlink) == true
-    @test readlink(dirlink) == subdir * (is_windows() ? "\\" : "")
+    @test readlink(dirlink) == subdir * (Sys.iswindows() ? "\\" : "")
 end
 
 # rm recursive TODO add links
@@ -162,7 +163,7 @@ rm(c_tmpdir, recursive=true)
 @test_throws Base.UVError rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
-if !is_windows()
+if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
     if get(ENV, "USER", "") == "root" || get(ENV, "HOME", "") == "/root"
         chown(file, -2, -1)  # Change the file owner to nobody
@@ -191,12 +192,12 @@ function test_file_poll(channel,interval,timeout_s)
 end
 
 function test_timeout(tval)
-    tic()
-    channel = Channel(1)
-    @async test_file_poll(channel, 10, tval)
-    tr = take!(channel)
-    t_elapsed = toq()
-    @test !ispath(tr[1]) && !ispath(tr[2])
+    t_elapsed = @elapsed begin
+        channel = Channel(1)
+        @async test_file_poll(channel, 10, tval)
+        tr = take!(channel)
+    end
+    @test tr[1] === Base.Filesystem.StatStruct() && tr[2] === EOFError()
     @test tval <= t_elapsed
 end
 
@@ -236,7 +237,11 @@ function test_monitor_wait(tval)
     end
     fname, events = wait(fm)
     close(fm)
-    @test fname == basename(file)
+    if Sys.islinux() || Sys.iswindows() || Sys.isapple()
+        @test fname == basename(file)
+    else
+        @test fname == ""  # platforms where F_GETPATH is not available
+    end
     @test events.changed
 end
 
@@ -264,7 +269,9 @@ test_watch_file_timeout(0.1)
 test_watch_file_change(6)
 
 @test_throws Base.UVError watch_file("____nonexistent_file", 10)
-@test_throws Base.UVError poll_file("____nonexistent_file", 2, 10)
+@test(@elapsed(
+    @test(poll_file("____nonexistent_file", 1, 3.1) ===
+          (Base.Filesystem.StatStruct(), EOFError()))) > 3)
 
 ##############
 # mark/reset #
@@ -285,7 +292,7 @@ reset(s)
 str = readline(s)
 @test startswith(str, "Marked!")
 mark(s)
-@test readline(s) == "Hello world!\n"
+@test readline(s) == "Hello world!"
 @test ismarked(s)
 unmark(s)
 @test !ismarked(s)
@@ -303,14 +310,14 @@ my_tempdir = tempdir()
 
 path = tempname()
 # Issue #9053.
-@test ispath(path) == is_windows()
+@test ispath(path) == Sys.iswindows()
 ispath(path) && rm(path)
 
 (p, f) = mktemp()
 print(f, "Here is some text")
 close(f)
 @test isfile(p) == true
-@test readstring(p) == "Here is some text"
+@test read(p, String) == "Here is some text"
 rm(p)
 
 let
@@ -335,7 +342,7 @@ end
 emptyfile = joinpath(dir, "empty")
 touch(emptyfile)
 emptyf = open(emptyfile)
-@test isempty(readlines(emptyf))
+@test isempty(readlines(emptyf, chomp=false))
 close(emptyf)
 rm(emptyfile)
 
@@ -378,7 +385,7 @@ function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow
                 # copied_path must also be a file.
                 @test isfile(copied_path)
                 # copied_path must have same content
-                @test readstring(orig_path) == readstring(copied_path)
+                @test read(orig_path, String) == read(copied_path, String)
             end
         end
     elseif isdir(orig_path)
@@ -387,7 +394,7 @@ function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow
         # copied_path must also be a file.
         @test isfile(copied_path)
         # copied_path must have same content
-        @test readstring(orig_path) == readstring(copied_path)
+        @test read(orig_path, String) == read(copied_path, String)
     end
 end
 
@@ -425,6 +432,8 @@ c_stat = stat(cfile)
 @test a_stat.mode == b_stat.mode
 @test a_stat.size == b_stat.size
 @test a_stat.size == c_stat.size
+
+@test parse(Int,match(r"mode=(.*),",sprint(show,a_stat)).captures[1]) == a_stat.mode
 
 close(af)
 rm(afile)
@@ -470,7 +479,7 @@ end
 
 # issue #10506 #10434
 ## Tests for directories and links to directories
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     function setup_dirs(tmpdir)
         srcdir = joinpath(tmpdir, "src")
         hidden_srcdir = joinpath(tmpdir, ".hidden_srcdir")
@@ -680,7 +689,7 @@ end
 
 # issue #10506 #10434
 ## Tests for files and links to files as well as directories and links to directories
-if !is_windows()
+if !Sys.iswindows()
     function setup_files(tmpdir)
         srcfile = joinpath(tmpdir, "srcfile.txt")
         hidden_srcfile = joinpath(tmpdir, ".hidden_srcfile.txt")
@@ -712,7 +721,7 @@ if !is_windows()
         islink(s) && @test readlink(s) == readlink(d)
         islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d))
         # all should contain the same
-        @test readstring(s) == readstring(d) == file_txt
+        @test read(s, String) == read(d, String) == file_txt
     end
 
     function mv_check(s, d, d_mv, file_txt; remove_destination=true)
@@ -730,7 +739,7 @@ if !is_windows()
         islink(s) && @test readlink(s) == readlink(d_mv)
         islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
         # all should contain the same
-        @test readstring(s) == readstring(d_mv) == file_txt
+        @test read(s, String) == read(d_mv, String) == file_txt
         # d => d_mv same file/dir
         @test Base.samefile(stat_d, stat_d_mv)
     end
@@ -774,7 +783,7 @@ if !is_windows()
             # Expect no link because a file is copied (follow_symlinks=false does not effect this)
             @test isfile(d) && !islink(d)
             # all should contain otherfile_content
-            @test readstring(d) == otherfile_content
+            @test read(d, String) == otherfile_content
         end
     end
     # mv ----------------------------------------------------
@@ -834,7 +843,7 @@ if !is_windows()
         rel_dl = "rel_linkto_targetdir"
         rel_dir = joinpath("..", "targetdir")
         symlink(rel_dir, rel_dl)
-        rel_file_read_txt = readstring(rel_file)
+        rel_file_read_txt = read(rel_file, String)
         cd(pwd_)
         # Setup copytodir
         copytodir = joinpath(tmpdir, "copytodir")
@@ -912,7 +921,7 @@ let f = open(file, "w")
     f = open(file, "r")
     test_LibcFILE(convert(Libc.FILE, f))
     close(f)
-    if is_windows()
+    if Sys.iswindows()
         f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
     else
         f = RawFD(ccall(:open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
@@ -925,13 +934,14 @@ for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpat
         stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch,
         isblockdev, ischardev, isdir, isfifo, isfile, islink, ispath, issetgid,
         issetuid, issocket, issticky, realpath, watch_file, poll_file)
+    local f
     @test_throws ArgumentError f("adir\0bad")
 end
 @test_throws ArgumentError chmod("ba\0d", 0o222)
 @test_throws ArgumentError open("ba\0d", "w")
 @test_throws ArgumentError cp(file, "ba\0d")
 @test_throws ArgumentError mv(file, "ba\0d")
-if !is_windows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
+if !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
     @test_throws ArgumentError symlink(file, "ba\0d")
 else
     @test_throws ErrorException symlink(file, "ba\0d")
@@ -953,7 +963,7 @@ cd(dirwalk) do
         touch(joinpath("sub_dir1", "file$i"))
     end
     touch(joinpath("sub_dir2", "file_dir2"))
-    has_symlinks = !is_windows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
+    has_symlinks = !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
     follow_symlink_vec = has_symlinks ? [true, false] : [false]
     has_symlinks && symlink(abspath("sub_dir2"), joinpath("sub_dir1", "link"))
     for follow_symlinks in follow_symlink_vec
@@ -1042,11 +1052,11 @@ rm(dirwalk, recursive=true)
 ############
 # Clean up #
 ############
-if !is_windows()
+if !Sys.iswindows()
     rm(link)
     rm(rellink)
 end
-if !is_windows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
+if !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
     rm(dirlink)
     rm(relsubdirlink)
 end
@@ -1107,24 +1117,69 @@ test2_12992()
 test2_12992()
 
 # issue 13559
-if !is_windows()
+if !Sys.iswindows()
 function test_13559()
     fn = tempname()
     run(`mkfifo $fn`)
     # use subprocess to write 127 bytes to FIFO
-    writer_cmds = "x=open(\"$fn\", \"w\"); for i=1:127 write(x,0xaa); flush(x); sleep(0.1) end; close(x); quit()"
-    open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $writer_cmds`, stderr=STDERR))
-    #quickly read FIFO, draining it and blocking but not failing with EOFError yet
+    writer_cmds = """
+        using Test
+        x = open($(repr(fn)), "w")
+        for i in 1:120
+            write(x, 0xaa)
+        end
+        flush(x)
+        Test.@test read(STDIN, Int8) == 31
+        for i in 1:7
+            write(x, 0xaa)
+        end
+        close(x)
+    """
+    p = open(pipeline(`$(Base.julia_cmd()) --startup-file=no -e $writer_cmds`, stderr=STDERR), "w")
+    # quickly read FIFO, draining it and blocking but not failing with EOFError yet
     r = open(fn, "r")
     # 15 proper reads
-    for i=1:15
-        @test read(r, Int64) == -6148914691236517206
+    for i in 1:15
+        @test read(r, UInt64) === 0xaaaaaaaaaaaaaaaa
     end
-    # last read should throw EOFError when FIFO closes, since there are only 7 bytes available.
-    @test_throws EOFError read(r, Int64)
+    write(p, 0x1f)
+    # last read should throw EOFError when FIFO closes, since there are only 7 bytes (or less) available.
+    @test_throws EOFError read(r, UInt64)
     close(r)
+    @test success(p)
     rm(fn)
 end
 test_13559()
 end
-@test_throws ArgumentError mkpath("fakepath",-1)
+@test_throws ArgumentError mkpath("fakepath", -1)
+
+# issue #22566
+if !Sys.iswindows()
+    function test_22566()
+        fn = tempname()
+        run(`mkfifo $fn`)
+
+        script = """
+            using Test
+            x = open($(repr(fn)), "w")
+            write(x, 0x42)
+            flush(x)
+            Test.@test read(STDIN, Int8) == 21
+            close(x)
+        """
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
+        p = open(pipeline(cmd, stderr=STDERR), "w")
+
+        r = open(fn, "r")
+        @test read(r, Int8) == 66
+        write(p, 0x15)
+        close(r)
+        @test success(p)
+        rm(fn)
+    end
+
+    # repeat opening/closing fifo file, ensure no EINTR popped out
+    for i ∈ 1:50
+        test_22566()
+    end
+end  # !Sys.iswindows

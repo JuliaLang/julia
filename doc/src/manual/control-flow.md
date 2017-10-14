@@ -6,8 +6,8 @@ Julia provides a variety of control flow constructs:
   * [Conditional Evaluation](@ref man-conditional-evaluation): `if`-`elseif`-`else` and `?:` (ternary operator).
   * [Short-Circuit Evaluation](@ref): `&&`, `||` and chained comparisons.
   * [Repeated Evaluation: Loops](@ref man-loops): `while` and `for`.
-  * [Exception Handling](@ref): `try`-`catch`, [`error()`](@ref) and [`throw()`](@ref).
-  * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto()`](@ref).
+  * [Exception Handling](@ref): `try`-`catch`, [`error`](@ref) and [`throw`](@ref).
+  * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto`](@ref).
 
 The first five control flow mechanisms are standard to high-level programming languages. [`Task`](@ref)s
 are not so standard: they provide non-local control flow, making it possible to switch between
@@ -22,11 +22,11 @@ in order, returning the value of the last subexpression as its value. There are 
 that accomplish this: `begin` blocks and `(;)` chains. The value of both compound expression constructs
 is that of the last subexpression. Here's an example of a `begin` block:
 
-```julia
+```jldoctest
 julia> z = begin
-         x = 1
-         y = 2
-         x + y
+           x = 1
+           y = 2
+           x + y
        end
 3
 ```
@@ -34,7 +34,7 @@ julia> z = begin
 Since these are fairly small, simple expressions, they could easily be placed onto a single line,
 which is where the `(;)` chain syntax comes in handy:
 
-```julia
+```jldoctest
 julia> z = (x = 1; y = 2; x + y)
 3
 ```
@@ -43,7 +43,7 @@ This syntax is particularly useful with the terse single-line function definitio
 in [Functions](@ref). Although it is typical, there is no requirement that `begin` blocks be multiline
 or that `(;)` chains be single-line:
 
-```julia
+```jldoctest
 julia> begin x = 1; y = 2; x + y end
 3
 
@@ -60,11 +60,11 @@ value of a boolean expression. Here is the anatomy of the `if`-`elseif`-`else` c
 
 ```julia
 if x < y
-  println("x is less than y")
+    println("x is less than y")
 elseif x > y
-  println("x is greater than y")
+    println("x is greater than y")
 else
-  println("x is equal to y")
+    println("x is equal to y")
 end
 ```
 
@@ -72,15 +72,15 @@ If the condition expression `x < y` is `true`, then the corresponding block is e
 the condition expression `x > y` is evaluated, and if it is `true`, the corresponding block is
 evaluated; if neither expression is true, the `else` block is evaluated. Here it is in action:
 
-```julia
+```jldoctest
 julia> function test(x, y)
-         if x < y
-           println("x is less than y")
-         elseif x > y
-           println("x is greater than y")
-         else
-           println("x is equal to y")
-         end
+           if x < y
+               println("x is less than y")
+           elseif x > y
+               println("x is greater than y")
+           else
+               println("x is equal to y")
+           end
        end
 test (generic function with 1 method)
 
@@ -100,35 +100,38 @@ one evaluates to `true`, after which the associated block is evaluated, and no f
 expressions or blocks are evaluated.
 
 `if` blocks are "leaky", i.e. they do not introduce a local scope. This means that new variables
-defined inside the `ìf` clauses can be used after the `if` block, even if they weren't defined
+defined inside the `if` clauses can be used after the `if` block, even if they weren't defined
 before. So, we could have defined the `test` function above as
 
-```julia
+```jldoctest
 julia> function test(x,y)
-         if x < y
-           relation = "less than"
-         elseif x == y
-           relation = "equal to"
-         else
-           relation = "greater than"
-         end
-         println("x is ", relation, " y.")
+           if x < y
+               relation = "less than"
+           elseif x == y
+               relation = "equal to"
+           else
+               relation = "greater than"
+           end
+           println("x is ", relation, " y.")
        end
 test (generic function with 1 method)
+
+julia> test(2, 1)
+x is greater than y.
 ```
 
 The variable `relation` is declared inside the `if` block, but used outside. However, when depending
 on this behavior, make sure all possible code paths define a value for the variable. The following
 change to the above function results in a runtime error
 
-```julia
+```jldoctest
 julia> function test(x,y)
-         if x < y
-           relation = "less than"
-         elseif x == y
-           relation = "equal to"
-         end
-         println("x is ", relation, " y.")
+           if x < y
+               relation = "less than"
+           elseif x == y
+               relation = "equal to"
+           end
+           println("x is ", relation, " y.")
        end
 test (generic function with 1 method)
 
@@ -137,15 +140,15 @@ x is less than y.
 
 julia> test(2,1)
 ERROR: UndefVarError: relation not defined
- in test(::Int64, ::Int64) at ./none:7
- ...
+Stacktrace:
+ [1] test(::Int64, ::Int64) at ./none:7
 ```
 
 `if` blocks also return a value, which may seem unintuitive to users coming from many other languages.
 This value is simply the return value of the last executed statement in the branch that was chosen,
 so
 
-```julia
+```jldoctest
 julia> x = 3
 3
 
@@ -163,16 +166,15 @@ Evaluation in Julia, as outlined in the next section.
 Unlike C, MATLAB, Perl, Python, and Ruby -- but like Java, and a few other stricter, typed languages
 -- it is an error if the value of a conditional expression is anything but `true` or `false`:
 
-```julia
+```jldoctest
 julia> if 1
-         println("true")
+           println("true")
        end
 ERROR: TypeError: non-boolean (Int64) used in boolean context
- ...
 ```
 
-This error indicates that the conditional was of the wrong type: `Int64` rather than the required
-`Bool`.
+This error indicates that the conditional was of the wrong type: [`Int64`](@ref) rather
+than the required [`Bool`](@ref).
 
 The so-called "ternary operator", `?:`, is closely related to the `if`-`elseif`-`else` syntax,
 but is used where a conditional choice between single expression values is required, as opposed
@@ -185,14 +187,16 @@ a ? b : c
 
 The expression `a`, before the `?`, is a condition expression, and the ternary operation evaluates
 the expression `b`, before the `:`, if the condition `a` is `true` or the expression `c`, after
-the `:`, if it is `false`.
+the `:`, if it is `false`. Note that the spaces around `?` and `:` are mandatory: an expression
+like `a?b:c` is not a valid ternary expression (but a newline is acceptable after both the `?` and
+the `:`).
 
 The easiest way to understand this behavior is to see an example. In the previous example, the
 `println` call is shared by all three branches: the only real choice is which literal string to
 print. This could be written more concisely using the ternary operator. For the sake of clarity,
 let's try a two-way version first:
 
-```julia
+```jldoctest
 julia> x = 1; y = 2;
 
 julia> println(x < y ? "less than" : "not less than")
@@ -208,7 +212,7 @@ If the expression `x < y` is true, the entire ternary operator expression evalua
 `"less than"` and otherwise it evaluates to the string `"not less than"`. The original three-way
 example requires chaining multiple uses of the ternary operator together:
 
-```julia
+```jldoctest
 julia> test(x, y) = println(x < y ? "x is less than y"    :
                             x > y ? "x is greater than y" : "x is equal to y")
 test (generic function with 1 method)
@@ -228,7 +232,7 @@ To facilitate chaining, the operator associates from right to left.
 It is significant that like `if`-`elseif`-`else`, the expressions before and after the `:` are
 only evaluated if the condition expression evaluates to `true` or `false`, respectively:
 
-```julia
+```jldoctest
 julia> v(x) = (println(x); x)
 v (generic function with 1 method)
 
@@ -257,7 +261,7 @@ The reasoning is that `a && b` must be `false` if `a` is `false`, regardless of 
 of `b`. Both `&&` and `||` associate to the right, but `&&` has higher precedence than `||` does.
 It's easy to experiment with this behavior:
 
-```julia
+```jldoctest tandf
 julia> t(x) = (println(x); true)
 t (generic function with 1 method)
 
@@ -311,7 +315,7 @@ one can write `<cond> || <statement>` (which could be read as: <cond> *or else* 
 
 For example, a recursive factorial routine could be defined like this:
 
-```julia
+```jldoctest
 julia> function fact(n::Int)
            n >= 0 || error("n must be non-negative")
            n == 0 && return 1
@@ -327,15 +331,15 @@ julia> fact(0)
 
 julia> fact(-1)
 ERROR: n must be non-negative
- in fact(::Int64) at ./none:2
- ...
+Stacktrace:
+ [1] fact(::Int64) at ./none:2
 ```
 
 Boolean operations *without* short-circuit evaluation can be done with the bitwise boolean operators
 introduced in [Mathematical Operations and Elementary Functions](@ref): `&` and `|`. These are
 normal functions, which happen to support infix operator syntax, but always evaluate their arguments:
 
-```julia
+```jldoctest tandf
 julia> f(1) & t(2)
 1
 2
@@ -351,22 +355,19 @@ Just like condition expressions used in `if`, `elseif` or the ternary operator, 
 `&&` or `||` must be boolean values (`true` or `false`). Using a non-boolean value anywhere except
 for the last entry in a conditional chain is an error:
 
-```julia
+```jldoctest
 julia> 1 && true
 ERROR: TypeError: non-boolean (Int64) used in boolean context
- ...
 ```
 
 On the other hand, any type of expression can be used at the end of a conditional chain. It will
 be evaluated and returned depending on the preceding conditionals:
 
-```julia
-julia> true && (x = rand(2,2))
-2×2 Array{Float64,2}:
- 0.768448  0.673959
- 0.940515  0.395453
+```jldoctest
+julia> true && (x = (1, 2, 3))
+(1, 2, 3)
 
-julia> false && (x = rand(2,2))
+julia> false && (x = (1, 2, 3))
 false
 ```
 
@@ -375,12 +376,12 @@ false
 There are two constructs for repeated evaluation of expressions: the `while` loop and the `for`
 loop. Here is an example of a `while` loop:
 
-```julia
+```jldoctest
 julia> i = 1;
 
 julia> while i <= 5
-         println(i)
-         i += 1
+           println(i)
+           i += 1
        end
 1
 2
@@ -397,9 +398,9 @@ The `for` loop makes common repeated evaluation idioms easier to write. Since co
 down like the above `while` loop does is so common, it can be expressed more concisely with a
 `for` loop:
 
-```julia
+```jldoctest
 julia> for i = 1:5
-         println(i)
+           println(i)
        end
 1
 2
@@ -408,16 +409,16 @@ julia> for i = 1:5
 5
 ```
 
-Here the `1:5` is a `Range` object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
+Here the `1:5` is a range object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
 loop iterates through these values, assigning each one in turn to the variable `i`. One rather
 important distinction between the previous `while` loop form and the `for` loop form is the scope
 during which the variable is visible. If the variable `i` has not been introduced in an other
 scope, in the `for` loop form, it is visible only inside of the `for` loop, and not afterwards.
 You'll either need a new interactive session instance or a different variable name to test this:
 
-```julia
+```jldoctest
 julia> for j = 1:5
-         println(j)
+           println(j)
        end
 1
 2
@@ -427,7 +428,6 @@ julia> for j = 1:5
 
 julia> j
 ERROR: UndefVarError: j not defined
- ...
 ```
 
 See [Scope of Variables](@ref scope-of-variables) for a detailed explanation of variable scope and how it works in
@@ -437,16 +437,16 @@ In general, the `for` loop construct can iterate over any container. In these ca
 (but fully equivalent) keyword `in` or `∈` is typically used instead of `=`, since it makes
 the code read more clearly:
 
-```julia
+```jldoctest
 julia> for i in [1,4,0]
-         println(i)
+           println(i)
        end
 1
 4
 0
 
 julia> for s ∈ ["foo","bar","baz"]
-         println(s)
+           println(s)
        end
 foo
 bar
@@ -460,15 +460,15 @@ It is sometimes convenient to terminate the repetition of a `while` before the t
 is falsified or stop iterating in a `for` loop before the end of the iterable object is reached.
 This can be accomplished with the `break` keyword:
 
-```julia
+```jldoctest
 julia> i = 1;
 
 julia> while true
-         println(i)
-         if i >= 5
-           break
-         end
-         i += 1
+           println(i)
+           if i >= 5
+               break
+           end
+           i += 1
        end
 1
 2
@@ -477,10 +477,10 @@ julia> while true
 5
 
 julia> for i = 1:1000
-         println(i)
-         if i >= 5
-           break
-         end
+           println(i)
+           if i >= 5
+               break
+           end
        end
 1
 2
@@ -488,17 +488,18 @@ julia> for i = 1:1000
 4
 5
 ```
+
 Without the `break` keyword, the above `while` loop would never terminate on its own, and the `for` loop would iterate up to 1000. These loops are both exited early by using `break`.
 
 In other circumstances, it is handy to be able to stop an iteration and move on to the next one
 immediately. The `continue` keyword accomplishes this:
 
-```julia
+```jldoctest
 julia> for i = 1:10
-         if i % 3 != 0
-           continue
-         end
-         println(i)
+           if i % 3 != 0
+               continue
+           end
+           println(i)
        end
 3
 6
@@ -513,14 +514,14 @@ which one calls `continue`.
 Multiple nested `for` loops can be combined into a single outer loop, forming the cartesian product
 of its iterables:
 
-```julia
+```jldoctest
 julia> for i = 1:2, j = 3:4
-         println((i, j))
+           println((i, j))
        end
-(1,3)
-(1,4)
-(2,3)
-(2,4)
+(1, 3)
+(1, 4)
+(2, 3)
+(2, 4)
 ```
 
 A `break` statement inside such a loop exits the entire nest of loops, not just the inner one.
@@ -564,47 +565,48 @@ below all interrupt the normal flow of control.
 | [`UndefVarError`](@ref)       |
 | `UnicodeError`                |
 
-For example, the [`sqrt()`](@ref) function throws a [`DomainError`](@ref) if applied to a negative
+For example, the [`sqrt`](@ref) function throws a [`DomainError`](@ref) if applied to a negative
 real value:
 
-```julia
+```jldoctest
 julia> sqrt(-1)
-ERROR: DomainError:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
- in sqrt(::Int64) at ./math.jl:278
- ...
+ERROR: DomainError with -1.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+Stacktrace:
+[...]
 ```
 
 You may define your own exceptions in the following way:
 
-```julia
-julia> type MyCustomException <: Exception end
+```jldoctest
+julia> struct MyCustomException <: Exception end
 ```
 
-### The [`throw()`](@ref) function
+### The [`throw`](@ref) function
 
-Exceptions can be created explicitly with [`throw()`](@ref). For example, a function defined only
-for nonnegative numbers could be written to [`throw()`](@ref) a [`DomainError`](@ref) if the argument
+Exceptions can be created explicitly with [`throw`](@ref). For example, a function defined only
+for nonnegative numbers could be written to [`throw`](@ref) a [`DomainError`](@ref) if the argument
 is negative:
 
-```julia
-julia> f(x) = x>=0 ? exp(-x) : throw(DomainError())
+```jldoctest
+julia> f(x) = x>=0 ? exp(-x) : throw(DomainError(x, "argument must be nonnegative"))
 f (generic function with 1 method)
 
 julia> f(1)
 0.36787944117144233
 
 julia> f(-1)
-ERROR: DomainError:
- in f(::Int64) at ./none:1
- ...
+ERROR: DomainError with -1:
+argument must be nonnegative
+Stacktrace:
+ [1] f(::Int64) at ./none:1
 ```
 
 Note that [`DomainError`](@ref) without parentheses is not an exception, but a type of exception.
 It needs to be called to obtain an `Exception` object:
 
-```julia
-julia> typeof(DomainError()) <: Exception
+```jldoctest
+julia> typeof(DomainError(nothing)) <: Exception
 true
 
 julia> typeof(DomainError) <: Exception
@@ -613,20 +615,20 @@ false
 
 Additionally, some exception types take one or more arguments that are used for error reporting:
 
-```julia
+```jldoctest
 julia> throw(UndefVarError(:x))
 ERROR: UndefVarError: x not defined
- ...
 ```
 
 This mechanism can be implemented easily by custom exception types following the way [`UndefVarError`](@ref)
 is written:
 
-```julia
-julia> type MyUndefVarError <: Exception
+```jldoctest
+julia> struct MyUndefVarError <: Exception
            var::Symbol
        end
-julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defined");
+
+julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defined")
 ```
 
 !!! note
@@ -642,14 +644,14 @@ julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defin
 
 ### Errors
 
-The [`error()`](@ref) function is used to produce an [`ErrorException`](@ref) that interrupts
+The [`error`](@ref) function is used to produce an [`ErrorException`](@ref) that interrupts
 the normal flow of control.
 
 Suppose we want to stop execution immediately if the square root of a negative number is taken.
-To do this, we can define a fussy version of the [`sqrt()`](@ref) function that raises an error
+To do this, we can define a fussy version of the [`sqrt`](@ref) function that raises an error
 if its argument is negative:
 
-```julia
+```jldoctest fussy_sqrt
 julia> fussy_sqrt(x) = x >= 0 ? sqrt(x) : error("negative x not allowed")
 fussy_sqrt (generic function with 1 method)
 
@@ -658,20 +660,20 @@ julia> fussy_sqrt(2)
 
 julia> fussy_sqrt(-1)
 ERROR: negative x not allowed
- in fussy_sqrt(::Int64) at ./none:1
- ...
+Stacktrace:
+ [1] fussy_sqrt(::Int64) at ./none:1
 ```
 
 If `fussy_sqrt` is called with a negative value from another function, instead of trying to continue
 execution of the calling function, it returns immediately, displaying the error message in the
 interactive session:
 
-```julia
+```jldoctest fussy_sqrt
 julia> function verbose_fussy_sqrt(x)
-         println("before fussy_sqrt")
-         r = fussy_sqrt(x)
-         println("after fussy_sqrt")
-         return r
+           println("before fussy_sqrt")
+           r = fussy_sqrt(x)
+           println("after fussy_sqrt")
+           return r
        end
 verbose_fussy_sqrt (generic function with 1 method)
 
@@ -683,9 +685,9 @@ after fussy_sqrt
 julia> verbose_fussy_sqrt(-1)
 before fussy_sqrt
 ERROR: negative x not allowed
- in fussy_sqrt at ./none:1 [inlined]
- in verbose_fussy_sqrt(::Int64) at ./none:3
- ...
+Stacktrace:
+ [1] fussy_sqrt at ./none:1 [inlined]
+ [2] verbose_fussy_sqrt(::Int64) at ./none:3
 ```
 
 ### Warnings and informational messages
@@ -693,7 +695,7 @@ ERROR: negative x not allowed
 Julia also provides other functions that write messages to the standard error I/O, but do not
 throw any `Exception`s and hence do not interrupt execution:
 
-```julia
+```jldoctest
 julia> info("Hi"); 1+1
 INFO: Hi
 2
@@ -704,8 +706,8 @@ WARNING: Hi
 
 julia> error("Hi"); 1+1
 ERROR: Hi
- in error(::String) at ./error.jl:21
- ...
+Stacktrace:
+ [1] error(::String) at ./error.jl:21
 ```
 
 ### The `try/catch` statement
@@ -714,11 +716,11 @@ The `try/catch` statement allows for `Exception`s to be tested for. For example,
 square root function can be written to automatically call either the real or complex square root
 method on demand using `Exception`s :
 
-```julia
+```jldoctest
 julia> f(x) = try
-         sqrt(x)
+           sqrt(x)
        catch
-         sqrt(complex(x, 0))
+           sqrt(complex(x, 0))
        end
 f (generic function with 1 method)
 
@@ -736,15 +738,15 @@ instead of catching an exception. The exception is much slower than simply compa
 example, the following example calculates the square root of the second element of `x` if `x`
 is indexable, otherwise assumes `x` is a real number and returns its square root:
 
-```julia
+```jldoctest
 julia> sqrt_second(x) = try
-         sqrt(x[2])
+           sqrt(x[2])
        catch y
-         if isa(y, DomainError)
-           sqrt(complex(x[2], 0))
-         elseif isa(y, BoundsError)
-           sqrt(x)
-         end
+           if isa(y, DomainError)
+               sqrt(complex(x[2], 0))
+           elseif isa(y, BoundsError)
+               sqrt(x)
+           end
        end
 sqrt_second (generic function with 1 method)
 
@@ -758,9 +760,10 @@ julia> sqrt_second(9)
 3.0
 
 julia> sqrt_second(-9)
-ERROR: DomainError:
- in sqrt_second(::Int64) at ./none:7
- ...
+ERROR: DomainError with -9.0:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+Stacktrace:
+[...]
 ```
 
 Note that the symbol following `catch` will always be interpreted as a name for the exception,
@@ -778,23 +781,23 @@ try bad() catch; x end
 
 try bad()
 catch
-  x
+    x
 end
 ```
 
 The `catch` clause is not strictly necessary; when omitted, the default return value is `nothing`.
 
-```julia
-julia> try error() end #Returns nothing
+```jldoctest
+julia> try error() end # Returns nothing
 ```
 
 The power of the `try/catch` construct lies in the ability to unwind a deeply nested computation
 immediately to a much higher level in the stack of calling functions. There are situations where
 no error has occurred, but the ability to unwind the stack and pass a value to a higher level
-is desirable. Julia provides the [`rethrow()`](@ref), [`backtrace()`](@ref) and [`catch_backtrace()`](@ref)
+is desirable. Julia provides the [`rethrow`](@ref), [`backtrace`](@ref) and [`catch_backtrace`](@ref)
 functions for more advanced error handling.
 
-### finally Clauses
+### `finally` Clauses
 
 In code that performs state changes or uses resources like files, there is typically clean-up
 work (such as closing files) that needs to be done when the code is finished. Exceptions potentially
@@ -841,20 +844,21 @@ may have more values to generate and so might not yet be ready to return. With t
 and consumer can both run as long as they need to, passing values back and forth as necessary.
 
 Julia provides a [`Channel`](@ref) mechanism for solving this problem.
-A [`Channel`](@ref) is a waitable FIFO queue which can have multiple tasks reading and writing to it.
+A [`Channel`](@ref) is a waitable first-in first-out queue which can have
+multiple tasks reading from and writing to it.
 
 Let's define a producer task, which produces values via the [`put!`](@ref) call.
 To consume values, we need to schedule the producer to run in a new task. A special [`Channel`](@ref)
 constructor which accepts a 1-arg function as an argument can be used to run a task bound to a channel.
-We can then [`take!()`](@ref) values repeatedly from the channel object:
+We can then [`take!`](@ref) values repeatedly from the channel object:
 
-```jldoctest
+```jldoctest producer
 julia> function producer(c::Channel)
-         put!(c, "start")
-         for n=1:4
-           put!(c, 2n)
-         end
-         put!(c, "stop")
+           put!(c, "start")
+           for n=1:4
+               put!(c, 2n)
+           end
+           put!(c, "stop")
        end;
 
 julia> chnl = Channel(producer);
@@ -879,14 +883,14 @@ julia> take!(chnl)
 ```
 
 One way to think of this behavior is that `producer` was able to return multiple times. Between
-calls to [`put!()`](@ref), the producer's execution is suspended and the consumer has control.
+calls to [`put!`](@ref), the producer's execution is suspended and the consumer has control.
 
 The returned [`Channel`](@ref) can be used as an iterable object in a `for` loop, in which case the
 loop variable takes on all the produced values. The loop is terminated when the channel is closed.
 
-```jldoctest
+```jldoctest producer
 julia> for x in Channel(producer)
-         println(x)
+           println(x)
        end
 start
 2
@@ -897,18 +901,18 @@ stop
 ```
 
 Note that we did not have to explicitly close the channel in the producer. This is because
-the act of binding a [`Channel`](@ref) to a [`Task()`](@ref) associates the open lifetime of
+the act of binding a [`Channel`](@ref) to a [`Task`](@ref) associates the open lifetime of
 a channel with that of the bound task. The channel object is closed automatically when the task
 terminates. Multiple channels can be bound to a task, and vice-versa.
 
-While the [`Task()`](@ref) constructor expects a 0-argument function, the [`Channel()`](@ref)
+While the [`Task`](@ref) constructor expects a 0-argument function, the [`Channel`](@ref)
 method which creates a channel bound task expects a function that accepts a single argument of
 type [`Channel`](@ref). A common pattern is for the producer to be parameterized, in which case a partial
 function application is needed to create a 0 or 1 argument [anonymous function](@ref man-anonymous-functions).
 
-For [`Task()`](@ref) objects this can be done either directly or by use of a convenience macro:
+For [`Task`](@ref) objects this can be done either directly or by use of a convenience macro:
 
-```
+```julia
 function mytask(myarg)
     ...
 end
@@ -918,8 +922,8 @@ taskHdl = Task(() -> mytask(7))
 taskHdl = @task mytask(7)
 ```
 
-To orchestrate more advanced work distribution patterns, [`bind()`](@ref) and [`schedule()`](@ref)
-can be used in conjunction with [`Task()`](@ref) and [`Channel()`](@ref)
+To orchestrate more advanced work distribution patterns, [`bind`](@ref) and [`schedule`](@ref)
+can be used in conjunction with [`Task`](@ref) and [`Channel`](@ref)
 constructors to explicitly link a set of channels with a set of producer/consumer tasks.
 
 Note that currently Julia tasks are not scheduled to run on separate CPU cores.
@@ -927,27 +931,27 @@ True kernel threads are discussed under the topic of [Parallel Computing](@ref).
 
 ### Core task operations
 
-Let us explore the low level construct [`yieldto()`](@ref) to underestand how task switching works.
+Let us explore the low level construct [`yieldto`](@ref) to underestand how task switching works.
 `yieldto(task,value)` suspends the current task, switches to the specified `task`, and causes
-that task's last [`yieldto()`](@ref) call to return the specified `value`. Notice that [`yieldto()`](@ref)
+that task's last [`yieldto`](@ref) call to return the specified `value`. Notice that [`yieldto`](@ref)
 is the only operation required to use task-style control flow; instead of calling and returning
 we are always just switching to a different task. This is why this feature is also called "symmetric
 coroutines"; each task is switched to and from using the same mechanism.
 
-[`yieldto()`](@ref) is powerful, but most uses of tasks do not invoke it directly. Consider why
+[`yieldto`](@ref) is powerful, but most uses of tasks do not invoke it directly. Consider why
 this might be. If you switch away from the current task, you will probably want to switch back
 to it at some point, but knowing when to switch back, and knowing which task has the responsibility
-of switching back, can require considerable coordination. For example, [`put!()`](@ref) and [`take!()`](@ref)
+of switching back, can require considerable coordination. For example, [`put!`](@ref) and [`take!`](@ref)
 are blocking operations, which, when used in the context of channels maintain state to remember
-who the consumers are. Not needing to manually keep track of the consuming task is what makes [`put!()`](@ref)
-easier to use than the low-level [`yieldto()`](@ref).
+who the consumers are. Not needing to manually keep track of the consuming task is what makes [`put!`](@ref)
+easier to use than the low-level [`yieldto`](@ref).
 
-In addition to [`yieldto()`](@ref), a few other basic functions are needed to use tasks effectively.
+In addition to [`yieldto`](@ref), a few other basic functions are needed to use tasks effectively.
 
-  * [`current_task()`](@ref) gets a reference to the currently-running task.
-  * [`istaskdone()`](@ref) queries whether a task has exited.
-  * [`istaskstarted()`](@ref) queries whether a task has run yet.
-  * [`task_local_storage()`](@ref) manipulates a key-value store specific to the current task.
+  * [`current_task`](@ref) gets a reference to the currently-running task.
+  * [`istaskdone`](@ref) queries whether a task has exited.
+  * [`istaskstarted`](@ref) queries whether a task has run yet.
+  * [`task_local_storage`](@ref) manipulates a key-value store specific to the current task.
 
 ### Tasks and events
 
@@ -955,23 +959,23 @@ Most task switches occur as a result of waiting for events such as I/O requests,
 by a scheduler included in the standard library. The scheduler maintains a queue of runnable tasks,
 and executes an event loop that restarts tasks based on external events such as message arrival.
 
-The basic function for waiting for an event is [`wait()`](@ref). Several objects implement [`wait()`](@ref);
-for example, given a `Process` object, [`wait()`](@ref) will wait for it to exit. [`wait()`](@ref)
-is often implicit; for example, a [`wait()`](@ref) can happen inside a call to [`read()`](@ref)
+The basic function for waiting for an event is [`wait`](@ref). Several objects implement [`wait`](@ref);
+for example, given a `Process` object, [`wait`](@ref) will wait for it to exit. [`wait`](@ref)
+is often implicit; for example, a [`wait`](@ref) can happen inside a call to [`read`](@ref)
 to wait for data to be available.
 
-In all of these cases, [`wait()`](@ref) ultimately operates on a [`Condition`](@ref) object, which
-is in charge of queueing and restarting tasks. When a task calls [`wait()`](@ref) on a [`Condition`](@ref),
+In all of these cases, [`wait`](@ref) ultimately operates on a [`Condition`](@ref) object, which
+is in charge of queueing and restarting tasks. When a task calls [`wait`](@ref) on a [`Condition`](@ref),
 the task is marked as non-runnable, added to the condition's queue, and switches to the scheduler.
 The scheduler will then pick another task to run, or block waiting for external events. If all
-goes well, eventually an event handler will call [`notify()`](@ref) on the condition, which causes
+goes well, eventually an event handler will call [`notify`](@ref) on the condition, which causes
 tasks waiting for that condition to become runnable again.
 
 A task created explicitly by calling [`Task`](@ref) is initially not known to the scheduler. This
-allows you to manage tasks manually using [`yieldto()`](@ref) if you wish. However, when such
+allows you to manage tasks manually using [`yieldto`](@ref) if you wish. However, when such
 a task waits for an event, it still gets restarted automatically when the event happens, as you
 would expect. It is also possible to make the scheduler run a task whenever it can, without necessarily
-waiting for any events. This is done by calling [`schedule()`](@ref), or using the [`@schedule`](@ref)
+waiting for any events. This is done by calling [`schedule`](@ref), or using the [`@schedule`](@ref)
 or [`@async`](@ref) macros (see [Parallel Computing](@ref) for more details).
 
 ### Task states

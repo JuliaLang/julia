@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Performance testing
 
@@ -104,29 +104,29 @@ function sumvector(A, n)
     s
 end
 
-abstract MyArray{T,N} <: AbstractArray{T,N}
+abstract type MyArray{T,N} <: AbstractArray{T,N} end
 
-immutable ArrayLS{T,N} <: MyArray{T,N}  # LinearSlow
+struct ArrayLS{T,N} <: MyArray{T,N}  # IndexCartesian
     data::Array{T,N}
 end
-immutable ArrayLSLS{T,N} <: MyArray{T,N}  # LinearSlow with LinearSlow similar
+struct ArrayLSLS{T,N} <: MyArray{T,N}  # IndexCartesian with IndexCartesian similar
     data::Array{T,N}
 end
-Base.similar{T}(A::ArrayLSLS, ::Type{T}, dims::Tuple{Vararg{Int}}) = ArrayLSLS(similar(A.data, T, dims))
+Base.similar(A::ArrayLSLS, ::Type{T}, dims::Tuple{Vararg{Int}}) where {T} = ArrayLSLS(similar(A.data, T, dims))
 @inline Base.setindex!(A::ArrayLSLS, v, I::Int...) = A.data[I...] = v
 @inline Base.unsafe_setindex!(A::ArrayLSLS, v, I::Int...) = Base.unsafe_setindex!(A.data, v, I...)
 Base.first(A::ArrayLSLS) = first(A.data)
 
-immutable ArrayLF{T,N} <: MyArray{T,N}  # LinearFast
+struct ArrayLF{T,N} <: MyArray{T,N}  # IndexLinear
     data::Array{T,N}
 end
-immutable ArrayStrides{T,N} <: MyArray{T,N}
+struct ArrayStrides{T,N} <: MyArray{T,N}
     data::Array{T,N}
     strides::NTuple{N,Int}
 end
 ArrayStrides(A::Array) = ArrayStrides(A, strides(A))
 
-immutable ArrayStrides1{T} <: MyArray{T,2}
+struct ArrayStrides1{T} <: MyArray{T,2}
     data::Matrix{T}
     stride1::Int
 end
@@ -140,15 +140,15 @@ Base.size(A::MyArray) = size(A.data)
 @inline Base.unsafe_getindex(A::ArrayLF, indx::Int) = unsafe_getindex(A.data, indx)
 @inline Base.unsafe_getindex(A::Union{ArrayLS, ArrayLSLS}, i::Int, j::Int) = unsafe_getindex(A.data, i, j)
 
-@inline Base.getindex{T}(A::ArrayStrides{T,2}, i::Real, j::Real) = getindex(A.data, 1+A.strides[1]*(i-1)+A.strides[2]*(j-1))
+@inline Base.getindex(A::ArrayStrides{T,2}, i::Real, j::Real) where {T} = getindex(A.data, 1+A.strides[1]*(i-1)+A.strides[2]*(j-1))
 @inline Base.getindex(A::ArrayStrides1, i::Real, j::Real) = getindex(A.data, i + A.stride1*(j-1))
-@inline Base.unsafe_getindex{T}(A::ArrayStrides{T,2}, i::Real, j::Real) = unsafe_getindex(A.data, 1+A.strides[1]*(i-1)+A.strides[2]*(j-1))
+@inline Base.unsafe_getindex(A::ArrayStrides{T,2}, i::Real, j::Real) where {T} = unsafe_getindex(A.data, 1+A.strides[1]*(i-1)+A.strides[2]*(j-1))
 @inline Base.unsafe_getindex(A::ArrayStrides1, i::Real, j::Real) = unsafe_getindex(A.data, i + A.stride1*(j-1))
 
-# Using the qualified Base.LinearFast() in the linearindexing definition
+# Using the qualified Base.IndexLinear() in the IndexStyle definition
 # requires looking up the symbol in the module on each call.
-import Base: LinearFast
-Base.linearindexing{T<:ArrayLF}(::Type{T}) = LinearFast()
+import Base: IndexLinear
+Base.IndexStyle(::Type{T}) where {T<:ArrayLF} = IndexLinear()
 
 if !applicable(unsafe_getindex, [1 2], 1:1, 2)
     @inline Base.unsafe_getindex(A::Array, I...) = @inbounds return A[I...]
@@ -157,7 +157,7 @@ if !applicable(unsafe_getindex, [1 2], 1:1, 2)
     @inline Base.unsafe_getindex(A::BitArray, I1::BitArray, I2::Int) = unsafe_getindex(A, Base.to_index(I1), I2)
 end
 
-function makearrays{T}(::Type{T}, sz)
+function makearrays(::Type{T}, sz) where T
     L = prod(sz)
     A = reshape(convert(Vector{T}, [1:L;]), sz)
     AS = ArrayLS(A)

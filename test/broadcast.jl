@@ -1,23 +1,24 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module TestBroadcastInternals
 
 using Base.Broadcast: broadcast_indices, check_broadcast_indices,
-                      check_broadcast_shape, newindex, _bcs, _bcsm
-using Base: Test, OneTo
+                      check_broadcast_shape, newindex, _bcs
+using Base: OneTo
+using Test
 
-@test @inferred(_bcs((), (3,5), (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,1), (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,),  (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,5), (3,)))  == (3,5)
-@test_throws DimensionMismatch _bcs((), (3,5), (4,5))
-@test_throws DimensionMismatch _bcs((), (3,5), (3,4))
-@test @inferred(_bcs((), (-1:1, 2:5), (-1:1, 2:5))) == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1, 2:5), (1, 2:5)))    == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1, 1),   (1, 2:5)))    == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1,),     (-1:1, 2:5))) == (-1:1, 2:5)
-@test_throws DimensionMismatch _bcs((), (-1:1, 2:6), (-1:1, 2:5))
-@test_throws DimensionMismatch _bcs((), (-1:1, 2:5), (2, 2:5))
+@test @inferred(_bcs((3,5), (3,5))) == (3,5)
+@test @inferred(_bcs((3,1), (3,5))) == (3,5)
+@test @inferred(_bcs((3,),  (3,5))) == (3,5)
+@test @inferred(_bcs((3,5), (3,)))  == (3,5)
+@test_throws DimensionMismatch _bcs((3,5), (4,5))
+@test_throws DimensionMismatch _bcs((3,5), (3,4))
+@test @inferred(_bcs((-1:1, 2:5), (-1:1, 2:5))) == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1, 2:5), (1, 2:5)))    == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1, 1),   (1, 2:5)))    == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1,),     (-1:1, 2:5))) == (-1:1, 2:5)
+@test_throws DimensionMismatch _bcs((-1:1, 2:6), (-1:1, 2:5))
+@test_throws DimensionMismatch _bcs((-1:1, 2:5), (2, 2:5))
 
 @test @inferred(broadcast_indices(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
 @test @inferred(broadcast_indices(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
@@ -70,7 +71,7 @@ function as_sub(x::AbstractMatrix)
     end
     y
 end
-function as_sub{T}(x::AbstractArray{T,3})
+function as_sub(x::AbstractArray{T,3}) where T
     y = similar(x, eltype(x), tuple(([size(x)...]*2)...))
     y = view(y, 2:2:size(y,1), 2:2:size(y,2), 2:2:size(y,3))
     for k=1:size(x,3)
@@ -200,7 +201,7 @@ end
 
 # issue #4883
 @test isa(broadcast(tuple, [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Int,String}})
-@test isa(broadcast((x,y)->(x==1?1.0:x,y), [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Real,String}})
+@test isa(broadcast((x,y)->(x==1 ? 1.0 : x, y), [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Real,String}})
 let a = length.(["foo", "bar"])
     @test isa(a, Vector{Int})
     @test a == [3, 3]
@@ -216,8 +217,8 @@ let A = [sqrt(i)+j for i = 1:3, j=1:4]
     @test atan2.(log.(A), sum(A,1)) == broadcast(atan2, broadcast(log, A), sum(A, 1))
 end
 let x = sin.(1:10)
-    @test atan2.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan2, x+1, x+2) == broadcast(atan2, x.+1, x.+2)
-    @test sin.(atan2.([x+1,x+2]...)) == sin.(atan2.(x+1,x+2))
+    @test atan2.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan2, x.+1, x.+2)
+    @test sin.(atan2.([x.+1,x.+2]...)) == sin.(atan2.(x.+1 ,x.+2)) == @. sin(atan2(x+1,x+2))
     @test sin.(atan2.(x, 3.7)) == broadcast(x -> sin(atan2(x,3.7)), x)
     @test atan2.(x, 3.7) == broadcast(x -> atan2(x,3.7), x) == broadcast(atan2, x, 3.7)
 end
@@ -225,6 +226,9 @@ end
 let g = Int[]
     f17300(x) = begin; push!(g, x); x+2; end
     f17300.(f17300.(f17300.(1:3)))
+    @test g == [1,3,5, 2,4,6, 3,5,7]
+    empty!(g)
+    @. f17300(f17300(f17300(1:3)))
     @test g == [1,3,5, 2,4,6, 3,5,7]
 end
 # fusion with splatted args:
@@ -244,6 +248,33 @@ let x = [1:4;]
     @test sin.(f17300kw.(x, y=1)) == sin.(f17300kw.(x; y=1)) == sin.(x .+ 1)
 end
 
+# issue #23236
+let X = [[true,false],[false,true]]
+    @test [.!x for x in X] == [[false,true],[true,false]]
+end
+
+# splice escaping of @.
+let x = [4, -9, 1, -16]
+    @test [2, 3, 4, 5] == @.(1 + sqrt($sort(abs(x))))
+end
+
+# interaction of @. with let
+@test [1,4,9] == @. let x = [1,2,3]; x^2; end
+
+# interaction of @. with for loops
+let x = [1,2,3], y = x
+    @. for i = 1:3
+        y = y^2 # should convert to y .= y.^2
+    end
+    @test x == [1,256,6561]
+end
+
+# interaction of @. with function definitions
+let x = [1,2,3]
+    @. f(x) = x^2
+    @test f(x) == [1,4,9]
+end
+
 # PR #17510: Fused in-place assignment
 let x = [1:4;], y = x
     y .= 2:5
@@ -259,15 +290,15 @@ let x = [1:4;], y = x
     @test y === x == [9,9,9,9]
     y .-= 1
     @test y === x == [8,8,8,8]
-    y .-= 1:4
+    @. y -= 1:4          # @. should convert to .-=
     @test y === x == [7,6,5,4]
     x[1:2] .= 1
     @test y === x == [1,1,5,4]
-    x[1:2] .+= [2,3]
+    @. x[1:2] .+= [2,3]  # use .+= to make sure @. works with dotted assignment
     @test y === x == [3,4,5,4]
-    x[:] .= 0
+    @. x[:] .= 0         # use .= to make sure @. works with dotted assignment
     @test y === x == [0,0,0,0]
-    x[2:end] .= 1:3
+    @. x[2:end] = 1:3    # @. should convert to .=
     @test y === x == [0,1,2,3]
 end
 let a = [[4, 5], [6, 7]]
@@ -287,12 +318,12 @@ end
 
 # make sure scalars are inlined, which causes f.(x,scalar) to lower to a "thunk"
 import Base.Meta: isexpr
-@test isexpr(expand(:(f.(x,y))), :call)
-@test isexpr(expand(:(f.(x,1))), :thunk)
-@test isexpr(expand(:(f.(x,1.0))), :thunk)
-@test isexpr(expand(:(f.(x,$π))), :thunk)
-@test isexpr(expand(:(f.(x,"hello"))), :thunk)
-@test isexpr(expand(:(f.(x,$("hello")))), :thunk)
+@test isexpr(expand(Main, :(f.(x,y))), :call)
+@test isexpr(expand(Main, :(f.(x,1))), :thunk)
+@test isexpr(expand(Main, :(f.(x,1.0))), :thunk)
+@test isexpr(expand(Main, :(f.(x,$π))), :thunk)
+@test isexpr(expand(Main, :(f.(x,"hello"))), :thunk)
+@test isexpr(expand(Main, :(f.(x,$("hello")))), :thunk)
 
 # PR #17623: Fused binary operators
 @test [true] .* [true] == [true]
@@ -301,6 +332,11 @@ let g = Int[], ⊕ = (a,b) -> let c=a+2b; push!(g, c); c; end
     @test [1,2,3] .⊕ [10,11,12] .⊕ [100,200,300] == [221,424,627]
     @test g == [21,221,24,424,27,627] # test for loop fusion
 end
+
+# Fused unary operators
+@test .√[3,4,5] == sqrt.([3,4,5])
+@test .![true, true, false] == [false, false, true]
+@test .-[1,2,3] == -[1,2,3] == .+[-1,-2,-3] == [-1,-2,-3]
 
 # PR 16988
 @test Base.promote_op(+, Bool) === Int
@@ -316,7 +352,7 @@ end
 let f17314 = x -> x < 0 ? false : x
     @test eltype(broadcast(f17314, 1:3)) === Int
     @test eltype(broadcast(f17314, -1:1)) === Integer
-    @test eltype(broadcast(f17314, Int[])) === Union{Bool,Int}
+    @test eltype(broadcast(f17314, Int[])) == Union{Bool,Int}
 end
 let io = IOBuffer()
     broadcast(x->print(io,x), 1:5) # broadcast with side effects
@@ -346,7 +382,7 @@ let s = "foo"
 end
 
 # Ensure that even strange constructors that break `T(x)::T` work with broadcast
-immutable StrangeType18623 end
+struct StrangeType18623 end
 StrangeType18623(x) = x
 StrangeType18623(x,y) = (x,y)
 @test @inferred(broadcast(StrangeType18623, 1:3)) == [1,2,3]
@@ -376,7 +412,6 @@ end
 @test (-).(C_NULL, C_NULL)::UInt == 0
 @test (+).(1, Ref(2)) == fill(3)
 @test (+).(Ref(1), Ref(2)) == fill(3)
-@test (+).([[0,2], [1,3]], [1,-1]) == [[1,3], [0,2]]
 @test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]
 
 # Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722),
@@ -385,13 +420,14 @@ end
 @test let z = 1; A = broadcast!(x -> z += x, zeros(2), 1); A[1] != A[2]; end
 
 # broadcasting for custom AbstractArray
-immutable Array19745{T,N} <: AbstractArray{T,N}
+struct Array19745{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
 Base.getindex(A::Array19745, i::Integer...) = A.data[i...]
+Base.setindex!(A::Array19745, v::Any, i::Integer...) = setindex!(A.data, v, i...)
 Base.size(A::Array19745) = size(A.data)
 
-Base.Broadcast._containertype{T<:Array19745}(::Type{T}) = Array19745
+Base.Broadcast._containertype(::Type{T}) where {T<:Array19745} = Array19745
 
 Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array19745}) = Array19745
 Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array})      = Array19745
@@ -405,8 +441,12 @@ Base.Broadcast.broadcast_indices(::Type{Array19745}, A::Ref) = ()
 getfield19745(x::Array19745) = x.data
 getfield19745(x)             = x
 
-Base.Broadcast.broadcast_c(f, ::Type{Array19745}, A, Bs...) =
-    Array19745(Base.Broadcast.broadcast_c(f, Array, getfield19745(A), map(getfield19745, Bs)...))
+function Base.Broadcast.broadcast_c(f, ::Type{Array19745}, A, Bs...)
+    T     = Base.Broadcast._broadcast_eltype(f, A, Bs...)
+    shape = Base.Broadcast.broadcast_indices(A, Bs...)
+    dest = Array19745(Array{T}(Base.index_lengths(shape...)))
+    return broadcast!(f, dest, A, Bs...)
+end
 
 @testset "broadcasting for custom AbstractArray" begin
     a  = randn(10)
@@ -444,8 +484,44 @@ end
 
 # Test that broadcast treats type arguments as scalars, i.e. containertype yields Any,
 # even for subtypes of abstract array. (https://github.com/JuliaStats/DataArrays.jl/issues/229)
-let
+@testset "treat type arguments as scalars, DataArrays issue 229" begin
     @test Base.Broadcast.containertype(AbstractArray) == Any
     @test broadcast(==, [1], AbstractArray) == BitArray([false])
     @test broadcast(==, 1, AbstractArray) == false
+end
+
+# Test that broadcasting identity where the input and output Array shapes do not match
+# yields the correct result, not merely a partial copy. See pull request #19895 for discussion.
+let N = 5
+    @test iszero(ones(N, N) .= zeros(N, N))
+    @test iszero(ones(N, N) .= zeros(N, 1))
+    @test iszero(ones(N, N) .= zeros(1, N))
+    @test iszero(ones(N, N) .= zeros(1, 1))
+end
+
+@testset "test broadcast for matrix of matrices" begin
+    A = fill(zeros(2,2), 4, 4)
+    A[1:3,1:3] .= [ones(2,2)]
+    @test all(A[1:3,1:3] .== [ones(2,2)])
+end
+
+# Test that broadcast does not confuse eltypes. See also
+# https://github.com/JuliaLang/julia/issues/21325
+@testset "eltype confusion (#21325)" begin
+    foo(x::Char, y::Int) = 0
+    foo(x::String, y::Int) = "hello"
+    @test broadcast(foo, "x", [1, 2, 3]) == ["hello", "hello", "hello"]
+
+    @test isequal(
+        [Set([1]), Set([2])] .∪ Set([3]),
+        [Set([1, 3]), Set([2, 3])])
+
+    @test isequal(@inferred(broadcast(foo, "world", Nullable(1))),
+                  Nullable("hello"))
+end
+
+# Issue #21291
+let t = (0, 1, 2)
+    o = 1
+    @test @inferred(broadcast(+, t, o)) == (1, 2, 3)
 end

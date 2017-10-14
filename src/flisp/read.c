@@ -516,7 +516,12 @@ static value_t read_string(fl_context_t *fl_ctx)
                     i += u8_wc_toutf8(&buf[i], wc);
             }
             else {
-                buf[i++] = read_escape_control_char((char)c);
+                char esc = read_escape_control_char((char)c);
+                if (esc == (char)c && !strchr("\\'\"$`", esc)) {
+                    free(buf);
+                    lerror(fl_ctx, fl_ctx->ParseError, "read: invalid escape sequence");
+                }
+                buf[i++] = esc;
             }
         }
         else {

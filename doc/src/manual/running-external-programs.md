@@ -3,7 +3,7 @@
 Julia borrows backtick notation for commands from the shell, Perl, and Ruby. However, in Julia,
 writing
 
-```julia
+```jldoctest
 julia> `echo hello`
 `echo hello`
 ```
@@ -22,8 +22,14 @@ differs in several aspects from the behavior in various shells, Perl, or Ruby:
 
 Here's a simple example of running an external program:
 
-```julia
-julia> run(`echo hello`)
+```jldoctest
+julia> mycommand = `echo hello`
+`echo hello`
+
+julia> typeof(mycommand)
+Cmd
+
+julia> run(mycommand)
 hello
 ```
 
@@ -31,19 +37,19 @@ The `hello` is the output of the `echo` command, sent to [`STDOUT`](@ref). The r
 returns `nothing`, and throws an [`ErrorException`](@ref) if the external command fails to run
 successfully.
 
-If you want to read the output of the external command, [`readstring()`](@ref) can be used instead:
+If you want to read the output of the external command, [`read`](@ref) can be used instead:
 
-```julia
-julia> a=readstring(`echo hello`)
+```jldoctest
+julia> a = read(`echo hello`, String)
 "hello\n"
 
-julia> (chomp(a)) == "hello"
+julia> chomp(a) == "hello"
 true
 ```
 
-More generally, you can use [`open()`](@ref) to read from or write to an external command.
+More generally, you can use [`open`](@ref) to read from or write to an external command.
 
-```julia
+```jldoctest
 julia> open(`less`, "w", STDOUT) do io
            for i = 1:3
                println(io, i)
@@ -54,13 +60,25 @@ julia> open(`less`, "w", STDOUT) do io
 3
 ```
 
+The program name and the individual arguments in a command can be accessed
+and iterated over as if the command were an array of strings:
+```jldoctest
+julia> collect(`echo "foo bar"`)
+2-element Array{String,1}:
+ "echo"
+ "foo bar"
+
+julia> `echo "foo bar"`[2]
+"foo bar"
+```
+
 ## [Interpolation](@id command-interpolation)
 
 Suppose you want to do something a bit more complicated and use the name of a file in the variable
 `file` as an argument to a command. You can use `$` for interpolation much as you would in a string
 literal (see [Strings](@ref)):
 
-```julia
+```jldoctest
 julia> file = "/etc/passwd"
 "/etc/passwd"
 
@@ -73,7 +91,7 @@ that are special to the shell, they may cause undesirable behavior. Suppose, for
 than `/etc/passwd`, we wanted to sort the contents of the file `/Volumes/External HD/data.csv`.
 Let's try it:
 
-```julia
+```jldoctest
 julia> file = "/Volumes/External HD/data.csv"
 "/Volumes/External HD/data.csv"
 
@@ -87,7 +105,7 @@ is never interpreted by a shell, so there's no need for actual quoting; the quot
 only for presentation to the user. This will even work if you interpolate a value as part of a
 shell word:
 
-```julia
+```jldoctest
 julia> path = "/Volumes/External HD"
 "/Volumes/External HD"
 
@@ -104,7 +122,7 @@ julia> `sort $path/$name.$ext`
 As you can see, the space in the `path` variable is appropriately escaped. But what if you *want*
 to interpolate multiple words? In that case, just use an array (or any other iterable container):
 
-```julia
+```jldoctest
 julia> files = ["/etc/passwd","/Volumes/External HD/data.csv"]
 2-element Array{String,1}:
  "/etc/passwd"
@@ -117,7 +135,7 @@ julia> `grep foo $files`
 If you interpolate an array as part of a shell word, Julia emulates the shell's `{a,b,c}` argument
 generation:
 
-```julia
+```jldoctest
 julia> names = ["foo","bar","baz"]
 3-element Array{String,1}:
  "foo"
@@ -131,7 +149,7 @@ julia> `grep xylophone $names.txt`
 Moreover, if you interpolate multiple arrays into the same word, the shell's Cartesian product
 generation behavior is emulated:
 
-```julia
+```jldoctest
 julia> names = ["foo","bar","baz"]
 3-element Array{String,1}:
  "foo"
@@ -150,7 +168,7 @@ julia> `rm -f $names.$exts`
 Since you can interpolate literal arrays, you can use this generative functionality without needing
 to create temporary array objects first:
 
-```julia
+```jldoctest
 julia> `rm -rf $["foo","bar","baz","qux"].$["aux","log","pdf"]`
 `rm -rf foo.aux foo.log foo.pdf bar.aux bar.log bar.pdf baz.aux baz.log baz.pdf qux.aux qux.log qux.pdf`
 ```
@@ -187,11 +205,11 @@ behaviors are the same as the shell's. The only difference is that the interpola
 and aware of Julia's notion of what is a single string value, and what is a container for multiple
 values. Let's try the above two examples in Julia:
 
-```julia
-julia> `perl -le '$|=1; for (0..3) { print }'`
+```jldoctest
+julia> A = `perl -le '$|=1; for (0..3) { print }'`
 `perl -le '$|=1; for (0..3) { print }'`
 
-julia> run(ans)
+julia> run(A)
 0
 1
 2
@@ -199,10 +217,10 @@ julia> run(ans)
 
 julia> first = "A"; second = "B";
 
-julia> `perl -le 'print for @ARGV' "1: $first" "2: $second"`
+julia> B = `perl -le 'print for @ARGV' "1: $first" "2: $second"`
 `perl -le 'print for @ARGV' '1: A' '2: B'`
 
-julia> run(ans)
+julia> run(B)
 1: A
 2: B
 ```
@@ -215,20 +233,21 @@ easily and safely just examine its interpretation without doing any damage.
 
 ## Pipelines
 
-Shell metacharacters, such as `|`, `&`, and `>`, are not special inside of Julia's backticks:
-unlike in the shell, inside of Julia's backticks, a pipe is always just a pipe:
+Shell metacharacters, such as `|`, `&`, and `>`, need to be quoted (or escaped) inside of Julia's backticks:
 
-```julia
-julia> run(`echo hello | sort`)
+```jldoctest
+julia> run(`echo hello '|' sort`)
+hello | sort
+
+julia> run(`echo hello \| sort`)
 hello | sort
 ```
 
-This expression invokes the `echo` command with three words as arguments: "hello", "|", and "sort".
-The result is that a single line is printed: "hello | sort". Inside of backticks, a "|" is just
-a literal pipe character. How, then, does one construct a pipeline? Instead of using "|" inside
-of backticks, one uses [`pipeline()`](@ref):
+This expression invokes the `echo` command with three words as arguments: `hello`, `|`, and `sort`.
+The result is that a single line is printed: `hello | sort`. How, then, does one construct a
+pipeline? Instead of using `'|'` inside of backticks, one uses [`pipeline`](@ref):
 
-```julia
+```jldoctest
 julia> run(pipeline(`echo hello`, `sort`))
 hello
 ```
@@ -237,7 +256,7 @@ This pipes the output of the `echo` command to the `sort` command. Of course, th
 interesting since there's only one line to sort, but we can certainly do much more interesting
 things:
 
-```julia
+```julia-repl
 julia> run(pipeline(`cut -d: -f3 /etc/passwd`, `sort -n`, `tail -n5`))
 210
 211
@@ -254,7 +273,7 @@ that shells cannot.
 
 Julia can run multiple commands in parallel:
 
-```julia
+```julia-repl
 julia> run(`echo hello` & `echo world`)
 world
 hello
@@ -265,7 +284,7 @@ nearly simultaneously, and race to make the first write to the [`STDOUT`](@ref) 
 share with each other and the `julia` parent process. Julia lets you pipe the output from both
 of these processes to another program:
 
-```julia
+```jldoctest
 julia> run(pipeline(`echo world` & `echo hello`, `sort`))
 hello
 world
@@ -287,15 +306,15 @@ pipeline(`do_work`, stdout=pipeline(`sort`, "out.txt"), stderr="errs.txt")
 When reading and writing to both ends of a pipeline from a single process, it is important to
 avoid forcing the kernel to buffer all of the data.
 
-For example, when reading all of the output from a command, call `readstring(out)`, not `wait(process)`,
+For example, when reading all of the output from a command, call `read(out, String)`, not `wait(process)`,
 since the former will actively consume all of the data written by the process, whereas the latter
 will attempt to store the data in the kernel's buffers while waiting for a reader to be connected.
 
 Another common solution is to separate the reader and writer of the pipeline into separate Tasks:
 
 ```julia
-writer = @async writeall(process, "data")
-reader = @async do_compute(readstring(process))
+writer = @async write(process, "data")
+reader = @async do_compute(read(process, String))
 wait(process)
 fetch(reader)
 ```
@@ -307,7 +326,7 @@ setup of pipes between processes is a powerful one. To give some sense of the co
 that can be created easily, here are some more sophisticated examples, with apologies for the
 excessive use of Perl one-liners:
 
-```julia
+```julia-repl
 julia> prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`;
 
 julia> run(pipeline(`perl -le '$|=1; for(0..9){ print; sleep 1 }'`, prefixer("A",2) & prefixer("B",2)))
@@ -333,7 +352,7 @@ the output is buffered and printed to the pipe at once, to be read by just one c
 
 Here is an even more complex multi-stage producer-consumer example:
 
-```julia
+```julia-repl
 julia> run(pipeline(`perl -le '$|=1; for(0..9){ print; sleep 1 }'`,
            prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3),
            prefixer("A",2) & prefixer("B",2)))

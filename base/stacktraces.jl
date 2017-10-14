@@ -1,5 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Tools for collecting and manipulating stack traces. Mainly used for building errors.
+"""
 module StackTraces
 
 
@@ -37,12 +40,12 @@ Stack information representing execution context, with the following fields:
 
   True if the code is from an inlined frame.
 
-- `pointer::Int64`
+- `pointer::UInt64`
 
   Representation of the pointer to the execution context as returned by `backtrace`.
 
 """
-immutable StackFrame # this type should be kept platform-agnostic so that profiles can be dumped on one machine and read on another
+struct StackFrame # this type should be kept platform-agnostic so that profiles can be dumped on one machine and read on another
     "the name of the function containing the execution context"
     func::Symbol
     "the path to the file containing the execution context"
@@ -59,7 +62,8 @@ immutable StackFrame # this type should be kept platform-agnostic so that profil
     pointer::UInt64  # Large enough to be read losslessly on 32- and 64-bit machines.
 end
 
-StackFrame(func, file, line) = StackFrame(func, file, line, Nullable{Core.MethodInstance}(), false, false, 0)
+StackFrame(func, file, line) = StackFrame(Symbol(func), Symbol(file), line,
+                                          Nullable{Core.MethodInstance}(), false, false, 0)
 
 """
     StackTrace
@@ -67,7 +71,7 @@ StackFrame(func, file, line) = StackFrame(func, file, line, Nullable{Core.Method
 An alias for `Vector{StackFrame}` provided for convenience; returned by calls to
 `stacktrace` and `catch_stacktrace`.
 """
-typealias StackTrace Vector{StackFrame}
+const StackTrace = Vector{StackFrame}
 
 const empty_sym = Symbol("")
 const UNKNOWN = StackFrame(empty_sym, empty_sym, -1, Nullable{Core.MethodInstance}(), true, false, 0) # === lookup(C_NULL)
@@ -124,7 +128,7 @@ inlined at that point, innermost function first.
 function lookup(pointer::Ptr{Void})
     infos = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), pointer - 1, false)
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, Nullable{Core.MethodInstance}(), true, false, convert(UInt64, pointer))]
-    res = Array{StackFrame}(length(infos))
+    res = Vector{StackFrame}(length(infos))
     for i in 1:length(infos)
         info = infos[i]
         @assert(length(info) == 7)
@@ -135,6 +139,10 @@ function lookup(pointer::Ptr{Void})
 end
 
 lookup(pointer::UInt) = lookup(convert(Ptr{Void}, pointer))
+
+# allow lookup on already-looked-up data for easier handling of pre-processed frames
+lookup(s::StackFrame) = StackFrame[s]
+lookup(s::Tuple{StackFrame,Int}) = StackFrame[s[1]]
 
 """
     stacktrace([trace::Vector{Ptr{Void}},] [c_funcs::Bool=false]) -> StackTrace
@@ -190,31 +198,39 @@ function remove_frames!(stack::StackTrace, names::Vector{Symbol})
     return stack
 end
 
+"""
+    remove_frames!(stack::StackTrace, m::Module)
+
+Returns the `StackTrace` with all `StackFrame`s from the provided `Module` removed.
+"""
+function remove_frames!(stack::StackTrace, m::Module)
+    filter!(f -> !from(f, m), stack)
+    return stack
+end
+
 function show_spec_linfo(io::IO, frame::StackFrame)
     if isnull(frame.linfo)
         if frame.func === empty_sym
             @printf(io, "ip:%#x", frame.pointer)
         else
-            print_with_color(Base.have_color ? Base.stackframe_function_color() : :nothing, io, string(frame.func))
+            print_with_color(Base.have_color && get(io, :backtrace, false) ? Base.stackframe_function_color() : :nothing, io, string(frame.func))
         end
     else
         linfo = get(frame.linfo)
-        if isdefined(linfo, :def)
-            Base.show_lambda_types(io, linfo)
+        if isa(linfo.def, Method)
+            Base.show_tuple_as_call(io, linfo.def.name, linfo.specTypes)
         else
             Base.show(io, linfo)
         end
     end
 end
 
-function show(io::IO, frame::StackFrame; full_path::Bool=false,
-              prefix = " in ")
-    print(io, prefix)
+function show(io::IO, frame::StackFrame; full_path::Bool=false)
     show_spec_linfo(io, frame)
     if frame.file !== empty_sym
         file_info = full_path ? string(frame.file) : basename(string(frame.file))
         print(io, " at ")
-        Base.with_output_color(Base.have_color ? Base.stackframe_lineinfo_color() : :nothing, io) do io
+        Base.with_output_color(Base.have_color && get(io, :backtrace, false) ? Base.stackframe_lineinfo_color() : :nothing, io) do io
             print(io, file_info, ":")
             if frame.line >= 0
                 print(io, frame.line)
@@ -226,6 +242,24 @@ function show(io::IO, frame::StackFrame; full_path::Bool=false,
     if frame.inlined
         print(io, " [inlined]")
     end
+end
+
+"""
+    from(frame::StackFrame, filter_mod::Module) -> Bool
+
+Returns whether the `frame` is from the provided `Module`
+"""
+function from(frame::StackFrame, m::Module)
+    finfo = frame.linfo
+    result = false
+
+    if !isnull(finfo)
+        frame_m = get(finfo).def
+        isa(frame_m, Method) && (frame_m = frame_m.module)
+        result = module_name(frame_m) === module_name(m)
+    end
+
+    return result
 end
 
 end

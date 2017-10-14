@@ -1,8 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Sort
 
-using Base: Order, Checked, copymutable, linearindices, linearindexing, viewindexing, LinearFast, _length
+using Base: Order, Checked, copymutable, linearindices, IndexStyle, viewindexing, IndexLinear, _length
 
 import
     Base.sort,
@@ -15,18 +15,18 @@ import
 export # also exported by Base
     # order-only:
     issorted,
-    select,
-    select!,
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
     # order & algorithm:
     sort,
     sort!,
-    selectperm,
-    selectperm!,
     sortperm,
     sortperm!,
+    partialsort,
+    partialsort!,
+    partialsortperm,
+    partialsortperm!,
     sortrows,
     sortcols,
     # algorithms:
@@ -58,25 +58,99 @@ function issorted(itr, order::Ordering)
 end
 
 """
-    issorted(v, by=identity, rev:Bool=false, order::Ordering=Forward)
+    issorted(v, lt=isless, by=identity, rev:Bool=false, order::Ordering=Forward)
 
-Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modify what
+Test whether a vector is in sorted order. The `lt`, `by` and `rev` keywords modify what
 order is considered to be sorted just as they do for [`sort`](@ref).
+
+# Examples
+```jldoctest
+julia> issorted([1, 2, 3])
+true
+
+julia> issorted([(1, "b"), (2, "a")], by = x -> x[1])
+true
+
+julia> issorted([(1, "b"), (2, "a")], by = x -> x[2])
+false
+
+julia> issorted([(1, "b"), (2, "a")], by = x -> x[2], rev=true)
+true
+```
 """
 issorted(itr;
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
-function select!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
+function partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
     inds = indices(v, 1)
     sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
-    v[k]
+    @views v[k]
 end
-select!(v::AbstractVector, k::Union{Int,OrdinalRange};
-    lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
-    select!(v, k, ord(lt,by,rev,order))
 
-select(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) = select!(copymutable(v), k; kws...)
+"""
+    partialsort!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Partially sort the vector `v` in place, according to the order specified by `by`, `lt` and
+`rev` so that the value at index `k` (or range of adjacent values if `k` is a range) occurs
+at the position where it would appear if the array were fully sorted via a non-stable
+algorithm. If `k` is a single index, that value is returned; if `k` is a range, an array of
+values at those indices is returned. Note that `partialsort!` does not fully sort the input
+array.
+
+# Examples
+```jldoctest
+julia> a = [1, 2, 4, 3, 4]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 3
+ 4
+
+julia> partialsort!(a, 4)
+4
+
+julia> a
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 4
+
+julia> a = [1, 2, 4, 3, 4]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 3
+ 4
+
+julia> partialsort!(a, 4, rev=true)
+2
+
+julia> a
+5-element Array{Int64,1}:
+ 4
+ 4
+ 3
+ 2
+ 1
+```
+"""
+partialsort!(v::AbstractVector, k::Union{Int,OrdinalRange};
+             lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
+    partialsort!(v, k, ord(lt,by,rev,order))
+
+"""
+    partialsort(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Variant of [`partialsort!`](@ref) which copies `v` before partially sorting it, thereby returning the
+same thing as `partialsort!` but leaving `v` unmodified.
+"""
+partialsort(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) =
+    partialsort!(copymutable(v), k; kws...)
 
 
 # reference on sorted binary search:
@@ -135,7 +209,7 @@ function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
     return (lo + 1) : (hi - 1)
 end
 
-function searchsortedlast{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -144,7 +218,7 @@ function searchsortedlast{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedfirst{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, first(a), x) ? length(a) + 1 : 1
     else
@@ -153,7 +227,7 @@ function searchsortedfirst{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedlast{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
@@ -161,7 +235,7 @@ function searchsortedlast{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedfirst{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
@@ -169,7 +243,7 @@ function searchsortedfirst{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedfirst{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
     if lt(o, first(a), x)
         if step(a) == 0
             length(a) + 1
@@ -181,7 +255,7 @@ function searchsortedfirst{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrderi
     end
 end
 
-function searchsortedlast{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Unsigned, o::DirectOrdering)
     if lt(o, x, first(a))
         0
     elseif step(a) == 0
@@ -191,7 +265,7 @@ function searchsortedlast{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrderin
     end
 end
 
-searchsorted{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering) =
+searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
     searchsortedfirst(a, x, o) : searchsortedlast(a, x, o)
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
@@ -204,15 +278,81 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     end
 end
 
+"""
+    searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Return the range of indices of `a` which compare as equal to `x` (using binary search)
+according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
+is already sorted in that order. Return an empty range located at the insertion point
+if `a` does not contain values equal to `x`.
+
+# Examples
+```jldoctest
+julia> a = [4, 3, 2, 1]
+4-element Array{Int64,1}:
+ 4
+ 3
+ 2
+ 1
+
+julia> searchsorted(a, 4)
+5:4
+
+julia> searchsorted(a, 4, rev=true)
+1:1
+```
+""" searchsorted
+
+"""
+    searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Return the index of the first value in `a` greater than or equal to `x`, according to the
+specified order. Return `length(a) + 1` if `x` is greater than all values in `a`.
+`a` is assumed to be sorted.
+
+# Examples
+```jldoctest
+julia> searchsortedfirst([1, 2, 4, 5, 14], 4)
+3
+
+julia> searchsortedfirst([1, 2, 4, 5, 14], 4, rev=true)
+1
+
+julia> searchsortedfirst([1, 2, 4, 5, 14], 15)
+6
+```
+""" searchsortedfirst
+
+"""
+    searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Return the index of the last value in `a` less than or equal to `x`, according to the
+specified order. Return `0` if `x` is less than all values in `a`. `a` is assumed to
+be sorted.
+
+# Examples
+```jldoctest
+julia> searchsortedlast([1, 2, 4, 5, 14], 4)
+3
+
+julia> searchsortedlast([1, 2, 4, 5, 14], 4, rev=true)
+5
+
+julia> searchsortedlast([1, 2, 4, 5, 14], -1)
+0
+```
+""" searchsortedlast
+
+
 ## sorting algorithms ##
 
-abstract Algorithm
+abstract type Algorithm end
 
-immutable InsertionSortAlg <: Algorithm end
-immutable QuickSortAlg     <: Algorithm end
-immutable MergeSortAlg     <: Algorithm end
+struct InsertionSortAlg <: Algorithm end
+struct QuickSortAlg     <: Algorithm end
+struct MergeSortAlg     <: Algorithm end
 
-immutable PartialQuickSort{T <: Union{Int,OrdinalRange}} <: Algorithm
+struct PartialQuickSort{T <: Union{Int,OrdinalRange}} <: Algorithm
     k::T
 end
 
@@ -414,7 +554,7 @@ end
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
-defalg{T<:Number}(v::AbstractArray{T}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{<:Number}) = DEFAULT_UNSTABLE
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
     inds = indices(v,1)
@@ -432,6 +572,33 @@ providing a custom "less than" function; use `rev=true` to reverse the sorting o
 options are independent and can be used together in all possible combinations: if both `by`
 and `lt` are specified, the `lt` function is applied to the result of the `by` function;
 `rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
+
+# Examples
+```jldoctest
+julia> v = [3, 1, 2]; sort!(v); v
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> v = [3, 1, 2]; sort!(v, rev = true); v
+3-element Array{Int64,1}:
+ 3
+ 2
+ 1
+
+julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[1]); v
+3-element Array{Tuple{Int64,String},1}:
+ (1, "c")
+ (2, "b")
+ (3, "a")
+
+julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
+3-element Array{Tuple{Int64,String},1}:
+ (3, "a")
+ (2, "b")
+ (1, "c")
+```
 """
 function sort!(v::AbstractVector;
                alg::Algorithm=defalg(v),
@@ -445,7 +612,7 @@ function sort!(v::AbstractVector;
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
-            (rangelen, o2) = add_with_overflow(diff, one(diff))
+            (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
             if !o1 && !o2 && rangelen < div(n,2)
                 return sort_int_range!(v, rangelen, min)
             end
@@ -455,7 +622,7 @@ function sort!(v::AbstractVector;
 end
 
 # sort! for vectors of few unique integers
-function sort_int_range!{T<:Integer}(x::Vector{T}, rangelen, minval)
+function sort_int_range!(x::Vector{<:Integer}, rangelen, minval)
     offs = 1 - minval
     n = length(x)
 
@@ -481,21 +648,56 @@ end
     sort(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
+
+# Examples
+```jldoctest
+julia> v = [3, 1, 2];
+
+julia> sort(v)
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> v
+3-element Array{Int64,1}:
+ 3
+ 1
+ 2
+```
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
-## selectperm: the permutation to sort the first k elements of an array ##
+## partialsortperm: the permutation to sort the first k elements of an array ##
 
-selectperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
-    selectperm!(similar(Vector{eltype(k)}, indices(v,1)), v, k; kwargs..., initialized=false)
+"""
+    partialsortperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-function selectperm!{I<:Integer}(ix::AbstractVector{I}, v::AbstractVector,
-                                 k::Union{Int, OrdinalRange};
-                                 lt::Function=isless,
-                                 by::Function=identity,
-                                 rev::Bool=false,
-                                 order::Ordering=Forward,
-                                 initialized::Bool=false)
+Return a partial permutation of the vector `v`, according to the order specified by
+`by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
+if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index,
+the index in `v` of the value which would be sorted at position `k` is returned;
+if `k` is a range, an array with the indices in `v` of the values which would be sorted in
+these positions is returned.
+
+Note that this is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
+"""
+partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
+    partialsortperm!(similar(Vector{eltype(k)}, indices(v,1)), v, k; kwargs..., initialized=false)
+
+"""
+    partialsortperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
+
+Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix`. If `initialized` is `false`
+(the default), `ix` is initialized to contain the values `1:length(ix)`.
+"""
+function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
+                          k::Union{Int, OrdinalRange};
+                          lt::Function=isless,
+                          by::Function=identity,
+                          rev::Bool=false,
+                          order::Ordering=Forward,
+                          initialized::Bool=false)
     if !initialized
         @inbounds for i = indices(ix,1)
             ix[i] = i
@@ -504,7 +706,8 @@ function selectperm!{I<:Integer}(ix::AbstractVector{I}, v::AbstractVector,
 
     # do partial quicksort
     sort!(ix, PartialQuickSort(k), Perm(ord(lt, by, rev, order), v))
-    return ix[k]
+
+    @views ix[k]
 end
 
 ## sortperm: the permutation to sort an array ##
@@ -521,6 +724,23 @@ a different permutation that puts the array into order may be returned. The orde
 specified using the same keywords as `sort!`.
 
 See also [`sortperm!`](@ref).
+
+# Examples
+```jldoctest
+julia> v = [3, 1, 2];
+
+julia> p = sortperm(v)
+3-element Array{Int64,1}:
+ 2
+ 3
+ 1
+
+julia> v[p]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+```
 """
 function sortperm(v::AbstractVector;
                   alg::Algorithm=DEFAULT_UNSTABLE,
@@ -534,7 +754,7 @@ function sortperm(v::AbstractVector;
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
-            (rangelen, o2) = add_with_overflow(diff, one(diff))
+            (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
             if !o1 && !o2 && rangelen < div(n,2)
                 return sortperm_int_range(v, rangelen, min)
             end
@@ -552,15 +772,32 @@ end
     sortperm!(ix, v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
 
 Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
-(the default), ix is initialized to contain the values `1:length(v)`.
+(the default), `ix` is initialized to contain the values `1:length(v)`.
+
+# Examples
+```jldoctest
+julia> v = [3, 1, 2]; p = zeros(Int, 3);
+
+julia> sortperm!(p, v); p
+3-element Array{Int64,1}:
+ 2
+ 3
+ 1
+
+julia> v[p]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+```
 """
-function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
-                               alg::Algorithm=DEFAULT_UNSTABLE,
-                               lt=isless,
-                               by=identity,
-                               rev::Bool=false,
-                               order::Ordering=Forward,
-                               initialized::Bool=false)
+function sortperm!(x::AbstractVector{<:Integer}, v::AbstractVector;
+                   alg::Algorithm=DEFAULT_UNSTABLE,
+                   lt=isless,
+                   by=identity,
+                   rev::Bool=false,
+                   order::Ordering=Forward,
+                   initialized::Bool=false)
     if indices(x,1) != indices(v,1)
         throw(ArgumentError("index vector must have the same indices as the source vector, $(indices(x,1)) != $(indices(v,1))"))
     end
@@ -573,7 +810,7 @@ function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
 end
 
 # sortperm for vectors of few unique integers
-function sortperm_int_range{T<:Integer}(x::Vector{T}, rangelen, minval)
+function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
     offs = 1 - minval
     n = length(x)
 
@@ -602,6 +839,24 @@ end
 Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
+
+# Examples
+```jldoctest
+julia> A = [4 3; 1 2]
+2×2 Array{Int64,2}:
+ 4  3
+ 1  2
+
+julia> sort(A, 1)
+2×2 Array{Int64,2}:
+ 1  2
+ 4  3
+
+julia> sort(A, 2)
+2×2 Array{Int64,2}:
+ 3  4
+ 1  2
+```
 """
 function sort(A::AbstractArray, dim::Integer;
               alg::Algorithm=DEFAULT_UNSTABLE,
@@ -640,6 +895,27 @@ end
 Sort the rows of matrix `A` lexicographically.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
+
+# Examples
+```jldoctest
+julia> sortrows([7 3 5; -1 6 4; 9 -2 8])
+3×3 Array{Int64,2}:
+ -1   6  4
+  7   3  5
+  9  -2  8
+
+julia> sortrows([7 3 5; -1 6 4; 9 -2 8], lt=(x,y)->isless(x[2],y[2]))
+3×3 Array{Int64,2}:
+  9  -2  8
+  7   3  5
+ -1   6  4
+
+julia> sortrows([7 3 5; -1 6 4; 9 -2 8], rev=true)
+3×3 Array{Int64,2}:
+  9  -2  8
+  7   3  5
+ -1   6  4
+```
 """
 function sortrows(A::AbstractMatrix; kws...)
     inds = indices(A,1)
@@ -658,6 +934,27 @@ end
 Sort the columns of matrix `A` lexicographically.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
+
+# Examples
+```jldoctest
+julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8])
+3×3 Array{Int64,2}:
+  3   5  7
+ -1  -4  6
+ -2   8  9
+
+julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], alg=InsertionSort, lt=(x,y)->isless(x[2],y[2]))
+3×3 Array{Int64,2}:
+  5   3  7
+ -4  -1  6
+  8  -2  9
+
+julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], rev=true)
+3×3 Array{Int64,2}:
+ 7   5   3
+ 6  -4  -1
+ 9   8  -2
+```
 """
 function sortcols(A::AbstractMatrix; kws...)
     inds = indices(A,2)
@@ -670,13 +967,13 @@ function sortcols(A::AbstractMatrix; kws...)
     A[:,p]
 end
 
-function slicetypeof{T,N}(A::AbstractArray{T,N}, i1, i2)
+function slicetypeof(A::AbstractArray{T}, i1, i2) where T
     I = map(slice_dummy, to_indices(A, (i1, i2)))
-    fast = isa(linearindexing(viewindexing(I), linearindexing(A)), LinearFast)
+    fast = isa(IndexStyle(viewindexing(I), IndexStyle(A)), IndexLinear)
     SubArray{T,1,typeof(A),typeof(I),fast}
 end
 slice_dummy(S::Slice) = S
-slice_dummy{T}(::AbstractUnitRange{T}) = one(T)
+slice_dummy(::AbstractUnitRange{T}) where {T} = oneunit(T)
 
 ## fast clever sorting for floats ##
 
@@ -684,14 +981,14 @@ module Float
 using ..Sort
 using ...Order
 
-import Core.Intrinsics: unbox, slt_int
+import Core.Intrinsics: slt_int
 import ..Sort: sort!
 import ...Order: lt, DirectOrdering
 
-typealias Floats Union{Float32,Float64}
+const Floats = Union{Float32,Float64}
 
-immutable Left <: Ordering end
-immutable Right <: Ordering end
+struct Left <: Ordering end
+struct Right <: Ordering end
 
 left(::DirectOrdering) = Left()
 right(::DirectOrdering) = Right()
@@ -699,8 +996,8 @@ right(::DirectOrdering) = Right()
 left(o::Perm) = Perm(left(o.order), o.data)
 right(o::Perm) = Perm(right(o.order), o.data)
 
-lt{T<:Floats}(::Left, x::T, y::T) = slt_int(unbox(T,y),unbox(T,x))
-lt{T<:Floats}(::Right, x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
+lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
+lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
 
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
@@ -738,8 +1035,8 @@ end
 
 nans2end!(v::AbstractVector, o::ForwardOrdering) = nans2right!(v,o)
 nans2end!(v::AbstractVector, o::ReverseOrdering) = nans2left!(v,o)
-nans2end!{O<:ForwardOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2right!(v,o)
-nans2end!{O<:ReverseOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2left!(v,o)
+nans2end!(v::AbstractVector{Int}, o::Perm{<:ForwardOrdering}) = nans2right!(v,o)
+nans2end!(v::AbstractVector{Int}, o::Perm{<:ReverseOrdering}) = nans2left!(v,o)
 
 issignleft(o::ForwardOrdering, x::Floats) = lt(o, x, zero(x))
 issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
@@ -763,8 +1060,8 @@ end
 fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
     sort!(v, first(indices(v,1)), last(indices(v,1)), a, o)
 
-sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)
-sort!{O<:DirectOrdering,T<:Floats}(v::Vector{Int}, a::Algorithm, o::Perm{O,Vector{T}}) = fpsort!(v,a,o)
+sort!(v::AbstractVector{<:Floats}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)
+sort!(v::Vector{Int}, a::Algorithm, o::Perm{<:DirectOrdering,<:Vector{<:Floats}}) = fpsort!(v,a,o)
 
 end # module Sort.Float
 

@@ -1,13 +1,13 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## basic task functions and TLS
 
 # Container for a captured exception and its backtrace. Can be serialized.
-type CapturedException <: Exception
+struct CapturedException <: Exception
     ex::Any
     processed_bt::Vector{Any}
 
-    function CapturedException(ex, bt_raw)
+    function CapturedException(ex, bt_raw::Vector{Ptr{Void}})
         # bt_raw MUST be an Array of code pointers than can be processed by jl_lookup_code_address
         # Typically the result of a catch_backtrace()
 
@@ -16,13 +16,17 @@ type CapturedException <: Exception
         process_func(args...) = push!(bt_lines, args)
         process_backtrace(process_func, bt_raw, 100) # Limiting this to 100 lines.
 
-        new(ex, bt_lines)
+        CapturedException(ex, bt_lines)
     end
+
+    CapturedException(ex, processed_bt::Vector{Any}) = new(ex, processed_bt)
 end
 
-showerror(io::IO, ce::CapturedException) = showerror(io, ce.ex, ce.processed_bt, backtrace=true)
+function showerror(io::IO, ce::CapturedException)
+    showerror(io, ce.ex, ce.processed_bt, backtrace=true)
+end
 
-type CompositeException <: Exception
+struct CompositeException <: Exception
     exceptions::Vector{Any}
     CompositeException() = new(Any[])
     CompositeException(exceptions) = new(exceptions)
@@ -39,7 +43,7 @@ function showerror(io::IO, ex::CompositeException)
         showerror(io, ex.exceptions[1])
         remaining = length(ex) - 1
         if remaining > 0
-            print(io, "\n\n...and $remaining other exceptions.\n")
+            print(io, string("\n\n...and ", remaining, " more exception(s).\n"))
         end
     else
         print(io, "CompositeException()\n")
@@ -205,7 +209,7 @@ function task_done_hook(t::Task)
 
     if isa(t.donenotify, Condition) && !isempty(t.donenotify.waitq)
         handled = true
-        notify(t.donenotify, result, error=err)
+        notify(t.donenotify, result, true, err)
     end
 
     # Execute any other hooks registered in the TLS
@@ -234,7 +238,7 @@ function task_done_hook(t::Task)
         if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
             active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
-            throwto(active_repl_backend.backend_task, result)
+            throwto(active_repl_backend.backend_task, result) # this terminates the task
         end
         if !suppress_excp_printing(t)
             let bt = t.backtrace
@@ -249,7 +253,7 @@ function task_done_hook(t::Task)
     end
     # Clear sigatomic before waiting
     sigatomic_end()
-    wait()
+    wait() # this will not return
 end
 
 
@@ -325,10 +329,44 @@ end
 
 Like `@schedule`, `@async` wraps an expression in a `Task` and adds it to the local
 machine's scheduler queue. Additionally it adds the task to the set of items that the
-nearest enclosing `@sync` waits for. `@async` also wraps the expression in a `let x=x, y=y, ...`
-block to create a new scope with copies of all variables referenced in the expression.
+nearest enclosing `@sync` waits for.
 """
 macro async(expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
-    :(async_run_thunk($expr))
+    thunk = esc(:(()->($expr)))
+    :(async_run_thunk($thunk))
+end
+
+
+"""
+    timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+
+Waits until `testcb` returns `true` or for `secs` seconds, whichever is earlier.
+`testcb` is polled every `pollint` seconds.
+"""
+function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+    pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
+    start = time()
+    done = Channel(1)
+    timercb(aw) = begin
+        try
+            if testcb()
+                put!(done, :ok)
+            elseif (time() - start) > secs
+                put!(done, :timed_out)
+            end
+        catch e
+            put!(done, :error)
+        finally
+            isready(done) && close(aw)
+        end
+    end
+
+    if !testcb()
+        t = Timer(timercb, pollint, pollint)
+        ret = fetch(done)
+        close(t)
+    else
+        ret = :ok
+    end
+    ret
 end

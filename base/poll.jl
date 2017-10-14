@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # filesystem operations
 
@@ -12,15 +12,15 @@ export
 
 import Base: @handle_as, wait, close, uvfinalize, eventloop, notify_error, stream_wait,
     _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close,
-    associate_julia_struct, disassociate_julia_struct, |
-if is_windows()
+    associate_julia_struct, disassociate_julia_struct, isreadable, iswritable, |
+if Sys.iswindows()
     import Base.WindowsRawSocket
 end
 
 # libuv file watching event flags
 const UV_RENAME = 1
 const UV_CHANGE = 2
-immutable FileEvent
+struct FileEvent
     renamed::Bool
     changed::Bool
     timedout::Bool
@@ -31,7 +31,7 @@ FileEvent(flags::Integer) = FileEvent((flags & UV_RENAME) != 0,
                                   (flags & FD_TIMEDOUT) != 0)
 fetimeout() = FileEvent(false, false, true)
 
-immutable FDEvent
+struct FDEvent
     readable::Bool
     writable::Bool
     disconnect::Bool
@@ -57,7 +57,7 @@ fdtimeout() = FDEvent(false, false, false, true)
             a.disconnect | b.disconnect,
             a.timedout | b.timedout)
 
-type FileMonitor
+mutable struct FileMonitor
     handle::Ptr{Void}
     file::String
     notify::Condition
@@ -76,15 +76,16 @@ type FileMonitor
     end
 end
 
-type PollingFileWatcher
+mutable struct PollingFileWatcher
     handle::Ptr{Void}
     file::String
     interval::UInt32
     notify::Condition
     active::Bool
+    busy_polling::Int32
     function PollingFileWatcher(file::AbstractString, interval::Float64=5.007) # same default as nodejs
         handle = Libc.malloc(_sizeof_uv_fs_poll)
-        this = new(handle, file, round(UInt32, interval * 1000), Condition(), false)
+        this = new(handle, file, round(UInt32, interval * 1000), Condition(), false, 0)
         associate_julia_struct(handle, this)
         err = ccall(:uv_fs_poll_init, Int32, (Ptr{Void}, Ptr{Void}), eventloop(), handle)
         if err != 0
@@ -96,7 +97,7 @@ type PollingFileWatcher
     end
 end
 
-type _FDWatcher
+mutable struct _FDWatcher
     handle::Ptr{Void}
     fdnum::Int # this is NOT the file descriptor
     refcount::Tuple{Int, Int}
@@ -106,13 +107,10 @@ type _FDWatcher
 
     let FDWatchers = Vector{Any}()
         global _FDWatcher
-        @static if is_unix()
+        @static if Sys.isunix()
             function _FDWatcher(fd::RawFD, readable::Bool, writable::Bool)
                 if !readable && !writable
                     throw(ArgumentError("must specify at least one of readable or writable to create a FDWatcher"))
-                end
-                if ccall(:jl_uv_unix_fd_is_watched, Int32, (Int32, Ptr{Void}, Ptr{Void}), fd.fd, C_NULL, eventloop()) == 1
-                    throw(ArgumentError("file descriptor $(fd.fd) is already being watched by libuv"))
                 end
                 fdnum = fd.fd + 1
                 if fdnum > length(FDWatchers)
@@ -123,6 +121,9 @@ type _FDWatcher
                     this = FDWatchers[fdnum]::_FDWatcher
                     this.refcount = (this.refcount[1] + Int(readable), this.refcount[2] + Int(writable))
                     return this
+                end
+                if ccall(:jl_uv_unix_fd_is_watched, Int32, (Int32, Ptr{Void}, Ptr{Void}), fd.fd, C_NULL, eventloop()) == 1
+                    throw(ArgumentError("file descriptor $(fd.fd) is already being watched by libuv"))
                 end
 
                 handle = Libc.malloc(_sizeof_uv_poll)
@@ -145,8 +146,7 @@ type _FDWatcher
             end
         end
 
-        global uvfinalize
-        function uvfinalize(t::_FDWatcher)
+        function Base.uvfinalize(t::_FDWatcher)
             if t.handle != C_NULL
                 disassociate_julia_struct(t)
                 ccall(:jl_close_uv, Void, (Ptr{Void},), t.handle)
@@ -154,7 +154,7 @@ type _FDWatcher
             end
             t.refcount = (0, 0)
             t.active = (false, false)
-            @static if is_unix()
+            @static if Sys.isunix()
                 if FDWatchers[t.fdnum] == t
                     FDWatchers[t.fdnum] = nothing
                 end
@@ -164,7 +164,7 @@ type _FDWatcher
         end
     end
 
-    @static if is_windows()
+    @static if Sys.iswindows()
         function _FDWatcher(fd::RawFD, readable::Bool, writable::Bool)
             handle = Libc._get_osfhandle(fd)
             return _FDWatcher(handle, readable, writable)
@@ -195,7 +195,7 @@ type _FDWatcher
     end
 end
 
-type FDWatcher
+mutable struct FDWatcher
     watcher::_FDWatcher
     readable::Bool
     writable::Bool
@@ -205,7 +205,7 @@ type FDWatcher
         finalizer(this, close)
         return this
     end
-    @static if is_windows()
+    @static if Sys.iswindows()
         function FDWatcher(fd::WindowsRawSocket, readable::Bool, writable::Bool)
             this = new(_FDWatcher(fd, readable, writable), readable, writable)
             finalizer(this, close)
@@ -251,7 +251,7 @@ end
 function _uv_hook_close(uv::PollingFileWatcher)
     uv.handle = C_NULL
     uv.active = false
-    notify(uv.notify, (StatStruct(), StatStruct()))
+    notify(uv.notify, (StatStruct(), EOFError()))
     nothing
 end
 
@@ -263,9 +263,9 @@ function _uv_hook_close(uv::FileMonitor)
 end
 
 function __init__()
-    global uv_jl_pollcb        = cfunction(uv_pollcb, Void, (Ptr{Void}, Cint, Cint))
-    global uv_jl_fspollcb      = cfunction(uv_fspollcb, Void, (Ptr{Void}, Cint, Ptr{Void}, Ptr{Void}))
-    global uv_jl_fseventscb    = cfunction(uv_fseventscb, Void, (Ptr{Void}, Ptr{Int8}, Int32, Int32))
+    global uv_jl_pollcb        = cfunction(uv_pollcb, Void, Tuple{Ptr{Void}, Cint, Cint})
+    global uv_jl_fspollcb      = cfunction(uv_fspollcb, Void, Tuple{Ptr{Void}, Cint, Ptr{Void}, Ptr{Void}})
+    global uv_jl_fseventscb    = cfunction(uv_fseventscb, Void, Tuple{Ptr{Void}, Ptr{Int8}, Int32, Int32})
 end
 
 function uv_fseventscb(handle::Ptr{Void}, filename::Ptr, events::Int32, status::Int32)
@@ -300,11 +300,10 @@ end
 
 function uv_fspollcb(handle::Ptr{Void}, status::Int32, prev::Ptr, curr::Ptr)
     t = @handle_as handle PollingFileWatcher
-    if status != 0
-        notify_error(t.notify, UVError("PollingFileWatcher", status))
-    else
+    if status == 0 || status != t.busy_polling
+        t.busy_polling = status
         prev_stat = StatStruct(convert(Ptr{UInt8}, prev))
-        curr_stat = StatStruct(convert(Ptr{UInt8}, curr))
+        curr_stat = (status == 0) ? StatStruct(convert(Ptr{UInt8}, curr)) : UVError("PollingFileWatcher", status)
         notify(t.notify, (prev_stat, curr_stat))
     end
     nothing
@@ -406,7 +405,7 @@ function wait(fd::RawFD; readable=false, writable=false)
     end
 end
 
-if is_windows()
+if Sys.iswindows()
     function wait(socket::WindowsRawSocket; readable=false, writable=false)
         fdw = _FDWatcher(socket, readable, writable)
         try
@@ -443,7 +442,7 @@ least one of them must be set to `true`.
 The returned value is an object with boolean fields `readable`, `writable`, and `timedout`,
 giving the result of the polling.
 """
-function poll_fd(s::Union{RawFD, is_windows() ? WindowsRawSocket : Union{}}, timeout_s::Real=-1; readable=false, writable=false)
+function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, timeout_s::Real=-1; readable=false, writable=false)
     wt = Condition()
     fdw = _FDWatcher(s, readable, writable)
     try
@@ -512,15 +511,20 @@ function watch_file(s::AbstractString, timeout_s::Real=-1)
 end
 
 """
-    poll_file(path::AbstractString, interval_s::Real=5.007, timeout_s::Real=-1) -> (previous::StatStruct, current::StatStruct)
+    poll_file(path::AbstractString, interval_s::Real=5.007, timeout_s::Real=-1) -> (previous::StatStruct, current)
 
 Monitor a file for changes by polling every `interval_s` seconds until a change occurs or
 `timeout_s` seconds have elapsed. The `interval_s` should be a long period; the default is
 5.007 seconds.
 
-Returns a pair of `StatStruct` objects `(previous, current)` when a change is detected.
+Returns a pair of status objects `(previous, current)` when a change is detected.
+The `previous` status is always a `StatStruct`, but it may have all of the fields zeroed
+(indicating the file didn't previously exist, or wasn't previously accessible).
 
-To determine when a file was modified, compare `mtime(prev) != mtime(current)` to detect
+The `current` status object may be a `StatStruct`, an `EOFError` (indicating the timeout elapsed),
+or some other `Exception` subtype (if the `stat` operation failed - for example, if the path does not exist).
+
+To determine when a file was modified, compare `current isa StatStruct && mtime(prev) != mtime(current)` to detect
 notification of changes. However, using [`watch_file`](@ref) for this operation is preferred, since
 it is more reliable and efficient, although in some situations it may not be available.
 """
@@ -533,7 +537,12 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
 
             @schedule begin
                 try
-                    result = wait(pfw)
+                    statdiff = wait(pfw)
+                    if statdiff[1] == StatStruct() && isa(statdiff[2], UVError)
+                        # file didn't initially exist, continue watching for it to be created (or the error to change)
+                        statdiff = wait(pfw)
+                    end
+                    result = statdiff
                 catch e
                     notify_error(wt, e)
                     return
@@ -544,7 +553,7 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
 
             wait(wt)
             if result === :timeout
-                return (StatStruct(), StatStruct())
+                return (StatStruct(), EOFError())
             end
             return result
         else

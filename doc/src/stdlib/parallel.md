@@ -4,11 +4,11 @@
 
 ```@docs
 Core.Task
-Base.yieldto
 Base.current_task
 Base.istaskdone
 Base.istaskstarted
 Base.yield
+Base.yieldto
 Base.task_local_storage(::Any)
 Base.task_local_storage(::Any, ::Any)
 Base.task_local_storage(::Function, ::Any, ::Any)
@@ -60,11 +60,12 @@ Base.isready(::Future)
 Base.WorkerPool
 Base.CachingPool
 Base.default_worker_pool
+Base.clear!(::CachingPool)
 Base.remote
-Base.remotecall(::Any, ::Base.AbstractWorkerPool, ::Any...)
-Base.remotecall_wait(::Any, ::Base.AbstractWorkerPool, ::Any...)
-Base.remotecall_fetch(::Any, ::Base.AbstractWorkerPool, ::Any...)
-Base.remote_do(::Any, ::Base.AbstractWorkerPool, ::Any...)
+Base.remotecall(::Any, ::Base.Distributed.AbstractWorkerPool, ::Any...)
+Base.remotecall_wait(::Any, ::Base.Distributed.AbstractWorkerPool, ::Any...)
+Base.remotecall_fetch(::Any, ::Base.Distributed.AbstractWorkerPool, ::Any...)
+Base.remote_do(::Any, ::Base.Distributed.AbstractWorkerPool, ::Any...)
 Base.timedwait
 Base.@spawn
 Base.@spawnat
@@ -74,22 +75,12 @@ Base.@async
 Base.@sync
 Base.@parallel
 Base.@everywhere
-Base.clear!
+Base.clear!(::Any, ::Any; ::Any)
 Base.remoteref_id
 Base.channel_from_id
 Base.worker_id_from_socket
 Base.cluster_cookie()
 Base.cluster_cookie(::Any)
-```
-
-## Shared Arrays
-
-```@docs
-Base.SharedArray
-Base.procs(::SharedArray)
-Base.sdata
-Base.indexpids
-Base.localindexes
 ```
 
 ## Multi-Threading
@@ -149,7 +140,8 @@ and transport messages between processes. It is possible for Cluster Managers to
 Base.launch
 Base.manage
 Base.kill(::ClusterManager, ::Int, ::WorkerConfig)
-Base.init_worker
 Base.connect(::ClusterManager, ::Int, ::WorkerConfig)
+Base.init_worker
+Base.start_worker
 Base.process_messages
 ```

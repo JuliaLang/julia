@@ -1,22 +1,21 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # commented-out definitions are implemented in C
 
-#abstract Any <: Any
-#abstract Type{T}
+#abstract type Any <: Any end
+#abstract type Type{T} end
 
-#abstract Vararg{T}
-#Tuple = (Any...)
+#abstract type Vararg{T} end
 
-#type Symbol
+#mutable struct Symbol
 #    #opaque
 #end
 
-#type TypeName
+#mutable struct TypeName
 #    name::Symbol
 #end
 
-#type DataType <: Type
+#mutable struct DataType <: Type
 #    name::TypeName
 #    super::Type
 #    parameters::Tuple
@@ -30,93 +29,92 @@
 #    pointerfree::Bool
 #end
 
-#type Union <: Type
+#struct Union <: Type
 #    a
 #    b
 #end
 
-#type TypeVar
+#mutable struct TypeVar
 #    name::Symbol
 #    lb::Type
 #    ub::Type
 #end
 
-#type UnionAll
+#struct UnionAll
 #    var::TypeVar
 #    body
 #end
 
-#immutable Void
+#struct Void
 #end
 #const nothing = Void()
 
-#abstract AbstractArray{T,N}
-#abstract DenseArray{T,N} <: AbstractArray{T,N}
+#abstract type AbstractArray{T,N} end
+#abstract type DenseArray{T,N} <: AbstractArray{T,N} end
 
-#type Array{T,N} <: DenseArray{T,N}
+#mutable struct Array{T,N} <: DenseArray{T,N}
 #end
 
-#type Module
+#mutable struct Module
 #    name::Symbol
 #end
 
-#type Method
+#mutable struct Method
 #end
 
-#type MethodInstance
+#mutable struct MethodInstance
 #end
 
-#type CodeInfo
+#mutable struct CodeInfo
 #end
 
-#type TypeMapLevel
+#mutable struct TypeMapLevel
 #end
 
-#type TypeMapEntry
+#mutable struct TypeMapEntry
 #end
 
-#abstract Ref{T}
-#bitstype {32|64} Ptr{T} <: Ref{T}
+#abstract type Ref{T} end
+#primitive type Ptr{T} <: Ref{T} {32|64} end
 
 # types for the front end
 
-#type Expr
+#mutable struct Expr
 #    head::Symbol
 #    args::Array{Any,1}
 #    typ::Any
 #end
 
-#immutable LineNumberNode
+#struct LineNumberNode
 #    line::Int
+#    file::Any # nominally Union{Symbol,Void}
 #end
 
-#immutable LabelNode
+#struct LabelNode
 #    label::Int
 #end
 
-#immutable GotoNode
+#struct GotoNode
 #    label::Int
 #end
 
-#immutable QuoteNode
+#struct QuoteNode
 #    value
 #end
 
-#immutable GlobalRef
+#struct GlobalRef
 #    mod::Module
 #    name::Symbol
 #end
 
-# type Task
-#     parent::Task
-#     storage::Any
-#     consumers
-#     started::Bool
-#     done::Bool
-#     runnable::Bool
-# end
-
-import Core.Intrinsics.ccall
+#mutable struct Task
+#    parent::Task
+#    storage::Any
+#    consumers
+#    started::Bool
+#    done::Bool
+#    runnable::Bool
+#end
 
 export
     # key types
@@ -134,9 +132,10 @@ export
     # string types
     Char, DirectIndexString, AbstractString, String, IO,
     # errors
-    ErrorException, BoundsError, DivideError, DomainError, Exception, InexactError,
-    InterruptException, OutOfMemoryError, ReadOnlyMemoryError, OverflowError,
-    StackOverflowError, SegmentationFault, UndefRefError, UndefVarError, TypeError,
+    ErrorException, BoundsError, DivideError, DomainError, Exception,
+    InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
+    OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
+    TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
     GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
@@ -144,185 +143,234 @@ export
     fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
-    issubtype, typeof, isa, typeassert,
+    <:, typeof, isa, typeassert,
     # method reflection
     applicable, invoke,
     # constants
     nothing, Main
 
-typealias AnyVector Array{Any,1}
+const AnyVector = Array{Any,1}
 
-abstract Number
-abstract Real     <: Number
-abstract AbstractFloat <: Real
-abstract Integer  <: Real
-abstract Signed   <: Integer
-abstract Unsigned <: Integer
+abstract type Number end
+abstract type Real     <: Number end
+abstract type AbstractFloat <: Real end
+abstract type Integer  <: Real end
+abstract type Signed   <: Integer end
+abstract type Unsigned <: Integer end
 
-bitstype 16 Float16 <: AbstractFloat
-bitstype 32 Float32 <: AbstractFloat
-bitstype 64 Float64 <: AbstractFloat
+primitive type Float16 <: AbstractFloat 16 end
+primitive type Float32 <: AbstractFloat 32 end
+primitive type Float64 <: AbstractFloat 64 end
 
-bitstype 8  Bool <: Integer
-bitstype 32 Char
+#primitive type Bool <: Integer 8 end
+primitive type Char 32 end
 
-bitstype 8   Int8    <: Signed
-bitstype 8   UInt8   <: Unsigned
-bitstype 16  Int16   <: Signed
-bitstype 16  UInt16  <: Unsigned
-bitstype 32  Int32   <: Signed
-bitstype 32  UInt32  <: Unsigned
-bitstype 64  Int64   <: Signed
-bitstype 64  UInt64  <: Unsigned
-bitstype 128 Int128  <: Signed
-bitstype 128 UInt128 <: Unsigned
+primitive type Int8    <: Signed   8 end
+#primitive type UInt8   <: Unsigned 8 end
+primitive type Int16   <: Signed   16 end
+primitive type UInt16  <: Unsigned 16 end
+#primitive type Int32   <: Signed   32 end
+primitive type UInt32  <: Unsigned 32 end
+#primitive type Int64   <: Signed   64 end
+primitive type UInt64  <: Unsigned 64 end
+primitive type Int128  <: Signed   128 end
+primitive type UInt128 <: Unsigned 128 end
 
 if Int === Int64
-    typealias UInt UInt64
+    const UInt = UInt64
 else
-    typealias UInt UInt32
+    const UInt = UInt32
 end
 
 function Typeof end
-(f::typeof(Typeof))(x::ANY) = isa(x,Type) ? Type{x} : typeof(x)
+ccall(:jl_toplevel_eval_in, Any, (Any, Any),
+      Core, quote
+      (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
+      end)
 
-abstract Exception
-type ErrorException <: Exception
-    msg::AbstractString
-    ErrorException(msg::AbstractString) = new(msg)
+macro nospecialize(x)
+    _expr(:meta, :nospecialize, x)
 end
 
-Expr(args::ANY...) = _expr(args...)
+Expr(@nospecialize args...) = _expr(args...)
+
+abstract type Exception end
+struct ErrorException <: Exception
+    msg::AbstractString
+end
 
 macro _noinline_meta()
     Expr(:meta, :noinline)
 end
 
-immutable BoundsError        <: Exception
+struct BoundsError <: Exception
     a::Any
     i::Any
     BoundsError() = new()
-    BoundsError(a::ANY) = (@_noinline_meta; new(a))
-    BoundsError(a::ANY, i) = (@_noinline_meta; new(a,i))
+    BoundsError(@nospecialize(a)) = (@_noinline_meta; new(a))
+    BoundsError(@nospecialize(a), i) = (@_noinline_meta; new(a,i))
 end
-immutable DivideError        <: Exception end
-immutable DomainError        <: Exception end
-immutable OverflowError      <: Exception end
-immutable InexactError       <: Exception end
-immutable OutOfMemoryError   <: Exception end
-immutable ReadOnlyMemoryError<: Exception end
-immutable SegmentationFault  <: Exception end
-immutable StackOverflowError <: Exception end
-immutable UndefRefError      <: Exception end
-immutable UndefVarError      <: Exception
+struct DivideError         <: Exception end
+struct OutOfMemoryError    <: Exception end
+struct ReadOnlyMemoryError <: Exception end
+struct SegmentationFault   <: Exception end
+struct StackOverflowError  <: Exception end
+struct UndefRefError       <: Exception end
+struct UndefVarError <: Exception
     var::Symbol
 end
-immutable InterruptException <: Exception end
-type TypeError <: Exception
+struct InterruptException <: Exception end
+struct DomainError <: Exception
+    val
+    msg::AbstractString
+    DomainError(@nospecialize(val)) = (@_noinline_meta; new(val, ""))
+    DomainError(@nospecialize(val), @nospecialize(msg)) = (@_noinline_meta; new(val, msg))
+end
+struct TypeError <: Exception
     func::Symbol
     context::AbstractString
     expected::Type
     got
 end
+struct InexactError <: Exception
+    func::Symbol
+    T::Type
+    val
+    InexactError(f::Symbol, @nospecialize(T), @nospecialize(val)) = (@_noinline_meta; new(f, T, val))
+end
+struct OverflowError <: Exception
+    msg::AbstractString
+end
 
-abstract DirectIndexString <: AbstractString
+struct ArgumentError <: Exception
+    msg::AbstractString
+end
+
+struct MethodError <: Exception
+    f
+    args
+    world::UInt
+    MethodError(@nospecialize(f), @nospecialize(args), world::UInt) = new(f, args, world)
+end
+const typemax_UInt = ccall(:jl_typemax_uint, Any, (Any,), UInt)
+MethodError(@nospecialize(f), @nospecialize(args)) = MethodError(f, args, typemax_UInt)
+
+struct AssertionError <: Exception
+    msg::AbstractString
+end
+AssertionError() = AssertionError("")
+
+#Generic wrapping of arbitrary exceptions
+#Subtypes should put the exception in an 'error' field
+abstract type WrappedException <: Exception end
+
+struct LoadError <: WrappedException
+    file::AbstractString
+    line::Int
+    error
+end
+
+struct InitError <: WrappedException
+    mod::Symbol
+    error
+end
+
+abstract type DirectIndexString <: AbstractString end
 
 String(s::String) = s  # no constructor yet
 
 # This should always be inlined
 getptls() = ccall(:jl_get_ptls_states, Ptr{Void}, ())
 
-include(fname::String) = ccall(:jl_load_, Any, (Any,), fname)
+include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
 
-eval(e::ANY) = eval(Main, e)
-eval(m::Module, e::ANY) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
+eval(@nospecialize(e)) = eval(Main, e)
+eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
-kwfunc(f::ANY) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
+kwfunc(@nospecialize(f)) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
 
-kwftype(t::ANY) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t.name))
+kwftype(@nospecialize(t)) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t))
 
-type Box
+mutable struct Box
     contents::Any
-    Box(x::ANY) = new(x)
+    Box(@nospecialize(x)) = new(x)
     Box() = new()
 end
 
 # constructors for built-in types
 
-type WeakRef
+mutable struct WeakRef
     value
     WeakRef() = WeakRef(nothing)
-    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref_th, Ref{WeakRef},
-                            (Ptr{Void}, Any), getptls(), v)
+    WeakRef(@nospecialize(v)) = ccall(:jl_gc_new_weakref_th, Ref{WeakRef},
+                                      (Ptr{Void}, Any), getptls(), v)
 end
 
 TypeVar(n::Symbol) =
     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, Any)
-TypeVar(n::Symbol, ub::ANY) =
+TypeVar(n::Symbol, @nospecialize(ub)) =
     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub)
-TypeVar(n::Symbol, lb::ANY, ub::ANY) =
+TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) =
     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb, ub)
 
-UnionAll(v::TypeVar, t::ANY) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
+UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
 Void() = nothing
 
-immutable VecElement{T}
+(::Type{Tuple{}})() = () # Tuple{}()
+
+struct VecElement{T}
     value::T
-    VecElement(value::T) = new(value) # disable converting constructor in Core
+    VecElement{T}(value::T) where {T} = new(value) # disable converting constructor in Core
 end
-VecElement{T}(arg::T) = VecElement{T}(arg)
+VecElement(arg::T) where {T} = VecElement{T}(arg)
 
-# used by lowering of splicing unquote
-splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
-
-_new(typ::Symbol, argty::Symbol) = eval(:((::Type{$typ})(n::$argty) = $(Expr(:new, typ, :n))))
+_new(typ::Symbol, argty::Symbol) = eval(Core, :($typ(@nospecialize n::$argty) = $(Expr(:new, typ, :n))))
 _new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
 _new(:NewvarNode, :SlotNumber)
-_new(:QuoteNode, :ANY)
+_new(:QuoteNode, :Any)
 _new(:SSAValue, :Int)
-eval(:((::Type{LineNumberNode})(l::Int) = $(Expr(:new, :LineNumberNode, :l))))
-eval(:((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
-eval(:((::Type{SlotNumber})(n::Int) = $(Expr(:new, :SlotNumber, :n))))
-eval(:((::Type{TypedSlot})(n::Int, t::ANY) = $(Expr(:new, :TypedSlot, :n, :t))))
+eval(Core, :(LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
+eval(Core, :(LineNumberNode(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumberNode, :l, :f))))
+eval(Core, :(GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
+eval(Core, :(SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))))
+eval(Core, :(TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
-Task(f::ANY) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
+Task(@nospecialize(f)) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
 
 # simple convert for use by constructors of types in Core
 # note that there is no actual conversion defined here,
 # so the methods and ccall's in Core aren't permitted to use convert
-convert(::Type{Any}, x::ANY) = x
-convert{T}(::Type{T}, x::T) = x
-cconvert{T}(::Type{T}, x) = convert(T, x)
-unsafe_convert{T}(::Type{T}, x::T) = x
+convert(::Type{Any}, @nospecialize(x)) = x
+convert(::Type{T}, x::T) where {T} = x
+cconvert(::Type{T}, x) where {T} = convert(T, x)
+unsafe_convert(::Type{T}, x::T) where {T} = x
 
-typealias NTuple{N,T} Tuple{Vararg{T,N}}
+const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 
 # primitive array constructors
-(::Type{Array{T,N}}){T,N}(d::NTuple{N,Int}) =
-    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
-(::Type{Array{T,1}}){T}(d::NTuple{1,Int}) = Array{T,1}(getfield(d,1))
-(::Type{Array{T,2}}){T}(d::NTuple{2,Int}) = Array{T,2}(getfield(d,1), getfield(d,2))
-(::Type{Array{T,3}}){T}(d::NTuple{3,Int}) = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
-(::Type{Array{T,N}}){T,N}(d::Vararg{Int, N}) = ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
-(::Type{Array{T,1}}){T}(m::Int) =
-    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
-(::Type{Array{T,2}}){T}(m::Int, n::Int) =
-    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m, n)
-(::Type{Array{T,3}}){T}(m::Int, n::Int, o::Int) =
-    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m, n, o)
+Array{T,N}(d::NTuple{N,Int}) where {T,N} =
+    ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+Array{T,1}(d::NTuple{1,Int}) where {T} = Array{T,1}(getfield(d,1))
+Array{T,2}(d::NTuple{2,Int}) where {T} = Array{T,2}(getfield(d,1), getfield(d,2))
+Array{T,3}(d::NTuple{3,Int}) where {T} = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
+Array{T,N}(d::Vararg{Int,N}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+Array{T,1}(m::Int) where {T} = ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
+Array{T,2}(m::Int, n::Int) where {T} =
+    ccall(:jl_alloc_array_2d, Array{T,2}, (Any, Int, Int), Array{T,2}, m, n)
+Array{T,3}(m::Int, n::Int, o::Int) where {T} =
+    ccall(:jl_alloc_array_3d, Array{T,3}, (Any, Int, Int, Int), Array{T,3}, m, n, o)
 
-(::Type{Array{T}}){T,N}(d::NTuple{N,Int}) = Array{T,N}(d)
-(::Type{Array{T}}){T}(m::Int) = Array{T,1}(m)
-(::Type{Array{T}}){T}(m::Int, n::Int) = Array{T,2}(m, n)
-(::Type{Array{T}}){T}(m::Int, n::Int, o::Int) = Array{T,3}(m, n, o)
+Array{T}(d::NTuple{N,Int}) where {T,N} = Array{T,N}(d)
+Array{T}(m::Int) where {T} = Array{T,1}(m)
+Array{T}(m::Int, n::Int) where {T} = Array{T,2}(m, n)
+Array{T}(m::Int, n::Int, o::Int) where {T} = Array{T,3}(m, n, o)
 
-(::Type{Array{T,1}}){T}() = Array{T,1}(0)
-(::Type{Array{T,2}}){T}() = Array{T,2}(0, 0)
+Array{T,1}() where {T} = Array{T,1}(0)
 
 # primitive Symbol constructors
 function Symbol(s::String)
@@ -335,10 +383,11 @@ function Symbol(a::Array{UInt8,1})
                  ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
                  Intrinsics.arraylen(a))
 end
+Symbol(s::Symbol) = s
 
 # docsystem basics
 macro doc(x...)
-    atdoc(x...)
+    atdoc(__source__, __module__, x...)
 end
 macro __doc__(x)
     Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
@@ -346,14 +395,14 @@ end
 macro doc_str(s)
     Expr(:escape, s)
 end
-atdoc     = (str, expr) -> Expr(:escape, expr)
+atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
 
 
 # simple stand-alone print definitions for debugging
-abstract IO
-type CoreSTDOUT <: IO end
-type CoreSTDERR <: IO end
+abstract type IO end
+mutable struct CoreSTDOUT <: IO end
+mutable struct CoreSTDERR <: IO end
 const STDOUT = CoreSTDOUT()
 const STDERR = CoreSTDERR()
 io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Void}), 1, 1)
@@ -371,16 +420,16 @@ function write(io::IO, x::String)
     return nb
 end
 
-show(io::IO, x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any), io_pointer(io), x)
+show(io::IO, @nospecialize x) = ccall(:jl_static_show, Void, (Ptr{Void}, Any), io_pointer(io), x)
 print(io::IO, x::Char) = ccall(:jl_uv_putc, Void, (Ptr{Void}, Char), io_pointer(io), x)
-print(io::IO, x::String) = write(io, x)
-print(io::IO, x::ANY) = show(io, x)
-print(io::IO, x::ANY, a::ANY...) = (print(io, x); print(io, a...))
-println(io::IO) = write(io, 0x0a) # 0x0a = '\n'
-println(io::IO, x::ANY...) = (print(io, x...); println(io))
+print(io::IO, x::String) = (write(io, x); nothing)
+print(io::IO, @nospecialize x) = show(io, x)
+print(io::IO, @nospecialize(x), @nospecialize a...) = (print(io, x); print(io, a...))
+println(io::IO) = (write(io, 0x0a); nothing) # 0x0a = '\n'
+println(io::IO, @nospecialize x...) = (print(io, x...); println(io))
 
-show(a::ANY) = show(STDOUT, a)
-print(a::ANY...) = print(STDOUT, a...)
-println(a::ANY...) = println(STDOUT, a...)
+show(@nospecialize a) = show(STDOUT, a)
+print(@nospecialize a...) = print(STDOUT, a...)
+println(@nospecialize a...) = println(STDOUT, a...)
 
-ccall(:jl_set_istopmod, Void, (Bool,), true)
+ccall(:jl_set_istopmod, Void, (Any, Bool), Core, true)

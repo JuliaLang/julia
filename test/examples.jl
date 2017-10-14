@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 dir = joinpath(JULIA_HOME, Base.DOCDIR, "examples")
 
@@ -9,7 +9,7 @@ a = rand(1:100,100)
 include(joinpath(dir, "lru.jl"))
 include(joinpath(dir, "lru_test.jl"))
 
-include(joinpath(dir, "modint.jl"))
+include(joinpath(dir, "ModInts.jl"))
 b = ModInts.ModInt{10}(2)
 c = ModInts.ModInt{10}(4)
 @test b + c == ModInts.ModInt{10}(6)
@@ -30,13 +30,14 @@ r3, r4 = meshgrid(1:10,1:10)
 @test r4 == r
 
 include(joinpath(dir, "queens.jl"))
-@test solve(8, 8, 1) == Array{Int,1}[[1,1]]
-@test solve(8, 8, 7) == Array{Int,1}[[1,1],[2,3],[3,5],[4,2],[5,8],[7,4],[8,7]]
+@test trysolve(8, 8, 1) == (Queen(1,1),)
+@test trysolve(8, 8, 7) ==
+    (Queen(1,1), Queen(2,3), Queen(3,5), Queen(4,2), Queen(5,8), Queen(7,4), Queen(8,7))
 
 # Different cluster managers do not play well together. Since
 # the test infrastructure already uses LocalManager, we will test the simple
 # cluster manager example through a new Julia session.
-if is_unix()
+if Sys.isunix()
     script = joinpath(dir, "clustermanager/simple/test_simple.jl")
     cmd = `$(Base.julia_cmd()) --startup-file=no $script`
     if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR)) && ccall(:jl_running_on_valgrind,Cint,()) == 0
@@ -73,18 +74,5 @@ put!(dc, "Hello", "World")
 
 # At least make sure code loads
 include(joinpath(dir, "wordcount.jl"))
-
-# the 0mq clustermanager depends on package ZMQ. Just making sure the
-# code loads using a stub module definition for ZMQ.
-zmq_found=true
-try
-    using ZMQ
-catch
-    zmq_found=false
-end
-
-if !zmq_found
-    eval(Main, parse("module ZMQ end"))
-end
 
 include(joinpath(dir, "clustermanager/0mq/ZMQCM.jl"))

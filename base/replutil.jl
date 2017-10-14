@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # fallback text/plain representation of any type:
 show(io::IO, ::MIME"text/plain", x) = show(io, x)
@@ -15,14 +15,14 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator}
         rows < 2 && (print(io, " …"); return)
         cols < 4 && (cols = 4)
         cols -= 2 # For prefix "  "
-        rows -= 2 # For summary and final ⋮ continuation lines
+        rows -= 1 # For summary
     else
-        rows = cols = 0
+        rows = cols = typemax(Int)
     end
 
     for (i, v) in enumerate(iter)
         print(io, "\n  ")
-        limit && i >= rows && (print(io, "⋮"); break)
+        i == rows < length(iter) && (print(io, "⋮"); break)
 
         if limit
             str = sprint(0, show, v, env=io)
@@ -34,17 +34,17 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator}
     end
 end
 
-function show{K,V}(io::IO, ::MIME"text/plain", t::Associative{K,V})
+function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
     if !haskey(io, :compact)
-        recur_io = IOContext(recur_io, compact=true)
+        recur_io = IOContext(recur_io, :compact => true)
     end
 
     print(io, summary(t))
     isempty(t) && return
-    print(io, ":\n  ")
+    print(io, ":")
     show_circular(io, t) && return
     if limit
         sz = displaysize(io)
@@ -52,11 +52,11 @@ function show{K,V}(io::IO, ::MIME"text/plain", t::Associative{K,V})
         rows < 2   && (print(io, " …"); return)
         cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
         cols -= 6 # Subtract the widths of prefix "  " separator " => "
-        rows -= 2 # Subtract the summary and final ⋮ continuation lines
+        rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
-        ks = Array{AbstractString}(min(rows, length(t)))
-        vs = Array{AbstractString}(min(rows, length(t)))
+        ks = Vector{AbstractString}(min(rows, length(t)))
+        vs = Vector{AbstractString}(min(rows, length(t)))
         keylen = 0
         vallen = 0
         for (i, (k, v)) in enumerate(t)
@@ -70,14 +70,12 @@ function show{K,V}(io::IO, ::MIME"text/plain", t::Associative{K,V})
             keylen = max(cld(cols, 3), cols - vallen)
         end
     else
-        rows = cols = 0
+        rows = cols = typemax(Int)
     end
 
-    first = true
     for (i, (k, v)) in enumerate(t)
-        first || print(io, "\n  ")
-        first = false
-        limit && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+        print(io, "\n  ")
+        i == rows < length(t) && (print(io, rpad("⋮", keylen), " => ⋮"); break)
 
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
@@ -101,7 +99,7 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     mt = ft.name.mt
     if isa(f, Core.IntrinsicFunction)
         show(io, f)
-        id = Core.Intrinsics.box(Int32, f)
+        id = Core.Intrinsics.bitcast(Int32, f)
         print(io, " (intrinsic function #$id)")
     elseif isa(f, Core.Builtin)
         print(io, mt.name, " (built-in function)")
@@ -111,7 +109,8 @@ function show(io::IO, ::MIME"text/plain", f::Function)
                  ft == typeof(getfield(ft.name.module, name))
         n = length(methods(f))
         m = n==1 ? "method" : "methods"
-        ns = isself ? string(name) : string("(::", name, ")")
+        sname = string(name)
+        ns = (isself || '#' in sname) ? sname : string("(::", ft, ")")
         what = startswith(ns, '@') ? "macro" : "generic function"
         print(io, ns, " (", what, " with $n $m)")
     end
@@ -138,7 +137,7 @@ function show(io::IO, ::MIME"text/plain", t::Task)
 end
 
 show(io::IO, ::MIME"text/plain", X::AbstractArray) = showarray(io, X, false)
-show(io::IO, ::MIME"text/plain", r::Range) = show(io, r) # always use the compact form for printing ranges
+show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
 # display something useful even for strings containing arbitrary
 # (non-UTF8) binary data:
@@ -151,8 +150,30 @@ function show(io::IO, ::MIME"text/plain", s::String)
     end
 end
 
+function show(io::IO, ::MIME"text/plain", opt::JLOptions)
+    println(io, "JLOptions(")
+    fields = fieldnames(JLOptions)
+    nfields = length(fields)
+    for (i, f) in enumerate(fields)
+        v = getfield(opt, i)
+        if isa(v, Ptr{UInt8})
+            v = (v != C_NULL) ? unsafe_string(v) : ""
+        elseif isa(v, Ptr{Ptr{UInt8}})
+            v = unsafe_load_commands(v)
+        end
+        println(io, "  ", f, " = ", repr(v), i < nfields ? "," : "")
+    end
+    print(io, ")")
+end
+
+
 # showing exception objects as descriptive error messages
 
+"""
+    showerror(io, e)
+
+Show a descriptive representation of an exception object.
+"""
 showerror(io::IO, ex) = show(io, ex)
 
 function showerror(io::IO, ex::BoundsError)
@@ -167,10 +188,10 @@ function showerror(io::IO, ex::BoundsError)
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
-            if isa(ex.i, Range)
+            if isa(ex.i, AbstractRange)
                 print(io, ex.i)
             else
-                join(io, ex.i, ',')
+                join(io, ex.i, ", ")
             end
             print(io, ']')
         end
@@ -179,7 +200,6 @@ end
 
 function showerror(io::IO, ex::TypeError)
     print(io, "TypeError: ")
-    ctx = isempty(ex.context) ? "" : "in $(ex.context), "
     if ex.expected === Bool
         print(io, "non-boolean ($(typeof(ex.got))) used in boolean context")
     else
@@ -188,7 +208,12 @@ function showerror(io::IO, ex::TypeError)
         else
             tstr = string(typeof(ex.got))
         end
-        print(io, "$(ex.func): $(ctx)expected $(ex.expected), got $tstr")
+        if isempty(ex.context)
+            ctx = "in $(ex.func)"
+        else
+            ctx = "in $(ex.func), in $(ex.context)"
+        end
+        print(io, ctx, ", expected $(ex.expected), got ", tstr)
     end
 end
 
@@ -205,7 +230,7 @@ end
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
     print(io, "LoadError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)
-    print(io, "\nwhile loading $(ex.file), in expression starting on line $(ex.line)")
+    print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
@@ -217,29 +242,16 @@ end
 showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 
 function showerror(io::IO, ex::DomainError, bt; backtrace=true)
-    print(io, "DomainError:")
-    for b in bt
-        code = StackTraces.lookup(b)[1]
-        if !code.from_c
-            if code.func == :nan_dom_err
-                continue
-            elseif code.func in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                print(io, "\n$(code.func) will only return a complex result if called ",
-                    "with a complex argument. Try $(string(code.func))(complex(x)).")
-            elseif (code.func == :^ && code.file == Symbol("intfuncs.jl")) ||
-                    code.func == :power_by_squaring #3024
-                print(io, "\nCannot raise an integer x to a negative power -n. ",
-                    "\nMake x a float by adding a zero decimal (e.g. 2.0^-n instead ",
-                    "of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
-            elseif code.func == :^ &&
-                    (code.file == Symbol("promotion.jl") || code.file == Symbol("math.jl") ||
-                    code.file == Symbol(joinpath(".","promotion.jl")) ||
-                    code.file == Symbol(joinpath(".","math.jl")))
-                print(io, "\nExponentiation yielding a complex result requires a complex ",
-                    "argument.\nReplace x^y with (x+0im)^y, Complex(x)^y, or similar.")
-            end
-            break
-        end
+    if isa(ex.val, AbstractArray)
+        compact = get(io, :compact, true)
+        limit = get(io, :limit, true)
+        print(IOContext(io, :compact => compact, :limit => limit),
+              "DomainError with ", ex.val)
+    else
+        print(io, "DomainError with ", ex.val)
+    end
+    if isdefined(ex, :msg)
+        print(io, ":\n", ex.msg)
     end
     backtrace && show_backtrace(io, bt)
     nothing
@@ -267,6 +279,7 @@ showerror(io::IO, ex::KeyError) = print(io, "KeyError: key $(repr(ex.key)) not f
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
 showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
+showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: $(ex.msg)")
 
 function showerror(io::IO, ex::UndefVarError)
     if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring, :RepString]
@@ -277,6 +290,10 @@ function showerror(io::IO, ex::UndefVarError)
         """))
     end
     print(io, "UndefVarError: $(ex.var) not defined")
+end
+
+function showerror(io::IO, ex::InexactError)
+    print(io, "InexactError: ", ex.func, '(', ex.T, ", ", ex.val, ')')
 end
 
 function showerror(io::IO, ex::MethodError)
@@ -322,6 +339,18 @@ function showerror(io::IO, ex::MethodError)
             f_is_function = true
             print(io, "no method matching ", name)
         elseif isa(f, Type)
+            if isa(f, DataType) && f.abstract
+                # Print a more appropriate message if the only method
+                # on the type is the default one from sysimg.jl.
+                ms = methods(f)
+                if length(ms) == 1
+                    m = first(ms)
+                    if Base.is_default_method(m)
+                        print(io, "no constructors have been defined for $f")
+                        return
+                    end
+                end
+            end
             print(io, "no method matching ", f)
         else
             print(io, "no method matching (::", ft, ")")
@@ -335,7 +364,7 @@ function showerror(io::IO, ex::MethodError)
             print(io, "; ")
             for (i, (k, v)) in enumerate(kwargs)
                 print(io, k, "=")
-                show(IOContext(io, :limit=>true), v)
+                show(IOContext(io, :limit => true), v)
                 i == length(kwargs) || print(io, ", ")
             end
         end
@@ -352,7 +381,8 @@ function showerror(io::IO, ex::MethodError)
             print(io, "You may have intended to import Base.", name)
         end
     end
-    if method_exists(ex.f, arg_types)
+    if (ex.world != typemax(UInt) && method_exists(ex.f, arg_types) &&
+        !method_exists(ex.f, arg_types, ex.world))
         curworld = ccall(:jl_get_world_counter, UInt, ())
         println(io)
         print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
@@ -389,7 +419,7 @@ function showerror(io::IO, ex::MethodError)
     end
 end
 
-striptype{T}(::Type{T}) = T
+striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
 function showerror_ambiguous(io::IO, meth, f, args)
@@ -400,8 +430,14 @@ function showerror_ambiguous(io::IO, meth, f, args)
         i < length(p) && print(io, ", ")
     end
     print(io, ") is ambiguous. Candidates:")
+    sigfix = Any
     for m in meth
         print(io, "\n  ", m)
+        sigfix = typeintersect(m.sig, sigfix)
+    end
+    if isa(unwrap_unionall(sigfix), DataType) && sigfix <: Tuple
+        print(io, "\nPossible fix, define\n  ")
+        Base.show_tuple_as_call(io, :function,  sigfix)
     end
     nothing
 end
@@ -434,7 +470,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && isleaftype(at1)
+        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && !Core.Inference.has_free_typevars(at1)
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end
@@ -442,7 +478,15 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     for (func,arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
-            sig0 = unwrap_unionall(method.sig)
+            tv = Any[]
+            sig0 = method.sig
+            if Base.is_default_method(method)
+                continue
+            end
+            while isa(sig0, UnionAll)
+                push!(tv, sig0.var)
+                sig0 = sig0.body
+            end
             s1 = sig0.parameters[1]
             sig = sig0.parameters[2:end]
             print(buf, "  ")
@@ -453,13 +497,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 # TODO: use the methodshow logic here
                 use_constructor_syntax = isa(func, Type)
                 print(buf, use_constructor_syntax ? func : typeof(func).name.mt.name)
-            end
-            tv = method.tvars
-            if !isa(tv,SimpleVector)
-                tv = Any[tv]
-            end
-            if !isempty(tv)
-                show_delim_array(buf, tv, '{', ',', '}', false)
             end
             print(buf, "(")
             t_i = copy(arg_types_param)
@@ -515,6 +552,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                     # If the methods args is longer than input then the method
                     # arguments is printed as not a match
                     for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
+                        sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
                         if Base.isvarargtype(sigtype)
                             sigstr = string(sigtype.parameters[1], "...")
                         else
@@ -539,6 +577,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                     length(kwords) > 0 && print(buf, "; ", join(kwords, ", "))
                 end
                 print(buf, ")")
+                show_method_params(buf, tv)
                 print(buf, " at ", method.file, ":", method.line)
                 if !isempty(kwargs)
                     unexpected = Symbol[]
@@ -558,9 +597,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 end
                 if ex.world < min_world(method)
                     print(buf, " (method too new to be called from this world context.)")
-                end
-                if ex.world > max_world(method)
-                    print(buf, " (method deleted before this world age.)")
                 end
                 # TODO: indicate if it's in the wrong world
                 push!(lines, (buf, right_matches))
@@ -587,27 +623,27 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     end
 end
 
-function show_trace_entry(io, frame, n; prefix = " in ")
-    print(io, "\n")
-    show(io, frame, full_path=true; prefix = prefix)
+function show_trace_entry(io, frame, n; prefix = "")
+    print(io, "\n", prefix)
+    show(io, frame, full_path=true)
     n > 1 && print(io, " (repeats ", n, " times)")
 end
 
 # Contains file name and file number. Gets set when a backtrace
-# is shown. Used by the REPL to make it possible to open
-# the location of a stackframe in the edítor.
-global LAST_BACKTRACE_LINE_INFOS = Tuple{String, Int}[]
+# or methodlist is shown. Used by the REPL to make it possible to open
+# the location of a stackframe/method in the editor.
+global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
 
 function show_backtrace(io::IO, t::Vector)
     n_frames = 0
     frame_counter = 0
-    resize!(LAST_BACKTRACE_LINE_INFOS, 0)
+    resize!(LAST_SHOWN_LINE_INFOS, 0)
     process_backtrace((a,b) -> n_frames += 1, t)
     n_frames != 0 && print(io, "\nStacktrace:")
     process_entry = (last_frame, n) -> begin
         frame_counter += 1
-        show_trace_entry(io, last_frame, n, prefix = string(" [", frame_counter, "] "))
-        push!(LAST_BACKTRACE_LINE_INFOS, (string(last_frame.file), last_frame.line))
+        show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
+        push!(LAST_SHOWN_LINE_INFOS, (string(last_frame.file), last_frame.line))
     end
     process_backtrace(process_entry, t)
 end
@@ -649,4 +685,12 @@ function process_backtrace(process_func::Function, t::Vector, limit::Int=typemax
     if n > 0
         process_func(last_frame, n)
     end
+end
+
+"""
+Determines whether a method is the default method which is provided to all types from sysimg.jl.
+Such a method is usually undesirable to be displayed to the user in the REPL.
+"""
+function is_default_method(m::Method)
+    return m.module == Base && m.file == Symbol("sysimg.jl") && m.sig == Tuple{Type{T},Any} where T
 end

@@ -12,12 +12,14 @@ Base.:\(::Any, ::Any)
 Base.:^(::Number, ::Number)
 Base.fma
 Base.muladd
+Base.inv(::Number)
 Base.div
 Base.fld
 Base.cld
 Base.mod
-Base.Math.mod2pi
 Base.rem
+Base.rem2pi
+Base.Math.mod2pi
 Base.divrem
 Base.fldmod
 Base.fld1
@@ -33,6 +35,7 @@ Base.:(>>>)
 Base.colon
 Base.range
 Base.OneTo
+Base.StepRangeLen
 Base.:(==)
 Base.:(!=)
 Base.:(!==)
@@ -56,6 +59,7 @@ Base.:(!)
 Base.isapprox
 Base.sin
 Base.cos
+Base.sincos
 Base.tan
 Base.Math.sind
 Base.Math.cosd
@@ -151,13 +155,6 @@ Base.flipsign
 Base.sqrt
 Base.isqrt
 Base.Math.cbrt
-Base.Math.erf
-Base.Math.erfc
-Base.Math.erfcx
-Base.Math.erfi
-Base.Math.dawson
-Base.Math.erfinv
-Base.Math.erfcinv
 Base.real(::Complex)
 Base.imag
 Base.reim
@@ -180,44 +177,12 @@ Base.powermod
 Base.Math.gamma
 Base.Math.lgamma
 Base.Math.lfact
-Base.Math.digamma
-Base.Math.invdigamma
-Base.Math.trigamma
-Base.Math.polygamma
-Base.Math.airyai
-Base.Math.airyaiprime
-Base.Math.airyaix
-Base.Math.airyaiprimex
-Base.Math.airybi
-Base.Math.airybiprime
-Base.Math.airybix
-Base.Math.airybiprimex
-Base.Math.besselj0
-Base.Math.besselj1
-Base.Math.besselj
-Base.Math.besseljx
-Base.Math.bessely0
-Base.Math.bessely1
-Base.Math.bessely
-Base.Math.besselyx
-Base.Math.hankelh1
-Base.Math.hankelh1x
-Base.Math.hankelh2
-Base.Math.hankelh2x
-Base.Math.besselh
-Base.Math.besselhx
-Base.Math.besseli
-Base.Math.besselix
-Base.Math.besselk
-Base.Math.besselkx
 Base.Math.beta
 Base.Math.lbeta
-Base.Math.eta
-Base.Math.zeta(::Complex)
-Base.Math.zeta(::Any, ::Any)
 Base.ndigits
 Base.widemul
 Base.Math.@evalpoly
+Base.FastMath.@fastmath
 ```
 
 ## Statistics
@@ -236,55 +201,4 @@ Base.quantile
 Base.quantile!
 Base.cov
 Base.cor
-```
-
-## Signal Processing
-
-Fast Fourier transform (FFT) functions in Julia are implemented by calling functions from [FFTW](http://www.fftw.org).
-
-```@docs
-Base.DFT.fft
-Base.DFT.fft!
-Base.DFT.ifft
-Base.DFT.ifft!
-Base.DFT.bfft
-Base.DFT.bfft!
-Base.DFT.plan_fft
-Base.DFT.plan_ifft
-Base.DFT.plan_bfft
-Base.DFT.plan_fft!
-Base.DFT.plan_ifft!
-Base.DFT.plan_bfft!
-Base.DFT.rfft
-Base.DFT.irfft
-Base.DFT.brfft
-Base.DFT.plan_rfft
-Base.DFT.plan_brfft
-Base.DFT.plan_irfft
-Base.DFT.FFTW.dct
-Base.DFT.FFTW.dct!
-Base.DFT.FFTW.idct
-Base.DFT.FFTW.idct!
-Base.DFT.FFTW.plan_dct
-Base.DFT.FFTW.plan_dct!
-Base.DFT.FFTW.plan_idct
-Base.DFT.FFTW.plan_idct!
-Base.DFT.fftshift(::Any)
-Base.DFT.fftshift(::Any, ::Any)
-Base.DFT.ifftshift
-Base.DSP.filt
-Base.DSP.filt!
-Base.DSP.deconv
-Base.DSP.conv
-Base.DSP.conv2
-Base.DSP.xcorr
-```
-
-The following functions are defined within the `Base.FFTW` module.
-
-```@docs
-Base.DFT.FFTW.r2r
-Base.DFT.FFTW.r2r!
-Base.DFT.FFTW.plan_r2r
-Base.DFT.FFTW.plan_r2r!
 ```

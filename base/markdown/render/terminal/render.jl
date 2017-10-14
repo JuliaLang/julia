@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 include("formatting.jl")
 
@@ -24,7 +24,7 @@ function term(io::IO, md::Paragraph, columns)
 end
 
 function term(io::IO, md::BlockQuote, columns)
-    s = sprint(io->term(io, md.content, columns - 10))
+    s = sprint(term, md.content, columns - 10)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
@@ -34,7 +34,7 @@ function term(io::IO, md::Admonition, columns)
     print(io, " "^margin, "| ")
     with_output_format(:bold, print, io, isempty(md.title) ? md.category : md.title)
     println(io, "\n", " "^margin, "|")
-    s = sprint(io -> term(io, md.content, columns - 10))
+    s = sprint(term, md.content, columns - 10)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
@@ -44,7 +44,7 @@ function term(io::IO, f::Footnote, columns)
     print(io, " "^margin, "| ")
     with_output_format(:bold, print, io, "[^$(f.id)]")
     println(io, "\n", " "^margin, "|")
-    s = sprint(io -> term(io, f.text, columns - 10))
+    s = sprint(term, f.text, columns - 10)
     for line in split(rstrip(s), "\n")
         println(io, " "^margin, "|", line)
     end
@@ -63,21 +63,21 @@ end
 function _term_header(io::IO, md, char, columns)
     text = terminline(md.text)
     with_output_format(:bold, io) do io
-        print(io, " "^(2margin), " ")
+        print(io, " "^(margin))
         line_no, lastline_width = print_wrapped(io, text,
                                                 width=columns - 4margin; pre=" ")
         line_width = min(1 + lastline_width, columns)
         if line_no > 1
             line_width = max(line_width, div(columns, 3))
         end
-        char != ' ' && println(io, " "^(2margin), string(char) ^ line_width)
+        char != ' ' && println(io, " "^(margin), string(char) ^ line_width)
     end
 end
 
 const _header_underlines = collect("≡=–-⋅ ")
 # TODO settle on another option with unicode e.g. "≡=≃–∼⋅" ?
 
-function term{l}(io::IO, md::Header{l}, columns)
+function term(io::IO, md::Header{l}, columns) where l
     underline = _header_underlines[l]
     _term_header(io, md, underline, columns)
 end

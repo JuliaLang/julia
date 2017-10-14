@@ -26,10 +26,10 @@ Julia's flisp interpreter uses `value_t` objects; these can be displayed with `c
 ## Useful Julia variables for Inspecting
 
 While the addresses of many variables, like singletons, can be be useful to print for many failures,
-there are a number of additional variables (see julia.h for a complete list) that are even more
+there are a number of additional variables (see `julia.h` for a complete list) that are even more
 useful.
 
-  * (when in `jl_apply_generic`) `f->linfo` and `jl_uncompress_ast(f->linfo, f->linfo->ast)` :: for
+  * (when in `jl_apply_generic`) `mfunc` and `jl_uncompress_ast(mfunc->def, mfunc->code)` :: for
     figuring out a bit about the call-stack
   * `jl_lineno` and `jl_filename` :: for figuring out what line in a test to go start debugging from
     (or figure out how far into a file has been parsed)
@@ -234,9 +234,9 @@ process)
 
 ## Mozilla's Record and Replay Framework (rr)
 
-Julia now works out of the box with [rr,](http://rr-project.org/) the lightweight recording and
+Julia now works out of the box with [rr](http://rr-project.org/), the lightweight recording and
 deterministic debugging framework from Mozilla. This allows you to replay the trace of an execution
 deterministically.  The replayed execution's address spaces, register contents, syscall data etc
 are exactly the same in every run.
 
-A recent version of `rr` (3.1.0 or higher) is required.
+A recent version of rr (3.1.0 or higher) is required.

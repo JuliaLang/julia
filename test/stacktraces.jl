@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Tests for /base/stacktraces.jl
 
@@ -6,7 +6,7 @@ let
     @noinline child() = stacktrace()
     @noinline parent() = child()
     @noinline grandparent() = parent()
-    line_numbers = @__LINE__ - [3, 2, 1]
+    line_numbers = @__LINE__() .- [3, 2, 1]
     stack = grandparent()
 
     # Basic tests.
@@ -38,9 +38,8 @@ let
     @test isnull(frame2.linfo)
 end
 
-let
-    # Test from_c
-    default, with_c, without_c = stacktrace(), stacktrace(true), stacktrace(false)
+# Test from_c
+let (default, with_c, without_c) = (stacktrace(), stacktrace(true), stacktrace(false))
     @test default == without_c
     @test length(with_c) > length(without_c)
     @test !isempty(filter(frame -> frame.from_c, with_c))
@@ -69,7 +68,7 @@ let ct = current_task()
             return catch_stacktrace()
         end
     end
-    line_numbers = @__LINE__ .- [15, 10, 5]
+    line_numbers = @__LINE__() .- [15, 10, 5]
 
     # Test try...catch with stacktrace
     @test try_stacktrace()[1] == StackFrame(:try_stacktrace, @__FILE__, line_numbers[2])
@@ -82,7 +81,7 @@ let ct = current_task()
 end
 
 module inlined_test
-using Base.Test
+using Test
 @inline g(x) = (y = throw("a"); y) # the inliner does not insert the proper markers when inlining a single expression
 @inline h(x) = (y = g(x); y)       # this test could be extended to check for that if we switch to linear representation
 f(x) = (y = h(x); y)
@@ -99,20 +98,21 @@ for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false
 end
 end
 
-let src = expand(quote let x = 1 end end).args[1]::CodeInfo,
+let src = expand(Main, quote let x = 1 end end).args[1]::CodeInfo,
     li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
     sf
 
     li.inferred = src
     li.specTypes = Tuple{}
+    li.def = @__MODULE__
     sf = StackFrame(:a, :b, 3, li, false, false, 0)
     repr = string(sf)
-    @test repr == " in Toplevel MethodInstance thunk at b:3"
+    @test repr == "Toplevel MethodInstance thunk at b:3"
 end
 let li = typeof(getfield).name.mt.cache.func::Core.MethodInstance,
     sf = StackFrame(:a, :b, 3, li, false, false, 0),
     repr = string(sf)
-    @test repr == " in getfield(...) at b:3"
+    @test repr == "getfield(...) at b:3"
 end
 
 let ctestptr = cglobal((:ctest, "libccalltest")),
@@ -125,11 +125,21 @@ let ctestptr = cglobal((:ctest, "libccalltest")),
     @test ctest[1].pointer === UInt64(ctestptr)
 end
 
-# #19655
-let
+# issue #19655
+let st = stacktrace(empty!(backtrace()))
     # not in a `catch`, so should return an empty StackTrace
-    st = stacktrace(empty!(backtrace()))
-
     @test isempty(st)
     @test isa(st, StackTrace)
 end
+
+module StackTracesTestMod
+    unfiltered_stacktrace() = stacktrace()
+    filtered_stacktrace() = StackTraces.remove_frames!(stacktrace(), StackTracesTestMod)
+end
+
+# Test that `removes_frames!` can correctly remove frames from within the module
+trace = StackTracesTestMod.unfiltered_stacktrace()
+@test contains(string(trace), "unfiltered_stacktrace")
+
+trace = StackTracesTestMod.filtered_stacktrace()
+@test !contains(string(trace), "filtered_stacktrace")

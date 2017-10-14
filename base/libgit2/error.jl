@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Error
 
@@ -58,12 +58,12 @@ export GitError
              Describe,
              Rebase)
 
-immutable ErrorStruct
+struct ErrorStruct
     message::Ptr{UInt8}
     class::Cint
 end
 
-immutable GitError <: Exception
+struct GitError <: Exception
     class::Class
     code::Code
     msg::AbstractString

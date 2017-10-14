@@ -1,5 +1,5 @@
 #!/bin/sh
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Script to download newest version of cmake on linux (or mac)
 # saves you the trouble of compiling it if you don't have root

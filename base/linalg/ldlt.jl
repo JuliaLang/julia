@@ -1,27 +1,47 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-immutable LDLt{T,S<:AbstractMatrix} <: Factorization{T}
+struct LDLt{T,S<:AbstractMatrix} <: Factorization{T}
     data::S
 end
 
 size(S::LDLt) = size(S.data)
 size(S::LDLt, i::Integer) = size(S.data, i)
 
-convert{T,S}(::Type{LDLt{T,S}}, F::LDLt) = LDLt{T,S}(convert(S, F.data))
+convert(::Type{LDLt{T,S}}, F::LDLt) where {T,S} = LDLt{T,S}(convert(S, F.data))
 # NOTE: the annotaion <:AbstractMatrix shouldn't be necessary, it is introduced
 #       to avoid an ambiguity warning (see issue #6383)
-convert{T,S,U<:AbstractMatrix}(::Type{LDLt{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
+convert(::Type{LDLt{T}}, F::LDLt{S,U}) where {T,S,U<:AbstractMatrix} = convert(LDLt{T,U}, F)
 
-convert{T}(::Type{Factorization{T}}, F::LDLt{T}) = F
-convert{T,S,U}(::Type{Factorization{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
+convert(::Type{Factorization{T}}, F::LDLt{T}) where {T} = F
+convert(::Type{Factorization{T}}, F::LDLt{S,U}) where {T,S,U} = convert(LDLt{T,U}, F)
 
 # SymTridiagonal
 """
     ldltfact!(S::SymTridiagonal) -> LDLt
 
-Same as [`ldltfact`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
+Same as [`ldltfact`](@ref), but saves space by overwriting the input `S`, instead of creating a copy.
+
+# Examples
+```jldoctest
+julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
+3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+ 3.0  1.0   ⋅
+ 1.0  4.0  2.0
+  ⋅   2.0  5.0
+
+julia> ldltS = ldltfact!(S);
+
+julia> ldltS === S
+false
+
+julia> S
+3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+ 3.0       0.333333   ⋅
+ 0.333333  3.66667   0.545455
+  ⋅        0.545455  3.90909
+```
 """
-function ldltfact!{T<:Real}(S::SymTridiagonal{T})
+function ldltfact!(S::SymTridiagonal{T,V}) where {T<:Real,V}
     n = size(S,1)
     d = S.dv
     e = S.ev
@@ -29,24 +49,49 @@ function ldltfact!{T<:Real}(S::SymTridiagonal{T})
         e[i] /= d[i]
         d[i+1] -= abs2(e[i])*d[i]
     end
-    return LDLt{T,SymTridiagonal{T}}(S)
+    return LDLt{T,SymTridiagonal{T,V}}(S)
 end
 
 """
     ldltfact(S::SymTridiagonal) -> LDLt
 
-Compute an `LDLt` factorization of a real symmetric tridiagonal matrix such that `A = L*Diagonal(d)*L'`
+Compute an `LDLt` factorization of the real symmetric tridiagonal matrix `S` such that `S = L*Diagonal(d)*L'`
 where `L` is a unit lower triangular matrix and `d` is a vector. The main use of an `LDLt`
-factorization `F = ldltfact(A)` is to solve the linear system of equations `Ax = b` with `F\\b`.
+factorization `F = ldltfact(S)` is to solve the linear system of equations `Sx = b` with `F\\b`.
+
+# Examples
+```jldoctest
+julia> S = SymTridiagonal([3., 4., 5.], [1., 2.])
+3×3 SymTridiagonal{Float64,Array{Float64,1}}:
+ 3.0  1.0   ⋅
+ 1.0  4.0  2.0
+  ⋅   2.0  5.0
+
+julia> ldltS = ldltfact(S);
+
+julia> b = [6., 7., 8.];
+
+julia> ldltS\b
+3-element Array{Float64,1}:
+ 1.7906976744186047
+ 0.627906976744186
+ 1.3488372093023255
+
+julia> S\b
+3-element Array{Float64,1}:
+ 1.7906976744186047
+ 0.627906976744186
+ 1.3488372093023255
+```
 """
-function ldltfact{T}(M::SymTridiagonal{T})
+function ldltfact(M::SymTridiagonal{T}) where T
     S = typeof(zero(T)/one(T))
     return S == T ? ldltfact!(copy(M)) : ldltfact!(convert(SymTridiagonal{S}, M))
 end
 
 factorize(S::SymTridiagonal) = ldltfact(S)
 
-function A_ldiv_B!{T}(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T})
+function A_ldiv_B!(S::LDLt{T,M}, B::AbstractVecOrMat{T}) where {T,M<:SymTridiagonal{T}}
     n, nrhs = size(B, 1), size(B, 2)
     if size(S,1) != n
         throw(DimensionMismatch("Matrix has dimensions $(size(S)) but right hand side has first dimension $n"))
@@ -74,6 +119,11 @@ function A_ldiv_B!{T}(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T})
         end
     end
     return B
+end
+
+function logabsdet(F::LDLt{<:Any,<:SymTridiagonal})
+    it = (F.data[i,i] for i in 1:size(F, 1))
+    return sum(log∘abs, it), prod(sign, it)
 end
 
 # Conversion methods

@@ -53,16 +53,24 @@ ifeq ($(USE_GPL_LIBS), 1)
 else
 	@echo "const USE_GPL_LIBS = false" >> $@
 endif
-	@echo "const libfftw_name = \"$(LIBFFTWNAME)\"" >> $@
-	@echo "const libfftwf_name = \"$(LIBFFTWFNAME)\"" >> $@
-	@echo "const libllvm_version = \"$$($(LLVM_CONFIG_HOST) --version)\"" >> $@
+	@echo "const libllvm_version_string = \"$$($(LLVM_CONFIG_HOST) --version)\"" >> $@
 	@echo "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
 	@echo "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@
+ifeq ($(OS),WINNT)
+	@printf 'const SYSCONFDIR = "%s"\n' '$(subst /,\\,$(sysconfdir_rel))' >> $@
+	@printf 'const DATAROOTDIR = "%s"\n' '$(subst /,\\,$(datarootdir_rel))' >> $@
+	@printf 'const DOCDIR = "%s"\n' '$(subst /,\\,$(docdir_rel))' >> $@
+	@printf 'const LIBDIR = "%s"\n' '$(subst /,\\,$(libdir_rel))' >> $@
+	@printf 'const PRIVATE_LIBDIR = "%s"\n' '$(subst /,\\,$(private_libdir_rel))' >> $@
+	@printf 'const INCLUDEDIR = "%s"\n' '$(subst /,\\,$(includedir_rel))' >> $@
+else
 	@echo "const SYSCONFDIR = \"$(sysconfdir_rel)\"" >> $@
 	@echo "const DATAROOTDIR = \"$(datarootdir_rel)\"" >> $@
 	@echo "const DOCDIR = \"$(docdir_rel)\"" >> $@
 	@echo "const LIBDIR = \"$(libdir_rel)\"" >> $@
+	@echo "const PRIVATE_LIBDIR = \"$(private_libdir_rel)\"" >> $@
 	@echo "const INCLUDEDIR = \"$(includedir_rel)\"" >> $@
+endif
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible

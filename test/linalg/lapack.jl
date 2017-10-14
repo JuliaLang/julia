@@ -1,6 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 import Base.LinAlg.BlasInt
 
@@ -10,8 +10,7 @@ import Base.LinAlg.BlasInt
 @test_throws ArgumentError Base.LinAlg.LAPACK.chktrans('Z')
 
 @testset "syevr" begin
-    let
-        srand(123)
+    guardsrand(123) do
         Ainit = randn(5,5)
         @testset for elty in (Float32, Float64, Complex64, Complex128)
             if elty == Complex64 || elty == Complex128
@@ -52,7 +51,7 @@ end
             d, e = convert(Vector{elty}, randn(n)), convert(Vector{elty}, randn(n - 1))
             U, Vt, C = eye(elty, n), eye(elty, n), eye(elty, n)
             s, _ = LAPACK.bdsqr!('U', copy(d), copy(e), Vt, U, C)
-            @test Array(Bidiagonal(d, e, true)) ≈ U*Diagonal(s)*Vt
+            @test Array(Bidiagonal(d, e, :U)) ≈ U*Diagonal(s)*Vt
 
             @test_throws ArgumentError LAPACK.bdsqr!('A', d, e, Vt, U, C)
             @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, [e; 1], Vt, U, C)
@@ -172,7 +171,7 @@ end
         @test V' ≈ lVt
         B = rand(elty,10,10)
         # xggsvd3 replaced xggsvd in LAPACK 3.6.0
-        if LAPACK.laver() < (3, 6, 0)
+        if LAPACK.version() < v"3.6.0"
             @test_throws DimensionMismatch LAPACK.ggsvd!('S','S','S',A,B)
         else
             @test_throws DimensionMismatch LAPACK.ggsvd3!('S','S','S',A,B)
@@ -316,6 +315,15 @@ end
         @test_throws DimensionMismatch LAPACK.ormrq!('R','N',A,zeros(elty,11),rand(elty,10,10))
         @test_throws DimensionMismatch LAPACK.ormrq!('L','N',A,zeros(elty,11),rand(elty,10,10))
 
+        A = rand(elty,10,11)
+        Q = copy(A)
+        Q,tau = LAPACK.gerqf!(Q)
+        R = triu(Q[:,2:11])
+        LAPACK.orgrq!(Q,tau)
+        @test Q*Q' ≈ eye(elty,10)
+        @test R*Q ≈ A
+        @test_throws DimensionMismatch LAPACK.orgrq!(zeros(elty,11,10),zeros(elty,10))
+
         C = rand(elty,10,10)
         V = rand(elty,10,10)
         T = zeros(elty,10,11)
@@ -448,40 +456,42 @@ end
 
 @testset "ptsv" begin
     @testset for elty in (Float32, Float64, Complex64, Complex128)
-        dv = real(ones(elty,10))
+        dv = ones(elty,10)
         ev = zeros(elty,9)
+        rdv = real(dv)
         A = SymTridiagonal(dv,ev)
         if elty <: Complex
             A = Tridiagonal(conj(ev),dv,ev)
         end
         B = rand(elty,10,10)
         C = copy(B)
-        @test A\B ≈ LAPACK.ptsv!(dv,ev,C)
-        @test_throws DimensionMismatch LAPACK.ptsv!(dv,ones(elty,10),C)
-        @test_throws DimensionMismatch LAPACK.ptsv!(dv,ev,ones(elty,11,11))
+        @test A\B ≈ LAPACK.ptsv!(rdv,ev,C)
+        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,ones(elty,10),C)
+        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,ev,ones(elty,11,11))
     end
 end
 
 @testset "pttrf and pttrs" begin
     @testset for elty in (Float32, Float64, Complex64, Complex128)
-        dv = real(ones(elty,10))
+        dv = ones(elty,10)
         ev = zeros(elty,9)
+        rdv = real(dv)
         A = SymTridiagonal(dv,ev)
         if elty <: Complex
             A = Tridiagonal(conj(ev),dv,ev)
         end
-        dv,ev = LAPACK.pttrf!(dv,ev)
-        @test_throws DimensionMismatch LAPACK.pttrf!(dv,ones(elty,10))
+        rdv,ev = LAPACK.pttrf!(rdv,ev)
+        @test_throws DimensionMismatch LAPACK.pttrf!(rdv,dv)
         B = rand(elty,10,10)
         C = copy(B)
         if elty <: Complex
-            @test A\B ≈ LAPACK.pttrs!('U',dv,ev,C)
-            @test_throws DimensionMismatch LAPACK.pttrs!('U',dv,ones(elty,10),C)
-            @test_throws DimensionMismatch LAPACK.pttrs!('U',dv,ev,rand(elty,11,11))
+            @test A\B ≈ LAPACK.pttrs!('U',rdv,ev,C)
+            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,ones(elty,10),C)
+            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,ev,rand(elty,11,11))
         else
-            @test A\B ≈ LAPACK.pttrs!(dv,ev,C)
-            @test_throws DimensionMismatch LAPACK.pttrs!(dv,ones(elty,10),C)
-            @test_throws DimensionMismatch LAPACK.pttrs!(dv,ev,rand(elty,11,11))
+            @test A\B ≈ LAPACK.pttrs!(rdv,ev,C)
+            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,ones(elty,10),C)
+            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,ev,rand(elty,11,11))
         end
     end
 end
@@ -553,22 +563,34 @@ end
     end
 end
 
-@testset "trexc" begin
+@testset "trsen" begin
     @testset for elty in (Float32, Float64, Complex64, Complex128)
-        for c in ('V', 'N')
-            A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
-            T,Q,d = schur(A)
-            Base.LinAlg.LAPACK.trsen!('N',c,Array{LinAlg.BlasInt}([0,1,0,0]),T,Q)
-            @test d[1] ≈ T[2,2]
-            @test d[2] ≈ T[1,1]
-            if c == 'V'
-                @test  Q*T*Q' ≈ A
+        for job in ('N', 'E', 'V', 'B')
+            for c in ('V', 'N')
+                A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
+                T,Q,d = schur(A)
+                s, sep = Base.LinAlg.LAPACK.trsen!(job,c,Array{LinAlg.BlasInt}([0,1,0,0]),T,Q)[4:5]
+                @test d[1] ≈ T[2,2]
+                @test d[2] ≈ T[1,1]
+                if c == 'V'
+                    @test  Q*T*Q' ≈ A
+                end
+                if job == 'N' || job == 'V'
+                    @test iszero(s)
+                else
+                    @test s ≈ 0.8080423 atol=1e-6
+                end
+                if job == 'N' || job == 'E'
+                    @test iszero(sep)
+                else
+                    @test sep ≈ 2. atol=3e-1
+                end
             end
         end
     end
 end
 
-@testset "trexc and trsen" begin
+@testset "trexc" begin
     @testset for elty in (Float32, Float64, Complex64, Complex128)
         for c in ('V', 'N')
             A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
@@ -611,7 +633,7 @@ end
 
 # Issue 13976
 let A = [NaN 0.0 NaN; 0 0 0; NaN 0 NaN]
-    @test_throws ArgumentError expm(A)
+    @test_throws ArgumentError exp(A)
 end
 
 # Issue 14065 (and 14220)

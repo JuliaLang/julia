@@ -1,22 +1,25 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @test ifelse(true, 1, 2) == 1
 @test ifelse(false, 1, 2) == 2
 
-s = Set()
-ifelse(true, push!(s, 1), push!(s, 2))
-@test s == Set([1, 2])
+let s = Set()
+    ifelse(true, push!(s, 1), push!(s, 2))
+    @test s == Set([1, 2])
+end
 
-s = Set()
-true ? push!(s, 1) : push!(s, 2)
-false ? push!(s, 3) : push!(s, 4)
-@test s == Set([1, 4])
+let s = Set()
+    true ? push!(s, 1) : push!(s, 2)
+    false ? push!(s, 3) : push!(s, 4)
+    @test s == Set([1, 4])
+end
 
-B = [true true false]
-@test ifelse.(B, 1, 2) == [1 1 2]
-@test ifelse.(B, 1, [2 3 4]) == [1 1 4]
-@test ifelse.(B, [2 3 4], 1) == [2 3 1]
-@test ifelse.(B, [2 3 4], [5 6 7]) == [2 3 7]
+let B = [true true false]
+    @test ifelse.(B, 1, 2) == [1 1 2]
+    @test ifelse.(B, 1, [2 3 4]) == [1 1 4]
+    @test ifelse.(B, [2 3 4], 1) == [2 3 1]
+    @test ifelse.(B, [2 3 4], [5 6 7]) == [2 3 7]
+end
 
 @test reverse(Pair(1,2)) == Pair(2,1)
 @test reverse(Pair("13","24")) == Pair("24","13")
@@ -49,14 +52,35 @@ p = 1=>:foo
 @test xor(2) == 2
 @test (⊻)(2) == 2
 
-# @test ctranspose('a') == 'a' # (c)transpose of Chars no longer supported
-
 @test_throws ArgumentError Base.scalarmin(['a','b'],['c','d'])
 @test_throws ArgumentError Base.scalarmin('a',['c','d'])
 @test_throws ArgumentError Base.scalarmin(['a','b'],'c')
 @test_throws ArgumentError Base.scalarmax(['a','b'],['c','d'])
 @test_throws ArgumentError Base.scalarmax('a',['c','d'])
 @test_throws ArgumentError Base.scalarmax(['a','b'],'c')
+
+@test_throws MethodError min(Set([1]), Set([2]))
+@test_throws MethodError max(Set([1]), Set([2]))
+@test_throws MethodError minmax(Set([1]), Set([2]))
+
+# Test if isless (not <) is used by min, max, minmax
+# and commutativity.
+struct TO23094
+    x::Int
+end
+Base.isless(a::TO23094, b::TO23094) = isless(a.x, b.x)
+Base.isequal(a::TO23094, b::TO23094) = isequal(a.x, b.x)
+import Base.<
+<(a::TO23094, b::TO23094) = error("< should not be called")
+
+@test isequal(min(TO23094(1), TO23094(2)), TO23094(1))
+@test isequal(min(TO23094(2), TO23094(1)), TO23094(1))
+@test isequal(max(TO23094(1), TO23094(2)), TO23094(2))
+@test isequal(max(TO23094(2), TO23094(1)), TO23094(2))
+@test isequal(minmax(TO23094(1), TO23094(2))[1], TO23094(1))
+@test isequal(minmax(TO23094(1), TO23094(2))[2], TO23094(2))
+@test isequal(minmax(TO23094(2), TO23094(1))[1], TO23094(1))
+@test isequal(minmax(TO23094(2), TO23094(1))[2], TO23094(2))
 
 @test lexless('a','b')
 
@@ -73,7 +97,7 @@ let xs = [[i:i+4;] for i in 1:10]
 end
 
 # issue #19714
-immutable T19714 <: Integer end
+struct T19714 <: Integer end
 Base.float(::T19714) = 19714.0
 Base.:/(::T19714, ::T19714) = T19714()
 Base.convert(::Type{T19714}, ::Int) = T19714()
@@ -96,4 +120,19 @@ end
     @test B == [true false false]
     B = 3 .> [1 -1 5] .> 0
     @test B == [true false false]
+end
+
+struct TypeWrapper
+    t::Type
+end
+Base.:(<)(x::TypeWrapper, y::TypeWrapper) = (x.t <: y.t) & (x.t != y.t)
+@testset "poset" begin
+    #   Real
+    #  /    \
+    # Int  Float64
+    #  \    /
+    #  Union{}
+    @test TypeWrapper(Int) <= TypeWrapper(Int)
+    @test TypeWrapper(Int) <= TypeWrapper(Real)
+    @test !(TypeWrapper(Int) <= TypeWrapper(Float64))
 end
