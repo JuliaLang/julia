@@ -6834,8 +6834,10 @@ extern "C" void *jl_init_llvm(void)
         // Generate simpler code for JIT
         .setRelocationModel(Reloc::Static)
 #ifdef _P64
+        // Make sure we are using the large code model on 64bit
+        // Let LLVM pick a default suitable for jitting on 32bit
         .setCodeModel(CodeModel::Large)
-#else
+#elif JL_LLVM_VERSION < 60000
         .setCodeModel(CodeModel::JITDefault)
 #endif
 #ifdef DISABLE_OPT

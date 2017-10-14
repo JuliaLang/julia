@@ -1062,17 +1062,22 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         << jl_string_data(ir) << "\n}";
         SMDiagnostic Err = SMDiagnostic();
         std::string ir_string = ir_stream.str();
-        Module *m = NULL;
-        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*jl_Module,Err);
-        if (!failed)
-            m = jl_Module;
-        if (m == NULL) {
+#if JL_LLVM_VERSION >= 60000
+        // Do not enable update debug info since it runs the verifier on the whole module
+        // and will error on the function we are currently emitting.
+        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"),
+                                        *jl_Module, Err, nullptr, /* UpdateDebugInfo */ false);
+#else
+        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string, "llvmcall"),
+                                        *jl_Module, Err);
+#endif
+        if (failed) {
             std::string message = "Failed to parse LLVM Assembly: \n";
             llvm::raw_string_ostream stream(message);
             Err.print("julia",stream,true);
             jl_error(stream.str().c_str());
         }
-        f = m->getFunction(ir_name);
+        f = jl_Module->getFunction(ir_name);
     }
     else {
         assert(isPtr);
