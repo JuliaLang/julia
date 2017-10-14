@@ -195,6 +195,10 @@ timesofar("utils")
     a = trues(3)
     @test BitArray(a) !== a
     @test BitArray{1}(a) !== a
+
+    # issue #24062
+    @test_throws InexactError BitArray([0, 1, 2, 3])
+    @test_throws MethodError BitArray([0, ""])
 end
 
 timesofar("constructors")
