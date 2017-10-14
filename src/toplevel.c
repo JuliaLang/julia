@@ -663,6 +663,15 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
     return jl_toplevel_eval_flex(m, v, 1, 0);
 }
 
+JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
+{
+    jl_method_instance_t *li = jl_new_thunk(thk, m);
+    JL_GC_PUSH1(&li);
+    jl_type_infer(&li, jl_get_ptls_states()->world_age, 0);
+    JL_GC_POP();
+    return li->rettype;
+}
+
 JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *fname)
 {
     if (module->istopmod) {
