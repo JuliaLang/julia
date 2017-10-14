@@ -673,11 +673,9 @@ function inv(A::StridedMatrix{T}) where T
     S = typeof((one(T)*zero(T) + one(T)*zero(T))/one(T))
     AA = convert(AbstractArray{S}, A)
     if istriu(AA)
-        Ai = inv(UpperTriangular(AA))
-        Ai = convert(typeof(parent(Ai)), Ai)
+        Ai = triu!(parent(inv(UpperTriangular(AA))))
     elseif istril(AA)
-        Ai = inv(LowerTriangular(AA))
-        Ai = convert(typeof(parent(Ai)), Ai)
+        Ai = tril!(parent(inv(LowerTriangular(AA))))
     else
         Ai = inv!(lufact(AA))
         Ai = convert(typeof(parent(Ai)), Ai)
