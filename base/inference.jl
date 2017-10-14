@@ -3808,6 +3808,10 @@ function widen_all_consts!(src::CodeInfo)
     for i = 1:length(src.ssavaluetypes)
         src.ssavaluetypes[i] = widenconst(src.ssavaluetypes[i])
     end
+    for i = 1:length(src.slottypes)
+        src.slottypes[i] = widenconst(src.slottypes[i])
+    end
+
     nslots = length(src.slottypes)
     untypedload = fill(false, nslots)
     e = Expr(:body)
@@ -3823,7 +3827,6 @@ end
 # we also need to preserve the type for any untyped load of a DataType
 # since codegen optimizations of functions like `is` will depend on knowing it
 function widen_slot_type(@nospecialize(ty), untypedload::Bool)
-    ty = widenconst(ty)
     if isa(ty, DataType)
         if untypedload || isbits(ty) || isdefined(ty, :instance)
             return ty
