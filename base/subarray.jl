@@ -56,6 +56,7 @@ viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = IndexCartesian()
 size(V::SubArray) = (@_inline_meta; map(n->Int(unsafe_length(n)), indices(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
+_widen(::Type{SA}) where {T,N,P,SA<:SubArray{T,N,P}} = _widen(P)
 
 """
     parent(A)

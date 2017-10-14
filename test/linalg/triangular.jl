@@ -516,3 +516,27 @@ using Main.TestHelpers.Furlong
 let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
     @test sqrt(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
 end
+
+@testset "widening of wrapped matrix types" begin
+    n = 4
+    densemat = LinAlg.copytri!(rand(n, n), 'U')
+    sparsemat = LinAlg.copytri!(sprand(n, n, 0.5), 'U')
+    subdensemat = view(densemat, :, :)
+    subsparsemat = view(sparsemat, :, :)
+    reshapedspmat = reshape(sparsemat, n, n)
+
+    for (towrap, tocomp) in (
+            (densemat,      densemat),
+            (subdensemat,   densemat),
+            (sparsemat,     sparsemat),
+            (subsparsemat,  sparsemat),
+            (reshapedspmat, sparsemat), )
+        @test widen(towrap)::typeof(tocomp) == tocomp
+        @test widen(Symmetric(towrap))::typeof(tocomp) == tocomp
+        @test widen(Hermitian(towrap))::typeof(tocomp) == tocomp
+        @test widen(UpperTriangular(towrap))::typeof(tocomp) == triu(tocomp)
+        @test widen(LowerTriangular(towrap))::typeof(tocomp) == tril(tocomp)
+        @test widen(UnitUpperTriangular(towrap))::typeof(tocomp) == (triu(towrap, 1) + diagm(ones(n)))
+        @test widen(UnitLowerTriangular(towrap))::typeof(tocomp) == (tril(towrap, -1) + diagm(ones(n)))
+    end
+end
