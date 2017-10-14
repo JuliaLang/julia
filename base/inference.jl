@@ -414,6 +414,15 @@ function is_specializable_vararg_slot(arg, sv::InferenceState)
             isa(sv.vararg_type_container, DataType))
 end
 
+function is_self_quoting(@nospecialize(x))
+    return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type) ||
+        isa(x,Char) || x === nothing || isa(x,Builtin) || isa(x,IntrinsicFunction)
+end
+
+function quoted(@nospecialize(x))
+    return is_self_quoting(x) ? x : QuoteNode(x)
+end
+
 
 #### type-functions for builtins / intrinsics ####
 
@@ -2446,8 +2455,6 @@ function abstract_eval(@nospecialize(e), vtypes::VarTable, sv::InferenceState)
     e = e::Expr
     if e.head === :call
         t = abstract_eval_call(e, vtypes, sv)
-    elseif e.head === :null
-        t = Void
     elseif e.head === :new
         t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))[1]
         for i = 2:length(e.args)
@@ -3107,7 +3114,7 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
                 if linfo.jlcall_api == 2
                     method = linfo.def::Method
                     tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-                    tree.code = Any[ Expr(:return, QuoteNode(linfo.inferred_const)) ]
+                    tree.code = Any[ Expr(:return, quoted(linfo.inferred_const)) ]
                     tree.slotnames = Any[ compiler_temp_sym for i = 1:method.nargs ]
                     tree.slotflags = UInt8[ 0 for i = 1:method.nargs ]
                     tree.slottypes = nothing
@@ -3874,9 +3881,7 @@ function substitute!(
         e = e::Expr
         head = e.head
         if head === :static_parameter
-            sp = spvals[e.args[1]]
-            is_self_quoting(sp) && return sp
-            return QuoteNode(sp)
+            return quoted(spvals[e.args[1]])
         elseif head === :foreigncall
             @assert !isa(spsig, UnionAll) || !isempty(spvals)
             for i = 1:length(e.args)
@@ -4010,7 +4015,7 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
         end
         if head === :static_parameter
             # if we aren't certain about the type, it might be an UndefVarError at runtime
-            return isa(e.typ, DataType) && isleaftype(e.typ)
+            return (isa(e.typ, DataType) && isleaftype(e.typ)) || isa(e.typ, Const)
         end
         if e.typ === Bottom
             return false
@@ -4068,6 +4073,8 @@ function effect_free(@nospecialize(e), src::CodeInfo, mod::Module, allow_volatil
             # fall-through
         elseif head === :return
             # fall-through
+        elseif head === :isdefined
+            return allow_volatile
         elseif head === :the_exception
             return allow_volatile
         else
@@ -4115,14 +4122,7 @@ function inline_as_constant(@nospecialize(val), argexprs, sv::InferenceState, @n
             push!(stmts, invoke_texpr)
         end
     end
-    if !is_self_quoting(val)
-        val = QuoteNode(val)
-    end
-    return (val, stmts)
-end
-
-function is_self_quoting(@nospecialize(x))
-    return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type)
+    return (quoted(val), stmts)
 end
 
 function countunionsplit(atypes)
@@ -5205,12 +5205,12 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts::Vector{Any}, ins, bou
                 elseif isa(argt, Const) && (isa(argt.val, Tuple) || isa(argt.val, SimpleVector)) &&
                         effect_free(aarg, sv.src, sv.mod, true)
                     val = argt.val
-                    newargs[i - 2] = Any[ QuoteNode(val[i]) for i in 1:(length(val)::Int) ] # avoid making a tuple Generator here!
+                    newargs[i - 2] = Any[ quoted(val[i]) for i in 1:(length(val)::Int) ] # avoid making a tuple Generator here!
                 elseif isa(aarg, Tuple) || (isa(aarg, QuoteNode) && (isa(aarg.value, Tuple) || isa(aarg.value, SimpleVector)))
                     if isa(aarg, QuoteNode)
                         aarg = aarg.value
                     end
-                    newargs[i - 2] = Any[ QuoteNode(aarg[i]) for i in 1:(length(aarg)::Int) ] # avoid making a tuple Generator here!
+                    newargs[i - 2] = Any[ quoted(aarg[i]) for i in 1:(length(aarg)::Int) ] # avoid making a tuple Generator here!
                 elseif isa(t, DataType) && t.name === Tuple.name && !isvatuple(t) &&
                          length(t.parameters) <= sv.params.MAX_TUPLE_SPLAT
                     for k = (effect_free_upto + 1):(i - 3)
@@ -5370,19 +5370,25 @@ normvar(s::Slot) = normslot(s)
 normvar(s::SSAValue) = s
 normvar(@nospecialize(s)) = s
 
+function is_repeatable_literal(@nospecialize(x))
+    return isa(x, Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Float32,Float64}) ||
+        isa(x, Type) || isa(x, Char) || isa(x, IntrinsicFunction) || isa(x, Builtin) ||
+        x === "" || x === () || x === nothing
+end
+
 # given a single-assigned var and its initializer `init`, return what we can
 # replace `var` with, or `var` itself if we shouldn't replace it
 function get_replacement(table::ObjectIdDict, var::Union{SlotNumber, SSAValue}, @nospecialize(init),
                          nargs::Int, slottypes::Vector{Any}, ssavaluetypes::Vector{Any})
-    #if isa(init, QuoteNode)  # this can cause slight code size increases
-    #    return init
-    if isa(init, Expr) && init.head === :static_parameter
+    if isa(init, QuoteNode) && is_repeatable_literal(init.value)
+        return init.value
+    elseif isa(init, Expr) && init.head === :static_parameter
         # if we aren't certain about the type, it might be an UndefVarError at runtime (!effect_free)
         # so we need to preserve the original point of assignment
-        if isa(init.typ, DataType) && isleaftype(init.typ)
+        if (isa(init.typ, DataType) && isleaftype(init.typ)) || isa(init.typ, Const)
             return init
         end
-    elseif isa(init, corenumtype) || init === () || init === nothing
+    elseif is_repeatable_literal(init)
         return init
     elseif isa(init, Slot) && is_argument(nargs, init::Slot)
         # the transformation is not ideal if the assignment
@@ -5415,6 +5421,10 @@ function get_replacement(table::ObjectIdDict, var::Union{SlotNumber, SSAValue}, 
                 rep = TypedSlot(rep.id, init.typ)
             end
             return rep
+        end
+    elseif isa(init, GlobalRef)
+        if isdefined(init.mod, init.name) && isconst(init.mod, init.name)
+            return init
         end
     end
     return var
@@ -5556,6 +5566,8 @@ function void_use_elim_pass!(sv::InferenceState)
             h = ex.head
             if h === :return || h === :(=) || h === :gotoifnot || is_meta_expr_head(h)
                 return true
+            elseif h === :isdefined
+                return false
             end
             return !effect_free(ex, sv.src, sv.mod, false)
         elseif (isa(ex, GotoNode) || isa(ex, LineNumberNode) ||
@@ -5720,11 +5732,7 @@ function _getfield_elim_pass!(e::Expr, sv::InferenceState)
                     end
                 end
                 if isdefined(e1, j)
-                    e1j = getfield(e1, j)
-                    if !is_self_quoting(e1j)
-                        e1j = QuoteNode(e1j)
-                    end
-                    return e1j
+                    return quoted(getfield(e1, j))
                 end
             end
         end

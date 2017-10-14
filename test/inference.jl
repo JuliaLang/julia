@@ -896,7 +896,7 @@ let f, m
     m.source.ssavaluetypes = 1
     m.source.code = Any[
         Expr(:(=), SSAValue(0), Expr(:call, GlobalRef(Core, :svec), 1, 2, 3)),
-        Expr(:return, Expr(:call, Core._apply, :+, SSAValue(0)))
+        Expr(:return, Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(0)))
     ]
     @test @inferred(f()) == 6
 end
