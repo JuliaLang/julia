@@ -367,6 +367,21 @@ unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
 
 macro b_str(s); :(Vector{UInt8}($(unescape_string(s)))); end
 
+"""
+    @raw_str -> String
+
+Create a raw string without interpolation and unescaping.
+The exception is that quotation marks still must be escaped.
+
+# Examples
+```jldoctest
+julia> raw"\\""
+"\\""
+
+julia> raw""\" " ""\"
+" \\" "
+```
+"""
 macro raw_str(s); s; end
 
 ## multiline strings ##

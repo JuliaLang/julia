@@ -16,6 +16,7 @@ Base.unsafe_string
 Base.codeunit(::AbstractString, ::Integer)
 Base.ascii
 Base.@r_str
+Base.@raw_str
 Base.Docs.@html_str
 Base.Docs.@text_str
 Base.UTF8proc.normalize_string
