@@ -860,9 +860,9 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     if (S.AllPtrNumbering.find(Phi) != S.AllPtrNumbering.end())
                         continue;
                     auto Num = LiftPhi(S, Phi);
-                    auto lift = cast<PHINode>(S.ReversePtrNumbering[Num]);
                     SmallVector<int, 1> RefinedPtr(0);
                     // DISABLED DUE TO BUG IN THE ALGORITHM (#24098)
+                    //auto lift = cast<PHINode>(S.ReversePtrNumbering[Num]);
                     //for (unsigned i = 0; i < nIncoming; ++i)
                     //    RefinedPtr[i] = Number(S, lift->getIncomingValue(i));
                     S.Refinements[Num] = std::move(RefinedPtr);
