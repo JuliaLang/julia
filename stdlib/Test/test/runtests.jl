@@ -2,26 +2,28 @@
 
 using Test
 
-# Test @test
-@test true
-@test 1 == 1
-@test 1 != 2
-@test ==(1, 1)
-@test ==((1, 1)...)
-@test 1 ≈ 2 atol=1
-@test strip("\t  hi   \n") == "hi"
-@test strip("\t  this should fail   \n") != "hi"
-@test isequal(1, 1)
-@test isapprox(1, 1, atol=0.1)
-@test isapprox(1, 1; atol=0.1)
-@test isapprox(1, 1; [(:atol, 0)]...)
-
-# @test keyword precedence: post-semicolon keyword, suffix keyword, pre-semicolon keyword
-@test isapprox(1, 2, atol=0) atol=1
-@test isapprox(1, 3, atol=0; atol=2) atol=1
-
-# @test should only evaluate the arguments once
-let g = Int[], f = (x) -> (push!(g, x); x)
+@testset "@test" begin
+    @test true
+    @test 1 == 1
+    @test 1 != 2
+    @test ==(1, 1)
+    @test ==((1, 1)...)
+    @test 1 ≈ 2 atol=1
+    @test strip("\t  hi   \n") == "hi"
+    @test strip("\t  this should fail   \n") != "hi"
+    @test isequal(1, 1)
+    @test isapprox(1, 1, atol=0.1)
+    @test isapprox(1, 1; atol=0.1)
+    @test isapprox(1, 1; [(:atol, 0)]...)
+end
+@testset "@test keyword precedence" begin
+    # post-semicolon keyword, suffix keyword, pre-semicolon keyword
+    @test isapprox(1, 2, atol=0) atol=1
+    @test isapprox(1, 3, atol=0; atol=2) atol=1
+end
+@testset "@test should only evaluate the arguments once" begin
+    g = Int[]
+    f = (x) -> (push!(g, x); x)
     @test f(1) == 1
     @test g == [1]
 
@@ -30,32 +32,34 @@ let g = Int[], f = (x) -> (push!(g, x); x)
     @test g == [2]
 end
 
-# Test @test_broken with fail
-@test_broken false
-@test_broken 1 == 2
-@test_broken 1 != 1
-@test_broken strip("\t  hi   \n") != "hi"
-@test_broken strip("\t  this should fail   \n") == "hi"
-# Test @test_broken with errors
-@test_broken error()
-@test_broken absolute_nonsense
-
-#Test @test_skip
-@test_skip error()
-@test_skip true
-@test_skip false
-@test_skip gobbeldygook
-
-# Test @test_warn
-@test 1234 === @test_nowarn(1234)
-@test 5678 === @test_warn("WARNING: foo", begin warn("foo"); 5678; end)
-let a
-    @test_throws UndefVarError(:a) a
-    @test_nowarn a = 1
-    @test a === 1
+@testset "@test_broken with fail" begin
+    @test_broken false
+    @test_broken 1 == 2
+    @test_broken 1 != 1
+    @test_broken strip("\t  hi   \n") != "hi"
+    @test_broken strip("\t  this should fail   \n") == "hi"
 end
-
-let a = Array{Float64, 5}(2, 2, 2, 2, 2)
+@testset "@test_broken with errors" begin
+    @test_broken error()
+    @test_broken absolute_nonsense
+end
+@testset "@test_skip" begin
+    @test_skip error()
+    @test_skip true
+    @test_skip false
+    @test_skip gobbeldygook
+end
+@testset "@test_warn" begin
+    @test 1234 === @test_nowarn(1234)
+    @test 5678 === @test_warn("WARNING: foo", begin warn("foo"); 5678; end)
+    let a
+        @test_throws UndefVarError(:a) a
+        @test_nowarn a = 1
+        @test a === 1
+    end
+end
+@testset "@test and elements of an array" begin
+    a = Array{Float64, 5}(2, 2, 2, 2, 2)
     a[1, 1, 1, 1, 1] = 10
     @test a[1, 1, 1, 1, 1] == 10
     @test a[1, 1, 1, 1, 1] != 2
@@ -63,12 +67,12 @@ end
 
 @test rand() != rand()
 
-# Pass - exception
-@test endswith(sprint(show, @test_throws ErrorException error()),
-               "Thrown: ErrorException")
-@test endswith(sprint(show, @test_throws ErrorException("test") error("test")),
-               "Thrown: ErrorException")
-
+@testset "Pass - exception" begin
+    @test endswith(sprint(show, @test_throws ErrorException error()),
+                   "Thrown: ErrorException")
+    @test endswith(sprint(show, @test_throws ErrorException("test") error("test")),
+                   "Thrown: ErrorException")
+end
 # Test printing of Fail results
 mutable struct NoThrowTestSet <: Test.AbstractTestSet
     results::Vector
@@ -188,8 +192,8 @@ let fails = @testset NoThrowTestSet begin
     end
 end
 
-# Test printing of a TestSetException
-let tse_str = sprint(show, Test.TestSetException(1, 2, 3, 4, Vector{Union{Test.Error, Test.Fail}}()))
+@testset "printing of a TestSetException" begin
+    tse_str = sprint(show, Test.TestSetException(1, 2, 3, 4, Vector{Union{Test.Error, Test.Fail}}()))
     @test contains(tse_str, "1 passed")
     @test contains(tse_str, "2 failed")
     @test contains(tse_str, "3 errored")
@@ -504,13 +508,13 @@ end
 @test @inferred inferred_test_function()
 @test inferred_test_global == 1
 
-# Test that @inferred works with A[i] expressions
-@test @inferred((1:3)[2]) == 2
 struct SillyArray <: AbstractArray{Float64,1} end
 Base.getindex(a::SillyArray, i) = rand() > 0.5 ? 0 : false
-test_result = @test_throws ErrorException @inferred(SillyArray()[2])
-@test contains(test_result.value.msg, "Bool")
-
+@testset "@inferred works with A[i] expressions" begin
+    @test @inferred((1:3)[2]) == 2
+    test_result = @test_throws ErrorException @inferred(SillyArray()[2])
+    @test contains(test_result.value.msg, "Bool")
+end
 # Issue #14928
 # Make sure abstract error type works.
 @test_throws Exception error("")
@@ -559,8 +563,8 @@ let io = IOBuffer()
     @test !contains(String(take!(io)), "backtrace()")
 end
 
-# 19750
-let io = IOBuffer()
+@testset "#19750" begin
+    io = IOBuffer()
     exc = Test.TestSetException(1,2,3,4,Vector{Union{Test.Error, Test.Fail}}())
     Base.showerror(io, exc, backtrace())
     @test !contains(String(take!(io)), "backtrace()")
@@ -608,8 +612,8 @@ Test.print_test_results(Test.DefaultTestSet(""))'`), stderr=DevNull), String), "
 
 @test msg == rstrip(msg)
 
-# test guarded srand
-let seed = rand(UInt)
+@testset "test guarded srand" begin
+    seed = rand(UInt)
     orig = copy(Base.GLOBAL_RNG)
     @test guardsrand(()->rand(), seed) == guardsrand(()->rand(), seed)
     @test guardsrand(()->rand(Int), seed) == guardsrand(()->rand(Int), seed)
