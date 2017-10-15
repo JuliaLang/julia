@@ -114,7 +114,7 @@ julia-sysimg-release : julia-inference julia-ui-release
 julia-sysimg-debug : julia-inference julia-ui-debug
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug$(CPUID_TAG).$(SHLIB_EXT) JULIA_BUILD_MODE=debug
 
-julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest
+julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest julia-base-cache
 
 debug release : % : julia-%
 
@@ -240,6 +240,8 @@ endif
 $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_depsbindir)
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
 
+julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir)/julia
+	@$(call exec,$(JULIA_EXECUTABLE) $(JULIAHOME)/etc/write_base_cache.jl $(build_datarootdir)/julia/base.cache)
 
 # public libraries, that are installed in $(prefix)/lib
 JL_LIBS := julia julia-debug

@@ -225,10 +225,9 @@ your changes.
 Here is the standard procedure:
 
 1. If you are planning changes to any types or macros, make those
-   changes, commit them, and build julia using `make`. (This is
+   changes and build julia using `make`. (This is
    necessary because `Revise` cannot handle changes to type
-   definitions or macros.) By making a git commit, you "shield" these
-   changes from the `git stash` procedure described below. Unless it's
+   definitions or macros.) Unless it's
    required to get Julia to build, you do not have to add any
    functionality based on the new types, just the type definitions
    themselves.
@@ -241,27 +240,12 @@ Revise.track(Base)
 ```
 
 3. Edit files in `base/`, save your edits, and test the
-   functionality. Once you are satisfied that things work as desired,
-   make another commit and rebuild julia.
+   functionality.
 
-Should you for some reason need to quit and restart your REPL session
-before finishing your changes, the procedure above will fail because
-`Revise.track`
-[cannot detect changes in source files that occurred after Julia was built](https://github.com/JuliaLang/julia/issues/23448)---it
-will only detect changes to source files that occur after tracking is
-initiated.  Consequently, any changes made prior to
-`Revise.track(Base)` will not be incorporated into your new REPL
-session. You can work around this by temporarily reverting all source
-files to their original state. From somewhere in the `julia`
-directory, start your REPL session and do the following:
-
-```julia
-shell> git stash  # ensure that the code in `base/` matches its state when you built julia
-
-julia> Revise.track(Base)  # Revise's source code cache is synchronized with what's running
-
-shell> git stash pop  # restore any in-progress changes (will now be tracked)
-```
+If you need to restart your Julia session, just start at step 2 above.
+`Revise.track(Base)` will note any changes from when Julia was last
+built and incorporate them automatically. You only need to rebuild
+Julia if you made code-changes that Revise cannot handle.
 
 ### Code Formatting Guidelines
 

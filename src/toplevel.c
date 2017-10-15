@@ -685,6 +685,23 @@ JL_DLLEXPORT jl_value_t *jl_load_(jl_module_t *module, jl_value_t *str)
     return jl_load(module, (const char*)jl_string_data(str));
 }
 
+JL_DLLEXPORT jl_value_t *jl_prepend_cwd(jl_value_t *str)
+{
+    size_t sz = 1024;
+    char path[1024];
+    int c = uv_cwd(path, &sz);
+    if (c < 0) {
+        jl_errorf("could not get current directory");
+    }
+    path[sz] = '/';  // fix later with normpath if Windows
+    const char *fstr = (const char*)jl_string_data(str);
+    if (strlen(fstr) + sz >= 1024) {
+        jl_errorf("use a bigger buffer for jl_fullpath");
+    }
+    strcpy(path + sz + 1, fstr);
+    return jl_cstr_to_string(path);
+}
+
 #ifdef __cplusplus
 }
 #endif
