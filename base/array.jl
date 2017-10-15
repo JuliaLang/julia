@@ -1610,7 +1610,7 @@ function findnext(A, start::Integer)
     while i <= l
         a = A[i]
         if !warned && !(a isa Bool)
-            depwarn("In the future `findnext` will only work on boolean collections. Use `findnext(x->x!=0, A)` instead.", :findnext)
+            depwarn("In the future `findnext` will only work on boolean collections. Use `findnext(x->x!=0, A, start)` instead.", :findnext)
             warned = true
         end
         if a != 0
@@ -1725,7 +1725,7 @@ function findprev(A, start::Integer)
     while i >= 1
         a = A[i]
         if !warned && !(a isa Bool)
-            depwarn("In the future `findprev` will only work on boolean collections. Use `findprev(x->x!=0, A)` instead.", :findprev)
+            depwarn("In the future `findprev` will only work on boolean collections. Use `findprev(x->x!=0, A, start)` instead.", :findprev)
             warned = true
         end
         a != 0 && return i
