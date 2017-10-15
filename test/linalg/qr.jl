@@ -197,3 +197,8 @@ end
     @test A \ B == zeros(2, 1)
     @test qrfact(A, Val(true)) \ B == zeros(2, 1)
 end
+
+@testset "Issue 24107" begin
+    A = rand(200,2)
+    @test A \ linspace(0,1,200) == A \ collect(linspace(0,1,200))
+end
