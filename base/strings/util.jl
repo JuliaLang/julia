@@ -79,7 +79,7 @@ julia> chop(a)
 "Marc"
 ```
 """
-chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
+chop(s::AbstractString) = SubString(s, 1, prevind(s, endof(s)))
 
 """
     chomp(s::AbstractString)
@@ -96,17 +96,17 @@ function chomp(s::AbstractString)
     i = endof(s)
     (i < 1 || s[i] != '\n') && (return SubString(s, 1, i))
     j = prevind(s,i)
-    (j < 1 || s[j] != '\r') && (return SubString(s, 1, i-1))
-    return SubString(s, 1, j-1)
+    (j < 1 || s[j] != '\r') && (return SubString(s, 1, j))
+    return SubString(s, 1, prevind(s,j))
 end
 function chomp(s::String)
     i = endof(s)
     if i < 1 || codeunit(s,i) != 0x0a
         SubString(s, 1, i)
     elseif i < 2 || codeunit(s,i-1) != 0x0d
-        SubString(s, 1, i-1)
+        SubString(s, 1, prevind(s, i))
     else
-        SubString(s, 1, i-2)
+        SubString(s, 1, prevind(s, i-1))
     end
 end
 

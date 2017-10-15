@@ -14,8 +14,8 @@ function test_approx_eq_vecs(a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, error
     end
 end
 
-let n = 12 #Size of matrix problem to test
-    srand(123)
+guardsrand(123) do
+    n = 12 #Size of matrix problem to test
     @testset for elty in (Float32, Float64, Complex64, Complex128, Int)
         if elty == Int
             srand(61516384)
@@ -291,6 +291,12 @@ let n = 12 #Size of matrix problem to test
                             @test isa(similar(Ts, Int), SymTridiagonal{Int})
                             @test isa(similar(Ts, Int, (3,2)), Matrix{Int})
                         end
+
+                        @test first(logabsdet(Tldlt)) ≈ first(logabsdet(Fs))
+                        @test last(logabsdet(Tldlt))  ≈ last(logabsdet(Fs))
+                        # just test that the det method exists. The numerical value of the
+                        # determinant is unreliable
+                        det(Tldlt)
                     end
                 end
             else # mat_type is Tridiagonal

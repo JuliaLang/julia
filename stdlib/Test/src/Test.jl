@@ -21,27 +21,21 @@ export @testset
 export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray
+export guardsrand
 
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
-function ip_matches_func_and_name(ip, func::Symbol, dir::String, file::String)
-    for fr in StackTraces.lookup(ip)
-        if fr === StackTraces.UNKNOWN || fr.from_c
-            return false
-        end
-        path = string(fr.file)
-        fr.func == func && dirname(path) == dir && basename(path) == file && return true
-    end
-    return false
+function ip_has_file_and_func(ip, file, funcs)
+    return any(fr -> (string(fr.file) == file && fr.func in funcs), StackTraces.lookup(ip))
 end
 
 function scrub_backtrace(bt)
-    do_test_ind = findfirst(addr->ip_matches_func_and_name(addr, :do_test, ".", "test.jl"), bt)
+    do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (:do_test, :do_test_throws)), bt)
     if do_test_ind != 0 && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end
-    name_ind = findfirst(addr->ip_matches_func_and_name(addr, Symbol("macro expansion"), ".", "test.jl"), bt)
+    name_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (Symbol("macro expansion"),)), bt)
     if name_ind != 0 && length(bt) != 0
         bt = bt[1:name_ind]
     end
@@ -1428,6 +1422,24 @@ Base.getindex(a::GenericArray, i...) = a.a[i...]
 Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
 
 Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
+
+"`guardsrand(f)` runs the function `f()` and then restores the
+state of the global RNG as it was before."
+function guardsrand(f::Function, r::AbstractRNG=Base.GLOBAL_RNG)
+    old = copy(r)
+    try
+        f()
+    finally
+        copy!(r, old)
+    end
+end
+
+"`guardsrand(f, seed)` is equivalent to running `srand(seed); f()` and
+then restoring the state of the global RNG as it was before."
+guardsrand(f::Function, seed::Integer) = guardsrand() do
+    srand(seed)
+    f()
+end
 
 # 0.7 deprecations
 

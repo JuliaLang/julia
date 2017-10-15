@@ -271,3 +271,45 @@ top:
     call void @one_arg_boxed(%jl_value_t addrspace(10)* %aboxed3)
     ret void
 }
+
+@gv1 = external global %jl_value_t*
+@gv2 = external global %jl_value_t addrspace(10)*
+
+define %jl_value_t addrspace(10)* @gv_const() {
+; CHECK-LABEL: @gv_const
+; CHECK-NOT: %gcframe
+top:
+    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %v10 = load %jl_value_t*, %jl_value_t** @gv1, !tbaa !2
+    %v1 = addrspacecast %jl_value_t* %v10 to %jl_value_t addrspace(10)*
+    %v2 = load %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** @gv2, !tbaa !2
+    call void @jl_safepoint()
+    call void @one_arg_boxed(%jl_value_t addrspace(10)* %v1)
+    call void @one_arg_boxed(%jl_value_t addrspace(10)* %v2)
+    ret %jl_value_t addrspace(10)* %v1
+}
+
+define void @refine_select_phi(%jl_value_t addrspace(10)* %x, %jl_value_t addrspace(10)* %y, i1 %b) {
+; CHECK-LABEL: @refine_select_phi
+; CHECK-NOT: %gcframe
+top:
+  %ptls = call %jl_value_t*** @jl_get_ptls_states()
+  %s = select i1 %b, %jl_value_t addrspace(10)* %x, %jl_value_t addrspace(10)* %y
+  br i1 %b, label %L1, label %L2
+
+L1:
+  br label %L3
+
+L2:
+  br label %L3
+
+L3:
+  %p = phi %jl_value_t addrspace(10)* [ %x, %L1 ], [ %y, %L2 ]
+  call void @one_arg_boxed(%jl_value_t addrspace(10)* %s)
+  call void @one_arg_boxed(%jl_value_t addrspace(10)* %p)
+  ret void
+}
+
+!0 = !{!"jtbaa"}
+!1 = !{!"jtbaa_const", !0, i64 0}
+!2 = !{!1, !1, i64 0, i64 1}

@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Linear algebra module. Provides array arithmetic,
+matrix factorizations and other linear algebra related
+functionality.
+"""
 module LinAlg
 
 import Base: \, /, *, ^, +, -, ==

@@ -517,6 +517,7 @@ if module_name(@__MODULE__) === :Base
 end
 
 rem(x::T, ::Type{T}) where {T<:Integer} = x
+rem(x::Integer, T::Type{<:Integer}) = convert(T, x)  # `x % T` falls back to `convert`
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 
@@ -766,4 +767,12 @@ else
 
     rem(x::Int128,  y::Int128)  = checked_srem_int(x, y)
     rem(x::UInt128, y::UInt128) = checked_urem_int(x, y)
+end
+
+# issue #15489: since integer ops are unchecked, they shouldn't check promotion
+for op in (:+, :-, :*, :&, :|, :xor)
+    @eval function $op(a::Integer, b::Integer)
+        T = promote_typeof(a, b)
+        return $op(a % T, b % T)
+    end
 end

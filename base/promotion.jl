@@ -310,10 +310,6 @@ julia> A^3
 fma(x::Number, y::Number, z::Number) = fma(promote(x,y,z)...)
 muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
 
-(&)(x::Integer, y::Integer) = (&)(promote(x,y)...)
-(|)(x::Integer, y::Integer) = (|)(promote(x,y)...)
-xor(x::Integer, y::Integer) = xor(promote(x,y)...)
-
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
 <( x::Real, y::Real)     = (< )(promote(x,y)...)
 <=(x::Real, y::Real)     = (<=)(promote(x,y)...)

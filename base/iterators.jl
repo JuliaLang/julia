@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Methods for working with Iterators.
+"""
 module Iterators
 
 import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, indices, ndims, pairs

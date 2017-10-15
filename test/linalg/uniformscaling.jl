@@ -16,8 +16,8 @@ srand(123)
     @test one(UniformScaling(rand(Complex128))) == one(UniformScaling{Complex128})
     @test eltype(one(UniformScaling(rand(Complex128)))) == Complex128
     @test -one(UniformScaling(2)) == UniformScaling(-1)
-    @test sparse(3I,4,5) == spdiagm(fill(3,4),0,4,5)
-    @test sparse(3I,5,4) == spdiagm(fill(3,4),0,5,4)
+    @test sparse(3I,4,5) == sparse(1:4, 1:4, 3, 4, 5)
+    @test sparse(3I,5,4) == sparse(1:4, 1:4, 3, 5, 4)
     @test norm(UniformScaling(1+im)) ≈ sqrt(2)
 end
 

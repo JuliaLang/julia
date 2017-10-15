@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+function isnan_type(::Type{T}, x) where T
+    isa(x, T) && isnan(x)
+end
+
 @testset "clamp" begin
     @test clamp(0, 1, 3) == 1
     @test clamp(1, 1, 3) == 1
@@ -66,9 +70,9 @@ end
             @test exponent(-a) == n-1
         end
         @test_throws DomainError exponent(convert(T,NaN))
-        @test isnan(significand(convert(T,NaN)))
+        @test isnan_type(T, significand(convert(T,NaN)))
         x,y = frexp(convert(T,NaN))
-        @test isnan(x)
+        @test isnan_type(T, x)
         @test y == 0
 
         @testset "ldexp function" begin
@@ -77,7 +81,7 @@ end
             @test ldexp(T(Inf), 1) === T(Inf)
             @test ldexp(T(Inf), 10000) === T(Inf)
             @test ldexp(T(-Inf), 1) === T(-Inf)
-            @test ldexp(T(NaN), 10) === T(NaN)
+            @test isnan_type(T, ldexp(T(NaN), 10))
             @test ldexp(T(1.0), 0) === T(1.0)
             @test ldexp(T(0.8), 4) === T(12.8)
             @test ldexp(T(-0.854375), 5) === T(-27.34)
@@ -233,16 +237,16 @@ end
         end
         @testset "Edge cases" begin
             @test isinf(log(zero(T)))
-            @test isnan(log(convert(T,NaN)))
+            @test isnan_type(T, log(convert(T,NaN)))
             @test_throws DomainError log(-one(T))
             @test isinf(log1p(-one(T)))
-            @test isnan(log1p(convert(T,NaN)))
+            @test isnan_type(T, log1p(convert(T,NaN)))
             @test_throws DomainError log1p(convert(T,-2.0))
             @test hypot(T(0), T(0)) === T(0)
             @test hypot(T(Inf), T(Inf)) === T(Inf)
             @test hypot(T(Inf), T(x)) === T(Inf)
             @test hypot(T(Inf), T(NaN)) === T(Inf)
-            @test isnan(hypot(T(x), T(NaN)))
+            @test isnan_type(T, hypot(T(x), T(NaN)))
         end
     end
 end
@@ -256,7 +260,7 @@ end
         end
     end
     @testset "$T edge cases" begin
-        @test isnan(exp(T(NaN)))
+        @test isnan_type(T, exp(T(NaN)))
         @test exp(T(-Inf)) === T(0.0)
         @test exp(T(Inf)) === T(Inf)
         @test exp(T(0.0)) === T(1.0) # exact
@@ -279,7 +283,7 @@ end
         end
     end
     @testset "$T edge cases" for T in (Float64, Float32)
-        @test isnan(exp10(T(NaN)))
+        @test isnan_type(T, exp10(T(NaN)))
         @test exp10(T(-Inf)) === T(0.0)
         @test exp10(T(Inf)) === T(Inf)
         @test exp10(T(0.0)) === T(1.0) # exact
@@ -593,10 +597,10 @@ end
 
     for T in (Float32,Float64)
         @test log(zero(T)) == -Inf
-        @test isnan(log(NaN))
+        @test isnan_type(T, log(T(NaN)))
         @test_throws DomainError log(-one(T))
         @test log1p(-one(T)) == -Inf
-        @test isnan(log1p(NaN))
+        @test isnan_type(T, log1p(T(NaN)))
         @test_throws DomainError log1p(-2*one(T))
     end
 end
@@ -702,7 +706,7 @@ end
         end
         @test_throws DomainError asin(-T(Inf))
         @test_throws DomainError asin(T(Inf))
-        @test asin(T(NaN)) === T(NaN)
+        @test isnan_type(T, asin(T(NaN)))
     end
 end
 
@@ -750,9 +754,9 @@ end
 
 @testset "atan2" begin
     for T in (Float32, Float64)
-        @test atan2(T(NaN), T(NaN)) === T(NaN)
-        @test atan2(T(NaN), T(0.1)) === T(NaN)
-        @test atan2(T(0.1), T(NaN)) === T(NaN)
+        @test isnan_type(T, atan2(T(NaN), T(NaN)))
+        @test isnan_type(T, atan2(T(NaN), T(0.1)))
+        @test isnan_type(T, atan2(T(0.1), T(NaN)))
         r = T(randn())
         absr = abs(r)
         # y zero
@@ -819,6 +823,6 @@ end
         end
         @test_throws DomainError acos(-T(Inf))
         @test_throws DomainError acos(T(Inf))
-        @test acos(T(NaN)) === T(NaN)
+        @test isnan_type(T, acos(T(NaN)))
     end
 end

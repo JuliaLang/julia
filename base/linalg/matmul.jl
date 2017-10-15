@@ -90,7 +90,7 @@ A_mul_B!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) where 
 for elty in (Float32,Float64)
     @eval begin
         function A_mul_B!(y::StridedVector{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, x::StridedVector{$elty})
-            Afl = reinterpret($elty,A,(2size(A,1),size(A,2)))
+            Afl = reinterpret($elty,A)
             yfl = reinterpret($elty,y)
             gemv!(yfl,'N',Afl,x)
             return y
@@ -148,8 +148,8 @@ A_mul_B!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) wher
 for elty in (Float32,Float64)
     @eval begin
         function A_mul_B!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty})
-            Afl = reinterpret($elty, A, (2size(A,1), size(A,2)))
-            Cfl = reinterpret($elty, C, (2size(C,1), size(C,2)))
+            Afl = reinterpret($elty, A)
+            Cfl = reinterpret($elty, C)
             gemm_wrapper!(Cfl, 'N', 'N', Afl, B)
             return C
         end
@@ -190,8 +190,8 @@ A_mul_Bt!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) whe
 for elty in (Float32,Float64)
     @eval begin
         function A_mul_Bt!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty})
-            Afl = reinterpret($elty, A, (2size(A,1), size(A,2)))
-            Cfl = reinterpret($elty, C, (2size(C,1), size(C,2)))
+            Afl = reinterpret($elty, A)
+            Cfl = reinterpret($elty, C)
             gemm_wrapper!(Cfl, 'N', 'T', Afl, B)
             return C
         end

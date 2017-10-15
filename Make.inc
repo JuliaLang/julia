@@ -731,6 +731,13 @@ endif
 
 JULIA_CPU_TARGET ?= native
 
+ifneq ($(OS),WINNT)
+# Windows headers with this configuration conflicts with LLVM
+# (Symbol renames are done with macros)
+# We mainly need this on linux for cgmemmgr so don't worry about windows for now...
+JCXXFLAGS += -D_FILE_OFFSET_BITS=64
+endif
+
 # Set some ARCH-specific flags
 ifneq ($(USEICC),1)
 ifeq ($(ISX86),1)

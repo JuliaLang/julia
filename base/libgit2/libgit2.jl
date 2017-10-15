@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Interface to [libgit2](https://libgit2.github.com/).
+"""
 module LibGit2
 
 import Base: merge!, ==
@@ -266,7 +269,7 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
         GitRemoteAnon(repo, remoteurl)
     end
     result = try
-        fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), p))
+        fo = FetchOptions(callbacks=RemoteCallbacks(credentials=credentials_cb(), payload=p))
         fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
     catch err
         if isa(err, GitError) && err.code == Error.EAUTH
@@ -308,7 +311,7 @@ function push(repo::GitRepo; remote::AbstractString="origin",
         GitRemoteAnon(repo, remoteurl)
     end
     result = try
-        push_opts = PushOptions(callbacks=RemoteCallbacks(credentials_cb(), p))
+        push_opts = PushOptions(callbacks=RemoteCallbacks(credentials=credentials_cb(), payload=p))
         push(rmt, refspecs, force=force, options=push_opts)
     catch err
         if isa(err, GitError) && err.code == Error.EAUTH
@@ -519,21 +522,23 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}=CredentialPayload())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
-    p = reset!(deprecate_nullable_creds(:clone, "repo_url, repo_path", payload))
-    fetch_opts = FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), p))
-    clone_opts = CloneOptions(
-                bare = Cint(isbare),
-                checkout_branch = isempty(lbranch) ? Cstring(C_NULL) : Base.unsafe_convert(Cstring, lbranch),
-                fetch_opts = fetch_opts,
-                remote_cb = remote_cb
-            )
-    repo = try
-        clone(repo_url, repo_path, clone_opts)
-    catch err
-        if isa(err, GitError) && err.code == Error.EAUTH
-            reject(payload)
+    @Base.gc_preserve lbranch begin
+        p = reset!(deprecate_nullable_creds(:clone, "repo_url, repo_path", payload))
+        fetch_opts = FetchOptions(callbacks = RemoteCallbacks(credentials=credentials_cb(), payload=p))
+        clone_opts = CloneOptions(
+                    bare = Cint(isbare),
+                    checkout_branch = isempty(lbranch) ? Cstring(C_NULL) : Base.unsafe_convert(Cstring, lbranch),
+                    fetch_opts = fetch_opts,
+                    remote_cb = remote_cb
+                )
+        repo = try
+            clone(repo_url, repo_path, clone_opts)
+        catch err
+            if isa(err, GitError) && err.code == Error.EAUTH
+                reject(payload)
+            end
+            rethrow()
         end
-        rethrow()
     end
     approve(payload)
     return repo

@@ -83,41 +83,44 @@ static Instruction *emit_ptls_tp(LLVMContext &ctx, Value *offset, Type *T_ppjlva
 {
     auto T_int8 = Type::getInt8Ty(ctx);
     auto T_pint8 = PointerType::get(T_int8, 0);
-#  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
-    // Workaround LLVM bug by hiding the offset computation
-    // (and therefore the optimization opportunity) from LLVM.
-    // Ref https://github.com/JuliaLang/julia/issues/17288
-    static const std::string const_asm_str = [&] () {
-        std::stringstream stm;
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+    if (insertBefore->getFunction()->callsFunctionThatReturnsTwice()) {
+        // Workaround LLVM bug by hiding the offset computation
+        // (and therefore the optimization opportunity) from LLVM.
+        // Ref https://github.com/JuliaLang/julia/issues/17288
+        static const std::string const_asm_str = [&] () {
+            std::stringstream stm;
 #  if defined(_CPU_X86_64_)
-        stm << "movq %fs:0, $0;\naddq $$" << jl_tls_offset << ", $0";
+            stm << "movq %fs:0, $0;\naddq $$" << jl_tls_offset << ", $0";
 #  else
-        stm << "movl %gs:0, $0;\naddl $$" << jl_tls_offset << ", $0";
+            stm << "movl %gs:0, $0;\naddl $$" << jl_tls_offset << ", $0";
 #  endif
-        return stm.str();
-    }();
+            return stm.str();
+        }();
 #  if defined(_CPU_X86_64_)
-    const char *dyn_asm_str = "movq %fs:0, $0;\naddq $1, $0";
+        const char *dyn_asm_str = "movq %fs:0, $0;\naddq $1, $0";
 #  else
-    const char *dyn_asm_str = "movl %gs:0, $0;\naddl $1, $0";
+        const char *dyn_asm_str = "movl %gs:0, $0;\naddl $1, $0";
 #  endif
 
-    // The add instruction clobbers flags
-    Value *tls;
-    if (offset) {
-        std::vector<Type*> args(0);
-        args.push_back(offset->getType());
-        auto tp = InlineAsm::get(FunctionType::get(T_pint8, args, false),
-                                 dyn_asm_str, "=&r,r,~{dirflag},~{fpsr},~{flags}", false);
-        tls = CallInst::Create(tp, offset, "ptls_i8", insertBefore);
+        // The add instruction clobbers flags
+        Value *tls;
+        if (offset) {
+            std::vector<Type*> args(0);
+            args.push_back(offset->getType());
+            auto tp = InlineAsm::get(FunctionType::get(T_pint8, args, false),
+                                     dyn_asm_str, "=&r,r,~{dirflag},~{fpsr},~{flags}", false);
+            tls = CallInst::Create(tp, offset, "ptls_i8", insertBefore);
+        }
+        else {
+            auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
+                                     const_asm_str.c_str(), "=r,~{dirflag},~{fpsr},~{flags}",
+                                     false);
+            tls = CallInst::Create(tp, "ptls_i8", insertBefore);
+        }
+        return new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0), "ptls", insertBefore);
     }
-    else {
-        auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
-                                 const_asm_str.c_str(), "=r,~{dirflag},~{fpsr},~{flags}", false);
-        tls = CallInst::Create(tp, "ptls_i8", insertBefore);
-    }
-    return new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0), "ptls", insertBefore);
-#  elif defined(_CPU_AARCH64_) || (defined(__ARM_ARCH) && __ARM_ARCH >= 7)
+#endif
     // AArch64/ARM doesn't seem to have this issue.
     // (Possibly because there are many more registers and the offset is
     // positive and small)
@@ -126,8 +129,15 @@ static Instruction *emit_ptls_tp(LLVMContext &ctx, Value *offset, Type *T_ppjlva
     // the add for now.
 #if defined(_CPU_AARCH64_)
     const char *asm_str = "mrs $0, tpidr_el0";
-#else
+#elif defined(__ARM_ARCH) && __ARM_ARCH >= 7
     const char *asm_str = "mrc p15, 0, $0, c13, c0, 3";
+#elif defined(_CPU_X86_64_)
+    const char *asm_str = "movq %fs:0, $0";
+#elif defined(_CPU_X86_)
+    const char *asm_str = "movl %gs:0, $0";
+#else
+    const char *asm_str = nullptr;
+    assert(0 && "Cannot emit thread pointer for this architecture.");
 #endif
     if (!offset) {
         auto T_size = (sizeof(size_t) == 8 ? Type::getInt64Ty(ctx) : Type::getInt32Ty(ctx));
@@ -137,11 +147,6 @@ static Instruction *emit_ptls_tp(LLVMContext &ctx, Value *offset, Type *T_ppjlva
     Value *tls = CallInst::Create(tp, "thread_ptr", insertBefore);
     tls = GetElementPtrInst::Create(T_int8, tls, {offset}, "ptls_i8", insertBefore);
     return new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0), "ptls", insertBefore);
-#  else
-    (void)T_pint8;
-    assert(0 && "Cannot emit thread pointer for this architecture.");
-    return nullptr;
-#  endif
 }
 
 #endif

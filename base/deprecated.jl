@@ -1638,7 +1638,7 @@ export hex2num
 
 # PR 23341
 import .LinAlg: diagm
-@deprecate diagm(A::SparseMatrixCSC) spdiagm(sparsevec(A))
+@deprecate diagm(A::SparseMatrixCSC) sparse(Diagonal(sparsevec(A)))
 
 # PR #23373
 @deprecate diagm(A::BitMatrix) diagm(vec(A))
@@ -1757,6 +1757,33 @@ end
 
 @deprecate contains(eq::Function, itr, x) any(y->eq(y,x), itr)
 
+# PR #23757
+import .SparseArrays.spdiagm
+@deprecate spdiagm(x::AbstractVector) sparse(Diagonal(x))
+function spdiagm(x::AbstractVector, d::Number)
+    depwarn(string("spdiagm(x::AbstractVector, d::Number) is deprecated, use ",
+        "spdiagm(d => x) instead, which now returns a square matrix. To preserve the old ",
+        "behaviour, use sparse(SparseArrays.spdiagm_internal(d => x)...)"), :spdiagm)
+    I, J, V = SparseArrays.spdiagm_internal(d => x)
+    return sparse(I, J, V)
+end
+function spdiagm(x, d)
+    depwarn(string("spdiagm((x1, x2, ...), (d1, d2, ...)) is deprecated, use ",
+        "spdiagm(d1 => x1, d2 => x2, ...) instead, which now returns a square matrix. ",
+        "To preserve the old behaviour, use ",
+        "sparse(SparseArrays.spdiagm_internal(d1 => x1, d2 => x2, ...)...)"), :spdiagm)
+    I, J, V = SparseArrays.spdiagm_internal((d[i] => x[i] for i in 1:length(x))...)
+    return sparse(I, J, V)
+end
+function spdiagm(x, d, m::Integer, n::Integer)
+    depwarn(string("spdiagm((x1, x2, ...), (d1, d2, ...), m, n) is deprecated, use ",
+        "spdiagm(d1 => x1, d2 => x2, ...) instead, which now returns a square matrix. ",
+        "To specify a non-square matrix and preserve the old behaviour, use ",
+        "I, J, V = SparseArrays.spdiagm_internal(d1 => x1, d2 => x2, ...); sparse(I, J, V, m, n)"), :spdiagm)
+    I, J, V = SparseArrays.spdiagm_internal((d[i] => x[i] for i in 1:length(x))...)
+    return sparse(I, J, V, m, n)
+end
+
 # PR #23690
 # `SSHCredentials` and `UserPasswordCredentials` constructors using `prompt_if_incorrect`
 # are deprecated in base/libgit2/types.jl.
@@ -1854,6 +1881,13 @@ end
 @deprecate findlast(A, v)             findlast(equalto(v), A)
 # also remove deprecation warnings in find* functions in array.jl, sparse/sparsematrix.jl,
 # and sparse/sparsevector.jl.
+
+# issue #22849
+@deprecate reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where {T, S, N} reshape(reinterpret(T, vec(a)), dims)
+@deprecate reinterpret(::Type{T}, a::SparseMatrixCSC{S}, dims::NTuple{N,Int}) where {T, S, N} reinterpret(T, reshape(a, dims))
+
+# issue #24006
+@deprecate linearindices(s::AbstractString) eachindex(s)
 
 # END 0.7 deprecations
 

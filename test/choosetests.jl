@@ -2,7 +2,7 @@
 
 @doc """
 
-`tests, net_on, exit_on_error = choosetests(choices)` selects a set of tests to be
+`tests, net_on, exit_on_error, seed = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
 `["all"]`, all tests are selected.
 
@@ -10,14 +10,21 @@ This function also supports "test collections": specifically, "linalg"
  refers to collections of tests in the correspondingly-named
 directories.
 
-Upon return, `tests` is a vector of fully-expanded test names,
-`net_on` is true if networking is available (required for some tests),
-and `exit_on_error` is true if an error in one test should cancel
-remaining tests to be run (otherwise, all tests are run unconditionally).
+Upon return:
+  - `tests` is a vector of fully-expanded test names,
+  - `net_on` is true if networking is available (required for some tests),
+  - `exit_on_error` is true if an error in one test should cancel
+    remaining tests to be run (otherwise, all tests are run unconditionally),
+  - `seed` is a seed which will be used to initialize the global RNG for each
+    test to be run.
 
-Two options can be passed to `choosetests` by including a special token
-in the `choices` argument: "--skip", which makes all tests coming after
-be skipped, and "--exit-on-error" which sets the value of `exit_on_error`.
+Three options can be passed to `choosetests` by including a special token
+in the `choices` argument:
+   - "--skip", which makes all tests coming after be skipped,
+   - "--exit-on-error" which sets the value of `exit_on_error`,
+   - "--seed=SEED", which sets the value of `seed` to `SEED`
+     (parsed as an `UInt128`); `seed` is otherwise initialized randomly.
+     This option can be used to reproduce failed tests.
 """ ->
 function choosetests(choices = [])
     testnames = [
@@ -41,7 +48,8 @@ function choosetests(choices = [])
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "intset", "floatfuncs", "compile", "distributed", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
-        "channels", "iostream", "specificity", "codegen", "codevalidation"
+        "channels", "iostream", "specificity", "codegen", "codevalidation",
+        "reinterpretarray"
     ]
     profile_skipped = false
     if startswith(string(Sys.ARCH), "arm")
@@ -58,6 +66,7 @@ function choosetests(choices = [])
     tests = []
     skip_tests = []
     exit_on_error = false
+    seed = rand(RandomDevice(), UInt128)
 
     for (i, t) in enumerate(choices)
         if t == "--skip"
@@ -65,6 +74,8 @@ function choosetests(choices = [])
             break
         elseif t == "--exit-on-error"
             exit_on_error = true
+        elseif startswith(t, "--seed=")
+            seed = parse(UInt128, t[8:end])
         else
             push!(tests, t)
         end
@@ -177,5 +188,5 @@ function choosetests(choices = [])
 
     filter!(x -> !(x in skip_tests), tests)
 
-    tests, net_on, exit_on_error
+    tests, net_on, exit_on_error, seed
 end

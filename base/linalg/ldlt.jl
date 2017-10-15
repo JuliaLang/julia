@@ -121,6 +121,11 @@ function A_ldiv_B!(S::LDLt{T,M}, B::AbstractVecOrMat{T}) where {T,M<:SymTridiago
     return B
 end
 
+function logabsdet(F::LDLt{<:Any,<:SymTridiagonal})
+    it = (F.data[i,i] for i in 1:size(F, 1))
+    return sum(log∘abs, it), prod(sign, it)
+end
+
 # Conversion methods
 function convert(::Type{SymTridiagonal}, F::LDLt)
     e = copy(F.data.ev)

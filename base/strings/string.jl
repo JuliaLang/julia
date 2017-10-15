@@ -66,6 +66,17 @@ sizeof(s::String) = Core.sizeof(s)
 
 Get the `i`th code unit of an encoded string. For example,
 returns the `i`th byte of the representation of a UTF-8 string.
+
+# Examples
+```jldoctest
+julia> s = "δ=γ"; [codeunit(s, i) for i in 1:sizeof(s)]
+5-element Array{UInt8,1}:
+ 0xce
+ 0xb4
+ 0x3d
+ 0xce
+ 0xb3
+```
 """
 codeunit(s::AbstractString, i::Integer)
 

@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## The LAPACK module of interfaces to LAPACK subroutines
 module LAPACK
+@doc """
+Interfaces to LAPACK subroutines.
+""" -> LAPACK
 
 const liblapack = Base.liblapack_name
 

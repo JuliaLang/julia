@@ -4,21 +4,20 @@ using Test
 
 ## Test Julia fallbacks to BLAS routines
 
-# matrices with zero dimensions
-@test ones(0,5)*ones(5,3) == zeros(0,3)
-@test ones(3,5)*ones(5,0) == zeros(3,0)
-@test ones(3,0)*ones(0,4) == zeros(3,4)
-@test ones(0,5)*ones(5,0) == zeros(0,0)
-@test ones(0,0)*ones(0,4) == zeros(0,4)
-@test ones(3,0)*ones(0,0) == zeros(3,0)
-@test ones(0,0)*ones(0,0) == zeros(0,0)
-@test Array{Float64}(5, 0) |> t -> t't == zeros(0,0)
-@test Array{Float64}(5, 0) |> t -> t*t' == zeros(5,5)
-@test Array{Complex128}(5, 0) |> t -> t't == zeros(0,0)
-@test Array{Complex128}(5, 0) |> t -> t*t' == zeros(5,5)
-
-# 2x2
-let
+@testset "matrices with zero dimensions" begin
+    @test ones(0,5)*ones(5,3) == zeros(0,3)
+    @test ones(3,5)*ones(5,0) == zeros(3,0)
+    @test ones(3,0)*ones(0,4) == zeros(3,4)
+    @test ones(0,5)*ones(5,0) == zeros(0,0)
+    @test ones(0,0)*ones(0,4) == zeros(0,4)
+    @test ones(3,0)*ones(0,0) == zeros(3,0)
+    @test ones(0,0)*ones(0,0) == zeros(0,0)
+    @test Array{Float64}(5, 0) |> t -> t't == zeros(0,0)
+    @test Array{Float64}(5, 0) |> t -> t*t' == zeros(5,5)
+    @test Array{Complex128}(5, 0) |> t -> t't == zeros(0,0)
+    @test Array{Complex128}(5, 0) |> t -> t*t' == zeros(5,5)
+end
+@testset "2x2 matmul" begin
     AA = [1 2; 3 4]
     BB = [5 6; 7 8]
     AAi = AA+(0.5*im).*BB
@@ -39,8 +38,7 @@ let
     CC = ones(3, 3)
     @test_throws DimensionMismatch A_mul_B!(CC, AA, BB)
 end
-# 3x3
-let
+@testset "3x3 matmul" begin
     AA = [1 2 3; 4 5 6; 7 8 9].-5
     BB = [1 0 5; 6 -10 3; 2 -4 -1]
     AAi = AA+(0.5*im).*BB
@@ -61,7 +59,7 @@ let
     CC = ones(4, 4)
     @test_throws DimensionMismatch A_mul_B!(CC, AA, BB)
 end
-# Generic integer matrix multiplication
+
 # Generic AbstractArrays
 module MyArray15367
     using Test
@@ -77,7 +75,7 @@ module MyArray15367
     @test A*b ≈ A.data*b
 end
 
-let
+@testset "Generic integer matrix multiplication" begin
     AA = [1 2 3; 4 5 6] .- 3
     BB = [2 -2; 3 -5; -4 7]
     for A in (copy(AA), view(AA, 1:2, 1:3)), B in (copy(BB), view(BB, 1:3, 1:2))
@@ -113,8 +111,7 @@ let
     end
 end
 
-#and for generic_matvecmul
-let
+@testset "generic_matvecmul" begin
     AA = rand(5,5)
     BB = rand(5)
     for A in (copy(AA), view(AA, 1:5, 1:5)), B in (copy(BB), view(BB, 1:5))
@@ -133,8 +130,7 @@ let
     end
 end
 
-# fallbacks & such for BlasFloats
-let
+@testset "fallbacks & such for BlasFloats" begin
     AA = rand(Float64,6,6)
     BB = rand(Float64,6,6)
     CC = zeros(Float64,6,6)
@@ -145,8 +141,7 @@ let
     end
 end
 
-# matrix algebra with subarrays of floats (stride != 1)
-let
+@testset "matrix algebra with subarrays of floats (stride != 1)" begin
     A = reshape(map(Float64,1:20),5,4)
     Aref = A[1:2:end,1:2:end]
     Asub = view(A, 1:2:5, 1:2:4)
@@ -161,8 +156,11 @@ let
     @test A_mul_Bc(Asub, Asub) == A_mul_Bc(Aref, Aref)
 end
 
-# issue #15286
-let A = reshape(map(Float64, 1:20), 5, 4), C = zeros(8, 8), sC = view(C, 1:2:8, 1:2:8), B = reshape(map(Float64,-9:10),5,4)
+@testset "issue #15286" begin
+    A = reshape(map(Float64, 1:20), 5, 4)
+    C = zeros(8, 8)
+    sC = view(C, 1:2:8, 1:2:8)
+    B = reshape(map(Float64,-9:10),5,4)
     @test At_mul_B!(sC, A, A) == A'*A
     @test At_mul_B!(sC, A, B) == A'*B
 
@@ -174,8 +172,7 @@ let A = reshape(map(Float64, 1:20), 5, 4), C = zeros(8, 8), sC = view(C, 1:2:8, 
     @test Ac_mul_B!(sC, Aim, B) == Aim'*B
 end
 
-# syrk & herk
-let
+@testset "syrk & herk" begin
     AA = reshape(1:1503, 501, 3).-750.0
     res = Float64[135228751 9979252 -115270247; 9979252 10481254 10983256; -115270247 10983256 137236759]
     for A in (copy(AA), view(AA, 1:501, 1:3))
@@ -196,8 +193,7 @@ let
     @test_throws DimensionMismatch Base.LinAlg.herk_wrapper!(zeros(5,5),'N',ones(6,5))
 end
 
-# matmul for types w/o sizeof (issue #1282)
-let
+@testset "matmul for types w/o sizeof (issue #1282)" begin
     AA = fill(complex(1,1), 10, 10)
     for A in (copy(AA), view(AA, 1:10, 1:10))
         A2 = A^2
@@ -205,7 +201,7 @@ let
     end
 end
 
-let
+@testset "scale!" begin
     AA = zeros(5, 5)
     BB = ones(5)
     CC = rand(5, 6)
@@ -231,8 +227,10 @@ end
     @test dot(X, X) == res
 end
 
-vecdot_(x,y) = invoke(vecdot, Tuple{Any,Any}, x,y) # generic vecdot
-let AA = [1+2im 3+4im; 5+6im 7+8im], BB = [2+7im 4+1im; 3+8im 6+5im]
+vecdot_(x,y) = invoke(vecdot, Tuple{Any,Any}, x,y)
+@testset "generic vecdot" begin
+    AA = [1+2im 3+4im; 5+6im 7+8im]
+    BB = [2+7im 4+1im; 3+8im 6+5im]
     for A in (copy(AA), view(AA, 1:2, 1:2)), B in (copy(BB), view(BB, 1:2, 1:2))
         @test vecdot(A,B) == dot(vec(A),vec(B)) == vecdot_(A,B) == vecdot(float.(A),float.(B))
         @test vecdot(Int[], Int[]) == 0 == vecdot_(Int[], Int[])
@@ -248,8 +246,7 @@ let AA = [1+2im 3+4im; 5+6im 7+8im], BB = [2+7im 4+1im; 3+8im 6+5im]
     end
 end
 
-# Issue 11978
-let
+@testset "Issue 11978" begin
     A = Array{Matrix{Float64}}(2, 2)
     A[1,1] = eye(3)
     A[1,2] = eye(3,2)
@@ -263,7 +260,7 @@ end
 
 @test_throws ArgumentError Base.LinAlg.copytri!(ones(10,10),'Z')
 
-for elty in [Float32,Float64,Complex128,Complex64]
+@testset "gemv! and gemm_wrapper for $elty" for elty in [Float32,Float64,Complex128,Complex64]
     @test_throws DimensionMismatch Base.LinAlg.gemv!(ones(elty,10),'N',rand(elty,10,10),ones(elty,11))
     @test_throws DimensionMismatch Base.LinAlg.gemv!(ones(elty,11),'N',rand(elty,10,10),ones(elty,10))
     @test Base.LinAlg.gemv!(ones(elty,0),'N',rand(elty,0,0),rand(elty,0)) == ones(elty,0)
@@ -277,8 +274,7 @@ for elty in [Float32,Float64,Complex128,Complex64]
     @test Base.LinAlg.matmul3x3('T','N',A,eye(elty,3)) == A.'
 end
 
-# 13593, #13488
-let
+@testset "#13593, #13488" begin
     aa = rand(3,3)
     bb = rand(3,3)
     for a in (copy(aa), view(aa, 1:3, 1:3)), b in (copy(bb), view(bb, 1:3, 1:3))
@@ -288,7 +284,7 @@ let
     end
 end
 
-# Number types that lack conversion to the destination type (#14293)
+# Number types that lack conversion to the destination type
 struct RootInt
     i::Int
 end
@@ -297,7 +293,7 @@ import Base: *, transpose
 transpose(x::RootInt) = x
 @test Base.promote_op(*, RootInt, RootInt) === Int
 
-let
+@testset "#14293" begin
     a = [RootInt(3)]
     C = [0]
     A_mul_Bt!(C, a, a)
@@ -314,7 +310,7 @@ function test_mul(C, A, B)
     @test A*B ≈ C
 end
 
-let
+@testset "A_mul_B! vs A_mul_B for special types" begin
     eltypes = [Float32, Float64, Int64]
     for k in [3, 4, 10]
         T = rand(eltypes)

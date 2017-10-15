@@ -21,3 +21,10 @@ issparse(S::UpperTriangular{<:Any,<:AbstractSparseMatrix}) = true
 issparse(S::LinAlg.UnitUpperTriangular{<:Any,<:AbstractSparseMatrix}) = true
 
 indtype(S::AbstractSparseArray{<:Any,Ti}) where {Ti} = Ti
+
+function Base.reinterpret(::Type, A::AbstractSparseArray)
+    error("""
+          `reinterpret` on sparse arrays is discontinued.
+          Try reinterpreting the value itself instead.
+          """)
+end

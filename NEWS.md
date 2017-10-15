@@ -246,6 +246,9 @@ This section lists changes that do not have deprecation warnings.
   * All command line arguments passed via `-e`, `-E`, and `-L` will be executed in the order
     given on the command line ([#23665]).
 
+  * The return type of `reinterpret` has changed to `ReinterpretArray`. `reinterpret` on sparse
+    arrays has been discontinued.
+
 Library improvements
 --------------------
 
@@ -315,6 +318,10 @@ Library improvements
 
   * New function `equalto(x)`, which returns a function that compares its argument to `x`
     using `isequal` ([#23812]).
+
+  * `reinterpret` now works on any AbstractArray using the new `ReinterpretArray` type.
+    This supersedes the old behavior of reinterpret on Arrays. As a result, reinterpreting
+    arrays with different alignment requirements (removed in 0.6) is once again allowed ([#23750]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -499,6 +506,13 @@ Deprecated or removed
 
   * `contains(eq, itr, item)` is deprecated in favor of `any` with a predicate ([#23716]).
 
+  * `spdiagm(x::AbstractVector)` has been deprecated in favor of `sparse(Diagonal(x))`
+    alternatively `spdiagm(0 => x)` ([#23757]).
+
+  * `spdiagm(x::AbstractVector, d::Integer)` and `spdiagm(x::Tuple{<:AbstractVector}, d::Tuple{<:Integer})`
+    have been deprecated in favor of `spdiagm(d => x)` and `spdiagm(d[1] => x[1], d[2] => x[2], ...)`
+    respectively. The new `spdiagm` implementation now always returns a square matrix ([#23757]).
+
   * Constructors for `LibGit2.UserPasswordCredentials` and `LibGit2.SSHCredentials` which take a
     `prompt_if_incorrect` argument are deprecated. Instead, prompting behavior is controlled using
     the `allow_prompt` keyword in the `LibGit2.CredentialPayload` constructor ([#23690]).
@@ -513,6 +527,11 @@ Deprecated or removed
 
   * `find` functions now operate only on booleans by default. To look for non-zeros, use
     `x->x!=0` or `!iszero` ([#23120]).
+
+  * The ability of `reinterpret` to yield `Array`s of different type than the underlying storage
+    has been removed. The `reinterpret` function is still available, but now returns a
+    `ReinterpretArray`. The three argument form of `reinterpret` that implicitly reshapes
+    has been deprecated ([#23750]).
 
 Command-line option changes
 ---------------------------
@@ -623,6 +642,9 @@ Breaking changes
 ----------------
 
 This section lists changes that do not have deprecation warnings.
+
+  * The constructor of `SubString` now checks if the requsted view range
+    is defined by valid indices in the parent `AbstractString` ([#22511]).
 
   * `readline`, `readlines` and `eachline` return lines without line endings by default.
     You *must* use `readline(s, chomp=false)`, etc. to get the old behavior where

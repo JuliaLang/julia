@@ -68,19 +68,15 @@ using Main.TestHelpers.OAs
     @test a[1,2,1,1,2] == 20
     @test a[1,1,2,2,1] == 30
 
-    @test_throws ArgumentError reinterpret(Int8, a)
-
     b = reshape(a, (32,))
     @test b[1]  == 10
     @test b[19] == 20
     @test b[13] == 30
     @test_throws DimensionMismatch reshape(b,(5,7))
     @test_throws DimensionMismatch reshape(b,(35,))
-    @test_throws DimensionMismatch reinterpret(Int, b, (35,))
-    @test_throws ArgumentError reinterpret(Any, b, (32,))
-    @test_throws DimensionMismatch reinterpret(Complex128, b, (32,))
+    @test_throws ArgumentError reinterpret(Any, b)
     c = ["hello", "world"]
-    @test_throws ArgumentError reinterpret(Float32, c, (2,))
+    @test_throws ArgumentError reinterpret(Float32, c)
     a = Vector(ones(5))
     @test_throws ArgumentError resize!(a, -2)
 
@@ -209,7 +205,7 @@ end
     @test b[5] == -4
     @test b[6] == -3
     @test b[7] == -2
-    b = reinterpret(Int, a, (3,4))
+    b = reinterpret(Int, a)
     b[1] = -1
     @test vec(b) == vec(a)
 
