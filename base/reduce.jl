@@ -5,31 +5,24 @@
 ###### Generic (map)reduce functions ######
 
 if Int === Int32
-const SmallSigned = Union{Int8,Int16}
-const SmallUnsigned = Union{UInt8,UInt16}
+    const SmallSigned = Union{Int8,Int16}
+    const SmallUnsigned = Union{UInt8,UInt16}
 else
-const SmallSigned = Union{Int8,Int16,Int32}
-const SmallUnsigned = Union{UInt8,UInt16,UInt32}
+    const SmallSigned = Union{Int8,Int16,Int32}
+    const SmallUnsigned = Union{UInt8,UInt16,UInt32}
 end
 
-const CommonReduceResult = Union{UInt64,UInt128,Int64,Int128,Float32,Float64}
-const WidenReduceResult = Union{SmallSigned, SmallUnsigned, Float16}
+# Certain reductions like sum and prod may wish to promote the items being reduced over to
+# an appropriate size. Note we need x + zero(x) because some types like Bool have their sum
+# lie in a larger type.
+promote_sys_size(T::Type) = T
+promote_sys_size(::Type{<:SmallSigned}) = Int
+promote_sys_size(::Type{<:SmallUnsigned}) = UInt
 
-# r_promote_type: promote T to the type of reduce(op, ::Array{T})
-# (some "extra" methods are required here to avoid ambiguity warnings)
-r_promote_type(op, ::Type{T}) where {T} = T
-r_promote_type(op, ::Type{T}) where {T<:WidenReduceResult} = widen(T)
-r_promote_type(::typeof(+), ::Type{T}) where {T<:WidenReduceResult} = widen(T)
-r_promote_type(::typeof(*), ::Type{T}) where {T<:WidenReduceResult} = widen(T)
-r_promote_type(::typeof(+), ::Type{T}) where {T<:Number} = typeof(zero(T)+zero(T))
-r_promote_type(::typeof(*), ::Type{T}) where {T<:Number} = typeof(one(T)*one(T))
-r_promote_type(::typeof(scalarmax), ::Type{T}) where {T<:WidenReduceResult} = T
-r_promote_type(::typeof(scalarmin), ::Type{T}) where {T<:WidenReduceResult} = T
-r_promote_type(::typeof(max), ::Type{T}) where {T<:WidenReduceResult} = T
-r_promote_type(::typeof(min), ::Type{T}) where {T<:WidenReduceResult} = T
-
-# r_promote: promote x to the type of reduce(op, [x])
-r_promote(op, x::T) where {T} = convert(r_promote_type(op, T), x)
+promote_sys_size_add(x) = convert(promote_sys_size(typeof(x + zero(x))), x)
+promote_sys_size_mul(x) = convert(promote_sys_size(typeof(x * one(x))), x)
+const _PromoteSysSizeFunction = Union{typeof(promote_sys_size_add),
+                                      typeof(promote_sys_size_mul)}
 
 ## foldl && mapfoldl
 
@@ -37,10 +30,10 @@ r_promote(op, x::T) where {T} = convert(r_promote_type(op, T), x)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
     if done(itr, i)
-        return r_promote(op, v0)
+        return v0
     else
         (x, i) = next(itr, i)
-        v = op(r_promote(op, v0), f(x))
+        v = op(v0, f(x))
         while !done(itr, i)
             @inbounds (x, i) = next(itr, i)
             v = op(v, f(x))
@@ -68,7 +61,7 @@ In general, this cannot be used with empty collections (see [`reduce(op, itr)`](
 function mapfoldl(f, op, itr)
     i = start(itr)
     if done(itr, i)
-        return Base.mr_empty_iter(f, op, itr, iteratoreltype(itr))
+        return Base.mapreduce_empty_iter(f, op, itr, iteratoreltype(itr))
     end
     (x, i) = next(itr, i)
     v0 = f(x)
@@ -107,10 +100,10 @@ function mapfoldr_impl(f, op, v0, itr, i::Integer)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
     if isempty(itr) || i == 0
-        return r_promote(op, v0)
+        return v0
     else
         x = itr[i]
-        v  = op(f(x), r_promote(op, v0))
+        v  = op(f(x), v0)
         while i > 1
             x = itr[i -= 1]
             v = op(f(x), v)
@@ -138,7 +131,7 @@ In general, this cannot be used with empty collections (see [`reduce(op, itr)`](
 function mapfoldr(f, op, itr)
     i = endof(itr)
     if isempty(itr)
-        return Base.mr_empty_iter(f, op, itr, iteratoreltype(itr))
+        return Base.mapreduce_empty_iter(f, op, itr, iteratoreltype(itr))
     end
     return mapfoldr_impl(f, op, f(itr[i]), itr, i-1)
 end
@@ -181,12 +174,12 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
 @noinline function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
-        return r_promote(op, f(a1))
+        return f(a1)
     elseif ifirst + blksize > ilast
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[ifirst+1]
-        v = op(r_promote(op, f(a1)), r_promote(op, f(a2)))
+        v = op(f(a1), f(a2))
         @simd for i = ifirst + 2 : ilast
             @inbounds ai = A[i]
             v = op(v, f(ai))
@@ -245,23 +238,33 @@ pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
 # handling empty arrays
 _empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))
-mr_empty(f, op, T) = _empty_reduce_error()
-# use zero(T)::T to improve type information when zero(T) is not defined
-mr_empty(::typeof(identity), op::typeof(+), T) = r_promote(op, zero(T)::T)
-mr_empty(::typeof(abs), op::typeof(+), T) = r_promote(op, abs(zero(T)::T))
-mr_empty(::typeof(abs2), op::typeof(+), T) = r_promote(op, abs2(zero(T)::T))
-mr_empty(::typeof(identity), op::typeof(*), T) = r_promote(op, one(T)::T)
-mr_empty(::typeof(abs), op::typeof(scalarmax), T) = abs(zero(T)::T)
-mr_empty(::typeof(abs2), op::typeof(scalarmax), T) = abs2(zero(T)::T)
-mr_empty(::typeof(abs), op::typeof(max), T) = mr_empty(abs, scalarmax, T)
-mr_empty(::typeof(abs2), op::typeof(max), T) = mr_empty(abs2, scalarmax, T)
-mr_empty(f, op::typeof(&), T) = true
-mr_empty(f, op::typeof(|), T) = false
+reduce_empty(op, T) = _empty_reduce_error()
+reduce_empty(::typeof(+), T) = zero(T)
+reduce_empty(::typeof(*), T) = one(T)
+reduce_empty(::typeof(&), ::Type{Bool}) = true
+reduce_empty(::typeof(|), ::Type{Bool}) = false
 
-mr_empty_iter(f, op, itr, ::HasEltype) = mr_empty(f, op, eltype(itr))
-mr_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
-mr_empty_iter(f, op::typeof(|), itr, ::EltypeUnknown) = false
-mr_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
+mapreduce_empty(f, op, T) = _empty_reduce_error()
+mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
+mapreduce_empty(f::_PromoteSysSizeFunction, op, T) =
+    f(mapreduce_empty(identity, op, T))
+mapreduce_empty(::typeof(abs), ::typeof(+), T) = abs(zero(T))
+mapreduce_empty(::typeof(abs2), ::typeof(+), T) = abs2(zero(T))
+mapreduce_empty(::typeof(abs), ::Union{typeof(scalarmax), typeof(max)}, T) =
+    abs(zero(T))
+mapreduce_empty(::typeof(abs2), ::Union{typeof(scalarmax), typeof(max)}, T) =
+    abs2(zero(T))
+
+# Allow mapreduce_empty to “see through” promote_sys_size
+let ComposedFunction = typename(typeof(identity ∘ identity)).wrapper
+    global mapreduce_empty(f::ComposedFunction{<:_PromoteSysSizeFunction}, op, T) =
+        f.f(mapreduce_empty(f.g, op, T))
+end
+
+mapreduce_empty_iter(f, op, itr, ::HasEltype) = mapreduce_empty(f, op, eltype(itr))
+mapreduce_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
+mapreduce_empty_iter(f, op::typeof(|), itr, ::EltypeUnknown) = false
+mapreduce_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
@@ -269,15 +272,15 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
     inds = linearindices(A)
     n = length(inds)
     if n == 0
-        return mr_empty(f, op, T)
+        return mapreduce_empty(f, op, T)
     elseif n == 1
         @inbounds a1 = A[inds[1]]
-        return r_promote(op, f(a1))
+        return f(a1)
     elseif n < 16 # process short array here, avoid mapreduce_impl() compilation
         @inbounds i = inds[1]
         @inbounds a1 = A[i]
         @inbounds a2 = A[i+=1]
-        s = op(r_promote(op, f(a1)), r_promote(op, f(a2)))
+        s = op(f(a1), f(a2))
         while i < last(inds)
             @inbounds Ai = A[i+=1]
             s = op(s, f(Ai))
@@ -296,21 +299,21 @@ mapreduce(f, op, a::Number) = f(a)
 """
     reduce(op, v0, itr)
 
-Reduce the given collection `ìtr` with the given binary operator `op`. `v0` must be a
+Reduce the given collection `itr` with the given binary operator `op`. `v0` must be a
 neutral element for `op` that will be returned for empty collections. It is unspecified
 whether `v0` is used for non-empty collections.
 
-Reductions for certain commonly-used operators have special implementations which should be
-used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`, `any(itr)`,
-`all(itr)`.
+Reductions for certain commonly-used operators may have special implementations, and
+should be used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`,
+ `any(itr)`, `all(itr)`.
 
 The associativity of the reduction is implementation dependent. This means that you can't
 use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
 should be evaluated as `(1-2)-3` or `1-(2-3)`. Use [`foldl`](@ref) or
 [`foldr`](@ref) instead for guaranteed left or right associativity.
 
-Some operations accumulate error, and parallelism will also be easier if the reduction can
-be executed in groups. Future versions of Julia might change the algorithm. Note that the
+Some operations accumulate error. Parallelism will be easier if the reduction can be
+executed in groups. Future versions of Julia might change the algorithm. Note that the
 elements are not reordered if you use an ordered collection.
 
 # Examples
@@ -345,24 +348,47 @@ reduce(op, a::Number) = a
 
 Sum the results of calling function `f` on each element of `itr`.
 
+The return type is `Int` for signed integers of less than system word size, and
+`UInt` for unsigned integers of less than system word size.  For all other
+arguments, a common return type is found to which all arguments are promoted.
+
 ```jldoctest
 julia> sum(abs2, [2; 3; 4])
 29
 ```
+
+Note the important difference between `sum(A)` and `reduce(+, A)` for arrays
+with small integer eltype:
+
+```jldoctest
+julia> sum(Int8[100, 28])
+128
+
+julia> reduce(+, Int8[100, 28])
+-128
+```
+
+In the former case, the integers are widened to system word size and therefore
+the result is 128. In the latter case, no such widening happens and integer
+overflow results in -128.
 """
-sum(f::Callable, a) = mapreduce(f, +, a)
+sum(f::Callable, a) = mapreduce(promote_sys_size_add ∘ f, +, a)
 
 """
     sum(itr)
 
 Returns the sum of all elements in a collection.
 
+The return type is `Int` for signed integers of less than system word size, and
+`UInt` for unsigned integers of less than system word size.  For all other
+arguments, a common return type is found to which all arguments are promoted.
+
 ```jldoctest
 julia> sum(1:20)
 210
 ```
 """
-sum(a) = mapreduce(identity, +, a)
+sum(a) = mapreduce(promote_sys_size_add, +, a)
 sum(a::AbstractArray{Bool}) = count(a)
 
 
@@ -377,7 +403,7 @@ summation algorithm for additional accuracy.
 """
 function sum_kbn(A)
     T = @default_eltype(typeof(A))
-    c = r_promote(+, zero(T)::T)
+    c = promote_sys_size_add(zero(T)::T)
     i = start(A)
     if done(A, i)
         return c
@@ -403,24 +429,32 @@ end
 
 Returns the product of `f` applied to each element of `itr`.
 
+The return type is `Int` for signed integers of less than system word size, and
+`UInt` for unsigned integers of less than system word size.  For all other
+arguments, a common return type is found to which all arguments are promoted.
+
 ```jldoctest
 julia> prod(abs2, [2; 3; 4])
 576
 ```
 """
-prod(f::Callable, a) = mapreduce(f, *, a)
+prod(f::Callable, a) = mapreduce(promote_sys_size_mul ∘ f, *, a)
 
 """
     prod(itr)
 
 Returns the product of all elements of a collection.
 
+The return type is `Int` for signed integers of less than system word size, and
+`UInt` for unsigned integers of less than system word size.  For all other
+arguments, a common return type is found to which all arguments are promoted.
+
 ```jldoctest
 julia> prod(1:20)
 2432902008176640000
 ```
 """
-prod(a) = mapreduce(identity, *, a)
+prod(a) = mapreduce(promote_sys_size_mul, *, a)
 
 ## maximum & minimum
 

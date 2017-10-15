@@ -115,6 +115,9 @@ Language changes
   * The keyword `importall` is deprecated. Use `using` and/or individual `import` statements
     instead ([#22789]).
 
+  * `reduce(+, [...])` and `reduce(*, [...])` no longer widen the iterated over arguments to
+    system word size. `sum` and `prod` still preserve this behavior. ([#22825])
+
 Breaking changes
 ----------------
 
