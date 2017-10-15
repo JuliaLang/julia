@@ -516,3 +516,15 @@ using Main.TestHelpers.Furlong
 let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
     @test sqrt(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
 end
+
+@testset "similar should preserve underlying storage type" begin
+    m, n = 4, 3
+    sparsemat = sprand(m, m, 0.5)
+    for TriType in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        trisparsemat = TriType(sparsemat)
+        @test isa(similar(trisparsemat), typeof(trisparsemat))
+        @test isa(similar(trisparsemat, Float32), TriType{Float32,<:SparseMatrixCSC{Float32}})
+        @test isa(similar(trisparsemat, (n, n)), typeof(sparsemat))
+        @test isa(similar(trisparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
+    end
+end
