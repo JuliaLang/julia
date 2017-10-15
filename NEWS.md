@@ -316,7 +316,7 @@ Library improvements
 
   * REPL Undo via Ctrl-/ and Ctrl-_
 
-  * `diagm` now accepts several diagonal index/vector pairs ([#24047]).
+  * `diagm` now accepts several diagonal index/vector `Pair`s ([#24047]).
 
   * New function `equalto(x)`, which returns a function that compares its argument to `x`
     using `isequal` ([#23812]).

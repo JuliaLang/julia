@@ -270,8 +270,11 @@ diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 
 Construct a square matrix from `Pair`s of diagonals and vectors.
 Vector `kv.second` will be placed on the `kv.first` diagonal.
+`diagm` constructs a full matrix; if you want storage-efficient
+versions with fast arithmetic, see [`Diagonal`](@ref), [`Bidiagonal`](@ref)
+[`Tridiagonal`](@ref) and [`SymTridiagonal`](@ref).
 
-See also: [`spdiagm`](@ref), [`Diagonal`](@ref)
+See also: [`spdiagm`](@ref)
 
 # Examples
 ```jldoctest
