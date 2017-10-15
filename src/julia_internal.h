@@ -1068,6 +1068,12 @@ jl_assume_aligned(T ptr, unsigned align)
 #define jl_assume_aligned(ptr, align) (ptr)
 #endif
 
+#if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
+#  define jl_unreachable() __builtin_unreachable()
+#else
+#  define jl_unreachable() ((void)jl_assume(0))
+#endif
+
 #ifdef __cplusplus
 }
 #endif
