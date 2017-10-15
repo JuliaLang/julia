@@ -69,6 +69,8 @@ startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
     chop(s::AbstractString, head::Integer=0, tail::Integer=1)
 
 Remove first `head` and last `tail` characters from `s`.
+If it is requested to remove more characters than `length(s)`
+then an empty string is returned.
 
 # Examples
 ```jldoctest
@@ -88,15 +90,20 @@ julia> chop(a, 5, 5)
 function chop(s::AbstractString, head::Integer, tail::Integer)
     # negative values of head/tail will throw error in nextind/prevind
     if head == 0
-        tail == 0 && return SubString(s)
-        return SubString(s, 1, prevind(s, endof(s), tail))
+        if tail == 0
+            return SubString(s)
+        else
+            return SubString(s, start(s), prevind(s, endof(s), tail))
+        end
+    elseif tail == 0
+        return SubString(s, nextind(s, start(s), head), endof(s))
+    else
+        return SubString(s, nextind(s, start(s), head), prevind(s, endof(s), tail))
     end
-    tail == 0 && return SubString(s, nextind(s, 1, head), endof(s))
-    SubString(s, nextind(s, 1, head), prevind(s, endof(s), tail))
 end
 
 # no head/tail version left for performance reasons
-chop(s::AbstractString) = SubString(s, 1, prevind(s, endof(s)))
+chop(s::AbstractString) = SubString(s, start(s), prevind(s, endof(s)))
 
 """
     chomp(s::AbstractString)
@@ -111,10 +118,10 @@ julia> chomp("Hello\\n")
 """
 function chomp(s::AbstractString)
     i = endof(s)
-    (i < 1 || s[i] != '\n') && (return SubString(s, 1, i))
+    (i < start(s) || s[i] != '\n') && (return SubString(s, start(s), i))
     j = prevind(s,i)
-    (j < 1 || s[j] != '\r') && (return SubString(s, 1, j))
-    return SubString(s, 1, prevind(s,j))
+    (j < start(s) || s[j] != '\r') && (return SubString(s, start(s), j))
+    return SubString(s, start(s), prevind(s,j))
 end
 function chomp(s::String)
     i = endof(s)
@@ -195,11 +202,11 @@ function rstrip(s::AbstractString, chars::Chars=_default_delims)
     while !done(r,i)
         c, j = next(r,i)
         if !(c in chars)
-            return SubString(s, 1, endof(s)-i+1)
+            return SubString(s, start(s), endof(s)-i+1)
         end
         i = j
     end
-    SubString(s, 1, 0)
+    SubString(s, start(s), 0)
 end
 
 """
