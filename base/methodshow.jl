@@ -262,6 +262,7 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=N
         end
     end
     print(io, ")")
+    print(io, " in ", m.module)
     if line > 0
         u = url(m)
         if isempty(u)
