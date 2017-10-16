@@ -444,3 +444,17 @@ end
         @test norm(inv(Hermitian(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
     end
 end
+
+@testset "similar should preserve underlying storage type and uplo flag" begin
+    m, n = 4, 3
+    sparsemat = sprand(m, m, 0.5)
+    for SymType in (Symmetric, Hermitian)
+        symsparsemat = SymType(sparsemat)
+        @test isa(similar(symsparsemat), typeof(symsparsemat))
+        @test similar(symsparsemat).uplo == symsparsemat.uplo
+        @test isa(similar(symsparsemat, Float32), SymType{Float32,<:SparseMatrixCSC{Float32}})
+        @test similar(symsparsemat, Float32).uplo == symsparsemat.uplo
+        @test isa(similar(symsparsemat, (n, n)), typeof(sparsemat))
+        @test isa(similar(symsparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
+    end
+end

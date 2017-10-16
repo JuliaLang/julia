@@ -137,16 +137,19 @@ function setindex!(A::Hermitian, v, i::Integer, j::Integer)
     end
 end
 
-similar(A::Symmetric, ::Type{T}) where {T} = Symmetric(similar(A.data, T))
-# Hermitian version can be simplified when check for imaginary part of
-# diagonal in Hermitian has been removed
+# For A<:Union{Symmetric,Hermitian}, similar(A[, neweltype]) should yield a matrix with the same
+# symmetry type, uplo flag, and underlying storage type as A. The following methods cover these cases.
+similar(A::Symmetric, ::Type{T}) where {T} = Symmetric(similar(parent(A), T), ifelse(A.uplo == 'U', :U, :L))
+# If the the Hermitian constructor's check ascertaining that the wrapped matrix's
+# diagonal is strictly real is removed, the following method can be simplified.
 function similar(A::Hermitian, ::Type{T}) where T
-    B = similar(A.data, T)
-    for i = 1:size(A,1)
-        B[i,i] = 0
-    end
-    return Hermitian(B)
+    B = similar(parent(A), T)
+    for i in 1:size(B, 1) B[i, i] = 0 end
+    return Hermitian(B, ifelse(A.uplo == 'U', :U, :L))
 end
+# On the other hand, similar(A, [neweltype,] shape...) should yield a matrix of the underlying
+# storage type of A (not wrapped in a symmetry type). The following method covers these cases.
+similar(A::Union{Symmetric,Hermitian}, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(A), T, dims)
 
 # Conversion
 convert(::Type{Matrix}, A::Symmetric) = copytri!(convert(Matrix, copy(A.data)), A.uplo)
