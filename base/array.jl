@@ -1642,7 +1642,7 @@ julia> findfirst(zeros(3))
 0
 ```
 """
-findfirst(A) = findnext(A, 1)
+findfirst(A) = findnext(x -> x != 0, A, 1)
 
 """
     findnext(predicate::Function, A, i::Integer)
@@ -1759,7 +1759,7 @@ julia> findlast(A)
 0
 ```
 """
-findlast(A) = findprev(A, endof(A))
+findlast(A) = findprev(x -> x != 0, A, endof(A))
 
 """
     findprev(predicate::Function, A, i::Integer)
