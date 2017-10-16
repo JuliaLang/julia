@@ -358,6 +358,10 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
         return a;
     if (jl_is_kind(b) && jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == b)
         return b;
+    if (jl_is_typevar(a) && obviously_egal(b, ((jl_tvar_t*)a)->lb))
+        return a;
+    if (jl_is_typevar(b) && obviously_egal(a, ((jl_tvar_t*)b)->lb))
+        return b;
     if (!jl_has_free_typevars(a) && !jl_has_free_typevars(b)) {
         if (jl_subtype(a, b)) return b;
         if (jl_subtype(b, a)) return a;
@@ -633,18 +637,20 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     //  ( Tuple{Int, Int}    <: Tuple{T, T} where T) but
     // !( Tuple{Int, String} <: Tuple{T, T} where T)
     // Then check concreteness by checking that the lower bound is not an abstract type.
-    if (ans && (vb.concrete || (!vb.occurs_inv && vb.occurs_cov > 1)) &&
-        is_leaf_typevar((jl_value_t*)u->var)) {
-        if (jl_is_typevar(vb.lb)) {
-            // TODO test case that demonstrates the need for this?
-            /*
+    int diagonal = !vb.occurs_inv && vb.occurs_cov > 1;
+    if (ans && (vb.concrete || (diagonal && is_leaf_typevar((jl_value_t*)u->var)))) {
+        if (vb.concrete && !diagonal && !is_leaf_bound(vb.ub)) {
+            // a non-diagonal var can only be a subtype of a diagonal var if its
+            // upper bound is concrete.
+            ans = 0;
+        }
+        else if (jl_is_typevar(vb.lb)) {
             jl_tvar_t *v = (jl_tvar_t*)vb.lb;
             jl_varbinding_t *vlb = lookup(e, v);
             if (vlb)
                 vlb->concrete = 1;
-            else  // TODO handle multiple variables in vb.concretevar
-                ans = (v == vb.concretevar);
-            */
+            //else  // TODO handle multiple variables in vb.concretevar
+            //    ans = (v == vb.concretevar);
         }
         else if (!is_leaf_bound(vb.lb)) {
             ans = 0;

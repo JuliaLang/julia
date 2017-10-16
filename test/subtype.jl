@@ -116,6 +116,21 @@ function test_diagonal()
     # don't consider a diagonal variable concrete if it already has an abstract lower bound
     @test isequal_type(Tuple{Vararg{A}} where A>:Integer,
                        Tuple{Vararg{A}} where A>:Integer)
+
+    # issue #24166
+    @test !issub(Tuple{T, T, Ref{T}} where T, Tuple{S, S, Ref{Q} where Q} where S)
+    @test !issub(Tuple{T, T, Ref{T}} where T, Tuple{S, S, Ref{Q} where Q} where S<:Integer)
+    @test !issub(Tuple{T, T, Ref{T}} where T, Tuple{S, S, Ref{Q} where Q} where S<:Int)
+    @test  issub(Tuple{T, T, Ref{T}} where T<:Int, Tuple{S, S, Ref{Q} where Q} where S)
+    @test !issub(Tuple{T, T, Ref{T}} where T>:Int, Tuple{S, S, Ref{Q} where Q} where S)
+    @test !issub(Tuple{T, T, Ref{T}} where T>:Integer, Tuple{S, S, Ref{Q} where Q} where S)
+    @test !issub(Tuple{T, T, Ref{T}} where T>:Any, Tuple{S, S, Ref{Q} where Q} where S)
+
+    @test  issub(Tuple{T, T} where Int<:T<:Int, Tuple{T, T} where Int<:T<:Int)
+    @test  issub(Tuple{T, T} where T>:Int, Tuple{T, T} where T>:Int)
+    @test  issub(Tuple{Tuple{T, T} where T>:Int}, Tuple{Tuple{T, T} where T>:Int})
+    @test  issub(Tuple{Tuple{T, T} where T>:Int}, Tuple{Tuple{T, T}} where T>:Int)
+    @test  issub(Tuple{Tuple{T, T}} where T>:Int, Tuple{Tuple{T, T} where T>:Int})
 end
 
 # level 3: UnionAll
