@@ -5625,28 +5625,60 @@ function meta_elim_pass!(code::Array{Any,1}, do_coverage::Bool)
             push!(prev_dbg_stack, 0)
             push!(push_loc_pos_stack, i)
         elseif arg1 === :pop_loc
-            prev_dbg = if length(prev_dbg_stack) > 1
-                pop!(prev_dbg_stack)
+            npops = (nargs > 1 ? args[2]::Int : 1)
+            for pop in 1:npops
+                prev_dbg = if length(prev_dbg_stack) > 1
+                    pop!(prev_dbg_stack)
+                else
+                    prev_dbg_stack[end]
+                end
+                if prev_dbg > 0
+                    code[prev_dbg] = nothing
+                end
+                push_loc = if length(push_loc_pos_stack) > 1
+                    pop!(push_loc_pos_stack)
+                else
+                    push_loc_pos_stack[end]
+                end
+                if push_loc > 0
+                    code[push_loc] = nothing
+                    npops -= 1
+                else
+                    prev_dbg_stack[end] = 0
+                    push_loc_pos_stack[end] = 0
+                end
+            end
+            if npops > 1
+                code[i] = Expr(:meta, :pop_loc, npops)
+            elseif npops == 1
+                code[i] = Expr(:meta, :pop_loc)
             else
-                prev_dbg_stack[end]
-            end
-            if prev_dbg > 0
-                code[prev_dbg] = nothing
-            end
-            push_loc = if length(push_loc_pos_stack) > 1
-                pop!(push_loc_pos_stack)
-            else
-                push_loc_pos_stack[end]
-            end
-            if push_loc > 0
-                code[push_loc] = nothing
                 code[i] = nothing
-            else
-                prev_dbg_stack[end] = 0
-                push_loc_pos_stack[end] = 0
             end
         else
             continue
+        end
+    end
+
+    # combine consecutive :pop_loc instructions
+    lastpop = nothing
+    npops = 0
+    for i in 1:length(code)
+        ex = code[i]
+        if isa(ex, Expr) && ex.head === :meta && length(ex.args) > 0 && ex.args[1] == :pop_loc
+            npops += (length(ex.args) > 1 ? ex.args[2]::Int : 1)
+            if lastpop === nothing
+                lastpop = ex
+            else
+                code[i] = nothing
+            end
+        elseif ex !== nothing && lastpop !== nothing
+            if npops > 1
+                resize!(lastpop.args, 2)
+                lastpop.args[2] = npops
+            end
+            lastpop = nothing
+            npops = 0
         end
     end
 end
