@@ -23,10 +23,10 @@ H_OVERFLOW_X(::Type{Float64}) = 710.475860073944 # nextfloat(710.4758600739439)
 H_LARGE_X(::Type{Float32}) = 88.72283f0
 H_OVERFLOW_X(::Type{Float32}) = 89.415985f0
 function sinh(x::T) where T <: Union{Float32, Float64}
-    # Method :
-    # mathematically sinh(x) if defined to be (exp(x)-exp(-x))/2
+    # Method
+    # mathematically sinh(x) is defined to be (exp(x)-exp(-x))/2
     #    1. Replace x by |x| (sinh(-x) = -sinh(x)).
-    #    2. Find the the branch and the expression to calculate and return it
+    #    2. Find the branch and the expression to calculate and return it
     #      a)   0 <= x < SINH_SMALL_X
     #               return x
     #      b)   SINH_SMALL_X <= x < H_MEDIUM_X
@@ -77,13 +77,13 @@ sinh(x::Real) = sinh(float(x))
 COSH_SMALL_X(::Type{Float32}) = 0.00024414062f0
 COSH_SMALL_X(::Type{Float64}) = 2.7755602085408512e-17
 function cosh(x::T) where T <: Union{Float32, Float64}
-    # Method :
-    # mathematically cosh(x) if defined to be (exp(x)+exp(-x))/2
+    # Method
+    # mathematically cosh(x) is defined to be (exp(x)+exp(-x))/2
     #    1. Replace x by |x| (cosh(x) = cosh(-x)).
-    #    2. Find the the branch and the expression to calculate and return it
+    #    2. Find the branch and the expression to calculate and return it
     #      a)   x <= COSH_SMALL_X
     #               return T(1)
-    #      b)   0 <= x <= ln2/2
+    #      b)   COSH_SMALL_X <= x <= ln2/2
     #               return 1+expm1(|x|)^2/(2*exp(|x|))
     #      c)   ln2/2 <= x <= H_MEDIUM_X
     #               return (exp(|x|)+1/exp(|x|)/2
@@ -132,20 +132,18 @@ TANH_LARGE_X(T::Type{Float32}) = 9.0
 TANH_SMALL_X(T::Type{Float64}) = 2.0^-28
 TANH_SMALL_X(T::Type{Float32}) = 2f0^-12
 function tanh(x::T) where T<:Union{Float32, Float64}
-# Method :
-# mathematically tanh(x) if defined to be (exp(x)-exp(-x))/(exp(x)+exp(-x))
-#    1. reduce x to non-negative by tanh(-x) = -tanh(x).
-#    2.  0 <= x < TANH_SMALL_X
-#            return x
-#        TANH_SMALL_X <= x < 1
-#            -expm1(-2x)/(expm1(-2x) + 2)
-#        1 <= x < TANH_LARGE_X
-#           1 - 2/(expm1(2x) + 2)
-#        TANH_LARGE_X <= x
-#            return 1
-# Special cases:
-#    tanh(NaN) is NaN
-#    only tanh(0)=0 is exact for finite argument.
+    # Method
+    # mathematically tanh(x) is defined to be (exp(x)-exp(-x))/(exp(x)+exp(-x))
+    #    1. reduce x to non-negative by tanh(-x) = -tanh(x).
+    #    2. Find the branch and the expression to calculate and return it
+    #      a) 0 <= x < TANH_SMALL_X
+    #             return x
+    #      b) TANH_SMALL_X <= x < 1
+    #            -expm1(-2x)/(expm1(-2x) + 2)
+    #      c) 1 <= x < TANH_LARGE_X
+    #           1 - 2/(expm1(2x) + 2)
+    #      d) TANH_LARGE_X <= x
+    #            return 1
 
     if isnan(x)
         return x
@@ -156,19 +154,53 @@ function tanh(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
 
     if absx < TANH_LARGE_X(T)
+        # in a)
         if absx < TANH_SMALL_X(T)
             return x
         end
         if absx >= T(1)
+            # in c)
             t = expm1(T(2)*absx)
             z = T(1) - T(2)/(t + T(2))
         else
+            # in b)
             t = expm1(-T(2)*absx)
             z = -t/(t + T(2))
         end
     else
+        # in d)
         z = T(1)
     end
     return copysign(z, x)
 end
 tanh(x::Real) = tanh(float(x))
+
+# Inverse hyperbolic functions
+# acosh methods
+ACOSH_LN2(T) = 6.93147180559945286227e-01
+ACOSH_LN2(T) = 6.9314718246e-01
+@noinline acosh_domain_error(x) = throw(DomainError(x, "acosh(x) is only defined for x >= 1."))
+function acosh(x::T) where T <: Union{Flaot32, Float64}
+    # Method
+    # mathematically acosh(x) if defined to be log(x + sqrt(x*x-1))
+    #    1. Find the branch and the expression to calculate and return it
+    #        a) 1 < x < 2
+    #            return log1p(t+sqrt(2.0*t+t*t)) where t=x-1.
+    #        b) 2 <= x <
+    #            return log(2x-1/(sqrt(x*x-1)+x))
+    #        c) x >=
+    #            return log(x)+ln2
+    if x < T(1)
+        return acosh_domain_error(x)
+    elseif x == T(1)
+        return T(0)
+    elseif x < T(2)
+        t = x-T(1)
+        return log1p(t+sqrt(T(2)*t+t*t))
+    elseif x < T(2)^28
+        t = x*x
+        return log(T(2)*x-T(1)/(x+sqrt(t-T(1))))
+    else
+        return log(x)+ACOSH_LN2(T)
+    end
+end
