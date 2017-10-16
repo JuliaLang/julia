@@ -833,12 +833,12 @@ end
 
 @testset "cosh" begin
     for T in (Float32, Float64)
-        @test cosh(zero(T)) === zero(T)
-        @test cosh(-zero(T)) === -zero(T)
-        @test cosh(nextfloat(zero(T))) === nextfloat(zero(T))
-        @test cosh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test cosh(zero(T)) === one(T)
+        @test cosh(-zero(T)) === one(T)
+        @test cosh(nextfloat(zero(T))) === one(T)
+        @test cosh(prevfloat(zero(T))) === one(T)
         @test cosh(T(1000)) === T(Inf)
-        @test cosh(-T(1000)) === -T(Inf)
+        @test cosh(-T(1000)) === T(Inf)
         @test isnan_type(T, cosh(T(NaN)))
     end
     for x in (0.1, 9.0, 22.0, 25.0,709.0, 710.0)
@@ -857,24 +857,24 @@ end
 
 @testset "tanh" begin
     for T in (Float32, Float64)
-        @test cosh(zero(T)) === zero(T)
-        @test cosh(-zero(T)) === -zero(T)
-        @test cosh(nextfloat(zero(T))) === nextfloat(zero(T))
-        @test cosh(prevfloat(zero(T))) === prevfloat(zero(T))
-        @test cosh(T(1000)) === T(Inf)
-        @test cosh(-T(1000)) === -T(Inf)
-        @test isnan_type(T, cosh(T(NaN)))
+        @test tanh(zero(T)) === zero(T)
+        @test tanh(-zero(T)) === -zero(T)
+        @test tanh(nextfloat(zero(T))) === nextfloat(zero(T))
+        @test tanh(prevfloat(zero(T))) === prevfloat(zero(T))
+        @test tanh(T(1000)) === one(T)
+        @test tanh(-T(1000)) === -one(T)
+        @test isnan_type(T, tanh(T(NaN)))
     end
     for x in (0.1, 9.0, 21.0)
-        by = cosh(big(x))
-        @test Float64((cosh(x) - by))/eps(abs(Float64(by))) <= 1
-        bym = cosh(big(-x))
-        @test Float64(abs(cosh(-x) - bym))/eps(abs(Float64(bym))) <= 1
+        by = tanh(big(x))
+        @test Float64((tanh(x) - by))/eps(abs(Float64(by))) <= 1
+        bym = tanh(big(-x))
+        @test Float64(abs(tanh(-x) - bym))/eps(abs(Float64(bym))) <= 1
     end
     for x in (0.1f0, 8f0)
-        by = cosh(big(x))
-        @test Float32((cosh(x) - by))/eps(abs(Float32(by))) <= 1
-        bym = cosh(big(-x))
-        @test Float32(abs(cosh(-x) - bym))/eps(abs(Float32(bym))) <= 1
+        by = tanh(big(x))
+        @test Float32((tanh(x) - by))/eps(abs(Float32(by))) <= 1
+        bym = tanh(big(-x))
+        @test Float32(abs(tanh(-x) - bym))/eps(abs(Float32(bym))) <= 1
     end
 end
