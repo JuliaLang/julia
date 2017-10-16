@@ -2369,6 +2369,12 @@ f9534h(a,b,c...) = c[a]
 @test f9534h(4,2,3,4,5,6) == 6
 @test try; f9534h(5,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 5; end
 
+# issue #7978, comment 332352438
+f7978a() = 1
+@test try; a, b = f7978a() catch ex; (ex::BoundsError).a == 1 && ex.i == 2; end
+f7978b() = 1, 2
+@test try; a, b, c = f7978b() catch ex; (ex::BoundsError).a == (1, 2) && ex.i == 3; end
+
 # issue #9535
 counter9535 = 0
 f9535() = (global counter9535; counter9535 += 1; counter9535)
