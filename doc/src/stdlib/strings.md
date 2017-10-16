@@ -48,6 +48,8 @@ Base.lstrip
 Base.rstrip
 Base.startswith
 Base.endswith
+Base.first(::AbstractString, ::Integer)
+Base.last(::AbstractString, ::Integer)
 Base.uppercase
 Base.lowercase
 Base.titlecase

@@ -252,8 +252,12 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
+  * Functions `first` and `last` now accept `nchar` argument for `AbstractString`.
+    If this argument is used they return a string consisting of first/last `nchar`
+    characters from the original string ([#23960]).
+
   * The functions `nextind` and `prevind` now accept `nchar` argument that indicates
-    number of characters to move ([#23805]).
+    the number of characters to move ([#23805]).
 
   * The functions `strip`, `lstrip` and `rstrip` now return `SubString` ([#22496]).
 
