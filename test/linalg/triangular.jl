@@ -110,7 +110,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test tril(A1,1)  == t1(tril(tril(Matrix(A1), 1)))
             @test_throws ArgumentError tril!(A1, -n - 2)
             @test_throws ArgumentError tril!(A1, n)
-            @test triu(A1,0)  == t1(diagm(diag(A1)))
+            @test triu(A1,0)  == t1(diagm(0 => diag(A1)))
             @test triu(A1,-1) == t1(tril(triu(A1.data,-1)))
             @test triu(A1,1)  == LowerTriangular(zeros(A1.data))
             @test_throws ArgumentError triu!(A1, -n)
@@ -121,7 +121,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test triu(A1,-1) == t1(triu(triu(Matrix(A1), -1)))
             @test_throws ArgumentError triu!(A1, -n)
             @test_throws ArgumentError triu!(A1, n + 2)
-            @test tril(A1,0)  == t1(diagm(diag(A1)))
+            @test tril(A1,0)  == t1(diagm(0 => diag(A1)))
             @test tril(A1,1)  == t1(triu(tril(A1.data,1)))
             @test tril(A1,-1) == UpperTriangular(zeros(A1.data))
             @test_throws ArgumentError tril!(A1, -n - 2)
@@ -250,7 +250,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not handled yet
             vals, vecs = eig(A1)
             if (t1 == UpperTriangular || t1 == LowerTriangular) && elty1 != Int # Cannot really handle degenerate eigen space and Int matrices will probably have repeated eigenvalues.
-                @test vecs*diagm(vals)/vecs ≈ A1 atol=sqrt(eps(float(real(one(vals[1])))))*(norm(A1,Inf)*n)^2
+                @test vecs*diagm(0 => vals)/vecs ≈ A1 atol=sqrt(eps(float(real(one(vals[1])))))*(norm(A1,Inf)*n)^2
             end
         end
 
@@ -476,10 +476,10 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 end
 
 # Issue 10742 and similar
-@test istril(UpperTriangular(diagm([1,2,3,4])))
-@test istriu(LowerTriangular(diagm([1,2,3,4])))
-@test isdiag(UpperTriangular(diagm([1,2,3,4])))
-@test isdiag(LowerTriangular(diagm([1,2,3,4])))
+@test istril(UpperTriangular(diagm(0 => [1,2,3,4])))
+@test istriu(LowerTriangular(diagm(0 => [1,2,3,4])))
+@test isdiag(UpperTriangular(diagm(0 => [1,2,3,4])))
+@test isdiag(LowerTriangular(diagm(0 => [1,2,3,4])))
 @test !isdiag(UpperTriangular(rand(4, 4)))
 @test !isdiag(LowerTriangular(rand(4, 4)))
 

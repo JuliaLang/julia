@@ -1641,7 +1641,7 @@ import .LinAlg: diagm
 @deprecate diagm(A::SparseMatrixCSC) sparse(Diagonal(sparsevec(A)))
 
 # PR #23373
-@deprecate diagm(A::BitMatrix) diagm(vec(A))
+@deprecate diagm(A::BitMatrix) BitMatrix(Diagonal(vec(A)))
 
 # PR 23341
 @eval GMP @deprecate gmp_version() version() false
@@ -1869,6 +1869,19 @@ end
     end
     nothing
 end
+
+function diagm(v::BitVector)
+    depwarn(string("diagm(v::BitVector) is deprecated, use diagm(0 => v) or ",
+        "BitMatrix(Diagonal(v)) instead"), :diagm)
+    return BitMatrix(Diagonal(v))
+end
+function diagm(v::AbstractVector)
+    depwarn(string("diagm(v::AbstractVector) is deprecated, use diagm(0 => v) or ",
+        "Matrix(Diagonal(v)) instead"), :diagm)
+    return Matrix(Diagonal(v))
+end
+@deprecate diagm(v::AbstractVector, k::Integer) diagm(k => v)
+@deprecate diagm(x::Number) fill(x, 1, 1)
 
 # issue #20816
 @deprecate strwidth textwidth

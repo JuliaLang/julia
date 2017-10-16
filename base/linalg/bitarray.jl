@@ -74,7 +74,7 @@ function tril(B::BitMatrix, k::Integer=0)
     A
 end
 
-## diag and related
+## diag
 
 function diag(B::BitMatrix)
     n = minimum(size(B))
@@ -83,15 +83,6 @@ function diag(B::BitMatrix)
         v[i] = B[i,i]
     end
     v
-end
-
-function diagm(v::BitVector)
-    n = length(v)
-    a = falses(n, n)
-    for i=1:n
-        a[i,i] = v[i]
-    end
-    a
 end
 
 ## norm and rank

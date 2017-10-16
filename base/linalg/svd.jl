@@ -32,7 +32,7 @@ end
 Compute the singular value decomposition (SVD) of `A` and return an `SVD` object.
 
 `U`, `S`, `V` and `Vt` can be obtained from the factorization `F` with `F[:U]`,
-`F[:S]`, `F[:V]` and `F[:Vt]`, such that `A = U*diagm(S)*Vt`.
+`F[:S]`, `F[:V]` and `F[:Vt]`, such that `A = U*Diagonal(S)*Vt`.
 The algorithm produces `Vt` and hence `Vt` is more efficient to extract than `V`.
 The singular values in `S` are sorted in descending order.
 
@@ -52,7 +52,7 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
 julia> F = svdfact(A)
 Base.LinAlg.SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23607, 2.0, 0.0], [-0.0 0.0 … -0.0 0.0; 0.447214 0.0 … 0.0 0.894427; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])
 
-julia> F[:U] * diagm(F[:S]) * F[:Vt]
+julia> F[:U] * Diagonal(F[:S]) * F[:Vt]
 4×5 Array{Float64,2}:
  1.0  0.0  0.0  0.0  2.0
  0.0  0.0  3.0  0.0  0.0
@@ -71,7 +71,7 @@ svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin=thin)
     svd(A; thin::Bool=true) -> U, S, V
 
 Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
-`A == U*diagm(S)*V'`. The singular values in `S` are sorted in descending order.
+`A == U*Diagonal(S)*V'`. The singular values in `S` are sorted in descending order.
 
 If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 `A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
@@ -93,7 +93,7 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
 julia> U, S, V = svd(A)
 ([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23607, 2.0, 0.0], [-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])
 
-julia> U*diagm(S)*V'
+julia> U*Diagonal(S)*V'
 4×5 Array{Float64,2}:
  1.0  0.0  0.0  0.0  2.0
  0.0  0.0  3.0  0.0  0.0
@@ -266,17 +266,17 @@ function getindex(obj::GeneralizedSVD{T}, d::Symbol) where T
     elseif d == :D1
         m = size(obj.U, 1)
         if m - obj.k - obj.l >= 0
-            return [eye(T, obj.k) zeros(T, obj.k, obj.l); zeros(T, obj.l, obj.k) diagm(obj.a[obj.k + 1:obj.k + obj.l]); zeros(T, m - obj.k - obj.l, obj.k + obj.l)]
+            return [eye(T, obj.k) zeros(T, obj.k, obj.l); zeros(T, obj.l, obj.k) Diagonal(obj.a[obj.k + 1:obj.k + obj.l]); zeros(T, m - obj.k - obj.l, obj.k + obj.l)]
         else
-            return [eye(T, m, obj.k) [zeros(T, obj.k, m - obj.k); diagm(obj.a[obj.k + 1:m])] zeros(T, m, obj.k + obj.l - m)]
+            return [eye(T, m, obj.k) [zeros(T, obj.k, m - obj.k); Diagonal(obj.a[obj.k + 1:m])] zeros(T, m, obj.k + obj.l - m)]
         end
     elseif d == :D2
         m = size(obj.U, 1)
         p = size(obj.V, 1)
         if m - obj.k - obj.l >= 0
-            return [zeros(T, obj.l, obj.k) diagm(obj.b[obj.k + 1:obj.k + obj.l]); zeros(T, p - obj.l, obj.k + obj.l)]
+            return [zeros(T, obj.l, obj.k) Diagonal(obj.b[obj.k + 1:obj.k + obj.l]); zeros(T, p - obj.l, obj.k + obj.l)]
         else
-            return [zeros(T, p, obj.k) [diagm(obj.b[obj.k + 1:m]); zeros(T, obj.k + p - m, m - obj.k)] [zeros(T, m - obj.k, obj.k + obj.l - m); eye(T, obj.k + p - m, obj.k + obj.l - m)]]
+            return [zeros(T, p, obj.k) [Diagonal(obj.b[obj.k + 1:m]); zeros(T, obj.k + p - m, m - obj.k)] [zeros(T, m - obj.k, obj.k + obj.l - m); eye(T, obj.k + p - m, obj.k + obj.l - m)]]
         end
     elseif d == :R
         return obj.R

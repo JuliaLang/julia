@@ -341,9 +341,9 @@ end
 
 #Issue #7647: test xsyevr, xheevr, xstevr drivers.
 @testset "Eigenvalues in interval for $(typeof(Mi7647))" for Mi7647 in
-        (Symmetric(diagm(1.0:3.0)),
-         Hermitian(diagm(1.0:3.0)),
-         Hermitian(diagm(complex(1.0:3.0))),
+        (Symmetric(diagm(0 => 1.0:3.0)),
+         Hermitian(diagm(0 => 1.0:3.0)),
+         Hermitian(diagm(0 => complex(1.0:3.0))),
          SymTridiagonal([1.0:3.0;], zeros(2)))
     @test eigmin(Mi7647)  == eigvals(Mi7647, 0.5, 1.5)[1] == 1.0
     @test eigmax(Mi7647)  == eigvals(Mi7647, 2.5, 3.5)[1] == 3.0

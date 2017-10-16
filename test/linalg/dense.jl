@@ -112,35 +112,28 @@ bimg  = randn(n,2)/2
         end
     end # end for loop over arraytype
 
-    @testset "Numbers" begin
-        α = rand(eltya)
-        A = zeros(eltya,1,1)
-        A[1,1] = α
-        @test diagm(α) == A # Test behavior of `diagm` when passed a scalar
-    end
-
     @testset "Factorize" begin
         d = rand(eltya,n)
         e = rand(eltya,n-1)
         e2 = rand(eltya,n-1)
         f = rand(eltya,n-2)
-        A = diagm(d)
+        A = diagm(0 => d)
         @test factorize(A) == Diagonal(d)
-        A += diagm(e,-1)
+        A += diagm(-1 => e)
         @test factorize(A) == Bidiagonal(d,e,:L)
-        A += diagm(f,-2)
+        A += diagm(-2 => f)
         @test factorize(A) == LowerTriangular(A)
-        A = diagm(d) + diagm(e,1)
+        A = diagm(0 => d, 1 => e)
         @test factorize(A) == Bidiagonal(d,e,:U)
         if eltya <: Real
-            A = diagm(d) + diagm(e,1) + diagm(e,-1)
+            A = diagm(0 => d, 1 => e, -1 => e)
             @test Matrix(factorize(A)) ≈ Matrix(factorize(SymTridiagonal(d,e)))
-            A = diagm(d) + diagm(e,1) + diagm(e,-1) + diagm(f,2) + diagm(f,-2)
+            A = diagm(0 => d, 1 => e, -1 => e, 2 => f, -2 => f)
             @test inv(factorize(A)) ≈ inv(factorize(Symmetric(A)))
         end
-        A = diagm(d) + diagm(e,1) + diagm(e2,-1)
+        A = diagm(0 => d, 1 => e, -1 => e2)
         @test Matrix(factorize(A)) ≈ Matrix(factorize(Tridiagonal(e2,d,e)))
-        A = diagm(d) + diagm(e,1) + diagm(f,2)
+        A = diagm(0 => d, 1 => e, 2 => f)
         @test factorize(A) == UpperTriangular(A)
     end
 end # for eltya
