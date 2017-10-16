@@ -199,31 +199,45 @@ might have been written as `...->` instead of `...`.
 The operator `=` always returns the right-hand side, therefore:
 
 ```jldoctest
-function threeint()
-    x::Int = 3.
-    x # returns variable x
-end
-function threefloat()
-    x::Int = 3. # returns 3.
-end
+julia> function threeint()
+           x::Int = 3.0
+           x # returns variable x
+       end
+threeint (generic function with 1 method)
 
-typeof(threeint()) === Int
-typeof(threefloat()) === Float64
+julia> function threefloat()
+           x::Int = 3.0 # returns 3.0
+       end
+threefloat (generic function with 1 method)
+
+julia> threeint()
+3
+
+julia> threefloat()
+3.0
 ```
 
 and similarly:
 
 ```jldoctest
-function threetup()
-    x,y = [3, 3]
-    x,y # returns a tuple
-end
-function threearr()
-    x,y = [3, 3] # returns an array
-end
+julia> function threetup()
+           x, y = [3, 3]
+           x, y # returns a tuple
+       end
+threetup (generic function with 1 method)
 
-typeof(threetup()) === Tuple{Int,Int}
-typeof(threearr()) === Array{Int,1}
+julia> function threearr()
+           x, y = [3, 3] # returns an array
+       end
+threearr (generic function with 1 method)
+
+julia> threetup()
+(3, 3)
+
+julia> threearr()
+2-element Array{Int64,1}:
+ 3
+ 3
 ```
 
 ## Types, type declarations, and constructors
