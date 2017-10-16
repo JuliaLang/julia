@@ -318,6 +318,7 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})
                 catch err
                     serialize(f, name)
                     serialize(f, err)
+                    exit(1)
                 end
             end
             """
