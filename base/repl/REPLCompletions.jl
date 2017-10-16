@@ -316,8 +316,7 @@ function get_type_call(expr::Expr)
 end
 
 # Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (String, true)
-function get_type(sym::Expr, fn::Module)
-    sym = expand(fn, sym)
+function try_get_type(sym::Expr, fn::Module)
     val, found = get_value(sym, fn)
     found && return Base.typesof(val).parameters[1], found
     if sym.head === :call
@@ -330,9 +329,28 @@ function get_type(sym::Expr, fn::Module)
             return found ? Base.typesof(val).parameters[1] : Any, found
         end
         return get_type_call(sym)
+    elseif sym.head === :thunk
+        thk = sym.args[1]
+        rt = ccall(:jl_infer_thunk, Any, (Any, Any), thk::CodeInfo, fn)
+        rt !== Any && return (rt, true)
+    elseif sym.head === :ref
+        # some simple cases of `expand`
+        return try_get_type(Expr(:call, GlobalRef(Base, :getindex), sym.args...), fn)
+    elseif sym.head === :.
+        return try_get_type(Expr(:call, GlobalRef(Core, :getfield), sym.args...), fn)
     end
     return (Any, false)
 end
+
+try_get_type(other, fn::Module) = get_type(other, fn)
+
+function get_type(sym::Expr, fn::Module)
+    # try to analyze nests of calls. if this fails, try using the expanded form.
+    val, found = try_get_type(sym, fn)
+    found && return val, found
+    return try_get_type(expand(fn, sym), fn)
+end
+
 function get_type(sym, fn::Module)
     val, found = get_value(sym, fn)
     return found ? Base.typesof(val).parameters[1] : Any, found

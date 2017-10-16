@@ -3175,6 +3175,7 @@ function typeinf_ext(linfo::MethodInstance, world::UInt)
         ccall(:jl_typeinf_end, Void, ())
         @assert frame.inferred # TODO: deal with this better
         @assert frame.linfo === linfo
+        linfo.rettype = widenconst(frame.bestguess)
         return svec(linfo, frame.src, linfo.rettype)
     end
 end
