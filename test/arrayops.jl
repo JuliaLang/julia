@@ -426,6 +426,8 @@ end
 
 @testset "find, findfirst, findnext, findlast, findprev" begin
     a = [0,1,2,3,0,1,2,3]
+    @test findfirst(a) == 2
+    @test findlast(a) == 8
     @test find(!iszero, a) == [2,3,4,6,7,8]
     @test find(a.==2) == [3,7]
     @test find(isodd,a) == [2,4,6,8]
