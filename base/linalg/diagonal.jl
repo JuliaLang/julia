@@ -56,9 +56,11 @@ convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
 convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
 full(D::Diagonal) = convert(Array, D)
 
-function similar(D::Diagonal, ::Type{T}) where T
-    return Diagonal{T}(similar(D.diag, T))
-end
+# For D<:Diagonal, similar(D[, neweltype]) should yield a Diagonal matrix.
+# On the other hand, similar(D, [neweltype,] shape...) should yield a sparse matrix.
+# The first method below effects the former, and the second the latter.
+similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
+similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)
 
@@ -304,6 +306,11 @@ end
 
 A_rdiv_Bc!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, conj(D))
 A_rdiv_Bt!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, D)
+
+(\)(F::Factorization, D::Diagonal) =
+    A_ldiv_B!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
+Ac_ldiv_B(F::Factorization, D::Diagonal) =
+    Ac_ldiv_B!(F, Matrix{typeof(oneunit(eltype(D))/oneunit(eltype(F)))}(D))
 
 # Methods to resolve ambiguities with `Diagonal`
 @inline *(rowvec::RowVector, D::Diagonal) = transpose(D * transpose(rowvec))
