@@ -131,6 +131,11 @@ let gen = ((x,y) for x in 1:10, y in 1:10 if x % 2 == 0 && y % 2 == 0),
     @test collect(gen) == collect(gen2)
 end
 
+# inference on vararg generator of a type (see #22907 comments)
+let f(x) = collect(Base.Generator(=>, x, x))
+    @test @inferred(f((1,2))) == [1=>1, 2=>2]
+end
+
 # generators with nested loops (#4867)
 @test [(i,j) for i=1:3 for j=1:i] == [(1,1), (2,1), (2,2), (3,1), (3,2), (3,3)]
 
