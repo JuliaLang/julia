@@ -313,17 +313,41 @@ function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
     return A
 end
 
-function similar(S::SparseMatrixCSC, ::Type{Tv} = eltype(S)) where Tv
-    SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Vector{Tv}(length(S.nzval)))
+## similar
+#
+# parent method for similar that preserves stored-entry structure (for when new and old dims match)
+function _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}) where {TvNew,TiNew}
+    newcolptr = copy!(similar(S.colptr, TiNew), S.colptr)
+    newrowval = copy!(similar(S.rowval, TiNew), S.rowval)
+    return SparseMatrixCSC(S.m, S.n, newcolptr, newrowval, similar(S.nzval, TvNew))
 end
+# parent methods for similar that preserves only storage space (for when new and old dims differ)
+_sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
+    SparseMatrixCSC(dims..., ones(TiNew, last(dims)+1), similar(S.rowval, TiNew), similar(S.nzval, TvNew))
+# parent method for similar that allocates an empty sparse vector (when new dims are single)
+_sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
+    SparseVector(dims..., similar(S.rowval, TiNew, 0), similar(S.nzval, TvNew, 0))
+#
+# The following methods hook into the AbstractArray similar hierarchy. The first method
+# covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
+# methods cover similar(A[, Tv], shape...) calls, which preserve storage space when the shape
+# calls for a two-dimensional result.
+similar(S::SparseMatrixCSC{<:Any,Ti}, ::Type{TvNew}) where {Ti,TvNew} = _sparsesimilar(S, TvNew, Ti)
+similar(S::SparseMatrixCSC{<:Any,Ti}, ::Type{TvNew}, dims::Union{Dims{1},Dims{2}}) where {Ti,TvNew} =
+    _sparsesimilar(S, TvNew, Ti, dims)
+# The following methods cover similar(A, Tv, Ti[, shape...]) calls, which specify the
+# result's index type in addition to its entry type, and aren't covered by the hooks above.
+# The calls without shape again preserve stored-entry structure, whereas those with shape
+# preserve storage space when the shape calls for a two-dimensional result.
+similar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}) where{TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew)
+similar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Union{Dims{1},Dims{2}}) where {TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew, dims)
+similar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, m::Integer) where {TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew, (m,))
+similar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, m::Integer, n::Integer) where {TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew, (m, n))
 
-function similar(S::SparseMatrixCSC, ::Type{Tv}, ::Type{Ti}) where {Tv,Ti}
-    new_colptr = copy!(similar(S.colptr, Ti), S.colptr)
-    new_rowval = copy!(similar(S.rowval, Ti), S.rowval)
-    new_nzval =  copy!(similar(S.nzval,  Tv), S.nzval)
-    SparseMatrixCSC(S.m, S.n, new_colptr, new_rowval, new_nzval)
-end
-@inline similar(S::SparseMatrixCSC, ::Type{Tv}, d::Dims) where {Tv} = spzeros(Tv, d...)
 
 # convert'ing between SparseMatrixCSC types
 convert(::Type{AbstractMatrix{Tv}}, A::SparseMatrixCSC{Tv}) where {Tv} = A

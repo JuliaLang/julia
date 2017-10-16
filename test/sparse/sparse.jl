@@ -1302,16 +1302,6 @@ end
     @test_throws ArgumentError squeeze(A,(1, 1))
 end
 
-@testset "similar with type conversion" begin
-    local A = speye(5)
-    @test size(similar(A, Complex128, Int)) == (5, 5)
-    @test typeof(similar(A, Complex128, Int)) == SparseMatrixCSC{Complex128, Int}
-    @test size(similar(A, Complex128, Int8)) == (5, 5)
-    @test typeof(similar(A, Complex128, Int8)) == SparseMatrixCSC{Complex128, Int8}
-    @test similar(A, Complex128,(6, 6)) == spzeros(Complex128, 6, 6)
-    @test convert(Matrix, A) == Array(A)
-end
-
 @testset "float" begin
     local A
     A = sprand(Bool, 5, 5, 0.0)
@@ -1945,15 +1935,6 @@ end
         "  [2, 1]  =  2.0\n  [3, 2]  =  3.0\n  [4, 2]  =  4.0\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
 end
 
-@testset "similar aliasing" begin
-    a = sparse(rand(3,3) .+ 0.1)
-    b = similar(a, Float32, Int32)
-    c = similar(b, Float32, Int32)
-    Base.SparseArrays.dropstored!(b, 1, 1)
-    @test length(c.rowval) == 9
-    @test length(c.nzval) == 9
-end
-
 @testset "check buffers" for n in 1:3
     local A
     colptr = [1,2,3,4]
@@ -2034,4 +2015,90 @@ end
         @test isfinite.(cov_sparse) == isfinite.(cov_dense)
         @test isfinite.(cov_sparse) == isfinite.(cov_dense)
     end
+end
+
+@testset "similar should not alias the input sparse array" begin
+    a = sparse(rand(3,3) .+ 0.1)
+    b = similar(a, Float32, Int32)
+    c = similar(b, Float32, Int32)
+    Base.SparseArrays.dropstored!(b, 1, 1)
+    @test length(c.rowval) == 9
+    @test length(c.nzval) == 9
+end
+
+@testset "similar with type conversion" begin
+    local A = speye(5)
+    @test size(similar(A, Complex128, Int)) == (5, 5)
+    @test typeof(similar(A, Complex128, Int)) == SparseMatrixCSC{Complex128, Int}
+    @test size(similar(A, Complex128, Int8)) == (5, 5)
+    @test typeof(similar(A, Complex128, Int8)) == SparseMatrixCSC{Complex128, Int8}
+    @test similar(A, Complex128,(6, 6)) == spzeros(Complex128, 6, 6)
+    @test convert(Matrix, A) == Array(A) # lolwut, are you lost, test?
+end
+
+@testset "similar for SparseMatrixCSC" begin
+    A = speye(5)
+    # test similar without specifications (preserves stored-entry structure)
+    simA = similar(A)
+    @test typeof(simA) == typeof(A)
+    @test size(simA) == size(A)
+    @test simA.colptr == A.colptr
+    @test simA.rowval == A.rowval
+    @test length(simA.nzval) == length(A.nzval)
+    # test similar with entry type specification (preserves stored-entry structure)
+    simA = similar(A, Float32)
+    @test typeof(simA) == SparseMatrixCSC{Float32,eltype(A.colptr)}
+    @test size(simA) == size(A)
+    @test simA.colptr == A.colptr
+    @test simA.rowval == A.rowval
+    @test length(simA.nzval) == length(A.nzval)
+    # test similar with entry and index type specification (preserves stored-entry structure)
+    simA = similar(A, Float32, Int8)
+    @test typeof(simA) == SparseMatrixCSC{Float32,Int8}
+    @test size(simA) == size(A)
+    @test simA.colptr == A.colptr
+    @test simA.rowval == A.rowval
+    @test length(simA.nzval) == length(A.nzval)
+    # test similar with Dims{2} specification (preserves storage space only, not stored-entry structure)
+    simA = similar(A, (6,6))
+    @test typeof(simA) == typeof(A)
+    @test size(simA) == (6,6)
+    @test simA.colptr == ones(eltype(A.colptr), 6+1)
+    @test length(simA.rowval) == length(A.rowval)
+    @test length(simA.nzval) == length(A.nzval)
+    # test similar with entry type and Dims{2} specification (preserves storage space only)
+    simA = similar(A, Float32, (6,6))
+    @test typeof(simA) == SparseMatrixCSC{Float32,eltype(A.colptr)}
+    @test size(simA) == (6,6)
+    @test simA.colptr == ones(eltype(A.colptr), 6+1)
+    @test length(simA.rowval) == length(A.rowval)
+    @test length(simA.nzval) == length(A.nzval)
+    # test similar with entry type, index type, and Dims{2} specification (preserves storage space only)
+    simA = similar(A, Float32, Int8, (6,6))
+    @test typeof(simA) == SparseMatrixCSC{Float32, Int8}
+    @test size(simA) == (6,6)
+    @test simA.colptr == ones(eltype(A.colptr), 6+1)
+    @test length(simA.rowval) == length(A.rowval)
+    @test length(simA.nzval) == length(A.nzval)
+    # test similar with Dims{1} specification (preserves nothing)
+    simA = similar(A, (6,))
+    @test typeof(simA) == SparseVector{eltype(A.nzval),eltype(A.colptr)}
+    @test size(simA) == (6,)
+    @test length(simA.nzind) == 0
+    @test length(simA.nzval) == 0
+    # test similar with entry type and Dims{1} specification (preserves nothing)
+    simA = similar(A, Float32, (6,))
+    @test typeof(simA) == SparseVector{Float32,eltype(A.colptr)}
+    @test size(simA) == (6,)
+    @test length(simA.nzind) == 0
+    @test length(simA.nzval) == 0
+    # test similar with entry type, index type, and Dims{1} specification (preserves nothing)
+    simA = similar(A, Float32, Int8, (6,))
+    @test typeof(simA) == SparseVector{Float32,Int8}
+    @test size(simA) == (6,)
+    @test length(simA.nzind) == 0
+    @test length(simA.nzval) == 0
+    # test entry points to similar with entry type, index type, and non-Dims shape specification
+    @test similar(A, Float32, Int8, 6, 6) == similar(A, Float32, Int8, (6, 6))
+    @test similar(A, Float32, Int8, 6) == similar(A, Float32, Int8, (6,))
 end
