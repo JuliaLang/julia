@@ -68,7 +68,8 @@ startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
 """
     chop(s::AbstractString, head::Integer=0, tail::Integer=1)
 
-Remove first `head` and last `tail` characters from `s`.
+Remove the first `head` and the last `tail` characters from `s`.
+The call `chop(s)` removes the last character from `s`.
 If it is requested to remove more characters than `length(s)`
 then an empty string is returned.
 
@@ -89,17 +90,9 @@ julia> chop(a, 5, 5)
 """
 function chop(s::AbstractString, head::Integer, tail::Integer)
     # negative values of head/tail will throw error in nextind/prevind
-    if head == 0
-        if tail == 0
-            return SubString(s)
-        else
-            return SubString(s, start(s), prevind(s, endof(s), tail))
-        end
-    elseif tail == 0
-        return SubString(s, nextind(s, start(s), head), endof(s))
-    else
-        return SubString(s, nextind(s, start(s), head), prevind(s, endof(s), tail))
-    end
+    headidx = head == 0 ? start(s) : nextind(s, start(s), head)
+    tailidx = tail == 0 ? endof(s) : prevind(s, endof(s), tail)
+    SubString(s, headidx, tailidx)
 end
 
 # no head/tail version left for performance reasons
@@ -118,10 +111,10 @@ julia> chomp("Hello\\n")
 """
 function chomp(s::AbstractString)
     i = endof(s)
-    (i < start(s) || s[i] != '\n') && (return SubString(s, start(s), i))
+    (i < 1 || s[i] != '\n') && (return SubString(s, 1, i))
     j = prevind(s,i)
-    (j < start(s) || s[j] != '\r') && (return SubString(s, start(s), j))
-    return SubString(s, start(s), prevind(s,j))
+    (j < 1 || s[j] != '\r') && (return SubString(s, 1, j))
+    return SubString(s, 1, prevind(s,j))
 end
 function chomp(s::String)
     i = endof(s)
@@ -202,11 +195,11 @@ function rstrip(s::AbstractString, chars::Chars=_default_delims)
     while !done(r,i)
         c, j = next(r,i)
         if !(c in chars)
-            return SubString(s, start(s), endof(s)-i+1)
+            return SubString(s, 1, endof(s)-i+1)
         end
         i = j
     end
-    SubString(s, start(s), 0)
+    SubString(s, 1, 0)
 end
 
 """
