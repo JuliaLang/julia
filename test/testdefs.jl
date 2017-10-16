@@ -2,7 +2,7 @@
 
 using Test
 
-function runtests(name, isolate=true; seed=nothing)
+function runtests(name, isolate=true; seed=0)
     old_print_setting = Test.TESTSET_PRINT_ENABLE[]
     Test.TESTSET_PRINT_ENABLE[] = false
     try
