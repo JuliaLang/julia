@@ -348,8 +348,31 @@ if Sys.iswindows()
     ispty(s::IO) = false
 end
 
-"    displaysize(io) -> (lines, columns)
-Return the nominal size of the screen that may be used for rendering output to this io object"
+"""
+displaysize([io::IO]) -> (lines, columns)
+
+Return the nominal size of the screen that may be used for rendering output to
+this `IO` object.
+If `IO` object is not provided, it will return the default size `(24, 80)`.
+
+The default size can be changed by the environment variables
+`LINES` and `COLUMNS`.
+
+# Examples
+```jldoctest
+julia> withenv("LINES" => 30, "COLUMNS" => 100) do
+           displaysize()
+       end
+(30, 100)
+```
+
+To get your TTY size,
+
+```julia
+julia> displaysize(STDOUT)
+(34, 147)
+```
+"""
 displaysize(io::IO) = displaysize()
 displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
