@@ -178,6 +178,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `equalto` constructs an `EqualTo` object that can be used as a predicate ([#23812]).
 
+* `*(::Union{Char,AbstractString},::Union{Char,AbstractString})` concatenation. ([#22512])
+
 ## Renaming
 
 
@@ -341,3 +343,4 @@ includes this fix. Find the minimum version from there.
 [#23666]: https://github.com/JuliaLang/julia/issues/23666
 [#23812]: https://github.com/JuliaLang/julia/issues/23812
 [#23931]: https://github.com/JuliaLang/julia/issues/23931
+[#22512]: https://github.com/JuliaLang/julia/issues/22532
