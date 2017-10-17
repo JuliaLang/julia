@@ -216,7 +216,7 @@ function asinh(x::T) where T <: Union{Float32, Float64}
 end
 # acosh methods
 @noinline acosh_domain_error(x) = throw(DomainError(x, "acosh(x) is only defined for x >= 1."))
-function acosh(x::T) where T <: Union{Flaot32, Float64}
+function acosh(x::T) where T <: Union{Float32, Float64}
     # Method
     # mathematically acosh(x) if defined to be log(x + sqrt(x*x-1))
     #    1. Find the branch and the expression to calculate and return it
