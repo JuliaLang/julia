@@ -634,39 +634,21 @@ end
 
 @testset "file info in test errors" begin
      f = tempname()
-     for str in ["@test 1==2", "@test_throws UndefVarError 1", "@test_broken 1 == 1"]
-         write(f,
-         """
-         using Test
-         $str
-         """)
 
-         msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=DevNull), String)
-         @test contains(msg, "at " * f * ":" * "2")
-
-         write(f,
-         """
-         using Test
-         @testset begin
-             $str
-         end
-         """)
-
-         msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=DevNull), String)
-         @test contains(msg, "at " * f * ":" * "3")
-
-         write(f,
-         """
-         using Test
-
-         g(x) = @test x == 1
-         @testset begin
-             g(2)
-         end
-         """)
-         msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=DevNull), String)
-
-         @test contains(msg, "at " * f * ":" * "3")
+     write(f,
+     """
+     using Test
+     @testset begin
+         @test 1==2
+         @test_throws UndefVarError 1
+         @test_broken 1 == 1
      end
+     """)
+
+     msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $f`), stderr=DevNull), String)
+     @test contains(msg, "at " * f * ":" * "3")
+     @test contains(msg, "at " * f * ":" * "4")
+     @test contains(msg, "at " * f * ":" * "5")
+
      rm(f; force=true)
  end
