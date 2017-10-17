@@ -435,7 +435,7 @@ julia> log1p(0)
 ```
 """
 log1p(x)
-for f in (:atanh, :log, :log2, :log10, :lgamma, :log1p)
+for f in (:log, :log2, :log10, :lgamma, :log1p)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
         @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)

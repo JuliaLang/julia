@@ -287,3 +287,4 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     end
     return copysign(t, x)
 end
+atanh(x::Real) = atanh(float(x))
