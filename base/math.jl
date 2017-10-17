@@ -244,7 +244,7 @@ asinh(x)
 Accurately compute ``e^x-1``.
 """
 expm1(x)
-for f in (:cbrt, :atan, :asinh, :exp2, :expm1)
+for f in (:cbrt, :atan, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
@@ -435,7 +435,7 @@ julia> log1p(0)
 ```
 """
 log1p(x)
-for f in (:acosh, :atanh, :log, :log2, :log10, :lgamma, :log1p)
+for f in (:atanh, :log, :log2, :log10, :lgamma, :log1p)
     @eval begin
         @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
         @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
