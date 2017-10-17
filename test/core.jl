@@ -5511,6 +5511,33 @@ x.u = initvalue2(Base.uniontypes(U)[1])
 x.u = initvalue(Base.uniontypes(U)[2])
 @test x.u === initvalue(Base.uniontypes(U)[2])
 
+v = Vector{Float64}(8000000);
+mutable struct UnionField2
+    x::Union{Void, Int}
+    UnionField2() = new()
+end
+@test UnionField2().x === nothing
+
+struct UnionField3
+    x::Union{Void, Int}
+    UnionField3() = new()
+end
+@test UnionField3().x === nothing
+
+mutable struct UnionField4
+    x::Union{Void, Float64}
+    y::Union{Void, Int8}
+    UnionField4() = new()
+end
+@test UnionField4().x === nothing
+
+struct UnionField5
+    x::Union{Void, Float64}
+    y::Union{Void, Int8}
+    UnionField5() = new()
+end
+@test UnionField5().x === nothing
+
 # PR #23367
 struct A23367
     x::Union{Int8, Int16, NTuple{7, Int8}, Void}

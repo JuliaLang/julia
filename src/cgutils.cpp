@@ -2425,6 +2425,14 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                         assert(false);
                 }
             }
+            for (size_t i = nargs; i < nf; i++) {
+                if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
+                    tbaa_decorate(tbaa_unionselbyte, ctx.builder.CreateStore(
+                            ConstantInt::get(T_int8, 0),
+                            ctx.builder.CreateGEP(emit_bitcast(ctx, strct, T_pint8),
+                                ConstantInt::get(T_size, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1))));
+                }
+            }
             if (type_is_ghost(lt))
                 return mark_julia_const(sty->instance);
             else if (init_as_value)
@@ -2444,6 +2452,14 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                             ctx.builder.CreateGEP(emit_bitcast(ctx, strct, T_pint8),
                                 ConstantInt::get(T_size, jl_field_offset(sty, i))),
                             T_pprjlvalue)));
+            }
+        }
+        for (size_t i = nargs; i < nf; i++) {
+            if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
+                tbaa_decorate(tbaa_unionselbyte, ctx.builder.CreateStore(
+                        ConstantInt::get(T_int8, 0),
+                        ctx.builder.CreateGEP(emit_bitcast(ctx, strct, T_pint8),
+                            ConstantInt::get(T_size, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1))));
             }
         }
         bool need_wb = false;
