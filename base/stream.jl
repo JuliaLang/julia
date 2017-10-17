@@ -349,14 +349,12 @@ if Sys.iswindows()
 end
 
 """
-displaysize([io::IO]) -> (lines, columns)
+    displaysize([io::IO]) -> (lines, columns)
 
 Return the nominal size of the screen that may be used for rendering output to
 this `IO` object.
-If `IO` object is not provided, it will return the default size `(24, 80)`.
-
-The default size can be changed by the environment variables
-`LINES` and `COLUMNS`.
+If no input is provided, the environment variables `LINES` and `COLUMNS` are read.
+If those are not set, a default size of `(24, 80)` is returned.
 
 # Examples
 ```jldoctest
