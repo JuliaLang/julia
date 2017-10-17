@@ -508,6 +508,27 @@ end
         @test sinh(A5) ≈ 0.5 * (exp(A5) - exp(-A5))
     end
 
+    @testset "Additional tests for $elty" for elty in (Int32, Int64, Complex{Int32}, Complex{Int64})
+        A1 = convert(Matrix{elty}, [1 2; 3 4])
+        A2 = convert(Matrix{elty}, [1 2; 2 1])
+
+        cosA1 = convert(Matrix{float(elty)}, [0.855423165077998 -0.11087638101074865;
+                                              -0.16631457151612294 0.689108593561875])
+        cosA2 = convert(Matrix{float(elty)}, [-0.22484509536615283 -0.7651474012342925;
+                                              -0.7651474012342925 -0.22484509536615283])
+
+        @test cos(A1) ≈ cosA1
+        @test cos(A2) ≈ cosA2
+
+        sinA1 = convert(Matrix{float(elty)}, [-0.46558148631373036 -0.14842445991317652;
+                                              -0.22263668986976476 -0.6882181761834951])
+        sinA2 = convert(Matrix{float(elty)}, [-0.3501754883740146 0.4912954964338818;
+                                              0.4912954964338818 -0.3501754883740146])
+
+        @test sin(A1) ≈ sinA1
+        @test sin(A2) ≈ sinA2
+    end
+
     @testset "Inverse functions for $elty" for elty in (Float32, Float64)
         A1 = convert(Matrix{elty}, [0.244637  -0.63578;
                                     0.22002    0.189026])
