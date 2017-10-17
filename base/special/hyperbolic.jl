@@ -96,7 +96,6 @@ function cosh(x::T) where T <: Union{Float32, Float64}
     isnan(x) && return x
 
     absx = abs(x)
-
     h = T(0.5)
     # in a) or b)
     if absx < log(T(2))/2
@@ -144,7 +143,6 @@ function tanh(x::T) where T<:Union{Float32, Float64}
     #           1 - 2/(expm1(2x) + 2)
     #      d) TANH_LARGE_X <= x
     #            return 1
-
     if isnan(x)
         return x
     elseif isinf(x)
@@ -152,7 +150,6 @@ function tanh(x::T) where T<:Union{Float32, Float64}
     end
 
     absx = abs(x)
-
     if absx < TANH_LARGE_X(T)
         # in a)
         if absx < TANH_SMALL_X(T)
@@ -202,17 +199,17 @@ function asinh(x::T) where T <: Union{Float32, Float64}
             return x
         end
         # in b)
-        t = x*x;
-        w =log1p(absx+t/(T(1)+sqrt(T(1)+t)));
+        t = x*x
+        w = log1p(absx + t/(T(1) + sqrt(T(1) + t)))
     elseif absx < T(2)^28
         # in c)
-        t = absxx;
-	    w = log(T(2)*t+T(1)/(sqrt(x*x+T(1))+t));
+        t = absx
+        w = log(T(2)*t + T(1)/(sqrt(x*x + T(1)) + t))
     else
         # in d)
-	    w = log(absx)+AH_LN2(T);
+        w = log(absx) + AH_LN2(T)
     end
-	return copysign(w, x)
+    return copysign(w, x)
 end
 asinh(x::Real) = asinh(float(x))
 
@@ -221,15 +218,17 @@ asinh(x::Real) = asinh(float(x))
 function acosh(x::T) where T <: Union{Float32, Float64}
     # Method
     # mathematically acosh(x) if defined to be log(x + sqrt(x*x-1))
-    #    1. Find the branch and the expression to calculate and return it
-    #        a) x = 1
-    #            return log1p(t+sqrt(2.0*t+t*t)) where t=x-1.
-    #        b) 1 < x < 2
-    #            return log1p(t+sqrt(2.0*t+t*t)) where t=x-1.
-    #        c) 2 <= x <
-    #            return log(2x-1/(sqrt(x*x-1)+x))
-    #        d) x >= 2^28
-    #            return log(x)+ln2
+    # 1. Find the branch and the expression to calculate and return it
+    #     a) x = 1
+    #         return log1p(t+sqrt(2.0*t+t*t)) where t=x-1.
+    #     b) 1 < x < 2
+    #         return log1p(t+sqrt(2.0*t+t*t)) where t=x-1.
+    #     c) 2 <= x <
+    #         return log(2x-1/(sqrt(x*x-1)+x))
+    #     d) x >= 2^28
+    #         return log(x)+ln2
+    # Special cases:
+    #     if x < 1 throw DomainError
     if x < T(1)
         return acosh_domain_error(x)
     elseif x == T(1)
@@ -237,15 +236,54 @@ function acosh(x::T) where T <: Union{Float32, Float64}
         return T(0)
     elseif x < T(2)
         # in b)
-        t = x-T(1)
-        return log1p(t+sqrt(T(2)*t+t*t))
+        t = x - T(1)
+        return log1p(t + sqrt(T(2)*t + t*t))
     elseif x < T(2)^28
         # in c)
         t = x*x
-        return log(T(2)*x-T(1)/(x+sqrt(t-T(1))))
+        return log(T(2)*x - T(1)/(x+sqrt(t - T(1))))
     else
         # in d)
-        return log(x)+AH_LN2(T)
+        return log(x) + AH_LN2(T)
     end
 end
 acosh(x::Real) = acosh(float(x))
+
+# atanh methods
+@noinline atanh_domain_error(x) = throw(DomainError(x, "atanh(x) is only defined for x <= 1."))
+function atanh(x::T) where T <: Union{Float32, Float64}
+    # Method
+    # 1.Reduced x to positive by atanh(-x) = -atanh(x)
+    # 2. Find the branch and the expression to calculate and return it
+    #     a) 0 <= x < 2^-28
+    #         return x
+    #     b) 2^-28 <= x < 0.5
+    #         return 0.5*log1p(2x+2x*x/(1-x))
+    #     c) 0.5 <= x < 1
+    #         return 0.5*log1p(2x/1-x)
+    #     d) x = 1
+    #         return Inf
+    # Special cases:
+    #    if |x| > 1 throw DomainError
+    absx = abs(x)
+
+    if absx > 1
+        atanh_domain_error(x)
+    end
+    if absx < T(2)^-28
+        # in a)
+        return x
+    end
+    if absx < T(0.5)
+        # in b)
+        t = absx+absx;
+        t = T(0.5)*log1p(t+t*absx/(T(1)-absx))
+    elseif absx < T(1)
+        # in c)
+        t = T(0.5)*log1p((absx + absx)/(T(1)-absx))
+    elseif absx == T(1)
+        # in d)
+        return copysign(T(Inf), x)
+    end
+    return copysign(t, x)
+end
