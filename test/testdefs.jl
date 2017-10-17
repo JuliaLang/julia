@@ -2,7 +2,7 @@
 
 using Test
 
-function runtests(name, isolate=true; seed=0)
+function runtests(name, isolate=true; seed=nothing)
     old_print_setting = Test.TESTSET_PRINT_ENABLE[]
     Test.TESTSET_PRINT_ENABLE[] = false
     try
@@ -17,7 +17,8 @@ function runtests(name, isolate=true; seed=0)
         @eval(m, using Test)
         ex = quote
             @timed @testset $"$name" begin
-                srand($seed)
+                # srand(nothing) will fail
+                $seed != nothing && srand($seed)
                 include($"$name.jl")
             end
         end
