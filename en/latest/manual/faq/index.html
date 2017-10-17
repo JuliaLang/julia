@@ -82,7 +82,39 @@ julia&gt; vec = [1, 2, 3]
 julia&gt; threeargs(vec...)
 a = 1::Int64
 b = 2::Int64
-c = 3::Int64</code></pre><p>If Julia were a language that made more liberal use of ASCII characters, the splatting operator might have been written as <code>...-&gt;</code> instead of <code>...</code>.</p><h2><a class="nav-anchor" id="Types,-type-declarations,-and-constructors-1" href="#Types,-type-declarations,-and-constructors-1">Types, type declarations, and constructors</a></h2><h3><a class="nav-anchor" id="man-type-stability-1" href="#man-type-stability-1">What does &quot;type-stable&quot; mean?</a></h3><p>It means that the type of the output is predictable from the types of the inputs.  In particular, it means that the type of the output cannot vary depending on the <em>values</em> of the inputs. The following code is <em>not</em> type-stable:</p><pre><code class="language-julia-repl">julia&gt; function unstable(flag::Bool)
+c = 3::Int64</code></pre><p>If Julia were a language that made more liberal use of ASCII characters, the splatting operator might have been written as <code>...-&gt;</code> instead of <code>...</code>.</p><h3><a class="nav-anchor" id="What-is-the-return-value-of-an-assignment?-1" href="#What-is-the-return-value-of-an-assignment?-1">What is the return value of an assignment?</a></h3><p>The operator <code>=</code> always returns the right-hand side, therefore:</p><pre><code class="language-julia-repl">julia&gt; function threeint()
+           x::Int = 3.0
+           x # returns variable x
+       end
+threeint (generic function with 1 method)
+
+julia&gt; function threefloat()
+           x::Int = 3.0 # returns 3.0
+       end
+threefloat (generic function with 1 method)
+
+julia&gt; threeint()
+3
+
+julia&gt; threefloat()
+3.0</code></pre><p>and similarly:</p><pre><code class="language-julia-repl">julia&gt; function threetup()
+           x, y = [3, 3]
+           x, y # returns a tuple
+       end
+threetup (generic function with 1 method)
+
+julia&gt; function threearr()
+           x, y = [3, 3] # returns an array
+       end
+threearr (generic function with 1 method)
+
+julia&gt; threetup()
+(3, 3)
+
+julia&gt; threearr()
+2-element Array{Int64,1}:
+ 3
+ 3</code></pre><h2><a class="nav-anchor" id="Types,-type-declarations,-and-constructors-1" href="#Types,-type-declarations,-and-constructors-1">Types, type declarations, and constructors</a></h2><h3><a class="nav-anchor" id="man-type-stability-1" href="#man-type-stability-1">What does &quot;type-stable&quot; mean?</a></h3><p>It means that the type of the output is predictable from the types of the inputs.  In particular, it means that the type of the output cannot vary depending on the <em>values</em> of the inputs. The following code is <em>not</em> type-stable:</p><pre><code class="language-julia-repl">julia&gt; function unstable(flag::Bool)
            if flag
                return 1
            else
