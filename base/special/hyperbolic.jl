@@ -7,6 +7,8 @@
 # is preserved.
 # ====================================================
 
+# Hyperbolic functions
+# sinh methods
 SINH_SMALL_X(::Type{Float64}) = 2.0^-28
 H_MEDIUM_X(::Type{Float64}) = 22.0
 
@@ -70,6 +72,7 @@ function sinh(x::T) where T <: Union{Float32, Float64}
 end
 sinh(x::Real) = sinh(float(x))
 
+# cosh methods
 COSH_SMALL_X(::Type{Float32}) = 0.00024414062f0
 COSH_SMALL_X(::Type{Float64}) = 2.7755602085408512e-17
 function cosh(x::T) where T <: Union{Float32, Float64}
@@ -123,6 +126,7 @@ function cosh(x::T) where T <: Union{Float32, Float64}
 end
 cosh(x::Real) = cosh(float(x))
 
+# tanh methods
 TANH_LARGE_X(T::Type{Float64}) = 22.0
 TANH_LARGE_X(T::Type{Float32}) = 9.0
 TANH_SMALL_X(T::Type{Float64}) = 2.0^-28
@@ -172,9 +176,41 @@ end
 tanh(x::Real) = tanh(float(x))
 
 # Inverse hyperbolic functions
+# asinh methods
+AH_LN2(T) =  6.93147180559945286227e-01
+function asinh(x::T) where T <: Union{Float32, Float64}
+    # Method
+    # mathematically asinh(x) = sign(x)*log(|x| + sqrt(x*x + 1))
+    # is the principle value of the inverse hyperbolic sine
+    # 1. Find the branch and the expression to calculate and return it
+    #    a) |x| < 2^-28
+    #        return x
+    #    b) |x| < 2
+    #        return sign(x)*log1p(|x| + x^2/(1 + sqrt(1+x^2)))
+    #    c) 2 <= |x| < 2^28
+    #        return sign(x)*log(2|x|+1/(|x|+sqrt(x*x+1)))
+    #    d) |x| >= 2^28
+    #        return sign(x)*(log(x)+ln2))
+    if isnan(x) || isinf(x)
+        return x
+    end
+    absx = abs(x)
+    if absx < T(2)
+        if absx < T(2)^-28
+            return x
+        end
+        t = x*x;
+        w =log1p(absx+t/(T(1)+sqrt(T(1)+t)));
+    elseif absx < T(2)^28
+        t = absxx;
+	    w = log(T(2)*t+T(1)/(sqrt(x*x+T(1))+t));
+    else
+	    w = log(absx)+AH_LN2(T);
+	return copysign(w, x)
+end
 # acosh methods
-ACOSH_LN2(T) = 6.93147180559945286227e-01
-ACOSH_LN2(T) = 6.9314718246e-01
+AH_LN2(T::Type{Float64}) = 6.93147180559945286227e-01
+AH_LN2(T::Type{Float32}) = 6.9314718246f-01
 @noinline acosh_domain_error(x) = throw(DomainError(x, "acosh(x) is only defined for x >= 1."))
 function acosh(x::T) where T <: Union{Flaot32, Float64}
     # Method
@@ -184,7 +220,7 @@ function acosh(x::T) where T <: Union{Flaot32, Float64}
     #            return log1p(t+sqrt(2.0*t+t*t)) where t=x-1.
     #        b) 2 <= x <
     #            return log(2x-1/(sqrt(x*x-1)+x))
-    #        c) x >=
+    #        c) x >= 2^28
     #            return log(x)+ln2
     if x < T(1)
         return acosh_domain_error(x)
@@ -197,6 +233,6 @@ function acosh(x::T) where T <: Union{Flaot32, Float64}
         t = x*x
         return log(T(2)*x-T(1)/(x+sqrt(t-T(1))))
     else
-        return log(x)+ACOSH_LN2(T)
+        return log(x)+AH_LN2(T)
     end
 end
