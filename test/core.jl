@@ -5816,3 +5816,8 @@ function hh6614()
     x, y
 end
 @test hh6614() == (1, 2)
+
+# issue 22098
+macro m22098 end
+handle_on_m22098 = getfield(@__MODULE__, Symbol("@m22098"))
+@test isempty(methods(handle_on_m22098))
