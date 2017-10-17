@@ -176,8 +176,9 @@ end
 tanh(x::Real) = tanh(float(x))
 
 # Inverse hyperbolic functions
+AH_LN2(T::Type{Float64}) = 6.93147180559945286227e-01
+AH_LN2(T::Type{Float32}) = 6.9314718246f-01
 # asinh methods
-AH_LN2(T) =  6.93147180559945286227e-01
 function asinh(x::T) where T <: Union{Float32, Float64}
     # Method
     # mathematically asinh(x) = sign(x)*log(|x| + sqrt(x*x + 1))
@@ -196,43 +197,52 @@ function asinh(x::T) where T <: Union{Float32, Float64}
     end
     absx = abs(x)
     if absx < T(2)
+        # in a)
         if absx < T(2)^-28
             return x
         end
+        # in b)
         t = x*x;
         w =log1p(absx+t/(T(1)+sqrt(T(1)+t)));
     elseif absx < T(2)^28
+        # in c)
         t = absxx;
 	    w = log(T(2)*t+T(1)/(sqrt(x*x+T(1))+t));
     else
+        # in d)
 	    w = log(absx)+AH_LN2(T);
+    end
 	return copysign(w, x)
 end
 # acosh methods
-AH_LN2(T::Type{Float64}) = 6.93147180559945286227e-01
-AH_LN2(T::Type{Float32}) = 6.9314718246f-01
 @noinline acosh_domain_error(x) = throw(DomainError(x, "acosh(x) is only defined for x >= 1."))
 function acosh(x::T) where T <: Union{Flaot32, Float64}
     # Method
     # mathematically acosh(x) if defined to be log(x + sqrt(x*x-1))
     #    1. Find the branch and the expression to calculate and return it
-    #        a) 1 < x < 2
+    #        a) x = 1
     #            return log1p(t+sqrt(2.0*t+t*t)) where t=x-1.
-    #        b) 2 <= x <
+    #        b) 1 < x < 2
+    #            return log1p(t+sqrt(2.0*t+t*t)) where t=x-1.
+    #        c) 2 <= x <
     #            return log(2x-1/(sqrt(x*x-1)+x))
-    #        c) x >= 2^28
+    #        d) x >= 2^28
     #            return log(x)+ln2
     if x < T(1)
         return acosh_domain_error(x)
     elseif x == T(1)
+        # in a)
         return T(0)
     elseif x < T(2)
+        # in b)
         t = x-T(1)
         return log1p(t+sqrt(T(2)*t+t*t))
     elseif x < T(2)^28
+        # in c)
         t = x*x
         return log(T(2)*x-T(1)/(x+sqrt(t-T(1))))
     else
+        # in d)
         return log(x)+AH_LN2(T)
     end
 end
