@@ -2816,6 +2816,13 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             stt == jl_module_type) { // TODO: use ->layout here instead of leaf_type
             return false;
         }
+        if (jl_is_type_type((jl_value_t*)stt)) {
+            // the representation type of Type{T} is either DataType, or unknown
+            if (jl_is_leaf_type(jl_tparam0(stt)))
+                stt = jl_datatype_type;
+            else
+                return false;
+        }
         assert(jl_is_datatype(stt));
 
         ssize_t fieldidx = -1;
