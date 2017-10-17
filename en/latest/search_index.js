@@ -7165,7 +7165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.count",
     "category": "Function",
-    "text": "count(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\nLibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\n"
+    "text": "LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, find the number of commits which return true when f is applied to them. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\ncnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)\nend\n\ncount finds the number of commits along the walk with a certain GitHash commit_oid1, starting the walk from that commit and moving forwards in time from it. Since the GitHash is unique to a commit, cnt will be 1.\n\n\n\ncount(p, itr) -> Integer\ncount(itr) -> Integer\n\nCount the number of elements in itr for which predicate p returns true. If p is omitted, counts the number of true elements in itr (which should be a collection of boolean values).\n\njulia> count(i->(4<=i<=6), [2,3,4,5,6])\n3\n\njulia> count([true, false, true, true])\n3\n\n\n\n"
 },
 
 {
@@ -7197,7 +7197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nmap(f, x::Nullable)\n\nReturn f applied to the value of x if it has one, as a Nullable. If x is null, then return a null value of type Nullable{S}. S is guaranteed to be either Union{} or a concrete type. Whichever of these is chosen is an implementation detail, but typically the choice that maximizes performance would be used. If x has a value, then the return type is guaranteed to be of type Nullable{typeof(f(x))}.\n\nExamples\n\njulia> map(isodd, Nullable(1))\nNullable{Bool}(true)\n\njulia> map(isodd, Nullable(2))\nNullable{Bool}(false)\n\njulia> map(isodd, Nullable{Int}())\nNullable{Bool}()\n\n\n\nLibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\n"
+    "text": "LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), range::AbstractString=\"\", by::Cint=Consts.SORT_NONE, rev::Bool=false)\n\nUsing the GitRevWalker walker to \"walk\" over every commit in the repository's history, apply f to each commit in the walk. The keyword arguments are:     * oid: The GitHash of the commit to begin the walk from. The default is to use       push_head! and therefore the HEAD commit and all its ancestors.     * range: A range of GitHashs in the format oid1..oid2. f will be       applied to all commits between the two.     * by: The sorting method. The default is not to sort. Other options are to sort by       topology (LibGit2.Consts.SORT_TOPOLOGICAL), to sort forwards in time       (LibGit2.Consts.SORT_TIME, most ancient first) or to sort backwards in time       (LibGit2.Consts.SORT_REVERSE, most recent first).     * rev: Whether to reverse the sorted order (for instance, if topological sorting is used).\n\nExamples\n\noids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker\n    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)\nend\n\nHere, map visits each commit using the GitRevWalker and finds its GitHash.\n\n\n\nmap(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nSee also: mapslices\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nmap(f, x::Nullable)\n\nReturn f applied to the value of x if it has one, as a Nullable. If x is null, then return a null value of type Nullable{S}. S is guaranteed to be either Union{} or a concrete type. Whichever of these is chosen is an implementation detail, but typically the choice that maximizes performance would be used. If x has a value, then the return type is guaranteed to be of type Nullable{typeof(f(x))}.\n\nExamples\n\njulia> map(isodd, Nullable(1))\nNullable{Bool}(true)\n\njulia> map(isodd, Nullable(2))\nNullable{Bool}(false)\n\njulia> map(isodd, Nullable{Int}())\nNullable{Bool}()\n\n\n\n"
 },
 
 {
@@ -7469,7 +7469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nSee also: IndexStyle, indices.\n\n\n\n"
+    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nSee also: IndexStyle, indices.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
 },
 
 {
@@ -8161,34 +8161,34 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math/#Base.sin",
+    "location": "stdlib/math/#Base.sin-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.sin",
-    "category": "Function",
+    "category": "Method",
     "text": "sin(x)\n\nCompute sine of x, where x is in radians.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.cos",
+    "location": "stdlib/math/#Base.cos-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.cos",
-    "category": "Function",
+    "category": "Method",
     "text": "cos(x)\n\nCompute cosine of x, where x is in radians.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.Math.sincos",
+    "location": "stdlib/math/#Base.Math.sincos-Tuple{Float64}",
     "page": "Mathematics",
     "title": "Base.Math.sincos",
-    "category": "Function",
+    "category": "Method",
     "text": "sincos(x)\n\nSimultaneously compute the sine and cosine of x, where the x is in radians.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.tan",
+    "location": "stdlib/math/#Base.tan-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.tan",
-    "category": "Function",
+    "category": "Method",
     "text": "tan(x)\n\nCompute tangent of x, where x is in radians.\n\n\n\n"
 },
 
@@ -8233,50 +8233,50 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math/#Base.sinh",
+    "location": "stdlib/math/#Base.sinh-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.sinh",
-    "category": "Function",
+    "category": "Method",
     "text": "sinh(x)\n\nCompute hyperbolic sine of x.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.cosh",
+    "location": "stdlib/math/#Base.cosh-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.cosh",
-    "category": "Function",
+    "category": "Method",
     "text": "cosh(x)\n\nCompute hyperbolic cosine of x.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.tanh",
+    "location": "stdlib/math/#Base.tanh-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.tanh",
-    "category": "Function",
+    "category": "Method",
     "text": "tanh(x)\n\nCompute hyperbolic tangent of x.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.asin",
+    "location": "stdlib/math/#Base.asin-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.asin",
-    "category": "Function",
+    "category": "Method",
     "text": "asin(x)\n\nCompute the inverse sine of x, where the output is in radians.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.acos",
+    "location": "stdlib/math/#Base.acos-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.acos",
-    "category": "Function",
+    "category": "Method",
     "text": "acos(x)\n\nCompute the inverse cosine of x, where the output is in radians\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.atan",
+    "location": "stdlib/math/#Base.atan-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.atan",
-    "category": "Function",
+    "category": "Method",
     "text": "atan(x)\n\nCompute the inverse tangent of x, where the output is in radians.\n\n\n\n"
 },
 
@@ -8313,26 +8313,26 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math/#Base.Math.sec",
+    "location": "stdlib/math/#Base.Math.sec-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.sec",
-    "category": "Function",
+    "category": "Method",
     "text": "sec(x)\n\nCompute the secant of x, where x is in radians.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.Math.csc",
+    "location": "stdlib/math/#Base.Math.csc-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.csc",
-    "category": "Function",
+    "category": "Method",
     "text": "csc(x)\n\nCompute the cosecant of x, where x is in radians.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.Math.cot",
+    "location": "stdlib/math/#Base.Math.cot-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.cot",
-    "category": "Function",
+    "category": "Method",
     "text": "cot(x)\n\nCompute the cotangent of x, where x is in radians.\n\n\n\n"
 },
 
@@ -8361,26 +8361,26 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math/#Base.Math.asec",
+    "location": "stdlib/math/#Base.Math.asec-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.asec",
-    "category": "Function",
+    "category": "Method",
     "text": "asec(x)\n\nCompute the inverse secant of x, where the output is in radians. \n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.Math.acsc",
+    "location": "stdlib/math/#Base.Math.acsc-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.acsc",
-    "category": "Function",
+    "category": "Method",
     "text": "acsc(x)\n\nCompute the inverse cosecant of x, where the output is in radians. \n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.Math.acot",
+    "location": "stdlib/math/#Base.Math.acot-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.acot",
-    "category": "Function",
+    "category": "Method",
     "text": "acot(x)\n\nCompute the inverse cotangent of x, where the output is in radians. \n\n\n\n"
 },
 
@@ -8409,74 +8409,74 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math/#Base.Math.sech",
+    "location": "stdlib/math/#Base.Math.sech-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.sech",
-    "category": "Function",
+    "category": "Method",
     "text": "sech(x)\n\nCompute the hyperbolic secant of x.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.Math.csch",
+    "location": "stdlib/math/#Base.Math.csch-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.csch",
-    "category": "Function",
+    "category": "Method",
     "text": "csch(x)\n\nCompute the hyperbolic cosecant of x.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.Math.coth",
+    "location": "stdlib/math/#Base.Math.coth-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.coth",
-    "category": "Function",
+    "category": "Method",
     "text": "coth(x)\n\nCompute the hyperbolic cotangent of x.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.asinh",
+    "location": "stdlib/math/#Base.asinh-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.asinh",
-    "category": "Function",
+    "category": "Method",
     "text": "asinh(x)\n\nCompute the inverse hyperbolic sine of x.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.acosh",
+    "location": "stdlib/math/#Base.acosh-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.acosh",
-    "category": "Function",
+    "category": "Method",
     "text": "acosh(x)\n\nCompute the inverse hyperbolic cosine of x.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.atanh",
+    "location": "stdlib/math/#Base.atanh-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.atanh",
-    "category": "Function",
+    "category": "Method",
     "text": "atanh(x)\n\nCompute the inverse hyperbolic tangent of x.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.Math.asech",
+    "location": "stdlib/math/#Base.Math.asech-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.asech",
-    "category": "Function",
+    "category": "Method",
     "text": "asech(x)\n\nCompute the inverse hyperbolic secant of x. \n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.Math.acsch",
+    "location": "stdlib/math/#Base.Math.acsch-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.acsch",
-    "category": "Function",
+    "category": "Method",
     "text": "acsch(x)\n\nCompute the inverse hyperbolic cosecant of x. \n\n\n\n"
 },
 
 {
-    "location": "stdlib/math/#Base.Math.acoth",
+    "location": "stdlib/math/#Base.Math.acoth-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.Math.acoth",
-    "category": "Function",
+    "category": "Method",
     "text": "acoth(x)\n\nCompute the inverse hyperbolic cotangent of x. \n\n\n\n"
 },
 
@@ -8521,11 +8521,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math/#Base.log-Tuple{Any}",
+    "location": "stdlib/math/#Base.log-Tuple{Number}",
     "page": "Mathematics",
     "title": "Base.log",
     "category": "Method",
-    "text": "log(x)\n\nCompute the natural logarithm of x. Throws DomainError for negative Real arguments. Use complex negative arguments to obtain complex results.\n\nThere is an experimental variant in the Base.Math.JuliaLibm module, which is typically faster and more accurate.\n\n\n\nlog(A{T}::StridedMatrix{T})\n\nIf A has no negative real eigenvalue, compute the principal matrix logarithm of A, i.e. the unique matrix X such that e^X = A and -pi  Im(lambda)  pi for all the eigenvalues lambda of X. If A has nonpositive eigenvalues, a nonprincipal matrix function is returned whenever possible.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used, if A is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12] and [AHR13]). For general matrices, the complex Schur form (schur) is computed and the triangular algorithm is used on the triangular factor.\n\n[AH12]: Awad H. Al-Mohy and Nicholas J. Higham, \"Improved inverse  scaling and squaring algorithms for the matrix logarithm\", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. doi:10.1137/110852553\n\n[AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, \"Computing the Fréchet derivative of the matrix logarithm and estimating the condition number\", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. doi:10.1137/120885991\n\nExamples\n\njulia> A = 2.7182818 * eye(2)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\njulia> log(A)\n2×2 Symmetric{Float64,Array{Float64,2}}:\n 1.0  0.0\n 0.0  1.0\n\n\n\n"
+    "text": "log(x)\n\nCompute the natural logarithm of x. Throws DomainError for negative Real arguments. Use complex negative arguments to obtain complex results.\n\nThere is an experimental variant in the Base.Math.JuliaLibm module, which is typically faster and more accurate.\n\n\n\n"
 },
 
 {
@@ -8569,11 +8569,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math/#Base.exp",
+    "location": "stdlib/math/#Base.exp-Tuple{Float64}",
     "page": "Mathematics",
     "title": "Base.exp",
-    "category": "Function",
-    "text": "exp(x)\n\nCompute the natural base exponential of x, in other words e^x.\n\njulia> exp(1.0)\n2.718281828459045\n\n\n\nexp(A::AbstractMatrix)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExamples\n\njulia> A = eye(2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> exp(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\n"
+    "category": "Method",
+    "text": "exp(x)\n\nCompute the natural base exponential of x, in other words e^x.\n\njulia> exp(1.0)\n2.718281828459045\n\n\n\n"
 },
 
 {
@@ -8921,11 +8921,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math/#Base.sqrt",
+    "location": "stdlib/math/#Base.sqrt-Tuple{Real}",
     "page": "Mathematics",
     "title": "Base.sqrt",
-    "category": "Function",
-    "text": "sqrt(x)\n\nReturn sqrtx. Throws DomainError for negative Real arguments. Use complex negative arguments instead. The prefix operator √ is equivalent to sqrt.\n\n\n\nsqrt(A::AbstractMatrix)\n\nIf A has no negative real eigenvalues, compute the principal matrix square root of A, that is the unique matrix X with eigenvalues having positive real part such that X^2 = A. Otherwise, a nonprincipal square root is returned.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the square root. Otherwise, the square root is determined by means of the Björck-Hammarling method [BH83], which computes the complex Schur form (schur) and then the complex square root of the triangular factor.\n\n[BH83]: Åke Björck and Sven Hammarling, \"A Schur method for the square root of a matrix\", Linear Algebra and its Applications, 52-53, 1983, 127-140. doi:10.1016/0024-3795(83)80010-X\n\nExamples\n\njulia> A = [4 0; 0 4]\n2×2 Array{Int64,2}:\n 4  0\n 0  4\n\njulia> sqrt(A)\n2×2 Array{Float64,2}:\n 2.0  0.0\n 0.0  2.0\n\n\n\n"
+    "category": "Method",
+    "text": "sqrt(x)\n\nReturn sqrtx. Throws DomainError for negative Real arguments. Use complex negative arguments instead. The prefix operator √ is equivalent to sqrt.\n\n\n\n"
 },
 
 {
@@ -8973,7 +8973,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -9173,7 +9173,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Mathematical Functions",
     "category": "section",
-    "text": "Base.isapprox\nBase.sin\nBase.cos\nBase.sincos\nBase.tan\nBase.Math.sind\nBase.Math.cosd\nBase.Math.tand\nBase.Math.sinpi\nBase.Math.cospi\nBase.sinh\nBase.cosh\nBase.tanh\nBase.asin\nBase.acos\nBase.atan\nBase.Math.atan2\nBase.Math.asind\nBase.Math.acosd\nBase.Math.atand\nBase.Math.sec\nBase.Math.csc\nBase.Math.cot\nBase.Math.secd\nBase.Math.cscd\nBase.Math.cotd\nBase.Math.asec\nBase.Math.acsc\nBase.Math.acot\nBase.Math.asecd\nBase.Math.acscd\nBase.Math.acotd\nBase.Math.sech\nBase.Math.csch\nBase.Math.coth\nBase.asinh\nBase.acosh\nBase.atanh\nBase.Math.asech\nBase.Math.acsch\nBase.Math.acoth\nBase.Math.sinc\nBase.Math.cosc\nBase.Math.deg2rad\nBase.Math.rad2deg\nBase.Math.hypot\nBase.log(::Any)\nBase.log(::Number, ::Number)\nBase.log2\nBase.log10\nBase.log1p\nBase.Math.frexp\nBase.exp\nBase.exp2\nBase.exp10\nBase.Math.ldexp\nBase.Math.modf\nBase.expm1\nBase.round(::Type, ::Any)\nBase.Rounding.RoundingMode\nBase.Rounding.RoundNearest\nBase.Rounding.RoundNearestTiesAway\nBase.Rounding.RoundNearestTiesUp\nBase.Rounding.RoundToZero\nBase.Rounding.RoundUp\nBase.Rounding.RoundDown\nBase.round{T <: AbstractFloat, MR, MI}(::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})\nBase.ceil\nBase.floor\nBase.trunc\nBase.unsafe_trunc\nBase.signif\nBase.min\nBase.max\nBase.minmax\nBase.Math.clamp\nBase.Math.clamp!\nBase.abs\nBase.Checked.checked_abs\nBase.Checked.checked_neg\nBase.Checked.checked_add\nBase.Checked.checked_sub\nBase.Checked.checked_mul\nBase.Checked.checked_div\nBase.Checked.checked_rem\nBase.Checked.checked_fld\nBase.Checked.checked_mod\nBase.Checked.checked_cld\nBase.Checked.add_with_overflow\nBase.Checked.sub_with_overflow\nBase.Checked.mul_with_overflow\nBase.abs2\nBase.copysign\nBase.sign\nBase.signbit\nBase.flipsign\nBase.sqrt\nBase.isqrt\nBase.Math.cbrt\nBase.real(::Complex)\nBase.imag\nBase.reim\nBase.conj\nBase.angle\nBase.cis\nBase.binomial\nBase.factorial\nBase.gcd\nBase.lcm\nBase.gcdx\nBase.ispow2\nBase.nextpow2\nBase.prevpow2\nBase.nextpow\nBase.prevpow\nBase.nextprod\nBase.invmod\nBase.powermod\nBase.Math.gamma\nBase.Math.lgamma\nBase.Math.lfact\nBase.Math.beta\nBase.Math.lbeta\nBase.ndigits\nBase.widemul\nBase.Math.@evalpoly\nBase.FastMath.@fastmath"
+    "text": "Base.isapprox\nBase.sin(::Number)\nBase.cos(::Number)\nBase.sincos(::Float64)\nBase.tan(::Number)\nBase.Math.sind\nBase.Math.cosd\nBase.Math.tand\nBase.Math.sinpi\nBase.Math.cospi\nBase.sinh(::Number)\nBase.cosh(::Number)\nBase.tanh(::Number)\nBase.asin(::Number)\nBase.acos(::Number)\nBase.atan(::Number)\nBase.Math.atan2\nBase.Math.asind\nBase.Math.acosd\nBase.Math.atand\nBase.Math.sec(::Number)\nBase.Math.csc(::Number)\nBase.Math.cot(::Number)\nBase.Math.secd\nBase.Math.cscd\nBase.Math.cotd\nBase.Math.asec(::Number)\nBase.Math.acsc(::Number)\nBase.Math.acot(::Number)\nBase.Math.asecd\nBase.Math.acscd\nBase.Math.acotd\nBase.Math.sech(::Number)\nBase.Math.csch(::Number)\nBase.Math.coth(::Number)\nBase.asinh(::Number)\nBase.acosh(::Number)\nBase.atanh(::Number)\nBase.Math.asech(::Number)\nBase.Math.acsch(::Number)\nBase.Math.acoth(::Number)\nBase.Math.sinc\nBase.Math.cosc\nBase.Math.deg2rad\nBase.Math.rad2deg\nBase.Math.hypot\nBase.log(::Number)\nBase.log(::Number, ::Number)\nBase.log2\nBase.log10\nBase.log1p\nBase.Math.frexp\nBase.exp(::Float64)\nBase.exp2\nBase.exp10\nBase.Math.ldexp\nBase.Math.modf\nBase.expm1\nBase.round(::Type, ::Any)\nBase.Rounding.RoundingMode\nBase.Rounding.RoundNearest\nBase.Rounding.RoundNearestTiesAway\nBase.Rounding.RoundNearestTiesUp\nBase.Rounding.RoundToZero\nBase.Rounding.RoundUp\nBase.Rounding.RoundDown\nBase.round{T <: AbstractFloat, MR, MI}(::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})\nBase.ceil\nBase.floor\nBase.trunc\nBase.unsafe_trunc\nBase.signif\nBase.min\nBase.max\nBase.minmax\nBase.Math.clamp\nBase.Math.clamp!\nBase.abs\nBase.Checked.checked_abs\nBase.Checked.checked_neg\nBase.Checked.checked_add\nBase.Checked.checked_sub\nBase.Checked.checked_mul\nBase.Checked.checked_div\nBase.Checked.checked_rem\nBase.Checked.checked_fld\nBase.Checked.checked_mod\nBase.Checked.checked_cld\nBase.Checked.add_with_overflow\nBase.Checked.sub_with_overflow\nBase.Checked.mul_with_overflow\nBase.abs2\nBase.copysign\nBase.sign\nBase.signbit\nBase.flipsign\nBase.sqrt(::Real)\nBase.isqrt\nBase.Math.cbrt\nBase.real(::Complex)\nBase.imag\nBase.reim\nBase.conj\nBase.angle\nBase.cis\nBase.binomial\nBase.factorial\nBase.gcd\nBase.lcm\nBase.gcdx\nBase.ispow2\nBase.nextpow2\nBase.prevpow2\nBase.nextpow\nBase.prevpow\nBase.nextprod\nBase.invmod\nBase.powermod\nBase.Math.gamma\nBase.Math.lgamma\nBase.Math.lfact\nBase.Math.beta\nBase.Math.lbeta\nBase.ndigits\nBase.widemul\nBase.Math.@evalpoly\nBase.FastMath.@fastmath"
 },
 
 {
@@ -13181,7 +13181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A, pivot=Val(true)) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExamples\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A, pivot=Val(true)) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExamples\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
 },
 
 {
@@ -13737,6 +13737,230 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/linalg/#Base.exp-Tuple{Union{DenseArray{#s81,2}, Base.ReinterpretArray{#s81,2,S,A} where S, Base.ReshapedArray{#s81,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s81,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s81<:Union{Complex{Float32}, Complex{Float64}, Float32, Float64}}",
+    "page": "Linear Algebra",
+    "title": "Base.exp",
+    "category": "Method",
+    "text": "exp(A::AbstractMatrix)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExamples\n\njulia> A = eye(2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> exp(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.log-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.log",
+    "category": "Method",
+    "text": "log(A{T}::StridedMatrix{T})\n\nIf A has no negative real eigenvalue, compute the principal matrix logarithm of A, i.e. the unique matrix X such that e^X = A and -pi  Im(lambda)  pi for all the eigenvalues lambda of X. If A has nonpositive eigenvalues, a nonprincipal matrix function is returned whenever possible.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used, if A is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12] and [AHR13]). For general matrices, the complex Schur form (schur) is computed and the triangular algorithm is used on the triangular factor.\n\n[AH12]: Awad H. Al-Mohy and Nicholas J. Higham, \"Improved inverse  scaling and squaring algorithms for the matrix logarithm\", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. doi:10.1137/110852553\n\n[AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, \"Computing the Fréchet derivative of the matrix logarithm and estimating the condition number\", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. doi:10.1137/120885991\n\nExamples\n\njulia> A = 2.7182818 * eye(2)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\njulia> log(A)\n2×2 Symmetric{Float64,Array{Float64,2}}:\n 1.0  0.0\n 0.0  1.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.sqrt-Tuple{Union{DenseArray{#s81,2}, Base.ReinterpretArray{#s81,2,S,A} where S, Base.ReshapedArray{#s81,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s81,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s81<:Real}",
+    "page": "Linear Algebra",
+    "title": "Base.sqrt",
+    "category": "Method",
+    "text": "sqrt(A::AbstractMatrix)\n\nIf A has no negative real eigenvalues, compute the principal matrix square root of A, that is the unique matrix X with eigenvalues having positive real part such that X^2 = A. Otherwise, a nonprincipal square root is returned.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the square root. Otherwise, the square root is determined by means of the Björck-Hammarling method [BH83], which computes the complex Schur form (schur) and then the complex square root of the triangular factor.\n\n[BH83]: Åke Björck and Sven Hammarling, \"A Schur method for the square root of a matrix\", Linear Algebra and its Applications, 52-53, 1983, 127-140. doi:10.1016/0024-3795(83)80010-X\n\nExamples\n\njulia> A = [4 0; 0 4]\n2×2 Array{Int64,2}:\n 4  0\n 0  4\n\njulia> sqrt(A)\n2×2 Array{Float64,2}:\n 2.0  0.0\n 0.0  2.0\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.cos-Tuple{Union{DenseArray{#s81,2}, Base.ReinterpretArray{#s81,2,S,A} where S, Base.ReshapedArray{#s81,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s81,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s81<:Real}",
+    "page": "Linear Algebra",
+    "title": "Base.cos",
+    "category": "Method",
+    "text": "cos(A::AbstractMatrix)\n\nCompute the matrix cosine of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the cosine. Otherwise, the cosine is determined by calling exp.\n\nExamples\n\njulia> cos(ones(2, 2))\n2×2 Array{Float64,2}:\n  0.291927  -0.708073\n -0.708073   0.291927\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.sin-Tuple{Union{DenseArray{#s81,2}, Base.ReinterpretArray{#s81,2,S,A} where S, Base.ReshapedArray{#s81,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s81,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s81<:Real}",
+    "page": "Linear Algebra",
+    "title": "Base.sin",
+    "category": "Method",
+    "text": "sin(A::AbstractMatrix)\n\nCompute the matrix sine of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the sine. Otherwise, the sine is determined by calling exp.\n\nExamples\n\njulia> sin(ones(2, 2))\n2×2 Array{Float64,2}:\n 0.454649  0.454649\n 0.454649  0.454649\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.Math.sincos-Tuple{Union{DenseArray{#s81,2}, Base.ReinterpretArray{#s81,2,S,A} where S, Base.ReshapedArray{#s81,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s81,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s81<:Real}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.sincos",
+    "category": "Method",
+    "text": "sincos(A::AbstractMatrix)\n\nCompute the matrix sine and cosine of a square matrix A.\n\nExamples\n\njulia> S, C = sincos(ones(2, 2));\n\njulia> S\n2×2 Array{Float64,2}:\n 0.454649  0.454649\n 0.454649  0.454649\n\njulia> C\n2×2 Array{Float64,2}:\n  0.291927  -0.708073\n -0.708073   0.291927\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.tan-Tuple{Union{DenseArray{#s81,2}, Base.ReinterpretArray{#s81,2,S,A} where S, Base.ReshapedArray{#s81,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{#s81,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where #s81<:Real}",
+    "page": "Linear Algebra",
+    "title": "Base.tan",
+    "category": "Method",
+    "text": "tan(A::AbstractMatrix)\n\nCompute the matrix tangent of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the tangent. Otherwise, the tangent is determined by calling exp.\n\nExamples\n\njulia> tan(ones(2, 2))\n2×2 Array{Float64,2}:\n -1.09252  -1.09252\n -1.09252  -1.09252\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.Math.sec-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.sec",
+    "category": "Method",
+    "text": "sec(A::AbstractMatrix)\n\nCompute the matrix secant of a square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.Math.csc-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.csc",
+    "category": "Method",
+    "text": "csc(A::AbstractMatrix)\n\nCompute the matrix cosecant of a square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.Math.cot-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.cot",
+    "category": "Method",
+    "text": "cot(A::AbstractMatrix)\n\nCompute the matrix cotangent of a square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.cosh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.cosh",
+    "category": "Method",
+    "text": "cosh(A::AbstractMatrix)\n\nCompute the matrix hyperbolic cosine of a square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.sinh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.sinh",
+    "category": "Method",
+    "text": "sinh(A::AbstractMatrix)\n\nCompute the matrix hyperbolic sine of a square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.tanh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.tanh",
+    "category": "Method",
+    "text": "tanh(A::AbstractMatrix)\n\nCompute the matrix hyperbolic tangent of a square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.Math.sech-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.sech",
+    "category": "Method",
+    "text": "sech(A::AbstractMatrix)\n\nCompute the matrix hyperbolic secant of square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.Math.csch-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.csch",
+    "category": "Method",
+    "text": "csch(A::AbstractMatrix)\n\nCompute the matrix hyperbolic cosecant of square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.Math.coth-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.coth",
+    "category": "Method",
+    "text": "coth(A::AbstractMatrix)\n\nCompute the matrix hyperbolic cotangent of square matrix A.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.acos-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.acos",
+    "category": "Method",
+    "text": "acos(A::AbstractMatrix)\n\nCompute the inverse matrix cosine of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the inverse cosine. Otherwise, the inverse cosine is determined by using log and sqrt.  For the theory and logarithmic formulas used to compute this function, see [AH16_1].\n\n[AH16_1]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\nExamples\n\njulia> acos(cos([0.5 0.1; -0.2 0.3]))\n2×2 Array{Complex{Float64},2}:\n  0.5-8.32667e-17im  0.1-2.77556e-17im\n -0.2+2.77556e-16im  0.3-3.46945e-16im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.asin-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.asin",
+    "category": "Method",
+    "text": "asin(A::AbstractMatrix)\n\nCompute the inverse matrix sine of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the inverse sine. Otherwise, the inverse sine is determined by using log and sqrt.  For the theory and logarithmic formulas used to compute this function, see [AH16_2].\n\n[AH16_2]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\nExamples\n\njulia> asin(sin([0.5 0.1; -0.2 0.3]))\n2×2 Array{Complex{Float64},2}:\n  0.5-4.16334e-17im  0.1-5.55112e-17im\n -0.2+9.71445e-17im  0.3-1.249e-16im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.atan-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.atan",
+    "category": "Method",
+    "text": "atan(A::AbstractMatrix)\n\nCompute the inverse matrix tangent of a square matrix A.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the inverse tangent. Otherwise, the inverse tangent is determined by using log.  For the theory and logarithmic formulas used to compute this function, see [AH16_3].\n\n[AH16_3]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\nExamples\n\njulia> atan(tan([0.5 0.1; -0.2 0.3]))\n2×2 Array{Complex{Float64},2}:\n  0.5+1.38778e-17im  0.1-2.77556e-17im\n -0.2+6.93889e-17im  0.3-4.16334e-17im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.Math.asec-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.asec",
+    "category": "Method",
+    "text": "asec(A::AbstractMatrix)\n\nCompute the inverse matrix secant of A. \n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.Math.acsc-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.acsc",
+    "category": "Method",
+    "text": "acsc(A::AbstractMatrix)\n\nCompute the inverse matrix cosecant of A. \n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.Math.acot-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.acot",
+    "category": "Method",
+    "text": "acot(A::AbstractMatrix)\n\nCompute the inverse matrix cotangent of A. \n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.acosh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.acosh",
+    "category": "Method",
+    "text": "acosh(A::AbstractMatrix)\n\nCompute the inverse hyperbolic matrix cosine of a square matrix A.  For the theory and logarithmic formulas used to compute this function, see [AH16_4].\n\n[AH16_4]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.asinh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.asinh",
+    "category": "Method",
+    "text": "asinh(A::AbstractMatrix)\n\nCompute the inverse hyperbolic matrix sine of a square matrix A.  For the theory and logarithmic formulas used to compute this function, see [AH16_5].\n\n[AH16_5]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.atanh-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.atanh",
+    "category": "Method",
+    "text": "atanh(A::AbstractMatrix)\n\nCompute the inverse hyperbolic matrix tangent of a square matrix A.  For the theory and logarithmic formulas used to compute this function, see [AH16_6].\n\n[AH16_6]: Mary Aprahamian and Nicholas J. Higham, \"Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms\", MIMS EPrint: 2016.4. https://doi.org/10.1137/16M1057577\n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.Math.asech-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.asech",
+    "category": "Method",
+    "text": "asech(A::AbstractMatrix)\n\nCompute the inverse matrix hyperbolic secant of A. \n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.Math.acsch-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.acsch",
+    "category": "Method",
+    "text": "acsch(A::AbstractMatrix)\n\nCompute the inverse matrix hyperbolic cosecant of A. \n\n\n\n"
+},
+
+{
+    "location": "stdlib/linalg/#Base.Math.acoth-Tuple{Union{DenseArray{T,2}, Base.ReinterpretArray{T,2,S,A} where S, Base.ReshapedArray{T,2,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray}, SubArray{T,2,A,I,L} where L} where I<:Tuple{Vararg{Union{Int64, AbstractRange{Int64}, Base.AbstractCartesianIndex},N} where N} where A<:Union{Base.ReshapedArray{T,N,A,MI} where MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N} where N} where A<:Union{SubArray{T,N,P,I,true} where I<:Tuple{Union{Base.Slice, UnitRange},Vararg{Any,N} where N} where P where N where T, DenseArray} where N where T, DenseArray} where T}",
+    "page": "Linear Algebra",
+    "title": "Base.Math.acoth",
+    "category": "Method",
+    "text": "acoth(A::AbstractMatrix)\n\nCompute the inverse matrix hyperbolic cotangent of A. \n\n\n\n"
+},
+
+{
     "location": "stdlib/linalg/#Base.LinAlg.lyap",
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lyap",
@@ -13901,7 +14125,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Standard Functions",
     "category": "section",
-    "text": "Linear algebra functions in Julia are largely implemented by calling functions from LAPACK.  Sparse factorizations call functions from SuiteSparse.Base.:*(::AbstractArray, ::AbstractArray)\nBase.:\\(::AbstractArray, ::Any)\nBase.LinAlg.dot\nBase.LinAlg.vecdot\nBase.LinAlg.cross\nBase.LinAlg.factorize\nBase.LinAlg.Diagonal\nBase.LinAlg.Bidiagonal\nBase.LinAlg.SymTridiagonal\nBase.LinAlg.Tridiagonal\nBase.LinAlg.Symmetric\nBase.LinAlg.Hermitian\nBase.LinAlg.LowerTriangular\nBase.LinAlg.UpperTriangular\nBase.LinAlg.UniformScaling\nBase.LinAlg.lu\nBase.LinAlg.lufact\nBase.LinAlg.lufact!\nBase.LinAlg.chol\nBase.LinAlg.cholfact\nBase.LinAlg.cholfact!\nBase.LinAlg.lowrankupdate\nBase.LinAlg.lowrankdowndate\nBase.LinAlg.lowrankupdate!\nBase.LinAlg.lowrankdowndate!\nBase.LinAlg.ldltfact\nBase.LinAlg.ldltfact!\nBase.LinAlg.qr\nBase.LinAlg.qr!\nBase.LinAlg.qrfact\nBase.LinAlg.qrfact!\nBase.LinAlg.QR\nBase.LinAlg.QRCompactWY\nBase.LinAlg.QRPivoted\nBase.LinAlg.lqfact!\nBase.LinAlg.lqfact\nBase.LinAlg.lq\nBase.LinAlg.bkfact\nBase.LinAlg.bkfact!\nBase.LinAlg.eig\nBase.LinAlg.eigvals\nBase.LinAlg.eigvals!\nBase.LinAlg.eigmax\nBase.LinAlg.eigmin\nBase.LinAlg.eigvecs\nBase.LinAlg.eigfact\nBase.LinAlg.eigfact!\nBase.LinAlg.hessfact\nBase.LinAlg.hessfact!\nBase.LinAlg.schurfact\nBase.LinAlg.schurfact!\nBase.LinAlg.schur\nBase.LinAlg.ordschur\nBase.LinAlg.ordschur!\nBase.LinAlg.svdfact\nBase.LinAlg.svdfact!\nBase.LinAlg.svd\nBase.LinAlg.svdvals\nBase.LinAlg.Givens\nBase.LinAlg.givens\nBase.LinAlg.triu\nBase.LinAlg.triu!\nBase.LinAlg.tril\nBase.LinAlg.tril!\nBase.LinAlg.diagind\nBase.LinAlg.diag\nBase.LinAlg.diagm\nBase.LinAlg.scale!\nBase.LinAlg.rank\nBase.LinAlg.norm\nBase.LinAlg.vecnorm\nBase.LinAlg.normalize!\nBase.LinAlg.normalize\nBase.LinAlg.cond\nBase.LinAlg.condskeel\nBase.LinAlg.trace\nBase.LinAlg.det\nBase.LinAlg.logdet\nBase.LinAlg.logabsdet\nBase.inv(::AbstractMatrix)\nBase.LinAlg.pinv\nBase.LinAlg.nullspace\nBase.repmat\nBase.kron\nBase.SparseArrays.blkdiag\nBase.LinAlg.linreg\nBase.LinAlg.lyap\nBase.LinAlg.sylvester\nBase.LinAlg.issuccess\nBase.LinAlg.issymmetric\nBase.LinAlg.isposdef\nBase.LinAlg.isposdef!\nBase.LinAlg.istril\nBase.LinAlg.istriu\nBase.LinAlg.isdiag\nBase.LinAlg.ishermitian\nBase.LinAlg.RowVector\nBase.LinAlg.ConjArray\nBase.transpose\nBase.transpose!\nBase.adjoint\nBase.adjoint!\nBase.LinAlg.eigs(::Any)\nBase.LinAlg.eigs(::Any, ::Any)\nBase.LinAlg.svds\nBase.LinAlg.peakflops"
+    "text": "Linear algebra functions in Julia are largely implemented by calling functions from LAPACK.  Sparse factorizations call functions from SuiteSparse.Base.:*(::AbstractArray, ::AbstractArray)\nBase.:\\(::AbstractArray, ::Any)\nBase.LinAlg.dot\nBase.LinAlg.vecdot\nBase.LinAlg.cross\nBase.LinAlg.factorize\nBase.LinAlg.Diagonal\nBase.LinAlg.Bidiagonal\nBase.LinAlg.SymTridiagonal\nBase.LinAlg.Tridiagonal\nBase.LinAlg.Symmetric\nBase.LinAlg.Hermitian\nBase.LinAlg.LowerTriangular\nBase.LinAlg.UpperTriangular\nBase.LinAlg.UniformScaling\nBase.LinAlg.lu\nBase.LinAlg.lufact\nBase.LinAlg.lufact!\nBase.LinAlg.chol\nBase.LinAlg.cholfact\nBase.LinAlg.cholfact!\nBase.LinAlg.lowrankupdate\nBase.LinAlg.lowrankdowndate\nBase.LinAlg.lowrankupdate!\nBase.LinAlg.lowrankdowndate!\nBase.LinAlg.ldltfact\nBase.LinAlg.ldltfact!\nBase.LinAlg.qr\nBase.LinAlg.qr!\nBase.LinAlg.qrfact\nBase.LinAlg.qrfact!\nBase.LinAlg.QR\nBase.LinAlg.QRCompactWY\nBase.LinAlg.QRPivoted\nBase.LinAlg.lqfact!\nBase.LinAlg.lqfact\nBase.LinAlg.lq\nBase.LinAlg.bkfact\nBase.LinAlg.bkfact!\nBase.LinAlg.eig\nBase.LinAlg.eigvals\nBase.LinAlg.eigvals!\nBase.LinAlg.eigmax\nBase.LinAlg.eigmin\nBase.LinAlg.eigvecs\nBase.LinAlg.eigfact\nBase.LinAlg.eigfact!\nBase.LinAlg.hessfact\nBase.LinAlg.hessfact!\nBase.LinAlg.schurfact\nBase.LinAlg.schurfact!\nBase.LinAlg.schur\nBase.LinAlg.ordschur\nBase.LinAlg.ordschur!\nBase.LinAlg.svdfact\nBase.LinAlg.svdfact!\nBase.LinAlg.svd\nBase.LinAlg.svdvals\nBase.LinAlg.Givens\nBase.LinAlg.givens\nBase.LinAlg.triu\nBase.LinAlg.triu!\nBase.LinAlg.tril\nBase.LinAlg.tril!\nBase.LinAlg.diagind\nBase.LinAlg.diag\nBase.LinAlg.diagm\nBase.LinAlg.scale!\nBase.LinAlg.rank\nBase.LinAlg.norm\nBase.LinAlg.vecnorm\nBase.LinAlg.normalize!\nBase.LinAlg.normalize\nBase.LinAlg.cond\nBase.LinAlg.condskeel\nBase.LinAlg.trace\nBase.LinAlg.det\nBase.LinAlg.logdet\nBase.LinAlg.logabsdet\nBase.inv(::AbstractMatrix)\nBase.LinAlg.pinv\nBase.LinAlg.nullspace\nBase.repmat\nBase.kron\nBase.SparseArrays.blkdiag\nBase.LinAlg.linreg\nBase.LinAlg.exp(::StridedMatrix{<:Base.LinAlg.BlasFloat})\nBase.LinAlg.log(::StridedMatrix)\nBase.LinAlg.sqrt(::StridedMatrix{<:Real})\nBase.LinAlg.cos(::StridedMatrix{<:Real})\nBase.LinAlg.sin(::StridedMatrix{<:Real})\nBase.LinAlg.sincos(::StridedMatrix{<:Real})\nBase.LinAlg.tan(::StridedMatrix{<:Real})\nBase.LinAlg.sec(::StridedMatrix)\nBase.LinAlg.csc(::StridedMatrix)\nBase.LinAlg.cot(::StridedMatrix)\nBase.LinAlg.cosh(::StridedMatrix)\nBase.LinAlg.sinh(::StridedMatrix)\nBase.LinAlg.tanh(::StridedMatrix)\nBase.LinAlg.sech(::StridedMatrix)\nBase.LinAlg.csch(::StridedMatrix)\nBase.LinAlg.coth(::StridedMatrix)\nBase.LinAlg.acos(::StridedMatrix)\nBase.LinAlg.asin(::StridedMatrix)\nBase.LinAlg.atan(::StridedMatrix)\nBase.LinAlg.asec(::StridedMatrix)\nBase.LinAlg.acsc(::StridedMatrix)\nBase.LinAlg.acot(::StridedMatrix)\nBase.LinAlg.acosh(::StridedMatrix)\nBase.LinAlg.asinh(::StridedMatrix)\nBase.LinAlg.atanh(::StridedMatrix)\nBase.LinAlg.asech(::StridedMatrix)\nBase.LinAlg.acsch(::StridedMatrix)\nBase.LinAlg.acoth(::StridedMatrix)\nBase.LinAlg.lyap\nBase.LinAlg.sylvester\nBase.LinAlg.issuccess\nBase.LinAlg.issymmetric\nBase.LinAlg.isposdef\nBase.LinAlg.isposdef!\nBase.LinAlg.istril\nBase.LinAlg.istriu\nBase.LinAlg.isdiag\nBase.LinAlg.ishermitian\nBase.LinAlg.RowVector\nBase.LinAlg.ConjArray\nBase.transpose\nBase.transpose!\nBase.adjoint\nBase.adjoint!\nBase.LinAlg.eigs(::Any)\nBase.LinAlg.eigs(::Any, ::Any)\nBase.LinAlg.svds\nBase.LinAlg.peakflops"
 },
 
 {
