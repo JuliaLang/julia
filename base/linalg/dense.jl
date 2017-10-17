@@ -718,13 +718,13 @@ julia> cos(ones(2, 2))
 """
 function cos(A::AbstractMatrix{<:Real})
     if issymmetric(A)
-        return full(cos(Symmetric(A)))
+        return copytri!(parent(cos(Symmetric(A))), 'U')
     end
     return real(exp!(im*A))
 end
 function cos(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
-        return full(cos(Hermitian(A)))
+        return copytri!(parent(cos(Hermitian(A))), 'U', true)
     end
     X = exp!(im*A)
     X .= (X .+ exp!(-im*A)) ./ 2
@@ -749,13 +749,13 @@ julia> sin(ones(2, 2))
 """
 function sin(A::AbstractMatrix{<:Real})
     if issymmetric(A)
-        return full(sin(Symmetric(A)))
+        return copytri!(parent(sin(Symmetric(A))), 'U')
     end
     return imag(exp!(im*A))
 end
 function sin(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
-        return full(sin(Hermitian(A)))
+        return copytri!(parent(sin(Hermitian(A))), 'U', true)
     end
     X = exp!(im*A)
     Y = exp!(-im*A)
@@ -788,14 +788,20 @@ julia> C
 """
 function sincos(A::AbstractMatrix{<:Real})
     if issymmetric(A)
-        return full.(sincos(Symmetric(A)))
+        symsinA, symcosA = sincos(Symmetric(A))
+        sinA = copytri!(parent(symsinA), 'U')
+        cosA = copytri!(parent(symcosA), 'U')
+        return sinA, cosA
     end
     c, s = reim(exp!(im*A))
     return s, c
 end
 function sincos(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
-        return full.(sincos(Hermitian(A)))
+        hermsinA, hermcosA = sincos(Hermitian(A))
+        sinA = copytri!(parent(hermsinA), 'U', true)
+        cosA = copytri!(parent(hermcosA), 'U', true)
+        return sinA, cosA
     end
     X = exp!(im*A)
     Y = exp!(-im*A)
@@ -825,7 +831,7 @@ julia> tan(ones(2, 2))
 """
 function tan(A::AbstractMatrix)
     if ishermitian(A)
-        return full(tan(Hermitian(A)))
+        return copytri!(parent(tan(Hermitian(A))), 'U', true)
     end
     S, C = sincos(A)
     S /= C
@@ -839,7 +845,7 @@ Compute the matrix hyperbolic cosine of a square matrix `A`.
 """
 function cosh(A::AbstractMatrix)
     if ishermitian(A)
-        return full(cosh(Hermitian(A)))
+        return copytri!(parent(cosh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
     X .= (X .+ exp!(-A)) ./ 2
@@ -853,7 +859,7 @@ Compute the matrix hyperbolic sine of a square matrix `A`.
 """
 function sinh(A::AbstractMatrix)
     if ishermitian(A)
-        return full(sinh(Hermitian(A)))
+        return copytri!(parent(sinh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
     X .= (X .- exp!(-A)) ./ 2
@@ -867,7 +873,7 @@ Compute the matrix hyperbolic tangent of a square matrix `A`.
 """
 function tanh(A::AbstractMatrix)
     if ishermitian(A)
-        return full(tanh(Hermitian(A)))
+        return copytri!(parent(tanh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
     Y = exp!(-A)
@@ -902,11 +908,12 @@ julia> acos(cos([0.5 0.1; -0.2 0.3]))
 """
 function acos(A::AbstractMatrix)
     if ishermitian(A)
-        return full(acos(Hermitian(A)))
+        acosHermA = acos(Hermitian(A))
+        return isa(acosHermA, Hermitian) ? copytri!(parent(acosHermA), 'U', true) : parent(acosHermA)
     end
     SchurF = schurfact(complex(A))
     U = UpperTriangular(SchurF.T)
-    R = full(-im * log(U + im * sqrt(I - U^2)))
+    R = triu!(parent(-im * log(U + im * sqrt(I - U^2))))
     return SchurF.Z * R * SchurF.Z'
 end
 
@@ -932,11 +939,12 @@ julia> asin(sin([0.5 0.1; -0.2 0.3]))
 """
 function asin(A::AbstractMatrix)
     if ishermitian(A)
-        return full(asin(Hermitian(A)))
+        asinHermA = asin(Hermitian(A))
+        return isa(asinHermA, Hermitian) ? copytri!(parent(asinHermA), 'U', true) : parent(asinHermA)
     end
     SchurF = schurfact(complex(A))
     U = UpperTriangular(SchurF.T)
-    R = full(-im * log(im * U + sqrt(I - U^2)))
+    R = triu!(parent(-im * log(im * U + sqrt(I - U^2))))
     return SchurF.Z * R * SchurF.Z'
 end
 
@@ -962,11 +970,11 @@ julia> atan(tan([0.5 0.1; -0.2 0.3]))
 """
 function atan(A::AbstractMatrix)
     if ishermitian(A)
-        return full(atan(Hermitian(A)))
+        return copytri!(parent(atan(Hermitian(A))), 'U', true)
     end
     SchurF = schurfact(complex(A))
     U = im * UpperTriangular(SchurF.T)
-    R = full(log((I + U) / (I - U)) / 2im)
+    R = triu!(parent(log((I + U) / (I - U)) / 2im))
     return SchurF.Z * R * SchurF.Z'
 end
 
@@ -980,11 +988,12 @@ logarithmic formulas used to compute this function, see [^AH16_4].
 """
 function acosh(A::AbstractMatrix)
     if ishermitian(A)
-        return full(acosh(Hermitian(A)))
+        acoshHermA = acosh(Hermitian(A))
+        return isa(acoshHermA, Hermitian) ? copytri!(parent(acoshHermA), 'U', true) : parent(acoshHermA)
     end
     SchurF = schurfact(complex(A))
     U = UpperTriangular(SchurF.T)
-    R = full(log(U + sqrt(U - I) * sqrt(U + I)))
+    R = triu!(parent(log(U + sqrt(U - I) * sqrt(U + I))))
     return SchurF.Z * R * SchurF.Z'
 end
 
@@ -998,11 +1007,11 @@ logarithmic formulas used to compute this function, see [^AH16_5].
 """
 function asinh(A::AbstractMatrix)
     if ishermitian(A)
-        return full(asinh(Hermitian(A)))
+        return copytri!(parent(asinh(Hermitian(A))), 'U', true)
     end
     SchurF = schurfact(complex(A))
     U = UpperTriangular(SchurF.T)
-    R = full(log(U + sqrt(I + U^2)))
+    R = triu!(parent(log(U + sqrt(I + U^2))))
     return SchurF.Z * R * SchurF.Z'
 end
 
@@ -1016,11 +1025,11 @@ logarithmic formulas used to compute this function, see [^AH16_6].
 """
 function atanh(A::AbstractMatrix)
     if ishermitian(A)
-        return full(atanh(Hermitian(A)))
+        return copytri!(parent(atanh(Hermitian(A))), 'U', true)
     end
     SchurF = schurfact(complex(A))
     U = UpperTriangular(SchurF.T)
-    R = full(log((I + U) / (I - U)) / 2)
+    R = triu!(parent(log((I + U) / (I - U)) / 2))
     return SchurF.Z * R * SchurF.Z'
 end
 
