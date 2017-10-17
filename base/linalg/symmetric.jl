@@ -589,27 +589,102 @@ function ^(A::Hermitian{T}, p::Real) where T
     end
 end
 
-function exp(A::Symmetric)
-    F = eigfact(A)
-    return Symmetric((F.vectors * Diagonal(exp.(F.values))) * F.vectors')
+for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh, :atan, :asinh, :atanh)
+    @eval begin
+        function ($func)(A::HermOrSym{<:Real})
+            F = eigfact(A)
+            return Symmetric((F.vectors * Diagonal(($func).(F.values))) * F.vectors')
+        end
+        function ($func)(A::Hermitian{<:Complex})
+            n = checksquare(A)
+            F = eigfact(A)
+            retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
+            for i = 1:n
+                retmat[i,i] = real(retmat[i,i])
+            end
+            return Hermitian(retmat)
+        end
+    end
 end
-function exp(A::Hermitian{T}) where T
+
+for func in (:acos, :asin)
+    @eval begin
+        function ($func)(A::HermOrSym{<:Real})
+            F = eigfact(A)
+            if all(λ -> -1 ≤ λ ≤ 1, F.values)
+                retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
+            else
+                retmat = (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
+            end
+            return Symmetric(retmat)
+        end
+        function ($func)(A::Hermitian{<:Complex})
+            n = checksquare(A)
+            F = eigfact(A)
+            if all(λ -> -1 ≤ λ ≤ 1, F.values)
+                retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
+                for i = 1:n
+                    retmat[i,i] = real(retmat[i,i])
+                end
+                return Hermitian(retmat)
+            else
+                return (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
+            end
+        end
+    end
+end
+
+function acosh(A::HermOrSym{<:Real})
+    F = eigfact(A)
+    if all(λ -> λ ≥ 1, F.values)
+        retmat = (F.vectors * Diagonal(acosh.(F.values))) * F.vectors'
+    else
+        retmat = (F.vectors * Diagonal(acosh.(complex.(F.values)))) * F.vectors'
+    end
+    return Symmetric(retmat)
+end
+function acosh(A::Hermitian{<:Complex})
     n = checksquare(A)
     F = eigfact(A)
-    retmat = (F.vectors * Diagonal(exp.(F.values))) * F.vectors'
-    if T <: Real
-        return real(Hermitian(retmat))
-    else
+    if all(λ -> λ ≥ 1, F.values)
+        retmat = (F.vectors * Diagonal(acosh.(F.values))) * F.vectors'
         for i = 1:n
             retmat[i,i] = real(retmat[i,i])
         end
         return Hermitian(retmat)
+    else
+        return (F.vectors * Diagonal(acosh.(complex.(F.values)))) * F.vectors'
     end
 end
 
+function sincos(A::HermOrSym{<:Real})
+    n = checksquare(A)
+    F = eigfact(A)
+    S, C = Diagonal(similar(A, (n,))), Diagonal(similar(A, (n,)))
+    for i in 1:n
+        S.diag[i], C.diag[i] = sincos(F.values[i])
+    end
+    return Symmetric((F.vectors * S) * F.vectors'), Symmetric((F.vectors * C) * F.vectors')
+end
+function sincos(A::Hermitian{<:Complex})
+    n = checksquare(A)
+    F = eigfact(A)
+    S, C = Diagonal(similar(A, (n,))), Diagonal(similar(A, (n,)))
+    for i in 1:n
+        S.diag[i], C.diag[i] = sincos(F.values[i])
+    end
+    retmatS, retmatC = (F.vectors * S) * F.vectors', (F.vectors * C) * F.vectors'
+    for i = 1:n
+        retmatS[i,i] = real(retmatS[i,i])
+        retmatC[i,i] = real(retmatC[i,i])
+    end
+    return Hermitian(retmatS), Hermitian(retmatC)
+end
+
+
 for func in (:log, :sqrt)
     @eval begin
-        function ($func)(A::Symmetric{T}) where T<:Real
+        function ($func)(A::HermOrSym{<:Real})
             F = eigfact(A)
             if all(λ -> λ ≥ 0, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
@@ -619,19 +694,15 @@ for func in (:log, :sqrt)
             return Symmetric(retmat)
         end
 
-        function ($func)(A::Hermitian{T}) where T
+        function ($func)(A::Hermitian{<:Complex})
             n = checksquare(A)
             F = eigfact(A)
             if all(λ -> λ ≥ 0, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
-                if T <: Real
-                    return Hermitian(retmat)
-                else
-                    for i = 1:n
-                        retmat[i,i] = real(retmat[i,i])
-                    end
-                    return Hermitian(retmat)
+                for i = 1:n
+                    retmat[i,i] = real(retmat[i,i])
                 end
+                return Hermitian(retmat)
             else
                 retmat = (F.vectors * Diagonal(($func).(complex(F.values)))) * F.vectors'
                 return retmat

@@ -476,11 +476,6 @@ exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
 ## "Functions of Matrices: Theory and Computation", SIAM
 function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     n = checksquare(A)
-    if T <: Real
-        if issymmetric(A)
-            return full(exp(Symmetric(A)))
-        end
-    end
     if ishermitian(A)
         return full(exp(Hermitian(A)))
     end
@@ -603,13 +598,8 @@ julia> log(A)
  0.0  1.0
 ```
 """
-function log(A::StridedMatrix{T}) where T
+function log(A::StridedMatrix)
     # If possible, use diagonalization
-    if T <: Real
-        if issymmetric(A)
-            return full(log(Symmetric(A)))
-        end
-    end
     if ishermitian(A)
         return full(log(Hermitian(A)))
     end
@@ -706,6 +696,364 @@ function inv(A::StridedMatrix{T}) where T
         Ai = convert(typeof(parent(Ai)), Ai)
     end
     return Ai
+end
+
+"""
+    cos(A::AbstractMatrix)
+
+Compute the matrix cosine of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the cosine. Otherwise, the cosine is determined by calling [`exp`](@ref).
+
+# Examples
+```jldoctest
+julia> cos(ones(2, 2))
+2×2 Array{Float64,2}:
+  0.291927  -0.708073
+ -0.708073   0.291927
+```
+"""
+function cos(A::AbstractMatrix{<:Real})
+    if issymmetric(A)
+        return full(cos(Symmetric(A)))
+    end
+    return real(exp!(im*A))
+end
+function cos(A::AbstractMatrix{<:Complex})
+    if ishermitian(A)
+        return full(cos(Hermitian(A)))
+    end
+    X = exp!(im*A)
+    X .= (X .+ exp!(-im*A)) ./ 2
+    return X
+end
+
+"""
+    sin(A::AbstractMatrix)
+
+Compute the matrix sine of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the sine. Otherwise, the sine is determined by calling [`exp`](@ref).
+
+# Examples
+```jldoctest
+julia> sin(ones(2, 2))
+2×2 Array{Float64,2}:
+ 0.454649  0.454649
+ 0.454649  0.454649
+```
+"""
+function sin(A::AbstractMatrix{<:Real})
+    if issymmetric(A)
+        return full(sin(Symmetric(A)))
+    end
+    return imag(exp!(im*A))
+end
+function sin(A::AbstractMatrix{<:Complex})
+    if ishermitian(A)
+        return full(sin(Hermitian(A)))
+    end
+    X = exp!(im*A)
+    Y = exp!(-im*A)
+    @inbounds for i in eachindex(X)
+        x, y = X[i]/2, Y[i]/2
+        X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
+    end
+    return X
+end
+
+"""
+    sincos(A::AbstractMatrix)
+
+Compute the matrix sine and cosine of a square matrix `A`.
+
+# Examples
+```jldoctest
+julia> S, C = sincos(ones(2, 2));
+
+julia> S
+2×2 Array{Float64,2}:
+ 0.454649  0.454649
+ 0.454649  0.454649
+
+julia> C
+2×2 Array{Float64,2}:
+  0.291927  -0.708073
+ -0.708073   0.291927
+```
+"""
+function sincos(A::AbstractMatrix{<:Real})
+    if issymmetric(A)
+        return full.(sincos(Symmetric(A)))
+    end
+    c, s = reim(exp!(im*A))
+    return s, c
+end
+function sincos(A::AbstractMatrix{<:Complex})
+    if ishermitian(A)
+        return full.(sincos(Hermitian(A)))
+    end
+    X = exp!(im*A)
+    Y = exp!(-im*A)
+    @inbounds for i in eachindex(X)
+        x, y = X[i]/2, Y[i]/2
+        X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
+        Y[i] = x+y
+    end
+    return X, Y
+end
+
+"""
+    tan(A::AbstractMatrix)
+
+Compute the matrix tangent of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the tangent. Otherwise, the tangent is determined by calling [`exp`](@ref).
+
+# Examples
+```jldoctest
+julia> tan(ones(2, 2))
+2×2 Array{Float64,2}:
+ -1.09252  -1.09252
+ -1.09252  -1.09252
+```
+"""
+function tan(A::AbstractMatrix)
+    if ishermitian(A)
+        return full(tan(Hermitian(A)))
+    end
+    S, C = sincos(A)
+    S /= C
+    return S
+end
+
+"""
+    cosh(A::AbstractMatrix)
+
+Compute the matrix hyperbolic cosine of a square matrix `A`.
+"""
+function cosh(A::AbstractMatrix)
+    if ishermitian(A)
+        return full(cosh(Hermitian(A)))
+    end
+    X = exp(A)
+    X .= (X .+ exp!(-A)) ./ 2
+    return X
+end
+
+"""
+    sinh(A::AbstractMatrix)
+
+Compute the matrix hyperbolic sine of a square matrix `A`.
+"""
+function sinh(A::AbstractMatrix)
+    if ishermitian(A)
+        return full(sinh(Hermitian(A)))
+    end
+    X = exp(A)
+    X .= (X .- exp!(-A)) ./ 2
+    return X
+end
+
+"""
+    tanh(A::AbstractMatrix)
+
+Compute the matrix hyperbolic tangent of a square matrix `A`.
+"""
+function tanh(A::AbstractMatrix)
+    if ishermitian(A)
+        return full(tanh(Hermitian(A)))
+    end
+    X = exp(A)
+    Y = exp!(-A)
+    @inbounds for i in eachindex(X)
+        x, y = X[i], Y[i]
+        X[i] = x - y
+        Y[i] = x + y
+    end
+    X /= Y
+    return X
+end
+
+"""
+    acos(A::AbstractMatrix)
+
+Compute the inverse matrix cosine of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the inverse cosine. Otherwise, the inverse cosine is determined by using
+[`log`](@ref) and [`sqrt`](@ref).  For the theory and logarithmic formulas used to compute
+this function, see [^AH16_1].
+
+[^AH16_1]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+
+# Examples
+```jldoctest
+julia> acos(cos([0.5 0.1; -0.2 0.3]))
+2×2 Array{Complex{Float64},2}:
+  0.5-8.32667e-17im  0.1-2.77556e-17im
+ -0.2+2.77556e-16im  0.3-3.46945e-16im
+```
+"""
+function acos(A::AbstractMatrix)
+    if ishermitian(A)
+        return full(acos(Hermitian(A)))
+    end
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = full(-im * log(U + im * sqrt(I - U^2)))
+    return SchurF.Z * R * SchurF.Z'
+end
+
+"""
+    asin(A::AbstractMatrix)
+
+Compute the inverse matrix sine of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the inverse sine. Otherwise, the inverse sine is determined by using [`log`](@ref)
+and [`sqrt`](@ref).  For the theory and logarithmic formulas used to compute this function,
+see [^AH16_2].
+
+[^AH16_2]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+
+# Examples
+```jldoctest
+julia> asin(sin([0.5 0.1; -0.2 0.3]))
+2×2 Array{Complex{Float64},2}:
+  0.5-4.16334e-17im  0.1-5.55112e-17im
+ -0.2+9.71445e-17im  0.3-1.249e-16im
+```
+"""
+function asin(A::AbstractMatrix)
+    if ishermitian(A)
+        return full(asin(Hermitian(A)))
+    end
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = full(-im * log(im * U + sqrt(I - U^2)))
+    return SchurF.Z * R * SchurF.Z'
+end
+
+"""
+    atan(A::AbstractMatrix)
+
+Compute the inverse matrix tangent of a square matrix `A`.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is used to
+compute the inverse tangent. Otherwise, the inverse tangent is determined by using
+[`log`](@ref).  For the theory and logarithmic formulas used to compute this function, see
+[^AH16_3].
+
+[^AH16_3]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+
+# Examples
+```jldoctest
+julia> atan(tan([0.5 0.1; -0.2 0.3]))
+2×2 Array{Complex{Float64},2}:
+  0.5+1.38778e-17im  0.1-2.77556e-17im
+ -0.2+6.93889e-17im  0.3-4.16334e-17im
+```
+"""
+function atan(A::AbstractMatrix)
+    if ishermitian(A)
+        return full(atan(Hermitian(A)))
+    end
+    SchurF = schurfact(complex(A))
+    U = im * UpperTriangular(SchurF.T)
+    R = full(log((I + U) / (I - U)) / 2im)
+    return SchurF.Z * R * SchurF.Z'
+end
+
+"""
+    acosh(A::AbstractMatrix)
+
+Compute the inverse hyperbolic matrix cosine of a square matrix `A`.  For the theory and
+logarithmic formulas used to compute this function, see [^AH16_4].
+
+[^AH16_4]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+"""
+function acosh(A::AbstractMatrix)
+    if ishermitian(A)
+        return full(acosh(Hermitian(A)))
+    end
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = full(log(U + sqrt(U - I) * sqrt(U + I)))
+    return SchurF.Z * R * SchurF.Z'
+end
+
+"""
+    asinh(A::AbstractMatrix)
+
+Compute the inverse hyperbolic matrix sine of a square matrix `A`.  For the theory and
+logarithmic formulas used to compute this function, see [^AH16_5].
+
+[^AH16_5]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+"""
+function asinh(A::AbstractMatrix)
+    if ishermitian(A)
+        return full(asinh(Hermitian(A)))
+    end
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = full(log(U + sqrt(I + U^2)))
+    return SchurF.Z * R * SchurF.Z'
+end
+
+"""
+    atanh(A::AbstractMatrix)
+
+Compute the inverse hyperbolic matrix tangent of a square matrix `A`.  For the theory and
+logarithmic formulas used to compute this function, see [^AH16_6].
+
+[^AH16_6]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
+"""
+function atanh(A::AbstractMatrix)
+    if ishermitian(A)
+        return full(atanh(Hermitian(A)))
+    end
+    SchurF = schurfact(complex(A))
+    U = UpperTriangular(SchurF.T)
+    R = full(log((I + U) / (I - U)) / 2)
+    return SchurF.Z * R * SchurF.Z'
+end
+
+for (finv, f, finvh, fh, fn) in ((:sec, :cos, :sech, :cosh, "secant"),
+                                 (:csc, :sin, :csch, :sinh, "cosecant"),
+                                 (:cot, :tan, :coth, :tanh, "cotangent"))
+    name = string(finv)
+    hname = string(finvh)
+    @eval begin
+        @doc """
+            $($name)(A::AbstractMatrix)
+
+        Compute the matrix $($fn) of a square matrix `A`.
+        """ ($finv)(A::AbstractMatrix{T}) where {T} = inv(($f)(A))
+        @doc """
+            $($hname)(A::AbstractMatrix)
+
+        Compute the matrix hyperbolic $($fn) of square matrix `A`.
+        """ ($finvh)(A::AbstractMatrix{T}) where {T} = inv(($fh)(A))
+    end
+end
+
+for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
+                                       (:acsc, :asin, :acsch, :asinh, "cosecant"),
+                                       (:acot, :atan, :acoth, :atanh, "cotangent"))
+    tname = string(tfa)
+    hname = string(hfa)
+    @eval begin
+        @doc """
+            $($tname)(A::AbstractMatrix)
+        Compute the inverse matrix $($fn) of `A`. """ ($tfa)(A::AbstractMatrix{T}) where {T} = ($tfainv)(inv(A))
+        @doc """
+            $($hname)(A::AbstractMatrix)
+        Compute the inverse matrix hyperbolic $($fn) of `A`. """ ($hfa)(A::AbstractMatrix{T}) where {T} = ($hfainv)(inv(A))
+    end
 end
 
 """
