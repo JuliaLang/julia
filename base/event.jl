@@ -466,7 +466,7 @@ Here the first number is printed after a delay of two seconds, then the followin
 ```julia-repl
 julia> begin
            i=0
-           cb(timer) = println(global i +=1)
+           cb(timer) = println(global i+=1)
            t=Timer(cb, 2,0.2)
            wait(t)
            sleep(.5)
