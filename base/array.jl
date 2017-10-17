@@ -1450,7 +1450,8 @@ end
 """
     reverse(v [, start=1 [, stop=length(v) ]] )
 
-Return a copy of `v` reversed from start to stop.
+Return a copy of `v` reversed from start to stop.  See also [`Iterators.reverse`](@ref)
+for reverse-order iteration without making a copy.
 
 # Examples
 ```jldoctest
