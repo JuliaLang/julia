@@ -194,6 +194,52 @@ c = 3::Int64
 If Julia were a language that made more liberal use of ASCII characters, the splatting operator
 might have been written as `...->` instead of `...`.
 
+### What is the return value of an assignment?
+
+The operator `=` always returns the right-hand side, therefore:
+
+```jldoctest
+julia> function threeint()
+           x::Int = 3.0
+           x # returns variable x
+       end
+threeint (generic function with 1 method)
+
+julia> function threefloat()
+           x::Int = 3.0 # returns 3.0
+       end
+threefloat (generic function with 1 method)
+
+julia> threeint()
+3
+
+julia> threefloat()
+3.0
+```
+
+and similarly:
+
+```jldoctest
+julia> function threetup()
+           x, y = [3, 3]
+           x, y # returns a tuple
+       end
+threetup (generic function with 1 method)
+
+julia> function threearr()
+           x, y = [3, 3] # returns an array
+       end
+threearr (generic function with 1 method)
+
+julia> threetup()
+(3, 3)
+
+julia> threearr()
+2-element Array{Int64,1}:
+ 3
+ 3
+```
+
 ## Types, type declarations, and constructors
 
 ### [What does "type-stable" mean?](@id man-type-stability)
