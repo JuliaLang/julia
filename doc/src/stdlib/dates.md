@@ -132,6 +132,14 @@ Base.ceil(::Base.Dates.TimeType, ::Base.Dates.Period)
 Base.round(::Base.Dates.TimeType, ::Base.Dates.Period, ::RoundingMode{:NearestTiesUp})
 ```
 
+Most `Period` values can also be rounded to a specified resolution:
+
+```@docs
+Base.floor(::Base.Dates.ConvertiblePeriod, ::T) where T <: Base.Dates.ConvertiblePeriod
+Base.ceil(::Base.Dates.ConvertiblePeriod, ::Base.Dates.ConvertiblePeriod)
+Base.round(::Base.Dates.ConvertiblePeriod, ::Base.Dates.ConvertiblePeriod, ::RoundingMode{:NearestTiesUp})
+```
+
 The following functions are not exported:
 
 ```@docs
