@@ -282,6 +282,26 @@ function prune_manifest(env::EnvCache)
     end
 end
 
+function toposort_builds!(env::EnvCache, builds::Vector{Tuple{String,UUID,SHA1,String}})
+    seen = UUID[]
+    order = Dict{UUID,Int}()
+    k::Int = 0
+    function visit(uuid)
+        uuid in seen && error("Build graph not a DAG!")
+        haskey(order, uuid) && return
+        push!(seen, uuid)
+        info = manifest_info(env, uuid)
+        if haskey(info, "deps")
+            deps = info["deps"]
+            foreach(visit∘UUID, values(deps))
+        end
+        pop!(seen)
+        order[uuid] = k += 1
+    end
+    for b in builds; visit(b[2]); end
+    sort!(builds, by = b->order[b[2]])
+end
+
 function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})
     names, hashes, urls = version_data(env, pkgs)
     # install & update manifest
@@ -296,8 +316,11 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})
         build_file = joinpath(path, "deps", "build.jl")
         ispath(build_file) && push!(builds, (name, uuid, hash, build_file))
     end
+    toposort_builds!(env, builds)
     prune_manifest(env)
     # build new package versions with deps/build.jl files
+    ENV = copy(Base.ENV)
+    ENV["JULIA_ENV"] = dirname(env.project_file)
     LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
     for (name, uuid, hash, build_file) in builds
         info("Building [$(string(uuid)[1:8])] $name $(string(hash)[1:16])...")
@@ -322,14 +345,16 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})
                 end
             end
             """
-        cmd = ```
+        cmd = Cmd(```
             $(Base.julia_cmd()) -O0
             --color=$(Base.have_color ? "yes" : "no")
             --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
             --history-file=no
             --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
             --eval $code
-            ```
+            ```,
+            env=ENV
+        )
         if success(pipeline(cmd, stdout=STDOUT, stderr=STDERR))
             Base.rm(log_file, force=true)
         else
