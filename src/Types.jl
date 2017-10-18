@@ -730,7 +730,7 @@ function manifest_info(env::EnvCache, uuid::UUID)::Union{Dict{String,Any},Void}
     uuid in values(env.uuids) || find_registered!(env, [uuid])
     for (name, infos) in env.manifest, info in infos
         haskey(info, "uuid") && uuid == UUID(info["uuid"]) || continue
-        return convert(Dict{String,Any}, info)
+        return merge!(Dict{String,Any}("name" => name), info)
     end
     return nothing
 end

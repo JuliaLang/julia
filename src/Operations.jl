@@ -282,46 +282,63 @@ function prune_manifest(env::EnvCache)
     end
 end
 
-function toposort_builds!(env::EnvCache, builds::Vector{Tuple{String,UUID,SHA1,String}})
-    seen = UUID[]
-    order = Dict{UUID,Int}()
-    k::Int = 0
-    function visit(uuid)
-        uuid in seen && error("Build graph not a DAG!")
-        haskey(order, uuid) && return
-        push!(seen, uuid)
-        info = manifest_info(env, uuid)
-        if haskey(info, "deps")
-            deps = info["deps"]
-            foreach(visit∘UUID, values(deps))
-        end
-        pop!(seen)
-        order[uuid] = k += 1
-    end
-    for b in builds; visit(b[2]); end
-    sort!(builds, by = b->order[b[2]])
-end
-
-function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})
+function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})::Vector{UUID}
     names, hashes, urls = version_data(env, pkgs)
     # install & update manifest
-    builds = Tuple{String,UUID,SHA1,String}[]
+    new_versions = UUID[]
     for pkg in pkgs
         uuid = pkg.uuid
         version = pkg.version::VersionNumber
         name, hash = names[uuid], hashes[uuid]
         path, new = install(env, uuid, name, hash, urls[uuid], version)
         update_manifest(env, uuid, name, hash, version)
-        new || continue
-        build_file = joinpath(path, "deps", "build.jl")
-        ispath(build_file) && push!(builds, (name, uuid, hash, build_file))
+        new && push!(new_versions, uuid)
     end
-    toposort_builds!(env, builds)
     prune_manifest(env)
-    # build new package versions with deps/build.jl files
-    LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
+    return new_versions
+end
+
+function dependency_order_uuids(env::EnvCache, uuids::Vector{UUID})::Dict{UUID,Int}
+    order = Dict{UUID,Int}()
+    seen = UUID[]
+    k::Int = 0
+    function visit(uuid::UUID)
+        uuid in seen &&
+            return warn("Dependency graph not a DAG, linearizing anyway")
+        haskey(order, uuid) && return
+        push!(seen, uuid)
+        info = manifest_info(env, uuid)
+        haskey(info, "deps") &&
+            foreach(visit, values(info["deps"]))
+        pop!(seen)
+        order[uuid] = k += 1
+    end
+    visit(uuid::String) = visit(UUID(uuid))
+    foreach(visit, uuids)
+    return order
+end
+
+function build_versions(env::EnvCache, uuids::Vector{UUID})
+    # collect builds for UUIDs with `deps/build.jl` files
+    builds = Tuple{UUID,String,SHA1,String}[]
+    for uuid in uuids
+        info = manifest_info(env, uuid)
+        name = info["name"]
+        # TODO: handle development packages?
+        haskey(info, "hash-sha1") || continue
+        hash = SHA1(info["hash-sha1"])
+        path = find_installed(uuid, hash)
+        ispath(path) || error("Build path for $name does not exist: $path")
+        build_file = joinpath(path, "deps", "build.jl")
+        ispath(build_file) && push!(builds, (uuid, name, hash, build_file))
+    end
+    # toposort builds by dependencies
+    order = dependency_order_uuids(env, map(first, builds))
+    sort!(builds, by = build -> order[first(build)])
+    # build each package verions in a child process
     withenv("JULIA_ENV" => env.project_file) do
-        for (name, uuid, hash, build_file) in builds
+        LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
+        for (uuid, name, hash, build_file) in builds
             info("Building [$(string(uuid)[1:8])] $name $(string(hash)[1:16])...")
             log_file = splitext(build_file)[1] * ".log"
             code = """
@@ -428,8 +445,9 @@ function add(env::EnvCache, pkgs::Vector{PackageSpec})
     end
     # resolve & apply package versions
     resolve_versions!(env, pkgs)
-    apply_versions(env, pkgs)
-    write_env(env)
+    new = apply_versions(env, pkgs)
+    write_env(env) # write env before building
+    build_versions(env, new)
 end
 
 function up(env::EnvCache, pkgs::Vector{PackageSpec})
@@ -451,8 +469,9 @@ function up(env::EnvCache, pkgs::Vector{PackageSpec})
     end
     # resolve & apply package versions
     resolve_versions!(env, pkgs)
-    apply_versions(env, pkgs)
-    write_env(env)
+    new = apply_versions(env, pkgs)
+    write_env(env) # write env before building
+    build_versions(env, new)
 end
 
 end # module
