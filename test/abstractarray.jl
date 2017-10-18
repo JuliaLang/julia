@@ -872,3 +872,8 @@ end
         copy!(Array{T,n}(size(a)), a)
     @test isa(similar(Dict(:a=>1, :b=>2.0), Pair{Union{},Union{}}), Dict{Union{}, Union{}})
 end
+
+@testset "zero-dimensional copy" begin
+    Z = Array{Int}(); Z[] = 17
+    @test Z == collect(Z) == copy(Z)
+end
