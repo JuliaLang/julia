@@ -264,7 +264,6 @@ int32_t jl_jlcall_api(const char *fname)
 
 // constants
 static Constant *V_null;
-static Type *NoopType;
 extern "C" {
 JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed=NULL);
 }
@@ -2133,8 +2132,9 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
 
     if (at->isAggregateType()) { // Struct or Array
         assert(arg1.ispointer() && arg2.ispointer());
-        size_t sz = jl_datatype_size(arg1.typ);
-        if (sz > 512 && !((jl_datatype_t*)arg1.typ)->layout->haspadding) {
+        jl_datatype_t *sty = (jl_datatype_t*)arg1.typ;
+        size_t sz = jl_datatype_size(sty);
+        if (sz > 512 && !sty->layout->haspadding) {
             Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_derived_func),
                             {
                             maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg1)), T_pint8),
@@ -2147,22 +2147,26 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
             Type *atp = at->getPointerTo();
             Value *varg1 = maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg1)), atp);
             Value *varg2 = maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg2)), atp);
-            jl_svec_t *types = ((jl_datatype_t*)arg1.typ)->types;
+            jl_svec_t *types = sty->types;
             Value *answer = ConstantInt::get(T_int1, 1);
             for (size_t i = 0, l = jl_svec_len(types); i < l; i++) {
                 jl_value_t *fldty = jl_svecref(types, i);
-                Value *subAns, *fld1, *fld2;
-                fld1 = ctx.builder.CreateConstGEP2_32(at, varg1, 0, i);
-                fld2 = ctx.builder.CreateConstGEP2_32(at, varg2, 0, i);
-                Type *at_i = cast<GetElementPtrInst>(fld1)->getResultElementType();
-                if (type_is_ghost(at_i))
+                if (type_is_ghost(julia_type_to_llvm(fldty)))
                     continue;
+                unsigned byte_offset = jl_field_offset(sty, i);
+                Value *subAns, *fld1, *fld2;
+                if (isa<StructType>(at)) {
+                    fld1 = emit_struct_gep(ctx, at, varg1, byte_offset);
+                    fld2 = emit_struct_gep(ctx, at, varg2, byte_offset);
+                }
+                else {
+                    fld1 = ctx.builder.CreateConstInBoundsGEP2_32(at, varg1, 0, i);
+                    fld2 = ctx.builder.CreateConstInBoundsGEP2_32(at, varg2, 0, i);
+                }
                 if (jl_is_uniontype(fldty)) {
-                    unsigned tindex_offset = cast<StructType>(at_i)->getNumElements() - 1;
-                    Value *ptindex1 = ctx.builder.CreateConstInBoundsGEP2_32(
-                            at_i, fld1, 0, tindex_offset);
-                    Value *ptindex2 = ctx.builder.CreateConstInBoundsGEP2_32(
-                            at_i, fld2, 0, tindex_offset);
+                    unsigned tindex_offset = byte_offset + jl_field_size(sty, i) - 1;
+                    Value *ptindex1 = emit_struct_gep(ctx, at, varg1, tindex_offset);
+                    Value *ptindex2 = emit_struct_gep(ctx, at, varg2, tindex_offset);
                     Value *tindex1 = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1),
                             ctx.builder.CreateLoad(T_int8, ptindex1));
                     Value *tindex2 = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1),
@@ -2838,12 +2842,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         else {
             size_t offs = jl_field_offset(stt, fieldidx);
-            Value *ptr = emit_bitcast(ctx, decay_derived(data_pointer(ctx, obj)), T_pint8);
-            Value *llvm_idx = ConstantInt::get(T_size, offs);
+            Value *ptr = emit_bitcast(ctx, decay_derived(data_pointer(ctx, obj)), T_pprjlvalue);
+            Value *llvm_idx = ConstantInt::get(T_size, offs / sizeof(void*));
             Value *addr = ctx.builder.CreateGEP(ptr, llvm_idx);
             // emit this using the same type as emit_getfield_knownidx
             // so that LLVM may be able to load-load forward them and fold the result
-            Value *fldv = tbaa_decorate(obj.tbaa, ctx.builder.CreateLoad(T_prjlvalue, emit_bitcast(ctx, addr, T_pprjlvalue)));
+            Value *fldv = tbaa_decorate(obj.tbaa, ctx.builder.CreateLoad(T_prjlvalue,  addr));
             Value *isdef = ctx.builder.CreateIsNotNull(fldv);
             *ret = mark_julia_type(ctx, isdef, false, jl_bool_type);
         }
@@ -6003,9 +6007,6 @@ static void init_julia_llvm_env(Module *m)
     T_pvoidfunc = FunctionType::get(T_void, /*isVarArg*/false)->getPointerTo();
 
     auto T_pint8_derived = PointerType::get(T_int8, AddressSpace::Derived);
-
-    // This type is used to create undef Values for use in struct declarations to skip indices
-    NoopType = ArrayType::get(T_int1, 0);
 
     // add needed base debugging definitions to our LLVM environment
     DIBuilder dbuilder(*m);
