@@ -32,24 +32,16 @@ end
 """
    SingularException(info)
 
-The matrix passed is a singular matrix. Optional argument INFO is an INTEGER
-= 0:  successful exit
-< 0:  if INFO = -i, the i-th argument had an illegal value
-> 0:  if INFO = i, U(i,i) is exactly zero. The factorization
-      has been completed, but the factor U is exactly
-      singular, and division by zero will occur if it is used
-      to solve a system of equations.
+The matrix passed is a singular matrix. Optional argument INFO is an INTEGER > 0  
+      if INFO = i, The matrix is exactly singular, and division by zero 
+      will occur if it is used to solve a system of equations.
 """
 struct SingularException <: Exception
     info::BlasInt
 end
 
 function Base.showerror(io::IO, ex::SingularException)
-    print(io, "SingularException: ")
-    if ex.info > 0
-        print(io,"matrix is singular")
-    elseif ex.info <0
-        print(io,"argument $(ex.info) had illegal value")
+    print(io, "SingularException($ex.info): matrix is singular")
 end
 
 struct PosDefException <: Exception
