@@ -101,6 +101,7 @@ before_install:
         export JULIA_CPU_CORES=2;
         export JULIA_TEST_MAXRSS_MB=600;
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
+    - echo "override JULIA_CPU_TARGET=generic;native" >> Make.user
     - git clone -q git://git.kitenet.net/moreutils
 script:
     - echo BUILDOPTS=$BUILDOPTS

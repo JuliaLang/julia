@@ -81,11 +81,6 @@ HAVE_SSP := 0
 WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
 
-# When set, give julia binaries CPUID specific names. This is useful in cluster environments
-# with heterogeneous architectures. N.B.: will not be automatically rebuilt for all
-# architectures if julia is updated.
-CPUID_SPECIFIC_BINARIES ?= 0
-
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 

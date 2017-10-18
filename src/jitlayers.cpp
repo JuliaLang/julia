@@ -97,7 +97,7 @@ void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump_native)
 {
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
@@ -133,6 +133,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
         PM->add(createLateLowerGCFramePass());
         PM->add(createLowerPTLSPass(imaging_mode));
 #endif
+        if (dump_native)
+            PM->add(createMultiVersioningPass());
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
@@ -172,6 +174,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     PM->add(createAllocOptPass());
 #endif
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    if (dump_native)
+        PM->add(createMultiVersioningPass());
     PM->add(createSROAPass());                 // Break up aggregate allocas
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     PM->add(createJumpThreadingPass());        // Thread jumps.
@@ -1020,28 +1024,20 @@ void jl_add_to_shadow(Module *m)
     jl_merge_module(shadow_output, std::move(clone));
 }
 
-#ifdef HAVE_CPUID
-extern "C" {
-    extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
-}
-#endif
-
 static void emit_offset_table(Module *mod, const std::vector<GlobalValue*> &vars, StringRef name)
 {
+    // Emit a global variable with all the variable addresses.
+    // The cloning pass will convert them into offsets.
     assert(!vars.empty());
-    addComdat(GlobalAlias::create(GlobalVariable::ExternalLinkage, name + "_base", vars[0]));
-    auto vbase = ConstantExpr::getPtrToInt(vars[0], T_size);
     size_t nvars = vars.size();
-    std::vector<Constant*> offsets(nvars);
-    for (size_t i = 0; i < nvars; i++) {
-        auto ptrdiff = ConstantExpr::getSub(ConstantExpr::getPtrToInt(vars[i], T_size), vbase);
-        offsets[i] = sizeof(void*) == 8 ? ConstantExpr::getTrunc(ptrdiff, T_uint32) : ptrdiff;
-    }
-    ArrayType *vars_type = ArrayType::get(T_uint32, nvars);
-    addComdat(new GlobalVariable(*mod, vars_type, true,
-                                 GlobalVariable::ExternalLinkage,
-                                 ConstantArray::get(vars_type, ArrayRef<Constant*>(offsets)),
-                                 name + "_offsets"));
+    std::vector<Constant*> addrs(nvars);
+    for (size_t i = 0; i < nvars; i++)
+        addrs[i] = ConstantExpr::getBitCast(vars[i], T_psize);
+    ArrayType *vars_type = ArrayType::get(T_psize, nvars);
+    new GlobalVariable(*mod, vars_type, true,
+                       GlobalVariable::ExternalLinkage,
+                       ConstantArray::get(vars_type, addrs),
+                       name);
 }
 
 
@@ -1070,14 +1066,6 @@ static void jl_gen_llvm_globaldata(Module *mod, const char *sysimg_data, size_t 
                                  "jl_tls_offset_idx"));
 #endif
 
-    Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_options.cpu_target);
-    addComdat(new GlobalVariable(*mod,
-                                 feature_string->getType(),
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 feature_string,
-                                 "jl_sysimg_cpu_target"));
-
     // reflect the address of the jl_RTLD_DEFAULT_handle variable
     // back to the caller, so that we can check for consistency issues
     GlobalValue *jlRTLD_DEFAULT_var = mod->getNamedValue("jl_RTLD_DEFAULT_handle");
@@ -1087,21 +1075,6 @@ static void jl_gen_llvm_globaldata(Module *mod, const char *sysimg_data, size_t 
                                  GlobalVariable::ExternalLinkage,
                                  jlRTLD_DEFAULT_var,
                                  "jl_RTLD_DEFAULT_handle_pointer"));
-
-#ifdef HAVE_CPUID
-    // For native also store the cpuid
-    if (strcmp(jl_options.cpu_target,"native") == 0) {
-        uint32_t info[4];
-
-        jl_cpuid((int32_t*)info, 1);
-        addComdat(new GlobalVariable(*mod,
-                                     T_uint64,
-                                     true,
-                                     GlobalVariable::ExternalLinkage,
-                                     ConstantInt::get(T_uint64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
-                                     "jl_sysimg_cpu_cpuid"));
-    }
-#endif
 
     if (sysimg_data) {
         Constant *data = ConstantDataArray::get(jl_LLVMContext,
@@ -1173,7 +1146,7 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     }
 
     if (bc_fname || obj_fname)
-        addOptimizationPasses(&PM, jl_options.opt_level);
+        addOptimizationPasses(&PM, jl_options.opt_level, true);
 
     if (bc_fname) {
         // call output handler directly to avoid special case handling of `-` filename
