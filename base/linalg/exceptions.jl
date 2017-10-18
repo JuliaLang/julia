@@ -33,6 +33,10 @@ struct SingularException <: Exception
     info::BlasInt
 end
 
+function Base.showerror(io::IO, ex::SingularException)
+    print(io, "SingularException: matrix is singular")
+end
+
 struct PosDefException <: Exception
     info::BlasInt
 end
