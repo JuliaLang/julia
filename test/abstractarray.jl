@@ -841,3 +841,8 @@ end
 @testset "checkbounds_indices method ambiguities #20989" begin
     @test Base.checkbounds_indices(Bool, (1:1,), ([CartesianIndex(1)],))
 end
+
+@testset "zero-dimensional copy" begin
+    Z = Array{Int}(); Z[] = 17
+    @test Z == collect(Z) == copy(Z)
+end
