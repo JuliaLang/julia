@@ -173,7 +173,7 @@ cd(dirname(@__FILE__)) do
             # the test runner itself had some problem, so we may have hit a segfault,
             # deserialization errors or something similar.  Record this testset as Errored.
             fake = Test.DefaultTestSet(res[1])
-            Test.record(fake, Test.Error(:test_error, res[1], res[2][1], []))
+            Test.record(fake, Test.Error(:test_error, res[1], res[2][1], [], LineNumberNode(1)))
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
