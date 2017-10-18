@@ -250,7 +250,6 @@ function process_options(opts::JLOptions)
         idxs = find(x -> x == "--", ARGS)
         length(idxs) > 0 && deleteat!(ARGS, idxs[1])
     end
-    repl                  = true
     quiet                 = (opts.quiet != 0)
     startup               = (opts.startupfile != 2)
     history_file          = (opts.historyfile != 0)
@@ -258,66 +257,75 @@ function process_options(opts::JLOptions)
     global have_color     = (opts.color == 1)
     global is_interactive = (opts.isinteractive != 0)
 
+    # pre-process command line argument list
+    arg_is_program = !isempty(ARGS)
+    repl = !arg_is_program
+    cmds = unsafe_load_commands(opts.commands)
+    for (cmd, arg) in cmds
+        if cmd == 'e'
+            arg_is_program = false
+            repl = false
+        elseif cmd == 'E'
+            arg_is_program = false
+            repl = false
+        elseif cmd == 'L'
+            # nothing
+        else
+            warn("unexpected command -$cmd'$arg'")
+        end
+    end
+
     # remove filename from ARGS
-    arg_is_program = opts.eval == C_NULL && opts.print == C_NULL && !isempty(ARGS)
     global PROGRAM_FILE = arg_is_program ? shift!(ARGS) : ""
 
-    while true
-        # startup worker.
-        # opts.startupfile, opts.load, etc should should not be processed for workers.
-        if opts.worker == 1
-            # does not return
-            if opts.cookie != C_NULL
-                start_worker(unsafe_string(opts.cookie))
-            else
-                start_worker()
-            end
+    # startup worker.
+    # opts.startupfile, opts.load, etc should should not be processed for workers.
+    if opts.worker == 1
+        # does not return
+        if opts.cookie != C_NULL
+            start_worker(unsafe_string(opts.cookie))
+        else
+            start_worker()
         end
+    end
 
-        # add processors
-        if opts.nprocs > 0
-            addprocs(opts.nprocs)
-        end
-        # load processes from machine file
-        if opts.machinefile != C_NULL
-            addprocs(load_machine_file(unsafe_string(opts.machinefile)))
-        end
+    # add processors
+    if opts.nprocs > 0
+        addprocs(opts.nprocs)
+    end
+    # load processes from machine file
+    if opts.machinefile != C_NULL
+        addprocs(load_machine_file(unsafe_string(opts.machinefile)))
+    end
 
-        # load ~/.juliarc file
-        startup && load_juliarc()
+    # load ~/.juliarc file
+    startup && load_juliarc()
 
-        # load file immediately on all processors
-        if opts.load != C_NULL
-            @sync for p in procs()
-                @async remotecall_fetch(include, p, Main, unsafe_string(opts.load))
-            end
-        end
-        # eval expression
-        if opts.eval != C_NULL
-            repl = false
-            eval(Main, parse_input_line(unsafe_string(opts.eval)))
-            break
-        end
-        # eval expression and show result
-        if opts.print != C_NULL
-            repl = false
-            show(eval(Main, parse_input_line(unsafe_string(opts.print))))
+    # process cmds list
+    for (cmd, arg) in cmds
+        if cmd == 'e'
+            eval(Main, parse_input_line(arg))
+        elseif cmd == 'E'
+            invokelatest(show, eval(Main, parse_input_line(arg)))
             println()
-            break
-        end
-        # load file
-        if !isempty(PROGRAM_FILE)
-            # program
-            repl = false
-            if !is_interactive
-                ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+        elseif cmd == 'L'
+            # load file immediately on all processors
+            @sync for p in procs()
+                @async remotecall_wait(include, p, Main, arg)
             end
-            include(Main, PROGRAM_FILE)
         end
-        break
+    end
+
+    # load file
+    if arg_is_program
+        # program
+        if !is_interactive
+            ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+        end
+        include(Main, PROGRAM_FILE)
     end
     repl |= is_interactive
-    return (quiet,repl,startup,color_set,history_file)
+    return (quiet, repl, startup, color_set, history_file)
 end
 
 function load_juliarc()
@@ -378,7 +386,7 @@ function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     opts = JLOptions()
-    @eval Main include(x) = $include(Main, x)
+    @eval Main using Base.MainInclude
     try
         (quiet,repl,startup,color_set,history_file) = process_options(opts)
         banner = opts.banner == 1

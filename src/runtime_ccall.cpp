@@ -7,6 +7,7 @@
 #include <llvm/Support/Host.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "processor.h"
 #include "julia_assert.h"
 
 using namespace llvm;
@@ -173,11 +174,41 @@ void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
 }
 
 // miscellany
-extern "C" JL_DLLEXPORT
-jl_value_t *jl_get_cpu_name(void)
+std::string jl_get_cpu_name_llvm(void)
 {
-    StringRef HostCPUName = llvm::sys::getHostCPUName();
-    return jl_pchar_to_string(HostCPUName.data(), HostCPUName.size());
+    return llvm::sys::getHostCPUName().str();
+}
+
+std::string jl_get_cpu_features_llvm(void)
+{
+    StringMap<bool> HostFeatures;
+    llvm::sys::getHostCPUFeatures(HostFeatures);
+    std::string attr;
+    for (auto &ele: HostFeatures) {
+        if (ele.getValue()) {
+            if (!attr.empty()) {
+                attr.append(",+");
+            }
+            else {
+                attr.append("+");
+            }
+            attr.append(ele.getKey().str());
+        }
+    }
+    // Explicitly disabled features need to be added at the end so that
+    // they are not reenabled by other features that implies them by default.
+    for (auto &ele: HostFeatures) {
+        if (!ele.getValue()) {
+            if (!attr.empty()) {
+                attr.append(",-");
+            }
+            else {
+                attr.append("-");
+            }
+            attr.append(ele.getKey().str());
+        }
+    }
+    return attr;
 }
 
 extern "C" JL_DLLEXPORT

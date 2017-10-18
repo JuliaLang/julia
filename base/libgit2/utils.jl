@@ -84,7 +84,7 @@ Standardise the path string `path` to use POSIX separators.
 function posixpath end
 if Sys.iswindows()
     posixpath(path) = replace(path,'\\','/')
-else Sys.isunix()
+elseif Sys.isunix()
     posixpath(path) = path
 end
 
@@ -155,4 +155,15 @@ function git_url(;
     end
 
     return String(take!(io))
+end
+
+function credential_identifier(scheme::AbstractString, host::AbstractString)
+    string(isempty(scheme) ? "ssh" : scheme, "://", host)
+end
+
+function credential_identifier(url::AbstractString)
+    m = match(URL_REGEX, url)
+    scheme = m[:scheme] === nothing ? "" : m[:scheme]
+    host = m[:host]
+    credential_identifier(scheme, host)
 end

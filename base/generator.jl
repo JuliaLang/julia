@@ -37,6 +37,8 @@ Generator(f, I1, I2, Is...) = Generator(a->f(a...), zip(I1, I2, Is...))
 
 Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
 
+Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(a->T(a...), zip(I1, I2, Is...))
+
 start(g::Generator) = (@_inline_meta; start(g.iter))
 done(g::Generator, s) = (@_inline_meta; done(g.iter, s))
 function next(g::Generator, s)

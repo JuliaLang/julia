@@ -36,23 +36,24 @@ end
 ### printf format string parsing ###
 
 function parse(s::AbstractString)
-    # parse format string in to stings and format tuples
+    # parse format string into strings and format tuples
     list = []
     i = j = start(s)
+    j1 = 0 # invariant: j1 == prevind(s, j)
     while !done(s,j)
         c, k = next(s,j)
         if c == '%'
-            isempty(s[i:j-1]) || push!(list, s[i:j-1])
+            i > j1 || push!(list, s[i:j1])
             flags, width, precision, conversion, k = parse1(s,k)
             '\'' in flags && error("printf format flag ' not yet supported")
             conversion == 'n'    && error("printf feature %n not supported")
             push!(list, conversion == '%' ? "%" : (flags,width,precision,conversion))
-            i = j = k
-        else
-            j = k
+            i = k
         end
+        j1 = j
+        j = k
     end
-    isempty(s[i:end]) || push!(list, s[i:end])
+    i > endof(s) || push!(list, s[i:end])
     # coalesce adjacent strings
     i = 1
     while i < length(list)
@@ -98,7 +99,7 @@ function parse1(s::AbstractString, k::Integer)
     while c in "#0- + '"
         c, k = next_or_die(s,k)
     end
-    flags = String(s[j:k-2])
+    flags = String(s[j:prevind(s,k)-1]) # exploiting that all flags are one-byte.
     # parse width
     while '0' <= c <= '9'
         width = 10*width + c-'0'
@@ -617,11 +618,11 @@ function gen_c(flags::String, width::Int, precision::Int, c::Char)
     blk = Expr(:block, :($x = Char($x)))
     if width > 1 && !('-' in flags)
         p = '0' in flags ? '0' : ' '
-        push!(blk.args, pad(width-1, :($width-charwidth($x)), p))
+        push!(blk.args, pad(width-1, :($width-textwidth($x)), p))
     end
     push!(blk.args, :(write(out, $x)))
     if width > 1 && '-' in flags
-        push!(blk.args, pad(width-1, :($width-charwidth($x)), ' '))
+        push!(blk.args, pad(width-1, :($width-textwidth($x)), ' '))
     end
     :(($x)::Integer), blk
 end
@@ -652,11 +653,11 @@ function gen_s(flags::String, width::Int, precision::Int, c::Char)
             push!(blk.args, :($x = _limit($x, $precision)))
         end
         if !('-' in flags)
-            push!(blk.args, pad(width, :($width-strwidth($x)), ' '))
+            push!(blk.args, pad(width, :($width-textwidth($x)), ' '))
         end
         push!(blk.args, :(write(out, $x)))
         if '-' in flags
-            push!(blk.args, pad(width, :($width-strwidth($x)), ' '))
+            push!(blk.args, pad(width, :($width-textwidth($x)), ' '))
         end
     else
         if precision!=-1

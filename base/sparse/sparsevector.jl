@@ -573,7 +573,7 @@ function _logical_index(A::SparseMatrixCSC{Tv}, I::AbstractArray{Bool}) where Tv
     SparseVector(n, rowvalB, nzvalB)
 end
 
-# TODO: further optimizations are available for ::Colon and other types of Range
+# TODO: further optimizations are available for ::Colon and other types of AbstractRange
 getindex(A::SparseMatrixCSC, ::Colon) = A[1:end]
 
 function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
@@ -649,7 +649,17 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractVector) where Tv
     SparseVector(n, rowvalB, nzvalB)
 end
 
-function find(x::SparseVector{<:Any,Ti}) where Ti
+function find(x::SparseVector)
+    if !(eltype(x) <: Bool)
+        Base.depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
+    end
+    return find(x->x!=0, x)
+end
+
+function find(p::Function, x::SparseVector{<:Any,Ti}) where Ti
+    if p(zero(eltype(x)))
+        return invoke(find, Tuple{Function, Any}, p, x)
+    end
     numnz = nnz(x)
     I = Vector{Ti}(numnz)
 
@@ -658,7 +668,7 @@ function find(x::SparseVector{<:Any,Ti}) where Ti
 
     count = 1
     @inbounds for i = 1 : numnz
-        if nzval[i] != 0
+        if p(nzval[i])
             I[count] = nzind[i]
             count += 1
         end
@@ -994,7 +1004,7 @@ function hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
     tmp_rows = Vector{SparseMatrixCSC}(nbr)
     k = 0
     @inbounds for i = 1 : nbr
-        tmp_rows[i] = hcat(X[(1 : rows[i]) + k]...)
+        tmp_rows[i] = hcat(X[(1 : rows[i]) .+ k]...)
         k += rows[i]
     end
     vcat(tmp_rows...)
@@ -1443,13 +1453,9 @@ scale!(x::AbstractSparseVector, a::Complex) = (scale!(nonzeros(x), a); x)
 scale!(a::Real, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
 scale!(a::Complex, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
 
-
 (*)(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) * a)
 (*)(a::Number, x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), a * nonzeros(x))
 (/)(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
-broadcast(::typeof(*), x::AbstractSparseVector, a::Number) = x * a
-broadcast(::typeof(*), a::Number, x::AbstractSparseVector) = a * x
-broadcast(::typeof(/), x::AbstractSparseVector, a::Number) = x / a
 
 # dot
 function dot(x::StridedVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
@@ -1827,7 +1833,7 @@ for isunittri in (true, false), islowertri in (true, false)
                 nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
                     :(b.nzind[1]:b.n) :
                     :(1:b.nzind[end]) )
-                nzrangeviewbnz = view(b.nzval, nzrange - b.nzind[1] + 1)
+                nzrangeviewbnz = view(b.nzval, nzrange .- (b.nzind[1] - 1))
                 nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
                 ($func)(nzrangeviewA, nzrangeviewbnz)
                 # could strip any miraculous zeros here perhaps
@@ -1890,9 +1896,9 @@ function sort(x::SparseVector{Tv,Ti}; kws...) where {Tv,Ti}
     allvals = push!(copy(nonzeros(x)),zero(Tv))
     sinds = sortperm(allvals;kws...)
     n,k = length(x),length(allvals)
-    z = findfirst(sinds,k)
+    z = findfirst(equalto(k),sinds)
     newnzind = collect(Ti,1:k-1)
-    newnzind[z:end]+= n-k+1
+    newnzind[z:end] .+= n-k+1
     newnzvals = allvals[deleteat!(sinds[1:k],z)]
     SparseVector(n,newnzind,newnzvals)
 end

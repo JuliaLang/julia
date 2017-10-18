@@ -77,7 +77,7 @@ indices1(A::AbstractArray) = (@_inline_meta; indices(A)[1])
 indices1(iter) = OneTo(length(iter))
 
 unsafe_indices(A) = indices(A)
-unsafe_indices(r::Range) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
+unsafe_indices(r::AbstractRange) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
 
 """
     linearindices(A)
@@ -101,7 +101,7 @@ julia> extrema(b)
 (1, 210)
 ```
 """
-linearindices(A) = (@_inline_meta; OneTo(_length(A)))
+linearindices(A::AbstractArray) = (@_inline_meta; OneTo(_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
 
 keys(a::AbstractArray) = CartesianRange(indices(a))
@@ -171,8 +171,8 @@ first(a::AbstractArray) = a[first(eachindex(a))]
 """
     first(coll)
 
-Get the first element of an iterable collection. Returns the start point of a
-`Range` even if it is empty.
+Get the first element of an iterable collection. Returns the start point of an
+`AbstractRange` even if it is empty.
 
 # Examples
 ```jldoctest
@@ -194,7 +194,7 @@ end
 
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
 accomplished by calling [`endof`](@ref) to get the last index. Returns the end
-point of a `Range` even if it is empty.
+point of an `AbstractRange` even if it is empty.
 
 # Examples
 ```jldoctest
@@ -324,7 +324,7 @@ IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
 IndexStyle(::Type{Union{}}) = IndexLinear()
 IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
 IndexStyle(::Type{<:Array}) = IndexLinear()
-IndexStyle(::Type{<:Range}) = IndexLinear()
+IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
 
 IndexStyle(A::AbstractArray, B::AbstractArray) = IndexStyle(IndexStyle(A), IndexStyle(B))
 IndexStyle(A::AbstractArray, B::AbstractArray...) = IndexStyle(IndexStyle(A), IndexStyle(B...))
@@ -429,7 +429,7 @@ function checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple)
     @_inline_meta
     checkindex(Bool, OneTo(1), I[1]) & checkbounds_indices(Bool, (), tail(I))
 end
-checkbounds_indices(::Type{Bool}, ::Tuple,   ::Tuple{}) = true
+checkbounds_indices(::Type{Bool}, IA::Tuple, ::Tuple{}) = (@_inline_meta; all(x->unsafe_length(x)==1, IA))
 checkbounds_indices(::Type{Bool}, ::Tuple{}, ::Tuple{}) = true
 
 throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
@@ -457,7 +457,7 @@ checkindex(::Type{Bool}, inds::AbstractUnitRange, i) =
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Slice) = true
-function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::Range)
+function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::AbstractRange)
     @_propagate_inbounds_meta
     isempty(r) | (checkindex(Bool, inds, first(r)) & checkindex(Bool, inds, last(r)))
 end
@@ -700,8 +700,8 @@ function copy(a::AbstractArray)
     copymutable(a)
 end
 
-function copy!(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_dest::Range{Int},
-               A::AbstractVecOrMat{S}, ir_src::Range{Int}, jr_src::Range{Int}) where {R,S}
+function copy!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+               A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
     if length(ir_dest) != length(ir_src)
         throw(ArgumentError(string("source and destination must have same size (got ",
                                    length(ir_src)," and ",length(ir_dest),")")))
@@ -895,7 +895,7 @@ end
     getindex(A, inds...)
 
 Return a subset of array `A` as specified by `inds`, where each `ind` may be an
-`Int`, a `Range`, or a [`Vector`](@ref). See the manual section on
+`Int`, an `AbstractRange`, or a [`Vector`](@ref). See the manual section on
 [array indexing](@ref man-array-indexing) for details.
 
 # Examples
@@ -1045,14 +1045,14 @@ end
 
 ## get (getindex with a default value) ##
 
-RangeVecIntList{A<:AbstractVector{Int}} = Union{Tuple{Vararg{Union{Range, AbstractVector{Int}}}},
-    AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A}}
+RangeVecIntList{A<:AbstractVector{Int}} = Union{Tuple{Vararg{Union{AbstractRange, AbstractVector{Int}}}},
+    AbstractVector{UnitRange{Int}}, AbstractVector{AbstractRange{Int}}, AbstractVector{A}}
 
 get(A::AbstractArray, i::Integer, default) = checkbounds(Bool, A, i) ? A[i] : default
 get(A::AbstractArray, I::Tuple{}, default) = similar(A, typeof(default), 0)
 get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] : default
 
-function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{Range,AbstractVector{Int}}, default::T) where T
+function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # 1d is not linear indexing
     ind = findin(I, indices1(A))
     X[ind] = A[I[ind]]
@@ -1061,7 +1061,7 @@ function get!(X::AbstractVector{T}, A::AbstractVector, I::Union{Range,AbstractVe
     X[last(ind)+1:last(Xind)] = default
     X
 end
-function get!(X::AbstractArray{T}, A::AbstractArray, I::Union{Range,AbstractVector{Int}}, default::T) where T
+function get!(X::AbstractArray{T}, A::AbstractArray, I::Union{AbstractRange,AbstractVector{Int}}, default::T) where T
     # Linear indexing
     ind = findin(I, 1:length(A))
     X[ind] = A[I[ind]]
@@ -1070,7 +1070,7 @@ function get!(X::AbstractArray{T}, A::AbstractArray, I::Union{Range,AbstractVect
     X
 end
 
-get(A::AbstractArray, I::Range, default) = get!(similar(A, typeof(default), index_shape(I)), A, I, default)
+get(A::AbstractArray, I::AbstractRange, default) = get!(similar(A, typeof(default), index_shape(I)), A, I, default)
 
 # TODO: DEPRECATE FOR #14770 (just the partial linear indexing part)
 function get!(X::AbstractArray{T}, A::AbstractArray, I::RangeVecIntList, default::T) where T
@@ -1258,7 +1258,7 @@ function _cat(A, shape::NTuple{N}, catdims, X...) where N
     for x in X
         for i = 1:N
             if concat[i]
-                inds[i] = offsets[i] + cat_indices(x, i)
+                inds[i] = offsets[i] .+ cat_indices(x, i)
                 offsets[i] += cat_size(x, i)
             else
                 inds[i] = 1:shape[i]
@@ -1559,7 +1559,7 @@ function isequal(A::AbstractArray, B::AbstractArray)
     if indices(A) != indices(B)
         return false
     end
-    if isa(A,Range) != isa(B,Range)
+    if isa(A,AbstractRange) != isa(B,AbstractRange)
         return false
     end
     for (a, b) in zip(A, B)
@@ -1582,7 +1582,7 @@ function (==)(A::AbstractArray, B::AbstractArray)
     if indices(A) != indices(B)
         return false
     end
-    if isa(A,Range) != isa(B,Range)
+    if isa(A,AbstractRange) != isa(B,AbstractRange)
         return false
     end
     for (a, b) in zip(A, B)
@@ -1674,13 +1674,6 @@ ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsE
 
 Returns a tuple of subscripts into an array with dimensions `dims`,
 corresponding to the linear index `index`.
-
-# Examples
-```
-i, j, ... = ind2sub(size(A), indmax(A))
-```
-
-provides the indices of the maximum element.
 
 # Examples
 ```jldoctest
@@ -1936,7 +1929,7 @@ function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
 end
 
 # map on collections
-map(f, A::Union{AbstractArray,AbstractSet,Associative}) = collect_similar(A, Generator(f,A))
+map(f, A::Union{AbstractArray,AbstractSet}) = collect_similar(A, Generator(f,A))
 
 # default to returning an Array for `map` on general iterators
 """
@@ -1944,6 +1937,8 @@ map(f, A::Union{AbstractArray,AbstractSet,Associative}) = collect_similar(A, Gen
 
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise.
+
+See also: [`mapslices`](@ref)
 
 # Examples
 ```jldoctest

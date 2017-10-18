@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module BLAS
+@doc """
+Interface to BLAS subroutines.
+""" -> BLAS
 
 import ..axpy!, ..axpby!
 import Base: copy!
@@ -313,21 +316,21 @@ function dot(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T},
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    dot(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    Base.@gc_preserve DX DY dot(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
 function dotc(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T},StridedVector{T}}) where T<:BlasComplex
     n = length(DX)
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    dotc(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    Base.@gc_preserve DX DY dotc(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
 function dotu(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T},StridedVector{T}}) where T<:BlasComplex
     n = length(DX)
     if n != length(DY)
         throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     end
-    dotu(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
+    Base.@gc_preserve DX DY dotu(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
 
 ## nrm2
@@ -364,7 +367,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
         end
     end
 end
-nrm2(x::Union{StridedVector,Array}) = nrm2(length(x), pointer(x), stride1(x))
+nrm2(x::Union{StridedVector,Array}) = Base.@gc_preserve x nrm2(length(x), pointer(x), stride1(x))
 
 ## asum
 
@@ -397,7 +400,7 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
         end
     end
 end
-asum(x::Union{StridedVector,Array}) = asum(length(x), pointer(x), stride1(x))
+asum(x::Union{StridedVector,Array}) = Base.@gc_preserve x asum(length(x), pointer(x), stride1(x))
 
 ## axpy
 
@@ -445,12 +448,12 @@ function axpy!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
-    axpy!(length(x), convert(T,alpha), pointer(x), stride(x, 1), pointer(y), stride(y, 1))
+    Base.@gc_preserve x y axpy!(length(x), convert(T,alpha), pointer(x), stride(x, 1), pointer(y), stride(y, 1))
     y
 end
 
-function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},Range{Ti}},
-               y::Array{T}, ry::Union{UnitRange{Ti},Range{Ti}}) where {T<:BlasFloat,Ti<:Integer}
+function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange{Ti}},
+               y::Array{T}, ry::Union{UnitRange{Ti},AbstractRange{Ti}}) where {T<:BlasFloat,Ti<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("ranges of differing lengths"))
     end
@@ -460,7 +463,7 @@ function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},Range{Ti}},
     if minimum(ry) < 1 || maximum(ry) > length(y)
         throw(ArgumentError("range out of bounds for y, of length $(length(y))"))
     end
-    axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    Base.@gc_preserve x y axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
     y
 end
 
@@ -509,7 +512,7 @@ function axpby!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, beta::N
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
-    axpby!(length(x), convert(T,alpha), pointer(x), stride(x, 1), convert(T,beta), pointer(y), stride(y, 1))
+    Base.@gc_preserve x y axpby!(length(x), convert(T,alpha), pointer(x), stride(x, 1), convert(T,beta), pointer(y), stride(y, 1))
     y
 end
 
@@ -526,7 +529,7 @@ for (fname, elty) in ((:idamax_,:Float64),
         end
     end
 end
-iamax(dx::Union{StridedVector,Array}) = iamax(length(dx), pointer(dx), stride1(dx))
+iamax(dx::Union{StridedVector,Array}) = Base.@gc_preserve dx iamax(length(dx), pointer(dx), stride1(dx))
 
 # Level 2
 ## mv
@@ -1515,8 +1518,8 @@ end
 
 end # module
 
-function copy!(dest::Array{T}, rdest::Union{UnitRange{Ti},Range{Ti}},
-               src::Array{T}, rsrc::Union{UnitRange{Ti},Range{Ti}}) where {T<:BlasFloat,Ti<:Integer}
+function copy!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
+               src::Array{T}, rsrc::Union{UnitRange{Ti},AbstractRange{Ti}}) where {T<:BlasFloat,Ti<:Integer}
     if minimum(rdest) < 1 || maximum(rdest) > length(dest)
         throw(ArgumentError("range out of bounds for dest, of length $(length(dest))"))
     end
@@ -1526,7 +1529,10 @@ function copy!(dest::Array{T}, rdest::Union{UnitRange{Ti},Range{Ti}},
     if length(rdest) != length(rsrc)
         throw(DimensionMismatch("ranges must be of the same length"))
     end
-    BLAS.blascopy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
-                   pointer(dest)+(first(rdest)-1)*sizeof(T), step(rdest))
+    Base.@gc_preserve src dest BLAS.blascopy!(length(rsrc),
+                                              pointer(src) + (first(rsrc) - 1) * sizeof(T),
+                                              step(rsrc),
+                                              pointer(dest) + (first(rdest) - 1) * sizeof(T),
+                                              step(rdest))
     dest
 end

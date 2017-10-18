@@ -5,7 +5,7 @@ include("testenv.jl")
 
 # REPL tests
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using TestHelpers
+using Main.TestHelpers
 import Base: REPL, LineEdit
 
 function fake_repl(f)
@@ -644,7 +644,7 @@ let exename = Base.julia_cmd()
 
     # Test stream mode
     outs, ins, p = readandwrite(`$exename --startup-file=no -q`)
-    write(ins,"1\nquit()\n")
+    write(ins, "1\nquit()\n")
     @test read(outs, String) == "1\n"
 end # let exename
 

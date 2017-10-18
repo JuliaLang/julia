@@ -148,7 +148,7 @@ extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
 
 #ifdef COPY_STACKS
-#if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_)) && !defined(_COMPILER_MICROSOFT_)
+#if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) || defined(_CPU_ARM_)) && !defined(_COMPILER_MICROSOFT_)
 #define ASM_COPY_STACKS
 #endif
 
@@ -246,7 +246,7 @@ static void record_backtrace(void)
     ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE);
 }
 
-static void NOINLINE JL_NORETURN start_task(void)
+static void NOINLINE JL_NORETURN JL_USED_FUNC start_task(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     // this runs the first time we switch to a task
@@ -284,7 +284,7 @@ void NOINLINE jl_set_base_ctx(char *__stk)
     jl_ptls_t ptls = jl_get_ptls_states();
     ptls->stackbase = (char*)(((uintptr_t)__stk + sizeof(*__stk))&-16); // also ensures stackbase is 16-byte aligned
 #ifndef ASM_COPY_STACKS
-    if (jl_setjmp(ptls->base_ctx, 1)) {
+    if (jl_setjmp(ptls->base_ctx, 0)) {
         start_task();
     }
 #endif
@@ -295,11 +295,11 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
     // keep this function small, since we want to keep the stack frame
     // leading up to this also quite small
-    _julia_init(rel);
 #ifdef COPY_STACKS
     char __stk;
     jl_set_base_ctx(&__stk); // separate function, to record the size of a stack frame
 #endif
+    _julia_init(rel);
 }
 
 static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
@@ -372,20 +372,29 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
                 " push %%ebp;\n" // instead of ESP
                 " jmp %P1;\n" // call `start_task` with fake stack frame
                 " ud2"
-                : : "r" (stackbase), "X"(&start_task) : "memory" );
+                : : "r"(stackbase), "X"(&start_task) : "memory" );
 #elif defined(_CPU_AARCH64_)
             asm(" mov sp, %0;\n"
                 " mov x29, xzr;\n" // Clear link register (x29) and frame pointer
                 " mov x30, xzr;\n" // (x30) to terminate unwinder.
-                " br %1;\n" // call `start_task` with fake stack frame
+                " b %1;\n" // call `start_task` with fake stack frame
                 " brk #0x1" // abort
-                : : "r" (stackbase), "r"(&start_task) : "memory" );
+                : : "r"(stackbase), "S"(&start_task) : "memory" );
+#elif defined(_CPU_ARM_)
+            // A "i" constraint on `&start_task` works only on clang and not on GCC.
+            asm(" mov sp, %0;\n"
+                " mov lr, #0;\n" // Clear link register (lr) and frame pointer
+                " mov fp, #0;\n" // (fp) to terminate unwinder.
+                " b start_task;\n" // call `start_task` with fake stack frame
+                " udf #0" // abort
+                : : "r"(stackbase) : "memory" );
 #else
 #error ASM_COPY_STACKS not supported on this cpu architecture
 #endif
 #else // ASM_COPY_STACKS
             jl_longjmp(ptls->base_ctx, 1);
 #endif
+            jl_unreachable();
         }
 #else
         jl_longjmp(t->ctx, 1);

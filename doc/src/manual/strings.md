@@ -205,6 +205,7 @@ ERROR: BoundsError: attempt to access "Hello, world.\n"
 julia> str[end+1]
 ERROR: BoundsError: attempt to access "Hello, world.\n"
   at index [15]
+Stacktrace:
 [...]
 ```
 
@@ -227,6 +228,24 @@ julia> str[6:6]
 
 The former is a single character value of type `Char`, while the latter is a string value that
 happens to contain only a single character. In Julia these are very different things.
+
+Range indexing makes a copy of the selected part of the original string.
+Alternatively, it is possible to create a view into a string using the type [`SubString`](@ref),
+for example:
+
+```jldoctest
+julia> str = "long string"
+"long string"
+
+julia> substr = SubString(str, 1, 4)
+"long"
+
+julia> typeof(substr)
+SubString{String}
+```
+
+Several standard functions like [`chop`](@ref), [`chomp`](@ref) or [`strip`](@ref)
+return a [`SubString`](@ref).
 
 ## Unicode and UTF-8
 
@@ -267,6 +286,20 @@ julia> s[4]
 In this case, the character `∀` is a three-byte character, so the indices 2 and 3 are invalid
 and the next character's index is 4; this next valid index can be computed by [`nextind(s,1)`](@ref),
 and the next index after that by `nextind(s,4)` and so on.
+
+Extraction of a substring using range indexing also expects valid byte indices or an error is thrown:
+
+```jldoctest unicodestring
+julia> s[1:1]
+"∀"
+
+julia> s[1:2]
+ERROR: UnicodeError: invalid character index
+[...]
+
+julia> s[1:4]
+"∀ "
+```
 
 Because of variable-length encodings, the number of characters in a string (given by [`length(s)`](@ref))
 is not always the same as the last index. If you iterate through the indices 1 through [`endof(s)`](@ref)

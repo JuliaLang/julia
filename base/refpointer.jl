@@ -55,7 +55,7 @@ convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
 function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
     if isbits(T) || isbitsunion(T)
         return convert(P, pointer_from_objref(b))
-    elseif isleaftype(T)
+    elseif _isleaftype(T)
         return convert(P, pointer_from_objref(b.x))
     else
         # If the slot is not leaf type, it could be either isbits or not.

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Bottom
-using Base.Test
+using Test
 
 macro UnionAll(var, expr)
     Expr(:where, esc(expr), esc(var))
@@ -116,6 +116,21 @@ function test_diagonal()
     # don't consider a diagonal variable concrete if it already has an abstract lower bound
     @test isequal_type(Tuple{Vararg{A}} where A>:Integer,
                        Tuple{Vararg{A}} where A>:Integer)
+
+    # issue #24166
+    @test !issub(Tuple{T, T, Ref{T}} where T, Tuple{S, S, Ref{Q} where Q} where S)
+    @test !issub(Tuple{T, T, Ref{T}} where T, Tuple{S, S, Ref{Q} where Q} where S<:Integer)
+    @test !issub(Tuple{T, T, Ref{T}} where T, Tuple{S, S, Ref{Q} where Q} where S<:Int)
+    @test  issub(Tuple{T, T, Ref{T}} where T<:Int, Tuple{S, S, Ref{Q} where Q} where S)
+    @test !issub(Tuple{T, T, Ref{T}} where T>:Int, Tuple{S, S, Ref{Q} where Q} where S)
+    @test !issub(Tuple{T, T, Ref{T}} where T>:Integer, Tuple{S, S, Ref{Q} where Q} where S)
+    @test !issub(Tuple{T, T, Ref{T}} where T>:Any, Tuple{S, S, Ref{Q} where Q} where S)
+
+    @test  issub(Tuple{T, T} where Int<:T<:Int, Tuple{T, T} where Int<:T<:Int)
+    @test  issub(Tuple{T, T} where T>:Int, Tuple{T, T} where T>:Int)
+    @test  issub(Tuple{Tuple{T, T} where T>:Int}, Tuple{Tuple{T, T} where T>:Int})
+    @test  issub(Tuple{Tuple{T, T} where T>:Int}, Tuple{Tuple{T, T}} where T>:Int)
+    @test  issub(Tuple{Tuple{T, T}} where T>:Int, Tuple{Tuple{T, T} where T>:Int})
 end
 
 # level 3: UnionAll
@@ -256,6 +271,23 @@ function test_3()
     @test !issub((@UnionAll T>:Integer @UnionAll S>:Ptr Tuple{Ptr{T},Ptr{S}}), B)
 
     @test  issub((@UnionAll T>:Ptr @UnionAll S>:Integer Tuple{Ptr{T},Ptr{S}}), B)
+
+    # issue #23327
+    @test !issub((Type{AbstractArray{Array{T}} where T}), Type{AbstractArray{S}} where S)
+    @test !issub((Val{AbstractArray{Array{T}} where T}), Val{AbstractArray{T}} where T)
+    @test !issub((Array{Array{Array{T}} where T}), Array{Array{T}} where T)
+    @test !issub((Array{Array{T, 1}, 1} where T), AbstractArray{Vector})
+
+    @test !issub((Ref{Pair{Pair{T, R}, R} where R} where T),
+                 (Ref{Pair{A,          B} where B} where A))
+    @test !issub((Ref{Pair{Pair{A, B}, B} where B} where A),
+                 (Ref{Pair{A,          B2} where B2 <: B} where A where B))
+
+    @test !issub(Tuple{Type{Vector{T}} where T, Vector{Float64}}, Tuple{Type{T}, T} where T)
+    @test !issub(Tuple{Vector{Float64}, Type{Vector{T}} where T}, Tuple{T, Type{T}} where T)
+    @test !issub(Tuple{Type{Ref{T}} where T, Vector{Float64}}, Tuple{Ref{T}, T} where T)
+
+    @test !issub(Tuple{Type{Ref{T}} where T, Ref{Float64}}, Tuple{Type{T},T} where T)
 end
 
 # level 4: Union
@@ -646,8 +678,8 @@ function test_intersection()
     @testintersect(Tuple{Type{Ptr{UInt8}}, Ptr{Bottom}},
                    (@UnionAll T Tuple{Type{Ptr{T}},Ptr{T}}), Bottom)
 
-    @testintersect(Tuple{Range{Int},Tuple{Int,Int}}, (@UnionAll T Tuple{AbstractArray{T},Dims}),
-                   Tuple{Range{Int},Tuple{Int,Int}})
+    @testintersect(Tuple{AbstractRange{Int},Tuple{Int,Int}}, (@UnionAll T Tuple{AbstractArray{T},Dims}),
+                   Tuple{AbstractRange{Int},Tuple{Int,Int}})
 
     @testintersect((@UnionAll Integer<:T<:Number Array{T}), (@UnionAll T<:Number Array{T}),
                    (@UnionAll Integer<:T<:Number Array{T}))
@@ -915,6 +947,17 @@ function test_intersection()
     @testintersect(Tuple{Ref{Ref{T}} where T, Ref},
                    Tuple{Ref{T}, Ref{T}} where T,
                    Tuple{Ref{Ref{T}}, Ref{Ref{T}}} where T)
+
+    # issue #23685
+    @testintersect(Pair{Type{Z},Z} where Z,
+                   Pair{Type{Ref{T}} where T, Ref{Float64}},
+                   Bottom)
+    @testintersect(Tuple{Type{Z},Z} where Z,
+                   Tuple{Type{Ref{T}} where T, Ref{Float64}},
+                   !Bottom)
+    @test_broken typeintersect(Tuple{Type{Z},Z} where Z,
+                               Tuple{Type{Ref{T}} where T, Ref{Float64}}) ==
+        Tuple{Type{Ref{Float64}},Ref{Float64}}
 end
 
 function test_intersection_properties()
@@ -1149,3 +1192,40 @@ end
               Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
               Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
               Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64} <: (Tuple{Vararg{T}} where T<:Number))
+
+# part of issue #23327
+let
+    triangular(::Type{<:AbstractArray{T}}) where {T} = T
+    triangular(::Type{<:AbstractArray}) = Any
+    @test triangular(Array{Array{T, 1}, 1} where T) === Any
+end
+
+# issue #23908
+@test Array{Union{Int128, Int16, Int32, Int8}, 1} <: Array{Union{Int128, Int32, Int8, _1}, 1} where _1
+let A = Pair{Void, Pair{Array{Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8}, 1}, Void}},
+    B = Pair{Void, Pair{Array{Union{Int8, UInt128, UInt16, UInt32, UInt64, UInt8, _1}, 1}, Void}} where _1
+    @test A <: B
+    @test !(B <: A)
+end
+
+# issue #22688
+let X = Ref{Tuple{Array{Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8}, 1}}}
+    @test !(X <: Ref{Tuple{Array{Union{Int8, UInt128, UInt16, UInt32, UInt64, UInt8, S}}}} where S)
+    @test X <: Ref{Tuple{Array{Union{Int8, UInt128, UInt16, UInt32, UInt64, UInt8, S}, 1}}} where S
+end
+let X = Ref{Tuple{Array{Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8}, 1}, Array{Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8}, 1}}},
+    Y = Ref{Tuple{Array{Union{Int8, UInt128, UInt16, UInt32, UInt64, UInt8, S}, 1}, Array{Union{Int8, UInt128, UInt16, UInt32, UInt64, UInt8, T}, 1}}} where S where T
+    @test X <: Y
+end
+
+# issue #23764
+@test Tuple{Ref{Union{T,Int}} where {T}} <: Tuple{Ref{T}} where {T}
+@test Tuple{Ref{Union{T,Int}} where {T}} <: Tuple{Ref{T} where {T}}
+@test (Tuple{Ref{Union{T,Int}}} where T) <: Tuple{Ref{T}} where {T}
+@test (Tuple{Ref{Union{T,Int}}} where T) <: Tuple{Ref{T} where {T}}
+@test Tuple{Tuple{Tuple{R}} where R} <: Tuple{Tuple{S}} where S
+struct A23764{T, N, S} <: AbstractArray{Union{T, S}, N}; end
+@test Tuple{A23764{Int, 1, T} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
+struct A23764_2{T, N, S} <: AbstractArray{Union{Ref{T}, S}, N}; end
+@test Tuple{A23764_2{T, 1, Void} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
+@test Tuple{A23764_2{T, 1, Void} where T} <: Tuple{AbstractArray{T,N} where {T,N}}

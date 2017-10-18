@@ -8,7 +8,7 @@
 The objects called do not have matching dimensionality. Optional argument `msg` is a
 descriptive error string.
 """
-mutable struct DimensionMismatch <: Exception
+struct DimensionMismatch <: Exception
     msg::AbstractString
 end
 DimensionMismatch() = DimensionMismatch("")
@@ -30,7 +30,7 @@ elements of type `T`. Alias for [`AbstractArray{T,2}`](@ref).
 """
 const AbstractMatrix{T} = AbstractArray{T,2}
 const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
-const RangeIndex = Union{Int, Range{Int}, AbstractUnitRange{Int}}
+const RangeIndex = Union{Int, AbstractRange{Int}, AbstractUnitRange{Int}}
 const DimOrInd = Union{Integer, AbstractUnitRange}
 const IntOrInd = Union{Int, AbstractUnitRange}
 const DimsOrInds{N} = NTuple{N,DimOrInd}
@@ -171,6 +171,8 @@ that N is inbounds on either array. Incorrect usage may corrupt or segfault your
 the same manner as C.
 """
 function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
+    t1 = @_gc_preserve_begin dest
+    t2 = @_gc_preserve_begin src
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
     elseif isbitsunion(T)
@@ -185,6 +187,8 @@ function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
         ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
               dest, pointer(dest, doffs), src, pointer(src, soffs), n)
     end
+    @_gc_preserve_end t2
+    @_gc_preserve_end t1
     return dest
 end
 
@@ -213,33 +217,6 @@ For example, copying an array produces a new array with identically-same element
 original.
 """
 copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
-
-function reinterpret(::Type{T}, a::Array{S,1}) where T where S
-    nel = Int(div(length(a) * sizeof(S), sizeof(T)))
-    # TODO: maybe check that remainder is zero?
-    return reinterpret(T, a, (nel,))
-end
-
-function reinterpret(::Type{T}, a::Array{S}) where T where S
-    if sizeof(S) != sizeof(T)
-        throw(ArgumentError("result shape not specified"))
-    end
-    reinterpret(T, a, size(a))
-end
-
-function reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where T where S where N
-    function throwbits(::Type{S}, ::Type{T}, ::Type{U}) where {S,T,U}
-        @_noinline_meta
-        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(U) is not a bits type"))
-    end
-    isbits(T) || throwbits(S, T, T)
-    isbits(S) || throwbits(S, T, S)
-    nel = div(length(a) * sizeof(S), sizeof(T))
-    if prod(dims) != nel
-        _throw_dmrsa(dims, nel)
-    end
-    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
-end
 
 # reshaping to same # of dimensions
 function reshape(a::Array{T,N}, dims::NTuple{N,Int}) where T where N
@@ -441,16 +418,16 @@ See also [`zeros`](@ref), [`similar`](@ref).
 """
 function ones end
 
-for (fname, felt) in ((:zeros,:zero), (:ones,:one))
+for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     @eval begin
         # allow signature of similar
-        $fname(a::AbstractArray, T::Type, dims::Tuple) = fill!(similar(a, T, dims), $felt(T))
-        $fname(a::AbstractArray, T::Type, dims...) = fill!(similar(a,T,dims...), $felt(T))
-        $fname(a::AbstractArray, T::Type=eltype(a)) = fill!(similar(a,T), $felt(T))
+        $fname(a::AbstractArray, ::Type{T}, dims::Tuple) where {T} = fill!(similar(a, T, dims), $felt(T))
+        $fname(a::AbstractArray, ::Type{T}, dims...) where {T} = fill!(similar(a, T, dims...), $felt(T))
+        $fname(a::AbstractArray, ::Type{T}=eltype(a)) where {T} = fill!(similar(a, T), $felt(T))
 
-        $fname(T::Type, dims::Tuple) = fill!(Array{T}(Dims(dims)), $felt(T))
+        $fname(::Type{T}, dims::NTuple{N, Any}) where {T, N} = fill!(Array{T,N}(Dims(dims)), $felt(T))
         $fname(dims::Tuple) = ($fname)(Float64, dims)
-        $fname(T::Type, dims...) = $fname(T, dims)
+        $fname(::Type{T}, dims...) where {T} = $fname(T, dims)
         $fname(dims...) = $fname(dims)
     end
 end
@@ -551,6 +528,9 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
+# arises in similar(dest, Pair{Union{},Union{}}) where dest::Dict:
+convert(::Type{Vector{Union{}}}, a::Vector{Union{}}) = a
+
 convert(::Type{Vector}, x::AbstractVector{T}) where {T} = convert(Vector{T}, x)
 convert(::Type{Matrix}, x::AbstractMatrix{T}) where {T} = convert(Matrix{T}, x)
 
@@ -648,10 +628,20 @@ function _collect_indices(indsA, A)
     copy!(B, CartesianRange(indices(B)), A, CartesianRange(indsA))
 end
 
+# define this as a macro so that the call to Inference
+# gets inlined into the caller before recursion detection
+# gets a chance to see it, so that recursive calls to the caller
+# don't trigger the inference limiter
 if isdefined(Core, :Inference)
-    _default_eltype(@nospecialize itrt) = Core.Inference.return_type(first, Tuple{itrt})
+    macro default_eltype(itrt)
+        return quote
+            Core.Inference.return_type(first, Tuple{$(esc(itrt))})
+        end
+    end
 else
-    _default_eltype(@nospecialize itr) = Any
+    macro default_eltype(itrt)
+        return :(Any)
+    end
 end
 
 _array_for(::Type{T}, itr, ::HasLength) where {T} = Array{T,1}(Int(length(itr)::Integer))
@@ -659,7 +649,7 @@ _array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, indices(itr
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
-    et = _default_eltype(typeof(itr))
+    et = @default_eltype(typeof(itr))
     if isa(isz, SizeUnknown)
         return grow_to!(Array{et,1}(0), itr)
     else
@@ -673,12 +663,12 @@ function collect(itr::Generator)
 end
 
 _collect(c, itr, ::EltypeUnknown, isz::SizeUnknown) =
-    grow_to!(_similar_for(c, _default_eltype(typeof(itr)), itr, isz), itr)
+    grow_to!(_similar_for(c, @default_eltype(typeof(itr)), itr, isz), itr)
 
 function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
     st = start(itr)
     if done(itr,st)
-        return _similar_for(c, _default_eltype(typeof(itr)), itr, isz)
+        return _similar_for(c, @default_eltype(typeof(itr)), itr, isz)
     end
     v1, st = next(itr, st)
     collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)
@@ -789,7 +779,7 @@ function getindex(A::Array, c::Colon)
 end
 
 # This is redundant with the abstract fallbacks, but needed for bootstrap
-function getindex(A::Array{S}, I::Range{Int}) where S
+function getindex(A::Array{S}, I::AbstractRange{Int}) where S
     return S[ A[i] for i in I ]
 end
 
@@ -1257,8 +1247,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], [true, false, true, false, true, false])
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
 Stacktrace:
- [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:926
- [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:913
+[...]
 ```
 """
 deleteat!(a::Vector, inds) = _deleteat!(a, inds)
@@ -1567,6 +1556,7 @@ function vcat(arrays::Vector{T}...) where T
     else
         elsz = Core.sizeof(Ptr{Void})
     end
+    t = @_gc_preserve_begin arr
     for a in arrays
         na = length(a)
         nba = na * elsz
@@ -1586,6 +1576,7 @@ function vcat(arrays::Vector{T}...) where T
         end
         ptr += nba
     end
+    @_gc_preserve_end t
     return arr
 end
 
@@ -1596,14 +1587,14 @@ cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x
 """
     findnext(A, i::Integer)
 
-Find the next linear index >= `i` of a non-zero element of `A`, or `0` if not found.
+Find the next linear index >= `i` of a `true` element of `A`, or `0` if not found.
 
 # Examples
 ```jldoctest
-julia> A = [0 0; 1 0]
-2×2 Array{Int64,2}:
- 0  0
- 1  0
+julia> A = [false false; true false]
+2×2 Array{Bool,2}:
+ false  false
+  true  false
 
 julia> findnext(A,1)
 2
@@ -1615,8 +1606,14 @@ julia> findnext(A,3)
 function findnext(A, start::Integer)
     l = endof(A)
     i = start
+    warned = false
     while i <= l
-        if A[i] != 0
+        a = A[i]
+        if !warned && !(a isa Bool)
+            depwarn("In the future `findnext` will only work on boolean collections. Use `findnext(x->x!=0, A, start)` instead.", :findnext)
+            warned = true
+        end
+        if a != 0
             return i
         end
         i = nextind(A, i)
@@ -1627,8 +1624,9 @@ end
 """
     findfirst(A)
 
-Return the linear index of the first non-zero value in `A` (determined by `A[i]!=0`).
+Return the linear index of the first `true` value in `A`.
 Returns `0` if no such value is found.
+To search for other kinds of values, pass a predicate as the first argument.
 
 # Examples
 ```jldoctest
@@ -1645,58 +1643,6 @@ julia> findfirst(zeros(3))
 ```
 """
 findfirst(A) = findnext(A, 1)
-
-"""
-    findnext(A, v, i::Integer)
-
-Find the next linear index >= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
-
-# Examples
-```jldoctest
-julia> A = [1 4; 2 2]
-2×2 Array{Int64,2}:
- 1  4
- 2  2
-
-julia> findnext(A,4,4)
-0
-
-julia> findnext(A,4,3)
-3
-```
-"""
-function findnext(A, v, start::Integer)
-    l = endof(A)
-    i = start
-    while i <= l
-        if A[i] == v
-            return i
-        end
-        i = nextind(A, i)
-    end
-    return 0
-end
-"""
-    findfirst(A, v)
-
-Return the linear index of the first element equal to `v` in `A`.
-Returns `0` if `v` is not found.
-
-# Examples
-```jldoctest
-julia> A = [4 6; 2 2]
-2×2 Array{Int64,2}:
- 4  6
- 2  2
-
-julia> findfirst(A,2)
-2
-
-julia> findfirst(A,3)
-0
-```
-"""
-findfirst(A, v) = findnext(A, v, 1)
 
 """
     findnext(predicate::Function, A, i::Integer)
@@ -1747,6 +1693,9 @@ julia> findfirst(iseven, A)
 
 julia> findfirst(x -> x>10, A)
 0
+
+julia> findfirst(equalto(4), A)
+3
 ```
 """
 findfirst(testf::Function, A) = findnext(testf, A, 1)
@@ -1754,14 +1703,14 @@ findfirst(testf::Function, A) = findnext(testf, A, 1)
 """
     findprev(A, i::Integer)
 
-Find the previous linear index <= `i` of a non-zero element of `A`, or `0` if not found.
+Find the previous linear index <= `i` of a `true` element of `A`, or `0` if not found.
 
 # Examples
 ```jldoctest
-julia> A = [0 0; 1 2]
-2×2 Array{Int64,2}:
- 0  0
- 1  2
+julia> A = [false false; true true]
+2×2 Array{Bool,2}:
+ false  false
+  true  true
 
 julia> findprev(A,2)
 2
@@ -1772,8 +1721,14 @@ julia> findprev(A,1)
 """
 function findprev(A, start::Integer)
     i = start
+    warned = false
     while i >= 1
-        A[i] != 0 && return i
+        a = A[i]
+        if !warned && !(a isa Bool)
+            depwarn("In the future `findprev` will only work on boolean collections. Use `findprev(x->x!=0, A, start)` instead.", :findprev)
+            warned = true
+        end
+        a != 0 && return i
         i = prevind(A, i)
     end
     return 0
@@ -1782,8 +1737,8 @@ end
 """
     findlast(A)
 
-Return the linear index of the last non-zero value in `A` (determined by `A[i]!=0`).
-Returns `0` if there is no non-zero value in `A`.
+Return the linear index of the last `true` value in `A`.
+Returns `0` if there is no `true` value in `A`.
 
 # Examples
 ```jldoctest
@@ -1805,59 +1760,6 @@ julia> findlast(A)
 ```
 """
 findlast(A) = findprev(A, endof(A))
-
-"""
-    findprev(A, v, i::Integer)
-
-Find the previous linear index <= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
-
-# Examples
-```jldoctest
-julia> A = [0 0; 1 2]
-2×2 Array{Int64,2}:
- 0  0
- 1  2
-
-julia> findprev(A, 1, 4)
-2
-
-julia> findprev(A, 1, 1)
-0
-```
-"""
-function findprev(A, v, start::Integer)
-    i = start
-    while i >= 1
-        A[i] == v && return i
-        i = prevind(A, i)
-    end
-    return 0
-end
-
-"""
-    findlast(A, v)
-
-Return the linear index of the last element equal to `v` in `A`.
-Returns `0` if there is no element of `A` equal to `v`.
-
-# Examples
-```jldoctest
-julia> A = [1 2; 2 1]
-2×2 Array{Int64,2}:
- 1  2
- 2  1
-
-julia> findlast(A,1)
-4
-
-julia> findlast(A,2)
-3
-
-julia> findlast(A,3)
-0
-```
-"""
-findlast(A, v) = findprev(A, v, endof(A))
 
 """
     findprev(predicate::Function, A, i::Integer)
@@ -1918,15 +1820,22 @@ If there are no such elements of `A`, find returns an empty array.
 
 # Examples
 ```jldoctest
-julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
- 1  2
- 3  4
+julia> A = [1 2 0; 3 4 0]
+2×3 Array{Int64,2}:
+ 1  2  0
+ 3  4  0
 
-julia> find(isodd,A)
+julia> find(isodd, A)
 2-element Array{Int64,1}:
  1
  2
+
+julia> find(!iszero, A)
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
 
 julia> find(isodd, [2, 4])
 0-element Array{Int64,1}
@@ -1952,9 +1861,8 @@ _index_remapper(iter) = OneTo(typemax(Int))  # safe for objects that don't imple
 """
     find(A)
 
-Return a vector of the linear indexes of the non-zeros in `A` (determined by `A[i]!=0`). A
-common use of this is to convert a boolean array to an array of indexes of the `true`
-elements. If there are no non-zero elements of `A`, `find` returns an empty array.
+Return a vector of the linear indices of the `true` values in `A`.
+To search for other kinds of values, pass a predicate as the first argument.
 
 # Examples
 ```jldoctest
@@ -1968,7 +1876,7 @@ julia> find(A)
  1
  4
 
-julia> find(zeros(3))
+julia> find(falses(3))
 0-element Array{Int64,1}
 ```
 """
@@ -1977,7 +1885,12 @@ function find(A)
     I = Vector{Int}(nnzA)
     cnt = 1
     inds = _index_remapper(A)
+    warned = false
     for (i,a) in enumerate(A)
+        if !warned && !(a isa Bool)
+            depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
+            warned = true
+        end
         if a != 0
             I[cnt] = inds[i]
             cnt += 1
@@ -1986,7 +1899,7 @@ function find(A)
     return I
 end
 
-find(x::Number) = x == 0 ? Array{Int,1}(0) : [1]
+find(x::Bool) = x ? [1] : Array{Int,1}(0)
 find(testf::Function, x::Number) = !testf(x) ? Array{Int,1}(0) : [1]
 
 findn(A::AbstractVector) = find(A)

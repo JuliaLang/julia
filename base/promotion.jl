@@ -310,10 +310,6 @@ julia> A^3
 fma(x::Number, y::Number, z::Number) = fma(promote(x,y,z)...)
 muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
 
-(&)(x::Integer, y::Integer) = (&)(promote(x,y)...)
-(|)(x::Integer, y::Integer) = (|)(promote(x,y)...)
-xor(x::Integer, y::Integer) = xor(promote(x,y)...)
-
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
 <( x::Real, y::Real)     = (< )(promote(x,y)...)
 <=(x::Real, y::Real)     = (<=)(promote(x,y)...)
@@ -346,13 +342,13 @@ promote_op(::Any...) = (@_inline_meta; Any)
 function promote_op(f, ::Type{S}) where S
     @_inline_meta
     T = _return_type(f, Tuple{_default_type(S)})
-    isleaftype(S) && return isleaftype(T) ? T : Any
+    _isleaftype(S) && return _isleaftype(T) ? T : Any
     return typejoin(S, T)
 end
 function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
     @_inline_meta
     T = _return_type(f, Tuple{_default_type(R), _default_type(S)})
-    isleaftype(R) && isleaftype(S) && return isleaftype(T) ? T : Any
+    _isleaftype(R) && _isleaftype(S) && return _isleaftype(T) ? T : Any
     return typejoin(R, S, T)
 end
 

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 import Base.LinAlg: BlasFloat, BlasComplex, SingularException, A_rdiv_B!, A_rdiv_Bt!,
     A_rdiv_Bc!
 
@@ -17,7 +17,7 @@ srand(1)
         UU+=im*convert(Matrix{elty}, randn(n,n))
     end
     D = Diagonal(dd)
-    DM = diagm(dd)
+    DM = Matrix(Diagonal(dd))
 
     @testset "constructor" begin
         for x in (dd, GenericArray(dd))
@@ -121,7 +121,7 @@ srand(1)
     end
     d = convert(Vector{elty}, randn(n))
     D2 = Diagonal(d)
-    DM2= diagm(d)
+    DM2= Matrix(Diagonal(d))
     @testset "Binary operations" begin
         for op in (+, -, *)
             @test Array(op(D, D2)) ≈ op(DM, DM2)
@@ -152,19 +152,19 @@ srand(1)
 
         # Performance specialisations for A*_mul_B!
         vvv = similar(vv)
-        @test (r = full(D) * vv   ; A_mul_B!(vvv, D, vv)  ≈ r ≈ vvv)
-        @test (r = full(D)' * vv  ; Ac_mul_B!(vvv, D, vv) ≈ r ≈ vvv)
-        @test (r = full(D).' * vv ; At_mul_B!(vvv, D, vv) ≈ r ≈ vvv)
+        @test (r = Matrix(D) * vv   ; A_mul_B!(vvv, D, vv)  ≈ r ≈ vvv)
+        @test (r = Matrix(D)' * vv  ; Ac_mul_B!(vvv, D, vv) ≈ r ≈ vvv)
+        @test (r = Matrix(D).' * vv ; At_mul_B!(vvv, D, vv) ≈ r ≈ vvv)
 
         UUU = similar(UU)
-        @test (r = full(D) * UU   ; A_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
-        @test (r = full(D)' * UU  ; Ac_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
-        @test (r = full(D).' * UU ; At_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
+        @test (r = Matrix(D) * UU   ; A_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
+        @test (r = Matrix(D)' * UU  ; Ac_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
+        @test (r = Matrix(D).' * UU ; At_mul_B!(UUU, D, UU) ≈ r ≈ UUU)
 
         # make sure that A_mul_B{c,t}! works with B as a Diagonal
         VV = Array(D)
         DD = copy(D)
-        r  = VV * full(D)
+        r  = VV * Matrix(D)
         @test Array(A_mul_B!(VV, DD)) ≈ r ≈ Array(D)*Array(D)
         DD = copy(D)
         r  = VV * (Array(D).')
@@ -182,8 +182,10 @@ srand(1)
         @test tril(D,1)  == D
         @test tril(D,-1) == zeros(D)
         @test tril(D,0)  == D
-        @test_throws ArgumentError tril(D,n+1)
-        @test_throws ArgumentError triu(D,n+1)
+        @test_throws ArgumentError tril(D, -n - 2)
+        @test_throws ArgumentError tril(D, n)
+        @test_throws ArgumentError triu(D, -n)
+        @test_throws ArgumentError triu(D, n + 2)
     end
 
     # factorize
@@ -220,7 +222,7 @@ srand(1)
     #logdet
     if relty <: Real
         ld=convert(Vector{relty},rand(n))
-        @test logdet(Diagonal(ld)) ≈ logdet(diagm(ld))
+        @test logdet(Diagonal(ld)) ≈ logdet(Matrix(Diagonal(ld)))
     end
 
     @testset "similar" begin
@@ -259,7 +261,7 @@ end
 end
 
 @testset "isposdef" begin
-    @test isposdef(Diagonal(1.0 + rand(n)))
+    @test isposdef(Diagonal(1.0 .+ rand(n)))
     @test !isposdef(Diagonal(-1.0 * rand(n)))
 end
 
@@ -398,8 +400,12 @@ end
         fullDD = copy!(Matrix{Matrix{T}}(2, 2), DD)
         fullBB = copy!(Matrix{Matrix{T}}(2, 2), BB)
         for f in (*, Ac_mul_B, A_mul_Bc, Ac_mul_Bc, At_mul_B, A_mul_Bt, At_mul_Bt)
-            @test f(D, B)::typeof(D) == f(Matrix(D), Matrix(B))
+            @test f(D, B)::typeof(D) ≈ f(Matrix(D), Matrix(B)) atol=2 * eps()
             @test f(DD, BB)::typeof(DD) == f(fullDD, fullBB)
         end
     end
+end
+
+@testset "Diagonal of a RowVector (#23649)" begin
+    @test Diagonal([1,2,3].') == Diagonal([1 2 3])
 end

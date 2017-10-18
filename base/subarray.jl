@@ -46,7 +46,7 @@ viewindexing(I::Tuple{Slice, Slice, Vararg{Any}}) = (@_inline_meta; viewindexing
 # A UnitRange can follow Slices, but only if all other indices are scalar
 viewindexing(I::Tuple{Slice, UnitRange, Vararg{ScalarIndex}}) = IndexLinear()
 # In general, ranges are only fast if all other indices are scalar
-viewindexing(I::Tuple{Union{Range, Slice}, Vararg{ScalarIndex}}) = IndexLinear()
+viewindexing(I::Tuple{Union{AbstractRange, Slice}, Vararg{ScalarIndex}}) = IndexLinear()
 # All other index combinations are slow
 viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 # Of course, all other array types are slow
@@ -257,7 +257,7 @@ substrides(parent, I::Tuple) = substrides(1, parent, 1, I)
 substrides(s, parent, dim, ::Tuple{}) = ()
 substrides(s, parent, dim, I::Tuple{ScalarIndex, Vararg{Any}}) = (substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
 substrides(s, parent, dim, I::Tuple{Slice, Vararg{Any}}) = (s, substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
-substrides(s, parent, dim, I::Tuple{Range, Vararg{Any}}) = (s*step(I[1]), substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
+substrides(s, parent, dim, I::Tuple{AbstractRange, Vararg{Any}}) = (s*step(I[1]), substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
 substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(I[1]))"))
 
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
@@ -267,7 +267,7 @@ compute_stride1(parent::AbstractArray, I::NTuple{N,Any}) where {N} =
 compute_stride1(s, inds, I::Tuple{}) = s
 compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
     (@_inline_meta; compute_stride1(s*unsafe_length(inds[1]), tail(inds), tail(I)))
-compute_stride1(s, inds, I::Tuple{Range, Vararg{Any}}) = s*step(I[1])
+compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s*step(I[1])
 compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
 
@@ -285,6 +285,9 @@ end
 # Computing the first index simply steps through the indices, accumulating the
 # sum of index each multiplied by the parent's stride.
 # The running sum is `f`; the cumulative stride product is `s`.
+# If the parent is a vector, then we offset the parent's own indices with parameters of I
+compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{AbstractRange}) =
+    (@_inline_meta; first(I[1]) - first(indices1(I[1]))*stride1)
 # If the result is one-dimensional and it's a Colon, then linear
 # indexing uses the indices along the given dimension. Otherwise
 # linear indexing always starts with 1.
@@ -358,7 +361,7 @@ function parentdims(s::SubArray)
     j = 1
     for i = 1:ndims(s.parent)
         r = s.indexes[i]
-        if j <= nd && (isa(r,Union{Slice,Range}) ? sp[i]*step(r) : sp[i]) == sv[j]
+        if j <= nd && (isa(r,Union{Slice,AbstractRange}) ? sp[i]*step(r) : sp[i]) == sv[j]
             dimindex[j] = i
             j += 1
         end

@@ -4,7 +4,7 @@ using Base.LineEdit
 using Base.LineEdit: edit_insert, buffer, content, setmark, getmark
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using TestHelpers
+using Main.TestHelpers
 
 # no need to have animation in tests
 LineEdit.REGION_ANIMATION_DURATION[] = 0.001
@@ -179,7 +179,7 @@ let f = keymap_fcn([test_keymap_7, test_keymap_6])
     buf = IOBuffer("abd")
     f(buf)
     @test a_foo == 3
-    a_foo = 0
+    global a_foo = 0
     f(buf)
     @test a_foo == 3
     f(buf)
@@ -330,7 +330,7 @@ let buf = IOBuffer()
     @test position(buf) == 0
     LineEdit.edit_move_right(buf)
     @test nb_available(buf) == 0
-    LineEdit.edit_backspace(buf)
+    LineEdit.edit_backspace(buf, false, false)
     @test content(buf) == "a"
 end
 
@@ -370,6 +370,7 @@ let buf = IOBuffer()
 end
 
 @testset "edit_word_transpose" begin
+    local buf, mode
     buf = IOBuffer()
     mode = Ref{Symbol}()
     transpose!(i) = transform!(buf -> LineEdit.edit_transpose_words(buf, mode[]),
@@ -401,7 +402,7 @@ end
     @test transpose!(13) == ("àbç gh    def", 13)
 end
 
-let s = new_state()
+let s = new_state(),
     buf = buffer(s)
 
     edit_insert(s,"first line\nsecond line\nthird line")
@@ -446,10 +447,9 @@ end
 # julia> is 6 characters + 1 character for space,
 # so the rest of the terminal is 73 characters
 #########################################################################
-let
-    buf = IOBuffer(
-    "begin\nprint(\"A very very very very very very very very very very very very ve\")\nend")
-    seek(buf,4)
+let buf = IOBuffer(
+        "begin\nprint(\"A very very very very very very very very very very very very ve\")\nend")
+    seek(buf, 4)
     outbuf = IOBuffer()
     termbuf = Base.Terminals.TerminalBuffer(outbuf)
     term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
@@ -459,6 +459,7 @@ let
 end
 
 @testset "function prompt indentation" begin
+    local s, term, ps, buf, outbuf, termbuf
     s = new_state()
     term = Base.LineEdit.terminal(s)
     # default prompt: PromptState.indent should not be set to a final fixed value
@@ -583,7 +584,7 @@ end
 end
 
 @testset "change case on the right" begin
-    buf = IOBuffer()
+    local buf = IOBuffer()
     edit_insert(buf, "aa bb CC")
     seekstart(buf)
     LineEdit.edit_upper_case(buf)
@@ -595,6 +596,7 @@ end
 end
 
 @testset "kill ring" begin
+    local buf
     s = new_state()
     buf = buffer(s)
     edit_insert(s, "ça ≡ nothing")
@@ -617,6 +619,10 @@ end
     LineEdit.edit_kill_line(s)
     @test s.kill_ring[end] == "çhing"
     @test s.kill_idx == 3
+    # check that edit_yank_pop works when passing require_previous_yank=false (#23635)
+    s.last_action = :unknown
+    @test transform!(s->LineEdit.edit_yank_pop(s, false), s) == ("ça ≡ nothinga ≡ not", 19, 12)
+
     # repetition (concatenation of killed strings
     edit_insert(s, "A B  C")
     LineEdit.edit_delete_prev_word(s)
@@ -665,6 +671,7 @@ end
     @test edit!(edit_undo!) == "one two three"
 
     @test edit!(LineEdit.edit_clear) == ""
+    @test edit!(LineEdit.edit_clear) == "" # should not be saved twice
     @test edit!(edit_undo!) == "one two three"
 
     @test edit!(LineEdit.edit_insert_newline) == "one two three\n"
@@ -679,6 +686,11 @@ end
 
     LineEdit.move_line_start(s)
     @test edit!(LineEdit.edit_kill_line) == ""
+    @test edit!(edit_undo!) == "one two three"
+    # undo stack not updated if killing nothing:
+    LineEdit.move_line_start(s)
+    LineEdit.edit_kill_line(s)
+    LineEdit.edit_kill_line(s) # no effect
     @test edit!(edit_undo!) == "one two three"
 
     LineEdit.move_line_start(s)
@@ -699,9 +711,9 @@ end
     @test edit!(edit_undo!) == "one two three"
 
     LineEdit.move_line_end(s)
-    LineEdit.edit_backspace(s)
-    LineEdit.edit_backspace(s)
-    @test edit!(LineEdit.edit_backspace) == "one two th"
+    LineEdit.edit_backspace(s, false, false)
+    LineEdit.edit_backspace(s, false, false)
+    @test edit!(s->LineEdit.edit_backspace(s, false, false)) == "one two th"
     @test edit!(edit_undo!) == "one two thr"
     @test edit!(edit_undo!) == "one two thre"
     @test edit!(edit_undo!) == "one two three"
@@ -743,6 +755,11 @@ end
     @test edit!(LineEdit.edit_tab) == "one two three   "
     @test edit!(edit_undo!) == "one two three  "
     @test edit!(edit_undo!) == "one two three"
+    LineEdit.move_line_start(s)
+    edit_insert(s, "  ")
+    LineEdit.move_line_start(s)
+    @test edit!(s->LineEdit.edit_tab(s, true, true)) == "  one two three" # tab moves cursor to position 2
+    @test edit!(edit_undo!) == "one two three" # undo didn't record cursor movement
     # TODO: add tests for complete_line, which don't work directly
 
     # pop initial insert of "one two three"

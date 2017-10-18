@@ -149,6 +149,25 @@ int main()
         bar();
     }
 
+    {
+        // Importing a Julia package
+
+        checked_eval_string("let d = dirname(unsafe_string(Base.JLOptions().julia_bin))\n"
+                            // disable the package manager
+                            "    ENV[\"JULIA_PKGDIR\"] = joinpath(d, \"disabled\")\n"
+                            // locate files relative to the "embedding" executable
+                            "    empty!(LOAD_PATH)\n"
+                            "    push!(LOAD_PATH, d)\n"
+                            // this directory needs to be writable for the example,
+                            // although in real code it usually wouldn't necessarily be used that way
+                            "    empty!(Base.LOAD_CACHE_PATH)\n"
+                            "    push!(Base.LOAD_CACHE_PATH, tempdir())\n"
+                            "end");
+        checked_eval_string("import LocalModule");
+        checked_eval_string("LocalModule.myapp()");
+    }
+
+
     int ret = 0;
     jl_atexit_hook(ret);
     return ret;

@@ -54,6 +54,63 @@ Base.workspace
 ans
 ```
 
+## Keywords
+
+```@docs
+module
+export
+import
+using
+baremodule
+function
+macro
+return
+do
+begin
+end
+let
+if
+for
+while
+break
+continue
+try
+finally
+quote
+local
+global
+const
+struct
+mutable struct
+abstract type
+primitive type
+...
+;
+```
+
+## Base Modules
+```@docs
+Base.BLAS
+Base.Dates
+Base.Distributed
+Base.Docs
+Base.Iterators
+Base.LAPACK
+Base.LibGit2
+Base.Libc
+Base.Libdl
+Base.LinAlg
+Base.Markdown
+Base.Meta
+Base.Pkg
+Base.Profile
+Base.Serializer
+Base.SparseArrays
+Base.StackTraces
+Base.Sys
+Base.Threads
+```
+
 ## All Objects
 
 ```@docs
@@ -106,7 +163,7 @@ Base.fieldoffset
 Core.fieldtype
 Base.isimmutable
 Base.isbits
-Base.isleaftype
+Base.isconcrete
 Base.typejoin
 Base.typeintersect
 Base.instances
@@ -134,8 +191,10 @@ Base.method_exists
 Core.applicable
 Core.invoke
 Base.invokelatest
+new
 Base.:(|>)
 Base.:(∘)
+Base.equalto
 ```
 
 ## Syntax
@@ -152,6 +211,8 @@ Base.@noinline
 Base.@nospecialize
 Base.gensym
 Base.@gensym
+Base.@goto
+Base.@label
 Base.@polly
 Base.parse(::AbstractString, ::Int)
 Base.parse(::AbstractString)
@@ -191,9 +252,6 @@ Base.getipaddr
 Base.Libc.getpid
 Base.Libc.time()
 Base.time_ns
-Base.tic
-Base.toc
-Base.toq
 Base.@time
 Base.@timev
 Base.@timed

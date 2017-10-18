@@ -15,7 +15,7 @@ to generically build upon those behaviors.
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
 | `iteratorsize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
 | `iteratoreltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
-| `eltype(IterType)`             | `Any`                  | The type the items returned by `next()`                                               |
+| `eltype(IterType)`             | `Any`                  | The type of the items returned by `next()`                                            |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
 | `size(iter, [dim...])`         | (*undefined*)          | The number of items in each dimension, if known                                       |
 
@@ -327,8 +327,8 @@ julia> A[:] = 1:length(A); A
 ```
 
 The result of indexing an `AbstractArray` can itself be an array (for instance when indexing by
-a `Range`). The `AbstractArray` fallback methods use [`similar`](@ref) to allocate an `Array` of the
-appropriate size and element type, which is filled in using the basic indexing method described
+an `AbstractRange`). The `AbstractArray` fallback methods use [`similar`](@ref) to allocate an `Array`
+of the appropriate size and element type, which is filled in using the basic indexing method described
 above. However, when implementing an array wrapper you often want the result to be wrapped as
 well:
 

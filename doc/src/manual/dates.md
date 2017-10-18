@@ -334,8 +334,7 @@ function `dayabbr` will error.
 julia> Dates.dayabbr(t;locale="french")
 ERROR: BoundsError: attempt to access 1-element Array{String,1} at index [5]
 Stacktrace:
- [1] #dayabbr#6(::String, ::Function, ::Int64) at ./dates/query.jl:114
- [2] (::Base.Dates.#kw##dayabbr)(::Array{Any,1}, ::Base.Dates.#dayabbr, ::Int64) at ./<missing>:0 (repeats 2 times)
+[...]
 ```
 
 

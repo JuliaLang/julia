@@ -207,6 +207,29 @@ qrfact!(A::StridedMatrix{<:BlasFloat}) = qrfact!(A, Val(false))
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
+
+# Examples
+```jldoctest
+julia> a = [1. 2.; 3. 4.]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> qrfact!(a)
+Base.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:
+[-0.316228 -0.948683; -0.948683 0.316228]
+[-3.16228 -4.42719; 0.0 -0.632456]
+
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> qrfact!(a)
+ERROR: InexactError: convert(Int64, -3.1622776601683795)
+Stacktrace:
+[...]
+```
 """
 qrfact!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
 qrfact!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
@@ -293,11 +316,13 @@ qr(A::Union{Number, AbstractMatrix}, pivot::Union{Val{false}, Val{true}}=Val(fal
     _qr(A, pivot, thin=thin)
 function _qr(A::Union{Number, AbstractMatrix}, ::Val{false}; thin::Bool=true)
     F = qrfact(A, Val(false))
-    full(getq(F), thin=thin), F[:R]::Matrix{eltype(F)}
+    Q, R = getq(F), F[:R]::Matrix{eltype(F)}
+    return (thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))), R
 end
 function _qr(A::Union{Number, AbstractMatrix}, ::Val{true}; thin::Bool=true)
     F = qrfact(A, Val(true))
-    full(getq(F), thin=thin), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
+    Q, R, p = getq(F), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
+    return (thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))), R, p
 end
 
 """
@@ -345,6 +370,20 @@ and `r`, the norm of `v`.
 
 See also [`normalize`](@ref), [`normalize!`](@ref),
 and [`qr`](@ref).
+
+# Examples
+```jldoctest
+julia> v = [1.; 2.]
+2-element Array{Float64,1}:
+ 1.0
+ 2.0
+
+julia> w, r = Base.LinAlg.qr!(v)
+([0.447214, 0.894427], 2.23606797749979)
+
+julia> w === v
+true
+```
 """
 function qr!(v::AbstractVector)
     nrm = norm(v)
@@ -471,6 +510,39 @@ Optionally takes a `thin` Boolean argument, which if `true` omits the columns th
 rows of `R` in the QR factorization that are zero. The resulting matrix is the `Q` in a thin
 QR factorization (sometimes called the reduced QR factorization). If `false`, returns a `Q`
 that spans all rows of `R` in its corresponding QR factorization.
+
+# Examples
+```jldoctest
+julia> a = [1. 2.; 3. 4.; 5. 6.];
+
+julia> qra = qrfact(a, Val(true));
+
+julia> full(qra[:Q], thin=true)
+3×2 Array{Float64,2}:
+ -0.267261   0.872872
+ -0.534522   0.218218
+ -0.801784  -0.436436
+
+julia> full(qra[:Q], thin=false)
+3×3 Array{Float64,2}:
+ -0.267261   0.872872   0.408248
+ -0.534522   0.218218  -0.816497
+ -0.801784  -0.436436   0.408248
+
+julia> qra = qrfact(a, Val(false));
+
+julia> full(qra[:Q], thin=true)
+3×2 Array{Float64,2}:
+ -0.169031   0.897085
+ -0.507093   0.276026
+ -0.845154  -0.345033
+
+julia> full(qra[:Q], thin=false)
+3×3 Array{Float64,2}:
+ -0.169031   0.897085   0.408248
+ -0.507093   0.276026  -0.816497
+ -0.845154  -0.345033   0.408248
+```
 """
 function full(A::AbstractQ{T}; thin::Bool = true) where T
     if thin
@@ -697,17 +769,18 @@ end
 A_ldiv_B!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], b), 1:size(A, 2))); b)
 A_ldiv_B!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], B), 1:size(A, 2), 1:size(B, 2))); B)
 
-# Julia implementation similarly to xgelsy
+# Julia implementation similar to xgelsy
 function A_ldiv_B!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasFloat
     mA, nA = size(A.factors)
     nr = min(mA,nA)
     nrhs = size(B, 2)
     if nr == 0
-        return zeros(T, 0, nrhs), 0
+        return B, 0
     end
     ar = abs(A.factors[1])
     if ar == 0
-        return zeros(T, nA, nrhs), 0
+        B[1:nA, :] = 0
+        return B, 0
     end
     rnk = 1
     xmin = ones(T, 1)
@@ -801,23 +874,8 @@ _cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
 _cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
 
 ## append right hand side with zeros if necessary
-function _append_zeros(b::AbstractVector, T::Type, n)
-    if n > length(b)
-        x = zeros(T, n)
-        return copy!(x, b)
-    else
-        return copy_oftype(b, T)
-    end
-end
-function _append_zeros(B::AbstractMatrix, T::Type, n)
-    if n > size(B, 1)
-        X = zeros(T, (n, size(B, 2)))
-        X[1:size(B,1), :] = B
-        return X
-    else
-        return copy_oftype(B, T)
-    end
-end
+_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
+_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
 
 function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB}) where {TA,TB}
     S = promote_type(TA,TB)
@@ -826,7 +884,10 @@ function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat
 
     AA = convert(Factorization{S}, A)
 
-    X = A_ldiv_B!(AA, _append_zeros(B, S, n))
+    X = _zeros(S, B, n)
+    X[1:size(B, 1), :] = B
+
+    A_ldiv_B!(AA, X)
 
     return _cut_B(X, 1:n)
 end
@@ -846,15 +907,18 @@ function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    B = reshape(transpose(reinterpret(T, BIn, (2, length(BIn)))), size(BIn, 1), 2*size(BIn, 2))
+    B = reshape(transpose(reinterpret(T, reshape(BIn, (1, length(BIn))))), size(BIn, 1), 2*size(BIn, 2))
 
-    X = A_ldiv_B!(A, _append_zeros(B, T, n))
+    X = _zeros(T, B, n)
+    X[1:size(B, 1), :] = B
+
+    A_ldiv_B!(A, X)
 
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      <-       |y1|y2|y3|y4|     <-      |x2|y2|     <-    |x2|y2|x4|y4|
 #                                                 |x3|y3|
 #                                                 |x4|y4|
-    XX = reinterpret(Complex{T}, transpose(reshape(X, div(length(X), 2), 2)), _ret_size(A, BIn))
+    XX = reshape(collect(reinterpret(Complex{T}, transpose(reshape(X, div(length(X), 2), 2)))), _ret_size(A, BIn))
     return _cut_B(XX, 1:n)
 end
 

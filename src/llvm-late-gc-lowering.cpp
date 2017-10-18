@@ -255,9 +255,13 @@ struct State {
     // The result of the local analysis
     std::map<BasicBlock *, BBState> BBStates;
 
-    // Load refinement map. All uses of the keys can be combined with uses
-    // of the value (but not the other way around).
-    std::map<int, int> LoadRefinements;
+    // Refinement map. If all of the values are rooted (-1 means a globally rooted value),
+    // the key is already rooted (but not the other way around).
+    std::map<int, SmallVector<int, 1>> Refinements;
+
+    // GC preserves map. All safepoints dominated by the map key, but not any
+    // of its uses need to preserve the values listed in the map value.
+    std::map<Instruction *, std::vector<int>> GCPreserves;
 
     // The assignment of numbers to safepoints. The indices in the map
     // are indices into the next three maps which store safepoint properties
@@ -315,20 +319,22 @@ private:
     Type *T_int8;
     Type *T_int32;
     Type *T_pint8;
+    Type *T_pjlvalue;
     Type *T_pjlvalue_der;
     Type *T_ppjlvalue_der;
     MDNode *tbaa_gcframe;
     MDNode *tbaa_tag;
     Function *ptls_getter;
     Function *gc_flush_func;
-    Function *gc_use_func;
+    Function *gc_preserve_begin_func;
+    Function *gc_preserve_end_func;
     Function *pointer_from_objref_func;
     Function *alloc_obj_func;
     Function *pool_alloc_func;
     Function *big_alloc_func;
     CallInst *ptlsStates;
 
-    void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, int RefinedPtr = -2);
+    void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
     void NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses);
     void NoteUse(State &S, BBState &BBS, Value *V) {
         NoteUse(S, BBS, V, BBS.UpExposedUses);
@@ -349,7 +355,7 @@ private:
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint);
     void PlaceGCFrameStores(Function &F, State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
     void PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
-    bool doInitialization(Module &M) override;
+    bool DefineFunctions(Module &M);
     bool runOnFunction(Function &F) override;
     Instruction *get_pgcstack(Instruction *ptlsStates);
     bool CleanupIR(Function &F);
@@ -454,6 +460,7 @@ int LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi)
     for (unsigned i = 0; i < Phi->getNumIncomingValues(); ++i) {
         Value *Incoming = Phi->getIncomingValue(i);
         Value *Base = FindBaseValue(S, Incoming, false);
+        Base = MaybeExtractUnion(Base, Phi->getIncomingBlock(i)->getTerminator());
         if (getValueAddrSpace(Base) != AddressSpace::Tracked)
             Base = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
         if (Base->getType() != T_prjlvalue)
@@ -568,7 +575,7 @@ static void NoteDef(State &S, BBState &BBS, int Num, const std::vector<int> &Saf
     }
 }
 
-void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, int RefinedPtr) {
+void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr) {
     int Num = -1;
     Type *RT = Def->getType();
     if (isSpecialPtr(RT)) {
@@ -584,8 +591,8 @@ void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const st
         std::vector<int> Nums = NumberVector(S, Def);
         for (int Num : Nums) {
             NoteDef(S, BBS, Num, SafepointsSoFar);
-            if (RefinedPtr != -2)
-                S.LoadRefinements[Num] = RefinedPtr;
+            if (!RefinedPtr.empty())
+                S.Refinements[Num] = RefinedPtr;
         }
         return;
     }
@@ -593,8 +600,8 @@ void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const st
         return;
     }
     NoteDef(S, BBS, Num, SafepointsSoFar);
-    if (RefinedPtr != -2)
-        S.LoadRefinements[Num] = RefinedPtr;
+    if (!RefinedPtr.empty())
+        S.Refinements[Num] = std::move(RefinedPtr);
 }
 
 static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI) {
@@ -714,6 +721,25 @@ static bool isLoadFromImmut(LoadInst *LI)
     return false;
 }
 
+// Check if this is a load from an constant global.
+static bool isLoadFromConstGV(LoadInst *LI)
+{
+    // We only emit single slot GV in codegen
+    // but LLVM global merging can change the pointer operands to GEPs/bitcasts
+    if (!isa<GlobalVariable>(LI->getPointerOperand()->stripInBoundsOffsets()))
+        return false;
+    MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
+    if (!TBAA)
+        return false;
+    while (TBAA->getNumOperands() > 1) {
+        TBAA = cast<MDNode>(TBAA->getOperand(1).get());
+        if (cast<MDString>(TBAA->getOperand(0))->getString() == "jtbaa_const") {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool LooksLikeFrameRef(Value *V) {
     if (isSpecialPtr(V->getType()))
         return false;
@@ -753,16 +779,30 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 if (CI->canReturnTwice()) {
                     S.ReturnsTwice.push_back(CI);
                 }
-                if (isa<IntrinsicInst>(CI)) {
-                    // Intrinsics are never safepoints.
-                    continue;
-                }
                 if (auto callee = CI->getCalledFunction()) {
+                    if (callee == gc_preserve_begin_func) {
+                        std::vector<int> args;
+                        for (Use &U : CI->arg_operands()) {
+                            Value *V = U;
+                            if (isa<Constant>(V))
+                                continue;
+                            int Num = Number(S, V);
+                            if (Num >= 0)
+                                args.push_back(Num);
+                        }
+                        S.GCPreserves[CI] = args;
+                        continue;
+                    }
                     // Known functions emitted in codegen that are not safepoints
-                    if (callee == pointer_from_objref_func || callee == gc_use_func ||
+                    if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
+                        callee == gc_preserve_end_func ||
                         callee->getName() == "memcmp") {
                         continue;
                     }
+                }
+                if (isa<IntrinsicInst>(CI)) {
+                    // Intrinsics are never safepoints.
+                    continue;
                 }
                 int SafepointNumber = NoteSafepoint(S, BBS, CI);
                 BBS.HasSafepoint = true;
@@ -774,16 +814,21 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 // object we're loading from is, so we can refine uses
                 // of this object to uses of the object we're loading
                 // from.
-                int RefinedPtr = -2;
+                SmallVector<int, 1> RefinedPtr{};
                 if (isLoadFromImmut(LI) && isSpecialPtr(LI->getPointerOperand()->getType())) {
-                    RefinedPtr = Number(S, LI->getPointerOperand());
+                    RefinedPtr.push_back(Number(S, LI->getPointerOperand()));
                 } else if (LI->getType()->isPointerTy() &&
                     isSpecialPtr(LI->getType()) &&
                     LooksLikeFrameRef(LI->getPointerOperand())) {
                     // Loads from a jlcall argument array
-                    RefinedPtr = -1;
+                    RefinedPtr.push_back(-1);
                 }
-                MaybeNoteDef(S, BBS, LI, BBS.Safepoints, RefinedPtr);
+                else if (isLoadFromConstGV(LI)) {
+                    // If this is a const load from a global,
+                    // we know that the object is a constant as well and doesn't need rooting.
+                    RefinedPtr.push_back(-1);
+                }
+                MaybeNoteDef(S, BBS, LI, BBS.Safepoints, std::move(RefinedPtr));
                 NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
             } else if (SelectInst *SI = dyn_cast<SelectInst>(&I)) {
                 // We need to insert an extra select for the GC root
@@ -792,23 +837,42 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 if (getValueAddrSpace(SI) != AddressSpace::Tracked) {
                     if (S.AllPtrNumbering.find(SI) != S.AllPtrNumbering.end())
                         continue;
-                    LiftSelect(S, SI);
+                    auto Num = LiftSelect(S, SI);
+                    if (Num == -1)
+                        continue;
+                    auto SelectBase = cast<SelectInst>(S.ReversePtrNumbering[Num]);
+                    SmallVector<int, 1> RefinedPtr{Number(S, SelectBase->getTrueValue()),
+                            Number(S, SelectBase->getFalseValue())};
+                    S.Refinements[Num] = std::move(RefinedPtr);
                 } else {
-                    MaybeNoteDef(S, BBS, SI, BBS.Safepoints);
+                    SmallVector<int, 1> RefinedPtr{Number(S, SI->getTrueValue()),
+                            Number(S, SI->getFalseValue())};
+                    MaybeNoteDef(S, BBS, SI, BBS.Safepoints, std::move(RefinedPtr));
                     NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
                 }
             } else if (PHINode *Phi = dyn_cast<PHINode>(&I)) {
                 if (!isSpecialPtr(Phi->getType())) {
                     continue;
                 }
+                auto nIncoming = Phi->getNumIncomingValues();
                 // We need to insert an extra phi for the GC root
                 if (getValueAddrSpace(Phi) != AddressSpace::Tracked) {
                     if (S.AllPtrNumbering.find(Phi) != S.AllPtrNumbering.end())
                         continue;
-                    LiftPhi(S, Phi);
+                    auto Num = LiftPhi(S, Phi);
+                    auto lift = cast<PHINode>(S.ReversePtrNumbering[Num]);
+                    SmallVector<int, 1> RefinedPtr(0);
+                    // DISABLED DUE TO BUG IN THE ALGORITHM (#24098)
+                    //for (unsigned i = 0; i < nIncoming; ++i)
+                    //    RefinedPtr[i] = Number(S, lift->getIncomingValue(i));
+                    S.Refinements[Num] = std::move(RefinedPtr);
                 } else {
-                    MaybeNoteDef(S, BBS, Phi, BBS.Safepoints);
-                    for (unsigned i = 0; i < Phi->getNumIncomingValues(); ++i) {
+                    SmallVector<int, 1> RefinedPtr(0);
+                    // DISABLED DUE TO BUG IN THE ALGORITHM (#24098)
+                    //for (unsigned i = 0; i < nIncoming; ++i)
+                    //    RefinedPtr[i] = Number(S, Phi->getIncomingValue(i));
+                    MaybeNoteDef(S, BBS, Phi, BBS.Safepoints, std::move(RefinedPtr));
+                    for (unsigned i = 0; i < nIncoming; ++i) {
                         BBState &IncomingBBS = S.BBStates[Phi->getIncomingBlock(i)];
                         NoteUse(S, IncomingBBS, Phi->getIncomingValue(i), IncomingBBS.PhiOuts);
                     }
@@ -816,8 +880,16 @@ State LateLowerGCFrame::LocalScan(Function &F) {
             } else if (isa<StoreInst>(&I) || isa<ReturnInst>(&I)) {
                 NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
             } else if (auto *ASCI = dyn_cast<AddrSpaceCastInst>(&I)) {
-                if (getValueAddrSpace(ASCI) == AddressSpace::Tracked)
-                    MaybeNoteDef(S, BBS, ASCI, BBS.Safepoints);
+                if (getValueAddrSpace(ASCI) == AddressSpace::Tracked) {
+                    SmallVector<int, 1> RefinedPtr{};
+                    auto origin = ASCI->getPointerOperand()->stripPointerCasts();
+                    if (auto LI = dyn_cast<LoadInst>(origin)) {
+                        if (isLoadFromConstGV(LI)) {
+                            RefinedPtr.push_back(-1);
+                        }
+                    }
+                    MaybeNoteDef(S, BBS, ASCI, BBS.Safepoints, std::move(RefinedPtr));
+                }
             } else if (auto *AI = dyn_cast<AllocaInst>(&I)) {
                 if (isSpecialPtr(AI->getAllocatedType()) && !AI->isArrayAllocation() &&
                     cast<PointerType>(AI->getAllocatedType())->getAddressSpace() == AddressSpace::Tracked)
@@ -911,6 +983,7 @@ JL_USED_FUNC static void dumpSafepointsForBBName(Function &F, State &S, const ch
 }
 
 void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
+    DominatorTree *DT = nullptr;
     // Iterate over all safe points. Add to live sets all those variables that
     // are now live across their parent block.
     for (auto it : S.SafepointNumbering) {
@@ -928,11 +1001,48 @@ void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
         }
         // Apply refinements
         for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
-            if (!S.LoadRefinements.count(Idx))
+            if (!S.Refinements.count(Idx))
                 continue;
-            int RefinedPtr = S.LoadRefinements[Idx];
-            if (RefinedPtr == -1 || HasBitSet(LS, RefinedPtr))
+            auto &RefinedPtr = S.Refinements[Idx];
+            if (RefinedPtr.empty())
+                continue;
+            bool rooted = true;
+            for (auto RefPtr: RefinedPtr) {
+                if (RefPtr == -1 || HasBitSet(LS, RefPtr))
+                    continue;
+                rooted = false;
+                break;
+            }
+            if (rooted) {
                 LS[Idx] = 0;
+            }
+        }
+        // If the function has GC preserves, figure out whether we need to
+        // add in any extra live values.
+        if (!S.GCPreserves.empty()) {
+            if (!DT) {
+                DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+            }
+            for (auto it2 : S.GCPreserves) {
+                if (!DT->dominates(it2.first, Safepoint))
+                    continue;
+                bool OutsideRange = false;
+                for (const User *U : it2.first->users()) {
+                    // If this is dominated by an end, we don't need to add
+                    // the values to our live set.
+                    if (DT->dominates(cast<Instruction>(U), Safepoint)) {
+                        OutsideRange = true;
+                        break;
+                    }
+                }
+                if (OutsideRange)
+                    continue;
+                for (unsigned Num : it2.second) {
+                    if (Num >= LS.size())
+                        LS.resize(Num + 1);
+                    LS[Num] = 1;
+                }
+            }
         }
     }
     // Compute the interference graph
@@ -1152,13 +1262,14 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
             }
             CallingConv::ID CC = CI->getCallingConv();
             auto callee = CI->getCalledValue();
-            if ((gc_flush_func != nullptr && callee == gc_flush_func) ||
-                (gc_use_func != nullptr && callee == gc_use_func)) {
+            if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
+                        || callee == gc_preserve_end_func)) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
-                auto *ptr = new PtrToIntInst(CI->getOperand(0), CI->getType(), "", CI);
-                ptr->takeName(CI);
-                CI->replaceAllUsesWith(ptr);
+                auto *obj = CI->getOperand(0);
+                auto *ASCI = new AddrSpaceCastInst(obj, T_pjlvalue, "", CI);
+                ASCI->takeName(CI);
+                CI->replaceAllUsesWith(ASCI);
             } else if (alloc_obj_func && callee == alloc_obj_func) {
                 assert(CI->getNumArgOperands() == 3);
                 auto sz = (size_t)cast<ConstantInt>(CI->getArgOperand(1))->getZExtValue();
@@ -1240,6 +1351,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                 CallInst *NewCall = CallInst::Create(CI, None, CI);
                 NewCall->takeName(CI);
                 CI->replaceAllUsesWith(NewCall);
+            }
+            if (!CI->use_empty()) {
+                CI->replaceAllUsesWith(UndefValue::get(CI->getType()));
             }
             it = CI->eraseFromParent();
             ChangesMade = true;
@@ -1417,10 +1531,11 @@ static void addRetNoAlias(Function *F)
 #endif
 }
 
-bool LateLowerGCFrame::doInitialization(Module &M) {
+bool LateLowerGCFrame::DefineFunctions(Module &M) {
     ptls_getter = M.getFunction("jl_get_ptls_states");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
-    gc_use_func = M.getFunction("julia.gc_use");
+    gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
+    gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");
     pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
     auto &ctx = M.getContext();
     T_size = M.getDataLayout().getIntPtrType(ctx);
@@ -1447,15 +1562,16 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
             addRetNoAlias(big_alloc_func);
         }
         auto T_jlvalue = cast<PointerType>(T_prjlvalue)->getElementType();
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
+        T_pjlvalue = PointerType::get(T_jlvalue, 0);
         T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
         T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
         T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
+        return true;
     }
     else if (ptls_getter) {
         auto functype = ptls_getter->getFunctionType();
         T_ppjlvalue = cast<PointerType>(functype->getReturnType())->getElementType();
-        auto T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
+        T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
         auto T_jlvalue = cast<PointerType>(T_pjlvalue)->getElementType();
         T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
         T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
@@ -1464,6 +1580,7 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
     else {
         T_ppjlvalue = nullptr;
         T_prjlvalue = nullptr;
+        T_pjlvalue = nullptr;
         T_pjlvalue_der = nullptr;
         T_ppjlvalue_der = nullptr;
     }
@@ -1472,6 +1589,7 @@ bool LateLowerGCFrame::doInitialization(Module &M) {
 
 bool LateLowerGCFrame::runOnFunction(Function &F) {
     DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
+    DefineFunctions(*F.getParent());
     if (!ptls_getter)
         return CleanupIR(F);
     ptlsStates = nullptr;

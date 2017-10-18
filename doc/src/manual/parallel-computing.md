@@ -125,6 +125,7 @@ julia> rand2(2,2)
 
 julia> fetch(@spawn rand2(2,2))
 ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))
+Stacktrace:
 [...]
 ```
 
@@ -567,6 +568,7 @@ julia> close(c);
 
 julia> put!(c, 2) # `put!` on a closed channel throws an exception.
 ERROR: InvalidStateException("Channel is closed.",:closed)
+Stacktrace:
 [...]
 ```
 
@@ -585,6 +587,7 @@ julia> take!(c) # The first `take!` removes the value.
 
 julia> take!(c) # No more data available on a closed channel.
 ERROR: InvalidStateException("Channel is closed.",:closed)
+Stacktrace:
 [...]
 ```
 
@@ -858,7 +861,9 @@ julia> addprocs(3)
  3
  4
 
-julia> S = SharedArray{Int,2}((3,4), init = S -> S[Base.localindexes(S)] = myid())
+julia> @everywhere using SharedArrays
+
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindexes(S)] = myid())
 3×4 SharedArray{Int64,2}:
  2  2  3  4
  2  3  3  4
@@ -874,7 +879,7 @@ julia> S
  2  7  4  4
 ```
 
-[`Base.localindexes`](@ref) provides disjoint one-dimensional ranges of indexes, and is sometimes
+[`SharedArrays.localindexes`](@ref) provides disjoint one-dimensional ranges of indexes, and is sometimes
 convenient for splitting up tasks among processes. You can, of course, divide the work any way
 you wish:
 

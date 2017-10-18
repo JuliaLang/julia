@@ -173,6 +173,7 @@ end
             fY = Array(Y)
             # --> test broadcast entry point
             @test broadcast(+, X, Y) == sparse(broadcast(+, fX, fY))
+            @test broadcast(-, X, Y) == sparse(broadcast(-, fX, fY))
             @test broadcast(*, X, Y) == sparse(broadcast(*, fX, fY))
             @test broadcast(f, X, Y) == sparse(broadcast(f, fX, fY))
             # TODO strengthen this test, avoiding dependence on checking whether

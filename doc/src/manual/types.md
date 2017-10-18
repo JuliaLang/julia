@@ -1267,7 +1267,7 @@ julia> print(:($a^2))
 3.0 * exp(4.0im) ^ 2
 ```
 
-Because the operator `^` has higher precedence than `*` (see [Operator Precedence](@ref)), this
+Because the operator `^` has higher precedence than `*` (see [Operator Precedence and Associativity](@ref)), this
 output does not faithfully represent the expression `a ^ 2` which should be equal to `(3.0 *
 exp(4.0im)) ^ 2`.  To solve this issue, we must make a custom method for `Base.show_unquoted(io::IO,
 z::Polar, indent::Int, precedence::Int)`, which is called internally by the expression object when
@@ -1423,7 +1423,7 @@ You can safely access the value of a `Nullable` object using [`get`](@ref):
 julia> get(Nullable{Float64}())
 ERROR: NullException()
 Stacktrace:
- [1] get(::Nullable{Float64}) at ./nullable.jl:118
+[...]
 
 julia> get(Nullable(1.0))
 1.0

@@ -18,6 +18,14 @@ macro _noinline_meta()
     Expr(:meta, :noinline)
 end
 
+macro _gc_preserve_begin(arg1)
+    Expr(:gc_preserve_begin, esc(arg1))
+end
+
+macro _gc_preserve_end(token)
+    Expr(:gc_preserve_end, esc(token))
+end
+
 """
     @nospecialize
 
@@ -313,19 +321,11 @@ unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
     reinterpret(type, A)
 
 Change the type-interpretation of a block of memory.
-For arrays, this constructs an array with the same binary data as the given
+For arrays, this constructs a view of the array with the same binary data as the given
 array, but with the specified element type.
 For example,
 `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
 [`Float32`](@ref).
-
-!!! warning
-
-    It is not allowed to `reinterpret` an array to an element type with a larger alignment then
-    the alignment of the array. For a normal `Array`, this is the alignment of its element type.
-    For a reinterpreted array, this is the alignment of the `Array` it was reinterpreted from.
-    For example, `reinterpret(UInt32, UInt8[0, 0, 0, 0])` is not allowed but
-    `reinterpret(UInt32, reinterpret(UInt8, Float32[1.0]))` is allowed.
 
 # Examples
 ```jldoctest
@@ -361,7 +361,7 @@ If `T` does not have a specific size, an error is thrown.
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
 Stacktrace:
- [1] sizeof(::Type{T} where T) at ./essentials.jl:367
+[...]
 ```
 """
 sizeof(x) = Core.sizeof(x)
@@ -488,10 +488,24 @@ macro inbounds(blk)
         Expr(:inbounds, :pop))
 end
 
+"""
+    @label name
+
+Labels a statement with the symbolic label `name`. The label marks the end-point
+of an unconditional jump with [`@goto name`](@ref).
+"""
 macro label(name::Symbol)
     return esc(Expr(:symboliclabel, name))
 end
 
+"""
+    @goto name
+
+`@goto name` unconditionally jumps to the statement at the location [`@label name`](@ref).
+
+`@label` and `@goto` cannot create jumps to different top-level statements. Attempts cause an
+error. To still use `@goto`, enclose the `@label` and `@goto` in a block.
+"""
 macro goto(name::Symbol)
     return esc(Expr(:symbolicgoto, name))
 end
@@ -499,20 +513,27 @@ end
 # SimpleVector
 
 function getindex(v::SimpleVector, i::Int)
-    if !(1 <= i <= length(v))
+    @boundscheck if !(1 <= i <= length(v))
         throw(BoundsError(v,i))
     end
+    t = @_gc_preserve_begin v
     x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
     x == C_NULL && throw(UndefRefError())
-    return unsafe_pointer_to_objref(x)
+    o = unsafe_pointer_to_objref(x)
+    @_gc_preserve_end t
+    return o
 end
 
-# TODO: add gc use intrinsic call instead of noinline
-length(v::SimpleVector) = (@_noinline_meta; unsafe_load(convert(Ptr{Int},data_pointer_from_objref(v))))
+function length(v::SimpleVector)
+    t = @_gc_preserve_begin v
+    l = unsafe_load(convert(Ptr{Int},data_pointer_from_objref(v)))
+    @_gc_preserve_end t
+    return l
+end
 endof(v::SimpleVector) = length(v)
 start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
-done(v::SimpleVector,i) = (i > length(v))
+done(v::SimpleVector,i) = (length(v) < i)
 isempty(v::SimpleVector) = (length(v) == 0)
 indices(v::SimpleVector) = (OneTo(length(v)),)
 linearindices(v::SimpleVector) = indices(v, 1)
@@ -559,7 +580,9 @@ function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
+    t = @_gc_preserve_begin v
     x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
+    @_gc_preserve_end t
     return x != C_NULL
 end
 
@@ -601,7 +624,7 @@ end
 
 Val(x) = (@_pure_meta; Val{x}())
 
-# used by interpolating quote and some other things in the front end
+# used by keyword arg call lowering
 function vector_any(@nospecialize xs...)
     n = length(xs)
     a = Vector{Any}(n)

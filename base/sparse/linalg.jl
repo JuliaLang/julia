@@ -315,8 +315,9 @@ A_rdiv_Bt!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, D)
 
 function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     m,n = size(S)
-    if (k > 0 && k > n) || (k < 0 && -k > m)
-        throw(BoundsError())
+    if !(-m + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-m + 1) and at most $(n + 1) in an $m-by-$n matrix")))
     end
     colptr = Vector{Ti}(n+1)
     nnz = 0
@@ -346,8 +347,9 @@ end
 
 function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     m,n = size(S)
-    if (k > 0 && k > n) || (k < 0 && -k > m)
-        throw(BoundsError())
+    if !(-m - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-m - 1) and at most $(n - 1) in an $m-by-$n matrix")))
     end
     colptr = Vector{Ti}(n+1)
     nnz = 0
@@ -775,7 +777,7 @@ function kron(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti
             stopB = colptrB[i+1]-1
             lB = stopB - startB + 1
 
-            ptr_range = (1:lB) + (colptr[col]-1)
+            ptr_range = (1:lB) .+ (colptr[col]-1)
 
             colptr[col+1] = colptr[col] + lA * lB
             col += 1
@@ -787,7 +789,7 @@ function kron(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti
                     nzval[ptr] = nzvalA[ptrA] * nzvalB[ptrB]
                     ptrB += 1
                 end
-                ptr_range += lB
+                ptr_range = ptr_range .+ lB
             end
         end
     end
@@ -804,6 +806,31 @@ end
 
 kron(A::SparseMatrixCSC, B::VecOrMat) = kron(A, sparse(B))
 kron(A::VecOrMat, B::SparseMatrixCSC) = kron(sparse(A), B)
+
+function kron(x::SparseVector{Tv,Ti},y::SparseVector{Tv,Ti}) where {Tv,Ti}
+    nnzx = nnz(x)
+    nnzy = nnz(y)
+    nnzz = nnzx*nnzy # number of nonzeros in new vector
+    nzind = Vector{Ti}(nnzz) # the indices of nonzeros
+    nzval = Vector{Tv}(nnzz) # the values of nonzeros
+    @inbounds for i = 1:nnzx, j = 1:nnzy
+        this_ind = (i-1)*nnzy+j
+        nzind[this_ind] = (x.nzind[i]-1)*y.n + y.nzind[j]
+        nzval[this_ind] = x.nzval[i] * y.nzval[j]
+    end
+    return SparseVector(x.n*y.n,nzind,nzval)
+end
+
+function kron(x::SparseVector{Tv1,Ti1}, y::SparseVector{Tv2,Ti2}) where {Tv1,Ti1,Tv2,Ti2}
+    Tv_res = promote_type(Tv1, Tv2)
+    Ti_res = promote_type(Ti1, Ti2)
+    x2 = convert(SparseVector{Tv_res,Ti_res}, x)
+    y2 = convert(SparseVector{Tv_res,Ti_res}, y)
+    return kron(x2,y2)
+end
+
+kron(x::SparseVector{Tv,Ti}, y::AbstractVector) where {Tv,Ti} = kron(x, sparse(y))
+kron(x::AbstractVector, y::SparseVector{Tv,Ti}) where {Tv,Ti} = kron(sparse(x), y)
 
 ## det, inv, cond
 

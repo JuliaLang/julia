@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 srand(101)
 
@@ -72,14 +72,20 @@ end
                 @test isa(similar(Symmetric(asym), Int, (3,2)), Matrix{Int})
                 @test isa(similar(Hermitian(aherm), Int, (3,2)), Matrix{Int})
             end
-            @testset "full" begin
-                @test asym  == full(Symmetric(asym))
-                @test aherm == full(Hermitian(aherm))
+
+            @testset "Array/Matrix constructor from Symmetric/Hermitian" begin
+                @test asym  == Matrix(Symmetric(asym))  == Array(Symmetric(asym))
+                @test aherm == Matrix(Hermitian(aherm)) == Array(Hermitian(aherm))
             end
 
             @testset "parent" begin
                 @test asym === parent(Symmetric(asym))
                 @test aherm === parent(Hermitian(aherm))
+            end
+            # Unary minus for Symmetric/Hermitian matrices
+            @testset "Unary minus for Symmetric/Hermitian matrices" begin
+                @test (-Symmetric(asym))::typeof(Symmetric(asym)) == -asym
+                @test (-Hermitian(aherm))::typeof(Hermitian(aherm)) == -aherm
             end
 
             @testset "getindex and unsafe_getindex" begin
@@ -119,15 +125,15 @@ end
             end
 
             @testset "tril/triu" begin
-                for di in -n:n
-                    @test triu(Symmetric(asym), di) == triu(asym, di)
-                    @test tril(Symmetric(asym), di) == tril(asym, di)
-                    @test triu(Hermitian(aherm), di) == triu(aherm, di)
-                    @test tril(Hermitian(aherm), di) == tril(aherm, di)
-                    @test triu(Symmetric(asym, :L), di) == triu(asym, di)
-                    @test tril(Symmetric(asym, :L), di) == tril(asym, di)
-                    @test triu(Hermitian(aherm, :L), di) == triu(aherm, di)
-                    @test tril(Hermitian(aherm, :L), di) == tril(aherm, di)
+                for (op, validks) in (
+                        (triu, (-n + 1):(n + 1)),
+                        (tril, (-n - 1):(n - 1)) )
+                    for di in validks
+                        @test op(Symmetric(asym), di) == op(asym, di)
+                        @test op(Hermitian(aherm), di) == op(aherm, di)
+                        @test op(Symmetric(asym, :L), di) == op(asym, di)
+                        @test op(Hermitian(aherm, :L), di) == op(aherm, di)
+                    end
                 end
             end
 
@@ -185,6 +191,17 @@ end
                         @test inv(Hermitian(a, uplo))::Hermitian ≈ inv(Matrix(Hermitian(a, uplo)))
                     end
                 end
+                if eltya <: Base.LinAlg.BlasComplex
+                    @testset "inverse edge case with complex Hermitian" begin
+                        # Hermitian matrix, where inv(lufact(A)) generates non-real diagonal elements
+                        for T in (Complex64, Complex128)
+                            A = T[0.650488+0.0im 0.826686+0.667447im; 0.826686-0.667447im 1.81707+0.0im]
+                            H = Hermitian(A)
+                            @test inv(H) ≈ inv(A)
+                            @test ishermitian(Matrix(inv(H)))
+                        end
+                    end
+                end
             end
 
             # Revisit when implemented in julia
@@ -209,7 +226,7 @@ end
                         @test eigvals(Symmetric(asym), 1:2) ≈ d[1:2]
                         @test eigvals(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
                         # eigfact doesn't support Symmetric{Complex}
-                        @test full(eigfact(asym)) ≈ asym
+                        @test Matrix(eigfact(asym)) ≈ asym
                         @test eigvecs(Symmetric(asym)) ≈ eigvecs(asym)
                     end
 
@@ -223,7 +240,7 @@ end
                     eig(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
                     @test eigvals(Hermitian(aherm), 1:2) ≈ d[1:2]
                     @test eigvals(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
-                    @test full(eigfact(aherm)) ≈ aherm
+                    @test Matrix(eigfact(aherm)) ≈ aherm
                     @test eigvecs(Hermitian(aherm)) ≈ eigvecs(aherm)
 
                     # relation to svdvals
@@ -324,9 +341,9 @@ end
 
 #Issue #7647: test xsyevr, xheevr, xstevr drivers.
 @testset "Eigenvalues in interval for $(typeof(Mi7647))" for Mi7647 in
-        (Symmetric(diagm(1.0:3.0)),
-         Hermitian(diagm(1.0:3.0)),
-         Hermitian(diagm(complex(1.0:3.0))),
+        (Symmetric(diagm(0 => 1.0:3.0)),
+         Hermitian(diagm(0 => 1.0:3.0)),
+         Hermitian(diagm(0 => complex(1.0:3.0))),
          SymTridiagonal([1.0:3.0;], zeros(2)))
     @test eigmin(Mi7647)  == eigvals(Mi7647, 0.5, 1.5)[1] == 1.0
     @test eigmax(Mi7647)  == eigvals(Mi7647, 2.5, 3.5)[1] == 3.0
@@ -336,7 +353,7 @@ end
 @testset "Issue #7933" begin
     A7933 = [1 2; 3 4]
     B7933 = copy(A7933)
-    C7933 = full(Symmetric(A7933))
+    C7933 = Matrix(Symmetric(A7933))
     @test A7933 == B7933
 end
 
@@ -351,15 +368,6 @@ end
     A = [1.0+im 2.0; 2.0 0.0]
     @test !ishermitian(A)
     @test_throws ArgumentError Hermitian(A)
-end
-
-# Unary minus for Symmetric/Hermitian matrices
-@testset "Unary minus for Symmetric/Hermitian matrices" begin
-    A = randn(5, 5)
-    for SH in (Symmetric(A), Hermitian(A))
-        F = Matrix(SH)
-        @test (-SH)::typeof(SH) == -F
-    end
 end
 
 @testset "Issue #17780" begin
@@ -397,12 +405,12 @@ end
         @test Y - I == T([0 -1; -1 0])
         @test Y * I == Y
 
-        @test Y + 1 == T([2 0; 0 2])
-        @test Y - 1 == T([0 -2; -2 0])
+        @test Y .+ 1 == T([2 0; 0 2])
+        @test Y .- 1 == T([0 -2; -2 0])
         @test Y * 2 == T([2 -2; -2 2])
         @test Y / 1 == Y
 
-        @test T([true false; false true]) + true == T([2 1; 1 2])
+        @test T([true false; false true]) .+ true == T([2 1; 1 2])
     end
 
     @test_throws ArgumentError Hermitian(X) + 2im*I
@@ -432,17 +440,7 @@ end
 @testset "inversion of Hilbert matrix" begin
     for T in (Float64, Complex128)
         H = T[1/(i + j - 1) for i in 1:8, j in 1:8]
-        @test norm(inv(Symmetric(H))*(H*ones(8))-1) ≈ 0 atol = 1e-5
-        @test norm(inv(Hermitian(H))*(H*ones(8))-1) ≈ 0 atol = 1e-5
-    end
-end
-
-@testset "inverse edge case with complex Hermitian" begin
-    # Hermitian matrix, where inv(lufact(A)) generates non-real diagonal elements
-    for T in (Complex64, Complex128)
-        A = T[0.650488+0.0im 0.826686+0.667447im; 0.826686-0.667447im 1.81707+0.0im]
-        H = Hermitian(A)
-        @test inv(H) ≈ inv(A)
-        @test ishermitian(full(inv(H)))
+        @test norm(inv(Symmetric(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
+        @test norm(inv(Hermitian(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
     end
 end

@@ -2,6 +2,20 @@
 
 # tests for Core.Inference correctness and precision
 import Core.Inference: Const, Conditional, ⊑
+const isleaftype = Core.Inference._isleaftype
+
+# demonstrate some of the type-size limits
+@test Core.Inference.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 0) == Ref
+@test Core.Inference.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 0) == Ref{Complex{T} where T}
+let comparison = Tuple{X, X} where X<:Tuple
+    sig = Tuple{X, X} where X<:comparison
+    ref = Tuple{X, X} where X
+    @test Core.Inference.limit_type_size(sig, comparison, comparison, 10) == comparison
+    @test Core.Inference.limit_type_size(sig, ref, comparison,  10) == comparison
+    @test Core.Inference.limit_type_size(Tuple{sig}, Tuple{ref}, comparison,  10) == Tuple{comparison}
+    @test Core.Inference.limit_type_size(sig, ref, Tuple{comparison},  10) == sig
+end
+
 
 # issue 9770
 @noinline x9770() = false
@@ -565,7 +579,7 @@ tpara18457(::Type{A}) where {A<:AbstractMyType18457} = tpara18457(supertype(A))
 @test tpara18457(MyType18457{true}) === true
 
 @testset "type inference error #19322" begin
-    Y_19322 = reshape(round.(Int, abs.(randn(5*1000)))+1,1000,5)
+    Y_19322 = reshape(round.(Int, abs.(randn(5*1000))) .+ 1, 1000, 5)
 
     function FOO_19322(Y::AbstractMatrix; frac::Float64=0.3, nbins::Int=100, n_sims::Int=100)
         num_iters, num_chains = size(Y)
@@ -777,7 +791,8 @@ end
 
 # issue #21410
 f21410(::V, ::Pair{V,E}) where {V, E} = E
-@test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second == Type{Ref{T}} where T<:Number
+@test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second ==
+    Type{E} where E <: (Ref{T} where T<:Number)
 
 # issue #21369
 function inf_error_21369(arg)
@@ -828,7 +843,7 @@ f2_17003(::Any) = f2_17003(NArray_17003(gl_17003))
 
 # issue #20847
 function segfaultfunction_20847(A::Vector{NTuple{N, T}}) where {N, T}
-    B = reinterpret(T, A, (N, length(A)))
+    B = reshape(reinterpret(T, A), (N, length(A)))
     return nothing
 end
 
@@ -881,7 +896,7 @@ let f, m
     m.source.ssavaluetypes = 1
     m.source.code = Any[
         Expr(:(=), SSAValue(0), Expr(:call, GlobalRef(Core, :svec), 1, 2, 3)),
-        Expr(:return, Expr(:call, Core._apply, :+, SSAValue(0)))
+        Expr(:return, Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(0)))
     ]
     @test @inferred(f()) == 6
 end
@@ -978,13 +993,13 @@ copy_dims_out(out) = ()
 copy_dims_out(out, dim::Int, tail...) =  copy_dims_out((out..., dim), tail...)
 copy_dims_out(out, dim::Colon, tail...) = copy_dims_out((out..., dim), tail...)
 @test Base.return_types(copy_dims_out, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 2 < count_specializations(m) < 15, methods(copy_dims_out))
+@test all(m -> 10 < count_specializations(m) < 25, methods(copy_dims_out))
 
 copy_dims_pair(out) = ()
-copy_dims_pair(out, dim::Int, tail...) =  copy_dims_out(out => dim, tail...)
-copy_dims_pair(out, dim::Colon, tail...) = copy_dims_out(out => dim, tail...)
+copy_dims_pair(out, dim::Int, tail...) =  copy_dims_pair(out => dim, tail...)
+copy_dims_pair(out, dim::Colon, tail...) = copy_dims_pair(out => dim, tail...)
 @test Base.return_types(copy_dims_pair, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 5 < count_specializations(m) < 25, methods(copy_dims_out))
+@test all(m -> 5 < count_specializations(m) < 25, methods(copy_dims_pair))
 
 # splatting an ::Any should still allow inference to use types of parameters preceding it
 f22364(::Int, ::Any...) = 0
@@ -1100,7 +1115,7 @@ isdefined_f3(x) = isdefined(x, 3)
 @test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]).code, isdefined, 3)
 
 let isa_tfunc = Core.Inference.t_ffunc_val[
-        findfirst(Core.Inference.t_ffunc_key, isa)][3]
+        findfirst(x->x===isa, Core.Inference.t_ffunc_key)][3]
     @test isa_tfunc(Array, Const(AbstractArray)) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray}) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray{Int}}) == Bool
@@ -1140,7 +1155,7 @@ let isa_tfunc = Core.Inference.t_ffunc_val[
 end
 
 let subtype_tfunc = Core.Inference.t_ffunc_val[
-        findfirst(Core.Inference.t_ffunc_key, <:)][3]
+        findfirst(x->x===(<:), Core.Inference.t_ffunc_key)][3]
     @test subtype_tfunc(Type{<:Array}, Const(AbstractArray)) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray}) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray{Int}}) == Bool
@@ -1201,3 +1216,45 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 
 @test !Core.Inference.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
 @test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any]
+
+# issue #23685
+struct Node23685{T}
+end
+@inline function update23685!(::Node23685{T}) where T
+    convert(Node23685{T}, Node23685{Float64}())
+end
+h23685 = Node23685{Float64}()
+f23685() = update23685!(h23685)
+@test f23685() === h23685
+
+let c(::Type{T}, x) where {T<:Array} = T,
+    f() = c(Vector{Any[Int][1]}, [1])
+    @test f() === Vector{Int}
+end
+
+# issue #23786
+struct T23786{D<:Tuple{Vararg{Vector{T} where T}}, N}
+end
+let t = Tuple{Type{T23786{D, N} where N where D<:Tuple{Vararg{Array{T, 1} where T, N} where N}}}
+    @test Core.Inference.limit_type_depth(t, 4) >: t
+end
+
+# issue #13183
+_false13183 = false
+gg13183(x::X...) where {X} = (_false13183 ? gg13183(x, x) : 0)
+@test gg13183(5) == 0
+
+# test the external OptimizationState constructor
+let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
+    world = typemax(UInt),
+    opt = Core.Inference.OptimizationState(linfo, Core.Inference.InferenceParams(world))
+    # make sure the state of the properties look reasonable
+    @test opt.src !== linfo.def.source
+    @test length(opt.src.slotflags) == length(opt.src.slotnames) == length(opt.src.slottypes)
+    @test opt.src.ssavaluetypes isa Vector{Any}
+    @test !opt.src.inferred
+    @test opt.mod === Base
+    @test opt.max_valid === typemax(UInt)
+    @test opt.min_valid === Core.Inference.min_world(opt.linfo) > 2
+    @test opt.nargs == 3
+end

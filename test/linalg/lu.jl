@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 import Base.LinAlg.BlasInt, Base.LinAlg.BlasFloat
 
 n = 10
@@ -10,8 +10,6 @@ n1 = div(n, 2)
 n2 = 2*n1
 
 srand(1234321)
-
-a = rand(n,n)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -45,6 +43,20 @@ dimg  = randn(n)/2
             @test lu(num) == (one(eltya),num,1)
             @test AbstractArray(lufact(num)) ≈ eltya[num]
         end
+        @testset "Balancing in eigenvector calculations" begin
+            A = convert(Matrix{eltya}, [ 3.0     -2.0      -0.9     2*eps(real(one(eltya)));
+                                       -2.0      4.0       1.0    -eps(real(one(eltya)));
+                                       -eps(real(one(eltya)))/4  eps(real(one(eltya)))/2  -1.0     0;
+                                       -0.5     -0.5       0.1     1.0])
+            F = eigfact(A, permute=false, scale=false)
+            eig(A, permute=false, scale=false)
+            @test F[:vectors]*Diagonal(F[:values])/F[:vectors] ≈ A
+            F = eigfact(A)
+            # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
+        end
+    end
+    @testset "Singular LU" begin
+        @test !LinAlg.issuccess(lufact(zeros(eltya, 3, 3)))
     end
     @testset for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         b  = eltyb == Int ? rand(1:5, n, 2) :
@@ -68,7 +80,7 @@ dimg  = randn(n)/2
 
             lstring = sprint(show,l)
             ustring = sprint(show,u)
-            @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring\nsuccessful: true"
+            @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
             let Bs = copy(b), Cs = copy(c)
                 for (bb, cc) in ((Bs, Cs), (view(Bs, 1:n, 1), view(Cs, 1:n)))
                     @test norm(a*(lua\bb) - bb, 1) < ε*κ*n*2 # Two because the right hand side has two columns
@@ -209,20 +221,6 @@ end
     end
 end
 
-@testset "Balancing in eigenvector calculations" begin
-    for elty in (Float32, Float64, Complex64, Complex128)
-        A = convert(Matrix{elty}, [ 3.0     -2.0      -0.9     2*eps(real(one(elty)));
-                                   -2.0      4.0       1.0    -eps(real(one(elty)));
-                                   -eps(real(one(elty)))/4  eps(real(one(elty)))/2  -1.0     0;
-                                   -0.5     -0.5       0.1     1.0])
-        F = eigfact(A, permute=false, scale=false)
-        eig(A, permute=false, scale=false)
-        @test F[:vectors]*Diagonal(F[:values])/F[:vectors] ≈ A
-        F = eigfact(A)
-        # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
-    end
-end
-
 @testset "logdet" begin
     @test @inferred(logdet(Complex64[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
     @test_throws DomainError logdet([1 1; 1 -1])
@@ -230,8 +228,4 @@ end
 
 @testset "Issue 21453" begin
     @test_throws ArgumentError LinAlg._cond1Inf(lufact(randn(5,5)), 2, 2.0)
-end
-
-@testset "Singular LU" begin
-    @test !LinAlg.issuccess(lufact(zeros(3,3)))
 end

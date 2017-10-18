@@ -35,7 +35,7 @@ Base.iteratoreltype
 
 Fully implemented by:
 
-  * `Range`
+  * `AbstractRange`
   * `UnitRange`
   * `Tuple`
   * `Number`
@@ -47,6 +47,7 @@ Fully implemented by:
   * `EachLine`
   * `AbstractString`
   * [`Set`](@ref)
+  * [`Pair`](@ref)
 
 ## General Collections
 
@@ -58,7 +59,7 @@ Base.length
 
 Fully implemented by:
 
-  * `Range`
+  * `AbstractRange`
   * `UnitRange`
   * `Tuple`
   * `Number`
@@ -151,7 +152,7 @@ Fully implemented by:
 
 Partially implemented by:
 
-  * `Range`
+  * `AbstractRange`
   * `UnitRange`
   * `Tuple`
   * `AbstractString`
@@ -265,3 +266,9 @@ Fully implemented by:
 
   * `Vector` (a.k.a. 1-dimensional [`Array`](@ref))
   * `BitVector` (a.k.a. 1-dimensional [`BitArray`](@ref))
+
+## Utility Collections
+
+```@docs
+Base.Pair
+```

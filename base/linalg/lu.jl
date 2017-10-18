@@ -88,7 +88,7 @@ lufact(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}},
 
 # for all other types we must promote to a type which is stable under division
 """
-    lufact(A [,pivot=Val(true)]) -> F::LU
+    lufact(A, pivot=Val(true)) -> F::LU
 
 Compute the LU factorization of `A`.
 
@@ -133,7 +133,6 @@ julia> F = lufact(A)
 Base.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:
 [1.0 0.0; 1.5 1.0]
 [4.0 3.0; 0.0 -1.5]
-successful: true
 
 julia> F[:L] * F[:U] == A[F[:p], :]
 true
@@ -234,11 +233,14 @@ end
 issuccess(F::LU) = F.info == 0
 
 function show(io::IO, F::LU)
-    println(io, "$(typeof(F)) with factors L and U:")
-    show(io, F[:L])
-    println(io)
-    show(io, F[:U])
-    print(io, "\nsuccessful: $(issuccess(F))")
+    if issuccess(F)
+        println(io, "$(typeof(F)) with factors L and U:")
+        show(io, F[:L])
+        println(io)
+        show(io, F[:U])
+    else
+        print(io, "Failed factorization of type $(typeof(F))")
+    end
 end
 
 _apply_ipiv!(A::LU, B::StridedVecOrMat) = _ipiv!(A, 1 : length(A.ipiv), B)

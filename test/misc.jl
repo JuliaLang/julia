@@ -231,7 +231,7 @@ struct NoMethodHasThisType end
 @test !isempty(methodswith(Int))
 struct Type4Union end
 func4union(::Union{Type4Union,Int}) = ()
-@test !isempty(methodswith(Type4Union))
+@test !isempty(methodswith(Type4Union, @__MODULE__))
 
 # PR #10984
 # Disable on windows because of issue (missing flush) when redirecting STDERR.
@@ -562,10 +562,10 @@ let a = [1,2,3]
     @test unsafe_securezero!(Ptr{Void}(pointer(a)), sizeof(a)) == Ptr{Void}(pointer(a))
     @test a == [0,0,0]
 end
-let creds = Base.LibGit2.CachedCredentials()
-    LibGit2.get_creds!(creds, "foo", LibGit2.SSHCredentials()).pass = "bar"
-    securezero!(creds)
-    @test LibGit2.get_creds!(creds, "foo", nothing).pass == "\0\0\0"
+let cache = Base.LibGit2.CachedCredentials()
+    get!(cache, "foo", LibGit2.SSHCredentials("", "bar"))
+    securezero!(cache)
+    @test cache["foo"].pass == "\0\0\0"
 end
 
 # Test that we can VirtualProtect jitted code to writable
@@ -821,3 +821,6 @@ let flags = Cmd(filter(a->!contains(a, "depwarn"), collect(test_exeflags)))
         error("Deprecation test failed, cmd : $cmd")
     end
 end
+
+# PR #23664, make sure names don't get added to the default `Main` workspace
+@test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]

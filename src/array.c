@@ -180,6 +180,7 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     size_t ndims = jl_nfields(_dims);
     assert(is_ntuple_long(_dims));
     size_t *dims = (size_t*)_dims;
+    assert(jl_types_equal(jl_tparam0(jl_typeof(data)), jl_tparam0(atype)));
 
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords * sizeof(size_t) + sizeof(void*), JL_SMALL_BYTE_ALIGNMENT);

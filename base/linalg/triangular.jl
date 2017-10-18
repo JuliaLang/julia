@@ -234,8 +234,9 @@ istriu(A::UnitUpperTriangular) = true
 
 function tril!(A::UpperTriangular, k::Integer=0)
     n = size(A,1)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < 0
         fill!(A.data,0)
         return A
@@ -252,8 +253,9 @@ triu!(A::UpperTriangular, k::Integer=0) = UpperTriangular(triu!(A.data,k))
 
 function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where T
     n = size(A,1)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < 0
         fill!(A.data, zero(T))
         return UpperTriangular(A.data)
@@ -280,8 +282,9 @@ end
 
 function triu!(A::LowerTriangular, k::Integer=0)
     n = size(A,1)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 0
         fill!(A.data,0)
         return A
@@ -299,8 +302,9 @@ tril!(A::LowerTriangular, k::Integer=0) = LowerTriangular(tril!(A.data,k))
 
 function triu!(A::UnitLowerTriangular{T}, k::Integer=0) where T
     n = size(A,1)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 0
         fill!(A.data, zero(T))
         return LowerTriangular(A.data)
@@ -1430,7 +1434,7 @@ end
 ## for these cases, but I'm not sure it is worth it.
 for t in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
     @eval begin
-        (*)(A::Tridiagonal, B::$t) = A_mul_B!(full(A), B)
+        (*)(A::Tridiagonal, B::$t) = A_mul_B!(Matrix(A), B)
     end
 end
 
@@ -1789,7 +1793,7 @@ powm(A::LowerTriangular, p::Real) = powm(A.', p::Real).'
 # Based on the code available at http://eprints.ma.man.ac.uk/1851/02/logm.zip,
 # Copyright (c) 2011, Awad H. Al-Mohy and Nicholas J. Higham
 # Julia version relicensed with permission from original authors
-function log(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
+function log(A0::UpperTriangular{T}) where T<:BlasFloat
     maxsqrt = 100
     theta = [1.586970738772063e-005,
          2.313807884242979e-003,

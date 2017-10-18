@@ -66,6 +66,17 @@ sizeof(s::String) = Core.sizeof(s)
 
 Get the `i`th code unit of an encoded string. For example,
 returns the `i`th byte of the representation of a UTF-8 string.
+
+# Examples
+```jldoctest
+julia> s = "δ=γ"; [codeunit(s, i) for i in 1:sizeof(s)]
+5-element Array{UInt8,1}:
+ 0xce
+ 0xb4
+ 0x3d
+ 0xce
+ 0xb3
+```
 """
 codeunit(s::AbstractString, i::Integer)
 
@@ -73,13 +84,11 @@ codeunit(s::AbstractString, i::Integer)
     @boundscheck if (i < 1) | (i > sizeof(s))
         throw(BoundsError(s,i))
     end
-    ptr = pointer(s, i)
-    r = unsafe_load(ptr)
-    Core.gcuse(s)
-    r
+    @gc_preserve s unsafe_load(pointer(s, i))
 end
 
-write(io::IO, s::String) = unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
+write(io::IO, s::String) =
+    @gc_preserve s unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s)))
 
 ## comparison ##
 
@@ -110,6 +119,25 @@ function prevind(s::String, i::Integer)
     j
 end
 
+function prevind(s::String, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    j = Int(i)
+    e = sizeof(s)
+    while nchar > 0
+        if j > e
+            j = endof(s)
+        else
+            j -= 1
+            @inbounds while j > 0 && is_valid_continuation(codeunit(s,j))
+                j -= 1
+            end
+        end
+        nchar -= 1
+        j <= 0 && return j - nchar
+    end
+    j
+end
+
 function nextind(s::String, i::Integer)
     j = Int(i)
     if j < 1
@@ -119,6 +147,25 @@ function nextind(s::String, i::Integer)
     j += 1
     @inbounds while j <= e && is_valid_continuation(codeunit(s,j))
         j += 1
+    end
+    j
+end
+
+function nextind(s::String, i::Integer, nchar::Integer)
+    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
+    j = Int(i)
+    e = sizeof(s)
+    while nchar > 0
+        if j < 1
+            j = 1
+        else
+            j += 1
+            @inbounds while j <= e && is_valid_continuation(codeunit(s,j))
+                j += 1
+            end
+        end
+        nchar -= 1
+        j > e && return j + nchar
     end
     j
 end
@@ -238,8 +285,8 @@ isvalid(s::String, i::Integer) =
 
 function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""
-    i, j = first(r), last(r)
     l = sizeof(s)
+    i = first(r)
     if i < 1 || i > l
         throw(BoundsError(s, i))
     end
@@ -247,11 +294,16 @@ function getindex(s::String, r::UnitRange{Int})
     if is_valid_continuation(si)
         throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, si))
     end
+    j = last(r)
     if j > l
-        throw(BoundsError())
+        throw(BoundsError(s, j))
     end
-    j = nextind(s,j)-1
-    unsafe_string(pointer(s,i), j-i+1)
+    @inbounds sj = codeunit(s, j)
+    if is_valid_continuation(sj)
+        throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, sj))
+    end
+    j = nextind(s,j)
+    unsafe_string(pointer(s,i), j-i)
 end
 
 function search(s::String, c::Char, i::Integer = 1)
@@ -458,12 +510,43 @@ julia> repeat('A', 3)
 ```
 """
 function repeat(c::Char, r::Integer)
-    if isascii(c)
-        r < 0 && throw(ArgumentError("can't repeat a character $r times"))
+    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
+    r == 0 && return ""
+    ch = UInt(c)
+    if ch < 0x80
         out = _string_n(r)
         ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), out, c, r)
-        return out
+    elseif ch < 0x800
+        out = _string_n(2r)
+        p16 = reinterpret(Ptr{UInt16}, pointer(out))
+        u16 = ((ch >> 0x6) | (ch & 0x3f) << 0x8) % UInt16 | 0x80c0
+        @inbounds for i = 1:r
+            unsafe_store!(p16, u16, i)
+        end
+    elseif ch < 0x10000
+        (0xd800 ≥ ch ≤ 0xdfff) || throw(ArgumentError("invalid character 0x$(hex(ch))"))
+        out = _string_n(3r)
+        p = pointer(out)
+        b1 = (ch >> 0xc) % UInt8 | 0xe0
+        b2 = ((ch >> 0x6) & 0x3f) % UInt8 | 0x80
+        b3 = (ch & 0x3f) % UInt8 | 0x80
+        @inbounds for i = 1:r
+            unsafe_store!(p, b1)
+            unsafe_store!(p, b2, 2)
+            unsafe_store!(p, b3, 3)
+            p += 3
+        end
+    elseif ch < 0x110000
+        out = _string_n(4r)
+        p32 = reinterpret(Ptr{UInt32}, pointer(out))
+        u32 = ((ch >> 0x12) | ((ch >> 0x4) & 0x03f00) |
+            ((ch << 0xa) & 0x3f0000) | ((ch & 0x3f) << 0x18)) % UInt32 | 0x808080f0
+        @inbounds for i = 1:r
+            unsafe_store!(p32, u32)
+            p32 += 4
+        end
     else
-        return repeat(string(c), r)
+        throw(ArgumentError("invalid character 0x$(hex(ch))"))
     end
+    return out
 end

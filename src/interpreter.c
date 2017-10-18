@@ -506,6 +506,11 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     else if (ex->head == boundscheck_sym || ex->head == inbounds_sym || ex->head == fastmath_sym ||
              ex->head == simdloop_sym || ex->head == meta_sym) {
         return jl_nothing;
+    } else if (ex->head == gc_preserve_begin_sym || ex->head == gc_preserve_end_sym) {
+        // The interpreter generally keeps values that were assigned in this scope
+        // rooted. If the interpreter learns to be more agressive here, we may
+        // want to explicitly root these values.
+        return jl_nothing;
     }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(ex->head));
     abort();
@@ -582,11 +587,6 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
                 else if (cond != jl_true) {
                     jl_type_error_rt("toplevel", "if", (jl_value_t*)jl_bool_type, cond);
                 }
-            }
-            else if (head == line_sym) {
-                if (toplevel)
-                    jl_lineno = jl_unbox_long(jl_exprarg(stmt, 0));
-                // TODO: interpreted function line numbers
             }
             else if (head == enter_sym) {
                 jl_enter_handler(&__eh);

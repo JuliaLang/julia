@@ -146,7 +146,7 @@ end
 
 @eval clear(t::UnixTerminal) = write(t.out_stream, $"$(CSI)H$(CSI)2J")
 @eval clear_line(t::UnixTerminal) = write(t.out_stream, $"\r$(CSI)0K")
-#beep(t::UnixTerminal) = write(t.err_stream,"\x7")
+beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
 Base.displaysize(t::UnixTerminal) = displaysize(t.out_stream)
 

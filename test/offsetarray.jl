@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using TestHelpers.OAs
+using Main.TestHelpers.OAs
+using DelimitedFiles
 
 const OAs_name = join(fullname(OAs), ".")
 
@@ -31,11 +32,17 @@ S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # IndexCartesian
 @test_throws BoundsError A[0,3,2]
 @test_throws BoundsError S[0,3,2]
 # partial indexing
-S3 = OffsetArray(view(reshape(collect(1:4*3*2), 4, 3, 2), 1:3, 1:2, :), (-1,-2,1))
+S3 = OffsetArray(view(reshape(collect(1:4*3*1), 4, 3, 1), 1:3, 1:2, :), (-1,-2,1))
 @test S3[1,-1] == 2
 @test S3[1,0] == 6
 @test_throws BoundsError S3[1,1]
 @test_throws BoundsError S3[1,-2]
+S4 = OffsetArray(view(reshape(collect(1:4*3*2), 4, 3, 2), 1:3, 1:2, :), (-1,-2,1))
+@test S4[1,-1,2] == 2
+@test S4[1,0,2] == 6
+@test_throws BoundsError S4[1,1,2]
+@test_throws BoundsError S4[1,-2,2]
+
 
 # Vector indexing
 @test A[:, 3] == S[:, 3] == OffsetArray([1,2], (A.offsets[1],))
@@ -115,6 +122,17 @@ S = view(A, :, :)
 @test S[1,4] == S[4] == 4
 @test_throws BoundsError S[1,1]
 @test indices(S) === (0:1, 3:4)
+# https://github.com/JuliaArrays/OffsetArrays.jl/issues/27
+g = OffsetArray(collect(-2:3), (-3,))
+gv = view(g, -1:2)
+@test indices(gv, 1) === Base.OneTo(4)
+@test collect(gv) == collect(-1:2)
+gv = view(g, OffsetArray(-1:2, (-2,)))
+@test indices(gv, 1) === -1:2
+@test collect(gv) == collect(-1:2)
+gv = view(g, OffsetArray(-1:2, (-1,)))
+@test indices(gv, 1) === 0:3
+@test collect(gv) == collect(-1:2)
 
 # iteration
 for (a,d) in zip(A, A0)
@@ -276,6 +294,21 @@ am = map(identity, a)
 @test isa(am, OffsetArray)
 @test am == a
 
+# squeeze
+a0 = rand(1,1,8,8,1)
+a = OffsetArray(a0, (-1,2,3,4,5))
+@test @inferred(squeeze(a, 1)) == @inferred(squeeze(a, (1,))) == OffsetArray(reshape(a, (1,8,8,1)), (2,3,4,5))
+@test @inferred(squeeze(a, 5)) == @inferred(squeeze(a, (5,))) == OffsetArray(reshape(a, (1,1,8,8)), (-1,2,3,4))
+@test @inferred(squeeze(a, (1,5))) == squeeze(a, (5,1)) == OffsetArray(reshape(a, (1,8,8)), (2,3,4))
+@test @inferred(squeeze(a, (1,2,5))) == squeeze(a, (5,2,1)) == OffsetArray(reshape(a, (8,8)), (3,4))
+@test_throws ArgumentError squeeze(a, 0)
+@test_throws ArgumentError squeeze(a, (1,1))
+@test_throws ArgumentError squeeze(a, (1,2,1))
+@test_throws ArgumentError squeeze(a, (1,1,2))
+@test_throws ArgumentError squeeze(a, 3)
+@test_throws ArgumentError squeeze(a, 4)
+@test_throws ArgumentError squeeze(a, 6)
+
 # other functions
 v = OffsetArray(v0, (-3,))
 @test endof(v) == 1
@@ -332,7 +365,7 @@ I,J,N = findnz(z)
 @test I == [-1]
 @test J == [0]
 @test N == [2]
-@test find(h) == [-2:1;]
+@test find(!iszero,h) == [-2:1;]
 @test find(x->x>0, h) == [-1,1]
 @test find(x->x<0, h) == [-2,0]
 @test find(x->x==0, h) == [2]
@@ -383,7 +416,7 @@ v = OffsetArray(rand(8), (-2,))
 @test flipdim(A, 1) == OffsetArray(flipdim(parent(A), 1), A.offsets)
 @test flipdim(A, 2) == OffsetArray(flipdim(parent(A), 2), A.offsets)
 
-@test A+1 == OffsetArray(parent(A)+1, A.offsets)
+@test A .+ 1 == OffsetArray(parent(A) .+ 1, A.offsets)
 @test 2*A == OffsetArray(2*parent(A), A.offsets)
 @test A+A == OffsetArray(parent(A)+parent(A), A.offsets)
 @test A.*A == OffsetArray(parent(A).*parent(A), A.offsets)
@@ -402,7 +435,7 @@ end # let
 # StackOverflowError if no appropriate method has been defined
 # (#18107)
 module SimilarUR
-    using Base.Test
+    using Test
     struct MyURange <: AbstractUnitRange{Int}
         start::Int
         stop::Int

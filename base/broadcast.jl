@@ -309,7 +309,7 @@ _nullable_eltype(f, A, As...) =
     T = _broadcast_eltype(f, A, Bs...)
     shape = broadcast_indices(A, Bs...)
     iter = CartesianRange(shape)
-    if isleaftype(T)
+    if Base._isleaftype(T)
         return broadcast_t(f, T, shape, iter, A, Bs...)
     end
     if isempty(iter)
@@ -320,8 +320,8 @@ end
 @inline function broadcast_c(f, ::Type{Nullable}, a...)
     nonnull = all(hasvalue, a)
     S = _nullable_eltype(f, a...)
-    if isleaftype(S) && null_safe_op(f, maptoTuple(_unsafe_get_eltype,
-                                                   a...).types...)
+    if Base._isleaftype(S) && null_safe_op(f, maptoTuple(_unsafe_get_eltype,
+                                                         a...).types...)
         Nullable{S}(f(map(unsafe_get, a)...), nonnull)
     else
         if nonnull

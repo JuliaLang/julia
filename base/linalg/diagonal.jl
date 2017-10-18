@@ -52,7 +52,7 @@ Diagonal{T}(V::AbstractVector) where {T} = Diagonal{T}(convert(AbstractVector{T}
 convert(::Type{Diagonal{T}}, D::Diagonal{T}) where {T} = D
 convert(::Type{Diagonal{T}}, D::Diagonal) where {T} = Diagonal{T}(convert(AbstractVector{T}, D.diag))
 convert(::Type{AbstractMatrix{T}}, D::Diagonal) where {T} = convert(Diagonal{T}, D)
-convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
+convert(::Type{Matrix}, D::Diagonal) = diagm(0 => D.diag)
 convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
 full(D::Diagonal) = convert(Array, D)
 
@@ -118,8 +118,9 @@ istriu(D::Diagonal) = true
 istril(D::Diagonal) = true
 function triu!(D::Diagonal,k::Integer=0)
     n = size(D,1)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 0
         fill!(D.diag,0)
     end
@@ -128,8 +129,9 @@ end
 
 function tril!(D::Diagonal,k::Integer=0)
     n = size(D,1)
-    if abs(k) > n
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))
+    if !(-n - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < 0
         fill!(D.diag,0)
     end

@@ -227,7 +227,7 @@ srand(100)
                     bH = zeros(elty,2,n)
                     bH[1,2:n] = ev
                     bH[2,:] = dv
-                    fullH = diagm(dv) + diagm(conj(ev),-1) + diagm(ev,1)
+                    fullH = diagm(0 => dv, -1 => conj(ev), 1 => ev)
                     @test BLAS.hbmv('U',1,bH,x) ≈ fullH*x
                 end
             end

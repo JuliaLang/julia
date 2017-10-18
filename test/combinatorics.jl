@@ -40,8 +40,8 @@ end
     @test ipermute!(permute!([1:10;], a),a) == [1:10;]
 
     # PR 12785
-    let a = 2:-1:1
-        @test ipermute!(permute!([1, 2], a), a) == [1, 2]
+    let ai = 2:-1:1
+        @test ipermute!(permute!([1, 2], ai), ai) == [1, 2]
     end
 end
 

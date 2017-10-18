@@ -20,7 +20,7 @@ export dir, init, rm, add, available, installed, status, clone, checkout,
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
 
-mutable struct PkgError <: Exception
+struct PkgError <: Exception
     msg::AbstractString
     ex::Nullable{Exception}
 end
@@ -86,8 +86,6 @@ init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Di
 
 function __init__()
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    vers = ccall(:jl_uses_cpuid_tag, Cint, ()) == 0 ? vers :
-        joinpath(vers,hex(ccall(:jl_cpuid_tag, UInt64, ()), 2*sizeof(UInt64)))
     unshift!(Base.LOAD_CACHE_PATH, abspath(Dir._pkgroot(), "lib", vers))
 end
 

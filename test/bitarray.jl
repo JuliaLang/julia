@@ -195,6 +195,10 @@ timesofar("utils")
     a = trues(3)
     @test BitArray(a) !== a
     @test BitArray{1}(a) !== a
+
+    # issue #24062
+    @test_throws InexactError BitArray([0, 1, 2, 3])
+    @test_throws MethodError BitArray([0, ""])
 end
 
 timesofar("constructors")
@@ -1055,7 +1059,10 @@ timesofar("binary comparison")
         b2 = circshift!(i1, b1, -j)
         i2 = circshift!(b1, -j)
         @test b2 == i2
+
+        @check_bit_operation slicedim(b1, 1, m) Bool
     end
+    @check_bit_operation slicedim(b1, 1, :) BitVector
 end
 
 timesofar("datamove")
@@ -1066,9 +1073,9 @@ timesofar("datamove")
 
         @check_bit_operation findfirst(b1) Int
 
-        @check_bit_operation findfirst(b1, true)  Int
-        @check_bit_operation findfirst(b1, false) Int
-        @check_bit_operation findfirst(b1, 3)     Int
+        @check_bit_operation findfirst(!iszero, b1)    Int
+        @check_bit_operation findfirst(iszero, b1)     Int
+        @check_bit_operation findfirst(equalto(3), b1) Int
 
         @check_bit_operation findfirst(x->x, b1)     Int
         @check_bit_operation findfirst(x->!x, b1)    Int
@@ -1357,8 +1364,14 @@ timesofar("cat")
     @check_bit_operation dot(b1, b2) Int
 
     b1 = bitrand(n1, n2)
-    for k = (-n1):n2
+    @test_throws ArgumentError tril(b1, -n1 - 2)
+    @test_throws ArgumentError tril(b1, n2)
+    @test_throws ArgumentError triu(b1, -n1)
+    @test_throws ArgumentError triu(b1, n2 + 2)
+    for k in (-n1 - 1):(n2 - 1)
         @check_bit_operation tril(b1, k) BitMatrix
+    end
+    for k in (-n1 + 1):(n2 + 1)
         @check_bit_operation triu(b1, k) BitMatrix
     end
 
@@ -1393,11 +1406,11 @@ timesofar("cat")
     @check_bit_operation qr(b1)
 
     b1 = bitrand(v1)
-    @check_bit_operation gradient(b1)
-    @check_bit_operation gradient(b1, 1.0)
+    @check_bit_operation diagm(0 => b1) BitMatrix
 
     b1 = bitrand(v1)
-    @check_bit_operation diagm(b1) BitMatrix
+    b2 = bitrand(v1)
+    @check_bit_operation diagm(-1 => b1, 1 => b2) BitMatrix
 
     b1 = bitrand(n1, n1)
     @check_bit_operation diag(b1)

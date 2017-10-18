@@ -582,8 +582,8 @@ end
 
 ##
 
-mutable struct DNSError <: Exception
-    host::AbstractString
+struct DNSError <: Exception
+    host::String
     code::Int32
 end
 
@@ -592,65 +592,77 @@ function show(io::IO, err::DNSError)
                                       " (", uverrorname(err.code), ")")
 end
 
-callback_dict = ObjectIdDict()
-
 function uv_getaddrinfocb(req::Ptr{Void}, status::Cint, addrinfo::Ptr{Void})
-    data = ccall(:jl_uv_getaddrinfo_data, Ptr{Void}, (Ptr{Void},), req)
-    data == C_NULL && return
-    cb = unsafe_pointer_to_objref(data)::Function
-    pop!(callback_dict,cb) # using pop forces an error if cb not in callback_dict
-    if status != 0 || addrinfo == C_NULL
-        invokelatest(cb, UVError("uv_getaddrinfocb received an unexpected status code", status))
-    else
-        freeaddrinfo = addrinfo
-        while addrinfo != C_NULL
-            sockaddr = ccall(:jl_sockaddr_from_addrinfo, Ptr{Void}, (Ptr{Void},), addrinfo)
-            if ccall(:jl_sockaddr_is_ip4, Int32, (Ptr{Void},), sockaddr) == 1
-                invokelatest(cb, IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Void},), sockaddr))))
-                break
-            #elseif ccall(:jl_sockaddr_is_ip6, Int32, (Ptr{Void},), sockaddr) == 1
-            #    host = Vector{UInt128}(1)
-            #    scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Void}, Ptr{UInt128}), sockaddr, host)
-            #    invokelatest(cb, IPv6(ntoh(host[1])))
-            #    break
+    data = uv_req_data(req)
+    if data != C_NULL
+        t = unsafe_pointer_to_objref(data)::Task
+        uv_req_set_data(req, C_NULL)
+        if status != 0 || addrinfo == C_NULL
+            schedule(t, UVError("getaddrinfocb", status))
+        else
+            freeaddrinfo = addrinfo
+            addrs = IPAddr[]
+            while addrinfo != C_NULL
+                sockaddr = ccall(:jl_sockaddr_from_addrinfo, Ptr{Void}, (Ptr{Void},), addrinfo)
+                if ccall(:jl_sockaddr_is_ip4, Int32, (Ptr{Void},), sockaddr) == 1
+                    ip4addr = ccall(:jl_sockaddr_host4, UInt32, (Ptr{Void},), sockaddr)
+                    push!(addrs, IPv4(ntoh(ip4addr)))
+                elseif ccall(:jl_sockaddr_is_ip6, Int32, (Ptr{Void},), sockaddr) == 1
+                    ip6addr = Ref{UInt128}()
+                    scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Void}, Ptr{UInt128}), sockaddr, ip6addr)
+                    push!(addrs, IPv6(ntoh(ip6addr[])))
+                end
+                addrinfo = ccall(:jl_next_from_addrinfo, Ptr{Void}, (Ptr{Void},), addrinfo)
             end
-            addrinfo = ccall(:jl_next_from_addrinfo, Ptr{Void}, (Ptr{Void},), addrinfo)
+            ccall(:uv_freeaddrinfo, Void, (Ptr{Void},), freeaddrinfo)
+            schedule(t, addrs)
         end
-        ccall(:uv_freeaddrinfo, Void, (Ptr{Void},), freeaddrinfo)
+    else
+        # no owner for this req, safe to just free it
+        Libc.free(req)
     end
-    Libc.free(req)
     nothing
 end
 
-function getaddrinfo(cb::Function, host::String)
+"""
+    getalladdrinfo(host::AbstractString) -> Vector{IPAddr}
+
+Gets all of the IP addresses of the `host`.
+Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
+"""
+function getalladdrinfo(host::String)
     isascii(host) || error("non-ASCII hostname: $host")
-    callback_dict[cb] = cb
-    status = ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Cstring, Ptr{UInt8}, Any, Ptr{Void}),
-                   eventloop(), host, C_NULL, cb, uv_jl_getaddrinfocb::Ptr{Void})
-    if status == UV_EINVAL
-        throw(ArgumentError("Invalid uv_getaddrinfo() agument"))
-    elseif status in [UV_ENOMEM, UV_ENOBUFS]
-        throw(OutOfMemoryError())
-    elseif status < 0
-        throw(UVError("uv_getaddrinfo returned an unexpected error code", status))
+    req = Libc.malloc(_sizeof_uv_getaddrinfo)
+    uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
+    status = ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}, Ptr{Void}),
+                   eventloop(), req, host, #=service=#C_NULL, uv_jl_getaddrinfocb::Ptr{Void})
+    if status < 0
+        Libc.free(req)
+        if status == UV_EINVAL
+            throw(ArgumentError("Invalid getaddrinfo argument"))
+        elseif status == UV_ENOMEM || status == UV_ENOBUFS
+            throw(OutOfMemoryError())
+        end
+        uv_error("getaddrinfo", status)
     end
-    return nothing
-end
-getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb, String(host))
-
-"""
-    getaddrinfo(host::AbstractString) -> IPAddr
-
-Gets the IP address of the `host` (may have to do a DNS lookup)
-"""
-function getaddrinfo(host::String)
-    c = Condition()
-    getaddrinfo(host) do IP
-        notify(c,IP)
+    ct = current_task()
+    preserve_handle(ct)
+    r = try
+        uv_req_set_data(req, ct)
+        wait()
+    finally
+        if uv_req_data(req) != C_NULL
+            # req is still alive,
+            # so make sure we don't get spurious notifications later
+            uv_req_set_data(req, C_NULL)
+            ccall(:uv_cancel, Int32, (Ptr{Void},), req) # try to let libuv know we don't care anymore
+        else
+            # done with req
+            Libc.free(req)
+        end
+        unpreserve_handle(ct)
     end
-    r = wait(c)
     if isa(r, UVError)
-        r = r::UVError
         code = r.code
         if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
                     UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
@@ -661,12 +673,112 @@ function getaddrinfo(host::String)
         elseif code == UV_EAI_MEMORY
             throw(OutOfMemoryError())
         else
-            throw(SystemError("uv_getaddrinfocb", -code))
+            throw(UVError("getaddrinfo", code))
         end
     end
-    return r::IPAddr
+    return r::Vector{IPAddr}
 end
-getaddrinfo(host::AbstractString) = getaddrinfo(String(host))
+getalladdrinfo(host::AbstractString) = getalladdrinfo(String(host))
+
+"""
+    getalladdrinfo(host::AbstractString, IPAddr=IPv4) -> IPAddr
+
+Gets the first IP address of the `host` of the specified IPAddr type.
+Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
+"""
+function getaddrinfo(host::String, T::Type{<:IPAddr})
+    addrs = getalladdrinfo(host)
+    for addr in addrs
+        if addr isa T
+            return addr
+        end
+    end
+    throw(DNSError(host, UV_EAI_NONAME))
+end
+getaddrinfo(host::AbstractString, T::Type{<:IPAddr}) = getaddrinfo(String(host), T)
+getaddrinfo(host::AbstractString) = getaddrinfo(String(host), IPv4)
+
+function uv_getnameinfocb(req::Ptr{Void}, status::Cint, hostname::Cstring, service::Cstring)
+    data = uv_req_data(req)
+    if data != C_NULL
+        t = unsafe_pointer_to_objref(data)::Task
+        uv_req_set_data(req, C_NULL)
+        if status != 0
+            schedule(t, UVError("getnameinfocb", status))
+        else
+            schedule(t, unsafe_string(hostname))
+        end
+    else
+        # no owner for this req, safe to just free it
+        Libc.free(req)
+    end
+    nothing
+end
+
+"""
+    getnameinfo(host::IPAddr) -> String
+
+Performs a reverse-lookup for IP address to return a hostname and service
+using the operating system's underlying getnameinfo implementation.
+"""
+function getnameinfo(address::Union{IPv4, IPv6})
+    req = Libc.malloc(_sizeof_uv_getnameinfo)
+    uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
+    ev = eventloop()
+    port = hton(UInt16(0))
+    flags = 0
+    uvcb = uv_jl_getnameinfocb::Ptr{Void}
+    status = UV_EINVAL
+    if address isa IPv4
+        status = ccall(:jl_getnameinfo, Int32, (Ptr{Void}, Ptr{Void}, UInt32, UInt16, Cint, Ptr{Void}),
+                       ev, req, hton(address.host), port, flags, uvcb)
+    elseif address isa IPv6
+        status = ccall(:jl_getnameinfo6, Int32, (Ptr{Void}, Ptr{Void}, Ref{UInt128}, UInt16, Cint, Ptr{Void}),
+                       ev, req, hton(address.host), port, flags, uvcb)
+    end
+    if status < 0
+        Libc.free(req)
+        if status == UV_EINVAL
+            throw(ArgumentError("Invalid getnameinfo argument"))
+        elseif status == UV_ENOMEM || status == UV_ENOBUFS
+            throw(OutOfMemoryError())
+        end
+        uv_error("getnameinfo", status)
+    end
+    ct = current_task()
+    preserve_handle(ct)
+    r = try
+        uv_req_set_data(req, ct)
+        wait()
+    finally
+        if uv_req_data(req) != C_NULL
+            # req is still alive,
+            # so make sure we don't get spurious notifications later
+            uv_req_set_data(req, C_NULL)
+            ccall(:uv_cancel, Int32, (Ptr{Void},), req) # try to let libuv know we don't care anymore
+        else
+            # done with req
+            Libc.free(req)
+        end
+        unpreserve_handle(ct)
+    end
+    if isa(r, UVError)
+        code = r.code
+        if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
+                    UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
+                    UV_EAI_FAMILY, UV_EAI_NODATA, UV_EAI_NONAME,
+                    UV_EAI_OVERFLOW, UV_EAI_PROTOCOL, UV_EAI_SERVICE,
+                    UV_EAI_SOCKTYPE)
+            throw(DNSError(repr(address), code))
+        elseif code == UV_EAI_MEMORY
+            throw(OutOfMemoryError())
+        else
+            throw(UVError("getnameinfo", code))
+        end
+    end
+    return r::String
+end
+
 
 const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32,())
 
@@ -701,7 +813,7 @@ function getipaddr()
         end
     end
     ccall(:uv_free_interface_addresses, Void, (Ptr{UInt8}, Int32), addr, count)
-    return lo_present ? ip"127.0.0.1" : error("No networking interface available")
+    return lo_present ? localhost : error("No networking interface available")
 end
 
 ##
@@ -741,15 +853,15 @@ connect!(sock::TCPSocket, addr::InetAddr) = connect!(sock, addr.host, addr.port)
 
 Connect to the host `host` on port `port`.
 """
-connect(sock::TCPSocket, port::Integer) = connect(sock,IPv4(127,0,0,1), port)
-connect(port::Integer) = connect(IPv4(127,0,0,1), port)
+connect(sock::TCPSocket, port::Integer) = connect(sock, localhost, port)
+connect(port::Integer) = connect(localhost, port)
 
 # Valid connect signatures for TCP
 connect(host::AbstractString, port::Integer) = connect(TCPSocket(), host, port)
 connect(addr::IPAddr, port::Integer) = connect(TCPSocket(), addr, port)
 connect(addr::InetAddr) = connect(TCPSocket(), addr)
 
-default_connectcb(sock,status) = nothing
+default_connectcb(sock, status) = nothing
 
 function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     if sock.status != StatusInit
@@ -780,7 +892,7 @@ function listen(addr; backlog::Integer=BACKLOG_DEFAULT)
     listen(sock; backlog=backlog)
     return sock
 end
-listen(port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(IPv4(UInt32(0)), port; backlog=backlog)
+listen(port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(localhost, port; backlog=backlog)
 listen(host::IPAddr, port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(InetAddr(host, port); backlog=backlog)
 
 function listen(callback, server::Union{TCPSocket, UDPSocket})
@@ -822,6 +934,8 @@ end
 
 ## Utility functions
 
+const localhost = ip"127.0.0.1"
+
 """
     listenany([host::IPAddr,] port_hint) -> (UInt16, TCPServer)
 
@@ -847,7 +961,7 @@ function listenany(host::IPAddr, default_port)
     end
 end
 
-listenany(default_port) = listenany(IPv4(UInt32(0)), default_port)
+listenany(default_port) = listenany(localhost, default_port)
 
 """
     getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)

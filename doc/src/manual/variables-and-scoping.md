@@ -276,7 +276,7 @@ julia> f = y -> y + a
 julia> f(3)
 ERROR: UndefVarError: a not defined
 Stacktrace:
- [1] (::##1#2)(::Int64) at ./none:1
+[...]
 
 julia> a = 1
 1
@@ -468,6 +468,11 @@ assigned once. This intent can be conveyed to the compiler using the `const` key
 julia> const e  = 2.71828182845904523536;
 
 julia> const pi = 3.14159265358979323846;
+```
+
+Multiple variables can be declared in a single `const` statement:
+```jldoctest
+julia> const a, b = 1, 2
 ```
 
 The `const` declaration should only be used in global scope on globals.

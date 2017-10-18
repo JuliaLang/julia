@@ -31,7 +31,6 @@ USE_SYSTEM_PCRE:=0
 USE_SYSTEM_LIBM:=0
 USE_SYSTEM_OPENLIBM:=0
 UNTRUSTED_SYSTEM_LIBM:=0
-USE_SYSTEM_OPENSPECFUN:=0
 USE_SYSTEM_DSFMT:=0
 USE_SYSTEM_BLAS:=0
 USE_SYSTEM_LAPACK:=0
@@ -81,11 +80,6 @@ HAVE_SSP := 0
 # GC debugging options
 WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
-
-# When set, give julia binaries CPUID specific names. This is useful in cluster environments
-# with heterogeneous architectures. N.B.: will not be automatically rebuilt for all
-# architectures if julia is updated.
-CPUID_SPECIFIC_BINARIES ?= 0
 
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
@@ -732,6 +726,13 @@ endif
 
 JULIA_CPU_TARGET ?= native
 
+ifneq ($(OS),WINNT)
+# Windows headers with this configuration conflicts with LLVM
+# (Symbol renames are done with macros)
+# We mainly need this on linux for cgmemmgr so don't worry about windows for now...
+JCXXFLAGS += -D_FILE_OFFSET_BITS=64
+endif
+
 # Set some ARCH-specific flags
 ifneq ($(USEICC),1)
 ifeq ($(ISX86),1)
@@ -1124,19 +1125,19 @@ endef
 endif
 
 define symlink_target
-CLEAN_TARGETS += clean-$(2)/$(1)
-clean-$$(abspath $(2)/$(1)):
+CLEAN_TARGETS += clean-$(2)/$(3)
+clean-$$(abspath $(2)/$(3)):
 ifeq ($(BUILD_OS), WINNT)
-	@-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&)
+	@-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&)
 else
-	@-rm $$(abspath $(2)/$(1))
+	@-rm $$(abspath $(2)/$(3))
 endif
-$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
-$$(abspath $(2)/$(1)): | $$(abspath $(2))
+$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(3))): $$(abspath $(2)/$(3))
+$$(abspath $(2)/$(3)): | $$(abspath $(2))
 ifeq ($(BUILD_OS), WINNT)
-	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&) $$(call mingw_to_dos,$(1),)
+	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&) $$(call mingw_to_dos,$(1),)
 else ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
-	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(1)) $$(call cygpath_w,$(1))
+	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
 else ifdef JULIA_VAGRANT_BUILD
 	@cp -R $$(abspath $(1)) $$@
 else

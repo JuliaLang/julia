@@ -77,6 +77,11 @@ istril(::UniformScaling) = true
 issymmetric(::UniformScaling) = true
 ishermitian(J::UniformScaling) = isreal(J.λ)
 
+(+)(J::UniformScaling, x::Number) = J.λ + x
+(+)(x::Number, J::UniformScaling) = x + J.λ
+(-)(J::UniformScaling, x::Number) = J.λ - x
+(-)(x::Number, J::UniformScaling) = x - J.λ
+
 (+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
 (+)(B::BitArray{2}, J::UniformScaling)      = Array(B) + J
 (+)(J::UniformScaling, B::BitArray{2})      = J + Array(B)
@@ -215,7 +220,7 @@ function isapprox(J::UniformScaling,A::AbstractMatrix;
                   rtol::Real=rtoldefault(promote_leaf_eltypes(A),eltype(J),atol),
                   nans::Bool=false, norm::Function=vecnorm)
     n = checksquare(A)
-    Jnorm = norm === vecnorm ? abs(J.λ)*sqrt(n) : (norm === Base.norm ? abs(J.λ) : norm(diagm(fill(J.λ, n))))
+    Jnorm = norm === vecnorm ? abs(J.λ)*sqrt(n) : (norm === Base.norm ? abs(J.λ) : norm(Diagonal(fill(J.λ, n))))
     return norm(A - J) <= max(atol, rtol*max(norm(A), Jnorm))
 end
 isapprox(A::AbstractMatrix,J::UniformScaling;kwargs...) = isapprox(J,A;kwargs...)

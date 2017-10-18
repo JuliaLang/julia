@@ -435,33 +435,36 @@ uuid_version(u::UUID) = Int((u.value >> 76) & 0xf)
 
 Base.convert(::Type{UInt128}, u::UUID) = u.value
 
-function Base.convert(::Type{UUID}, s::AbstractString)
-    s = lowercase(s)
+let groupings = [1:8; 10:13; 15:18; 20:23; 25:36]
+    function Base.convert(::Type{UUID}, s::AbstractString)
+        s = lowercase(s)
 
-    if !ismatch(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)
-        throw(ArgumentError("Malformed UUID string"))
-    end
+        if !ismatch(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)
+            throw(ArgumentError("Malformed UUID string"))
+        end
 
-    u = UInt128(0)
-    for i in [1:8; 10:13; 15:18; 20:23; 25:36]
-        u <<= 4
-        d = s[i]-'0'
-        u |= 0xf & (d-39*(d>9))
+        u = UInt128(0)
+        for i in groupings
+            u <<= 4
+            d = s[i] - '0'
+            u |= 0xf & (d - 39*(d > 9))
+        end
+        return UUID(u)
     end
-    return UUID(u)
 end
 
-function Base.repr(u::UUID)
-    u = u.value
-    a = Vector{UInt8}(36)
-    for i = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
-        d = u & 0xf
-        a[i] = '0'+d+39*(d>9)
-        u >>= 4
+let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
+    function Base.string(u::UUID)
+        u = u.value
+        a = Base.StringVector(36)
+        for i in groupings
+            d = u & 0xf
+            a[i] = '0' + d + 39*(d > 9)
+            u >>= 4
+        end
+        a[24] = a[19] = a[14] = a[9] = '-'
+        return String(a)
     end
-    a[[24,19,14,9]] = '-'
-
-    return String(a)
 end
 
-Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
+Base.show(io::IO, u::UUID) = write(io, string(u))

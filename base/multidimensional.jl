@@ -88,6 +88,10 @@ module IteratorsMD
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
+    eltype(index::CartesianIndex) = eltype(index.I)
+
+    # access to index tuple
+    Tuple(index::CartesianIndex) = index.I
 
     # zeros and ones
     zero(::CartesianIndex{N}) where {N} = zero(CartesianIndex{N})
@@ -122,6 +126,10 @@ module IteratorsMD
     end
     _isless(ret, ::Tuple{}, ::Tuple{}) = ifelse(ret==1, true, false)
     icmp(a, b) = ifelse(isless(a,b), 1, ifelse(a==b, 0, -1))
+
+    # conversions
+    convert(::Type{T}, index::CartesianIndex{1}) where {T<:Number} = convert(T, index[1])
+    convert(::Type{T}, index::CartesianIndex) where {T<:Tuple} = convert(T, index.I)
 
     # hashing
     const cartindexhash_seed = UInt == UInt64 ? 0xd60ca92f8284b8b0 : 0xf2ea7c2e
@@ -284,21 +292,27 @@ module IteratorsMD
     end
 
     # Split out the first N elements of a tuple
-    @inline split(t, V::Val) = _split((), t, V)
-    @inline _split(tN, trest, V::Val) = _split((tN..., trest[1]), tail(trest), V)
-    # exit either when we've exhausted the input tuple or when tN has length N
-    @inline _split(tN::NTuple{N,Any}, ::Tuple{}, ::Val{N}) where {N} = tN, ()  # ambig.
-    @inline _split(tN,                ::Tuple{}, ::Val{N}) where {N} = tN, ()
-    @inline _split(tN::NTuple{N,Any},  trest,    ::Val{N}) where {N} = tN, trest
+    @inline function split(t, V::Val)
+        ref = ntuple(d->true, V)  # create a reference tuple of length N
+        _split1(t, ref), _splitrest(t, ref)
+    end
+    @inline _split1(t, ref) = (t[1], _split1(tail(t), tail(ref))...)
+    @inline _splitrest(t, ref) = _splitrest(tail(t), tail(ref))
+    # exit either when we've exhausted the input or reference tuple
+    _split1(::Tuple{}, ::Tuple{}) = ()
+    _split1(::Tuple{}, ref) = ()
+    _split1(t, ::Tuple{}) = ()
+    _splitrest(::Tuple{}, ::Tuple{}) = ()
+    _splitrest(t, ::Tuple{}) = t
+    _splitrest(::Tuple{}, ref) = ()
 
     @inline function split(I::CartesianIndex, V::Val)
         i, j = split(I.I, V)
         CartesianIndex(i), CartesianIndex(j)
     end
     function split(R::CartesianRange, V::Val)
-        istart, jstart = split(first(R), V)
-        istop,  jstop  = split(last(R), V)
-        CartesianRange(istart, istop), CartesianRange(jstart, jstop)
+        i, j = split(R.indices, V)
+        CartesianRange(i), CartesianRange(j)
     end
 end  # IteratorsMD
 
@@ -649,7 +663,7 @@ end
 """
     cumsum(A, dim=1)
 
-Cumulative sum along a dimension `dim` (defaults to 1). See also [`cumsum!`](@ref)
+Cumulative sum along a dimension `dim`. See also [`cumsum!`](@ref)
 to use a preallocated output array, both for performance and to control the precision of the
 output (e.g. to avoid overflow).
 
@@ -678,15 +692,14 @@ end
 """
     cumsum!(B, A, dim::Integer=1)
 
-Cumulative sum of `A` along a dimension, storing the result in `B`. The dimension defaults
-to 1. See also [`cumsum`](@ref).
+Cumulative sum of `A` along a dimension, storing the result in `B`. See also [`cumsum`](@ref).
 """
 cumsum!(B, A, axis::Integer=1) = accumulate!(+, B, A, axis)
 
 """
     cumprod(A, dim=1)
 
-Cumulative product along a dimension `dim` (defaults to 1). See also
+Cumulative product along a dimension `dim`. See also
 [`cumprod!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow).
 
@@ -712,7 +725,7 @@ cumprod(A::AbstractArray, axis::Integer=1) = accumulate(*, A, axis)
 """
     cumprod!(B, A, dim::Integer=1)
 
-Cumulative product of `A` along a dimension, storing the result in `B`. The dimension defaults to 1.
+Cumulative product of `A` along a dimension, storing the result in `B`.
 See also [`cumprod`](@ref).
 """
 cumprod!(B, A, axis::Integer=1) = accumulate!(*, B, A, axis)
@@ -720,7 +733,7 @@ cumprod!(B, A, axis::Integer=1) = accumulate!(*, B, A, axis)
 """
     accumulate(op, A, dim=1)
 
-Cumulative operation `op` along a dimension `dim` (defaults to 1). See also
+Cumulative operation `op` along a dimension `dim`. See also
 [`accumulate!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow). For common operations
 there are specialized variants of `accumulate`, see:
@@ -805,7 +818,7 @@ end
     accumulate!(op, B, A, dim=1)
 
 Cumulative operation `op` on `A` along a dimension, storing the result in `B`.
-The dimension defaults to 1. See also [`accumulate`](@ref).
+See also [`accumulate`](@ref).
 """
 function accumulate!(op, B, A, axis::Integer=1)
     axis > 0 || throw(ArgumentError("axis must be a positive integer"))
@@ -1144,7 +1157,7 @@ end
 @inline unchecked_bool_convert(x::Real) = x == 1
 
 function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::StridedArray{<:Real}, pos_s::Int, numbits::Int)
-    @inbounds for i = (1:numbits) + pos_s - 1
+    @inbounds for i = (1:numbits) .+ (pos_s - 1)
         try_bool_conversion(C[i])
     end
 

@@ -137,19 +137,22 @@ reducedim_init(f, op::typeof(|), A::AbstractArray, region) = reducedim_initarray
 
 # specialize to make initialization more efficient for common cases
 
-for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (SmallUnsigned, :UInt))
-    T = Union{[AbstractArray{t} for t in uniontypes(IT)]..., [AbstractArray{Complex{t}} for t in uniontypes(IT)]...}
-    @eval begin
-        reducedim_init(f::typeof(identity), op::typeof(+), A::$T, region) =
-            reducedim_initarray(A, region, zero($RT))
-        reducedim_init(f::typeof(identity), op::typeof(*), A::$T, region) =
-            reducedim_initarray(A, region, one($RT))
-        reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(+), A::$T, region) =
-            reducedim_initarray(A, region, real(zero($RT)))
-        reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(*), A::$T, region) =
-            reducedim_initarray(A, region, real(one($RT)))
-    end
+let
+    BitIntFloat = Union{BitInteger, Math.IEEEFloat}
+    T = Union{
+        [AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
+        [AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
+
+    global reducedim_init(f::typeof(identity), op::typeof(+), A::T, region) =
+        reducedim_initarray(A, region, zero(eltype(A)))
+    global reducedim_init(f::typeof(identity), op::typeof(*), A::T, region) =
+        reducedim_initarray(A, region, one(eltype(A)))
+    global reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(+), A::T, region) =
+        reducedim_initarray(A, region, real(zero(eltype(A))))
+    global reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(*), A::T, region) =
+        reducedim_initarray(A, region, real(one(eltype(A))))
 end
+
 reducedim_init(f::Union{typeof(identity),typeof(abs),typeof(abs2)}, op::typeof(+), A::AbstractArray{Bool}, region) =
     reducedim_initarray(A, region, 0)
 
@@ -610,6 +613,15 @@ any!(r, A)
 for (fname, op) in [(:sum, :+), (:prod, :*),
                     (:maximum, :scalarmax), (:minimum, :scalarmin),
                     (:all, :&), (:any, :|)]
+    function compose_promote_sys_size(x)
+        if fname === :sum
+            :(promote_sys_size_add ∘ $x)
+        elseif fname === :prod
+            :(promote_sys_size_mul ∘ $x)
+        else
+            x
+        end
+    end
     fname! = Symbol(fname, '!')
     @eval begin
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
@@ -617,7 +629,7 @@ for (fname, op) in [(:sum, :+), (:prod, :*),
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
         $(fname)(f::Function, A::AbstractArray, region) =
-            mapreducedim(f, $(op), A, region)
+            mapreducedim($(compose_promote_sys_size(:f)), $(op), A, region)
         $(fname)(A::AbstractArray, region) = $(fname)(identity, A, region)
     end
 end

@@ -253,7 +253,7 @@ function show_type_name(io::IO, tn::TypeName)
         globname_str = string(globname)
         if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
             isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
-            isa(getfield(tn.module, globname), tn.wrapper) && isleaftype(tn.wrapper))
+            isa(getfield(tn.module, globname), tn.wrapper) && _isleaftype(tn.wrapper))
             globfunc = true
         end
     end
@@ -380,8 +380,8 @@ function show(io::IO, p::Pair)
 end
 
 function show(io::IO, m::Module)
-    if m === Main
-        print(io, "Main")
+    if is_root_module(m)
+        print(io, module_name(m))
     else
         print(io, join(fullname(m),"."))
     end
@@ -572,7 +572,45 @@ function isidentifier(s::AbstractString)
 end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
+"""
+    isoperator(s::Symbol)
+
+Return `true` if the symbol can be used as an operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Base.isoperator(:+), Base.isoperator(:f)
+(true, false)
+```
+"""
 isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+
+"""
+    isunaryoperator(s::Symbol)
+
+Return `true` if the symbol can be used as a unary (prefix) operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Base.isunaryoperator(:-), Base.isunaryoperator(:√), Base.isunaryoperator(:f)
+(true, true, false)
+```
+"""
+isunaryoperator(s::Symbol) = ccall(:jl_is_unary_operator, Cint, (Cstring,), s) != 0
+is_unary_and_binary_operator(s::Symbol) = ccall(:jl_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0
+
+"""
+    isbinaryoperator(s::Symbol)
+
+Return `true` if the symbol can be used as a binary (infix) operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Base.isbinaryoperator(:-), Base.isbinaryoperator(:√), Base.isbinaryoperator(:f)
+(true, false, false)
+```
+"""
+isbinaryoperator(s::Symbol) = isoperator(s) && (!isunaryoperator(s) || is_unary_and_binary_operator(s))
 
 """
     operator_precedence(s::Symbol)
@@ -584,16 +622,45 @@ operators. Return `0` if `s` is not a valid operator.
 # Examples
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
-(9,11,15)
+(9, 11, 15)
 
-julia> Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
-(1,1)
+julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
+(0, 1, 1)
 ```
 """
 operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Cstring,), s))
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
+const prec_assignment = operator_precedence(:(=))
+const prec_arrow = operator_precedence(:(-->))
+const prec_control_flow = operator_precedence(:(&&))
+const prec_comparison = operator_precedence(:(>))
 const prec_power = operator_precedence(:(^))
 const prec_decl = operator_precedence(:(::))
+
+"""
+    operator_associativity(s::Symbol)
+
+Return a symbol representing the associativity of operator `s`. Left- and right-associative
+operators return `:left` and `:right`, respectively. Return `:none` if `s` is non-associative
+or an invalid operator.
+
+# Examples
+```jldoctest
+julia> Base.operator_associativity(:-), Base.operator_associativity(:+), Base.operator_associativity(:^)
+(:left, :none, :right)
+
+julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Base.operator_associativity(:→)
+(:left, :none, :right)
+```
+"""
+function operator_associativity(s::Symbol)
+    if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_power) || isunaryoperator(s) && !is_unary_and_binary_operator(s)
+        return :right
+    elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
+        return :none
+    end
+    return :left
+end
 
 is_expr(ex, head::Symbol)         = (isa(ex, Expr) && (ex.head == head))
 is_expr(ex, head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
@@ -617,7 +684,7 @@ function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     elseif ty === Core.IntrinsicFunction
         print(io, "::I")
     else
-        if emph && (!isleaftype(ty) || ty == Core.Box)
+        if emph && (!_isleaftype(ty) || ty == Core.Box)
             emphasize(io, "::$ty")
         else
             print(io, "::$ty")
@@ -1115,7 +1182,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         parens && print(io, ")")
 
-    elseif head === :import || head === :importall || head === :using
+    elseif head === :import || head === :using
         print(io, head)
         first = true
         for a = args
@@ -1134,6 +1201,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_type = false
     elseif head === :meta && length(args) == 1 && args[1] === :pop_loc
         print(io, "# meta: pop location")
+        show_type = false
+    elseif head === :meta && length(args) == 2 && args[1] === :pop_loc
+        print(io, "# meta: pop locations ($(args[2]))")
         show_type = false
     # print anything else as "Expr(head, args...)"
     else
@@ -1171,7 +1241,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
                 isdefined(uw.name.module, uw.name.mt.name) &&
                 ft == typeof(getfield(uw.name.module, uw.name.mt.name))
             print(io, uw.name.mt.name)
-        elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
+        elseif isa(ft, DataType) && ft.name === Type.body.name && !Core.Inference.has_free_typevars(ft)
             f = ft.parameters[1]
             print(io, f)
         else
@@ -1615,11 +1685,10 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     screenwidth -= length(pre) + length(post)
     presp = repeat(" ", length(pre))  # indent each row to match pre string
     postsp = ""
-    @assert strwidth(hdots) == strwidth(ddots)
+    @assert textwidth(hdots) == textwidth(ddots)
     sepsize = length(sep)
-    inds1, inds2 = indices(X,1), indices(X,2)
-    m, n = length(inds1), length(inds2)
-    rowsA, colsA = collect(inds1), collect(inds2)
+    rowsA, colsA = indices(X,1), indices(X,2)
+    m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
     # If not, then we only need to look at the first and last chunks of A,
@@ -1653,7 +1722,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 print(io, i == first(rowsA) ? pre : presp)
                 print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
                 print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
-                print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
+                print_matrix_row(io, X, Ralign, i, (n - length(Ralign)) .+ colsA, sep)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != last(rowsA); println(io); end
             end
@@ -1681,7 +1750,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 print(io, i == first(rowsA) ? pre : presp)
                 print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
                 print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
-                print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
+                print_matrix_row(io, X,Ralign,i,(n-length(Ralign)).+colsA,sep)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]
@@ -1703,10 +1772,11 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
 end
 
 """
-    summary(x)
+    summary(io::IO, x)
+    str = summary(x)
 
-Return a string giving a brief description of a value. By default returns
-`string(typeof(x))`, e.g. [`Int64`](@ref).
+Print to a stream `io`, or return a string `str`, giving a brief description of
+a value. By default returns `string(typeof(x))`, e.g. [`Int64`](@ref).
 
 For arrays, returns a string of size and type info,
 e.g. `10-element Array{Int64,1}`.
@@ -1719,8 +1789,14 @@ julia> summary(zeros(2))
 "2-element Array{Float64,1}"
 ```
 """
-summary(x) = string(typeof(x)) # e.g. Int64
+summary(io::IO, x) = print(io, typeof(x))
+function summary(x)
+    io = IOBuffer()
+    summary(io, x)
+    String(take!(io))
+end
 
+## `summary` for AbstractArrays
 # sizes such as 0-dimensional, 4-dimensional, 2x3
 dims2string(d::Dims) = isempty(d) ? "0-dimensional" :
                        length(d) == 1 ? "$(d[1])-element" :
@@ -1729,9 +1805,97 @@ dims2string(d::Dims) = isempty(d) ? "0-dimensional" :
 inds2string(inds::Indices) = join(map(string,inds), '×')
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
-summary(a::AbstractArray) = _summary(a, indices(a))
-_summary(a, inds::Tuple{Vararg{OneTo}}) = string(dims2string(length.(inds)), " ", typeof(a))
-_summary(a, inds) = string(typeof(a), " with indices ", inds2string(inds))
+summary(io::IO, a::AbstractArray) = summary(io, a, indices(a))
+function summary(io::IO, a, inds::Tuple{Vararg{OneTo}})
+    print(io, dims2string(length.(inds)), " ")
+    showarg(io, a, true)
+end
+function summary(io::IO, a, inds)
+    showarg(io, a, true)
+    print(io, " with indices ", inds2string(inds))
+end
+
+"""
+    showarg(io::IO, x, toplevel)
+
+Show `x` as if it were an argument to a function. This function is
+used by [`summary`](@ref) to display type information in terms of sequences of
+function calls on objects. `toplevel` is `true` if this is
+the direct call from `summary` and `false` for nested (recursive) calls.
+
+The fallback definition is to print `x` as "::\$(typeof(x))",
+representing argument `x` in terms of its type. (The double-colon is
+omitted if `toplevel=true`.) However, you can
+specialize this function for specific types to customize printing.
+
+# Example
+
+A SubArray created as `view(a, :, 3, 2:5)`, where `a` is a
+3-dimensional Float64 array, has type
+
+    SubArray{Float64,2,Array{Float64,3},Tuple{Colon,Int64,UnitRange{Int64}},false}
+
+The default `show` printing would display this full type.
+However, the summary for SubArrays actually prints as
+
+    2×4 view(::Array{Float64,3}, :, 3, 2:5) with eltype Float64
+
+because of a definition similar to
+
+    function Base.showarg(io::IO, v::SubArray, toplevel)
+        print(io, "view(")
+        showarg(io, parent(v), false)
+        print(io, ", ", join(v.indexes, ", "))
+        print(io, ')')
+        toplevel && print(io, " with eltype ", eltype(v))
+    end
+
+Note that we're calling `showarg` recursively for the parent array
+type, indicating that any recursed calls are not at the top level.
+Printing the parent as `::Array{Float64,3}` is the fallback (non-toplevel)
+behavior, because no specialized method for `Array` has been defined.
+"""
+function showarg(io::IO, ::Type{T}, toplevel) where {T}
+    toplevel || print(io, "::")
+    print(io, "Type{", T, "}")
+end
+function showarg(io::IO, x, toplevel)
+    toplevel || print(io, "::")
+    print(io, typeof(x))
+end
+# This method resolves an ambiguity for packages that specialize on eltype
+function showarg(io::IO, a::Array{Union{}}, toplevel)
+    toplevel || print(io, "::")
+    print(io, typeof(a))
+end
+
+# Container specializations
+function showarg(io::IO, v::SubArray, toplevel)
+    print(io, "view(")
+    showarg(io, parent(v), false)
+    showindices(io, v.indexes...)
+    print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(v))
+end
+showindices(io, ::Slice, inds...) =
+    (print(io, ", :"); showindices(io, inds...))
+showindices(io, ind1, inds...) =
+    (print(io, ", ", ind1); showindices(io, inds...))
+showindices(io) = nothing
+
+function showarg(io::IO, r::ReshapedArray, toplevel)
+    print(io, "reshape(")
+    showarg(io, parent(r), false)
+    print(io, ", ", join(r.dims, ", "))
+    print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(r))
+end
+
+function showarg(io::IO, r::ReinterpretArray{T}, toplevel) where {T}
+    print(io, "reinterpret($T, ")
+    showarg(io, parent(r), false)
+    print(io, ')')
+end
 
 # n-dimensional arrays
 function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
@@ -1913,7 +2077,8 @@ function array_eltype_show_how(X)
         str = string(e)
     end
     # Types hard-coded here are those which are created by default for a given syntax
-    isleaftype(e), (!isempty(X) && (e===Float64 || e===Int || e===Char) ? "" : str)
+    (_isleaftype(e),
+     (!isempty(X) && (e===Float64 || e===Int || e===Char || e===String) ? "" : str))
 end
 
 function show_vector(io::IO, v, opn, cls)

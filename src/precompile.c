@@ -286,10 +286,7 @@ static void compile_all_enq_(jl_methtable_t *mt, void *env)
     jl_typemap_visitor(mt->defs, compile_all_enq__, env);
 }
 
-void jl_foreach_mtable_in_module(
-        jl_module_t *m,
-        void (*visit)(jl_methtable_t *mt, void *env),
-        void *env);
+void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), void *env);
 
 static void jl_compile_all_defs(void)
 {
@@ -298,7 +295,7 @@ static void jl_compile_all_defs(void)
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
     while (1) {
-        jl_foreach_mtable_in_module(jl_main_module, compile_all_enq_, m);
+        jl_foreach_reachable_mtable(compile_all_enq_, m);
         size_t changes = jl_array_len(m);
         if (!changes)
             break;
@@ -334,7 +331,7 @@ static void jl_compile_specializations(void)
     // type signatures that were inferred but haven't been compiled
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
-    jl_foreach_mtable_in_module(jl_main_module, precompile_enq_all_specializations_, m);
+    jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
     size_t i, l;
     for (i = 0, l = jl_array_len(m); i < l; i++) {
         jl_compile_hint((jl_tupletype_t*)jl_array_ptr_ref(m, i));

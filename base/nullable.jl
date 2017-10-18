@@ -13,7 +13,7 @@ Nullable{Int64}()
 julia> get(a)
 ERROR: NullException()
 Stacktrace:
- [1] get(::Nullable{Int64}) at ./nullable.jl:118
+[...]
 ```
 """
 struct NullException <: Exception
@@ -104,7 +104,7 @@ julia> get(Nullable(5))
 julia> get(Nullable())
 ERROR: NullException()
 Stacktrace:
- [1] get(::Nullable{Union{}}) at ./nullable.jl:102
+[...]
 ```
 """
 @inline function get(x::Nullable{T}, y) where T
@@ -140,7 +140,7 @@ Nullable{String}()
 julia> unsafe_get(x)
 ERROR: UndefRefError: access to undefined reference
 Stacktrace:
- [1] unsafe_get(::Nullable{String}) at ./nullable.jl:152
+[...]
 
 julia> x = 1
 1
@@ -339,7 +339,7 @@ end
 """
 Return the given type if it is concrete, and `Union{}` otherwise.
 """
-nullable_returntype(::Type{T}) where {T} = isleaftype(T) ? T : Union{}
+nullable_returntype(::Type{T}) where {T} = _isleaftype(T) ? T : Union{}
 
 """
     map(f, x::Nullable)
@@ -365,7 +365,7 @@ Nullable{Bool}()
 """
 function map(f, x::Nullable{T}) where T
     S = promote_op(f, T)
-    if isleaftype(S) && null_safe_op(f, T)
+    if _isleaftype(S) && null_safe_op(f, T)
         Nullable(f(unsafe_get(x)), !isnull(x))
     else
         if isnull(x)
@@ -388,6 +388,7 @@ all(f::typeof(hasvalue), t::Tuple{}) = true
 
 # Note this list does not include sqrt since it can raise a DomainError
 for op in (+, -, abs, abs2)
+    global null_safe_op
     null_safe_op(::typeof(op), ::NullSafeTypes) = true
     null_safe_op(::typeof(op), ::Type{Complex{S}}) where {S} = null_safe_op(op, S)
     null_safe_op(::typeof(op), ::Type{Rational{S}}) where {S} = null_safe_op(op, S)
@@ -404,11 +405,13 @@ null_safe_op(::typeof(!), ::Type{Bool}) = true
 for op in (+, -, *, /, &, |, <<, >>, >>>,
            scalarmin, scalarmax)
     # to fix ambiguities
+    global null_safe_op
     null_safe_op(::typeof(op), ::NullSafeFloats, ::NullSafeFloats) = true
     null_safe_op(::typeof(op), ::NullSafeSignedInts, ::NullSafeSignedInts) = true
     null_safe_op(::typeof(op), ::NullSafeUnsignedInts, ::NullSafeUnsignedInts) = true
 end
 for op in (+, -, *, /)
+    global null_safe_op
     null_safe_op(::typeof(op), ::Type{Complex{S}}, ::Type{T}) where {S,T} =
         null_safe_op(op, T, S)
     null_safe_op(::typeof(op), ::Type{Rational{S}}, ::Type{T}) where {S,T} =

@@ -3,13 +3,18 @@
 catcmd = `cat`
 if Sys.iswindows()
     busybox = joinpath(JULIA_HOME, "busybox.exe")
-    try # use busybox-w32 on windows
+    havebb = try # use busybox-w32 on windows
         success(`$busybox`)
+        true
+    catch
+        false
+    end
+    if havebb
         catcmd = `$busybox cat`
     end
 end
 
-let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
+let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes --startup-file=no`
     # --version
     let v = split(read(`$exename -v`, String), "julia version ")[end]
         @test Base.VERSION_STRING == chomp(v)
@@ -59,11 +64,29 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     # --load
     let testfile = tempname()
         try
-            write(testfile, "testvar = :test\n")
-            @test split(readchomp(`$exename -i --load=$testfile -e "println(testvar)"`),
-                '\n')[end] == "test"
-            @test split(readchomp(`$exename -i -e "println(testvar)" -L $testfile`),
-                '\n')[end] == "test"
+            write(testfile, "testvar = :test\nprintln(\"loaded\")\n")
+            @test read(`$exename -i --load=$testfile -e "println(testvar)"`, String) == "loaded\ntest\n"
+            @test read(`$exename -i -L $testfile -e "println(testvar)"`, String) == "loaded\ntest\n"
+            # multiple, combined
+            @test read(```$exename
+                -e 'push!(ARGS, "hi")'
+                -E "1+1"
+                -E "2+2"
+                -L $testfile
+                -E '3+3'
+                -L $testfile
+                -E 'pop!(ARGS)'
+                -e 'show(ARGS); println()'
+                9 10
+                ```, String) == """
+                2
+                4
+                loaded
+                6
+                loaded
+                "hi"
+                ["9", "10"]
+                """
         finally
             rm(testfile)
         end
@@ -72,14 +95,9 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     @test !success(`$exename -L`)
     @test !success(`$exename --load`)
 
-    # --cpu-target
-    # NOTE: this test only holds true if image_file is a shared library.
-    if Libdl.dlopen_e(unsafe_string(Base.JLOptions().image_file)) != C_NULL
-        @test !success(`$exename -C invalidtarget --precompiled=yes`)
-        @test !success(`$exename --cpu-target=invalidtarget --precompiled=yes`)
-    else
-        warn("--cpu-target test not runnable")
-    end
+    # --cpu-target (requires LLVM enabled)
+    @test !success(`$exename -C invalidtarget`)
+    @test !success(`$exename --cpu-target=invalidtarget`)
 
     # --procs
     @test readchomp(`$exename -q -p 2 -e "println(nworkers())"`) == "2"
@@ -269,7 +287,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
         cp(testfile, joinpath(dir, ".juliarc.jl"))
 
         withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => dir) do
-            output = "String[\"foo\", \"-bar\", \"--baz\"]"
+            output = "[\"foo\", \"-bar\", \"--baz\"]"
             @test readchomp(`$exename $testfile foo -bar --baz`) == output
             @test readchomp(`$exename $testfile -- foo -bar --baz`) == output
             @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) ==
@@ -283,7 +301,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
 
             @test !success(`$exename --foo $testfile`)
             @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) ==
-                "String[\"foo\", \"-bar\", \"--\", \"baz\"]"
+                "[\"foo\", \"-bar\", \"--\", \"baz\"]"
         end
     end
 
@@ -330,7 +348,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     end
 
     # issue #10562
-    @test readchomp(`$exename -e 'println(ARGS);' ''`) == "String[\"\"]"
+    @test readchomp(`$exename -e 'println(ARGS);' ''`) == "[\"\"]"
 
     # issue #12679
     @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --compile=yes -ioo`),
@@ -342,13 +360,13 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`),
         stderr=catcmd)) == "ERROR: unknown option `-n`"
 
-    # --compilecache={yes|no}
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().use_compilecache)"`) == "true"
-    @test readchomp(`$exename --compilecache=yes -E
-        "Bool(Base.JLOptions().use_compilecache)"`) == "true"
-    @test readchomp(`$exename --compilecache=no -E
-        "Bool(Base.JLOptions().use_compilecache)"`) == "false"
-    @test !success(`$exename --compilecache=foo -e "exit(0)"`)
+    # --compiled-modules={yes|no}
+    @test readchomp(`$exename -E "Bool(Base.JLOptions().use_compiled_modules)"`) == "true"
+    @test readchomp(`$exename --compiled-modules=yes -E
+        "Bool(Base.JLOptions().use_compiled_modules)"`) == "true"
+    @test readchomp(`$exename --compiled-modules=no -E
+        "Bool(Base.JLOptions().use_compiled_modules)"`) == "false"
+    @test !success(`$exename --compiled-modules=foo -e "exit(0)"`)
 
     # issue #12671, starting from a non-directory
     # rm(dir) fails on windows with Permission denied
@@ -399,7 +417,7 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename()),
     end
 end
 
-let exename = `$(Base.julia_cmd()) --precompiled=yes`
+let exename = `$(Base.julia_cmd()) --sysimage-native-code=yes`
     # --startup-file
     let JL_OPTIONS_STARTUPFILE_ON = 1,
         JL_OPTIONS_STARTUPFILE_OFF = 2
@@ -422,17 +440,17 @@ run(pipeline(DevNull, `$(joinpath(JULIA_HOME, Base.julia_exename())) --lisp`, De
 @test_throws ErrorException run(pipeline(DevNull, pipeline(`$(joinpath(JULIA_HOME,
     Base.julia_exename())) -Cnative --lisp`, stderr=DevNull), DevNull))
 
-# --precompiled={yes|no}
+# --sysimage-native-code={yes|no}
 let exename = `$(Base.julia_cmd()) --startup-file=no`
-    @test readchomp(`$exename --precompiled=yes -E
-        "Bool(Base.JLOptions().use_precompiled)"`) == "true"
-    @test readchomp(`$exename --precompiled=no -E
-        "Bool(Base.JLOptions().use_precompiled)"`) == "false"
+    @test readchomp(`$exename --sysimage-native-code=yes -E
+        "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "true"
+    @test readchomp(`$exename --sysimage-native-code=no -E
+        "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "false"
 end
 
 # backtrace contains type and line number info (esp. on windows #17179)
 for precomp in ("yes", "no")
-    bt = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --precompiled=$precomp
+    bt = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp
         -E 'include("____nonexistent_file")'`), stderr=catcmd), String)
     @test contains(bt, "include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))")
     lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)
@@ -445,7 +463,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no`
     for (mac, flag, pfix, msg) in [("@test_nowarn", ``, "_1", ""),
                                    ("@test_warn",   `--warn-overwrite=yes`, "_2", "\"WARNING: Method definition\"")]
         str = """
-        using Base.Test
+        using Test
         try
             # issue #18725
             $mac $msg @eval Main begin

@@ -176,9 +176,7 @@ values without literal forms as args. In this specific example, `+` and `a` are 
 is a subexpression, and `1` is a literal 64-bit signed integer.
 
 There is a second syntactic form of quoting for multiple expressions: blocks of code enclosed
-in `quote ... end`. Note that this form introduces `QuoteNode` elements to the expression tree,
-which must be considered when directly manipulating an expression tree generated from `quote`
-blocks. For other purposes, `:( ... )` and `quote .. end` blocks are treated identically.
+in `quote ... end`.
 
 ```jldoctest
 julia> ex = quote
@@ -202,11 +200,10 @@ Expr
 ### Interpolation
 
 Direct construction of `Expr` objects with value arguments is powerful, but `Expr` constructors
-can be tedious compared to "normal" Julia syntax. As an alternative, Julia allows "splicing" or
-interpolation of literals or expressions into quoted expressions. Interpolation is indicated by
-the `$` prefix.
+can be tedious compared to "normal" Julia syntax. As an alternative, Julia allows *interpolation* of
+literals or expressions into quoted expressions. Interpolation is indicated by a prefix `$`.
 
-In this example, the literal value of `a` is interpolated:
+In this example, the value of variable `a` is interpolated:
 
 ```jldoctest interp1
 julia> a = 1;
@@ -217,7 +214,7 @@ julia> ex = :($a + b)
 
 Interpolating into an unquoted expression is not supported and will cause a compile-time error:
 
-```jlcodtest interp1
+```jldoctest interp1
 julia> $a + b
 ERROR: unsupported or misplaced expression $
  ...
@@ -230,18 +227,121 @@ julia> ex = :(a in $:((1,2,3)) )
 :(a in (1, 2, 3))
 ```
 
-Interpolating symbols into a nested expression requires enclosing each symbol in an enclosing
-quote block:
-
-```julia-repl
-julia> :( :a in $( :(:a + :b) ) )
-                   ^^^^^^^^^^
-                   quoted inner expression
-```
-
 The use of `$` for expression interpolation is intentionally reminiscent of [string interpolation](@ref string-interpolation)
 and [command interpolation](@ref command-interpolation). Expression interpolation allows convenient, readable programmatic
 construction of complex Julia expressions.
+
+### Splatting interpolation
+
+Notice that the `$` interpolation syntax allows inserting only a single expression into an
+enclosing expression.
+Occasionally, you have an array of expressions and need them all to become arguments of
+the surrounding expression.
+This can be done with the syntax `$(xs...)`.
+For example, the following code generates a function call where the number of arguments is
+determined programmatically:
+
+```jldoctest interp1
+julia> args = [:x, :y, :z];
+
+julia> :(f(1, $(args...)))
+:(f(1, x, y, z))
+```
+
+### Nested quote
+
+Naturally, it is possible for quote expressions to contain other quote expressions.
+Understanding how interpolation works in these cases can be a bit tricky.
+Consider this example:
+
+```jldoctest interp1
+julia> x = :(1 + 2);
+
+julia> e = quote quote $x end end
+quote
+    #= REPL[4]:1 =#
+    $(Expr(:quote, quote
+    #= REPL[4]:1 =#
+    $(Expr(:$, :x))
+end))
+end
+```
+
+Notice that the result contains `Expr(:$, :x)`, which means that `x` has not been
+evaluated yet.
+In other words, the `$` expression "belongs to" the inner quote expression, and
+so its argument is only evaluated when the inner quote expression is:
+
+```jldoctest interp1
+julia> eval(e)
+quote
+    #= REPL[4]:1 =#
+    1 + 2
+end
+```
+
+However, the outer `quote` expression is able to interpolate values inside the `$`
+in the inner quote.
+This is done with multiple `$`s:
+
+```jldoctest interp1
+julia> e = quote quote $$x end end
+quote
+    #= REPL[7]:1 =#
+    $(Expr(:quote, quote
+    #= REPL[7]:1 =#
+    $(Expr(:$, :(1 + 2)))
+end))
+end
+```
+
+Notice that `:(1 + 2)` now appears in the result instead of the symbol `:x`.
+Evaluating this expression yields an interpolated `3`:
+
+```jldoctest interp1
+julia> eval(e)
+quote
+    #= REPL[2]:1 =#
+    3
+end
+```
+
+The intuition behind this behavior is that `x` is evaluated once for each `$`:
+one `$` works similarly to `eval(:x)`, giving `x`'s value, while two `$`s do the
+equivalent of `eval(eval(:x))`.
+
+### QuoteNode
+
+The usual representation of a `quote` form in an AST is an `Expr` with head `:quote`:
+
+```jldoctest interp1
+julia> dump(parse(":(1+2)"))
+Expr
+  head: Symbol quote
+  args: Array{Any}((1,))
+    1: Expr
+      head: Symbol call
+      args: Array{Any}((3,))
+        1: Symbol +
+        2: Int64 1
+        3: Int64 2
+      typ: Any
+  typ: Any
+```
+
+As we have seen, such expressions support interpolation with `$`.
+However, in some situations it is necessary to quote code *without* performing interpolation.
+This kind of quoting does not yet have syntax, but is represented internally
+as an object of type `QuoteNode`.
+The parser yields `QuoteNode`s for simple quoted items like symbols:
+
+```jldoctest interp1
+julia> dump(parse(":x"))
+QuoteNode
+  value: Symbol x
+```
+
+`QuoteNode` can also be used for certain advanced metaprogramming tasks.
 
 ### [`eval`](@ref) and effects
 
@@ -481,6 +581,13 @@ above; it passes the tuple `(expr1, expr2, ...)` as one argument to the macro:
 
 ```julia
 @name (expr1, expr2, ...)
+```
+
+An alternative way to invoke a macro over an array literal (or comprehension) is to juxtapose both without using parentheses. In this case, the array will be the only expression fed to the macro. The following syntax is equivalent (and different from `@name [a b] * v`):
+
+```julia
+@name[a b] * v
+@name([a b]) * v
 ```
 
 It is important to emphasize that macros receive their arguments as expressions, literals, or

@@ -34,8 +34,8 @@ may trip up Julia users accustomed to MATLAB:
       with spaces (`[x y z]`).
     - To construct block matrices (concatenating in the first two dimensions), use either [`hvcat`](@ref)
       or combine spaces and semicolons (`[a b; c d]`).
-  * In Julia, `a:b` and `a:b:c` construct `Range` objects. To construct a full vector like in MATLAB,
-    use [`collect(a:b)`](@ref). Generally, there is no need to call `collect` though. `Range` will
+  * In Julia, `a:b` and `a:b:c` construct `AbstractRange` objects. To construct a full vector like in MATLAB,
+    use [`collect(a:b)`](@ref). Generally, there is no need to call `collect` though. An `AbstractRange` object will
     act like a normal array in most cases but is more efficient because it lazily computes its values.
     This pattern of creating specialized objects instead of full arrays is used frequently, and is
     also seen in functions such as [`linspace`](@ref), or with iterators such as `enumerate`, and
@@ -52,8 +52,7 @@ may trip up Julia users accustomed to MATLAB:
   * In Julia, functions such as [`sort`](@ref) that operate column-wise by default (`sort(A)` is
     equivalent to `sort(A,1)`) do not have special behavior for `1xN` arrays; the argument is returned
     unmodified since it still performs `sort(A,1)`. To sort a `1xN` matrix like a vector, use `sort(A,2)`.
-  * In Julia, parentheses must be used to call a function with zero arguments, like in [`tic()`](@ref)
-    and [`toc()`](@ref).
+  * In Julia, parentheses must be used to call a function with zero arguments, like in [`rand()`](@ref).
   * Julia discourages the used of semicolons to end statements. The results of statements are not
     automatically printed (except at the interactive prompt), and lines of code do not need to end
     with semicolons. [`println`](@ref) or [`@printf`](@ref) can be used to print specific output.
@@ -64,7 +63,7 @@ may trip up Julia users accustomed to MATLAB:
     bitwise operations equivalent to `and`, `or`, and `xor` respectively in MATLAB, and have precedence
     similar to Python's bitwise operators (unlike C). They can operate on scalars or element-wise
     across arrays and can be used to combine logical arrays, but note the difference in order of operations:
-    parentheses may be required (e.g., to select elements of `A` equal to 1 or 2 use `(A .== 1) | (A .== 2)`).
+    parentheses may be required (e.g., to select elements of `A` equal to 1 or 2 use `(A .== 1) .| (A .== 2)`).
   * In Julia, the elements of a collection can be passed as arguments to a function using the splat
     operator `...`, as in `xs=[1,2]; f(xs...)`.
   * Julia's [`svd`](@ref) returns singular values as a vector instead of as a dense diagonal matrix.
@@ -108,6 +107,10 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Like many languages, Julia does not always allow operations on vectors of different lengths, unlike
     R where the vectors only need to share a common index range.  For example, `c(1, 2, 3, 4) + c(1, 2)`
     is valid R but the equivalent `[1, 2, 3, 4] + [1, 2]` will throw an error in Julia.
+  * Julia allows an optional trailing comma when that comma does not change the meaning of code.
+    This can cause confusion among R users when indexing into arrays. For example, `x[1,]` in R
+    would return the first row of a matrix; in Julia, however, the comma is ignored, so
+    `x[1,] == x[1]`, and will return the first element. To extract a row, be sure to use `:`, as in `x[1,:]`.
   * Julia's [`map`](@ref) takes the function first, then its arguments, unlike `lapply(<structure>, function, ...)`
     in R. Similarly Julia's equivalent of `apply(X, MARGIN, FUN, ...)` in R is [`mapslices`](@ref)
     where the function is the first argument.
@@ -156,8 +159,8 @@ For users coming to Julia from R, these are some noteworthy differences:
     on large data structures much more efficiently.
   * In Julia, vectors and matrices are concatenated using [`hcat`](@ref), [`vcat`](@ref) and
     [`hvcat`](@ref), not `c`, `rbind` and `cbind` like in R.
-  * In Julia, a range like `a:b` is not shorthand for a vector like in R, but is a specialized `Range`
-    that is used for iteration without high memory overhead. To convert a range into a vector, use
+  * In Julia, a range like `a:b` is not shorthand for a vector like in R, but is a specialized `AbstractRange`
+    object that is used for iteration without high memory overhead. To convert a range into a vector, use
     [`collect(a:b)`](@ref).
   * Julia's [`max`](@ref) and [`min`](@ref) are the equivalent of `pmax` and `pmin` respectively
     in R, but both arguments need to have the same dimensions.  While [`maximum`](@ref) and [`minimum`](@ref)

@@ -409,7 +409,7 @@ julia> for i = 1:5
 5
 ```
 
-Here the `1:5` is a `Range` object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
+Here the `1:5` is a range object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
 loop iterates through these values, assigning each one in turn to the variable `i`. One rather
 important distinction between the previous `while` loop form and the `for` loop form is the scope
 during which the variable is visible. If the variable `i` has not been introduced in an other
@@ -573,9 +573,7 @@ julia> sqrt(-1)
 ERROR: DomainError with -1.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt(::Int64) at ./math.jl:472
+[...]
 ```
 
 You may define your own exceptions in the following way:
@@ -765,10 +763,7 @@ julia> sqrt_second(-9)
 ERROR: DomainError with -9.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
- [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
- [2] sqrt at ./math.jl:462 [inlined]
- [3] sqrt at ./math.jl:472 [inlined]
- [4] sqrt_second(::Int64) at ./none:7
+[...]
 ```
 
 Note that the symbol following `catch` will always be interpreted as a name for the exception,

@@ -309,8 +309,7 @@ julia> factorial(6)
 julia> factorial(21)
 ERROR: OverflowError: 21 is too large to look up in the table
 Stacktrace:
- [1] factorial_lookup at ./combinatorics.jl:19 [inlined]
- [2] factorial(::Int64) at ./combinatorics.jl:27
+[...]
 
 julia> factorial(21.0)
 5.109094217170944e19

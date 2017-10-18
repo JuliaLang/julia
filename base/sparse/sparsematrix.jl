@@ -210,18 +210,7 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
     end
 end
 
-## Reinterpret and Reshape
-
-function reinterpret(::Type{T}, a::SparseMatrixCSC{Tv}) where {T,Tv}
-    if sizeof(T) != sizeof(Tv)
-        throw(ArgumentError("SparseMatrixCSC reinterpret is only supported for element types of the same size"))
-    end
-    mA, nA = size(a)
-    colptr = copy(a.colptr)
-    rowval = copy(a.rowval)
-    nzval  = reinterpret(T, a.nzval)
-    return SparseMatrixCSC(mA, nA, colptr, rowval, nzval)
-end
+## Reshape
 
 function sparse_compute_reshaped_colptr_and_rowval(colptrS::Vector{Ti}, rowvalS::Vector{Ti},
                                                    mS::Int, nS::Int, colptrA::Vector{Ti},
@@ -255,25 +244,6 @@ function sparse_compute_reshaped_colptr_and_rowval(colptrS::Vector{Ti}, rowvalS:
         colptrS[colS+1] = ptr
         colS += 1
     end
-end
-
-function reinterpret(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{N,Int}) where {T,Tv,Ti,N}
-    if sizeof(T) != sizeof(Tv)
-        throw(ArgumentError("SparseMatrixCSC reinterpret is only supported for element types of the same size"))
-    end
-    if prod(dims) != length(a)
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
-    end
-    mS,nS = dims
-    mA,nA = size(a)
-    numnz = nnz(a)
-    colptr = Vector{Ti}(nS+1)
-    rowval = similar(a.rowval)
-    nzval = reinterpret(T, a.nzval)
-
-    sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
-
-    return SparseMatrixCSC(mS, nS, colptr, rowval, nzval)
 end
 
 function copy(ra::ReshapedArray{<:Any,2,<:SparseMatrixCSC})
@@ -1117,7 +1087,7 @@ For expert drivers and additional information, see [`permute!`](@ref).
 
 # Examples
 ```jldoctest
-julia> A = spdiagm([1, 2, 3, 4], 0, 4, 4) + spdiagm([5, 6, 7], 1, 4, 4)
+julia> A = spdiagm(0 => [1, 2, 3, 4], 1 => [5, 6, 7])
 4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:
   [1, 1]  =  1
   [1, 2]  =  5
@@ -1174,7 +1144,7 @@ and no space beyond that passed in. If `trim` is `true`, this method trims `A.ro
 
 # Examples
 ```jldoctest
-julia> A = spdiagm([1, 2, 3, 4])
+julia> A = sparse(Diagonal([1, 2, 3, 4]))
 4×4 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
   [1, 1]  =  1
   [2, 2]  =  2
@@ -1229,14 +1199,16 @@ function fkeep!(A::SparseMatrixCSC, f, trim::Bool = true)
 end
 
 function tril!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true)
-    if k > A.n-1 || k < 1-A.m
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($(A.m),$(A.n))"))
+    if !(-A.m - 1 <= k <= A.n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-A.m - 1) and at most $(A.n - 1) in an $(A.m)-by-$(A.n) matrix")))
     end
     fkeep!(A, (i, j, x) -> i + k >= j, trim)
 end
 function triu!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true)
-    if k > A.n-1 || k < 1-A.m
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($(A.m),$(A.n))"))
+    if !(-A.m + 1 <= k <= A.n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-A.m + 1) and at most $(A.n + 1) in an $(A.m)-by-$(A.n) matrix")))
     end
     fkeep!(A, (i, j, x) -> j >= i + k, trim)
 end
@@ -1281,19 +1253,31 @@ dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
 ## Find methods
 
 function find(S::SparseMatrixCSC)
+    if !(eltype(S) <: Bool)
+        Base.depwarn("In the future `find(A)` will only work on boolean collections. Use `find(x->x!=0, A)` instead.", :find)
+    end
+    return find(x->x!=0, S)
+end
+
+function find(p::Function, S::SparseMatrixCSC)
+    if p(zero(eltype(S)))
+        return invoke(find, Tuple{Function, Any}, p, S)
+    end
     sz = size(S)
-    I, J = findn(S)
+    I, J = _findn(p, S)
     return sub2ind(sz, I, J)
 end
 
-function findn(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+findn(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = _findn(x->x!=0, S)
+
+function _findn(p::Function, S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
     I = Vector{Ti}(numnz)
     J = Vector{Ti}(numnz)
 
     count = 1
     @inbounds for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if S.nzval[k] != 0
+        if p(S.nzval[k])
             I[count] = S.rowval[k]
             J[count] = col
             count += 1
@@ -1660,7 +1644,7 @@ function Base._mapreduce(f, op, ::Base.IndexCartesian, A::SparseMatrixCSC{T}) wh
     n = length(A)
     if z == 0
         if n == 0
-            Base.mr_empty(f, op, T)
+            Base.mapreduce_empty(f, op, T)
         else
             _mapreducezeros(f, op, T, n-z-1, f(zero(T)))
         end
@@ -1921,7 +1905,7 @@ indmin(A::SparseMatrixCSC) = findmin(A)[2]
 indmax(A::SparseMatrixCSC) = findmax(A)[2]
 
 ## getindex
-function rangesearch(haystack::Range, needle)
+function rangesearch(haystack::AbstractRange, needle)
     (i,rem) = divrem(needle - first(haystack), step(haystack))
     (rem==0 && 1<=i+1<=length(haystack)) ? i+1 : 0
 end
@@ -1978,7 +1962,7 @@ end
 getindex_traverse_col(::AbstractUnitRange, lo::Int, hi::Int) = lo:hi
 getindex_traverse_col(I::StepRange, lo::Int, hi::Int) = step(I) > 0 ? (lo:1:hi) : (hi:-1:lo)
 
-function getindex(A::SparseMatrixCSC{Tv,Ti}, I::Range, J::AbstractVector) where {Tv,Ti<:Integer}
+function getindex(A::SparseMatrixCSC{Tv,Ti}, I::AbstractRange, J::AbstractVector) where {Tv,Ti<:Integer}
     # Ranges for indexing rows
     (m, n) = size(A)
     # whole columns:
@@ -2338,10 +2322,10 @@ function getindex(A::SparseMatrixCSC{Tv}, I::AbstractArray) where Tv
 end
 
 # logical getindex
-getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::Range{Bool}, J::AbstractVector{Bool}) = error("Cannot index with Range{Bool}")
-getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::Range{Bool}, J::AbstractVector{<:Integer}) = error("Cannot index with Range{Bool}")
+getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::AbstractRange{Bool}, J::AbstractVector{Bool}) = error("Cannot index with AbstractRange{Bool}")
+getindex(A::SparseMatrixCSC{<:Any,<:Integer}, I::AbstractRange{Bool}, J::AbstractVector{<:Integer}) = error("Cannot index with AbstractRange{Bool}")
 
-getindex(A::SparseMatrixCSC, I::Range{<:Integer}, J::AbstractVector{Bool}) = A[I,find(J)]
+getindex(A::SparseMatrixCSC, I::AbstractRange{<:Integer}, J::AbstractVector{Bool}) = A[I,find(J)]
 getindex(A::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = A[I,find(J)]
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = A[find(I),J]
 getindex(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),find(J)]
@@ -2573,7 +2557,7 @@ function setindex!(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::Abst
     elseif !issortedI
         pI = sortperm(I); @inbounds I = I[pI]
         B = B[pI,:]
-    else !issortedJ
+    elseif !issortedJ
         pJ = sortperm(J); @inbounds J = J[pJ]
         B = B[:, pJ]
     end
@@ -2951,7 +2935,7 @@ stored and otherwise do nothing. Derivative forms:
 
 # Examples
 ```jldoctest
-julia> A = spdiagm([1, 2, 3, 4])
+julia> A = sparse(Diagonal([1, 2, 3, 4]))
 4×4 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
   [1, 1]  =  1
   [2, 2]  =  2
@@ -3115,13 +3099,13 @@ function hcat(X::SparseMatrixCSC...)
     nX_sofar = 0
     @inbounds for i = 1 : num
         XI = X[i]
-        colptr[(1 : nX[i] + 1) + nX_sofar] = XI.colptr .+ nnz_sofar
+        colptr[(1 : nX[i] + 1) .+ nX_sofar] = XI.colptr .+ nnz_sofar
         if nnzX[i] == length(XI.rowval)
-            rowval[(1 : nnzX[i]) + nnz_sofar] = XI.rowval
-            nzval[(1 : nnzX[i]) + nnz_sofar] = XI.nzval
+            rowval[(1 : nnzX[i]) .+ nnz_sofar] = XI.rowval
+            nzval[(1 : nnzX[i]) .+ nnz_sofar] = XI.nzval
         else
-            rowval[(1 : nnzX[i]) + nnz_sofar] = XI.rowval[1:nnzX[i]]
-            nzval[(1 : nnzX[i]) + nnz_sofar] = XI.nzval[1:nnzX[i]]
+            rowval[(1 : nnzX[i]) .+ nnz_sofar] = XI.rowval[1:nnzX[i]]
+            nzval[(1 : nnzX[i]) .+ nnz_sofar] = XI.nzval[1:nnzX[i]]
         end
         nnz_sofar += nnzX[i]
         nX_sofar += nX[i]
@@ -3166,9 +3150,9 @@ function blkdiag(X::SparseMatrixCSC...)
     nX_sofar = 0
     mX_sofar = 0
     for i = 1 : num
-        colptr[(1 : nX[i] + 1) + nX_sofar] = X[i].colptr .+ nnz_sofar
-        rowval[(1 : nnzX[i]) + nnz_sofar] = X[i].rowval .+ mX_sofar
-        nzval[(1 : nnzX[i]) + nnz_sofar] = X[i].nzval
+        colptr[(1 : nX[i] + 1) .+ nX_sofar] = X[i].colptr .+ nnz_sofar
+        rowval[(1 : nnzX[i]) .+ nnz_sofar] = X[i].rowval .+ mX_sofar
+        nzval[(1 : nnzX[i]) .+ nnz_sofar] = X[i].nzval
         nnz_sofar += nnzX[i]
         nX_sofar += nX[i]
         mX_sofar += mX[i]
@@ -3296,57 +3280,48 @@ function istril(A::SparseMatrixCSC)
     return true
 end
 
-# Create a sparse diagonal matrix by specifying multiple diagonals
-# packed into a tuple, alongside their diagonal offsets and matrix shape
 
-function spdiagm_internal(B, d)
-    ndiags = length(d)
-    if length(B) != ndiags; throw(ArgumentError("first argument should be a tuple of length(d)=$ndiags arrays of diagonals")); end
+function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
     ncoeffs = 0
-    for vec in B
-        ncoeffs += length(vec)
+    for p in kv
+        ncoeffs += length(p.second)
     end
     I = Vector{Int}(ncoeffs)
     J = Vector{Int}(ncoeffs)
-    V = Vector{promote_type(map(eltype, B)...)}(ncoeffs)
-    id = 0
+    V = Vector{promote_type(map(x -> eltype(x.second), kv)...)}(ncoeffs)
     i = 0
-    for vec in B
-        id += 1
-        diag = d[id]
-        numel = length(vec)
-        if diag < 0
-            row = -diag
+    for p in kv
+        dia = p.first
+        vect = p.second
+        numel = length(vect)
+        if dia < 0
+            row = -dia
             col = 0
-        elseif diag > 0
+        elseif dia > 0
             row = 0
-            col = diag
+            col = dia
         else
             row = 0
             col = 0
         end
-        range = 1+i:numel+i
-        I[range] = row+1:row+numel
-        J[range] = col+1:col+numel
-        copy!(view(V, range), vec)
+        r = 1+i:numel+i
+        I[r] = row+1:row+numel
+        J[r] = col+1:col+numel
+        copy!(view(V, r), vect)
         i += numel
     end
-
-    return (I,J,V)
+    return I, J, V
 end
 
 """
-    spdiagm(B, d[, m, n])
+    spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
 
-Construct a sparse diagonal matrix. `B` is a tuple of vectors containing the diagonals and
-`d` is a tuple containing the positions of the diagonals. In the case the input contains only
-one diagonal, `B` can be a vector (instead of a tuple) and `d` can be the diagonal position
-(instead of a tuple), defaulting to 0 (diagonal). Optionally, `m` and `n` specify the size
-of the resulting sparse matrix.
+Construct a square sparse diagonal matrix from `Pair`s of vectors and diagonals.
+Vector `kv.second` will be placed on the `kv.first` diagonal.
 
 # Examples
 ```jldoctest
-julia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))
+julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
 5×5 SparseMatrixCSC{Int64,Int64} with 8 stored entries:
   [2, 1]  =  1
   [1, 2]  =  4
@@ -3358,19 +3333,11 @@ julia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))
   [4, 5]  =  1
 ```
 """
-function spdiagm(B, d, m::Integer, n::Integer)
-    (I,J,V) = spdiagm_internal(B, d)
-    return sparse(I,J,V,m,n)
+function spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
+    I, J, V = spdiagm_internal(kv...)
+    n = max(dimlub(I), dimlub(J))
+    return sparse(I, J, V, n, n)
 end
-
-function spdiagm(B, d)
-    (I,J,V) = spdiagm_internal(B, d)
-    return sparse(I,J,V)
-end
-
-spdiagm(B::AbstractVector, d::Number, m::Integer, n::Integer) = spdiagm((B,), (d,), m, n)
-
-spdiagm(B::AbstractVector, d::Number=0) = spdiagm((B,), (d,))
 
 ## expand a colptr or rowptr into a dense index vector
 function expandptr(V::Vector{<:Integer})
@@ -3385,7 +3352,8 @@ function diag(A::SparseMatrixCSC{Tv,Ti}, d::Integer=0) where {Tv,Ti}
     m, n = size(A)
     k = Int(d)
     if !(-m <= k <= n)
-        throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($m, $n)"))
+        throw(ArgumentError(string("requested diagonal, $k, must be at least $(-m) ",
+            "and at most $n in an $m-by-$n matrix")))
     end
     l = k < 0 ? min(m+k,n) : min(n-k,m)
     r, c = k <= 0 ? (-k, 0) : (0, k) # start row/col -1

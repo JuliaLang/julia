@@ -359,7 +359,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
             vmaskp[vn] = falses(luds)
         end
         for (vn,a) in fdepsp
-            vmind = findfirst(uniqdepssets, a.requires)
+            vmind = findfirst(equalto(a.requires), uniqdepssets)
             @assert vmind > 0
             vm = vmaskp[vn]
             vm[vmind] = true
@@ -389,7 +389,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
         nc = length(vmask0_uniq)
         classes = [VersionNumber[] for c0 = 1:nc]
         for (vn,vm) in vmaskp
-            c0 = findfirst(vmask0_uniq, vm)
+            c0 = findfirst(equalto(vm), vmask0_uniq)
             push!(classes[c0], vn)
         end
         map(sort!, classes)

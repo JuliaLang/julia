@@ -44,6 +44,10 @@ end
 
 function triu(B::BitMatrix, k::Integer=0)
     m,n = size(B)
+    if !(-m + 1 <= k <= n + 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least",
+            "$(-m + 1) and at most $(n + 1) in an $m-by-$n matrix")))
+    end
     A = falses(m,n)
     Ac = A.chunks
     Bc = B.chunks
@@ -56,6 +60,10 @@ end
 
 function tril(B::BitMatrix, k::Integer=0)
     m,n = size(B)
+    if !(-m - 1 <= k <= n - 1)
+        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
+            "$(-m - 1) and at most $(n - 1) in an $m-by-$n matrix")))
+    end
     A = falses(m, n)
     Ac = A.chunks
     Bc = B.chunks
@@ -66,16 +74,7 @@ function tril(B::BitMatrix, k::Integer=0)
     A
 end
 
-## diff and gradient
-
-# TODO: this could be improved (is it worth it?)
-gradient(F::BitVector) = gradient(Array(F))
-gradient(F::BitVector, h::Real) = gradient(Array(F), h)
-gradient(F::Vector, h::BitVector) = gradient(F, Array(h))
-gradient(F::BitVector, h::Vector) = gradient(Array(F), h)
-gradient(F::BitVector, h::BitVector) = gradient(Array(F), Array(h))
-
-## diag and related
+## diag
 
 function diag(B::BitMatrix)
     n = minimum(size(B))
@@ -84,15 +83,6 @@ function diag(B::BitMatrix)
         v[i] = B[i,i]
     end
     v
-end
-
-function diagm(v::BitVector)
-    n = length(v)
-    a = falses(n, n)
-    for i=1:n
-        a[i,i] = v[i]
-    end
-    a
 end
 
 ## norm and rank
@@ -120,10 +110,10 @@ function kron(a::BitMatrix, b::BitMatrix)
     R = falses(mA*mB, nA*nB)
 
     for i = 1:mA
-        ri = (1:mB)+(i-1)*mB
+        ri = (1:mB) .+ ((i-1)*mB)
         for j = 1:nA
             if a[i,j]
-                rj = (1:nB)+(j-1)*nB
+                rj = (1:nB) .+ ((j-1)*nB)
                 R[ri,rj] = b
             end
         end

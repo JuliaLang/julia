@@ -63,14 +63,14 @@ end
 function _term_header(io::IO, md, char, columns)
     text = terminline(md.text)
     with_output_format(:bold, io) do io
-        print(io, " "^(2margin), " ")
+        print(io, " "^(margin))
         line_no, lastline_width = print_wrapped(io, text,
                                                 width=columns - 4margin; pre=" ")
         line_width = min(1 + lastline_width, columns)
         if line_no > 1
             line_width = max(line_width, div(columns, 3))
         end
-        char != ' ' && println(io, " "^(2margin), string(char) ^ line_width)
+        char != ' ' && println(io, " "^(margin), string(char) ^ line_width)
     end
 end
 

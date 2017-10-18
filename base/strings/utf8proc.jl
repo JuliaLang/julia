@@ -8,7 +8,7 @@ import Base: show, ==, hash, string, Symbol, isless, length, eltype, start, next
 export isgraphemebreak, category_code, category_abbrev, category_string
 
 # also exported by Base:
-export normalize_string, graphemes, is_assigned_char, charwidth, isvalid,
+export normalize_string, graphemes, is_assigned_char, textwidth, isvalid,
    islower, isupper, isalpha, isdigit, isnumber, isalnum,
    iscntrl, ispunct, isspace, isprint, isgraph
 
@@ -19,6 +19,15 @@ export normalize_string, graphemes, is_assigned_char, charwidth, isvalid,
 
 Returns `true` if the given value is valid for its type, which currently can be either
 `Char` or `String`.
+
+# Examples
+```jldoctest
+julia> isvalid(Char(0xd800))
+false
+
+julia> isvalid(Char(0xd799))
+true
+```
 """
 isvalid(value)
 
@@ -28,6 +37,15 @@ isvalid(value)
 Returns `true` if the given value is valid for that type. Types currently can
 be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt32`](@ref).
 Values for `String` can be of that type, or `Vector{UInt8}`.
+
+# Examples
+```jldoctest
+julia> isvalid(Char, 0xd800)
+false
+
+julia> isvalid(Char, 0xd799)
+true
+```
 """
 isvalid(T,value)
 
@@ -195,6 +213,18 @@ options (which all default to `false` except for `compose`) are specified:
 * `stable=true`: enforce Unicode Versioning Stability
 
 For example, NFKC corresponds to the options `compose=true, compat=true, stable=true`.
+
+# Examples
+```jldoctest
+julia> "μ" == normalize_string("µ", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5
+true
+
+julia> normalize_string("JuLiA", casefold=true)
+"julia"
+
+julia> normalize_string("JúLiA", stripmark=true)
+"JuLiA"
+```
 """
 function normalize_string(s::AbstractString, nf::Symbol)
     utf8proc_map(s, nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
@@ -208,21 +238,35 @@ end
 
 ############################################################################
 
+## character column width function ##
 """
-    charwidth(c)
+    textwidth(c)
 
-Gives the number of columns needed to print a character.
+Give the number of columns needed to print a character.
 
 # Examples
 ```jldoctest
-julia> charwidth('α')
+julia> textwidth('α')
 1
 
-julia> charwidth('❤')
+julia> textwidth('❤')
 2
 ```
 """
-charwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
+textwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
+
+"""
+    textwidth(s::AbstractString)
+
+Give the number of columns needed to print a string.
+
+# Examples
+```jldoctest
+julia> textwidth("March")
+5
+```
+"""
+textwidth(s::AbstractString) = mapreduce(textwidth, +, 0, s)
 
 lowercase(c::Char) = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) : Char(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
 uppercase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) : Char(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
@@ -241,6 +285,15 @@ category_string(c) = category_strings[category_code(c)+1]
     is_assigned_char(c) -> Bool
 
 Returns `true` if the given char or integer is an assigned Unicode code point.
+
+# Examples
+```jldoctest
+julia> is_assigned_char(101)
+true
+
+julia> is_assigned_char('\x01')
+true
+```
 """
 is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
 
@@ -386,6 +439,15 @@ end
 
 Tests whether a character is a control character.
 Control characters are the non-printing characters of the Latin-1 subset of Unicode.
+
+# Examples
+```jldoctest
+julia> iscntrl('\x01')
+true
+
+julia> iscntrl('a')
+false
+```
 """
 iscntrl(c::Char) = (c <= Char(0x1f) || Char(0x7f) <= c <= Char(0x9f))
 
@@ -417,6 +479,21 @@ ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGOR
 Tests whether a character is any whitespace character. Includes ASCII characters '\\t',
 '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode
 category Zs.
+
+# Examples
+```jldoctest
+julia> isspace('\n')
+true
+
+julia> isspace('\r')
+true
+
+julia> isspace(' ')
+true
+
+julia> isspace('\x20')
+true
+```
 """
 @inline isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == '\u85' || '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
 
@@ -424,6 +501,15 @@ category Zs.
     isprint(c::Char) -> Bool
 
 Tests whether a character is printable, including spaces, but not a control character.
+
+# Examples
+```jldoctest
+julia> isprint('\x01')
+false
+
+julia> isprint('A')
+true
+```
 """
 isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS)
 
@@ -435,6 +521,15 @@ isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGOR
 Tests whether a character is printable, and not a space.
 Any character that would cause a printer to use ink should be
 classified with `isgraph(c)==true`.
+
+# Examples
+```jldoctest
+julia> isgraph('\x01')
+false
+
+julia> isgraph('A')
+true
+```
 """
 isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_SO)
 

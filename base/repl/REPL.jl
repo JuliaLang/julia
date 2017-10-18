@@ -241,6 +241,21 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     dopushdisplay && popdisplay(d)
 end
 
+## User Options
+
+mutable struct Options
+    hascolor::Bool
+    extra_keymap::Union{Dict,Vector{<:Dict}}
+    backspace_align::Bool
+    backspace_adjust::Bool
+end
+
+Options(;
+        hascolor = true,
+        extra_keymap = AnyDict[],
+        backspace_align = true, backspace_adjust = backspace_align) =
+            Options(hascolor, extra_keymap, backspace_align, backspace_adjust)
+
 ## LineEditREPL ##
 
 mutable struct LineEditREPL <: AbstractREPL
@@ -257,11 +272,12 @@ mutable struct LineEditREPL <: AbstractREPL
     envcolors::Bool
     waserror::Bool
     specialdisplay::Union{Void,Display}
+    options::Options
     interface::ModalInterface
     backendref::REPLBackendRef
     LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
         new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
-            in_help,envcolors,false,nothing)
+            in_help,envcolors,false,nothing, Options())
 end
 outstream(r::LineEditREPL) = r.t
 specialdisplay(r::LineEditREPL) = r.specialdisplay
@@ -477,14 +493,14 @@ function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
     elseif m === :skip
         history_prev(s, hist, num+1, save_idx)
     else
-        Terminals.beep(LineEdit.terminal(s))
+        Terminals.beep(s)
     end
 end
 
 function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
                       num::Int=1, save_idx::Int = hist.cur_idx)
     if num == 0
-        Terminals.beep(LineEdit.terminal(s))
+        Terminals.beep(s)
         return
     end
     num < 0 && return history_prev(s, hist, -num, save_idx)
@@ -502,7 +518,7 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
     elseif m === :skip
         history_next(s, hist, num+1, save_idx)
     else
-        Terminals.beep(LineEdit.terminal(s))
+        Terminals.beep(s)
     end
 end
 
@@ -546,7 +562,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
             end
         end
     end
-    Terminals.beep(LineEdit.terminal(s))
+    Terminals.beep(s)
 end
 history_next_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, prefix::AbstractString) =
     history_move_prefix(s, hist, prefix, false)
@@ -703,8 +719,9 @@ enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
 function setup_interface(
     repl::LineEditREPL;
-    hascolor::Bool = repl.hascolor,
-    extra_repl_keymap::Union{Dict,Vector{<:Dict}} = Dict{Any,Any}[]
+    # those keyword arguments may be deprecated eventually in favor of the Options mechanism
+    hascolor::Bool = repl.options.hascolor,
+    extra_repl_keymap::Union{Dict,Vector{<:Dict}} = repl.options.extra_keymap
 )
     ###
     #
@@ -741,7 +758,7 @@ function setup_interface(
         prompt_prefix = hascolor ? repl.prompt_color : "",
         prompt_suffix = hascolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
-        keymap_func_data = repl,
+        repl = repl,
         complete = replc,
         on_enter = return_callback)
 
@@ -750,7 +767,7 @@ function setup_interface(
         prompt_prefix = hascolor ? repl.help_color : "",
         prompt_suffix = hascolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
-        keymap_func_data = repl,
+        repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
         on_done = respond(Docs.helpmode, repl, julia_prompt))
@@ -760,7 +777,7 @@ function setup_interface(
         prompt_prefix = hascolor ? repl.shell_color : "",
         prompt_suffix = hascolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
-        keymap_func_data = repl,
+        repl = repl,
         complete = ShellCompletionProvider(),
         # Transform "foo bar baz" into `foo bar baz` (shell quoting)
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
@@ -865,7 +882,7 @@ function setup_interface(
                     end
                     # Check if input line starts with "julia> ", remove it if we are in prompt paste mode
                     jl_prompt_len = 7
-                    if (firstline || isprompt_paste) && (oldpos + jl_prompt_len <= sizeof(input) && input[oldpos:oldpos+jl_prompt_len-1] == JULIA_PROMPT)
+                    if (firstline || isprompt_paste) && startswith(SubString(input, oldpos), JULIA_PROMPT)
                         isprompt_paste = true
                         oldpos += jl_prompt_len
                     # If we are prompt pasting and current statement does not begin with julia> , skip to next line

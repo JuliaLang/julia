@@ -137,7 +137,7 @@ function show(io::IO, ::MIME"text/plain", t::Task)
 end
 
 show(io::IO, ::MIME"text/plain", X::AbstractArray) = showarray(io, X, false)
-show(io::IO, ::MIME"text/plain", r::Range) = show(io, r) # always use the compact form for printing ranges
+show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
 # display something useful even for strings containing arbitrary
 # (non-UTF8) binary data:
@@ -158,6 +158,8 @@ function show(io::IO, ::MIME"text/plain", opt::JLOptions)
         v = getfield(opt, i)
         if isa(v, Ptr{UInt8})
             v = (v != C_NULL) ? unsafe_string(v) : ""
+        elseif isa(v, Ptr{Ptr{UInt8}})
+            v = unsafe_load_commands(v)
         end
         println(io, "  ", f, " = ", repr(v), i < nfields ? "," : "")
     end
@@ -186,7 +188,7 @@ function showerror(io::IO, ex::BoundsError)
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
-            if isa(ex.i, Range)
+            if isa(ex.i, AbstractRange)
                 print(io, ex.i)
             else
                 join(io, ex.i, ", ")
@@ -228,7 +230,7 @@ end
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
     print(io, "LoadError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)
-    print(io, "\nwhile loading $(ex.file), in expression starting on line $(ex.line)")
+    print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
@@ -468,7 +470,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && isleaftype(at1)
+        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && !Core.Inference.has_free_typevars(at1)
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end

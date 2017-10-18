@@ -425,8 +425,7 @@ function update(branch::AbstractString, upkgs::Set{String})
                         prev_sha = string(LibGit2.head_oid(repo))
                         success = true
                         try
-                            LibGit2.fetch(repo, payload = Nullable(creds))
-                            LibGit2.reset!(creds)
+                            LibGit2.fetch(repo, payload=LibGit2.CredentialPayload(creds))
                             LibGit2.merge!(repo, fastforward=true)
                         catch err
                             cex = CapturedException(err, catch_backtrace())
@@ -540,7 +539,7 @@ function resolve(
                 info("$(up)grading $pkg: v$ver1 => v$ver2")
                 Write.update(pkg, Read.sha1(pkg,ver2))
                 pkgsym = Symbol(pkg)
-                if Base.isbindingresolved(Main, pkgsym) && isa(getfield(Main, pkgsym), Module)
+                if Base.root_module_exists(pkgsym)
                     push!(imported, "- $pkg")
                 end
             end
@@ -571,7 +570,7 @@ end
 
 function warnbanner(msg...; label="[ WARNING ]", prefix="")
     cols = Base.displaysize(STDERR)[2]
-    str = rpad(lpad(label, div(cols+strwidth(label), 2), "="), cols, "=")
+    str = rpad(lpad(label, div(cols+textwidth(label), 2), "="), cols, "=")
     warn(prefix="", str)
     println(STDERR)
     warn(prefix=prefix, msg...)
@@ -608,7 +607,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
     cmd = ```
         $(Base.julia_cmd()) -O0
         --color=$(Base.have_color ? "yes" : "no")
-        --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
+        --compiled-modules=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
         --history-file=no
         --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
         --eval $code
@@ -716,7 +715,7 @@ function test!(pkg::AbstractString,
                     $(Base.julia_cmd())
                     --code-coverage=$(coverage ? "user" : "none")
                     --color=$(Base.have_color ? "yes" : "no")
-                    --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
+                    --compiled-modules=$(Bool(Base.JLOptions().use_compiled_modules) ? "yes" : "no")
                     --check-bounds=yes
                     --warn-overwrite=yes
                     --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
@@ -733,8 +732,8 @@ function test!(pkg::AbstractString,
     isfile(reqs_path) && resolve()
 end
 
-mutable struct PkgTestError <: Exception
-    msg::String
+struct PkgTestError <: Exception
+    msg::AbstractString
 end
 
 function Base.showerror(io::IO, ex::PkgTestError, bt; backtrace=true)

@@ -163,8 +163,9 @@ const ≠ = !=
     ≡(x,y) -> Bool
 
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
-them. Compares mutable objects by address in memory, and compares immutable objects (such as
-numbers) by contents at the bit level. This function is sometimes called `egal`.
+them. First it compares the types of `x` and `y`. If those are identical, it compares mutable
+objects by address in memory and immutable objects (such as numbers) by contents at the bit
+level. This function is sometimes called "egal".
 
 # Examples
 ```jldoctest
@@ -334,6 +335,7 @@ julia> cmp(2, 1)
 
 julia> cmp(2+im, 3-im)
 ERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})
+Stacktrace:
 [...]
 ```
 """
@@ -972,3 +974,22 @@ julia> filter(!isalpha, str)
 ```
 """
 !(f::Function) = (x...)->!f(x...)
+
+struct EqualTo{T} <: Function
+    x::T
+
+    EqualTo(x::T) where {T} = new{T}(x)
+end
+
+(f::EqualTo)(y) = isequal(f.x, y)
+
+"""
+    equalto(x)
+
+Create a function that compares its argument to `x` using [`isequal`](@ref); i.e. returns
+`y->isequal(x,y)`.
+
+The returned function is of type `Base.EqualTo`. This allows dispatching to
+specialized methods by using e.g. `f::Base.EqualTo` in a method signature.
+"""
+const equalto = EqualTo

@@ -5,13 +5,11 @@ const VALID_EXPR_HEADS = ObjectIdDict(
     :call => 1:typemax(Int),
     :invoke => 2:typemax(Int),
     :static_parameter => 1:1,
-    :line => 1:3,
     :gotoifnot => 2:2,
     :(&) => 1:1,
     :(=) => 2:2,
     :method => 1:4,
     :const => 1:1,
-    :null => 0:0, # TODO from @vtjnash: remove this + any :null handling code in Base
     :new => 1:typemax(Int),
     :return => 1:1,
     :the_exception => 0:0,
@@ -24,7 +22,9 @@ const VALID_EXPR_HEADS = ObjectIdDict(
     :global => 1:1,
     :foreigncall => 3:typemax(Int),
     :isdefined => 1:1,
-    :simdloop => 0:0
+    :simdloop => 0:0,
+    :gc_preserve_begin => 0:typemax(Int),
+    :gc_preserve_end => 0:typemax(Int)
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this
@@ -44,11 +44,11 @@ const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of meth
 const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
 
 struct InvalidCodeError <: Exception
-    kind::String
+    kind::AbstractString
     meta::Any
 end
+InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
 
-InvalidCodeError(kind) = InvalidCodeError(kind, nothing)
 
 """
     validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)

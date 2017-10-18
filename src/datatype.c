@@ -485,33 +485,34 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
 
 // bits constructors ----------------------------------------------------------
 
-typedef struct {
-    int64_t a;
-    int64_t b;
-} bits128_t;
-
-// TODO: do we care that this has invalid alignment assumptions?
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *dt, void *data)
 {
+    // data may not have the alignment required by the data type.
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(jl_is_datatype(dt));
     jl_datatype_t *bt = (jl_datatype_t*)dt;
     size_t nb = jl_datatype_size(bt);
     if (nb == 0)               return jl_new_struct_uninit(bt); // returns bt->instance
     if (bt == jl_uint8_type)   return jl_box_uint8(*(uint8_t*)data);
-    if (bt == jl_int64_type)   return jl_box_int64(*(int64_t*)data);
+    if (bt == jl_int64_type)   return jl_box_int64(jl_load_unaligned_i64(data));
     if (bt == jl_bool_type)    return (*(int8_t*)data) ? jl_true : jl_false;
-    if (bt == jl_int32_type)   return jl_box_int32(*(int32_t*)data);
-    if (bt == jl_float64_type) return jl_box_float64(*(double*)data);
+    if (bt == jl_int32_type)   return jl_box_int32(jl_load_unaligned_i32(data));
+    if (bt == jl_float64_type) {
+        double f;
+        memcpy(&f, data, 8);
+        return jl_box_float64(f);
+    }
 
     jl_value_t *v = jl_gc_alloc(ptls, nb, bt);
     switch (nb) {
-    case  1: *(int8_t*)   jl_data_ptr(v) = *(int8_t*)data;    break;
-    case  2: *(int16_t*)  jl_data_ptr(v) = *(int16_t*)data;   break;
-    case  4: *(int32_t*)  jl_data_ptr(v) = *(int32_t*)data;   break;
-    case  8: *(int64_t*)  jl_data_ptr(v) = *(int64_t*)data;   break;
-    case 16: *(bits128_t*)jl_data_ptr(v) = *(bits128_t*)data; break;
-    default: memcpy(jl_data_ptr(v), data, nb);
+    case  1: *(uint8_t*) v = *(uint8_t*)data;    break;
+    case  2: *(uint16_t*)v = jl_load_unaligned_i16(data);   break;
+    case  4: *(uint32_t*)v = jl_load_unaligned_i32(data);   break;
+    case  8: *(uint64_t*)v = jl_load_unaligned_i64(data);   break;
+    case 16:
+        memcpy(jl_assume_aligned(v, 16), data, 16);
+        break;
+    default: memcpy(v, data, nb);
     }
     return v;
 }
@@ -521,21 +522,24 @@ JL_DLLEXPORT jl_value_t *jl_typemax_uint(jl_value_t *bt)
 {
     uint64_t data = 0xffffffffffffffffULL;
     jl_value_t *v = jl_gc_alloc(jl_get_ptls_states(), sizeof(size_t), bt);
-    memcpy(jl_data_ptr(v), &data, sizeof(size_t));
+    memcpy(v, &data, sizeof(size_t));
     return v;
 }
 
 void jl_assign_bits(void *dest, jl_value_t *bits)
 {
+    // bits must be a heap box.
     size_t nb = jl_datatype_size(jl_typeof(bits));
     if (nb == 0) return;
     switch (nb) {
-    case  1: *(int8_t*)dest    = *(int8_t*)jl_data_ptr(bits);    break;
-    case  2: *(int16_t*)dest   = *(int16_t*)jl_data_ptr(bits);   break;
-    case  4: *(int32_t*)dest   = *(int32_t*)jl_data_ptr(bits);   break;
-    case  8: *(int64_t*)dest   = *(int64_t*)jl_data_ptr(bits);   break;
-    case 16: *(bits128_t*)dest = *(bits128_t*)jl_data_ptr(bits); break;
-    default: memcpy(dest, jl_data_ptr(bits), nb);
+    case  1: *(uint8_t*)dest    = *(uint8_t*)bits;    break;
+    case  2: jl_store_unaligned_i16(dest, *(uint16_t*)bits); break;
+    case  4: jl_store_unaligned_i32(dest, *(uint32_t*)bits); break;
+    case  8: jl_store_unaligned_i64(dest, *(uint64_t*)bits); break;
+    case 16:
+        memcpy(dest, jl_assume_aligned(bits, 16), 16);
+        break;
+    default: memcpy(dest, bits, nb);
     }
 }
 
@@ -730,6 +734,13 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
     for(size_t i=na; i < nf; i++) {
         if (jl_field_isptr(type, i)) {
             *(jl_value_t**)((char*)jl_data_ptr(jv)+jl_field_offset(type,i)) = NULL;
+
+        } else {
+            jl_value_t *ft = jl_field_type(type, i);
+            if (jl_is_uniontype(ft)) {
+                uint8_t *psel = &((uint8_t *)jv)[jl_field_offset(type, i) + jl_field_size(type, i) - 1];
+                *psel = 0;
+            }
         }
     }
     return jv;

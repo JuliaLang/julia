@@ -33,7 +33,7 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
         }
         if (jl_is_toplevel_only_expr(expr) || e->head == const_sym || e->head == copyast_sym ||
             e->head == quote_sym || e->head == inert_sym ||
-            e->head == line_sym || e->head == meta_sym || e->head == inbounds_sym ||
+            e->head == meta_sym || e->head == inbounds_sym ||
             e->head == boundscheck_sym || e->head == simdloop_sym) {
             // ignore these
         }
@@ -434,21 +434,6 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 set_lineno = 1;
             }
         }
-        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == line_sym) {
-            if (!set_lineno) {
-                switch (jl_expr_nargs(st)) {
-                case 2:
-                    m->file = (jl_sym_t*)jl_exprarg(st, 1);
-                    JL_FALLTHROUGH;
-                case 1:
-                    m->line = jl_unbox_long(jl_exprarg(st, 0));
-                    JL_FALLTHROUGH;
-                default: ;
-                }
-                st = jl_nothing;
-                set_lineno = 1;
-            }
-        }
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == meta_sym &&
                  jl_expr_nargs(st) > 1 && jl_exprarg(st, 0) == (jl_value_t*)nospecialize_sym) {
             for (size_t j=1; j < jl_expr_nargs(st); j++) {
@@ -764,23 +749,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                           m->line);
     }
 
-    int ishidden = !!strchr(jl_symbol_name(name), '#');
-    if (!ishidden) {
-        jl_value_t *atemp = argtype;
-        while (jl_is_unionall(atemp)) {
-            jl_unionall_t *ua = (jl_unionall_t*)atemp;
-            jl_tvar_t *tv = ua->var;
-            if (!jl_has_typevar(ua->body, tv)) {
-                jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
-                          jl_symbol_name(tv->name), jl_symbol_name(name));
-                print_func_loc(JL_STDERR, m);
-                jl_printf(JL_STDERR, ".\n");
-            }
-            atemp = ua->body;
-        }
-    }
     jl_check_static_parameter_conflicts(m, f, tvars);
-
     jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);

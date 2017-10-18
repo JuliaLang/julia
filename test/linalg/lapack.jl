@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 import Base.LinAlg.BlasInt
 
@@ -10,8 +10,7 @@ import Base.LinAlg.BlasInt
 @test_throws ArgumentError Base.LinAlg.LAPACK.chktrans('Z')
 
 @testset "syevr" begin
-    let
-        srand(123)
+    guardsrand(123) do
         Ainit = randn(5,5)
         @testset for elty in (Float32, Float64, Complex64, Complex128)
             if elty == Complex64 || elty == Complex128
@@ -105,7 +104,7 @@ end
         C = rand(elty,6,6)
         D = copy(C)
         D = LAPACK.gbtrs!('N',2,1,6,AB,ipiv,D)
-        A = diagm(dl2,-2) + diagm(dl,-1) + diagm(d) + diagm(du,1)
+        A = diagm(-2 => dl2, -1 => dl, 0 => d, 1 => du)
         @test A\C ≈ D
         @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,ones(elty,7,6))
         @test_throws Base.LinAlg.LAPACKException LAPACK.gbtrf!(2,1,6,zeros(AB))
@@ -316,6 +315,15 @@ end
         @test_throws DimensionMismatch LAPACK.ormrq!('R','N',A,zeros(elty,11),rand(elty,10,10))
         @test_throws DimensionMismatch LAPACK.ormrq!('L','N',A,zeros(elty,11),rand(elty,10,10))
 
+        A = rand(elty,10,11)
+        Q = copy(A)
+        Q,tau = LAPACK.gerqf!(Q)
+        R = triu(Q[:,2:11])
+        LAPACK.orgrq!(Q,tau)
+        @test Q*Q' ≈ eye(elty,10)
+        @test R*Q ≈ A
+        @test_throws DimensionMismatch LAPACK.orgrq!(zeros(elty,11,10),zeros(elty,10))
+
         C = rand(elty,10,10)
         V = rand(elty,10,10)
         T = zeros(elty,10,11)
@@ -491,7 +499,7 @@ end
 @testset "posv and some errors for friends" begin
     @testset for elty in (Float32, Float64, Complex64, Complex128)
         A = rand(elty,10,10)/100
-        A += real(diagm(10*real(rand(elty,10))))
+        A += real(diagm(0 => 10*real(rand(elty,10))))
         if elty <: Complex
             A = A + A'
         else
@@ -555,22 +563,34 @@ end
     end
 end
 
-@testset "trexc" begin
+@testset "trsen" begin
     @testset for elty in (Float32, Float64, Complex64, Complex128)
-        for c in ('V', 'N')
-            A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
-            T,Q,d = schur(A)
-            Base.LinAlg.LAPACK.trsen!('N',c,Array{LinAlg.BlasInt}([0,1,0,0]),T,Q)
-            @test d[1] ≈ T[2,2]
-            @test d[2] ≈ T[1,1]
-            if c == 'V'
-                @test  Q*T*Q' ≈ A
+        for job in ('N', 'E', 'V', 'B')
+            for c in ('V', 'N')
+                A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
+                T,Q,d = schur(A)
+                s, sep = Base.LinAlg.LAPACK.trsen!(job,c,Array{LinAlg.BlasInt}([0,1,0,0]),T,Q)[4:5]
+                @test d[1] ≈ T[2,2]
+                @test d[2] ≈ T[1,1]
+                if c == 'V'
+                    @test  Q*T*Q' ≈ A
+                end
+                if job == 'N' || job == 'V'
+                    @test iszero(s)
+                else
+                    @test s ≈ 0.8080423 atol=1e-6
+                end
+                if job == 'N' || job == 'E'
+                    @test iszero(sep)
+                else
+                    @test sep ≈ 2. atol=3e-1
+                end
             end
         end
     end
 end
 
-@testset "trexc and trsen" begin
+@testset "trexc" begin
     @testset for elty in (Float32, Float64, Complex64, Complex128)
         for c in ('V', 'N')
             A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
