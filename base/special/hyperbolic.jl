@@ -118,7 +118,7 @@ function cosh(x::T) where T <: Union{Float32, Float64}
     end
     # in e)
     if absx < H_OVERFLOW_X(T)
-        return _ldexp_exp(absx, -1)
+        return ldexp(absx, -1)
     end
     # in f)
     return T(Inf)
