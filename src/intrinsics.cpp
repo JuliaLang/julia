@@ -208,39 +208,43 @@ static Constant *julia_const_to_llvm(const void *ptr, jl_datatype_t *bt)
             uint8_t sel = ((const uint8_t*)ptr)[offs + fsz - 1];
             jl_value_t *active_ty = jl_nth_union_component(ft, sel);
             size_t active_sz = jl_datatype_size(active_ty);
-            ArrayType *aty = cast<ArrayType>(lct->getTypeAtIndex(llvm_idx));
-            unsigned num_array_elem = aty->getNumElements();
-            assert(aty->getElementType() == IntegerType::get(jl_LLVMContext, 8 * al) &&
-                   num_array_elem == (fsz - 1) / al);
-            std::vector<Constant*> ArrayElements(num_array_elem);
-            for (unsigned j = 0; j < num_array_elem; j++) {
-                APInt Elem(8 * al, 0);
-                void *bits = const_cast<uint64_t*>(Elem.getRawData());
-                if (active_sz > al) {
-                    memcpy(bits, ov, al);
-                    active_sz -= al;
-                }
-                else if (active_sz > 0) {
-                    memcpy(bits, ov, active_sz);
-                    active_sz = 0;
-                }
-                ov += al;
-                ArrayElements[j] = ConstantInt::get(aty->getElementType(), Elem);
-            }
-            fields.push_back(ConstantArray::get(aty, ArrayElements));
+            Type *AlignmentType = IntegerType::get(jl_LLVMContext, 8 * al);
+            unsigned NumATy = (fsz - 1) / al;
             unsigned remainder = (fsz - 1) % al;
-            while (remainder--) {
-                uint8_t byte;
+            while (NumATy--) {
+                Constant *fld;
                 if (active_sz > 0) {
-                    byte = *ov;
-                    active_sz -= 1;
+                    APInt Elem(8 * al, 0);
+                    void *bits = const_cast<uint64_t*>(Elem.getRawData());
+                    if (active_sz > al) {
+                        memcpy(bits, ov, al);
+                        active_sz -= al;
+                    }
+                    else {
+                        memcpy(bits, ov, active_sz);
+                        active_sz = 0;
+                    }
+                    fld = ConstantInt::get(AlignmentType, Elem);
                 }
                 else {
-                    byte = 0;
+                    fld = UndefValue::get(AlignmentType);
+                }
+                ov += al;
+                fields.push_back(fld);
+            }
+            while (remainder--) {
+                Constant *fld;
+                if (active_sz > 0) {
+                    uint8_t byte = *ov;
+                    APInt Elem(8, byte);
+                    active_sz -= 1;
+                    fld = ConstantInt::get(T_int8, Elem);
+                }
+                else {
+                    fld = UndefValue::get(T_int8);
                 }
                 ov += 1;
-                APInt Elem(8, byte);
-                fields.push_back(ConstantInt::get(T_int8, Elem));
+                fields.push_back(fld);
             }
             fields.push_back(ConstantInt::get(T_int8, sel));
         }

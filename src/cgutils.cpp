@@ -540,12 +540,14 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
             else if (jl_is_uniontype(ty)) {
                 // pick an Integer type size such that alignment will be correct
                 // and always end with an Int8 (selector byte)
-                Type *lty0 = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * al), (fsz - 1) / al);
-                latypes.push_back(lty0);
-                latypes.push_back(T_int8);
+                Type *AlignmentType = IntegerType::get(jl_LLVMContext, 8 * al);
+                unsigned NumATy = (fsz - 1) / al;
                 unsigned remainder = (fsz - 1) % al;
+                while (NumATy--)
+                    latypes.push_back(AlignmentType);
                 while (remainder--)
                     latypes.push_back(T_int8);
+                latypes.push_back(T_int8);
                 isarray = false;
                 allghost = false;
                 continue;
