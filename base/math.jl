@@ -443,13 +443,6 @@ for f in (:acosh, :atanh, :log, :log2, :log10, :lgamma, :log1p)
     end
 end
 
-@inline asin(x::Real) = asin(float(x))
-@inline sin(x::Real) = sin(float(x))
-@inline cos(x::Real) = cos(float(x))
-@inline tan(x::Real) = tan(float(x))
-@inline sincos(x::Real) = sincos(float(x))
-@inline acos(x::Real) = acos(float(x))
-
 @inline function sqrt(x::Union{Float32,Float64})
     x < zero(x) && throw_complex_domainerror(:sqrt, x)
     sqrt_llvm(x)
