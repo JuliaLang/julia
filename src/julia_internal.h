@@ -734,10 +734,6 @@ void *jl_dlopen_soname(const char *pfx, size_t n, unsigned flags);
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
 
-#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
-#define HAVE_CPUID
-#endif
-
 #ifdef SEGV_EXCEPTION
 extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
 #endif
@@ -1005,7 +1001,9 @@ extern jl_sym_t *nospecialize_sym;
 extern jl_sym_t *boundscheck_sym;
 extern jl_sym_t *gc_preserve_begin_sym; extern jl_sym_t *gc_preserve_end_sym;
 
-void jl_register_fptrs(uint64_t sysimage_base, const char *base, const int32_t *offsets,
+struct _jl_sysimg_fptrs_t;
+
+void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *fptrs,
                        jl_method_instance_t **linfos, size_t n);
 
 extern arraylist_t partial_inst;
@@ -1066,6 +1064,12 @@ jl_assume_aligned(T ptr, unsigned align)
 }
 #else
 #define jl_assume_aligned(ptr, align) (ptr)
+#endif
+
+#if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
+#  define jl_unreachable() __builtin_unreachable()
+#else
+#  define jl_unreachable() ((void)jl_assume(0))
 #endif
 
 #ifdef __cplusplus

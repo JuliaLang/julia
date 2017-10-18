@@ -378,13 +378,20 @@ let s = "CompletionFoo.test4(\"e\",r\" \","
 end
 
 # (As discussed in #19829, the Base.REPLCompletions.get_type function isn't
-#  powerful enough to analyze general dot calls because it can't handle
-#  anonymous-function evaluation.)
-let s = "CompletionFoo.test5(push!(Base.split(\"\",' '),\"\",\"\").==\"\","
+#  powerful enough to analyze anonymous functions.)
+let s = "CompletionFoo.test5(broadcast((x,y)->x==y, push!(Base.split(\"\",' '),\"\",\"\"), \"\"),"
     c, r, res = test_complete(s)
     @test !res
     @test_broken length(c) == 1
     @test_broken c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
+end
+
+# test partial expression expansion
+let s = "CompletionFoo.test5(Bool[x==1 for x=1:4],"
+    c, r, res = test_complete(s)
+    @test !res
+    @test length(c) == 1
+    @test c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{Array{Bool,1}})))
 end
 
 let s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.test_y_array[1]()[2], "

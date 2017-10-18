@@ -101,7 +101,7 @@ julia> extrema(b)
 (1, 210)
 ```
 """
-linearindices(A) = (@_inline_meta; OneTo(_length(A)))
+linearindices(A::AbstractArray) = (@_inline_meta; OneTo(_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
 
 keys(a::AbstractArray) = CartesianRange(indices(a))
@@ -1937,6 +1937,8 @@ map(f, A::Union{AbstractArray,AbstractSet}) = collect_similar(A, Generator(f,A))
 
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise.
+
+See also: [`mapslices`](@ref)
 
 # Examples
 ```jldoctest

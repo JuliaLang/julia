@@ -53,7 +53,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     while !done(s,j)
         c, k = next(s,j)
         if !in_single_quotes && !in_double_quotes && isspace(c)
-            update_arg(s[i:j-1])
+            update_arg(s[i:prevind(s, j)])
             append_arg()
             j = k
             while !done(s,j)
@@ -65,7 +65,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 j = k
             end
         elseif interpolate && !in_single_quotes && c == '$'
-            update_arg(s[i:j-1]); i = k; j = k
+            update_arg(s[i:prevind(s, j)]); i = k; j = k
             if done(s,k)
                 error("\$ right before end of command")
             end
@@ -79,24 +79,24 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
         else
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
-                update_arg(s[i:j-1]); i = k
+                update_arg(s[i:prevind(s, j)]); i = k
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
-                update_arg(s[i:j-1]); i = k
+                update_arg(s[i:prevind(s, j)]); i = k
             elseif c == '\\'
                 if in_double_quotes
                     if done(s,k)
                         error("unterminated double quote")
                     end
                     if s[k] == '"' || s[k] == '$' || s[k] == '\\'
-                        update_arg(s[i:j-1]); i = k
+                        update_arg(s[i:prevind(s, j)]); i = k
                         c, k = next(s,k)
                     end
                 elseif !in_single_quotes
                     if done(s,k)
                         error("dangling backslash")
                     end
-                    update_arg(s[i:j-1]); i = k
+                    update_arg(s[i:prevind(s, j)]); i = k
                     c, k = next(s,k)
                 end
             elseif !in_single_quotes && !in_double_quotes && c in special

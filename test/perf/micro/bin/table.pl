@@ -56,8 +56,8 @@ our @systems = qw(c julia lua fortran java javascript matlab python mathematica 
 
 print qq[<table class="benchmarks">\n];
 print qq[<colgroup>\n];
-print qq[<col class="name"></col>\n];
-printf qq[<col class="relative" span="%d"></col>\n], scalar(@systems);
+print qq[<col class="name">\n];
+printf qq[<col class="relative" span="%d">\n], scalar(@systems);
 print qq[</colgroup>\n];
 print qq[<thead>\n];
 print qq[<tr>];

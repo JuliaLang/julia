@@ -50,10 +50,11 @@ gc(); gc()
 s = open(f->f,file,"w")
 @test Mmap.mmap(file) == Array{UInt8}(0) # requested len=0 on empty file
 @test Mmap.mmap(file,Vector{UInt8},0) == Array{UInt8}(0)
-m = Mmap.mmap(file,Vector{UInt8},12)
+s = open(file, "r+")
+m = Mmap.mmap(s,Vector{UInt8},12)
 m[:] = b"Hello World\n"
 Mmap.sync!(m)
-finalize(m); m=nothing; gc()
+close(s); finalize(m); m=nothing; gc()
 @test open(x->read(x, String),file) == "Hello World\n"
 
 s = open(file, "r")
@@ -73,21 +74,24 @@ end
 gc(); gc()
 
 sz = filesize(file)
-m = Mmap.mmap(file, Vector{UInt8}, sz+1)
+s = open(file, "r+")
+m = Mmap.mmap(s, Vector{UInt8}, sz+1)
 @test length(m) == sz+1 # test growing
 @test m[end] == 0x00
-finalize(m); m=nothing; gc()
+close(s); finalize(m); m=nothing; gc()
 sz = filesize(file)
-m = Mmap.mmap(file, Vector{UInt8}, 1, sz)
+s = open(file, "r+")
+m = Mmap.mmap(s, Vector{UInt8}, 1, sz)
 @test length(m) == 1
 @test m[1] == 0x00
-finalize(m); m=nothing; gc()
+close(s); finalize(m); m=nothing; gc()
 sz = filesize(file)
 # test where offset is actually > than size of file; file is grown with zeroed bytes
-m = Mmap.mmap(file, Vector{UInt8}, 1, sz+1)
+s = open(file, "r+")
+m = Mmap.mmap(s, Vector{UInt8}, 1, sz+1)
 @test length(m) == 1
 @test m[1] == 0x00
-finalize(m); m=nothing; gc()
+close(s); finalize(m); m=nothing; gc()
 
 s = open(file, "r")
 m = Mmap.mmap(s)
@@ -217,10 +221,11 @@ open(file,"w") do f
     write(f,UInt8(1))
 end
 @test filesize(file) == 9
-m = Mmap.mmap(file, BitArray, (72,))
+s = open(file, "r+")
+m = Mmap.mmap(s, BitArray, (72,))
 @test Base._check_bitarray_consistency(m)
 @test length(m) == 72
-finalize(m); m = nothing; gc()
+close(s); finalize(m); m = nothing; gc()
 rm(file)
 
 # Mmap.mmap with an offset

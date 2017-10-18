@@ -91,7 +91,7 @@ end
 end
 
 @testset "Left Division" begin
-    mat = diagm([1,2,3])
+    mat = Matrix(Diagonal([1,2,3]))
     v = [2,3,4]
     rv = v.'
 
@@ -101,7 +101,7 @@ end
 @testset "Multiplication" begin
     v = [1,2,3]
     rv = v.'
-    mat = diagm([1,2,3])
+    mat = Matrix(Diagonal([1,2,3]))
 
     @test (rv*v) === 14
     @test (rv*mat)::RowVector == [1 4 9]
@@ -137,7 +137,7 @@ end
 
     z = [1+im,2,3]
     cz = z'
-    mat = diagm([1+im,2,3])
+    mat = Matrix(Diagonal([1+im,2,3]))
 
     @test cz*z === 15 + 0im
 
@@ -181,7 +181,7 @@ end
 end
 
 @testset "Right Division" begin
-    mat = diagm([1,2,3])
+    mat = Matrix(Diagonal([1,2,3]))
     v = [2,3,4]
     rv = v.'
 
@@ -197,7 +197,7 @@ end
 end
 
 @testset "Sparse ambiguity methods" begin
-    mat = sparse(diagm([1,2,3]))
+    mat = sparse(Diagonal([1,2,3]))
     v = [2,3,4]
     rv = v.'
 

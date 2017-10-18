@@ -2369,6 +2369,12 @@ f9534h(a,b,c...) = c[a]
 @test f9534h(4,2,3,4,5,6) == 6
 @test try; f9534h(5,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 5; end
 
+# issue #7978, comment 332352438
+f7978a() = 1
+@test try; a, b = f7978a() catch ex; (ex::BoundsError).a == 1 && ex.i == 2; end
+f7978b() = 1, 2
+@test try; a, b, c = f7978b() catch ex; (ex::BoundsError).a == (1, 2) && ex.i == 3; end
+
 # issue #9535
 counter9535 = 0
 f9535() = (global counter9535; counter9535 += 1; counter9535)
@@ -5341,6 +5347,13 @@ f_isdefined_va(::T...) where {T} = @isdefined T
 @test !f_isdefined_va()
 @test f_isdefined_va(1, 2, 3)
 
+# note: the constant `5` here should be > DataType.ninitialized.
+# This tests that there's no crash due to accessing Type.body.layout.
+let f(n) = isdefined(typeof(n), 5)
+    @test f(0) === false
+    @test isdefined(Int, 5) === false
+end
+
 # @isdefined in a loop
 let a = []
     for i = 1:2
@@ -5504,6 +5517,33 @@ x.u = initvalue2(Base.uniontypes(U)[1])
 @test x.u === initvalue2(Base.uniontypes(U)[1])
 x.u = initvalue(Base.uniontypes(U)[2])
 @test x.u === initvalue(Base.uniontypes(U)[2])
+
+v = Vector{Float64}(8000000);
+mutable struct UnionField2
+    x::Union{Void, Int}
+    UnionField2() = new()
+end
+@test UnionField2().x === nothing
+
+struct UnionField3
+    x::Union{Void, Int}
+    UnionField3() = new()
+end
+@test UnionField3().x === nothing
+
+mutable struct UnionField4
+    x::Union{Void, Float64}
+    y::Union{Void, Int8}
+    UnionField4() = new()
+end
+@test UnionField4().x === nothing
+
+struct UnionField5
+    x::Union{Void, Float64}
+    y::Union{Void, Int8}
+    UnionField5() = new()
+end
+@test UnionField5().x === nothing
 
 # PR #23367
 struct A23367
@@ -5783,3 +5823,8 @@ function hh6614()
     x, y
 end
 @test hh6614() == (1, 2)
+
+# issue 22098
+macro m22098 end
+handle_on_m22098 = getfield(@__MODULE__, Symbol("@m22098"))
+@test isempty(methods(handle_on_m22098))

@@ -230,7 +230,7 @@ The former is a single character value of type `Char`, while the latter is a str
 happens to contain only a single character. In Julia these are very different things.
 
 Range indexing makes a copy of the selected part of the original string.
-Alternatively, it is possible to create a view into a string using the type `SubString`,
+Alternatively, it is possible to create a view into a string using the type [`SubString`](@ref),
 for example:
 
 ```jldoctest
@@ -245,7 +245,7 @@ SubString{String}
 ```
 
 Several standard functions like [`chop`](@ref), [`chomp`](@ref) or [`strip`](@ref)
-return a `SubString`.
+return a [`SubString`](@ref).
 
 ## Unicode and UTF-8
 

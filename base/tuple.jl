@@ -57,7 +57,7 @@ end
 # while reducing to plain next() for arbitrary iterables.
 indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
 indexed_next(a::Array, i::Int, state) = (a[i], i+1)
-indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state)
+indexed_next(I, i, state) = done(I,state) ? throw(BoundsError(I, i)) : next(I, state)
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
@@ -308,9 +308,13 @@ reverse(t::Tuple) = revargs(t...)
 
 # TODO: these definitions cannot yet be combined, since +(x...)
 # where x might be any tuple matches too many methods.
+# TODO: this is inconsistent with the regular sum in cases where the arguments
+# require size promotion to system size.
 sum(x::Tuple{Any, Vararg{Any}}) = +(x...)
 
 # NOTE: should remove, but often used on array sizes
+# TODO: this is inconsistent with the regular prod in cases where the arguments
+# require size promotion to system size.
 prod(x::Tuple{}) = 1
 prod(x::Tuple{Any, Vararg{Any}}) = *(x...)
 

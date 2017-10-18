@@ -116,6 +116,21 @@ function test_diagonal()
     # don't consider a diagonal variable concrete if it already has an abstract lower bound
     @test isequal_type(Tuple{Vararg{A}} where A>:Integer,
                        Tuple{Vararg{A}} where A>:Integer)
+
+    # issue #24166
+    @test !issub(Tuple{T, T, Ref{T}} where T, Tuple{S, S, Ref{Q} where Q} where S)
+    @test !issub(Tuple{T, T, Ref{T}} where T, Tuple{S, S, Ref{Q} where Q} where S<:Integer)
+    @test !issub(Tuple{T, T, Ref{T}} where T, Tuple{S, S, Ref{Q} where Q} where S<:Int)
+    @test  issub(Tuple{T, T, Ref{T}} where T<:Int, Tuple{S, S, Ref{Q} where Q} where S)
+    @test !issub(Tuple{T, T, Ref{T}} where T>:Int, Tuple{S, S, Ref{Q} where Q} where S)
+    @test !issub(Tuple{T, T, Ref{T}} where T>:Integer, Tuple{S, S, Ref{Q} where Q} where S)
+    @test !issub(Tuple{T, T, Ref{T}} where T>:Any, Tuple{S, S, Ref{Q} where Q} where S)
+
+    @test  issub(Tuple{T, T} where Int<:T<:Int, Tuple{T, T} where Int<:T<:Int)
+    @test  issub(Tuple{T, T} where T>:Int, Tuple{T, T} where T>:Int)
+    @test  issub(Tuple{Tuple{T, T} where T>:Int}, Tuple{Tuple{T, T} where T>:Int})
+    @test  issub(Tuple{Tuple{T, T} where T>:Int}, Tuple{Tuple{T, T}} where T>:Int)
+    @test  issub(Tuple{Tuple{T, T}} where T>:Int, Tuple{Tuple{T, T} where T>:Int})
 end
 
 # level 3: UnionAll
@@ -1202,3 +1217,15 @@ let X = Ref{Tuple{Array{Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16
     Y = Ref{Tuple{Array{Union{Int8, UInt128, UInt16, UInt32, UInt64, UInt8, S}, 1}, Array{Union{Int8, UInt128, UInt16, UInt32, UInt64, UInt8, T}, 1}}} where S where T
     @test X <: Y
 end
+
+# issue #23764
+@test Tuple{Ref{Union{T,Int}} where {T}} <: Tuple{Ref{T}} where {T}
+@test Tuple{Ref{Union{T,Int}} where {T}} <: Tuple{Ref{T} where {T}}
+@test (Tuple{Ref{Union{T,Int}}} where T) <: Tuple{Ref{T}} where {T}
+@test (Tuple{Ref{Union{T,Int}}} where T) <: Tuple{Ref{T} where {T}}
+@test Tuple{Tuple{Tuple{R}} where R} <: Tuple{Tuple{S}} where S
+struct A23764{T, N, S} <: AbstractArray{Union{T, S}, N}; end
+@test Tuple{A23764{Int, 1, T} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
+struct A23764_2{T, N, S} <: AbstractArray{Union{Ref{T}, S}, N}; end
+@test Tuple{A23764_2{T, 1, Void} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
+@test Tuple{A23764_2{T, 1, Void} where T} <: Tuple{AbstractArray{T,N} where {T,N}}

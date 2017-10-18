@@ -104,7 +104,7 @@ end
         C = rand(elty,6,6)
         D = copy(C)
         D = LAPACK.gbtrs!('N',2,1,6,AB,ipiv,D)
-        A = diagm(dl2,-2) + diagm(dl,-1) + diagm(d) + diagm(du,1)
+        A = diagm(-2 => dl2, -1 => dl, 0 => d, 1 => du)
         @test A\C ≈ D
         @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,ones(elty,7,6))
         @test_throws Base.LinAlg.LAPACKException LAPACK.gbtrf!(2,1,6,zeros(AB))
@@ -499,7 +499,7 @@ end
 @testset "posv and some errors for friends" begin
     @testset for elty in (Float32, Float64, Complex64, Complex128)
         A = rand(elty,10,10)/100
-        A += real(diagm(10*real(rand(elty,10))))
+        A += real(diagm(0 => 10*real(rand(elty,10))))
         if elty <: Complex
             A = A + A'
         else

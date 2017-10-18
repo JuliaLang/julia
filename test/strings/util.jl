@@ -230,7 +230,11 @@ end
 
 @testset "chomp/chop" begin
     @test chomp("foo\n") == "foo"
+    @test chomp("fo∀\n") == "fo∀"
+    @test chomp("fo∀") == "fo∀"
     @test chop("fooε") == "foo"
+    @test chop("foεo") == "foε"
+    @test chop("∃∃∃∃") == "∃∃∃"
     @test isa(chomp("foo"), SubString)
     @test isa(chop("foo"), SubString)
 end

@@ -10,7 +10,6 @@ const VALID_EXPR_HEADS = ObjectIdDict(
     :(=) => 2:2,
     :method => 1:4,
     :const => 1:1,
-    :null => 0:0, # TODO from @vtjnash: remove this + any :null handling code in Base
     :new => 1:typemax(Int),
     :return => 1:1,
     :the_exception => 0:0,

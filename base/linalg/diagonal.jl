@@ -52,7 +52,7 @@ Diagonal{T}(V::AbstractVector) where {T} = Diagonal{T}(convert(AbstractVector{T}
 convert(::Type{Diagonal{T}}, D::Diagonal{T}) where {T} = D
 convert(::Type{Diagonal{T}}, D::Diagonal) where {T} = Diagonal{T}(convert(AbstractVector{T}, D.diag))
 convert(::Type{AbstractMatrix{T}}, D::Diagonal) where {T} = convert(Diagonal{T}, D)
-convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
+convert(::Type{Matrix}, D::Diagonal) = diagm(0 => D.diag)
 convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
 full(D::Diagonal) = convert(Array, D)
 

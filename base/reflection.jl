@@ -126,7 +126,13 @@ julia> fieldname(SparseMatrixCSC, 5)
 :nzval
 ```
 """
-fieldname(t::DataType, i::Integer) = t.name.names[i]::Symbol
+function fieldname(t::DataType, i::Integer)
+    n_fields = length(t.name.names)
+    field_label = n_fields == 1 ? "field" : "fields"
+    i > n_fields && throw(ArgumentError("Cannot access field $i since type $t only has $n_fields $field_label."))
+    i < 1 && throw(ArgumentError("Field numbers must be positive integers. $i is invalid."))
+    return t.name.names[i]::Symbol
+end
 fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)
 fieldname(t::Type{<:Tuple}, i::Integer) =
     i < 1 || i > fieldcount(t) ? throw(BoundsError(t, i)) : Int(i)
@@ -491,10 +497,10 @@ enumerated types (see `@enum`).
 
 # Example
 ```jldoctest
-julia> @enum Colors Red Blue Green
+julia> @enum Color red blue green
 
-julia> instances(Colors)
-(Red::Colors = 0, Blue::Colors = 1, Green::Colors = 2)
+julia> instances(Color)
+(red::Color = 0, blue::Color = 1, green::Color = 2)
 ```
 """
 function instances end

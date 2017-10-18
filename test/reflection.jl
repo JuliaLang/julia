@@ -328,10 +328,10 @@ tlayout = TLayout(5,7,11)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
 @test_throws BoundsError fieldtype(TLayout, 0)
-@test_throws BoundsError fieldname(TLayout, 0)
+@test_throws ArgumentError fieldname(TLayout, 0)
 @test_throws BoundsError fieldoffset(TLayout, 0)
 @test_throws BoundsError fieldtype(TLayout, 4)
-@test_throws BoundsError fieldname(TLayout, 4)
+@test_throws ArgumentError fieldname(TLayout, 4)
 @test_throws BoundsError fieldoffset(TLayout, 4)
 
 @test fieldtype(Tuple{Vararg{Int8}}, 1) === Int8

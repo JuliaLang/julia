@@ -115,6 +115,9 @@ Language changes
   * The keyword `importall` is deprecated. Use `using` and/or individual `import` statements
     instead ([#22789]).
 
+  * `reduce(+, [...])` and `reduce(*, [...])` no longer widen the iterated over arguments to
+    system word size. `sum` and `prod` still preserve this behavior. ([#22825])
+
 Breaking changes
 ----------------
 
@@ -249,8 +252,12 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
+  * Functions `first` and `last` now accept `nchar` argument for `AbstractString`.
+    If this argument is used they return a string consisting of first/last `nchar`
+    characters from the original string ([#23960]).
+
   * The functions `nextind` and `prevind` now accept `nchar` argument that indicates
-    number of characters to move ([#23805]).
+    the number of characters to move ([#23805]).
 
   * The functions `strip`, `lstrip` and `rstrip` now return `SubString` ([#22496]).
 
@@ -312,6 +319,8 @@ Library improvements
   * `BigFloat` random numbers can now be generated ([#22720]).
 
   * REPL Undo via Ctrl-/ and Ctrl-_
+
+  * `diagm` now accepts several diagonal index/vector `Pair`s ([#24047]).
 
   * New function `equalto(x)`, which returns a function that compares its argument to `x`
     using `isequal` ([#23812]).
@@ -464,10 +473,16 @@ Deprecated or removed
   * The tuple-of-types form of `cfunction`, `cfunction(f, returntype, (types...))`, has been deprecated
     in favor of the tuple-type form `cfunction(f, returntype, Tuple{types...})` ([#23066]).
 
+  * `diagm(v::AbstractVector, k::Integer=0)` has been deprecated in favor of
+    `diagm(k => v)` ([#24047]).
+
+  * `diagm(x::Number)` has been deprecated in favor of `fill(x, 1, 1)` ([#24047]).
+
   * `diagm(A::SparseMatrixCSC)` has been deprecated in favor of
     `spdiagm(sparsevec(A))` ([#23341]).
 
-  * `diagm(A::BitMatrix)` has been deprecated, use `diagm(vec(A))` instead ([#23373]).
+  * `diagm(A::BitMatrix)` has been deprecated, use `diagm(0 => vec(A))` or
+    `BitMatrix(Diagonal(vec(A)))` instead ([#23373], [#24047]).
 
   * `ℯ` (written as `\mscre<TAB>` or `\euler<TAB>`) is now the only (by default) exported
     name for Euler's number, and the type has changed from `Irrational{:e}` to
@@ -639,6 +654,9 @@ Breaking changes
 ----------------
 
 This section lists changes that do not have deprecation warnings.
+
+  * The constructor of `SubString` now checks if the requsted view range
+    is defined by valid indices in the parent `AbstractString` ([#22511]).
 
   * `readline`, `readlines` and `eachline` return lines without line endings by default.
     You *must* use `readline(s, chomp=false)`, etc. to get the old behavior where

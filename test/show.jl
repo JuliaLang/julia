@@ -992,3 +992,11 @@ end
     p = PermutedDimsArray(r, (2, 1))
     @test summary(p) == "2×4 PermutedDimsArray(reshape(view(::Array{Int16,3}, :, 3, 2:5), 4, 2), (2, 1)) with eltype Int16"
 end
+
+@testset "Methods" begin
+    m = @which sin(1.0)
+    io = IOBuffer()
+    show(io, "text/html", m)
+    s = String(take!(io))
+    @test contains(s, " in Base.Math ")
+end

@@ -739,13 +739,13 @@ of the [`eltype`](@ref) of `A`.
 julia> rank(eye(3))
 3
 
-julia> rank(diagm([1, 0, 2]))
+julia> rank(diagm(0 => [1, 0, 2]))
 2
 
-julia> rank(diagm([1, 0.001, 2]), 0.1)
+julia> rank(diagm(0 => [1, 0.001, 2]), 0.1)
 2
 
-julia> rank(diagm([1, 0.001, 2]), 0.00001)
+julia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)
 3
 ```
 """

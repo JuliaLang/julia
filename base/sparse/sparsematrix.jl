@@ -1644,7 +1644,7 @@ function Base._mapreduce(f, op, ::Base.IndexCartesian, A::SparseMatrixCSC{T}) wh
     n = length(A)
     if z == 0
         if n == 0
-            Base.mr_empty(f, op, T)
+            Base.mapreduce_empty(f, op, T)
         else
             _mapreducezeros(f, op, T, n-z-1, f(zero(T)))
         end
