@@ -34,7 +34,11 @@ struct SingularException <: Exception
 end
 
 function Base.showerror(io::IO, ex::SingularException)
-    print(io, "SingularException: matrix is singular")
+    print(io, "SingularException: ")
+    if ex.info > 0
+        print(io,"matrix is singular")
+    elseif ex.info <0
+        print(io,"argument $(ex.info) had illegal value")
 end
 
 struct PosDefException <: Exception
