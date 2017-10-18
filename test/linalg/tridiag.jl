@@ -74,6 +74,7 @@ guardsrand(123) do
         end
         @testset "interconversion of Tridiagonal and SymTridiagonal" begin
             @test Tridiagonal(dl, d, dl) == SymTridiagonal(d, dl)
+            @test SymTridiagonal(d, dl) == Tridiagonal(dl, d, dl)
             @test Tridiagonal(dl, d, du) + Tridiagonal(du, d, dl) == SymTridiagonal(2d, dl+du)
             @test SymTridiagonal(d, dl) + Tridiagonal(dl, d, du) == Tridiagonal(dl + dl, d+d, dl+du)
             @test convert(SymTridiagonal,Tridiagonal(SymTridiagonal(d, dl))) == SymTridiagonal(d, dl)
