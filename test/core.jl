@@ -5347,6 +5347,13 @@ f_isdefined_va(::T...) where {T} = @isdefined T
 @test !f_isdefined_va()
 @test f_isdefined_va(1, 2, 3)
 
+# note: the constant `5` here should be > DataType.ninitialized.
+# This tests that there's no crash due to accessing Type.body.layout.
+let f(n) = isdefined(typeof(n), 5)
+    @test f(0) === false
+    @test isdefined(Int, 5) === false
+end
+
 # @isdefined in a loop
 let a = []
     for i = 1:2
