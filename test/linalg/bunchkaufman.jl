@@ -32,50 +32,51 @@ bimg  = randn(n,2)/2
                                 view(apd , 1:n, 1:n)))
         ε = εa = eps(abs(float(one(eltya))))
 
+        # check that factorize gives a Bunch-Kaufman
+        @test isa(factorize(asym), LinAlg.BunchKaufman)
+        @test isa(factorize(aher), LinAlg.BunchKaufman)
+        @testset "$uplo Bunch-Kaufman factor of indefinite matrix" for uplo in (:L, :U)
+            bc1 = bkfact(Hermitian(aher, uplo))
+            @test LinAlg.issuccess(bc1)
+            @test logabsdet(bc1)[1] ≈ log(abs(det(bc1)))
+            if eltya <: Real
+                @test logabsdet(bc1)[2] == sign(det(bc1))
+            else
+                @test logabsdet(bc1)[2] ≈ sign(det(bc1))
+            end
+            @test inv(bc1)*aher ≈ eye(n)
+            @testset for rook in (false, true)
+                @test inv(bkfact(Symmetric(a.' + a, uplo), rook))*(a.' + a) ≈ eye(n)
+                @test size(bc1) == size(bc1.LD)
+                @test size(bc1, 1) == size(bc1.LD, 1)
+                @test size(bc1, 2) == size(bc1.LD, 2)
+                if eltya <: BlasReal
+                    @test_throws ArgumentError bkfact(a)
+                end
+                # Test extraction of factors
+                # syconvf_rook just added to LAPACK 3.7.0. Test when we distribute LAPACK 3.7.0
+                # we don't have synconvf_rook equivalent for hermitian complex
+                if eltya <: Real
+                    @test bc1[uplo]*bc1[:D]*bc1[uplo]' ≈ aher[bc1[:p], bc1[:p]]
+                    @test bc1[uplo]*bc1[:D]*bc1[uplo]' ≈ bc1[:P]*aher*bc1[:P]'
+                end
+                bc1 = bkfact(Symmetric(asym, uplo))
+                @test bc1[uplo]*bc1[:D]*bc1[uplo].' ≈ asym[bc1[:p], bc1[:p]]
+                @test bc1[uplo]*bc1[:D]*bc1[uplo].' ≈ bc1[:P]*asym*bc1[:P].'
+                @test_throws KeyError bc1[:Z]
+                @test_throws ArgumentError uplo == :L ? bc1[:U] : bc1[:L]
+            end
+        end
+
         @testset for eltyb in (Float32, Float64, Complex64, Complex128, Int)
             b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
-
-            # check that factorize gives a Bunch-Kaufman
-            @test isa(factorize(asym), LinAlg.BunchKaufman)
-            @test isa(factorize(aher), LinAlg.BunchKaufman)
-
             for b in (b, view(b, 1:n, 1:2))
                 εb = eps(abs(float(one(eltyb))))
                 ε = max(εa,εb)
 
                 @testset "$uplo Bunch-Kaufman factor of indefinite matrix" for uplo in (:L, :U)
                     bc1 = bkfact(Hermitian(aher, uplo))
-                    @test LinAlg.issuccess(bc1)
-                    @test logabsdet(bc1)[1] ≈ log(abs(det(bc1)))
-                    if eltya <: Real
-                        @test logabsdet(bc1)[2] == sign(det(bc1))
-                    else
-                        @test logabsdet(bc1)[2] ≈ sign(det(bc1))
-                    end
-                    @test inv(bc1)*aher ≈ eye(n)
                     @test aher*(bc1\b) ≈ b atol=1000ε
-                    @testset for rook in (false, true)
-                        @test inv(bkfact(Symmetric(a.' + a, uplo), rook))*(a.' + a) ≈ eye(n)
-                        # test also bkfact! without explicit type tag
-                        @test inv(bkfact(a.' + a, rook))*(a.' + a) ≈ eye(n)
-                        @test size(bc1) == size(bc1.LD)
-                        @test size(bc1, 1) == size(bc1.LD, 1)
-                        @test size(bc1, 2) == size(bc1.LD, 2)
-                        if eltya <: BlasReal
-                            @test_throws ArgumentError bkfact(a)
-                        end
-                    end
-                    # Test extraction of factors
-                    # syconvf_rook just added to LAPACK 3.7.0. Test when we distribute LAPACK 3.7.0
-                    @test bc1[uplo]*bc1[:D]*bc1[uplo]' ≈ aher[bc1[:p], bc1[:p]]
-                    @test bc1[uplo]*bc1[:D]*bc1[uplo]' ≈ bc1[:P]*aher*bc1[:P]'
-                    if eltya <: Complex
-                        bc1 = bkfact(Symmetric(asym, uplo))
-                        @test bc1[uplo]*bc1[:D]*bc1[uplo].' ≈ asym[bc1[:p], bc1[:p]]
-                        @test bc1[uplo]*bc1[:D]*bc1[uplo].' ≈ bc1[:P]*asym*bc1[:P]'
-                    end
-                    @test_throws KeyError bc1[:Z]
-                    @test_throws ArgumentError uplo == :L ? bc1[:U] : bc1[:L]
                 end
 
                 @testset "$uplo Bunch-Kaufman factors of a pos-def matrix" for uplo in (:U, :L)
