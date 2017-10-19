@@ -50,7 +50,7 @@
     //        t = (new Date()).getTime()-t;
     //        if (t < tmin) { tmin = t; }
     //    }
-    console.log("javascript,print_to_file," + 9999);
+    //   console.log("javascript,print_to_file," + 9999);
 
     // mandelbrot set //
 
@@ -60,6 +60,9 @@
     }
     function complex_abs(z) {
         return Math.sqrt(z.re*z.re + z.im*z.im);
+    }
+    function complex_abs2(z) {
+        return z.re*z.re + z.im*z.im;
     }
     function complex_add(z,w) {
         return new Complex(z.re+w.re, z.im+w.im);
@@ -74,7 +77,7 @@
         maxiter = 80;
         n = 0;
         for (n = 0; n < maxiter; n++) {
-            if (complex_abs(z) > 2) { return n; }
+            if (complex_abs2(z) > 4) { return n; }
             z = complex_add(complex_multiply(z,z),c);
         }
         return maxiter;
@@ -113,7 +116,7 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin=t; }
     }
-    console.log("javascript,iteration_mandelbrot," + tmin/1000);
+    console.log("javascript,userfunc_mandelbrot," + tmin/1000);
 
     // numeric vector sort //
 

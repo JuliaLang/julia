@@ -10,7 +10,6 @@ while (<>) {
 }
 
 our @benchmarks = qw(
-  iteration_mandelbrot
   iteration_pi_sum
   recursion_fibonacci
   recursion_quicksort  
@@ -18,6 +17,7 @@ our @benchmarks = qw(
   print_to_file
   matrix_statistics
   matrix_multiply
+  userfunc_mandelbrot
 );
 
 our $c_ver = `gcc -v 2>&1 | grep "gcc version" | cut -f3 -d" "`;
@@ -27,9 +27,9 @@ our $python_ver = `python3 -V 2>&1 | cut -f2 -d" "`;
 our $matlab_ver = `matlab -nodisplay -nojvm -nosplash -r "version -release, quit" | tail -n 3 | head -n 1`;
 our $R_ver = `R --version | grep "R version" | cut -f3 -d" "`;
 our $octave_ver = `octave -v | grep version | cut -f4 -d" "`;
-#our $go_ver = `go version | cut -f3 -d" "`;
+our $go_ver = `go version | cut -f3 -d" "`;
 #our $lua_ver = `scilua -v 2>&1 | grep Shell | cut -f3 -d" " | cut -f1 -d,`;
-our $lua_ver = "scilua v1.0.0-b12";
+our $lua_ver = "scilua v1.0.0-b12"; # scilua has no run-time versioninfo function
 our $javascript_ver = `nodejs -e "console.log(process.versions.v8)"`;
 our $mathematica_ver = `echo quit | math -version | head -n 1 | cut -f2 -d" "`;
 #our $stata_ver = `stata -q -b version && grep version stata.log | cut -f2 -d" " && rm stata.log`;
@@ -47,11 +47,11 @@ our %systems = (
   "mathematica"=> ["Mathe-matica" , $mathematica_ver ],
   "r"          => ["R"           , $R_ver ],
   "octave"     => ["Octave"      , $octave_ver ],
-#  "go"         => ["Go"          , $go_ver ],
+  "go"         => ["Go"          , $go_ver ],
 #  "stata"      => ["Stata"       , $stata_ver ],
 );
 
-our @systems = qw(c julia lua fortran java javascript matlab python mathematica r octave);
+our @systems = qw(c julia lua fortran go java javascript mathematica python matlab r octave);
 #our @systems = qw(lua);
 
 print qq[<table class="benchmarks">\n];
@@ -76,7 +76,6 @@ for my $benchmark (@benchmarks) {
   print qq[<th>$benchmark</th>];
   for my $system (@systems) {
     printf qq[<td class="data">%.2f</td>], $_{$benchmark}{$system}/$_{$benchmark}{'c'};
-    #printf qq[<td class="data">%.3f</td>], $_{$benchmark}{$system};
   }
   print qq[</tr>\n];
 }

@@ -297,7 +297,7 @@ public class PerfPure {
         double cReal = zReal;
         double cImag = zImag;
         for (n=0; n<=79; ++n) {
-            if (complexAbs(zReal,zImag) > 2.0) {
+            if (complexAbs2(zReal,zImag) > 4.0) {
                 n -= 1;
                 break;
             }
@@ -316,6 +316,10 @@ public class PerfPure {
 
     private double complexAbs(double zReal, double zImag) {
         return Math.sqrt(zReal*zReal + zImag*zImag);
+    }
+
+    private double complexAbs2(double zReal, double zImag) {
+        return zReal*zReal + zImag*zImag;
     }
 
     protected int mandelperf() {

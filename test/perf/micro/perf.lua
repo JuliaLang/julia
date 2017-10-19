@@ -69,11 +69,15 @@ end
 
 timeit(parseint, 'parse_integers')
 
+local function cabs2( z )
+   return z[1]*z[1] + z[2]*z[2]
+end
+
 local function mandel(z)
     local c = z
     local maxiter = 80
     for n = 1, maxiter do
-        if cabs(z) > 2 then
+        if cabs2(z) > 4 then
             return n-1
         end
         z = z*z + c
@@ -91,7 +95,7 @@ local function mandelperf()
     return a
 end
 
-timeit(mandelperf, 'iteration_mandelbrot', function(a) assert(sum(a) == 14791) end)
+timeit(mandelperf, 'userfunc_mandelbrot', function(a) assert(sum(a) == 14791) end)
 
 local function qsort(a, lo, hi)
     local i, j = lo, hi

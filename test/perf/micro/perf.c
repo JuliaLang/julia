@@ -57,11 +57,15 @@ double *matmul_aat(int n, double *b) {
     return c;
 }
 
+double cabs2(double complex z) {
+  return creal(z)*creal(z) + cimag(z)*cimag(z);
+}
+
 int mandel(double complex z) {
     int maxiter = 80;
     double complex c = z;
     for (int n = 0; n < maxiter; ++n) {
-        if (cabs(z) > 2.0) {
+        if (cabs2(z) > 4.0) {
             return n;
         }
         z = z*z+c;
@@ -321,7 +325,7 @@ int main() {
         if (t < tmin) tmin = t;
     }
     assert(mandel_sum2 == 14791 * NITER);
-    print_perf("iteration_mandelbrot", tmin / 100);
+    print_perf("userfunc_mandelbrot", tmin / 100);
 
     // sort
     tmin = INFINITY;
