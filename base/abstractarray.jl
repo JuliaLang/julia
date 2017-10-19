@@ -862,6 +862,11 @@ Reconstruct the matrix `A` from the factorization `F=factorize(A)`.
 """
 full(x::AbstractArray) = x
 
+## Widening ##
+widen(::Type{S}) where {S<:AbstractVecOrMat} = _widen(S)
+_widen(::Type{S}) where {S<:AbstractVecOrMat} = S
+widen(A::AbstractVecOrMat) = convert(widen(typeof(A)), A)
+
 ## range conversions ##
 
 map(::Type{T}, r::StepRange) where {T<:Real} = T(r.start):T(r.step):T(last(r))

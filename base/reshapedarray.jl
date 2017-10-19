@@ -175,6 +175,7 @@ end
 
 size(A::ReshapedArray) = A.dims
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
+_widen(::Type{RSA}) where {T,N,P,RSA<:ReshapedArray{T,N,P}} = _widen(P)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
 parentindexes(A::ReshapedArray) = map(s->1:s, size(parent(A)))
