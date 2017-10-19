@@ -4118,20 +4118,21 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
         # INTEGER            IPIV( * )
         # DOUBLE PRECISION   A( LDA, * ), E( * )
         function syconvf_rook!(uplo::Char, way::Char, A::StridedMatrix{$elty},
-                               ipiv::StridedVector{BlasInt}, e::StridedVector{$elty})
+                               ipiv::StridedVector{BlasInt}, e::StridedVector{$elty} = Vector{$elty}(length(ipiv)))
             # extract
             n = checksquare(A)
+            lda = max(1, stride(A, 2))
 
             # check
             chkuplo(uplo)
-            if way != :C && way != :R
-                throw(ArgumentError("way must be :C or :R"))
+            if way != 'C' && way != 'R'
+                throw(ArgumentError("way must be C or R"))
             end
             if length(ipiv) != n
                 throw(ArgumentError("length of pivot vector was $(length(ipiv)) but should have been $n"))
             end
             if length(e) != n
-                throw(ArgumentError("length of e vector was $(length(ipiv)) but should have been $n"))
+                throw(ArgumentError("length of e vector was $(length(e)) but should have been $n"))
             end
 
             # allocate
@@ -4139,9 +4140,9 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
 
             ccall((@blasfunc($syconvf), liblapack), Void,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
-                 Ref{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                 Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 uplo, way, n, A,
-                lda, ipiv, e, info)
+                lda, e, ipiv, info)
 
             chklapackerror(info[])
             return A, e
@@ -4731,7 +4732,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
                 throw(ArgumentError("length of pivot vector was $(length(ipiv)) but should have been $n"))
             end
             if length(e) != n
-                throw(ArgumentError("length of e vector was $(length(ipiv)) but should have been $n"))
+                throw(ArgumentError("length of e vector was $(length(e)) but should have been $n"))
             end
 
             # allocate
@@ -4739,9 +4740,9 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
 
             ccall((@blasfunc($syconvf), liblapack), Void,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
-                 Ref{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                 Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 uplo, way, n, A,
-                max(1, lda), ipiv, e, info)
+                max(1, lda), e, ipiv, info)
 
             chklapackerror(info[])
             return A, e
