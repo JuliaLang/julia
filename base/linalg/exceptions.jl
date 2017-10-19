@@ -10,6 +10,17 @@ struct LAPACKException <: Exception
     info::BlasInt
 end
 
+"""
+    ARPACKException(info)
+
+Optional Argument info is an Integer. 
+If info == -8: There was an error return from calculation of a real Schur form.
+Else if info == -9: There was an error return from calculation of eigenvectors.
+Else if info ==-14: Did not find any eigenvalues to sufficient accuracy. 
+                    Try with a different starting vector or more Lanczos vectors by increasing the value of ncv.
+Else: Uspecified ARPACK error.
+
+"""
 struct ARPACKException <: Exception
     info::BlasInt
 end
