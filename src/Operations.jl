@@ -319,45 +319,30 @@ function apply_versions(env::EnvCache, pkgs::Vector{PackageSpec})
     toposort_builds!(env, builds)
     prune_manifest(env)
     # build new package versions with deps/build.jl files
-    ENV = copy(Base.ENV)
-    ENV["JULIA_ENV"] = dirname(env.project_file)
     LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
-    for (name, uuid, hash, build_file) in builds
-        info("Building [$(string(uuid)[1:8])] $name $(string(hash)[1:16])...")
-        log_file = splitext(build_file)[1] * ".log"
-        code = """
-            empty!(Base.LOAD_PATH)
-            append!(Base.LOAD_PATH, $(repr(LOAD_PATH)))
-            empty!(Base.LOAD_CACHE_PATH)
-            append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
-            empty!(Base.DL_LOAD_PATH)
-            append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
-            open($(repr(log_file)), "w") do f
-                name = $(repr(name))
-                build_file = $(repr(build_file))
-                try cd(dirname(build_file)) do
-                        evalfile(build_file)
-                    end
-                catch err
-                    serialize(f, name)
-                    serialize(f, err)
-                    exit(1)
-                end
-            end
-            """
-        cmd = Cmd(```
-            $(Base.julia_cmd()) -O0
-            --color=$(Base.have_color ? "yes" : "no")
-            --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
-            --history-file=no
-            --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
-            --eval $code
-            ```,
-            env=ENV
-        )
-        if success(pipeline(cmd, stdout=STDOUT, stderr=STDERR))
-            Base.rm(log_file, force=true)
-        else
+    withenv("JULIA_ENV" => env.project_file) do
+        for (name, uuid, hash, build_file) in builds
+            info("Building [$(string(uuid)[1:8])] $name $(string(hash)[1:16])...")
+            log_file = splitext(build_file)[1] * ".log"
+            code = """
+                empty!(Base.LOAD_PATH)
+                append!(Base.LOAD_PATH, $(repr(LOAD_PATH)))
+                empty!(Base.LOAD_CACHE_PATH)
+                append!(Base.LOAD_CACHE_PATH, $(repr(Base.LOAD_CACHE_PATH)))
+                empty!(Base.DL_LOAD_PATH)
+                append!(Base.DL_LOAD_PATH, $(repr(Base.DL_LOAD_PATH)))
+                cd($(repr(dirname(build_file))))
+                include($(repr(build_file)))
+                """
+            cmd = ```
+                $(Base.julia_cmd()) -O0 --color=no --history-file=no
+                --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
+                --compilecache=$(Base.JLOptions().use_compilecache != 0 ? "yes" : "no")
+                --eval $code
+                ```
+            open(log_file, "w") do log
+                success(pipeline(cmd, stdout=log, stderr=log))
+            end ? Base.rm(log_file, force=true) :
             warn("Error building `$name`!\nBuild log left at $(repr(log_file))")
         end
     end
