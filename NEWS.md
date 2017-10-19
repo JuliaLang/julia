@@ -119,7 +119,7 @@ Language changes
     system word size. `sum` and `prod` still preserve this behavior. ([#22825])
 
   * Like `_`, variable names consisting only of underscores can be assigned,
-    but accessing their values is deprecated ([]).
+    but accessing their values is deprecated ([#24221]).
 
 Breaking changes
 ----------------
