@@ -56,7 +56,9 @@ dimg  = randn(n)/2
         end
     end
     @testset "Singular LU" begin
-        @test !LinAlg.issuccess(lufact(zeros(eltya, 3, 3)))
+        lua = lufact(zeros(eltya, 3, 3))
+        @test !LinAlg.issuccess(lua)
+        @test sprint(show, lua) == "Failed factorization of type $(typeof(lua))"
     end
     @testset for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         b  = eltyb == Int ? rand(1:5, n, 2) :
