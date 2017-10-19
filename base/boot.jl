@@ -287,6 +287,24 @@ include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
 eval(@nospecialize(e)) = eval(Main, e)
 eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
+"""
+    evalcheck(e)
+
+Recursively checks `Expr` objects for dangerous calls
+"""
+function evalcheck(e)
+    if typeof(e) == Expr
+        if e.head == :call && e.args[1] == :run
+            error("Invalid `eval` with system call")
+        else
+            for i ∈ 1:length(e.args)
+                evalcheck(e.args[i])
+            end
+        end
+    end
+    return e
+end
+
 kwfunc(@nospecialize(f)) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
 
 kwftype(@nospecialize(t)) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t))
