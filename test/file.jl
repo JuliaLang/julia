@@ -1154,7 +1154,8 @@ end
 @test_throws ArgumentError mkpath("fakepath", -1)
 
 # issue #22566
-if !Sys.iswindows()
+# issue #24037 (disabling on FreeBSD)
+if !Sys.iswindows() && !(Sys.isbsd() && !Sys.isapple())
     function test_22566()
         fn = tempname()
         run(`mkfifo $fn`)
