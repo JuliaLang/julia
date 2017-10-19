@@ -89,6 +89,9 @@ end
         apos = apd[1,1]            # test chol(x::Number), needs x>0
         @test all(x -> x ≈ √apos, cholfact(apos).factors)
         @test_throws PosDefException chol(-one(eltya))
+        # test chol! with a Number
+        chol_num = Base.LinAlg.chol!(apos, :U)
+        @test all(x -> x ≈ √apos, chol_num)
 
         # Test cholfact with Symmetric/Hermitian upper/lower
         apds  = Symmetric(apd)
