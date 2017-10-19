@@ -847,6 +847,9 @@ let a = [0,1,2,3,0,1,2,3]
     @test findprev(equalto(1), a, 8) == 6
 end
 
+# 0.7
+@test 'a'*"b" == "a"*'b' == 'a'*'b' == "ab"
+
 if VERSION < v"0.6.0"
     include("deprecated.jl")
 end
