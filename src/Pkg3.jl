@@ -37,14 +37,10 @@ function _find_in_path(name::String, wd::Union{Void,String})
     info == nothing && return nothing
     haskey(info, "uuid") || return nothing
     haskey(info, "hash-sha1") || return nothing
-    uuid = String(Base.Random.UUID(info["uuid"]))
-    hash = String(Pkg3.Types.SHA1(info["hash-sha1"]))
-    path = joinpath("packages", uuid, hash, "src", name)
-    for depot in depots()
-        file = joinpath(depot, path)
-        ispath(file) && return file
-    end
-    return nothing
+    uuid = Base.Random.UUID(info["uuid"])
+    hash = Pkg3.Types.SHA1(info["hash-sha1"])
+    path = Pkg3.Operations.find_installed(uuid, hash)
+    ispath(path) ? joinpath(path, "src", name) : nothing
 end
 
 Base.find_in_path(name::String, wd::Void) = _find_in_path(name, wd)

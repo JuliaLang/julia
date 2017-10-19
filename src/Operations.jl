@@ -6,13 +6,20 @@ using Base: Pkg
 using Pkg3.TerminalMenus
 using Pkg3.Types
 import Pkg3: depots
+using SHA: sha224
+
+const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+
+version_slug(bytes::Vector{UInt8}) = String([chars[mod1(b,length(chars))] for b in bytes])
+version_slug(uuid::UUID, sha1::SHA1) = version_slug(sha224("$uuid/$sha1")[1:16])
 
 function find_installed(uuid::UUID, sha1::SHA1)
+    slug = version_slug(uuid, sha1)
     for depot in depots()
-        path = abspath(depot, "packages", string(uuid), string(sha1))
+        path = abspath(depot, "packages", slug)
         ispath(path) && return path
     end
-    return abspath(depots()[1], "packages", string(uuid), string(sha1))
+    return abspath(depots()[1], "packages", slug)
 end
 
 function package_env_info(pkg::String, env::EnvCache = EnvCache(); verb::String = "choose")
