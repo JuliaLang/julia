@@ -132,7 +132,7 @@ function parse_json(strng::AbstractString)
         end
         delta = m.offset + length(m.match)
         pos = pos + delta -1
-        return float(m.match)
+        return parse(Float64, m.match)
     end
 
     function  parse_value()

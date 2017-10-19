@@ -236,10 +236,6 @@ function parse(::Type{T}, s::AbstractString) where T<:AbstractFloat
     return unsafe_get(result)
 end
 
-float(x::AbstractString) = parse(Float64,x)
-
-float(a::AbstractArray{<:AbstractString}) = map!(float, similar(a,typeof(float(0))), a)
-
 ## interface to parser ##
 
 """
