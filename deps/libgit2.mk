@@ -40,24 +40,6 @@ ifneq (,$(findstring $(OS),Linux FreeBSD))
 LIBGIT2_OPTS += -DUSE_HTTPS=ON -DTLS_BACKEND="mbedTLS" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
-# We need to bundle ca certs on linux now that we're using libgit2 with ssl
-ifneq (,$(findstring $(OS),Linux FreeBSD))
-OPENSSL_DIR=$(shell openssl version -d | cut -d '"' -f 2)
-# This certfile location observed on Ubuntu 16.04
-ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca-certificates.crt ] && echo exists),exists)
-CERTFILE=$(OPENSSL_DIR)/certs/ca-certificates.crt
-# This certfile location observed on openSUSE Leap 42.1
-else ifeq ($(shell [ -e $(OPENSSL_DIR)/ca-bundle.pem ] && echo exists),exists)
-CERTFILE=$(OPENSSL_DIR)/ca-bundle.pem
-# This certfile location observed on Ubuntu 14.04 and FreeBSD
-else ifeq ($(shell [ -e $(OPENSSL_DIR)/cert.pem ] && echo exists),exists)
-CERTFILE=$(OPENSSL_DIR)/cert.pem
-# This certfile location observed on Debian 7
-else ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca.pem ] && echo exists),exists)
-CERTFILE=$(OPENSSL_DIR)/certs/ca.pem
-endif
-endif # Linux and FreeBSD
-
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
 
 $(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted
@@ -90,9 +72,14 @@ $(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied: $(LIBGIT2_SRC_PATH)/source-e
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-ssh-loop.patch
 	echo 1 > $@
 
-$(build_datarootdir)/julia/cert.pem: $(CERTFILE)
-	mkdir -p $(build_datarootdir)/julia
-	cp -f $(CERTFILE) $@
+$(build_datarootdir)/julia/cert.pem:
+	TMP_CACERT_SHA256:=$(shell mktemp cacert-2017-09-20.XXXX.pem.sha256)
+	echo "435ac8e816f5c10eaaf228d618445811c16a5e842e461cb087642b6265a36856 *cacert-2017-09-20.pem" > $(TMP_CACERT_SHA256) && \
+	$(JLDOWNLOAD) $(shell pwd)/cacert-2017-09-20.pem https://curl.haxx.se/ca/cacert-2017-09-20.pem && \
+	sha256sum --check $(TMP_CACERT_SHA256) >/dev/null && \
+	mkdir -p $(build_datarootdir)/julia && \
+	mv $(shell pwd)/cacert-2017-09-20.pem $@
+	rm $(TMP_CACERT_SHA256)
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
@@ -102,11 +89,7 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-fixup.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied \
 
-ifneq ($(CERTFILE),)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_datarootdir)/julia/cert.pem
-endif
-
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_datarootdir)/julia/cert.pem $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBGIT2_OPTS)
