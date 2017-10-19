@@ -346,7 +346,7 @@ function build_versions(env::EnvCache, uuids::Vector{UUID})
     withenv("JULIA_ENV" => env.project_file) do
         LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
         for (uuid, name, hash, build_file) in builds
-            info("Building [$(string(uuid)[1:8])] $name $(string(hash)[1:16])...")
+            Base.info("Building [$(string(uuid)[1:8])] $name $(string(hash)[1:16])...")
             log_file = splitext(build_file)[1] * ".log"
             code = """
                 empty!(Base.LOAD_PATH)
