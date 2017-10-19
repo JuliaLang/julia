@@ -44,6 +44,15 @@ function Base.showerror(io::IO, ex::SingularException)
     print(io, "SingularException($ex.info): matrix is singular")
 end
 
+"""
+    PosDefException(info)
+
+Optional Argument info is an Integer. 
+If info == -1: The matrix is not Hermitian.
+Else: The matrix is not positive definite.
+
+
+"""
 struct PosDefException <: Exception
     info::BlasInt
 end
