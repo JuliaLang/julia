@@ -396,7 +396,10 @@ function find_project(env::String)
         return find_local_env()
     elseif startswith(env, "/") || startswith(env, "./")
         # path to project file or project directory
-        splitext(env)[2] == ".toml" && return abspath(env)
+        if splitext(env)[2] == ".toml"
+            path = abspath(env)
+            return path, find_git_repo(path)
+        end
         for name in project_names
             path = abspath(env, name)
             isfile(path) && return path, find_git_repo(path)
