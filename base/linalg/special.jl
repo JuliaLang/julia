@@ -116,12 +116,11 @@ for op in (:+, :-)
     end
     for matrixtype in (:SymTridiagonal,:Tridiagonal,:Bidiagonal,:Matrix)
         @eval begin
-            ($op)(A::AbstractTriangular, B::($matrixtype)) = ($op)(full(A), B)
-            ($op)(A::($matrixtype), B::AbstractTriangular) = ($op)(A, full(B))
+            ($op)(A::AbstractTriangular, B::($matrixtype)) = ($op)(copy!(similar(parent(A)), A), B)
+            ($op)(A::($matrixtype), B::AbstractTriangular) = ($op)(A, copy!(similar(parent(B)), B))
         end
     end
 end
 
-A_mul_Bc!(A::AbstractTriangular, B::QRCompactWYQ) = A_mul_Bc!(full!(A),B)
-A_mul_Bc!(A::AbstractTriangular, B::QRPackedQ) = A_mul_Bc!(full!(A),B)
-A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(full(A), B)
+A_mul_Bc!(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc!(full!(A), B)
+A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(copy!(similar(parent(A)), A), B)
