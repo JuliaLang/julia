@@ -79,7 +79,7 @@ $(build_datarootdir)/julia/cert.pem:
 	sha256sum --check $(TMP_CACERT_SHA256)
 	mkdir -p $(build_datarootdir)/julia
 	mv $(shell pwd)/cacert-2017-09-20.pem $@
-	rm $(TMP_CACERT_SHA256)
+	rm -f $(TMP_CACERT_SHA256)
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
@@ -89,7 +89,7 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-fixup.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied \
 
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_datarootdir)/julia/cert.pem $(LIBGIT2_SRC_PATH)/source-extracted
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted $(build_datarootdir)/julia/cert.pem
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBGIT2_OPTS)
