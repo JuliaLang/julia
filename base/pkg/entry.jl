@@ -536,7 +536,7 @@ function resolve(
                 Write.remove(pkg)
             else
                 up = ver1 <= ver2 ? "Up" : "Down"
-                info("$(up)grading $pkg: v$ver1 => v$ver2")
+                info("$(up)grading $pkg: v$ver1 → v$ver2")
                 Write.update(pkg, Read.sha1(pkg,ver2))
                 pkgsym = Symbol(pkg)
                 if Base.root_module_exists(pkgsym)
