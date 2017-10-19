@@ -71,7 +71,7 @@ public class PerfPure {
             if (t < tmin) tmin = t;
         }
         assert(mandel_sum == 14720) : "value was "+mandel_sum;
-        print_perf("iteration_mandelbrot", tmin);
+        print_perf("userfunc_mandelbrot", tmin);
 
         // sort
         tmin = Long.MAX_VALUE;
