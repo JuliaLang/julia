@@ -1619,6 +1619,13 @@ end
     @test norm(Ai,1) ≈ norm(Array(Ai),1)
     @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
     @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
+    # make certain entries in nzval beyond
+    # the range specified in colptr do not
+    # impact vecnorm of a sparse matrix
+    foo = speye(4)
+    resize!(foo.nzval, 5)
+    setindex!(foo.nzval, NaN, 5)
+    @test vecnorm(foo) == 2.0
 end
 
 @testset "sparse matrix cond" begin
