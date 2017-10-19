@@ -30,10 +30,12 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
         convert(::Type{AbstractMatrix{T}}, A::$t) where {T} = convert($t{T}, A)
         convert(::Type{Matrix}, A::$t{T}) where {T} = convert(Matrix{T}, A)
 
-        function similar(A::$t, ::Type{T}) where T
-            B = similar(A.data, T)
-            return $t(B)
-        end
+        # For A<:AbstractTriangular, similar(A[, neweltype]) should yield a matrix with the same
+        # triangular type and underlying storage type as A. The following method covers these cases.
+        similar(A::$t, ::Type{T}) where {T} = $t(similar(parent(A), T))
+        # On the other hand, similar(A, [neweltype,] shape...) should yield a matrix of the underlying
+        # storage type of A (not wrapped in a triangular type). The following method covers these cases.
+        similar(A::$t, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(A), T, dims)
 
         copy(A::$t) = $t(copy(A.data))
 
