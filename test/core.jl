@@ -5518,32 +5518,62 @@ x.u = initvalue2(Base.uniontypes(U)[1])
 x.u = initvalue(Base.uniontypes(U)[2])
 @test x.u === initvalue(Base.uniontypes(U)[2])
 
-v = Vector{Float64}(8000000);
 mutable struct UnionField2
     x::Union{Void, Int}
-    UnionField2() = new()
+    @noinline UnionField2() = new()
 end
 @test UnionField2().x === nothing
 
 struct UnionField3
     x::Union{Void, Int}
-    UnionField3() = new()
+    @noinline UnionField3() = new()
 end
 @test UnionField3().x === nothing
 
 mutable struct UnionField4
     x::Union{Void, Float64}
     y::Union{Void, Int8}
-    UnionField4() = new()
+    z::NTuple{8, UInt8}
+    @noinline UnionField4() = new()
+    @noinline UnionField4(x, y) = new(x, y, (0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88))
 end
 @test UnionField4().x === nothing
+@test UnionField4().y === nothing
+let x4 = UnionField4(nothing, Int8(3))
+    x4copy = deepcopy(x4)
+    @test x4.x === nothing
+    @test x4.y === Int8(3)
+    @test x4.z[1] === 0x11
+    @test x4 === x4
+    @test x4 == x4
+    @test !(x4 === x4copy)
+    @test !(x4 == x4copy)
+end
 
 struct UnionField5
     x::Union{Void, Float64}
     y::Union{Void, Int8}
-    UnionField5() = new()
+    z::NTuple{8, UInt8}
+    @noinline UnionField5() = new()
+    @noinline UnionField5(x, y) = new(x, y, (0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88))
 end
 @test UnionField5().x === nothing
+@test UnionField5().y === nothing
+let x5 = UnionField5(nothing, Int8(3))
+    x5copy = deepcopy(x5)
+    @test x5.x === nothing
+    @test x5.y === Int8(3)
+    @test x5.z[1] === 0x11
+    @test x5 === x5
+    @test x5 == x5
+    @test x5 === x5copy
+    @test x5 == x5copy
+    @test object_id(x5) === object_id(x5copy)
+    @test hash(x5) === hash(x5copy)
+    @test pointer_from_objref(x5) === pointer_from_objref(x5)
+    @test pointer_from_objref(x5) !== pointer_from_objref(x5copy)
+end
+
 
 # PR #23367
 struct A23367
