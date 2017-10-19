@@ -208,8 +208,8 @@ function parse_input_line(s::String; filename::String="none")
     # expr
     ex = ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
                s, sizeof(s), filename, sizeof(filename))
-    if ex === :_
-        # remove with 0.6 deprecation
+    if ex isa Symbol && all(equalto('_'), string(ex))
+        # remove with 0.7 deprecation
         expand(Main, ex)  # to get possible warning about using _ as an rvalue
     end
     return ex

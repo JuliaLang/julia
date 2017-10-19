@@ -210,6 +210,16 @@ value_t fl_julia_strip_op_suffix(fl_context_t *fl_ctx, value_t *args, uint32_t n
     return opnew_symbol;
 }
 
+/* check whether arg is a symbol that consists solely of underscores. */
+value_t fl_julia_underscore_symbolp(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "underscore-symbol?", nargs, 1);
+    if (!issymbol(args[0])) return fl_ctx->F;
+    char *op = symbol_name(fl_ctx, args[0]);
+    while (*op == '_') ++op;
+    return *op ? fl_ctx->F : fl_ctx->T;
+}
+
 #include "julia_charmap.h"
 
 utf8proc_int32_t jl_charmap_map(utf8proc_int32_t c, void *ctx)
@@ -298,6 +308,7 @@ static const builtinspec_t julia_flisp_func_info[] = {
     { "identifier-start-char?", fl_julia_identifier_start_char },
     { "op-suffix-char?", fl_julia_op_suffix_char },
     { "strip-op-suffix", fl_julia_strip_op_suffix },
+    { "underscore-symbol?", fl_julia_underscore_symbolp },
     { NULL, NULL }
 };
 
