@@ -148,8 +148,8 @@ Test whether a string contains a match of the given regular expression.
 
 # Examples
 ```jldoctest
-julia> rx = r"a(.)a"
-r"a(.)a"
+julia> rx = r"a.a"
+r"a.a"
 
 julia> ismatch(rx, "aba")
 true
@@ -233,8 +233,8 @@ Return a vector of the matching substrings from [`eachmatch`](@ref).
 
 # Examples
 ```jldoctest
-julia> rx = r"a(.)a"
-r"a(.)a"
+julia> rx = r"a.a"
+r"a.a"
 
 julia> matchall(rx, "a1a2a3a")
 2-element Array{SubString{String},1}:
@@ -444,22 +444,22 @@ original string, otherwise they must be from distinct character ranges.
 
 # Examples
 ```jldoctest
-julia> rx = r"a(.)a"
-r"a(.)a"
+julia> rx = r"a.a"
+r"a.a"
 
 julia> m = eachmatch(rx, "a1a2a3a")
-Base.RegexMatchIterator(r"a(.)a", "a1a2a3a", false)
+Base.RegexMatchIterator(r"a.a", "a1a2a3a", false)
 
 julia> collect(m)
 2-element Array{RegexMatch,1}:
- RegexMatch("a1a", 1="1")
- RegexMatch("a3a", 1="3")
+ RegexMatch("a1a")
+ RegexMatch("a3a")
 
 julia> collect(eachmatch(rx, "a1a2a3a", true))
 3-element Array{RegexMatch,1}:
- RegexMatch("a1a", 1="1")
- RegexMatch("a2a", 1="2")
- RegexMatch("a3a", 1="3")
+ RegexMatch("a1a")
+ RegexMatch("a2a")
+ RegexMatch("a3a")
 ```
 """
 eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)

@@ -425,7 +425,7 @@ Stacktrace:
  [1] throw_inexacterror(::Symbol, ::Type{Int8}, ::Int64) at ./int.jl:34
  [2] checked_trunc_sint at ./int.jl:438 [inlined]
  [3] convert at ./int.jl:458 [inlined]
- [4] Int8(::Int64) at ./sysimg.jl:107
+ [4] Int8(::Int64) at ./sysimg.jl:114
 
 julia> Int8(127.0)
 127
@@ -434,13 +434,13 @@ julia> Int8(3.14)
 ERROR: InexactError: convert(Int8, 3.14)
 Stacktrace:
  [1] convert at ./float.jl:682 [inlined]
- [2] Int8(::Float64) at ./sysimg.jl:107
+ [2] Int8(::Float64) at ./sysimg.jl:114
 
 julia> Int8(128.0)
 ERROR: InexactError: convert(Int8, 128.0)
 Stacktrace:
  [1] convert at ./float.jl:682 [inlined]
- [2] Int8(::Float64) at ./sysimg.jl:107
+ [2] Int8(::Float64) at ./sysimg.jl:114
 
 julia> 127 % Int8
 127

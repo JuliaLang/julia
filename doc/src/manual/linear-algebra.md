@@ -27,23 +27,20 @@ julia> inv(A)
 As well as other useful operations, such as finding eigenvalues or eigenvectors:
 
 ```jldoctest
-julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]
-3×3 Array{Float64,2}:
-   1.5   2.0  -4.0
-   3.0  -1.0  -6.0
- -10.0   2.3   4.0
+julia> A = [-4. -17.; 2. 2.]
+2×2 Array{Float64,2}:
+ -4.0  -17.0
+  2.0    2.0
 
 julia> eigvals(A)
-3-element Array{Complex{Float64},1}:
-  9.319084268422866 + 0.0im
- -2.409542134211437 + 2.7209481982433124im
- -2.409542134211437 - 2.7209481982433124im
+2-element Array{Complex{Float64},1}:
+ -1.0 + 5.0im
+ -1.0 - 5.0im
 
 julia> eigvecs(A)
-3×3 Array{Complex{Float64},2}:
- -0.488645+0.0im  0.182546-0.39813im   0.182546+0.39813im
- -0.540358+0.0im  0.692926+0.0im       0.692926-0.0im
-   0.68501+0.0im  0.254058-0.513301im  0.254058+0.513301im
+2×2 Array{Complex{Float64},2}:
+  0.945905+0.0im        0.945905-0.0im
+ -0.166924-0.278207im  -0.166924+0.278207im
 ```
 
 In addition, Julia provides many [factorizations](@ref man-linalg-factorizations) which can be used to

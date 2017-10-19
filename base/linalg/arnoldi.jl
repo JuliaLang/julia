@@ -386,7 +386,7 @@ julia> s = svds(A, nsv = 2)[1];
 julia> s[:S]
 2-element Array{Float64,1}:
  4.0
- 3.0
+ 2.9999999999999996
 ```
 
 !!! note "Implementation"

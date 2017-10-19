@@ -13,7 +13,7 @@ See also: [`Dict`](@ref)
 # Examples
 ```jldoctest
 julia> p = "foo" => 7
-"foo"=>7
+"foo" => 7
 
 julia> typeof(p)
 Pair{String,Int64}

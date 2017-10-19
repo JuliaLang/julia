@@ -22,28 +22,26 @@ schurfact!(A::StridedMatrix{<:BlasFloat}) = Schur(LinAlg.LAPACK.gees!('V', A)...
 Computes the Schur factorization of the matrix `A`. The (quasi) triangular Schur factor can
 be obtained from the `Schur` object `F` with either `F[:Schur]` or `F[:T]` and the
 orthogonal/unitary Schur vectors can be obtained with `F[:vectors]` or `F[:Z]` such that
-`A = F[:vectors]*F[:Schur]*F[:vectors]'`. The eigenvalues of `A` can be obtained with `F[:values]`.
+`A = F[:vectors] * F[:Schur] * F[:vectors]'`. The eigenvalues of `A` can be obtained with `F[:values]`.
 
 # Examples
 ```jldoctest
-julia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]
-3×3 Array{Float64,2}:
- -2.0  1.0   3.0
-  2.0  1.0  -1.0
- -7.0  2.0   7.0
+julia> A = [5. 7.; -2. -4.]
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
 
 julia> F = schurfact(A)
 Base.LinAlg.Schur{Float64,Array{Float64,2}} with factors T and Z:
-[2.00002 0.80179 6.6352; 0.0 1.99999 8.08278; 0.0 -2.1985e-11 1.99999]
-[0.577353 0.154292 -0.801784; 0.577335 -0.771528 0.267262; 0.577362 0.617203 0.534522]
+[3.0 9.0; 0.0 -2.0]
+[0.961524 0.274721; -0.274721 0.961524]
 and values:
-Complex{Float64}[2.00002+0.0im, 1.99999+1.33304e-5im, 1.99999-1.33304e-5im]
+[3.0, -2.0]
 
 julia> F[:vectors] * F[:Schur] * F[:vectors]'
-3×3 Array{Float64,2}:
- -2.0  1.0   3.0
-  2.0  1.0  -1.0
- -7.0  2.0   7.0
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
 ```
 """
 schurfact(A::StridedMatrix{<:BlasFloat}) = schurfact!(copy(A))
@@ -79,26 +77,29 @@ end
 
 Computes the Schur factorization of the matrix `A`. The methods return the (quasi)
 triangular Schur factor `T` and the orthogonal/unitary Schur vectors `Z` such that
-`A = Z*T*Z'`. The eigenvalues of `A` are returned in the vector `λ`.
+`A = Z * T * Z'`. The eigenvalues of `A` are returned in the vector `λ`.
 
 See [`schurfact`](@ref).
 
 # Examples
 ```jldoctest
-julia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]
-3×3 Array{Float64,2}:
- -2.0  1.0   3.0
-  2.0  1.0  -1.0
- -7.0  2.0   7.0
+julia> A = [5. 7.; -2. -4.]
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
 
 julia> T, Z, lambda = schur(A)
-([2.00002 0.80179 6.6352; 0.0 1.99999 8.08278; 0.0 -2.1985e-11 1.99999], [0.577353 0.154292 -0.801784; 0.577335 -0.771528 0.267262; 0.577362 0.617203 0.534522], Complex{Float64}[2.00002+0.0im, 1.99999+1.33304e-5im, 1.99999-1.33304e-5im])
+([3.0 9.0; 0.0 -2.0], [0.961524 0.274721; -0.274721 0.961524], [3.0, -2.0])
+
+julia> Z * Z'
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
 
 julia> Z * T * Z'
-3×3 Array{Float64,2}:
- -2.0  1.0   3.0
-  2.0  1.0  -1.0
- -7.0  2.0   7.0
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
 ```
 """
 function schur(A::StridedMatrix)
