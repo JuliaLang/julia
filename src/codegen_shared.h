@@ -1,3 +1,7 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
+#include <llvm/Support/Debug.h>
+
 enum AddressSpace {
     Generic = 0,
     Tracked = 10, Derived = 11, CalleeRooted = 12,

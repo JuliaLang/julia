@@ -1532,7 +1532,7 @@ static void addRetNoAlias(Function *F)
 }
 
 bool LateLowerGCFrame::DefineFunctions(Module &M) {
-    ptls_getter = M.getFunction("jl_get_ptls_states");
+    ptls_getter = M.getFunction("julia.ptls_states");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
     gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
     gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");

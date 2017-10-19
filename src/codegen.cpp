@@ -280,13 +280,6 @@ static GlobalVariable *jldll_var;
 #endif //_OS_WINDOWS_
 
 static Function *jltls_states_func;
-#ifndef JULIA_ENABLE_THREADING
-static GlobalVariable *jltls_states_var;
-#else
-// Imaging mode only
-size_t jltls_states_func_idx = 0;
-size_t jltls_offset_idx = 0;
-#endif
 
 // important functions
 static Function *jlnew_func;
@@ -6127,43 +6120,9 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jldll_var, &jl_dl_handle);
 #endif
 
-#ifndef JULIA_ENABLE_THREADING
-    // For non-threading, we use the address of the global variable directly
-    jltls_states_var =
-        new GlobalVariable(*m, T_ppjlvalue,
-                           false, GlobalVariable::ExternalLinkage,
-                           NULL, "jl_tls_states");
-    add_named_global(jltls_states_var, &jl_tls_states);
-    // placeholder function for keeping track of the end of the gcframe
-    jltls_states_func = Function::Create(FunctionType::get(jltls_states_var->getType(), false),
-                                         Function::ExternalLinkage,
-                                         "jl_get_ptls_states", m);
-    add_named_global(jltls_states_func, (void*)NULL, /*dllimport*/false);
-#else
-    // For threading, we emit a call to the getter function.
-    // In non-imaging mode, (i.e. the code will not be saved to disk), we
-    // use the address of the actual getter function directly
-    // (`jl_tls_states_cb` returned by `jl_get_ptls_states_getter()`)
-    // (Alternatively if we know how to generate the tls address directly
-    // we will inline the assembly, see `finalize_gc_frame(Function*)`)
-    // In imaging mode, we emit the function address as a load of a static
-    // variable to be filled (in `dump.c`) at initialization time of the sysimg.
-    // This way we can by pass the extra indirection in `jl_get_ptls_states`
-    // since we don't know which getter function to use ahead of time.
     jltls_states_func = Function::Create(FunctionType::get(PointerType::get(T_ppjlvalue, 0), false),
-                                         Function::ExternalLinkage,
-                                         "jl_get_ptls_states", m);
-    add_named_global(jltls_states_func, jl_get_ptls_states_getter());
-    if (imaging_mode) {
-        PointerType *pfunctype = jltls_states_func->getFunctionType()->getPointerTo();
-        jl_emit_sysimg_slot(m, pfunctype, "jl_get_ptls_states.ptr",
-                            (uintptr_t)jl_get_ptls_states_getter(),
-                            jltls_states_func_idx);
-        jl_emit_sysimg_slot(m, T_size, "jl_tls_offset.val",
-                            (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset),
-                            jltls_offset_idx);
-    }
-#endif
+                                         Function::ExternalLinkage, "julia.ptls_states");
+    add_named_global(jltls_states_func, (void*)NULL, /*dllimport*/false);
 
     std::vector<Type*> args1(0);
     args1.push_back(T_pint8);
