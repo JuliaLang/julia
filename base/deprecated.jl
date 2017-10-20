@@ -1637,6 +1637,7 @@ end
             depwarn("using nonscalar indexed assignment to implicitly broadcast the values of an array to many indices is deprecated. Use `A[I...] .= values` to explicitly opt-in to broadcasting.", :setindex!)
         else
             depwarn("using nonscalar indexed assignment to implicitly broadcast the values of an array to many indices is deprecated. Use `A[I...] .= reshape(values` to explicitly opt-in to broadcasting.", :setindex!)
+        end
         @nexprs $N d->(I_d = I[d])
         idxlens = @ncall $N index_lengths I
         @ncall $N setindex_shape_check X (d->idxlens[d])
@@ -1648,8 +1649,6 @@ end
         A
     end
 end
-@deprecate setindex!(B::BitArray, X::StridedArray, I::Union{Colon,UnitRange{Int}}) B[I] .= X
-@deprecate setindex!(B::BitArray, X::StridedArray, I0::Union{Colon,AbstractUnitRange}, I::Union{Int,Colon,AbstractUnitRange}...) B[I0, I...] .= X
 
 # issue #22791
 @deprecate select partialsort
