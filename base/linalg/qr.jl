@@ -267,7 +267,7 @@ solution and if the solution is not unique, the one with smallest norm is return
 
 Multiplication with respect to either thin or full `Q` is allowed, i.e. both `F[:Q]*F[:R]`
 and `F[:Q]*A` are supported. A `Q` matrix can be converted into a regular matrix with
-[`full`](@ref) which has a named argument `thin`.
+[`Matrix`](@ref).
 
 # Examples
 ```jldoctest
@@ -401,7 +401,6 @@ convert(::Type{AbstractMatrix}, F::Union{QR,QRCompactWY}) = F[:Q] * F[:R]
 convert(::Type{AbstractArray}, F::Union{QR,QRCompactWY}) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::Union{QR,QRCompactWY}) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::Union{QR,QRCompactWY}) = convert(Matrix, F)
-full(F::Union{QR,QRCompactWY}) = convert(AbstractArray, F)
 convert(::Type{QRPivoted{T}}, A::QRPivoted) where {T} = QRPivoted(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ), A.jpvt)
 convert(::Type{Factorization{T}}, A::QRPivoted{T}) where {T} = A
 convert(::Type{Factorization{T}}, A::QRPivoted) where {T} = convert(QRPivoted{T}, A)
@@ -409,7 +408,6 @@ convert(::Type{AbstractMatrix}, F::QRPivoted) = (F[:Q] * F[:R])[:,invperm(F[:p])
 convert(::Type{AbstractArray}, F::QRPivoted) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::QRPivoted) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::QRPivoted) = convert(Matrix, F)
-full(F::QRPivoted) = convert(AbstractArray, F)
 
 function show(io::IO, F::Union{QR, QRCompactWY, QRPivoted})
     println(io, "$(typeof(F)) with factors Q and R:")
@@ -499,58 +497,6 @@ convert(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ{S}) where {S} = Q
 convert(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ) where {S} = convert(QRCompactWYQ{S}, Q)
 convert(::Type{Matrix}, A::AbstractQ{T}) where {T} = A_mul_B!(A, eye(T, size(A.factors, 1), min(size(A.factors)...)))
 convert(::Type{Array}, A::AbstractQ) = convert(Matrix, A)
-
-"""
-    full(A::AbstractQ; thin::Bool=true) -> Matrix
-
-Converts an orthogonal or unitary matrix stored as a `QRCompactWYQ` object, i.e. in the
-compact WY format [^Bischof1987], or in the `QRPackedQ` format, to a dense matrix.
-
-Optionally takes a `thin` Boolean argument, which if `true` omits the columns that span the
-rows of `R` in the QR factorization that are zero. The resulting matrix is the `Q` in a thin
-QR factorization (sometimes called the reduced QR factorization). If `false`, returns a `Q`
-that spans all rows of `R` in its corresponding QR factorization.
-
-# Examples
-```jldoctest
-julia> a = [1. 2.; 3. 4.; 5. 6.];
-
-julia> qra = qrfact(a, Val(true));
-
-julia> full(qra[:Q], thin=true)
-3×2 Array{Float64,2}:
- -0.267261   0.872872
- -0.534522   0.218218
- -0.801784  -0.436436
-
-julia> full(qra[:Q], thin=false)
-3×3 Array{Float64,2}:
- -0.267261   0.872872   0.408248
- -0.534522   0.218218  -0.816497
- -0.801784  -0.436436   0.408248
-
-julia> qra = qrfact(a, Val(false));
-
-julia> full(qra[:Q], thin=true)
-3×2 Array{Float64,2}:
- -0.169031   0.897085
- -0.507093   0.276026
- -0.845154  -0.345033
-
-julia> full(qra[:Q], thin=false)
-3×3 Array{Float64,2}:
- -0.169031   0.897085   0.408248
- -0.507093   0.276026  -0.816497
- -0.845154  -0.345033   0.408248
-```
-"""
-function full(A::AbstractQ{T}; thin::Bool = true) where T
-    if thin
-        convert(Array, A)
-    else
-        A_mul_B!(A, eye(T, size(A.factors, 1)))
-    end
-end
 
 size(A::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(A.factors, dim)
 size(A::Union{QR,QRCompactWY,QRPivoted}) = size(A.factors)

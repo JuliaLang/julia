@@ -62,7 +62,6 @@ convert(::Type{AbstractMatrix}, A::LQ) = A[:L]*A[:Q]
 convert(::Type{AbstractArray}, A::LQ) = convert(AbstractMatrix, A)
 convert(::Type{Matrix}, A::LQ) = convert(Array, convert(AbstractArray, A))
 convert(::Type{Array}, A::LQ) = convert(Matrix, A)
-full(A::LQ) = convert(AbstractArray, A)
 
 adjoint(A::LQ{T}) where {T} = QR{T,typeof(A.factors)}(A.factors', A.τ)
 
@@ -93,9 +92,6 @@ convert(::Type{LQPackedQ{T}}, Q::LQPackedQ) where {T} = LQPackedQ(convert(Abstra
 convert(::Type{AbstractMatrix{T}}, Q::LQPackedQ) where {T} = convert(LQPackedQ{T}, Q)
 convert(::Type{Matrix}, A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
 convert(::Type{Array}, A::LQPackedQ) = convert(Matrix, A)
-
-full(Q::LQPackedQ; thin::Bool = true) =
-    thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 2)))
 
 size(A::LQ, dim::Integer) = size(A.factors, dim)
 size(A::LQ) = size(A.factors)

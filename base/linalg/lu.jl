@@ -550,7 +550,6 @@ convert(::Type{AbstractMatrix}, F::LU) = (F[:L] * F[:U])[invperm(F[:p]),:]
 convert(::Type{AbstractArray}, F::LU) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::LU) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::LU) = convert(Matrix, F)
-full(F::LU) = convert(AbstractArray, F)
 
 function convert(::Type{Tridiagonal}, F::Base.LinAlg.LU{T,Tridiagonal{T,V}}) where {T,V}
     n = size(F, 1)
@@ -594,4 +593,3 @@ convert(::Type{Matrix}, F::LU{T,Tridiagonal{T,V}}) where {T,V} =
     convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::LU{T,Tridiagonal{T,V}}) where {T,V} =
     convert(Matrix, F)
-full(F::LU{T,Tridiagonal{T,V}}) where {T,V} = convert(AbstractArray, F)

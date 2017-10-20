@@ -386,32 +386,8 @@ function convert(::Type{Matrix}, S::SparseMatrixCSC{Tv}) where Tv
     return A
 end
 convert(::Type{Array}, S::SparseMatrixCSC) = convert(Matrix, S)
-full(S::SparseMatrixCSC) = convert(Array, S)
-
-"""
-    full(S)
-
-Convert a sparse matrix or vector `S` into a dense matrix or vector.
-
-# Examples
-```jldoctest
-julia> A = speye(3)
-3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
-
-julia> full(A)
-3×3 Array{Float64,2}:
- 1.0  0.0  0.0
- 0.0  1.0  0.0
- 0.0  0.0  1.0
-```
-"""
-full
 
 float(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), float.(S.nzval))
-
 complex(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), complex(copy(S.nzval)))
 
 # Construct a sparse vector

@@ -435,4 +435,3 @@ convert(::Type{AbstractMatrix}, F::Eigen) = F.vectors * Diagonal(F.values) / F.v
 convert(::Type{AbstractArray}, F::Eigen) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::Eigen) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::Eigen) = convert(Matrix, F)
-full(F::Eigen) = convert(AbstractArray, F)

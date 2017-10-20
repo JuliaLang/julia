@@ -95,7 +95,6 @@ function convert(::Type{Matrix{T}}, M::SymTridiagonal) where T
 end
 convert(::Type{Matrix}, M::SymTridiagonal{T}) where {T} = convert(Matrix{T}, M)
 convert(::Type{Array}, M::SymTridiagonal) = convert(Matrix, M)
-full(M::SymTridiagonal) = convert(Array, M)
 
 size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
 function size(A::SymTridiagonal, d::Integer)
@@ -502,7 +501,6 @@ function convert(::Type{Matrix{T}}, M::Tridiagonal{T}) where T
 end
 convert(::Type{Matrix}, M::Tridiagonal{T}) where {T} = convert(Matrix{T}, M)
 convert(::Type{Array}, M::Tridiagonal) = convert(Matrix, M)
-full(M::Tridiagonal) = convert(Array, M)
 
 # For M<:Tridiagonal, similar(M[, neweltype]) should yield a Tridiagonal matrix.
 # On the other hand, similar(M, [neweltype,] shape...) should yield a sparse matrix.

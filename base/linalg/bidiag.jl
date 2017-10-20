@@ -147,7 +147,6 @@ function convert(::Type{Matrix{T}}, A::Bidiagonal) where T
 end
 convert(::Type{Matrix}, A::Bidiagonal{T}) where {T} = convert(Matrix{T}, A)
 convert(::Type{Array}, A::Bidiagonal) = convert(Matrix, A)
-full(A::Bidiagonal) = convert(Array, A)
 promote_rule(::Type{Matrix{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} = Matrix{promote_type(T,S)}
 
 #Converting from Bidiagonal to Tridiagonal

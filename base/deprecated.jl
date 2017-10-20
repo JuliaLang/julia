@@ -1882,6 +1882,142 @@ end
 @deprecate diagm(v::AbstractVector, k::Integer) diagm(k => v)
 @deprecate diagm(x::Number) fill(x, 1, 1)
 
+## deprecate full
+
+# full no-op fallback
+function full(A::AbstractArray)
+    depwarn(string(
+        "The no-op `full(A::AbstractArray)` fallback has been deprecated, and no more ",
+        "specific `full` method for $(typeof(A)) exists. Furthermore, `full` in general ",
+        "has been deprecated.\n\n",
+        "To replace `full(A)`, as appropriate consider dismabiguating with a concrete ",
+        "array constructor (e.g. `Array(A)`), with an abstract array constructor (e.g.`AbstractArray(A)`), ",
+        "instead `convert`ing to an array type (e.g `convert(Array, A)`, `convert(AbstractArray, A)`), ",
+        "or using another such operation that addresses your specific use case."),  :full)
+    return A
+end
+
+# full for structured arrays
+function full(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal})
+    mattypestr = isa(A, Diagonal)        ? "Diagonal"        :
+                 isa(A, Bidiagonal)      ? "Bidiagonal"      :
+                 isa(A, Tridiagonal)     ? "Tridiagonal"     :
+                 isa(A, SymTridiagonal)  ? "SymTridiagonal"  :
+                    error("should not be reachable!")
+    depwarn(string(
+        "`full(A::$(mattypestr))` (and `full` in general) has been deprecated. ",
+        "To replace `full(A::$(mattypestr))`, consider `Matrix(A)` or, if that ",
+        "option is too narrow, `Array(A)`. Also consider `SparseMatrixCSC(A)` ",
+        "or, if that option is too narrow, `sparse(A)`."),  :full)
+    return Matrix(A)
+end
+
+# full for sparse arrays
+function full(S::Union{SparseVector,SparseMatrixCSC})
+    (arrtypestr, desttypestr) =
+        isa(S, SparseVector)    ? ("SparseVector",    "Vector") :
+        isa(S, SparseMatrixCSC) ? ("SparseMatrixCSC", "Matrix") :
+            error("should not be reachable!")
+    depwarn(string(
+        "`full(S::$(arrtypestr))` (and `full` in general) has been deprecated. ",
+        "To replace `full(S::$(arrtypestr))`, consider `$(desttypestr)(S)` or, ",
+        "if that option is too narrow, `Array(S)`."), :full)
+    return Array(S)
+end
+
+# full for factorizations
+function full(F::Union{LinAlg.LU,LinAlg.LQ,LinAlg.QR,LinAlg.QRPivoted,LinAlg.QRCompactWY,
+                        LinAlg.SVD,LinAlg.LDLt,LinAlg.Schur,LinAlg.Eigen,LinAlg.Hessenberg,
+                        LinAlg.Cholesky,LinAlg.CholeskyPivoted})
+    facttypestr = isa(F, LinAlg.LU)               ? "LU"              :
+                  isa(F, LinAlg.LQ)               ? "LQ"              :
+                  isa(F, LinAlg.QR)               ? "QR"              :
+                  isa(F, LinAlg.QRPivoted)        ? "QRPivoted"       :
+                  isa(F, LinAlg.QRCompactWY)      ? "QRCompactWY"     :
+                  isa(F, LinAlg.SVD)              ? "SVD"             :
+                  isa(F, LinAlg.LDLt)             ? "LDLt"            :
+                  isa(F, LinAlg.Schur)            ? "Schur"           :
+                  isa(F, LinAlg.Eigen)            ? "Eigen"           :
+                  isa(F, LinAlg.Hessenberg)       ? "Hessenberg"      :
+                  isa(F, LinAlg.Cholesky)         ? "Cholesky"        :
+                  isa(F, LinAlg.CholeskyPivoted)  ? "CholeskyPivoted" :
+                      error("should not be reachable!")
+   depwarn(string(
+       "`full(F::$(facttypestr))` (and `full` in general) has been deprecated. ",
+       "To replace `full(F::$(facttypestr))`, consider `Matrix(F)`, `AbstractMatrix(F)` or, ",
+       "if those options are too narrow, `Array(F)` or `AbstractArray(F)`."), :full)
+   return AbstractMatrix(F)
+end
+
+# full for implicit orthogonal factors
+function full(Q::LinAlg.HessenbergQ)
+    depwarn(string(
+        "`full(Q::HessenbergQ)` (and `full` in general) has been deprecated. ",
+        "To replace `full(Q::HessenbergQ)`, consider `Matrix(Q)` or, ",
+        "if that option is too narrow, `Array(Q)`."), :full)
+    return Matrix(Q)
+end
+function full(Q::LinAlg.LQPackedQ; thin::Bool = true)
+    depwarn(string(
+        "`full(Q::LQPackedQ; thin::Bool = true)` (and `full` in general) ",
+        "has been deprecated. To replace `full(Q::LQPackedQ, true)`, ",
+        "consider `Matrix(Q)` or `Array(Q)`. To replace `full(Q::LQPackedQ, false)`, ",
+        "consider `Base.LinAlg.A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 2)))`."), :full)
+    return thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 2)))
+end
+function full(Q::Union{LinAlg.QRPackedQ,LinAlg.QRCompactWYQ}; thin::Bool = true)
+    qtypestr = isa(Q, LinAlg.QRPackedQ)    ? "QRPackedQ"    :
+               isa(Q, LinAlg.QRCompactWYQ) ? "QRCompactWYQ" :
+                  error("should not be reachable!")
+    depwarn(string(
+        "`full(Q::$(qtypestr); thin::Bool = true)` (and `full` in general) ",
+        "has been deprecated. To replace `full(Q::$(qtypestr), true)`, ",
+        "consider `Matrix(Q)` or `Array(Q)`. To replace `full(Q::$(qtypestr), false)`, ",
+        "consider `Base.LinAlg.A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))`."), :full)
+    return thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))
+end
+
+# full for symmetric / hermitian / triangular wrappers
+function full(A::Symmetric)
+    depwarn(string(
+        "`full(A::Symmetric)` (and `full` in general) has been deprecated. ",
+        "To replace `full(A::Symmetric)`, as appropriate consider `Matrix(A)`, ",
+        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, `copy!(similar(parent(A)), A)`, ",
+        "or `Base.LinAlg.copytri!(copy(parent(A)), A.uplo)`."), :full)
+    return Matrix(A)
+end
+function full(A::Hermitian)
+    depwarn(string(
+        "`full(A::Hermitian)` (and `full` in general) has been deprecated. ",
+        "To replace `full(A::Hermitian)`, as appropriate consider `Matrix(A)`, ",
+        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, `copy!(similar(parent(A)), A)`, ",
+        "or `Base.LinAlg.copytri!(copy(parent(A)), A.uplo, true)`."), :full)
+    return Matrix(A)
+end
+function full(A::Union{UpperTriangular,LowerTriangular})
+    (tritypestr, tri!str) =
+        isa(A, UpperTriangular) ? ("UpperTriangular", "triu!") :
+        isa(A, LowerTriangular) ? ("LowerTriangular", "tril!") :
+            error("should not be reachable!")
+    depwarn(string(
+        "`full(A::$(tritypestr))` (and `full` in general) has been deprecated. ",
+        "To replace `full(A::$(tritypestr))`, as appropriate consider `Matrix(A)`, ",
+        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, `copy!(similar(parent(A)), A)`, ",
+        "or `$(tri!str)(copy(parent(A)))`."), :full)
+    return Matrix(A)
+end
+function full(A::Union{LinAlg.UnitUpperTriangular,LinAlg.UnitLowerTriangular})
+    tritypestr = isa(A, LinAlg.UnitUpperTriangular) ? "LinAlg.UnitUpperTriangular" :
+                 isa(A, LinAlg.UnitLowerTriangular) ? "LinAlg.UnitLowerTriangular" :
+                     error("should not be reachable!")
+    depwarn(string(
+        "`full(A::$(tritypestr))` (and `full` in general) has been deprecated. ",
+        "To replace `full(A::$(tritypestr))`, as appropriate consider `Matrix(A)`, ",
+        "`Array(A)`, `SparseMatrixCSC(A)`, `sparse(A)`, or `copy!(similar(parent(A)), A)`."), :full)
+    return Matrix(A)
+end
+
+
 # issue #20816
 @deprecate strwidth textwidth
 @deprecate charwidth textwidth
