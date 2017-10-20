@@ -118,6 +118,9 @@ Language changes
   * `reduce(+, [...])` and `reduce(*, [...])` no longer widen the iterated over arguments to
     system word size. `sum` and `prod` still preserve this behavior. ([#22825])
 
+  * Like `_`, variable names consisting only of underscores can be assigned,
+    but accessing their values is deprecated ([#24221]).
+
 Breaking changes
 ----------------
 
