@@ -418,7 +418,7 @@ function _require(mod::Symbol)
         name = string(mod)
         path = find_in_path(name, nothing)
         if path === nothing
-            throw(ArgumentError("Module $name not found in current path.\nRun `Pkg.add(\"$name\")` to install the $name package."))
+            throw(ArgumentError("Module $name not found in LOAD_PATH or `Pkg.dir()`.\nRun `Pkg.add(\"$name\")` to install the $name package."))
         end
 
         # attempt to load the module file via the precompile cache locations
