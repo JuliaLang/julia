@@ -756,7 +756,7 @@ function getindex end
 
 # This is more complicated than it needs to be in order to get Win64 through bootstrap
 @eval getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
-@eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...)) # TODO: REMOVE FOR #14770
+@eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copy! for UnitRange and Colon
 function getindex(A::Array, I::UnitRange{Int})
@@ -795,7 +795,7 @@ function setindex! end
 
 @eval setindex!(A::Array{T}, x, i1::Int) where {T} = arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1)
 @eval setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
-    (@_inline_meta; arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
+    (@_inline_meta; arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1, i2, I...))
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
@@ -2231,7 +2231,6 @@ end
 findin(a, b) = _findin(a, b)
 
 # Copying subregions
-# TODO: DEPRECATE FOR #14770
 function indcopy(sz::Dims, I::Vector)
     n = length(I)
     s = sz[n]

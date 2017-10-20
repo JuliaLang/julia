@@ -399,7 +399,6 @@ function checkbounds(A::AbstractArray, I...)
     checkbounds(Bool, A, I...) || throw_boundserror(A, I)
     nothing
 end
-checkbounds(A::AbstractArray) = checkbounds(A, 1) # 0-d case
 
 """
     checkbounds_indices(Bool, IA, I)
@@ -943,7 +942,6 @@ _getindex(::IndexStyle, A::AbstractArray, I...) =
 
 ## IndexLinear Scalar indexing: canonical method is one Int
 _getindex(::IndexLinear, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
-_getindex(::IndexLinear, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_linear_index(A)))
 function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
     @_inline_meta
     @boundscheck checkbounds(A, I...) # generally _to_linear_index requires bounds checking
@@ -951,16 +949,11 @@ function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
     r
 end
 _to_linear_index(A::AbstractArray, i::Int) = i
-_to_linear_index(A::AbstractVector, i::Int, I::Int...) = i # TODO: DEPRECATE FOR #14770
-_to_linear_index(A::AbstractArray{T,N}, I::Vararg{Int,N}) where {T,N} = (@_inline_meta; sub2ind(A, I...))
-_to_linear_index(A::AbstractArray) = 1 # TODO: DEPRECATE FOR #14770
-_to_linear_index(A::AbstractArray, I::Int...) = (@_inline_meta; sub2ind(A, I...)) # TODO: DEPRECATE FOR #14770
+_to_linear_index(A::AbstractVector, i::Int, I::Int...) = i
+_to_linear_index(A::AbstractArray) = 1
+_to_linear_index(A::AbstractArray, I::Int...) = (@_inline_meta; sub2ind(A, I...))
 
 ## IndexCartesian Scalar indexing: Canonical method is full dimensionality of Ints
-function _getindex(::IndexCartesian, A::AbstractArray)
-    @_propagate_inbounds_meta
-    getindex(A, _to_subscript_indices(A)...)
-end
 function _getindex(::IndexCartesian, A::AbstractArray, I::Vararg{Int,M}) where M
     @_inline_meta
     @boundscheck checkbounds(A, I...) # generally _to_subscript_indices requires bounds checking
@@ -972,11 +965,11 @@ function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) w
     getindex(A, I...)
 end
 _to_subscript_indices(A::AbstractArray, i::Int) = (@_inline_meta; _unsafe_ind2sub(A, i))
-_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@_inline_meta; fill_to_length((), 1, Val(N))) # TODO: DEPRECATE FOR #14770
-_to_subscript_indices(A::AbstractArray{T,0}) where {T} = () # TODO: REMOVE FOR #14770
-_to_subscript_indices(A::AbstractArray{T,0}, i::Int) where {T} = () # TODO: REMOVE FOR #14770
-_to_subscript_indices(A::AbstractArray{T,0}, I::Int...) where {T} = () # TODO: DEPRECATE FOR #14770
-function _to_subscript_indices(A::AbstractArray{T,N}, I::Int...) where {T,N} # TODO: DEPRECATE FOR #14770
+_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@_inline_meta; fill_to_length((), 1, Val(N)))
+_to_subscript_indices(A::AbstractArray{T,0}) where {T} = ()
+_to_subscript_indices(A::AbstractArray{T,0}, i::Int) where {T} = ()
+_to_subscript_indices(A::AbstractArray{T,0}, I::Int...) where {T} = ()
+function _to_subscript_indices(A::AbstractArray{T,N}, I::Int...) where {T,N}
     @_inline_meta
     J, Jrem = IteratorsMD.split(I, Val(N))
     _to_subscript_indices(A, J, Jrem)
@@ -1019,7 +1012,6 @@ _setindex!(::IndexStyle, A::AbstractArray, v, I...) =
 
 ## IndexLinear Scalar indexing
 _setindex!(::IndexLinear, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
-_setindex!(::IndexLinear, A::AbstractArray, v) = (@_propagate_inbounds_meta; setindex!(A, v, _to_linear_index(A)))
 function _setindex!(::IndexLinear, A::AbstractArray, v, I::Vararg{Int,M}) where M
     @_inline_meta
     @boundscheck checkbounds(A, I...)
@@ -1031,10 +1023,6 @@ end
 function _setindex!(::IndexCartesian, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) where {T,N}
     @_propagate_inbounds_meta
     setindex!(A, v, I...)
-end
-function _setindex!(::IndexCartesian, A::AbstractArray, v)
-    @_propagate_inbounds_meta
-    setindex!(A, v, _to_subscript_indices(A)...)
 end
 function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) where M
     @_inline_meta
@@ -1072,7 +1060,6 @@ end
 
 get(A::AbstractArray, I::AbstractRange, default) = get!(similar(A, typeof(default), index_shape(I)), A, I, default)
 
-# TODO: DEPRECATE FOR #14770 (just the partial linear indexing part)
 function get!(X::AbstractArray{T}, A::AbstractArray, I::RangeVecIntList, default::T) where T
     fill!(X, default)
     dst, src = indcopy(size(A), I)
