@@ -203,9 +203,10 @@ static crc32c_func_t crc32c_dispatch(void)
 #    define crc32c_dispatch crc32c_dispatch
 #    define crc32c_dispatch_ifunc "crc32c_dispatch"
 #  endif
-#elif defined(_CPU_AARCH64_)
-#define CRC_TARGET __attribute__((target("+crc")))
+#elif defined(_CPU_AARCH64_) || defined(_CPU_ARM_)
 /* Compute CRC-32C using the ARMv8 CRC32 extension. */
+#  ifdef _CPU_AARCH64_
+#  define CRC_TARGET __attribute__((target("+crc")))
 CRC_TARGET static inline uint32_t crc32cx(uint32_t crc, uint64_t val)
 {
     uint32_t res;
@@ -230,6 +231,66 @@ CRC_TARGET static inline uint32_t crc32cb(uint32_t crc, uint32_t val)
     asm("crc32cb %w0, %w1, %w2" : "=r"(res) : "r"(crc), "r"(val));
     return res;
 }
+#    define crc32c_ptr crc32cx
+#    define load_unaligned_intptr jl_load_unaligned_i64
+#  else
+/* #    ifdef _COMPILER_CLANG_ */
+/* #      define CRC_TARGET __attribute__((target("armv8-a,crc"))) */
+/* #    else */
+/* #      define CRC_TARGET __attribute__((target("armv8-a+crc"))) */
+/* #    endif */
+// Workaround GCC bug https://gcc.gnu.org/bugzilla/show_bug.cgi?id=82641
+// Clang is slightly better and can generate the correct binary but wrong textual assembly.
+#    define CRC_TARGET
+asm("\t.set jl_arm_reg_r0, 0\n"
+    "\t.set jl_arm_reg_r1, 1\n"
+    "\t.set jl_arm_reg_r2, 2\n"
+    "\t.set jl_arm_reg_r3, 3\n"
+    "\t.set jl_arm_reg_r4, 4\n"
+    "\t.set jl_arm_reg_r5, 5\n"
+    "\t.set jl_arm_reg_r6, 6\n"
+    "\t.set jl_arm_reg_r7, 7\n"
+    "\t.set jl_arm_reg_r8, 8\n"
+    "\t.set jl_arm_reg_r9, 9\n"
+    "\t.set jl_arm_reg_r10, 10\n"
+    "\t.set jl_arm_reg_sl, 10\n"
+    "\t.set jl_arm_reg_r11, 11\n"
+    "\t.set jl_arm_reg_fp, 11\n"
+    "\t.set jl_arm_reg_r12, 12\n"
+    "\t.set jl_arm_reg_ip, 12\n"
+    "\t.set jl_arm_reg_r13, 13\n"
+    "\t.set jl_arm_reg_sp, 13\n"
+    "\t.set jl_arm_reg_r14, 14\n"
+    "\t.set jl_arm_reg_lr, 14\n"
+    "\t.set jl_arm_reg_r15, 15\n"
+    "\t.set jl_arm_reg_pc, 15\n");
+CRC_TARGET static inline uint32_t crc32cw(uint32_t crc, uint32_t val)
+{
+    uint32_t res;
+    // asm("crc32cw %0, %1, %2" : "=r"(res) : "r"(crc), "r"(val));
+    asm(".inst 0xe1400240 | (jl_arm_reg_%0 << 16) | (jl_arm_reg_%1 << 12) | (jl_arm_reg_%2)"
+        : "=r"(res) : "r"(crc), "r"(val));
+    return res;
+}
+CRC_TARGET static inline uint32_t crc32ch(uint32_t crc, uint32_t val)
+{
+    uint32_t res;
+    // asm("crc32ch %0, %1, %2" : "=r"(res) : "r"(crc), "r"(val));
+    asm(".inst 0xe1200240 | (jl_arm_reg_%0 << 16) | (jl_arm_reg_%1 << 12) | (jl_arm_reg_%2)"
+        : "=r"(res) : "r"(crc), "r"(val));
+    return res;
+}
+CRC_TARGET static inline uint32_t crc32cb(uint32_t crc, uint32_t val)
+{
+    uint32_t res;
+    // asm("crc32cb %0, %1, %2" : "=r"(res) : "r"(crc), "r"(val));
+    asm(".inst 0xe1000240 | (jl_arm_reg_%0 << 16) | (jl_arm_reg_%1 << 12) | (jl_arm_reg_%2)"
+        : "=r"(res) : "r"(crc), "r"(val));
+    return res;
+}
+#    define crc32c_ptr crc32cw
+#    define load_unaligned_intptr jl_load_unaligned_i32
+#endif
 
 // Modified from the SSE4.2 version.
 CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t len)
@@ -253,12 +314,12 @@ CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t le
         const char *buf2 = end;
         const char *buf3 = end + LONG;
         do {
-            crc = crc32cx(crc, jl_load_unaligned_i64(buf));
-            buf += 8;
-            crc1 = crc32cx(crc1, jl_load_unaligned_i64(buf2));
-            buf2 += 8;
-            crc2 = crc32cx(crc2, jl_load_unaligned_i64(buf3));
-            buf3 += 8;
+            crc = crc32c_ptr(crc, load_unaligned_intptr(buf));
+            buf += sizeof(void*);
+            crc1 = crc32c_ptr(crc1, load_unaligned_intptr(buf2));
+            buf2 += sizeof(void*);
+            crc2 = crc32c_ptr(crc2, load_unaligned_intptr(buf3));
+            buf3 += sizeof(void*);
         } while (buf < end);
         crc = crc32c_shift(crc32c_long, crc) ^ crc1;
         crc = crc32c_shift(crc32c_long, crc) ^ crc2;
@@ -275,12 +336,12 @@ CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t le
         const char *buf2 = end;
         const char *buf3 = end + SHORT;
         do {
-            crc = crc32cx(crc, jl_load_unaligned_i64(buf));
-            buf += 8;
-            crc1 = crc32cx(crc1, jl_load_unaligned_i64(buf2));
-            buf2 += 8;
-            crc2 = crc32cx(crc2, jl_load_unaligned_i64(buf3));
-            buf3 += 8;
+            crc = crc32c_ptr(crc, load_unaligned_intptr(buf));
+            buf += sizeof(void*);
+            crc1 = crc32c_ptr(crc1, load_unaligned_intptr(buf2));
+            buf2 += sizeof(void*);
+            crc2 = crc32c_ptr(crc2, load_unaligned_intptr(buf3));
+            buf3 += sizeof(void*);
         } while (buf < end);
         crc = crc32c_shift(crc32c_short, crc) ^ crc1;
         crc = crc32c_shift(crc32c_short, crc) ^ crc2;
@@ -293,10 +354,10 @@ CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t le
         const char *end = buf + SHORT;
         const char *buf2 = end;
         do {
-            crc = crc32cx(crc, jl_load_unaligned_i64(buf));
-            buf += 8;
-            crc1 = crc32cx(crc1, jl_load_unaligned_i64(buf2));
-            buf2 += 8;
+            crc = crc32c_ptr(crc, load_unaligned_intptr(buf));
+            buf += sizeof(void*);
+            crc1 = crc32c_ptr(crc1, load_unaligned_intptr(buf2));
+            buf2 += sizeof(void*);
         } while (buf < end);
         crc = crc32c_shift(crc32c_short, crc) ^ crc1;
         buf += SHORT;
@@ -305,12 +366,12 @@ CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t le
 
     /* compute the crc on the remaining eight-byte units less than a SHORT*2
        block */
-    const char *end = buf + len - 8;
+    const char *end = buf + len - sizeof(void*);
     while (buf <= end) {
-        crc = crc32cx(crc, jl_load_unaligned_i64(buf));
-        buf += 8;
+        crc = crc32c_ptr(crc, load_unaligned_intptr(buf));
+        buf += sizeof(void*);
     }
-    if (len & 4) {
+    if (sizeof(void*) == 8 && len & 4) {
         crc = crc32cw(crc, jl_load_unaligned_i32(buf));
         buf += 4;
     }
@@ -331,7 +392,7 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
 {
     return crc32c_armv8(crc, buf, len);
 }
-#  else
+#  elif defined(_CPU_AARCH64_)
 static crc32c_func_t crc32c_dispatch(unsigned long hwcap)
 {
     if (hwcap & (1 << JL_AArch64_crc))
@@ -341,6 +402,20 @@ static crc32c_func_t crc32c_dispatch(unsigned long hwcap)
 // For ifdef detection below
 #    define crc32c_dispatch() crc32c_dispatch(getauxval(AT_HWCAP))
 #    define crc32c_dispatch_ifunc "crc32c_dispatch"
+#  else
+static crc32c_func_t crc32c_dispatch(void)
+{
+    if (jl_test_cpu_feature(JL_AArch32_crc))
+        return crc32c_armv8;
+    return jl_crc32c_sw;
+}
+// For ifdef detection below
+#    define crc32c_dispatch crc32c_dispatch
+// It's not really supported currently to access HWCAP2 in an ifunc.
+// Since the CRC32 bit is in HWCAP2 on ARM, we can't use ifunc.
+#    ifdef JL_CRC32C_USE_IFUNC
+#      undef JL_CRC32C_USE_IFUNC
+#    endif
 #  endif
 #else
 // If we don't have any accelerated version to define, just make the _sw version define
