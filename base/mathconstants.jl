@@ -82,7 +82,7 @@ catalan = 0.9159655941772...
 catalan
 
 # loop over types to prevent ambiguities for ^(::Number, x)
-for T in (Irrational, Rational, Integer, Number)
+for T in (AbstractIrrational, Rational, Integer, Number)
     Base.:^(::Irrational{:ℯ}, x::T) = exp(x)
 end
 
