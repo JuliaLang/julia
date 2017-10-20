@@ -334,7 +334,14 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 
 ## binary I/O ##
 
-write(io::IO, x) = throw(MethodError(write, (io, x)))
+function write(io::IO, x::T) where T
+    if isbits(T)
+        unsafe_write(io, Ref(x), sizeof(T))
+    else
+        throw(MethodError(write, (io, x)))
+    end
+end
+
 function write(io::IO, xs...)
     local written::Int = 0
     for x in xs
