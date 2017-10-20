@@ -1434,11 +1434,7 @@ end
 
 ## Some Triangular-Triangular cases. We might want to write taylored methods
 ## for these cases, but I'm not sure it is worth it.
-for t in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
-    @eval begin
-        (*)(A::Tridiagonal, B::$t) = A_mul_B!(Matrix(A), B)
-    end
-end
+(*)(A::Union{Tridiagonal,SymTridiagonal}, B::AbstractTriangular) = A_mul_B!(Matrix(A), B)
 
 for (f1, f2) in ((:*, :A_mul_B!), (:\, :A_ldiv_B!))
     @eval begin

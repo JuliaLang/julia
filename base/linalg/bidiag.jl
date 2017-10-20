@@ -170,7 +170,12 @@ convert(::Type{AbstractMatrix{T}}, A::Bidiagonal) where {T} = convert(Bidiagonal
 
 broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.uplo)
 
-similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal{T}(similar(B.dv, T), similar(B.ev, T), B.uplo)
+# For B<:Bidiagonal, similar(B[, neweltype]) should yield a Bidiagonal matrix.
+# On the other hand, similar(B, [neweltype,] shape...) should yield a sparse matrix.
+# The first method below effects the former, and the second the latter.
+similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), similar(B.ev, T), B.uplo)
+similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+
 
 ###################
 # LAPACK routines #

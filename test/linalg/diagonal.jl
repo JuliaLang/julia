@@ -228,8 +228,8 @@ srand(1)
     @testset "similar" begin
         @test isa(similar(D), Diagonal{elty})
         @test isa(similar(D, Int), Diagonal{Int})
-        @test isa(similar(D, (3,2)), Matrix{elty})
-        @test isa(similar(D, Int, (3,2)), Matrix{Int})
+        @test isa(similar(D, (3,2)), SparseMatrixCSC{elty})
+        @test isa(similar(D, Int, (3,2)), SparseMatrixCSC{Int})
     end
 
     # Issue number 10036

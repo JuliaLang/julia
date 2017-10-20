@@ -52,13 +52,13 @@ convert(::Type{Diagonal}, A::AbstractTriangular) =
     isdiag(A) ? Diagonal(diag(A)) :
         throw(ArgumentError("matrix cannot be represented as Diagonal"))
 convert(::Type{Bidiagonal}, A::AbstractTriangular) =
-    isbanded(A, 0, 1) ? Bidiagonal(diag(A), diag(A,  1), :U) : # is upper bidiagonal
-    isbanded(A, -1, 0) ? Bidiagonal(diag(A), diag(A, -1), :L) : # is lower bidiagonal
+    isbanded(A, 0, 1) ? Bidiagonal(diag(A, 0), diag(A,  1), :U) : # is upper bidiagonal
+    isbanded(A, -1, 0) ? Bidiagonal(diag(A, 0), diag(A, -1), :L) : # is lower bidiagonal
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
 convert(::Type{SymTridiagonal}, A::AbstractTriangular) =
     convert(SymTridiagonal, convert(Tridiagonal, A))
 convert(::Type{Tridiagonal}, A::AbstractTriangular) =
-    isbanded(A, -1, 1) ? Tridiagonal(diag(A, -1), diag(A), diag(A, 1)) : # is tridiagonal
+    isbanded(A, -1, 1) ? Tridiagonal(diag(A, -1), diag(A, 0), diag(A, 1)) : # is tridiagonal
         throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
 
 
