@@ -233,9 +233,9 @@ julia&gt; while true
 4
 5
 
-julia&gt; for i = 1:1000
-           println(i)
-           if i &gt;= 5
+julia&gt; for j = 1:1000
+           println(j)
+           if j &gt;= 5
                break
            end
        end
@@ -318,7 +318,7 @@ WARNING: Hi
 julia&gt; error(&quot;Hi&quot;); 1+1
 ERROR: Hi
 Stacktrace:
- [1] error(::String) at ./error.jl:21</code></pre><h3><a class="nav-anchor" id="The-try/catch-statement-1" href="#The-try/catch-statement-1">The <code>try/catch</code> statement</a></h3><p>The <code>try/catch</code> statement allows for <code>Exception</code>s to be tested for. For example, a customized square root function can be written to automatically call either the real or complex square root method on demand using <code>Exception</code>s :</p><pre><code class="language-julia-repl">julia&gt; f(x) = try
+ [1] error(::String) at ./error.jl:33</code></pre><h3><a class="nav-anchor" id="The-try/catch-statement-1" href="#The-try/catch-statement-1">The <code>try/catch</code> statement</a></h3><p>The <code>try/catch</code> statement allows for <code>Exception</code>s to be tested for. For example, a customized square root function can be written to automatically call either the real or complex square root method on demand using <code>Exception</code>s :</p><pre><code class="language-julia-repl">julia&gt; f(x) = try
            sqrt(x)
        catch
            sqrt(complex(x, 0))

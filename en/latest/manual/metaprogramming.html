@@ -68,8 +68,7 @@ Expr</code></pre><h3><a class="nav-anchor" id="Interpolation-1" href="#Interpola
 
 julia&gt; ex = :($a + b)
 :(1 + b)</code></pre><p>Interpolating into an unquoted expression is not supported and will cause a compile-time error:</p><pre><code class="language-julia-repl">julia&gt; $a + b
-ERROR: unsupported or misplaced expression $
- ...</code></pre><p>In this example, the tuple <code>(1,2,3)</code> is interpolated as an expression into a conditional test:</p><pre><code class="language-julia-repl">julia&gt; ex = :(a in $:((1,2,3)) )
+ERROR: unsupported or misplaced expression $</code></pre><p>In this example, the tuple <code>(1,2,3)</code> is interpolated as an expression into a conditional test:</p><pre><code class="language-julia-repl">julia&gt; ex = :(a in $:((1,2,3)) )
 :(a in (1, 2, 3))</code></pre><p>The use of <code>$</code> for expression interpolation is intentionally reminiscent of <a href="strings.html#string-interpolation-1">string interpolation</a> and <a href="running-external-programs.html#command-interpolation-1">command interpolation</a>. Expression interpolation allows convenient, readable programmatic construction of complex Julia expressions.</p><h3><a class="nav-anchor" id="Splatting-interpolation-1" href="#Splatting-interpolation-1">Splatting interpolation</a></h3><p>Notice that the <code>$</code> interpolation syntax allows inserting only a single expression into an enclosing expression. Occasionally, you have an array of expressions and need them all to become arguments of the surrounding expression. This can be done with the syntax <code>$(xs...)</code>. For example, the following code generates a function call where the number of arguments is determined programmatically:</p><pre><code class="language-julia-repl">julia&gt; args = [:x, :y, :z];
 
 julia&gt; :(f(1, $(args...)))
@@ -77,25 +76,25 @@ julia&gt; :(f(1, $(args...)))
 
 julia&gt; e = quote quote $x end end
 quote
-    #= REPL[4]:1 =#
+    #= none:1 =#
     $(Expr(:quote, quote
-    #= REPL[4]:1 =#
+    #= none:1 =#
     $(Expr(:$, :x))
 end))
 end</code></pre><p>Notice that the result contains <code>Expr(:$, :x)</code>, which means that <code>x</code> has not been evaluated yet. In other words, the <code>$</code> expression &quot;belongs to&quot; the inner quote expression, and so its argument is only evaluated when the inner quote expression is:</p><pre><code class="language-julia-repl">julia&gt; eval(e)
 quote
-    #= REPL[4]:1 =#
+    #= none:1 =#
     1 + 2
 end</code></pre><p>However, the outer <code>quote</code> expression is able to interpolate values inside the <code>$</code> in the inner quote. This is done with multiple <code>$</code>s:</p><pre><code class="language-julia-repl">julia&gt; e = quote quote $$x end end
 quote
-    #= REPL[7]:1 =#
+    #= none:1 =#
     $(Expr(:quote, quote
-    #= REPL[7]:1 =#
+    #= none:1 =#
     $(Expr(:$, :(1 + 2)))
 end))
 end</code></pre><p>Notice that <code>:(1 + 2)</code> now appears in the result instead of the symbol <code>:x</code>. Evaluating this expression yields an interpolated <code>3</code>:</p><pre><code class="language-julia-repl">julia&gt; eval(e)
 quote
-    #= REPL[2]:1 =#
+    #= none:1 =#
     3
 end</code></pre><p>The intuition behind this behavior is that <code>x</code> is evaluated once for each <code>$</code>: one <code>$</code> works similarly to <code>eval(:x)</code>, giving <code>x</code>&#39;s value, while two <code>$</code>s do the equivalent of <code>eval(eval(:x))</code>.</p><h3><a class="nav-anchor" id="QuoteNode-1" href="#QuoteNode-1">QuoteNode</a></h3><p>The usual representation of a <code>quote</code> form in an AST is an <code>Expr</code> with head <code>:quote</code>:</p><pre><code class="language-julia-repl">julia&gt; dump(parse(&quot;:(1+2)&quot;))
 Expr

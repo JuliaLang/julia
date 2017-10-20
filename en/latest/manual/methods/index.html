@@ -88,9 +88,11 @@ julia&gt; g(2, 3.0)
 8.0
 
 julia&gt; g(2.0, 3.0)
-ERROR: MethodError: g(::Float64, ::Float64) is ambiguous.
-Stacktrace:
-[...]</code></pre><p>Here the call <code>g(2.0, 3.0)</code> could be handled by either the <code>g(Float64, Any)</code> or the <code>g(Any, Float64)</code> method, and neither is more specific than the other. In such cases, Julia raises a <a href="../../stdlib/base/#Core.MethodError"><code>MethodError</code></a> rather than arbitrarily picking a method. You can avoid method ambiguities by specifying an appropriate method for the intersection case:</p><pre><code class="language-julia-repl">julia&gt; g(x::Float64, y::Float64) = 2x + 2y
+ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
+  g(x, y::Float64) in Main at none:1
+  g(x::Float64, y) in Main at none:1
+Possible fix, define
+  g(::Float64, ::Float64)</code></pre><p>Here the call <code>g(2.0, 3.0)</code> could be handled by either the <code>g(Float64, Any)</code> or the <code>g(Any, Float64)</code> method, and neither is more specific than the other. In such cases, Julia raises a <a href="../../stdlib/base/#Core.MethodError"><code>MethodError</code></a> rather than arbitrarily picking a method. You can avoid method ambiguities by specifying an appropriate method for the intersection case:</p><pre><code class="language-julia-repl">julia&gt; g(x::Float64, y::Float64) = 2x + 2y
 g (generic function with 3 methods)
 
 julia&gt; g(2.0, 3)

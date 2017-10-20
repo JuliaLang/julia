@@ -120,8 +120,7 @@ julia&gt; quz()
 14
 
 julia&gt; x, y
-(1, 2)</code></pre><p>Note that above subtlety does not pertain to type and macro definitions as they can only appear at the global scope. There are special scoping rules concerning the evaluation of default and keyword function arguments which are described in the <a href="functions.html#man-functions-1">Function section</a>.</p><p>An assignment introducing a variable used inside a function, type or macro definition need not come before its inner usage:</p><pre><code class="language-julia-repl">julia&gt; f = y -&gt; y + a
-(::#1) (generic function with 1 method)
+(1, 2)</code></pre><p>Note that above subtlety does not pertain to type and macro definitions as they can only appear at the global scope. There are special scoping rules concerning the evaluation of default and keyword function arguments which are described in the <a href="functions.html#man-functions-1">Function section</a>.</p><p>An assignment introducing a variable used inside a function, type or macro definition need not come before its inner usage:</p><pre><code class="language-julia-repl">julia&gt; f = y -&gt; y + a;
 
 julia&gt; f(3)
 ERROR: UndefVarError: a not defined
@@ -197,18 +196,23 @@ julia&gt; Fs[1]()
 1
 
 julia&gt; Fs[2]()
-2</code></pre><p>A <code>for</code> loop or comprehension iteration variable is always a new variable:</p><pre><code class="language-julia-repl">julia&gt; i = 0;
+2</code></pre><p>A <code>for</code> loop or comprehension iteration variable is always a new variable:</p><pre><code class="language-julia-repl">julia&gt; function f()
+           i = 0
+           for i = 1:3
+           end
+           return i
+       end;
 
-julia&gt; for i = 1:3
-       end
+julia&gt; f()
+0</code></pre><p>However, it is occasionally useful to reuse an existing variable as the iteration variable. This can be done conveniently by adding the keyword <code>outer</code>:</p><pre><code class="language-julia-repl">julia&gt; function f()
+           i = 0
+           for outer i = 1:3
+           end
+           return i
+       end;
 
-julia&gt; i
-0</code></pre><p>However, it is occasionally useful to reuse an existing variable as the iteration variable. This can be done conveniently by adding the keyword <code>outer</code>:</p><pre><code class="language-julia-repl">julia&gt; i = 0;
-
-julia&gt; for outer i = 1:3
-       end
-
-julia&gt; i
+julia&gt; f()
 3</code></pre><h2><a class="nav-anchor" id="Constants-1" href="#Constants-1">Constants</a></h2><p>A common use of variables is giving names to specific, unchanging values. Such variables are only assigned once. This intent can be conveyed to the compiler using the <code>const</code> keyword:</p><pre><code class="language-julia-repl">julia&gt; const e  = 2.71828182845904523536;
 
-julia&gt; const pi = 3.14159265358979323846;</code></pre><p>Multiple variables can be declared in a single <code>const</code> statement:</p><pre><code class="language-julia-repl">julia&gt; const a, b = 1, 2</code></pre><p>The <code>const</code> declaration should only be used in global scope on globals. It is difficult for the compiler to optimize code involving global variables, since their values (or even their types) might change at almost any time. If a global variable will not change, adding a <code>const</code> declaration solves this performance problem.</p><p>Local constants are quite different. The compiler is able to determine automatically when a local variable is constant, so local constant declarations are not necessary, and in fact are currently not supported.</p><p>Special top-level assignments, such as those performed by the <code>function</code> and <code>struct</code> keywords, are constant by default.</p><p>Note that <code>const</code> only affects the variable binding; the variable may be bound to a mutable object (such as an array), and that object may still be modified.</p><footer><hr/><a class="previous" href="control-flow.html"><span class="direction">Previous</span><span class="title">Control Flow</span></a><a class="next" href="types.html"><span class="direction">Next</span><span class="title">Types</span></a></footer></article></body></html>
+julia&gt; const pi = 3.14159265358979323846;</code></pre><p>Multiple variables can be declared in a single <code>const</code> statement:</p><pre><code class="language-julia-repl">julia&gt; const a, b = 1, 2
+(1, 2)</code></pre><p>The <code>const</code> declaration should only be used in global scope on globals. It is difficult for the compiler to optimize code involving global variables, since their values (or even their types) might change at almost any time. If a global variable will not change, adding a <code>const</code> declaration solves this performance problem.</p><p>Local constants are quite different. The compiler is able to determine automatically when a local variable is constant, so local constant declarations are not necessary, and in fact are currently not supported.</p><p>Special top-level assignments, such as those performed by the <code>function</code> and <code>struct</code> keywords, are constant by default.</p><p>Note that <code>const</code> only affects the variable binding; the variable may be bound to a mutable object (such as an array), and that object may still be modified.</p><footer><hr/><a class="previous" href="control-flow.html"><span class="direction">Previous</span><span class="title">Control Flow</span></a><a class="next" href="types.html"><span class="direction">Next</span><span class="title">Types</span></a></footer></article></body></html>

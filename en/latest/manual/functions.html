@@ -58,12 +58,12 @@ julia&gt; +(1,2,3)
 
 julia&gt; f(1,2,3)
 6</code></pre><p>Under the name <code>f</code>, the function does not support infix notation, however.</p><h2><a class="nav-anchor" id="Operators-With-Special-Names-1" href="#Operators-With-Special-Names-1">Operators With Special Names</a></h2><p>A few special expressions correspond to calls to functions with non-obvious names. These are:</p><table><tr><th>Expression</th><th>Calls</th></tr><tr><td><code>[A B C ...]</code></td><td><a href="../stdlib/arrays.html#Base.hcat"><code>hcat</code></a></td></tr><tr><td><code>[A; B; C; ...]</code></td><td><a href="../stdlib/arrays.html#Base.vcat"><code>vcat</code></a></td></tr><tr><td><code>[A B; C D; ...]</code></td><td><a href="../stdlib/arrays.html#Base.hvcat"><code>hvcat</code></a></td></tr><tr><td><code>A&#39;</code></td><td><a href="../stdlib/linalg.html#Base.adjoint"><code>adjoint</code></a></td></tr><tr><td><code>A.&#39;</code></td><td><a href="../stdlib/linalg.html#Base.transpose"><code>transpose</code></a></td></tr><tr><td><code>1:n</code></td><td><a href="../stdlib/math.html#Base.colon"><code>colon</code></a></td></tr><tr><td><code>A[i]</code></td><td><a href="../stdlib/collections.html#Base.getindex"><code>getindex</code></a></td></tr><tr><td><code>A[i]=x</code></td><td><a href="../stdlib/collections.html#Base.setindex!"><code>setindex!</code></a></td></tr></table><h2><a class="nav-anchor" id="man-anonymous-functions-1" href="#man-anonymous-functions-1">Anonymous Functions</a></h2><p>Functions in Julia are <a href="https://en.wikipedia.org/wiki/First-class_citizen">first-class objects</a>: they can be assigned to variables, and called using the standard function call syntax from the variable they have been assigned to. They can be used as arguments, and they can be returned as values. They can also be created anonymously, without being given a name, using either of these syntaxes:</p><pre><code class="language-julia-repl">julia&gt; x -&gt; x^2 + 2x - 1
-(::#1) (generic function with 1 method)
+#1 (generic function with 1 method)
 
 julia&gt; function (x)
            x^2 + 2x - 1
        end
-(::#3) (generic function with 1 method)</code></pre><p>This creates a function taking one argument <code>x</code> and returning the value of the polynomial <code>x^2 + 2x - 1</code> at that value. Notice that the result is a generic function, but with a compiler-generated name based on consecutive numbering.</p><p>The primary use for anonymous functions is passing them to functions which take other functions as arguments. A classic example is <a href="../stdlib/collections.html#Base.map"><code>map</code></a>, which applies a function to each value of an array and returns a new array containing the resulting values:</p><pre><code class="language-julia-repl">julia&gt; map(round, [1.2,3.5,1.7])
+#3 (generic function with 1 method)</code></pre><p>This creates a function taking one argument <code>x</code> and returning the value of the polynomial <code>x^2 + 2x - 1</code> at that value. Notice that the result is a generic function, but with a compiler-generated name based on consecutive numbering.</p><p>The primary use for anonymous functions is passing them to functions which take other functions as arguments. A classic example is <a href="../stdlib/collections.html#Base.map"><code>map</code></a>, which applies a function to each value of an array and returns a new array containing the resulting values:</p><pre><code class="language-julia-repl">julia&gt; map(round, [1.2,3.5,1.7])
 3-element Array{Float64,1}:
  1.0
  4.0
@@ -200,9 +200,9 @@ end</code></pre><p>Here, <a href="../stdlib/io-network.html#Base.open"><code>ope
 
 julia&gt; sin.(A)
 3-element Array{Float64,1}:
- 0.841471
- 0.909297
- 0.14112</code></pre><p>Of course, you can omit the dot if you write a specialized &quot;vector&quot; method of <code>f</code>, e.g. via <code>f(A::AbstractArray) = map(f, A)</code>, and this is just as efficient as <code>f.(A)</code>. But that approach requires you to decide in advance which functions you want to vectorize.</p><p>More generally, <code>f.(args...)</code> is actually equivalent to <code>broadcast(f, args...)</code>, which allows you to operate on multiple arrays (even of different shapes), or a mix of arrays and scalars (see <a href="arrays.html#Broadcasting-1">Broadcasting</a>). For example, if you have <code>f(x,y) = 3x + 4y</code>, then <code>f.(pi,A)</code> will return a new array consisting of <code>f(pi,a)</code> for each <code>a</code> in <code>A</code>, and <code>f.(vector1,vector2)</code> will return a new vector consisting of <code>f(vector1[i],vector2[i])</code> for each index <code>i</code> (throwing an exception if the vectors have different length).</p><pre><code class="language-julia-repl">julia&gt; f(x,y) = 3x + 4y;
+ 0.8414709848078965
+ 0.9092974268256817
+ 0.1411200080598672</code></pre><p>Of course, you can omit the dot if you write a specialized &quot;vector&quot; method of <code>f</code>, e.g. via <code>f(A::AbstractArray) = map(f, A)</code>, and this is just as efficient as <code>f.(A)</code>. But that approach requires you to decide in advance which functions you want to vectorize.</p><p>More generally, <code>f.(args...)</code> is actually equivalent to <code>broadcast(f, args...)</code>, which allows you to operate on multiple arrays (even of different shapes), or a mix of arrays and scalars (see <a href="arrays.html#Broadcasting-1">Broadcasting</a>). For example, if you have <code>f(x,y) = 3x + 4y</code>, then <code>f.(pi,A)</code> will return a new array consisting of <code>f(pi,a)</code> for each <code>a</code> in <code>A</code>, and <code>f.(vector1,vector2)</code> will return a new vector consisting of <code>f(vector1[i],vector2[i])</code> for each index <code>i</code> (throwing an exception if the vectors have different length).</p><pre><code class="language-julia-repl">julia&gt; f(x,y) = 3x + 4y;
 
 julia&gt; A = [1.0, 2.0, 3.0];
 
@@ -210,9 +210,9 @@ julia&gt; B = [4.0, 5.0, 6.0];
 
 julia&gt; f.(pi, A)
 3-element Array{Float64,1}:
- 13.4248
- 17.4248
- 21.4248
+ 13.42477796076938
+ 17.42477796076938
+ 21.42477796076938
 
 julia&gt; f.(A, B)
 3-element Array{Float64,1}:
@@ -224,7 +224,7 @@ julia&gt; X = similar(Y); # pre-allocate output array
 
 julia&gt; @. X = sin(cos(Y)) # equivalent to X .= sin.(cos.(Y))
 4-element Array{Float64,1}:
-  0.514395
- -0.404239
- -0.836022
- -0.608083</code></pre><p>Binary (or unary) operators like <code>.+</code> are handled with the same mechanism: they are equivalent to <code>broadcast</code> calls and are fused with other nested &quot;dot&quot; calls.  <code>X .+= Y</code> etcetera is equivalent to <code>X .= X .+ Y</code> and results in a fused in-place assignment;  see also <a href="mathematical-operations.html#man-dot-operators-1">dot operators</a>.</p><h2><a class="nav-anchor" id="Further-Reading-1" href="#Further-Reading-1">Further Reading</a></h2><p>We should mention here that this is far from a complete picture of defining functions. Julia has a sophisticated type system and allows multiple dispatch on argument types. None of the examples given here provide any type annotations on their arguments, meaning that they are applicable to all types of arguments. The type system is described in <a href="types.html#man-types-1">Types</a> and defining a function in terms of methods chosen by multiple dispatch on run-time argument types is described in <a href="methods.html#Methods-1">Methods</a>.</p><footer><hr/><a class="previous" href="strings.html"><span class="direction">Previous</span><span class="title">Strings</span></a><a class="next" href="control-flow.html"><span class="direction">Next</span><span class="title">Control Flow</span></a></footer></article></body></html>
+  0.5143952585235492
+ -0.4042391538522658
+ -0.8360218615377305
+ -0.6080830096407656</code></pre><p>Binary (or unary) operators like <code>.+</code> are handled with the same mechanism: they are equivalent to <code>broadcast</code> calls and are fused with other nested &quot;dot&quot; calls.  <code>X .+= Y</code> etcetera is equivalent to <code>X .= X .+ Y</code> and results in a fused in-place assignment;  see also <a href="mathematical-operations.html#man-dot-operators-1">dot operators</a>.</p><h2><a class="nav-anchor" id="Further-Reading-1" href="#Further-Reading-1">Further Reading</a></h2><p>We should mention here that this is far from a complete picture of defining functions. Julia has a sophisticated type system and allows multiple dispatch on argument types. None of the examples given here provide any type annotations on their arguments, meaning that they are applicable to all types of arguments. The type system is described in <a href="types.html#man-types-1">Types</a> and defining a function in terms of methods chosen by multiple dispatch on run-time argument types is described in <a href="methods.html#Methods-1">Methods</a>.</p><footer><hr/><a class="previous" href="strings.html"><span class="direction">Previous</span><span class="title">Strings</span></a><a class="next" href="control-flow.html"><span class="direction">Next</span><span class="title">Control Flow</span></a></footer></article></body></html>
