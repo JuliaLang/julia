@@ -619,14 +619,18 @@ end
     end
 end
 
-@testset "issues #3024, #12822" begin
-    @test_throws DomainError 2 ^ -2
+@testset "issues #3024, #12822, #24240" begin
+    p2 = -2
+    p3 = -3
+    @test_throws DomainError 2 ^ p2
+    @test 2 ^ -2 == 0.25
     @test_throws DomainError (-2)^(2.2)
     @test_throws DomainError (-2.0)^(2.2)
-    @test_throws DomainError false ^ -2
-    @test 1 ^ -2 === (-1) ^ -2 === 1
-    @test (-1) ^ -3 === -1
-    @test true ^ -2 === true
+    @test_throws DomainError false ^ p2
+    @test false ^ -2 == Inf
+    @test 1 ^ -2 === (-1) ^ -2 == 1 ^ p2 === (-1) ^ p2 === 1
+    @test (-1) ^ -3 == (-1) ^ p3 === -1
+    @test true ^ -2 == true ^ p2 === true
 end
 
 @testset "issue #13748" begin

@@ -784,8 +784,10 @@ end
 
 @test complex(1//2,1//3)^2 === complex(5//36, 1//3)
 @test complex(2,2)^2 === complex(0,8)
-@test_throws DomainError complex(2,2)^(-2)
-@test complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
+let p = -2
+    @test_throws DomainError complex(2,2)^p
+end
+@test complex(2,2)^(-2) === complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
 
 @test complex.(1.0, [1.0, 1.0]) == [complex(1.0, 1.0), complex(1.0, 1.0)]
 @test complex.([1.0, 1.0], 1.0) == [complex(1.0, 1.0), complex(1.0, 1.0)]
