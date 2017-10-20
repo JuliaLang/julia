@@ -71,13 +71,13 @@ julia> ldltS = ldltfact(S);
 
 julia> b = [6., 7., 8.];
 
-julia> ldltS\b
+julia> ldltS \\ b
 3-element Array{Float64,1}:
  1.7906976744186047
  0.627906976744186
  1.3488372093023255
 
-julia> S\b
+julia> S \\ b
 3-element Array{Float64,1}:
  1.7906976744186047
  0.627906976744186

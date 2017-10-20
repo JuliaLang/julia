@@ -62,7 +62,7 @@ julia> io = IOBuffer();
 julia> println(io, "Hello, world")
 
 julia> String(take!(io))
-"Hello, world\n"
+"Hello, world\\n"
 ```
 """
 println(io::IO, xs...) = print(io, xs..., '\n')

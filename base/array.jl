@@ -1596,10 +1596,10 @@ julia> A = [false false; true false]
  false  false
   true  false
 
-julia> findnext(A,1)
+julia> findnext(A, 1)
 2
 
-julia> findnext(A,3)
+julia> findnext(A, 3)
 0
 ```
 """
@@ -1630,15 +1630,15 @@ To search for other kinds of values, pass a predicate as the first argument.
 
 # Examples
 ```jldoctest
-julia> A = [0 0; 1 0]
-2×2 Array{Int64,2}:
- 0  0
- 1  0
+julia> A = [false false; true false]
+2×2 Array{Bool,2}:
+ false  false
+  true  false
 
 julia> findfirst(A)
 2
 
-julia> findfirst(zeros(3))
+julia> findfirst(falses(3))
 0
 ```
 """
@@ -1710,7 +1710,7 @@ Find the previous linear index <= `i` of a `true` element of `A`, or `0` if not 
 julia> A = [false false; true true]
 2×2 Array{Bool,2}:
  false  false
-  true  true
+  true   true
 
 julia> findprev(A,2)
 2
@@ -1742,18 +1742,15 @@ Returns `0` if there is no `true` value in `A`.
 
 # Examples
 ```jldoctest
-julia> A = [1 0; 1 0]
-2×2 Array{Int64,2}:
- 1  0
- 1  0
+julia> A = [true false; true false]
+2×2 Array{Bool,2}:
+ true  false
+ true  false
 
 julia> findlast(A)
 2
 
-julia> A = zeros(2,2)
-2×2 Array{Float64,2}:
- 0.0  0.0
- 0.0  0.0
+julia> A = falses(2,2);
 
 julia> findlast(A)
 0

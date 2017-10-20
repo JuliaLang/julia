@@ -593,7 +593,7 @@ julia> A = 2.7182818 * eye(2)
  0.0      2.71828
 
 julia> log(A)
-2×2 Symmetric{Float64,Array{Float64,2}}:
+2×2 Array{Float64,2}:
  1.0  0.0
  0.0  1.0
 ```
@@ -1104,7 +1104,7 @@ julia> A = Array(Bidiagonal(ones(5, 5), :U))
  0.0  0.0  0.0  0.0  1.0
 
 julia> factorize(A) # factorize will check to see that A is already factorized
-5×5 Bidiagonal{Float64}:
+5×5 Bidiagonal{Float64,Array{Float64,1}}:
  1.0  1.0   ⋅    ⋅    ⋅
   ⋅   1.0  1.0   ⋅    ⋅
   ⋅    ⋅   1.0  1.0   ⋅

@@ -203,7 +203,7 @@ Multiply `x` and `y`, giving the result as a larger type.
 
 ```jldoctest
 julia> widemul(Float32(3.), 4.)
-1.200000000000000000000000000000000000000000000000000000000000000000000000000000e+01
+1.2e+01
 ```
 """
 widemul(x::Number, y::Number) = widen(x)*widen(y)
@@ -226,7 +226,7 @@ julia> zero(1)
 0
 
 julia> zero(big"2.0")
-0.000000000000000000000000000000000000000000000000000000000000000000000000000000
+0.0
 
 julia> zero(rand(2,2))
 2×2 Array{Float64,2}:

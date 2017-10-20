@@ -706,15 +706,15 @@ For an array input, returns the value and index of the minimum over the given re
 # Examples
 ```jldoctest
 julia> A = [1.0 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Array{Float64,2}:
  1.0  2.0
  3.0  4.0
 
 julia> findmin(A, 1)
-([1.0 2.0], [1 3])
+([1.0 2.0], CartesianIndex{2}[CartesianIndex(1, 1) CartesianIndex(1, 2)])
 
 julia> findmin(A, 2)
-([1.0; 3.0], [1; 2])
+([1.0; 3.0], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1)])
 ```
 """
 function findmin(A::AbstractArray{T}, region) where T
@@ -753,15 +753,15 @@ For an array input, returns the value and index of the maximum over the given re
 # Examples
 ```jldoctest
 julia> A = [1.0 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Array{Float64,2}:
  1.0  2.0
  3.0  4.0
 
 julia> findmax(A,1)
-([3.0 4.0], [2 4])
+([3.0 4.0], CartesianIndex{2}[CartesianIndex(2, 1) CartesianIndex(2, 2)])
 
 julia> findmax(A,2)
-([2.0; 4.0], [3; 4])
+([2.0; 4.0], CartesianIndex{2}[CartesianIndex(1, 2); CartesianIndex(2, 2)])
 ```
 """
 function findmax(A::AbstractArray{T}, region) where T

@@ -93,15 +93,15 @@ julia> rng = MersenneTwister(1234);
 
 julia> x1 = rand(rng, 2)
 2-element Array{Float64,1}:
- 0.590845
- 0.766797
+ 0.5908446386657102
+ 0.7667970365022592
 
 julia> rng = MersenneTwister(1234);
 
 julia> x2 = rand(rng, 2)
 2-element Array{Float64,1}:
- 0.590845
- 0.766797
+ 0.5908446386657102
+ 0.7667970365022592
 
 julia> x1 == x2
 true

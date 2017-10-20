@@ -116,12 +116,12 @@ julia> A = [1 2; 3 4]
  3  4
 
 julia> b = view(A, :, 1)
-2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:
+2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
  1
  3
 
 julia> fill!(b, 0)
-2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:
+2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
  0
  0
 
@@ -453,12 +453,12 @@ julia> A = [1 2; 3 4]
  3  4
 
 julia> b = @view A[:, 1]
-2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:
+2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
  1
  3
 
 julia> fill!(b, 0)
-2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:
+2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
  0
  0
 

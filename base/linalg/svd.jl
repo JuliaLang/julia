@@ -32,7 +32,7 @@ end
 Compute the singular value decomposition (SVD) of `A` and return an `SVD` object.
 
 `U`, `S`, `V` and `Vt` can be obtained from the factorization `F` with `F[:U]`,
-`F[:S]`, `F[:V]` and `F[:Vt]`, such that `A = U*Diagonal(S)*Vt`.
+`F[:S]`, `F[:V]` and `F[:Vt]`, such that `A = U * Diagonal(S) * Vt`.
 The algorithm produces `Vt` and hence `Vt` is more efficient to extract than `V`.
 The singular values in `S` are sorted in descending order.
 
@@ -49,8 +49,7 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
  0.0  0.0  0.0  0.0  0.0
  0.0  2.0  0.0  0.0  0.0
 
-julia> F = svdfact(A)
-Base.LinAlg.SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23607, 2.0, 0.0], [-0.0 0.0 … -0.0 0.0; 0.447214 0.0 … 0.0 0.894427; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])
+julia> F = svdfact(A);
 
 julia> F[:U] * Diagonal(F[:S]) * F[:Vt]
 4×5 Array{Float64,2}:
@@ -71,9 +70,9 @@ svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin=thin)
     svd(A; thin::Bool=true) -> U, S, V
 
 Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
-`A == U*Diagonal(S)*V'`. The singular values in `S` are sorted in descending order.
+`A == U * Diagonal(S) * V'`. The singular values in `S` are sorted in descending order.
 
-If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
+If `thin = true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 `A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
 ``M \\times \\min(M, N)`` for a thin SVD.
 
@@ -90,10 +89,9 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
  0.0  0.0  0.0  0.0  0.0
  0.0  2.0  0.0  0.0  0.0
 
-julia> U, S, V = svd(A)
-([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23607, 2.0, 0.0], [-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])
+julia> U, S, V = svd(A);
 
-julia> U*Diagonal(S)*V'
+julia> U * Diagonal(S) * V'
 4×5 Array{Float64,2}:
  1.0  0.0  0.0  0.0  2.0
  0.0  0.0  3.0  0.0  0.0
@@ -147,7 +145,7 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
 julia> svdvals(A)
 4-element Array{Float64,1}:
  3.0
- 2.23607
+ 2.23606797749979
  2.0
  0.0
 ```

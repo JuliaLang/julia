@@ -393,8 +393,8 @@ julia> B = [0 1; 1 0]
 
 julia> eigvals(A,B)
 2-element Array{Complex{Float64},1}:
- 0.0+1.0im
- 0.0-1.0im
+ 0.0 + 1.0im
+ 0.0 - 1.0im
 ```
 """
 function eigvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}

@@ -476,9 +476,9 @@ julia> while true
 4
 5
 
-julia> for i = 1:1000
-           println(i)
-           if i >= 5
+julia> for j = 1:1000
+           println(j)
+           if j >= 5
                break
            end
        end
@@ -707,7 +707,7 @@ WARNING: Hi
 julia> error("Hi"); 1+1
 ERROR: Hi
 Stacktrace:
- [1] error(::String) at ./error.jl:21
+ [1] error(::String) at ./error.jl:33
 ```
 
 ### The `try/catch` statement

@@ -86,7 +86,7 @@ julia> convert(Int, 3.0)
 julia> convert(Int, 3.5)
 ERROR: InexactError: convert(Int64, 3.5)
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:701
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:703
 ```
 
 If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
@@ -333,8 +333,8 @@ julia> reinterpret(Float32, UInt32(7))
 1.0f-44
 
 julia> reinterpret(Float32, UInt32[1 2 3 4 5])
-1×5 Array{Float32,2}:
- 1.4013f-45  2.8026f-45  4.2039f-45  5.60519f-45  7.00649f-45
+1×5 reinterpret(Float32, ::Array{UInt32,2}):
+ 1.4013e-45  2.8026e-45  4.2039e-45  5.60519e-45  7.00649e-45
 ```
 """
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
@@ -432,10 +432,10 @@ f2 (generic function with 1 method)
 julia> f1()
 ERROR: BoundsError: attempt to access 2-element UnitRange{Int64} at index [-1]
 Stacktrace:
- [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:428
- [2] checkbounds at ./abstractarray.jl:392 [inlined]
- [3] g at ./REPL[20]:2 [inlined]
- [4] f1() at ./REPL[20]:5
+ [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:435
+ [2] checkbounds at ./abstractarray.jl:399 [inlined]
+ [3] g at ./none:2 [inlined]
+ [4] f1() at ./none:1
 
 julia> f2()
 "accessing (1:2)[-1]"

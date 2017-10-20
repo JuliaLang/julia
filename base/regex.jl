@@ -186,13 +186,13 @@ retrieved by accessing `m.match` and the captured sequences can be retrieved by 
 # Examples
 ```jldoctest
 julia> rx = r"a(.)a"
-r"a.a"
+r"a(.)a"
 
 julia> m = match(rx, "cabac")
-RegexMatch("aba")
+RegexMatch("aba", 1="b")
 
-julia> julia> m.captures
-1-element Array{Union{SubString{String}, Void},1}:
+julia> m.captures
+1-element Array{Union{Void, SubString{String}},1}:
  "b"
 
 julia> m.match

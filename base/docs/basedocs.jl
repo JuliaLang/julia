@@ -831,7 +831,7 @@ julia> isa(+, Function)
 true
 
 julia> typeof(sin)
-Base.#sin
+typeof(sin)
 
 julia> ans <: Function
 true
@@ -918,19 +918,19 @@ julia> A = ones(7);
 julia> A[8]
 ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
 Stacktrace:
- [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:763
+ [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:758
 
 julia> B = ones(2, 3);
 
 julia> B[2, 4]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:764
+ [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:759
 
 julia> B[9]
 ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [9]
 Stacktrace:
- [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:763
+ [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:758
 ```
 """
 BoundsError
@@ -1402,7 +1402,7 @@ union [`Union{}`](@ref) is the bottom type of Julia.
 # Examples
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
-Union{AbstractString, Int64}
+Union{Int64, AbstractString}
 
 julia> 1 :: IntOrString
 1
@@ -1411,7 +1411,7 @@ julia> "Hello!" :: IntOrString
 "Hello!"
 
 julia> 1.0 :: IntOrString
-ERROR: TypeError: typeassert: expected Union{AbstractString, Int64}, got Float64
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got Float64
 ```
 """
 Union

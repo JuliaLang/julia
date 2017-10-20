@@ -270,8 +270,7 @@ An assignment introducing a variable used inside a function, type or macro defin
 come before its inner usage:
 
 ```jldoctest
-julia> f = y -> y + a
-(::#1) (generic function with 1 method)
+julia> f = y -> y + a;
 
 julia> f(3)
 ERROR: UndefVarError: a not defined
@@ -436,13 +435,15 @@ julia> Fs[2]()
 
 A `for` loop or comprehension iteration variable is always a new variable:
 
-```jldoctest
-julia> i = 0;
+```julia-repl enable_doctest_when_deprecation_warning_is_removed
+julia> function f()
+           i = 0
+           for i = 1:3
+           end
+           return i
+       end;
 
-julia> for i = 1:3
-       end
-
-julia> i
+julia> f()
 0
 ```
 
@@ -450,12 +451,14 @@ However, it is occasionally useful to reuse an existing variable as the iteratio
 This can be done conveniently by adding the keyword `outer`:
 
 ```jldoctest
-julia> i = 0;
+julia> function f()
+           i = 0
+           for outer i = 1:3
+           end
+           return i
+       end;
 
-julia> for outer i = 1:3
-       end
-
-julia> i
+julia> f()
 3
 ```
 
@@ -473,6 +476,7 @@ julia> const pi = 3.14159265358979323846;
 Multiple variables can be declared in a single `const` statement:
 ```jldoctest
 julia> const a, b = 1, 2
+(1, 2)
 ```
 
 The `const` declaration should only be used in global scope on globals.

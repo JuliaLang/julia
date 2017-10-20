@@ -152,7 +152,7 @@ julia> λ, ϕ = eigs(A, B, nev = 2);
 julia> λ
 2-element Array{Float64,1}:
  1.0
- 0.5
+ 0.4999999999999999
 ```
 
 !!! note
@@ -386,7 +386,7 @@ julia> s = svds(A, nsv = 2)[1];
 julia> s[:S]
 2-element Array{Float64,1}:
  4.0
- 3.0
+ 2.9999999999999996
 ```
 
 !!! note "Implementation"

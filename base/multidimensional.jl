@@ -169,14 +169,14 @@ module IteratorsMD
     # Examples
     ```jldoctest
     julia> foreach(println, CartesianRange((2, 2, 2)))
-    CartesianIndex{3}((1, 1, 1))
-    CartesianIndex{3}((2, 1, 1))
-    CartesianIndex{3}((1, 2, 1))
-    CartesianIndex{3}((2, 2, 1))
-    CartesianIndex{3}((1, 1, 2))
-    CartesianIndex{3}((2, 1, 2))
-    CartesianIndex{3}((1, 2, 2))
-    CartesianIndex{3}((2, 2, 2))
+    CartesianIndex(1, 1, 1)
+    CartesianIndex(2, 1, 1)
+    CartesianIndex(1, 2, 1)
+    CartesianIndex(2, 2, 1)
+    CartesianIndex(1, 1, 2)
+    CartesianIndex(2, 1, 2)
+    CartesianIndex(1, 2, 2)
+    CartesianIndex(2, 2, 2)
     ```
     """
     struct CartesianRange{N,R<:NTuple{N,AbstractUnitRange{Int}}}
