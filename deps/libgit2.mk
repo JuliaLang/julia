@@ -73,13 +73,10 @@ $(LIBGIT2_SRC_PATH)/libgit2-ssh-loop.patch-applied: $(LIBGIT2_SRC_PATH)/source-e
 	echo 1 > $@
 
 $(build_datarootdir)/julia/cert.pem:
-	$(eval TMP_CACERT_SHA256:=$(shell mktemp cacert-2017-09-20.XXXX.pem.sha256))
-	echo "435ac8e816f5c10eaaf228d618445811c16a5e842e461cb087642b6265a36856 *cacert-2017-09-20.pem" > $(TMP_CACERT_SHA256)
 	$(JLDOWNLOAD) $(shell pwd)/cacert-2017-09-20.pem https://curl.haxx.se/ca/cacert-2017-09-20.pem
-	sha256sum --check $(TMP_CACERT_SHA256)
+	$(JLCHECKSUM) $(shell pwd)/cacert-2017-09-20.pem
 	mkdir -p $(build_datarootdir)/julia
 	mv $(shell pwd)/cacert-2017-09-20.pem $@
-	rm -f $(TMP_CACERT_SHA256)
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
