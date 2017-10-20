@@ -2109,3 +2109,11 @@ end
     @test similar(A, Float32, Int8, 6, 6) == similar(A, Float32, Int8, (6, 6))
     @test similar(A, Float32, Int8, 6) == similar(A, Float32, Int8, (6,))
 end
+
+@testset "count specializations" begin
+    # count should throw for sparse arrays for which zero(eltype) does not exist
+    @test_throws MethodError count(SparseMatrixCSC(2, 2, Int[1, 2, 3], Int[1, 2], Any[true, true]))
+    @test_throws MethodError count(SparseVector(2, Int[1], Any[true]))
+    # count should run only over S.nzval[1:nnz(S)], not S.nzval in full
+    @test count(SparseMatrixCSC(2, 2, Int[1, 2, 3], Int[1, 2], Bool[true, true, true])) == 2
+end
