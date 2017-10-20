@@ -60,6 +60,37 @@ dimg  = randn(n)/2
         @test !LinAlg.issuccess(lua)
         @test sprint(show, lua) == "Failed factorization of type $(typeof(lua))"
     end
+    κ  = cond(a,1)
+    @testset "(Automatic) Square LU decomposition" begin
+        lua   = factorize(a)
+        @test_throws KeyError lua[:Z]
+        l,u,p = lua[:L], lua[:U], lua[:p]
+        ll,ul,pl = lu(a)
+        @test ll * ul ≈ a[pl,:]
+        @test l*u ≈ a[p,:]
+        @test (l*u)[invperm(p),:] ≈ a
+        @test a * inv(lua) ≈ eye(n)
+        @test copy(lua) == lua
+        if eltya <: BlasFloat
+            # test conversion of LU factorization's numerical type
+            bft = eltya <: Real ? Base.LinAlg.LU{BigFloat} : Base.LinAlg.LU{Complex{BigFloat}}
+            bflua = convert(bft, lua)
+            @test bflua[:L]*bflua[:U] ≈ big.(a)[p,:] rtol=ε
+        end
+        lstring = sprint(show,l)
+        ustring = sprint(show,u)
+        @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
+    end
+    κd    = cond(Array(d),1)
+    @testset "Tridiagonal LU" begin
+        lud   = lufact(d)
+        @test LinAlg.issuccess(lud)
+        @test lufact(lud) == lud
+        @test_throws KeyError lud[:Z]
+        @test lud[:L]*lud[:U] ≈ lud[:P]*Array(d)
+        @test lud[:L]*lud[:U] ≈ Array(d)[lud[:p],:]
+        @test AbstractArray(lud) ≈ d
+    end
     @testset for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         b  = eltyb == Int ? rand(1:5, n, 2) :
             convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
@@ -67,22 +98,8 @@ dimg  = randn(n)/2
             convert(Vector{eltyb}, eltyb <: Complex ? complex.(creal, cimg) : creal)
         εb = eps(abs(float(one(eltyb))))
         ε  = max(εa,εb)
-        κ  = cond(a,1)
-
         @testset "(Automatic) Square LU decomposition" begin
             lua   = factorize(a)
-            @test_throws KeyError lua[:Z]
-            l,u,p = lua[:L], lua[:U], lua[:p]
-            ll,ul,pl = lu(a)
-            @test ll * ul ≈ a[pl,:]
-            @test l*u ≈ a[p,:]
-            @test (l*u)[invperm(p),:] ≈ a
-            @test a * inv(lua) ≈ eye(n)
-            @test copy(lua) == lua
-
-            lstring = sprint(show,l)
-            ustring = sprint(show,u)
-            @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
             let Bs = copy(b), Cs = copy(c)
                 for (bb, cc) in ((Bs, Cs), (view(Bs, 1:n, 1), view(Cs, 1:n)))
                     @test norm(a*(lua\bb) - bb, 1) < ε*κ*n*2 # Two because the right hand side has two columns
@@ -122,14 +139,7 @@ dimg  = randn(n)/2
             end
         end
         @testset "Tridiagonal LU" begin
-            κd    = cond(Array(d),1)
-            lud   = lufact(d)
-            @test LinAlg.issuccess(lud)
-            @test lufact(lud) == lud
-            @test_throws KeyError lud[:Z]
-            @test lud[:L]*lud[:U] ≈ lud[:P]*Array(d)
-            @test lud[:L]*lud[:U] ≈ Array(d)[lud[:p],:]
-            @test AbstractArray(lud) ≈ d
+            lud   = factorize(d)
             f = zeros(eltyb, n+1)
             @test_throws DimensionMismatch lud\f
             @test_throws DimensionMismatch lud.'\f
