@@ -124,7 +124,8 @@ guardsrand(123) do
                 end
                 @test isa(similar(A), mat_type{elty})
                 @test isa(similar(A, Int), mat_type{Int})
-                @test isa(similar(A, Int, (3, 2)), Matrix{Int})
+                @test isa(similar(A, (3, 2)), SparseMatrixCSC)
+                @test isa(similar(A, Int, (3, 2)), SparseMatrixCSC{Int})
                 @test size(A, 3) == 1
                 @test size(A, 1) == n
                 @test size(A) == (n, n)
@@ -289,7 +290,8 @@ guardsrand(123) do
                         @testset "similar" begin
                             @test isa(similar(Ts), SymTridiagonal{elty})
                             @test isa(similar(Ts, Int), SymTridiagonal{Int})
-                            @test isa(similar(Ts, Int, (3,2)), Matrix{Int})
+                            @test isa(similar(Ts, (3, 2)), SparseMatrixCSC)
+                            @test isa(similar(Ts, Int, (3, 2)), SparseMatrixCSC{Int})
                         end
 
                         @test first(logabsdet(Tldlt)) ≈ first(logabsdet(Fs))

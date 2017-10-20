@@ -108,7 +108,11 @@ function size(A::SymTridiagonal, d::Integer)
     end
 end
 
-similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal{T}(similar(S.dv, T), similar(S.ev, T))
+# For S<:SymTridiagonal, similar(S[, neweltype]) should yield a SymTridiagonal matrix.
+# On the other hand, similar(S, [neweltype,] shape...) should yield a sparse matrix.
+# The first method below effects the former, and the second the latter.
+similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
+similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 #Elementary operations
 broadcast(::typeof(abs), M::SymTridiagonal) = SymTridiagonal(abs.(M.dv), abs.(M.ev))
@@ -499,9 +503,12 @@ end
 convert(::Type{Matrix}, M::Tridiagonal{T}) where {T} = convert(Matrix{T}, M)
 convert(::Type{Array}, M::Tridiagonal) = convert(Matrix, M)
 full(M::Tridiagonal) = convert(Array, M)
-function similar(M::Tridiagonal, ::Type{T}) where T
-    Tridiagonal{T}(similar(M.dl, T), similar(M.d, T), similar(M.du, T))
-end
+
+# For M<:Tridiagonal, similar(M[, neweltype]) should yield a Tridiagonal matrix.
+# On the other hand, similar(M, [neweltype,] shape...) should yield a sparse matrix.
+# The first method below effects the former, and the second the latter.
+similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), similar(M.d, T), similar(M.du, T))
+similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
 
 # Operations on Tridiagonal matrices
 copy!(dest::Tridiagonal, src::Tridiagonal) = (copy!(dest.dl, src.dl); copy!(dest.d, src.d); copy!(dest.du, src.du); dest)
