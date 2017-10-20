@@ -1066,3 +1066,8 @@ end
 end
 @test Main.f23011() == 2
 @test docstrings_equal(@doc(Main.f23011), doc"second")
+
+# issue 22098
+"an empty macro"
+macro mdoc22098 end
+@test docstrings_equal(@doc(:@mdoc22098), doc"an empty macro")

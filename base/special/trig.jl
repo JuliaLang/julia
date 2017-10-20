@@ -49,6 +49,7 @@ end
         return -cos_kernel(y)
     end
 end
+sin(x::Real) = sin(float(x))
 
 # Coefficients in 13th order polynomial approximation on [0; π/4]
 #     sin(x) ≈ x + S1*x³ + S2*x⁵ + S3*x⁷ + S4*x⁹ + S5*x¹¹ + S6*x¹³
@@ -119,6 +120,7 @@ end
         end
     end
 end
+cos(x::Real) = cos(float(x))
 
 const DC1 = 4.16666666666666019037e-02
 const DC2 = -1.38888888888741095749e-03
@@ -194,6 +196,7 @@ Simultaneously compute the sine and cosine of `x`, where the `x` is in radians.
         return -co, si
     end
 end
+sincos(x::Real) = sincos(float(x))
 
 # There's no need to write specialized kernels, as inlining takes care of remo-
 # ving superfluous calculations.
@@ -220,6 +223,8 @@ function tan(x::T) where T<:Union{Float32, Float64}
         return tan_kernel(y,-1)
     end
 end
+tan(x::Real) = tan(float(x))
+
 @inline tan_kernel(y::Float64) = tan_kernel(DoubleFloat64(y, 0.0), 1)
 @inline function tan_kernel(y::DoubleFloat64, k)
     # kernel tan function on ~[-pi/4, pi/4] (except on -0)
@@ -437,6 +442,7 @@ function asin(x::T) where T<:Union{Float32, Float64}
     t = (T(1.0) - absx)/2
     return asin_kernel(t, x)
 end
+asin(x::Real) = asin(float(x))
 
 # atan2 methods
 ATAN2_PI_LO(::Type{Float32}) = -8.7422776573f-08
@@ -606,6 +612,7 @@ function acos(x::T) where T <: Union{Float32, Float64}
         return T(2.0)*(df + (zRz*s + c))
     end
 end
+acos(x::Real) = acos(float(x))
 
 # multiply in extended precision
 function mulpi_ext(x::Float64)

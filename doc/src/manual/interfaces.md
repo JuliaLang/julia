@@ -273,7 +273,7 @@ julia> s[s .> 20]
  49
 
 julia> s \ [1 2; 3 4; 5 6; 7 8; 9 10; 11 12; 13 14]
-1×2 Array{Float64,2}:
+1×2 RowVector{Float64,Array{Float64,1}}:
  0.305389  0.335329
 
 julia> s ⋅ s # dot(s, s)
@@ -289,9 +289,9 @@ julia> struct SparseArray{T,N} <: AbstractArray{T,N}
            dims::NTuple{N,Int}
        end
 
-julia> SparseArray{T}(::Type{T}, dims::Int...) = SparseArray(T, dims);
+julia> SparseArray(::Type{T}, dims::Int...) where {T} = SparseArray(T, dims);
 
-julia> SparseArray{T,N}(::Type{T}, dims::NTuple{N,Int}) = SparseArray{T,N}(Dict{NTuple{N,Int}, T}(), dims);
+julia> SparseArray(::Type{T}, dims::NTuple{N,Int}) where {T,N} = SparseArray{T,N}(Dict{NTuple{N,Int}, T}(), dims);
 
 julia> Base.size(A::SparseArray) = A.dims
 

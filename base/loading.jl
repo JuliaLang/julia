@@ -218,7 +218,7 @@ function _include_dependency(modstring::AbstractString, _path::AbstractString)
         path = joinpath(dirname(prev), _path)
     end
     if _track_dependencies[]
-        push!(_require_dependencies, (modstring, path, mtime(path)))
+        push!(_require_dependencies, (modstring, normpath(path), mtime(path)))
     end
     return path, prev
 end
@@ -733,6 +733,10 @@ function read_dependency_src(io::IO, filename::AbstractString)
     modules, files, required_modules, srctextpos = parse_cache_header(io)
     srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
+    _read_dependency_src(io, filename)
+end
+
+function _read_dependency_src(io::IO, filename::AbstractString)
     while !eof(io)
         filenamelen = ntoh(read(io, Int32))
         filenamelen == 0 && break

@@ -896,7 +896,7 @@ let f, m
     m.source.ssavaluetypes = 1
     m.source.code = Any[
         Expr(:(=), SSAValue(0), Expr(:call, GlobalRef(Core, :svec), 1, 2, 3)),
-        Expr(:return, Expr(:call, Core._apply, :+, SSAValue(0)))
+        Expr(:return, Expr(:call, Core._apply, GlobalRef(Base, :+), SSAValue(0)))
     ]
     @test @inferred(f()) == 6
 end
@@ -1243,3 +1243,18 @@ end
 _false13183 = false
 gg13183(x::X...) where {X} = (_false13183 ? gg13183(x, x) : 0)
 @test gg13183(5) == 0
+
+# test the external OptimizationState constructor
+let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
+    world = typemax(UInt),
+    opt = Core.Inference.OptimizationState(linfo, Core.Inference.InferenceParams(world))
+    # make sure the state of the properties look reasonable
+    @test opt.src !== linfo.def.source
+    @test length(opt.src.slotflags) == length(opt.src.slotnames) == length(opt.src.slottypes)
+    @test opt.src.ssavaluetypes isa Vector{Any}
+    @test !opt.src.inferred
+    @test opt.mod === Base
+    @test opt.max_valid === typemax(UInt)
+    @test opt.min_valid === Core.Inference.min_world(opt.linfo) > 2
+    @test opt.nargs == 3
+end

@@ -217,7 +217,6 @@ Interpolating into an unquoted expression is not supported and will cause a comp
 ```jldoctest interp1
 julia> $a + b
 ERROR: unsupported or misplaced expression $
- ...
 ```
 
 In this example, the tuple `(1,2,3)` is interpolated as an expression into a conditional test:
@@ -259,9 +258,9 @@ julia> x = :(1 + 2);
 
 julia> e = quote quote $x end end
 quote
-    #= REPL[4]:1 =#
+    #= none:1 =#
     $(Expr(:quote, quote
-    #= REPL[4]:1 =#
+    #= none:1 =#
     $(Expr(:$, :x))
 end))
 end
@@ -275,7 +274,7 @@ so its argument is only evaluated when the inner quote expression is:
 ```jldoctest interp1
 julia> eval(e)
 quote
-    #= REPL[4]:1 =#
+    #= none:1 =#
     1 + 2
 end
 ```
@@ -287,9 +286,9 @@ This is done with multiple `$`s:
 ```jldoctest interp1
 julia> e = quote quote $$x end end
 quote
-    #= REPL[7]:1 =#
+    #= none:1 =#
     $(Expr(:quote, quote
-    #= REPL[7]:1 =#
+    #= none:1 =#
     $(Expr(:$, :(1 + 2)))
 end))
 end
@@ -301,7 +300,7 @@ Evaluating this expression yields an interpolated `3`:
 ```jldoctest interp1
 julia> eval(e)
 quote
-    #= REPL[2]:1 =#
+    #= none:1 =#
     3
 end
 ```

@@ -56,7 +56,6 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetRegistry.h>
-#include <llvm/Support/Host.h>
 #include "llvm/Support/TargetSelect.h"
 #include <llvm/Support/raw_ostream.h>
 #include "llvm/Support/FormattedStream.h"
@@ -72,6 +71,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "processor.h"
 
 using namespace llvm;
 #include "debuginfo.h"
@@ -636,15 +636,9 @@ static void jl_dump_asm_internal(
     std::string TripleName = sys::getDefaultTargetTriple();
     Triple TheTriple(Triple::normalize(TripleName));
 
-    std::string MCPU = sys::getHostCPUName();
-#ifdef _CPU_ARM_
-    // The Raspberry Pi CPU is misdetected by LLVM (at least of version
-    // 3.6); correct this.
-    if (MCPU == "arm1176jz-s")
-        MCPU = "arm1176jzf-s";
-#endif
-    SubtargetFeatures Features;
-    Features.getDefaultSubtargetFeatures(TheTriple);
+    const auto &target = jl_get_llvm_disasm_target();
+    const auto &cpu = target.first;
+    const auto &features = target.second;
 
     std::string err;
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, err);
@@ -670,7 +664,7 @@ static void jl_dump_asm_internal(
 
     // Set up Subtarget and Disassembler
     std::unique_ptr<MCSubtargetInfo>
-        STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
+        STI(TheTarget->createMCSubtargetInfo(TripleName, cpu, features));
     std::unique_ptr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI, Ctx));
     if (!DisAsm) {
         jl_printf(JL_STDERR, "ERROR: no disassembler for target %s\n",
@@ -696,9 +690,9 @@ static void jl_dump_asm_internal(
         CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
 #if JL_LLVM_VERSION >= 40000
         MCTargetOptions Options;
-        MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, MCPU, Options);
+        MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, cpu, Options);
 #else
-        MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, MCPU);
+        MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, cpu);
 #endif
     }
 

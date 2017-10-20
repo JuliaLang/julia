@@ -30,10 +30,12 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
         convert(::Type{AbstractMatrix{T}}, A::$t) where {T} = convert($t{T}, A)
         convert(::Type{Matrix}, A::$t{T}) where {T} = convert(Matrix{T}, A)
 
-        function similar(A::$t, ::Type{T}) where T
-            B = similar(A.data, T)
-            return $t(B)
-        end
+        # For A<:AbstractTriangular, similar(A[, neweltype]) should yield a matrix with the same
+        # triangular type and underlying storage type as A. The following method covers these cases.
+        similar(A::$t, ::Type{T}) where {T} = $t(similar(parent(A), T))
+        # On the other hand, similar(A, [neweltype,] shape...) should yield a matrix of the underlying
+        # storage type of A (not wrapped in a triangular type). The following method covers these cases.
+        similar(A::$t, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(A), T, dims)
 
         copy(A::$t) = $t(copy(A.data))
 
@@ -426,7 +428,7 @@ scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 +(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(tril(A.data, -1) + B.data + I)
 +(A::UnitUpperTriangular, B::UnitUpperTriangular) = UpperTriangular(triu(A.data, 1) + triu(B.data, 1) + 2I)
 +(A::UnitLowerTriangular, B::UnitLowerTriangular) = LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
-+(A::AbstractTriangular, B::AbstractTriangular) = full(A) + full(B)
++(A::AbstractTriangular, B::AbstractTriangular) = copy!(similar(parent(A)), A) + copy!(similar(parent(B)), B)
 
 -(A::UpperTriangular, B::UpperTriangular) = UpperTriangular(A.data - B.data)
 -(A::LowerTriangular, B::LowerTriangular) = LowerTriangular(A.data - B.data)
@@ -436,15 +438,15 @@ scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 -(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(tril(A.data, -1) - B.data + I)
 -(A::UnitUpperTriangular, B::UnitUpperTriangular) = UpperTriangular(triu(A.data, 1) - triu(B.data, 1))
 -(A::UnitLowerTriangular, B::UnitLowerTriangular) = LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
--(A::AbstractTriangular, B::AbstractTriangular) = full(A) - full(B)
+-(A::AbstractTriangular, B::AbstractTriangular) = copy!(similar(parent(A)), A) - copy!(similar(parent(B)), B)
 
 ######################
 # BlasFloat routines #
 ######################
 
 A_mul_B!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
-A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = A_mul_B!(C, full(A), B)
-A_mul_B!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = A_mul_B!(C, A, full(B))
+A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = A_mul_B!(C, copy!(similar(parent(A)), A), B)
+A_mul_B!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = A_mul_B!(C, A, copy!(similar(parent(B)), B))
 A_mul_Bt!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, transpose!(C, B))
 A_mul_Bc!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, adjoint!(C, B))
 A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, adjoint!(C, B))
@@ -528,7 +530,7 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
             elseif p == Inf
                 return inv(LAPACK.trcon!('I', $uploc, $isunitc, A.data))
             else # use fallback
-                return cond(full(A), p)
+                return cond(copy!(similar(parent(A)), A), p)
             end
         end
     end
@@ -1793,7 +1795,7 @@ powm(A::LowerTriangular, p::Real) = powm(A.', p::Real).'
 # Based on the code available at http://eprints.ma.man.ac.uk/1851/02/logm.zip,
 # Copyright (c) 2011, Awad H. Al-Mohy and Nicholas J. Higham
 # Julia version relicensed with permission from original authors
-function log(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
+function log(A0::UpperTriangular{T}) where T<:BlasFloat
     maxsqrt = 100
     theta = [1.586970738772063e-005,
          2.313807884242979e-003,
@@ -2210,7 +2212,7 @@ eigfact(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
 # Generic singular systems
 for func in (:svd, :svdfact, :svdfact!, :svdvals)
     @eval begin
-        ($func)(A::AbstractTriangular) = ($func)(full(A))
+        ($func)(A::AbstractTriangular) = ($func)(copy!(similar(parent(A)), A))
     end
 end
 

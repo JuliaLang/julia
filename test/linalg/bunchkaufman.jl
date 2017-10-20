@@ -56,6 +56,8 @@ bimg  = randn(n,2)/2
                     @test aher*(bc1\b) ≈ b atol=1000ε
                     @testset for rook in (false, true)
                         @test inv(bkfact(Symmetric(a.' + a, uplo), rook))*(a.' + a) ≈ eye(n)
+                        # test also bkfact! without explicit type tag
+                        @test inv(bkfact(a.' + a, rook))*(a.' + a) ≈ eye(n)
                         @test size(bc1) == size(bc1.LD)
                         @test size(bc1, 1) == size(bc1.LD, 1)
                         @test size(bc1, 2) == size(bc1.LD, 2)

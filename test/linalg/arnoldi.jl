@@ -186,7 +186,7 @@ end
     # Ensure singular values from svds are in
     # the correct order
     @testset "singular values ordered correctly" begin
-        B = sparse(diagm([1.0, 2.0, 34.0, 5.0, 6.0]))
+        B = sparse(Diagonal([1.0, 2.0, 34.0, 5.0, 6.0]))
         S3 = svds(B, ritzvec=false, nsv=2)
         @test S3[1][:S] ≈ [34.0, 6.0]
         S4 = svds(B, nsv=2)

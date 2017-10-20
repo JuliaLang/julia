@@ -112,35 +112,28 @@ bimg  = randn(n,2)/2
         end
     end # end for loop over arraytype
 
-    @testset "Numbers" begin
-        α = rand(eltya)
-        A = zeros(eltya,1,1)
-        A[1,1] = α
-        @test diagm(α) == A # Test behavior of `diagm` when passed a scalar
-    end
-
     @testset "Factorize" begin
         d = rand(eltya,n)
         e = rand(eltya,n-1)
         e2 = rand(eltya,n-1)
         f = rand(eltya,n-2)
-        A = diagm(d)
+        A = diagm(0 => d)
         @test factorize(A) == Diagonal(d)
-        A += diagm(e,-1)
+        A += diagm(-1 => e)
         @test factorize(A) == Bidiagonal(d,e,:L)
-        A += diagm(f,-2)
+        A += diagm(-2 => f)
         @test factorize(A) == LowerTriangular(A)
-        A = diagm(d) + diagm(e,1)
+        A = diagm(0 => d, 1 => e)
         @test factorize(A) == Bidiagonal(d,e,:U)
         if eltya <: Real
-            A = diagm(d) + diagm(e,1) + diagm(e,-1)
+            A = diagm(0 => d, 1 => e, -1 => e)
             @test Matrix(factorize(A)) ≈ Matrix(factorize(SymTridiagonal(d,e)))
-            A = diagm(d) + diagm(e,1) + diagm(e,-1) + diagm(f,2) + diagm(f,-2)
+            A = diagm(0 => d, 1 => e, -1 => e, 2 => f, -2 => f)
             @test inv(factorize(A)) ≈ inv(factorize(Symmetric(A)))
         end
-        A = diagm(d) + diagm(e,1) + diagm(e2,-1)
+        A = diagm(0 => d, 1 => e, -1 => e2)
         @test Matrix(factorize(A)) ≈ Matrix(factorize(Tridiagonal(e2,d,e)))
-        A = diagm(d) + diagm(e,1) + diagm(f,2)
+        A = diagm(0 => d, 1 => e, 2 => f)
         @test factorize(A) == UpperTriangular(A)
     end
 end # for eltya
@@ -419,6 +412,166 @@ end
 
     A8 = 100 * [-1+1im 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1]
     @test exp(log(A8)) ≈ A8
+end
+
+@testset "Matrix trigonometry" begin
+    @testset "Tests for $elty" for elty in (Float32, Float64, Complex64, Complex128)
+        A1  = convert(Matrix{elty}, [3 2 0; 1 3 1; 1 1 3])
+        A2  = convert(Matrix{elty},
+                      [3.975884257819758 0.15631501695814318 -0.4579038628067864;
+                       0.15631501695814318 4.545313891142127 1.7361475641080275;
+                       -0.4579038628067864 1.7361475641080275 6.478801851038108])
+        A3 = convert(Matrix{elty}, [0.25 0.25; 0 0])
+        A4 = convert(Matrix{elty}, [0 0.02; 0 0])
+
+        cosA1 = convert(Matrix{elty},[-0.18287716254368605 -0.29517205254584633 0.761711400552759;
+                                      0.23326967400345625 0.19797853773269333 -0.14758602627292305;
+                                      0.23326967400345636 0.6141253742798355 -0.5637328628200653])
+        sinA1 = convert(Matrix{elty}, [0.2865568596627417 -1.107751980582015 -0.13772915374386513;
+                                       -0.6227405671629401 0.2176922827908092 -0.5538759902910078;
+                                       -0.6227405671629398 -0.6916051440348725 0.3554214365346742])
+        @test cos(A1) ≈ cosA1
+        @test sin(A1) ≈ sinA1
+
+        cosA2 = convert(Matrix{elty}, [-0.6331745163802187 0.12878366262380136 -0.17304181968301532;
+                                       0.12878366262380136 -0.5596234510748788 0.5210483146041339;
+                                       -0.17304181968301532 0.5210483146041339 0.002263776356015268])
+        sinA2 = convert(Matrix{elty},[-0.6677253518411841 -0.32599318928375437 0.020799609079003523;
+                                      -0.32599318928375437 -0.04568726058081066 0.5388748740270427;
+                                      0.020799609079003523 0.5388748740270427 0.6385462428126032])
+        @test cos(A2) ≈ cosA2
+        @test sin(A2) ≈ sinA2
+
+        cosA3 = convert(Matrix{elty}, [0.9689124217106446 -0.031087578289355197; 0.0 1.0])
+        sinA3 = convert(Matrix{elty}, [0.24740395925452285 0.24740395925452285; 0.0 0.0])
+        @test cos(A3) ≈ cosA3
+        @test sin(A3) ≈ sinA3
+
+        cosA4 = convert(Matrix{elty}, [1.0 0.0; 0.0 1.0])
+        sinA4 = convert(Matrix{elty}, [0.0 0.02; 0.0 0.0])
+        @test cos(A4) ≈ cosA4
+        @test sin(A4) ≈ sinA4
+
+        # Identities
+        for (i, A) in enumerate((A1, A2, A3, A4))
+            @test sincos(A) == (sin(A), cos(A))
+            @test cos(A)^2 + sin(A)^2 ≈ eye(A)
+            @test cos(A) ≈ cos(-A)
+            @test sin(A) ≈ -sin(-A)
+            @test tan(A) ≈ sin(A) / cos(A)
+            @test cos(A) ≈ real(exp(im*A))
+            @test sin(A) ≈ imag(exp(im*A))
+            @test cosh(A) ≈ 0.5 * (exp(A) + exp(-A))
+            @test sinh(A) ≈ 0.5 * (exp(A) - exp(-A))
+            @test cosh(A) ≈ cosh(-A)
+            @test sinh(A) ≈ -sinh(-A)
+
+            # Some of the following identities fail for A3, A4 because the matrices are singular
+            if i in (1, 2)
+                @test sec(A) ≈ inv(cos(A))
+                @test csc(A) ≈ inv(sin(A))
+                @test cot(A) ≈ inv(tan(A))
+                @test sech(A) ≈ inv(cosh(A))
+                @test csch(A) ≈ inv(sinh(A))
+                @test coth(A) ≈ inv(tanh(A))
+            end
+            # The following identities fail for A1, A2 due to rounding errors;
+            # probably needs better algorithm for the general case
+            if i in (3, 4)
+                @test cosh(A)^2 - sinh(A)^2 ≈ eye(A)
+                @test tanh(A) ≈ sinh(A) / cosh(A)
+            end
+        end
+    end
+
+    @testset "Additional tests for $elty" for elty in (Complex64, Complex128)
+        A5 = convert(Matrix{elty}, [1im 2; 0.02+0.5im 3])
+
+        @test sincos(A5) == (sin(A5), cos(A5))
+
+        @test cos(A5)^2 + sin(A5)^2 ≈ eye(A5)
+        @test cosh(A5)^2 - sinh(A5)^2 ≈ eye(A5)
+        @test cos(A5)^2 + sin(A5)^2 ≈ eye(A5)
+        @test tan(A5) ≈ sin(A5) / cos(A5)
+        @test tanh(A5) ≈ sinh(A5) / cosh(A5)
+
+        @test sec(A5) ≈ inv(cos(A5))
+        @test csc(A5) ≈ inv(sin(A5))
+        @test cot(A5) ≈ inv(tan(A5))
+        @test sech(A5) ≈ inv(cosh(A5))
+        @test csch(A5) ≈ inv(sinh(A5))
+        @test coth(A5) ≈ inv(tanh(A5))
+
+        @test cos(A5) ≈ 0.5 * (exp(im*A5) + exp(-im*A5))
+        @test sin(A5) ≈ -0.5im * (exp(im*A5) - exp(-im*A5))
+        @test cosh(A5) ≈ 0.5 * (exp(A5) + exp(-A5))
+        @test sinh(A5) ≈ 0.5 * (exp(A5) - exp(-A5))
+    end
+
+    @testset "Inverse functions for $elty" for elty in (Float32, Float64)
+        A1 = convert(Matrix{elty}, [0.244637  -0.63578;
+                                    0.22002    0.189026])
+        A2 = convert(Matrix{elty}, [1.11656   -0.098672   0.158485;
+                                    -0.098672   0.100933  -0.107107;
+                                    0.158485  -0.107107   0.612404])
+
+        for A in (A1, A2)
+            @test cos(acos(cos(A))) ≈ cos(A)
+            @test sin(asin(sin(A))) ≈ sin(A)
+            @test tan(atan(tan(A))) ≈ tan(A)
+            @test cosh(acosh(cosh(A))) ≈ cosh(A)
+            @test sinh(asinh(sinh(A))) ≈ sinh(A)
+            @test tanh(atanh(tanh(A))) ≈ tanh(A)
+            @test sec(asec(sec(A))) ≈ sec(A)
+            @test csc(acsc(csc(A))) ≈ csc(A)
+            @test cot(acot(cot(A))) ≈ cot(A)
+            @test sech(asech(sech(A))) ≈ sech(A)
+            @test csch(acsch(csch(A))) ≈ csch(A)
+            @test coth(acoth(coth(A))) ≈ coth(A)
+        end
+    end
+
+    @testset "Inverse functions for $elty" for elty in (Complex{Float32}, Complex{Float64})
+        A1 = convert(Matrix{elty}, [ 0.143721-0.0im       -0.138386-0.106905im;
+                                     -0.138386+0.106905im   0.306224-0.0im])
+        A2 = convert(Matrix{elty}, [1im 2; 0.02+0.5im 3])
+        A3 = convert(Matrix{elty}, [0.138721-0.266836im 0.0971722-0.13715im 0.205046-0.137136im;
+                                    -0.0154974-0.00358254im 0.152163-0.445452im 0.0314575-0.536521im;
+                                    -0.387488+0.0294059im -0.0448773+0.114305im 0.230684-0.275894im])
+        for A in (A1, A2, A3)
+            @test cos(acos(cos(A))) ≈ cos(A)
+            @test sin(asin(sin(A))) ≈ sin(A)
+            @test tan(atan(tan(A))) ≈ tan(A)
+            @test cosh(acosh(cosh(A))) ≈ cosh(A)
+            @test sinh(asinh(sinh(A))) ≈ sinh(A)
+            @test tanh(atanh(tanh(A))) ≈ tanh(A)
+            @test sec(asec(sec(A))) ≈ sec(A)
+            @test csc(acsc(csc(A))) ≈ csc(A)
+            @test cot(acot(cot(A))) ≈ cot(A)
+            @test sech(asech(sech(A))) ≈ sech(A)
+            @test csch(acsch(csch(A))) ≈ csch(A)
+            @test coth(acoth(coth(A))) ≈ coth(A)
+
+            # Definition of principal values (Aprahamian & Higham, 2016, pp. 4-5)
+            abstol = 1e-8 * norm(acosh(A))
+            @test all(z -> (0 < real(z) < π ||
+                            abs(real(z)) < abstol && imag(z) >= 0 ||
+                            abs(real(z) - π) < abstol && imag(z) <= 0),
+                      eigfact(acos(A))[:values])
+            @test all(z -> (-π/2 < real(z) < π/2 ||
+                            abs(real(z) + π/2) < abstol && imag(z) >= 0 ||
+                            abs(real(z) - π/2) < abstol && imag(z) <= 0),
+                      eigfact(asin(A))[:values])
+            @test all(z -> (-π < imag(z) < π && real(z) > 0 ||
+                            0 <= imag(z) < π && abs(real(z)) < abstol ||
+                            abs(imag(z) - π) < abstol && real(z) >= 0),
+                      eigfact(acosh(A))[:values])
+            @test all(z -> (-π/2 < imag(z) < π/2 ||
+                            abs(imag(z) + π/2) < abstol && real(z) <= 0 ||
+                            abs(imag(z) - π/2) < abstol && real(z) <= 0),
+                      eigfact(asinh(A))[:values])
+        end
+    end
 end
 
 @testset "issue 5116" begin

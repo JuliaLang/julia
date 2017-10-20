@@ -313,17 +313,41 @@ function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
     return A
 end
 
-function similar(S::SparseMatrixCSC, ::Type{Tv} = eltype(S)) where Tv
-    SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Vector{Tv}(length(S.nzval)))
+## similar
+#
+# parent method for similar that preserves stored-entry structure (for when new and old dims match)
+function _sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}) where {TvNew,TiNew}
+    newcolptr = copy!(similar(S.colptr, TiNew), S.colptr)
+    newrowval = copy!(similar(S.rowval, TiNew), S.rowval)
+    return SparseMatrixCSC(S.m, S.n, newcolptr, newrowval, similar(S.nzval, TvNew))
 end
+# parent methods for similar that preserves only storage space (for when new and old dims differ)
+_sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
+    SparseMatrixCSC(dims..., ones(TiNew, last(dims)+1), similar(S.rowval, TiNew), similar(S.nzval, TvNew))
+# parent method for similar that allocates an empty sparse vector (when new dims are single)
+_sparsesimilar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
+    SparseVector(dims..., similar(S.rowval, TiNew, 0), similar(S.nzval, TvNew, 0))
+#
+# The following methods hook into the AbstractArray similar hierarchy. The first method
+# covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
+# methods cover similar(A[, Tv], shape...) calls, which preserve storage space when the shape
+# calls for a two-dimensional result.
+similar(S::SparseMatrixCSC{<:Any,Ti}, ::Type{TvNew}) where {Ti,TvNew} = _sparsesimilar(S, TvNew, Ti)
+similar(S::SparseMatrixCSC{<:Any,Ti}, ::Type{TvNew}, dims::Union{Dims{1},Dims{2}}) where {Ti,TvNew} =
+    _sparsesimilar(S, TvNew, Ti, dims)
+# The following methods cover similar(A, Tv, Ti[, shape...]) calls, which specify the
+# result's index type in addition to its entry type, and aren't covered by the hooks above.
+# The calls without shape again preserve stored-entry structure, whereas those with shape
+# preserve storage space when the shape calls for a two-dimensional result.
+similar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}) where{TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew)
+similar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, dims::Union{Dims{1},Dims{2}}) where {TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew, dims)
+similar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, m::Integer) where {TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew, (m,))
+similar(S::SparseMatrixCSC, ::Type{TvNew}, ::Type{TiNew}, m::Integer, n::Integer) where {TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew, (m, n))
 
-function similar(S::SparseMatrixCSC, ::Type{Tv}, ::Type{Ti}) where {Tv,Ti}
-    new_colptr = copy!(similar(S.colptr, Ti), S.colptr)
-    new_rowval = copy!(similar(S.rowval, Ti), S.rowval)
-    new_nzval =  copy!(similar(S.nzval,  Tv), S.nzval)
-    SparseMatrixCSC(S.m, S.n, new_colptr, new_rowval, new_nzval)
-end
-@inline similar(S::SparseMatrixCSC, ::Type{Tv}, d::Dims) where {Tv} = spzeros(Tv, d...)
 
 # convert'ing between SparseMatrixCSC types
 convert(::Type{AbstractMatrix{Tv}}, A::SparseMatrixCSC{Tv}) where {Tv} = A
@@ -1087,7 +1111,7 @@ For expert drivers and additional information, see [`permute!`](@ref).
 
 # Examples
 ```jldoctest
-julia> A = spdiagm([1, 2, 3, 4], 0, 4, 4) + spdiagm([5, 6, 7], 1, 4, 4)
+julia> A = spdiagm(0 => [1, 2, 3, 4], 1 => [5, 6, 7])
 4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:
   [1, 1]  =  1
   [1, 2]  =  5
@@ -1144,7 +1168,7 @@ and no space beyond that passed in. If `trim` is `true`, this method trims `A.ro
 
 # Examples
 ```jldoctest
-julia> A = spdiagm([1, 2, 3, 4])
+julia> A = sparse(Diagonal([1, 2, 3, 4]))
 4×4 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
   [1, 1]  =  1
   [2, 2]  =  2
@@ -1644,7 +1668,7 @@ function Base._mapreduce(f, op, ::Base.IndexCartesian, A::SparseMatrixCSC{T}) wh
     n = length(A)
     if z == 0
         if n == 0
-            Base.mr_empty(f, op, T)
+            Base.mapreduce_empty(f, op, T)
         else
             _mapreducezeros(f, op, T, n-z-1, f(zero(T)))
         end
@@ -2935,7 +2959,7 @@ stored and otherwise do nothing. Derivative forms:
 
 # Examples
 ```jldoctest
-julia> A = spdiagm([1, 2, 3, 4])
+julia> A = sparse(Diagonal([1, 2, 3, 4]))
 4×4 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
   [1, 1]  =  1
   [2, 2]  =  2
@@ -3280,57 +3304,48 @@ function istril(A::SparseMatrixCSC)
     return true
 end
 
-# Create a sparse diagonal matrix by specifying multiple diagonals
-# packed into a tuple, alongside their diagonal offsets and matrix shape
 
-function spdiagm_internal(B, d)
-    ndiags = length(d)
-    if length(B) != ndiags; throw(ArgumentError("first argument should be a tuple of length(d)=$ndiags arrays of diagonals")); end
+function spdiagm_internal(kv::Pair{<:Integer,<:AbstractVector}...)
     ncoeffs = 0
-    for vec in B
-        ncoeffs += length(vec)
+    for p in kv
+        ncoeffs += length(p.second)
     end
     I = Vector{Int}(ncoeffs)
     J = Vector{Int}(ncoeffs)
-    V = Vector{promote_type(map(eltype, B)...)}(ncoeffs)
-    id = 0
+    V = Vector{promote_type(map(x -> eltype(x.second), kv)...)}(ncoeffs)
     i = 0
-    for vec in B
-        id += 1
-        diag = d[id]
-        numel = length(vec)
-        if diag < 0
-            row = -diag
+    for p in kv
+        dia = p.first
+        vect = p.second
+        numel = length(vect)
+        if dia < 0
+            row = -dia
             col = 0
-        elseif diag > 0
+        elseif dia > 0
             row = 0
-            col = diag
+            col = dia
         else
             row = 0
             col = 0
         end
-        range = 1+i:numel+i
-        I[range] = row+1:row+numel
-        J[range] = col+1:col+numel
-        copy!(view(V, range), vec)
+        r = 1+i:numel+i
+        I[r] = row+1:row+numel
+        J[r] = col+1:col+numel
+        copy!(view(V, r), vect)
         i += numel
     end
-
-    return (I,J,V)
+    return I, J, V
 end
 
 """
-    spdiagm(B, d[, m, n])
+    spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
 
-Construct a sparse diagonal matrix. `B` is a tuple of vectors containing the diagonals and
-`d` is a tuple containing the positions of the diagonals. In the case the input contains only
-one diagonal, `B` can be a vector (instead of a tuple) and `d` can be the diagonal position
-(instead of a tuple), defaulting to 0 (diagonal). Optionally, `m` and `n` specify the size
-of the resulting sparse matrix.
+Construct a square sparse diagonal matrix from `Pair`s of vectors and diagonals.
+Vector `kv.second` will be placed on the `kv.first` diagonal.
 
 # Examples
 ```jldoctest
-julia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))
+julia> spdiagm(-1 => [1,2,3,4], 1 => [4,3,2,1])
 5×5 SparseMatrixCSC{Int64,Int64} with 8 stored entries:
   [2, 1]  =  1
   [1, 2]  =  4
@@ -3342,19 +3357,11 @@ julia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))
   [4, 5]  =  1
 ```
 """
-function spdiagm(B, d, m::Integer, n::Integer)
-    (I,J,V) = spdiagm_internal(B, d)
-    return sparse(I,J,V,m,n)
+function spdiagm(kv::Pair{<:Integer,<:AbstractVector}...)
+    I, J, V = spdiagm_internal(kv...)
+    n = max(dimlub(I), dimlub(J))
+    return sparse(I, J, V, n, n)
 end
-
-function spdiagm(B, d)
-    (I,J,V) = spdiagm_internal(B, d)
-    return sparse(I,J,V)
-end
-
-spdiagm(B::AbstractVector, d::Number, m::Integer, n::Integer) = spdiagm((B,), (d,), m, n)
-
-spdiagm(B::AbstractVector, d::Number=0) = spdiagm((B,), (d,))
 
 ## expand a colptr or rowptr into a dense index vector
 function expandptr(V::Vector{<:Integer})

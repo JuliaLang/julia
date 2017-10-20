@@ -4,10 +4,11 @@ baremodule Base
 
 using Core.Intrinsics
 ccall(:jl_set_istopmod, Void, (Any, Bool), Base, true)
+
 function include(mod::Module, path::AbstractString)
     local result
     if INCLUDE_STATE === 1
-        result = Core.include(mod, path)
+        result = _include1(mod, path)
     elseif INCLUDE_STATE === 2
         result = _include(mod, path)
     elseif INCLUDE_STATE === 3
@@ -18,7 +19,7 @@ end
 function include(path::AbstractString)
     local result
     if INCLUDE_STATE === 1
-        result = Core.include(Base, path)
+        result = _include1(Base, path)
     elseif INCLUDE_STATE === 2
         result = _include(Base, path)
     else
@@ -28,12 +29,18 @@ function include(path::AbstractString)
     end
     result
 end
+const _included_files = Array{Tuple{Module,String}}(0)
+function _include1(mod::Module, path)
+    Core.Inference.push!(_included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)))
+    Core.include(mod, path)
+end
 let SOURCE_PATH = ""
     # simple, race-y TLS, relative include
     global _include
     function _include(mod::Module, path)
         prev = SOURCE_PATH
         path = joinpath(dirname(prev), path)
+        push!(_included_files, (mod, abspath(path)))
         SOURCE_PATH = path
         result = Core.include(mod, path)
         SOURCE_PATH = prev
@@ -446,6 +453,9 @@ include(Base, "precompile.jl")
 end # baremodule Base
 
 using Base
+
+# Ensure this file is also tracked
+unshift!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
 # set up load path to be able to find stdlib packages
 Base.init_load_path(ccall(:jl_get_julia_home, Any, ()))

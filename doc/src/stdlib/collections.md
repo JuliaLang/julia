@@ -47,6 +47,7 @@ Fully implemented by:
   * `EachLine`
   * `AbstractString`
   * [`Set`](@ref)
+  * [`Pair`](@ref)
 
 ## General Collections
 
@@ -265,3 +266,9 @@ Fully implemented by:
 
   * `Vector` (a.k.a. 1-dimensional [`Array`](@ref))
   * `BitVector` (a.k.a. 1-dimensional [`BitArray`](@ref))
+
+## Utility Collections
+
+```@docs
+Base.Pair
+```

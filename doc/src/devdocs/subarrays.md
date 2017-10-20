@@ -43,12 +43,12 @@ DocTestSetup = :(srand(1234))
 julia> A = rand(2,3,4);
 
 julia> S1 = view(A, :, 1, 2:3)
-2×2 SubArray{Float64,2,Array{Float64,3},Tuple{Base.Slice{Base.OneTo{Int64}},Int64,UnitRange{Int64}},false}:
+2×2 view(::Array{Float64,3}, :, 1, 2:3) with eltype Float64:
  0.200586  0.066423
  0.298614  0.956753
 
 julia> S2 = view(A, 1, :, 2:3)
-3×2 SubArray{Float64,2,Array{Float64,3},Tuple{Int64,Base.Slice{Base.OneTo{Int64}},UnitRange{Int64}},true}:
+3×2 view(::Array{Float64,3}, 1, :, 2:3) with eltype Float64:
  0.200586  0.066423
  0.246837  0.646691
  0.648882  0.276021
@@ -172,7 +172,7 @@ happens to be uniform:
 
 ```jldoctest
 julia> A = reshape(1:4*2, 4, 2)
-4×2 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
+4×2 reshape(::UnitRange{Int64}, 4, 2) with eltype Int64:
  1  5
  2  6
  3  7
@@ -191,7 +191,7 @@ size of the array: if the first dimension instead were odd,
 
 ```jldoctest
 julia> A = reshape(1:5*2, 5, 2)
-5×2 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
+5×2 reshape(::UnitRange{Int64}, 5, 2) with eltype Int64:
  1   6
  2   7
  3   8

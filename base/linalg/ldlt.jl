@@ -71,13 +71,13 @@ julia> ldltS = ldltfact(S);
 
 julia> b = [6., 7., 8.];
 
-julia> ldltS\b
+julia> ldltS \\ b
 3-element Array{Float64,1}:
  1.7906976744186047
  0.627906976744186
  1.3488372093023255
 
-julia> S\b
+julia> S \\ b
 3-element Array{Float64,1}:
  1.7906976744186047
  0.627906976744186
@@ -119,6 +119,11 @@ function A_ldiv_B!(S::LDLt{T,M}, B::AbstractVecOrMat{T}) where {T,M<:SymTridiago
         end
     end
     return B
+end
+
+function logabsdet(F::LDLt{<:Any,<:SymTridiagonal})
+    it = (F.data[i,i] for i in 1:size(F, 1))
+    return sum(log∘abs, it), prod(sign, it)
 end
 
 # Conversion methods

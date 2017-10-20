@@ -17,7 +17,8 @@ function runtests(name, isolate=true; seed=nothing)
         @eval(m, using Test)
         ex = quote
             @timed @testset $"$name" begin
-                srand($seed)
+                # srand(nothing) will fail
+                $seed != nothing && srand($seed)
                 include($"$name.jl")
             end
         end

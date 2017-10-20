@@ -743,6 +743,130 @@ begin
     @test try error() end === nothing
 end
 
+# issue #12806
+let i = 0, x = 0
+    for outer i = 1:10
+        try
+            break
+        finally
+            x = 1
+        end
+    end
+    @test i == 1
+    @test x == 1
+end
+
+let i = 1, a = []
+    while true
+        try
+            push!(a, i)
+            i += 1
+            i < 5 && continue
+            break
+        catch
+            push!(a, "catch")
+        finally
+            push!(a, "finally")
+        end
+    end
+    @test a == [1, "finally", 2, "finally", 3, "finally", 4, "finally"]
+end
+
+function _two_finally(n)
+    a = []
+    for i = 1:5
+        push!(a, i)
+        try
+            try
+                n == 1 && break
+                n == 2 && i > 1 && return [copy(a), a]
+            finally
+                push!(a, "finally 1")
+            end
+        finally
+            push!(a, "finally 2")
+        end
+    end
+    return a
+end
+@test _two_finally(1) == [1, "finally 1", "finally 2"]
+@test _two_finally(2) == [[1, "finally 1", "finally 2", 2],
+                          [1, "finally 1", "finally 2", 2, "finally 1", "finally 2"]]
+
+let i = 0
+    caught = nothing
+    try
+        try
+            error("oops")
+        catch
+            throw(42)
+        finally
+            i = 1
+        end
+    catch e
+        caught = e
+    end
+    @test caught == 42
+    @test i == 1
+end
+
+let i = 0, a = []
+    for i = 1:2
+        try
+            continue
+        finally
+            push!(a, "finally")
+        end
+        push!(a, "oops")
+    end
+    @test a == ["finally", "finally"]
+end
+
+# test from #13660
+let x = 0, y = 0, z = 0
+    for i = 1:2
+        try
+            i == 1 && continue
+        finally
+            x = 11
+        end
+        try
+            i == 2 && throw(42)
+        catch
+            break
+        finally
+            y = 12
+        end
+    end
+    for i = 1:2
+        try i == 1 && break
+        finally z = 13
+        end
+    end
+    @test x == 11
+    @test y == 12
+    @test z == 13
+end
+
+function test12806()
+    let catchb = false, catchc = false, catchr = false, a = []
+        for i in 1:3
+            try
+                throw("try err")
+            catch e
+                i == 1 && break
+                i == 2 && continue
+                i == 3 && return (catchb, catchc, catchr, a)
+            finally
+                i == 1 && (catchb = true; continue)
+                i == 2 && (catchc = true; )
+                i == 3 && (catchr = true; push!(a, 1))
+            end
+        end
+    end
+end
+@test test12806() == (true, true, false, [1])
+
 # finalizers
 let A = [1]
     local x = 0
@@ -2244,6 +2368,12 @@ f9534g(a,b,c...) = c[0]
 f9534h(a,b,c...) = c[a]
 @test f9534h(4,2,3,4,5,6) == 6
 @test try; f9534h(5,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 5; end
+
+# issue #7978, comment 332352438
+f7978a() = 1
+@test try; a, b = f7978a() catch ex; (ex::BoundsError).a == 1 && ex.i == 2; end
+f7978b() = 1, 2
+@test try; a, b, c = f7978b() catch ex; (ex::BoundsError).a == (1, 2) && ex.i == 3; end
 
 # issue #9535
 counter9535 = 0
@@ -4359,6 +4489,16 @@ end
 @test g1090(1) === 2
 @test g1090(Float32(3)) === Float32(4)
 
+# error during conversion to return type
+function f1090_err()::Int
+    try
+        return ""
+    catch
+        8
+    end
+end
+@test_throws MethodError f1090_err()
+
 function f17613_2(x)::Float64
     try
         return x
@@ -5207,6 +5347,13 @@ f_isdefined_va(::T...) where {T} = @isdefined T
 @test !f_isdefined_va()
 @test f_isdefined_va(1, 2, 3)
 
+# note: the constant `5` here should be > DataType.ninitialized.
+# This tests that there's no crash due to accessing Type.body.layout.
+let f(n) = isdefined(typeof(n), 5)
+    @test f(0) === false
+    @test isdefined(Int, 5) === false
+end
+
 # @isdefined in a loop
 let a = []
     for i = 1:2
@@ -5370,6 +5517,63 @@ x.u = initvalue2(Base.uniontypes(U)[1])
 @test x.u === initvalue2(Base.uniontypes(U)[1])
 x.u = initvalue(Base.uniontypes(U)[2])
 @test x.u === initvalue(Base.uniontypes(U)[2])
+
+mutable struct UnionField2
+    x::Union{Void, Int}
+    @noinline UnionField2() = new()
+end
+@test UnionField2().x === nothing
+
+struct UnionField3
+    x::Union{Void, Int}
+    @noinline UnionField3() = new()
+end
+@test UnionField3().x === nothing
+
+mutable struct UnionField4
+    x::Union{Void, Float64}
+    y::Union{Void, Int8}
+    z::NTuple{8, UInt8}
+    @noinline UnionField4() = new()
+    @noinline UnionField4(x, y) = new(x, y, (0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88))
+end
+@test UnionField4().x === nothing
+@test UnionField4().y === nothing
+let x4 = UnionField4(nothing, Int8(3))
+    x4copy = deepcopy(x4)
+    @test x4.x === nothing
+    @test x4.y === Int8(3)
+    @test x4.z[1] === 0x11
+    @test x4 === x4
+    @test x4 == x4
+    @test !(x4 === x4copy)
+    @test !(x4 == x4copy)
+end
+
+struct UnionField5
+    x::Union{Void, Float64}
+    y::Union{Void, Int8}
+    z::NTuple{8, UInt8}
+    @noinline UnionField5() = new()
+    @noinline UnionField5(x, y) = new(x, y, (0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88))
+end
+@test UnionField5().x === nothing
+@test UnionField5().y === nothing
+let x5 = UnionField5(nothing, Int8(3))
+    x5copy = deepcopy(x5)
+    @test x5.x === nothing
+    @test x5.y === Int8(3)
+    @test x5.z[1] === 0x11
+    @test x5 === x5
+    @test x5 == x5
+    @test x5 === x5copy
+    @test x5 == x5copy
+    @test object_id(x5) === object_id(x5copy)
+    @test hash(x5) === hash(x5copy)
+    @test pointer_from_objref(x5) === pointer_from_objref(x5)
+    @test pointer_from_objref(x5) !== pointer_from_objref(x5copy)
+end
+
 
 # PR #23367
 struct A23367
@@ -5649,3 +5853,8 @@ function hh6614()
     x, y
 end
 @test hh6614() == (1, 2)
+
+# issue 22098
+macro m22098 end
+handle_on_m22098 = getfield(@__MODULE__, Symbol("@m22098"))
+@test isempty(methods(handle_on_m22098))

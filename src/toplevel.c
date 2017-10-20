@@ -663,6 +663,15 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
     return jl_toplevel_eval_flex(m, v, 1, 0);
 }
 
+JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
+{
+    jl_method_instance_t *li = jl_new_thunk(thk, m);
+    JL_GC_PUSH1(&li);
+    jl_type_infer(&li, jl_get_ptls_states()->world_age, 0);
+    JL_GC_POP();
+    return li->rettype;
+}
+
 JL_DLLEXPORT jl_value_t *jl_load(jl_module_t *module, const char *fname)
 {
     if (module->istopmod) {
@@ -683,6 +692,23 @@ JL_DLLEXPORT jl_value_t *jl_load_(jl_module_t *module, jl_value_t *str)
 {
     // assume String has a hidden '\0' at the end
     return jl_load(module, (const char*)jl_string_data(str));
+}
+
+JL_DLLEXPORT jl_value_t *jl_prepend_cwd(jl_value_t *str)
+{
+    size_t sz = 1024;
+    char path[1024];
+    int c = uv_cwd(path, &sz);
+    if (c < 0) {
+        jl_errorf("could not get current directory");
+    }
+    path[sz] = '/';  // fix later with normpath if Windows
+    const char *fstr = (const char*)jl_string_data(str);
+    if (strlen(fstr) + sz >= 1024) {
+        jl_errorf("use a bigger buffer for jl_fullpath");
+    }
+    strcpy(path + sz + 1, fstr);
+    return jl_cstr_to_string(path);
 }
 
 #ifdef __cplusplus

@@ -341,9 +341,9 @@ end
 
 #Issue #7647: test xsyevr, xheevr, xstevr drivers.
 @testset "Eigenvalues in interval for $(typeof(Mi7647))" for Mi7647 in
-        (Symmetric(diagm(1.0:3.0)),
-         Hermitian(diagm(1.0:3.0)),
-         Hermitian(diagm(complex(1.0:3.0))),
+        (Symmetric(diagm(0 => 1.0:3.0)),
+         Hermitian(diagm(0 => 1.0:3.0)),
+         Hermitian(diagm(0 => complex(1.0:3.0))),
          SymTridiagonal([1.0:3.0;], zeros(2)))
     @test eigmin(Mi7647)  == eigvals(Mi7647, 0.5, 1.5)[1] == 1.0
     @test eigmax(Mi7647)  == eigvals(Mi7647, 2.5, 3.5)[1] == 3.0
@@ -381,7 +381,7 @@ end
     c = Hermitian(b + b')
     @test conj(c) == conj(Array(c))
     cc = copy(c)
-    @test conj!(c) == conj(Array(c))
+    @test conj!(c) == conj(Array(cc))
 end
 
 @testset "Issue # 19225" begin
@@ -442,5 +442,19 @@ end
         H = T[1/(i + j - 1) for i in 1:8, j in 1:8]
         @test norm(inv(Symmetric(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
         @test norm(inv(Hermitian(H))*(H*ones(8)) .- 1) ≈ 0 atol = 1e-5
+    end
+end
+
+@testset "similar should preserve underlying storage type and uplo flag" begin
+    m, n = 4, 3
+    sparsemat = sprand(m, m, 0.5)
+    for SymType in (Symmetric, Hermitian)
+        symsparsemat = SymType(sparsemat)
+        @test isa(similar(symsparsemat), typeof(symsparsemat))
+        @test similar(symsparsemat).uplo == symsparsemat.uplo
+        @test isa(similar(symsparsemat, Float32), SymType{Float32,<:SparseMatrixCSC{Float32}})
+        @test similar(symsparsemat, Float32).uplo == symsparsemat.uplo
+        @test isa(similar(symsparsemat, (n, n)), typeof(sparsemat))
+        @test isa(similar(symsparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
     end
 end

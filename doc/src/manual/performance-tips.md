@@ -453,8 +453,10 @@ MyBetterContainer{Float64,UnitRange{Float64}}
 
 julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(UnitRange(1.3, 5.0));
 ERROR: MethodError: Cannot `convert` an object of type UnitRange{Float64} to an object of type MyBetterContainer{Int64,UnitRange{Float64}}
+This may have arisen from a call to the constructor MyBetterContainer{Int64,UnitRange{Float64}}(...),
+since type constructors fall back to convert methods.
 Stacktrace:
-[...]
+ [1] MyBetterContainer{Int64,UnitRange{Float64}}(::UnitRange{Float64}) at ./sysimg.jl:114
 ```
 
 The inner constructor requires that the element type of `A` be `T`.

@@ -4,32 +4,49 @@
 
 ## substrings reference original strings ##
 
+"""
+    SubString(s::AbstractString, i::Integer, j::Integer=endof(s))
+    SubString(s::AbstractString, r::UnitRange{<:Integer})
+
+Like [`getindex`](@ref), but returns a view into the parent string `s`
+within range `i:j` or `r` respectively instead of making a copy.
+
+# Examples
+```jldoctest
+julia> SubString("abc", 1, 2)
+"ab"
+
+julia> SubString("abc", 1:2)
+"ab"
+
+julia> SubString("abc", 2)
+"bc"
+"""
 struct SubString{T<:AbstractString} <: AbstractString
     string::T
     offset::Int
     endof::Int
 
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
-        if i > endof(s) || j<i
-            return new(s, i-1, 0)
-        else
-            if !isvalid(s,i)
-                throw(ArgumentError("invalid SubString index"))
-            end
-
-            while !isvalid(s,j) && j > i
-                j -= 1
-            end
-
-            o = i-1
-            new(s, o, max(0, j-o))
-        end
+        i > j && return new(s, i - 1, 0) # always allow i > j as it is consistent with getindex
+        isvalid(s, i) || throw(BoundsError(s, i))
+        isvalid(s, j) || throw(BoundsError(s, j))
+        new(s, i-1, j-i+1)
     end
 end
+
 SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
-SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
-SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
-SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
+SubString(s::AbstractString, i::Integer, j::Integer=endof(s)) = SubString(s, Int(i), Int(j))
+SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
+
+function SubString(s::SubString, i::Int, j::Int)
+    # always allow i > j as it is consistent with getindex
+    i > j && return SubString(s.string, s.offset + i, s.offset + j)
+    i >= 1 || throw(BoundsError(s, i))
+    j <= endof(s) || throw(BoundsError(s, j))
+    SubString(s.string, s.offset + i, s.offset + j)
+end
+
 SubString(s::AbstractString) = SubString(s, 1, endof(s))
 SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, endof(s))
 

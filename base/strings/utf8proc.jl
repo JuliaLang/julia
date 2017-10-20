@@ -291,7 +291,7 @@ Returns `true` if the given char or integer is an assigned Unicode code point.
 julia> is_assigned_char(101)
 true
 
-julia> is_assigned_char('\x01')
+julia> is_assigned_char('\\x01')
 true
 ```
 """
@@ -442,7 +442,7 @@ Control characters are the non-printing characters of the Latin-1 subset of Unic
 
 # Examples
 ```jldoctest
-julia> iscntrl('\x01')
+julia> iscntrl('\\x01')
 true
 
 julia> iscntrl('a')
@@ -482,16 +482,16 @@ category Zs.
 
 # Examples
 ```jldoctest
-julia> isspace('\n')
+julia> isspace('\\n')
 true
 
-julia> isspace('\r')
+julia> isspace('\\r')
 true
 
 julia> isspace(' ')
 true
 
-julia> isspace('\x20')
+julia> isspace('\\x20')
 true
 ```
 """
@@ -504,7 +504,7 @@ Tests whether a character is printable, including spaces, but not a control char
 
 # Examples
 ```jldoctest
-julia> isprint('\x01')
+julia> isprint('\\x01')
 false
 
 julia> isprint('A')
@@ -524,7 +524,7 @@ classified with `isgraph(c)==true`.
 
 # Examples
 ```jldoctest
-julia> isgraph('\x01')
+julia> isgraph('\\x01')
 false
 
 julia> isgraph('A')

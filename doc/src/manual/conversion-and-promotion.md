@@ -300,7 +300,7 @@ to `promote` should be promoted. Thus, if one wants to know, in absence of actua
 type a collection of values of certain types would promote to, one can use `promote_type`:
 
 ```jldoctest
-julia> promote_type(Int8, UInt16)
+julia> promote_type(Int8, Int64)
 Int64
 ```
 

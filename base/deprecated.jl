@@ -218,15 +218,9 @@ end
 @deprecate SubArray(parent::AbstractArray, indexes::Tuple, dims::Tuple) SubArray(parent, indexes)
 
 # Deprecate vectorized unary functions over sparse matrices in favor of compact broadcast syntax (#17265).
-for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
-        :tan, :tanh, :tand, :atan, :atanh, :atand,
-        :sinpi, :cosc, :ceil, :floor, :trunc, :round,
-        :log1p, :expm1, :abs, :abs2,
-        :log2, :log10, :exp2, :exp10, :sinc, :cospi,
-        :cos, :cosh, :cosd, :acos, :acosd,
-        :cot, :coth, :cotd, :acot, :acotd,
-        :sec, :sech, :secd, :asech,
-        :csc, :csch, :cscd, :acsch)
+for f in (:sind, :asind, :tand, :atand, :sinpi, :cosc, :ceil, :floor, :trunc,
+        :round, :log1p, :expm1, :abs, :abs2, :log2, :log10, :exp2, :exp10,
+        :sinc, :cospi, :cosd, :acosd, :cotd, :acotd, :secd, :cscd)
     @eval import .Math: $f
     @eval @deprecate $f(A::SparseMatrixCSC) $f.(A)
 end
@@ -254,9 +248,7 @@ for f in (
         # base/special/gamma.jl
         :gamma, :lfact,
         # base/math.jl
-        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2,
-        :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh,
-        :log2, :log10, :lgamma, #=:log1p,=#
+        :cbrt, :exp2, :expm1, :exp10, :log2, :log10, :lgamma, #=:log1p,=#
         # base/floatfuncs.jl
         :abs, :abs2, :angle, :isnan, :isinf, :isfinite,
         # base/complex.jl
@@ -742,9 +734,7 @@ end
 @deprecate sign(A::AbstractArray) sign.(A)
 
 # Deprecate manually vectorized trigonometric and hyperbolic functions in favor of compact broadcast syntax
-for f in (:sec, :sech, :secd, :asec, :asech,
-            :csc, :csch, :cscd, :acsc, :acsch,
-            :cot, :coth, :cotd, :acot, :acoth)
+for f in (:secd, :cscd, :cotd)
     @eval import .Math: $f
     @eval @deprecate $f(A::AbstractArray{<:Number}) $f.(A)
 end
@@ -1480,10 +1470,11 @@ for op in (:floor, :ceil, :trunc, :round,
 end
 # deprecate remaining vectorized methods over SparseVectors (not-zero-preserving)
 for op in (:exp, :exp2, :exp10, :log, :log2, :log10,
-        :cos, :cosd, :acos, :cosh, :cospi,
-        :csc, :cscd, :acot, :csch, :acsch,
-        :cot, :cotd, :acosd, :coth,
-        :sec, :secd, :acotd, :sech, :asech)
+           :cos, :cosd, :acos, :cosh, :cospi,
+           :csc, :cscd, :acot, :csch, :acsch,
+           :cot, :cotd, :acosd, :coth,
+           :sec, :secd, :acotd, :sech, :asech)
+    @eval import .Math: $op
     @eval @deprecate ($op)(x::AbstractSparseVector{<:Number,<:Integer}) ($op).(x)
 end
 
@@ -1638,10 +1629,10 @@ export hex2num
 
 # PR 23341
 import .LinAlg: diagm
-@deprecate diagm(A::SparseMatrixCSC) spdiagm(sparsevec(A))
+@deprecate diagm(A::SparseMatrixCSC) sparse(Diagonal(sparsevec(A)))
 
 # PR #23373
-@deprecate diagm(A::BitMatrix) diagm(vec(A))
+@deprecate diagm(A::BitMatrix) BitMatrix(Diagonal(vec(A)))
 
 # PR 23341
 @eval GMP @deprecate gmp_version() version() false
@@ -1757,6 +1748,33 @@ end
 
 @deprecate contains(eq::Function, itr, x) any(y->eq(y,x), itr)
 
+# PR #23757
+import .SparseArrays.spdiagm
+@deprecate spdiagm(x::AbstractVector) sparse(Diagonal(x))
+function spdiagm(x::AbstractVector, d::Number)
+    depwarn(string("spdiagm(x::AbstractVector, d::Number) is deprecated, use ",
+        "spdiagm(d => x) instead, which now returns a square matrix. To preserve the old ",
+        "behaviour, use sparse(SparseArrays.spdiagm_internal(d => x)...)"), :spdiagm)
+    I, J, V = SparseArrays.spdiagm_internal(d => x)
+    return sparse(I, J, V)
+end
+function spdiagm(x, d)
+    depwarn(string("spdiagm((x1, x2, ...), (d1, d2, ...)) is deprecated, use ",
+        "spdiagm(d1 => x1, d2 => x2, ...) instead, which now returns a square matrix. ",
+        "To preserve the old behaviour, use ",
+        "sparse(SparseArrays.spdiagm_internal(d1 => x1, d2 => x2, ...)...)"), :spdiagm)
+    I, J, V = SparseArrays.spdiagm_internal((d[i] => x[i] for i in 1:length(x))...)
+    return sparse(I, J, V)
+end
+function spdiagm(x, d, m::Integer, n::Integer)
+    depwarn(string("spdiagm((x1, x2, ...), (d1, d2, ...), m, n) is deprecated, use ",
+        "spdiagm(d1 => x1, d2 => x2, ...) instead, which now returns a square matrix. ",
+        "To specify a non-square matrix and preserve the old behaviour, use ",
+        "I, J, V = SparseArrays.spdiagm_internal(d1 => x1, d2 => x2, ...); sparse(I, J, V, m, n)"), :spdiagm)
+    I, J, V = SparseArrays.spdiagm_internal((d[i] => x[i] for i in 1:length(x))...)
+    return sparse(I, J, V, m, n)
+end
+
 # PR #23690
 # `SSHCredentials` and `UserPasswordCredentials` constructors using `prompt_if_incorrect`
 # are deprecated in base/libgit2/types.jl.
@@ -1851,6 +1869,19 @@ end
 # After deprecation is removed, enable the @testset "indexing by Bool values" in test/arrayops.jl
 # Also un-comment the new definition in base/indices.jl
 
+function diagm(v::BitVector)
+    depwarn(string("diagm(v::BitVector) is deprecated, use diagm(0 => v) or ",
+        "BitMatrix(Diagonal(v)) instead"), :diagm)
+    return BitMatrix(Diagonal(v))
+end
+function diagm(v::AbstractVector)
+    depwarn(string("diagm(v::AbstractVector) is deprecated, use diagm(0 => v) or ",
+        "Matrix(Diagonal(v)) instead"), :diagm)
+    return Matrix(Diagonal(v))
+end
+@deprecate diagm(v::AbstractVector, k::Integer) diagm(k => v)
+@deprecate diagm(x::Number) fill(x, 1, 1)
+
 # issue #20816
 @deprecate strwidth textwidth
 @deprecate charwidth textwidth
@@ -1866,6 +1897,9 @@ end
 # issue #22849
 @deprecate reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where {T, S, N} reshape(reinterpret(T, vec(a)), dims)
 @deprecate reinterpret(::Type{T}, a::SparseMatrixCSC{S}, dims::NTuple{N,Int}) where {T, S, N} reinterpret(T, reshape(a, dims))
+
+# issue #24006
+@deprecate linearindices(s::AbstractString) eachindex(s)
 
 # END 0.7 deprecations
 

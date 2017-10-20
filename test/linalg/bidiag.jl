@@ -97,12 +97,12 @@ srand(1)
         @testset "Constructor and basic properties" begin
             @test size(T, 1) == size(T, 2) == n
             @test size(T) == (n, n)
-            @test Array(T) == diagm(dv) + diagm(ev, uplo == :U ? 1 : -1)
+            @test Array(T) == diagm(0 => dv, (uplo == :U ? 1 : -1) => ev)
             @test Bidiagonal(Array(T), uplo) == T
             @test big.(T) == T
-            @test Array(abs.(T)) == abs.(diagm(dv)) + abs.(diagm(ev, uplo == :U ? 1 : -1))
-            @test Array(real(T)) == real(diagm(dv)) + real(diagm(ev, uplo == :U ? 1 : -1))
-            @test Array(imag(T)) == imag(diagm(dv)) + imag(diagm(ev, uplo == :U ? 1 : -1))
+            @test Array(abs.(T)) == abs.(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
+            @test Array(real(T)) == real(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
+            @test Array(imag(T)) == imag(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
         end
 
         @testset for func in (conj, transpose, adjoint)
@@ -241,7 +241,7 @@ srand(1)
                     Test.test_approx_eq_modphase(u1, u2)
                     Test.test_approx_eq_modphase(v1, v2)
                 end
-                @test 0 ≈ vecnorm(u2*diagm(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),vecnorm(u1*diagm(d1)*v1'-Tfull))
+                @test 0 ≈ vecnorm(u2*Diagonal(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),vecnorm(u1*Diagonal(d1)*v1'-Tfull))
                 @inferred svdvals(T)
                 @inferred svd(T)
             end
@@ -264,7 +264,7 @@ srand(1)
             TriSym = SymTridiagonal(T.dv, T.ev)
             @test Array(TriSym*T) ≈ Array(TriSym)*Array(T)
             # test pass-through of A_mul_B! for AbstractTriangular*Bidiagonal
-            Tri = UpperTriangular(diagm(T.ev, 1))
+            Tri = UpperTriangular(diagm(1 => T.ev))
             @test Array(Tri*T) ≈ Array(Tri)*Array(T)
         end
 

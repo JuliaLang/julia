@@ -116,10 +116,10 @@ julia> S = view(A, 1:2, :);
 julia> for (index, value) in pairs(IndexStyle(S), S)
            println("\$index \$value")
        end
-CartesianIndex{2}((1, 1)) a
-CartesianIndex{2}((2, 1)) b
-CartesianIndex{2}((1, 2)) d
-CartesianIndex{2}((2, 2)) e
+CartesianIndex(1, 1) a
+CartesianIndex(2, 1) b
+CartesianIndex(1, 2) d
+CartesianIndex(2, 2) e
 ```
 
 See also: [`IndexStyle`](@ref), [`indices`](@ref).
@@ -221,7 +221,7 @@ julia> b = ["e","d","b","c","a"]
  "a"
 
 julia> c = zip(a,b)
-Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, String["e", "d", "b", "c", "a"])
+Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, ["e", "d", "b", "c", "a"])
 
 julia> length(c)
 5

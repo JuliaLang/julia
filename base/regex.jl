@@ -186,13 +186,13 @@ retrieved by accessing `m.match` and the captured sequences can be retrieved by 
 # Examples
 ```jldoctest
 julia> rx = r"a(.)a"
-r"a.a"
+r"a(.)a"
 
 julia> m = match(rx, "cabac")
-RegexMatch("aba")
+RegexMatch("aba", 1="b")
 
-julia> julia> m.captures
-1-element Array{Union{SubString{String}, Void},1}:
+julia> m.captures
+1-element Array{Union{Void, SubString{String}},1}:
  "b"
 
 julia> m.match
@@ -212,9 +212,10 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, a
     end
     ovec = re.ovec
     n = div(length(ovec),2) - 1
-    mat = SubString(str, ovec[1]+1, ovec[2])
-    cap = Union{Void,SubString{String}}[
-            ovec[2i+1] == PCRE.UNSET ? nothing : SubString(str, ovec[2i+1]+1, ovec[2i+2]) for i=1:n ]
+    mat = SubString(str, ovec[1]+1, prevind(str, ovec[2]+1))
+    cap = Union{Void,SubString{String}}[ovec[2i+1] == PCRE.UNSET ? nothing :
+                                        SubString(str, ovec[2i+1]+1,
+                                                  prevind(str, ovec[2i+2]+1)) for i=1:n]
     off = Int[ ovec[2i+1]+1 for i=1:n ]
     RegexMatch(mat, cap, ovec[1]+1, off, re)
 end

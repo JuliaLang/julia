@@ -74,6 +74,7 @@ guardsrand(123) do
         end
         @testset "interconversion of Tridiagonal and SymTridiagonal" begin
             @test Tridiagonal(dl, d, dl) == SymTridiagonal(d, dl)
+            @test SymTridiagonal(d, dl) == Tridiagonal(dl, d, dl)
             @test Tridiagonal(dl, d, du) + Tridiagonal(du, d, dl) == SymTridiagonal(2d, dl+du)
             @test SymTridiagonal(d, dl) + Tridiagonal(dl, d, du) == Tridiagonal(dl + dl, d+d, dl+du)
             @test convert(SymTridiagonal,Tridiagonal(SymTridiagonal(d, dl))) == SymTridiagonal(d, dl)
@@ -291,6 +292,12 @@ guardsrand(123) do
                             @test isa(similar(Ts, Int), SymTridiagonal{Int})
                             @test isa(similar(Ts, Int, (3,2)), Matrix{Int})
                         end
+
+                        @test first(logabsdet(Tldlt)) ≈ first(logabsdet(Fs))
+                        @test last(logabsdet(Tldlt))  ≈ last(logabsdet(Fs))
+                        # just test that the det method exists. The numerical value of the
+                        # determinant is unreliable
+                        det(Tldlt)
                     end
                 end
             else # mat_type is Tridiagonal

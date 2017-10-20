@@ -325,18 +325,18 @@ Construct a vector of `n` logarithmically spaced numbers from `base^start` to `b
 ```jldoctest
 julia> logspace(1.,10.,5)
 5-element Array{Float64,1}:
-   10.0
- 1778.28
-    3.16228e5
-    5.62341e7
-    1.0e10
+     10.0
+   1778.2794100389228
+ 316227.7660168379
+      5.623413251903491e7
+      1.0e10
 
 julia> logspace(1.,10.,5,base=2)
 5-element Array{Float64,1}:
     2.0
-    9.51366
-   45.2548
-  215.269
+    9.513656920021768
+   45.254833995939045
+  215.2694823049509
  1024.0
 ```
 """

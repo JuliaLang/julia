@@ -66,9 +66,12 @@ startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
 # TODO: fast endswith
 
 """
-    chop(s::AbstractString)
+    chop(s::AbstractString, head::Integer=0, tail::Integer=1)
 
-Remove the last character from `s`.
+Remove the first `head` and the last `tail` characters from `s`.
+The call `chop(s)` removes the last character from `s`.
+If it is requested to remove more characters than `length(s)`
+then an empty string is returned.
 
 # Examples
 ```jldoctest
@@ -77,9 +80,23 @@ julia> a = "March"
 
 julia> chop(a)
 "Marc"
+
+julia> chop(a, 1, 2)
+"ar"
+
+julia> chop(a, 5, 5)
+""
 ```
 """
-chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
+function chop(s::AbstractString, head::Integer, tail::Integer)
+    # negative values of head/tail will throw error in nextind/prevind
+    headidx = head == 0 ? start(s) : nextind(s, start(s), head)
+    tailidx = tail == 0 ? endof(s) : prevind(s, endof(s), tail)
+    SubString(s, headidx, tailidx)
+end
+
+# no head/tail version left for performance reasons
+chop(s::AbstractString) = SubString(s, start(s), prevind(s, endof(s)))
 
 """
     chomp(s::AbstractString)
@@ -96,17 +113,17 @@ function chomp(s::AbstractString)
     i = endof(s)
     (i < 1 || s[i] != '\n') && (return SubString(s, 1, i))
     j = prevind(s,i)
-    (j < 1 || s[j] != '\r') && (return SubString(s, 1, i-1))
-    return SubString(s, 1, j-1)
+    (j < 1 || s[j] != '\r') && (return SubString(s, 1, j))
+    return SubString(s, 1, prevind(s,j))
 end
 function chomp(s::String)
     i = endof(s)
     if i < 1 || codeunit(s,i) != 0x0a
         SubString(s, 1, i)
     elseif i < 2 || codeunit(s,i-1) != 0x0d
-        SubString(s, 1, i-1)
+        SubString(s, 1, prevind(s, i))
     else
-        SubString(s, 1, i-2)
+        SubString(s, 1, prevind(s, i-1))
     end
 end
 

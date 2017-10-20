@@ -1221,6 +1221,8 @@
                                           v))
                                     anames))
                        ,@(cddr e)))))
+        ((and (length= e 2) (symbol? (cadr e)))
+         (expand-forms `(function ,(symbol (string #\@ (cadr e))))))
         (else
          (error "invalid macro definition"))))
 
@@ -1265,88 +1267,31 @@
     (any not (map (lambda (k) (get label-defs k #f))
                   (table.keys label-refs)))))
 
-(define (block-returns? e)
-  (if (assignment? e)
-      (block-returns? (caddr e))
-      (and (pair? e) (eq? (car e) 'block)
-           (any return? (cdr e)))))
-
-(define (replace-return e bb ret retval)
-  (cond ((or (atom? e) (quoted? e)) e)
-        ((or (eq? (car e) 'lambda)
-             (eq? (car e) 'function)
-             (eq? (car e) 'stagedfunction)
-             (eq? (car e) '->)) e)
-        ((eq? (car e) 'return)
-         `(block ,@(if ret `((= ,ret true)) '())
-                 (= ,retval ,(cadr e))
-                 (break ,bb)))
-        (else (map (lambda (x) (replace-return x bb ret retval)) e))))
-
 (define (expand-try e)
-  (if (length= e 5)
-      (let (;; expand inner try blocks first, so their return statements
-            ;; will have been moved for `finally`, causing correct
-            ;; chaining behavior when the current (outer) try block is
-            ;; expanded.
-            (tryb (expand-forms (cadr e)))
-            (var  (caddr e))
-            (catchb (cadddr e))
-            (finalb (cadddr (cdr e))))
-        (if (has-unmatched-symbolic-goto? tryb)
-            (error "goto from a try/finally block is not permitted"))
-        (let ((hasret (or (contains return? tryb)
-                          (contains return? catchb))))
-          (let ((err (gensy))
-                (ret (and hasret
-                          (or (not (block-returns? tryb))
-                              (and (not (eq? catchb 'false))
-                                   (not (block-returns? catchb))))
-                          (gensy)))
-                (retval (if hasret (gensy) #f))
-                (bb  (gensy))
-                (finally-exception (gensy))
-                (val (gensy))) ;; this is an ssavalue, but llvm has trouble determining that it dominates all uses
-            (let ((tryb   (replace-return tryb bb ret retval))
-                  (catchb (replace-return catchb bb ret retval)))
-              (expand-forms
-               `(scope-block
-                 (block
-                  ,@(if hasret `((local ,retval)) '())
-                  (local ,val)
-                  (local ,finally-exception)
-                  (= ,err false)
-                  ,@(if ret `((= ,ret false)) '())
-                  (break-block
-                   ,bb
-                   (try (= ,val
-                           ,(if (not (eq? catchb 'false))
-                                `(try ,tryb ,var ,catchb)
-                                tryb))
-                        false
-                        (= ,err true)))
-                  (= ,finally-exception (the_exception))
-                  ,finalb
-                  (if ,err (foreigncall 'jl_rethrow_other (core Void) (call (core svec) Any)
-                                        'ccall 1 ,finally-exception))
-                  ,(if hasret
-                       (if ret
-                           `(if ,ret (return ,retval) ,val)
-                           `(return ,retval))
-                       val))))))))
-      (if (length= e 4)
-          (let ((tryb (cadr e))
-                (var  (caddr e))
-                (catchb (cadddr e)))
-            (expand-forms
-             (if (and (symbol-like? var) (not (eq? var 'false)))
-                 `(trycatch (scope-block ,tryb)
-                            (scope-block
-                             (block (= ,var (the_exception))
-                                    ,catchb)))
-                 `(trycatch (scope-block ,tryb)
-                            (scope-block ,catchb)))))
-          (map expand-forms e))))
+  (let ((tryb   (cadr e))
+        (var    (caddr e))
+        (catchb (cadddr e)))
+    (cond ((length= e 5)
+           (if (has-unmatched-symbolic-goto? tryb)
+               (error "goto from a try/finally block is not permitted"))
+           (let ((finalb (cadddr (cdr e))))
+             (expand-forms
+              `(tryfinally
+                ,(if (not (eq? catchb 'false))
+                     `(try ,tryb ,var ,catchb)
+                     tryb)
+                ,finalb))))
+          ((length= e 4)
+           (expand-forms
+            (if (and (symbol-like? var) (not (eq? var 'false)))
+                `(trycatch (scope-block ,tryb)
+                           (scope-block
+                            (block (= ,var (the_exception))
+                                   ,catchb)))
+                `(trycatch (scope-block ,tryb)
+                           (scope-block ,catchb)))))
+          (else
+           (error "invalid \"try\" form")))))
 
 (define (expand-typealias name type-ex)
   (if (and (pair? name)
@@ -3126,7 +3071,7 @@ f(x) = yt(x)
         (and cv (vinfo:asgn cv) (vinfo:capt cv)))))
 
 (define (toplevel-preserving? e)
-  (and (pair? e) (memq (car e) '(if block body trycatch))))
+  (and (pair? e) (memq (car e) '(if block body trycatch tryfinally))))
 
 (define (map-cl-convert exprs fname lam namemap toplevel interp)
   (if toplevel
@@ -3460,6 +3405,10 @@ f(x) = yt(x)
         (label-counter 0)     ;; counter for generating label addresses
         (label-map (table))   ;; maps label names to generated addresses
         (label-level (table)) ;; exception handler level of each label
+        (finally-handler #f)  ;; `(var label map level)` where `map` is a list of `(tag . action)`.
+                              ;; to exit the current finally block, set `var` to integer `tag`,
+                              ;; jump to `label`, and put `(tag . action)` in the map, where `action`
+                              ;; is `(return x)`, `(break x)`, or a call to rethrow.
         (handler-goto-fixups '())  ;; `goto`s that might need `leave` exprs added
         (handler-level 0))  ;; exception handler nesting depth
     (define (emit c)
@@ -3475,17 +3424,40 @@ f(x) = yt(x)
           (let ((l (make-label)))
             (mark-label l)
             l)))
+    (define (leave-finally-block action (need-goto #t))
+      (let* ((tags (caddr finally-handler))
+             (tag  (if (null? tags) 1 (+ 1 (caar tags)))))
+        (set-car! (cddr finally-handler) (cons (cons tag action) tags))
+        (emit `(= ,(car finally-handler) ,tag))
+        (if need-goto
+            (begin (emit `(leave ,(+ 1 (- handler-level (cadddr finally-handler)))))
+                   (emit `(goto ,(cadr finally-handler)))))
+        tag))
     (define (emit-return x)
-      (let ((rv (if (> handler-level 0)
-                    (let ((tmp (if (or (simple-atom? x) (ssavalue? x) (equal? x '(null)))
-                                   #f (make-ssavalue))))
-                      (if tmp (emit `(= ,tmp ,x)))
-                      (emit `(leave ,handler-level))
-                      (or tmp x))
-                    x)))
+      (define (converted y)
         (if rett
-            (emit `(return ,(convert-for-type-decl rv rett)))
-            (emit `(return ,rv)))))
+            (convert-for-type-decl y rett)
+            y))
+      (if (> handler-level 0)
+          (let ((tmp (cond ((or (simple-atom? x) (ssavalue? x) (equal? x '(null)))
+                            #f)
+                           (finally-handler  (new-mutable-var))
+                           (else  (make-ssavalue)))))
+            (if tmp (emit `(= ,tmp ,x)))
+            (if finally-handler
+                (leave-finally-block `(return ,(converted (or tmp x))))
+                (begin (emit `(leave ,handler-level))
+                       (emit `(return ,(converted (or tmp x))))))
+            (or tmp x))
+          (emit `(return ,(converted x)))))
+    (define (emit-break labl)
+      (let ((lvl (caddr labl)))
+        (if (and finally-handler (> (cadddr finally-handler) lvl))
+            (leave-finally-block `(break ,labl))
+            (begin
+              (if (> handler-level lvl)
+                  (emit `(leave ,(- handler-level lvl))))
+              (emit `(goto ,(cadr labl)))))))
     (define (new-mutable-var . name)
       (let ((g (if (null? name) (gensy) (named-gensy (car name)))))
         (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,g Any 2))))
@@ -3695,10 +3667,7 @@ f(x) = yt(x)
              (let ((labl (assq (cadr e) break-labels)))
                (if (not labl)
                    (error "break or continue outside loop")
-                   (begin
-                     (if (> handler-level (caddr labl))
-                         (emit `(leave ,(- handler-level (caddr labl)))))
-                     (emit `(goto ,(cadr labl)))))))
+                   (emit-break labl))))
             ((label symboliclabel)
              (if (eq? (car e) 'symboliclabel)
                  (if (has? label-level (cadr e))
@@ -3725,28 +3694,57 @@ f(x) = yt(x)
             ;; exception handlers are lowered using
             ;; (enter L) - push handler with catch block at label L
             ;; (leave n) - pop N exception handlers
-            ((trycatch)
+            ((trycatch tryfinally)
              (let ((catch (make-label))
-                   (endl  (make-label)))
+                   (endl  (make-label))
+                   (last-finally-handler finally-handler)
+                   (finally           (if (eq? (car e) 'tryfinally) (new-mutable-var) #f))
+                   (finally-exception (if (eq? (car e) 'tryfinally) (new-mutable-var) #f))
+                   (my-finally-handler #f))
                (emit `(enter ,catch))
                (set! handler-level (+ handler-level 1))
-               (let* ((v1  (compile (cadr e)
-                                    break-labels value #f))
+               (if finally (begin (set! my-finally-handler (list finally endl '() handler-level))
+                                  (set! finally-handler my-finally-handler)
+                                  (emit `(= ,finally -1))))
+               (let* ((v1  (compile (cadr e) break-labels value #f))
                       (val (if (and value (not tail))
                                (new-mutable-var) #f)))
                  (if val (emit `(= ,val ,v1)))
                  (if tail
                      (begin (emit-return v1)
-                            (set! endl #f))
+                            (if (not finally) (set! endl #f)))
                      (begin (emit '(leave 1))
                             (emit `(goto ,endl))))
                  (set! handler-level (- handler-level 1))
                  (mark-label catch)
                  (emit `(leave 1))
-                 (let ((v2 (compile (caddr e) break-labels value tail)))
-                   (if val (emit `(= ,val ,v2)))
-                   (if endl (mark-label endl))
-                   val))))
+                 (if finally
+                     (begin (emit `(= ,finally-exception (the_exception)))
+                            (leave-finally-block `(foreigncall 'jl_rethrow_other (core Void) (call (core svec) Any)
+                                                               'ccall 1 ,finally-exception)
+                                                 #f))
+                     (let ((v2 (compile (caddr e) break-labels value tail)))
+                       (if val (emit `(= ,val ,v2)))))
+                 (if endl (mark-label endl))
+                 (if finally
+                     (begin (set! finally-handler last-finally-handler)
+                            (compile (caddr e) break-labels #f #f)
+                            (let loop ((actions (caddr my-finally-handler)))
+                              (if (pair? actions)
+                                  (let ((skip (if (and tail (null? (cdr actions))
+                                                       (eq? (car (cdar actions)) 'return))
+                                                  #f
+                                                  (make-label))))
+                                    (if skip
+                                        (emit `(gotoifnot (call (core ===) ,finally ,(caar actions)) ,skip)))
+                                    (let ((ac (cdar actions)))
+                                      (cond ((eq? (car ac) 'return) (emit-return (cadr ac)))
+                                            ((eq? (car ac) 'break)  (emit-break (cadr ac)))
+                                            (else ;; assumed to be a rethrow
+                                             (emit ac))))
+                                    (if skip (mark-label skip))
+                                    (loop (cdr actions)))))))
+                 val)))
 
             ((method)
              (if (length> e 2)

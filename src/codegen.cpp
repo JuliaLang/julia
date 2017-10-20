@@ -98,6 +98,7 @@ namespace llvm {
 #include "julia_internal.h"
 #include "jitlayers.h"
 #include "codegen_shared.h"
+#include "processor.h"
 #include "julia_assert.h"
 
 // LLVM version compatibility macros
@@ -235,6 +236,7 @@ static MDNode *tbaa_arraylen;       // The len in a jl_array_t
 static MDNode *tbaa_arrayflags;     // The flags in a jl_array_t
 static MDNode *tbaa_const;      // Memory that is immutable by the time LLVM can see it
 static MDNode *tbaa_arrayselbyte;   // a selector byte in a isbits Union jl_array_t
+static MDNode *tbaa_unionselbyte;   // a selector byte in isbits Union struct fields
 
 // Basic DITypes
 static DICompositeType *jl_value_dillvmt;
@@ -262,7 +264,6 @@ int32_t jl_jlcall_api(const char *fname)
 
 // constants
 static Constant *V_null;
-static Type *NoopType;
 extern "C" {
 JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed=NULL);
 }
@@ -2131,8 +2132,9 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
 
     if (at->isAggregateType()) { // Struct or Array
         assert(arg1.ispointer() && arg2.ispointer());
-        size_t sz = jl_datatype_size(arg1.typ);
-        if (sz > 512 && !((jl_datatype_t*)arg1.typ)->layout->haspadding) {
+        jl_datatype_t *sty = (jl_datatype_t*)arg1.typ;
+        size_t sz = jl_datatype_size(sty);
+        if (sz > 512 && !sty->layout->haspadding) {
             Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_derived_func),
                             {
                             maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg1)), T_pint8),
@@ -2145,22 +2147,26 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
             Type *atp = at->getPointerTo();
             Value *varg1 = maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg1)), atp);
             Value *varg2 = maybe_bitcast(ctx, decay_derived(data_pointer(ctx, arg2)), atp);
-            jl_svec_t *types = ((jl_datatype_t*)arg1.typ)->types;
+            jl_svec_t *types = sty->types;
             Value *answer = ConstantInt::get(T_int1, 1);
             for (size_t i = 0, l = jl_svec_len(types); i < l; i++) {
                 jl_value_t *fldty = jl_svecref(types, i);
-                Value *subAns, *fld1, *fld2;
-                fld1 = ctx.builder.CreateConstGEP2_32(at, varg1, 0, i);
-                fld2 = ctx.builder.CreateConstGEP2_32(at, varg2, 0, i);
-                Type *at_i = cast<GetElementPtrInst>(fld1)->getResultElementType();
-                if (type_is_ghost(at_i))
+                if (type_is_ghost(julia_type_to_llvm(fldty)))
                     continue;
+                unsigned byte_offset = jl_field_offset(sty, i);
+                Value *subAns, *fld1, *fld2;
+                if (isa<StructType>(at)) {
+                    fld1 = emit_struct_gep(ctx, at, varg1, byte_offset);
+                    fld2 = emit_struct_gep(ctx, at, varg2, byte_offset);
+                }
+                else {
+                    fld1 = ctx.builder.CreateConstInBoundsGEP2_32(at, varg1, 0, i);
+                    fld2 = ctx.builder.CreateConstInBoundsGEP2_32(at, varg2, 0, i);
+                }
                 if (jl_is_uniontype(fldty)) {
-                    unsigned tindex_offset = cast<StructType>(at_i)->getNumElements() - 1;
-                    Value *ptindex1 = ctx.builder.CreateConstInBoundsGEP2_32(
-                            at_i, fld1, 0, tindex_offset);
-                    Value *ptindex2 = ctx.builder.CreateConstInBoundsGEP2_32(
-                            at_i, fld2, 0, tindex_offset);
+                    unsigned tindex_offset = byte_offset + jl_field_size(sty, i) - 1;
+                    Value *ptindex1 = emit_struct_gep(ctx, at, varg1, tindex_offset);
+                    Value *ptindex2 = emit_struct_gep(ctx, at, varg2, tindex_offset);
                     Value *tindex1 = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1),
                             ctx.builder.CreateLoad(T_int8, ptindex1));
                     Value *tindex2 = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1),
@@ -2815,6 +2821,13 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             stt == jl_module_type) { // TODO: use ->layout here instead of leaf_type
             return false;
         }
+        if (jl_is_type_type((jl_value_t*)stt)) {
+            // the representation type of Type{T} is either DataType, or unknown
+            if (jl_is_leaf_type(jl_tparam0(stt)))
+                stt = jl_datatype_type;
+            else
+                return false;
+        }
         assert(jl_is_datatype(stt));
 
         ssize_t fieldidx = -1;
@@ -2836,12 +2849,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         else {
             size_t offs = jl_field_offset(stt, fieldidx);
-            Value *ptr = emit_bitcast(ctx, decay_derived(data_pointer(ctx, obj)), T_pint8);
-            Value *llvm_idx = ConstantInt::get(T_size, offs);
+            Value *ptr = emit_bitcast(ctx, decay_derived(data_pointer(ctx, obj)), T_pprjlvalue);
+            Value *llvm_idx = ConstantInt::get(T_size, offs / sizeof(void*));
             Value *addr = ctx.builder.CreateGEP(ptr, llvm_idx);
             // emit this using the same type as emit_getfield_knownidx
             // so that LLVM may be able to load-load forward them and fold the result
-            Value *fldv = tbaa_decorate(obj.tbaa, ctx.builder.CreateLoad(T_prjlvalue, emit_bitcast(ctx, addr, T_pprjlvalue)));
+            Value *fldv = tbaa_decorate(obj.tbaa, ctx.builder.CreateLoad(T_prjlvalue,  addr));
             Value *isdef = ctx.builder.CreateIsNotNull(fldv);
             *ret = mark_julia_type(ctx, isdef, false, jl_bool_type);
         }
@@ -5503,6 +5516,11 @@ static std::unique_ptr<Module> emit_function(
                 cur_prop.loc_changed = true;
             }
             else if (meta_arg == (jl_value_t*)jl_symbol("pop_loc")) {
+                unsigned npops = 1;
+                if (jl_expr_nargs(expr) > 1)
+                    npops = jl_unbox_long(jl_exprarg(expr, 1));
+                for (unsigned i = 1; i < npops; i++)
+                    DI_stack.pop_back();
                 cur_prop.is_poploc = true;
                 auto &DI = DI_stack.back();
                 SP = DI.sp;
@@ -5510,8 +5528,8 @@ static std::unique_ptr<Module> emit_function(
                 cur_prop.file = DI.file;
                 cur_prop.line = DI.line;
                 cur_prop.in_user_code = DI.in_user_code;
-                DI_stack.pop_back();
                 cur_prop.loc_changed = true;
+                DI_stack.pop_back();
             }
         }
         stmtprops[i] = cur_prop;
@@ -5959,6 +5977,7 @@ static void init_julia_llvm_meta(void)
     tbaa_arrayflags = tbaa_make_child("jtbaa_arrayflags", tbaa_array_scalar).first;
     tbaa_const = tbaa_make_child("jtbaa_const", nullptr, true).first;
     tbaa_arrayselbyte = tbaa_make_child("jtbaa_arrayselbyte", tbaa_array_scalar).first;
+    tbaa_unionselbyte = tbaa_make_child("jtbaa_unionselbyte", tbaa_data_scalar).first;
 }
 
 static void init_julia_llvm_env(Module *m)
@@ -5995,9 +6014,6 @@ static void init_julia_llvm_env(Module *m)
     T_pvoidfunc = FunctionType::get(T_void, /*isVarArg*/false)->getPointerTo();
 
     auto T_pint8_derived = PointerType::get(T_int8, AddressSpace::Derived);
-
-    // This type is used to create undef Values for use in struct declarations to skip indices
-    NoopType = ArrayType::get(T_int1, 0);
 
     // add needed base debugging definitions to our LLVM environment
     DIBuilder dbuilder(*m);
@@ -6603,189 +6619,6 @@ static void init_julia_llvm_env(Module *m)
     addOptimizationPasses(jl_globalPM, jl_options.opt_level);
 }
 
-static inline std::string getNativeTarget()
-{
-    std::string cpu = sys::getHostCPUName();
-#if defined(_CPU_ARM_)
-    // Try slightly harder than LLVM at determining the CPU architecture.
-    if (cpu == "generic") {
-        // This is the most reliable way I can find
-        // `/proc/cpuinfo` changes between kernel versions
-        struct utsname name;
-        if (uname(&name) >= 0) {
-            // name.machine is the elf_platform in the kernel.
-            if (strcmp(name.machine, "armv6l") == 0) {
-                return "armv6";
-            }
-            if (strcmp(name.machine, "armv7l") == 0) {
-                return "armv7";
-            }
-            if (strcmp(name.machine, "armv7ml") == 0) {
-                // Thumb
-                return "armv7-m";
-            }
-            if (strcmp(name.machine, "armv8l") == 0 ||
-                strcmp(name.machine, "aarch64") == 0) {
-                return "armv8";
-            }
-        }
-    }
-#endif
-    return cpu;
-}
-
-#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
-// Check if the cpu name is a ARM/AArch64 arch name and return a
-// string that can be used as LLVM feature name
-static inline void checkARMArchFeature(std::string &cpu,
-                                       StringMap<bool> &HostFeatures)
-{
-#if defined(_CPU_ARM_)
-    if (cpu == "generic") {
-        HostFeatures["neon"] = false;
-        return;
-    }
-#endif
-    StringRef cpu_s = cpu;
-    if (!cpu_s.startswith("armv"))
-        return;
-    // Generic names
-#if defined(_CPU_ARM_)
-    if (!cpu_s.startswith("armv8")) {
-        // Turn off `neon` for generic archs on ARM
-        // since LLVM seems to enable it for all armv7-a processors.
-        HostFeatures["neon"] = false;
-    }
-    // "v7" and "v8" are not available in the form of `armv*`
-    // in the feature list
-    if (cpu == "armv7") {
-        HostFeatures["v7"] = true;
-    }
-    else if (cpu == "armv8") {
-        HostFeatures["v8"] = true;
-    }
-    else {
-        HostFeatures[cpu] = true;
-    }
-#else
-    // These two are allowed on 32bit. Allow them on 64bits too for consistency since
-    // they basically mean "generic" on aarch64.
-    // In particular, "armv8-a" is the generic value for the GCC `-march` option.
-    if (cpu != "armv8" && cpu != "armv8-a")
-        HostFeatures[cpu.substr(3)] = true;
-#endif
-    cpu = "generic";
-}
-#endif
-
-// Helper to figure out what features to set for the LLVM target
-// If the user specifies native (or does not specify) we default
-// using the API provided by LLVM
-static inline SmallVector<std::string,10> getTargetFeatures(std::string &cpu)
-{
-    StringMap<bool> HostFeatures;
-    if (jl_options.cpu_target && !strcmp(jl_options.cpu_target,"native")) {
-        // On earlier versions of LLVM this is empty
-        llvm::sys::getHostCPUFeatures(HostFeatures);
-    }
-
-    // Platform specific overides follow
-#if defined(_CPU_X86_64_)
-    // Require cx16 (cmpxchg16b)
-    // We need this for 128-bit atomic operations. We only need this
-    // when threading is enabled; however, to test whether this
-    // excludes important systems, we require this even when threading
-    // is disabled.
-    HostFeatures["cx16"] = true;
-#endif
-
-    // Figure out if we know the cpu_target
-    cpu = ((jl_options.cpu_target && strcmp(jl_options.cpu_target,"native")) ?
-            jl_options.cpu_target : getNativeTarget());
-#if defined(_CPU_ARM_)
-    // Figure out what we are compiling against from the C defines.
-    // This might affect ABI but is fine since
-    // 1. We define the C ABI explicitly.
-    // 2. This does not change when running the same binary on different
-    //    machines.
-    // This shouldn't affect making generic binaries since that requires a
-    // generic C -march anyway.
-    HostFeatures["vfp2"] = true;
-
-    // Arch version
-#if __ARM_ARCH >= 8
-#  if defined(__ARM_ARCH_PROFILE) && __ARM_ARCH_PROFILE == 'A'
-    HostFeatures["armv8-a"] = true;
-#  else
-    HostFeatures["v8"] = true;
-#  endif
-#elif __ARM_ARCH >= 7
-    // v7 + aclass emits slightly different code than armv7-a
-    // In particular LLVM does not use the armv7-a instruction for barrier
-    // with v7 + aclass.
-#  if defined(__ARM_ARCH_PROFILE) && __ARM_ARCH_PROFILE == 'A'
-    HostFeatures["armv7-a"] = true;
-#  elif defined(__ARM_ARCH_PROFILE) && __ARM_ARCH_PROFILE == 'R'
-    HostFeatures["armv7-r"] = true;
-#  elif defined(__ARM_ARCH_PROFILE) && __ARM_ARCH_PROFILE == 'M'
-    // Thumb
-    HostFeatures["armv7-m"] = true;
-#  else
-    HostFeatures["v7"] = true;
-#  endif
-#else
-    // minimum requirement
-    HostFeatures["v6"] = true;
-#endif
-
-    // ARM profile
-    // Only do this on ARM and not AArch64 since LLVM aarch64 backend
-    // doesn't support setting profiles.
-    // AFAIK there's currently no 64bit R and M profile either
-    // (v8r and v8m are both 32bit)
-#if defined(__ARM_ARCH_PROFILE)
-#  if __ARM_ARCH_PROFILE == 'A'
-    HostFeatures["aclass"] = true;
-#  elif __ARM_ARCH_PROFILE == 'R'
-    HostFeatures["rclass"] = true;
-#  elif __ARM_ARCH_PROFILE == 'M'
-    // Thumb
-    HostFeatures["mclass"] = true;
-#  endif
-#endif
-#endif // _CPU_ARM_
-
-    // On ARM and AArch64, allow using cpu_target to specify a CPU architecture
-    // which is specified in the feature set in LLVM.
-#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
-    // Supported ARM arch names on LLVM 3.8:
-    //   armv6, armv6-m, armv6j, armv6k, armv6kz, armv6s-m, armv6t2,
-    //   armv7, armv7-a, armv7-m, armv7-r, armv7e-m, armv7k, armv7s,
-    //   armv8, armv8-a, armv8.1-a, armv8.2-a
-    // Additional ARM arch names on LLVM 3.9:
-    //   armv8-m.base, armv8-m.main
-    //
-    // Supported AArch64 arch names on LLVM 3.8:
-    //   armv8.1a, armv8.2a
-    checkARMArchFeature(cpu, HostFeatures);
-#endif
-
-    SmallVector<std::string,10> attr;
-    for (auto it = HostFeatures.begin(); it != HostFeatures.end(); it++) {
-        if (it->getValue()) {
-            attr.append(1, it->getKey().str());
-        }
-    }
-    // Explicitly disabled features need to be added at the end so that
-    // they are not reenabled by other features that implies them by default.
-    for (auto it = HostFeatures.begin(); it != HostFeatures.end(); it++) {
-        if (!it->getValue()) {
-            attr.append(1, std::string("-") + it->getKey().str());
-        }
-    }
-    return attr;
-}
-
 extern "C" void *jl_init_llvm(void)
 {
     const char *const argv_tailmerge[] = {"", "-enable-tail-merge=0"}; // NOO TOUCHIE; NO TOUCH! See #922
@@ -6834,8 +6667,10 @@ extern "C" void *jl_init_llvm(void)
         // Generate simpler code for JIT
         .setRelocationModel(Reloc::Static)
 #ifdef _P64
+        // Make sure we are using the large code model on 64bit
+        // Let LLVM pick a default suitable for jitting on 32bit
         .setCodeModel(CodeModel::Large)
-#else
+#elif JL_LLVM_VERSION < 60000
         .setCodeModel(CodeModel::JITDefault)
 #endif
 #ifdef DISABLE_OPT
@@ -6848,8 +6683,25 @@ extern "C" void *jl_init_llvm(void)
 #if defined(FORCE_ELF)
     TheTriple.setObjectFormat(Triple::ELF);
 #endif
-    std::string TheCPU;
-    SmallVector<std::string, 10> targetFeatures = getTargetFeatures(TheCPU);
+    uint32_t target_flags = 0;
+    auto target = jl_get_llvm_target(imaging_mode, target_flags);
+    auto &TheCPU = target.first;
+    SmallVector<std::string, 10> targetFeatures(target.second.begin(), target.second.end());
+    if (jl_processor_print_help || (target_flags & JL_TARGET_UNKNOWN_NAME)) {
+        std::string errorstr;
+        const Target *target = TargetRegistry::lookupTarget("", TheTriple, errorstr);
+        assert(target);
+        std::unique_ptr<MCSubtargetInfo> MSTI(
+            target->createMCSubtargetInfo(TheTriple.str(), "", ""));
+        if (!MSTI->isCPUStringValid(TheCPU))
+            jl_errorf("Invalid CPU name %s.", TheCPU.c_str());
+        if (jl_processor_print_help) {
+            // This is the only way I can find to print the help message once.
+            // It'll be nice if we can iterate through the features and print our own help
+            // message...
+            MSTI->setDefaultFeatures("help", "");
+        }
+    }
     jl_TargetMachine = eb.selectTarget(
             TheTriple,
             "",

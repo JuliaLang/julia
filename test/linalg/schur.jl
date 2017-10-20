@@ -42,6 +42,8 @@ aimg  = randn(n,n)/2
         @test vecs*sch*vecs' ≈ asym
         sch, vecs, vals = schur(Symmetric(a+a.'))
         @test vecs*sch*vecs' ≈ a + a.'
+        sch, vecs, vals = schur(Tridiagonal(a+a.'))
+        @test vecs*sch*vecs' ≈ Tridiagonal(a + a.')
 
         tstring = sprint(show,f[:T])
         zstring = sprint(show,f[:Z])

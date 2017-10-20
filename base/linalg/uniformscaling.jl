@@ -110,7 +110,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
 end
 
 function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
-    ULnew = similar(full(UL), promote_type(eltype(J), eltype(UL)))
+    ULnew = similar(parent(UL), promote_type(eltype(J), eltype(UL)))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n
@@ -126,7 +126,7 @@ function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
     return UpperTriangular(ULnew)
 end
 function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
-    ULnew = similar(full(UL), promote_type(eltype(J), eltype(UL)))
+    ULnew = similar(parent(UL), promote_type(eltype(J), eltype(UL)))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n
@@ -220,7 +220,7 @@ function isapprox(J::UniformScaling,A::AbstractMatrix;
                   rtol::Real=rtoldefault(promote_leaf_eltypes(A),eltype(J),atol),
                   nans::Bool=false, norm::Function=vecnorm)
     n = checksquare(A)
-    Jnorm = norm === vecnorm ? abs(J.λ)*sqrt(n) : (norm === Base.norm ? abs(J.λ) : norm(diagm(fill(J.λ, n))))
+    Jnorm = norm === vecnorm ? abs(J.λ)*sqrt(n) : (norm === Base.norm ? abs(J.λ) : norm(Diagonal(fill(J.λ, n))))
     return norm(A - J) <= max(atol, rtol*max(norm(A), Jnorm))
 end
 isapprox(A::AbstractMatrix,J::UniformScaling;kwargs...) = isapprox(J,A;kwargs...)

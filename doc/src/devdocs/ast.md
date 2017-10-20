@@ -189,6 +189,8 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
       * `:pop_loc`: returns to the source location before the matching `:push_loc`.
 
+          * `args[2]::Int` (optional) specifies the number of `push_loc` to pop
+
 
 ### Method
 

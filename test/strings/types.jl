@@ -25,25 +25,53 @@ for i1 = 1:length(u8str2)
     end
 end
 
+# tests that SubString of a single multibyte `Char` string, like "∀" which takes 3 bytes
+# gives the same result as `getindex` (except that it is a veiw not a copy)
+for idx in 0:1
+    @test SubString("∀", 1, idx) == "∀"[1:idx]
+end
+
+# Substring provided with invalid end index throws BoundsError
+@test_throws BoundsError SubString("∀", 1, 2)
+@test_throws BoundsError SubString("∀", 1, 3)
+@test_throws BoundsError SubString("∀", 1, 4)
+
+# Substring provided with invalid start index throws BoundsError
+@test_throws BoundsError SubString("∀∀", 2:4)
+
+# tests for SubString of more than one multibyte `Char` string
+# we are consistent with `getindex` for `String`
+for idx in [0, 1, 4]
+    @test SubString("∀∀", 1, idx) == "∀∀"[1:idx]
+    @test SubString("∀∀", 4, idx) == "∀∀"[4:idx]
+end
+
+# second index beyond endof("∀∀")
+for idx in 5:8
+    @test_throws BoundsError SubString("∀∀", 1, idx)
+    @test_throws BoundsError SubString("∀∀", 4, idx)
+end
+
 let str="tempus fugit"              #length(str)==12
-    ss=SubString(str,1,length(str)) #match source string
+    ss=SubString(str,1,endof(str)) #match source string
+    @test length(ss)==length(str)
+
+    ss=SubString(str,1:endof(str))
     @test length(ss)==length(str)
 
     ss=SubString(str,1,0)    #empty SubString
     @test length(ss)==0
 
-    ss=SubString(str,14,20)  #start indexed beyond source string length
+    ss=SubString(str,1:0)
     @test length(ss)==0
 
-    ss=SubString(str,10,16)  #end indexed beyond source string length
-    @test length(ss)==3
+    @test_throws BoundsError SubString(str,14,20)  #start indexing beyond source string length
+    @test_throws BoundsError SubString(str,10,16)  #end indexing beyond source string length
 
-    str2=""
-    ss=SubString(str2,1,4)  #empty source string
-    @test length(ss)==0
-
-    ss=SubString(str2,1,1)  #empty source string, identical start and end index
-    @test length(ss)==0
+    @test_throws BoundsError SubString("", 1, 4)  #empty source string
+    @test_throws BoundsError SubString("", 1, 1)  #empty source string, identical start and end index
+    @test_throws BoundsError SubString("", 10, 12)
+    @test SubString("",12,10) == ""
 end
 
 @test SubString("foobar", big(1), big(3)) == "foo"
@@ -55,7 +83,7 @@ let str = "aa\u2200\u2222bb"
     write(b, u)
     @test String(take!(b)) == "\u2200\u2222"
 
-    @test_throws ArgumentError SubString(str, 4, 5)
+    @test_throws BoundsError SubString(str, 4, 5)
     @test_throws BoundsError next(u, 0)
     @test_throws BoundsError next(u, 7)
     @test_throws BoundsError getindex(u, 0)
@@ -68,15 +96,8 @@ let str = "aa\u2200\u2222bb"
 end
 
 let str = "føøbar"
+    @test_throws BoundsError SubString(str, 10, 10)
     u = SubString(str, 4, 3)
-    @test length(u) == 0
-    b = IOBuffer()
-    write(b, u)
-    @test String(take!(b)) == ""
-end
-
-let str = "føøbar"
-    u = SubString(str, 10, 10)
     @test length(u) == 0
     b = IOBuffer()
     write(b, u)
@@ -89,6 +110,22 @@ let str = "Hello, world!"
     @test rsearch(u, "World") == 0:-1
     @test rsearch(u, 'z') == 0
     @test rsearch(u, "ll") == 3:4
+end
+
+# SubString created from SubString
+let str = "Hello, world!"
+    u = SubString(str, 2, 5)
+    for idx in 1:4
+        @test SubString(u, 2, idx) == u[2:idx]
+        @test SubString(u, 2:idx) == u[2:idx]
+    end
+    @test_throws BoundsError SubString(u, 1, 10)
+    @test_throws BoundsError SubString(u, 1:10)
+    @test_throws BoundsError SubString(u, 20:30)
+    @test SubString(u, 20:15) == ""
+    @test_throws BoundsError SubString(u, -1:10)
+    @test SubString(u, -1, -10) == ""
+    @test SubString(SubString("123", 1, 2), -10, -20) == ""
 end
 
 # sizeof
@@ -115,8 +152,8 @@ let ss, s="lorem ipsum",
                SubString(s,1,6)=>"lorem ",
                SubString(s,1,0)=>"",
                SubString(s,2,4)=>"ore",
-               SubString(s,2,16)=>"orem ipsum",
-               SubString(s,12,14)=>""
+               SubString(s,2,11)=>"orem ipsum",
+               SubString(s,15,14)=>""
                )
     for (ss,s) in sdict
         local ss
@@ -140,9 +177,18 @@ end #let
 
 #for isvalid(SubString{String})
 let s = "Σx + βz - 2"
-    for i in -1:(length(s) + 2)
-        local ss = SubString(s, 1, i)
-        @test isvalid(ss, i) == isvalid(s, i)
+    for i in -1:(length(s)+2)
+        if isvalid(s, i)
+            ss=SubString(s,1,i)
+            # make sure isvalid gives equivalent results for SubString and String
+            @test isvalid(ss,i)==isvalid(s,i)
+        else
+            if i > 0
+                @test_throws BoundsError SubString(s,1,i)
+            else
+                @test SubString(s,1,i) == ""
+            end
+        end
     end
 end
 

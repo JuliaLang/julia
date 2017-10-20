@@ -739,13 +739,13 @@ of the [`eltype`](@ref) of `A`.
 julia> rank(eye(3))
 3
 
-julia> rank(diagm([1, 0, 2]))
+julia> rank(diagm(0 => [1, 0, 2]))
 2
 
-julia> rank(diagm([1, 0.001, 2]), 0.1)
+julia> rank(diagm(0 => [1, 0.001, 2]), 0.1)
 2
 
-julia> rank(diagm([1, 0.001, 2]), 0.00001)
+julia> rank(diagm(0 => [1, 0.001, 2]), 0.00001)
 3
 ```
 """
@@ -1437,18 +1437,18 @@ julia> a = [1,2,4];
 
 julia> b = normalize(a)
 3-element Array{Float64,1}:
- 0.218218
- 0.436436
- 0.872872
+ 0.2182178902359924
+ 0.4364357804719848
+ 0.8728715609439696
 
 julia> norm(b)
 1.0
 
 julia> c = normalize(a, 1)
 3-element Array{Float64,1}:
- 0.142857
- 0.285714
- 0.571429
+ 0.14285714285714285
+ 0.2857142857142857
+ 0.5714285714285714
 
 julia> norm(c, 1)
 1.0

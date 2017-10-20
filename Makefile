@@ -52,7 +52,7 @@ $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia,$(link))))
 
 build_defaultpkgdir = $(build_datarootdir)/julia/site/$(shell echo $(VERSDIR))
-$(eval $(call symlink_target,stdlib,$(build_datarootdir)/julia/site,$(shell echo $(VERSDIR))))
+$(eval $(call symlink_target,$(JULIAHOME)/stdlib,$(build_datarootdir)/julia/site,$(shell echo $(VERSDIR))))
 
 julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
@@ -102,19 +102,13 @@ julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 julia-inference : julia-base julia-ui-$(JULIA_BUILD_MODE) $(build_prefix)/.examples
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/inference.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
-ifneq ($(CPUID_SPECIFIC_BINARIES), 0)
-CPUID_TAG = _$(call exec,$(JULIA_EXECUTABLE) --cpuid)
-else
-CPUID_TAG =
-endif
-
 julia-sysimg-release : julia-inference julia-ui-release
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys$(CPUID_TAG).$(SHLIB_EXT) JULIA_BUILD_MODE=release
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys.$(SHLIB_EXT) JULIA_BUILD_MODE=release
 
 julia-sysimg-debug : julia-inference julia-ui-debug
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug$(CPUID_TAG).$(SHLIB_EXT) JULIA_BUILD_MODE=debug
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) JULIA_BUILD_MODE=debug
 
-julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest
+julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest julia-base-cache
 
 debug release : % : julia-%
 
@@ -229,17 +223,14 @@ $$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIA
 	fi )
 .SECONDARY: $(build_private_libdir)/sys$1.o
 endef
-ifneq ($(CPUID_SPECIFIC_BINARIES),0)
-$(eval $(call sysimg_builder,_%,-O3,$(JULIA_EXECUTABLE_release)))
-$(eval $(call sysimg_builder,-debug_%,-O0,$(JULIA_EXECUTABLE_debug)))
-else
 $(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
 $(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
-endif
 
 $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_depsbindir)
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
 
+julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir)/julia
+	@$(call exec,$(JULIA_EXECUTABLE) $(call cygpath_w,$(JULIAHOME)/etc/write_base_cache.jl) $(call cygpath_w,$(build_datarootdir)/julia/base.cache))
 
 # public libraries, that are installed in $(prefix)/lib
 JL_LIBS := julia julia-debug
@@ -585,15 +576,15 @@ endif
 endif
 ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920.exe && \
-	7z x -y 7z920.exe 7z.exe 7z.dll && \
+	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z1604.exe && \
+	7z x -y 7z1604.exe 7z.exe 7z.dll && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_Leap_42.2 \
 		"mingw32-libexpat1 mingw32-zlib1" && \
 	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll .
 else ifeq ($(ARCH),x86_64)
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) 7z920-x64.msi http://downloads.sourceforge.net/sevenzip/7z920-x64.msi && \
-	7z x -y 7z920-x64.msi _7z.exe _7z.dll && \
+	$(JLDOWNLOAD) 7z1604-x64.msi http://downloads.sourceforge.net/sevenzip/7z1604-x64.msi && \
+	7z x -y 7z1604-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_Leap_42.2 \
@@ -603,7 +594,7 @@ else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
 	cd $(JULIAHOME)/dist-extras && \
-	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
+	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z1604-extra.7z && \
 	$(JLDOWNLOAD) https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/unsis/nsis-2.46.5-Unicode-setup.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \

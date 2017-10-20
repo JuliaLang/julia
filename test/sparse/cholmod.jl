@@ -564,7 +564,7 @@ Asp = As[p,p]
 LDp = sparse(ldltfact(Asp, perm=[1,2,3])[:LD])
 # LDp = sparse(Fs[:LD])
 Lp, dp = Base.SparseArrays.CHOLMOD.getLd!(copy(LDp))
-Dp = spdiagm(dp)
+Dp = sparse(Diagonal(dp))
 @test Fs\b ≈ Af\b
 @test Fs[:UP]\(Fs[:PtLD]\b) ≈ Af\b
 @test Fs[:DUP]\(Fs[:PtL]\b) ≈ Af\b
@@ -643,9 +643,9 @@ Fnew = deserialize(b)
 
 # test \ for Factor and StridedVecOrMat
 let x = rand(5),
-    A = cholfact(sparse(diagm(x.\1)))
+    A = cholfact(sparse(Diagonal(x.\1)))
     @test A\view(ones(10),1:2:10) ≈ x
-    @test A\view(eye(5,5),:,:) ≈ diagm(x)
+    @test A\view(eye(5,5),:,:) ≈ Matrix(Diagonal(x))
 end
 
 # Real factorization and complex rhs

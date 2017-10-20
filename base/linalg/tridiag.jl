@@ -237,16 +237,16 @@ returns the specific corresponding eigenvectors.
 # Examples
 ```jldoctest
 julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
-3×3 SymTridiagonal{Float64}:
+3×3 SymTridiagonal{Float64,Array{Float64,1}}:
  1.0  2.0   ⋅
  2.0  2.0  3.0
   ⋅   3.0  1.0
 
 julia> eigvals(A)
 3-element Array{Float64,1}:
- -2.14005
-  1.0
-  5.14005
+ -2.1400549446402604
+  1.0000000000000002
+  5.140054944640259
 
 julia> eigvecs(A)
 3×3 Array{Float64,2}:
@@ -256,9 +256,9 @@ julia> eigvecs(A)
 
 julia> eigvecs(A, [1.])
 3×1 Array{Float64,2}:
-  0.83205
-  4.26351e-17
- -0.5547
+  0.8320502943378438
+  4.263514128092366e-17
+ -0.5547001962252291
 ```
 """
 eigvecs(A::SymTridiagonal{<:BlasFloat}, eigvals::Vector{<:Real}) = LAPACK.stein!(A.dv, A.ev, eigvals)

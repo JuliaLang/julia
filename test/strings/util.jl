@@ -230,7 +230,31 @@ end
 
 @testset "chomp/chop" begin
     @test chomp("foo\n") == "foo"
+    @test chomp("fo∀\n") == "fo∀"
+    @test chomp("foo\r\n") == "foo"
+    @test chomp("fo∀\r\n") == "fo∀"
+    @test chomp("fo∀") == "fo∀"
     @test chop("fooε") == "foo"
+    @test chop("foεo") == "foε"
+    @test chop("∃∃∃∃") == "∃∃∃"
+    @test chop("∀ϵ∃Δ", 0, 0) == "∀ϵ∃Δ"
+    @test chop("∀ϵ∃Δ", 0, 1) == "∀ϵ∃"
+    @test chop("∀ϵ∃Δ", 0, 2) == "∀ϵ"
+    @test chop("∀ϵ∃Δ", 0, 3) == "∀"
+    @test chop("∀ϵ∃Δ", 0, 4) == ""
+    @test chop("∀ϵ∃Δ", 0, 5) == ""
+    @test chop("∀ϵ∃Δ", 1, 0) == "ϵ∃Δ"
+    @test chop("∀ϵ∃Δ", 2, 0) == "∃Δ"
+    @test chop("∀ϵ∃Δ", 3, 0) == "Δ"
+    @test chop("∀ϵ∃Δ", 4, 0) == ""
+    @test chop("∀ϵ∃Δ", 5, 0) == ""
+    @test chop("∀ϵ∃Δ", 1, 1) == "ϵ∃"
+    @test chop("∀ϵ∃Δ", 2, 2) == ""
+    @test chop("∀ϵ∃Δ", 3, 3) == ""
+    @test_throws ArgumentError chop("∀ϵ∃Δ", -3, 3)
+    @test_throws ArgumentError chop("∀ϵ∃Δ", 3, -3)
+    @test_throws ArgumentError chop("∀ϵ∃Δ", -3, -3)
+
     @test isa(chomp("foo"), SubString)
     @test isa(chop("foo"), SubString)
 end
