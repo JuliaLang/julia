@@ -301,7 +301,7 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         end
     end
     # Test zero-dimensional accesses
-    @test A[1] == B[1] == 1 
+    @test A[1] == B[1] == 1
     # Test multidimensional scalar indexed assignment
     C = T(Int, shape)
     D1 = T(Int, shape)
