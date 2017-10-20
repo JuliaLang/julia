@@ -301,7 +301,7 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         end
     end
     # Test zero-dimensional accesses
-    @test A[] == B[] == A[1] == B[1] == 1
+    @test A[1] == B[1] == 1 
     # Test multidimensional scalar indexed assignment
     C = T(Int, shape)
     D1 = T(Int, shape)
@@ -361,9 +361,17 @@ function test_scalar_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
     end
     @test C == B == A
     # Test zero-dimensional setindex
-    A[] = 0; B[] = 0
-    @test A[] == B[] == 0
-    @test A == B
+    if length(A) == 1
+        A[] = 0; B[] = 0
+        @test A[] == B[] == 0
+        @test A == B
+    else
+        # TODO: Re-enable after PLI deprecation
+        # @test_throws BoundsError A[] = 0
+        # @test_throws BoundsError B[] = 0
+        # @test_throws BoundsError A[]
+        # @test_throws BoundsError B[]
+    end
 end
 
 function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where T
@@ -489,10 +497,10 @@ function test_getindex_internals(::Type{T}, shape, ::Type{TestAbstractArray}) wh
     A = reshape(collect(1:N), shape)
     B = T(A)
 
-    @test getindex(A) == 1
-    @test getindex(B) == 1
-    @test Base.unsafe_getindex(A) == 1
-    @test Base.unsafe_getindex(B) == 1
+    @test getindex(A, 1) == 1
+    @test getindex(B, 1) == 1
+    @test Base.unsafe_getindex(A, 1) == 1
+    @test Base.unsafe_getindex(B, 1) == 1
 end
 
 function test_getindex_internals(::Type{TestAbstractArray})
@@ -509,8 +517,8 @@ function test_setindex!_internals(::Type{T}, shape, ::Type{TestAbstractArray}) w
     A = reshape(collect(1:N), shape)
     B = T(A)
 
-    Base.unsafe_setindex!(B, 1)
-    @test B[1] == 1
+    Base.unsafe_setindex!(B, 2, 1)
+    @test B[1] == 2
 end
 
 function test_setindex!_internals(::Type{TestAbstractArray})

@@ -206,9 +206,16 @@ timesofar("constructors")
 @testset "Indexing" begin
     @testset "0d for size $sz" for (sz,T) in allsizes
         b1 = rand!(falses(sz...))
-        @check_bit_operation getindex(b1)         Bool
-        @check_bit_operation setindex!(b1, true)  T
-        @check_bit_operation setindex!(b1, false) T
+        if length(b1) == 1
+            @check_bit_operation getindex(b1)         Bool
+            @check_bit_operation setindex!(b1, true)  T
+            @check_bit_operation setindex!(b1, false) T
+        else
+            # TODO: Re-enable after PLI deprecation is removed
+            # @test_throws getindex(b1)
+            # @test_throws setindex!(b1, true)
+            # @test_throws setindex!(b1, false)
+        end
     end
 
     @testset "linear for size $sz" for (sz,T) in allsizes[2:end]
