@@ -384,6 +384,10 @@ end
 
 @test parse("1 == 2|>3") == Expr(:call, :(==), 1, Expr(:call, :(|>), 2, 3))
 
+# issue #24153
+@test parse("a|>b|>c|>d") == parse("((a|>b)|>c)|>d")
+@test parse("a<|b<|c<|d") == parse("a<|(b<|(c<|d))")
+
 # issue #12501 and pr #12502
 parse("""
       baremodule A

@@ -360,7 +360,9 @@ Julia applies the following order and associativity of operations, from highest 
 | Multiplication | `* / % & \`                                                                                       | Left[^2]                    |
 | Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
 | Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                    |
-| Syntax         | `: ..` followed by `\|>`                                                                          | Left                       |
+| Syntax         | `: ..`                                                                                            | Left                       |
+| Syntax         | `\|>`                                                                                             | Left                       |
+| Syntax         | `<\|`                                                                                             | Right                      |
 | Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
 | Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
 | Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
