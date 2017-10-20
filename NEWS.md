@@ -352,6 +352,9 @@ Deprecated or removed
     Instead, reshape the array or add trailing indices so the dimensionality and number of indices
     match ([#14770], [#23628]).
 
+  * Using Bool values directly as indices is now deprecated and will be an error in the future. Convert
+    them to `Int` before indexing if you intend to access index `1` for `true` and `0` for `false`.
+
   * `writecsv(io, a; opts...)` has been deprecated in favor of
     `writedlm(io, a, ','; opts...)` ([#23529]).
 

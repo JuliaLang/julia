@@ -182,6 +182,8 @@ indexing behaviors. This must return either an `Int` or an `AbstractArray` of
 `Int`s.
 """
 to_index(i::Integer) = convert(Int,i)::Int
+# TODO: Enable this new definition after the deprecations introduced in 0.7 are removed
+# to_index(i::Bool) = throw(ArgumentError("invalid index: $i"))
 to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
 to_index(I::AbstractArray) = I
 to_index(I::AbstractArray{<:Union{AbstractArray, Colon}}) = throw(ArgumentError("invalid index: $I"))

@@ -2241,3 +2241,9 @@ end
     @test_throws BoundsError zeros(2,3,0)[2,3]
     @test_throws BoundsError checkbounds(zeros(2,3,0), 2, 3)
 end
+
+# TODO: Enable this testset after the deprecations introduced in 0.7 are removed
+# @testset "indexing by Bool values" begin
+#     @test_throws ArgumentError zeros(2)[false]
+#     @test_throws ArgumentError zeros(2)[true]
+# end
