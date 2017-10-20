@@ -282,3 +282,13 @@ let
         @test read(io, Char) == char
     end
 end
+
+let
+    # Test constructor with a generic type argument.
+    io = IOBuffer(Int16(10))
+    @test io isa IOBuffer
+    io = IOBuffer(Int32(10))
+    @test io isa IOBuffer
+    io = IOBuffer(Int64(10))
+    @test io isa IOBuffer
+end

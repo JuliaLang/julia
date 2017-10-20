@@ -15,14 +15,14 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     mark::Int # reset mark location for ptr (or <0 for no mark)
 
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
-                                 maxsize::Int) where T<:AbstractVector{UInt8}
+                                maxsize::Integer) where T<:AbstractVector{UInt8}
         new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
     end
 end
 const IOBuffer = GenericIOBuffer{Vector{UInt8}}
 
 function GenericIOBuffer(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
-                          maxsize::Int) where T<:AbstractVector{UInt8}
+                         maxsize::Integer) where T<:AbstractVector{UInt8}
     GenericIOBuffer{T}(data, readable, writable, seekable, append, maxsize)
 end
 
@@ -39,7 +39,7 @@ readable/writable arguments are given, they restrict whether or not the buffer m
 from or written to respectively. The last argument optionally specifies a size beyond which
 the buffer may not be grown.
 """
-IOBuffer(data::AbstractVector{UInt8}, readable::Bool=true, writable::Bool=false, maxsize::Int=typemax(Int)) =
+IOBuffer(data::AbstractVector{UInt8}, readable::Bool=true, writable::Bool=false, maxsize::Integer=typemax(Int)) =
     GenericIOBuffer(data, readable, writable, true, false, maxsize)
 function IOBuffer(readable::Bool, writable::Bool)
     b = IOBuffer(StringVector(32), readable, writable)
@@ -56,16 +56,16 @@ Create an in-memory I/O stream.
 IOBuffer() = IOBuffer(true, true)
 
 """
-    IOBuffer(size::Int)
+    IOBuffer(size::Integer)
 
 Create a fixed size IOBuffer. The buffer will not grow dynamically.
 """
-IOBuffer(maxsize::Int) = (x=IOBuffer(StringVector(maxsize), true, true, maxsize); x.size=0; x)
+IOBuffer(maxsize::Integer) = (x=IOBuffer(StringVector(maxsize), true, true, maxsize); x.size=0; x)
 
 # PipeBuffers behave like Unix Pipes. They are typically readable and writable, they act appendable, and are not seekable.
 
 """
-    PipeBuffer(data::Vector{UInt8}=UInt8[],[maxsize::Int=typemax(Int)])
+    PipeBuffer(data::Vector{UInt8}=UInt8[],[maxsize::Integer=typemax(Int)])
 
 An [`IOBuffer`](@ref) that allows reading and performs writes by appending.
 Seeking and truncating are not supported.
@@ -75,7 +75,7 @@ optionally specifying a size beyond which the underlying `Array` may not be grow
 """
 PipeBuffer(data::Vector{UInt8}=UInt8[], maxsize::Int=typemax(Int)) =
     GenericIOBuffer(data,true,true,false,true,maxsize)
-PipeBuffer(maxsize::Int) = (x = PipeBuffer(StringVector(maxsize),maxsize); x.size=0; x)
+PipeBuffer(maxsize::Integer) = (x = PipeBuffer(StringVector(maxsize),maxsize); x.size=0; x)
 
 function copy(b::GenericIOBuffer)
     ret = typeof(b)(b.writable ? copy(b.data) : b.data,
