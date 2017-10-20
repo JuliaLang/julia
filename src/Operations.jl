@@ -6,12 +6,37 @@ using Base: Pkg
 using Pkg3.TerminalMenus
 using Pkg3.Types
 import Pkg3: depots
-using SHA: sha224
 
+const SlugInt = UInt32 # max p = 4
 const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+const nchars = SlugInt(length(chars))
+const max_p = floor(Int, log(nchars, typemax(SlugInt) >>> 8))
 
-version_slug(bytes::Vector{UInt8}) = String([chars[mod1(b,length(chars))] for b in bytes])
-version_slug(uuid::UUID, sha1::SHA1) = version_slug(sha224("$uuid/$sha1")[1:16])
+function slug(x::SlugInt, p::Int)
+    1 ≤ p ≤ max_p || # otherwise previous steps are wrong
+        error("invalid slug size: $p (need 1 ≤ p ≤ $max_p)")
+    return sprint() do io
+        for i = 1:p
+            x, d = divrem(x, nchars)
+            write(io, chars[1+d])
+        end
+    end
+end
+slug(x::Integer, p::Int) = slug(SlugInt(x), p)
+
+function slug(bytes::Vector{UInt8}, p::Int)
+    n = nchars^p
+    x = zero(SlugInt)
+    for (i, b) in enumerate(bytes)
+        x = (x + b*powermod(2, 8(i-1), n)) % n
+    end
+    slug(x, p)
+end
+
+slug(uuid::UUID, p::Int=4) = slug(uuid.value % nchars^p, p)
+slug(sha1::SHA1, p::Int=4) = slug(sha1.bytes, p)
+
+version_slug(uuid::UUID, sha1::SHA1) = joinpath(slug(uuid), slug(sha1))
 
 function find_installed(uuid::UUID, sha1::SHA1)
     slug = version_slug(uuid, sha1)
@@ -346,7 +371,7 @@ function build_versions(env::EnvCache, uuids::Vector{UUID})
     withenv("JULIA_ENV" => env.project_file) do
         LOAD_PATH = filter(x -> x isa AbstractString, Base.LOAD_PATH)
         for (uuid, name, hash, build_file) in builds
-            Base.info("Building [$(string(uuid)[1:8])] $name $(string(hash)[1:16])...")
+            Base.info("Building $name [$(string(hash)[1:16])]...")
             log_file = splitext(build_file)[1] * ".log"
             code = """
                 empty!(Base.LOAD_PATH)
@@ -367,7 +392,7 @@ function build_versions(env::EnvCache, uuids::Vector{UUID})
             open(log_file, "w") do log
                 success(pipeline(cmd, stdout=log, stderr=log))
             end ? Base.rm(log_file, force=true) :
-            warn("Error building `$name`!\nBuild log left at $(repr(log_file))")
+            warn("Error building `$name`!\nBuild log: $log_file")
         end
     end
 end
