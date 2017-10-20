@@ -138,9 +138,9 @@ end
 @test split(SubString("x", 2, 0), "y") == AbstractString[""]
 
 # issue #6772
-@test float(SubString("10",1,1)) === 1.0
-@test float(SubString("1 0",1,1)) === 1.0
-@test parse(Float32,SubString("10",1,1)) === 1.0f0
+@test parse(Float64, SubString("10",1,1)) === 1.0
+@test parse(Float64, SubString("1 0",1,1)) === 1.0
+@test parse(Float32, SubString("10",1,1)) === 1.0f0
 
 # issue #5870
 @test !ismatch(Regex("aa"), SubString("",1,0))

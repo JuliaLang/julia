@@ -176,7 +176,7 @@ let s = "x\u0302"
 end
 
 @testset "issue #9781" begin
-    # float(SubString) wasn't tolerant of trailing whitespace, which was different
+    # parse(Float64, SubString) wasn't tolerant of trailing whitespace, which was different
     # to "normal" strings. This also checks we aren't being too tolerant and allowing
     # any arbitrary trailing characters.
     @test parse(Float64,"1\n") == 1.0
