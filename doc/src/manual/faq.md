@@ -274,13 +274,6 @@ ERROR: DomainError with -2.0:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
-
-julia> 2^-5
-ERROR: DomainError with -5:
-Cannot raise an integer x to a negative power -5.
-Make x a float by adding a zero decimal (e.g., 2.0^-5 instead of 2^-5), or write 1/x^5, float(x)^-5, or (x//1)^-5
-Stacktrace:
-[...]
 ```
 
 This behavior is an inconvenient consequence of the requirement for type-stability.  In the case
@@ -296,9 +289,6 @@ your willingness to accept an *output type* in which the result can be represent
 ```jldoctest
 julia> sqrt(-2.0+0im)
 0.0 + 1.4142135623730951im
-
-julia> 2.0^-5
-0.03125
 ```
 
 ### Why does Julia use native machine integer arithmetic?

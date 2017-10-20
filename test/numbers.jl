@@ -2944,16 +2944,19 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     @test [x,x,x].^2 == [2,2,2]
     for T in (Float16, Float32, Float64, BigFloat, Int8, Int, BigInt, Complex{Int}, Complex{Float64})
         for p in -4:4
-            if p < 0 && real(T) <: Integer
-                @test_throws DomainError eval(:($T(2)^$p))
-            else
-                v = eval(:($T(2)^$p))
-                @test 2.0^p == T(2)^p == v
+            v = eval(:($T(2)^$p))
+            @test 2.0^p == v
+            if p >= 0 || T == float(T)
+                @test v == T(2)^p
                 @test v isa T
+            else
+                @test v isa float(T)
             end
         end
     end
     @test PR20889(2)^3 == 5
+    @test [2,4,8].^-2 == [0.25, 0.0625, 0.015625]
+    @test ℯ^-2 == exp(-2) ≈ inv(ℯ^2) ≈ sqrt(ℯ^-4)
 end
 module M20889 # do we get the expected behavior without importing Base.^?
     using Test

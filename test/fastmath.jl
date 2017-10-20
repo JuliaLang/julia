@@ -208,3 +208,7 @@ end
     @fastmath a[idx...] += b[idx...]
     @test a == b
 end
+
+@testset "literal powers" begin
+    @test @fastmath(2^-2) == @fastmath(2.0^-2) == 0.25
+end
