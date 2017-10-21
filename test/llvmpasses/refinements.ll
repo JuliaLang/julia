@@ -2,7 +2,7 @@
 
 %jl_value_t = type opaque
 
-declare %jl_value_t*** @jl_get_ptls_states()
+declare %jl_value_t*** @julia.ptls_states()
 declare void @jl_safepoint()
 declare void @one_arg_boxed(%jl_value_t addrspace(10)*)
 declare %jl_value_t addrspace(10)* @jl_box_int64(i64)
@@ -10,7 +10,7 @@ declare %jl_value_t addrspace(10)* @jl_box_int64(i64)
 define void @argument_refinement(%jl_value_t addrspace(10)* %a) {
 ; CHECK-LABEL: @argument_refinement
 ; CHECK-NOT: %gcframe
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
     %casted1 = bitcast %jl_value_t addrspace(10)* %a to %jl_value_t addrspace(10)* addrspace(10)*
     %loaded1 = load %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)* addrspace(10)* %casted1, !tbaa !1
     call void @jl_safepoint()
@@ -23,7 +23,7 @@ define void @argument_refinement(%jl_value_t addrspace(10)* %a) {
 define void @heap_refinement1(i64 %a) {
 ; CHECK-LABEL: @heap_refinement1
 ; CHECK:   %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
     %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
     %casted1 = bitcast %jl_value_t addrspace(10)* %aboxed to %jl_value_t addrspace(10)* addrspace(10)*
     %loaded1 = load %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)* addrspace(10)* %casted1, !tbaa !1
@@ -39,7 +39,7 @@ define void @heap_refinement1(i64 %a) {
 define void @heap_refinement2(i64 %a) {
 ; CHECK-LABEL: @heap_refinement2
 ; CHECK:   %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
     %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
     %casted1 = bitcast %jl_value_t addrspace(10)* %aboxed to %jl_value_t addrspace(10)* addrspace(10)*
     %loaded1 = load %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)* addrspace(10)* %casted1, !tbaa !1
@@ -55,7 +55,7 @@ declare %jl_value_t addrspace(10)* @allocate_some_value()
 ; Check that the way we compute rooting is compatible with refinements
 define void @issue22770() {
 ; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %ptls = call %jl_value_t*** @julia.ptls_states()
     %y = call %jl_value_t addrspace(10)* @allocate_some_value()
     %casted1 = bitcast %jl_value_t addrspace(10)* %y to %jl_value_t addrspace(10)* addrspace(10)*
     %x = load %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)* addrspace(10)* %casted1, !tbaa !1

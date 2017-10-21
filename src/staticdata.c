@@ -159,14 +159,11 @@ static void jl_load_sysimg_so(void)
         assert(sysimg_fptrs.base);
         globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
 #ifdef JULIA_ENABLE_THREADING
-        size_t tls_getter_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
-                                                   "jl_ptls_states_getter_idx");
-        *sysimg_gvars(sysimg_gvars_base, tls_getter_idx - 1) =
-            (uintptr_t)jl_get_ptls_states_getter();
-        size_t tls_offset_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
-                                                   "jl_tls_offset_idx");
-        *sysimg_gvars(sysimg_gvars_base, tls_offset_idx - 1) =
-            (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
+        uintptr_t *tls_getter_slot = (uintptr_t*)jl_dlsym(jl_sysimg_handle,
+                                                          "jl_get_ptls_states_slot");
+        *tls_getter_slot = (uintptr_t)jl_get_ptls_states_getter();
+        size_t *tls_offset_idx = (size_t*)jl_dlsym(jl_sysimg_handle, "jl_tls_offset");
+        *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
 #endif
 
 #ifdef _OS_WINDOWS_

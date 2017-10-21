@@ -117,7 +117,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
         PM->add(createLateLowerGCFramePass());
-        PM->add(createLowerPTLSPass(imaging_mode));
+        PM->add(createLowerPTLSPass(dump_native));
         PM->add(createBarrierNoopPass());
 #endif
         PM->add(createMemCpyOptPass()); // Remove memcpy / form memset
@@ -131,7 +131,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
         PM->add(createLateLowerGCFramePass());
-        PM->add(createLowerPTLSPass(imaging_mode));
+        PM->add(createLowerPTLSPass(dump_native));
 #endif
         if (dump_native)
             PM->add(createMultiVersioningPass());
@@ -156,7 +156,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createLateLowerGCFramePass());
     // Remove dead use of ptls
     PM->add(createDeadCodeEliminationPass());
-    PM->add(createLowerPTLSPass(imaging_mode));
+    PM->add(createLowerPTLSPass(dump_native));
 #endif
 
     PM->add(createMemCpyOptPass());
@@ -257,7 +257,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump
     PM->add(createLateLowerGCFramePass());
     // Remove dead use of ptls
     PM->add(createDeadCodeEliminationPass());
-    PM->add(createLowerPTLSPass(imaging_mode));
+    PM->add(createLowerPTLSPass(dump_native));
 #endif
     PM->add(createCombineMulAddPass());
 }
@@ -975,29 +975,6 @@ void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit)
     return slot;
 }
 
-// Emit a slot in the system image to be filled at sysimg init time.
-// Returns the global var. Fill `idx` with 1-base index in the sysimg gv.
-// Use as an optimization for runtime constant addresses to have one less
-// load. (Used only by threading).
-GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
-                                    uintptr_t init, size_t &idx)
-{
-    assert(imaging_mode);
-    // This is **NOT** a external variable or a normal global variable
-    // This is a special internal global slot with a special index
-    // in the global variable table.
-    GlobalVariable *gv = new GlobalVariable(*m, typ, false,
-                                            GlobalVariable::InternalLinkage,
-                                            Constant::getNullValue(typ), name);
-    addComdat(gv);
-    // make the pointer valid for this session
-    auto p = new uintptr_t(init);
-    jl_ExecutionEngine->addGlobalMapping(gv, (void*)p);
-    jl_sysimg_gvars.push_back(gv);
-    idx = jl_sysimg_gvars.size();
-    return gv;
-}
-
 void* jl_get_globalvar(GlobalVariable *gv)
 {
     void *p = (void*)(intptr_t)jl_ExecutionEngine->getPointerToGlobalIfAvailable(gv);
@@ -1051,20 +1028,6 @@ static void jl_gen_llvm_globaldata(Module *mod, const char *sysimg_data, size_t 
                                  GlobalVariable::ExternalLinkage,
                                  ConstantInt::get(T_size, globalUnique+1),
                                  "jl_globalUnique"));
-#ifdef JULIA_ENABLE_THREADING
-    addComdat(new GlobalVariable(*mod,
-                                 T_size,
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 ConstantInt::get(T_size, jltls_states_func_idx),
-                                 "jl_ptls_states_getter_idx"));
-    addComdat(new GlobalVariable(*mod,
-                                 T_size,
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 ConstantInt::get(T_size, jltls_offset_idx),
-                                 "jl_tls_offset_idx"));
-#endif
 
     // reflect the address of the jl_RTLD_DEFAULT_handle variable
     // back to the caller, so that we can check for consistency issues

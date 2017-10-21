@@ -3,11 +3,11 @@
 attributes #1 = { returns_twice }
 declare i32 @julia.except_enter() #1
 declare void @jl_pop_handler(i32)
-declare i8**** @jl_get_ptls_states()
+declare i8**** @julia.ptls_states()
 
 define void @simple() {
 top:
-    %ptls = call i8**** @jl_get_ptls_states()
+    %ptls = call i8**** @julia.ptls_states()
 ; CHECK: call void @llvm.lifetime.start
 ; CHECK: call void @jl_enter_handler
 ; CHECK: setjmp
