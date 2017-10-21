@@ -27,6 +27,9 @@ false
 
 julia> isvalid(Char(0xd799))
 true
+
+julia> isvalid(SubString(String(UInt8[0xfe,0x80,0x80,0x80,0x80,0x80]),1,2))
+false
 ```
 """
 isvalid(value)
@@ -36,7 +39,7 @@ isvalid(value)
 
 Returns `true` if the given value is valid for that type. Types currently can
 be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt32`](@ref).
-Values for `String` can be of that type, or `Vector{UInt8}`.
+Values for `String` can be of that type, or `Vector{UInt8}`, or `SubString`.
 
 # Examples
 ```jldoctest
@@ -44,6 +47,9 @@ julia> isvalid(Char, 0xd800)
 false
 
 julia> isvalid(Char, 0xd799)
+true
+
+julia> isvalid(String, SubString("thisisvalid",1,5))
 true
 ```
 """
