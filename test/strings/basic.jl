@@ -409,7 +409,7 @@ end
     @test isvalid(String, UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]) == false
     #issue #24214 Check valid SubString
     @test isvalid(lstrip(" ghjki")) == true
-    @test isvalid(String(UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]), 1,2) == false
+    @test isvalid(SubString(String(UInt8[0xfe, 0x80, 0x80, 0x80, 0x80, 0x80]), 1,2)) == false
 end
 
 @testset "issue #11482" begin
