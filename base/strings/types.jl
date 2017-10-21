@@ -119,6 +119,23 @@ function prevind(s::SubString{String}, i::Integer)
     prevind(s.string, j+s.offset)-s.offset
 end
 
+function nextind(s::SubString{String}, i::Integer, nchar::Integer)
+    j = Int(i)
+    # if j < 1 the first valid value of j is the same as for j equal to 0
+    # and the transofrmation below is valid if j>=0
+    j < 0 && (j = 0)
+    nextind(s.string, j+s.offset, nchar)-s.offset
+end
+
+function prevind(s::SubString{String}, i::Integer, nchar::Integer)
+    e = endof(s)
+    j = Int(i)
+    # if j > endof(s) the first valid value of j is the same as for j equal to endof(s)+1
+    # and the transofrmation below is valid if j<=endof(s)+1
+    j > e && (j = e+1)
+    prevind(s.string, j+s.offset, nchar)-s.offset
+end
+
 function getindex(s::AbstractString, r::UnitRange{Int})
     checkbounds(s, r) || throw(BoundsError(s, r))
     SubString(s, first(r), last(r))
