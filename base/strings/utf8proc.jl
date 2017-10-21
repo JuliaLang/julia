@@ -18,7 +18,7 @@ export normalize_string, graphemes, is_assigned_char, textwidth, isvalid,
     isvalid(value) -> Bool
 
 Returns `true` if the given value is valid for its type, which currently can be either
-`Char` or `String`.
+`Char` or `String` or `SubString` (it is considered a valid `String` type here).
 
 # Examples
 ```jldoctest

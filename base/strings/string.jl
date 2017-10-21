@@ -179,7 +179,7 @@ byte_string_classify(s::Union{String,SubString{String},Vector{UInt8}}) =
     # 2: valid UTF-8
 
 isvalid(::Type{String}, s::Union{Vector{UInt8},String,SubString{String}}) = byte_string_classify(s) != 0
-isvalid(s::String) = isvalid(String, s)
+isvalid(s::Union{String,SubString{String}}) = isvalid(String, s)
 
 ## basic UTF-8 decoding & iteration ##
 
