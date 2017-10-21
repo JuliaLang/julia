@@ -146,7 +146,7 @@ end
 @test !ismatch(Regex("aa"), SubString("",1,0))
 @test ismatch(Regex(""), SubString("",1,0))
 
-# isvalid(), chr2ind() and ind2chr() for SubString{DirectIndexString}
+# isvalid(), chr2ind() and ind2chr() for SubString{String}
 let ss, s="lorem ipsum",
     sdict=Dict(SubString(s,1,11)=>s,
                SubString(s,1,6)=>"lorem ",

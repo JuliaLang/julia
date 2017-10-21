@@ -130,7 +130,7 @@ export
     Signed, Int, Int8, Int16, Int32, Int64, Int128,
     Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
     # string types
-    Char, DirectIndexString, AbstractString, String, IO,
+    Char, AbstractString, String, IO,
     # errors
     ErrorException, BoundsError, DivideError, DomainError, Exception,
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
@@ -274,8 +274,6 @@ struct InitError <: WrappedException
     mod::Symbol
     error
 end
-
-abstract type DirectIndexString <: AbstractString end
 
 String(s::String) = s  # no constructor yet
 

@@ -59,8 +59,6 @@ sizeof(s::SubString{String}) = s.endof == 0 ? 0 : nextind(s, s.endof) - 1
 # default implementation will work but it's slow
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
-length(s::SubString{<:DirectIndexString}) = endof(s)
-
 function length(s::SubString{String})
     return s.endof==0 ? 0 : Int(ccall(:u8_charnum, Csize_t, (Ptr{UInt8}, Csize_t),
                                       pointer(s), nextind(s, s.endof) - 1))
@@ -86,11 +84,6 @@ endof(s::SubString) = s.endof
 function isvalid(s::SubString, i::Integer)
     return (start(s) <= i <= endof(s)) && isvalid(s.string, s.offset+i)
 end
-
-isvalid(s::SubString{<:DirectIndexString}, i::Integer) = (start(s) <= i <= endof(s))
-
-ind2chr(s::SubString{<:DirectIndexString}, i::Integer) = begin checkbounds(s,i); i end
-chr2ind(s::SubString{<:DirectIndexString}, i::Integer) = begin checkbounds(s,i); i end
 
 nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
@@ -177,7 +170,6 @@ Julia
 ```
 """
 reverseind(s::AbstractString, i) = chr2ind(s, length(s) + 1 - ind2chr(reverse(s), i))
-reverseind(s::Union{DirectIndexString,SubString{DirectIndexString}}, i::Integer) = length(s) + 1 - i
 reverseind(s::RevString, i::Integer) = endof(s) - i + 1
 reverseind(s::SubString{String}, i::Integer) =
     reverseind(s.string, nextind(s.string, endof(s.string))-s.offset-s.endof+i-1) - s.offset
