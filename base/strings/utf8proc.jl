@@ -49,7 +49,7 @@ false
 julia> isvalid(Char, 0xd799)
 true
 
-julia> isvalid(String, SubString("thisisvalid",1,5))    
+julia> isvalid(String, SubString("thisisvalid",1,5))
 true
 ```
 """
