@@ -269,7 +269,7 @@
       <keyword>Eigen</keyword>
       <keyword>EmptyCallStack</keyword>
       <keyword>Enumerate</keyword>
-      <keyword>EnvHash</keyword>
+      <keyword>EnvDict</keyword>
       <keyword>Executable</keyword>
       <keyword>Expr(Node)?</keyword>
       <keyword>Factorization</keyword>

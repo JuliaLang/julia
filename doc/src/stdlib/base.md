@@ -257,7 +257,7 @@ Base.@timev
 Base.@timed
 Base.@elapsed
 Base.@allocated
-Base.EnvHash
+Base.EnvDict
 Base.ENV
 Base.Sys.isunix
 Base.Sys.isapple
