@@ -10,6 +10,12 @@ endif
 
 CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
 
+# On older Linuces (those that use OpenSSL < 1.1) we include `libpthread` explicitly.
+# It doesn't hurt to include it explicitly elsewhere, so we do so.
+ifeq ($(OS),Linux)
+CURL_LDFLAGS += -lpthread
+endif
+
 $(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://curl.haxx.se/download/curl-$(CURL_VER).tar.bz2
 
