@@ -556,6 +556,10 @@ Deprecated or removed
     `ReinterpretArray`. The three argument form of `reinterpret` that implicitly reshapes
     has been deprecated ([#23750]).
 
+  * `num2hex` and `hex2num` have been deprecated in favor of `reinterpret` combined with `parse`/`hex`
+    ([#22088])
+
+
 Command-line option changes
 ---------------------------
 
@@ -1388,6 +1392,7 @@ Command-line option changes
 [#22038]: https://github.com/JuliaLang/julia/issues/22038
 [#22062]: https://github.com/JuliaLang/julia/issues/22062
 [#22064]: https://github.com/JuliaLang/julia/issues/22064
+[#22088]: https://github.com/JuliaLang/julia/issues/22088
 [#22092]: https://github.com/JuliaLang/julia/issues/22092
 [#22182]: https://github.com/JuliaLang/julia/issues/22182
 [#22187]: https://github.com/JuliaLang/julia/issues/22187
