@@ -106,7 +106,7 @@ function nextind(s::SubString{String}, i::Integer)
     # make sure that nonnegative value is returned
     j = Int(i)
     j < 1 && return 1
-    # the transofrmation below is valid if j>=0
+    # the transformation below is valid if j>=0
     nextind(s.string, j+s.offset)-s.offset
 end
 
@@ -115,14 +115,14 @@ function prevind(s::SubString{String}, i::Integer)
     # make sure that value not greater than endof(s) is returned
     j = Int(i)
     j > e && return e
-    # the transofrmation below is valid if j<=endof(s)+1
+    # the transformation below is valid if j<=endof(s)+1
     prevind(s.string, j+s.offset)-s.offset
 end
 
 function nextind(s::SubString{String}, i::Integer, nchar::Integer)
     j = Int(i)
     # if j < 1 the first valid value of j is the same as for j equal to 0
-    # and the transofrmation below is valid if j>=0
+    # and the transformation below is valid if j>=0
     j < 0 && (j = 0)
     nextind(s.string, j+s.offset, nchar)-s.offset
 end
@@ -131,7 +131,7 @@ function prevind(s::SubString{String}, i::Integer, nchar::Integer)
     e = endof(s)
     j = Int(i)
     # if j > endof(s) the first valid value of j is the same as for j equal to endof(s)+1
-    # and the transofrmation below is valid if j<=endof(s)+1
+    # and the transformation below is valid if j<=endof(s)+1
     j > e && (j = e+1)
     prevind(s.string, j+s.offset, nchar)-s.offset
 end
