@@ -39,7 +39,7 @@ isvalid(value)
 
 Returns `true` if the given value is valid for that type. Types currently can
 be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt32`](@ref).
-Values for `String` can be of that type, or `Vector{UInt8}`, or `SubString`.
+Values for `String` can be of that type, or `Vector{UInt8}`, or `SubString{String}`.
 
 # Examples
 ```jldoctest
