@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests related to functional programming functions and styles
 
@@ -129,6 +129,11 @@ end
 let gen = ((x,y) for x in 1:10, y in 1:10 if x % 2 == 0 && y % 2 == 0),
     gen2 = Iterators.filter(x->x[1] % 2 == 0 && x[2] % 2 == 0, (x,y) for x in 1:10, y in 1:10)
     @test collect(gen) == collect(gen2)
+end
+
+# inference on vararg generator of a type (see #22907 comments)
+let f(x) = collect(Base.Generator(=>, x, x))
+    @test @inferred(f((1,2))) == [1=>1, 2=>2]
 end
 
 # generators with nested loops (#4867)

@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -36,7 +36,8 @@ int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int no
     return 0;
 }
 
-void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_method_instance_t **linfos, size_t n)
+void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *fptrs,
+                       jl_method_instance_t **linfos, size_t n)
 {
     (void)sysimage_base; (void)fptrs; (void)linfos; (void)n;
 }

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## object-oriented Regex interface ##
 
@@ -75,7 +75,7 @@ after the ending quote, to change its behaviour:
 
 For example, this regex has all three flags enabled:
 
-```julia
+```jldoctest
 julia> match(r"a+.*b+.*?d\$"ism, "Goodbye,\\nOh, angry,\\nBad world\\n")
 RegexMatch("angry,\\nBad world")
 ```
@@ -141,6 +141,26 @@ function getindex(m::RegexMatch, name::Symbol)
 end
 getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
+"""
+    ismatch(r::Regex, s::AbstractString) -> Bool
+
+Test whether a string contains a match of the given regular expression.
+
+# Examples
+```jldoctest
+julia> rx = r"a.a"
+r"a.a"
+
+julia> ismatch(rx, "aba")
+true
+
+julia> ismatch(rx, "abba")
+false
+
+julia> rx("aba")
+true
+```
+"""
 function ismatch(r::Regex, s::AbstractString, offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, String(s), offset, r.match_options,
@@ -155,6 +175,35 @@ end
 
 (r::Regex)(s) = ismatch(r, s)
 
+"""
+    match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
+
+Search for the first match of the regular expression `r` in `s` and return a `RegexMatch`
+object containing the match, or nothing if the match failed. The matching substring can be
+retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
+`m.captures` The optional `idx` argument specifies an index at which to start the search.
+
+# Examples
+```jldoctest
+julia> rx = r"a(.)a"
+r"a(.)a"
+
+julia> m = match(rx, "cabac")
+RegexMatch("aba", 1="b")
+
+julia> m.captures
+1-element Array{Union{Void, SubString{String}},1}:
+ "b"
+
+julia> m.match
+"aba"
+
+julia> match(rx, "cabac", 3) == nothing
+true
+```
+"""
+function match end
+
 function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, add_opts::UInt32=UInt32(0))
     compile(re)
     opts = re.match_options | add_opts
@@ -163,9 +212,10 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, a
     end
     ovec = re.ovec
     n = div(length(ovec),2) - 1
-    mat = SubString(str, ovec[1]+1, ovec[2])
-    cap = Union{Void,SubString{String}}[
-            ovec[2i+1] == PCRE.UNSET ? nothing : SubString(str, ovec[2i+1]+1, ovec[2i+2]) for i=1:n ]
+    mat = SubString(str, ovec[1]+1, prevind(str, ovec[2]+1))
+    cap = Union{Void,SubString{String}}[ovec[2i+1] == PCRE.UNSET ? nothing :
+                                        SubString(str, ovec[2i+1]+1,
+                                                  prevind(str, ovec[2i+2]+1)) for i=1:n]
     off = Int[ ovec[2i+1]+1 for i=1:n ]
     RegexMatch(mat, cap, ovec[1]+1, off, re)
 end
@@ -175,6 +225,29 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
     "regex matching is only available for the String type; use String(s) to convert"
 ))
 
+"""
+    matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
+
+Return a vector of the matching substrings from [`eachmatch`](@ref).
+
+
+# Examples
+```jldoctest
+julia> rx = r"a.a"
+r"a.a"
+
+julia> matchall(rx, "a1a2a3a")
+2-element Array{SubString{String},1}:
+ "a1a"
+ "a3a"
+
+julia> matchall(rx, "a1a2a3a", true)
+3-element Array{SubString{String},1}:
+ "a1a"
+ "a2a"
+ "a3a"
+```
+"""
 function matchall(re::Regex, str::String, overlap::Bool=false)
     regex = compile(re).regex
     n = sizeof(str)
@@ -251,10 +324,10 @@ function _write_capture(io, re, group)
 end
 
 function _replace(io, repl_s::SubstitutionString, str, r, re)
-    const SUB_CHAR = '\\'
-    const GROUP_CHAR = 'g'
-    const LBRACKET = '<'
-    const RBRACKET = '>'
+    SUB_CHAR = '\\'
+    GROUP_CHAR = 'g'
+    LBRACKET = '<'
+    RBRACKET = '>'
     repl = repl_s.string
     i = start(repl)
     e = endof(repl)
@@ -362,6 +435,33 @@ function eachmatch(re::Regex, str::AbstractString, ovr::Bool)
     RegexMatchIterator(re,str,ovr)
 end
 
+"""
+    eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
+
+Search for all matches of a the regular expression `r` in `s` and return a iterator over the
+matches. If overlap is `true`, the matching sequences are allowed to overlap indices in the
+original string, otherwise they must be from distinct character ranges.
+
+# Examples
+```jldoctest
+julia> rx = r"a.a"
+r"a.a"
+
+julia> m = eachmatch(rx, "a1a2a3a")
+Base.RegexMatchIterator(r"a.a", "a1a2a3a", false)
+
+julia> collect(m)
+2-element Array{RegexMatch,1}:
+ RegexMatch("a1a")
+ RegexMatch("a3a")
+
+julia> collect(eachmatch(rx, "a1a2a3a", true))
+3-element Array{RegexMatch,1}:
+ RegexMatch("a1a")
+ RegexMatch("a2a")
+ RegexMatch("a3a")
+```
+"""
 eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
 
 ## comparison ##

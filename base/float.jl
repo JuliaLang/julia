@@ -1,29 +1,31 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+const IEEEFloat = Union{Float16, Float32, Float64}
 
 ## floating point traits ##
 
 """
     Inf16
 
-Positive infinity of type `Float16`.
+Positive infinity of type [`Float16`](@ref).
 """
 const Inf16 = bitcast(Float16, 0x7c00)
 """
     NaN16
 
-A not-a-number value of type `Float16`.
+A not-a-number value of type [`Float16`](@ref).
 """
 const NaN16 = bitcast(Float16, 0x7e00)
 """
     Inf32
 
-Positive infinity of type `Float32`.
+Positive infinity of type [`Float32`](@ref).
 """
 const Inf32 = bitcast(Float32, 0x7f800000)
 """
     NaN32
 
-A not-a-number value of type `Float32`.
+A not-a-number value of type [`Float32`](@ref).
 """
 const NaN32 = bitcast(Float32, 0x7fc00000)
 const Inf64 = bitcast(Float64, 0x7ff0000000000000)
@@ -32,13 +34,13 @@ const NaN64 = bitcast(Float64, 0x7ff8000000000000)
 """
     Inf
 
-Positive infinity of type `Float64`.
+Positive infinity of type [`Float64`](@ref).
 """
 const Inf = Inf64
 """
     NaN
 
-A not-a-number value of type `Float64`.
+A not-a-number value of type [`Float64`](@ref).
 """
 const NaN = NaN64
 
@@ -64,7 +66,7 @@ for t1 in (Float32, Float64)
     end
 end
 convert(::Type{Integer}, x::Float16) = convert(Integer, Float32(x))
-convert{T<:Integer}(::Type{T}, x::Float16) = convert(T, Float32(x))
+convert(::Type{T}, x::Float16) where {T<:Integer} = convert(T, Float32(x))
 
 
 promote_rule(::Type{Float64}, ::Type{UInt128}) = Float64
@@ -134,6 +136,10 @@ end
 
 function convert(::Type{Float16}, val::Float32)
     f = reinterpret(UInt32, val)
+    if isnan(val)
+        t = 0x8000 ⊻ (0x8000 & ((f >> 0x10) % UInt16))
+        return reinterpret(Float16, t ⊻ ((f >> 0xd) % UInt16))
+    end
     i = (f >> 23) & 0x1ff + 1
     sh = shifttable[i]
     f &= 0x007fffff
@@ -182,7 +188,7 @@ function convert(::Type{Float32}, val::Float16)
                 ret = 0xff800000
             end
         else  # NaN
-            ret = 0x7fc00000 | (sign<<31)
+            ret = 0x7fc00000 | (sign<<31) | (sig<<(23-10))
         end
     else
         sign = sign << 31
@@ -197,8 +203,8 @@ end
 #   "Fast Half Float Conversion" by Jeroen van der Zijp
 #   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
 
-const basetable = Array{UInt16}(512)
-const shifttable = Array{UInt8}(512)
+const basetable = Vector{UInt16}(512)
+const shifttable = Vector{UInt8}(512)
 
 for i = 0:255
     e = i - 127
@@ -271,16 +277,28 @@ julia> float(Int)
 Float64
 ```
 """
-float{T<:Number}(::Type{T}) = typeof(float(zero(T)))
+float(::Type{T}) where {T<:Number} = typeof(float(zero(T)))
+float(::Type{T}) where {T<:AbstractFloat} = T
+
+"""
+    unsafe_trunc(T, x)
+
+`unsafe_trunc(T, x)` returns the nearest integral value of type `T` whose absolute value is
+less than or equal to `x`. If the value is not representable by `T`, an arbitrary value will
+be returned.
+"""
+function unsafe_trunc end
 
 for Ti in (Int8, Int16, Int32, Int64)
     @eval begin
+        unsafe_trunc(::Type{$Ti}, x::Float16) = unsafe_trunc($Ti, Float32(x))
         unsafe_trunc(::Type{$Ti}, x::Float32) = fptosi($Ti, x)
         unsafe_trunc(::Type{$Ti}, x::Float64) = fptosi($Ti, x)
     end
 end
 for Ti in (UInt8, UInt16, UInt32, UInt64)
     @eval begin
+        unsafe_trunc(::Type{$Ti}, x::Float16) = unsafe_trunc($Ti, Float32(x))
         unsafe_trunc(::Type{$Ti}, x::Float32) = fptoui($Ti, x)
         unsafe_trunc(::Type{$Ti}, x::Float64) = fptoui($Ti, x)
     end
@@ -314,6 +332,8 @@ function unsafe_trunc(::Type{Int128}, x::Float32)
     copysign(unsafe_trunc(UInt128,x) % Int128, x)
 end
 
+unsafe_trunc(::Type{UInt128}, x::Float16) = unsafe_trunc(UInt128, Float32(x))
+unsafe_trunc(::Type{Int128}, x::Float16) = unsafe_trunc(Int128, Float32(x))
 
 # matches convert methods
 # also determines floor, ceil, round
@@ -323,15 +343,15 @@ trunc(::Type{Unsigned}, x::Float32) = trunc(UInt,x)
 trunc(::Type{Unsigned}, x::Float64) = trunc(UInt,x)
 trunc(::Type{Integer}, x::Float32) = trunc(Int,x)
 trunc(::Type{Integer}, x::Float64) = trunc(Int,x)
-trunc{T<:Integer}(::Type{T}, x::Float16) = trunc(T, Float32(x))
+trunc(::Type{T}, x::Float16) where {T<:Integer} = trunc(T, Float32(x))
 
 # fallbacks
-floor{T<:Integer}(::Type{T}, x::AbstractFloat) = trunc(T,floor(x))
-floor{T<:Integer}(::Type{T}, x::Float16) = floor(T, Float32(x))
-ceil{ T<:Integer}(::Type{T}, x::AbstractFloat) = trunc(T,ceil(x))
-ceil{ T<:Integer}(::Type{T}, x::Float16) = ceil(T, Float32(x))
-round{T<:Integer}(::Type{T}, x::AbstractFloat) = trunc(T,round(x))
-round{T<:Integer}(::Type{T}, x::Float16) = round(T, Float32(x))
+floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,floor(x))
+floor(::Type{T}, x::Float16) where {T<:Integer} = floor(T, Float32(x))
+ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,ceil(x))
+ceil(::Type{T}, x::Float16) where {T<:Integer} = ceil(T, Float32(x))
+round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x))
+round(::Type{T}, x::Float16) where {T<:Integer} = round(T, Float32(x))
 
 trunc(x::Float64) = trunc_llvm(x)
 trunc(x::Float32) = trunc_llvm(x)
@@ -395,9 +415,9 @@ end
 rem(x::Float32, y::Float32) = rem_float(x, y)
 rem(x::Float64, y::Float64) = rem_float(x, y)
 
-cld{T<:AbstractFloat}(x::T, y::T) = -fld(-x,y)
+cld(x::T, y::T) where {T<:AbstractFloat} = -fld(-x,y)
 
-function mod{T<:AbstractFloat}(x::T, y::T)
+function mod(x::T, y::T) where T<:AbstractFloat
     r = rem(x,y)
     if r == 0
         copysign(r,y)
@@ -438,17 +458,18 @@ for op in (:<, :<=, :isless)
 end
 
 function cmp(x::AbstractFloat, y::AbstractFloat)
-    (isnan(x) || isnan(y)) && throw(DomainError())
+    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
+    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
 function cmp(x::Real, y::AbstractFloat)
-    isnan(y) && throw(DomainError())
+    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
 function cmp(x::AbstractFloat, y::Real)
-    isnan(x) && throw(DomainError())
+    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
@@ -515,7 +536,7 @@ abs(x::Float64) = abs_float(x)
 Test whether a floating point number is not a number (NaN).
 """
 isnan(x::AbstractFloat) = x != x
-isnan(x::Float16)    = reinterpret(UInt16,x)&0x7fff  > 0x7c00
+isnan(x::Float16) = reinterpret(UInt16,x)&0x7fff > 0x7c00
 isnan(x::Real) = false
 
 """
@@ -555,11 +576,18 @@ hash(x::Float64, h::UInt) = isnan(x) ? (hx_NaN ⊻ h) : hx(fptoui(UInt64, abs(x)
 hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
 hash(x::Float32, h::UInt) = hash(Float64(x), h)
 
-## precision, as defined by the effective number of bits in the mantissa ##
+"""
+    precision(num::AbstractFloat)
+
+Get the precision of a floating point number, as defined by the effective number of bits in
+the mantissa.
+"""
+function precision end
+
 precision(::Type{Float16}) = 11
 precision(::Type{Float32}) = 24
 precision(::Type{Float64}) = 53
-precision{T<:AbstractFloat}(::T) = precision(T)
+precision(::T) where {T<:AbstractFloat} = precision(T)
 
 """
     uabs(x::Integer)
@@ -570,7 +598,7 @@ signed integer, so that `abs(typemin(x)) == typemin(x) < 0`, in which case the r
 `uabs(x)` will be an unsigned integer of the same size.
 """
 uabs(x::Integer) = abs(x)
-uabs(x::Signed) = unsigned(abs(x))
+uabs(x::BitSigned) = unsigned(abs(x))
 
 
 """
@@ -579,7 +607,7 @@ uabs(x::Signed) = unsigned(abs(x))
 The result of `n` iterative applications of `nextfloat` to `x` if `n >= 0`, or `-n`
 applications of `prevfloat` if `n < 0`.
 """
-function nextfloat(f::Union{Float16,Float32,Float64}, d::Integer)
+function nextfloat(f::IEEEFloat, d::Integer)
     F = typeof(f)
     fumax = reinterpret(Unsigned, F(Inf))
     U = typeof(fumax)
@@ -644,14 +672,14 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     if $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf))
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:trunc, $Ti, x))
                     end
                 end
                 function convert(::Type{$Ti}, x::$Tf)
                     if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (trunc(x) == x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:convert, $Ti, x))
                     end
                 end
             end
@@ -665,14 +693,14 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:trunc, $Ti, x))
                     end
                 end
                 function convert(::Type{$Ti}, x::$Tf)
                     if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (trunc(x) == x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:convert, $Ti, x))
                     end
                 end
             end
@@ -680,18 +708,25 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
     end
 end
 
-@eval begin
-    issubnormal(x::Float32) = (abs(x) < $(bitcast(Float32, 0x00800000))) & (x!=0)
-    issubnormal(x::Float64) = (abs(x) < $(bitcast(Float64, 0x0010000000000000))) & (x!=0)
+"""
+    issubnormal(f) -> Bool
 
+Test whether a floating point number is subnormal.
+"""
+function issubnormal(x::T) where {T<:IEEEFloat}
+    y = reinterpret(Unsigned, x)
+    (y & exponent_mask(T) == 0) & (y & significand_mask(T) != 0)
+end
+
+@eval begin
     typemin(::Type{Float16}) = $(bitcast(Float16, 0xfc00))
     typemax(::Type{Float16}) = $(Inf16)
     typemin(::Type{Float32}) = $(-Inf32)
     typemax(::Type{Float32}) = $(Inf32)
     typemin(::Type{Float64}) = $(-Inf64)
     typemax(::Type{Float64}) = $(Inf64)
-    typemin{T<:Real}(x::T) = typemin(T)
-    typemax{T<:Real}(x::T) = typemax(T)
+    typemin(x::T) where {T<:Real} = typemin(T)
+    typemax(x::T) where {T<:Real} = typemax(T)
 
     realmin(::Type{Float16}) = $(bitcast(Float16, 0x0400))
     realmin(::Type{Float32}) = $(bitcast(Float32, 0x00800000))
@@ -699,10 +734,6 @@ end
     realmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
     realmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
     realmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
-    realmin{T<:AbstractFloat}(x::T) = realmin(T)
-    realmax{T<:AbstractFloat}(x::T) = realmax(T)
-    realmin() = realmin(Float64)
-    realmax() = realmax(Float64)
 
     eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
     eps(::Type{Float16}) = $(bitcast(Float16, 0x1400))
@@ -710,6 +741,33 @@ end
     eps(::Type{Float64}) = $(bitcast(Float64, 0x3cb0000000000000))
     eps() = eps(Float64)
 end
+
+"""
+    realmin(T)
+
+The smallest in absolute value non-subnormal value representable by the given
+floating-point DataType `T`.
+"""
+realmin(x::T) where {T<:AbstractFloat} = realmin(T)
+
+"""
+    realmax(T)
+
+The highest finite value representable by the given floating-point DataType `T`.
+
+# Examples
+```jldoctest
+julia> realmax(Float16)
+Float16(6.55e4)
+
+julia> realmax(Float32)
+3.4028235f38
+```
+"""
+realmax(x::T) where {T<:AbstractFloat} = realmax(T)
+
+realmin() = realmin(Float64)
+realmax() = realmax(Float64)
 
 """
     eps(::Type{T}) where T<:AbstractFloat
@@ -745,8 +803,8 @@ of `x` is different, then the larger of the two is taken, that is
     eps(x) == max(x-prevfloat(x), nextfloat(x)-x)
 
 The exceptions to this rule are the smallest and largest finite values
-(e.g. `nextfloat(-Inf)` and `prevfloat(Inf)` for `Float64`), which round to the smaller of
-the values.
+(e.g. `nextfloat(-Inf)` and `prevfloat(Inf)` for [`Float64`](@ref)), which round to the
+smaller of the values.
 
 The rationale for this behavior is that `eps` bounds the floating point rounding
 error. Under the default `RoundNearest` rounding mode, if ``y`` is a real number and ``x``
@@ -808,39 +866,18 @@ exponent_half(::Type{Float16}) =    0x3800
 significand_mask(::Type{Float16}) = 0x03ff
 
 # integer size of float
-fpinttype(::Type{Float64}) = UInt64
-fpinttype(::Type{Float32}) = UInt32
-fpinttype(::Type{Float16}) = UInt16
+uinttype(::Type{Float64}) = UInt64
+uinttype(::Type{Float32}) = UInt32
+uinttype(::Type{Float16}) = UInt16
 
-## TwicePrecision utilities
-# The numeric constants are half the number of bits in the mantissa
-for (F, T, n) in ((Float16, UInt16, 5), (Float32, UInt32, 12), (Float64, UInt64, 26))
-    @eval begin
-        function truncbits(x::$F, nb)
-            @_inline_meta
-            truncmask(x, typemax($T) << nb)
-        end
-        function truncmask(x::$F, mask)
-            @_inline_meta
-            reinterpret($F, mask & reinterpret($T, x))
-        end
-        function splitprec(x::$F)
-            @_inline_meta
-            hi = truncmask(x, typemax($T) << $n)
-            hi, x-hi
-        end
-    end
-end
-
-truncbits(x, nb) = x
-truncmask(x, mask) = x
+Base.iszero(x::Float16) = reinterpret(UInt16, x) & ~sign_mask(Float16) == 0x0000
 
 ## Array operations on floating point numbers ##
 
 float(A::AbstractArray{<:AbstractFloat}) = A
 
-function float{T}(A::AbstractArray{T})
-    if !isleaftype(T)
+function float(A::AbstractArray{T}) where T
+    if !isconcrete(T)
         error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
     end
     convert(AbstractArray{typeof(float(zero(T)))}, A)
@@ -848,7 +885,8 @@ end
 
 float(r::StepRange) = float(r.start):float(r.step):float(last(r))
 float(r::UnitRange) = float(r.start):float(last(r))
-float(r::StepRangeLen) = StepRangeLen(float(r.ref), float(r.step), length(r), r.offset)
+float(r::StepRangeLen{T}) where {T} =
+    StepRangeLen{typeof(float(T(r.ref)))}(float(r.ref), float(r.step), length(r), r.offset)
 function float(r::LinSpace)
     LinSpace(float(r.start), float(r.stop), length(r))
 end

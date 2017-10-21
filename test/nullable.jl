@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # "is a null with type T", curried on 2nd argument
 isnull_oftype(x::Nullable, T::Type) = eltype(x) == T && isnull(x)
@@ -115,13 +115,13 @@ for (i, T) in enumerate(types)
 end
 
 module NullableTestEnum
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+import Test
+# For curmod_*
+include("testenv.jl")
 io = IOBuffer()
 @enum TestEnum a b
 show(io, Nullable(a))
-Base.Test.@test String(take!(io)) == "Nullable{$(curmod_prefix)TestEnum}(a)"
+Test.@test String(take!(io)) == "Nullable{$(curmod_prefix)TestEnum}(a)"
 end
 
 # showcompact(io::IO, x::Nullable)
@@ -522,6 +522,9 @@ end
 @test repr(Nullable()) == "Nullable{Union{}}()"
 
 # issue #19270
-let f19270{S,T}(x::S, y::T) = Base.promote_op(^, S, T)
+let f19270(x::S, y::T) where {S,T} = Base.promote_op(^, S, T)
     @test f19270(Nullable(0.0f0), Nullable(BigInt(0))) == Nullable{Float32}
 end
+
+# issue #21397
+@test Nullable(Tuple) === Nullable{DataType}(Tuple)

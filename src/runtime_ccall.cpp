@@ -1,12 +1,15 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm-version.h"
 #include <map>
 #include <string>
 #include <cstdio>
 #include <llvm/Support/Host.h>
 #include "julia.h"
 #include "julia_internal.h"
-#include "llvm-version.h"
+#include "processor.h"
+#include "julia_assert.h"
+
 using namespace llvm;
 
 // --- library symbol lookup ---
@@ -139,9 +142,9 @@ void *jl_get_library(const char *f_lib)
 {
     void *hnd;
 #ifdef _OS_WINDOWS_
-    if ((intptr_t)f_lib == 1)
+    if (f_lib == JL_EXE_LIBNAME)
         return jl_exe_handle;
-    if ((intptr_t)f_lib == 2)
+    if (f_lib == JL_DL_LIBNAME)
         return jl_dl_handle;
 #endif
     if (f_lib == NULL)
@@ -171,26 +174,46 @@ void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
 }
 
 // miscellany
-extern "C" JL_DLLEXPORT
-jl_value_t *jl_get_cpu_name(void)
+std::string jl_get_cpu_name_llvm(void)
 {
-#if JL_LLVM_VERSION >= 30500
-    StringRef HostCPUName = llvm::sys::getHostCPUName();
-#else
-    const std::string& HostCPUName = llvm::sys::getHostCPUName();
-#endif
-    return jl_pchar_to_string(HostCPUName.data(), HostCPUName.size());
+    return llvm::sys::getHostCPUName().str();
+}
+
+std::string jl_get_cpu_features_llvm(void)
+{
+    StringMap<bool> HostFeatures;
+    llvm::sys::getHostCPUFeatures(HostFeatures);
+    std::string attr;
+    for (auto &ele: HostFeatures) {
+        if (ele.getValue()) {
+            if (!attr.empty()) {
+                attr.append(",+");
+            }
+            else {
+                attr.append("+");
+            }
+            attr.append(ele.getKey().str());
+        }
+    }
+    // Explicitly disabled features need to be added at the end so that
+    // they are not reenabled by other features that implies them by default.
+    for (auto &ele: HostFeatures) {
+        if (!ele.getValue()) {
+            if (!attr.empty()) {
+                attr.append(",-");
+            }
+            else {
+                attr.append("-");
+            }
+            attr.append(ele.getKey().str());
+        }
+    }
+    return attr;
 }
 
 extern "C" JL_DLLEXPORT
 jl_value_t *jl_get_JIT(void)
 {
-#if defined(USE_ORCJIT)
     const std::string& HostJITName = "ORCJIT";
-#elif defined(USE_MCJIT)
-    const std::string& HostJITName = "MCJIT";
-#else
-    const std::string& HostJITName = "Unknown";
-#endif
     return jl_pchar_to_string(HostJITName.data(), HostJITName.size());
 }

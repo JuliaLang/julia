@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    var tmin, i, j, t, n, m, s, a, sum, a0, v, r, C;
+    var tmin, i, j, t, n, m, s, a, sum, a0, v, r, C, filename, fd;
 
     function assert(t) { if (!t) { throw new Error("assertion failed"); } }
 
@@ -21,14 +21,14 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin = t; }
     }
-    console.log("javascript,fib," + tmin/1000);
+    console.log("javascript,recursion_fibonacci," + tmin/1000);
 
     // parse int //
 
     tmin = Number.POSITIVE_INFINITY;
     for (i=0; i < 5; i++) {
         t = (new Date()).getTime();
-        for (j=0; j < 1000*1000; j++) {
+        for (j=0; j < 1000*100; j++) {
             n = Math.floor(4294967295*Math.random());
             s = n.toString(16);
             m = parseInt(s,16);
@@ -37,7 +37,20 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin = t; }
     }
-    console.log("javascript,parse_int," + tmin/1000);
+    console.log("javascript,parse_integers," + tmin/100);
+
+    //    for (i=0; i < 5; i++) {
+    //        t = (new Date()).getTime();	
+    //	filename = "/dev/null";
+    //	fd : StreamWriter = new StreamWriter(filepathIncludingFileName);
+    //    	  for (j=0; j < 100000; j++) {
+    //            s = j.toString();
+    //            fd.WriteLine(s + " " + s);
+    //        }
+    //        t = (new Date()).getTime()-t;
+    //        if (t < tmin) { tmin = t; }
+    //    }
+    console.log("javascript,print_to_file," + 9999);
 
     // mandelbrot set //
 
@@ -100,7 +113,7 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin=t; }
     }
-    console.log("javascript,mandel," + tmin/1000);
+    console.log("javascript,iteration_mandelbrot," + tmin/1000);
 
     // numeric vector sort //
 
@@ -160,7 +173,7 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin=t; }
     }
-    console.log("javascript,quicksort," + tmin/100);
+    console.log("javascript,recursion_quicksort," + tmin/100);
 
     // slow pi series //
 
@@ -185,7 +198,7 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin=t; }
     }
-    console.log("javascript,pi_sum," + tmin/10);
+    console.log("javascript,iteration_pi_sum," + tmin/10);
 
     // random matrix statistics //
 
@@ -355,7 +368,7 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin=t; }
     }
-    console.log("javascript,rand_mat_stat," + tmin/10);
+    console.log("javascript,matrix_statistics," + tmin/10);
 
     // random matrix multiply //
 
@@ -429,5 +442,5 @@
     assert(0 <= C[0]);
     t = (new Date()).getTime()-t;
     if (t < tmin) { tmin=t; }
-    console.log("javascript,rand_mat_mul," + tmin);
+    console.log("javascript,matrix_multiply," + tmin);
 }());

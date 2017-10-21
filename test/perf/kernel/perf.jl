@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 include("../perfutil.jl")
 
@@ -102,7 +102,7 @@ d = randn(len)
 
 @timeit (for n in 1:10; a = arith_vectorized(b,c,d); end) "vectorize" "Vectorized arithmetic"
 
-writecsv("random.csv", rand(100000,4))
+writedlm("random.csv", rand(100000, 4), ',')
 
 function parsecsv()
     for line in eachline("random.csv")

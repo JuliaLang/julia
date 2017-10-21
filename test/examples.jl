@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 dir = joinpath(JULIA_HOME, Base.DOCDIR, "examples")
 
@@ -37,7 +37,7 @@ include(joinpath(dir, "queens.jl"))
 # Different cluster managers do not play well together. Since
 # the test infrastructure already uses LocalManager, we will test the simple
 # cluster manager example through a new Julia session.
-if is_unix()
+if Sys.isunix()
     script = joinpath(dir, "clustermanager/simple/test_simple.jl")
     cmd = `$(Base.julia_cmd()) --startup-file=no $script`
     if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR)) && ccall(:jl_running_on_valgrind,Cint,()) == 0
@@ -74,18 +74,5 @@ put!(dc, "Hello", "World")
 
 # At least make sure code loads
 include(joinpath(dir, "wordcount.jl"))
-
-# the 0mq clustermanager depends on package ZMQ. Just making sure the
-# code loads using a stub module definition for ZMQ.
-zmq_found=true
-try
-    using ZMQ
-catch
-    zmq_found=false
-end
-
-if !zmq_found
-    eval(Main, parse("module ZMQ end"))
-end
 
 include(joinpath(dir, "clustermanager/0mq/ZMQCM.jl"))

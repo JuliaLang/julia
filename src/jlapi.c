@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   jlapi.c
@@ -10,8 +10,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 #include "julia.h"
+#include "options.h"
+#include "julia_assert.h"
 
 #ifdef __cplusplus
 #include <cfenv>
@@ -25,30 +26,60 @@ JL_DLLEXPORT char * __cdecl dirname(char *);
 #else
 #include <libgen.h>
 #endif
+#ifndef _OS_WINDOWS_
+#include <dlfcn.h>
+#endif
 
-JL_DLLEXPORT int jl_is_initialized(void) { return jl_main_module!=NULL; }
+JL_DLLEXPORT int jl_is_initialized(void)
+{
+    return jl_main_module != NULL;
+}
 
-// First argument is the usr/lib directory where libjulia is, or NULL to guess.
-// if that doesn't work, try the full path to the "lib" directory that
-// contains lib/julia/sys.ji
+// First argument is the usr/bin directory where the julia binary is, or NULL to guess.
 // Second argument is the path of a system image file (*.ji) relative to the
-// first argument path, or relative to the default julia home dir. The default
-// is something like ../lib/julia/sys.ji
+// first argument path, or relative to the default julia home dir.
+// The default is something like ../lib/julia/sys.ji
 JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
                                      const char *image_relative_path)
 {
-    if (jl_is_initialized()) return;
+    if (jl_is_initialized())
+        return;
     libsupport_init();
     jl_options.julia_home = julia_home_dir;
     if (image_relative_path != NULL)
         jl_options.image_file = image_relative_path;
+    else
+        jl_options.image_file = jl_get_default_sysimg_path();
     julia_init(JL_IMAGE_JULIA_HOME);
     jl_exception_clear();
 }
 
-JL_DLLEXPORT void jl_init(const char *julia_home_dir)
+JL_DLLEXPORT void jl_init(void)
 {
-    jl_init_with_image(julia_home_dir, NULL);
+    char *libbindir = NULL;
+#ifdef _OS_WINDOWS_
+    void *hdl = (void*)jl_load_dynamic_library_e(NULL, JL_RTLD_DEFAULT);
+    if (hdl) {
+        char *to_free = (char*)jl_pathname_for_handle(hdl);
+        if (to_free) {
+            libbindir = strdup(dirname(to_free));
+            free(to_free);
+        }
+    }
+#else
+    Dl_info dlinfo;
+    if (dladdr((void*)jl_init, &dlinfo) != 0 && dlinfo.dli_fname) {
+        char *to_free = strdup(dlinfo.dli_fname);
+        (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", dirname(to_free), "bin");
+        free(to_free);
+    }
+#endif
+    if (!libbindir) {
+        printf("jl_init unable to find libjulia!\n");
+        abort();
+    }
+    jl_init_with_image(libbindir, jl_get_default_sysimg_path());
+    free(libbindir);
 }
 
 JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
@@ -61,13 +92,12 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
         JL_GC_PUSH1(&ast);
         size_t last_age = jl_get_ptls_states()->world_age;
         jl_get_ptls_states()->world_age = jl_get_world_counter();
-        r = jl_toplevel_eval(ast);
+        r = jl_toplevel_eval_in(jl_main_module, ast);
         jl_get_ptls_states()->world_age = last_age;
         JL_GC_POP();
         jl_exception_clear();
     }
     JL_CATCH {
-        //jl_show(jl_stderr_obj(), jl_exception_in_transit);
         r = NULL;
     }
     return r;

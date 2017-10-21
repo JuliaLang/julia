@@ -26,8 +26,8 @@ Remote references come in two flavors: [`Future`](@ref) and [`RemoteChannel`](@r
 
 A remote call returns a [`Future`](@ref) to its result. Remote calls return immediately; the process
 that made the call proceeds to its next operation while the remote call happens somewhere else.
-You can wait for a remote call to finish by calling [`wait()`](@ref) on the returned [`Future`](@ref),
-and you can obtain the full value of the result using [`fetch()`](@ref).
+You can wait for a remote call to finish by calling [`wait`](@ref) on the returned [`Future`](@ref),
+and you can obtain the full value of the result using [`fetch`](@ref).
 
 On the other hand, [`RemoteChannel`](@ref) s are rewritable. For example, multiple processes can
 co-ordinate their processing by referencing the same remote `Channel`.
@@ -55,9 +55,9 @@ julia> fetch(s)
  1.16296  1.60607
 ```
 
-The first argument to [`remotecall()`](@ref) is the function to call. Most parallel programming
-in Julia does not reference specific processes or the number of processes available, but [`remotecall()`](@ref)
-is considered a low-level interface providing finer control. The second argument to [`remotecall()`](@ref)
+The first argument to [`remotecall`](@ref) is the function to call. Most parallel programming
+in Julia does not reference specific processes or the number of processes available, but [`remotecall`](@ref)
+is considered a low-level interface providing finer control. The second argument to [`remotecall`](@ref)
 is the `id` of the process that will do the work, and the remaining arguments will be passed to
 the function being called.
 
@@ -68,10 +68,10 @@ argument on the process specified by the first argument.
 
 Occasionally you might want a remotely-computed value immediately. This typically happens when
 you read from a remote object to obtain data needed by the next local operation. The function
-[`remotecall_fetch()`](@ref) exists for this purpose. It is equivalent to `fetch(remotecall(...))`
+[`remotecall_fetch`](@ref) exists for this purpose. It is equivalent to `fetch(remotecall(...))`
 but is more efficient.
 
-```julia
+```julia-repl
 julia> remotecall_fetch(getindex, 2, r, 1, 1)
 0.18526337335308085
 ```
@@ -79,11 +79,11 @@ julia> remotecall_fetch(getindex, 2, r, 1, 1)
 Remember that [`getindex(r,1,1)`](@ref) is [equivalent](@ref man-array-indexing) to `r[1,1]`, so this call fetches
 the first element of the future `r`.
 
-The syntax of [`remotecall()`](@ref) is not especially convenient. The macro [`@spawn`](@ref)
+The syntax of [`remotecall`](@ref) is not especially convenient. The macro [`@spawn`](@ref)
 makes things easier. It operates on an expression rather than a function, and picks where to do
 the operation for you:
 
-```julia
+```julia-repl
 julia> r = @spawn rand(2,2)
 Future(2, 1, 4, Nullable{Any}())
 
@@ -97,15 +97,15 @@ julia> fetch(s)
 ```
 
 Note that we used `1 .+ fetch(r)` instead of `1 .+ r`. This is because we do not know where the
-code will run, so in general a [`fetch()`](@ref) might be required to move `r` to the process
+code will run, so in general a [`fetch`](@ref) might be required to move `r` to the process
 doing the addition. In this case, [`@spawn`](@ref) is smart enough to perform the computation
-on the process that owns `r`, so the [`fetch()`](@ref) will be a no-op (no work is done).
+on the process that owns `r`, so the [`fetch`](@ref) will be a no-op (no work is done).
 
 (It is worth noting that [`@spawn`](@ref) is not built-in but defined in Julia as a [macro](@ref man-macros).
 It is possible to define your own such constructs.)
 
 An important thing to remember is that, once fetched, a [`Future`](@ref) will cache its value
-locally. Further [`fetch()`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref)s
+locally. Further [`fetch`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref)s
 have fetched, the remote stored value is deleted.
 
 ## Code Availability and Loading Packages
@@ -113,7 +113,7 @@ have fetched, the remote stored value is deleted.
 Your code must be available on any process that runs it. For example, type the following into
 the Julia prompt:
 
-```julia
+```julia-repl
 julia> function rand2(dims...)
            return 2*rand(dims...)
        end
@@ -125,13 +125,14 @@ julia> rand2(2,2)
 
 julia> fetch(@spawn rand2(2,2))
 ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))
+Stacktrace:
 [...]
 ```
 
 Process 1 knew about the function `rand2`, but process 2 did not.
 
 Most commonly you'll be loading code from files or packages, and you have a considerable amount
-of flexibility in controlling which processes load code. Consider a file, `"DummyModule.jl"`,
+of flexibility in controlling which processes load code. Consider a file, `DummyModule.jl`,
 containing the following code:
 
 ```julia
@@ -152,8 +153,8 @@ end
 
 Starting Julia with `julia -p 2`, you can use this to verify the following:
 
-  * [`include("DummyModule.jl")`](@ref) loads the file on just a single process (whichever one executes
-    the statement).
+  * `include("DummyModule.jl")` loads the file on just a single process
+    (whichever one executes the statement).
   * `using DummyModule` causes the module to be loaded on all processes; however, the module is brought
     into scope only on the one executing the statement.
   * As long as `DummyModule` is loaded on process 2, commands like
@@ -169,7 +170,7 @@ Starting Julia with `julia -p 2`, you can use this to verify the following:
 You can force a command to run on all processes using the [`@everywhere`](@ref) macro. For example, `@everywhere`
 can also be used to directly define a function on all processes:
 
-```julia
+```julia-repl
 julia> @everywhere id = myid()
 
 julia> remotecall_fetch(()->id, 2)
@@ -192,7 +193,7 @@ The base Julia installation has in-built support for two types of clusters:
   * A cluster spanning machines using the `--machinefile` option. This uses a passwordless `ssh` login
     to start Julia worker processes (from the same path as the current host) on the specified machines.
 
-Functions [`addprocs()`](@ref), [`rmprocs()`](@ref), [`workers()`](@ref), and others are available
+Functions [`addprocs`](@ref), [`rmprocs`](@ref), [`workers`](@ref), and others are available
 as a programmatic means of adding, removing and querying the processes in a cluster.
 
 Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their global
@@ -209,14 +210,14 @@ the number of messages and the amount of data sent is critical to achieving perf
 To this end, it is important to understand the data movement performed by Julia's various parallel
 programming constructs.
 
-[`fetch()`](@ref) can be considered an explicit data movement operation, since it directly asks
+[`fetch`](@ref) can be considered an explicit data movement operation, since it directly asks
 that an object be moved to the local machine. [`@spawn`](@ref) (and a few related constructs)
 also moves data, but this is not as obvious, hence it can be called an implicit data movement
 operation. Consider these two approaches to constructing and squaring a random matrix:
 
 Method 1:
 
-```julia
+```julia-repl
 julia> A = rand(1000,1000);
 
 julia> Bref = @spawn A^2;
@@ -228,7 +229,7 @@ julia> fetch(Bref);
 
 Method 2:
 
-```julia
+```julia-repl
 julia> Bref = @spawn rand(1000,1000)^2;
 
 [...]
@@ -256,13 +257,17 @@ Expressions executed remotely via `@spawn`, or closures specified for remote exe
 a little differently compared to global bindings in other modules. Consider the following code
 snippet:
 
-```julia
+```julia-repl
 A = rand(10,10)
-remotecall_fetch(()->foo(A), 2)
+remotecall_fetch(()->norm(A), 2)
 ```
 
+In this case [`norm`](@ref) is a function that takes 2D array as a parameter, and MUST be defined in
+the remote process.  You could use any function other than `norm` as long as it is defined in the remote
+process and accepts the appropriate parameter.
+
 Note that `A` is a global variable defined in the local workspace. Worker 2 does not have a variable called
-`A` under `Main`. The act of shipping the closure `()->foo(A)` to worker 2 results in `Main.A` being defined
+`A` under `Main`. The act of shipping the closure `()->norm(A)` to worker 2 results in `Main.A` being defined
 on 2. `Main.A` continues to exist on worker 2 even after the call `remotecall_fetch` returns. Remote calls
 with embedded global references (under `Main` module only) manage globals as follows:
 
@@ -276,9 +281,9 @@ with embedded global references (under `Main` module only) manage globals as fol
 
   ```julia
   A = rand(10,10)
-  remotecall_fetch(()->foo(A), 2) # worker 2
+  remotecall_fetch(()->norm(A), 2) # worker 2
   A = rand(10,10)
-  remotecall_fetch(()->foo(A), 3) # worker 3
+  remotecall_fetch(()->norm(A), 3) # worker 3
   A = nothing
   ```
 
@@ -296,7 +301,7 @@ altogether if possible. If you must reference globals, consider using `let` bloc
 
 For example:
 
-```julia
+```julia-repl
 julia> A = rand(10,10);
 
 julia> remotecall_fetch(()->A, 2);
@@ -339,8 +344,8 @@ end
 The function `count_heads` simply adds together `n` random bits. Here is how we can perform some
 trials on two machines, and add together the results:
 
-```julia
-julia> @everywhere include("count_heads.jl")
+```julia-repl
+julia> @everywhere include_string(Main, $(read("count_heads.jl", String)), "count_heads.jl")
 
 julia> a = @spawn count_heads(100000000)
 Future(2, 1, 6, Nullable{Any}())
@@ -416,23 +421,23 @@ Here each iteration applies `f` to a randomly-chosen sample from a vector `a` sh
 As you could see, the reduction operator can be omitted if it is not needed. In that case, the
 loop executes asynchronously, i.e. it spawns independent tasks on all available workers and returns
 an array of [`Future`](@ref) immediately without waiting for completion. The caller can wait for
-the [`Future`](@ref) completions at a later point by calling [`fetch()`](@ref) on them, or wait
+the [`Future`](@ref) completions at a later point by calling [`fetch`](@ref) on them, or wait
 for completion at the end of the loop by prefixing it with [`@sync`](@ref), like `@sync @parallel for`.
 
 In some cases no reduction operator is needed, and we merely wish to apply a function to all integers
 in some range (or, more generally, to all elements in some collection). This is another useful
-operation called *parallel map*, implemented in Julia as the [`pmap()`](@ref) function. For example,
+operation called *parallel map*, implemented in Julia as the [`pmap`](@ref) function. For example,
 we could compute the singular values of several large random matrices in parallel as follows:
 
-```julia
+```julia-repl
 julia> M = Matrix{Float64}[rand(1000,1000) for i = 1:10];
 
 julia> pmap(svd, M);
 ```
 
-Julia's [`pmap()`](@ref) is designed for the case where each function call does a large amount
+Julia's [`pmap`](@ref) is designed for the case where each function call does a large amount
 of work. In contrast, `@parallel for` can handle situations where each iteration is tiny, perhaps
-merely summing two numbers. Only worker processes are used by both [`pmap()`](@ref) and `@parallel for`
+merely summing two numbers. Only worker processes are used by both [`pmap`](@ref) and `@parallel for`
 for the parallel computation. In case of `@parallel for`, the final reduction is done on the calling
 process.
 
@@ -441,7 +446,7 @@ process.
 ## Scheduling
 
 Julia's parallel programming platform uses [Tasks (aka Coroutines)](@ref man-tasks) to switch among multiple
-computations. Whenever code performs a communication operation like [`fetch()`](@ref) or [`wait()`](@ref),
+computations. Whenever code performs a communication operation like [`fetch`](@ref) or [`wait`](@ref),
 the current task is suspended and a scheduler picks another task to run. A task is restarted when
 the event it is waiting for completes.
 
@@ -453,7 +458,7 @@ work to processes only when they finish their current tasks.
 
 As an example, consider computing the singular values of matrices of different sizes:
 
-```julia
+```julia-repl
 julia> M = Matrix{Float64}[rand(800,800), rand(600,600), rand(800,800), rand(600,600)];
 
 julia> pmap(svd, M);
@@ -461,7 +466,7 @@ julia> pmap(svd, M);
 
 If one process handles both 800×800 matrices and another handles both 600×600 matrices, we will
 not get as much scalability as we could. The solution is to make a local task to "feed" work to
-each process when it completes its current task. For example, consider a simple [`pmap()`](@ref)
+each process when it completes its current task. For example, consider a simple [`pmap`](@ref)
 implementation:
 
 ```julia
@@ -497,10 +502,10 @@ use it to create a "feeder" task for each process. Each task picks the next inde
 be computed, then waits for its process to finish, then repeats until we run out of indexes. Note
 that the feeder tasks do not begin to execute until the main task reaches the end of the [`@sync`](@ref)
 block, at which point it surrenders control and waits for all the local tasks to complete before
-returning from the function. The feeder tasks are able to share state via `nextidx()` because
+returning from the function. The feeder tasks are able to share state via `nextidx` because
 they all run on the same process. No locking is required, since the threads are scheduled cooperatively
 and not preemptively. This means context switches only occur at well-defined points: in this case,
-when [`remotecall_fetch()`](@ref) is called.
+when [`remotecall_fetch`](@ref) is called.
 
 ## Channels
 
@@ -515,17 +520,17 @@ to complete.
 
 A channel can be visualized as a pipe, i.e., it has a write end and read end.
 
-  * Multiple writers in different tasks can write to the same channel concurrently via [`put!()`](@ref)
+  * Multiple writers in different tasks can write to the same channel concurrently via [`put!`](@ref)
     calls.
-  * Multiple readers in different tasks can read data concurrently via [`take!()`](@ref) calls.
+  * Multiple readers in different tasks can read data concurrently via [`take!`](@ref) calls.
   * As an example:
 
-    ```
+    ```julia
     # Given Channels c1 and c2,
     c1 = Channel(32)
     c2 = Channel(32)
 
-    # and a function `foo()` which reads items from from c1, processes the item read
+    # and a function `foo` which reads items from from c1, processes the item read
     # and writes a result to c2,
     function foo()
         while true
@@ -535,7 +540,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and read end.
         end
     end
 
-    # we can schedule `n` instances of `foo()` to be active concurrently.
+    # we can schedule `n` instances of `foo` to be active concurrently.
     for _ in 1:n
         @schedule foo()
     end
@@ -545,15 +550,15 @@ A channel can be visualized as a pipe, i.e., it has a write end and read end.
     to the maximum number of elements that can be held in the channel at any time. For example, `Channel(32)`
     creates a channel that can hold a maximum of 32 objects of any type. A `Channel{MyType}(64)` can
     hold up to 64 objects of `MyType` at any time.
-  * If a [`Channel`](@ref) is empty, readers (on a [`take!()`](@ref) call) will block until data is available.
-  * If a [`Channel`](@ref) is full, writers (on a [`put!()`](@ref) call) will block until space becomes available.
-  * [`isready()`](@ref) tests for the presence of any object in the channel, while [`wait()`](@ref)
+  * If a [`Channel`](@ref) is empty, readers (on a [`take!`](@ref) call) will block until data is available.
+  * If a [`Channel`](@ref) is full, writers (on a [`put!`](@ref) call) will block until space becomes available.
+  * [`isready`](@ref) tests for the presence of any object in the channel, while [`wait`](@ref)
     waits for an object to become available.
   * A [`Channel`](@ref) is in an open state initially. This means that it can be read from and written to
-    freely via [`take!()`](@ref) and [`put!()`](@ref) calls. [`close()`](@ref) closes a [`Channel`](@ref).
-    On a closed [`Channel`](@ref), [`put!()`](@ref) will fail. For example:
+    freely via [`take!`](@ref) and [`put!`](@ref) calls. [`close`](@ref) closes a [`Channel`](@ref).
+    On a closed [`Channel`](@ref), [`put!`](@ref) will fail. For example:
 
-```julia
+```julia-repl
 julia> c = Channel(2);
 
 julia> put!(c, 1) # `put!` on an open channel succeeds
@@ -563,13 +568,14 @@ julia> close(c);
 
 julia> put!(c, 2) # `put!` on a closed channel throws an exception.
 ERROR: InvalidStateException("Channel is closed.",:closed)
+Stacktrace:
 [...]
 ```
 
-  * [`take!()`](@ref) and [`fetch()`](@ref) (which retrieves but does not remove the value) on a closed
+  * [`take!`](@ref) and [`fetch`](@ref) (which retrieves but does not remove the value) on a closed
     channel successfully return any existing values until it is emptied. Continuing the above example:
 
-```julia
+```julia-repl
 julia> fetch(c) # Any number of `fetch` calls succeed.
 1
 
@@ -581,6 +587,7 @@ julia> take!(c) # The first `take!` removes the value.
 
 julia> take!(c) # No more data available on a closed channel.
 ERROR: InvalidStateException("Channel is closed.",:closed)
+Stacktrace:
 [...]
 ```
 
@@ -590,7 +597,7 @@ long as the `Channel` has data or is open. The loop variable takes on all values
 
 For example, the following would cause the `for` loop to wait for more data:
 
-```julia
+```julia-repl
 julia> c = Channel{Int}(10);
 
 julia> foreach(i->put!(c, i), 1:3) # add a few entries
@@ -600,7 +607,7 @@ julia> data = [i for i in c]
 
 while this will return after reading all data:
 
-```julia
+```julia-repl
 julia> c = Channel{Int}(10);
 
 julia> foreach(i->put!(c, i), 1:3); # add a few entries
@@ -620,7 +627,7 @@ Each task in this simulation reads a `job_id`, waits for a random amout of time 
 a tuple of `job_id` and the simulated time to the results channel. Finally all the `results` are
 printed out.
 
-```julia
+```julia-repl
 julia> const jobs = Channel{Int}(32);
 
 julia> const results = Channel{Tuple}(32);
@@ -679,7 +686,7 @@ too.
 Remote references always refer to an implementation of an `AbstractChannel`.
 
 A concrete implementation of an `AbstractChannel` (like `Channel`), is required to implement
-[`put!()`](@ref), [`take!()`](@ref), [`fetch()`](@ref), [`isready()`](@ref) and [`wait()`](@ref).
+[`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and [`wait`](@ref).
 The remote object referred to by a [`Future`](@ref) is stored in a `Channel{Any}(1)`, i.e., a
 `Channel` of size 1 capable of holding objects of `Any` type.
 
@@ -687,13 +694,13 @@ The remote object referred to by a [`Future`](@ref) is stored in a `Channel{Any}
 other implementation of an `AbstractChannel`.
 
 The constructor `RemoteChannel(f::Function, pid)()` allows us to construct references to channels
-holding more than one value of a specific type. `f()` is a function executed on `pid` and it must
+holding more than one value of a specific type. `f` is a function executed on `pid` and it must
 return an `AbstractChannel`.
 
 For example, `RemoteChannel(()->Channel{Int}(10), pid)`, will return a reference to a channel
 of type `Int` and size 10. The channel exists on worker `pid`.
 
-Methods [`put!()`](@ref), [`take!()`](@ref), [`fetch()`](@ref), [`isready()`](@ref) and [`wait()`](@ref)
+Methods [`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and [`wait`](@ref)
 on a [`RemoteChannel`](@ref) are proxied onto the backing store on the remote process.
 
 [`RemoteChannel`](@ref) can thus be used to refer to user implemented `AbstractChannel` objects.
@@ -725,7 +732,7 @@ are written to the channel. Each remotely executing task in this simulation read
 waits for a random amount of time and writes back a tuple of `job_id`, time taken and its own
 `pid` to the results channel. Finally all the `results` are printed out on the master process.
 
-```julia
+```julia-repl
 julia> addprocs(4); # add worker processes
 
 julia> const jobs = RemoteChannel(()->Channel{Int}(32));
@@ -752,7 +759,7 @@ julia> n = 12;
 julia> @schedule make_jobs(n); # feed the jobs channel with "n" jobs
 
 julia> for p in workers() # start tasks on the workers to process requests in parallel
-           @async remote_do(do_work, p, jobs, results)
+           remote_do(do_work, p, jobs, results)
        end
 
 julia> @elapsed while n > 0 # print out results
@@ -777,20 +784,22 @@ julia> @elapsed while n > 0 # print out results
 
 ## Remote References and Distributed Garbage Collection
 
-Objects referred to by remote references can be freed only when *all* held references in the cluster
-are deleted.
+Objects referred to by remote references can be freed only when *all* held references
+in the cluster are deleted.
 
 The node where the value is stored keeps track of which of the workers have a reference to it.
 Every time a [`RemoteChannel`](@ref) or a (unfetched) [`Future`](@ref) is serialized to a worker,
 the node pointed to by the reference is notified. And every time a [`RemoteChannel`](@ref) or
 a (unfetched) [`Future`](@ref) is garbage collected locally, the node owning the value is again
-notified.
+notified. This is implemented in an internal cluster aware serializer. Remote references are only
+valid in the context of a running cluster. Serializing and deserializing references to and from
+regular `IO` objects is not supported.
 
 The notifications are done via sending of "tracking" messages--an "add reference" message when
 a reference is serialized to a different process and a "delete reference" message when a reference
 is locally garbage collected.
 
-Since [`Future`](@ref)s are write-once and cached locally, the act of [`fetch()`](@ref)ing a
+Since [`Future`](@ref)s are write-once and cached locally, the act of [`fetch`](@ref)ing a
 [`Future`](@ref) also updates reference tracking information on the node owning the value.
 
 The node which owns the value frees it once all references to it are cleared.
@@ -803,10 +812,10 @@ of the object and the current memory pressure in the system.
 
 In case of remote references, the size of the local reference object is quite small, while the
 value stored on the remote node may be quite large. Since the local object may not be collected
-immediately, it is a good practice to explicitly call [`finalize()`](@ref) on local instances
-of a [`RemoteChannel`](@ref), or on unfetched [`Future`](@ref)s. Since calling [`fetch()`](@ref)
+immediately, it is a good practice to explicitly call [`finalize`](@ref) on local instances
+of a [`RemoteChannel`](@ref), or on unfetched [`Future`](@ref)s. Since calling [`fetch`](@ref)
 on a [`Future`](@ref) also removes its reference from the remote store, this is not required on
-fetched [`Future`](@ref)s. Explicitly calling [`finalize()`](@ref) results in an immediate message
+fetched [`Future`](@ref)s. Explicitly calling [`finalize`](@ref) results in an immediate message
 sent to the remote node to go ahead and remove its reference to the value.
 
 Once finalized, a reference becomes invalid and cannot be used in any further calls.
@@ -814,8 +823,8 @@ Once finalized, a reference becomes invalid and cannot be used in any further ca
 ## [Shared Arrays](@id man-shared-arrays)
 
 Shared Arrays use system shared memory to map the same array across many processes. While there
-are some similarities to a [DArray](https://github.com/JuliaParallel/DistributedArrays.jl), the
-behavior of a [`SharedArray`](@ref) is quite different. In a [DArray](https://github.com/JuliaParallel/DistributedArrays.jl),
+are some similarities to a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl), the
+behavior of a [`SharedArray`](@ref) is quite different. In a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl),
 each process has local access to just a chunk of the data, and no two processes share the same
 chunk; in contrast, in a [`SharedArray`](@ref) each "participating" process has access to the
 entire array.  A [`SharedArray`](@ref) is a good choice when you want to have a large amount of
@@ -825,8 +834,8 @@ data jointly accessible to two or more processes on the same machine.
 and is efficient because the underlying memory is available to the local process. Therefore,
 most algorithms work naturally on [`SharedArray`](@ref)s, albeit in single-process mode. In cases
 where an algorithm insists on an [`Array`](@ref) input, the underlying array can be retrieved
-from a [`SharedArray`](@ref) by calling [`sdata()`](@ref). For other `AbstractArray` types, [`sdata()`](@ref)
-just returns the object itself, so it's safe to use [`sdata()`](@ref) on any `Array`-type object.
+from a [`SharedArray`](@ref) by calling [`sdata`](@ref). For other `AbstractArray` types, [`sdata`](@ref)
+just returns the object itself, so it's safe to use [`sdata`](@ref) on any `Array`-type object.
 
 The constructor for a shared array is of the form:
 
@@ -845,14 +854,16 @@ portion of the array, thereby parallelizing initialization.
 
 Here's a brief example:
 
-```julia
+```julia-repl
 julia> addprocs(3)
 3-element Array{Int64,1}:
  2
  3
  4
 
-julia> S = SharedArray{Int,2}((3,4), init = S -> S[Base.localindexes(S)] = myid())
+julia> @everywhere using SharedArrays
+
+julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindexes(S)] = myid())
 3×4 SharedArray{Int64,2}:
  2  2  3  4
  2  3  3  4
@@ -868,11 +879,11 @@ julia> S
  2  7  4  4
 ```
 
-[`Base.localindexes()`](@ref) provides disjoint one-dimensional ranges of indexes, and is sometimes
+[`SharedArrays.localindexes`](@ref) provides disjoint one-dimensional ranges of indexes, and is sometimes
 convenient for splitting up tasks among processes. You can, of course, divide the work any way
 you wish:
 
-```julia
+```julia-repl
 julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
 3×4 SharedArray{Int64,2}:
  2  2  2  2
@@ -910,7 +921,7 @@ not be ready at the time it's needed for computing `q[i,j,t+1]`. In such cases, 
 off chunking the array manually. Let's split along the second dimension.
 Define a function that returns the `(irange, jrange)` indexes assigned to this worker:
 
-```julia
+```julia-repl
 julia> @everywhere function myrange(q::SharedArray)
            idx = indexpids(q)
            if idx == 0 # This worker is not assigned a piece
@@ -924,11 +935,11 @@ julia> @everywhere function myrange(q::SharedArray)
 
 Next, define the kernel:
 
-```julia
+```julia-repl
 julia> @everywhere function advection_chunk!(q, u, irange, jrange, trange)
            @show (irange, jrange, trange)  # display so we can see what's happening
            for t in trange, j in jrange, i in irange
-               q[i,j,t+1] = q[i,j,t] +  u[i,j,t]
+               q[i,j,t+1] = q[i,j,t] + u[i,j,t]
            end
            q
        end
@@ -936,20 +947,20 @@ julia> @everywhere function advection_chunk!(q, u, irange, jrange, trange)
 
 We also define a convenience wrapper for a `SharedArray` implementation
 
-```julia
+```julia-repl
 julia> @everywhere advection_shared_chunk!(q, u) =
            advection_chunk!(q, u, myrange(q)..., 1:size(q,3)-1)
 ```
 
 Now let's compare three different versions, one that runs in a single process:
 
-```julia
+```julia-repl
 julia> advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1);
 ```
 
 one that uses [`@parallel`](@ref):
 
-```julia
+```julia-repl
 julia> function advection_parallel!(q, u)
            for t = 1:size(q,3)-1
                @sync @parallel for j = 1:size(q,2)
@@ -964,7 +975,7 @@ julia> function advection_parallel!(q, u)
 
 and one that delegates in chunks:
 
-```julia
+```julia-repl
 julia> function advection_shared!(q, u)
            @sync begin
                for p in procs(q)
@@ -977,7 +988,7 @@ julia> function advection_shared!(q, u)
 
 If we create `SharedArray`s and time these functions, we get the following results (with `julia -p 4`):
 
-```julia
+```julia-repl
 julia> q = SharedArray{Float64,3}((500,500,500));
 
 julia> u = SharedArray{Float64,3}((500,500,500));
@@ -985,7 +996,7 @@ julia> u = SharedArray{Float64,3}((500,500,500));
 
 Run the functions once to JIT-compile and [`@time`](@ref) them on the second run:
 
-```julia
+```julia-repl
 julia> @time advection_serial!(q, u);
 (irange,jrange,trange) = (1:500,1:500,1:499)
  830.220 milliseconds (216 allocations: 13820 bytes)
@@ -1029,8 +1040,8 @@ A Julia cluster has the following characteristics:
 Connections between workers (using the in-built TCP/IP transport) is established in the following
 manner:
 
-  * [`addprocs()`](@ref) is called on the master process with a `ClusterManager` object.
-  * [`addprocs()`](@ref) calls the appropriate [`launch()`](@ref) method which spawns required number
+  * [`addprocs`](@ref) is called on the master process with a `ClusterManager` object.
+  * [`addprocs`](@ref) calls the appropriate [`launch`](@ref) method which spawns required number
     of worker processes on appropriate machines.
   * Each worker starts listening on a free port and writes out its host and port information to [`STDOUT`](@ref).
   * The cluster manager captures the [`STDOUT`](@ref) of each worker and makes it available to the
@@ -1055,8 +1066,8 @@ and multi-processor hardware.
 Thus, a minimal cluster manager would need to:
 
   * be a subtype of the abstract `ClusterManager`
-  * implement [`launch()`](@ref), a method responsible for launching new workers
-  * implement [`manage()`](@ref), which is called at various events during a worker's lifetime (for
+  * implement [`launch`](@ref), a method responsible for launching new workers
+  * implement [`manage`](@ref), which is called at various events during a worker's lifetime (for
     example, sending an interrupt signal)
 
 [`addprocs(manager::FooManager)`](@ref addprocs) requires `FooManager` to implement:
@@ -1088,28 +1099,35 @@ function manage(manager::LocalManager, id::Integer, config::WorkerConfig, op::Sy
 end
 ```
 
-The [`launch()`](@ref) method takes the following arguments:
+The [`launch`](@ref) method takes the following arguments:
 
-  * `manager::ClusterManager`: the cluster manager that [`addprocs()`](@ref) is called with
-  * `params::Dict`: all the keyword arguments passed to [`addprocs()`](@ref)
+  * `manager::ClusterManager`: the cluster manager that [`addprocs`](@ref) is called with
+  * `params::Dict`: all the keyword arguments passed to [`addprocs`](@ref)
   * `launched::Array`: the array to append one or more `WorkerConfig` objects to
   * `c::Condition`: the condition variable to be notified as and when workers are launched
 
-The [`launch()`](@ref) method is called asynchronously in a separate task. The termination of
-this task signals that all requested workers have been launched. Hence the [`launch()`](@ref)
+The [`launch`](@ref) method is called asynchronously in a separate task. The termination of
+this task signals that all requested workers have been launched. Hence the [`launch`](@ref)
 function MUST exit as soon as all the requested workers have been launched.
 
-Newly launched workers are connected to each other, and the master process, in an all-to-all manner.
-Specifying the command argument `--worker <cookie>` results in the launched processes initializing
-themselves as workers and connections being set up via TCP/IP sockets. Optionally, `--bind-to bind_addr[:port]`
-may also be specified to enable other workers to connect to it at the specified `bind_addr` and
-`port`. This is useful for multi-homed hosts.
+Newly launched workers are connected to each other and the master process in an all-to-all manner.
+Specifying the command line argument `--worker[=<cookie>]` results in the launched processes
+initializing themselves as workers and connections being set up via TCP/IP sockets.
+
+All workers in a cluster share the same [cookie](#cluster-cookie) as the master. When the cookie is
+unspecified, i.e, with the `--worker` option, the worker tries to read it from its standard input.
+ `LocalManager` and `SSHManager` both pass the cookie to newly launched workers via their
+ standard inputs.
+
+By default a worker will listen on a free port at the address returned by a call to `getipaddr()`.
+A specific address to listen on may be specified by optional argument `--bind-to bind_addr[:port]`.
+This is useful for multi-homed hosts.
 
 As an example of a non-TCP/IP transport, an implementation may choose to use MPI, in which case
 `--worker` must NOT be specified. Instead, newly launched workers should call `init_worker(cookie)`
 before using any of the parallel constructs.
 
-For every worker launched, the [`launch()`](@ref) method must add a `WorkerConfig` object (with
+For every worker launched, the [`launch`](@ref) method must add a `WorkerConfig` object (with
 appropriate fields initialized) to `launched`
 
 ```julia
@@ -1212,8 +1230,8 @@ When using custom transports:
     must be called. This launches a new task that handles reading and writing of messages from/to
     the worker represented by the `IO` objects.
   * `init_worker(cookie, manager::FooManager)` MUST be called as part of worker process initialization.
-  * Field `connect_at::Any` in `WorkerConfig` can be set by the cluster manager when [`launch()`](@ref)
-    is called. The value of this field is passed in in all [`connect()`](@ref) callbacks. Typically,
+  * Field `connect_at::Any` in `WorkerConfig` can be set by the cluster manager when [`launch`](@ref)
+    is called. The value of this field is passed in in all [`connect`](@ref) callbacks. Typically,
     it carries information on *how to connect* to a worker. For example, the TCP/IP socket transport
     uses this field to specify the `(host, port)` tuple at which to connect to a worker.
 
@@ -1231,8 +1249,8 @@ as local laptops, departmental clusters, or even the cloud. This section covers 
 requirements for the inbuilt `LocalManager` and `SSHManager`:
 
   * The master process does not listen on any port. It only connects out to the workers.
-  * Each worker binds to only one of the local interfaces and listens on the first free port starting
-    from `9009`.
+  * Each worker binds to only one of the local interfaces and listens on an ephemeral port number
+    assigned by the OS.
   * `LocalManager`, used by `addprocs(N)`, by default binds only to the loopback interface. This means
     that workers started later on remote hosts (or by anyone with malicious intentions) are unable
     to connect to the cluster. An `addprocs(4)` followed by an `addprocs(["remote_host"])` will fail.
@@ -1250,8 +1268,9 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
     authenticated via public key infrastructure (PKI). Authentication credentials can be supplied
     via `sshflags`, for example ```sshflags=`-e <keyfile>` ```.
 
-    Note that worker-worker connections are still plain TCP and the local security policy on the remote
-    cluster must allow for free connections between worker nodes, at least for ports 9009 and above.
+    In an all-to-all topology (the default), all workers connect to each other via plain TCP sockets.
+    The security policy on the cluster nodes must thus ensure free connectivity between workers for
+    the ephemeral port range (varies by OS).
 
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
     can be done via a custom ClusterManager.
@@ -1265,10 +1284,12 @@ on the master process:
     it and returns the new cookie.
   * All connections are authenticated on both sides to ensure that only workers started by the master
     are allowed to connect to each other.
-  * The cookie must be passed to the workers at startup via argument `--worker <cookie>`. Custom ClusterManagers
-    can retrieve the cookie on the master by calling [`Base.cluster_cookie()`](@ref). Cluster managers
-    not using the default TCP/IP transport (and hence not specifying `--worker`) must call `init_worker(cookie, manager)`
-    with the same cookie as on the master.
+  * The cookie may be passed to the workers at startup via argument `--worker=<cookie>`. If argument
+    `--worker` is specified without the cookie, the worker tries to read the cookie from its
+    standard input (STDIN). The STDIN is closed immediately after the cookie is retrieved.
+  * ClusterManagers can retrieve the cookie on the master by calling [`Base.cluster_cookie()`](@ref).
+    Cluster managers not using the default TCP/IP transport (and hence not specifying `--worker`)
+    must call `init_worker(cookie, manager)` with the same cookie as on the master.
 
 Note that environments requiring higher levels of security can implement this via a custom `ClusterManager`.
 For example, cookies can be pre-shared and hence not specified as a startup argument.
@@ -1283,6 +1304,12 @@ connected to each other:
   * `:custom`: the `launch` method of the cluster manager specifies the connection topology via the
     fields `ident` and `connect_idents` in `WorkerConfig`. A worker with a cluster-manager-provided
     identity `ident` will connect to all workers specified in `connect_idents`.
+
+Keyword argument `lazy=true|false` only affects `topology` option `:all_to_all`. If `true`, the cluster
+starts off with the master connected to all workers. Specific worker-worker connections are established
+at the first remote invocation between two workers. This helps in reducing initial resources allocated for
+intra-cluster communication. Connections are setup depending on the runtime requirements of a parallel
+program. Default value for `lazy` is `true`.
 
 Currently, sending a message between unconnected workers results in an error. This behaviour,
 as with the functionality and interface, should be considered experimental in nature and may change
@@ -1299,7 +1326,7 @@ in the future.
 By default, Julia starts up with a single thread of execution. This can be verified by using the
 command [`Threads.nthreads()`](@ref):
 
-```julia
+```julia-repl
 julia> Threads.nthreads()
 1
 ```
@@ -1307,7 +1334,7 @@ julia> Threads.nthreads()
 The number of threads Julia starts up with is controlled by an environment variable called `JULIA_NUM_THREADS`.
 Now, let's start up Julia with 4 threads:
 
-```
+```bash
 export JULIA_NUM_THREADS=4
 ```
 
@@ -1317,14 +1344,14 @@ start up the command line in the location of `julia.exe` and use `set` instead o
 
 Let's verify there are 4 threads at our disposal.
 
-```julia
+```julia-repl
 julia> Threads.nthreads()
 4
 ```
 
-But we are currently on the master thread. To check, we use the command [`Threads.threadid()`](@ref)
+But we are currently on the master thread. To check, we use the function [`Threads.threadid`](@ref)
 
-```julia
+```julia-repl
 julia> Threads.threadid()
 1
 ```
@@ -1354,7 +1381,7 @@ thread ID into each location.
 Julia supports parallel loops using the [`Threads.@threads`](@ref) macro. This macro is affixed
 in front of a `for` loop to indicate to Julia that the loop is a multi-threaded region:
 
-```julia
+```julia-repl
 julia> Threads.@threads for i = 1:10
            a[i] = Threads.threadid()
        end
@@ -1363,7 +1390,7 @@ julia> Threads.@threads for i = 1:10
 The iteration space is split amongst the threads, after which each thread writes its thread ID
 to its assigned locations:
 
-```julia
+```julia-repl
 julia> a
 10-element Array{Float64,1}:
  1.0
@@ -1386,12 +1413,12 @@ All I/O tasks, timers, REPL commands, etc are multiplexed onto a single OS threa
 loop. A patched version of libuv ([http://docs.libuv.org/en/v1.x/](http://docs.libuv.org/en/v1.x/))
 provides this functionality. Yield points provide for co-operatively scheduling multiple tasks
 onto the same OS thread. I/O tasks and timers yield implicitly while waiting for the event to
-occur. Calling [`yield()`](@ref) explicitly allows for other tasks to be scheduled.
+occur. Calling [`yield`](@ref) explicitly allows for other tasks to be scheduled.
 
 Thus, a task executing a [`ccall`](@ref) effectively prevents the Julia scheduler from executing any other
 tasks till the call returns. This is true for all calls into external libraries. Exceptions are
 calls into custom C code that call back into Julia (which may then yield) or C code that calls
-`jl_yield()` (C equivalent of [`yield()`](@ref)).
+`jl_yield()` (C equivalent of [`yield`](@ref)).
 
 Note that while Julia code runs on a single thread (by default), libraries used by Julia may launch
 their own internal threads. For example, the BLAS library may start as many threads as there are
@@ -1413,5 +1440,4 @@ It is very important that the called function does not call back into Julia.
     In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee
     introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access
     (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication
-    patterns. For additional information on the latest MPI standard, see [http://mpi-forum.org/docs](http://mpi-forum.org/docs).
-
+    patterns. For additional information on the latest MPI standard, see [http://mpi-forum.org/docs](http://mpi-forum.org/docs/).

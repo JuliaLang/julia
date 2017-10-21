@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Support for @simd for
 
@@ -7,8 +7,8 @@ module SimdLoop
 export @simd, simd_outer_range, simd_inner_length, simd_index
 
 # Error thrown from ill-formed uses of @simd
-mutable struct SimdError <: Exception
-    msg::String
+struct SimdError <: Exception
+    msg::AbstractString
 end
 
 # Parse iteration space expression

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # The Computer Language Benchmarks Game
 # http://shootout.alioth.debian.org/
@@ -65,7 +65,7 @@ function k_nucleotide(infile="knucleotide-input.txt")
     for line in eachline(input)
         startswith(line, ">THREE ") && break
     end
-    data = collect(readstring(input))
+    data = collect(read(input, String))
     # delete the newlines and convert to upper case
     i, j = 1, 1
     while i <= length(data)

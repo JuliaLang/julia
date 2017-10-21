@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ### Data
 
@@ -20,7 +20,7 @@ let x = spv_x1
     @test size(x,2) == 1
     @test !isempty(x)
 
-    @test countnz(x) == 3
+    @test count(!iszero, x) == 3
     @test nnz(x) == 3
     @test SparseArrays.nonzeroinds(x) == [2, 5, 6]
     @test nonzeros(x) == [1.25, -0.75, 3.5]
@@ -159,10 +159,10 @@ let xr = sprand(Bool, 1000, 0.9)
     @test all(nonzeros(xr))
 end
 
-let r1 = MersenneTwister(), r2 = MersenneTwister()
+let r1 = MersenneTwister(0), r2 = MersenneTwister(0)
     @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
     @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
-    @test sprand(r1, Bool, 100, .9, ) == sprand(r2,  Bool, 100, .9)
+    @test sprand(r1, Bool, 100, .9) == sprand(r2,  Bool, 100, .9)
 end
 
 ### Element access
@@ -256,10 +256,12 @@ let x = SparseVector(10, [2, 7, 9], [2.0, 7.0, 9.0])
 end
 
 # find and findnz tests
-@test find(spv_x1) == find(x1_full)
-@test findnz(spv_x1) == (find(x1_full), filter(x->x!=0, x1_full))
+@test find(!iszero, spv_x1) == find(!iszero, x1_full)
+@test find(spv_x1 .> 1) == find(x1_full .> 1)
+@test find(x->x>1, spv_x1) == find(x->x>1, x1_full)
+@test findnz(spv_x1) == (find(!iszero, x1_full), filter(x->x!=0, x1_full))
 let xc = SparseVector(8, [2, 3, 5], [1.25, 0, -0.75]), fc = Array(xc)
-    @test find(xc) == find(fc)
+    @test find(!iszero, xc) == find(!iszero, fc)
     @test findnz(xc) == ([2, 5], [1.25, -0.75])
 end
 
@@ -279,11 +281,6 @@ let a = SparseVector(8, [2, 5, 6], Int32[12, 35, 72])
     # vec
     @test vec(a) == a
 
-    # reinterpret
-    au = reinterpret(UInt32, a)
-    @test isa(au, SparseVector{UInt32,Int})
-    @test exact_equal(au, SparseVector(8, [2, 5, 6], UInt32[12, 35, 72]))
-
     # float
     af = float(a)
     @test float(af) == af
@@ -296,7 +293,7 @@ let a = SparseVector(8, [2, 5, 6], Int32[12, 35, 72])
     @test complex(acp) == acp
     @test isa(acp, SparseVector{Complex128,Int})
     @test exact_equal(acp, SparseVector(8, [2, 5, 6], complex([12., 35., 72.])))
-    @test sparsevec(ctranspose(ctranspose(acp))) == acp
+    @test sparsevec(adjoint(adjoint(acp))) == acp
 end
 
 let x1 = SparseVector(8, [2, 5, 6], [12.2, 1.4, 5.0])
@@ -474,7 +471,12 @@ let N = 4
     @test issparse(cat((1,2), densemat, diagmat, spmat, densevec, spvec))
     @test issparse(cat((1,2), spvec, diagmat, densevec, spmat, densemat))
 end
-
+@testset "vertical concatenation of SparseVectors with different el- and ind-type (#22225)" begin
+    spv6464 = SparseVector(0, Int64[], Int64[])
+    @test isa(vcat(spv6464, SparseVector(0, Int64[], Int32[])), SparseVector{Int64,Int64})
+    @test isa(vcat(spv6464, SparseVector(0, Int32[], Int64[])), SparseVector{Int64,Int64})
+    @test isa(vcat(spv6464, SparseVector(0, Int32[], Int32[])), SparseVector{Int64,Int64})
+end
 
 ## sparsemat: combinations with sparse matrix
 
@@ -637,54 +639,53 @@ let x = spv_x1, x2 = spv_x2
     @test exact_equal(complex.(x2, x),
         SparseVector(8, [1,2,5,6,7], [3.25+0.0im, 4.0+1.25im, -0.75im, -5.5+3.5im, -6.0+0.0im]))
 
-    # real & imag
+    # real, imag and conj
 
     @test real(x) === x
     @test exact_equal(imag(x), spzeros(Float64, length(x)))
+    @test conj(x) === x
 
     xcp = complex.(x, x2)
     @test exact_equal(real(xcp), x)
     @test exact_equal(imag(xcp), x2)
+    @test exact_equal(conj(xcp), complex.(x, -x2))
 end
 
 ### Zero-preserving math functions: sparse -> sparse
 
-function check_nz2z_z2z{T}(f::Function, x::SparseVector{T}, xf::Vector{T})
-    R = typeof(f(zero(T)))
-    r = f(x)
-    isa(r, AbstractSparseVector) || error("$f(x) is not a sparse vector.")
-    eltype(r) == R || error("$f(x) results in eltype = $(eltype(r)), expect $R")
-    all(r.nzval .!= 0) || error("$f(x) contains zeros in nzval.")
-    Array(r) == f.(xf) || error("Incorrect results found in $f(x).")
-end
+x1operations = (floor, ceil, trunc, round)
+x0operations = (log1p,  expm1,  sinpi,
+                sin,    tan,    sind,   tand,
+                asin,   atan,   asind,  atand,
+                sinh,   tanh,   asinh,  atanh)
 
-for f in [floor, ceil, trunc, round]
-    check_nz2z_z2z(f, rnd_x1, rnd_x1f)
-end
-
-for f in [log1p, expm1,
-          sin, tan, sinpi, sind, tand,
-          asin, atan, asind, atand,
-          sinh, tanh, asinh, atanh]
-    check_nz2z_z2z(f, rnd_x0, rnd_x0f)
+for (spvec, densevec, operations) in (
+        (rnd_x0, rnd_x0f, x0operations),
+        (rnd_x1, rnd_x1f, x1operations) )
+    for op in operations
+        spresvec = op.(spvec)
+        @test spresvec == op.(densevec)
+        @test all(!iszero, spresvec.nzval)
+        resvaltype = typeof(op(zero(eltype(spvec))))
+        resindtype = Base.SparseArrays.indtype(spvec)
+        @test isa(spresvec, SparseVector{resvaltype,resindtype})
+    end
 end
 
 ### Non-zero-preserving math functions: sparse -> dense
 
-function check_z2nz{T}(f::Function, x::SparseVector{T}, xf::Vector{T})
-    R = typeof(f(zero(T)))
-    r = f(x)
-    isa(r, Vector) || error("$f(x) is not a dense vector.")
-    eltype(r) == R || error("$f(x) results in eltype = $(eltype(r)), expect $R")
-    r == f.(xf) || error("Incorrect results found in $f(x).")
-end
-
-for f in [exp, exp2, exp10, log, log2, log10,
-          cos, csc, cot, sec, cospi,
-          cosd, cscd, cotd, secd,
-          acos, acot, acosd, acotd,
-          cosh, csch, coth, sech, acsch, asech]
-    check_z2nz(f, rnd_x0, rnd_x0f)
+for op in (exp, exp2, exp10, log, log2, log10,
+        cos, cosd, acos, cosh, cospi,
+        csc, cscd, acot, csch, acsch,
+        cot, cotd, acosd, coth,
+        sec, secd, acotd, sech, asech)
+    spvec = rnd_x0
+    densevec = rnd_x0f
+    spresvec = op.(spvec)
+    @test spresvec == op.(densevec)
+    resvaltype = typeof(op(zero(eltype(spvec))))
+    resindtype = Base.SparseArrays.indtype(spvec)
+    @test isa(spresvec, SparseVector{resvaltype,resindtype})
 end
 
 
@@ -988,6 +989,20 @@ let origmat = [-1.5 -0.7; 0.0 1.0]
     end
 end
 
+# kron
+let testdims = ((5,10), (20,12), (25,30))
+    for (m,n) in testdims
+        x = sprand(m, 0.4)
+        y = sprand(n, 0.3)
+        @test Vector(kron(x,y)) == kron(Vector(x), Vector(y))
+        @test Vector(kron(Vector(x),y)) == kron(Vector(x), Vector(y))
+        @test Vector(kron(x,Vector(y))) == kron(Vector(x), Vector(y))
+        # test different types
+        z = convert(SparseVector{Float16, Int8}, y)
+        @test Vector(kron(x, z)) == kron(Vector(x), Vector(z))
+    end
+end
+
 # fkeep!
 let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
     # droptol
@@ -1080,21 +1095,24 @@ s14046 = sprand(5, 1.0)
 @test 2*s14046 == s14046 + s14046
 
 # Issue 14589
-#test vectors with no zero elements
-x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
-@test collect(sort(x)) == sort(collect(x))
-#test vectors with all zero elements
-x = sparsevec(Int64[], Float64[], 7)
-@test collect(sort(x)) == sort(collect(x))
-#test vector with sparsity approx 1/2
-x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
-@test collect(sort(x)) == sort(collect(x))
-# apply three distinct tranformations where zeros sort into start/middle/end
-@test collect(sort(x, by=abs)) == sort(collect(x), by=abs)
-@test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
-@test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
+# test vectors with no zero elements
+let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
+    @test collect(sort(x)) == sort(collect(x))
+end
+# test vectors with all zero elements
+let x = sparsevec(Int64[], Float64[], 7)
+    @test collect(sort(x)) == sort(collect(x))
+end
+# test vector with sparsity approx 1/2
+let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
+    @test collect(sort(x)) == sort(collect(x))
+    # apply three distinct tranformations where zeros sort into start/middle/end
+    @test collect(sort(x, by=abs)) == sort(collect(x), by=abs)
+    @test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
+    @test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
+end
 
-#fill!
+# fill!
 for Tv in [Float32, Float64, Int64, Int32, Complex128]
     for Ti in [Int16, Int32, Int64, BigInt]
         sptypes = (SparseMatrixCSC{Tv, Ti}, SparseVector{Tv, Ti})
@@ -1124,7 +1142,7 @@ end
 @test issparse([sprand(10,.1); rand(10)])
 
 
-type t20488 end
+mutable struct t20488 end
 
 @testset "similar" begin
     x = sparsevec(rand(3) .+ 0.1)
@@ -1145,4 +1163,14 @@ end
 
 @testset "spzeros with index type" begin
     @test typeof(spzeros(Float32, Int16, 3)) == SparseVector{Float32,Int16}
+end
+
+@testset "corner cases of broadcast arithmetic operations with scalars (#21515)" begin
+    # test both scalar literals and variables
+    areequal(a, b, c) = isequal(a, b) && isequal(b, c)
+    inf, zeroh, zv, spzv = Inf, 0.0, zeros(1), spzeros(1)
+    @test areequal(spzv .* Inf,  spzv .* inf,    sparsevec(zv .* Inf))
+    @test areequal(Inf .* spzv,  inf .* spzv,    sparsevec(Inf .* zv))
+    @test areequal(spzv ./ 0.0,  spzv ./ zeroh,  sparsevec(zv ./ 0.0))
+    @test areequal(0.0 .\ spzv,  zeroh .\ spzv,  sparsevec(0.0 .\ zv))
 end

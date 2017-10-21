@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## core text I/O ##
 
@@ -12,6 +12,7 @@ of a value if there is one, otherwise call [`show`](@ref).
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
+# Examples
 ```jldoctest
 julia> print("Hello World!")
 Hello World!
@@ -50,6 +51,19 @@ end
 
 Print (using [`print`](@ref)) `xs` followed by a newline.
 If `io` is not supplied, prints to [`STDOUT`](@ref).
+
+# Examples
+```jldoctest
+julia> println("Hello, world")
+Hello, world
+
+julia> io = IOBuffer();
+
+julia> println(io, "Hello, world")
+
+julia> String(take!(io))
+"Hello, world\\n"
+```
 """
 println(io::IO, xs...) = print(io, xs..., '\n')
 
@@ -74,6 +88,7 @@ end
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
 
+# Examples
 ```jldoctest
 julia> sprint(showcompact, 66.66666)
 "66.6667"
@@ -112,6 +127,7 @@ string_with_env(env, xs...) = print_to_string(xs...; env=env)
 
 Create a string from any values using the [`print`](@ref) function.
 
+# Examples
 ```jldoctest
 julia> string("a", 1, true)
 "a1true"
@@ -123,7 +139,7 @@ print(io::IO, s::AbstractString) = (write(io, s); nothing)
 write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); end; len)
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
-write(to::AbstractIOBuffer, s::SubString{String}) =
+write(to::GenericIOBuffer, s::SubString{String}) =
     s.endof==0 ? 0 : unsafe_write(to, pointer(s.string, s.offset + 1), UInt(nextind(s, s.endof) - 1))
 
 ## printing literal quoted string data ##
@@ -139,11 +155,21 @@ end
 """
     repr(x)
 
-Create a string from any value using the [`showall`](@ref) function.
+Create a string from any value using the [`show`](@ref) function.
+
+# Examples
+```jldoctest
+julia> repr(1)
+"1"
+
+julia> repr(zeros(3))
+"[0.0, 0.0, 0.0]"
+
+```
 """
 function repr(x)
     s = IOBuffer()
-    showall(s, x)
+    show(s, x)
     String(take!(s))
 end
 
@@ -154,6 +180,7 @@ end
 
 Create a read-only `IOBuffer` on the data underlying the given string.
 
+# Examples
 ```jldoctest
 julia> io = IOBuffer("Haho");
 
@@ -176,6 +203,7 @@ Join an array of `strings` into a single string, inserting the given delimiter b
 adjacent strings. If `last` is given, it will be used instead of `delim` between the last
 two strings. For example,
 
+# Examples
 ```jldoctest
 julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 "apples, bananas and pineapples"
@@ -299,7 +327,8 @@ function unescape_string(io, s::AbstractString)
                     i = j
                 end
                 if k == 1
-                    throw(ArgumentError("\\x used with no following hex digits in $(repr(s))"))
+                    throw(ArgumentError("invalid $(m == 2 ? "hex (\\x)" :
+                                            "unicode (\\u)") escape sequence used in $(repr(s))"))
                 end
                 if m == 2 # \x escape sequence
                     write(io, UInt8(n))
@@ -338,11 +367,28 @@ unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
 
 macro b_str(s); :(Vector{UInt8}($(unescape_string(s)))); end
 
+"""
+    @raw_str -> String
+
+Create a raw string without interpolation and unescaping.
+The exception is that quotation marks still must be escaped.
+
+# Examples
+```jldoctest
+julia> raw"\\""
+"\\""
+
+julia> raw""\" " ""\"
+" \\" "
+```
+"""
 macro raw_str(s); s; end
 
 ## multiline strings ##
 
 """
+    indentation(str::AbstractString; tabwidth=8)
+
 Calculate the width of leading blank space, and also return if string is blank
 
 Returns:
@@ -364,7 +410,9 @@ function indentation(str::AbstractString; tabwidth=8)
 end
 
 """
-Removes leading indentation from string
+    unindent(str::AbstractString, indent::Int; tabwidth=8)
+
+Remove leading indentation from string
 
 Returns:
 

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Schur decomposition
 struct Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
@@ -7,7 +7,7 @@ struct Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
     values::Vector
     Schur{Ty,S}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty,S} = new(T, Z, values)
 end
-Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where Ty = Schur{Ty, typeof(T)}(T, Z, values)
+Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty} = Schur{Ty, typeof(T)}(T, Z, values)
 
 """
     schurfact!(A::StridedMatrix) -> F::Schur
@@ -22,29 +22,30 @@ schurfact!(A::StridedMatrix{<:BlasFloat}) = Schur(LinAlg.LAPACK.gees!('V', A)...
 Computes the Schur factorization of the matrix `A`. The (quasi) triangular Schur factor can
 be obtained from the `Schur` object `F` with either `F[:Schur]` or `F[:T]` and the
 orthogonal/unitary Schur vectors can be obtained with `F[:vectors]` or `F[:Z]` such that
-`A = F[:vectors]*F[:Schur]*F[:vectors]'`. The eigenvalues of `A` can be obtained with `F[:values]`.
+`A = F[:vectors] * F[:Schur] * F[:vectors]'`. The eigenvalues of `A` can be obtained with `F[:values]`.
 
-# Example
-
+# Examples
 ```jldoctest
-julia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]
-3×3 Array{Float64,2}:
- -2.0  1.0   3.0
-  2.0  1.0  -1.0
- -7.0  2.0   7.0
+julia> A = [5. 7.; -2. -4.]
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
 
 julia> F = schurfact(A)
-Base.LinAlg.Schur{Float64,Array{Float64,2}}([2.0 0.801792 6.63509; -8.55988e-11 2.0 8.08286; 0.0 0.0 1.99999], [0.577351 0.154299 -0.801784; 0.577346 -0.77152 0.267262; 0.577354 0.617211 0.534522], Complex{Float64}[2.0+8.28447e-6im, 2.0-8.28447e-6im, 1.99999+0.0im])
+Base.LinAlg.Schur{Float64,Array{Float64,2}} with factors T and Z:
+[3.0 9.0; 0.0 -2.0]
+[0.961524 0.274721; -0.274721 0.961524]
+and values:
+[3.0, -2.0]
 
 julia> F[:vectors] * F[:Schur] * F[:vectors]'
-3×3 Array{Float64,2}:
- -2.0  1.0   3.0
-  2.0  1.0  -1.0
- -7.0  2.0   7.0
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
 ```
 """
 schurfact(A::StridedMatrix{<:BlasFloat}) = schurfact!(copy(A))
-function schurfact{T}(A::StridedMatrix{T})
+function schurfact(A::StridedMatrix{T}) where T
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
     return schurfact!(copy_oftype(A, S))
 end
@@ -76,33 +77,41 @@ end
 
 Computes the Schur factorization of the matrix `A`. The methods return the (quasi)
 triangular Schur factor `T` and the orthogonal/unitary Schur vectors `Z` such that
-`A = Z*T*Z'`. The eigenvalues of `A` are returned in the vector `λ`.
+`A = Z * T * Z'`. The eigenvalues of `A` are returned in the vector `λ`.
 
 See [`schurfact`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
-julia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]
-3×3 Array{Float64,2}:
- -2.0  1.0   3.0
-  2.0  1.0  -1.0
- -7.0  2.0   7.0
+julia> A = [5. 7.; -2. -4.]
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
 
 julia> T, Z, lambda = schur(A)
-([2.0 0.801792 6.63509; -8.55988e-11 2.0 8.08286; 0.0 0.0 1.99999], [0.577351 0.154299 -0.801784; 0.577346 -0.77152 0.267262; 0.577354 0.617211 0.534522], Complex{Float64}[2.0+8.28447e-6im, 2.0-8.28447e-6im, 1.99999+0.0im])
+([3.0 9.0; 0.0 -2.0], [0.961524 0.274721; -0.274721 0.961524], [3.0, -2.0])
+
+julia> Z * Z'
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
 
 julia> Z * T * Z'
-3×3 Array{Float64,2}:
- -2.0  1.0   3.0
-  2.0  1.0  -1.0
- -7.0  2.0   7.0
+2×2 Array{Float64,2}:
+  5.0   7.0
+ -2.0  -4.0
 ```
 """
 function schur(A::StridedMatrix)
     SchurF = schurfact(A)
     SchurF[:T], SchurF[:Z], SchurF[:values]
 end
+schur(A::Symmetric) = schur(copy!(similar(parent(A)), A))
+schur(A::Hermitian) = schur(copy!(similar(parent(A)), A))
+schur(A::UpperTriangular) = schur(copy!(similar(parent(A)), A))
+schur(A::LowerTriangular) = schur(copy!(similar(parent(A)), A))
+schur(A::Tridiagonal) = schur(Matrix(A))
+
 
 """
     ordschur!(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur
@@ -133,8 +142,8 @@ ordschur(schur::Schur, select::Union{Vector{Bool},BitVector}) =
 
 Same as [`ordschur`](@ref) but overwrites the input arguments.
 """
-ordschur!{Ty<:BlasFloat}(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) =
-    LinAlg.LAPACK.trsen!(convert(Vector{BlasInt}, select), T, Z)
+ordschur!(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
+    LinAlg.LAPACK.trsen!(convert(Vector{BlasInt}, select), T, Z)[1:3]
 
 """
     ordschur(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector
@@ -146,7 +155,7 @@ corresponding leading columns of `Z` form an orthogonal/unitary basis of the cor
 right invariant subspace. In the real case, a complex conjugate pair of eigenvalues must be
 either both included or both excluded via `select`.
 """
-ordschur{Ty<:BlasFloat}(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) =
+ordschur(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
     ordschur!(copy(T), copy(Z), select)
 
 struct GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
@@ -171,7 +180,7 @@ end
 
 Same as [`schurfact`](@ref) but uses the input matrices `A` and `B` as workspace.
 """
-schurfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) =
+schurfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
     GeneralizedSchur(LinAlg.LAPACK.gges!('V', 'V', A, B)...)
 
 """
@@ -184,8 +193,8 @@ and `F[:T]`, the left unitary/orthogonal Schur vectors can be obtained with `F[:
 `F[:Z]` such that `A=F[:left]*F[:S]*F[:right]'` and `B=F[:left]*F[:T]*F[:right]'`. The
 generalized eigenvalues of `A` and `B` can be obtained with `F[:alpha]./F[:beta]`.
 """
-schurfact{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = schurfact!(copy(A),copy(B))
-function schurfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB})
+schurfact(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schurfact!(copy(A),copy(B))
+function schurfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))), TB)
     return schurfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
@@ -220,8 +229,8 @@ ordschur(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) =
 
 Same as [`ordschur`](@ref) but overwrites the factorization the input arguments.
 """
-ordschur!{Ty<:BlasFloat}(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
-    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) =
+ordschur!(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
+    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
         LinAlg.LAPACK.tgsen!(convert(Vector{BlasInt}, select), S, T, Q, Z)
 
 """
@@ -234,8 +243,8 @@ and `T`, and the left and right unitary/orthogonal Schur vectors are also reorde
 that `(A, B) = Q*(S, T)*Z'` still holds and the generalized eigenvalues of `A` and `B` can
 still be obtained with `α./β`.
 """
-ordschur{Ty<:BlasFloat}(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
-    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) =
+ordschur(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
+    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
         ordschur!(copy(S), copy(T), copy(Q), copy(Z), select)
 
 function getindex(F::GeneralizedSchur, d::Symbol)

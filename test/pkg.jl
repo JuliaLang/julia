@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.Pkg.PkgError
 
@@ -10,7 +10,7 @@ function capture_stdout(f::Function)
                     f()
                 end
             end
-            return readstring(fname)
+            return read(fname, String)
         finally
             rm(fname, force=true)
         end
@@ -18,20 +18,31 @@ function capture_stdout(f::Function)
 end
 
 
-function temp_pkg_dir(fn::Function, remove_tmp_dir::Bool=true)
+function temp_pkg_dir(fn::Function, tmp_dir=joinpath(tempdir(), randstring()),
+        remove_tmp_dir::Bool=true; initialize::Bool=true)
+
     # Used in tests below to set up and tear down a sandboxed package directory
-    const tmpdir = joinpath(tempdir(),randstring())
-    withenv("JULIA_PKGDIR" => tmpdir) do
+    withenv("JULIA_PKGDIR" => tmp_dir) do
         @test !isdir(Pkg.dir())
         try
-            Pkg.init()
-            @test isdir(Pkg.dir())
-            Pkg.resolve()
+            if initialize
+                Pkg.init()
+                @test isdir(Pkg.dir())
+                Pkg.resolve()
+            else
+                mkpath(Pkg.dir())
+            end
             fn()
         finally
-            remove_tmp_dir && rm(tmpdir, recursive=true)
+            remove_tmp_dir && rm(tmp_dir, recursive=true)
         end
     end
+end
+
+function write_build(pkg, content)
+    build_filename = Pkg.dir(pkg, "deps", "build.jl")
+    mkpath(dirname(build_filename))
+    write(build_filename, content)
 end
 
 # Test basic operations: adding or removing a package, status, free
@@ -53,14 +64,6 @@ temp_pkg_dir() do
 
     @test_throws PkgError Pkg.installed("MyFakePackage")
     @test Pkg.installed("Example") === nothing
-
-    # check that versioninfo(io, true) doesn't error and produces some output
-    # (done here since it calls Pkg.status which might error or clone metadata)
-    buf = PipeBuffer()
-    versioninfo(buf, true)
-    ver = readstring(buf)
-    @test startswith(ver, "Julia Version $VERSION")
-    @test contains(ver, "Environment:")
 
     # Check that setprotocol! works.
     begin
@@ -124,7 +127,6 @@ temp_pkg_dir() do
     Pkg.status("Example", iob)
     str = chomp(String(take!(iob)))
     @test endswith(str, string(Pkg.installed("Example")))
-    @test isempty(Pkg.dependents("Example"))
 
     # 17364 - a, Pkg.checkout with specific local branch
     let branch_name = "test-branch-1",
@@ -312,7 +314,7 @@ temp_pkg_dir() do
         include(Pkg.dir("Example","src","Example.jl"))
         meth = first(methods(Example.domath))
         fname = string(meth.file)
-        @test ('\\' in fname) == is_windows()
+        @test ('\\' in fname) == Sys.iswindows()
         @test startswith(Base.url(meth), "https://github.com/JuliaLang/Example.jl/tree")
     end
 
@@ -398,13 +400,13 @@ temp_pkg_dir() do
         touch(depsbuild)
         # Pkg.build works without the src directory now
         # but it's probably fine to require it.
-        msg = readstring(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
+        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`, String)
         @test contains(msg, "Building BuildFail")
         @test !contains(msg, "ERROR")
         open(depsbuild, "w") do fd
             println(fd, "error(\"Throw build error\")")
         end
-        msg = readstring(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
+        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`, String)
         @test contains(msg, "Building BuildFail")
         @test contains(msg, "ERROR")
         @test contains(msg, "Pkg.build(\"BuildFail\")")
@@ -415,9 +417,27 @@ temp_pkg_dir() do
     let package = "Example"
         Pkg.rm(package)  # Remove package if installed
         @test Pkg.installed(package) === nothing  # Registered with METADATA but not installed
-        msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`))
+        msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`), String)
         @test contains(msg, "$package is not an installed package")
         @test !contains(msg, "signal (15)")
+    end
+
+    # issue #20695
+    Pkg.cd() do
+        @test Pkg.Entry.url_and_pkg("Example") == ("git://github.com/JuliaLang/Example.jl.git", "Example")
+        for url = [
+            "https://github.com/Org/Nonsense",
+            "git@github.com:Org/Nonsense",
+            "file:///home/user/Nonsense",
+            "/home/user/Nonsense",
+        ]
+            @test Pkg.Entry.url_and_pkg(url) == (url, "Nonsense")
+            @test Pkg.Entry.url_and_pkg("$url.jl") == ("$url.jl", "Nonsense")
+            @test Pkg.Entry.url_and_pkg("$url.git") == ("$url.git", "Nonsense")
+            @test Pkg.Entry.url_and_pkg("$url.jl.git") == ("$url.jl.git", "Nonsense")
+        end
+        pkg = randstring(20)
+        @test Pkg.Entry.url_and_pkg(pkg) == (pkg, pkg)
     end
 
     # partial Pkg.update
@@ -452,12 +472,27 @@ temp_pkg_dir() do
                     nothingtodomsg) Pkg.update("Example")
 
         metadata_dir = Pkg.dir("METADATA")
-        const old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
+        old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
 
         # Force a METADATA rollback to an old version, so that we will install some
         # outdated versions of some packages and then update some of those
         # (note that the following Pkg.update calls will update METADATA to the
         # latest version even though they don't update all packages)
+        LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
+            LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
+        end
+
+        # run these at an old metadata commit where it's guaranteed no
+        # packages depend on Example.jl
+        @test isempty(Pkg.dependents("Example"))
+        @test isempty(Pkg.dependents("Example.jl"))
+
+        @test_warn s -> !contains(s, "updated but were already imported") begin
+            Pkg.add("Iterators")
+            Pkg.update("Iterators")
+        end
+
+        # Do it again, because the above Iterators test will update things prematurely
         LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
             LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
         end
@@ -482,7 +517,7 @@ temp_pkg_dir() do
         Pkg.rm(package)  # Remove package if installed
 
         metadata_dir = Pkg.dir("METADATA")
-        const old_commit = "83ff7116e51fc9cdbd7e67affbd344b9f5c9dbf2"
+        old_commit = "83ff7116e51fc9cdbd7e67affbd344b9f5c9dbf2"
 
         # Reset METADATA to the second to last update of Example.jl
         LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
@@ -490,13 +525,153 @@ temp_pkg_dir() do
         end
 
         Pkg.add(package)
-        msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
-            "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`))
+        msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
+            "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`), String)
         @test contains(msg, "- $package\nRestart Julia to use the updated versions.")
+    end
+
+    # Verify that the --startup-file flag is respected by Pkg.build / Pkg.test
+    let package = "StartupFile"
+        content = """
+            info("JULIA_RC_LOADED defined \$(isdefined(@__MODULE__, :JULIA_RC_LOADED))")
+            info("Main.JULIA_RC_LOADED defined \$(isdefined(Main, :JULIA_RC_LOADED))")
+            """
+
+        write_build(package, content)
+
+        test_filename = Pkg.dir(package, "test", "runtests.jl")
+        mkpath(dirname(test_filename))
+        write(test_filename, content)
+
+        # Make a .juliarc.jl
+        home = Pkg.dir(".home")
+        mkdir(home)
+        write(joinpath(home, ".juliarc.jl"), "const JULIA_RC_LOADED = true")
+
+        withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => home) do
+            code = "redirect_stderr(STDOUT); Pkg.build(\"$package\")"
+
+            msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
+            @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
+            @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined false")
+
+            msg = read(`$(Base.julia_cmd()) --startup-file=yes -e $code`, String)
+            @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
+            @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined true")
+
+            code = "redirect_stderr(STDOUT); Pkg.test(\"$package\")"
+
+            msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
+            @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
+            @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined false")
+
+            # Note: Since both the startup-file and "runtests.jl" are run in the Main
+            # module any global variables created in the .juliarc.jl can be referenced.
+            msg = read(`$(Base.julia_cmd()) --startup-file=yes -e $code`, String)
+            @test contains(msg, "INFO: JULIA_RC_LOADED defined true")
+            @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined true")
+        end
+    end
+
+    let package = "Output"
+        stdout_file = Pkg.dir(package, "stdout.txt")
+        stderr_file = Pkg.dir(package, "stderr.txt")
+        content = """
+            println(STDOUT, "stdout")
+            println(STDERR, "stderr")
+            """
+        write_build(package, content)
+
+        code = "Pkg.build(\"$package\")"
+        msg = run(pipeline(
+            `$(Base.julia_cmd()) --startup-file=no -e $code`,
+            stdout=stdout_file, stderr=stderr_file))
+        @test last(readlines(stdout_file)) == "stdout"
+        @test last(readlines(stderr_file)) == "stderr"
+    end
+end
+
+@testset "Pkg functions with .jl extension" begin
+    temp_pkg_dir() do
+        @test Pkg.installed("Example.jl") === nothing
+        Pkg.add("Example.jl")
+        @test [keys(Pkg.installed())...] == ["Example"]
+        iob = IOBuffer()
+        Pkg.update("Example.jl")
+        Pkg.checkout("Example.jl")
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test startswith(str, " - Example")
+        @test endswith(str, "master")
+        Pkg.free("Example.jl")
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+        Pkg.checkout("Example.jl")
+        Pkg.free(("Example.jl",))
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+        Pkg.rm("Example.jl")
+        @test isempty(Pkg.installed())
+        @test !isempty(Pkg.available("Example.jl"))
+        @test !in("Example", keys(Pkg.installed()))
+        Pkg.rm("Example.jl")
+        @test isempty(Pkg.installed())
+        @test !isempty(Pkg.available("Example.jl"))
+        @test !in("Example", keys(Pkg.installed()))
+        Pkg.clone("https://github.com/JuliaLang/Example.jl.git")
+        @test [keys(Pkg.installed())...] == ["Example"]
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test startswith(str, " - Example")
+        @test endswith(str, "master")
+        Pkg.free("Example.jl")
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+        Pkg.checkout("Example.jl")
+        Pkg.free(("Example.jl",))
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
     end
 end
 
 let io = IOBuffer()
     Base.showerror(io, Base.Pkg.Entry.PkgTestError("ppp"), backtrace())
     @test !contains(String(take!(io)), "backtrace()")
+end
+
+@testset "Relative path operations" begin
+    cd(tempdir()) do
+        temp_pkg_dir(randstring()) do
+            Pkg.add("Example")
+            @test [keys(Pkg.installed())...] == ["Example"]
+        end
+    end
+end
+
+temp_pkg_dir(initialize=false) do
+    write_build("Normal", "")
+    write_build("Error", "error(\"An error has occurred while building a package\")")
+    write_build("Exit", "exit()")
+
+    cd(Pkg.dir()) do
+        errors = Dict()
+
+        empty!(errors)
+        @test_warn ("INFO: Building Error",
+                    "INFO: Building Normal") Pkg.Entry.build!(["Error", "Normal"], errors)
+
+        empty!(errors)
+        @test_warn ("INFO: Building Exit",
+                    "INFO: Building Normal") Pkg.Entry.build!(["Exit", "Normal"], errors)
+
+        empty!(errors)
+        @test_warn ("INFO: Building Exit",
+                    "INFO: Building Normal",
+                    "INFO: Building Exit",
+                    "INFO: Building Normal") Pkg.Entry.build!(["Exit", "Normal", "Exit", "Normal"], errors)
+    end
 end

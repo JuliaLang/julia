@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## IOStream
 
@@ -26,7 +26,15 @@ IOStream(name::AbstractString) = IOStream(name, true)
 
 unsafe_convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, pointer(s.ios))
 show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
+
+"""
+    fd(stream)
+
+Returns the file descriptor backing the stream or file. Note that this function only applies
+to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
+"""
 fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
+
 stat(s::IOStream) = stat(fd(s))
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 isopen(s::IOStream) = ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios)!=0
@@ -39,11 +47,22 @@ end
 iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios)!=0
 isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios)!=0
 
+"""
+    truncate(file,n)
+
+Resize the file or buffer given by the first argument to exactly `n` bytes, filling
+previously unallocated space with '\\0' if the file or buffer is grown.
+"""
 function truncate(s::IOStream, n::Integer)
     systemerror("truncate", ccall(:ios_trunc, Cint, (Ptr{Void}, Csize_t), s.ios, n) != 0)
     return s
 end
 
+"""
+    seek(s, pos)
+
+Seek a stream to the given position.
+"""
 function seek(s::IOStream, n::Integer)
     ret = ccall(:ios_seek, Int64, (Ptr{Void}, Int64), s.ios, n)
     systemerror("seek", ret == -1)
@@ -51,13 +70,28 @@ function seek(s::IOStream, n::Integer)
     return s
 end
 
+"""
+    seekstart(s)
+
+Seek a stream to its beginning.
+"""
 seekstart(s::IO) = seek(s,0)
 
+"""
+    seekend(s)
+
+Seek a stream to its end.
+"""
 function seekend(s::IOStream)
     systemerror("seekend", ccall(:ios_seek_end, Int64, (Ptr{Void},), s.ios) != 0)
     return s
 end
 
+"""
+    skip(s, offset)
+
+Seek a stream relative to the current position.
+"""
 function skip(s::IOStream, delta::Integer)
     ret = ccall(:ios_skip, Int64, (Ptr{Void}, Int64), s.ios, delta)
     systemerror("skip", ret == -1)
@@ -65,6 +99,11 @@ function skip(s::IOStream, delta::Integer)
     return s
 end
 
+"""
+    position(s)
+
+Get the current position of a stream.
+"""
 function position(s::IOStream)
     pos = ccall(:ios_pos, Int64, (Ptr{Void},), s.ios)
     systemerror("position", pos == -1)
@@ -144,7 +183,10 @@ end
 Apply the function `f` to the result of `open(args...)` and close the resulting file
 descriptor upon completion.
 
-**Example**: `open(readstring, "file.txt")`
+# Examples
+```julia-repl
+open(f->read(f, String), "file.txt")
+```
 """
 function open(f::Function, args...)
     io = open(args...)
@@ -164,21 +206,6 @@ function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
         throw(ArgumentError("write failed, IOStream is not writeable"))
     end
     return Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, p, nb))
-end
-
-function write{T,N}(s::IOStream, a::SubArray{T,N,<:Array})
-    if !isbits(T) || stride(a,1)!=1
-        return invoke(write, Tuple{Any, AbstractArray}, s, a)
-    end
-    colsz = size(a,1)*sizeof(T)
-    if N<=1
-        return unsafe_write(s, pointer(a, 1), colsz)
-    else
-        for idxs in CartesianRange((1, size(a)[2:end]...))
-            unsafe_write(s, pointer(a, idxs.I), colsz)
-        end
-        return colsz*trailingsize(a,2)
-    end
 end
 
 # num bytes available without blocking
@@ -237,7 +264,7 @@ end
 function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
     olb = lb = length(b)
     nr = 0
-    while nr < nb
+    @gc_preserve b while nr < nb
         if lb < nr+1
             lb = max(65536, (nr+1) * 2)
             resize!(b, lb)
@@ -257,8 +284,8 @@ function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
     if nb > lb
         resize!(b, nb)
     end
-    nr = Int(ccall(:ios_read, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t),
-                   s.ios, pointer(b), nb))
+    nr = @gc_preserve b Int(ccall(:ios_read, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t),
+                                  s.ios, pointer(b), nb))
     if lb > olb && lb > nr
         resize!(b, nr)
     end
@@ -287,7 +314,7 @@ function read(s::IOStream)
             sz -= pos
         end
     end
-    b = Array{UInt8,1}(sz<=0 ? 1024 : sz)
+    b = StringVector(sz<=0 ? 1024 : sz)
     nr = readbytes_all!(s, b, typemax(Int))
     resize!(b, nr)
 end
@@ -309,27 +336,14 @@ function read(s::IOStream, nb::Integer; all::Bool=true)
 end
 
 ## Character streams ##
-const _chtmp = Array{Char}(1)
+const _chtmp = Ref{Char}()
 function peekchar(s::IOStream)
     if ccall(:ios_peekutf8, Cint, (Ptr{Void}, Ptr{Char}), s, _chtmp) < 0
-        return Char(-1)
+        return typemax(Char)
     end
-    return _chtmp[1]
+    return _chtmp[]
 end
 
 function peek(s::IOStream)
     ccall(:ios_peekc, Cint, (Ptr{Void},), s)
-end
-
-function skipchars(s::IOStream, pred; linecomment::Char=Char(0xffffffff))
-    ch = peekchar(s); status = Int(ch)
-    while status >= 0 && (pred(ch) || ch == linecomment)
-        if ch == linecomment
-            readline(s)
-        else
-            read(s, Char)  # advance one character
-        end
-        ch = peekchar(s); status = Int(ch)
-    end
-    return s
 end

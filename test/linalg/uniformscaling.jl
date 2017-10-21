@@ -1,6 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 srand(123)
 
@@ -16,8 +16,9 @@ srand(123)
     @test one(UniformScaling(rand(Complex128))) == one(UniformScaling{Complex128})
     @test eltype(one(UniformScaling(rand(Complex128)))) == Complex128
     @test -one(UniformScaling(2)) == UniformScaling(-1)
-    @test sparse(3I,4,5) == spdiagm(fill(3,4),0,4,5)
-    @test sparse(3I,5,4) == spdiagm(fill(3,4),0,5,4)
+    @test sparse(3I,4,5) == sparse(1:4, 1:4, 3, 4, 5)
+    @test sparse(3I,5,4) == sparse(1:4, 1:4, 3, 5, 4)
+    @test norm(UniformScaling(1+im)) ≈ sqrt(2)
 end
 
 @testset "istriu, istril, issymmetric, ishermitian, isapprox" begin
@@ -29,46 +30,59 @@ end
     @test !ishermitian(UniformScaling(complex(1.0,1.0)))
     @test UniformScaling(4.00000000000001) ≈ UniformScaling(4.0)
     @test UniformScaling(4.32) ≈ UniformScaling(4.3) rtol=0.1 atol=0.01
+    @test UniformScaling(4.32) ≈ 4.3*eye(2) rtol=0.1 atol=0.01
+    @test UniformScaling(4.32) ≈ 4.3*eye(2) rtol=0.1 atol=0.01 norm=norm
+    @test 4.3*eye(2) ≈ UniformScaling(4.32) rtol=0.1 atol=0.01
+    @test [4.3201 0.002;0.001 4.32009] ≈ UniformScaling(4.32) rtol=0.1 atol=0.
+    @test UniformScaling(4.32) ≉ 4.3*ones(2,2) rtol=0.1 atol=0.01
 end
 
-@testset "* and / with number" begin
+@testset "arithmetic with Number" begin
     α = randn()
+    @test α + I == α + 1
+    @test I + α == α + 1
+    @test α - I == α - 1
+    @test I - α == 1 - α
     @test α .* UniformScaling(1.0) == UniformScaling(1.0) .* α
     @test UniformScaling(α)./α == UniformScaling(1.0)
+    @test α * UniformScaling(1.0) == UniformScaling(1.0) * α
+    @test UniformScaling(α)/α == UniformScaling(1.0)
+end
+
+@testset "det and logdet" begin
+    @test det(I) === 1
+    @test det(1.0I) === 1.0
+    @test det(0I) === 0
+    @test det(0.0I) === 0.0
+    @test logdet(I) == 0
+    @test_throws ArgumentError det(2I)
 end
 
 @test copy(UniformScaling(one(Float64))) == UniformScaling(one(Float64))
+@test sprint(show,UniformScaling(one(Complex128))) == "UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
 @test sprint(show,UniformScaling(one(Float32))) == "UniformScaling{Float32}\n1.0*I"
 
-λ = complex(randn(),randn())
-J = UniformScaling(λ)
-@testset "transpose, conj, inv" begin
-    @test ndims(J) == 2
-    @test transpose(J) == J
-    @test J*eye(2) == conj(J'eye(2)) # ctranpose (and A(c)_mul_B)
-    @test I + I === UniformScaling(2) # +
-    @test inv(I) == I
-    @test inv(J) == UniformScaling(inv(λ))
-    @test cond(I) == 1
-    @test cond(J) == (λ ≠ zero(λ) ? one(real(λ)) : oftype(real(λ), Inf))
-end
+let
+    λ = complex(randn(),randn())
+    J = UniformScaling(λ)
+    @testset "transpose, conj, inv" begin
+        @test ndims(J) == 2
+        @test transpose(J) == J
+        @test J*eye(2) == conj(J'eye(2)) # ctranpose (and A(c)_mul_B)
+        @test I + I === UniformScaling(2) # +
+        @test inv(I) == I
+        @test inv(J) == UniformScaling(inv(λ))
+        @test cond(I) == 1
+        @test cond(J) == (λ ≠ zero(λ) ? one(real(λ)) : oftype(real(λ), Inf))
+    end
 
-B = bitrand(2,2)
-@test B + I == B + eye(B)
-@test I + B == B + eye(B)
-
-@testset "binary ops with matrices" begin
-    let AA = randn(2, 2)
+    @testset "binary ops with matrices" begin
+        B = bitrand(2, 2)
+        @test B + I == B + eye(B)
+        @test I + B == B + eye(B)
+        AA = randn(2, 2)
         for SS in (sprandn(3,3, 0.5), speye(Int, 3))
-            @testset for atype in ("Array", "SubArray")
-                if atype == "Array"
-                    A = AA
-                    S = SS
-                else
-                    A = view(AA, 1:2, 1:2)
-                    S = view(SS, 1:3, 1:3)
-                end
-
+            for (A, S) in ((AA, SS), (view(AA, 1:2, 1:2), view(SS, 1:3, 1:3)))
                 @test @inferred(A + I) == A + eye(A)
                 @test @inferred(I + A) == A + eye(A)
                 @test @inferred(I - I) === UniformScaling(0)
@@ -97,48 +111,48 @@ B = bitrand(2,2)
                 @test @inferred(I/λ) === UniformScaling(1/λ)
                 @test @inferred(I\J) === J
 
-                if atype == "Array"
+                if isa(A, Array)
                     T = LowerTriangular(randn(3,3))
                 else
                     T = LowerTriangular(view(randn(3,3), 1:3, 1:3))
                 end
-                @test @inferred(T + J) == full(T) + J
-                @test @inferred(J + T) == J + full(T)
-                @test @inferred(T - J) == full(T) - J
-                @test @inferred(J - T) == J - full(T)
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
-                if atype == "Array"
+                if isa(A, Array)
                     T = LinAlg.UnitLowerTriangular(randn(3,3))
                 else
                     T = LinAlg.UnitLowerTriangular(view(randn(3,3), 1:3, 1:3))
                 end
-                @test @inferred(T + J) == full(T) + J
-                @test @inferred(J + T) == J + full(T)
-                @test @inferred(T - J) == full(T) - J
-                @test @inferred(J - T) == J - full(T)
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
-                if atype == "Array"
+                if isa(A, Array)
                     T = UpperTriangular(randn(3,3))
                 else
                     T = UpperTriangular(view(randn(3,3), 1:3, 1:3))
                 end
-                @test @inferred(T + J) == full(T) + J
-                @test @inferred(J + T) == J + full(T)
-                @test @inferred(T - J) == full(T) - J
-                @test @inferred(J - T) == J - full(T)
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
-                if atype == "Array"
+                if isa(A, Array)
                     T = LinAlg.UnitUpperTriangular(randn(3,3))
                 else
                     T = LinAlg.UnitUpperTriangular(view(randn(3,3), 1:3, 1:3))
                 end
-                @test @inferred(T + J) == full(T) + J
-                @test @inferred(J + T) == J + full(T)
-                @test @inferred(T - J) == full(T) - J
-                @test @inferred(J - T) == J - full(T)
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
                 @test @inferred(I\A) == A
@@ -164,5 +178,13 @@ end
         @test (vcat(I,3I,A,2I))::T == vcat(eye(4,4),3eye(4,4),A,2eye(4,4))
         @test (hvcat((2,1,2),B,2I,I,3I,4I))::T ==
             hvcat((2,1,2),B,2eye(3,3),eye(6,6),3eye(3,3),4eye(3,3))
+    end
+end
+
+@testset "chol" begin
+    for T in (Float64, Complex64, BigFloat, Int)
+        λ = T(4)
+        @test chol(λ*I) ≈ √λ*I
+        @test_throws LinAlg.PosDefException chol(-λ*I)
     end
 end

@@ -1,6 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 ######## Utilities ###########
 
@@ -34,11 +34,10 @@ _Agen(A, i1, i2, i3, i4) = [A[j1,j2,j3,j4] for j1 in i1, j2 in i2, j3 in i3, j4 
 
 function replace_colon(A::AbstractArray, I)
     Iout = Array{Any}(length(I))
-    for d = 1:length(I)-1
+    I == (:,) && return (1:length(A),)
+    for d = 1:length(I)
         Iout[d] = isa(I[d], Colon) ? (1:size(A,d)) : I[d]
     end
-    d = length(I)
-    Iout[d] = isa(I[d], Colon) ? (1:prod(size(A)[d:end])) : I[d]
     (Iout...,)
 end
 
@@ -47,7 +46,7 @@ ensure_iterable(t::Tuple{Union{Number, CartesianIndex}, Vararg{Any}}) = ((t[1],)
 ensure_iterable(t::Tuple{Any, Vararg{Any}}) = (t[1], ensure_iterable(Base.tail(t))...)
 
 index_ndims(t::Tuple) = tup2val(Base.index_ndims(t))
-tup2val{N}(::NTuple{N}) = Val{N}
+tup2val(::NTuple{N}) where {N} = Val(N)
 
 # To avoid getting confused by manipulations that are implemented for SubArrays,
 # it's good to copy the contents to an Array. This version protects against
@@ -89,10 +88,10 @@ function single_stride_dim(A::Array)
     end
     ld
 end
-single_stride_dim(A::ANY) = single_stride_dim(copy_to_array(A))
+single_stride_dim(@nospecialize(A)) = single_stride_dim(copy_to_array(A))
 
 # Testing equality of AbstractArrays, using several different methods to access values
-function test_cartesian(A::ANY, B::ANY)
+function test_cartesian(@nospecialize(A), @nospecialize(B))
     isgood = true
     for (IA, IB) in zip(eachindex(A), eachindex(B))
         if A[IA] != B[IB]
@@ -108,7 +107,7 @@ function test_cartesian(A::ANY, B::ANY)
     end
 end
 
-function test_linear(A::ANY, B::ANY)
+function test_linear(@nospecialize(A), @nospecialize(B))
     length(A) == length(B) || error("length mismatch")
     isgood = true
     for (iA, iB) in zip(1:length(A), 1:length(B))
@@ -126,15 +125,15 @@ function test_linear(A::ANY, B::ANY)
 end
 
 # "mixed" means 2 indexes even for N-dimensional arrays
-test_mixed{T}(::AbstractArray{T,1}, ::Array) = nothing
-test_mixed{T}(::AbstractArray{T,2}, ::Array) = nothing
+test_mixed(::AbstractArray{T,1}, ::Array) where {T} = nothing
+test_mixed(::AbstractArray{T,2}, ::Array) where {T} = nothing
 test_mixed(A, B::Array) = _test_mixed(A, reshape(B, size(A)))
-function _test_mixed(A::ANY, B::ANY)
+function _test_mixed(@nospecialize(A), @nospecialize(B))
     m = size(A, 1)
     n = size(A, 2)
     isgood = true
-    for j = 1:n, i = 1:m
-        if A[i,j] != B[i,j]
+    for J in CartesianRange(size(A)[2:end]), i in 1:m
+        if A[i,J] != B[i,J]
             isgood = false
             break
         end
@@ -147,19 +146,32 @@ function _test_mixed(A::ANY, B::ANY)
     nothing
 end
 
-function test_bounds(A::ANY)
+function test_bounds(@nospecialize(A))
     @test_throws BoundsError A[0]
     @test_throws BoundsError A[end+1]
-    @test_throws BoundsError A[1, 0]
-    @test_throws BoundsError A[1, end+1]
-    @test_throws BoundsError A[1, 1, 0]
-    @test_throws BoundsError A[1, 1, end+1]
-    @test_throws BoundsError A[0, 1]
-    @test_throws BoundsError A[end+1, 1]
-    @test_throws BoundsError A[0, 1, 1]
-    @test_throws BoundsError A[end+1, 1, 1]
-    @test_throws BoundsError A[1, 0, 1]
-    @test_throws BoundsError A[1, end+1, 1]
+    trailing2 = ntuple(x->1, max(ndims(A)-2, 0))
+    trailing3 = ntuple(x->1, max(ndims(A)-3, 0))
+    @test_throws BoundsError A[1, 0, trailing2...]
+    @test_throws BoundsError A[1, end+1, trailing2...]
+    @test_throws BoundsError A[1, 1, 0, trailing3...]
+    @test_throws BoundsError A[1, 1, end+1, trailing3...]
+    @test_throws BoundsError A[0, 1, trailing2...]
+    @test_throws BoundsError A[end+1, 1, trailing2...]
+    @test_throws BoundsError A[0, 1, 1, trailing3...]
+    @test_throws BoundsError A[end+1, 1, 1, trailing3...]
+    @test_throws BoundsError A[1, 0, 1, trailing3...]
+    @test_throws BoundsError A[1, end+1, 1, trailing3...]
+    # TODO: PLI (re-enable after 0.7)
+    # @test_throws BoundsError A[1, 0]
+    # @test_throws BoundsError A[1, end+1]
+    # @test_throws BoundsError A[1, 1, 0]
+    # @test_throws BoundsError A[1, 1, end+1]
+    # @test_throws BoundsError A[0, 1]
+    # @test_throws BoundsError A[end+1, 1]
+    # @test_throws BoundsError A[0, 1, 1]
+    # @test_throws BoundsError A[end+1, 1, 1]
+    # @test_throws BoundsError A[1, 0, 1]
+    # @test_throws BoundsError A[1, end+1, 1]
 end
 
 function dim_break_linindex(I)
@@ -183,7 +195,7 @@ function runsubarraytests(A::Array, I...)
     test_mixed(S, C)
 end
 
-function runsubarraytests(A::ANY, I...)
+function runsubarraytests(@nospecialize(A), I...)
     # When A was created with view, we have to check bounds, since some
     # of the "residual" dimensions have size 1. It's possible that we
     # need dedicated tests for view.
@@ -226,19 +238,30 @@ end
 function runviews(SB::AbstractArray, indexN, indexNN, indexNNN)
     @assert ndims(SB) > 2
     for i3 in indexN, i2 in indexN, i1 in indexN
-        ndims(SB) > 3 && i3 isa Colon && continue # TODO: Re-enable once Colon no longer spans partial trailing dimensions
-        runsubarraytests(SB, i1, i2, i3)
+        runsubarraytests(SB, i1, i2, i3, ntuple(x->1, max(ndims(SB)-3, 0))...)
     end
     for i2 in indexN, i1 in indexN
-        i2 isa Colon && continue # TODO: Re-enable once Colon no longer spans partial trailing dimensions
-        runsubarraytests(SB, i1, i2)
+        runsubarraytests(SB, i1, i2, ntuple(x->1, max(ndims(SB)-2, 0))...)
     end
     for i1 in indexNNN
         runsubarraytests(SB, i1)
     end
 end
 
-function runviews{T}(SB::AbstractArray{T,2}, indexN, indexNN, indexNNN)
+function runviews(SB::AbstractArray{T, 3} where T, indexN, indexNN, indexNNN)
+    @assert ndims(SB) > 2
+    for i3 in indexN, i2 in indexN, i1 in indexN
+        runsubarraytests(SB, i1, i2, i3)
+    end
+    for i2 in indexN, i1 in indexN
+        runsubarraytests(SB, i1, i2, 1)
+    end
+    for i1 in indexNNN
+        runsubarraytests(SB, i1)
+    end
+end
+
+function runviews(SB::AbstractArray{T,2}, indexN, indexNN, indexNNN) where T
     for i2 in indexN, i1 in indexN
         runsubarraytests(SB, i1, i2)
     end
@@ -247,13 +270,13 @@ function runviews{T}(SB::AbstractArray{T,2}, indexN, indexNN, indexNNN)
     end
 end
 
-function runviews{T}(SB::AbstractArray{T,1}, indexN, indexNN, indexNNN)
+function runviews(SB::AbstractArray{T,1}, indexN, indexNN, indexNNN) where T
     for i1 in indexN
         runsubarraytests(SB, i1)
     end
 end
 
-runviews{T}(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) = nothing
+runviews(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) where {T} = nothing
 
 ######### Tests #########
 
@@ -276,15 +299,12 @@ end
 # with the exception of Int-slicing
 oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9])
 
-_ndims{T,N}(::AbstractArray{T,N}) = N
+_ndims(::AbstractArray{T,N}) where {T,N} = N
 _ndims(x) = 1
 
 if testfull
     let B = copy(reshape(1:13^3, 13, 13, 13))
         for o3 in oindex, o2 in oindex, o1 in oindex
-            if (o3 isa Colon && (_ndims(o1) + _ndims(o2) != 2))
-                continue # TODO: remove once Colon no longer spans partial trailing dimensions
-            end
             viewB = view(B, o1, o2, o3)
             runviews(viewB, index5, index25, index125)
         end
@@ -411,9 +431,10 @@ sA = view(A, 1:2:3, 3, 1:2:8)
 @test sA[:] == A[sA.indexes...][:]
 test_bounds(sA)
 
-a = [5:8;]
-@test parent(a) == a
-@test parentindexes(a) == (1:4,)
+let a = [5:8;]
+    @test parent(a) == a
+    @test parentindexes(a) == (1:4,)
+end
 
 # issue #6218 - logical indexing
 A = rand(2, 2, 3)
@@ -421,7 +442,7 @@ msk = ones(Bool, 2, 2)
 msk[2,1] = false
 sA = view(A, :, :, 1)
 sA[msk] = 1.0
-@test sA[msk] == ones(countnz(msk))
+@test sA[msk] == ones(count(msk))
 
 # bounds checking upon construction; see #4044, #10296
 @test_throws BoundsError view(1:10, 8:11)
@@ -456,7 +477,7 @@ let a = [1,2,3],
     @test b == view(a, UInt(1):UInt(2)) == view(view(a, :), UInt(1):UInt(2)) == [1,2]
 end
 
-let A = reshape(1:4, 2, 2)
+let A = reshape(1:4, 2, 2),
     B = view(A, :, :)
     @test parent(B) === A
     @test parent(view(B, 0x1, :)) === parent(view(B, 0x1, :)) === A
@@ -482,7 +503,7 @@ Y = 4:-1:1
 @test X[1:end] == @.(@view X[1:end]) # test compatibility of @. and @view
 @test X[1:end-3] == @view X[1:end-3]
 @test X[1:end,2,2] == @view X[1:end,2,2]
-# @test X[1,1:end-2] == @view X[1,1:end-2] # TODO: Re-enable after partial linear indexing deprecation
+@test X[1,1:end-2,1] == @view X[1,1:end-2,1]
 @test X[1,2,1:end-2] == @view X[1,2,1:end-2]
 @test X[1,2,Y[2:end]] == @view X[1,2,Y[2:end]]
 @test X[1:end,2,Y[2:end]] == @view X[1:end,2,Y[2:end]]
@@ -518,7 +539,7 @@ end
     @test x == [5,6,35,4]
     x[Y[2:3]] .= 7:8
     @test x == [5,8,7,4]
-    @. x[(3,)..., ()...] += 3 # @. should convert to .+=, test compatibility with @views
+    x[(3,)..., ()...] += 3
     @test x == [5,8,10,4]
     i = Int[]
     # test that lhs expressions in update operations are evaluated only once:
@@ -533,7 +554,6 @@ end
 @test X[1:end] == @views X[1:end]
 @test X[1:end-3] == @views X[1:end-3]
 @test X[1:end,2,2] == @views X[1:end,2,2]
-# @test X[1,1:end-2] == @views X[1,1:end-2] # TODO: Re-enable after partial linear indexing deprecation
 @test X[1,2,1:end-2] == @views X[1,2,1:end-2]
 @test X[1,2,Y[2:end]] == @views X[1,2,Y[2:end]]
 @test X[1:end,2,Y[2:end]] == @views X[1:end,2,Y[2:end]]
@@ -554,4 +574,12 @@ let
     a = ImmutableTestArray{Float64, 2}()
     @test Base.IndexStyle(view(a, :, :)) == Base.IndexLinear()
     @test isbits(view(a, :, :))
+end
+
+# ref issue #17351
+@test @inferred(flipdim(view([1 2; 3 4], :, 1), 1)) == [3, 1]
+
+let
+    s = view(reshape(1:6, 2, 3), 1:2, 1:2)
+    @test @inferred(s[2,2,1]) === 4
 end

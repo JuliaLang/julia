@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
@@ -22,6 +22,7 @@ const text_colors = AnyDict(
     :normal        => "\033[0m",
     :default       => "\033[39m",
     :bold          => "\033[1m",
+    :underline     => "\033[4m",
     :nothing       => "",
 )
 
@@ -31,6 +32,7 @@ end
 
 const disable_text_style = AnyDict(
     :bold => "\033[22m",
+    :underline => "\033[24m",
     :normal => "",
     :default => "",
 )
@@ -100,7 +102,7 @@ function repl_cmd(cmd, out)
                 end
                 cd(ENV["OLDPWD"])
             else
-                cd(@static is_windows() ? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+                cd(@static Sys.iswindows() ? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
             end
         else
             cd()
@@ -108,7 +110,7 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@static is_windows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
+        run(ignorestatus(@static Sys.iswindows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
     end
     nothing
 end
@@ -140,7 +142,7 @@ end
 display_error(er, bt) = display_error(STDERR, er, bt)
 display_error(er) = display_error(er, [])
 
-function eval_user_input(ast::ANY, show_value)
+function eval_user_input(@nospecialize(ast), show_value)
     errcount, lasterr, bt = 0, (), nothing
     while true
         try
@@ -151,7 +153,7 @@ function eval_user_input(ast::ANY, show_value)
                 display_error(lasterr,bt)
                 errcount, lasterr = 0, ()
             else
-                ast = expand(ast)
+                ast = expand(Main, ast)
                 value = eval(Main, ast)
                 eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
                 if !(value === nothing) && show_value
@@ -206,9 +208,9 @@ function parse_input_line(s::String; filename::String="none")
     # expr
     ex = ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
                s, sizeof(s), filename, sizeof(filename))
-    if ex === :_
-        # remove with 0.6 deprecation
-        expand(ex)  # to get possible warning about using _ as an rvalue
+    if ex isa Symbol && all(equalto('_'), string(ex))
+        # remove with 0.7 deprecation
+        expand(Main, ex)  # to get possible warning about using _ as an rvalue
     end
     return ex
 end
@@ -241,89 +243,106 @@ function incomplete_tag(ex::Expr)
 end
 
 # try to include() a file, ignoring if not found
-try_include(path::AbstractString) = isfile(path) && include(path)
+try_include(mod::Module, path::AbstractString) = isfile(path) && include(mod, path)
 
 function process_options(opts::JLOptions)
     if !isempty(ARGS)
         idxs = find(x -> x == "--", ARGS)
         length(idxs) > 0 && deleteat!(ARGS, idxs[1])
     end
-    repl                  = true
+    quiet                 = (opts.quiet != 0)
     startup               = (opts.startupfile != 2)
     history_file          = (opts.historyfile != 0)
-    quiet                 = (opts.quiet != 0)
     color_set             = (opts.color != 0)
     global have_color     = (opts.color == 1)
     global is_interactive = (opts.isinteractive != 0)
-    while true
-        # startup worker.
-        # opts.startupfile, opts.load, etc should should not be processed for workers.
-        if opts.worker != C_NULL
-            start_worker(unsafe_string(opts.worker)) # does not return
-        end
 
-        # add processors
-        if opts.nprocs > 0
-            addprocs(opts.nprocs)
-        end
-        # load processes from machine file
-        if opts.machinefile != C_NULL
-            addprocs(load_machine_file(unsafe_string(opts.machinefile)))
-        end
-
-        # load ~/.juliarc file
-        startup && load_juliarc()
-
-        # load file immediately on all processors
-        if opts.load != C_NULL
-            @sync for p in procs()
-                @async remotecall_fetch(include, p, unsafe_string(opts.load))
-            end
-        end
-        # eval expression
-        if opts.eval != C_NULL
+    # pre-process command line argument list
+    arg_is_program = !isempty(ARGS)
+    repl = !arg_is_program
+    cmds = unsafe_load_commands(opts.commands)
+    for (cmd, arg) in cmds
+        if cmd == 'e'
+            arg_is_program = false
             repl = false
-            eval(Main, parse_input_line(unsafe_string(opts.eval)))
-            break
-        end
-        # eval expression and show result
-        if opts.print != C_NULL
+        elseif cmd == 'E'
+            arg_is_program = false
             repl = false
-            show(eval(Main, parse_input_line(unsafe_string(opts.print))))
+        elseif cmd == 'L'
+            # nothing
+        else
+            warn("unexpected command -$cmd'$arg'")
+        end
+    end
+
+    # remove filename from ARGS
+    global PROGRAM_FILE = arg_is_program ? shift!(ARGS) : ""
+
+    # startup worker.
+    # opts.startupfile, opts.load, etc should should not be processed for workers.
+    if opts.worker == 1
+        # does not return
+        if opts.cookie != C_NULL
+            start_worker(unsafe_string(opts.cookie))
+        else
+            start_worker()
+        end
+    end
+
+    # add processors
+    if opts.nprocs > 0
+        addprocs(opts.nprocs)
+    end
+    # load processes from machine file
+    if opts.machinefile != C_NULL
+        addprocs(load_machine_file(unsafe_string(opts.machinefile)))
+    end
+
+    # load ~/.juliarc file
+    startup && load_juliarc()
+
+    # process cmds list
+    for (cmd, arg) in cmds
+        if cmd == 'e'
+            eval(Main, parse_input_line(arg))
+        elseif cmd == 'E'
+            invokelatest(show, eval(Main, parse_input_line(arg)))
             println()
-            break
-        end
-        # load file
-        if !isempty(ARGS) && !isempty(ARGS[1])
-            # program
-            repl = false
-            # remove filename from ARGS
-            global PROGRAM_FILE = shift!(ARGS)
-            if !is_interactive
-                ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+        elseif cmd == 'L'
+            # load file immediately on all processors
+            @sync for p in procs()
+                @async remotecall_wait(include, p, Main, arg)
             end
-            include(PROGRAM_FILE)
         end
-        break
+    end
+
+    # load file
+    if arg_is_program
+        # program
+        if !is_interactive
+            ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+        end
+        include(Main, PROGRAM_FILE)
     end
     repl |= is_interactive
-    return (quiet,repl,startup,color_set,history_file)
+    return (quiet, repl, startup, color_set, history_file)
 end
 
 function load_juliarc()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a juliarc.jl file
     #   If it is not found, then continue on to the relative path based on JULIA_HOME
-    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(JULIA_HOME,Base.SYSCONFDIR,"julia","juliarc.jl"))
-        include(abspath(JULIA_HOME,Base.SYSCONFDIR,"julia","juliarc.jl"))
+    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(JULIA_HOME, Base.SYSCONFDIR, "julia", "juliarc.jl"))
+        include(Main, abspath(JULIA_HOME, Base.SYSCONFDIR, "julia", "juliarc.jl"))
     else
-        try_include(abspath(JULIA_HOME,"..","etc","julia","juliarc.jl"))
+        try_include(Main, abspath(JULIA_HOME, "..", "etc", "julia", "juliarc.jl"))
     end
-    try_include(abspath(homedir(),".juliarc.jl"))
+    try_include(Main, abspath(homedir(), ".juliarc.jl"))
+    nothing
 end
 
 function load_machine_file(path::AbstractString)
     machines = []
-    for line in split(readstring(path),'\n'; keep=false)
+    for line in split(read(path, String),'\n'; keep=false)
         s = split(line, '*'; keep = false)
         map!(strip, s, s)
         if length(s) > 1
@@ -361,14 +380,16 @@ function __atreplinit(repl)
         end
     end
 end
-_atreplinit(repl) = @eval Main $__atreplinit($repl)
+_atreplinit(repl) = invokelatest(__atreplinit, repl)
 
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     opts = JLOptions()
+    @eval Main using Base.MainInclude
     try
         (quiet,repl,startup,color_set,history_file) = process_options(opts)
+        banner = opts.banner == 1
 
         local term
         global active_repl
@@ -376,12 +397,15 @@ function _start()
         if repl
             if !isa(STDIN,TTY)
                 global is_interactive |= !isa(STDIN, Union{File, IOStream})
+                banner |= opts.banner != 0 && is_interactive
                 color_set || (global have_color = false)
             else
-                term = Terminals.TTYTerminal(get(ENV, "TERM", @static is_windows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
+                term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+                term = Terminals.TTYTerminal(term_env, STDIN, STDOUT, STDERR)
                 global is_interactive = true
+                banner |= opts.banner != 0
                 color_set || (global have_color = Terminals.hascolor(term))
-                quiet || REPL.banner(term,term)
+                banner && REPL.banner(term,term)
                 if term.term_type == "dumb"
                     active_repl = REPL.BasicREPL(term)
                     quiet || warn("Terminal not fully functional")
@@ -394,6 +418,8 @@ function _start()
                 # REPLDisplay
                 pushdisplay(REPL.REPLDisplay(active_repl))
             end
+        else
+            banner |= opts.banner != 0 && is_interactive
         end
 
         if repl
@@ -401,7 +427,7 @@ function _start()
                 # note: currently IOStream is used for file STDIN
                 if isa(STDIN,File) || isa(STDIN,IOStream)
                     # reading from a file, behave like include
-                    eval(Main,parse_input_line(readstring(STDIN)))
+                    eval(Main,parse_input_line(read(STDIN, String)))
                 else
                     # otherwise behave repl-like
                     while !eof(STDIN)

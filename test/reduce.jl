@@ -1,8 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # fold(l|r) & mapfold(l|r)
 @test foldl(+, Int64[]) === Int64(0) # In reference to issues #7465/#20144 (PR #20160)
-@test foldl(+, Int16[]) === Int32(0)
+@test foldl(+, Int16[]) === Int16(0) # In reference to issues #21536
 @test foldl(-, 1:5) == -13
 @test foldl(-, 10, 1:5) == -5
 
@@ -19,35 +19,78 @@
 @test Base.mapfoldl((x)-> x ⊻ true, |, false, [true false true false false]) == true
 
 @test foldr(+, Int64[]) === Int64(0) # In reference to issue #20144 (PR #20160)
-@test foldr(+, Int16[]) === Int32(0)
+@test foldr(+, Int16[]) === Int16(0) # In reference to issues #21536
 @test foldr(-, 1:5) == 3
 @test foldr(-, 10, 1:5) == -7
+@test foldr(+, [1]) == 1 # Issue #21493
 
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 10, 2:5) == -4
 
-# reduce & mapreduce
+# reduce
 @test reduce(+, Int64[]) === Int64(0) # In reference to issue #20144 (PR #20160)
-@test reduce(+, Int16[]) === Int32(0)
+@test reduce(+, Int16[]) === Int16(0) # In reference to issues #21536
 @test reduce((x,y)->"($x+$y)", 9:11) == "((9+10)+11)"
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1000, 1:5) == (1000 + 1 + 2 + 3 + 4 + 5)
 @test reduce(+,1) == 1
 
+# mapreduce
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
 @test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
 
+# mapreduce() for 1- 2- and n-sized blocks (PR #19325)
+@test mapreduce(-, +, [-10]) == 10
+@test mapreduce(abs2, +, [-9, -3]) == 81 + 9
+@test mapreduce(-, +, [-9, -3, -4, 8, -2]) == (9 + 3 + 4 - 8 + 2)
+@test mapreduce(-, +, collect(linspace(1.0, 10000.0, 10000))) == -50005000.0
+# empty mr
+@test mapreduce(abs2, +, Float64[]) === 0.0
+@test mapreduce(abs2, Base.scalarmax, Float64[]) === 0.0
+@test mapreduce(abs, max, Float64[]) === 0.0
+@test_throws ArgumentError mapreduce(abs2, &, Float64[])
+@test_throws ArgumentError mapreduce(abs2, |, Float64[])
+
+# mapreduce() type stability
+@test typeof(mapreduce(*, +, Int8[10])) ===
+      typeof(mapreduce(*, +, Int8[10, 11])) ===
+      typeof(mapreduce(*, +, Int8[10, 11, 12, 13]))
+@test typeof(mapreduce(*, +, Float32[10.0])) ===
+      typeof(mapreduce(*, +, Float32[10, 11])) ===
+      typeof(mapreduce(*, +, Float32[10, 11, 12, 13]))
+# mapreduce() type stability when f supports empty collections
+@test typeof(mapreduce(abs, +, Int8[])) ===
+      typeof(mapreduce(abs, +, Int8[10])) ===
+      typeof(mapreduce(abs, +, Int8[10, 11])) ===
+      typeof(mapreduce(abs, +, Int8[10, 11, 12, 13]))
+@test typeof(mapreduce(abs, +, Float32[])) ===
+      typeof(mapreduce(abs, +, Float32[10])) ===
+      typeof(mapreduce(abs, +, Float32[10, 11])) ===
+      typeof(mapreduce(abs, +, Float32[10, 11, 12, 13]))
+
 # sum
+@testset "sums promote to at least machine size" begin
+    @testset for T in [Int8, Int16, Int32]
+        @test sum(T[]) === Int(0)
+    end
+    @testset for T in [UInt8, UInt16, UInt32]
+        @test sum(T[]) === UInt(0)
+    end
+    @testset for T in [Int, Int64, Int128, UInt, UInt64, UInt128,
+                       Float16, Float32, Float64]
+        @test sum(T[]) === T(0)
+    end
+    @test sum(BigInt[]) == big(0) && sum(BigInt[]) isa BigInt
+end
 
-@test sum(Int8[]) === Int32(0)
-@test sum(Int[]) === Int(0)
-@test sum(Float64[]) === 0.0
+@test sum(Bool[]) === sum(Bool[false]) === sum(Bool[false, false]) === 0
+@test sum(Bool[true, false, true]) === 2
 
-@test sum(Int8(3)) === Int8(3)
+@test sum(Int8(3)) === Int(3)
 @test sum(3) === 3
 @test sum(3.0) === 3.0
 
-@test sum([Int8(3)]) === Int32(3)
+@test sum([Int8(3)]) === Int(3)
 @test sum([3]) === 3
 @test sum([3.0]) === 3.0
 
@@ -104,14 +147,22 @@ end
 @test sum_kbn([-0.0]) === -0.0
 @test sum_kbn([-0.0,-0.0]) === -0.0
 
+# check sum(abs, ...) for support of empty collections
+@testset "sum(abs, [])" begin
+    @test @inferred(sum(abs, Float64[])) === 0.0
+    @test @inferred(sum(abs, Int[])) === 0
+    @test @inferred(sum(abs, Set{Int}())) === 0
+    @test_throws MethodError sum(abs, Any[])
+end
+
 # prod
 
 @test prod(Int[]) === 1
-@test prod(Int8[]) === Int32(1)
+@test prod(Int8[]) === Int(1)
 @test prod(Float64[]) === 1.0
 
 @test prod([3]) === 3
-@test prod([Int8(3)]) === Int32(3)
+@test prod([Int8(3)]) === Int(3)
 @test prod([3.0]) === 3.0
 
 @test prod(z) === 120
@@ -126,8 +177,8 @@ end
 prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test prod(Int[]) === prod2(Int[]) === 1
 @test prod(Int[7]) === prod2(Int[7]) === 7
-@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int32
-@test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int32
+@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int
+@test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int
 
 # maximum & minimum & extrema
 
@@ -146,6 +197,10 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test isnan(minimum([NaN]))
 @test isequal(extrema([NaN]), (NaN, NaN))
 
+@test isnan(maximum([NaN, 2.]))
+@test isnan(minimum([NaN, 2.]))
+@test isequal(extrema([NaN, 2.]), (NaN,NaN))
+
 @test isnan(maximum([NaN, 2., 3.]))
 @test isnan(minimum([NaN, 2., 3.]))
 @test isequal(extrema([NaN, 2., 3.]), (NaN,NaN))
@@ -154,6 +209,14 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test isnan(minimum([4., 3., NaN, 5., 2.]))
 @test isequal(extrema([4., 3., NaN, 5., 2.]), (NaN,NaN))
 
+ # test long arrays
+@test isnan(maximum([NaN; 1.:10000.]))
+@test isnan(maximum([1.:10000.; NaN]))
+@test isnan(minimum([NaN; 1.:10000.]))
+@test isnan(minimum([1.:10000.; NaN]))
+@test isequal(extrema([1.:10000.; NaN]), (NaN,NaN))
+@test isequal(extrema([NaN; 1.:10000.]), (NaN,NaN))
+
 @test maximum(abs2, 3:7) == 49
 @test minimum(abs2, 3:7) == 9
 
@@ -161,9 +224,17 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test maximum(collect(Int16(1):Int16(100))) === Int16(100)
 @test maximum(Int32[1,2]) === Int32(2)
 
-@test extrema(reshape(1:24,2,3,4),1) == reshape([(1,2),(3,4),(5,6),(7,8),(9,10),(11,12),(13,14),(15,16),(17,18),(19,20),(21,22),(23,24)],1,3,4)
-@test extrema(reshape(1:24,2,3,4),2) == reshape([(1,5),(2,6),(7,11),(8,12),(13,17),(14,18),(19,23),(20,24)],2,1,4)
-@test extrema(reshape(1:24,2,3,4),3) == reshape([(1,19),(2,20),(3,21),(4,22),(5,23),(6,24)],2,3,1)
+A = circshift(reshape(1:24,2,3,4), (0,1,1))
+@test extrema(A,1) == reshape([(23,24),(19,20),(21,22),(5,6),(1,2),(3,4),(11,12),(7,8),(9,10),(17,18),(13,14),(15,16)],1,3,4)
+@test extrema(A,2) == reshape([(19,23),(20,24),(1,5),(2,6),(7,11),(8,12),(13,17),(14,18)],2,1,4)
+@test extrema(A,3) == reshape([(5,23),(6,24),(1,19),(2,20),(3,21),(4,22)],2,3,1)
+@test extrema(A,(1,2)) == reshape([(19,24),(1,6),(7,12),(13,18)],1,1,4)
+@test extrema(A,(1,3)) == reshape([(5,24),(1,20),(3,22)],1,3,1)
+@test extrema(A,(2,3)) == reshape([(1,23),(2,24)],2,1,1)
+@test extrema(A,(1,2,3)) == reshape([(1,24)],1,1,1)
+@test size(extrema(A,1)) == size(maximum(A,1))
+@test size(extrema(A,(1,2))) == size(maximum(A,(1,2)))
+@test size(extrema(A,(1,2,3))) == size(maximum(A,(1,2,3)))
 
 # any & all
 
@@ -267,7 +338,7 @@ struct SomeFunctor end
 @test contains("quick fox", "fox") == true
 @test contains("quick fox", "lazy dog") == false
 
-# count & countnz
+# count
 
 @test count(x->x>0, Int[]) == count(Bool[]) == 0
 @test count(x->x>0, -3:5) == count((-3:5) .> 0) == 5
@@ -282,10 +353,10 @@ end
 @test count(iseven(x) for x in 1:10 if x < 7) == 3
 @test count(iseven(x) for x in 1:10 if x < -7) == 0
 
-@test countnz(Int[]) == 0
-@test countnz(Int[0]) == 0
-@test countnz(Int[1]) == 1
-@test countnz([1, 0, 2, 0, 3, 0, 4]) == 4
+@test count(!iszero, Int[]) == 0
+@test count(!iszero, Int[0]) == 0
+@test count(!iszero, Int[1]) == 1
+@test count(!iszero, [1, 0, 2, 0, 3, 0, 4]) == 4
 
 
 ## cumsum, cummin, cummax
@@ -319,10 +390,17 @@ A = reshape(map(UInt8, 1:100), (10,10))
 let A = collect(1:10)
     @test A ∋ 5
     @test A ∌ 11
-    @test contains(==,A,6)
+    @test any(y->y==6,A)
 end
 
 # issue #18695
 test18695(r) = sum( t^2 for t in r )
 @test @inferred(test18695([1.0,2.0,3.0,4.0])) == 30.0
 @test_throws ArgumentError test18695(Any[])
+
+# issue #21107
+@test foldr(-,2:2) == 2
+
+# test neutral element not picked incorrectly for &, |
+@test @inferred(foldl(&, Int[1])) === 1
+@test_throws ArgumentError foldl(&, Int[])

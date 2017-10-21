@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 Dims{N} = NTuple{N,Int}
 DimsInteger{N} = NTuple{N,Integer}
@@ -182,6 +182,8 @@ indexing behaviors. This must return either an `Int` or an `AbstractArray` of
 `Int`s.
 """
 to_index(i::Integer) = convert(Int,i)::Int
+# TODO: Enable this new definition after the deprecations introduced in 0.7 are removed
+# to_index(i::Bool) = throw(ArgumentError("invalid index: $i"))
 to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
 to_index(I::AbstractArray) = I
 to_index(I::AbstractArray{<:Union{AbstractArray, Colon}}) = throw(ArgumentError("invalid index: $I"))
@@ -211,6 +213,7 @@ given tuple of indices and the dimensional indices of `A` in tandem. As such,
 not all index types are guaranteed to propagate to `Base.to_index`.
 """
 to_indices(A, I::Tuple) = (@_inline_meta; to_indices(A, indices(A), I))
+to_indices(A, I::Tuple{Any}) = (@_inline_meta; to_indices(A, (linearindices(A),), I))
 to_indices(A, inds, ::Tuple{}) = ()
 to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
     (@_inline_meta; (to_index(A, I[1]), to_indices(A, _maybetail(inds), tail(I))...))
@@ -223,7 +226,7 @@ _maybetail(t::Tuple) = tail(t)
 
 Represent an AbstractUnitRange of indices as a vector of the indices themselves.
 
-Upon calling `to_indices()`, Colons are converted to Slice objects to represent
+Upon calling `to_indices`, Colons are converted to Slice objects to represent
 the indices over which the Colon spans. Slice objects are themselves unit
 ranges with the same indices as those they wrap. This means that indexing into
 Slice objects with an integer always returns that exact integer, and they
@@ -237,7 +240,7 @@ unsafe_indices(S::Slice) = (S.indices,)
 indices1(S::Slice) = S.indices
 first(S::Slice) = first(S.indices)
 last(S::Slice) = last(S.indices)
-errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see http://docs.julialang.org/en/latest/devdocs/offset-arrays/")
+errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
 size(S::Slice) = first(S.indices) == 1 ? (length(S.indices),) : errmsg(S)
 length(S::Slice) = first(S.indices) == 1 ? length(S.indices) : errmsg(S)
 unsafe_length(S::Slice) = first(S.indices) == 1 ? unsafe_length(S.indices) : errmsg(S)

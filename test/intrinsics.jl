@@ -1,9 +1,9 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # intrinsic functions
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+
+# For curmod_*
+include("testenv.jl")
 
 # bits types
 @test isa((() -> Core.Intrinsics.bitcast(Ptr{Int8}, 0))(), Ptr{Int8})
@@ -69,7 +69,7 @@ compiled_addf(x, y) = Core.Intrinsics.add_float(x, y)
 @test_throws ErrorException compiled_addf(im, im)
 @test_throws ErrorException compiled_addf(true, true)
 
-function compiled_conv{T}(::Type{T}, x)
+function compiled_conv(::Type{T}, x) where T
     t = Core.Intrinsics.trunc_int(T, x)
     z = Core.Intrinsics.zext_int(typeof(x), t)
     s = Core.Intrinsics.sext_int(typeof(x), t)

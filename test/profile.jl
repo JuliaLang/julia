@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function busywait(t, n_tries)
     iter = 0
@@ -11,6 +11,17 @@ end
 
 Profile.clear()
 @profile busywait(1, 20)
+
+let r = Profile.retrieve()
+    mktemp() do path, io
+        serialize(io, r)
+        close(io)
+        open(path) do io
+            @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{StackFrame}}})
+        end
+    end
+end
+
 let iobuf = IOBuffer()
     Profile.print(iobuf, format=:tree, C=true)
     str = String(take!(iobuf))

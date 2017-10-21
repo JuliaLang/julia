@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: peek
 
@@ -200,7 +200,7 @@ end
 
 function showrest(io::IO)
     start = position(io)
-    show(readstring(io))
+    show(read(io, String))
     println()
     seek(io, start)
 end

@@ -2,7 +2,7 @@
 
 ## [Iteration](@id lib-collections-iteration)
 
-Sequential iteration is implemented by the methods [`start()`](@ref), [`done()`](@ref), and [`next()`](@ref).
+Sequential iteration is implemented by the methods [`start`](@ref), [`done`](@ref), and [`next`](@ref).
 The general `for` loop:
 
 ```julia
@@ -35,11 +35,11 @@ Base.iteratoreltype
 
 Fully implemented by:
 
-  * `Range`
+  * `AbstractRange`
   * `UnitRange`
   * `Tuple`
   * `Number`
-  * `AbstractArray`
+  * [`AbstractArray`](@ref)
   * [`IntSet`](@ref)
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
@@ -47,23 +47,23 @@ Fully implemented by:
   * `EachLine`
   * `AbstractString`
   * [`Set`](@ref)
+  * [`Pair`](@ref)
 
 ## General Collections
 
 ```@docs
 Base.isempty
 Base.empty!
-Base.length(::Any)
-Base.endof
+Base.length
 ```
 
 Fully implemented by:
 
-  * `Range`
+  * `AbstractRange`
   * `UnitRange`
   * `Tuple`
   * `Number`
-  * `AbstractArray`
+  * [`AbstractArray`](@ref)
   * [`IntSet`](@ref)
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
@@ -79,6 +79,7 @@ Base.eltype
 Base.indexin
 Base.findin
 Base.unique
+Base.unique!
 Base.allunique
 Base.reduce(::Any, ::Any, ::Any)
 Base.reduce(::Any, ::Any)
@@ -137,31 +138,32 @@ Base.filter!
 ## Indexable Collections
 
 ```@docs
-Base.getindex(::Any, ::Any...)
-Base.setindex!(::Any, ::Any, ::Any...)
+Base.getindex
+Base.setindex!
+Base.endof
 ```
 
 Fully implemented by:
 
   * [`Array`](@ref)
   * [`BitArray`](@ref)
-  * `AbstractArray`
+  * [`AbstractArray`](@ref)
   * `SubArray`
-  * [`ObjectIdDict`](@ref)
-  * [`Dict`](@ref)
-  * [`WeakKeyDict`](@ref)
-  * `AbstractString`
 
 Partially implemented by:
 
-  * `Range`
+  * `AbstractRange`
   * `UnitRange`
   * `Tuple`
+  * `AbstractString`
+  * [`Dict`](@ref)
+  * [`ObjectIdDict`](@ref)
+  * [`WeakKeyDict`](@ref)
 
 ## Associative Collections
 
-[`Dict`](@ref) is the standard associative collection. Its implementation uses [`hash()`](@ref)
-as the hashing function for the key, and [`isequal()`](@ref) to determine equality. Define these
+[`Dict`](@ref) is the standard associative collection. Its implementation uses [`hash`](@ref)
+as the hashing function for the key, and [`isequal`](@ref) to determine equality. Define these
 two functions for custom types to override how they are stored in a hash table.
 
 [`ObjectIdDict`](@ref) is a special hash table where the keys are always object identities.
@@ -169,7 +171,7 @@ two functions for custom types to override how they are stored in a hash table.
 [`WeakKeyDict`](@ref) is a hash table implementation where the keys are weak references to objects, and
 thus may be garbage collected even when referenced in a hash table.
 
-[`Dict`](@ref)s can be created by passing pair objects constructed with `=>()` to a [`Dict`](@ref)
+[`Dict`](@ref)s can be created by passing pair objects constructed with `=>` to a [`Dict`](@ref)
 constructor: `Dict("A"=>1, "B"=>2)`. This call will attempt to infer type information from the
 keys and values (i.e. this example creates a `Dict{String, Int64}`). To explicitly specify types
 use the syntax `Dict{KeyType,ValueType}(...)`. For example, `Dict{String,Int32}("A"=>1, "B"=>2)`.
@@ -195,8 +197,10 @@ Base.delete!
 Base.pop!(::Any, ::Any, ::Any)
 Base.keys
 Base.values
+Base.pairs
 Base.merge
-Base.merge!
+Base.merge!(::Associative, ::Associative...)
+Base.merge!(::Function, ::Associative, ::Associative...)
 Base.sizehint!
 Base.keytype
 Base.valtype
@@ -247,7 +251,7 @@ Partially implemented by:
 
 ```@docs
 Base.push!
-Base.pop!(::Any)
+Base.pop!
 Base.unshift!
 Base.shift!
 Base.insert!
@@ -262,3 +266,9 @@ Fully implemented by:
 
   * `Vector` (a.k.a. 1-dimensional [`Array`](@ref))
   * `BitVector` (a.k.a. 1-dimensional [`BitArray`](@ref))
+
+## Utility Collections
+
+```@docs
+Base.Pair
+```

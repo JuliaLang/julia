@@ -1,7 +1,7 @@
 # Julia ASTs
 
 Julia has two representations of code. First there is a surface syntax AST returned by the parser
-(e.g. the [`parse()`](@ref) function), and manipulated by macros. It is a structured representation
+(e.g. the [`parse`](@ref) function), and manipulated by macros. It is a structured representation
 of code as it is written, constructed by `julia-parser.scm` from a character stream. Next there
 is a lowered form, or IR (intermediate representation), which is used by type inference and code
 generation. In the lowered form there are fewer types of nodes, all macros are expanded, and all
@@ -82,10 +82,6 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
     Reference a static parameter by index.
 
-  * `line`
-
-    Line number and file name metadata. Unlike a `LineNumberNode`, can also contain a file name.
-
   * `gotoifnot`
 
     Conditional branch. If `args[1]` is false, goes to label identified in `args[2]`.
@@ -140,7 +136,7 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
   * `new`
 
-    Allocates a new struct-like object. First argument is the type. The `new` pseudo-function is lowered
+    Allocates a new struct-like object. First argument is the type. The [`new`](@ref) pseudo-function is lowered
     to this, and the type is always inserted by the compiler.  This is very much an internal-only
     feature, and does no checking. Evaluating arbitrary `new` expressions can easily segfault.
 
@@ -170,8 +166,8 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
   * `boundscheck`
 
-    Indicates the beginning or end of a section of code that performs a bounds check. Like `inbounds`,
-    a stack is maintained, and the second argument can be one of: `true`, `false`, or `:pop`.
+    Has the value `false` if inlined into a section of code marked with `@inbounds`,
+    otherwise has the value `true`.
 
   * `copyast`
 
@@ -192,6 +188,8 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
             code.
 
       * `:pop_loc`: returns to the source location before the matching `:push_loc`.
+
+          * `args[2]::Int` (optional) specifies the number of `push_loc` to pop
 
 
 ### Method
@@ -214,14 +212,14 @@ A unique'd container describing the shared metadata for a single method.
 
   * `source`
 
-    The original source code (compressed).
+    The original source code (usually compressed).
 
   * `roots`
 
     Pointers to non-AST things that have been interpolated into the AST, required by
     compression of the AST, type-inference, or the generation of native code.
 
-  * `nargs`, `isva`, `called`, `isstaged`
+  * `nargs`, `isva`, `called`, `isstaged`, `pure`
 
     Descriptive bit-fields for the source code of this Method.
 
@@ -242,8 +240,8 @@ for important details on how to modify these fields safely.
 
   * `def`
 
-    The `Method` that this function describes a specialization of. Or `#undef`, if this is
-    a top-level Lambda that is not part of a Method.
+    The `Method` that this function describes a specialization of. Or a `Module`,
+    if this is a top-level Lambda expanded in Module, and which is not part of a Method.
 
   * `sparam_vals`
 
@@ -288,7 +286,7 @@ A temporary container for holding lowered source code.
 
   * `code`
 
-    An `Any` array of statements, or a `UInt8` array with a compressed representation of the code.
+    An `Any` array of statements
 
   * `slotnames`
 
@@ -337,10 +335,11 @@ Boolean properties:
 
 ## Surface syntax AST
 
-Front end ASTs consist entirely of `Expr`s and atoms (e.g. symbols, numbers). There is generally
-a different expression head for each visually distinct syntactic form. Examples will be given
-in s-expression syntax. Each parenthesized list corresponds to an Expr, where the first element
-is the head. For example `(call f x)` corresponds to `Expr(:call, :f, :x)` in Julia.
+Front end ASTs consist almost entirely of `Expr`s and atoms (e.g. symbols, numbers).
+There is generally a different expression head for each visually distinct syntactic form.
+Examples will be given in s-expression syntax.
+Each parenthesized list corresponds to an Expr, where the first element is the head.
+For example `(call f x)` corresponds to `Expr(:call, :f, :x)` in Julia.
 
 ### Calls
 
@@ -407,21 +406,21 @@ call. Finally, chains of comparisons have their own special expression structure
 
 ### Macros
 
-| Input         | AST                                   |
-|:------------- |:------------------------------------- |
-| `@m x y`      | `(macrocall @m x y)`                  |
-| `Base.@m x y` | `(macrocall (. Base (quote @m)) x y)` |
-| `@Base.m x y` | `(macrocall (. Base (quote @m)) x y)` |
+| Input         | AST                                          |
+|:------------- |:-------------------------------------------- |
+| `@m x y`      | `(macrocall @m (line) x y)`                  |
+| `Base.@m x y` | `(macrocall (. Base (quote @m)) (line) x y)` |
+| `@Base.m x y` | `(macrocall (. Base (quote @m)) (line) x y)` |
 
 ### Strings
 
-| Input           | AST                          |
-|:--------------- |:---------------------------- |
-| `"a"`           | `"a"`                        |
-| `x"y"`          | `(macrocall @x_str "y")`     |
-| `x"y"z`         | `(macrocall @x_str "y" "z")` |
-| `"x = $x"`      | `(string "x = " x)`          |
-| ``` `a b c` ``` | `(macrocall @cmd "a b c")`   |
+| Input           | AST                                 |
+|:--------------- |:----------------------------------- |
+| `"a"`           | `"a"`                               |
+| `x"y"`          | `(macrocall @x_str (line) "y")`     |
+| `x"y"z`         | `(macrocall @x_str (line) "y" "z")` |
+| `"x = $x"`      | `(string "x = " x)`                 |
+| ``` `a b c` ``` | `(macrocall @cmd (line) "a b c")`   |
 
 Doc string syntax:
 
@@ -430,7 +429,7 @@ Doc string syntax:
 f(x) = x
 ```
 
-parses as `(macrocall (|.| Core '@doc) "some docs" (= (call f x) (block x)))`.
+parses as `(macrocall (|.| Core '@doc) (line) "some docs" (= (call f x) (block x)))`.
 
 ### Imports and such
 
@@ -449,11 +448,11 @@ parses as `(macrocall (|.| Core '@doc) "some docs" (= (call f x) (block x)))`.
 Julia supports more number types than many scheme implementations, so not all numbers are represented
 directly as scheme numbers in the AST.
 
-| Input                   | AST                                              |
-|:----------------------- |:------------------------------------------------ |
-| `11111111111111111111`  | `(macrocall @int128_str "11111111111111111111")` |
-| `0xfffffffffffffffff`   | `(macrocall @uint128_str "0xfffffffffffffffff")` |
-| `1111...many digits...` | `(macrocall @big_str "1111....")`                |
+| Input                   | AST                                                     |
+|:----------------------- |:------------------------------------------------------- |
+| `11111111111111111111`  | `(macrocall @int128_str (null) "11111111111111111111")` |
+| `0xfffffffffffffffff`   | `(macrocall @uint128_str (null) "0xfffffffffffffffff")` |
+| `1111...many digits...` | `(macrocall @big_str (null) "1111....")`                |
 
 ### Block forms
 
@@ -466,8 +465,8 @@ if a
     b
 elseif c
     d
-else e
-    f
+else
+    e
 end
 ```
 
@@ -475,8 +474,8 @@ parses as:
 
 ```
 (if a (block (line 2) b)
-    (block (line 3) (if c (block (line 4) d)
-                        (block (line 5) e (line 6) f))))
+    (elseif (block (line 3) c) (block (line 4) d)
+            (block (line 5 e))))
 ```
 
 A `while` loop parses as `(while condition body)`.
@@ -486,12 +485,13 @@ they are parsed as a block: `(for (block (= v1 iter1) (= v2 iter2)) body)`.
 
 `break` and `continue` are parsed as 0-argument expressions `(break)` and `(continue)`.
 
-`let` is parsed as `(let body (= var1 val1) (= var2 val2) ...)`.
+`let` is parsed as `(let (= var val) body)` or `(let (block (= var1 val1) (= var2 val2) ...) body)`,
+like `for` loops.
 
 A basic function definition is parsed as `(function (call f x) body)`. A more complex example:
 
 ```julia
-function f{T}(x::T; k = 1)
+function f(x::T; k = 1) where T
     return x+1
 end
 ```
@@ -499,15 +499,16 @@ end
 parses as:
 
 ```
-(function (call (curly f T) (parameters (kw k 1))
-                (:: x T))
-          (block (line 2 file.jl) (return (call + x 1))))
+(function (where (call f (parameters (kw k 1))
+                       (:: x T))
+                 T)
+          (block (line 2) (return (call + x 1))))
 ```
 
 Type definition:
 
 ```julia
-type Foo{T<:S}
+mutable struct Foo{T<:S}
     x::T
 end
 ```
@@ -515,8 +516,8 @@ end
 parses as:
 
 ```
-(type #t (curly Foo (<: T S))
-      (block (line 2 none) (:: x T)))
+(struct true (curly Foo (<: T S))
+        (block (line 2) (:: x T)))
 ```
 
 The first argument is a boolean telling whether the type is mutable.
@@ -524,3 +525,22 @@ The first argument is a boolean telling whether the type is mutable.
 `try` blocks parse as `(try try_block var catch_block finally_block)`. If no variable is present
 after `catch`, `var` is `#f`. If there is no `finally` clause, then the last argument is not present.
 
+### Quote expressions
+
+Julia source syntax forms for code quoting (`quote` and `:( )`) support interpolation with `$`.
+In Lisp terminology, this means they are actually "backquote" or "quasiquote" forms.
+Internally, there is also a need for code quoting without interpolation.
+In Julia's scheme code, non-interpolating quote is represented with the expression head `inert`.
+
+`inert` expressions are converted to Julia `QuoteNode` objects.
+These objects wrap a single value of any type, and when evaluated simply return that value.
+
+A `quote` expression whose argument is an atom also gets converted to a `QuoteNode`.
+
+### Line numbers
+
+Source location information is represented as `(line line_num file_name)` where the third
+component is optional (and omitted when the current line number, but not file name,
+changes).
+
+These expressions are represented as `LineNumberNode`s in Julia.

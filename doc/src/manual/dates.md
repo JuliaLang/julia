@@ -12,13 +12,14 @@ For example, since the [`Date`](@ref) type only resolves to the precision of a s
 no hours, minutes, or seconds), normal considerations for time zones, daylight savings/summer
 time, and leap seconds are unnecessary and avoided.
 
-Both [`Date`](@ref) and [`DateTime`](@ref) are basically immutable `Int64` wrappers. The single
-`instant` field of either type is actually a `UTInstant{P}` type, which represents a continuously
-increasing machine timeline based on the UT second [^1]. The [`DateTime`](@ref) type is *timezone-unaware*
-(in Python parlance) or is analogous to a *LocalDateTime* in Java 8. Additional time zone functionality
+Both [`Date`](@ref) and [`DateTime`](@ref) are basically immutable [`Int64`](@ref) wrappers.
+The single `instant` field of either type is actually a `UTInstant{P}` type, which
+represents a continuously increasing machine timeline based on the UT second [^1]. The
+[`DateTime`](@ref) type is not aware of time zones (*naive*, in Python parlance),
+analogous to a *LocalDateTime* in Java 8. Additional time zone functionality
 can be added through the [TimeZones.jl package](https://github.com/JuliaTime/TimeZones.jl/), which
 compiles the [IANA time zone database](http://www.iana.org/time-zones). Both [`Date`](@ref) and
-[`DateTime`](@ref) are based on the ISO 8601 standard, which follows the proleptic Gregorian calendar.
+[`DateTime`](@ref) are based on the [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) standard, which follows the proleptic Gregorian calendar.
 One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last
 day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists.
 The ISO standard, however, states that 1 BC/BCE is year zero, so `0000-12-31` is the day before
@@ -97,7 +98,7 @@ noting the transition `"yyyymm"` from one period character to the next.
 Support for text-form month parsing is also supported through the `u` and `U` characters, for
 abbreviated and full-length month names, respectively. By default, only English month names are
 supported, so `u` corresponds to "Jan", "Feb", "Mar", etc. And `U` corresponds to "January", "February",
-"March", etc. Similar to other name=>value mapping functions [`dayname()`](@ref) and [`monthname()`](@ref),
+"March", etc. Similar to other name=>value mapping functions [`dayname`](@ref) and [`monthname`](@ref),
 custom locales can be loaded by passing in the `locale=>Dict{String,Int}` mapping to the `MONTHTOVALUEABBR`
 and `MONTHTOVALUE` dicts for abbreviated and full-name month names, respectively.
 
@@ -119,12 +120,12 @@ julia> dt2 = Date("2015-01-02",df)
 You can also use the `dateformat""` string macro. This macro creates the `DateFormat` object once when the macro is expanded and uses the same `DateFormat` object even if a code snippet is run multiple times.
 
 ```jldoctest
-julia> for i=1:10^5
-           Date("2015-01-01",dateformat"y-m-d")
+julia> for i = 1:10^5
+           Date("2015-01-01", dateformat"y-m-d")
        end
 ```
 
-A full suite of parsing and formatting tests and examples is available in [tests/dates/io.jl](https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl).
+A full suite of parsing and formatting tests and examples is available in [`tests/dates/io.jl`](https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl).
 
 ## Durations/Comparisons
 
@@ -132,7 +133,7 @@ Finding the length of time between two [`Date`](@ref) or [`DateTime`](@ref) is s
 given their underlying representation as `UTInstant{Day}` and `UTInstant{Millisecond}`, respectively.
 The difference between [`Date`](@ref) is returned in the number of [`Day`](@ref), and [`DateTime`](@ref)
 in the number of [`Millisecond`](@ref). Similarly, comparing [`TimeType`](@ref) is a simple matter
-of comparing the underlying machine instants (which in turn compares the internal `Int64` values).
+of comparing the underlying machine instants (which in turn compares the internal [`Int64`](@ref) values).
 
 ```jldoctest
 julia> dt = Date(2012,2,29)
@@ -189,7 +190,7 @@ julia> dt - dt2
 
 ## Accessor Functions
 
-Because the [`Date`](@ref) and [`DateTime`](@ref) types are stored as single `Int64` values, date
+Because the [`Date`](@ref) and [`DateTime`](@ref) types are stored as single [`Int64`](@ref) values, date
 parts or fields can be retrieved through accessor functions. The lowercase accessors return the
 field as an integer:
 
@@ -295,10 +296,10 @@ julia> Dates.dayofquarter(t)
 31
 ```
 
-The [`dayname()`](@ref) and [`monthname()`](@ref) methods can also take an optional `locale` keyword
+The [`dayname`](@ref) and [`monthname`](@ref) methods can also take an optional `locale` keyword
 that can be used to return the name of the day or month of the year for other languages/locales.
 There are also versions of these functions returning the abbreviated names, namely
-[`dayabbr()`](@ref) and [`monthabbr()`](@ref).
+[`dayabbr`](@ref) and [`monthabbr`](@ref).
 First the mapping is loaded into the `LOCALES` variable:
 
 ```jldoctest tdate2
@@ -327,14 +328,13 @@ julia> Dates.monthabbr(t;locale="french")
 ```
 
 Since the abbreviated versions of the days are not loaded, trying to use the
-function `dayabbr()` will error.
+function `dayabbr` will error.
 
 ```jldoctest tdate2
 julia> Dates.dayabbr(t;locale="french")
 ERROR: BoundsError: attempt to access 1-element Array{String,1} at index [5]
 Stacktrace:
- [1] #dayabbr#6(::String, ::Function, ::Int64) at ./dates/query.jl:114
- [2] (::Base.Dates.#kw##dayabbr)(::Array{Any,1}, ::Base.Dates.#dayabbr, ::Int64) at ./<missing>:0 (repeats 2 times)
+[...]
 ```
 
 
@@ -349,7 +349,7 @@ little as possible when doing [`Period`](@ref) arithmetic. This approach is also
 *calendrical* arithmetic or what you would probably guess if someone were to ask you the same
 calculation in a conversation. Why all the fuss about this? Let's take a classic example: add
 1 month to January 31st, 2014. What's the answer? Javascript will say [March 3](http://www.markhneedham.com/blog/2009/01/07/javascript-add-a-month-to-a-date/)
-(assumes 31 days). PHP says [March 2](http://stackoverflow.com/questions/5760262/php-adding-months-to-a-date-while-not-exceeding-the-last-day-of-the-month)
+(assumes 31 days). PHP says [March 2](https://stackoverflow.com/questions/5760262/php-adding-months-to-a-date-while-not-exceeding-the-last-day-of-the-month)
 (assumes 30 days). The fact is, there is no right answer. In the `Dates` module, it gives
 the result of February 28th. How does it figure that out? I like to think of the classic 7-7-7
 gambling game in casinos.
@@ -450,15 +450,15 @@ julia> Dates.lastdayofquarter(Date(2014,7,16)) # Adjusts to the last day of the 
 2014-09-30
 ```
 
-The next two higher-order methods, [`tonext()`](@ref), and [`toprev()`](@ref), generalize working
+The next two higher-order methods, [`tonext`](@ref), and [`toprev`](@ref), generalize working
 with temporal expressions by taking a `DateFunction` as first argument, along with a starting
 [`TimeType`](@ref). A `DateFunction` is just a function, usually anonymous, that takes a single
-[`TimeType`](@ref) as input and returns a `Bool`, `true` indicating a satisfied adjustment criterion.
+[`TimeType`](@ref) as input and returns a [`Bool`](@ref), `true` indicating a satisfied
+adjustment criterion.
 For example:
 
 ```jldoctest
-julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday # Returns true if the day of the week of x is Tuesday
-(::#1) (generic function with 1 method)
+julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday; # Returns true if the day of the week of x is Tuesday
 
 julia> Dates.tonext(istuesday, Date(2014,7,13)) # 2014-07-13 is a Sunday
 2014-07-15
@@ -479,7 +479,7 @@ julia> Dates.tonext(Date(2014,7,13)) do x
 2014-11-27
 ```
 
-The [`Base.filter()`](@ref) method can be used to obtain all valid dates/moments in a specified
+The [`Base.filter`](@ref) method can be used to obtain all valid dates/moments in a specified
 range:
 
 ```jldoctest
@@ -503,14 +503,14 @@ julia> filter(dr) do x
  2014-11-11
 ```
 
-Additional examples and tests are available in [test/dates/adjusters.jl](https://github.com/JuliaLang/julia/blob/master/test/dates/adjusters.jl).
+Additional examples and tests are available in [`test/dates/adjusters.jl`](https://github.com/JuliaLang/julia/blob/master/test/dates/adjusters.jl).
 
 ## Period Types
 
 Periods are a human view of discrete, sometimes irregular durations of time. Consider 1 month;
 it could represent, in days, a value of 28, 29, 30, or 31 depending on the year and month context.
 Or a year could represent 365 or 366 days in the case of a leap year. [`Period`](@ref) types are
-simple `Int64` wrappers and are constructed by wrapping any `Int64` convertible type, i.e. `Year(1)`
+simple [`Int64`](@ref) wrappers and are constructed by wrapping any `Int64` convertible type, i.e. `Year(1)`
 or `Month(3.0)`. Arithmetic between [`Period`](@ref) of the same type behave like integers, and
 limited `Period-Real` arithmetic is available.
 
@@ -543,7 +543,7 @@ julia> div(y3,3) # mirrors integer division
 ## Rounding
 
 [`Date`](@ref) and [`DateTime`](@ref) values can be rounded to a specified resolution (e.g., 1
-month or 15 minutes) with [`floor()`](@ref), [`ceil()`](@ref), or [`round()`](@ref):
+month or 15 minutes) with [`floor`](@ref), [`ceil`](@ref), or [`round`](@ref):
 
 ```jldoctest
 julia> floor(Date(1985, 8, 16), Dates.Month)
@@ -556,10 +556,10 @@ julia> round(DateTime(2016, 8, 6, 20, 15), Dates.Day)
 2016-08-07T00:00:00
 ```
 
-Unlike the numeric [`round()`](@ref) method, which breaks ties toward the even number by default,
-the [`TimeType`](@ref)[`round()`](@ref) method uses the `RoundNearestTiesUp` rounding mode. (It's
+Unlike the numeric [`round`](@ref) method, which breaks ties toward the even number by default,
+the [`TimeType`](@ref)[`round`](@ref) method uses the `RoundNearestTiesUp` rounding mode. (It's
 difficult to guess what breaking ties to nearest "even" [`TimeType`](@ref) would entail.) Further
-details on the available `RoundingMode` s can be found in the [API reference](http://docs.julialang.org/en/latest/stdlib/dates/).
+details on the available `RoundingMode` s can be found in the [API reference](@ref stdlib-dates).
 
 Rounding should generally behave as expected, but there are a few cases in which the expected
 behaviour is not obvious.
@@ -624,5 +624,5 @@ will result in the months field having an odd value. Because both months and yea
 an irregular number of days, whether rounding to an even number of days will result in an even
 value in the days field is uncertain.
 
-See the [API reference](http://docs.julialang.org/en/latest/stdlib/dates/) for additional information
+See the [API reference](@ref stdlib-dates) for additional information
 on methods exported from the `Dates` module.

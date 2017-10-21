@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # The Computer Language Benchmarks Game
 # http://shootout.alioth.debian.org/
@@ -33,7 +33,7 @@ const subs = [
 ]
 
 function regex_dna(infile="regexdna-input.txt")
-    seq = readstring(infile)
+    seq = read(infile, String)
     l1 = length(seq)
 
     seq = replace(seq, r">.*\n|\n", "")

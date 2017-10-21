@@ -1,11 +1,11 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Read
 
 import ...LibGit2, ..Cache, ..Reqs, ...Pkg.PkgError, ..Dir
 using ..Types
 
-readstrip(path...) = strip(readstring(joinpath(path...)))
+readstrip(path...) = strip(read(joinpath(path...), String))
 
 url(pkg::AbstractString) = readstrip(Dir.path("METADATA"), pkg, "url")
 sha1(pkg::AbstractString, ver::VersionNumber) =
@@ -134,7 +134,7 @@ function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::D
     end
     isempty(head) && return typemin(VersionNumber)
 
-    vers = collect(keys(filter((ver,info)->info.sha1==head, avail)))
+    vers = collect(keys(filter(#=ver,info=#p->p[2].sha1==head, avail)))
     !isempty(vers) && return maximum(vers)
 
     cache = Cache.path(pkg)

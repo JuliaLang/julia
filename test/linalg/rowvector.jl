@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @testset "Core" begin
     v = [1,2,3]
@@ -49,6 +49,9 @@
 
     y = rand(Complex{Float64},3)
     @test sum(abs2, imag.(diag(y .+ y'))) < 1e-20
+
+    @test parent(rv) === v
+    @test vec(rv) === v
 end
 
 @testset "Diagonal ambiguity methods" begin
@@ -73,7 +76,7 @@ end
 end
 
 @testset "Bidiagonal ambiguity methods" begin
-    bd = Bidiagonal([1,2,3], [0,0], true)
+    bd = Bidiagonal([1,2,3], [0,0], :U)
     v = [2,3,4]
     rv = v.'
 
@@ -88,7 +91,7 @@ end
 end
 
 @testset "Left Division" begin
-    mat = diagm([1,2,3])
+    mat = Matrix(Diagonal([1,2,3]))
     v = [2,3,4]
     rv = v.'
 
@@ -98,7 +101,7 @@ end
 @testset "Multiplication" begin
     v = [1,2,3]
     rv = v.'
-    mat = diagm([1,2,3])
+    mat = Matrix(Diagonal([1,2,3]))
 
     @test (rv*v) === 14
     @test (rv*mat)::RowVector == [1 4 9]
@@ -134,7 +137,7 @@ end
 
     z = [1+im,2,3]
     cz = z'
-    mat = diagm([1+im,2,3])
+    mat = Matrix(Diagonal([1+im,2,3]))
 
     @test cz*z === 15 + 0im
 
@@ -178,7 +181,7 @@ end
 end
 
 @testset "Right Division" begin
-    mat = diagm([1,2,3])
+    mat = Matrix(Diagonal([1,2,3]))
     v = [2,3,4]
     rv = v.'
 
@@ -194,7 +197,7 @@ end
 end
 
 @testset "Sparse ambiguity methods" begin
-    mat = sparse(diagm([1,2,3]))
+    mat = sparse(Diagonal([1,2,3]))
     v = [2,3,4]
     rv = v.'
 
@@ -236,6 +239,14 @@ end
     @test_throws DimensionMismatch ut\rv
 end
 
+@testset "Symmetric/Hermitian ambiguity methods" begin
+    S = Symmetric(rand(3, 3))
+    H = Hermitian(rand(3, 3))
+    v = (rand(3)')::RowVector
+    @test_throws DimensionMismatch S\v
+    @test_throws DimensionMismatch H\v
+end
+
 # issue #20389
 @testset "1 row/col vec*mat" begin
     let x=[1,2,3], A=ones(1,4), y=x', B=A', C=x.*A
@@ -248,4 +259,43 @@ end
         @test x*A == y'*A == x*B' == y'*B' == C
         @test A'*x' == A'*y == B*x' == B*y == C'
     end
+end
+
+@testset "issue #20979" begin
+    f20979(z::Complex) = [z.re -z.im; z.im z.re]
+    v = [1+2im]'
+    @test (f20979.(v))[1] == f20979(v[1])
+    @test f20979.(v) == f20979.(collect(v))
+
+    w = rand(Complex128, 3)
+    @test f20979.(v') == f20979.(collect(v')) == (f20979.(v))'
+
+    g20979(x, y) = [x[2,1] x[1,2]; y[1,2] y[2,1]]
+    v = [rand(2,2), rand(2,2), rand(2,2)]
+    @test g20979.(v', v') == g20979.(collect(v'), collect(v')) ==
+          map(g20979, v', v') == map(g20979, collect(v'), collect(v'))
+end
+
+@testset "ambiguity between * methods with RowVectors and ConjRowVectors (#20971)" begin
+    @test RowVector(ConjArray(ones(4))) * ones(4) == 4
+end
+
+@testset "setindex!/getindex" begin
+    v = [2, 3, 4]
+    rv = v.'
+    @test_throws BoundsError setindex!(rv, 5, CartesianIndex((5, 4, 3)))
+    rv[CartesianIndex((1, 1, 1))] = 5
+    @test_throws BoundsError getindex(rv, CartesianIndex((5, 4, 3)))
+    @test rv[1] == 5
+
+    @test rv[:, 2]::Vector == [v[2]]
+    @test rv[:, 2:3]::RowVector == v[2:3].'
+    @test rv[:, :]::RowVector == rv
+
+    v = [1]
+    rv = v.'
+    rv[CartesianIndex()] = 2
+    @test rv[CartesianIndex()] == 2
+    rv[CartesianIndex(1)] = 1
+    @test rv[CartesianIndex(1)] == 1
 end

@@ -25,15 +25,19 @@ ifeq ($(SANITIZE),1)
 MPFR_OPTS += --host=none-unknown-linux
 endif
 
-$(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2: | $(SRCDIR)/srccache
+$(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ http://www.mpfr.org/mpfr-$(MPFR_VER)/$(notdir $@)
-$(SRCDIR)/srccache/mpfr-$(MPFR_VER)/source-extracted: $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2
+$(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) -jxf $<
-	touch -c $(SRCDIR)/srccache/mpfr-$(MPFR_VER)/configure # old target
+	touch -c $(SRCCACHE)/mpfr-$(MPFR_VER)/configure # old target
 	echo 1 > $@
 
-$(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: $(SRCDIR)/srccache/mpfr-$(MPFR_VER)/source-extracted
+$(SRCCACHE)/mpfr-$(MPFR_VER)/build-patched: $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted
+	cd $(dir $@) && patch -p0 < $(SRCDIR)/patches/mpfr-sincos.patch
+	echo 1 > $@
+
+$(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted $(SRCCACHE)/mpfr-$(MPFR_VER)/build-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) $(MPFR_OPTS) F77= --enable-shared --disable-static
@@ -59,12 +63,12 @@ clean-mpfr:
 	-$(MAKE) -C $(BUILDDIR)/mpfr-$(MPFR_VER) clean
 
 distclean-mpfr:
-	-rm -rf $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2 \
-		$(SRCDIR)/srccache/mpfr-$(MPFR_VER) \
+	-rm -rf $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2 \
+		$(SRCCACHE)/mpfr-$(MPFR_VER) \
 		$(BUILDDIR)/mpfr-$(MPFR_VER)
 
-get-mpfr: $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2
-extract-mpfr: $(SRCDIR)/srccache/mpfr-$(MPFR_VER)/source-extracted
+get-mpfr: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2
+extract-mpfr: $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted
 configure-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured
 compile-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled
 fastcheck-mpfr: check-mpfr

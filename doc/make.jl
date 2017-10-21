@@ -10,11 +10,27 @@ using Documenter
 # Include the `build_sysimg` file.
 
 baremodule GenStdLib end
-isdefined(:build_sysimg) || @eval module BuildSysImg
+@isdefined(build_sysimg) || @eval module BuildSysImg
     include(joinpath(@__DIR__, "..", "contrib", "build_sysimg.jl"))
 end
 
 # Documenter Setup.
+
+symlink_q(tgt, link) = isfile(link) || symlink(tgt, link)
+cp_q(src, dest) = isfile(dest) || cp(src, dest)
+
+# make links for stdlib package docs
+if Sys.iswindows()
+    cp_q("../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
+    cp_q("../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
+    cp_q("../stdlib/Mmap/docs/src/index.md", "src/stdlib/mmap.md")
+    cp_q("../stdlib/SharedArrays/docs/src/index.md", "src/stdlib/sharedarrays.md")
+else
+    symlink_q("../../../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
+    symlink_q("../../../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
+    symlink_q("../../../stdlib/Mmap/docs/src/index.md", "src/stdlib/mmap.md")
+    symlink_q("../../../stdlib/SharedArrays/docs/src/index.md", "src/stdlib/sharedarrays.md")
+end
 
 const PAGES = [
     "Home" => "index.md",
@@ -46,7 +62,7 @@ const PAGES = [
         "manual/running-external-programs.md",
         "manual/calling-c-and-fortran-code.md",
         "manual/handling-operating-system-variation.md",
-        "manual/interacting-with-julia.md",
+        "manual/environment-variables.md",
         "manual/embedding.md",
         "manual/packages.md",
         "manual/profile.md",
@@ -69,6 +85,7 @@ const PAGES = [
         "stdlib/linalg.md",
         "stdlib/constants.md",
         "stdlib/file.md",
+        "stdlib/delimitedfiles.md",
         "stdlib/io-network.md",
         "stdlib/punctuation.md",
         "stdlib/sort.md",
@@ -103,6 +120,9 @@ const PAGES = [
             "devdocs/boundscheck.md",
             "devdocs/locks.md",
             "devdocs/offset-arrays.md",
+            "devdocs/libgit2.md",
+            "devdocs/require.md",
+            "devdocs/inference.md",
         ],
         "Developing/debugging Julia's C code" => [
             "devdocs/backtraces.md",
@@ -113,12 +133,15 @@ const PAGES = [
     ],
 ]
 
+using DelimitedFiles, Test, Mmap, SharedArrays
+
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg],
+    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
+    linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     strict    = true,
     checkdocs = :none,
     format    = "pdf" in ARGS ? :latex : :html,
@@ -126,6 +149,7 @@ makedocs(
     authors   = "The Julia Project",
     analytics = "UA-28835595-6",
     pages     = PAGES,
+    html_prettyurls = ("deploy" in ARGS),
 )
 
 if "deploy" in ARGS

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Query
 
@@ -180,8 +180,8 @@ end
 const PackageState = Union{Void,VersionNumber}
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
-    change = Array{Tuple{String,Tuple{PackageState,PackageState}}}(0)
-    remove = Array{Tuple{String,Tuple{PackageState,PackageState}}}(0)
+    change = Vector{Tuple{String,Tuple{PackageState,PackageState}}}(0)
+    remove = Vector{Tuple{String,Tuple{PackageState,PackageState}}}(0)
 
     for pkg in collect(union(keys(have),keys(want)))
         h, w = haskey(have,pkg), haskey(want,pkg)
@@ -359,7 +359,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
             vmaskp[vn] = falses(luds)
         end
         for (vn,a) in fdepsp
-            vmind = findfirst(uniqdepssets, a.requires)
+            vmind = findfirst(equalto(a.requires), uniqdepssets)
             @assert vmind > 0
             vm = vmaskp[vn]
             vm[vmind] = true
@@ -389,7 +389,7 @@ function prune_versions(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Ava
         nc = length(vmask0_uniq)
         classes = [VersionNumber[] for c0 = 1:nc]
         for (vn,vm) in vmaskp
-            c0 = findfirst(vmask0_uniq, vm)
+            c0 = findfirst(equalto(vm), vmask0_uniq)
             push!(classes[c0], vn)
         end
         map(sort!, classes)

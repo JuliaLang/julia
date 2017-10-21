@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Peter Norvig's Spelling Corrector
 # based off of the python implementation at http://norvig.com/spell-correct.html
@@ -28,7 +28,7 @@ end
 if !isfile("big.txt")
     download("http://norvig.com/big.txt", "big.txt")
 end
-const NWORDS = train(words(readstring("big.txt")))
+const NWORDS = train(words(read("big.txt", String)))
 
 const alphabet = "abcdefghijklmnopqrstuvwxyz"
 
@@ -71,7 +71,7 @@ end
 ################ Testing code from here on ################
 
 function spelltest(tests; bias=0, verbose=false)
-    n, bad, unknown, start = 0, 0, 0, tic()
+    n, bad, unknown, start = 0, 0, 0, time_ns()
     if bias > 0
         for target in keys(tests)
             NWORDS[target] = get(NWORDS, target, 1) + bias
@@ -92,8 +92,8 @@ function spelltest(tests; bias=0, verbose=false)
         end
     end
 
-    return Dict("bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>round(Int, 100. - 100.*bad/n),
-                "unknown"=>unknown, "secs"=>toc())
+    return Dict("bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>round(Int, 100. - 100. * bad/n),
+                "unknown"=>unknown, "secs"=>(time_ns() - start)/1e9)
 end
 
 const tests1 = Dict("access"=> "acess", "accessing"=> "accesing", "accommodation"=>

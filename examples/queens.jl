@@ -1,8 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # n-queens (nqueens) solver, for nsquaresx-by-nsquaresy board
 
-immutable Queen
+struct Queen
     x::Int
     y::Int
 end

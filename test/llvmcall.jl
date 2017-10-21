@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.llvmcall
 
@@ -49,7 +49,7 @@ end
 # Test whether llvmcall escapes the function name correctly
 baremodule PlusTest
     using Base.llvmcall
-    using Base.Test
+    using Test
     using Base
 
     function +(x::Int32, y::Int32)
@@ -155,7 +155,8 @@ end
 call_jl_errno()
 
 module ObjLoadTest
-    using Base: Test, llvmcall, @ccallable
+    using Base: llvmcall, @ccallable
+    using Test
     didcall = false
     @ccallable Void function jl_the_callback()
         global didcall
@@ -177,7 +178,7 @@ module ObjLoadTest
 end
 
 # Test for proper parenting
-if VersionNumber(Base.libllvm_version) >= v"3.6" # llvm 3.6 changed the syntax for a gep, so just ignore this test on older versions
+if Base.libllvm_version >= v"3.6" # llvm 3.6 changed the syntax for a gep, so just ignore this test on older versions
     local foo
     function foo()
         # this IR snippet triggers an optimization relying
@@ -190,4 +191,21 @@ if VersionNumber(Base.libllvm_version) >= v"3.6" # llvm 3.6 changed the syntax f
     code_llvm(DevNull, foo, ())
 else
     println("INFO: skipping gep parentage test on llvm < 3.6")
+end
+
+module CcallableRetTypeTest
+    using Base: llvmcall, @ccallable
+    using Test
+    @ccallable function jl_test_returns_float()::Float64
+        return 42
+    end
+    function do_the_call()
+        llvmcall(
+        (""" declare double @jl_test_returns_float()""",
+        """
+        %1 = call double @jl_test_returns_float()
+        ret double %1
+        """),Float64,Tuple{})
+    end
+    @test do_the_call() === 42.0
 end

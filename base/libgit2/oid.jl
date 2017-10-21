@@ -1,5 +1,12 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    GitHash(ptr::Ptr{UInt8})
+
+Construct a `GitHash` from a pointer to `UInt8` data containing the bytes of the
+SHA-1 hash. The constructor throws an error if the pointer is null, i.e. equal to
+`C_NULL`.
+"""
 function GitHash(ptr::Ptr{UInt8})
     if ptr == C_NULL
         throw(ArgumentError("NULL pointer passed to GitHash() constructor"))
@@ -9,6 +16,11 @@ function GitHash(ptr::Ptr{UInt8})
     return oid_ptr[]
 end
 
+"""
+    GitHash(id::Vector{UInt8})
+
+Construct a `GitHash` from a vector of $OID_RAWSZ bytes.
+"""
 function GitHash(id::Array{UInt8,1})
     if length(id) != OID_RAWSZ
         throw(ArgumentError("invalid raw buffer size"))
@@ -16,6 +28,11 @@ function GitHash(id::Array{UInt8,1})
     return GitHash(pointer(id))
 end
 
+"""
+    GitHash(id::AbstractString)
+
+Construct a `GitHash` from a string of $OID_HEXSZ hexadecimal digits.
+"""
 function GitHash(id::AbstractString)
     bstr = String(id)
     len = sizeof(bstr)
@@ -27,6 +44,24 @@ function GitHash(id::AbstractString)
               (Ptr{GitHash}, Ptr{UInt8}, Csize_t), oid_ptr, bstr, len)
     return oid_ptr[]
 end
+
+"""
+    GitShortHash(buf::Buffer)
+
+Construct a `GitShortHash` from the data stored in the given [`Buffer`](@ref).
+"""
+function GitShortHash(buf::Buffer)
+    oid_ptr = Ref{GitHash}()
+    @check ccall((:git_oid_fromstrn, :libgit2), Cint,
+              (Ptr{GitHash}, Ptr{UInt8}, Csize_t), oid_ptr, buf.ptr, buf.size)
+    GitShortHash(oid_ptr[], buf.size)
+end
+
+"""
+    GitShortHash(id::AbstractString)
+
+Construct a `GitShortHash` from a string of at most $OID_HEXSZ hexadecimal digits.
+"""
 function GitShortHash(id::AbstractString)
     bstr = String(id)
     len = sizeof(bstr)
@@ -36,6 +71,21 @@ function GitShortHash(id::AbstractString)
     GitShortHash(oid_ptr[], len)
 end
 
+"""
+    @githash_str -> AbstractGitHash
+
+Construct a git hash object from the given string, returning a `GitShortHash` if
+the string is shorter than $OID_HEXSZ hexadecimal digits, otherwise a `GitHash`.
+
+# Examples
+```jldoctest
+julia> LibGit2.githash"d114feb74ce633"
+GitShortHash("d114feb74ce633")
+
+julia> LibGit2.githash"d114feb74ce63307afe878a5228ad014e0289a85"
+GitHash("d114feb74ce63307afe878a5228ad014e0289a85")
+```
+"""
 macro githash_str(id)
     bstr = String(id)
     if sizeof(bstr) < OID_HEXSZ
@@ -44,6 +94,15 @@ macro githash_str(id)
         GitHash(id)
     end
 end
+
+
+"""
+    GitHash(ref::GitReference)
+
+Get the identifier (`GitHash`) of the object referred to by the direct reference
+`ref`. Note: this does not work for symbolic references; in such cases use
+`GitHash(repo::GitRepo, ref_name::AbstractString)` instead.
+"""
 function GitHash(ref::GitReference)
     isempty(ref) && return GitHash()
     reftype(ref) != Consts.REF_OID && return GitHash()
@@ -52,6 +111,13 @@ function GitHash(ref::GitReference)
     return GitHash(oid_ptr)
 end
 
+
+"""
+    GitHash(repo::GitRepo, ref_name::AbstractString)
+
+Get the identifier (`GitHash`) of the object referred to by reference specified by
+`ref_name`.
+"""
 function GitHash(repo::GitRepo, ref_name::AbstractString)
     isempty(repo) && return GitHash()
     oid_ptr  = Ref(GitHash())
@@ -61,13 +127,39 @@ function GitHash(repo::GitRepo, ref_name::AbstractString)
     return oid_ptr[]
 end
 
+"""
+    GitHash(obj::GitObject)
+
+Get the identifier (`GitHash`) of `obj`.
+"""
 function GitHash(obj::GitObject)
     GitHash(ccall((:git_object_id, :libgit2), Ptr{UInt8}, (Ptr{Void},), obj.ptr))
+end
+
+"""
+    GitShortHash(obj::GitObject)
+
+Get a shortened identifier (`GitShortHash`) of `obj`. The minimum length (in characters)
+is determined by the `core.abbrev` config option, and will be of sufficient length to
+unambiuously identify the object in the repository.
+"""
+function GitShortHash(obj::GitObject)
+    buf_ref = Ref(Buffer())
+    @check ccall((:git_object_short_id, :libgit2), Cint,
+                 (Ptr{Buffer},Ptr{Void}), buf_ref, obj.ptr)
+    sid = GitShortHash(buf_ref[])
+    free(buf_ref)
+    return sid
 end
 
 Base.hex(id::GitHash) = join([hex(i,2) for i in id.val])
 Base.hex(id::GitShortHash) = hex(id.hash)[1:id.len]
 
+"""
+    raw(id::GitHash) -> Vector{UInt8}
+
+Obtain the raw bytes of the [`GitHash`](@ref) as a vector of length $OID_RAWSZ.
+"""
 raw(id::GitHash) = collect(id.val)
 
 Base.string(id::AbstractGitHash) = hex(id)
@@ -96,6 +188,11 @@ Base.cmp(id1::GitShortHash, id2::GitHash) = cmp(id1, GitShortHash(id2, OID_HEXSZ
 ==(id1::GitHash, id2::GitHash) = cmp(id1, id2) == 0
 Base.isless(id1::AbstractGitHash, id2::AbstractGitHash)  = cmp(id1, id2) < 0
 
+"""
+    iszero(id::GitHash) -> Bool
+
+Determine whether all hexadecimal digits of the given [`GitHash`](@ref) are zero.
+"""
 function iszero(id::GitHash)
     for i in 1:OID_RAWSZ
         id.val[i] != zero(UInt8) && return false

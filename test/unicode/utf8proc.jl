@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @testset "string normalization" begin
     # normalize_string (Unicode normalization etc.):
@@ -109,26 +109,26 @@ end
     alphas=vcat(alower,ulower,aupper,uupper,nocase)
 
     for c in alphas
-         @test isalpha(c) == true
-         @test isnumber(c) == false
+        @test isalpha(c) == true
+        @test isnumber(c) == false
     end
 
     anumber=['0', '1', '5', '9']
     unumber=['٣', '٥', '٨', '¹', 'ⅳ' ]
 
     for c in anumber
-         @test isdigit(c) == true
-         @test isnumber(c) == true
+        @test isdigit(c) == true
+        @test isnumber(c) == true
     end
     for c in unumber
-         @test isdigit(c) == false
-         @test isnumber(c) == true
+        @test isdigit(c) == false
+        @test isnumber(c) == true
     end
 
     alnums=vcat(alphas,anumber,unumber)
     for c in alnums
-         @test isalnum(c) == true
-         @test ispunct(c) == false
+        @test isalnum(c) == true
+        @test ispunct(c) == false
     end
 
     asymbol = ['(',')', '~', '$' ]
@@ -138,8 +138,8 @@ end
     upunct =['‡', '؟', '჻' ]
 
     for c in vcat(apunct,upunct)
-         @test ispunct(c) == true
-         @test isalnum(c) == false
+        @test ispunct(c) == true
+        @test isalnum(c) == false
     end
 
     for c in vcat(alnums,asymbol,usymbol,apunct,upunct)
@@ -266,16 +266,17 @@ end
 end
 
 @testset "#3721, #6939 up-to-date character widths" begin
-    @test charwidth('\U1f355') == 2
-    @test strwidth("\U1f355") == 2
-    @test strwidth(GenericString("\U1f355")) == 2
-    @test strwidth("\U1f355\u0302") == 2
-    @test strwidth(GenericString("\U1f355\u0302")) == 2
+    @test textwidth("") == 0
+    @test textwidth('\U1f355') == 2
+    @test textwidth("\U1f355") == 2
+    @test textwidth(GenericString("\U1f355")) == 2
+    @test textwidth("\U1f355\u0302") == 2
+    @test textwidth(GenericString("\U1f355\u0302")) == 2
 end
 
 @testset "#10958 handling of embedded NUL chars" begin
     @test length("\0w") == length("\0α") == 2
-    @test strwidth("\0w") == strwidth("\0α") == 1
+    @test textwidth("\0w") == textwidth("\0α") == 1
     @test normalize_string("\0W", casefold=true) == "\0w"
 end
 
@@ -310,10 +311,12 @@ end
         g = graphemes(str)
         h = hash(str)
         @test hash(g) == h
-        @test convert(GenericString, g) == str
-        io = IOBuffer()
-        show(io, g)
-        check = "length-14 GraphemeIterator{String} for \"$str\""
-        @test String(take!(io)) == check
+        @test repr(g) == "length-14 GraphemeIterator{String} for \"$str\""
     end
+end
+
+@testset "#22693: substring graphemes" begin
+    g = graphemes(SubString("123α56789", 1, 6))
+    @test eltype(g) == SubString{String}
+    @test collect(g) == ["1","2","3","α","5"]
 end

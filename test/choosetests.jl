@@ -1,8 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @doc """
 
-`tests, net_on = choosetests(choices)` selects a set of tests to be
+`tests, net_on, exit_on_error, seed = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
 `["all"]`, all tests are selected.
 
@@ -10,8 +10,21 @@ This function also supports "test collections": specifically, "linalg"
  refers to collections of tests in the correspondingly-named
 directories.
 
-Upon return, `tests` is a vector of fully-expanded test names, and
-`net_on` is true if networking is available (required for some tests).
+Upon return:
+  - `tests` is a vector of fully-expanded test names,
+  - `net_on` is true if networking is available (required for some tests),
+  - `exit_on_error` is true if an error in one test should cancel
+    remaining tests to be run (otherwise, all tests are run unconditionally),
+  - `seed` is a seed which will be used to initialize the global RNG for each
+    test to be run.
+
+Three options can be passed to `choosetests` by including a special token
+in the `choices` argument:
+   - "--skip", which makes all tests coming after be skipped,
+   - "--exit-on-error" which sets the value of `exit_on_error`,
+   - "--seed=SEED", which sets the value of `seed` to `SEED`
+     (parsed as an `UInt128`); `seed` is otherwise initialized randomly.
+     This option can be used to reproduce failed tests.
 """ ->
 function choosetests(choices = [])
     testnames = [
@@ -20,22 +33,23 @@ function choosetests(choices = [])
         "printf", "char", "strings", "triplequote", "unicode", "intrinsics",
         "dates", "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
-        "intfuncs", "simdloop", "vecelement", "blas", "sparse",
+        "intfuncs", "simdloop", "vecelement", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "path", "ccall", "parse", "loading", "bigint",
         "bigfloat", "sorting", "statistics", "spawn", "backtrace",
-        "file", "read", "mmap", "version", "resolve",
+        "file", "read", "version", "resolve",
         "pollfd", "mpfr", "broadcast", "complex", "socket",
-        "floatapprox", "datafmt", "reflection", "regex", "float16",
+        "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
-        "replutil", "sets", "test", "goto", "llvmcall", "llvmcall2", "grisu",
+        "replutil", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
         "nullable", "meta", "stacktraces", "profile", "libgit2", "docs",
         "markdown", "base64", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "intset", "floatfuncs", "compile", "distributed", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
-        "channels"
+        "channels", "iostream", "specificity", "codegen", "codevalidation",
+        "reinterpretarray"
     ]
     profile_skipped = false
     if startswith(string(Sys.ARCH), "arm")
@@ -45,21 +59,23 @@ function choosetests(choices = [])
         profile_skipped = true
     end
 
-    if Base.USE_GPL_LIBS
-        testnames = [testnames, "fft", "dsp"; ]
-    end
-
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
         push!(testnames, "examples")
     end
 
     tests = []
     skip_tests = []
+    exit_on_error = false
+    seed = rand(RandomDevice(), UInt128)
 
     for (i, t) in enumerate(choices)
         if t == "--skip"
             skip_tests = choices[i + 1:end]
             break
+        elseif t == "--exit-on-error"
+            exit_on_error = true
+        elseif startswith(t, "--seed=")
+            seed = parse(UInt128, t[8:end])
         else
             push!(tests, t)
         end
@@ -115,7 +131,7 @@ function choosetests(choices = [])
         prepend!(tests, sparsetests)
     end
 
-    #do subarray before sparse but after linalg
+    # do subarray before sparse but after linalg
     if "subarray" in skip_tests
         filter!(x -> x != "subarray", tests)
     elseif "subarray" in tests
@@ -130,7 +146,8 @@ function choosetests(choices = [])
                    "linalg/diagonal", "linalg/pinv", "linalg/givens",
                    "linalg/cholesky", "linalg/lu", "linalg/symmetric",
                    "linalg/generic", "linalg/uniformscaling", "linalg/lq",
-                   "linalg/hessenberg", "linalg/rowvector", "linalg/conjarray"]
+                   "linalg/hessenberg", "linalg/rowvector", "linalg/conjarray",
+                   "linalg/blas"]
     if Base.USE_GPL_LIBS
         push!(linalgtests, "linalg/arnoldi")
     end
@@ -141,6 +158,14 @@ function choosetests(choices = [])
         # specifically selected case
         filter!(x -> x != "linalg", tests)
         prepend!(tests, linalgtests)
+    end
+
+    # do ambiguous first to avoid failing if ambiguities are introduced by other tests
+    if "ambiguous" in skip_tests
+        filter!(x -> x != "ambiguous", tests)
+    elseif "ambiguous" in tests
+        filter!(x -> x != "ambiguous", tests)
+        prepend!(tests, ["ambiguous"])
     end
 
     net_required_for = ["socket", "distributed", "libgit2"]
@@ -163,5 +188,5 @@ function choosetests(choices = [])
 
     filter!(x -> !(x in skip_tests), tests)
 
-    tests, net_on
+    tests, net_on, exit_on_error, seed
 end

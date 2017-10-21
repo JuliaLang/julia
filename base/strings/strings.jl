@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 include("strings/errors.jl")
 include("strings/types.jl")
@@ -7,4 +7,4 @@ include("strings/search.jl")
 include("strings/util.jl")
 include("strings/io.jl")
 include("strings/utf8proc.jl")
-importall .UTF8proc
+using .UTF8proc

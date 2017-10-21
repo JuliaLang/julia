@@ -1,9 +1,9 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## basic task functions and TLS
 
 # Container for a captured exception and its backtrace. Can be serialized.
-mutable struct CapturedException <: Exception
+struct CapturedException <: Exception
     ex::Any
     processed_bt::Vector{Any}
 
@@ -26,7 +26,7 @@ function showerror(io::IO, ce::CapturedException)
     showerror(io, ce.ex, ce.processed_bt, backtrace=true)
 end
 
-mutable struct CompositeException <: Exception
+struct CompositeException <: Exception
     exceptions::Vector{Any}
     CompositeException() = new(Any[])
     CompositeException(exceptions) = new(exceptions)
@@ -209,7 +209,7 @@ function task_done_hook(t::Task)
 
     if isa(t.donenotify, Condition) && !isempty(t.donenotify.waitq)
         handled = true
-        notify(t.donenotify, result, error=err)
+        notify(t.donenotify, result, true, err)
     end
 
     # Execute any other hooks registered in the TLS
@@ -238,7 +238,7 @@ function task_done_hook(t::Task)
         if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
             active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
-            throwto(active_repl_backend.backend_task, result)
+            throwto(active_repl_backend.backend_task, result) # this terminates the task
         end
         if !suppress_excp_printing(t)
             let bt = t.backtrace
@@ -253,7 +253,20 @@ function task_done_hook(t::Task)
     end
     # Clear sigatomic before waiting
     sigatomic_end()
-    wait()
+    try
+        wait() # this will not return
+    catch e
+        # If an InterruptException happens while blocked in the event loop, try handing
+        # the exception to the REPL task since the current task is done.
+        # issue #19467
+        if isa(e,InterruptException) && isdefined(Base,:active_repl_backend) &&
+            active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
+            active_repl_backend.in_eval
+            throwto(active_repl_backend.backend_task, e)
+        else
+            rethrow(e)
+        end
+    end
 end
 
 

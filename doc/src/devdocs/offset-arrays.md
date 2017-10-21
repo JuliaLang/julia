@@ -18,7 +18,8 @@ the exported interfaces of Julia.
 As an overview, the steps are:
 
   * replace many uses of `size` with `indices`
-  * replace `1:length(A)` with `linearindices(A)`, and `length(A)` with `length(linearindices(A))`
+  * replace `1:length(A)` with `eachindex(A)`, or in some cases `linearindices(A)`
+  * replace `length(A)` with `length(linearindices(A))`
   * replace explicit allocations like `Array{Int}(size(B))` with `similar(Array{Int}, indices(B))`
 
 These are described in more detail below.
@@ -59,7 +60,7 @@ the ranges may not start at 1.  If you just want the range for a particular dime
 is `indices(A, d)`.
 
 Base implements a custom range type, `OneTo`, where `OneTo(n)` means the same thing as `1:n` but
-in a form that guarantees (via the type system) that the lower index is 1.  For any new `AbstractArray`
+in a form that guarantees (via the type system) that the lower index is 1. For any new [`AbstractArray`](@ref)
 type, this is the default returned by `indices`, and it indicates that this array type uses "conventional"
 1-based indexing.  Note that if you don't want to be bothered supporting arrays with non-1 indexing,
 you can add the following line:
@@ -75,20 +76,12 @@ can sometimes simplify such tests.
 
 ### Linear indexing (`linearindices`)
 
-Some algorithms are most conveniently (or efficiently) written in terms of a single linear index,
-`A[i]` even if `A` is multi-dimensional.  In "true" linear indexing, the indices always range
-from `1:length(A)`. However, this raises an ambiguity for one-dimensional arrays (a.k.a., `AbstractVector`):
-does `v[i]` mean linear indexing, or Cartesian indexing with the array's native indices?
 
-For this reason, if you want to use linear indexing in an algorithm, your best option is to get
-the index range by calling `linearindices(A)`.  This will return `indices(A, 1)` if `A` is an
-`AbstractVector`, and the equivalent of `1:length(A)` otherwise.
+Some algorithms are most conveniently (or efficiently) written in terms of a single linear index, `A[i]` even if `A` is multi-dimensional. Regardless of the array's native indices, linear indices always range from `1:length(A)`. However, this raises an ambiguity for one-dimensional arrays (a.k.a., [`AbstractVector`](@ref)): does `v[i]` mean linear indexing , or Cartesian indexing with the array's native indices?
 
-In a sense, one can say that 1-dimensional arrays always use Cartesian indexing. To help enforce
-this, it's worth noting that `sub2ind(shape, i...)` and `ind2sub(shape, ind)` will throw an error
-if `shape` indicates a 1-dimensional array with unconventional indexing (i.e., is a `Tuple{UnitRange}`
-rather than a tuple of `OneTo`).  For arrays with conventional indexing, these functions continue
-to work the same as always.
+For this reason, your best option may be to iterate over the array with `eachindex(A)`, or, if you require the indices to be sequential integers, to get the index range by calling `linearindices(A)`. This will return `indices(A, 1)` if A is an AbstractVector, and the equivalent of `1:length(A)` otherwise.
+
+By this definition, 1-dimensional arrays always use Cartesian indexing with the array's native indices. To help enforce this, it's worth noting that sub2ind(shape, i...) and ind2sub(shape, ind) will throw an error if shape indicates a 1-dimensional array with unconventional indexing (i.e., is a `Tuple{UnitRange}` rather than a tuple of `OneTo`). For arrays with conventional indexing, these functions continue to work the same as always.
 
 Using `indices` and `linearindices`, here is one way you could rewrite `mycopy!`:
 
@@ -108,8 +101,9 @@ Storage is often allocated with `Array{Int}(dims)` or `similar(A, args...)`. Whe
 to match the indices of some other array, this may not always suffice. The generic replacement
 for such patterns is to use `similar(storagetype, shape)`.  `storagetype` indicates the kind of
 underlying "conventional" behavior you'd like, e.g., `Array{Int}` or `BitArray` or even `dims->zeros(Float32, dims)`
-(which would allocate an all-zeros array). `shape` is a tuple of `Integer` or `AbstractUnitRange`
-values, specifying the indices that you want the result to use.
+(which would allocate an all-zeros array). `shape` is a tuple of [`Integer`](@ref) or
+`AbstractUnitRange` values, specifying the indices that you want the result to use. Note that
+a convenient way of producing an all-zeros array that matches the indices of A is simply `zeros(A)`.
 
 Let's walk through a couple of explicit examples. First, if `A` has conventional indices, then
 `similar(Array{Int}, indices(A))` would end up calling `Array{Int}(size(A))`, and thus return
@@ -169,8 +163,8 @@ is (perhaps counterintuitively) an advantage: `ModuleA.ZeroRange` indicates that
 create a `ModuleA.ZeroArray`, whereas `ModuleB.ZeroRange` indicates a `ModuleB.ZeroArray` type.
  This design allows peaceful coexistence among many different custom array types.
 
-Note that the Julia package `CustomUnitRanges.jl` can sometimes be used to avoid the need to write
-your own `ZeroRange` type.
+Note that the Julia package [CustomUnitRanges.jl](https://github.com/JuliaArrays/CustomUnitRanges.jl)
+can sometimes be used to avoid the need to write your own `ZeroRange` type.
 
 ### Specializing `indices`
 
@@ -186,7 +180,7 @@ implement this).
 In some cases, the fallback definition for `indices(A, d)`:
 
 ```julia
-indices{T,N}(A::AbstractArray{T,N}, d) = d <= N ? indices(A)[d] : OneTo(1)
+indices(A::AbstractArray{T,N}, d) where {T,N} = d <= N ? indices(A)[d] : OneTo(1)
 ```
 
 may not be what you want: you may need to specialize it to return something other than `OneTo(1)`
@@ -195,8 +189,8 @@ to `indices(A, 1)` but which avoids checking (at runtime) whether `ndims(A) > 0`
 a performance optimization.)  It is defined as:
 
 ```julia
-indices1{T}(A::AbstractArray{T,0}) = OneTo(1)
-indices1{T}(A::AbstractArray{T})   = indices(A)[1]
+indices1(A::AbstractArray{T,0}) where {T} = OneTo(1)
+indices1(A::AbstractArray) = indices(A)[1]
 ```
 
 If the first of these (the zero-dimensional case) is problematic for your custom array type, be

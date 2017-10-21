@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # run boundscheck tests on separate workers launched with --check-bounds={default,yes,no}
 

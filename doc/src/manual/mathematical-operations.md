@@ -21,7 +21,7 @@ are supported on all primitive numeric types:
 | `x ^ y`    | power          | raises `x` to the `y`th power          |
 | `x % y`    | remainder      | equivalent to `rem(x,y)`               |
 
-as well as the negation on `Bool` types:
+as well as the negation on [`Bool`](@ref) types:
 
 | Expression | Name     | Description                              |
 |:---------- |:-------- |:---------------------------------------- |
@@ -169,6 +169,11 @@ For example, if you define `⊗(A,B) = kron(A,B)` to give a convenient
 infix syntax `A ⊗ B` for Kronecker products ([`kron`](@ref)), then
 `[A,B] .⊗ [C,D]` will compute `[A⊗C, B⊗D]` with no additional coding.
 
+Combining dot operators with numeric literals can be ambiguous.
+For example, it is not clear whether `1.+x` means `1. + x` or `1 .+ x`.
+Therefore this syntax is disallowed, and spaces must be used around
+the operator in such cases.
+
 ## Numeric Comparisons
 
 Standard comparison operations are defined for all the primitive numeric types:
@@ -261,7 +266,7 @@ situations like hash key comparisons:
 | [`isinf(x)`](@ref)      | `x` is infinite           |
 | [`isnan(x)`](@ref)      | `x` is not a number       |
 
-[`isequal()`](@ref) considers `NaN`s equal to each other:
+[`isequal`](@ref) considers `NaN`s equal to each other:
 
 ```jldoctest
 julia> isequal(NaN, NaN)
@@ -274,7 +279,7 @@ julia> isequal(NaN, NaN32)
 true
 ```
 
-`isequal()` can also be used to distinguish signed zeros:
+`isequal` can also be used to distinguish signed zeros:
 
 ```jldoctest
 julia> -0.0 == 0.0
@@ -287,9 +292,9 @@ false
 Mixed-type comparisons between signed integers, unsigned integers, and floats can be tricky. A
 great deal of care has been taken to ensure that Julia does them correctly.
 
-For other types, `isequal()` defaults to calling [`==()`](@ref), so if you want to define
-equality for your own types then you only need to add a [`==()`](@ref) method.  If you define
-your own equality function, you should probably define a corresponding [`hash()`](@ref) method
+For other types, `isequal` defaults to calling [`==`](@ref), so if you want to define
+equality for your own types then you only need to add a [`==`](@ref) method.  If you define
+your own equality function, you should probably define a corresponding [`hash`](@ref) method
 to ensure that `isequal(x,y)` implies `hash(x) == hash(y)`.
 
 ### Chaining comparisons
@@ -331,33 +336,66 @@ comparison is undefined. It is strongly recommended not to use expressions with 
 as printing) in chained comparisons. If side effects are required, the short-circuit `&&` operator
 should be used explicitly (see [Short-Circuit Evaluation](@ref)).
 
-### Operator Precedence
-
-Julia applies the following order of operations, from highest precedence to lowest:
-
-| Category       | Operators                                                                                         |
-|:-------------- |:------------------------------------------------------------------------------------------------- |
-| Syntax         | `.` followed by `::`                                                                              |
-| Exponentiation | `^`                                                                                               |
-| Fractions      | `//`                                                                                              |
-| Multiplication | `* / % & \`                                                                                       |
-| Bitshifts      | `<< >> >>>`                                                                                       |
-| Addition       | `+ - \| ⊻`                                                                                        |
-| Syntax         | `: ..` followed by `\|>`                                                                          |
-| Comparisons    | `> < >= <= == === != !== <:`                                                                      |
-| Control flow   | `&&` followed by `\|\|` followed by `?`                                                           |
-| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            |
-
 ### Elementary Functions
 
 Julia provides a comprehensive collection of mathematical functions and operators. These mathematical
 operations are defined over as broad a class of numerical values as permit sensible definitions,
-including integers, floating-point numbers, rationals, and complexes, wherever such definitions
-make sense.
+including integers, floating-point numbers, rationals, and complex numbers,
+wherever such definitions make sense.
 
 Moreover, these functions (like any Julia function) can be applied in "vectorized" fashion to
 arrays and other collections with the [dot syntax](@ref man-vectorized) `f.(A)`,
-e.g. `sin.(A)` will compute the elementwise sine of each element of an array `A`.
+e.g. `sin.(A)` will compute the sine of each element of an array `A`.
+
+## Operator Precedence and Associativity
+
+Julia applies the following order and associativity of operations, from highest precedence to lowest:
+
+| Category       | Operators                                                                                         | Associativity              |
+|:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
+| Syntax         | `.` followed by `::`                                                                              | Left                       |
+| Exponentiation | `^`                                                                                               | Right                      |
+| Unary          | `+ - √`                                                                                           | Right[^1]                   |
+| Fractions      | `//`                                                                                              | Left                       |
+| Multiplication | `* / % & \`                                                                                       | Left[^2]                    |
+| Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
+| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                    |
+| Syntax         | `: ..` followed by `\|>`                                                                          | Left                       |
+| Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
+| Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
+| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
+
+[^1]:
+    The unary operators `+` and `-` require explicit parentheses around their argument to disambiguate them from the operator `++`, etc. Other compositions of unary operators are parsed with right-associativity, e. g., `√√-a` as `√(√(-a))`.
+[^2]:
+    The operators `+`, `++` and `*` are non-associative. `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),
+    c)`. However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.
+
+For a complete list of *every* Julia operator's precedence, see the top of this file:
+[`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm)
+
+You can also find the numerical precedence for any given operator via the built-in function `Base.operator_precedence`, where higher numbers take precedence:
+
+```jldoctest
+julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
+(9, 11, 15)
+
+julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
+(0, 1, 1)
+```
+
+A symbol representing the operator associativity can also be found by calling the built-in function `Base.operator_associativity`:
+
+```jldoctest
+julia> Base.operator_associativity(:-), Base.operator_associativity(:+), Base.operator_associativity(:^)
+(:left, :none, :right)
+
+julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Base.operator_associativity(:→)
+(:left, :none, :right)
+```
+
+Note that symbols such as `:sin` return precedence `0`. This value represents invalid operators and not
+operators of lowest precedence. Similarly, such operators are assigned associativity `:none`.
 
 ## Numerical Conversions
 
@@ -382,24 +420,27 @@ julia> Int8(127)
 127
 
 julia> Int8(128)
-ERROR: InexactError()
+ERROR: InexactError: trunc(Int8, 128)
 Stacktrace:
- [1] Int8(::Int64) at ./sysimg.jl:24
+ [1] throw_inexacterror(::Symbol, ::Type{Int8}, ::Int64) at ./int.jl:34
+ [2] checked_trunc_sint at ./int.jl:438 [inlined]
+ [3] convert at ./int.jl:458 [inlined]
+ [4] Int8(::Int64) at ./sysimg.jl:114
 
 julia> Int8(127.0)
 127
 
 julia> Int8(3.14)
-ERROR: InexactError()
+ERROR: InexactError: convert(Int8, 3.14)
 Stacktrace:
- [1] convert(::Type{Int8}, ::Float64) at ./float.jl:654
- [2] Int8(::Float64) at ./sysimg.jl:24
+ [1] convert at ./float.jl:682 [inlined]
+ [2] Int8(::Float64) at ./sysimg.jl:114
 
 julia> Int8(128.0)
-ERROR: InexactError()
+ERROR: InexactError: convert(Int8, 128.0)
 Stacktrace:
- [1] convert(::Type{Int8}, ::Float64) at ./float.jl:654
- [2] Int8(::Float64) at ./sysimg.jl:24
+ [1] convert at ./float.jl:682 [inlined]
+ [2] Int8(::Float64) at ./sysimg.jl:114
 
 julia> 127 % Int8
 127
@@ -411,10 +452,10 @@ julia> round(Int8,127.4)
 127
 
 julia> round(Int8,127.6)
-ERROR: InexactError()
+ERROR: InexactError: trunc(Int8, 128.0)
 Stacktrace:
- [1] trunc(::Type{Int8}, ::Float64) at ./float.jl:647
- [2] round(::Type{Int8}, ::Float64) at ./float.jl:333
+ [1] trunc at ./float.jl:675 [inlined]
+ [2] round(::Type{Int8}, ::Float64) at ./float.jl:353
 ```
 
 See [Conversion and Promotion](@ref conversion-and-promotion) for how to define your own conversions and promotions.
@@ -441,7 +482,7 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`cld(x,y)`](@ref)    | ceiling division; quotient rounded towards `+Inf`                                                         |
 | [`rem(x,y)`](@ref)    | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
 | [`mod(x,y)`](@ref)    | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
-| [`mod1(x,y)`](@ref)   | `mod()` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
+| [`mod1(x,y)`](@ref)   | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
 | [`mod2pi(x)`](@ref)   | modulus with respect to 2pi;  `0 <= mod2pi(x)    < 2pi`                                                   |
 | [`divrem(x,y)`](@ref) | returns `(div(x,y),rem(x,y))`                                                                             |
 | [`fldmod(x,y)`](@ref) | returns `(fld(x,y),mod(x,y))`                                                                             |
@@ -477,9 +518,9 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 | [`exponent(x)`](@ref)    | binary exponent of `x`                                                     |
 | [`significand(x)`](@ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
 
-For an overview of why functions like [`hypot()`](@ref), [`expm1()`](@ref), and [`log1p()`](@ref)
-are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](http://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),
-and [hypot](http://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/).
+For an overview of why functions like [`hypot`](@ref), [`expm1`](@ref), and [`log1p`](@ref)
+are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](https://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),
+and [hypot](https://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/).
 
 ### Trigonometric and hyperbolic functions
 

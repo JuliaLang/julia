@@ -1,6 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
+
+bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
 
 let io = IOBuffer()
 @test eof(io)
@@ -17,7 +19,7 @@ seek(io, 0)
 a = Array{UInt8}(2)
 @test read!(io, a) == a
 @test a == UInt8['b','c']
-@test String(io) == "abc"
+@test bufcontents(io) == "abc"
 seek(io, 1)
 truncate(io, 2)
 @test position(io) == 1
@@ -50,7 +52,7 @@ end
 let io = IOBuffer("hamster\nguinea pig\nturtle")
 @test position(io) == 0
 @test readline(io) == "hamster"
-@test readstring(io) == "guinea pig\nturtle"
+@test read(io, String) == "guinea pig\nturtle"
 @test_throws EOFError read(io,UInt8)
 seek(io,0)
 @test read(io,UInt8) == convert(UInt8, 'h')
@@ -88,6 +90,25 @@ write(io,"\n\r\n\n\r \n") > 0
 @test readlines(IOBuffer(""), chomp=true) == []
 @test readlines(IOBuffer("first\nsecond"), chomp=false) == String["first\n", "second"]
 @test readlines(IOBuffer("first\nsecond"), chomp=true) == String["first", "second"]
+
+let fname = tempname()
+    for dochomp in [true, false],
+        endline in ["\n", "\r\n"],
+        i in -5:5
+
+        ref = ("1"^(2^17 - i)) * endline
+        open(fname, "w") do io
+            write(io, ref)
+        end
+        x = readlines(fname, chomp = dochomp)
+        if dochomp
+            ref = chomp(ref)
+        end
+        @test ref == x[1]
+    end
+    rm(fname)
+end
+
 Base.compact(io)
 @test position(io) == 0
 @test ioslength(io) == 0
@@ -120,7 +141,7 @@ skip(io,3)
 @test write(io,b"apples") === 3
 skip(io,71)
 @test write(io,'y') === 1
-@test readstring(io) == "happy"
+@test read(io, String) == "happy"
 @test eof(io)
 write(io,zeros(UInt8,73))
 write(io,'a')
@@ -141,10 +162,10 @@ close(io)
 end
 
 # issue 5453
-let io=IOBuffer("abcdef")
-a = Array{UInt8}(1024)
-@test_throws EOFError read!(io,a)
-@test eof(io)
+let io = IOBuffer("abcdef"),
+    a = Array{UInt8}(1024)
+    @test_throws EOFError read!(io,a)
+    @test eof(io)
 end
 
 @test isempty(readlines(IOBuffer(), chomp=false))
@@ -167,7 +188,10 @@ let io=IOBuffer("hello")
 end
 
 # pr #11554
-let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodnightmoon", true, true)
+let a,
+    io = IOBuffer(SubString("***αhelloworldω***", 4, 16)),
+    io2 = IOBuffer(b"goodnightmoon", true, true)
+
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
     @test_throws ArgumentError write(io,'β')
@@ -177,23 +201,23 @@ let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodni
     @test read(io, Char) == 'ω'
     @test_throws EOFError read(io,UInt8)
     skip(io, -3)
-    @test readstring(io) == "dω"
-    @test String(io) == "αhelloworldω"
+    @test read(io, String) == "dω"
+    @test bufcontents(io) == "αhelloworldω"
     @test_throws ArgumentError write(io,"!")
     @test take!(io) == b"αhelloworldω"
     seek(io, 2)
     seekend(io2)
     write(io2, io)
-    @test readstring(io) == ""
-    @test readstring(io2) == ""
+    @test read(io, String) == ""
+    @test read(io2, String) == ""
     @test String(take!(io)) == "αhelloworldω"
     seek(io2, 0)
     truncate(io2, io2.size - 2)
-    @test readstring(io2) == "goodnightmoonhelloworld"
+    @test read(io2, String) == "goodnightmoonhelloworld"
     seek(io2, 0)
     write(io2, io2)
-    @test readstring(io2) == ""
-    @test String(io2) == "goodnightmoonhelloworld"
+    @test read(io2, String) == ""
+    @test bufcontents(io2) == "goodnightmoonhelloworld"
 end
 
 # issue #11917
@@ -231,4 +255,40 @@ end
 # pr #19461
 let io = IOBuffer()
     @test Base.buffer_writes(io) === io
+end
+
+# skipchars
+let
+    io = IOBuffer("")
+    @test eof(skipchars(io, isspace))
+
+    io = IOBuffer("   ")
+    @test eof(skipchars(io, isspace))
+
+    io = IOBuffer("#    \n     ")
+    @test eof(skipchars(io, isspace, linecomment='#'))
+
+    io = IOBuffer("      text")
+    skipchars(io, isspace)
+    @test String(readavailable(io)) == "text"
+
+    io = IOBuffer("   # comment \n    text")
+    skipchars(io, isspace, linecomment='#')
+    @test String(readavailable(io)) == "text"
+
+    for char in ['@','߷','࿊','𐋺']
+        io = IOBuffer("alphabeticalstuff$char")
+        @test !eof(skipchars(io, isalpha))
+        @test read(io, Char) == char
+    end
+end
+
+let
+    # Test constructor with a generic type argument.
+    io = IOBuffer(Int16(10))
+    @test io isa IOBuffer
+    io = IOBuffer(Int32(10))
+    @test io isa IOBuffer
+    io = IOBuffer(Int64(10))
+    @test io isa IOBuffer
 end

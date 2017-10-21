@@ -1,8 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function Base.parse(stream::IO; greedy::Bool = true, raise::Bool = true)
     pos = position(stream)
-    ex, Δ = Base.parse(readstring(stream), 1, greedy = greedy, raise = raise)
+    ex, Δ = Base.parse(read(stream, String), 1, greedy = greedy, raise = raise)
     seek(stream, pos + Δ - 1)
     return ex
 end

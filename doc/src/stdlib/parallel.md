@@ -4,11 +4,11 @@
 
 ```@docs
 Core.Task
-Base.yieldto
 Base.current_task
 Base.istaskdone
 Base.istaskstarted
 Base.yield
+Base.yieldto
 Base.task_local_storage(::Any)
 Base.task_local_storage(::Any, ::Any)
 Base.task_local_storage(::Function, ::Any, ::Any)
@@ -83,16 +83,6 @@ Base.cluster_cookie()
 Base.cluster_cookie(::Any)
 ```
 
-## Shared Arrays
-
-```@docs
-Base.SharedArray
-Base.procs(::SharedArray)
-Base.sdata
-Base.indexpids
-Base.localindexes
-```
-
 ## Multi-Threading
 
 This experimental interface supports Julia's multi-threading capabilities. Types and functions
@@ -150,7 +140,8 @@ and transport messages between processes. It is possible for Cluster Managers to
 Base.launch
 Base.manage
 Base.kill(::ClusterManager, ::Int, ::WorkerConfig)
-Base.init_worker
 Base.connect(::ClusterManager, ::Int, ::WorkerConfig)
+Base.init_worker
+Base.start_worker
 Base.process_messages
 ```

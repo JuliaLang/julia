@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Various Unicode functionality from the utf8proc library
 module UTF8proc
@@ -8,11 +8,47 @@ import Base: show, ==, hash, string, Symbol, isless, length, eltype, start, next
 export isgraphemebreak, category_code, category_abbrev, category_string
 
 # also exported by Base:
-export normalize_string, graphemes, is_assigned_char, charwidth, isvalid,
+export normalize_string, graphemes, is_assigned_char, textwidth, isvalid,
    islower, isupper, isalpha, isdigit, isnumber, isalnum,
    iscntrl, ispunct, isspace, isprint, isgraph
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
+
+"""
+    isvalid(value) -> Bool
+
+Returns `true` if the given value is valid for its type, which currently can be either
+`Char` or `String`.
+
+# Examples
+```jldoctest
+julia> isvalid(Char(0xd800))
+false
+
+julia> isvalid(Char(0xd799))
+true
+```
+"""
+isvalid(value)
+
+"""
+    isvalid(T, value) -> Bool
+
+Returns `true` if the given value is valid for that type. Types currently can
+be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt32`](@ref).
+Values for `String` can be of that type, or `Vector{UInt8}`.
+
+# Examples
+```jldoctest
+julia> isvalid(Char, 0xd800)
+false
+
+julia> isvalid(Char, 0xd799)
+true
+```
+"""
+isvalid(T,value)
+
 isvalid(::Type{Char}, ch::Unsigned) = !((ch - 0xd800 < 0x800) | (ch > 0x10ffff))
 isvalid(::Type{Char}, ch::Integer) = isvalid(Char, Unsigned(ch))
 isvalid(::Type{Char}, ch::Char) = isvalid(Char, UInt32(ch))
@@ -160,22 +196,35 @@ Alternatively, finer control and additional transformations may be be obtained b
 options (which all default to `false` except for `compose`) are specified:
 
 * `compose=false`: do not perform canonical composition
-* `decompose=true`: do canonical decomposition instead of canonical composition (`compose=true`
-  is ignored if present)
+* `decompose=true`: do canonical decomposition instead of canonical composition
+  (`compose=true` is ignored if present)
 * `compat=true`: compatibility equivalents are canonicalized
 * `casefold=true`: perform Unicode case folding, e.g. for case-insensitive string comparison
-* `newline2lf=true`, `newline2ls=true`, or `newline2ps=true`: convert various newline sequences
-  (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS)
-  character, respectively
+* `newline2lf=true`, `newline2ls=true`, or `newline2ps=true`: convert various newline
+  sequences (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or
+  paragraph-separation (PS) character, respectively
 * `stripmark=true`: strip diacritical marks (e.g. accents)
 * `stripignore=true`: strip Unicode's "default ignorable" characters (e.g. the soft hyphen
   or the left-to-right marker)
 * `stripcc=true`: strip control characters; horizontal tabs and form feeds are converted to
-  spaces; newlines are also converted to spaces unless a newline-conversion flag was specified
+  spaces; newlines are also converted to spaces unless a newline-conversion flag was
+  specified
 * `rejectna=true`: throw an error if unassigned code points are found
 * `stable=true`: enforce Unicode Versioning Stability
 
 For example, NFKC corresponds to the options `compose=true, compat=true, stable=true`.
+
+# Examples
+```jldoctest
+julia> "μ" == normalize_string("µ", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5
+true
+
+julia> normalize_string("JuLiA", casefold=true)
+"julia"
+
+julia> normalize_string("JúLiA", stripmark=true)
+"JuLiA"
+```
 """
 function normalize_string(s::AbstractString, nf::Symbol)
     utf8proc_map(s, nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
@@ -189,12 +238,35 @@ end
 
 ############################################################################
 
+## character column width function ##
 """
-    charwidth(c)
+    textwidth(c)
 
-Gives the number of columns needed to print a character.
+Give the number of columns needed to print a character.
+
+# Examples
+```jldoctest
+julia> textwidth('α')
+1
+
+julia> textwidth('❤')
+2
+```
 """
-charwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
+textwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
+
+"""
+    textwidth(s::AbstractString)
+
+Give the number of columns needed to print a string.
+
+# Examples
+```jldoctest
+julia> textwidth("March")
+5
+```
+"""
+textwidth(s::AbstractString) = mapreduce(textwidth, +, 0, s)
 
 lowercase(c::Char) = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) : Char(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
 uppercase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) : Char(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
@@ -213,6 +285,15 @@ category_string(c) = category_strings[category_code(c)+1]
     is_assigned_char(c) -> Bool
 
 Returns `true` if the given char or integer is an assigned Unicode code point.
+
+# Examples
+```jldoctest
+julia> is_assigned_char(101)
+true
+
+julia> is_assigned_char('\\x01')
+true
+```
 """
 is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
 
@@ -224,6 +305,18 @@ is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
 Tests whether a character is a lowercase letter.
 A character is classified as lowercase if it belongs to Unicode category Ll,
 Letter: Lowercase.
+
+# Examples
+```jldoctest
+julia> islower('α')
+true
+
+julia> islower('Γ')
+false
+
+julia> islower('❤')
+false
+```
 """
 islower(c::Char) = (category_code(c) == UTF8PROC_CATEGORY_LL)
 
@@ -235,6 +328,18 @@ islower(c::Char) = (category_code(c) == UTF8PROC_CATEGORY_LL)
 Tests whether a character is an uppercase letter.
 A character is classified as uppercase if it belongs to Unicode category Lu,
 Letter: Uppercase, or Lt, Letter: Titlecase.
+
+# Examples
+```jldoctest
+julia> isupper('γ')
+false
+
+julia> isupper('Γ')
+true
+
+julia> isupper('❤')
+false
+```
 """
 function isupper(c::Char)
     ccode = category_code(c)
@@ -245,6 +350,18 @@ end
     isdigit(c::Char) -> Bool
 
 Tests whether a character is a numeric digit (0-9).
+
+# Examples
+```jldoctest
+julia> isdigit('❤')
+false
+
+julia> isdigit('9')
+true
+
+julia> isdigit('α')
+false
+```
 """
 isdigit(c::Char)  = ('0' <= c <= '9')
 
@@ -254,6 +371,18 @@ isdigit(c::Char)  = ('0' <= c <= '9')
 Tests whether a character is alphabetic.
 A character is classified as alphabetic if it belongs to the Unicode general
 category Letter, i.e. a character whose category code begins with 'L'.
+
+# Examples
+```jldoctest
+julia> isalpha('❤')
+false
+
+julia> isalpha('α')
+true
+
+julia> isalpha('9')
+false
+```
 """
 isalpha(c::Char)  = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO)
 
@@ -263,6 +392,18 @@ isalpha(c::Char)  = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGO
 Tests whether a character is numeric.
 A character is classified as numeric if it belongs to the Unicode general category Number,
 i.e. a character whose category code begins with 'N'.
+
+# Examples
+```jldoctest
+julia> isnumber('9')
+true
+
+julia> isnumber('α')
+false
+
+julia> isnumber('❤')
+false
+```
 """
 isnumber(c::Char) = (UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO)
 
@@ -272,6 +413,18 @@ isnumber(c::Char) = (UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGO
 Tests whether a character is alphanumeric.
 A character is classified as alphabetic if it belongs to the Unicode general
 category Letter or Number, i.e. a character whose category code begins with 'L' or 'N'.
+
+# Examples
+```jldoctest
+julia> isalnum('❤')
+false
+
+julia> isalnum('9')
+true
+
+julia> isalnum('α')
+true
+```
 """
 function isalnum(c::Char)
     ccode = category_code(c)
@@ -286,6 +439,15 @@ end
 
 Tests whether a character is a control character.
 Control characters are the non-printing characters of the Latin-1 subset of Unicode.
+
+# Examples
+```jldoctest
+julia> iscntrl('\\x01')
+true
+
+julia> iscntrl('a')
+false
+```
 """
 iscntrl(c::Char) = (c <= Char(0x1f) || Char(0x7f) <= c <= Char(0x9f))
 
@@ -294,6 +456,18 @@ iscntrl(c::Char) = (c <= Char(0x1f) || Char(0x7f) <= c <= Char(0x9f))
 
 Tests whether a character belongs to the Unicode general category Punctuation, i.e. a
 character whose category code begins with 'P'.
+
+# Examples
+```jldoctest
+julia> ispunct('α')
+false
+
+julia> ispunct('/')
+true
+
+julia> ispunct(';')
+true
+```
 """
 ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGORY_PO)
 
@@ -305,6 +479,21 @@ ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGOR
 Tests whether a character is any whitespace character. Includes ASCII characters '\\t',
 '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode
 category Zs.
+
+# Examples
+```jldoctest
+julia> isspace('\\n')
+true
+
+julia> isspace('\\r')
+true
+
+julia> isspace(' ')
+true
+
+julia> isspace('\\x20')
+true
+```
 """
 @inline isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == '\u85' || '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
 
@@ -312,6 +501,15 @@ category Zs.
     isprint(c::Char) -> Bool
 
 Tests whether a character is printable, including spaces, but not a control character.
+
+# Examples
+```jldoctest
+julia> isprint('\\x01')
+false
+
+julia> isprint('A')
+true
+```
 """
 isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS)
 
@@ -323,6 +521,15 @@ isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGOR
 Tests whether a character is printable, and not a space.
 Any character that would cause a printer to use ink should be
 classified with `isgraph(c)==true`.
+
+# Examples
+```jldoctest
+julia> isgraph('\\x01')
+false
+
+julia> isgraph('A')
+true
+```
 """
 isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_SO)
 
@@ -352,7 +559,8 @@ letter combined with an accent mark is a single grapheme.)
 """
 graphemes(s::AbstractString) = GraphemeIterator{typeof(s)}(s)
 
-eltype{S}(::Type{GraphemeIterator{S}}) = SubString{S}
+eltype(::Type{GraphemeIterator{S}}) where {S} = SubString{S}
+eltype(::Type{GraphemeIterator{SubString{S}}}) where {S} = SubString{S}
 
 function length(g::GraphemeIterator)
     c0 = Char(0x00ad) # soft hyphen (grapheme break always allowed after this)
@@ -387,9 +595,7 @@ end
 hash(g::GraphemeIterator, h::UInt) = hash(g.s, h)
 isless(g1::GraphemeIterator, g2::GraphemeIterator) = isless(g1.s, g2.s)
 
-convert{S<:AbstractString}(::Type{S}, g::GraphemeIterator) = convert(S, g.s)
-
-show{S}(io::IO, g::GraphemeIterator{S}) = print(io, "length-$(length(g)) GraphemeIterator{$S} for \"$(g.s)\"")
+show(io::IO, g::GraphemeIterator{S}) where {S} = print(io, "length-$(length(g)) GraphemeIterator{$S} for \"$(g.s)\"")
 
 ############################################################################
 

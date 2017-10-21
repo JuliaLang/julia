@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function Signature(ptr::Ptr{SignatureStruct})
     sig   = unsafe_load(ptr)::SignatureStruct
@@ -35,7 +35,12 @@ function Base.convert(::Type{GitSignature}, sig::Signature)
     return GitSignature(sig_ptr_ptr[])
 end
 
-Base.show(io::IO, sig::Signature) = print(io, "Name: $(sig.name), Email: $(sig.email), Time: $(Dates.unix2datetime(sig.time + sig.time_offset))")
+function Base.show(io::IO, sig::Signature)
+    print(io, "Name: ", sig.name, ", ")
+    print(io, "Email: ", sig.email, ", ")
+    print(io, "Time: ", Dates.unix2datetime(sig.time + 60*sig.time_offset))
+    @printf(io, "%+03i:%02i", divrem(sig.time_offset, 60)...)
+end
 
 """Return signature object. Free it after use."""
 function default_signature(repo::GitRepo)

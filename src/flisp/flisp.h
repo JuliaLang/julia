@@ -248,7 +248,7 @@ typedef struct _fltype_t {
     cvinitfunc_t init;
 } fltype_t;
 
-typedef struct {
+JL_EXTENSION typedef struct {
     fltype_t *type;
     void *data;
     size_t len;            // length of *data in bytes
@@ -378,6 +378,7 @@ int fl_load_system_image_str(fl_context_t *fl_ctx, char* str, size_t len);
 /* julia extensions */
 JL_DLLEXPORT int jl_id_char(uint32_t wc);
 JL_DLLEXPORT int jl_id_start_char(uint32_t wc);
+JL_DLLEXPORT int jl_op_suffix_char(uint32_t wc);
 
 struct _fl_context_t {
     symbol_t *symtab;
@@ -406,7 +407,6 @@ struct _fl_context_t {
     fltype_t *builtintype;
 
     htable_t equal_eq_hashtable;
-    htable_t jl_charmap;
 
     value_t tablesym;
     fltype_t *tabletype;

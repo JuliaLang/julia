@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
  ## Basic functions ##
 
@@ -12,8 +12,11 @@ all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 """
     vec(a::AbstractArray) -> Vector
 
-Reshape array `a` as a one-dimensional column vector.
+Reshape the array `a` as a one-dimensional column vector. The resulting array
+shares the same underlying data as `a`, so modifying one will also modify the
+other.
 
+# Examples
 ```jldoctest
 julia> a = [1 2 3; 4 5 6]
 2×3 Array{Int64,2}:
@@ -29,6 +32,8 @@ julia> vec(a)
  3
  6
 ```
+
+See also [`reshape`](@ref).
 """
 vec(a::AbstractArray) = reshape(a,_length(a))
 vec(a::AbstractVector) = a
@@ -44,6 +49,7 @@ Remove the dimensions specified by `dims` from array `A`.
 Elements of `dims` must be unique and within the range `1:ndims(A)`.
 `size(A,i)` must equal 1 for all `i` in `dims`.
 
+# Examples
 ```jldoctest
 julia> a = reshape(collect(1:4),(2,2,1,1))
 2×2×1×1 Array{Int64,4}:
@@ -61,7 +67,7 @@ julia> squeeze(a,3)
 function squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
-        size(A, dims[i]) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
+        length(indices(A, dims[i])) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
         for j = 1:i-1
             dims[j] == dims[i] && throw(ArgumentError("squeezed dims must be unique"))
         end
@@ -69,10 +75,10 @@ function squeeze(A::AbstractArray, dims::Dims)
     d = ()
     for i = 1:ndims(A)
         if !in(i, dims)
-            d = tuple(d..., size(A, i))
+            d = tuple(d..., indices(A, i))
         end
     end
-    reshape(A, d::typeof(_sub(size(A), dims)))
+    reshape(A, d::typeof(_sub(indices(A), dims)))
 end
 
 squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
@@ -97,6 +103,7 @@ imag(x::AbstractArray{<:Real}) = zero(x)
 Return all the data of `A` where the index for dimension `d` equals `i`. Equivalent to
 `A[:,:,...,i,:,:,...]` where `i` is in position `d`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2 3 4; 5 6 7 8]
 2×4 Array{Int64,2}:
@@ -116,16 +123,12 @@ function slicedim(A::AbstractArray, d::Integer, i)
     A[setindex(indices(A), i, d)...]
 end
 
-function flipdim(A::AbstractVector, d::Integer)
-    d == 1 || throw(ArgumentError("dimension to flip must be 1"))
-    reverse(A)
-end
-
 """
     flipdim(A, d::Integer)
 
 Reverse `A` in dimension `d`.
 
+# Examples
 ```jldoctest
 julia> b = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -143,6 +146,8 @@ function flipdim(A::AbstractArray, d::Integer)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     if isempty(A)
         return copy(A)
+    elseif nd == 1
+        return reverse(A)
     end
     inds = indices(A)
     B = similar(A)
@@ -159,9 +164,11 @@ function flipdim(A::AbstractArray, d::Integer)
         end
         return B
     end
-    alli = [ indices(B,n) for n in 1:nd ]
-    for i in indsd
-        B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] = slicedim(A, d, i)
+    let B=B # workaround #15276
+        alli = [ indices(B,n) for n in 1:nd ]
+        for i in indsd
+            B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] = slicedim(A, d, i)
+        end
     end
     return B
 end
@@ -173,9 +180,11 @@ circshift(a::AbstractArray, shiftamt::DimsInteger) = circshift!(similar(a), a, s
 """
     circshift(A, shifts)
 
-Circularly shift the data in an array. The second argument is a vector giving the amount to
-shift in each dimension.
+Circularly shift, i.e. rotate, the data in an array. The second argument is a tuple or
+vector giving the amount to shift in each dimension, or an integer to shift only in the
+first dimension.
 
+# Examples
 ```jldoctest
 julia> b = reshape(collect(1:16), (4,4))
 4×4 Array{Int64,2}:
@@ -197,6 +206,30 @@ julia> circshift(b, (-1,0))
  3  7  11  15
  4  8  12  16
  1  5   9  13
+
+julia> a = BitArray([true, true, false, false, true])
+5-element BitArray{1}:
+  true
+  true
+ false
+ false
+  true
+
+julia> circshift(a, 1)
+5-element BitArray{1}:
+  true
+  true
+  true
+ false
+ false
+
+julia> circshift(a, -1)
+5-element BitArray{1}:
+  true
+ false
+ false
+  true
+  true
 ```
 
 See also [`circshift!`](@ref).
@@ -206,7 +239,7 @@ function circshift(a::AbstractArray, shiftamt)
 end
 
 # Uses K-B-N summation
-function cumsum_kbn{T<:AbstractFloat}(v::AbstractVector{T})
+function cumsum_kbn(v::AbstractVector{T}) where T<:AbstractFloat
     r = similar(v)
     if isempty(v); return r; end
 
@@ -237,7 +270,7 @@ end
 Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation
 algorithm for additional accuracy. The dimension defaults to 1.
 """
-function cumsum_kbn{T<:AbstractFloat}(A::AbstractArray{T}, axis::Integer=1)
+function cumsum_kbn(A::AbstractArray{T}, axis::Integer=1) where T<:AbstractFloat
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]
@@ -280,6 +313,7 @@ end
 Construct a matrix by repeating the given matrix (or vector) `m` times in dimension 1 and `n` times in
 dimension 2.
 
+# Examples
 ```jldoctest
 julia> repmat([1, 2, 3], 2)
 6-element Array{Int64,1}:
@@ -336,6 +370,7 @@ repeated. The i-th element of `outer` specifies the number of times that a slice
 i-th dimension of `A` should be repeated. If `inner` or `outer` are omitted, no repetition
 is performed.
 
+# Examples
 ```jldoctest
 julia> repeat(1:2, inner=2)
 4-element Array{Int64,1}:
@@ -360,8 +395,8 @@ julia> repeat([1 2; 3 4], inner=(2, 1), outer=(1, 3))
 ```
 """
 function repeat(A::AbstractArray;
-                inner=ntuple(n->1, Val{ndims(A)}),
-                outer=ntuple(n->1, Val{ndims(A)}))
+                inner=ntuple(n->1, Val(ndims(A))),
+                outer=ntuple(n->1, Val(ndims(A))))
     return _repeat(A, rep_kw2tup(inner), rep_kw2tup(outer))
 end
 
@@ -389,7 +424,11 @@ _rshps(shp, shp_i, sz, i, ::Tuple{}) =
 _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     "($n) cannot be less than number of dimensions of input ($N)"))
 
-@propagate_inbounds function _repeat(A::AbstractArray, inner, outer)
+# We need special handling when repeating arrays of arrays
+cat_fill!(R, X, inds) = (R[inds...] = X)
+cat_fill!(R, X::AbstractArray, inds) = fill!(view(R, inds...), X)
+
+@noinline function _repeat(A::AbstractArray, inner, outer)
     shape, inner_shape = rep_shapes(A, inner, outer)
 
     R = similar(A, shape)
@@ -405,9 +444,9 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
         for c in CartesianRange(indices(A))
             for i in 1:ndims(A)
                 n = inner[i]
-                inner_indices[i] = (1:n) + ((c[i] - 1) * n)
+                inner_indices[i] = (1:n) .+ ((c[i] - 1) * n)
             end
-            R[inner_indices...] = A[c]
+            cat_fill!(R, A[c], inner_indices)
         end
     end
 
@@ -420,7 +459,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     for i in 1:length(outer)
         B = view(R, src_indices...)
         for j in 2:outer[i]
-            dest_indices[i] += inner_shape[i]
+            dest_indices[i] = dest_indices[i] .+ inner_shape[i]
             R[dest_indices...] = B
         end
         src_indices[i] = dest_indices[i] = 1:shape[i]

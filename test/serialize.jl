@@ -1,11 +1,11 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Test
+using Test
 
 # Check that serializer hasn't gone out-of-frame
-@test Serializer.sertag(Symbol) == 2
-@test Serializer.sertag(()) == 45
-@test Serializer.sertag(false) == 121
+@test Serializer.sertag(Symbol) == 1
+@test Serializer.sertag(()) == 68
+@test Serializer.sertag(false) == 76
 
 function create_serialization_stream(f::Function)
     s = IOBuffer()
@@ -251,7 +251,7 @@ module ArrayWrappers
 struct ArrayWrapper{T,N,A<:AbstractArray} <: AbstractArray{T,N}
     data::A
 end
-ArrayWrapper{T,N}(data::AbstractArray{T,N}) = ArrayWrapper{T,N,typeof(data)}(data)
+ArrayWrapper(data::AbstractArray{T,N}) where {T,N} = ArrayWrapper{T,N,typeof(data)}(data)
 Base.size(A::ArrayWrapper) = size(A.data)
 Base.size(A::ArrayWrapper, d) = size(A.data, d)
 Base.getindex(A::ArrayWrapper, i::Real...) = getindex(A.data, i...)
@@ -294,11 +294,21 @@ main_ex = quote
         serialize(s, g)
 
         seekstart(s)
-        local g2 = deserialize(s)
+        ds = SerializationState(s)
+        local g2 = deserialize(ds)
         $Test.@test g2 !== g
         $Test.@test g2() == :magic_token_anon_fun_test
         $Test.@test g2() == :magic_token_anon_fun_test
-        $Test.@test deserialize(s) === g2
+        $Test.@test deserialize(ds) === g2
+
+        # issue #21793
+        y = x -> (() -> x)
+        seekstart(s)
+        serialize(s, y)
+        seekstart(s)
+        y2 = deserialize(s)
+        x2 = y2(2)
+        $Test.@test x2() == 2
     end
 end
 # This needs to be run on `Main` since the serializer treats it differently.
@@ -369,6 +379,17 @@ create_serialization_stream() do s
     @test isa(b,Vector{Any})
 end
 
+# shared references
+create_serialization_stream() do s
+    A = [1,2]
+    B = [A,A]
+    serialize(s, B)
+    seekstart(s)
+    C = deserialize(s)
+    @test C == B
+    @test C[1] === C[2]
+end
+
 # Regex
 create_serialization_stream() do s
     r1 = r"a?b.*"
@@ -380,7 +401,7 @@ end
 
 # issue #13452
 module Test13452
-using Base.Test
+using Test
 
 module Shell
 export foo
@@ -428,8 +449,10 @@ let b = IOBuffer()
 end
 
 # issue #1770
-let a = ['T', 'e', 's', 't']
+let a = ['T', 'e', 's', 't'],
     f = IOBuffer()
+
+    # issue #1770
     serialize(f, a)
     seek(f, 0)
     @test deserialize(f) == a
@@ -443,4 +466,31 @@ let a = ['T', 'e', 's', 't']
     serialize(f, :β)
     seek(f,0)
     @test deserialize(f) === :β
+end
+
+# issue #20324
+struct T20324{T}
+    x::T
+end
+let x = T20324[T20324(1) for i = 1:2]
+    b = IOBuffer()
+    serialize(b, x)
+    seekstart(b)
+    y = deserialize(b)
+    @test isa(y,Vector{T20324})
+    @test y == x
+end
+
+# serializer header
+let io = IOBuffer()
+    serialize(io, ())
+    seekstart(io)
+    b = read(io)
+    @test b[1] == Serializer.HEADER_TAG
+    @test b[2:3] == b"JL"
+    @test b[4] == Serializer.ser_version
+    @test (b[5] & 0x3) == (ENDIAN_BOM == 0x01020304)
+    @test ((b[5] & 0xc)>>2) == (sizeof(Int) == 8)
+    @test (b[5] & 0xf0) == 0
+    @test all(b[6:8] .== 0)
 end
