@@ -351,6 +351,11 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
                 @test A_mul_Bt!(zeros(B),A1,B) ≈ A1*B.'
                 @test Ac_mul_B!(zeros(B),A1,B) ≈ A1'*B
                 @test At_mul_B!(zeros(B),A1,B) ≈ A1.'*B
+                # test also vector methods
+                B1 = vec(B[1,:])
+                @test A_mul_B!(zeros(B1),A1,B1)  ≈ A1*B1
+                @test Ac_mul_B!(zeros(B1),A1,B1) ≈ A1'*B1
+                @test At_mul_B!(zeros(B1),A1,B1) ≈ A1.'*B1
             end
             #error handling
             @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(A1, ones(eltyB,n+1))
