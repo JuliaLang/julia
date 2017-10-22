@@ -2031,6 +2031,9 @@ end
 @deprecate strwidth textwidth
 @deprecate charwidth textwidth
 
+# TODO: after 0.7, remove thin keyword argument and associated logic from...
+# (1) base/linalg/svd.jl
+
 @deprecate find(x::Number)            find(!iszero, x)
 @deprecate findnext(A, v, i::Integer) findnext(equalto(v), A, i)
 @deprecate findfirst(A, v)            findfirst(equalto(v), A)
