@@ -70,7 +70,7 @@ end
     sym = Symbol(Char(0xdcdb))
     @test string(sym) == string(Char(0xdcdb))
     @test String(sym) == string(Char(0xdcdb))
-    @test expand(Main, sym) === sym
+    @test Meta.lower(Main, sym) === sym
     res = string(parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
     @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
 end

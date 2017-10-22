@@ -498,7 +498,7 @@ test_parseerror("0x0.1", "hex float literal must contain \"p\" or \"P\"")
 test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
 
 # issue #15798
-@test expand(Main, Base.parse_input_line("""
+@test Meta.lower(Main, Base.parse_input_line("""
               try = "No"
            """)) == Expr(:error, "unexpected \"=\"")
 
@@ -527,10 +527,10 @@ test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
 test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
 
 # issue #15828
-@test expand(Main, parse("x...")) == Expr(:error, "\"...\" expression outside call")
+@test Meta.lower(Main, parse("x...")) == Expr(:error, "\"...\" expression outside call")
 
 # issue #15830
-@test expand(Main, parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
+@test Meta.lower(Main, parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
 
 # issue #15844
 function f15844(x)
@@ -561,11 +561,11 @@ add_method_to_glob_fn!()
 @test_throws ParseError parse("function finally() end")
 
 # PR #16170
-@test expand(Main, parse("true(x) = x")) == Expr(:error, "invalid function name \"true\"")
-@test expand(Main, parse("false(x) = x")) == Expr(:error, "invalid function name \"false\"")
+@test Meta.lower(Main, parse("true(x) = x")) == Expr(:error, "invalid function name \"true\"")
+@test Meta.lower(Main, parse("false(x) = x")) == Expr(:error, "invalid function name \"false\"")
 
 # issue #16355
-@test expand(Main, :(f(d:Int...) = nothing)) == Expr(:error, "\"d:Int\" is not a valid function argument name")
+@test Meta.lower(Main, :(f(d:Int...) = nothing)) == Expr(:error, "\"d:Int\" is not a valid function argument name")
 
 # issue #16517
 @test (try error(); catch; 0; end) === 0
@@ -721,21 +721,21 @@ let m_error, error_out, filename = Base.source_path()
 end
 
 # issue #7272
-@test expand(Main, parse("let
+@test Meta.lower(Main, parse("let
               global x = 2
               local x = 1
               end")) == Expr(:error, "variable \"x\" declared both local and global")
 
-@test expand(Main, parse("let
+@test Meta.lower(Main, parse("let
               local x = 2
               local x = 1
               end")) == Expr(:error, "local \"x\" declared twice")
 
-@test expand(Main, parse("let x
+@test Meta.lower(Main, parse("let x
                   local x = 1
               end")) == Expr(:error, "local \"x\" declared twice")
 
-@test expand(Main, parse("let x = 2
+@test Meta.lower(Main, parse("let x = 2
                   local x = 1
               end")) == Expr(:error, "local \"x\" declared twice")
 
@@ -743,7 +743,7 @@ end
 @test :(let $([:(x=1),:(y=2)]...); x+y end) == :(let x = 1, y = 2; x+y end)
 
 # make sure front end can correctly print values to error messages
-let ex = expand(Main, parse("\"a\"=1"))
+let ex = Meta.lower(Main, parse("\"a\"=1"))
     @test ex == Expr(:error, "invalid assignment location \"\"a\"\"")
 end
 
@@ -763,7 +763,7 @@ for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :c
 end
 
 # meta nodes for optional positional arguments
-@test expand(Main, :(@inline f(p::Int=2) = 3)).args[2].args[3].inlineable
+@test Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[2].args[3].inlineable
 
 # issue #16096
 module M16096
@@ -775,14 +775,14 @@ macro iter()
     end
 end
 end
-let ex = expand(M16096, :(@iter))
+let ex = Meta.lower(M16096, :(@iter))
     @test isa(ex, Expr) && ex.head === :thunk
 end
-let ex = expand(Main, :($M16096.@iter))
+let ex = Meta.lower(Main, :($M16096.@iter))
     @test isa(ex, Expr) && ex.head === :thunk
 end
 let thismodule = @__MODULE__,
-    ex = expand(thismodule, :(@M16096.iter))
+    ex = Meta.lower(thismodule, :(@M16096.iter))
     @test isa(ex, Expr) && ex.head === :thunk
     @test !isdefined(M16096, :foo16096)
     local_foo16096 = eval(@__MODULE__, ex)
@@ -848,11 +848,11 @@ for op in ["+", "-", "\$", "|", ".+", ".-", "*", ".*"]
 end
 
 # issue #17701
-@test expand(Main, :(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i, 3) && i\"")
+@test Meta.lower(Main, :(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i, 3) && i\"")
 
 # issue #18667
-@test expand(Main, :(true = 1)) == Expr(:error, "invalid assignment location \"true\"")
-@test expand(Main, :(false = 1)) == Expr(:error, "invalid assignment location \"false\"")
+@test Meta.lower(Main, :(true = 1)) == Expr(:error, "invalid assignment location \"true\"")
+@test Meta.lower(Main, :(false = 1)) == Expr(:error, "invalid assignment location \"false\"")
 
 # PR #15592
 let str = "[1] [2]"
@@ -924,10 +924,10 @@ macro m4()
     end
 end
 """, "another_file.jl")
-m1_exprs = get_expr_list(expand(@__MODULE__, :(@m1)))
-m2_exprs = get_expr_list(expand(@__MODULE__, :(@m2)))
-m3_exprs = get_expr_list(expand(@__MODULE__, :(@m3)))
-m4_exprs = get_expr_list(expand(@__MODULE__, :(@m4)))
+m1_exprs = get_expr_list(Meta.lower(@__MODULE__, :(@m1)))
+m2_exprs = get_expr_list(Meta.lower(@__MODULE__, :(@m2)))
+m3_exprs = get_expr_list(Meta.lower(@__MODULE__, :(@m3)))
+m4_exprs = get_expr_list(Meta.lower(@__MODULE__, :(@m4)))
 
 # Check the expanded expresion has expected number of matching push/pop
 # and the return is handled correctly
@@ -1010,7 +1010,7 @@ end
 @test parse("Foo{T} = Bar{T}") == Expr(:(=), Expr(:curly, :Foo, :T), Expr(:curly, :Bar, :T))
 
 # don't insert push_loc for filename `none` at the top level
-let ex = expand(Main, parse("""
+let ex = Meta.lower(Main, parse("""
 begin
     x = 1
 end"""))
@@ -1097,8 +1097,8 @@ end
 # issue #20541
 @test parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :(.!), :b))
 
-@test expand(Main, :(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
-@test expand(Main, :(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")
+@test Meta.lower(Main, :(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
+@test Meta.lower(Main, :(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")
 
 # issue #20653
 @test_throws UndefVarError Base.call(::Int) = 1
@@ -1120,13 +1120,13 @@ macro m20729()
 end
 
 @test_throws ErrorException eval(@__MODULE__, :(@m20729))
-@test expand(@__MODULE__, :(@m20729)) == Expr(:error, "undefined reference in AST")
+@test Meta.lower(@__MODULE__, :(@m20729)) == Expr(:error, "undefined reference in AST")
 
 macro err20000()
     return Expr(:error, "oops!")
 end
 
-@test expand(@__MODULE__, :(@err20000)) == Expr(:error, "oops!")
+@test Meta.lower(@__MODULE__, :(@err20000)) == Expr(:error, "oops!")
 
 # issue #20000
 @test parse("@m(a; b=c)") == Expr(:macrocall, Symbol("@m"), LineNumberNode(1, :none),
@@ -1144,8 +1144,8 @@ g21054(>:) = >:2
 @test g21054(-) == -2
 
 # issue #21168
-@test expand(Main, :(a.[1])) == Expr(:error, "invalid syntax a.[1]")
-@test expand(Main, :(a.{1})) == Expr(:error, "invalid syntax a.{1}")
+@test Meta.lower(Main, :(a.[1])) == Expr(:error, "invalid syntax a.[1]")
+@test Meta.lower(Main, :(a.{1})) == Expr(:error, "invalid syntax a.{1}")
 
 # Issue #21225
 let abstr = parse("abstract type X end")
@@ -1249,7 +1249,7 @@ module Test21607
 end
 
 # issue #16937
-@test expand(Main, :(f(2, a=1, w=3, c=3, w=4, b=2))) ==
+@test Meta.lower(Main, :(f(2, a=1, w=3, c=3, w=4, b=2))) ==
     Expr(:error, "keyword argument \"w\" repeated in call to \"f\"")
 
 let f(x) =
@@ -1300,7 +1300,7 @@ end
 @test_throws ParseError parse("@ time")
 
 # issue #7479
-@test expand(Main, parse("(true &&& false)")) == Expr(:error, "misplaced \"&\" expression")
+@test Meta.lower(Main, parse("(true &&& false)")) == Expr(:error, "misplaced \"&\" expression")
 
 # if an indexing expression becomes a cat expression, `end` is not special
 @test_throws ParseError parse("a[end end]")
@@ -1342,7 +1342,7 @@ let
 end
 
 # issue #18730
-@test expand(Main, quote
+@test Meta.lower(Main, quote
         function f()
             local Int
             x::Int -> 2

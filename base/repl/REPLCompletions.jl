@@ -348,7 +348,7 @@ function get_type(sym::Expr, fn::Module)
     # try to analyze nests of calls. if this fails, try using the expanded form.
     val, found = try_get_type(sym, fn)
     found && return val, found
-    return try_get_type(expand(fn, sym), fn)
+    return try_get_type(Meta.lower(fn, sym), fn)
 end
 
 function get_type(sym, fn::Module)

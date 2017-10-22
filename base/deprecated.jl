@@ -1254,9 +1254,10 @@ _current_module() = ccall(:jl_get_current_module, Ref{Module}, ())
     depwarn("binding_module(symbol) is deprecated, use `binding_module(module, symbol)` instead.", :binding_module)
     return binding_module(_current_module(), s)
 end
+export expand
 @noinline function expand(@nospecialize(x))
-    depwarn("expand(x) is deprecated, use `expand(module, x)` instead.", :expand)
-    return expand(_current_module(), x)
+    depwarn("expand(x) is deprecated, use `Meta.lower(module, x)` instead.", :expand)
+    return Meta.lower(_current_module(), x)
 end
 @noinline function macroexpand(@nospecialize(x))
     depwarn("macroexpand(x) is deprecated, use `macroexpand(module, x)` instead.", :macroexpand)

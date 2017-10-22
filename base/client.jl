@@ -153,7 +153,7 @@ function eval_user_input(@nospecialize(ast), show_value)
                 display_error(lasterr,bt)
                 errcount, lasterr = 0, ()
             else
-                ast = expand(Main, ast)
+                ast = Meta.lower(Main, ast)
                 value = eval(Main, ast)
                 eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
                 if !(value === nothing) && show_value
@@ -210,7 +210,7 @@ function parse_input_line(s::String; filename::String="none")
                s, sizeof(s), filename, sizeof(filename))
     if ex isa Symbol && all(equalto('_'), string(ex))
         # remove with 0.7 deprecation
-        expand(Main, ex)  # to get possible warning about using _ as an rvalue
+        Meta.lower(Main, ex)  # to get possible warning about using _ as an rvalue
     end
     return ex
 end

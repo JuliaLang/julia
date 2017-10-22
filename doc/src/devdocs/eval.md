@@ -78,7 +78,7 @@ the expression. Macro expansion involves a handoff from [`eval()`](@ref) (in Jul
 function `jl_macroexpand()` (written in `flisp`) to the Julia macro itself (written in - what
 else - Julia) via `fl_invoke_julia_macro()`, and back.
 
-Typically, macro expansion is invoked as a first step during a call to [`expand()`](@ref)/`jl_expand()`,
+Typically, macro expansion is invoked as a first step during a call to [`Meta.lower()`](@ref)/`jl_expand()`,
 although it can also be invoked directly by a call to [`macroexpand()`](@ref)/`jl_macroexpand()`.
 
 ## [Type Inference](@id dev-type-inference)

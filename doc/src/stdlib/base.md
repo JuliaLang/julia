@@ -344,10 +344,10 @@ Base.@functionloc
 ```@docs
 Base.gc
 Base.gc_enable
+Meta.lower
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1
-Base.expand
 Base.code_lowered
 Base.@code_lowered
 Base.code_typed

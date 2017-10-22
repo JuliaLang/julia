@@ -378,10 +378,13 @@ Deprecated or removed
   * The `bkfact`/`bkfact!` methods that accepted `uplo` and `issymmetric` symbols have been deprecated
     in favor of using `Hermitian` (or `Symmetric`) views ([#22605]).
 
-  * The function `current_module` is deprecated and replaced with `@__MODULE__` ([#22064]).
-    This caused the deprecation of some reflection methods (such as `macroexpand` and `isconst`),
-    which now require a module argument.
-    And it caused the bugfix of other default arguments to use the Main module (including `whos`, `which`).
+  * The function `current_module` is deprecated and replaced with `@__MODULE__`.
+    This caused the deprecation of some reflection methods (such as `macroexpand` and
+    `isconst`), which now require a module argument. And it caused the bugfix of other
+    default arguments to use the Main module (including `whos`, `which`)  ([#22064]).
+
+  * `expand(ex)` and `expand(module, ex)` have been deprecated in favor of
+    `Meta.lower(module, ex)` ([#22064, #24278]).
 
   * The `Operators` module is deprecated. Instead, import required operators explicitly
     from `Base`, e.g. `import Base: +, -, *, /` ([#22251]).
