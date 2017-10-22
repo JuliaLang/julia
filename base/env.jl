@@ -59,42 +59,42 @@ end # os test
 ## ENV: hash interface ##
 
 """
-    EnvHash() -> EnvHash
+    EnvDict() -> EnvDict
 
 A singleton of this type provides a hash table interface to environment variables.
 """
-mutable struct EnvHash <: Associative{String,String}; end
+struct EnvDict <: Associative{String,String}; end
 
 """
     ENV
 
-Reference to the singleton `EnvHash`, providing a dictionary interface to system environment
+Reference to the singleton `EnvDict`, providing a dictionary interface to system environment
 variables.
 """
-const ENV = EnvHash()
+const ENV = EnvDict()
 
-similar(::EnvHash) = Dict{String,String}()
+similar(::EnvDict) = Dict{String,String}()
 
-getindex(::EnvHash, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
-get(::EnvHash, k::AbstractString, def) = access_env(k->def, k)
-get(f::Callable, ::EnvHash, k::AbstractString) = access_env(k->f(), k)
-in(k::AbstractString, ::KeyIterator{EnvHash}) = _hasenv(k)
-pop!(::EnvHash, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
-pop!(::EnvHash, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
-delete!(::EnvHash, k::AbstractString) = (_unsetenv(k); ENV)
-setindex!(::EnvHash, v, k::AbstractString) = _setenv(k,string(v))
-push!(::EnvHash, k::AbstractString, v) = setindex!(ENV, v, k)
+getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
+get(::EnvDict, k::AbstractString, def) = access_env(k->def, k)
+get(f::Callable, ::EnvDict, k::AbstractString) = access_env(k->f(), k)
+in(k::AbstractString, ::KeyIterator{EnvDict}) = _hasenv(k)
+pop!(::EnvDict, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
+pop!(::EnvDict, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
+delete!(::EnvDict, k::AbstractString) = (_unsetenv(k); ENV)
+setindex!(::EnvDict, v, k::AbstractString) = _setenv(k,string(v))
+push!(::EnvDict, k::AbstractString, v) = setindex!(ENV, v, k)
 
 if Sys.iswindows()
-    start(hash::EnvHash) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
-    function done(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
+    start(hash::EnvDict) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
+    function done(hash::EnvDict, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
         if unsafe_load(block[1]) == 0
             ccall(:FreeEnvironmentStringsW, stdcall, Int32, (Ptr{UInt16},), block[2])
             return true
         end
         return false
     end
-    function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
+    function next(hash::EnvDict, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
         pos = block[1]
         blk = block[2]
         len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
@@ -108,10 +108,10 @@ if Sys.iswindows()
         return (Pair{String,String}(m.captures[1], m.captures[2]), (pos+(len+1)*2, blk))
     end
 else # !windows
-    start(::EnvHash) = 0
-    done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), i) === nothing)
+    start(::EnvDict) = 0
+    done(::EnvDict, i) = (ccall(:jl_environ, Any, (Int32,), i) === nothing)
 
-    function next(::EnvHash, i)
+    function next(::EnvDict, i)
         env = ccall(:jl_environ, Any, (Int32,), i)
         if env === nothing
             throw(BoundsError())
@@ -126,7 +126,7 @@ else # !windows
 end # os-test
 
 #TODO: Make these more efficent
-function length(::EnvHash)
+function length(::EnvDict)
     i = 0
     for (k,v) in ENV
         i += 1
@@ -134,7 +134,7 @@ function length(::EnvHash)
     return i
 end
 
-function show(io::IO, ::EnvHash)
+function show(io::IO, ::EnvDict)
     for (k,v) = ENV
         println(io, "$k=$v")
     end

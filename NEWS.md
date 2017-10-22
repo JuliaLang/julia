@@ -1048,7 +1048,7 @@ Deprecated or removed
 
   * `num` and `den` have been deprecated in favor of `numerator` and `denominator` respectively ([#19233],[#19246]).
 
-  * `delete!(ENV::EnvHash, k::AbstractString, def)` has been deprecated in favor of
+  * `delete!(ENV::EnvDict, k::AbstractString, def)` has been deprecated in favor of
     `pop!(ENV, k, def)`. Be aware that `pop!` returns `k` or `def`, whereas `delete!`
     returns `ENV` or `def` ([#18012]).
 
@@ -1192,6 +1192,8 @@ Deprecated or removed
 
   * Parsing string dates from a `Dates.DateFormat` object has been deprecated as part of a
     larger effort toward faster, more extensible date parsing ([#20952]).
+
+  * `EnvHash` has been renamed to `EnvDict` ([#24167]).
 
 Command-line option changes
 ---------------------------

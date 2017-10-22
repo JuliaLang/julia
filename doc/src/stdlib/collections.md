@@ -216,7 +216,7 @@ Partially implemented by:
 
   * [`IntSet`](@ref)
   * [`Set`](@ref)
-  * [`EnvHash`](@ref Base.EnvHash)
+  * [`EnvDict`](@ref Base.EnvDict)
   * [`Array`](@ref)
   * [`BitArray`](@ref)
 

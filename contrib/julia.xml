@@ -108,7 +108,7 @@
       <item> EachLine </item>
       <item> Eigen </item>
       <item> Enumerate </item>
-      <item> EnvHash </item>
+      <item> EnvDict </item>
       <item> Exception </item>
       <item> Expr </item>
       <item> FileMonitor </item>
