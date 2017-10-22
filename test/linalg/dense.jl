@@ -797,5 +797,6 @@ end
 @testset "stride1" begin
     a = rand(10)
     b = view(a,2:2:10)
+    @test Base.LinAlg.stride1(a) == 1
     @test Base.LinAlg.stride1(b) == 2
 end
