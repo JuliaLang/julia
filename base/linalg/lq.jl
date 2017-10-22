@@ -33,24 +33,31 @@ lqfact(A::StridedMatrix{<:BlasFloat})  = lqfact!(copy(A))
 lqfact(x::Number) = lqfact(fill(x,1,1))
 
 """
-    lq(A; [thin=true]) -> L, Q
+    lq(A; full = false) -> L, Q
 
-Perform an LQ factorization of `A` such that `A = L*Q`. The default is to compute
-a "thin" factorization. The LQ factorization is the QR factorization of `A.'`.
-`L` is not extendedwith zeros if the explicit, square form of `Q`
-is requested via `thin = false`.
+Perform an LQ factorization of `A` such that `A = L*Q`. The default (`full = false`)
+computes a factorization with possibly-rectangular `L` and `Q`, commonly the "thin"
+factorization. The LQ factorization is the QR factorization of `A.'`. If the explicit,
+full/square form of `Q` is requested via `full = true`, `L` is not extended with zeros.
 
 !!! note
     While in QR factorization the "thin" factorization is so named due to yielding
-    either a square or "tall"/"thin" factor `Q`, in LQ factorization the "thin"
-    factorization somewhat confusingly produces either a square or "short"/"wide"
-    factor `Q`. "Thin" factorizations more broadly are also (more descriptively)
-    referred to as "truncated" or "reduced" factorizatons.
+    either a square or "tall"/"thin" rectangular factor `Q`, in LQ factorization the
+    "thin" factorization somewhat confusingly produces either a square or "short"/"wide"
+    rectangular factor `Q`. "Thin" factorizations more broadly are also
+    referred to as "reduced" factorizatons.
 """
-function lq(A::Union{Number,AbstractMatrix}; thin::Bool = true)
+function lq(A::Union{Number,AbstractMatrix}; full::Bool = false, thin::Union{Bool,Void} = nothing)
+    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
+    if thin != nothing
+        Base.depwarn(string("the `thin` keyword argument in `lq(A; thin = $(thin))` has ",
+            "been deprecated in favor of `full`, which has the opposite meaning, ",
+            "e.g. `lq(A; full = $(!thin))`."), :lq)
+        full::Bool = !thin
+    end
     F = lqfact(A)
     L, Q = F[:L], F[:Q]
-    return L, thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 2)))
+    return L, !full ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 2)))
 end
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
