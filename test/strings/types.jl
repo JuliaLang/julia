@@ -115,7 +115,7 @@ end
 # SubString created from SubString
 let str = "Hello, world!"
     u = SubString(str, 2, 5)
-    
+
     @test SubString(u, 2, 3) == SubString{typeof(u)}(u, 2, 3)
     @test typeof(SubString(u, 2, 3)) == typeof(SubString{typeof(u)}(u, 2, 3))
 
