@@ -302,9 +302,9 @@ function serialize(s::AbstractSerializer, ss::String)
     write(s.io, ss)
 end
 
-function serialize(s::AbstractSerializer, ss::SubString{T}) where T<:AbstractString
+function serialize(s::AbstractSerializer, ss::SubString{String})
     # avoid saving a copy of the parent string, keeping the type of ss
-    serialize_any(s, convert(SubString{T}, convert(T,ss)))
+    serialize_any(s, SubString(String(ss)))
 end
 
 # Don't serialize the pointers
