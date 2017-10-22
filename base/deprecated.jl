@@ -2033,6 +2033,7 @@ end
 
 # TODO: after 0.7, remove thin keyword argument and associated logic from...
 # (1) base/linalg/svd.jl
+# (2) base/linalg/qr.jl
 
 @deprecate find(x::Number)            find(!iszero, x)
 @deprecate findnext(A, v, i::Integer) findnext(equalto(v), A, i)
