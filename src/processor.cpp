@@ -49,7 +49,7 @@
 // Features that are not recognized will be passed to LLVM directly during codegen
 // but ignored otherwise.
 
-// Two special features are supported:
+// A few special features are supported:
 // 1. `clone_all`
 //
 //     This forces the target to have all functions in sysimg cloned.
@@ -63,6 +63,14 @@
 //     will use the version in the base target. This option causes the base target to be
 //     fully cloned (as if `clone_all` is specified for it) if it is not the default target (0).
 //     The index can only be smaller than the current index.
+//
+// 3. `opt_size`
+//
+//     Optimize for size with minimum performance impact. Clang/GCC's `-Os`.
+//
+// 4. `min_size`
+//
+//     Optimize only for size. Clang's `-Oz`.
 
 bool jl_processor_print_help = false;
 
@@ -548,6 +556,20 @@ parse_cmdline(const char *option, F &&feature_cb)
                     arg.en.flags &= ~JL_TARGET_CLONE_ALL;
                 }
             }
+            else if (llvm::StringRef(fname, p - fname) == "opt_size") {
+                if (disable)
+                    jl_error("Invalid target option: disabled opt_size.");
+                if (arg.en.flags & JL_TARGET_MINSIZE)
+                    jl_error("Conflicting target option: both opt_size and min_size are specified.");
+                arg.en.flags |= JL_TARGET_OPTSIZE;
+            }
+            else if (llvm::StringRef(fname, p - fname) == "min_size") {
+                if (disable)
+                    jl_error("Invalid target option: disabled min_size.");
+                if (arg.en.flags & JL_TARGET_OPTSIZE)
+                    jl_error("Conflicting target option: both opt_size and min_size are specified.");
+                arg.en.flags |= JL_TARGET_MINSIZE;
+            }
             else if (int base = get_clone_base(fname, p)) {
                 if (disable)
                     jl_error("Invalid target option: disabled base index.");
@@ -702,6 +724,14 @@ static inline void check_cmdline(T &&cmdline, bool imaging)
         }
         if (cmdline[0].en.flags & JL_TARGET_CLONE_ALL) {
             jl_error("\"clone_all\" feature specified "
+                     "without a `--output-` flag specified");
+        }
+        if (cmdline[0].en.flags & JL_TARGET_OPTSIZE) {
+            jl_error("\"opt_size\" feature specified "
+                     "without a `--output-` flag specified");
+        }
+        if (cmdline[0].en.flags & JL_TARGET_MINSIZE) {
+            jl_error("\"min_size\" feature specified "
                      "without a `--output-` flag specified");
         }
     }
