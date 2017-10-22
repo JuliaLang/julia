@@ -3,6 +3,7 @@
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/ADT/SetVector.h>
+#include <llvm/ADT/SmallVector.h>
 #include "llvm/Analysis/CFG.h"
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
@@ -11,11 +12,14 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/CallSite.h>
+#include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
 
 #include "llvm-version.h"
 #include "codegen_shared.h"
@@ -26,6 +30,49 @@
 #define DEBUG_TYPE "late_lower_gcroot"
 
 using namespace llvm;
+
+namespace {
+#if JL_LLVM_VERSION < 50000
+static void appendToUsedList(Module &M, StringRef Name, ArrayRef<GlobalValue *> Values) {
+  GlobalVariable *GV = M.getGlobalVariable(Name);
+  SmallPtrSet<Constant *, 16> InitAsSet;
+  SmallVector<Constant *, 16> Init;
+  if (GV) {
+    ConstantArray *CA = dyn_cast<ConstantArray>(GV->getInitializer());
+    for (auto &Op : CA->operands()) {
+      Constant *C = cast_or_null<Constant>(Op);
+      if (InitAsSet.insert(C).second)
+        Init.push_back(C);
+    }
+    GV->eraseFromParent();
+  }
+
+  Type *Int8PtrTy = llvm::Type::getInt8PtrTy(M.getContext());
+  for (auto *V : Values) {
+    Constant *C = ConstantExpr::getBitCast(V, Int8PtrTy);
+    if (InitAsSet.insert(C).second)
+      Init.push_back(C);
+  }
+
+  if (Init.empty())
+    return;
+
+  ArrayType *ATy = ArrayType::get(Int8PtrTy, Init.size());
+  GV = new llvm::GlobalVariable(M, ATy, false, GlobalValue::AppendingLinkage,
+                                ConstantArray::get(ATy, Init), Name);
+  GV->setSection("llvm.metadata");
+}
+
+static void append_to_compiler_used(Module &M, ArrayRef<GlobalValue *> Values) {
+  appendToUsedList(M, "llvm.compiler.used", Values);
+}
+#else
+static void append_to_compiler_used(Module &M, ArrayRef<GlobalValue *> Values)
+{
+    appendToCompilerUsed(M, Values);
+}
+#endif
+}
 
 /* Julia GC Root Placement pass. For a general overview of the design of GC
    root lowering, see the devdocs. This file is the actual implementation.
@@ -346,6 +393,9 @@ private:
     Function *gc_preserve_end_func;
     Function *pointer_from_objref_func;
     Function *alloc_obj_func;
+    Function *typeof_func;
+    Function *write_barrier_func;
+    Function *queueroot_func;
     Function *pool_alloc_func;
     Function *big_alloc_func;
     CallInst *ptlsStates;
@@ -375,7 +425,8 @@ private:
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint);
     void PlaceGCFrameStores(State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
     void PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
-    bool DefineFunctions(Module &M);
+    bool doInitialization(Module &M) override;
+    bool doFinalization(Module &) override;
     bool runOnFunction(Function &F) override;
     Instruction *get_pgcstack(Instruction *ptlsStates);
     bool CleanupIR(Function &F);
@@ -383,6 +434,8 @@ private:
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
     void FixUpRefinements(ArrayRef<int> PHINumbers, State &S);
     void RefineLiveSet(BitVector &LS, State &S);
+    Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V);
+    Value *EmitLoadTag(IRBuilder<> &builder, Type *T, Value *V);
 };
 
 static unsigned getValueAddrSpace(Value *V) {
@@ -955,7 +1008,13 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         continue;
                     }
                 }
-                MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
+                auto callee = CI->getCalledFunction();
+                if (callee && callee == typeof_func) {
+                    MaybeNoteDef(S, BBS, CI, BBS.Safepoints, SmallVector<int, 1>{-1});
+                }
+                else {
+                    MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
+                }
                 NoteOperandUses(S, BBS, I, BBS.UpExposedUses);
                 for (Use &U : CI->operands()) {
                     Value *V = U;
@@ -967,7 +1026,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 if (CI->canReturnTwice()) {
                     S.ReturnsTwice.push_back(CI);
                 }
-                if (auto callee = CI->getCalledFunction()) {
+                if (callee) {
                     if (callee == gc_preserve_begin_func) {
                         std::vector<int> args;
                         for (Use &U : CI->arg_operands()) {
@@ -983,12 +1042,18 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     }
                     // Known functions emitted in codegen that are not safepoints
                     if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
-                        callee == gc_preserve_end_func ||
-                        callee->getName() == "memcmp") {
+                        callee == gc_preserve_end_func || callee == typeof_func ||
+                        callee == write_barrier_func || callee->getName() == "memcmp") {
+                        continue;
+                    }
+                    if (callee->hasFnAttribute(Attribute::ReadNone) ||
+                        callee->hasFnAttribute(Attribute::ReadOnly) ||
+                        callee->hasFnAttribute(Attribute::ArgMemOnly)) {
                         continue;
                     }
                 }
-                if (isa<IntrinsicInst>(CI)) {
+                if (isa<IntrinsicInst>(CI) || CI->hasFnAttr(Attribute::ArgMemOnly) ||
+                    CI->hasFnAttr(Attribute::ReadNone) || CI->hasFnAttr(Attribute::ReadOnly)) {
                     // Intrinsics are never safepoints.
                     continue;
                 }
@@ -1436,6 +1501,36 @@ void LateLowerGCFrame::PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
 }
 
+// Size of T is assumed to be `sizeof(void*)`
+Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V)
+{
+    assert(T == T_size || isa<PointerType>(T));
+    auto TV = cast<PointerType>(V->getType());
+    auto cast = builder.CreateBitCast(V, T->getPointerTo(TV->getAddressSpace()));
+    return builder.CreateGEP(T, cast, ConstantInt::get(T_size, -1));
+}
+
+// Size of T is assumed to be `sizeof(void*)`
+Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T, Value *V)
+{
+    auto addr = EmitTagPtr(builder, T, V);
+    auto load = builder.CreateLoad(T, addr);
+    load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+    if (T == T_size) {
+        MDBuilder MDB(load->getContext());
+        auto *NullInt = ConstantInt::get(T, 0);
+        // We can be sure that the tag is larger than page size.
+        // Hopefully this is enough to convince LLVM that the value is still not NULL
+        // after masking off the tag bits
+        auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T, 4096));
+        load->setMetadata(LLVMContext::MD_range, MDB.createRange(NonNullInt, NullInt));
+    }
+    else {
+        load->setMetadata(LLVMContext::MD_nonnull, MDNode::get(load->getContext(), None));
+    }
+    return load;
+}
+
 bool LateLowerGCFrame::CleanupIR(Function &F) {
     bool ChangesMade = false;
     // We create one alloca for all the jlcall frames that haven't been processed
@@ -1453,6 +1548,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
 #endif
         ConstantInt::get(T_int32, maxframeargs), "", StartOff);
     }
+    SmallVector<CallInst*, 16> write_barriers;
     for (BasicBlock &BB : F) {
         for (auto it = BB.begin(); it != BB.end();) {
             auto *CI = dyn_cast<CallInst>(&*it);
@@ -1493,13 +1589,28 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                 addReturnAttr(newI, Attribute::NoAlias);
                 addReturnAttr(newI, Attribute::NonNull);
                 newI->takeName(CI);
-                auto derived = builder.CreateAddrSpaceCast(newI, T_pjlvalue_der);
-                auto cast = builder.CreateBitCast(derived, T_ppjlvalue_der);
-                auto tagaddr = builder.CreateGEP(T_prjlvalue, cast,
-                                                 ConstantInt::get(T_size, -1));
-                auto store = builder.CreateStore(CI->getArgOperand(2), tagaddr);
+                auto store = builder.CreateStore(CI->getArgOperand(2),
+                                                 EmitTagPtr(builder, T_prjlvalue, newI));
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
                 CI->replaceAllUsesWith(newI);
+            } else if (typeof_func && callee == typeof_func) {
+                assert(CI->getNumArgOperands() == 1);
+                IRBuilder<> builder(CI);
+                builder.SetCurrentDebugLocation(CI->getDebugLoc());
+                auto tag = EmitLoadTag(builder, T_size, CI->getArgOperand(0));
+                auto masked = builder.CreateAnd(tag, ConstantInt::get(T_size, ~(uintptr_t)15));
+                auto typ = builder.CreateAddrSpaceCast(builder.CreateIntToPtr(masked, T_pjlvalue),
+                                                       T_prjlvalue);
+                typ->takeName(CI);
+                CI->replaceAllUsesWith(typ);
+            } else if (write_barrier_func && callee == write_barrier_func) {
+                // The replacement for this requires creating new BasicBlocks
+                // which messes up the loop. Queue all of them to be replaced later.
+                assert(CI->getNumArgOperands() == 2);
+                write_barriers.push_back(CI);
+                ChangesMade = true;
+                ++it;
+                continue;
             } else if (CC == JLCALL_CC ||
                        CC == JLCALL_F_CC) {
                 assert(T_prjlvalue);
@@ -1558,6 +1669,25 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
             it = CI->eraseFromParent();
             ChangesMade = true;
         }
+    }
+    for (auto CI: write_barriers) {
+        IRBuilder<> builder(CI);
+        builder.SetCurrentDebugLocation(CI->getDebugLoc());
+        auto parent = CI->getArgOperand(0);
+        auto child = CI->getArgOperand(1);
+        auto parBits = builder.CreateAnd(EmitLoadTag(builder, T_size, parent), 3);
+        auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, 3));
+        auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, CI, false);
+        builder.SetInsertPoint(mayTrigTerm);
+        auto chldBit = builder.CreateAnd(EmitLoadTag(builder, T_size, child), 1);
+        auto chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0));
+        MDBuilder MDB(parent->getContext());
+        SmallVector<uint32_t, 2> Weights{1, 9};
+        auto trigTerm = SplitBlockAndInsertIfThen(chldNotMarked, mayTrigTerm, false,
+                                                  MDB.createBranchWeights(Weights));
+        builder.SetInsertPoint(trigTerm);
+        builder.CreateCall(queueroot_func, parent);
+        CI->eraseFromParent();
     }
     if (maxframeargs == 0 && Frame) {
         Frame->eraseFromParent();
@@ -1723,7 +1853,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
     }
 }
 
-bool LateLowerGCFrame::DefineFunctions(Module &M) {
+bool LateLowerGCFrame::doInitialization(Module &M) {
     ptls_getter = M.getFunction("julia.ptls_states");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
     gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
@@ -1734,6 +1864,21 @@ bool LateLowerGCFrame::DefineFunctions(Module &M) {
     T_int8 = Type::getInt8Ty(ctx);
     T_pint8 = PointerType::get(T_int8, 0);
     T_int32 = Type::getInt32Ty(ctx);
+    typeof_func = M.getFunction("julia.typeof");
+    if ((write_barrier_func = M.getFunction("julia.write_barrier"))) {
+        T_prjlvalue = write_barrier_func->getFunctionType()->getParamType(0);
+        if (!(queueroot_func = M.getFunction("jl_gc_queue_root"))) {
+            queueroot_func = Function::Create(FunctionType::get(Type::getVoidTy(ctx),
+                                                                {T_prjlvalue}, false),
+                                              Function::ExternalLinkage, "jl_gc_queue_root", &M);
+            queueroot_func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+        }
+    }
+    else {
+        queueroot_func = nullptr;
+    }
+    pool_alloc_func = nullptr;
+    big_alloc_func = nullptr;
     if ((alloc_obj_func = M.getFunction("julia.gc_alloc_obj"))) {
         T_prjlvalue = alloc_obj_func->getReturnType();
         if (!(pool_alloc_func = M.getFunction("jl_gc_pool_alloc"))) {
@@ -1760,7 +1905,6 @@ bool LateLowerGCFrame::DefineFunctions(Module &M) {
         T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
         T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
         T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
-        return true;
     }
     else if (ptls_getter) {
         auto functype = ptls_getter->getFunctionType();
@@ -1778,12 +1922,62 @@ bool LateLowerGCFrame::DefineFunctions(Module &M) {
         T_pjlvalue_der = nullptr;
         T_ppjlvalue_der = nullptr;
     }
-    return false;
+    GlobalValue *function_list[] = {gc_flush_func, gc_preserve_begin_func,
+                                    gc_preserve_end_func, pointer_from_objref_func,
+                                    alloc_obj_func, typeof_func, write_barrier_func,
+                                    queueroot_func, pool_alloc_func, big_alloc_func};
+    unsigned j = 0;
+    for (unsigned i = 0; i < sizeof(function_list) / sizeof(void*); i++) {
+        if (!function_list[i])
+            continue;
+        if (i != j)
+            function_list[j] = function_list[i];
+        j++;
+    }
+    if (j != 0)
+        append_to_compiler_used(M, ArrayRef<GlobalValue*>(function_list, j));
+    return true;
+}
+
+bool LateLowerGCFrame::doFinalization(Module &M)
+{
+    auto used = M.getGlobalVariable("llvm.compiler.used");
+    if (!used)
+        return false;
+    GlobalValue *function_list[] = {gc_flush_func, gc_preserve_begin_func,
+                                    gc_preserve_end_func, pointer_from_objref_func,
+                                    alloc_obj_func, typeof_func, write_barrier_func,
+                                    queueroot_func, pool_alloc_func, big_alloc_func};
+    SmallPtrSet<Constant*, 16> InitAsSet(function_list,
+                                         function_list + sizeof(function_list) / sizeof(void*));
+    bool changed = false;
+    SmallVector<Constant*, 16> Init;
+    ConstantArray *CA = dyn_cast<ConstantArray>(used->getInitializer());
+    for (auto &Op : CA->operands()) {
+        Constant *C = cast_or_null<Constant>(Op);
+        if (InitAsSet.count(C->stripPointerCasts())) {
+            changed = true;
+            continue;
+        }
+        Init.push_back(C);
+    }
+    if (!changed)
+        return false;
+    used->eraseFromParent();
+    if (Init.empty())
+        return true;
+    ArrayType *ATy = ArrayType::get(T_pint8, Init.size());
+    used = new llvm::GlobalVariable(M, ATy, false, GlobalValue::AppendingLinkage,
+                                    ConstantArray::get(ATy, Init), "llvm.compiler.used");
+    used->setSection("llvm.metadata");
+    return true;
 }
 
 bool LateLowerGCFrame::runOnFunction(Function &F) {
     DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
-    DefineFunctions(*F.getParent());
+    // Check availability of `julia.ptls_states`. Keeping it in `llvm.compiler.used` can makes
+    // LowerPTLS pass unhappy.
+    ptls_getter = F.getParent()->getFunction("julia.ptls_states");
     if (!ptls_getter)
         return CleanupIR(F);
     ptlsStates = nullptr;
