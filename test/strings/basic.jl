@@ -592,11 +592,9 @@ end
 end
 
 @testset "prevind and nextind" begin
-    let str = "∀α>β:α+1>β", strs = Any[str, GenericString(str),
-                                       SubString(str, 1), SubString(str, 1, 4),
-                                       SubString(GenericString(str), 1),
-                                       SubString(GenericString(str), 1, 4)]
-        for i in 1:5
+    let str = "∀α>β:α+1>β", strs = Any[str, GenericString(str), SubString(str, 1),
+                                       SubString(GenericString(str), 1)]
+        for i in 1:length(strs)
             @test prevind(strs[i], 1) == 0
             @test prevind(strs[i], 1, 1) == 0
             @test prevind(strs[i], 2) == 1
@@ -656,7 +654,26 @@ end
                     @test nextind(strs[i], x, j) == n
                 end
             end
+
+            let ss = SubString(strs[i], 1, 4)
+                @test prevind(ss, 0) < 1
+                @test prevind(ss, 0, 1) < 1
+                @test prevind(ss, 1, 2) < 1
+                @test prevind(ss, 0, 2) < 1
+            end
+            let ss = SubString(strs[i], 7, 10)
+                @test prevind(ss, 1) < 1
+                @test prevind(ss, 1, 1) < 1
+                @test prevind(ss, 0) < 1
+                @test prevind(ss, 0, 1) < 1
+                @test prevind(ss, 1, 2) < 1
+                @test nextind(ss, 4) > endof(ss)
+                @test nextind(ss, 4, 1) > endof(ss)
+                @test nextind(ss, 9) > endof(ss)
+                @test nextind(ss, 9, 1) > endof(ss)
+            end
         end
+
         @test prevind(strs[1], -1) == -2
         @test prevind(strs[1], -1, 1) == -2
 
@@ -665,23 +682,13 @@ end
 
         @test prevind(strs[3], -1) == -2
         @test prevind(strs[3], -1, 1) == -2
-        @test prevind(strs[4], -1) == -2
-        @test prevind(strs[4], -1, 1) == -2
 
-        @test prevind(strs[5], -4) == 0
-        @test prevind(strs[5], -4, 1) == 0
-        @test prevind(strs[6], -4) == 0
-        @test prevind(strs[6], -4, 1) == 0
-
-        @test prevind(strs[7], -4) == -5
-        @test prevind(strs[7], -4, 1) == -5
-
-        @test prevind(strs[8], -4) == 0
-        @test prevind(strs[8], -4, 1) == 0
+        @test prevind(strs[4], -4) == 0
+        @test prevind(strs[4], -4, 1) == 0
     end
 
     let strs = Any["1234567", GenericString("1234567")]
-        for i in 1:2
+        for i in 1:length(strs)
             @test prevind(SubString(strs[i], 1, 3), 10) == 3
             @test prevind(SubString(strs[i], 1, 3), 10, 1) == 3
             @test prevind(SubString(strs[i], 1, 3), 10, 2) == 2
@@ -711,15 +718,6 @@ end
             @test nextind(SubString(strs[i], 3), 4, 2) == 6
         end
     end
-
-    @test prevind(SubString("1234567", 1, 3), 0) == -1
-    @test prevind(SubString(GenericString("1234567"), 1, 3), 0) == 0
-    @test prevind(SubString("1234567", 1, 3), 0, 1) == -1
-    @test prevind(SubString(GenericString("1234567"), 1, 3), 0, 1) == 0
-    @test prevind(SubString("1234567", 1, 3), 1, 2) == -1
-    @test prevind(SubString(GenericString("1234567"), 1, 3), 1, 2) == 0
-    @test prevind(SubString("1234567", 1, 3), 0, 2) == -2
-    @test prevind(SubString(GenericString("1234567"), 1, 3), 0, 2) == 0
 end
 
 @testset "first and last" begin
