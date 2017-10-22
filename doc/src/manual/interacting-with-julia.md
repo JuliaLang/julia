@@ -91,15 +91,18 @@ search: AbstractString AbstractSparseMatrix AbstractSparseVector AbstractSet
 
   No documentation found.
 
-  Summary:
+  Summary
+  ≡≡≡≡≡≡≡≡≡
 
-  abstract AbstractString <: Any
+  abstract type AbstractString <: Any
 
-  Subtypes:
+  Subtypes
+  ≡≡≡≡≡≡≡≡≡≡
 
-  Base.Test.GenericString
-  DirectIndexString
+  Base.SubstitutionString
   String
+  SubString
+  Test.GenericString
 ```
 
 Help mode can be exited by pressing backspace at the beginning of the line.

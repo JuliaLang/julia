@@ -4,7 +4,6 @@
 
 endof(s::AbstractString) = error("you must implement endof(", typeof(s), ")")
 next(s::AbstractString, i::Int) = error("you must implement next(", typeof(s), ",Int)")
-next(s::DirectIndexString, i::Int) = (s[i],i+1)
 next(s::AbstractString, i::Integer) = next(s,Int(i))
 
 string() = ""
@@ -69,8 +68,6 @@ julia> 'j' * "ulia"
 (*)(s1::Union{Char, AbstractString}, ss::Union{Char, AbstractString}...) = string(s1, ss...)
 
 one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
-
-length(s::DirectIndexString) = endof(s)
 
 """
     length(s::AbstractString)
@@ -198,8 +195,6 @@ isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
 
 ## Generic validation functions ##
 
-isvalid(s::DirectIndexString, i::Integer) = (start(s) <= i <= endof(s))
-
 """
     isvalid(str::AbstractString, i::Integer)
 
@@ -236,20 +231,6 @@ function isvalid(s::AbstractString, i::Integer)
 end
 
 ## Generic indexing functions ##
-
-prevind(s::DirectIndexString, i::Integer) = Int(i)-1
-nextind(s::DirectIndexString, i::Integer) = Int(i)+1
-
-function prevind(s::DirectIndexString, i::Integer, nchar::Integer)
-    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
-    Int(i)-nchar
-end
-
-function nextind(s::DirectIndexString, i::Integer, nchar::Integer)
-    nchar > 0 || throw(ArgumentError("nchar must be greater than 0"))
-    Int(i)+nchar
-end
-
 
 """
     prevind(str::AbstractString, i::Integer, nchar::Integer=1)
@@ -370,9 +351,6 @@ checkbounds(s::AbstractString, r::AbstractRange{<:Integer}) = isempty(r) || (min
 # The following will end up using a deprecated checkbounds, when the covariant parameter is not Integer
 checkbounds(s::AbstractString, I::AbstractArray{<:Real}) = all(i -> checkbounds(s, i), I)
 checkbounds(s::AbstractString, I::AbstractArray{<:Integer}) = all(i -> checkbounds(s, i), I)
-
-ind2chr(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
-chr2ind(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
 
 
 """
