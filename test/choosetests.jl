@@ -46,7 +46,7 @@ function choosetests(choices = [])
         "nullable", "meta", "stacktraces", "profile", "libgit2", "docs",
         "markdown", "base64", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
-        "checked", "intset", "floatfuncs", "compile", "distributed", "inline",
+        "checked", "bitset", "floatfuncs", "compile", "distributed", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
         "channels", "iostream", "specificity", "codegen", "codevalidation",
         "reinterpretarray"
