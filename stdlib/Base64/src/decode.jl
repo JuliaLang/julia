@@ -171,8 +171,8 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
     end
 
     # Write output.
-    p = ptr
-    p_end = ptr + n
+    p::Ptr{UInt8} = ptr
+    p_end::Ptr{UInt8} = ptr + n
     function output(b)
         if p < p_end
             unsafe_store!(p, b)
