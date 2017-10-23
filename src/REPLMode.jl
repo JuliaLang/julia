@@ -7,6 +7,7 @@ using Pkg3.Operations
 
 import Base: LineEdit, REPL, REPLCompletions
 import Base.Random: UUID
+using Base.Markdown
 
 const cmds = Dict(
     "help"      => :help,
@@ -124,6 +125,7 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
             end
         end
         env = EnvCache(env_opt)
+        cmd == :help   ?   do_help!(env, tokens, repl) :
         cmd == :rm     ?     do_rm!(env, tokens) :
         cmd == :add    ?    do_add!(env, tokens) :
         cmd == :up     ?     do_up!(env, tokens) :
@@ -135,6 +137,136 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
         else
             Base.display_error(repl.t.err_stream, err, Base.catch_backtrace())
         end
+    end
+end
+
+const help_help = Base.Markdown.parse("""
+    **Synopsis**
+
+        pkg> [--env=...] cmd [opts] [args]
+
+    **Environment**
+
+    The `--env` meta option determines which project environment to manipulate. By
+    default, this looks for a git repo in the parents directories of the current
+    working directory, and if it finds one, it uses that as an environment. Otherwise,
+    it uses a named environment (typically found in `~/.julia/environments`) looking
+    for environments named `v$(VERSION.major).$(VERSION.minor).$(VERSION.patch)`,
+    `v$(VERSION.major).$(VERSION.minor)`,  `v$(VERSION.major)` or `default` in order.
+
+    **Commands**
+
+    What action you want the package manager to take:
+
+    `help`: show this message
+
+    `status`: summarize contents of and changes to environment
+
+    `add`: add packages to project
+
+    `rm`: remove packages from project or manifest
+
+    `up`: update packages in manifest
+    """)
+
+const helps = Dict(
+    :help => md"""
+
+        help
+
+    Display this message.
+
+        help cmd...
+
+    Display usage information for commands listed. Available commands:
+    `help`, `status`, `add`, `rm`, `up`.
+    """, :status => md"""
+
+        status
+        status [-p|--project]
+        status [-m|--manifest]
+
+    Show the status of the current environment. By default, the full contents of
+    the project file is summarized, showing what version each package is on and
+    how it has changed since the last git commit (if in a git repo), as well as
+    any changes to manifest packages not already listed. In `--project` mode, the
+    status of the project file is summarized. In `--project` mode, the status of
+    the project file is summarized.
+    """, :add => md"""
+
+        add pkg[=uuid] [@version] ...
+
+    Add package `pkg` to the current project file. If `pkg` could refer to
+    multiple different packages, specifying `uuid` allows you to disambiguate.
+    `@version` optionally allows specifying which versions of packages. Versions
+    may be specified by `@1`, `@1.2`, `@1.2.3`, allowing any version with a prefix
+    that matches, or ranges thereof, such as `@1.2-3.4.5`.
+    """, :rm => md"""
+
+        rm [-p|--project] pkg[=uuid] ...
+
+    Remove package `pkg` from the project file. Since the name `pkg` can only
+    refer to one package in a project this is unambiguous, but you can specify
+    a `uuid` anyway, and the command is ignored, with a warning if package name
+    and UUID do not mactch. When a package is removed from the project file, it
+    may still remain in the manifest if it is required by some other package in
+    the project. Project mode operation is the default, so passing `-p` or
+    `--project` is optional unless it is preceded by the `-m` or `--manifest`
+    options at some earlier point.
+
+        rm [-m|--manifest] pkg[=uuid] ...
+
+    Remove package `pkg` from the manifest file. If the name `pkg` refers to
+    multiple packages in the manifest, `uuid` disambiguates it. Removing a package
+    from the manifest forces the removal of all packages that depend on it, as well
+    as any no-longer-necessary manifest packages due to project package removals.
+    """, :up => md"""
+
+        up [-p|project] [opts] pkg[=uuid] [@version] ...
+        up [-m|manifest] [opts] pkg[=uuid] [@version] ...
+
+        opts: --major | --minor | --patch | --fixed
+
+    Update the indicated package within the constraints of the indicated version
+    specifications. Versions may be specified by `@1`, `@1.2`, `@1.2.3`, allowing
+    any version with a prefix that matches, or ranges thereof, such as `@1.2-3.4.5`.
+    In `--project` mode, package specifications only match project packages, while
+    in `manifest` mode they match any manifest package. Bound level options force
+    the following packages to be upgraded only within the current major, minor,
+    patch version; if the `--fixed` upgrade level is given, then the following
+    packages will not be upgraded at all.
+    """,
+)
+
+const help_all = [helps[cmd] for cmd in sort!(collect(keys(helps)), by = String)]
+
+function do_help!(
+    env::EnvCache,
+    tokens::Vector{Tuple{Symbol,Vararg{Any}}},
+    repl::Base.REPL.AbstractREPL,
+)
+    disp = Base.REPL.REPLDisplay(repl)
+    if isempty(tokens)
+        Base.display(disp, help_help)
+        return
+    end
+    mds = Base.Markdown.MD[]
+    for token in tokens
+        if token[1] == :cmd
+            if haskey(helps, token[2])
+                push!(mds, helps[token[2]])
+            elseif token[2] == :all
+
+                push!(mds, )
+            else
+                cmderror("Sorry, I don't have any help for the `$(token[2])` command.")
+            end
+        else
+            error("This should not happen")
+        end
+    end
+    for md in mds
+        Base.display(disp, md)
     end
 end
 
