@@ -47,6 +47,11 @@ bimg  = randn(n,2)/2
             @test inv(bc1)*aher ≈ eye(n)
             @testset for rook in (false, true)
                 @test inv(bkfact(Symmetric(a.' + a, uplo), rook))*(a.' + a) ≈ eye(n)
+                if eltya <: BlasFloat
+                    # test also bkfact! without explicit type tag
+                    # no bkfact! method for Int ... yet
+                    @test inv(bkfact!(a.' + a, rook))*(a.' + a) ≈ eye(n)
+                end
                 @test size(bc1) == size(bc1.LD)
                 @test size(bc1, 1) == size(bc1.LD, 1)
                 @test size(bc1, 2) == size(bc1.LD, 2)
