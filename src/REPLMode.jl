@@ -227,8 +227,15 @@ function do_up!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
     manifest_resolve!(env, pkgs)
     ensure_resolved(env, pkgs)
     if isempty(pkgs)
-        for (name::String, uuid::UUID) in env.project["deps"]
-            push!(pkgs, PackageSpec(name, uuid, level))
+        if mode == :project
+            for (name::String, uuid::UUID) in env.project["deps"]
+                push!(pkgs, PackageSpec(name, uuid, level))
+            end
+        elseif mode == :manifest
+            for (name, infos) in env.manifest, info in infos
+                uuid = UUID(info["uuid"])
+                push!(pkgs, PackageSpec(name, uuid, level))
+            end
         end
     end
     Pkg3.Operations.up(env, pkgs)
