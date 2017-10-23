@@ -101,6 +101,7 @@ const PAGES = [
         "stdlib/profile.md",
         "stdlib/stacktraces.md",
         "stdlib/simd-types.md",
+        "stdlib/base64.md",
     ],
     "Developer Documentation" => [
         "devdocs/reflection.md",
