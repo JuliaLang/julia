@@ -2956,7 +2956,7 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     end
     @test PR20889(2)^3 == 5
     @test [2,4,8].^-2 == [0.25, 0.0625, 0.015625]
-    @test ℯ^-2 == exp(-2) ≈ inv(ℯ^2) ≈ sqrt(ℯ^-4)
+    @test ℯ^-2 == exp(-2) ≈ inv(ℯ^2) ≈ (ℯ^-1)^2 ≈ sqrt(ℯ^-4)
 end
 module M20889 # do we get the expected behavior without importing Base.^?
     using Test

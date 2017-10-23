@@ -702,7 +702,8 @@ end
                                             UInt128, UInt16, UInt32, UInt64, UInt8,
                                             BigInt)
         info("Testing $elty")
-        @test elty[1 1;1 0]^-2 == [1 -1; -1 2]
+        @test elty[1 1;1 0]^-1 == [0  1;  1 -1]
+        @test elty[1 1;1 0]^-2 == [1 -1; -1  2]
         @test (@inferred elty[1 1;1 0]^2) == elty[2 1;1 1]
         I_ = elty[1 0;0 1]
         @test I_^-1 == I_

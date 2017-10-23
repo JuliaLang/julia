@@ -242,6 +242,10 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
     end
 end
 
+# note: it is tempting to add optimized literal_pow(::typeof(^), x, ::Val{n})
+#       methods here for various n, but this easily leads to method ambiguities
+#       if anyone has defined literal_pow(::typeof(^), x::T, ::Val).
+
 # b^p mod m
 
 """

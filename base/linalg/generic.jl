@@ -825,6 +825,11 @@ function pinv(v::AbstractVector{T}, tol::Real=real(zero(T))) where T
     return res
 end
 
+# this method is just an optimization: literal negative powers of A are
+# already turned by literal_pow into powers of inv(A), but for A^-1 this
+# would turn into inv(A)^1 = copy(inv(A)), which makes an extra copy.
+@inline Base.literal_pow(::typeof(^), A::AbstractMatrix, ::Val{-1}) = inv(A)
+
 """
     \\(A, B)
 
