@@ -154,7 +154,6 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
 
     # Check the decoded quadruplet.
     k = 0
-    ended = false
     if b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 < 0x40
         # pass
         k = 3
@@ -166,7 +165,6 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
         k = 1
     elseif b1 == b2 == b3 == BASE64_CODE_IGN && b4 == BASE64_CODE_END
         b1 = b2 = b3 = b4 = 0x00
-        ended = true
     else
         throw(ArgumentError("malformed base64 sequence"))
     end
@@ -186,7 +184,7 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
     k ≥ 2 && output(b2 << 4 | b3 >> 2)
     k ≥ 3 && output(b3 << 6 | b4     )
 
-    return i, p, ended
+    return i, p, k == 0
 end
 
 """
