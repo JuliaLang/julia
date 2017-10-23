@@ -720,14 +720,16 @@ function cos(A::AbstractMatrix{<:Real})
     if issymmetric(A)
         return copytri!(parent(cos(Symmetric(A))), 'U')
     end
-    return real(exp!(im*A))
+    T = complex(float(eltype(A)))
+    return real(exp!(T.(im .* A)))
 end
 function cos(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
         return copytri!(parent(cos(Hermitian(A))), 'U', true)
     end
-    X = exp!(im*A)
-    X .= (X .+ exp!(-im*A)) ./ 2
+    T = complex(float(eltype(A)))
+    X = exp!(T.(im .* A))
+    @. X = (X + $exp!(T(-im*A))) / 2
     return X
 end
 
@@ -751,14 +753,16 @@ function sin(A::AbstractMatrix{<:Real})
     if issymmetric(A)
         return copytri!(parent(sin(Symmetric(A))), 'U')
     end
-    return imag(exp!(im*A))
+    T = complex(float(eltype(A)))
+    return imag(exp!(T.(im .* A)))
 end
 function sin(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
         return copytri!(parent(sin(Hermitian(A))), 'U', true)
     end
-    X = exp!(im*A)
-    Y = exp!(-im*A)
+    T = complex(float(eltype(A)))
+    X = exp!(T.(im .* A))
+    Y = exp!(T.(.-im .* A))
     @inbounds for i in eachindex(X)
         x, y = X[i]/2, Y[i]/2
         X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
@@ -793,7 +797,8 @@ function sincos(A::AbstractMatrix{<:Real})
         cosA = copytri!(parent(symcosA), 'U')
         return sinA, cosA
     end
-    c, s = reim(exp!(im*A))
+    T = complex(float(eltype(A)))
+    c, s = reim(exp!(T.(im .* A)))
     return s, c
 end
 function sincos(A::AbstractMatrix{<:Complex})
@@ -803,8 +808,9 @@ function sincos(A::AbstractMatrix{<:Complex})
         cosA = copytri!(parent(hermcosA), 'U', true)
         return sinA, cosA
     end
-    X = exp!(im*A)
-    Y = exp!(-im*A)
+    T = complex(float(eltype(A)))
+    X = exp!(T.(im .* A))
+    Y = exp!(T.(.-im .* A))
     @inbounds for i in eachindex(X)
         x, y = X[i]/2, Y[i]/2
         X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
@@ -848,7 +854,7 @@ function cosh(A::AbstractMatrix)
         return copytri!(parent(cosh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
-    X .= (X .+ exp!(-A)) ./ 2
+    @. X = (X + $exp!(float(-A))) / 2
     return X
 end
 
@@ -862,7 +868,7 @@ function sinh(A::AbstractMatrix)
         return copytri!(parent(sinh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
-    X .= (X .- exp!(-A)) ./ 2
+    @. X = (X - $exp!(float(-A))) / 2
     return X
 end
 
@@ -876,7 +882,7 @@ function tanh(A::AbstractMatrix)
         return copytri!(parent(tanh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
-    Y = exp!(-A)
+    Y = exp!(float.(.-A))
     @inbounds for i in eachindex(X)
         x, y = X[i], Y[i]
         X[i] = x - y
