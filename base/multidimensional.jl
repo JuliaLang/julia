@@ -147,6 +147,11 @@ module IteratorsMD
         return ni
     end
 
+    # Iteration over the elements of CartesianIndex cannot be supported until its length can be inferred,
+    # see #23719
+    Base.start(::CartesianIndex) =
+        error("iteration is deliberately unsupported for CartesianIndex. Use `I` rather than `I...`, or use `Tuple(I)...`")
+
     # Iteration
     """
         CartesianRange(sz::Dims) -> R
