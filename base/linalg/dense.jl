@@ -719,15 +719,15 @@ function cos(A::AbstractMatrix{<:Real})
         return full(cos(Symmetric(A)))
     end
     T = complex(float(eltype(A)))
-    return real(exp!(convert(AbstractArray{T}, im*A)))
+    return real(exp!(T.(im .* A)))
 end
 function cos(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
         return full(cos(Hermitian(A)))
     end
     T = complex(float(eltype(A)))
-    X = exp!(convert(AbstractArray{T}, im*A))
-    X .= (X .+ exp!(convert(AbstractArray{T}, -im*A))) ./ 2
+    X = exp!(T.(im .* A))
+    @. X = (X + $exp!(T(-im*A))) / 2
     return X
 end
 
@@ -752,15 +752,15 @@ function sin(A::AbstractMatrix{<:Real})
         return full(sin(Symmetric(A)))
     end
     T = complex(float(eltype(A)))
-    return imag(exp!(convert(AbstractArray{T}, im*A)))
+    return imag(exp!(T.(im .* A)))
 end
 function sin(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
         return full(sin(Hermitian(A)))
     end
     T = complex(float(eltype(A)))
-    X = exp!(convert(AbstractArray{T}, im*A))
-    Y = exp!(convert(AbstractArray{T}, -im*A))
+    X = exp!(T.(im .* A))
+    Y = exp!(T.(.-im .* A))
     @inbounds for i in eachindex(X)
         x, y = X[i]/2, Y[i]/2
         X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
@@ -793,7 +793,7 @@ function sincos(A::AbstractMatrix{<:Real})
         return full.(sincos(Symmetric(A)))
     end
     T = complex(float(eltype(A)))
-    c, s = reim(exp!(convert(AbstractArray{T}, im*A)))
+    c, s = reim(exp!(T.(im .* A)))
     return s, c
 end
 function sincos(A::AbstractMatrix{<:Complex})
@@ -801,8 +801,8 @@ function sincos(A::AbstractMatrix{<:Complex})
         return full.(sincos(Hermitian(A)))
     end
     T = complex(float(eltype(A)))
-    X = exp!(convert(AbstractArray{T}, im*A))
-    Y = exp!(convert(AbstractArray{T}, -im*A))
+    X = exp!(T.(im .* A))
+    Y = exp!(T.(.-im .* A))
     @inbounds for i in eachindex(X)
         x, y = X[i]/2, Y[i]/2
         X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
@@ -845,9 +845,8 @@ function cosh(A::AbstractMatrix)
     if ishermitian(A)
         return full(cosh(Hermitian(A)))
     end
-    T = float(eltype(A))
     X = exp(A)
-    X .= (X .+ exp!(convert(AbstractArray{T}, -A))) ./ 2
+    @. X = (X + $exp!(float(-A))) / 2
     return X
 end
 
@@ -860,9 +859,8 @@ function sinh(A::AbstractMatrix)
     if ishermitian(A)
         return full(sinh(Hermitian(A)))
     end
-    T = float(eltype(A))
     X = exp(A)
-    X .= (X .- exp!(convert(AbstractArray{T}, -A))) ./ 2
+    @. X = (X - $exp!(float(-A))) / 2
     return X
 end
 
@@ -875,9 +873,8 @@ function tanh(A::AbstractMatrix)
     if ishermitian(A)
         return full(tanh(Hermitian(A)))
     end
-    T = float(eltype(A))
     X = exp(A)
-    Y = exp!(convert(AbstractArray{T}, -A))
+    Y = exp!(float.(.-A))
     @inbounds for i in eachindex(X)
         x, y = X[i], Y[i]
         X[i] = x - y
