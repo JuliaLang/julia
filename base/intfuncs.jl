@@ -708,26 +708,26 @@ julia> dec(20, 3)
 dec
 
 """
-    bits(n)
+    bitstring(n)
 
 A string giving the literal bit representation of a number.
 
 # Examples
 ```jldoctest
-julia> bits(4)
+julia> bitstring(4)
 "0000000000000000000000000000000000000000000000000000000000000100"
 
-julia> bits(2.2)
+julia> bitstring(2.2)
 "0100000000000001100110011001100110011001100110011001100110011010"
 ```
 """
-function bits end
+function bitstring end
 
-bits(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
-bits(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
-bits(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
-bits(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
-bits(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
+bitstring(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
+bitstring(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
+bitstring(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
+bitstring(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
+bitstring(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
 
 """
     digits([T<:Integer], n::Integer, base::T=10, pad::Integer=1)

@@ -1913,6 +1913,9 @@ end
 @deprecate float(x::AbstractString) parse(Float64, x)
 @deprecate float(a::AbstractArray{<:AbstractString}) parse.(Float64, a)
 
+# deprecate bits to bitstring (#24263, #24281)
+@deprecate bits bitstring
+
 # issue #24167
 @deprecate EnvHash EnvDict
 

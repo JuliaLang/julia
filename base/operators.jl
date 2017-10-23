@@ -518,10 +518,10 @@ this is equivalent to `x >> -n`.
 julia> Int8(3) << 2
 12
 
-julia> bits(Int8(3))
+julia> bitstring(Int8(3))
 "00000011"
 
-julia> bits(Int8(12))
+julia> bitstring(Int8(12))
 "00001100"
 ```
 See also [`>>`](@ref), [`>>>`](@ref).
@@ -548,19 +548,19 @@ right by `n` bits, where `n >= 0`, filling with `0`s if `x >= 0`, `1`s if `x <
 julia> Int8(13) >> 2
 3
 
-julia> bits(Int8(13))
+julia> bitstring(Int8(13))
 "00001101"
 
-julia> bits(Int8(3))
+julia> bitstring(Int8(3))
 "00000011"
 
 julia> Int8(-14) >> 2
 -4
 
-julia> bits(Int8(-14))
+julia> bitstring(Int8(-14))
 "11110010"
 
-julia> bits(Int8(-4))
+julia> bitstring(Int8(-4))
 "11111100"
 ```
 See also [`>>>`](@ref), [`<<`](@ref).
@@ -589,10 +589,10 @@ For [`Unsigned`](@ref) integer types, this is equivalent to [`>>`](@ref). For
 julia> Int8(-14) >>> 2
 60
 
-julia> bits(Int8(-14))
+julia> bitstring(Int8(-14))
 "11110010"
 
-julia> bits(Int8(60))
+julia> bitstring(Int8(60))
 "00111100"
 ```
 

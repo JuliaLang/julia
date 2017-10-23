@@ -68,7 +68,7 @@ end
         i = rand(I) >> 1  # test large values below
         hi, lo = Base.splitprec(T, i)
         @test widen(hi) + widen(lo) == i
-        @test endswith(bits(hi), repeat('0', Base.Math.significand_bits(T) ÷ 2))
+        @test endswith(bitstring(hi), repeat('0', Base.Math.significand_bits(T) ÷ 2))
     end
     for (I, T) in ((Int16, Float16), (Int32, Float32), (Int64, Float64))
         x = T(typemax(I))
@@ -76,12 +76,12 @@ end
         for i = typemax(I)-2Δi:typemax(I)-Δi
             hi, lo = Base.splitprec(T, i)
             @test widen(hi) + widen(lo) == i
-            @test endswith(bits(hi), repeat('0', Base.Math.significand_bits(T) ÷ 2))
+            @test endswith(bitstring(hi), repeat('0', Base.Math.significand_bits(T) ÷ 2))
         end
         for i = typemin(I):typemin(I)+Δi
             hi, lo = Base.splitprec(T, i)
             @test widen(hi) + widen(lo) == i
-            @test endswith(bits(hi), repeat('0', Base.Math.significand_bits(T) ÷ 2))
+            @test endswith(bitstring(hi), repeat('0', Base.Math.significand_bits(T) ÷ 2))
         end
     end
 
