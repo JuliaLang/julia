@@ -26,12 +26,14 @@ if Sys.iswindows()
     cp_q("../stdlib/Mmap/docs/src/index.md", "src/stdlib/mmap.md")
     cp_q("../stdlib/SharedArrays/docs/src/index.md", "src/stdlib/sharedarrays.md")
     cp_q("../stdlib/Profile/docs/src/index.md", "src/stdlib/profile.md")
+    cp_q("../stdlib/Base64/docs/src/index.md", "src/stdlib/base64.md")
 else
     symlink_q("../../../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
     symlink_q("../../../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
     symlink_q("../../../stdlib/Mmap/docs/src/index.md", "src/stdlib/mmap.md")
     symlink_q("../../../stdlib/SharedArrays/docs/src/index.md", "src/stdlib/sharedarrays.md")
     symlink_q("../../../stdlib/Profile/docs/src/index.md", "src/stdlib/profile.md")
+    symlink_q("../../../stdlib/Base64/docs/src/index.md", "src/stdlib/base64.md")
 end
 
 const PAGES = [
@@ -101,6 +103,7 @@ const PAGES = [
         "stdlib/profile.md",
         "stdlib/stacktraces.md",
         "stdlib/simd-types.md",
+        "stdlib/base64.md",
     ],
     "Developer Documentation" => [
         "devdocs/reflection.md",
@@ -135,11 +138,11 @@ const PAGES = [
     ],
 ]
 
-using DelimitedFiles, Test, Mmap, SharedArrays, Profile
+using DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64
 
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile],
+    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
