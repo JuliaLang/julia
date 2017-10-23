@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Generate decode table.
 const BASE64_CODE_END = 0x40
 const BASE64_CODE_PAD = 0x41
 const BASE64_CODE_IGN = 0x42
@@ -13,7 +14,8 @@ decode(x::UInt8) = BASE64_DECODE[x + 1]
 """
     Base64DecodePipe(istream)
 
-Returns a new read-only I/O stream, which decodes base64-encoded data read from `istream`.
+Returns a new read-only I/O stream, which decodes base64-encoded data read from
+`istream`.
 
 # Examples
 ```jldoctest
@@ -189,9 +191,10 @@ end
 """
     base64decode(string)
 
-Decodes the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded bytes.
+Decodes the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded
+bytes.
 
-See also [`base64encode`](@ref)
+See also [`base64encode`](@ref).
 
 # Examples
 ```jldoctest
