@@ -35,7 +35,7 @@ julia> String(read(iob64_decode))
 struct Base64DecodePipe <: IO
     io::IO
     buffer::Buffer
-    rest::Vector{UInt}
+    rest::Vector{UInt8}
 
     function Base64DecodePipe(io::IO)
         buffer = Buffer(512)
