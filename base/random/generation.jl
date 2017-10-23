@@ -323,7 +323,7 @@ rand(rng::AbstractRNG, r::AbstractArray, dims::Integer...) = rand(rng, r, Dims(d
 rand(                  r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, Dims(dims))
 
 
-## random values from Dict, Set, IntSet
+## random values from Dict, Set, BitSet
 
 function rand(r::AbstractRNG, t::Dict)
     isempty(t) && throw(ArgumentError("collection must be non-empty"))
@@ -336,7 +336,7 @@ end
 
 rand(r::AbstractRNG, s::Set) = rand(r, s.dict).first
 
-function rand(r::AbstractRNG, s::IntSet)
+function rand(r::AbstractRNG, s::BitSet)
     isempty(s) && throw(ArgumentError("collection must be non-empty"))
     # s can be empty while s.bits is not, so we cannot rely on the
     # length check in RangeGenerator below
@@ -361,7 +361,7 @@ rand(s::Union{Associative,AbstractSet}) = rand(GLOBAL_RNG, s)
 
 ### arrays
 
-function rand!(r::AbstractRNG, A::AbstractArray, s::Union{Dict,Set,IntSet})
+function rand!(r::AbstractRNG, A::AbstractArray, s::Union{Dict,Set,BitSet})
     for i in eachindex(A)
         @inbounds A[i] = rand(r, s)
     end

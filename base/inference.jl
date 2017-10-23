@@ -129,7 +129,7 @@ mutable struct InferenceState
     # return type
     bestguess #::Type
     # current active instruction pointers
-    ip::IntSet
+    ip::BitSet
     pc´´::LineNum
     nstmts::Int
     # current exception handler info
@@ -137,7 +137,7 @@ mutable struct InferenceState
     handler_at::Vector{Any}
     n_handlers::Int
     # ssavalue sparsity and restart info
-    ssavalue_uses::Vector{IntSet}
+    ssavalue_uses::Vector{BitSet}
     ssavalue_defs::Vector{LineNum}
     vararg_type_container #::Type
 
@@ -254,7 +254,7 @@ mutable struct InferenceState
         handler_at = Any[ () for i=1:n ]
         n_handlers = 0
 
-        W = IntSet()
+        W = BitSet()
         push!(W, 1) #initial pc to visit
 
         if !toplevel
@@ -2926,7 +2926,7 @@ end
 
 
 function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
-    uses = IntSet[ IntSet() for i = 1:nvals ]
+    uses = BitSet[ BitSet() for i = 1:nvals ]
     for line in 1:length(body)
         e = body[line]
         isa(e, Expr) && find_ssavalue_uses(e, uses, line)
@@ -2934,7 +2934,7 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     return uses
 end
 
-function find_ssavalue_uses(e::Expr, uses::Vector{IntSet}, line::Int)
+function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
     head = e.head
     is_meta_expr_head(head) && return
     skiparg = (head === :(=))
@@ -5805,7 +5805,7 @@ function getfield_elim_pass!(sv::OptimizationState)
     end
 end
 
-function _getfield_elim_pass!(e::Expr, ssa_defs::Vector{LineNum}, ssa_uses::Vector{IntSet}, sv::OptimizationState)
+function _getfield_elim_pass!(e::Expr, ssa_defs::Vector{LineNum}, ssa_uses::Vector{BitSet}, sv::OptimizationState)
     nargs = length(e.args)
     for i = 1:nargs
         e.args[i] = _getfield_elim_pass!(e.args[i], ssa_defs, ssa_uses, sv)
@@ -5870,7 +5870,7 @@ function _getfield_elim_pass!(e::Expr, ssa_defs::Vector{LineNum}, ssa_uses::Vect
     return e
 end
 
-_getfield_elim_pass!(@nospecialize(e), ssa_defs::Vector{LineNum}, ssa_uses::Vector{IntSet}, sv::OptimizationState) = e
+_getfield_elim_pass!(@nospecialize(e), ssa_defs::Vector{LineNum}, ssa_uses::Vector{BitSet}, sv::OptimizationState) = e
 
 # check if e is a successful allocation of an struct
 # if it is, returns (n,f) such that it is always valid to call
@@ -5928,8 +5928,8 @@ end
 function basic_dce_pass!(sv::OptimizationState)
     body = sv.src.code
     labelmap = get_label_map(body)
-    reachable = IntSet()
-    W = IntSet()
+    reachable = BitSet()
+    W = BitSet()
     push!(W, 1)
     while !isempty(W)
         pc = pop!(W)

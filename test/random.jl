@@ -325,7 +325,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     types = [Bool, Char, BigFloat, Base.BitInteger_types..., ftypes...]
     randset = Set(rand(Int, 20))
     randdict = Dict(zip(rand(Int,10), rand(Int, 10)))
-    collections = [IntSet(rand(1:100, 20)) => Int,
+    collections = [BitSet(rand(1:100, 20)) => Int,
                    randset                 => Int,
                    GenericSet(randset)     => Int,
                    randdict                => Pair{Int,Int},
@@ -380,7 +380,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
             end
         end
     end
-    for C in [1:0, Dict(), Set(), IntSet(), Int[],
+    for C in [1:0, Dict(), Set(), BitSet(), Int[],
               GenericDict(Dict()), GenericSet(Set()),
               "", Test.GenericString("")]
         @test_throws ArgumentError rand(rng..., C)
