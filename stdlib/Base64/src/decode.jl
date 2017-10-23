@@ -9,12 +9,12 @@ for (i, c) in enumerate(BASE64_ENCODE)
     BASE64_DECODE[Int(c)+1] = UInt8(i - 1)
 end
 BASE64_DECODE[Int(encodepadding())+1] = BASE64_CODE_PAD
-decode(x::UInt8) = BASE64_DECODE[x + 1]
+decode(x::UInt8) = @inbounds return BASE64_DECODE[x + 1]
 
 """
     Base64DecodePipe(istream)
 
-Returns a new read-only I/O stream, which decodes base64-encoded data read from
+Return a new read-only I/O stream, which decodes base64-encoded data read from
 `istream`.
 
 # Examples
@@ -39,9 +39,7 @@ struct Base64DecodePipe <: IO
 
     function Base64DecodePipe(io::IO)
         buffer = Buffer(512)
-        pipe = new(io, buffer, UInt8[])
-        finalizer(buffer, _ -> close(pipe))
-        return pipe
+        return new(io, buffer, UInt8[])
     end
 end
 
@@ -155,7 +153,6 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
     # Check the decoded quadruplet.
     k = 0
     if b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 < 0x40
-        # pass
         k = 3
     elseif b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 == BASE64_CODE_PAD
         b4 = 0x00
@@ -190,7 +187,7 @@ end
 """
     base64decode(string)
 
-Decodes the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded
+Decode the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded
 bytes.
 
 See also [`base64encode`](@ref).

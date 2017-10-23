@@ -31,6 +31,20 @@ ZSBzaG9ydCB2ZWhlbWVuY2Ugb2YgYW55IGNhcm5hbCBwbGVhc3VyZS4="""
     end
     rm(fname)
 
+    # Byte-by-byte encode and decode.
+    buf = IOBuffer()
+    pipe = Base64EncodePipe(buf)
+    for char in inputText
+        write(pipe, UInt8(char))
+    end
+    close(pipe)
+    pipe = Base64DecodePipe(IOBuffer(take!(buf)))
+    decoded = UInt8[]
+    while !eof(pipe)
+        push!(decoded, read(pipe, UInt8))
+    end
+    @test String(decoded) == inputText
+
     # Encode to string and decode
     @test String(base64decode(base64encode(inputText))) == inputText
 

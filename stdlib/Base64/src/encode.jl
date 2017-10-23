@@ -2,13 +2,13 @@
 
 # Generate encode table.
 const BASE64_ENCODE = [UInt8(x) for x in ['A':'Z'; 'a':'z'; '0':'9'; '+'; '/']]
-encode(x::UInt8) = BASE64_ENCODE[(x & 0x3f) + 1]
+encode(x::UInt8) = @inbounds return BASE64_ENCODE[(x & 0x3f) + 1]
 encodepadding()  = UInt8('=')
 
 """
     Base64EncodePipe(ostream)
 
-Returns a new write-only I/O stream, which converts any bytes written to it into
+Return a new write-only I/O stream, which converts any bytes written to it into
 base64-encoded ASCII bytes written to `ostream`.  Calling [`close`](@ref) on the
 `Base64EncodePipe` stream is necessary to complete the encoding (but does not
 close `ostream`).
@@ -63,7 +63,6 @@ function Base.unsafe_write(pipe::Base64EncodePipe, ptr::Ptr{UInt8}, n::UInt)::In
     end
     @assert buffer.size == 0
 
-    capacity = length(buffer.data)
     i = 0
     p_end = ptr + n
     while true
@@ -80,7 +79,7 @@ function Base.unsafe_write(pipe::Base64EncodePipe, ptr::Ptr{UInt8}, n::UInt)::In
         else
             break
         end
-        if i + 4 > capacity
+        if i + 4 > capacity(buffer)
             unsafe_write(pipe.io, pointer(buffer), i)
             i = 0
         end
@@ -90,7 +89,7 @@ function Base.unsafe_write(pipe::Base64EncodePipe, ptr::Ptr{UInt8}, n::UInt)::In
     end
 
     while p < p_end
-        buffer[buffer.size+=1] = unsafe_load(p, 1)
+        buffer[buffer.size+=1] = unsafe_load(p)
         p += 1
     end
     return p - ptr
@@ -106,7 +105,7 @@ function Base.write(pipe::Base64EncodePipe, x::UInt8)
 end
 
 function Base.close(pipe::Base64EncodePipe)
-    b1, b2, b3, k = loadtriplet!(pipe.buffer, convert(Ptr{UInt8}, C_NULL), 0)
+    b1, b2, b3, k = loadtriplet!(pipe.buffer, Ptr{UInt8}(C_NULL), UInt(0))
     if k == 0
         # no leftover and padding
     elseif k == 1
@@ -133,7 +132,7 @@ function Base.close(pipe::Base64EncodePipe)
 end
 
 # Load three bytes from buffer and ptr.
-function loadtriplet!(buffer::Buffer, ptr::Ptr{UInt8}, n::Integer)
+function loadtriplet!(buffer::Buffer, ptr::Ptr{UInt8}, n::UInt)
     b1 = b2 = b3 = 0x00
     if buffer.size == 0
         if n == 0
