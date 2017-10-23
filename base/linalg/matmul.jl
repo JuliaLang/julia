@@ -159,7 +159,7 @@ end
 """
     A_mul_B!(Y, A, B) -> Y
 
-Calculates the matrix-matrix or matrix-vector product ``A⋅B`` and stores the result in `Y`,
+Calculates the matrix-matrix or matrix-vector product ``AB`` and stores the result in `Y`,
 overwriting the existing value of `Y`. Note that `Y` must not be aliased with either `A` or
 `B`.
 
@@ -174,6 +174,14 @@ julia> Y
 ```
 """
 A_mul_B!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat) = generic_matmatmul!(C, 'N', 'N', A, B)
+
+"""
+    A_mul_B!(A, B)
+
+Calculate the matrix-matrix product ``AB``, overwriting one of `A` or `B` (but not both),
+and return the result (the overwritten argument).
+"""
+A_mul_B!(A, B)
 
 function At_mul_B(A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
     TS = promote_op(matprod, T, S)
