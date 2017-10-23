@@ -10,6 +10,26 @@ end
 BASE64_DECODE[Int(encodepadding())+1] = BASE64_CODE_PAD
 decode(x::UInt8) = BASE64_DECODE[x + 1]
 
+"""
+    Base64DecodePipe(istream)
+
+Returns a new read-only I/O stream, which decodes base64-encoded data read from `istream`.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer();
+
+julia> iob64_decode = Base64DecodePipe(io);
+
+julia> write(io, "SGVsbG8h")
+8
+
+julia> seekstart(io);
+
+julia> String(read(iob64_decode))
+"Hello!"
+```
+"""
 struct Base64DecodePipe <: IO
     io::IO
     buffer::Buffer
@@ -166,6 +186,28 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
     return i, p, finished
 end
 
+"""
+    base64decode(string)
+
+Decodes the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded bytes.
+
+See also [`base64encode`](@ref)
+
+# Examples
+```jldoctest
+julia> b = base64decode("SGVsbG8h")
+6-element Array{UInt8,1}:
+ 0x48
+ 0x65
+ 0x6c
+ 0x6c
+ 0x6f
+ 0x21
+
+julia> String(b)
+"Hello!"
+```
+"""
 function base64decode(s)
     b = IOBuffer(s)
     try
