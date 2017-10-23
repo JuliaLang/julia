@@ -83,6 +83,11 @@ bimg  = randn(n,2)/2
                     @testset "rook pivoting: $rook" for rook in (false, true)
                         bc2 = bkfact(Hermitian(apd, uplo), rook)
                         @test LinAlg.issuccess(bc2)
+                        bks = split(sprint(show, "text/plain", bc2), "\n")
+                        @test bks[1] == summary(bc2)
+                        @test bks[2] == "D factor:"
+                        @test bks[4+n] == "$uplo factor:"
+                        @test bks[6+2n] == "permutation:"
                         @test logdet(bc2) ≈ log(det(bc2))
                         @test logabsdet(bc2)[1] ≈ log(abs(det(bc2)))
                         @test logabsdet(bc2)[2] == sign(det(bc2))
@@ -110,6 +115,9 @@ end
                     @testset for uplo in (:L, :U)
                         F = bkfact(issymmetric(As) ? Symmetric(As, uplo) : Hermitian(As, uplo), rook)
                         @test !LinAlg.issuccess(F)
+                        # test printing of this as well!
+                        bks = sprint(show, "text/plain", F)
+                        @test bks == "Failed factorization of type $(typeof(F))"
                         @test det(F) == 0
                         @test_throws LinAlg.SingularException inv(F)
                         @test_throws LinAlg.SingularException F \ ones(size(As, 1))
