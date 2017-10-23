@@ -137,8 +137,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Julia does not provide `nrow` and `ncol`. Instead, use `size(M, 1)` for `nrow(M)` and `size(M, 2)`
     for `ncol(M)`.
   * Julia is careful to distinguish scalars, vectors and matrices.  In R, `1` and `c(1)` are the same.
-    In Julia, they can not be used interchangeably. One potentially confusing result of this is that
-    `x' * y` for vectors `x` and `y` is a 1-element vector, not a scalar. To get a scalar, use [`dot(x, y)`](@ref).
+    In Julia, they cannot be used interchangeably.
   * Julia's [`diag`](@ref) and [`diagm`](@ref) are not like R's.
   * Julia cannot assign to the results of function calls on the left hand side of an assignment operation:
     you cannot write `diag(M) = ones(n)`.
