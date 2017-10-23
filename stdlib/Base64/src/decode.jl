@@ -46,14 +46,15 @@ struct Base64DecodePipe <: IO
 end
 
 function Base.unsafe_read(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
-    p = read_avail(pipe, ptr, n)
+    p = read_until_end(pipe, ptr, n)
     if p < ptr + n
         throw(EOFError())
     end
     return nothing
 end
 
-function read_avail(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
+# Read and decode as much data as possible.
+function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
     p = ptr
     p_end = ptr + n
     while !isempty(pipe.rest) && p < p_end
@@ -72,8 +73,8 @@ function read_avail(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
             unsafe_store!(p + 2, b3 << 6 | b4     )
             p += 3
         else
-            i, p, finished = decode_slow(b1, b2, b3, b4, buffer, i, pipe.io, p, p_end - p, pipe.rest)
-            if finished
+            i, p, ended = decode_slow(b1, b2, b3, b4, buffer, i, pipe.io, p, p_end - p, pipe.rest)
+            if ended
                 break
             end
         end
@@ -116,7 +117,7 @@ function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb
             resize!(data, min(length(data) * 2, nb))
         end
         p = pointer(data, filled + 1)
-        p_end = read_avail(pipe, p, UInt(min(length(data), nb) - filled))
+        p_end = read_until_end(pipe, p, UInt(min(length(data), nb) - filled))
         filled += p_end - p
     end
     resize!(data, filled)
@@ -153,7 +154,7 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
 
     # Check the decoded quadruplet.
     k = 0
-    finished = false
+    ended = false
     if b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 < 0x40
         # pass
         k = 3
@@ -165,14 +166,14 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
         k = 1
     elseif b1 == b2 == b3 == BASE64_CODE_IGN && b4 == BASE64_CODE_END
         b1 = b2 = b3 = b4 = 0x00
-        finished = true
+        ended = true
     else
         throw(ArgumentError("malformed base64 sequence"))
     end
 
     # Write output.
     p::Ptr{UInt8} = ptr
-    p_end::Ptr{UInt8} = ptr + n
+    p_end = ptr + n
     function output(b)
         if p < p_end
             unsafe_store!(p, b)
@@ -185,7 +186,7 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
     k ≥ 2 && output(b2 << 4 | b3 >> 2)
     k ≥ 3 && output(b3 << 6 | b4     )
 
-    return i, p, finished
+    return i, p, ended
 end
 
 """
