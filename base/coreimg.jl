@@ -47,9 +47,6 @@ include("indices.jl")
 include("array.jl")
 include("abstractarray.jl")
 
-include("hashing.jl")
-include("nofloat_hashing.jl")
-
 # map-reduce operators
 macro simd(forloop)
     esc(forloop)
