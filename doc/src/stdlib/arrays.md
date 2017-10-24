@@ -185,7 +185,6 @@ Base.SparseArrays.SparseMatrixCSC
 Base.SparseArrays.sparse
 Base.SparseArrays.sparsevec
 Base.SparseArrays.issparse
-Base.full
 Base.SparseArrays.nnz
 Base.SparseArrays.spzeros
 Base.SparseArrays.spones

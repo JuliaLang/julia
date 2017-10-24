@@ -79,12 +79,10 @@ end
 ## reconstruct the original matrix
 convert(::Type{Matrix}, A::HessenbergQ{<:BlasFloat}) = LAPACK.orghr!(1, size(A.factors, 1), copy(A.factors), A.τ)
 convert(::Type{Array}, A::HessenbergQ) = convert(Matrix, A)
-full(A::HessenbergQ) = convert(Array, A)
 convert(::Type{AbstractMatrix}, F::Hessenberg) = (fq = Array(F[:Q]); (fq * F[:H]) * fq')
 convert(::Type{AbstractArray}, F::Hessenberg) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::Hessenberg) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::Hessenberg) = convert(Matrix, F)
-full(F::Hessenberg) = convert(AbstractArray, F)
 
 A_mul_B!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.ormhr!('L', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)

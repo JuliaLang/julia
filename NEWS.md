@@ -461,6 +461,22 @@ Deprecated or removed
 
   * `logm` has been deprecated in favor of `log` ([#23505]).
 
+  * `full` has been deprecated in favor of more specific, better defined alternatives.
+    On structured matrices `A`, consider instead `Matrix(A)`, `Array(A)`,
+    `SparseMatrixCSC(A)`, or `sparse(A)`. On sparse arrays `S`, consider instead
+    `Vector(S)`, `Matrix(S)`, or `Array(S)` as appropriate. On factorizations `F`,
+    consider instead `Matrix(F)`, `Array(F)`, `AbstractMatrix(F)`, or `AbstractArray(F)`.
+    On implicit orthogonal factors `Q`, consider instead `Matrix(Q)` or `Array(Q)`; for
+    implicit orthogonal factors that can be recovered in square or truncated form,
+    see the deprecation message for square recovery instructions. On `Symmetric`,
+    `Hermitian`, or `AbstractTriangular` matrices `A`, consider instead `Matrix(S)`,
+    `Array(S)`, `SparseMatrixCSC(S)`, or `sparse(S)`. On `Symmetric` matrices `A`
+    particularly, consider instead `LinAlg.copytri!(copy(parent(A)), A.uplo)`. On
+    `Hermitian` matrices `A` particularly, consider instead
+    `LinAlg.copytri!(copy(parent(A)), A.uplo, true)`. On `UpperTriangular` matrices `A`
+    particularly, consider instead `triu!(copy(parent(A)))`. On `LowerTriangular` matrices
+    `A` particularly, consider instead `tril!(copy(parent(A)))` ([#24250]).
+
   * Calling `union` with no arguments is deprecated; construct an empty set with an appropriate
     element type using `Set{T}()` instead ([#23144]).
 

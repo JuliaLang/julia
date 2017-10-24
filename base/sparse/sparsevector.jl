@@ -876,7 +876,6 @@ function convert(::Type{Vector}, x::AbstractSparseVector{Tv}) where Tv
     return r
 end
 convert(::Type{Array}, x::AbstractSparseVector) = convert(Vector, x)
-full(x::AbstractSparseVector) = convert(Array, x)
 
 ### Array manipulation
 

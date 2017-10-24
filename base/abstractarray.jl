@@ -854,13 +854,6 @@ Represents the array `y` as an array having the same indices type as `x`.
 of_indices(x, y) = similar(dims->y, oftype(indices(x), indices(y)))
 
 
-"""
-    full(F)
-
-Reconstruct the matrix `A` from the factorization `F=factorize(A)`.
-"""
-full(x::AbstractArray) = x
-
 ## range conversions ##
 
 map(::Type{T}, r::StepRange) where {T<:Real} = T(r.start):T(r.step):T(last(r))
