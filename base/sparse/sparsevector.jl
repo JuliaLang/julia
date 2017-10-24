@@ -58,11 +58,40 @@ function nonzeroinds(x::SparseColumnView)
     return y
 end
 
-similar(x::SparseVector, Tv::Type=eltype(x)) = SparseVector(x.n, copy(x.nzind), Vector{Tv}(length(x.nzval)))
-function similar(x::SparseVector, ::Type{Tv}, ::Type{Ti}) where {Tv,Ti}
-    return SparseVector(x.n, copy!(similar(x.nzind, Ti), x.nzind), copy!(similar(x.nzval, Tv), x.nzval))
-end
-similar(x::SparseVector, ::Type{T}, D::Dims) where {T} = spzeros(T, D...)
+
+## similar
+#
+# parent method for similar that preserves stored-entry structure (for when new and old dims match)
+_sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}) where {TvNew,TiNew} =
+    SparseVector(S.n, copy!(similar(S.nzind, TiNew), S.nzind), similar(S.nzval, TvNew))
+# parent method for similar that preserves nothing (for when old and new dims differ, and new is 1d)
+_sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{1}) where {TvNew,TiNew} =
+    SparseVector(dims..., similar(S.nzind, TiNew, 0), similar(S.nzval, TvNew, 0))
+# parent method for similar that preserves storage space (for old and new dims differ, and new is 2d)
+_sparsesimilar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Dims{2}) where {TvNew,TiNew} =
+    SparseMatrixCSC(dims..., ones(TiNew, last(dims)+1), similar(S.nzind, TiNew), similar(S.nzval, TvNew))
+# The following methods hook into the AbstractArray similar hierarchy. The first method
+# covers similar(A[, Tv]) calls, which preserve stored-entry structure, and the latter
+# methods cover similar(A[, Tv], shape...) calls, which preserve nothing if the dims
+# specify a SparseVector result and storage space if the dims specify a SparseMatrixCSC result.
+similar(S::SparseVector{<:Any,Ti}, ::Type{TvNew}) where {Ti,TvNew} =
+    _sparsesimilar(S, TvNew, Ti)
+similar(S::SparseVector{<:Any,Ti}, ::Type{TvNew}, dims::Union{Dims{1},Dims{2}}) where {Ti,TvNew} =
+    _sparsesimilar(S, TvNew, Ti, dims)
+# The following methods cover similar(A, Tv, Ti[, shape...]) calls, which specify the
+# result's index type in addition to its entry type, and aren't covered by the hooks above.
+# The calls without shape again preserve stored-entry structure, whereas those with
+# one-dimensional shape preserve nothing, and those with two-dimensional shape
+# preserve storage space.
+similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}) where{TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew)
+similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, dims::Union{Dims{1},Dims{2}}) where {TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew, dims)
+similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, m::Integer) where {TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew, (m,))
+similar(S::SparseVector, ::Type{TvNew}, ::Type{TiNew}, m::Integer, n::Integer) where {TvNew,TiNew} =
+    _sparsesimilar(S, TvNew, TiNew, (m, n))
+
 
 ### Construct empty sparse vector
 
