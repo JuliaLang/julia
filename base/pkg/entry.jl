@@ -12,7 +12,7 @@ macro recover(ex)
     quote
         try $(esc(ex))
         catch err
-            @error err
+            @error "Caught exception" exception=err
         end
     end
 end
@@ -70,7 +70,8 @@ function add(pkg::AbstractString, vers::VersionSet)
     if outdated != :no
         is = outdated == :yes ? "is" : "might be"
         @info """
-        METADATA $is out-of-date — you may not have the latest version of $pkg
+        METADATA $is out-of-date — you may not have the latest version of $pkg.
+
         Use `Pkg.update()` to get the latest versions of your packages
         """
     end
@@ -590,7 +591,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
                     evalfile(build_file)
                 end
             catch err
-                @error err,"occurred while building \$pkg"
+                @error "Exception occurred while building \$pkg" exception=err
                 serialize(f, pkg)
                 serialize(f, err)
             end
@@ -645,10 +646,10 @@ function build(pkgs::Vector)
     @warn """
     $(join(keys(errs),", "," and ")) had build errors.
 
-     - packages with build errors remain installed in $(pwd())
+     - packages with build errors remain installed in "$(pwd())"
      - build the package(s) and all dependencies with `Pkg.build("$(join(keys(errs),"\", \""))")`
      - build a single package by running its `deps/build.jl` script
-    """ banner=true
+    """
 end
 build() = build(sort!(collect(keys(installed()))))
 
@@ -662,7 +663,7 @@ function updatehook!(pkgs::Vector, errs::Dict, seen::Set=Set())
         cd(dirname(path)) do
             try evalfile(path)
             catch err
-                @error err,"occurred while running update script $path"
+                @error "An exception occurred while running update script $path" exception=err
                 errs[pkg] = err
             end
         end
@@ -678,8 +679,8 @@ function updatehook(pkgs::Vector)
     $(join(keys(errs),", "," and ")) had update errors.
 
      - Unrelated packages are unaffected
-     - To retry, run Pkg.update() again
-    """ banner=true
+     - To retry, run `Pkg.update()` again
+    """
 end
 
 function test!(pkg::AbstractString,
@@ -716,7 +717,7 @@ function test!(pkg::AbstractString,
                 run(cmd)
                 @info "$pkg tests passed"
             catch err
-                @error err,"occurred while running tests for $pkg" banner=true
+                @error "An exception occurred while running tests for $pkg" exception=err
                 push!(errs,pkg)
             end
         end
