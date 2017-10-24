@@ -345,6 +345,11 @@ end
         T = zeros(elty,11,10)
         @test_throws DimensionMismatch LAPACK.gemqrt!('R','N',V,T,C)
 
+        C = rand(elty,10,10)
+        V = rand(elty,10,10)
+        T = zeros(elty,10,0)
+        @test C == LAPACK.gemqrt!('R','N',V,T,C)
+
         @test_throws DimensionMismatch LAPACK.orghr!(1, 10, C, zeros(elty,11))
     end
 end
@@ -514,6 +519,8 @@ end
         @test A\B ≈ C
         @test_throws DimensionMismatch LAPACK.posv!('U',D,ones(elty,12,12))
         @test_throws DimensionMismatch LAPACK.potrs!('U',D,ones(elty,12,12))
+        # check non positive definite
+        @test_throws LinAlg.PosDefException LAPACK.posv!('U', diagm(0 => -ones(elty, 12)), ones(elty, 12, 12))
 
         @test LAPACK.potrs!('U',zeros(elty,0,0),ones(elty,0)) == ones(elty,0)
     end
@@ -602,6 +609,11 @@ end
             @test d[2] ≈ T[1,1]
             if c == 'V'
                 @test Q*T*Q' ≈ A
+                A = convert(Matrix{elty}, [7 2 2 1; 1 5 2 0; 0 3 9 4; 1 1 1 4])
+                T,Q,d = schur(A)
+                Base.LinAlg.LAPACK.trexc!(LinAlg.BlasInt(1),LinAlg.BlasInt(2),T,Q)
+                @test d[1] ≈ T[2,2]
+                @test d[2] ≈ T[1,1]
             end
         end
     end
