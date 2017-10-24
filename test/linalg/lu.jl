@@ -41,7 +41,7 @@ dimg  = randn(n)/2
         @testset "LU factorization for Number" begin
             num = rand(eltya)
             @test lu(num) == (one(eltya),num,1)
-            @test AbstractArray(lufact(num)) ≈ eltya[num]
+            @test convert(Array, lufact(num)) ≈ eltya[num]
         end
         @testset "Balancing in eigenvector calculations" begin
             A = convert(Matrix{eltya}, [ 3.0     -2.0      -0.9     2*eps(real(one(eltya)));
