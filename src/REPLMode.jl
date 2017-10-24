@@ -61,7 +61,7 @@ let uuid = raw"(?i)[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}(
     global name_uuid_re = Regex("^$name\\s*=\\s*($uuid)\$")
 end
 
-const lex_re = r"[^@\s]+\s*=\s*[^@\s]+ | @\s*[^@\s]* | [^@\s]+"x
+const lex_re = r"^[\?\./\+\-] | [^@\s]+\s*=\s*[^@\s]+ | @\s*[^@\s]* | [^@\s]+"x
 
 function tokenize(cmd::String)::Vector{Tuple{Symbol,Vararg{Any}}}
     tokens = Tuple{Symbol,Vararg{Any}}[]
@@ -223,7 +223,7 @@ const helps = Dict(
     as any no-longer-necessary manifest packages due to project package removals.
     """, :up => md"""
 
-        up [-p|project] [opts] pkg[=uuid] [@version] ...
+        up [-p|project]  [opts] pkg[=uuid] [@version] ...
         up [-m|manifest] [opts] pkg[=uuid] [@version] ...
 
         opts: --major | --minor | --patch | --fixed
@@ -239,8 +239,6 @@ const helps = Dict(
     """,
 )
 
-const help_all = [helps[cmd] for cmd in sort!(collect(keys(helps)), by = String)]
-
 function do_help!(
     env::EnvCache,
     tokens::Vector{Tuple{Symbol,Vararg{Any}}},
@@ -251,14 +249,13 @@ function do_help!(
         Base.display(disp, help)
         return
     end
-    mds = Base.Markdown.MD[]
+    help_md = md""
     for token in tokens
         if token[1] == :cmd
             if haskey(helps, token[2])
-                push!(mds, helps[token[2]])
-            elseif token[2] == :all
-
-                push!(mds, )
+                isempty(help_md.content) ||
+                push!(help_md.content, md"---")
+                push!(help_md.content, helps[token[2]].content)
             else
                 cmderror("Sorry, I don't have any help for the `$(token[2])` command.")
             end
@@ -266,9 +263,7 @@ function do_help!(
             error("This should not happen")
         end
     end
-    for md in mds
-        Base.display(disp, md)
-    end
+    Base.display(disp, help_md)
 end
 
 function do_rm!(env::EnvCache, tokens::Vector{Tuple{Symbol,Vararg{Any}}})
