@@ -5,6 +5,8 @@
 const shell_special = "#{}()[]<>|&*?~;"
 
 # needs to be factored out so depwarn only warns once
+# when removed, also need to update shell_escape for a Cmd to pass shell_special
+# and may want to use it in the test for #10120 (currently the implementation is essentially copied there)
 @noinline warn_shell_special(special) =
     depwarn("special characters \"$special\" should now be quoted in commands", :warn_shell_special)
 
@@ -191,3 +193,60 @@ julia> Base.shell_escape("echo", "this", "&&", "that")
 """
 shell_escape(args::AbstractString...; special::AbstractString="") =
     sprint(io->print_shell_escaped(io, args..., special=special))
+
+
+function print_shell_escaped_posixly(io::IO, args::AbstractString...)
+    first = true
+    for arg in args
+        first || print(io, ' ')
+        # avoid printing quotes around simple enough strings
+        # that any (reasonable) shell will definitely never consider them to be special
+        have_single = false
+        have_double = false
+        function isword(c::Char)
+            if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
+                # word characters
+            elseif c == '_' || c == '/' || c == '+' || c == '-'
+                # other common characters
+            elseif c == '\''
+                have_single = true
+            elseif c == '"'
+                have_double && return false # switch to single quoting
+                have_double = true
+            elseif !first && c == '='
+                # equals is special if it is first (e.g. `env=val ./cmd`)
+            else
+                # anything else
+                return false
+            end
+            return true
+        end
+        if all(isword, arg)
+            have_single && (arg = replace(arg, '\'', "\\'"))
+            have_double && (arg = replace(arg, '"', "\\\""))
+            print(io, arg)
+        else
+            print(io, '\'', replace(arg, '\'', "'\\''"), '\'')
+        end
+        first = false
+    end
+end
+
+"""
+    shell_escape_posixly(args::Union{Cmd,AbstractString...})
+
+The unexported `shell_escape_posixly` function
+takes a string or command object and escapes any special characters in such a way that
+it is safe to pass it as an argument to a posix shell.
+
+# Examples
+```jldoctest
+julia> Base.shell_escape_posixly("cat", "/foo/bar baz", "&&", "echo", "done")
+"cat '/foo/bar baz' '&&' echo done"
+
+julia> Base.shell_escape_posixly("echo", "this", "&&", "that")
+"echo this '&&' that"
+```
+"""
+shell_escape_posixly(args::AbstractString...) =
+    sprint(io->print_shell_escaped_posixly(io, args...))

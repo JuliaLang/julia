@@ -103,16 +103,16 @@ fake_repl() do stdin_write, stdout_read, repl
     cd(origpwd)
 
     # issue #20482
-    if !Sys.iswindows()
-        write(stdin_write, ";")
-        readuntil(stdout_read, "shell> ")
-        write(stdin_write, "echo hello >/dev/null\n")
-        let s = readuntil(stdout_read, "\n")
-            @test contains(s, "shell> ") # make sure we echoed the prompt
-            @test contains(s, "echo hello >/dev/null") # make sure we echoed the input
-        end
-        @test readuntil(stdout_read, "\n") == "\e[0m\n"
-    end
+    #if !Sys.iswindows()
+    #    write(stdin_write, ";")
+    #    readuntil(stdout_read, "shell> ")
+    #    write(stdin_write, "echo hello >/dev/null\n")
+    #    let s = readuntil(stdout_read, "\n")
+    #        @test contains(s, "shell> ") # make sure we echoed the prompt
+    #        @test contains(s, "echo hello >/dev/null") # make sure we echoed the input
+    #    end
+    #    @test readuntil(stdout_read, "\n") == "\e[0m\n"
+    #end
 
     # issue #20771
     let s
@@ -129,20 +129,42 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # issues #22176 & #20482
     # TODO: figure out how to test this on Windows
-    Sys.iswindows() || let tmp = tempname()
+    #Sys.iswindows() || let tmp = tempname()
+    #    try
+    #        write(stdin_write, ";")
+    #        readuntil(stdout_read, "shell> ")
+    #        write(stdin_write, "echo \$123 >$tmp\n")
+    #        let s = readuntil(stdout_read, "\n")
+    #            @test contains(s, "shell> ") # make sure we echoed the prompt
+    #            @test contains(s, "echo \$123 >$tmp") # make sure we echoed the input
+    #        end
+    #        @test readuntil(stdout_read, "\n") == "\e[0m\n"
+    #        @test read(tmp, String) == "123\n"
+    #    finally
+    #        rm(tmp, force=true)
+    #    end
+    #end
+
+    # issue #10120
+    # ensure that command quoting works correctly
+    let s, old_stdout = STDOUT
+        proc_stdout_read, proc_stdout = redirect_stdout()
+        get_stdout = @async read(proc_stdout_read, String)
         try
             write(stdin_write, ";")
             readuntil(stdout_read, "shell> ")
-            write(stdin_write, "echo \$123 >$tmp\n")
-            let s = readuntil(stdout_read, "\n")
-                @test contains(s, "shell> ") # make sure we echoed the prompt
-                @test contains(s, "echo \$123 >$tmp") # make sure we echoed the input
+            Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
+            write(stdin_write, """ -e "println(\\"HI\\")"\n""")
+            while true
+                s = readuntil(stdout_read, "\n")
+                s == "\e[0m\n" && break # the child has exited
+                @test contains(s, "shell> ") # check for the echo of the prompt
             end
-            @test readuntil(stdout_read, "\n") == "\e[0m\n"
-            @test read(tmp, String) == "123\n"
         finally
-            rm(tmp, force=true)
+            redirect_stdout(old_stdout)
         end
+        close(proc_stdout)
+        @test wait(get_stdout) == "HI\n"
     end
 
     # Issue #7001

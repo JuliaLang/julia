@@ -181,14 +181,16 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     # Build up the ssh command
 
     # the default worker timeout
-    tval = haskey(ENV, "JULIA_WORKER_TIMEOUT") ?
-        `export JULIA_WORKER_TIMEOUT=$(ENV["JULIA_WORKER_TIMEOUT"])\;` : ``
+    tval = get(ENV, "JULIA_WORKER_TIMEOUT", "")
 
     # Julia process with passed in command line flag arguments
-    cmd = `cd $dir '&&' $tval $exename $exeflags`
+    cmds = """
+        cd -- $(shell_escape_posixly(dir))
+        $(isempty(tval) ? "" : "export JULIA_WORKER_TIMEOUT=$(shell_escape_posixly(tval))")
+        $(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"""
 
     # shell login (-l) with string command (-c) to launch julia process
-    cmd = `sh -l -c $(shell_escape(cmd))`
+    cmd = `sh -l -c $cmds`
 
     # remote launch with ssh with given ssh flags / host / port information
     # -T → disable pseudo-terminal allocation
@@ -196,7 +198,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     # -x → disable X11 forwarding
     # -o ClearAllForwardings → option if forwarding connections and
     #                          forwarded connections are causing collisions
-    cmd = `ssh -T -a -x -o ClearAllForwardings=yes $sshflags $host $(shell_escape(cmd))`
+    cmd = `ssh -T -a -x -o ClearAllForwardings=yes $sshflags $host $(shell_escape_posixly(cmd))`
 
     # launch the remote Julia process
 
