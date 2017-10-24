@@ -3,7 +3,7 @@
 ##    Error messages for Unicode / UTF support
 
 const UTF_ERR_SHORT             = "invalid UTF-8 sequence starting at index <<1>> (0x<<2>> missing one or more continuation bytes)"
-const UTF_ERR_INVALID_INDEX     = "invalid character index"
+const UTF_ERR_INVALID_INDEX     = "invalid character index <<1>> (0x<<2>> is a continuation byte)"
 
 struct UnicodeError <: Exception
     errmsg::AbstractString   ##< A UTF_ERR_ message
