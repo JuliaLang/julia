@@ -11,7 +11,9 @@ export
     # Logger type
     AbstractLogger,
     # Logger methods
-    handle_message, shouldlog
+    handle_message, shouldlog, min_enabled_level,
+    # Loggers
+    NullLogger, SimpleLogger
 
 """
 A logger controls how log records are filtered and dispatched.  When a log
@@ -341,15 +343,16 @@ function dispatch_message(logger, level, _module, group, id, filepath, line, cre
         # Try really hard to get the message to the logger, with
         # progressively less information.
         try
-            msg = ("Error formatting log message at location ($_module,$filepath,$line).", err)
-            handle_message(logger, Error, msg, _module, group, id, filepath, line)
-        catch
+            msg = "Exception while generating log record in module $_module at $filepath:$line"
+            handle_message(logger, Error, msg, _module, group, id, filepath, line; exception=err)
+        catch err2
             try
                 # Give up and write to STDERR, in three independent calls to
                 # increase the odds of it getting through.
                 print(STDERR, "Exception handling log message: ")
                 println(STDERR, err)
                 println(STDERR, "  module=$_module  file=$filepath  line=$line")
+                println(STDERR, "  Second exception: ", err2)
             catch
             end
         end
@@ -401,7 +404,7 @@ end
 #-------------------------------------------------------------------------------
 # Logger control and lookup
 
-_global_logstate = LogState(BelowMinLevel, NullLogger()) # See __init__
+_global_logstate = LogState(NullLogger()) # See __init__
 
 """
     global_logger()
