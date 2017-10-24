@@ -140,7 +140,7 @@ function do_cmd(repl::Base.REPL.AbstractREPL, input::String)
     end
 end
 
-const help_help = Base.Markdown.parse("""
+const help = Base.Markdown.parse("""
     **Synopsis**
 
         pkg> [--env=...] cmd [opts] [args]
@@ -176,10 +176,11 @@ const helps = Dict(
 
     Display this message.
 
-        help cmd...
+        help cmd ...
 
-    Display usage information for commands listed. Available commands:
-    `help`, `status`, `add`, `rm`, `up`.
+    Display usage information for commands listed.
+
+    Available commands: `help`, `status`, `add`, `rm`, `up`
     """, :status => md"""
 
         status
@@ -247,7 +248,7 @@ function do_help!(
 )
     disp = Base.REPL.REPLDisplay(repl)
     if isempty(tokens)
-        Base.display(disp, help_help)
+        Base.display(disp, help)
         return
     end
     mds = Base.Markdown.MD[]

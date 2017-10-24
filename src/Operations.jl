@@ -373,7 +373,7 @@ function build_versions(env::EnvCache, uuids::Vector{UUID})
         for (uuid, name, hash, build_file) in builds
             log_file = splitext(build_file)[1] * ".log"
             Base.info("Building $name [$(string(hash)[1:16])]...")
-            Base.info(" log: $log_file")
+            Base.info(" $log_file")
             code = """
                 empty!(Base.LOAD_PATH)
                 append!(Base.LOAD_PATH, $(repr(LOAD_PATH)))
