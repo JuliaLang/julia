@@ -1376,3 +1376,9 @@ end
 @test parse("@foo [1] + [2]") == parse("@foo([1] + [2])")
 @test parse("@Mdl.foo[1] + [2]") == parse("@Mdl.foo([1]) + [2]")
 @test parse("@Mdl.foo [1] + [2]") == parse("@Mdl.foo([1] + [2])")
+
+# issue #24289
+macro m24289()
+    :(global $(esc(:x24289)) = 1)
+end
+@test (@macroexpand @m24289) == :(global x24289 = 1)
