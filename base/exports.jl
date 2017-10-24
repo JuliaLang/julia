@@ -356,6 +356,7 @@ export
     modf,
     mod2pi,
     muladd,
+    multinomial,
     nextfloat,
     nextpow,
     nextpow2,

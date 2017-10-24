@@ -16,6 +16,25 @@
     @test_throws InexactError binomial(Int64(67), Int64(30))
 end
 
+@testset "multinomial" begin
+    # same tests as for binomial
+    @test multinomial(5,-1,6) == 0
+    @test multinomial(5,10,-5) == 0
+    @test multinomial(5,3,2) == 10
+    @test multinomial(2,1,1) == 2
+    @test multinomial(1,2,-1) == 0
+    @test multinomial(-2,1,-3) == 0
+    @test multinomial(2,-1,3) == 0
+
+    # some extra tests
+    @test multinomial(7,3,2,2) == 210
+    @test multinomial(7,3,1,3) == 140
+
+    # exceptions
+    @test_throws InexactError multinomial(Int64(67), Int64(30), Int64(37))
+    @test_throws DomainError multinomial(10, 5, 4)
+end
+
 @testset "permutations" begin
     p = shuffle([1:1000;])
     @test isperm(p)

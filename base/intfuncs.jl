@@ -889,3 +889,29 @@ function binomial(n::T, k::T) where T<:Integer
     end
     convert(T, copysign(x, sgn))
 end
+
+"""
+    multinomial(n, k...)
+
+Number of ways partition `n` into groups of sizes `k[1]...k[end]`.
+Needs `sum(k) == n`; throws a DomainError() otherwise.
+
+# Examples
+```jldoctest
+julia> multinomial(7, 3, 2, 2)
+210
+
+julia> factorial(7) ÷ (factorial(3) * factorial(2) * factorial(2))
+210
+```
+"""
+function multinomial(n, k...)
+    i = 1
+    for k_i in k
+        i *= binomial(n, k_i)
+        n -= k_i
+    end
+    n == 0 || throw(DomainError("multinomial($n, $(join(k, ", "))) is undefined"))
+    i
+end
+

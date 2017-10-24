@@ -195,6 +195,11 @@ end
     @test binomial(BigInt(1), 2)  == BigInt(0)
     @test binomial(BigInt(-53), 42) == parse(BigInt,"959509335087854414441273718")
     @test binomial(BigInt(113), BigInt(42)) == parse(BigInt,"18672199984318438125634054194360")
+    @test multinomial(BigInt(1), -1, 2) == BigInt(0)
+    @test multinomial(BigInt(1), 2, -1)  == BigInt(0)
+    @test multinomial(BigInt(-53), 42, -95) == BigInt(0)
+    @test multinomial(BigInt(113), BigInt(42), BigInt(71)) == parse(BigInt,"18672199984318438125634054194360")
+    @test multinomial(BigInt(200), BigInt(140), BigInt(60)) == parse(BigInt,"7040504849268924926147025804879358372000504061178480")
 end
 a = rand(1:100, 10000)
 b = map(BigInt, a)
