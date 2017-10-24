@@ -6,8 +6,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
  Sparse factorizations call functions from [SuiteSparse](http://faculty.cse.tamu.edu/davis/suitesparse.html).
 
 ```@docs
-Base.:*(::AbstractArray, ::AbstractArray)
-Base.:\(::AbstractArray, ::Any)
+Base.:*(::AbstractMatrix, ::AbstractMatrix)
+Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
 Base.LinAlg.dot
 Base.LinAlg.vecdot
 Base.LinAlg.cross
