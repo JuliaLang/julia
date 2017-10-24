@@ -1908,7 +1908,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
     nd = ndims(a)-2
     for I in CartesianRange(tailinds)
         idxs = I.I
-        if limit
+        if !limit
             for i = 1:nd
                 ii = idxs[i]
                 ind = tailinds[i]
