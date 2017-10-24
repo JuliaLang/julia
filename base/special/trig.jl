@@ -267,9 +267,9 @@ function atan(x::T) where T<:Union{Float32, Float64}
             lo = ATAN_3_O_2_LO(T)
             x = (absx - T(1.5))/(T(1.0) + T(1.5)*absx)
         else # 39/16 <= |x| < upper threshold (2.0^66 or 2.0f0^26)
-        hi = ATAN_INF_HI(T)
-        lo = ATAN_INF_LO(T)
-        x  = -T(1.0)/absx
+            hi = ATAN_INF_HI(T)
+            lo = ATAN_INF_LO(T)
+            x  = -T(1.0)/absx
         end
     end
     # end of argument reduction
