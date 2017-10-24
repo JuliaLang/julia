@@ -117,6 +117,7 @@ end
                 @test ishermitian(Hermitian(aherm))
                 if eltya <: Real
                     @test ishermitian(Symmetric(asym))
+                    @test issymmetric(Hermitian(asym))
                 elseif eltya <: Complex
                     # test that zero imaginary component is
                     # handled properly
@@ -296,10 +297,16 @@ end
         @testset "linalg binary ops" begin
             @testset "mat * vec" begin
                 @test Symmetric(asym)*x+y ≈ asym*x+y
+                # testing fallbacks for RowVector * SymHerm.'
+                xadj = x.'
+                @test xadj * Symmetric(asym).' ≈ xadj * asym
                 @test x' * Symmetric(asym) ≈ x' * asym
 
                 @test Hermitian(aherm)*x+y ≈ aherm*x+y
+                # testing fallbacks for RowVector * SymHerm'
+                xadj = x'
                 @test x' * Hermitian(aherm) ≈ x' * aherm
+                @test xadj * Hermitian(aherm)' ≈ xadj * aherm
             end
 
             @testset "mat * mat" begin
