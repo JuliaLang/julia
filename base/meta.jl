@@ -8,7 +8,10 @@ module Meta
 export quot,
        isexpr,
        show_sexpr,
-       @dump
+       @dump,
+       leaftypes,
+       abstracts
+
 
 quot(ex) = Expr(:quote, ex)
 
@@ -54,6 +57,24 @@ Show every part of the representation of the given expression. Equivalent to
 """
 macro dump(expr)
     dump(expr)
+end
+
+"""
+    leaftypes(t::Type) -> Vector{Type}
+
+Return an array containing all concrete subtypes of `t`, or only `t` if it is concrete.
+"""
+function leaftypes(t::Type)::Vector{Type}
+    isleaftype(t) ? [t] : vcat(leaftypes.(subtypes(t))...)
+end
+
+"""
+    abstracts(t::Type) -> Vector{Type}
+
+Return an array containing all abstract subtypes of `t`, which may include `t`.
+"""
+function abstracts(t::Type)::Vector{Type}
+    isleaftype(t) ? DataType[] : vcat(t, abstracts.(subtypes(t))...)
 end
 
 end # module
