@@ -25,7 +25,7 @@ end
 # Trigonometric functions
 # sin methods
 @noinline sin_domain_error(x) = throw(DomainError(x, "sin(x) is only defined for finite x."))
-@inline function sin(x::T) where T<:Union{Float32, Float64}
+function sin(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx < T(pi)/4 #|x| ~<= pi/4, no need for reduction
         if absx < sqrt(eps(T))
@@ -95,7 +95,7 @@ end
 
 # cos methods
 @noinline cos_domain_error(x) = throw(DomainError(x, "cos(x) is only defined for finite x."))
-@inline function cos(x::T) where T<:Union{Float32, Float64}
+function cos(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx < T(pi)/4
         if absx < sqrt(eps(T)/T(2.0))
@@ -169,7 +169,7 @@ end
 
 Simultaneously compute the sine and cosine of `x`, where the `x` is in radians.
 """
-@inline function sincos(x::T) where T<:Union{Float32, Float64}
+function sincos(x::T) where T<:Union{Float32, Float64}
     if abs(x) < T(pi)/4
         if x == zero(T)
             return x, one(T)
