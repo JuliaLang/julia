@@ -232,13 +232,13 @@
                       file line))
 
 (define (format-syntax-deprecation what instead file line exactloc)
-  (string "Deprecated syntax \"" what "\""
+  (string "Deprecated syntax `" what "`"
           (if (or (= line 0) (eq? file 'none))
             ""
             (string (if exactloc " at " " around ") file ":" line))
           "."
           (if (equal? instead "") ""
-            (string #\newline "Use \"" instead "\" instead."))))
+            (string #\newline "Use `" instead "` instead."))))
 
 ; Emit deprecation warning via julia logging layer if posible.  If not - eg,
 ; in bootstrap or in the special case that deprecations have been set to
