@@ -57,7 +57,7 @@ Multiple targets are separated by `;` in the option.
 The syntax for each target is a CPU name followed by multiple features separated by `,`.
 All features supported by LLVM is supported and a feature can be disabled with a `-` prefix.
 (`+` prefix is also allowed and ignored to be consistent with LLVM syntax).
-Additionally, two special features are supported to control the function cloning behavior.
+Additionally, a few special features are supported to control the function cloning behavior.
 
 1. `clone_all`
 
@@ -77,6 +77,16 @@ Additionally, two special features are supported to control the function cloning
     The `n`th target (0-based) will be used as the base target instead of the default (`0`th) one.
     The base target has to be either `0` or another `clone_all` target.
     Specifying a non default `clone_all` target as the base target will cause an error.
+
+3. `opt_size`
+
+    This cause the function for the targe to be optimize for size when there isn't a significant
+    runtime performance impact. This corresponds to `-Os` GCC and Clang option.
+
+4. `min_size`
+
+    This cause the function for the targe to be optimize for size that might have
+    a significant runtime performance impact. This corresponds to `-Oz` Clang option.
 
 ### Implementation overview
 
