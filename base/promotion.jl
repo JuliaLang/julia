@@ -2,6 +2,13 @@
 
 ## type join (closest common ancestor, or least upper bound) ##
 
+# Note: no methods must be added to this function after `typejoin` has been defined,
+# since it is declared as `@pure`
+isspecial(::Type) = false
+isspecial(::Type{Void}) = true
+isspecial(::Type{Missing}) = true
+isspecialpair(a, b) = isconcrete(a) && isconcrete(b) && (isspecial(a) || isspecial(b))
+
 """
     typejoin(T, S)
 
@@ -24,9 +31,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return typejoin(a.ub, b)
     elseif isa(b,TypeVar)
         return typejoin(a, b.ub)
-    elseif isa(a,Union)
+    elseif isa(a,Union) && !isspecialpair(a.a, a.b)
         return typejoin(typejoin(a.a,a.b), b)
-    elseif isa(b,Union)
+    elseif isa(b,Union) && !isspecialpair(b.a, b.b)
         return typejoin(a, typejoin(b.a,b.b))
     elseif a <: Tuple
         if !(b <: Tuple)
@@ -75,9 +82,10 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
-    while b !== Any
-        if a <: b.name.wrapper
-            while a.name !== b.name
+    b2 = b
+    while b2 !== Any && a isa DataType && b2 isa DataType
+        if a <: b2.name.wrapper
+            while a.name !== b2.name
                 a = supertype(a)
             end
             aprimary = unwrap_unionall(a.name.wrapper)
@@ -88,7 +96,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             end
             p = Vector{Any}(uninitialized, n)
             for i = 1:n
-                ai, bi = a.parameters[i], b.parameters[i]
+                ai, bi = a.parameters[i], b2.parameters[i]
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
                     p[i] = ai
                 else
@@ -97,8 +105,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             end
             return rewrap_unionall(a.name.wrapper{p...}, a.name.wrapper)
         end
-        b = supertype(b)
+        b2 = supertype(b2)
     end
+    isspecialpair(a, b) && return Union{a, b}
     return Any
 end
 
