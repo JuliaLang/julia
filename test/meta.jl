@@ -40,9 +40,7 @@ function foundfunc(bt, funcname)
     end
     false
 end
-if inlining_on
-    @test !foundfunc(h_inlined(), :g_inlined)
-end
+@test foundfunc(h_inlined(), :g_inlined)
 @test foundfunc(h_noinlined(), :g_noinlined)
 
 using Base.pushmeta!, Base.popmeta!
