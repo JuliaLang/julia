@@ -1639,20 +1639,21 @@ end
 end
 
 @testset "sparse matrix normestinv" begin
-    Ac, Aci, Ar = guardsrand(1234) do
-        sprandn(20,20,.5) + im* sprandn(20,20,.5),
-        ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5)),
-        sprandn(20,20,.5)
+    guardsrand(1234) do
+        Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
+        Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
+        Ar = sprandn(20,20,.5)
+        Ari = ceil.(Int64, 100*Ar)
+        if Base.USE_GPL_LIBS
+            # NOTE: normestinv is probabilistic, so must be included in the guardsrand block
+            @test Base.SparseArrays.normestinv(Ac,3) ≈ norm(inv(Array(Ac)),1) atol=1e-4
+            @test Base.SparseArrays.normestinv(Aci,3) ≈ norm(inv(Array(Aci)),1) atol=1e-4
+            @test Base.SparseArrays.normestinv(Ar) ≈ norm(inv(Array(Ar)),1) atol=1e-4
+            @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
+            @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
+        end
+        @test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
     end
-    Ari = ceil.(Int64, 100*Ar)
-    if Base.USE_GPL_LIBS
-        @test Base.SparseArrays.normestinv(Ac,3) ≈ norm(inv(Array(Ac)),1) atol=1e-4
-        @test Base.SparseArrays.normestinv(Aci,3) ≈ norm(inv(Array(Aci)),1) atol=1e-4
-        @test Base.SparseArrays.normestinv(Ar) ≈ norm(inv(Array(Ar)),1) atol=1e-4
-        @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
-        @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
-    end
-    @test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
 end
 
 @testset "issue #13008" begin
