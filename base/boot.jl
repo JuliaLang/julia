@@ -260,12 +260,6 @@ struct AssertionError <: Exception
 end
 AssertionError() = AssertionError("")
 
-"""
-    WrappedException([msg])
-
-wrap arbitrary exceptions generically.
-subtypes LoadError and InitError should put the exception in an 'error field'
-"""
 abstract type WrappedException <: Exception end
 
 struct LoadError <: WrappedException
