@@ -56,7 +56,7 @@ An array of paths as strings or custom loader objects for the `require`
 function and `using` and `import` statements to consider when loading
 code.
 """
-const LOAD_PATH = Any[]
+const LOAD_PATH = String[]
 const LOAD_CACHE_PATH = String[]
 
 function init_load_path(JULIA_HOME = JULIA_HOME)
