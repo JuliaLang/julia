@@ -1844,19 +1844,17 @@ function abstract_call_gf_by_type(@nospecialize(f), @nospecialize(atype), sv::In
         applicable = _methods_by_ftype(argtype, sv.params.MAX_METHODS, sv.params.world, min_valid, max_valid)
         if applicable === false
             # this means too many methods matched
+            # (assume this will always be true, so we don't compute / update valid age in this case)
             return Any
         end
     end
+    update_valid_age!(min_valid[1], max_valid[1], sv)
     applicable = applicable::Array{Any,1}
     napplicable = length(applicable)
-    fullmatch = false
     rettype = Bottom
     for i in 1:napplicable
         match = applicable[i]::SimpleVector
         method = match[3]::Method
-        if !fullmatch && (argtype <: method.sig)
-            fullmatch = true
-        end
         sig = match[1]
         sigtuple = unwrap_unionall(sig)::DataType
         splitunions = false
@@ -1876,11 +1874,21 @@ function abstract_call_gf_by_type(@nospecialize(f), @nospecialize(atype), sv::In
             rettype === Any && break
         end
     end
-    if !(fullmatch || rettype === Any)
-        # also need an edge to the method table in case something gets
-        # added that did not intersect with any existing method
-        add_mt_backedge(ftname.mt, argtype, sv)
-        update_valid_age!(min_valid[1], max_valid[1], sv)
+    if !(rettype === Any)
+        fullmatch = false
+        for i in napplicable:-1:1
+            match = applicable[i]::SimpleVector
+            method = match[3]::Method
+            if atype <: method.sig
+                fullmatch = true
+                break
+            end
+        end
+        if !fullmatch
+            # also need an edge to the method table in case something gets
+            # added that did not intersect with any existing method
+            add_mt_backedge(ftname.mt, atype, sv)
+        end
     end
     #print("=> ", rettype, "\n")
     return rettype
@@ -3069,13 +3077,6 @@ function code_for_method(method::Method, @nospecialize(atypes), sparams::SimpleV
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt), method, atypes, sparams, world)
 end
 
-function typeinf_active(linfo::MethodInstance, sv::InferenceState)
-    for infstate in sv.callers_in_cycle
-        linfo === infstate.linfo && return infstate
-    end
-    return nothing
-end
-
 function add_backedge!(frame::InferenceState, caller::InferenceState, currpc::Int)
     update_valid_age!(frame, caller)
     backedge = (caller, currpc)
@@ -3374,6 +3375,11 @@ function typeinf_work(frame::InferenceState)
                 elseif hd === :return
                     pc´ = n + 1
                     rt = abstract_eval(stmt.args[1], s[pc], frame)
+                    if !isa(rt, Const) && !isa(rt, Type)
+                        # only propagate information we know we can store
+                        # and is valid inter-procedurally
+                        rt = widenconst(rt)
+                    end
                     if tchanged(rt, frame.bestguess)
                         # new (wider) return type for frame
                         frame.bestguess = tmerge(frame.bestguess, rt)
