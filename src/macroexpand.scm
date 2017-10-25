@@ -400,11 +400,6 @@
       (apply append (map decl-vars* (cdr e)))
       (list (decl-var* e))))
 
-(define (function-def? e)
-  (and (pair? e) (or (eq? (car e) 'function) (eq? (car e) '->)
-                     (and (eq? (car e) '=) (length= e 3)
-                          (eventually-call? (cadr e))))))
-
 ;; count hygienic / escape pairs
 ;; and fold together a list resulting from applying the function to
 ;; any block at the same hygienic scope

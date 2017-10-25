@@ -430,4 +430,32 @@ show(@nospecialize a) = show(STDOUT, a)
 print(@nospecialize a...) = print(STDOUT, a...)
 println(@nospecialize a...) = println(STDOUT, a...)
 
+struct GeneratedFunctionStub
+    gen
+    argnames::Array{Any,1}
+    spnames::Union{Void, Array{Any,1}}
+    line::Int
+    file::Symbol
+end
+
+# invoke and wrap the results of @generated
+function (g::GeneratedFunctionStub)(@nospecialize args...)
+    body = g.gen(args...)
+    if body isa CodeInfo
+        return body
+    end
+    lam = Expr(:lambda, g.argnames,
+               Expr(Symbol("scope-block"),
+                    Expr(:block,
+                         LineNumberNode(g.line, g.file),
+                         Expr(:meta, :push_loc, g.file, Symbol("@generated body")),
+                         Expr(:return, body),
+                         Expr(:meta, :pop_loc))))
+    if g.spnames === nothing
+        return lam
+    else
+        return Expr(Symbol("with-static-parameters"), lam, g.spnames...)
+    end
+end
+
 ccall(:jl_set_istopmod, Void, (Any, Bool), Core, true)

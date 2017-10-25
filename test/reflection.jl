@@ -761,7 +761,7 @@ world = typemax(UInt)
 mtypes, msp, m = Base._methods_by_ftype(T22979, -1, world)[]
 instance = Core.Inference.code_for_method(m, mtypes, msp, world, false)
 cinfo_generated = Core.Inference.get_staged(instance)
-cinfo_ungenerated = Base.uncompressed_ast(m)
+@test_throws ErrorException Base.uncompressed_ast(m)
 
 test_similar_codeinfo(@code_lowered(f22979(x22979...)), cinfo_generated)
 
@@ -770,7 +770,4 @@ cinfos = code_lowered(f22979, typeof.(x22979), true)
 cinfo = cinfos[]
 test_similar_codeinfo(cinfo, cinfo_generated)
 
-cinfos = code_lowered(f22979, typeof.(x22979), false)
-@test length(cinfos) == 1
-cinfo = cinfos[]
-test_similar_codeinfo(cinfo, cinfo_ungenerated)
+@test_throws ErrorException code_lowered(f22979, typeof.(x22979), false)

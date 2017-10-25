@@ -358,6 +358,20 @@
   (and (if one (length= e 3) (length> e 2))
        (eq? (car e) 'meta) (eq? (cadr e) 'nospecialize)))
 
+(define (if-generated? e)
+  (and (length= e 4) (eq? (car e) 'if) (equal? (cadr e) '(generated))))
+
+(define (generated-meta? e)
+  (and (length= e 3) (eq? (car e) 'meta) (eq? (cadr e) 'generated)))
+
+(define (generated_only-meta? e)
+  (and (length= e 2) (eq? (car e) 'meta) (eq? (cadr e) 'generated_only)))
+
+(define (function-def? e)
+  (and (pair? e) (or (eq? (car e) 'function) (eq? (car e) '->)
+                     (and (eq? (car e) '=) (length= e 3)
+                          (eventually-call? (cadr e))))))
+
 ;; flatten nested expressions with the given head
 ;; (op (op a b) c) => (op a b c)
 (define (flatten-ex head e)

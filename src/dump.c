@@ -1454,7 +1454,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->unspecialized = (jl_method_instance_t*)jl_deserialize_value(s, (jl_value_t**)&m->unspecialized);
     if (m->unspecialized)
         jl_gc_wb(m, m->unspecialized);
-    m->generator = (jl_method_instance_t*)jl_deserialize_value(s, (jl_value_t**)&m->generator);
+    m->generator = jl_deserialize_value(s, (jl_value_t**)&m->generator);
     if (m->generator)
         jl_gc_wb(m, m->generator);
     m->invokes.unknown = jl_deserialize_value(s, (jl_value_t**)&m->invokes);

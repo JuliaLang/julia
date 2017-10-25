@@ -597,12 +597,13 @@ end
 """
     code_lowered(f, types, expand_generated = true)
 
-Return an array of lowered ASTs for the methods matching the given generic function and type signature.
+Return an array of the lowered forms (IR) for the methods matching the given generic function
+and type signature.
 
-If `expand_generated` is `false`, then the `CodeInfo` instances returned for `@generated`
-methods will correspond to the generators' lowered ASTs. If `expand_generated` is `true`,
-these `CodeInfo` instances will correspond to the lowered ASTs of the method bodies yielded
-by expanding the generators.
+If `expand_generated` is `false`, the returned `CodeInfo` instances will correspond to fallback
+implementations. An error is thrown if no fallback implementation exists.
+If `expand_generated` is `true`, these `CodeInfo` instances will correspond to the method bodies
+yielded by expanding the generators.
 
 Note that an error will be thrown if `types` are not leaf types when `expand_generated` is
 `true` and the corresponding method is a `@generated` method.
@@ -737,7 +738,9 @@ function length(mt::MethodTable)
 end
 isempty(mt::MethodTable) = (mt.defs === nothing)
 
-uncompressed_ast(m::Method) = uncompressed_ast(m, isdefined(m, :source) ? m.source : m.generator.inferred)
+uncompressed_ast(m::Method) = isdefined(m,:source) ? uncompressed_ast(m, m.source) :
+                              isdefined(m,:generator) ? error("Method is @generated; try `code_lowered` instead.") :
+                              error("Code for this Method is not available.")
 uncompressed_ast(m::Method, s::CodeInfo) = s
 uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Any), m, s)::CodeInfo
 uncompressed_ast(m::Core.MethodInstance) = uncompressed_ast(m.def)
@@ -851,7 +854,7 @@ code_native(::IO, ::Any, ::Symbol) = error("illegal code_native call") # resolve
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
 function func_for_method_checked(m::Method, @nospecialize types)
-    if isdefined(m,:generator) && !isdefined(m,:source) && !_isleaftype(types)
+    if isdefined(m,:generator) && !_isleaftype(types)
         error("cannot call @generated function `", m, "` ",
               "with abstract argument types: ", types)
     end
@@ -861,7 +864,7 @@ end
 """
     code_typed(f, types; optimize=true)
 
-Returns an array of lowered and type-inferred ASTs for the methods matching the given
+Returns an array of type-inferred lowered form (IR) for the methods matching the given
 generic function and type signature. The keyword argument `optimize` controls whether
 additional optimizations, such as inlining, are also applied.
 """

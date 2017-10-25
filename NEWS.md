@@ -19,6 +19,10 @@ New language features
  * The macro call syntax `@macroname[args]` is now available and is parsed
    as `@macroname([args])` ([#23519]).
 
+  * The construct `if @generated ...; else ...; end` can be used to provide both
+    `@generated` and normal implementations of part of a function. Surrounding code
+    will be common to both versions ([#23168]).
+
 Language changes
 ----------------
 

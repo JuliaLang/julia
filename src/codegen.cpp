@@ -1193,8 +1193,6 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
                 li->inferred &&
                 // and there is something to delete (test this before calling jl_ast_flag_inlineable)
                 li->inferred != jl_nothing &&
-                // don't delete the code for the generator
-                li != li->def.method->generator &&
                 // don't delete inlineable code, unless it is constant
                 (li->jlcall_api == 2 || !jl_ast_flag_inlineable((jl_array_t*)li->inferred)) &&
                 // don't delete code when generating a precompile file
@@ -3842,11 +3840,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
         }
         Value *a1 = boxed(ctx, emit_expr(ctx, args[1]));
         Value *a2 = boxed(ctx, emit_expr(ctx, args[2]));
-        Value *mdargs[4] = {
+        Value *mdargs[3] = {
             /*argdata*/a1,
             /*code*/a2,
-            /*module*/literal_pointer_val(ctx, (jl_value_t*)ctx.module),
-            /*isstaged*/literal_pointer_val(ctx, args[3])
+            /*module*/literal_pointer_val(ctx, (jl_value_t*)ctx.module)
         };
         ctx.builder.CreateCall(prepare_call(jlmethod_func), makeArrayRef(mdargs));
         return ghostValue(jl_void_type);
@@ -6359,7 +6356,6 @@ static void init_julia_llvm_env(Module *m)
     std::vector<Type*> mdargs(0);
     mdargs.push_back(T_prjlvalue);
     mdargs.push_back(T_prjlvalue);
-    mdargs.push_back(T_pjlvalue);
     mdargs.push_back(T_pjlvalue);
     jlmethod_func =
         Function::Create(FunctionType::get(T_void, mdargs, false),
