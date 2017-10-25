@@ -12,8 +12,11 @@ include("Display.jl")
 include("Operations.jl")
 include("REPLMode.jl")
 
-__init__() = isdefined(Base, :active_repl) &&
-    REPLMode.repl_init(Base.active_repl)
+function __init__()
+    empty!(LOAD_PATH)
+    push!(LOAD_PATH, dirname(@__DIR__))
+    isdefined(Base, :active_repl) && REPLMode.repl_init(Base.active_repl)
+end
 
 function Base.julia_cmd(julia::AbstractString)
     cmd = invoke(Base.julia_cmd, Tuple{Any}, julia)
