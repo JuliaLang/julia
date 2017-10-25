@@ -623,7 +623,7 @@ end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 function return_callback(s)
-    ast = Base.syntax_deprecation_warnings(false) do
+    ast = Base.without_syntax_deprecations() do
         Base.parse_input_line(String(take!(copy(LineEdit.buffer(s)))))
     end
     if  !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
@@ -894,7 +894,7 @@ function setup_interface(
                         continue
                     end
                 end
-                ast, pos = Base.syntax_deprecation_warnings(false) do
+                ast, pos = Base.without_syntax_deprecations() do
                     Base.parse(input, oldpos, raise=false)
                 end
                 if (isa(ast, Expr) && (ast.head == :error || ast.head == :continue || ast.head == :incomplete)) ||

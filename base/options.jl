@@ -21,7 +21,7 @@ struct JLOptions
     opt_level::Int8
     debug_level::Int8
     check_bounds::Int8
-    depwarn::Int8
+    depwarn::Int32
     warn_overwrite::Int8
     can_inline::Int8
     polly::Int8

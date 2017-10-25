@@ -28,7 +28,7 @@ macro deprecate(old, new, ex=true)
             ex ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...)
                   $meta
-                  depwarn($"$old is deprecated, use $new instead.", $oldmtname)
+                  depwarn($"`$old` is deprecated, use `$new` instead.", $oldmtname)
                   $(esc(new))(args...)
               end),
             :(const $oldmtname = Core.Typeof($(esc(old))).name.mt.name))
@@ -53,7 +53,7 @@ macro deprecate(old, new, ex=true)
             ex ? Expr(:export, esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
-                  depwarn($"$oldcall is deprecated, use $newcall instead.", $oldmtname)
+                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", $oldmtname)
                   $(esc(new))
               end),
             :(const $oldmtname = Core.Typeof($(esc(oldsym))).name.mt.name))
@@ -62,23 +62,45 @@ macro deprecate(old, new, ex=true)
     end
 end
 
+# NB: keep in sync with JL_OPTIONS_DEPWARN_THROW
+depwarn_should_throw(opts) =  opts.depwarn == typemax(Int32)
+
 function depwarn(msg, funcsym)
     opts = JLOptions()
-    if opts.depwarn > 0
-        bt = backtrace()
-        _depwarn(msg, opts, bt, firstcaller(bt, funcsym))
-    end
-    nothing
-end
-function _depwarn(msg, opts, bt, caller)
-    ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
-    fn = unsafe_string(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
-    if opts.depwarn == 1 # raise a warning
-        warn(msg, once=(caller != StackTraces.UNKNOWN), key=(caller,fn,ln), bt=bt,
-             filename=fn, lineno=ln)
-    elseif opts.depwarn == 2 # raise an error
+    if depwarn_should_throw(opts)
         throw(ErrorException(msg))
     end
+    deplevel = Logging.LogLevel(opts.depwarn)
+    @logmsg(
+        deplevel,
+        msg,
+        _module=begin
+            bt = backtrace()
+            frame, caller = firstcaller(bt, funcsym)
+            # FIXME - Which module should a null here be attributed to?
+            !isnull(caller.linfo) ? caller.linfo.value.def.module : Base
+        end,
+        _file=caller.file,
+        _line=caller.line,
+        _id=(frame,funcsym),
+        _group=:depwarn,
+        caller=caller,
+        max_log=1
+    )
+    nothing
+end
+
+# Emit deprecated syntax warning. This function exists to be called from
+# the julia parser (see flisp julia-syntax-depwarn) and in that context any
+# exceptions will be ignored.
+function syntax_depwarn(msg, file, line)
+    opts = JLOptions()
+    if depwarn_should_throw(opts)
+        return 2 # Will throw error on parser side to simplify marshalling
+    end
+    deplevel = Logging.LogLevel(opts.depwarn)
+    @logmsg deplevel msg _file=file _line=line _group=:depwarn
+    return 0
 end
 
 firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol) = firstcaller(bt, (funcsym,))
@@ -86,13 +108,17 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     # Identify the calling line
     found = false
     lkup = StackTraces.UNKNOWN
+    found_frame = Ptr{Void}(0)
     for frame in bt
         lkups = StackTraces.lookup(frame)
         for outer lkup in lkups
             if lkup == StackTraces.UNKNOWN
                 continue
             end
-            found && @goto found
+            if found
+                found_frame = frame
+                @goto found
+            end
             found = lkup.func in funcsyms
             # look for constructor type name
             if !found && !isnull(lkup.linfo)
@@ -105,9 +131,9 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
             end
         end
     end
-    return StackTraces.UNKNOWN
+    return found_frame, StackTraces.UNKNOWN
     @label found
-    return lkup
+    return found_frame, lkup
 end
 
 deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Void, (Any, Any, Cint), m, s, flag)

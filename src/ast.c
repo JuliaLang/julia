@@ -168,15 +168,46 @@ value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return fl_ctx->F;
 }
 
+static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
+
+
+value_t fl_julia_depwarn(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    if (nargs < 1)
+        lerror(fl_ctx, fl_ctx->ArgError, "julia-depwarn: too few arguments");
+    static jl_value_t *depwarn_func = NULL;
+    if (!depwarn_func && jl_base_module)
+        depwarn_func = jl_get_global(jl_base_module, jl_symbol("syntax_depwarn"));
+    if (!depwarn_func) {
+        // No julia function found - use fallbacks in flisp
+        return fixnum(jl_options.depwarn == JL_OPTIONS_DEPWARN_THROW ? 2 : 1);
+    }
+    value_t ret = fixnum(0);
+    jl_value_t **depwarn_args;
+    JL_GC_PUSHARGS(depwarn_args, nargs+2);
+    JL_TRY {
+        depwarn_args[0] = depwarn_func;
+        for (int i = 0; i < nargs; ++i)
+            depwarn_args[i+1] = scm_to_julia_(fl_ctx, args[i], NULL);
+        jl_value_t* jlret = jl_apply(depwarn_args, nargs+1);
+        depwarn_args[nargs+1] = jlret;
+        ret = julia_to_scm(fl_ctx, jlret);
+    }
+    JL_CATCH {
+        // Internal error on julia side - assume logging failed
+        ret = fixnum(1);
+    }
+    JL_GC_POP();
+    return ret;
+}
+
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
+    { "julia-depwarn", fl_julia_depwarn },
     { NULL, NULL }
 };
-
-static int jl_parse_deperror(fl_context_t *fl_ctx, int err);
-static int jl_parse_depwarn_(fl_context_t *fl_ctx, int warn);
 
 static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
 {
@@ -201,12 +232,6 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
     ctx->slot_sym = symbol(fl_ctx, "slot");
     ctx->task = NULL;
     ctx->module = NULL;
-
-    // Enable / disable syntax deprecation warnings
-    if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
-        jl_parse_deperror(fl_ctx, 1);
-    else
-        jl_parse_depwarn_(fl_ctx, (int)jl_options.depwarn);
 }
 
 // There should be no GC allocation while holding this lock
@@ -396,8 +421,6 @@ static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
     }
     return jl_symbol(symbol_name(fl_ctx, s));
 }
-
-static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
 
 static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod)
 {
@@ -826,28 +849,6 @@ JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
                                              char *filename, jl_module_t *inmodule)
 {
     return jl_parse_eval_all(filename, text, len, inmodule);
-}
-
-JL_DLLEXPORT int jl_parse_depwarn(int warn)
-{
-    jl_ast_context_t *ctx = jl_ast_ctx_enter();
-    int res = jl_parse_depwarn_(&ctx->fl, warn);
-    jl_ast_ctx_leave(ctx);
-    return res;
-}
-
-static int jl_parse_depwarn_(fl_context_t *fl_ctx, int warn)
-{
-    value_t prev = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parser-depwarn")),
-                             warn ? fl_ctx->T : fl_ctx->F);
-    return prev == fl_ctx->T ? 1 : 0;
-}
-
-static int jl_parse_deperror(fl_context_t *fl_ctx, int err)
-{
-    value_t prev = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parser-deperror")),
-                             err ? fl_ctx->T : fl_ctx->F);
-    return prev == fl_ctx->T ? 1 : 0;
 }
 
 // returns either an expression or a thunk

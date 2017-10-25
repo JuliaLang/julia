@@ -20,6 +20,7 @@ export
     Threads,
     Iterators,
     Distributed,
+    Logging,
 
 # Types
     AbstractChannel,
@@ -800,6 +801,11 @@ export
     unescape_string,
     uppercase,
     warn,
+
+# logging
+    AbstractLogger,
+    @debug, @info, @warn, @error, @logmsg,
+    with_logger, disable_logging, configure_logging,
 
 # random numbers
     AbstractRNG,

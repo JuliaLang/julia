@@ -307,7 +307,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
             end
             viol && continue
             # So the solution is non-optimal: we bump it manually
-            #warn("nonoptimal solution for package $(interface.pkgs[p0]): sol=$s0")
+            #@warn "nonoptimal solution for package $(interface.pkgs[p0]): sol=$s0"
             sol[p0] += 1
             restart = true
         end

@@ -50,7 +50,7 @@ jl_options_t jl_options = { 0,    // quiet
                             1,    // debug_level [release build]
 #endif
                             JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
-                            1,    // deprecation warning
+                            JL_OPTIONS_DEPWARN_ON,    // deprecation warning
                             0,    // method overwrite warning
                             1,    // can_inline
                             JL_OPTIONS_POLLY_ON, // polly
@@ -103,7 +103,7 @@ static const char opts[]  =
     " --history-file={yes|no}   Load or save history\n\n"
 
     // error and warning options
-    " --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings (\"error\" turns warnings into errors)\n"
+    " --depwarn={yes|no|throw}  Enable or disable syntax and method deprecation warnings (\"throw\" turns warnings into exceptions)\n"
     " --warn-overwrite={yes|no} Enable or disable method overwrite warnings\n\n"
 
     // code generation options
@@ -521,10 +521,10 @@ restart_switch:
                 jl_options.depwarn = JL_OPTIONS_DEPWARN_ON;
             else if (!strcmp(optarg,"no"))
                 jl_options.depwarn = JL_OPTIONS_DEPWARN_OFF;
-            else if (!strcmp(optarg,"error"))
-                jl_options.depwarn = JL_OPTIONS_DEPWARN_ERROR;
+            else if (!strcmp(optarg,"throw") || !strcmp(optarg,"error"))
+                jl_options.depwarn = JL_OPTIONS_DEPWARN_THROW;
             else
-                jl_errorf("julia: invalid argument to --depwarn={yes|no|error} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --depwarn={yes|no|throw} (%s)", optarg);
             break;
         case opt_warn_overwrite:
             if (!strcmp(optarg,"yes"))

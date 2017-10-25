@@ -1364,7 +1364,6 @@ JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len,
                                              const char *filename, size_t filename_len);
 JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
                                          int pos0, int greedy);
-JL_DLLEXPORT int jl_parse_depwarn(int warn);
 JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
                                              char *filename, jl_module_t *inmodule);
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule);
@@ -1692,7 +1691,7 @@ typedef struct {
     int8_t opt_level;
     int8_t debug_level;
     int8_t check_bounds;
-    int8_t depwarn;
+    int32_t depwarn;
     int8_t warn_overwrite;
     int8_t can_inline;
     int8_t polly;
@@ -1750,9 +1749,16 @@ JL_DLLEXPORT int jl_generating_output(void);
 #define JL_OPTIONS_STARTUPFILE_ON 1
 #define JL_OPTIONS_STARTUPFILE_OFF 2
 
-#define JL_OPTIONS_DEPWARN_OFF 0
-#define JL_OPTIONS_DEPWARN_ON 1
-#define JL_OPTIONS_DEPWARN_ERROR 2
+#define JL_LOGLEVEL_BELOWMIN  INT32_MIN
+#define JL_LOGLEVEL_DEBUG    -1000
+#define JL_LOGLEVEL_INFO      0
+#define JL_LOGLEVEL_WARN      1000
+#define JL_LOGLEVEL_ERROR     2000
+#define JL_LOGLEVEL_ABOVEMAX  INT32_MAX
+
+#define JL_OPTIONS_DEPWARN_OFF   JL_LOGLEVEL_BELOWMIN
+#define JL_OPTIONS_DEPWARN_ON    JL_LOGLEVEL_WARN
+#define JL_OPTIONS_DEPWARN_THROW JL_LOGLEVEL_ABOVEMAX
 
 #define JL_OPTIONS_WARN_OVERWRITE_OFF 0
 #define JL_OPTIONS_WARN_OVERWRITE_ON 1
