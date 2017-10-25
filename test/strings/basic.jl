@@ -238,7 +238,9 @@ end
     @test ind2chr(gstr,2)==2
 
     # tests promote_rule
-    @test s"12"*s"34" === "1234"
+    let svec = [s"12", GenericString("12"), SubString("123", 1, 2)]
+        @test all(x -> x === "12", svec)
+    end
 end
 
 @testset "issue #10307" begin
