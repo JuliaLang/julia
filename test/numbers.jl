@@ -2369,8 +2369,8 @@ end
 @test -0.0 + false === -0.0
 
 @testset "issue #5881" begin
-    @test bits(true) == "00000001"
-    @test bits(false) == "00000000"
+    @test bitstring(true) == "00000001"
+    @test bitstring(false) == "00000000"
 end
 @testset "edge cases of intrinsics" begin
     let g() = sqrt(-1.0)

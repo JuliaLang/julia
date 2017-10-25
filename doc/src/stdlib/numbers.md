@@ -47,7 +47,7 @@ Base.oct
 Base.base
 Base.digits
 Base.digits!
-Base.bits
+Base.bitstring
 Base.parse(::Type, ::Any, ::Any)
 Base.tryparse
 Base.big

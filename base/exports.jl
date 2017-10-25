@@ -721,7 +721,7 @@ export
     Base64DecodePipe,
     startswith,
     bin,
-    bits,
+    bitstring,
     bytes2hex,
     chomp,
     chop,

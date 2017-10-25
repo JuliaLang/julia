@@ -576,8 +576,9 @@ Deprecated or removed
     `ReinterpretArray`. The three argument form of `reinterpret` that implicitly reshapes
     has been deprecated ([#23750]).
 
-  * `num2hex` and `hex2num` have been deprecated in favor of `reinterpret` combined with `parse`/`hex`
-    ([#22088])
+  * `bits` has been deprecated in favor of `bitstring` ([#24281], [#24263]).
+
+  * `num2hex` and `hex2num` have been deprecated in favor of `reinterpret` combined with `parse`/`hex` ([#22088]).
 
 
 Command-line option changes

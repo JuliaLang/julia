@@ -311,10 +311,10 @@ can be seen using the `bits` function: :
 julia> 0.0 == -0.0
 true
 
-julia> bits(0.0)
+julia> bitstring(0.0)
 "0000000000000000000000000000000000000000000000000000000000000000"
 
-julia> bits(-0.0)
+julia> bitstring(-0.0)
 "1000000000000000000000000000000000000000000000000000000000000000"
 ```
 
@@ -443,13 +443,13 @@ julia> nextfloat(x)
 julia> prevfloat(x)
 1.2499999f0
 
-julia> bits(prevfloat(x))
+julia> bitstring(prevfloat(x))
 "00111111100111111111111111111111"
 
-julia> bits(x)
+julia> bitstring(x)
 "00111111101000000000000000000000"
 
-julia> bits(nextfloat(x))
+julia> bitstring(nextfloat(x))
 "00111111101000000000000000000001"
 ```
 
