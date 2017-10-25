@@ -1891,7 +1891,7 @@ end
 @deprecate diagm(x::Number) fill(x, 1, 1)
 
 ## deprecate full
-
+export full
 # full no-op fallback
 function full(A::AbstractArray)
     depwarn(string(
