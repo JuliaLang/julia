@@ -88,7 +88,7 @@ macro return_if_file(path)
 end
 
 function find_package(name::String)
-    endswith(name, ".jl") && (name = name[1:end-3])
+    endswith(name, ".jl") && (name = chop(name, 0, 3))
     for dir in [Pkg.dir(); LOAD_PATH]
         dir = abspath(dir)
         @return_if_file joinpath(dir, "$name.jl")
