@@ -826,7 +826,9 @@ static bool isLoadFromImmut(LoadInst *LI)
         return false;
     while (TBAA->getNumOperands() > 1) {
         TBAA = cast<MDNode>(TBAA->getOperand(1).get());
-        if (cast<MDString>(TBAA->getOperand(0))->getString() == "jtbaa_immut") {
+        auto Str = cast<MDString>(TBAA->getOperand(0))->getString();
+        // We load array owner with `tbaa_const`.
+        if (Str == "jtbaa_immut" || Str == "jtbaa_const") {
             return true;
         }
     }
@@ -1771,15 +1773,18 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
         }
         IRBuilder<> builder(CI);
         builder.SetCurrentDebugLocation(CI->getDebugLoc());
-        auto parBits = builder.CreateAnd(EmitLoadTag(builder, T_size, parent), 3);
-        auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, 3));
-        auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, CI, false);
-        builder.SetInsertPoint(mayTrigTerm);
+        Instruction *splitPoint = CI;
+        if (!IsPermRooted(parent, S)) {
+            auto parBits = builder.CreateAnd(EmitLoadTag(builder, T_size, parent), 3);
+            auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, 3));
+            splitPoint = SplitBlockAndInsertIfThen(parOldMarked, splitPoint, false);
+            builder.SetInsertPoint(splitPoint);
+        }
         auto chldBit = builder.CreateAnd(EmitLoadTag(builder, T_size, child), 1);
         auto chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0));
         MDBuilder MDB(parent->getContext());
         SmallVector<uint32_t, 2> Weights{1, 9};
-        auto trigTerm = SplitBlockAndInsertIfThen(chldNotMarked, mayTrigTerm, false,
+        auto trigTerm = SplitBlockAndInsertIfThen(chldNotMarked, splitPoint, false,
                                                   MDB.createBranchWeights(Weights));
         builder.SetInsertPoint(trigTerm);
         builder.CreateCall(queueroot_func, parent);

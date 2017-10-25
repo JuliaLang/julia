@@ -1302,14 +1302,11 @@ static void gc_sweep_perm_alloc(void)
 
 JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_taggedvalue_t *o = jl_astaggedvalue(ptr);
-#ifndef JULIA_ENABLE_THREADING
-    // Disable this assert since it can happen with multithreading (same
-    // with the ones in gc_queue_binding) when two threads are writing
-    // to the same object.
-    assert(o->bits.gc == GC_OLD_MARKED);
-#endif
+    // This can happen in multithreading or when we omit the parent check in codegen
+    if (o->bits.gc != GC_OLD_MARKED)
+        return;
+    jl_ptls_t ptls = jl_get_ptls_states();
     // The modification of the `gc_bits` is not atomic but it
     // should be safe here since GC is not allowed to run here and we only
     // write GC_OLD to the GC bits outside GC. This could cause
