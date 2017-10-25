@@ -78,30 +78,3 @@ mktempdir() do dir
         end
     end
 end
-
-SAVED_LOAD_PATH = copy(LOAD_PATH)
-empty!(LOAD_PATH)
-dir = abspath(@__DIR__)
-push!(LOAD_PATH, dir)
-
-@test Base.find_in_path("test_sourcepath") == joinpath(dir, "test_sourcepath.jl")
-@test Base.find_in_path(GenericString("test_sourcepath")) == joinpath(dir, "test_sourcepath.jl")
-LOAD_PATH[end] = GenericString(LOAD_PATH[end])
-@test Base.find_in_path("test_sourcepath") == joinpath(dir, "test_sourcepath.jl")
-
-struct CustomLoader
-    path::String
-end
-push!(LOAD_PATH, CustomLoader("abc"))
-let name = randstring(20)
-    @test_throws ArgumentError Base.find_in_path(name, nothing)
-    Base.load_hook(prefix::CustomLoader, name::String, found) = joinpath(prefix.path, name)
-    @test Base.find_in_path(name, nothing) == joinpath("abc", name)
-end
-@test Base.find_in_path("test_sourcepath", nothing) == joinpath("abc", "test_sourcepath")
-Base.load_hook(prefix::CustomLoader, name::String, found::String) = found
-@test Base.find_in_path("test_sourcepath", nothing) == joinpath(dir, "test_sourcepath.jl")
-
-empty!(LOAD_PATH)
-append!(LOAD_PATH, SAVED_LOAD_PATH)
-@test LOAD_PATH == SAVED_LOAD_PATH

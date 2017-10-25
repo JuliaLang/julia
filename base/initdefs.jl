@@ -54,19 +54,9 @@ isinteractive() = (is_interactive::Bool)
 
 An array of paths as strings or custom loader objects for the `require`
 function and `using` and `import` statements to consider when loading
-code. To create a custom loader type, define the type and then add
-appropriate methods to the `Base.load_hook` function with the following
-signature:
-
-    Base.load_hook(loader::Loader, name::String, found::Any)
-
-The `loader` argument is the current value in `LOAD_PATH`, `name` is the
-name of the module to load, and `found` is the path of any previously
-found code to provide `name`. If no provider has been found earlier in
-`LOAD_PATH` then the value of `found` will be `nothing`. Custom loader
-functionality is experimental and may break or change in Julia 1.0.
+code.
 """
-const LOAD_PATH = Any[]
+const LOAD_PATH = String[]
 const LOAD_CACHE_PATH = String[]
 
 function init_load_path(JULIA_HOME = JULIA_HOME)
