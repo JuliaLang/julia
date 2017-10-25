@@ -88,7 +88,7 @@ tag = Base.have_color ? Base.text_colors[Base.error_color()] : "ARRAY{FLOAT64,N}
 # Make sure emphasis is not used for other functions
 tag = Base.have_color ? Base.text_colors[Base.error_color()] : "ANY"
 iob = IOBuffer()
-show(iob, expand(Main, :(x -> x^2)))
+show(iob, Meta.lower(Main, :(x -> x^2)))
 str = String(take!(iob))
 @test isempty(search(str, tag))
 

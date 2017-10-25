@@ -98,7 +98,7 @@ for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false
 end
 end
 
-let src = expand(Main, quote let x = 1 end end).args[1]::CodeInfo,
+let src = Meta.lower(Main, quote let x = 1 end end).args[1]::CodeInfo,
     li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
     sf
 

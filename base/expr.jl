@@ -46,15 +46,6 @@ copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
 
 """
-    expand(m, x)
-
-Takes the expression `x` and returns an equivalent expression in lowered form
-for executing in module `m`.
-See also [`code_lowered`](@ref).
-"""
-expand(m::Module, @nospecialize(x)) = ccall(:jl_expand, Any, (Any, Any), x, m)
-
-"""
     macroexpand(m::Module, x; recursive=true)
 
 Takes the expression `x` and returns an equivalent expression with all macros removed (expanded)

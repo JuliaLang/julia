@@ -935,7 +935,6 @@ export
 
 # syntax
     esc,
-    expand,
     gensym,
     macroexpand,
     @macroexpand1,
