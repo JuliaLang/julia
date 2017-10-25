@@ -136,10 +136,10 @@ Float16(8.0)</code></pre><p>The underscore <code>_</code> can be used as digit s
 (10000, 5.0e-9, 0xdeadbeef, 0xb2)</code></pre><h3><a class="nav-anchor" id="Floating-point-zero-1" href="#Floating-point-zero-1">Floating-point zero</a></h3><p>Floating-point numbers have <a href="https://en.wikipedia.org/wiki/Signed_zero">two zeros</a>, positive zero and negative zero. They are equal to each other but have different binary representations, as can be seen using the <code>bits</code> function: :</p><pre><code class="language-julia-repl">julia&gt; 0.0 == -0.0
 true
 
-julia&gt; bits(0.0)
+julia&gt; bitstring(0.0)
 &quot;0000000000000000000000000000000000000000000000000000000000000000&quot;
 
-julia&gt; bits(-0.0)
+julia&gt; bitstring(-0.0)
 &quot;1000000000000000000000000000000000000000000000000000000000000000&quot;</code></pre><h3><a class="nav-anchor" id="Special-floating-point-values-1" href="#Special-floating-point-values-1">Special floating-point values</a></h3><p>There are three specified standard floating-point values that do not correspond to any point on the real number line:</p><table><tr><th><code>Float16</code></th><th><code>Float32</code></th><th><code>Float64</code></th><th>Name</th><th>Description</th></tr><tr><td><code>Inf16</code></td><td><code>Inf32</code></td><td><code>Inf</code></td><td>positive infinity</td><td>a value greater than all finite floating-point values</td></tr><tr><td><code>-Inf16</code></td><td><code>-Inf32</code></td><td><code>-Inf</code></td><td>negative infinity</td><td>a value less than all finite floating-point values</td></tr><tr><td><code>NaN16</code></td><td><code>NaN32</code></td><td><code>NaN</code></td><td>not a number</td><td>a value not <code>==</code> to any floating-point value (including itself)</td></tr></table><p>For further discussion of how these non-finite floating-point values are ordered with respect to each other and other floats, see <a href="mathematical-operations.html#Numeric-Comparisons-1">Numeric Comparisons</a>. By the <a href="https://en.wikipedia.org/wiki/IEEE_754-2008">IEEE 754 standard</a>, these floating-point values are the results of certain arithmetic operations:</p><pre><code class="language-julia-repl">julia&gt; 1/Inf
 0.0
 
@@ -207,13 +207,13 @@ julia&gt; nextfloat(x)
 julia&gt; prevfloat(x)
 1.2499999f0
 
-julia&gt; bits(prevfloat(x))
+julia&gt; bitstring(prevfloat(x))
 &quot;00111111100111111111111111111111&quot;
 
-julia&gt; bits(x)
+julia&gt; bitstring(x)
 &quot;00111111101000000000000000000000&quot;
 
-julia&gt; bits(nextfloat(x))
+julia&gt; bitstring(nextfloat(x))
 &quot;00111111101000000000000000000001&quot;</code></pre><p>This example highlights the general principle that the adjacent representable floating-point numbers also have adjacent binary integer representations.</p><h3><a class="nav-anchor" id="Rounding-modes-1" href="#Rounding-modes-1">Rounding modes</a></h3><p>If a number doesn&#39;t have an exact floating-point representation, it must be rounded to an appropriate representable value, however, if wanted, the manner in which this rounding is done can be changed according to the rounding modes presented in the <a href="https://en.wikipedia.org/wiki/IEEE_754-2008">IEEE 754 standard</a>.</p><pre><code class="language-julia-repl">julia&gt; x = 1.1; y = 0.1;
 
 julia&gt; x + y
