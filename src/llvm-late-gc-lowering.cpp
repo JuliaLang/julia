@@ -297,6 +297,16 @@ namespace llvm {
     void initializeLateLowerGCFramePass(PassRegistry &Registry);
 }
 
+template<typename T>
+static void addReturnAttr(T *f, Attribute::AttrKind Kind)
+{
+#if JL_LLVM_VERSION >= 50000
+    f->addAttribute(AttributeList::ReturnIndex, Kind);
+#else
+    f->addAttribute(AttributeSet::ReturnIndex, Kind);
+#endif
+}
+
 extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false);
 struct LateLowerGCFrame: public FunctionPass {
     static char ID;
@@ -1426,21 +1436,6 @@ void LateLowerGCFrame::PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
 }
 
-static void copyMetadata(Instruction *dest, const Instruction *src)
-{
-#if JL_LLVM_VERSION < 40000
-    if (!src->hasMetadata())
-        return;
-    SmallVector<std::pair<unsigned,MDNode*>,4> TheMDs;
-    src->getAllMetadataOtherThanDebugLoc(TheMDs);
-    for (const auto &MD : TheMDs)
-        dest->setMetadata(MD.first, MD.second);
-    dest->setDebugLoc(src->getDebugLoc());
-#else
-    dest->copyMetadata(*src);
-#endif
-}
-
 bool LateLowerGCFrame::CleanupIR(Function &F) {
     bool ChangesMade = false;
     // We create one alloca for all the jlcall frames that haven't been processed
@@ -1495,9 +1490,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                     auto pool_osize = ConstantInt::get(T_int32, osize);
                     newI = builder.CreateCall(pool_alloc_func, {ptls, pool_offs, pool_osize});
                 }
-                newI->setAttributes(CI->getAttributes());
+                addReturnAttr(newI, Attribute::NoAlias);
+                addReturnAttr(newI, Attribute::NonNull);
                 newI->takeName(CI);
-                copyMetadata(newI, CI);
                 auto derived = builder.CreateAddrSpaceCast(newI, T_pjlvalue_der);
                 auto cast = builder.CreateBitCast(derived, T_ppjlvalue_der);
                 auto tagaddr = builder.CreateGEP(T_prjlvalue, cast,
@@ -1728,15 +1723,6 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
     }
 }
 
-static void addRetNoAlias(Function *F)
-{
-#if JL_LLVM_VERSION >= 50000
-    F->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
-#else
-    F->addAttribute(AttributeSet::ReturnIndex, Attribute::NoAlias);
-#endif
-}
-
 bool LateLowerGCFrame::DefineFunctions(Module &M) {
     ptls_getter = M.getFunction("julia.ptls_states");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
@@ -1757,7 +1743,8 @@ bool LateLowerGCFrame::DefineFunctions(Module &M) {
             args.push_back(T_int32);
             pool_alloc_func = Function::Create(FunctionType::get(T_prjlvalue, args, false),
                                                Function::ExternalLinkage, "jl_gc_pool_alloc", &M);
-            addRetNoAlias(pool_alloc_func);
+            addReturnAttr(pool_alloc_func, Attribute::NoAlias);
+            addReturnAttr(pool_alloc_func, Attribute::NonNull);
         }
         if (!(big_alloc_func = M.getFunction("jl_gc_big_alloc"))) {
             std::vector<Type*> args(0);
@@ -1765,7 +1752,8 @@ bool LateLowerGCFrame::DefineFunctions(Module &M) {
             args.push_back(T_size);
             big_alloc_func = Function::Create(FunctionType::get(T_prjlvalue, args, false),
                                          Function::ExternalLinkage, "jl_gc_big_alloc", &M);
-            addRetNoAlias(big_alloc_func);
+            addReturnAttr(big_alloc_func, Attribute::NoAlias);
+            addReturnAttr(big_alloc_func, Attribute::NonNull);
         }
         auto T_jlvalue = cast<PointerType>(T_prjlvalue)->getElementType();
         T_pjlvalue = PointerType::get(T_jlvalue, 0);
