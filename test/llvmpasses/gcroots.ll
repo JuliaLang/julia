@@ -289,6 +289,31 @@ top:
     ret %jl_value_t addrspace(10)* %v1
 }
 
+define %jl_value_t addrspace(10)* @vec_jlcallarg(%jl_value_t addrspace(10)*, %jl_value_t addrspace(10)**, i32) {
+; CHECK-LABEL: @vec_jlcallarg
+; CHECK-NOT: %gcframe
+  %v4 = call %jl_value_t*** @julia.ptls_states()
+  %v5 = bitcast %jl_value_t addrspace(10)** %1 to <2 x %jl_value_t addrspace(10)*>*
+  %v6 = load <2 x %jl_value_t addrspace(10)*>, <2 x %jl_value_t addrspace(10)*>* %v5, align 8
+  %v7 = extractelement <2 x %jl_value_t addrspace(10)*> %v6, i32 0
+  ret %jl_value_t addrspace(10)* %v7
+}
+
+declare %jl_value_t addrspace(10) *@alloc()
+
+define %jl_value_t addrspace(10)* @vec_loadobj() {
+; CHECK-LABEL: @vec_loadobj
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+  %v4 = call %jl_value_t*** @julia.ptls_states()
+  %obj = call %jl_value_t addrspace(10) *@alloc()
+  %v1 = bitcast %jl_value_t addrspace(10) * %obj to %jl_value_t addrspace(10)* addrspace(10)*
+  %v5 = bitcast %jl_value_t addrspace(10)* addrspace(10)* %v1 to <2 x %jl_value_t addrspace(10)*> addrspace(10)*
+  %v6 = load <2 x %jl_value_t addrspace(10)*>, <2 x %jl_value_t addrspace(10)*> addrspace(10)* %v5, align 8
+  %obj2 = call %jl_value_t addrspace(10) *@alloc()
+  %v7 = extractelement <2 x %jl_value_t addrspace(10)*> %v6, i32 0
+  ret %jl_value_t addrspace(10)* %v7
+}
+
 !0 = !{!"jtbaa"}
 !1 = !{!"jtbaa_const", !0, i64 0}
 !2 = !{!1, !1, i64 0, i64 1}

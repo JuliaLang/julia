@@ -345,9 +345,13 @@ private:
     void NoteUse(State &S, BBState &BBS, Value *V) {
         NoteUse(S, BBS, V, BBS.UpExposedUses);
     }
+    Value *MaybeExtractUnion(std::pair<Value*,int> Val, Instruction *InsertBefore);
     int LiftPhi(State &S, PHINode *Phi);
+    int LiftSelect(State &S, SelectInst *SI);
     int Number(State &S, Value *V);
     std::vector<int> NumberVector(State &S, Value *Vec);
+    int NumberBase(State &S, Value *V, Value *Base);
+    std::vector<int> NumberVectorBase(State &S, Value *Base);
     void NoteOperandUses(State &S, BBState &BBS, User &UI, BitVector &Uses);
     void NoteOperandUses(State &S, BBState &BBS, User &UI){
         NoteOperandUses(S, BBS, UI, BBS.UpExposedUses);
@@ -395,18 +399,21 @@ static bool isUnionRep(Type *Ty) {
         isSpecialPtr(cast<StructType>(Ty)->getTypeAtIndex((unsigned)0));
 }
 
-static Value *FindBaseValue(const State &S, Value *V, bool UseCache = true) {
+// If the input value is a scalar (pointer), we may return a vector value as base
+// in which case the second member of the pair is the index of the value in the vector.
+static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCache = true) {
     Value *CurrentV = V;
+    int fld_idx = -1;
     while (true) {
         if (UseCache) {
             if (CurrentV->getType()->isPointerTy()) {
                 auto it = S.AllPtrNumbering.find(CurrentV);
                 if (it != S.AllPtrNumbering.end())
-                    return CurrentV;
+                    return std::make_pair(CurrentV, fld_idx);
             } else {
                 auto it = S.AllVectorNumbering.find(CurrentV);
                 if (it != S.AllVectorNumbering.end())
-                    return CurrentV;
+                    return std::make_pair(CurrentV, fld_idx);
             }
         }
         if (isa<BitCastInst>(CurrentV))
@@ -424,30 +431,41 @@ static Value *FindBaseValue(const State &S, Value *V, bool UseCache = true) {
             if (!isUnionRep(Operand->getType()))
                 break;
             CurrentV = Operand;
-            continue;
-        } else
+        }
+        else if (auto EEI = dyn_cast<ExtractElementInst>(CurrentV)) {
+            assert(CurrentV->getType()->isPointerTy() && fld_idx == -1);
+            // For now, only support constant index.
+            auto IdxOp = cast<ConstantInt>(EEI->getIndexOperand());
+            fld_idx = IdxOp->getLimitedValue(INT_MAX);
+            CurrentV = EEI->getVectorOperand();
+        }
+        else {
             break;
+        }
     }
     assert(isa<LoadInst>(CurrentV) || isa<CallInst>(CurrentV) ||
            isa<Argument>(CurrentV) || isa<SelectInst>(CurrentV) ||
            isa<PHINode>(CurrentV) || isa<AddrSpaceCastInst>(CurrentV) ||
            isa<Constant>(CurrentV) || isa<AllocaInst>(CurrentV) ||
            isa<ExtractValueInst>(CurrentV));
-    return CurrentV;
+    return std::make_pair(CurrentV, fld_idx);
 }
 
-static Value *MaybeExtractUnion(Value *Val, Instruction *InsertBefore) {
-    if (isUnionRep(Val->getType())) {
-        Val = ExtractValueInst::Create(Val, {(unsigned)0}, "", InsertBefore);
+Value *LateLowerGCFrame::MaybeExtractUnion(std::pair<Value*,int> Val, Instruction *InsertBefore) {
+    if (isUnionRep(Val.first->getType())) {
+        assert(Val.second == -1);
+        return ExtractValueInst::Create(Val.first, {(unsigned)0}, "", InsertBefore);
     }
-    return Val;
+    else if (Val.second != -1) {
+        return ExtractElementInst::Create(Val.first, ConstantInt::get(T_int32, Val.second),
+                                          "", InsertBefore);
+    }
+    return Val.first;
 }
 
-static int LiftSelect(State &S, SelectInst *SI) {
-    Value *TrueBase = FindBaseValue(S, SI->getTrueValue(), false);
-    Value *FalseBase = FindBaseValue(S, SI->getFalseValue(), false);
-    TrueBase = MaybeExtractUnion(TrueBase, SI);
-    FalseBase = MaybeExtractUnion(FalseBase, SI);
+int LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
+    Value *TrueBase = MaybeExtractUnion(FindBaseValue(S, SI->getTrueValue(), false), SI);
+    Value *FalseBase = MaybeExtractUnion(FindBaseValue(S, SI->getFalseValue(), false), SI);
     if (getValueAddrSpace(TrueBase) != AddressSpace::Tracked)
         TrueBase = ConstantPointerNull::get(cast<PointerType>(FalseBase->getType()));
     if (getValueAddrSpace(FalseBase) != AddressSpace::Tracked)
@@ -468,8 +486,8 @@ int LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi)
     PHINode *lift = PHINode::Create(T_prjlvalue, Phi->getNumIncomingValues(), "gclift", Phi);
     for (unsigned i = 0; i < Phi->getNumIncomingValues(); ++i) {
         Value *Incoming = Phi->getIncomingValue(i);
-        Value *Base = FindBaseValue(S, Incoming, false);
-        Base = MaybeExtractUnion(Base, Phi->getIncomingBlock(i)->getTerminator());
+        Value *Base = MaybeExtractUnion(FindBaseValue(S, Incoming, false),
+                                        Phi->getIncomingBlock(i)->getTerminator());
         if (getValueAddrSpace(Base) != AddressSpace::Tracked)
             Base = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
         if (Base->getType() != T_prjlvalue)
@@ -483,9 +501,8 @@ int LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi)
     return Number;
 }
 
-int LateLowerGCFrame::Number(State &S, Value *V) {
-    assert(isSpecialPtr(V->getType()) || isUnionRep(V->getType()));
-    Value *CurrentV = FindBaseValue(S, V);
+int LateLowerGCFrame::NumberBase(State &S, Value *V, Value *CurrentV)
+{
     auto it = S.AllPtrNumbering.find(CurrentV);
     if (it != S.AllPtrNumbering.end())
         return it->second;
@@ -518,19 +535,26 @@ int LateLowerGCFrame::Number(State &S, Value *V) {
     return Number;
 }
 
-std::vector<int> LateLowerGCFrame::NumberVector(State &S, Value *V) {
-    auto it = S.AllVectorNumbering.find(V);
+int LateLowerGCFrame::Number(State &S, Value *V) {
+    assert(isSpecialPtr(V->getType()) || isUnionRep(V->getType()));
+    auto CurrentV = FindBaseValue(S, V);
+    if (CurrentV.second == -1)
+        return NumberBase(S, V, CurrentV.first);
+    auto Numbers = NumberVectorBase(S, CurrentV.first);
+    auto Number = Numbers.size() == 0 ? -1 : Numbers[CurrentV.second];
+    S.AllPtrNumbering[V] = Number;
+    return Number;
+}
+
+std::vector<int> LateLowerGCFrame::NumberVectorBase(State &S, Value *CurrentV) {
+    auto it = S.AllVectorNumbering.find(CurrentV);
     if (it != S.AllVectorNumbering.end())
         return it->second;
-    Value *CurrentV = FindBaseValue(S, V);
-    it = S.AllVectorNumbering.find(CurrentV);
-    if (it != S.AllVectorNumbering.end())
-        return it->second;
+    std::vector<int> Numbers{};
     if (isa<Constant>(CurrentV) ||
         ((isa<Argument>(CurrentV) || isa<AllocaInst>(CurrentV) ||
          isa<AddrSpaceCastInst>(CurrentV)) &&
          getValueAddrSpace(CurrentV) != AddressSpace::Tracked)) {
-        S.AllVectorNumbering[V] = std::vector<int>{};
     }
     /* We (the frontend) don't insert either of these, but it would be legal -
        though a bit strange, considering they're pointers - for the optimizer to
@@ -542,15 +566,25 @@ std::vector<int> LateLowerGCFrame::NumberVector(State &S, Value *V) {
         assert(false && "TODO Insert");
     } else if (isa<LoadInst>(CurrentV)) {
         // This is simple, we can just number them sequentially
-        std::vector<int> Numbers;
         for (unsigned i = 0; i < cast<VectorType>(CurrentV->getType())->getNumElements(); ++i) {
             int Num = ++S.MaxPtrNumber;
             Numbers.push_back(Num);
-            S.ReversePtrNumbering[Num] = V;
+            S.ReversePtrNumbering[Num] = CurrentV;
         }
-        S.AllVectorNumbering[V] = Numbers;
     }
-    return S.AllVectorNumbering[CurrentV];
+    S.AllVectorNumbering[CurrentV] = Numbers;
+    return Numbers;
+}
+
+std::vector<int> LateLowerGCFrame::NumberVector(State &S, Value *V) {
+    auto it = S.AllVectorNumbering.find(V);
+    if (it != S.AllVectorNumbering.end())
+        return it->second;
+    auto CurrentV = FindBaseValue(S, V);
+    assert(CurrentV.second == -1);
+    auto Numbers = NumberVectorBase(S, CurrentV.first);
+    S.AllVectorNumbering[V] = Numbers;
+    return Numbers;
 }
 
 static void MaybeResize(BBState &BBS, unsigned Idx) {
@@ -1592,7 +1626,7 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     };
     GetElementPtrInst *gep = GetElementPtrInst::Create(T_prjlvalue, GCFrame, makeArrayRef(args));
     gep->insertBefore(InsertionPoint);
-    Val = MaybeExtractUnion(Val, InsertionPoint);
+    Val = MaybeExtractUnion(std::make_pair(Val, -1), InsertionPoint);
     // Pointee types don't have semantics, so the optimizer is
     // free to rewrite them if convenient. We need to change
     // it back here for the store.
