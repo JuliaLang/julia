@@ -217,7 +217,7 @@ end
     @test gstr[1:1] == "1"
     @test gstr[[1]] == "1"
 
-    @test s"∀∃"[big(1)] == 'f'
+    @test s"∀∃"[big(1)] == '∀'
     @test_throws UnicodeError GenericString("∀∃")[Int8(2)]
     @test_throws BoundsError GenericString("∀∃")[UInt16(10)]
 
