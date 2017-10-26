@@ -151,11 +151,11 @@ end
         @test abs(f32 - f16) < abs(f32 - prevfloat(f16))
     end
     # halfway between and last bit is 1
-    f = reinterpret(Float32,                           0b00111110101010100011000000000000)
-    @test Float32(Float16(f)) === reinterpret(Float32, 0b00111110101010100100000000000000)
+    ff = reinterpret(Float32,                           0b00111110101010100011000000000000)
+    @test Float32(Float16(ff)) === reinterpret(Float32, 0b00111110101010100100000000000000)
     # halfway between and last bit is 0
-    f = reinterpret(Float32,                           0b00111110101010100001000000000000)
-    @test Float32(Float16(f)) === reinterpret(Float32, 0b00111110101010100000000000000000)
+    ff = reinterpret(Float32,                           0b00111110101010100001000000000000)
+    @test Float32(Float16(ff)) === reinterpret(Float32, 0b00111110101010100000000000000000)
 end
 
 # issue #5948

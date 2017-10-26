@@ -190,6 +190,7 @@ c = Dates.Time(0)
     @test isfinite(Dates.Time)
 end
 @testset "Date-DateTime conversion/promotion" begin
+    global a, b, c, d
     @test Dates.DateTime(a) == a
     @test Dates.Date(a) == b
     @test Dates.DateTime(b) == a

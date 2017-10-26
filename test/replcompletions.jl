@@ -524,6 +524,7 @@ try
     touch(joinpath(Pack_folder2, "Test_pack2.jl"))
 
     # Test it completes on folders
+    local c, r, res # workaround for issue #24331
     c, r, res = test_complete("using Test_p")
     @test !("Test_pack" in c)
     @test "Test_pack2" in c
