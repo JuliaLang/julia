@@ -130,7 +130,7 @@
       <item> Int64 </item>
       <item> Int128 </item>
       <item> Integer </item>
-      <item> IntSet </item>
+      <item> BitSet </item>
       <item> ImaginaryUnit </item>
       <item> IO </item>
       <item> IOBuffer </item>

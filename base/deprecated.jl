@@ -2046,6 +2046,9 @@ end
 # issue #24006
 @deprecate linearindices(s::AbstractString) eachindex(s)
 
+# deprecate IntSet to BitSet
+@deprecate_binding IntSet BitSet
+
 # Issue 24219
 @deprecate float(x::AbstractString) parse(Float64, x)
 @deprecate float(a::AbstractArray{<:AbstractString}) parse.(Float64, a)

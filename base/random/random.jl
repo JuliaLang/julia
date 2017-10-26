@@ -83,7 +83,7 @@ julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
     The complexity of `rand(rng, s::Union{Associative,AbstractSet})`
     is linear in the length of `s`, unless an optimized method with
     constant complexity is available, which is the case for `Dict`,
-    `Set` and `IntSet`. For more than a few calls, use `rand(rng,
+    `Set` and `BitSet`. For more than a few calls, use `rand(rng,
     collect(s))` instead, or either `rand(rng, Dict(s))` or `rand(rng,
     Set(s))` as appropriate.
 """

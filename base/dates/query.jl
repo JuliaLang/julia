@@ -196,9 +196,9 @@ end
 
 # Total number of a day of week in the month
 # e.g. are there 4 or 5 Mondays in this month?
-const TWENTYNINE = IntSet([1, 8, 15, 22, 29])
-const THIRTY = IntSet([1, 2, 8, 9, 15, 16, 22, 23, 29, 30])
-const THIRTYONE = IntSet([1, 2, 3, 8, 9, 10, 15, 16, 17, 22, 23, 24, 29, 30, 31])
+const TWENTYNINE = BitSet([1, 8, 15, 22, 29])
+const THIRTY = BitSet([1, 2, 8, 9, 15, 16, 22, 23, 29, 30])
+const THIRTYONE = BitSet([1, 2, 3, 8, 9, 10, 15, 16, 17, 22, 23, 24, 29, 30, 31])
 
 """
     daysofweekinmonth(dt::TimeType) -> Int
