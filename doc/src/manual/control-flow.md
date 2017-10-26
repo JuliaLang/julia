@@ -532,7 +532,7 @@ A `break` statement inside such a loop exits the entire nest of loops, not just 
 When an unexpected condition occurs, a function may be unable to return a reasonable value to
 its caller. In such cases, it may be best for the exceptional condition to either terminate the
 program while printing a diagnostic error message, or if the programmer has provided code to handle
-such exceptional circumstances, allow that code to take the appropriate action.
+such exceptional circumstances then allow that code to take the appropriate action.
 
 ### Built-in `Exception`s
 
