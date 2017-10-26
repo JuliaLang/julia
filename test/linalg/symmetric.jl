@@ -262,18 +262,10 @@ end
                 @testset "pow" begin
                     # Integer power
                     @test (asym)^2   ≈ (Symmetric(asym)^2)::Symmetric
-                    if eltya <: Integer && !isone(asym) && !isone(-asym)
-                        @test_throws DomainError (asym)^-2
-                    else
-                        @test (asym)^-2  ≈ (Symmetric(asym)^-2)::Symmetric
-                    end
+                    @test (asym)^-2  ≈ (Symmetric(asym)^-2)::Symmetric
                     @test (aposs)^2  ≈ (Symmetric(aposs)^2)::Symmetric
                     @test (aherm)^2  ≈ (Hermitian(aherm)^2)::Hermitian
-                    if eltya <: Integer && !isone(aherm) && !isone(-aherm)
-                        @test_throws DomainError (aherm)^-2
-                    else
-                        @test (aherm)^-2 ≈ (Hermitian(aherm)^-2)::Hermitian
-                    end
+                    @test (aherm)^-2 ≈ (Hermitian(aherm)^-2)::Hermitian
                     @test (apos)^2   ≈ (Hermitian(apos)^2)::Hermitian
                     # integer floating point power
                     @test (asym)^2.0   ≈ (Symmetric(asym)^2.0)::Symmetric

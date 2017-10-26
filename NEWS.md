@@ -270,6 +270,10 @@ Library improvements
     If this argument is used they return a string consisting of first/last `nchar`
     characters from the original string ([#23960]).
 
+  * Expressions `x^-n` where `n` is an *integer literal* now correspond to `inv(x)^n`.
+    For example, `x^-1` is now essentially a synonym for `inv(x)`, and works
+    in a type-stable way even if `typeof(x) != typeof(inv(x))` ([#24240]).
+
   * The functions `nextind` and `prevind` now accept `nchar` argument that indicates
     the number of characters to move ([#23805]).
 

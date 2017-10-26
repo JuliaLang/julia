@@ -234,6 +234,18 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{2}) = x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
 
+@inline @generated function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
+    if p < 0
+        :(literal_pow(^, inv(x), $(Val{-p}())))
+    else
+        :(f(x,$p))
+    end
+end
+
+# note: it is tempting to add optimized literal_pow(::typeof(^), x, ::Val{n})
+#       methods here for various n, but this easily leads to method ambiguities
+#       if anyone has defined literal_pow(::typeof(^), x::T, ::Val).
+
 # b^p mod m
 
 """

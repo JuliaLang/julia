@@ -93,6 +93,9 @@ const rewrite_op =
 function make_fastmath(expr::Expr)
     if expr.head === :quote
         return expr
+    elseif expr.head == :call && expr.args[1] == :^ && expr.args[3] isa Integer
+        # mimic Julia's literal_pow lowering of literal integer powers
+        return Expr(:call, :(Base.FastMath.pow_fast), make_fastmath(expr.args[2]), Val{expr.args[3]}())
     end
     op = get(rewrite_op, expr.head, :nothing)
     if op !== :nothing
@@ -263,6 +266,8 @@ end
 
 pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32", llvmcall, Float32, (Float32, Int32), x, y)
 pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Float64, Int32), x, y)
+pow_fast(x::FloatTypes, ::Val{p}) where {p} = pow_fast(x, p) # inlines already via llvm.powi
+@inline pow_fast(x, v::Val) = Base.literal_pow(^, x, v)
 
 sqrt_fast(x::FloatTypes) = sqrt_llvm(x)
 
