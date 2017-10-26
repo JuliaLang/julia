@@ -130,14 +130,16 @@ broadcast(::typeof(ceil), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = Sym
 transpose(M::SymTridiagonal) = M #Identity operation
 adjoint(M::SymTridiagonal) = conj(M)
 
-function diag(M::SymTridiagonal{T}, n::Integer=0) where T
+function diag(M::SymTridiagonal, n::Integer=0)
+    # every branch call similar(..., ::Int) to make sure the
+    # same vector type is returned independent of n
     absn = abs(n)
     if absn == 0
-        return M.dv
+        return copy!(similar(M.dv, length(M.dv)), M.dv)
     elseif absn==1
-        return M.ev
+        return copy!(similar(M.ev, length(M.ev)), M.ev)
     elseif absn <= size(M,1)
-        return zeros(T,size(M,1)-absn)
+        return fill!(similar(M.dv, size(M,1)-absn), 0)
     else
         throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
             "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
@@ -535,14 +537,16 @@ transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 adjoint(M::Tridiagonal) = conj(transpose(M))
 
 function diag(M::Tridiagonal{T}, n::Integer=0) where T
+    # every branch call similar(..., ::Int) to make sure the
+    # same vector type is returned independent of n
     if n == 0
-        return M.d
+        return copy!(similar(M.d, length(M.d)), M.d)
     elseif n == -1
-        return M.dl
+        return copy!(similar(M.dl, length(M.dl)), M.dl)
     elseif n == 1
-        return M.du
+        return copy!(similar(M.du, length(M.du)), M.du)
     elseif abs(n) <= size(M,1)
-        return zeros(T,size(M,1)-abs(n))
+        return fill!(similar(M.d, size(M,1)-abs(n)), 0)
     else
         throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
             "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))

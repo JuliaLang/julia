@@ -153,14 +153,17 @@ guardsrand(123) do
                     @test_throws ArgumentError A[2, 3] = 1 # test assignment on the superdiagonal
                 end
             end
-            @testset "Diagonal extraction" begin
-                @test diag(A, 1) === (mat_type == Tridiagonal ? du : dl)
-                @test diag(A, -1) === dl
-                @test diag(A, 0) === d
-                @test diag(A) === d
-                @test diag(A, n - 1) == zeros(elty, 1)
+            @testset "diag" begin
+                @test (@inferred diag(A))::typeof(d) == d
+                @test (@inferred diag(A, 0))::typeof(d) == d
+                @test (@inferred diag(A, 1))::typeof(d) == (mat_type == Tridiagonal ? du : dl)
+                @test (@inferred diag(A, -1))::typeof(d) == dl
+                @test (@inferred diag(A, n-1))::typeof(d) == zeros(elty, 1)
                 @test_throws ArgumentError diag(A, -n - 1)
                 @test_throws ArgumentError diag(A, n + 1)
+                GA = mat_type == Tridiagonal ? mat_type(GenericArray.((dl, d, du))...) : mat_type(GenericArray.((d, dl))...)
+                @test (@inferred diag(GA))::typeof(GenericArray(d)) == GenericArray(d)
+                @test (@inferred diag(GA, -1))::typeof(GenericArray(d)) == GenericArray(dl)
             end
             @testset "Idempotent tests" begin
                 for func in (conj, transpose, adjoint)
