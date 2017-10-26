@@ -655,3 +655,18 @@ end
     @test last(s, length(s)) == s
     @test_throws BoundsError last(s, length(s)+1)
 end
+
+@testset "invalid code point" begin
+    s = String([0x61, 0xba, 0x41])
+    @test !isvalid(s)
+    @test_throws UnicodeError s[2]
+    e = try
+        s[2]
+    catch e
+        e
+    end
+    b = IOBuffer()
+    show(b, e)
+    @test String(take!(b)) == "UnicodeError: invalid character index 2 (0xba is a continuation byte)"
+end
+
