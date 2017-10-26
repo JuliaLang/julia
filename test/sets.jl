@@ -19,6 +19,19 @@ using Main.TestHelpers.OAs
         @test isa(Set(f17741(x) for x = 1:3), Set{Int})
         @test isa(Set(f17741(x) for x = -1:1), Set{Integer})
     end
+    let s1 = Set(["foo", "bar"]), s2 = Set(s1)
+        @test s1 == s2
+        x = pop!(s1)
+        @test s1 != s2
+        @test !(x in s1)
+        @test x in s2
+        push!(s1, "baz")
+        push!(s2, "baz2")
+        @test "baz" in s1
+        @test !("baz" in s2)
+        @test !("baz2" in s1)
+        @test "baz2" in s2
+    end
 end
 
 @testset "hash" begin
