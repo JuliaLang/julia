@@ -35,6 +35,8 @@ using Test
             @test a*v[:,2] ≈ d[2]*v[:,2]
             @test norm(v) > testtol # eigenvectors cannot be null vectors
             @test_warn "Use symbols instead of strings for specifying which eigenvalues to compute" eigs(a, which="LM")
+            @test_warn "Adjusting ncv from 1 to 4" eigs(a, ncv=1, nev=2)
+            @test_warn "Adjusting nev from $n to $(n-2)" eigs(a, nev=n)
             # (d,v) = eigs(a, b, nev=3, tol=1e-8) # not handled yet
             # @test a*v[:,2] ≈ d[2]*b*v[:,2] atol=testtol
             # @test norm(v) > testtol # eigenvectors cannot be null vectors
