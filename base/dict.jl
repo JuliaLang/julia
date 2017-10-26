@@ -104,12 +104,8 @@ mutable struct Dict{K,V} <: Associative{K,V}
         new(zeros(UInt8,n), Array{K,1}(n), Array{V,1}(n), 0, 0, 0, 1, 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
-        if d.ndel > 0
-            rehash!(d)
-        end
-        @assert d.ndel == 0
-        new(copy(d.slots), copy(d.keys), copy(d.vals), 0, d.count, d.age, d.idxfloor,
-            d.maxprobe)
+        new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
+            d.idxfloor, d.maxprobe)
     end
 end
 function Dict{K,V}(kv) where V where K
@@ -346,7 +342,7 @@ end
 # get the index where a key is stored, or -pos if not present
 # and the key would be inserted at pos
 # This version is for use by setindex! and get!
-function ht_keyindex2(h::Dict{K,V}, key) where V where K
+function ht_keyindex2!(h::Dict{K,V}, key) where V where K
     age0 = h.age
     sz = length(h.keys)
     iter = 0
@@ -393,7 +389,7 @@ function ht_keyindex2(h::Dict{K,V}, key) where V where K
 
     rehash!(h, h.count > 64000 ? sz*2 : sz*4)
 
-    return ht_keyindex2(h, key)
+    return ht_keyindex2!(h, key)
 end
 
 @propagate_inbounds function _setindex!(h::Dict, v, key, index)
@@ -424,7 +420,7 @@ end
 
 function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     v = convert(V, v0)
-    index = ht_keyindex2(h, key)
+    index = ht_keyindex2!(h, key)
 
     if index > 0
         h.age += 1
@@ -490,14 +486,14 @@ function get!(default::Callable, h::Dict{K,V}, key0) where V where K
 end
 
 function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
-    index = ht_keyindex2(h, key)
+    index = ht_keyindex2!(h, key)
 
     index > 0 && return h.vals[index]
 
     age0 = h.age
     v = convert(V, default())
     if h.age != age0
-        index = ht_keyindex2(h, key)
+        index = ht_keyindex2!(h, key)
     end
     if index > 0
         h.age += 1
