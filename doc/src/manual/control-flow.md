@@ -412,9 +412,10 @@ julia> for i = 1:5
 Here the `1:5` is a range object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
 loop iterates through these values, assigning each one in turn to the variable `i`. One rather
 important distinction between the previous `while` loop form and the `for` loop form is the scope
-during which the variable is visible. If the variable `i` has not been introduced in an other
-scope, in the `for` loop form, it is visible only inside of the `for` loop, and not afterwards.
-You'll either need a new interactive session instance or a different variable name to test this:
+during which the variable is visible. If the variable `i` has not been introduced in another
+scope, in the `for` loop form, it is visible only inside of the `for` loop, and not
+outside/afterwards. You'll either need a new interactive session instance or a different variable
+name to test this:
 
 ```jldoctest
 julia> for j = 1:5
@@ -530,8 +531,8 @@ A `break` statement inside such a loop exits the entire nest of loops, not just 
 
 When an unexpected condition occurs, a function may be unable to return a reasonable value to
 its caller. In such cases, it may be best for the exceptional condition to either terminate the
-program, printing a diagnostic error message, or if the programmer has provided code to handle
-such exceptional circumstances, allow that code to take the appropriate action.
+program while printing a diagnostic error message, or if the programmer has provided code to handle
+such exceptional circumstances then allow that code to take the appropriate action.
 
 ### Built-in `Exception`s
 
