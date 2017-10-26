@@ -1895,74 +1895,64 @@ function abstract_call_gf_by_type(@nospecialize(f), @nospecialize(atype), sv::In
 end
 
 function abstract_call_method(method::Method, @nospecialize(f), @nospecialize(sig), sparams::SimpleVector, sv::InferenceState)
-    limited = sv.limited
-    # If we are operating without inference limits,
-    # see if we need to enable those.
-    # The limit will be imposed if we recur on the same method.
     topmost = nothing
-    if !limited && !istopfunction(_topmod(sv), f, :promote_typeof)
-        # since promote_typeof signature may be used with many arguments, here we'll just assume it is defined non-recursively
-        # otherwise: limit argument type tuple growth of all other functions
-        # look through the parents list to find the topmost
-        # function call to the same method
-        cyclei = 0
-        infstate = sv
-        while infstate !== nothing
-            infstate = infstate::InferenceState
-            if method === infstate.linfo.def
-                if infstate.linfo.specTypes == sig
-                    # avoid widening when detecting self-recursion
-                    # TODO: merge call cycle and return right away
-                    # TODO: this'll improve convergence speed and give better results,
-                    #       but is it correct and valid?
-                    limited = false
-                    break
+    # Limit argument type tuple growth of functions:
+    # look through the parents list to see if there's a call to the same method
+    # and from the same method.
+    # Returns the topmost occurrence of that repeated edge.
+    cyclei = 0
+    infstate = sv
+    while !(infstate === nothing)
+        infstate = infstate::InferenceState
+        if method === infstate.linfo.def
+            if infstate.linfo.specTypes == sig
+                # avoid widening when detecting self-recursion
+                # TODO: merge call cycle and return right away
+                topmost = nothing
+                break
+            end
+            if topmost === nothing
+                # inspect the parent of this edge,
+                # to see if they are the same Method as sv
+                # in which case we'll need to ensure it is convergent
+                # otherwise, we don't
+                for parent in infstate.callers_in_cycle
+                    # check in the cycle list first
+                    # all items in here are mutual parents of all others
+                    if parent.linfo.def === sv.linfo.def
+                        topmost = infstate
+                        break
+                    end
                 end
-                if topmost === nothing
-                    # inspect the parent of this edge,
-                    # to see if they are the same Method as sv
-                    # in which case we'll need to ensure it is convergent
-                    # otherwise, we don't
-                    for parent in infstate.callers_in_cycle
-                        # check in the cycle list first
-                        # all items in here are mutual parents of all others
-                        if parent.linfo.def === sv.linfo.def
-                            limited = true
+                let parent = infstate.parent
+                    # then check the parent link
+                    if topmost === nothing && parent !== nothing
+                        parent = parent::InferenceState
+                        if parent.cached && parent.linfo.def === sv.linfo.def
                             topmost = infstate
-                            break
-                        end
-                    end
-                    let parent = infstate.parent
-                        # then check the parent link
-                        if topmost === nothing && parent !== nothing
-                            parent = parent::InferenceState
-                            if parent.cached && parent.linfo.def === sv.linfo.def
-                                limited = true
-                                topmost = infstate
-                            end
                         end
                     end
                 end
             end
-            # iterate through the cycle before walking to the parent
-            if cyclei < length(infstate.callers_in_cycle)
-                cyclei += 1
-                infstate = infstate.callers_in_cycle[cyclei]
-            else
-                cyclei = 0
-                infstate = infstate.parent
-            end
+        end
+        # iterate through the cycle before walking to the parent
+        if cyclei < length(infstate.callers_in_cycle)
+            cyclei += 1
+            infstate = infstate.callers_in_cycle[cyclei]
+        else
+            cyclei = 0
+            infstate = infstate.parent
         end
     end
 
-    if limited
+    if !(topmost === nothing)
+        topmost = topmost::InferenceState
         sigtuple = unwrap_unionall(sig)::DataType
         msig = unwrap_unionall(method.sig)::DataType
         spec_len = length(msig.parameters) + 1
         ls = length(sigtuple.parameters)
         if method === sv.linfo.def
-            # direct self-recursion permits much greater use of reducers
-            # without using non-local state (just the total edge)
+            # Under direct self-recursion, permit much greater use of reducers.
             # here we assume that complexity(specTypes) :>= complexity(sig)
             comparison = sv.linfo.specTypes
             l_comparison = length(unwrap_unionall(comparison).parameters)
@@ -1970,30 +1960,20 @@ function abstract_call_method(method::Method, @nospecialize(f), @nospecialize(si
         else
             comparison = method.sig
         end
-        # see if the type is too big, and limit it if required
+        # see if the type is actually too big (relative to the caller), and limit it if required
         newsig = limit_type_size(sig, comparison, sv.linfo.specTypes, spec_len)
 
         if newsig !== sig
-            if !sv.limited
-                # continue inference, but limit parameter complexity to ensure (quick) convergence
-                topmost = topmost::InferenceState
-                infstate = sv
-                while infstate !== topmost.parent
-                    # TODO: avoid this non-local mutation
-                    infstate.limited = true
-                    if infstate.parent !== nothing
-                        infstate.optimize = false
-                    end
-                    for infstate_cycle in infstate.callers_in_cycle
-                        infstate_cycle.limited = true
-                        if infstate_cycle.parent !== nothing
-                            infstate_cycle.optimize = false
-                        end
-                    end
-                    infstate = infstate.parent
-                    infstate === nothing && break
+            # continue inference, but note that we've limited parameter complexity
+            # on this call (to ensure convergence), so that we don't cache this result
+            infstate = sv
+            topmost = topmost::InferenceState
+            while !(infstate.parent === topmost.parent)
+                infstate.limited = true
+                for infstate_cycle in infstate.callers_in_cycle
+                    infstate_cycle.limited = true
                 end
-                # TODO: break here and restart from "topmost" call-site
+                infstate = infstate.parent
             end
             sig = newsig
             sparams = svec()
@@ -3556,7 +3536,11 @@ function optimize(me::InferenceState)
 
     # run optimization passes on fulltree
     force_noinline = true
-    if me.optimize
+    if me.limited && me.parent !== nothing
+        # a top parent will be cached still, but not this intermediate work
+        me.cached = false
+        me.linfo.inInference = false
+    elseif me.optimize
         opt = OptimizationState(me)
         # This pass is required for the AST to be valid in codegen
         # if any `SSAValue` is created by type inference. Ref issue #6068
@@ -3584,10 +3568,6 @@ function optimize(me::InferenceState)
         reindex_labels!(opt)
         me.min_valid = opt.min_valid
         me.max_valid = opt.max_valid
-    elseif me.cached && me.parent !== nothing
-        # top parent will be cached still, but not this intermediate work
-        me.cached = false
-        me.linfo.inInference = false
     end
 
     # convert all type information into the form consumed by the code-generator
