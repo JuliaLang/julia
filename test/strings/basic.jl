@@ -11,6 +11,7 @@
     @test "abc" === "abc"
     @test "ab"  !== "abc"
     @test string("ab", 'c') === "abc"
+    @test string() === ""
     codegen_egal_of_strings(x, y) = (x===y, x!==y)
     @test codegen_egal_of_strings(string("ab", 'c'), "abc") === (true, false)
     let strs = ["", "a", "a b c", "до свидания"]
@@ -216,6 +217,10 @@ end
     @test gstr[1:1] == "1"
     @test gstr[[1]] == "1"
 
+    @test s"∀∃"[big(1)] == '∀'
+    @test_throws UnicodeError GenericString("∀∃")[Int8(2)]
+    @test_throws BoundsError GenericString("∀∃")[UInt16(10)]
+
     @test done(eachindex("foobar"),7)
     @test eltype(Base.EachStringIndex) == Int
     @test map(uppercase, "foó") == "FOÓ"
@@ -231,6 +236,11 @@ end
     @test nextind([1], 1) == 2
 
     @test ind2chr(gstr,2)==2
+
+    # tests promote_rule
+    let svec = [s"12", GenericString("12"), SubString("123", 1, 2)]
+        @test all(x -> x === "12", svec)
+    end
 end
 
 @testset "issue #10307" begin
