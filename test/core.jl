@@ -867,6 +867,20 @@ function test12806()
 end
 @test test12806() == (true, true, false, [1])
 
+# issue #24331
+try
+    c24331 = 1
+finally
+end
+@test !isdefined(@__MODULE__, :c24331)
+function f24331()
+    try
+        x = [2]
+    finally
+    end
+end
+@test f24331() == [2]
+
 # finalizers
 let A = [1]
     local x = 0
