@@ -261,26 +261,27 @@ end
 
                 @testset "pow" begin
                     # Integer power
-                    @test (asym)^2   ≈ (Symmetric(asym)^2)::Symmetric
-                    @test (asym)^-2  ≈ (Symmetric(asym)^-2)::Symmetric
-                    @test (aposs)^2  ≈ (Symmetric(aposs)^2)::Symmetric
-                    @test (aherm)^2  ≈ (Hermitian(aherm)^2)::Hermitian
-                    @test (aherm)^-2 ≈ (Hermitian(aherm)^-2)::Hermitian
-                    @test (apos)^2   ≈ (Hermitian(apos)^2)::Hermitian
+                    @test asym^2   ≈ (Symmetric(asym)^2)::Matrix{eltya}
+                    @test asym^-2  ≈ (Symmetric(asym)^-2)::Matrix{eltya}
+                    @test aposs^2  ≈ (Symmetric(aposs)^2)::Matrix{eltya}
+                    @test aherm^2  ≈ (Hermitian(aherm)^2)::Matrix{eltya}
+                    @test aherm^-2 ≈ (Hermitian(aherm)^-2)::Matrix{eltya}
+                    @test apos^2   ≈ (Hermitian(apos)^2)::Matrix{eltya}
                     # integer floating point power
-                    @test (asym)^2.0   ≈ (Symmetric(asym)^2.0)::Symmetric
-                    @test (asym)^-2.0  ≈ (Symmetric(asym)^-2.0)::Symmetric
-                    @test (aposs)^2.0  ≈ (Symmetric(aposs)^2.0)::Symmetric
-                    @test (aherm)^2.0  ≈ (Hermitian(aherm)^2.0)::Hermitian
-                    @test (aherm)^-2.0 ≈ (Hermitian(aherm)^-2.0)::Hermitian
-                    @test (apos)^2.0   ≈ (Hermitian(apos)^2.0)::Hermitian
+                    RT = Base.promote_op(^, eltya, Float64)
+                    @test asym^2.0   ≈ (Symmetric(asym)^2.0)::Matrix{RT}
+                    @test asym^-2.0  ≈ (Symmetric(asym)^-2.0)::Matrix{RT}
+                    @test aposs^2.0  ≈ (Symmetric(aposs)^2.0)::Matrix{RT}
+                    @test aherm^2.0  ≈ (Hermitian(aherm)^2.0)::Matrix{RT}
+                    @test aherm^-2.0 ≈ (Hermitian(aherm)^-2.0)::Matrix{RT}
+                    @test apos^2.0   ≈ (Hermitian(apos)^2.0)::Matrix{RT}
                     # non-integer floating point power
-                    @test (asym)^2.5   ≈ (Symmetric(asym)^2.5)::Symmetric
-                    @test (asym)^-2.5  ≈ (Symmetric(asym)^-2.5)::Symmetric
-                    @test (aposs)^2.5  ≈ (Symmetric(aposs)^2.5)::Symmetric
-                    @test (aherm)^2.5  ≈ (Hermitian(aherm)^2.5)#::Hermitian
-                    @test (aherm)^-2.5 ≈ (Hermitian(aherm)^-2.5)#::Hermitian
-                    @test (apos)^2.5   ≈ (Hermitian(apos)^2.5)::Hermitian
+                    @test asym^2.5   ≈ (Symmetric(asym)^2.5)::Matrix
+                    @test asym^-2.5  ≈ (Symmetric(asym)^-2.5)::Matrix
+                    @test aposs^2.5  ≈ (Symmetric(aposs)^2.5)::Matrix
+                    @test aherm^2.5  ≈ (Hermitian(aherm)^2.5)::Matrix
+                    @test aherm^-2.5 ≈ (Hermitian(aherm)^-2.5)::Matrix
+                    @test apos^2.5   ≈ (Hermitian(apos)^2.5)::Matrix
                 end
             end
         end

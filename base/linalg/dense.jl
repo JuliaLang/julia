@@ -428,10 +428,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     isinteger(p) && return integerpow(A, p)
 
     # If possible, use diagonalization
-    if issymmetric(A)
-        return (Symmetric(A)^p)
-    end
-    if ishermitian(A)
+    if ishermitian(A) # real symmetric or real/complex Hermitian
         return (Hermitian(A)^p)
     end
 
