@@ -11,6 +11,7 @@ Core.AbstractFloat
 Core.Integer
 Core.Signed
 Core.Unsigned
+Base.AbstractIrrational
 ```
 
 ### Concrete number types

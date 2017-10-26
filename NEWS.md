@@ -261,6 +261,8 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
+  * `Irrational` is now a subtype of `AbstractIrrational` ([#24245]).
+
   * The function `chop` now accepts two arguments `head` and `tail` allowing to specify
     number of characters to remove from the head and tail of the string ([#24126]).
 

@@ -23,6 +23,7 @@ export
 
 # Types
     AbstractChannel,
+    AbstractIrrational,
     AbstractMatrix,
     AbstractRange,
     AbstractSet,
