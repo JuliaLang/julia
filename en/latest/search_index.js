@@ -6805,7 +6805,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Iteration",
     "category": "section",
-    "text": "Sequential iteration is implemented by the methods start, done, and next. The general for loop:for i = I   # or  \"for i in I\"\n    # body\nendis translated into:state = start(I)\nwhile !done(I, state)\n    (i, state) = next(I, state)\n    # body\nendThe state object may be anything, and should be chosen appropriately for each iterable type. See the manual section on the iteration interface for more details about defining a custom iterable type.Base.start\nBase.done\nBase.next\nBase.iteratorsize\nBase.iteratoreltypeFully implemented by:AbstractRange\nUnitRange\nTuple\nNumber\nAbstractArray\nIntSet\nObjectIdDict\nDict\nWeakKeyDict\nEachLine\nAbstractString\nSet\nPair"
+    "text": "Sequential iteration is implemented by the methods start, done, and next. The general for loop:for i = I   # or  \"for i in I\"\n    # body\nendis translated into:state = start(I)\nwhile !done(I, state)\n    (i, state) = next(I, state)\n    # body\nendThe state object may be anything, and should be chosen appropriately for each iterable type. See the manual section on the iteration interface for more details about defining a custom iterable type.Base.start\nBase.done\nBase.next\nBase.iteratorsize\nBase.iteratoreltypeFully implemented by:AbstractRange\nUnitRange\nTuple\nNumber\nAbstractArray\nBitSet\nObjectIdDict\nDict\nWeakKeyDict\nEachLine\nAbstractString\nSet\nPair"
 },
 
 {
@@ -6837,7 +6837,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "General Collections",
     "category": "section",
-    "text": "Base.isempty\nBase.empty!\nBase.lengthFully implemented by:AbstractRange\nUnitRange\nTuple\nNumber\nAbstractArray\nIntSet\nObjectIdDict\nDict\nWeakKeyDict\nAbstractString\nSet"
+    "text": "Base.isempty\nBase.empty!\nBase.lengthFully implemented by:AbstractRange\nUnitRange\nTuple\nNumber\nAbstractArray\nBitSet\nObjectIdDict\nDict\nWeakKeyDict\nAbstractString\nSet"
 },
 
 {
@@ -7461,7 +7461,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pairs",
     "category": "Function",
-    "text": "pairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\npairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\n"
+    "text": "pairs(collection)\n\nReturn an iterator over key => value pairs for any collection that maps a set of keys to a set of values. This includes arrays, where the keys are the array indices.\n\n\n\npairs(IndexLinear(), A)\npairs(IndexCartesian(), A)\npairs(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning i => x, where i is the index for the element and x = A[i]. Identical to pairs(A), except that the style of index can be selected. Also similar to enumerate(A), except i will be a valid index for A, while enumerate always counts from 1 regardless of the indices of A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in pairs(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in pairs(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex(1, 1) a\nCartesianIndex(2, 1) b\nCartesianIndex(1, 2) d\nCartesianIndex(2, 2) e\n\nSee also: IndexStyle, indices.\n\n\n\n"
 },
 
 {
@@ -7517,7 +7517,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Associative Collections",
     "category": "section",
-    "text": "Dict is the standard associative collection. Its implementation uses hash as the hashing function for the key, and isequal to determine equality. Define these two functions for custom types to override how they are stored in a hash table.ObjectIdDict is a special hash table where the keys are always object identities.WeakKeyDict is a hash table implementation where the keys are weak references to objects, and thus may be garbage collected even when referenced in a hash table.Dicts can be created by passing pair objects constructed with => to a Dict constructor: Dict(\"A\"=>1, \"B\"=>2). This call will attempt to infer type information from the keys and values (i.e. this example creates a Dict{String, Int64}). To explicitly specify types use the syntax Dict{KeyType,ValueType}(...). For example, Dict{String,Int32}(\"A\"=>1, \"B\"=>2).Associative collections may also be created with generators. For example, Dict(i => f(i) for i = 1:10).Given a dictionary D, the syntax D[x] returns the value of key x (if it exists) or throws an error, and D[x] = y stores the key-value pair x => y in D (replacing any existing value for the key x).  Multiple arguments to D[...] are converted to tuples; for example, the syntax D[x,y]  is equivalent to D[(x,y)], i.e. it refers to the value keyed by the tuple (x,y).Base.Dict\nBase.ObjectIdDict\nBase.WeakKeyDict\nBase.haskey\nBase.get(::Any, ::Any, ::Any)\nBase.get\nBase.get!(::Any, ::Any, ::Any)\nBase.get!(::Function, ::Any, ::Any)\nBase.getkey\nBase.delete!\nBase.pop!(::Any, ::Any, ::Any)\nBase.keys\nBase.values\nBase.pairs\nBase.merge\nBase.merge!(::Associative, ::Associative...)\nBase.merge!(::Function, ::Associative, ::Associative...)\nBase.sizehint!\nBase.keytype\nBase.valtypeFully implemented by:ObjectIdDict\nDict\nWeakKeyDictPartially implemented by:IntSet\nSet\nEnvDict\nArray\nBitArray"
+    "text": "Dict is the standard associative collection. Its implementation uses hash as the hashing function for the key, and isequal to determine equality. Define these two functions for custom types to override how they are stored in a hash table.ObjectIdDict is a special hash table where the keys are always object identities.WeakKeyDict is a hash table implementation where the keys are weak references to objects, and thus may be garbage collected even when referenced in a hash table.Dicts can be created by passing pair objects constructed with => to a Dict constructor: Dict(\"A\"=>1, \"B\"=>2). This call will attempt to infer type information from the keys and values (i.e. this example creates a Dict{String, Int64}). To explicitly specify types use the syntax Dict{KeyType,ValueType}(...). For example, Dict{String,Int32}(\"A\"=>1, \"B\"=>2).Associative collections may also be created with generators. For example, Dict(i => f(i) for i = 1:10).Given a dictionary D, the syntax D[x] returns the value of key x (if it exists) or throws an error, and D[x] = y stores the key-value pair x => y in D (replacing any existing value for the key x).  Multiple arguments to D[...] are converted to tuples; for example, the syntax D[x,y]  is equivalent to D[(x,y)], i.e. it refers to the value keyed by the tuple (x,y).Base.Dict\nBase.ObjectIdDict\nBase.WeakKeyDict\nBase.haskey\nBase.get(::Any, ::Any, ::Any)\nBase.get\nBase.get!(::Any, ::Any, ::Any)\nBase.get!(::Function, ::Any, ::Any)\nBase.getkey\nBase.delete!\nBase.pop!(::Any, ::Any, ::Any)\nBase.keys\nBase.values\nBase.pairs\nBase.merge\nBase.merge!(::Associative, ::Associative...)\nBase.merge!(::Function, ::Associative, ::Associative...)\nBase.sizehint!\nBase.keytype\nBase.valtypeFully implemented by:ObjectIdDict\nDict\nWeakKeyDictPartially implemented by:BitSet\nSet\nEnvDict\nArray\nBitArray"
 },
 
 {
@@ -7525,15 +7525,15 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.Set",
     "category": "Type",
-    "text": "Set([itr])\n\nConstruct a Set of the values generated by the given iterable object, or an empty set. Should be used instead of IntSet for sparse integer sets, or for sets of arbitrary objects.\n\n\n\n"
+    "text": "Set([itr])\n\nConstruct a Set of the values generated by the given iterable object, or an empty set. Should be used instead of BitSet for sparse integer sets, or for sets of arbitrary objects.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/collections/#Base.IntSet",
+    "location": "stdlib/collections/#Base.BitSet",
     "page": "Collections and Data Structures",
-    "title": "Base.IntSet",
+    "title": "Base.BitSet",
     "category": "Type",
-    "text": "IntSet([itr])\n\nConstruct a sorted set of positive Ints generated by the given iterable object, or an empty set. Implemented as a bit string, and therefore designed for dense integer sets. Only Ints greater than 0 can be stored. If the set will be sparse (for example holding a few very large integers), use Set instead.\n\n\n\n"
+    "text": "BitSet([itr])\n\nConstruct a sorted set of positive Ints generated by the given iterable object, or an empty set. Implemented as a bit string, and therefore designed for dense integer sets. Only Ints greater than 0 can be stored. If the set will be sparse (for example holding a few very large integers), use Set instead.\n\n\n\n"
 },
 
 {
@@ -7585,7 +7585,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/collections/#Base.symdiff!-Tuple{IntSet,Integer}",
+    "location": "stdlib/collections/#Base.symdiff!-Tuple{BitSet,Integer}",
     "page": "Collections and Data Structures",
     "title": "Base.symdiff!",
     "category": "Method",
@@ -7593,7 +7593,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/collections/#Base.symdiff!-Tuple{IntSet,Any}",
+    "location": "stdlib/collections/#Base.symdiff!-Tuple{BitSet,Any}",
     "page": "Collections and Data Structures",
     "title": "Base.symdiff!",
     "category": "Method",
@@ -7601,7 +7601,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/collections/#Base.symdiff!-Tuple{IntSet,IntSet}",
+    "location": "stdlib/collections/#Base.symdiff!-Tuple{BitSet,BitSet}",
     "page": "Collections and Data Structures",
     "title": "Base.symdiff!",
     "category": "Method",
@@ -7613,7 +7613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.intersect!",
     "category": "Function",
-    "text": "intersect!(s1::IntSet, s2::IntSet)\n\nIntersects sets s1 and s2 and overwrites the set s1 with the result. If needed, s1 will be expanded to the size of s2.\n\n\n\n"
+    "text": "intersect!(s1::BitSet, s2::BitSet)\n\nIntersects sets s1 and s2 and overwrites the set s1 with the result. If needed, s1 will be expanded to the size of s2.\n\n\n\n"
 },
 
 {
@@ -7629,7 +7629,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Set-Like Collections",
     "category": "section",
-    "text": "Base.Set\nBase.IntSet\nBase.union\nBase.union!\nBase.intersect\nBase.setdiff\nBase.setdiff!\nBase.symdiff\nBase.symdiff!(::IntSet, ::Integer)\nBase.symdiff!(::IntSet, ::Any)\nBase.symdiff!(::IntSet, ::IntSet)\nBase.intersect!\nBase.issubsetFully implemented by:IntSet\nSetPartially implemented by:Array"
+    "text": "Base.Set\nBase.BitSet\nBase.union\nBase.union!\nBase.intersect\nBase.setdiff\nBase.setdiff!\nBase.symdiff\nBase.symdiff!(::BitSet, ::Integer)\nBase.symdiff!(::BitSet, ::Any)\nBase.symdiff!(::BitSet, ::BitSet)\nBase.intersect!\nBase.issubsetFully implemented by:BitSet\nSetPartially implemented by:Array"
 },
 
 {
@@ -7765,7 +7765,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:+",
     "category": "Function",
-    "text": "+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\ndt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n"
+    "text": "dt::Date + t::Time -> DateTime\n\nThe addition of a Date with a Time produces a DateTime. The hour, minute, second, and millisecond parts of the Time are used along with the year, month, and day of the Date to create the new DateTime. Non-zero microseconds or nanoseconds in the Time type will result in an InexactError being thrown.\n\n\n\n+(x, y...)\n\nAddition operator. x+y+z+... calls this function with all arguments, i.e. +(x, y, z, ...).\n\n\n\n"
 },
 
 {
@@ -10141,7 +10141,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.rand",
     "category": "Function",
-    "text": "rand([rng=GLOBAL_RNG], [S], [dims...])\n\nPick a random element or array of random elements from the set of values specified by S; S can be\n\nan indexable collection (for example 1:n or ['x','y','z']),\nan Associative or AbstractSet object,\na string (considered as a collection of characters), or\na type: the set of values to pick from is then equivalent to typemin(S):typemax(S) for integers (this is not applicable to BigInt), and to 0 1) for floating point numbers;\n\nS defaults to Float64.\n\nExamples\n\njulia> rand(Int, 2)\n2-element Array{Int64,1}:\n 1339893410598768192\n 1575814717733606317\n\njulia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))\n1=>2\n\nnote: Note\nThe complexity of rand(rng, s::Union{Associative,AbstractSet}) is linear in the length of s, unless an optimized method with constant complexity is available, which is the case for Dict, Set and IntSet. For more than a few calls, use rand(rng, collect(s)) instead, or either rand(rng, Dict(s)) or rand(rng, Set(s)) as appropriate.\n\n\n\n"
+    "text": "rand([rng=GLOBAL_RNG], [S], [dims...])\n\nPick a random element or array of random elements from the set of values specified by S; S can be\n\nan indexable collection (for example 1:n or ['x','y','z']),\nan Associative or AbstractSet object,\na string (considered as a collection of characters), or\na type: the set of values to pick from is then equivalent to typemin(S):typemax(S) for integers (this is not applicable to BigInt), and to 0 1) for floating point numbers;\n\nS defaults to Float64.\n\nExamples\n\njulia> rand(Int, 2)\n2-element Array{Int64,1}:\n 1339893410598768192\n 1575814717733606317\n\njulia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))\n1=>2\n\nnote: Note\nThe complexity of rand(rng, s::Union{Associative,AbstractSet}) is linear in the length of s, unless an optimized method with constant complexity is available, which is the case for Dict, Set and BitSet. For more than a few calls, use rand(rng, collect(s)) instead, or either rand(rng, Dict(s)) or rand(rng, Set(s)) as appropriate.\n\n\n\n"
 },
 
 {
