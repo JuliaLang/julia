@@ -72,7 +72,7 @@ end
     @test string(sym) == string(Char(0xdcdb))
     @test String(sym) == string(Char(0xdcdb))
     @test Meta.lower(Main, sym) === sym
-    res = string(parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
+    res = string(Meta.parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
     @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
 end
 
@@ -561,8 +561,8 @@ end
 end
 
 @testset "unrecognized escapes in string/char literals" begin
-    @test_throws ParseError parse("\"\\.\"")
-    @test_throws ParseError parse("\'\\.\'")
+    @test_throws ParseError Meta.parse("\"\\.\"")
+    @test_throws ParseError Meta.parse("\'\\.\'")
 end
 
 @testset "prevind and nextind" begin

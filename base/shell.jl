@@ -75,7 +75,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 error("space not allowed right after \$")
             end
             stpos = j
-            ex, j = parse(s,j,greedy=false)
+            ex, j = Meta.parse(s,j,greedy=false)
             last_parse = stpos:j
             update_arg(ex); i = j
         else

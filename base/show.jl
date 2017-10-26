@@ -509,8 +509,8 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 #   show_unquoted(io, ex) does the heavy lifting
 #
 # AST printing should follow two rules:
-#   1. parse(string(ex)) == ex
-#   2. eval(parse(repr(ex))) == ex
+#   1. Meta.parse(string(ex)) == ex
+#   2. eval(Meta.parse(repr(ex))) == ex
 #
 # Rule 1 means that printing an expression should generate Julia code which
 # could be reparsed to obtain the original expression. This code should be
@@ -521,8 +521,8 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 # original expression.
 #
 # This is consistent with many other show methods, i.e.:
-#   show(Set([1,2,3]))                # ==> "Set{Int64}([2,3,1])"
-#   eval(parse("Set{Int64}([2,3,1])”) # ==> An actual set
+#   show(Set([1,2,3]))                     # ==> "Set{Int64}([2,3,1])"
+#   eval(Meta.parse("Set{Int64}([2,3,1])”) # ==> An actual set
 # While this isn’t true of ALL show methods, it is of all ASTs.
 
 const ExprNode = Union{Expr, QuoteNode, Slot, LineNumberNode,

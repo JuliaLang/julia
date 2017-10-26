@@ -26,7 +26,7 @@ The next step is to [parse](https://en.wikipedia.org/wiki/Parsing#Computer_langu
 into an object called an expression, represented by the Julia type `Expr`:
 
 ```jldoctest prog
-julia> ex1 = parse(prog)
+julia> ex1 = Meta.parse(prog)
 :(1 + 1)
 
 julia> typeof(ex1)
@@ -86,7 +86,7 @@ Expr
 `Expr` objects may also be nested:
 
 ```jldoctest ex3
-julia> ex3 = parse("(4 + 4) / 2")
+julia> ex3 = Meta.parse("(4 + 4) / 2")
 :((4 + 4) / 2)
 ```
 
@@ -160,12 +160,12 @@ Expr
 (to view the structure of this expression, try `ex.head` and `ex.args`, or use [`dump`](@ref)
 as above or [`Meta.@dump`](@ref))
 
-Note that equivalent expressions may be constructed using [`parse`](@ref) or the direct `Expr`
+Note that equivalent expressions may be constructed using [`Meta.parse`](@ref) or the direct `Expr`
 form:
 
 ```jldoctest
-julia>      :(a + b*c + 1)  ==
-       parse("a + b*c + 1") ==
+julia>      :(a + b*c + 1)       ==
+       Meta.parse("a + b*c + 1") ==
        Expr(:call, :+, :a, Expr(:call, :*, :b, :c), 1)
 true
 ```

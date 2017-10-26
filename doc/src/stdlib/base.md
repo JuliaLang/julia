@@ -211,8 +211,6 @@ Base.@gensym
 Base.@goto
 Base.@label
 Base.@polly
-Base.parse(::AbstractString, ::Int)
-Base.parse(::AbstractString)
 ```
 
 ## Nullables
@@ -343,6 +341,8 @@ Base.gc
 Base.gc_enable
 Meta.lower
 Meta.@lower
+Meta.parse(::AbstractString, ::Int)
+Meta.parse(::AbstractString)
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1

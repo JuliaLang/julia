@@ -895,7 +895,7 @@ function setup_interface(
                     end
                 end
                 ast, pos = Base.syntax_deprecation_warnings(false) do
-                    Base.parse(input, oldpos, raise=false)
+                    Meta.parse(input, oldpos, raise=false)
                 end
                 if (isa(ast, Expr) && (ast.head == :error || ast.head == :continue || ast.head == :incomplete)) ||
                         (done(input, pos) && !endswith(input, '\n'))

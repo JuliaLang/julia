@@ -2073,6 +2073,10 @@ end
 # issue #24167
 @deprecate EnvHash EnvDict
 
+# issue #24349
+@deprecate parse(str::AbstractString; kwargs...) Meta.parse(str; kwargs...)
+@deprecate parse(str::AbstractString, pos::Int, ; kwargs...) Meta.parse(str, pos; kwargs...)
+@deprecate_binding ParseError Meta.ParseError
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

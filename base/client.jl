@@ -207,12 +207,12 @@ function syntax_deprecation_warnings(f::Function, warn::Bool)
 end
 
 function parse_input_line(s::String; filename::String="none")
-    # (expr, pos) = parse(s, 1)
+    # (expr, pos) = Meta.parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
     #                   (Ptr{UInt8},Csize_t,Int32,Int32),
     #                   s, sizeof(s), pos-1, 1)
     # if ex!==()
-    #     throw(ParseError("extra input after end of expression"))
+    #     throw(Meta.ParseError("extra input after end of expression"))
     # end
     # expr
     ex = ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),

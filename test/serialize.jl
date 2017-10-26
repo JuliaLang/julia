@@ -192,10 +192,10 @@ end
 
 # Expression
 create_serialization_stream() do s
-    expr = parse("a = 1")
+    expr = Meta.parse("a = 1")
     serialize(s, expr)
 
-    expr2 = parse(repeat("a = 1;", 300))
+    expr2 = Meta.parse(repeat("a = 1;", 300))
     serialize(s, expr2)
 
     seek(s, 0)
