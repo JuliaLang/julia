@@ -145,7 +145,7 @@ final residual vector `resid`.
 
 # Examples
 ```jldoctest
-julia> A = speye(4, 4); B = Diagonal(1:4);
+julia> A = sparse(1.0I, 4, 4); B = Diagonal(1:4);
 
 julia> λ, ϕ = eigs(A, B, nev = 2);
 

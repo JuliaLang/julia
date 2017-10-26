@@ -59,11 +59,11 @@ Returns the number of stored (filled) elements in a sparse array.
 
 # Examples
 ```jldoctest
-julia> A = speye(3)
-3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
+julia> A = sparse(2I, 3, 3)
+3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+  [1, 1]  =  2
+  [2, 2]  =  2
+  [3, 3]  =  2
 
 julia> nnz(A)
 3
@@ -83,17 +83,17 @@ modifications to the returned vector will mutate `A` as well. See
 
 # Examples
 ```jldoctest
-julia> A = speye(3)
-3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
+julia> A = sparse(2I, 3, 3)
+3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+  [1, 1]  =  2
+  [2, 2]  =  2
+  [3, 3]  =  2
 
 julia> nonzeros(A)
-3-element Array{Float64,1}:
- 1.0
- 1.0
- 1.0
+3-element Array{Int64,1}:
+ 2
+ 2
+ 2
 ```
 """
 nonzeros(S::SparseMatrixCSC) = S.nzval
@@ -108,11 +108,11 @@ nonzero values. See also [`nonzeros`](@ref) and [`nzrange`](@ref).
 
 # Examples
 ```jldoctest
-julia> A = speye(3)
-3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
+julia> A = sparse(2I, 3, 3)
+3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
+  [1, 1]  =  2
+  [2, 2]  =  2
+  [3, 3]  =  2
 
 julia> rowvals(A)
 3-element Array{Int64,1}:
@@ -1453,8 +1453,6 @@ julia> spones(A)
   [3, 3]  =  1.0
   [2, 4]  =  1.0
 ```
-
-Note the difference from [`speye`](@ref).
 """
 spones(S::SparseMatrixCSC{T}) where {T} =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
@@ -1487,55 +1485,11 @@ function spzeros(::Type{Tv}, ::Type{Ti}, sz::Tuple{Integer,Integer}) where {Tv, 
     spzeros(Tv, Ti, sz[1], sz[2])
 end
 
-speye(n::Integer) = speye(Float64, n)
-speye(::Type{T}, n::Integer) where {T} = speye(T, n, n)
-speye(m::Integer, n::Integer) = speye(Float64, m, n)
-
-"""
-    speye(S)
-
-Create a sparse identity matrix with the same size as `S`.
-
-# Examples
-```jldoctest
-julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
-4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
-  [4, 1]  =  2.0
-  [1, 2]  =  5.0
-  [3, 3]  =  3.0
-  [2, 4]  =  4.0
-
-julia> speye(A)
-4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
-  [4, 4]  =  1.0
-```
-
-Note the difference from [`spones`](@ref).
-"""
-speye(S::SparseMatrixCSC{T}) where {T} = speye(T, size(S, 1), size(S, 2))
-eye(S::SparseMatrixCSC) = speye(S)
-
-"""
-    speye([type,]m[,n])
-
-Create a sparse identity matrix of size `m x m`. When `n` is supplied,
-create a sparse identity matrix of size `m x n`. The type defaults to [`Float64`](@ref)
-if not specified.
-
-`sparse(I, m, n)` is equivalent to `speye(Int, m, n)`, and
-`sparse(α*I, m, n)` can be used to efficiently create a sparse
-multiple `α` of the identity matrix.
-"""
-speye(::Type{T}, m::Integer, n::Integer) where {T} = SparseMatrixCSC{T}(UniformScaling(one(T)), Dims((m, n)))
-sparse(s::UniformScaling, m::Integer, n::Integer) = SparseMatrixCSC(s, Dims((m, n)))
+eye(S::SparseMatrixCSC{T}) where {T} = SparseMatrixCSC{T}(I, size(S))
 
 function one(S::SparseMatrixCSC{T}) where T
-    m,n = size(S)
-    if m != n; throw(DimensionMismatch("multiplicative identity only defined for square matrices")); end
-    speye(T, m)
+    S.m == S.n || throw(DimensionMismatch("multiplicative identity only defined for square matrices"))
+    return SparseMatrixCSC{T}(I, S.m, S.n)
 end
 
 ## SparseMatrixCSC construction from UniformScaling
@@ -1568,6 +1522,7 @@ function Base.isone(A::SparseMatrixCSC)
     return true
 end
 
+sparse(s::UniformScaling, m::Integer, n::Integer) = SparseMatrixCSC(s, Dims((m, n)))
 
 # TODO: More appropriate location?
 conj!(A::SparseMatrixCSC) = (@inbounds broadcast!(conj, A.nzval, A.nzval); A)
@@ -3136,13 +3091,13 @@ Concatenate matrices block-diagonally. Currently only implemented for sparse mat
 
 # Examples
 ```jldoctest
-julia> blkdiag(speye(3), 2*speye(2))
-5×5 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
-  [1, 1]  =  1.0
-  [2, 2]  =  1.0
-  [3, 3]  =  1.0
-  [4, 4]  =  2.0
-  [5, 5]  =  2.0
+julia> blkdiag(sparse(2I, 3, 3), sparse(4I, 2, 2))
+5×5 SparseMatrixCSC{Int64,Int64} with 5 stored entries:
+  [1, 1]  =  2
+  [2, 2]  =  2
+  [3, 3]  =  2
+  [4, 4]  =  4
+  [5, 5]  =  4
 ```
 """
 function blkdiag(X::SparseMatrixCSC...)
@@ -3594,6 +3549,6 @@ end
 
 ## Uniform matrix arithmetic
 
-(+)(A::SparseMatrixCSC, J::UniformScaling) = A + J.λ * speye(A)
-(-)(A::SparseMatrixCSC, J::UniformScaling) = A - J.λ * speye(A)
-(-)(J::UniformScaling, A::SparseMatrixCSC) = J.λ * speye(A) - A
+(+)(A::SparseMatrixCSC, J::UniformScaling) = A + sparse(J, size(A)...)
+(-)(A::SparseMatrixCSC, J::UniformScaling) = A - sparse(J, size(A)...)
+(-)(J::UniformScaling, A::SparseMatrixCSC) = sparse(J, size(A)...) - A

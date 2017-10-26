@@ -1255,7 +1255,6 @@ export
     sparse,
     sparsevec,
     spdiagm,
-    speye,
     spones,
     sprand,
     sprandn,

@@ -188,7 +188,7 @@ end
 end
 
 @testset "Issue #9915" begin
-    @test speye(2)\speye(2) == eye(2)
+    @test sparse(1.0I, 2, 2) \ sparse(1.0I, 2, 2) == eye(2)
 end
 
 @testset "test Sparse constructor Symmetric and Hermitian input (and issymmetric and ishermitian)" begin
@@ -660,12 +660,12 @@ end
 end
 
 @testset "Further issue with promotion #14894" begin
-    @test cholfact(speye(Float16, 5))\ones(5) == ones(5)
-    @test cholfact(Symmetric(speye(Float16, 5)))\ones(5) == ones(5)
-    @test cholfact(Hermitian(speye(Complex{Float16}, 5)))\ones(5) == ones(Complex{Float64}, 5)
-    @test_throws MethodError cholfact(speye(BigFloat, 5))
-    @test_throws MethodError cholfact(Symmetric(speye(BigFloat, 5)))
-    @test_throws MethodError cholfact(Hermitian(speye(Complex{BigFloat}, 5)))
+    @test cholfact(sparse(Float16(1)I, 5, 5))\ones(5) == ones(5)
+    @test cholfact(Symmetric(sparse(Float16(1)I, 5, 5)))\ones(5) == ones(5)
+    @test cholfact(Hermitian(sparse(Complex{Float16}(1)I, 5, 5)))\ones(5) == ones(Complex{Float64}, 5)
+    @test_throws MethodError cholfact(sparse(BigFloat(1)I, 5, 5))
+    @test_throws MethodError cholfact(Symmetric(sparse(BigFloat(1)I, 5, 5)))
+    @test_throws MethodError cholfact(Hermitian(sparse(Complex{BigFloat}(1)I, 5, 5)))
 end
 
 @testset "test \\ for Factor and StridedVecOrMat" begin
@@ -684,7 +684,7 @@ end
 @testset "Make sure that ldltfact performs an LDLt (Issue #19032)" begin
     m, n = 400, 500
     A = sprandn(m, n, .2)
-    M = [speye(n) A'; A -speye(m)]
+    M = [I A'; A -I]
     b = M * ones(m + n)
     F = ldltfact(M)
     s = unsafe_load(pointer(F))
@@ -738,11 +738,12 @@ end
 end
 
 @testset "sparse right multiplication of Symmetric and Hermitian matrices #21431" begin
-    @test issparse(speye(2)*speye(2)*speye(2))
+    S = sparse(1.0I, 2, 2)
+    @test issparse(S*S*S)
     for T in (Symmetric, Hermitian)
-        @test issparse(speye(2)*T(speye(2))*speye(2))
-        @test issparse(speye(2)*(T(speye(2))*speye(2)))
-        @test issparse((speye(2)*T(speye(2)))*speye(2))
+        @test issparse(S*T(S)*S)
+        @test issparse(S*(T(S)*S))
+        @test issparse((S*T(S))*S)
     end
 end
 
@@ -788,7 +789,7 @@ end
 
 @testset "Issue #22335" begin
     local A, F
-    A = speye(3)
+    A = sparse(1.0I, 3, 3)
     @test LinAlg.issuccess(cholfact(A))
     A[3, 3] = -1
     F = cholfact(A)

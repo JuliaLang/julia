@@ -2076,6 +2076,55 @@ end
 # deprecate bits to bitstring (#24263, #24281)
 @deprecate bits bitstring
 
+# deprecate speye
+export speye
+function speye(n::Integer)
+    depwarn(string("`speye(n::Integer)` has been deprecated in favor of `I`, `sparse`, and ",
+                    "`SparseMatrixCSC` constructor methods. For a direct replacement, consider ",
+                    "`sparse(1.0I, n, n)`, `SparseMatrixCSC(1.0I, n, n)`, or `SparseMatrixCSC{Float64}(I, n, n)`. ",
+                    "If `Float64` element type is not necessary, consider the shorter `sparse(I, n, n)` ",
+                    "or `SparseMatrixCSC(I, n, n)` (with default `eltype(I)` of `Bool`)."), :speye)
+    return sparse(1.0I, n, n)
+end
+function speye(m::Integer, n::Integer)
+    depwarn(string("`speye(m::Integer, n::Integer)` has been deprecated in favor of `I`, ",
+                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
+                    "replacement, consider `sparse(1.0I, m, n)`, `SparseMatrixCSC(1.0I, m, n)`, ",
+                    "or `SparseMatrixCSC{Float64}(I, m, n)`. If `Float64` element type is not ",
+                    " necessary, consider the shorter `sparse(I, m, n)` or `SparseMatrixCSC(I, m, n)` ",
+                    "(with default `eltype(I)` of `Bool`)."), :speye)
+    return sparse(1.0I, m, n)
+end
+function speye(::Type{T}, n::Integer) where T
+    depwarn(string("`speye(T, n::Integer)` has been deprecated in favor of `I`, `sparse`, and ",
+                    "`SparseMatrixCSC` constructor methods. For a direct replacement, consider ",
+                    "`sparse(T(1)I, n, n)` if `T` is concrete or `SparseMatrixCSC{T}(I, n, n)` ",
+                    "if `T` is either concrete or abstract. If element type `T` is not necessary, ",
+                    "consider the shorter `sparse(I, n, n)` or `SparseMatrixCSC(I, n, n)` ",
+                    "(with default `eltype(I)` of `Bool`)."), :speye)
+    return SparseMatrixCSC{T}(I, n)
+end
+function speye(::Type{T}, m::Integer, n::Integer) where T
+    depwarn(string("`speye(T, m::Integer, n::Integer)` has been deprecated in favor of `I`, ",
+                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
+                    "replacement, consider `sparse(T(1)I, m, n)` if `T` is concrete or ",
+                    "`SparseMatrixCSC{T}(I, m, n)` if `T` is either concrete or abstract. ",
+                    "If element type `T` is not necessary, consider the shorter ",
+                    "`sparse(I, m, n)` or `SparseMatrixCSC(I, m, n)` (with default `eltype(I)` ",
+                    "of `Bool`)."), :speye)
+    return SparseMatrixCSC{T}(I, m, n)
+end
+function speye(S::SparseMatrixCSC{T}) where T
+    depwarn(string("`speye(S::SparseMatrixCSC{T})` has been deprecated in favor of `I`, ",
+                    "`sparse`, and `SparseMatrixCSC` constructor methods. For a direct ",
+                    "replacement, consider `sparse(T(1)I, size(S)...)` if `T` is concrete or ",
+                    "`SparseMatrixCSC{eltype(S)}(I, size(S))` if `T` is either concrete or abstract. ",
+                    "If preserving element type `T` is not necessary, consider the shorter ",
+                    "`sparse(I, size(S)...)` or `SparseMatrixCSC(I, size(S))` (with default ",
+                    "`eltype(I)` of `Bool`)."), :speye)
+    return SparseMatrixCSC{T}(I, m, n)
+end
+
 # issue #24167
 @deprecate EnvHash EnvDict
 

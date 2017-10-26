@@ -119,7 +119,7 @@ true
 Similarly, if `T` is a composite type and `x` a related instance, the result of
 `convert(T, x)` may alias part or all of `x`.
 ```jldoctest
-julia> x = speye(5);
+julia> x = sparse(1.0I, 5, 5);
 
 julia> typeof(x)
 SparseMatrixCSC{Float64,Int64}

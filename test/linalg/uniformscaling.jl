@@ -82,7 +82,7 @@ let
         @test B + I == B + eye(B)
         @test I + B == B + eye(B)
         AA = randn(2, 2)
-        for SS in (sprandn(3,3, 0.5), speye(Int, 3))
+        for SS in (sprandn(3,3, 0.5), sparse(Int(1)I, 3, 3))
             for (A, S) in ((AA, SS), (view(AA, 1:2, 1:2), view(SS, 1:3, 1:3)))
                 @test @inferred(A + I) == A + eye(A)
                 @test @inferred(I + A) == A + eye(A)
