@@ -83,15 +83,13 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool
     with_fake_pty() do slave, master
         p = spawn(detach(cmd), slave, slave, slave)
         # Kill the process if it takes too long. Typically occurs when process is waiting for input
-        @async begin
+        t = @async begin
             sleep(timeout)
             kill(p)
             close(master)
         end
         try
             for (challenge, response) in challenges
-                process_exited(p) && error("Too few prompts. $(format_output(out))")
-
                 write(out, readuntil(master, challenge))
                 if !isopen(master)
                     error("Could not locate challenge: \"$challenge\". $(format_output(out))")
@@ -102,9 +100,15 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool
         finally
             kill(p)
         end
-        # Determine if the process was explicitly killed
-        killed = process_exited(p) && (p.exitcode != 0 || p.termsignal != 0)
-        killed && error("Too many prompts. $(format_output(out))")
+
+        # Process timed out or aborted
+        if !success(p)
+            if istaskdone(t)
+                error("Too many prompts. $(format_output(out))")
+            else
+                Base.pipeline_error(p)
+            end
+        end
     end
     nothing
 end
