@@ -6736,6 +6736,11 @@ extern "C" void jl_dump_llvm_metadata(void *v)
     llvm_dump((Metadata*)v);
 }
 
+extern "C" void jl_dump_llvm_debugloc(void *v)
+{
+    llvm_dump((DebugLoc*)v);
+}
+
 extern void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;
     raw_fd_ostream OS(fname, EC, sys::fs::F_None);
