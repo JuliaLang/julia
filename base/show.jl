@@ -738,7 +738,7 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operato
         !first && print(io, sep)
         parens = !is_quoted(item) &&
             (first && prec >= prec_power &&
-             ((item isa Expr && item.head === :call && item.args[1] in uni_ops) ||
+             ((item isa Expr && item.head === :call && item.args[1] isa Symbol && item.args[1] in uni_ops) ||
               (item isa Real && item < 0))) ||
               (enclose_operators && item isa Symbol && isoperator(item))
         parens && print(io, '(')
@@ -922,7 +922,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         func = args[1]
         fname = isa(func,GlobalRef) ? func.name : func
         func_prec = operator_precedence(fname)
-        if func_prec > 0 || fname in uni_ops
+        if func_prec > 0 || (fname isa Symbol && fname in uni_ops)
             func = fname
         end
         func_args = args[2:end]

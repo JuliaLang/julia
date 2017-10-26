@@ -267,7 +267,7 @@ const CONVERSION_SPECIFIERS = Dict{Char, Type}(
 # Default values are needed when a conversion specifier is used in a DateFormat for parsing
 # and we have reached the end of the input string.
 # Note: Allow `Any` value as a default to support extensibility
-const CONVERSION_DEFAULTS = Dict{Type, Any}(
+const CONVERSION_DEFAULTS = ObjectIdDict(
     Year => Int64(1),
     Month => Int64(1),
     DayOfWeekToken => Int64(0),
@@ -282,7 +282,7 @@ const CONVERSION_DEFAULTS = Dict{Type, Any}(
 
 # Specifies the required fields in order to parse a TimeType
 # Note: Allows for addition of new TimeTypes
-const CONVERSION_TRANSLATIONS = Dict{Type{<:TimeType}, Tuple}(
+const CONVERSION_TRANSLATIONS = ObjectIdDict(
     Date => (Year, Month, Day),
     DateTime => (Year, Month, Day, Hour, Minute, Second, Millisecond),
     Time => (Hour, Minute, Second, Millisecond, Microsecond, Nanosecond),

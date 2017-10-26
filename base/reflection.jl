@@ -507,7 +507,7 @@ function instances end
 
 # subtypes
 function _subtypes(m::Module, x::Union{DataType,UnionAll},
-                   sts=Set{Union{DataType,UnionAll}}(), visited=Set{Module}())
+                   sts=ObjectIdDict(), visited=Set{Module}())
     push!(visited, m)
     xt = unwrap_unionall(x)
     if !isa(xt, DataType)
@@ -521,7 +521,7 @@ function _subtypes(m::Module, x::Union{DataType,UnionAll},
                 t = t::DataType
                 if t.name.name === s && supertype(t).name == xt.name
                     ti = typeintersect(t, x)
-                    ti != Bottom && push!(sts, ti)
+                    ti != Bottom && push!(sts, ti=>true)
                 end
             elseif isa(t, UnionAll)
                 t = t::UnionAll
@@ -530,7 +530,7 @@ function _subtypes(m::Module, x::Union{DataType,UnionAll},
                 tt = tt::DataType
                 if tt.name.name === s && supertype(tt).name == xt.name
                     ti = typeintersect(t, x)
-                    ti != Bottom && push!(sts, ti)
+                    ti != Bottom && push!(sts, ti=>true)
                 end
             elseif isa(t, Module)
                 t = t::Module
@@ -544,14 +544,14 @@ end
 function _subtypes_in(mods::Array, x::Union{DataType,UnionAll})
     if !isabstract(x)
         # Fast path
-        return Union{DataType,UnionAll}[]
+        return Any[]
     end
-    sts = Set{Union{DataType,UnionAll}}()
+    sts = ObjectIdDict()
     visited = Set{Module}()
     for m in mods
         _subtypes(m, x, sts, visited)
     end
-    return sort!(collect(sts), by=string)
+    return sort!(collect(Any, keys(sts)), by=string)
 end
 
 subtypes(m::Module, x::Union{DataType,UnionAll}) = _subtypes_in([m], x)

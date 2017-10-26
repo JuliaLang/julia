@@ -98,6 +98,14 @@ function serialize(s::ClusterSerializer, g::GlobalRef)
     invoke(serialize, Tuple{AbstractSerializer, GlobalRef}, s, g)
 end
 
+function hash_any(@nospecialize x)
+    try
+        return hash(x)
+    catch
+        return object_id(x)
+    end
+end
+
 # Send/resend a global object if
 # a) has not been sent previously, i.e., we are seeing this object_id for the first time, or,
 # b) hash value has changed or
@@ -114,7 +122,7 @@ function syms_2b_sent(s::ClusterSerializer, identifier)
             oid = object_id(v)
             if haskey(s.glbs_sent, oid)
                 # We have sent this object before, see if it has changed.
-                s.glbs_sent[oid] != hash(sym, hash(v)) && push!(lst, sym)
+                s.glbs_sent[oid] != hash(sym, hash_any(v)) && push!(lst, sym)
             else
                 push!(lst, sym)
             end
@@ -143,7 +151,7 @@ function serialize_global_from_main(s::ClusterSerializer, sym)
             end
         end
     end
-    record_v && (s.glbs_sent[oid] = hash(sym, hash(v)))
+    record_v && (s.glbs_sent[oid] = hash(sym, hash_any(v)))
 
     serialize(s, isconst(Main, sym))
     serialize(s, v)

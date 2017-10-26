@@ -632,7 +632,7 @@ for (Bsig, A1sig, A2sig, gbb, funcname) in
      (SparseMatrixCSC   , BitArray  ,  SparseMatrixCSC,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
      (SparseMatrixCSC   , SparseMatrixCSC  ,  BitArray,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
      )
-    @eval let cache = Dict{Function,Function}()
+    @eval let cache = ObjectIdDict()
         global $funcname
         function $funcname(f::Function, B::$Bsig, A1::$A1sig, A2::$A2sig)
             func       = @get! cache  f  gen_broadcast_function_sparse($gbb, f, ($A1sig) <: SparseMatrixCSC)
