@@ -468,3 +468,17 @@ Base.endof(x::CharStr) = endof(x.chars)
 # issue #12495: check that logical indexing attempt raises ArgumentError
 @test_throws ArgumentError "abc"[[true, false, true]]
 @test_throws ArgumentError "abc"[BitArray([true, false, true])]
+
+@testset "invalid code point" begin
+    s = String([0x61, 0xba, 0x41])
+    @test !isvalid(s)
+    @test_throws UnicodeError s[2]
+    e = try
+        s[2]
+    catch e
+        e
+    end
+    b = IOBuffer()
+    show(b, e)
+    @test String(take!(b)) == "UnicodeError: invalid character index 2 (0xba is a continuation byte)"
+end
