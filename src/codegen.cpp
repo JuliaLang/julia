@@ -13,6 +13,9 @@
 // also, use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
 #define FORCE_ELF
 #endif
+#if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
+#  define JL_DISABLE_FPO
+#endif
 #if defined(_CPU_X86_)
 #define JL_NEED_FLOATTEMP_VAR 1
 #endif
@@ -4164,7 +4167,9 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
             funcName.str(), M);
     jl_init_function(cw);
     cw->setAttributes(sig.attributes);
+#ifdef JL_DISABLE_FPO
     cw->addFnAttr("no-frame-pointer-elim", "true");
+#endif
     Function *cw_proto = function_proto(cw);
 
     jl_codectx_t ctx(jl_LLVMContext);
@@ -4343,7 +4348,9 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                     GlobalVariable::InternalLinkage, funcName.str(), M);
             jl_init_function(gf_thunk);
             gf_thunk->setAttributes(returninfo.decl->getAttributes());
+#ifdef JL_DISABLE_FPO
             gf_thunk->addFnAttr("no-frame-pointer-elim", "true");
+#endif
             // build a  specsig -> jl_apply_generic converter thunk
             // this builds a method that calls jl_apply_generic (as a closure over a singleton function pointer),
             // but which has the signature of a specsig
@@ -4570,7 +4577,9 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, const jl_returnin
     add_return_attr(w, Attribute::NonNull);
     w->addFnAttr("thunk");
     jl_init_function(w);
+#ifdef JL_DISABLE_FPO
     w->addFnAttr("no-frame-pointer-elim", "true");
+#endif
     Function::arg_iterator AI = w->arg_begin();
     Value *fArg = &*AI++;
     Value *argArray = &*AI++;
@@ -5011,7 +5020,9 @@ static std::unique_ptr<Module> emit_function(
         declarations->specFunctionObject = NULL;
     }
 
+#ifdef JL_DISABLE_FPO
     f->addFnAttr("no-frame-pointer-elim", "true");
+#endif
     if (jlrettype == (jl_value_t*)jl_bottom_type)
         f->setDoesNotReturn();
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
