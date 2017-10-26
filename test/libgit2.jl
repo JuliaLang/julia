@@ -321,6 +321,83 @@ end
     end
 end
 
+@testset "GitCredential" begin
+    @testset "missing" begin
+        str = ""
+        cred = read!(IOBuffer(str), LibGit2.GitCredential())
+        @test cred == LibGit2.GitCredential()
+        @test sprint(write, cred) == str
+    end
+
+    @testset "empty" begin
+        str = """
+            protocol=
+            host=
+            path=
+            username=
+            password=
+            """
+        cred = read!(IOBuffer(str), LibGit2.GitCredential())
+        @test cred == LibGit2.GitCredential("", "", "", "", "")
+        @test sprint(write, cred) == str
+    end
+
+    @testset "input/output" begin
+        str = """
+            protocol=https
+            host=example.com
+            username=alice
+            password=*****
+            """
+        cred = read!(IOBuffer(str), LibGit2.GitCredential())
+        @test cred == LibGit2.GitCredential("https", "example.com", nothing, "alice", "*****")
+        @test sprint(write, cred) == str
+    end
+
+    @testset "URL input/output" begin
+        str = """
+            host=example.com
+            password=bar
+            url=https://a@b/c
+            username=foo
+            """
+        expected = """
+            protocol=https
+            host=b
+            path=c
+            username=foo
+            """
+        cred = read!(IOBuffer(str), LibGit2.GitCredential())
+        @test cred == LibGit2.GitCredential("https", "b", "c", "foo", nothing)
+        @test sprint(write, cred) == expected
+    end
+
+    @testset "ismatch" begin
+        # Equal
+        cred = LibGit2.GitCredential("https", "github.com")
+        @test LibGit2.ismatch("https://github.com", cred)
+
+        # Credential hostname is different
+        cred = LibGit2.GitCredential("https", "github.com")
+        @test !LibGit2.ismatch("https://myhost", cred)
+
+        # Credential is less specific than URL
+        cred = LibGit2.GitCredential("https")
+        @test !LibGit2.ismatch("https://github.com", cred)
+
+        # Credential is more specific than URL
+        cred = LibGit2.GitCredential("https", "github.com", "path", "user", "pass")
+        @test LibGit2.ismatch("https://github.com", cred)
+
+        # Credential needs to have an "" username to match
+        cred = LibGit2.GitCredential("https", "github.com", nothing, "")
+        @test LibGit2.ismatch("https://@github.com", cred)
+
+        cred = LibGit2.GitCredential("https", "github.com", nothing, nothing)
+        @test !LibGit2.ismatch("https://@github.com", cred)
+    end
+end
+
 mktempdir() do dir
     # test parameters
     repo_url = "https://github.com/JuliaLang/Example.jl"
@@ -384,11 +461,12 @@ mktempdir() do dir
         # Write config entries with duplicate names
         open(config_path, "a") do fp
             write(fp, """
-            [credential]
-            \thelper = store
-            [credential]
-            \thelper = cache
-            """)
+                [credential]
+                    helper = store
+                    username = julia
+                [credential]
+                    helper = cache
+                """)
         end
 
         LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
@@ -1458,6 +1536,151 @@ mktempdir() do dir
         @test cred.pass != "password"
     end
 
+    @testset "Git Credential Username" begin
+        @testset "fill username" begin
+            config_path = joinpath(dir, config_file)
+            isfile(config_path) && rm(config_path)
+
+            LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                # No credential settings should be set for these tests
+                @test isempty(collect(LibGit2.GitConfigIter(cfg, r"credential.*")))
+
+                # No credential settings in configuration.
+                cred = LibGit2.GitCredential("https", "github.com")
+                username = LibGit2.default_username(cfg, cred)
+                @test isnull(username)
+
+                # Add a credential setting for a specific for a URL
+                LibGit2.set!(cfg, "credential.https://github.com.username", "foo")
+
+                cred = LibGit2.GitCredential("https", "github.com")
+                username = LibGit2.default_username(cfg, cred)
+                @test !isnull(username)
+                @test get(username) == "foo"
+
+                cred = LibGit2.GitCredential("https", "mygithost")
+                username = LibGit2.default_username(cfg, cred)
+                @test isnull(username)
+
+                # Add a global credential setting after the URL specific setting. The first
+                # setting to match will be the one that is used.
+                LibGit2.set!(cfg, "credential.username", "bar")
+
+                cred = LibGit2.GitCredential("https", "github.com")
+                username = LibGit2.default_username(cfg, cred)
+                @test !isnull(username)
+                @test get(username) == "foo"
+
+                cred = LibGit2.GitCredential("https", "mygithost")
+                username = LibGit2.default_username(cfg, cred)
+                @test !isnull(username)
+                @test get(username) == "bar"
+            end
+        end
+
+        @testset "empty username" begin
+            config_path = joinpath(dir, config_file)
+            isfile(config_path) && rm(config_path)
+
+            LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                # No credential settings should be set for these tests
+                @test isempty(collect(LibGit2.GitConfigIter(cfg, r"credential.*")))
+
+                # An empty username should count as being set
+                LibGit2.set!(cfg, "credential.https://github.com.username", "")
+                LibGit2.set!(cfg, "credential.username", "name")
+
+                cred = LibGit2.GitCredential("https", "github.com")
+                username = LibGit2.default_username(cfg, cred)
+                @test !isnull(username)
+                @test get(username) == ""
+
+                cred = LibGit2.GitCredential("https", "mygithost", "path")
+                username = LibGit2.default_username(cfg, cred)
+                @test !isnull(username)
+                @test get(username) == "name"
+            end
+        end
+    end
+
+    @testset "GitCredentialHelper" begin
+        GitCredentialHelper = LibGit2.GitCredentialHelper
+        GitCredential = LibGit2.GitCredential
+
+        @testset "parse" begin
+            @test parse(GitCredentialHelper, "!echo hello") == GitCredentialHelper(`echo hello`)
+            @test parse(GitCredentialHelper, "/bin/bash") == GitCredentialHelper(`/bin/bash`)
+            @test parse(GitCredentialHelper, "store") == GitCredentialHelper(`git credential-store`)
+        end
+
+        @testset "empty helper" begin
+            config_path = joinpath(dir, config_file)
+
+            # Note: LibGit2.set! doesn't allow us to set duplicates or ordering
+            open(config_path, "w+") do fp
+                write(fp, """
+                    [credential]
+                        helper = !echo first
+                    [credential "https://mygithost"]
+                        helper = ""
+                    [credential]
+                        helper = !echo second
+                    """)
+            end
+
+            LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                @test length(collect(LibGit2.GitConfigIter(cfg, r"credential.*"))) == 3
+
+                expected = [
+                    GitCredentialHelper(`echo first`),
+                    GitCredentialHelper(`echo second`),
+                ]
+
+                @test LibGit2.credential_helpers(cfg, GitCredential("https", "github.com")) == expected
+                @test_broken LibGit2.credential_helpers(cfg, GitCredential("https", "mygithost")) == expected[2]
+            end
+        end
+
+        @testset "approve/reject" begin
+            # In order to use the "store" credential helper `git` needs to be installed and
+            # on the path.
+            git_installed = try
+                success(`git --version`)
+            catch
+                false
+            end
+
+            if git_installed
+                config_path = joinpath(dir, config_file)
+                credential_file = joinpath(dir, ".git-credentials")
+
+                isfile(config_path) && rm(config_path)
+
+                LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                    @test !isfile(credential_file)
+                    @test isempty(LibGit2.get(cfg, "credential.helper", ""))
+
+                    helper = parse(LibGit2.GitCredentialHelper, "store")  # Requires `git`
+                    LibGit2.set!(cfg, "credential.helper", "store")
+
+                    # Set HOME to control where .git-credentials file is written.
+                    withenv(HOME => dir) do
+                        query = LibGit2.GitCredential("https", "mygithost")
+                        filled = LibGit2.GitCredential("https", "mygithost", nothing, "bob", "s3cre7")
+
+                        @test LibGit2.fill!(helper, deepcopy(query)) == query
+
+                        LibGit2.approve(helper, filled)
+                        @test LibGit2.fill!(helper, deepcopy(query)) == filled
+
+                        LibGit2.reject(helper, filled)
+                        @test LibGit2.fill!(helper, deepcopy(query)) == query
+                    end
+                end
+            end
+        end
+    end
+
     # The following tests require that we can fake a TTY so that we can provide passwords
     # which use the `getpass` function. At the moment we can only fake this on UNIX based
     # systems.
@@ -1797,7 +2020,8 @@ mktempdir() do dir
             function gen_ex(; username="git")
                 quote
                     include($LIBGIT2_HELPER_PATH)
-                    payload = CredentialPayload(allow_ssh_agent=true, allow_prompt=false)
+                    payload = CredentialPayload(allow_prompt=false, allow_ssh_agent=true,
+                                                allow_git_helpers=false)
                     credential_loop($valid_cred, $url, Nullable{String}($username), payload)
                 end
             end
@@ -1885,7 +2109,8 @@ mktempdir() do dir
 
             ssh_ex = quote
                 include($LIBGIT2_HELPER_PATH)
-                payload = CredentialPayload(allow_ssh_agent=false, allow_prompt=true)
+                payload = CredentialPayload(allow_prompt=true, allow_ssh_agent=false,
+                                            allow_git_helpers=false)
                 err, auth_attempts = credential_loop($valid_cred, $url, "git", payload)
                 (err, auth_attempts, payload.credential)
             end
@@ -1936,8 +2161,9 @@ mktempdir() do dir
             function gen_ex(cred; allow_prompt=true, allow_ssh_agent=false)
                 quote
                     include($LIBGIT2_HELPER_PATH)
-                    payload = CredentialPayload($cred, allow_ssh_agent=$allow_ssh_agent,
-                        allow_prompt=$allow_prompt)
+                    payload = CredentialPayload($cred, allow_prompt=$allow_prompt,
+                                                allow_ssh_agent=$allow_ssh_agent,
+                                                allow_git_helpers=false)
                     credential_loop($valid_cred, $url, $username, payload)
                 end
             end
@@ -1965,7 +2191,8 @@ mktempdir() do dir
             function gen_ex(cred; allow_prompt=true)
                 quote
                     include($LIBGIT2_HELPER_PATH)
-                    payload = CredentialPayload($cred, allow_prompt=$allow_prompt)
+                    payload = CredentialPayload($cred, allow_prompt=$allow_prompt,
+                                                allow_git_helpers=false)
                     credential_loop($valid_cred, $url, "", payload)
                 end
             end
@@ -2000,7 +2227,8 @@ mktempdir() do dir
                     include($LIBGIT2_HELPER_PATH)
                     cache = CachedCredentials()
                     $(cached_cred !== nothing && :(LibGit2.approve(cache, $cached_cred, $url)))
-                    payload = CredentialPayload(cache, allow_prompt=$allow_prompt)
+                    payload = CredentialPayload(cache, allow_prompt=$allow_prompt,
+                                                allow_git_helpers=false)
                     err, auth_attempts = credential_loop($valid_cred, $url, "", payload)
                     (err, auth_attempts, cache)
                 end
@@ -2062,7 +2290,8 @@ mktempdir() do dir
             expect_ssh_ex = quote
                 include($LIBGIT2_HELPER_PATH)
                 valid_cred = LibGit2.UserPasswordCredentials("foo", "bar")
-                payload = CredentialPayload(valid_cred, allow_ssh_agent=false)
+                payload = CredentialPayload(valid_cred, allow_ssh_agent=false,
+                                            allow_git_helpers=false)
                 credential_loop(valid_cred, "ssh://github.com/repo", Nullable(""),
                     Cuint(LibGit2.Consts.CREDTYPE_SSH_KEY), payload)
             end
@@ -2075,7 +2304,8 @@ mktempdir() do dir
             expect_https_ex = quote
                 include($LIBGIT2_HELPER_PATH)
                 valid_cred = LibGit2.SSHCredentials("foo", "", "", "")
-                payload = CredentialPayload(valid_cred, allow_ssh_agent=false)
+                payload = CredentialPayload(valid_cred, allow_ssh_agent=false,
+                                            allow_git_helpers=false)
                 credential_loop(valid_cred, "https://github.com/repo", Nullable(""),
                     Cuint(LibGit2.Consts.CREDTYPE_USERPASS_PLAINTEXT), payload)
             end
@@ -2095,7 +2325,8 @@ mktempdir() do dir
             ex = quote
                 include($LIBGIT2_HELPER_PATH)
                 valid_cred = LibGit2.UserPasswordCredentials("foo", "bar")
-                payload = CredentialPayload(valid_cred, allow_ssh_agent=false)
+                payload = CredentialPayload(valid_cred, allow_ssh_agent=false,
+                                            allow_git_helpers=false)
                 credential_loop(valid_cred, "foo://github.com/repo", Nullable(""),
                     $allowed_types, payload)
             end
@@ -2119,7 +2350,7 @@ mktempdir() do dir
                 include($LIBGIT2_HELPER_PATH)
                 valid_cred = LibGit2.UserPasswordCredentials($valid_username, $valid_password)
                 user = Nullable{String}()
-                payload = CredentialPayload()
+                payload = CredentialPayload(allow_git_helpers=false)
                 first_result = credential_loop(valid_cred, $(urls[1]), user, payload)
                 LibGit2.reset!(payload)
                 second_result = credential_loop(valid_cred, $(urls[2]), user, payload)

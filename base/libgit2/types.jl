@@ -864,6 +864,46 @@ function Base.show(io::IO, ce::ConfigEntry)
     print(io, "ConfigEntry(\"", unsafe_string(ce.name), "\", \"", unsafe_string(ce.value), "\")")
 end
 
+"""
+    split(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}
+
+Break the `ConfigEntry` up to the following pieces: section, subsection, name, and value.
+
+# Examples
+Given the git configuration file containing:
+```
+[credential "https://example.com"]
+    username = me
+```
+
+The `ConfigEntry` would look like the following:
+
+```julia-repl
+julia> entry
+ConfigEntry("credential.https://example.com.username", "me")
+
+julia> split(entry)
+("credential", "https://example.com", "username", "me")
+```
+
+Refer to the [git config syntax documenation](https://git-scm.com/docs/git-config#_syntax)
+for more details.
+"""
+function Base.split(ce::ConfigEntry)
+    key = unsafe_string(ce.name)
+
+    # Determine the positions of the delimiters
+    subsection_delim = search(key, '.')
+    name_delim = rsearch(key, '.')
+
+    section = SubString(key, 1, subsection_delim - 1)
+    subsection = SubString(key, subsection_delim + 1, name_delim - 1)
+    name = SubString(key, name_delim + 1)
+    value = unsafe_string(ce.value)
+
+    return (section, subsection, name, value)
+end
+
 # Abstract object types
 abstract type AbstractGitObject end
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
@@ -1215,14 +1255,18 @@ different URL.
 mutable struct CredentialPayload <: Payload
     explicit::Nullable{AbstractCredentials}
     cache::Nullable{CachedCredentials}
-    allow_ssh_agent::Bool  # Allow the use of the SSH agent to get credentials
-    allow_prompt::Bool     # Allow prompting the user for credentials
+    allow_ssh_agent::Bool    # Allow the use of the SSH agent to get credentials
+    allow_git_helpers::Bool  # Allow the use of git credential helpers
+    allow_prompt::Bool       # Allow prompting the user for credentials
+
+    config::GitConfig
 
     # Ephemeral state fields
     credential::Nullable{AbstractCredentials}
     first_pass::Bool
     use_ssh_agent::Bool
     use_env::Bool
+    use_git_helpers::Bool
     remaining_prompts::Int
 
     url::String
@@ -1232,10 +1276,13 @@ mutable struct CredentialPayload <: Payload
 
     function CredentialPayload(
             credential::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}(),
-            cache::Nullable{CachedCredentials}=Nullable{CachedCredentials}();
+            cache::Nullable{CachedCredentials}=Nullable{CachedCredentials}(),
+            config::GitConfig=GitConfig();
             allow_ssh_agent::Bool=true,
+            allow_git_helpers::Bool=true,
             allow_prompt::Bool=true)
-        payload = new(credential, cache, allow_ssh_agent, allow_prompt)
+
+        payload = new(credential, cache, allow_ssh_agent, allow_git_helpers, allow_prompt, config)
         return reset!(payload)
     end
 end
@@ -1249,16 +1296,18 @@ function CredentialPayload(cache::CachedCredentials; kwargs...)
 end
 
 """
-    reset!(payload) -> CredentialPayload
+    reset!(payload, [config]) -> CredentialPayload
 
 Reset the `payload` state back to the initial values so that it can be used again within
-the credential callback.
+the credential callback. If a `config` is provided the configuration will also be updated.
 """
-function reset!(p::CredentialPayload)
+function reset!(p::CredentialPayload, config::GitConfig=p.config)
+    p.config = config
     p.credential = Nullable{AbstractCredentials}()
     p.first_pass = true
     p.use_ssh_agent = p.allow_ssh_agent
     p.use_env = true
+    p.use_git_helpers = p.allow_git_helpers
     p.remaining_prompts = p.allow_prompt ? 3 : 0
     p.url = ""
     p.scheme = ""
@@ -1281,6 +1330,9 @@ function approve(p::CredentialPayload)
     if !isnull(p.cache)
         approve(unsafe_get(p.cache), cred, p.url)
     end
+    if p.allow_git_helpers
+        approve(p.config, cred, p.url)
+    end
 end
 
 """
@@ -1295,5 +1347,8 @@ function reject(p::CredentialPayload)
 
     if !isnull(p.cache)
         reject(unsafe_get(p.cache), cred, p.url)
+    end
+    if p.allow_git_helpers
+        reject(p.config, cred, p.url)
     end
 end
