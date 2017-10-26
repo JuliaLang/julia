@@ -5,6 +5,7 @@ the first dimension.
 """
 struct ReinterpretArray{T,N,S,A<:AbstractArray{S, N}} <: AbstractArray{T, N}
     parent::A
+    global reinterpret
     function reinterpret(::Type{T}, a::A) where {T,N,S,A<:AbstractArray{S, N}}
         function throwbits(::Type{S}, ::Type{T}, ::Type{U}) where {S,T,U}
             @_noinline_meta
