@@ -216,10 +216,18 @@ srand(1)
             end
         end
 
-        @testset "Diagonals" begin
-            @test diag(T,2) == zeros(elty, n-2)
+        @testset "diag" begin
+            @test (@inferred diag(T))::typeof(dv) == dv
+            @test (@inferred diag(T, uplo == :U ? 1 : -1))::typeof(dv) == ev
+            @test (@inferred diag(T,2))::typeof(dv) == zeros(elty, n-2)
             @test_throws ArgumentError diag(T, -n - 1)
-            @test_throws ArgumentError diag(T, n + 1)
+            @test_throws ArgumentError diag(T,  n + 1)
+            # test diag with another wrapped vector type
+            gdv, gev = GenericArray(dv), GenericArray(ev)
+            G = Bidiagonal(gdv, gev, uplo)
+            @test (@inferred diag(G))::typeof(gdv) == gdv
+            @test (@inferred diag(G, uplo == :U ? 1 : -1))::typeof(gdv) == gev
+            @test (@inferred diag(G,2))::typeof(gdv) == GenericArray(zeros(elty, n-2))
         end
 
         @testset "Eigensystems" begin

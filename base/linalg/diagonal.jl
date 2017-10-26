@@ -322,7 +322,18 @@ transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
 adjoint(D::Diagonal{<:Number}) = conj(D)
 adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
 
-diag(D::Diagonal) = D.diag
+function diag(D::Diagonal, k::Integer=0)
+    # every branch call similar(..., ::Int) to make sure the
+    # same vector type is returned independent of k
+    if k == 0
+        return copy!(similar(D.diag, length(D.diag)), D.diag)
+    elseif -size(D,1) <= k <= size(D,1)
+        return fill!(similar(D.diag, size(D,1)-abs(k)), 0)
+    else
+        throw(ArgumentError(string("requested diagonal, $k, must be at least $(-size(D, 1)) ",
+            "and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
+    end
+end
 trace(D::Diagonal) = sum(D.diag)
 det(D::Diagonal) = prod(D.diag)
 logdet(D::Diagonal{<:Real}) = sum(log, D.diag)

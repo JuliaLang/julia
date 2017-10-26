@@ -39,7 +39,6 @@ srand(1)
         @test Array(imag(D)) == imag(DM)
 
         @test parent(D) == dd
-        @test diag(D) == dd
         @test D[1,1] == dd[1]
         @test D[1,2] == 0
 
@@ -50,6 +49,18 @@ srand(1)
             @test ishermitian(D)
         end
     end
+
+    @testset "diag" begin
+        @test_throws ArgumentError diag(D,  n+1)
+        @test_throws ArgumentError diag(D, -n-1)
+        @test (@inferred diag(D))::typeof(dd) == dd
+        @test (@inferred diag(D, 0))::typeof(dd) == dd
+        @test (@inferred diag(D, 1))::typeof(dd) == zeros(elty, n-1)
+        DG = Diagonal(GenericArray(dd))
+        @test (@inferred diag(DG))::typeof(GenericArray(dd)) == GenericArray(dd)
+        @test (@inferred diag(DG, 1))::typeof(GenericArray(dd)) == GenericArray(zeros(elty, n-1))
+    end
+
 
     @testset "Simple unary functions" begin
         for op in (-,)
