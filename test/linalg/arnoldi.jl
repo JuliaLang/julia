@@ -20,6 +20,7 @@ using Test
                 a = areal
                 b = breal
             end
+            a_evs = eigvals(Array(a))
             a     = convert(SparseMatrixCSC{elty}, a)
             asym  = a' + a                  # symmetric indefinite
             apd   = a'*a                    # symmetric positive-definite
@@ -40,6 +41,20 @@ using Test
             # (d,v) = eigs(a, b, nev=3, tol=1e-8) # not handled yet
             # @test a*v[:,2] ≈ d[2]*b*v[:,2] atol=testtol
             # @test norm(v) > testtol # eigenvectors cannot be null vectors
+            if elty <: Base.LinAlg.BlasComplex
+                sr_ind = indmin(real.(a_evs))
+                (d, v) = eigs(a, nev=1, which=:SR)
+                @test d[1] ≈ a_evs[sr_ind]
+                si_ind = indmin(imag.(a_evs))
+                (d, v) = eigs(a, nev=1, which=:SI)
+                @test d[1] ≈ a_evs[si_ind]
+                lr_ind = indmax(real.(a_evs))
+                (d, v) = eigs(a, nev=1, which=:LR)
+                @test d[1] ≈ a_evs[lr_ind]
+                li_ind = indmax(imag.(a_evs))
+                (d, v) = eigs(a, nev=1, which=:LI)
+                @test d[1] ≈ a_evs[li_ind]
+            end
 
             (d,v) = eigs(asym, nev=3)
             @test asym*v[:,1] ≈ d[1]*v[:,1]
