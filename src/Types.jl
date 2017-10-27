@@ -293,11 +293,11 @@ function write_env(env::EnvCache)
     # load old environment for comparison
     old_env = EnvCache(env.env)
     # update the project file
-    if !isempty(env.project) || ispath(env.project_file)
+    project = deepcopy(env.project)
+    isempty(project["deps"]) && delete!(project, "deps")
+    if !isempty(project) || ispath(env.project_file)
         info("Updating $(pathrepr(env, env.project_file))")
         Pkg3.Display.print_project_diff(old_env, env)
-        project = deepcopy(env.project)
-        isempty(project["deps"]) && delete!(project, "deps")
         mkpath(dirname(env.project_file))
         open(env.project_file, "w") do io
             TOML.print(io, project, sorted=true)
