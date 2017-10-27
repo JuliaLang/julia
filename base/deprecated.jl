@@ -1630,25 +1630,18 @@ function _depwarn_for_trailing_indices(t::Tuple)
 end
 
 # issue #...: nonscalar indexed assignment of many values to many locations
-@generated function _unsafe_setindex!(::IndexStyle, A::AbstractArray, X::AbstractArray, I::Union{Real,AbstractArray}...)
-    N = length(I)
-    quote
-        if ndims(A) == ndims(X)
-            depwarn("using nonscalar indexed assignment to implicitly broadcast the values of an array to many indices is deprecated. Use `A[I...] .= values` to explicitly opt-in to broadcasting.", :setindex!)
-        else
-            depwarn("using nonscalar indexed assignment to implicitly broadcast the values of an array to many indices is deprecated. Use `A[I...] .= reshape(values` to explicitly opt-in to broadcasting.", :setindex!)
-        end
-        @nexprs $N d->(I_d = I[d])
-        idxlens = @ncall $N index_lengths I
-        @ncall $N setindex_shape_check X (d->idxlens[d])
-        Xs = start(X)
-        @inbounds @nloops $N i d->I_d begin
-            v, Xs = next(X, Xs)
-            @ncall $N setindex! A v i
-        end
-        A
+function deprecate_nonscalar_indexed_assignment!(A::AbstractArray, X::AbstractArray, I...)
+    if ndims(A) == ndims(X)
+        depwarn("using `A[I...] = X` to implicitly broadcast the elements of `X` to many locations in `A` is deprecated. Use `A[I...] .= X` to explicitly opt-in to broadcasting.", :setindex!)
+        A[I...] .= X
+    else
+        depwarn("using `A[I...] = X` to implicitly broadcast the elements of `X` to many locations in `A` is deprecated. Use `A[I...] .= reshape(X, indices(view(A, I...)))` to explicitly opt-in to broadcasting.", :setindex!)
+        A[I...] .= reshape(X, indices(view(A, I...)))
     end
 end
+_unsafe_setindex!(::IndexStyle, A::AbstractArray, X::AbstractArray, I::Union{Real,AbstractArray}...) = deprecate_nonscalar_indexed_assignment!(A, X, I...)
+setindex!(B::BitArray, X::StridedArray, J0::Union{Colon,UnitRange{Int}}) = deprecate_nonscalar_indexed_assignment(B, X, J0)
+setindex!(B::BitArray, X::StridedArray, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...) = deprecate_nonscalar_indexed_assignment(B, X, I0, I)
 
 # issue #22791
 @deprecate select partialsort

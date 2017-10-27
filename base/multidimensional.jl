@@ -1473,12 +1473,12 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 function broadcast!(::typeof(identity), B::BitArray, X::StridedArray)
-    size(B) == size(X) || return Broadcast.broadcast_c!(identity, containertype(B), containertype(X), B, X)
+    size(B) == size(X) || return _broadcast!(identity, B, X)
     copy_to_bitarray_chunks!(B.chunks, 1, X, 1, length(B))
     return B
 end
 function broadcast!(::typeof(identity), V::SubArray{<:Any,<:Any,<:BitArray,<:Tuple{AbstractUnitRange}}, X::StridedArray)
-    size(V) == size(X) || return Broadcast.broadcast_c!(identity, containertype(V), containertype(X), V, X)
+    size(V) == size(X) || _broadcast!(identity, B, X)
     B = V.parent
     I0 = V.indexes[1]
     l0 = length(I0)
@@ -1491,7 +1491,7 @@ end
         V::SubArray{<:Any,<:Any,<:BitArray,<:Tuple{AbstractUnitRange,Vararg{Union{AbstractUnitRange,Int}}}}, X::StridedArray)
     N = length(I)
     quote
-        size(V) == size(X) || return Broadcast.broadcast_c!(identity, containertype(V), containertype(X), V, X)
+        size(V) == size(X) || return _broadcast(identity, V, X)
         B = V.parent
         I0 = V.indexes[1]
         I = tail(V.indexes)

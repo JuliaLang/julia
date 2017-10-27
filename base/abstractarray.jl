@@ -1121,7 +1121,7 @@ function typed_vcat(::Type{T}, V::AbstractVector...) where T
     for k=1:length(V)
         Vk = V[k]
         p1 = pos+length(Vk)-1
-        a[pos:p1] = Vk
+        a[pos:p1] .= Vk
         pos = p1+1
     end
     a
@@ -1259,7 +1259,7 @@ function _cat(A, shape::NTuple{N}, catdims, X...) where N
             end
         end
         I::NTuple{N, UnitRange{Int}} = (inds...,)
-        A[I...] = x
+        A[I...] .= x
     end
     return A
 end
