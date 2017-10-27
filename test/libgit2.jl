@@ -2285,6 +2285,38 @@ mktempdir() do dir
             @test cache.cred == Dict()
         end
 
+        @testset "HTTPS git helper username" begin
+            url = "https://github.com/test/package.jl"
+
+            valid_username = "julia"
+            valid_password = randstring(16)
+            valid_cred = LibGit2.UserPasswordCredentials(valid_username, valid_password)
+
+            config_path = joinpath(dir, config_file)
+            write(config_path, """
+                [credential]
+                    username = $valid_username
+                """)
+
+            https_ex = quote
+                include($LIBGIT2_HELPER_PATH)
+                LibGit2.with(LibGit2.GitConfig($config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                    payload = CredentialPayload(Nullable{AbstractCredentials}(),
+                                                Nullable{CachedCredentials}(), cfg,
+                                                allow_git_helpers=true)
+                    credential_loop($valid_cred, $url, Nullable{String}(), payload)
+                end
+            end
+
+            challenges = [
+                "Username for 'https://github.com' [$valid_username]:" => "\n",
+                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+            ]
+            err, auth_attempts = challenge_prompt(https_ex, challenges)
+            @test err == git_ok
+            @test auth_attempts == 1
+        end
+
         @testset "Incompatible explicit credentials" begin
             # User provides a user/password credential where a SSH credential is required.
             expect_ssh_ex = quote
