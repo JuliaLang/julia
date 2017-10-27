@@ -83,9 +83,15 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool
     with_fake_pty() do slave, master
         p = spawn(detach(cmd), slave, slave, slave)
         # Kill the process if it takes too long. Typically occurs when process is waiting for input
-        t = @async begin
+        done = Channel(1)
+        @async begin
             sleep(timeout)
-            kill(p)
+            if process_running(p)
+                kill(p)
+                put!(done, :timed_out)
+            else
+                put!(done, :exited)
+            end
             close(master)
         end
         try
@@ -103,7 +109,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool
 
         # Process timed out or aborted
         if !success(p)
-            if istaskdone(t)
+            if isready(done) && fetch(done) == :timed_out
                 error("Too many prompts. $(format_output(out))")
             else
                 Base.pipeline_error(p)
