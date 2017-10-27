@@ -104,9 +104,11 @@ _log_record_ids = Set{Symbol}()
 # itself doesn't change.
 function log_record_id(_module, level, message_ex)
     modname = join(fullname(_module), "_")
-    h = hash(string(modname, level, message_ex)) % ((1<<24) - 1000)
+    # Use (1<<31) to fit well within an (arbitriraly chosen) eight hex digits,
+    # as we increment h to resolve any collisions.
+    h = hash(string(modname, level, message_ex)) % (1<<31)
     while true
-        id = Symbol(@sprintf("%s_%06x", modname, h))
+        id = Symbol(string(modname, '_', hex(h, 8)))
         if !(id in _log_record_ids)
             push!(_log_record_ids, id)
             return id
@@ -304,7 +306,7 @@ macro error(message, exs...) logmsg_code((@sourceinfo)..., :Error, message, exs.
 """
     handle_message(logger, level, message, _module, group, id, file, line; key1=val1, ...)
 
-Log a message to `logger` at `level`.  The logicla location at which the
+Log a message to `logger` at `level`.  The logical location at which the
 message was generated is given by module `_module` and `group`; the source
 location by `file` and `line`. `id` is an arbitrary unique `Symbol` to be used
 as a key to identify the log statement when filtering.
