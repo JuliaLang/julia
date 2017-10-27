@@ -85,7 +85,7 @@ catalan
 for T in (AbstractIrrational, Rational, Integer, Number)
     Base.:^(::Irrational{:ℯ}, x::T) = exp(x)
 end
-@generated Base.literal_pow(::typeof(^), ::Irrational{:ℯ}, ::Val{p}) where {p} = exp(p)
+Base.literal_pow(::typeof(^), ::Irrational{:ℯ}, ::Val{p}) where {p} = exp(p)
 
 Base.log(::Irrational{:ℯ}) = 1 # use 1 to correctly promote expressions like log(x)/log(ℯ)
 Base.log(::Irrational{:ℯ}, x::Number) = log(x)
