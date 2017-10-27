@@ -1291,3 +1291,8 @@ let T1 = Array{Float64}, T2 = Array{_1,2} where _1
     rt = Base.return_types(g, (Union{Ref{Array{Float64}}, Ref{Array{Float32}}},))[1]
     @test rt >: Union{Type{Array{Float64}}, Type{Array{Float32}}}
 end
+
+# Demonstrate IPO constant propagation (#24362)
+f_constant(x) = convert(Int, x)
+g_test_constant() = (f_constant(3) == 3 && f_constant(4) == 4 ? true : "BAD")
+@test @inferred g_test_constant()
