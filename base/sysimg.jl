@@ -260,10 +260,6 @@ end
     end
 end
 
-# base64 conversions (need broadcast)
-include("base64.jl")
-using .Base64
-
 # version
 include("version.jl")
 
@@ -289,8 +285,6 @@ include("socket.jl")
 include("filesystem.jl")
 using .Filesystem
 include("process.jl")
-include("multimedia.jl")
-using .Multimedia
 include("grisu/grisu.jl")
 import .Grisu.print_shortest
 include("methodshow.jl")
@@ -378,17 +372,12 @@ include("replutil.jl")
 include("i18n.jl")
 using .I18n
 
-# frontend
-include("initdefs.jl")
-include("repl/Terminals.jl")
-include("repl/LineEdit.jl")
-include("repl/REPLCompletions.jl")
-include("repl/REPL.jl")
-include("client.jl")
-
 # Stack frames and traces
 include("stacktraces.jl")
 using .StackTraces
+
+include("initdefs.jl")
+include("client.jl")
 
 # misc useful functions & macros
 include("util.jl")
@@ -421,11 +410,29 @@ include("asyncmap.jl")
 include("distributed/Distributed.jl")
 using .Distributed
 
+# worker threads
+include("threadcall.jl")
+
 # code loading
 include("loading.jl")
 
-# worker threads
-include("threadcall.jl")
+# set up load path to be able to find stdlib packages
+init_load_path(ccall(:jl_get_julia_home, Any, ()))
+
+INCLUDE_STATE = 3 # include = include_relative
+
+import Base64
+
+INCLUDE_STATE = 2
+
+include("multimedia.jl")
+using .Multimedia
+
+# frontend
+include("repl/Terminals.jl")
+include("repl/LineEdit.jl")
+include("repl/REPLCompletions.jl")
+include("repl/REPL.jl")
 
 # deprecated functions
 include("deprecated.jl")
@@ -449,8 +456,9 @@ function __init__()
     init_threadcall()
 end
 
+include("precompile.jl")
+
 INCLUDE_STATE = 3 # include = include_relative
-include(Base, "precompile.jl")
 
 end # baremodule Base
 
@@ -458,9 +466,6 @@ using Base
 
 # Ensure this file is also tracked
 unshift!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
-
-# set up load path to be able to find stdlib packages
-Base.init_load_path(ccall(:jl_get_julia_home, Any, ()))
 
 # load some stdlib packages but don't put their names in Main
 Base.require(:DelimitedFiles)

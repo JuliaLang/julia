@@ -77,10 +77,6 @@ Base.readline
 Base.readuntil
 Base.readlines
 Base.eachline
-Base.Base64.Base64EncodePipe
-Base.Base64.Base64DecodePipe
-Base.Base64.base64encode
-Base.Base64.base64decode
 Base.displaysize
 ```
 

@@ -218,7 +218,7 @@ try
                                     [:Base, :Core, Foo2_module, FooBase_module, :Main, :Test]),
                                # plus modules included in the system image
                                Dict(s => Base.module_uuid(Base.root_module(s)) for s in
-                                    [:DelimitedFiles,:Mmap]))
+                                    [:DelimitedFiles,:Mmap,:Base64]))
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2

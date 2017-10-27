@@ -2,13 +2,11 @@
 
 module Base64
 
-#=
 export
     Base64EncodePipe,
     base64encode,
     Base64DecodePipe,
     base64decode
-=#
 
 # Base64EncodePipe is a pipe-like IO object, which converts into base64 data
 # sent to a stream. (You must close the pipe to complete the encode, separate

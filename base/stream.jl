@@ -16,8 +16,6 @@ abstract type LibuvStream <: IO end
 # .  +- Pipe
 # .  +- Process (not exported)
 # .  +- ProcessChain (not exported)
-# +- Base64DecodePipe
-# +- Base64EncodePipe
 # +- BufferStream
 # +- DevNullStream (not exported)
 # +- Filesystem.File

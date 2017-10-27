@@ -1356,6 +1356,11 @@ export conv, conv2, deconv, filt, filt!, xcorr
 @deprecate_binding Profile nothing true ", run `using Profile` instead"
 @eval @deprecate_moved $(Symbol("@profile")) "Profile" true true
 
+@deprecate_moved base64encode "Base64" true true
+@deprecate_moved base64decode "Base64" true true
+@deprecate_moved Base64EncodePipe "Base64" true true
+@deprecate_moved Base64DecodePipe "Base64" true true
+
 # PR #21709
 @deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)
 @deprecate cov(x::AbstractMatrix, vardim::Int, corrected::Bool) cov(x, vardim, corrected=corrected)

@@ -44,7 +44,7 @@ function choosetests(choices = [])
         "euler", "show", "lineedit", "replcompletions", "repl",
         "replutil", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
         "nullable", "meta", "stacktraces", "libgit2", "docs",
-        "markdown", "base64", "serialize", "misc", "threads",
+        "markdown", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "bitset", "floatfuncs", "compile", "distributed", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
