@@ -240,3 +240,17 @@ setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 @noinline _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
 
 unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = unsafe_convert(Ptr{T}, parent(a))
+
+## Additional SubArray optimizations where one index is a Reshaped Range
+ReshapedUnitRange{T, N} = ReshapedArray{T, N, <:AbstractUnitRange}
+StridedIndexSubArray{T,N,A,I<:Tuple{Vararg{Union{ReshapedRange, RangeIndex, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
+ContiguousSubArray{T,N,A,I<:Tuple{Union{ReshapedUnitRange, AbstractUnitRange}}} = SubArray{T,N,A,I}
+compute_stride1(s, inds, I::Tuple{ReshapedRange, Vararg{Any}}) = s*step(I[1].parent)
+@inline substrides(s, parent, dim, I::Tuple{ReshapedRange, Vararg{Any}}) = ((s.*_stepstrides(I[1]))..., substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
+@inline _stepstrides(R::ReshapedRange{<:Any,0}) = ()
+@inline _stepstrides(R::ReshapedRange) = (s=step(R.parent); (s, _stepstrides(s, front(size(R)))...))
+@inline _stepstrides(s, t::Tuple) = (x=s*t[1]; (x, _stepstrides(x, tail(t))...))
+_stepstrides(s, t::Tuple{}) = ()
+viewindexing(I::Tuple{Slice, ReshapedUnitRange, Vararg{ScalarIndex}}) = IndexLinear()
+viewindexing(I::Tuple{ReshapedRange, Vararg{ScalarIndex}}) = IndexLinear()
+_iscontiguousindex(::Type{<:ReshapedArray{<:Any,<:AbstractUnitRange}}) = true

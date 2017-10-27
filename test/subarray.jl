@@ -188,7 +188,8 @@ function runsubarraytests(A::Array, I...)
     ld = min(single_stride_dim(C), dim_break_linindex(I))
     S = view(A, I...)
     if Base.iscontiguous(S)
-        @test S.stride1 == 1
+        @test length(S.indexes) == 1
+        @test step(S.indexes[1]) == 1
     end
     test_linear(S, C)
     test_cartesian(S, C)
@@ -350,7 +351,6 @@ sA = view(A, 2:2, 1:5, :)
 @test strides(sA) == (1, 3, 15)
 @test parent(sA) == A
 @test parentindexes(sA) == (2:2, 1:5, Base.Slice(1:8))
-@test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (1, 5, 8)
 @test indices(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
 @test sA[1, 2, 1:8][:] == [5:15:120;]
@@ -362,7 +362,6 @@ sA[2:5:end] = -1
 @test stride(sA,4) == 120
 test_bounds(sA)
 sA = view(A, 1:3, 1:5, 5)
-@test Base.parentdims(sA) == [1:2;]
 sA[1:3,1:5] = -2
 @test all(A[:,:,5] .== -2)
 sA[:] = -3
@@ -370,14 +369,12 @@ sA[:] = -3
 @test strides(sA) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:3, 3:3, 2:5)
-@test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (3,1,4)
 @test indices(sA) === (Base.OneTo(3), Base.OneTo(1), Base.OneTo(4))
 @test sA == A[1:3,3:3,2:5]
 @test sA[:] == A[1:3,3,2:5][:]
 test_bounds(sA)
 sA = view(A, 1:2:3, 1:3:5, 1:2:8)
-@test Base.parentdims(sA) == [1:3;]
 @test strides(sA) == (2,9,30)
 @test sA[:] == A[1:2:3, 1:3:5, 1:2:8][:]
 # issue #8807
@@ -405,8 +402,6 @@ sB = view(B, 2:3, 2:3)
 A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2, :, 1:8)
 @test parent(sA) == A
-@test parentindexes(sA) == (2, Base.Slice(1:5), 1:8)
-@test Base.parentdims(sA) == [2:3;]
 @test size(sA) == (5, 8)
 @test indices(sA) === (Base.OneTo(5), Base.OneTo(8))
 @test strides(sA) == (3,15)
@@ -418,13 +413,11 @@ sA[2:5:end] = -1
 @test all(A[5:15:120] .== -1)
 test_bounds(sA)
 sA = view(A, 1:3, 1:5, 5)
-@test Base.parentdims(sA) == [1:2;]
 @test size(sA) == (3,5)
 @test indices(sA) === (Base.OneTo(3),Base.OneTo(5))
 @test strides(sA) == (1,3)
 test_bounds(sA)
 sA = view(A, 1:2:3, 3, 1:2:8)
-@test Base.parentdims(sA) == [1,3]
 @test size(sA) == (2,4)
 @test indices(sA) === (Base.OneTo(2), Base.OneTo(4))
 @test strides(sA) == (2,30)

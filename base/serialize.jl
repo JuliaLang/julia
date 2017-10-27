@@ -279,10 +279,7 @@ end
 
 trimmedsize(V) = index_lengths(V.indexes...)
 
-function _trimmedsubarray(A, V::SubArray{T,N,P,I,LD}, newindexes) where {T,N,P,I,LD}
-    LD && return SubArray{T,N,P,I,LD}(A, newindexes, Base.compute_offset1(A, 1, newindexes), 1)
-    SubArray{T,N,P,I,LD}(A, newindexes, 0, 0)
-end
+_trimmedsubarray(A, V::SubArray, newindexes) = SubArray(A, newindexes)
 _trimmedsubarray(A, V, newindexes, index::ViewIndex, indexes...) = _trimmedsubarray(A, V, (newindexes..., trimmedindex(V.parent, length(newindexes)+1, index)), indexes...)
 
 trimmedindex(P, d, i::Real) = oftype(i, 1)
