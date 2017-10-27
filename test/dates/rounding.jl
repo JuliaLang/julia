@@ -145,34 +145,42 @@ end
     end
 end
 @testset "Rounding for periods" begin
-    x = Dates.Nanosecond(172799999999999)
+    x = Dates.Second(172799)
     @test floor(x, Dates.Week) == Dates.Week(0)
     @test floor(x, Dates.Day) == Dates.Day(1)
     @test floor(x, Dates.Hour) == Dates.Hour(47)
     @test floor(x, Dates.Minute) == Dates.Minute(2879)
     @test floor(x, Dates.Second) == Dates.Second(172799)
-    @test floor(x, Dates.Millisecond) == Dates.Millisecond(172799999)
-    @test floor(x, Dates.Microsecond) == Dates.Microsecond(172799999999)
-    @test floor(x, Dates.Nanosecond) == x
+    @test floor(x, Dates.Millisecond) == Dates.Millisecond(172799000)
     @test ceil(x, Dates.Week) == Dates.Week(1)
     @test ceil(x, Dates.Day) == Dates.Day(2)
     @test ceil(x, Dates.Hour) == Dates.Hour(48)
     @test ceil(x, Dates.Minute) == Dates.Minute(2880)
-    @test ceil(x, Dates.Second) == Dates.Second(172800)
-    @test ceil(x, Dates.Millisecond) == Dates.Millisecond(172800000)
-    @test ceil(x, Dates.Microsecond) == Dates.Microsecond(172800000000)
-    @test ceil(x, Dates.Nanosecond) == x
+    @test ceil(x, Dates.Second) == Dates.Second(172799)
+    @test ceil(x, Dates.Millisecond) == Dates.Millisecond(172799000)
     @test round(x, Dates.Week) == Dates.Week(0)
     @test round(x, Dates.Day) == Dates.Day(2)
     @test round(x, Dates.Hour) == Dates.Hour(48)
     @test round(x, Dates.Minute) == Dates.Minute(2880)
-    @test round(x, Dates.Second) == Dates.Second(172800)
-    @test round(x, Dates.Millisecond) == Dates.Millisecond(172800000)
-    @test round(x, Dates.Microsecond) == Dates.Microsecond(172800000000)
+    @test round(x, Dates.Second) == Dates.Second(172799)
+    @test round(x, Dates.Millisecond) == Dates.Millisecond(172799000)
+
+    x = Dates.Nanosecond(2000999999)
+    @test floor(x, Dates.Second) == Dates.Second(2)
+    @test floor(x, Dates.Millisecond) == Dates.Millisecond(2000)
+    @test floor(x, Dates.Microsecond) == Dates.Microsecond(2000999)
+    @test floor(x, Dates.Nanosecond) == x
+    @test ceil(x, Dates.Second) == Dates.Second(3)
+    @test ceil(x, Dates.Millisecond) == Dates.Millisecond(2001)
+    @test ceil(x, Dates.Microsecond) == Dates.Microsecond(2001000)
+    @test ceil(x, Dates.Nanosecond) == x
+    @test round(x, Dates.Second) == Dates.Second(2)
+    @test round(x, Dates.Millisecond) == Dates.Millisecond(2001)
+    @test round(x, Dates.Microsecond) == Dates.Microsecond(2001000)
     @test round(x, Dates.Nanosecond) == x
 end
 @testset "Rounding for periods that should not need rounding" begin
-    for x in [Dates.Week(3), Dates.Day(14), Dates.Microsecond(604800000000)]
+    for x in [Dates.Week(3), Dates.Day(14), Dates.Second(604800)]
         local x
         for p in [Dates.Week, Dates.Day, Dates.Hour, Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond]
             local p
@@ -192,7 +200,7 @@ end
     @test round(x, Dates.Day) == round(x, Dates.Day, RoundNearestTiesUp)
 end
 @testset "Rounding periods to invalid resolutions" begin
-    x = Dates.Nanosecond(86399999999999)
+    x = Dates.Hour(86399)
     for p in [Dates.Week, Dates.Day, Dates.Hour, Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond]
         local p
         for v in [-1, 0]

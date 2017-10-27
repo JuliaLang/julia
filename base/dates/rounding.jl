@@ -104,8 +104,8 @@ inconsistent length.
 """
 function Base.floor(x::ConvertiblePeriod, precision::T) where T <: ConvertiblePeriod
     value(precision) < 1 && throw(DomainError(precision))
-    nanoseconds = Nanosecond(x)
-    return T(nanoseconds - mod(nanoseconds, Nanosecond(precision)))
+    x, precision = promote(x, precision)
+    return T(x - mod(x, precision))
 end
 
 """
@@ -261,7 +261,8 @@ inconsistent length.
 """
 function Base.round(x::ConvertiblePeriod, precision::ConvertiblePeriod, r::RoundingMode{:NearestTiesUp})
     f, c = floorceil(x, precision)
-    return (Nanosecond(x) - Nanosecond(f)) < (Nanosecond(c) - Nanosecond(x)) ? f : c
+    common_x, common_f, common_c = promote(x, f, c)
+    return (common_x - common_f) < (common_c - common_x) ? f : c
 end
 
 Base.round(x::TimeTypeOrPeriod, p::Period, r::RoundingMode{:Down}) = Base.floor(x, p)
