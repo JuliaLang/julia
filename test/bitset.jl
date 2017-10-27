@@ -299,10 +299,10 @@ end
 end
 
 @testset "unsigned overflow" begin
-    @test IntSet(UInt8(2^8-1)) == IntSet(2^8-1)
-    @test [x for x in IntSet(UInt8(2^8-1))] == [UInt8(2^8-1)]
-    @test IntSet(UInt16(2^16-1)) == IntSet(2^16-1)
-    @test [x for x in IntSet(UInt16(2^16-1))] == [UInt16(2^16-1)]
+    @test BitSet(UInt8(2^8-1)) == BitSet(2^8-1)
+    @test [x for x in BitSet(UInt8(2^8-1))] == [UInt8(2^8-1)]
+    @test BitSet(UInt16(2^16-1)) == BitSet(2^16-1)
+    @test [x for x in BitSet(UInt16(2^16-1))] == [UInt16(2^16-1)]
 end
 
 @testset "order" begin
