@@ -408,10 +408,6 @@ include("libgit2/libgit2.jl")
 # package manager
 include("pkg/pkg.jl")
 
-# profiler
-include("profile.jl")
-using .Profile
-
 # dates
 include("dates/Dates.jl")
 import .Dates: Date, DateTime, DateFormat, @dateformat_str, now

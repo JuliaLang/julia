@@ -6,7 +6,6 @@ export
     Pkg,
     LibGit2,
     StackTraces,
-    Profile,
     Dates,
     Sys,
     Libc,
@@ -1211,7 +1210,6 @@ export
     @timev,
     @elapsed,
     @allocated,
-    @profile,
 
     # reflection
     @which,
