@@ -839,8 +839,10 @@ f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 
 # issue #21653
 # ensure that we don't try to resolve cycles using uncached edges
+# but which also means we should still be storing the inference result from inferring the cycle
 f21653() = f21653()
 @test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}
+@test which(f21653, ()).specializations.func.rettype === Union{}
 
 @noinline map3_22347(f, t::Tuple{}) = ()
 @noinline map3_22347(f, t::Tuple) = (f(t[1]), map3_22347(f, Base.tail(t))...)

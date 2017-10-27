@@ -2525,8 +2525,15 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, caller
             end
         end
     end
-    frame = resolve_call_cycle!(code, caller)
+    if !caller.cached && caller.parent === nothing
+        # this caller exists to return to the user
+        # (if we asked resolve_call_cyle, it might instead detect that there is a cycle that it can't merge)
+        frame = nothing
+    else
+        frame = resolve_call_cycle!(code, caller)
+    end
     if frame === nothing
+        # completely new
         code.inInference = true
         frame = InferenceState(code, true, true, caller.params) # always optimize and cache edge targets
         if frame === nothing
