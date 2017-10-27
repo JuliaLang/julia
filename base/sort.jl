@@ -969,13 +969,14 @@ function sortcols(A::AbstractMatrix; kws...)
     A[:,p]
 end
 
-function slicetypeof(A::AbstractArray{T}, i1, i2) where T
+function slicetypeof(A::AbstractMatrix{T}, i1, i2) where T
     I = map(slice_dummy, to_indices(A, (i1, i2)))
-    fast = isa(IndexStyle(viewindexing(I), IndexStyle(A)), IndexLinear)
-    SubArray{T,1,typeof(A),typeof(I),fast}
+    SubArray{T,1,typeof(A),typeof(maybe_linearize(IndexStyle(viewindexing(I), IndexStyle(A)), I))}
 end
 slice_dummy(S::Slice) = S
 slice_dummy(::AbstractUnitRange{T}) where {T} = oneunit(T)
+maybe_linearize(::IndexCartesian, I) = I
+maybe_linearize(::IndexLinear, I) = Base.linearize_indices(parent, I, Base.index_shape(I...))
 
 ## fast clever sorting for floats ##
 
