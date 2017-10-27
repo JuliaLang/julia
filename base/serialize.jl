@@ -274,10 +274,10 @@ end
 function trimmedsubarray(V::SubArray{T,N,A}) where {T,N,A<:Array}
     dest = Array{eltype(V)}(trimmedsize(V))
     copy!(dest, V)
-    _trimmedsubarray(dest, V, (), V.indexes...)
+    _trimmedsubarray(dest, V, (), V.indices...)
 end
 
-trimmedsize(V) = index_lengths(V.indexes...)
+trimmedsize(V) = index_lengths(V.indices...)
 
 _trimmedsubarray(A, V::SubArray, newindexes) = SubArray(A, newindexes)
 _trimmedsubarray(A, V, newindexes, index::ViewIndex, indexes...) = _trimmedsubarray(A, V, (newindexes..., trimmedindex(V.parent, length(newindexes)+1, index)), indexes...)

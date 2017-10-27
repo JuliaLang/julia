@@ -5,7 +5,7 @@ abstract type AbstractCartesianIndex{N} end # This is a hacky forward declaratio
 const ViewIndex = Union{Real, AbstractArray}
 const ScalarIndex = Real
 
-# The view itself supports fast linear indexing if length(indexes) == 1 and IndexStyle(indexes[1]) is LinearFast()
+# The view itself supports fast linear indexing if length(indices) == 1 and IndexStyle(indices[1]) is LinearFast()
 """
     SubArray{T,N,P,I} <: AbstractArray{T,N}
 
@@ -17,20 +17,20 @@ identify the type of the parent array (`P`) and the type of the tuple of indices
 """
 struct SubArray{T,N,P,I} <: AbstractArray{T,N}
     parent::P
-    indexes::I
+    indices::I
 end
 # Compute the linear indexability of the indices, and combine it with the linear indexing of the parent
-function SubArray(parent::AbstractArray, indexes::Tuple)
+function SubArray(parent::AbstractArray, indices::Tuple)
     @_inline_meta
-    SubArray(IndexStyle(viewindexing(indexes), IndexStyle(parent)), parent, ensure_indexable(indexes), index_shape(indexes...))
+    SubArray(IndexStyle(viewindexing(indices), IndexStyle(parent)), parent, ensure_indexable(indices), index_shape(indices...))
 end
-function SubArray(::IndexCartesian, parent::P, indexes::I, ::NTuple{N,Any}) where {P,I,N}
+function SubArray(::IndexCartesian, parent::P, indices::I, ::NTuple{N,Any}) where {P,I,N}
     @_inline_meta
-    SubArray{eltype(P), N, P, I}(parent, indexes)
+    SubArray{eltype(P), N, P, I}(parent, indices)
 end
-function SubArray(::IndexLinear, parent::P, indexes::I, shape::NTuple{N,Any}) where {P,I,N}
+function SubArray(::IndexLinear, parent::P, indices::I, shape::NTuple{N,Any}) where {P,I,N}
     @_inline_meta
-    t = linearize_indices(parent, indexes, shape)
+    t = linearize_indices(parent, indices, shape)
     SubArray{eltype(P), N, P, typeof(t)}(parent, t)
 end
 
@@ -51,7 +51,7 @@ end
 
 # This computes the linear indexing compatability for a given tuple of indices
 viewindexing() = IndexLinear()
-# Leading scalar indexes simply increase the stride
+# Leading scalar indices simply increase the stride
 viewindexing(I::Tuple{ScalarIndex, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
 # Slices may begin a section which may be followed by any number of Slices
 viewindexing(I::Tuple{Slice, Slice, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
@@ -66,7 +66,7 @@ viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = IndexCartesian()
 
 # Simple utilities
-indices(S::SubArray) = (@_inline_meta; index_shape(S.indexes...))
+indices(S::SubArray) = (@_inline_meta; index_shape(S.indices...))
 size(V::SubArray) = (@_inline_meta; map(n->Int(unsafe_length(n)), indices(V)))
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
@@ -95,13 +95,13 @@ julia> parent(s_a)
 ```
 """
 parent(V::SubArray) = V.parent
-parentindexes(V::SubArray) = V.indexes
+parentindexes(V::SubArray) = V.indices
 
 parent(a::AbstractArray) = a
 """
     parentindexes(A)
 
-From an array view `A`, returns the corresponding indexes in the parent.
+From an array view `A`, returns the corresponding indices in the parent.
 """
 parentindexes(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 
@@ -176,15 +176,15 @@ _maybe_reindex(V, I, A::Tuple{AbstractArray{<:AbstractCartesianIndex{1}}, Vararg
 _maybe_reindex(V, I, A::Tuple{Any, Vararg{Any}}) = (@_inline_meta; _maybe_reindex(V, I, tail(A)))
 function _maybe_reindex(V, I, ::Tuple{})
     @_inline_meta
-    @inbounds idxs = to_indices(V.parent, reindex(V, V.indexes, I))
+    @inbounds idxs = to_indices(V.parent, reindex(V, V.indices, I))
     SubArray(V.parent, idxs)
 end
 
 ## Re-indexing is the heart of a view, transforming A[i, j][x, y] to A[i[x], j[y]]
 #
-# Recursively look through the heads of the parent- and sub-indexes, considering
+# Recursively look through the heads of the parent- and sub-indices, considering
 # the following cases:
-# * Parent index is array  -> re-index that with one or more sub-indexes (one per dimension)
+# * Parent index is array  -> re-index that with one or more sub-indices (one per dimension)
 # * Parent index is Colon  -> just use the sub-index as provided
 # * Parent index is scalar -> that dimension was dropped, so skip the sub-index and use the index as is
 
@@ -194,7 +194,7 @@ reindex(V, ::Tuple{}, ::Tuple{}) = ()
 reindex(V, idxs::Tuple{ScalarIndex, Vararg{Any}}, subidxs::Tuple{Vararg{Any}}) =
     (@_propagate_inbounds_meta; (idxs[1], reindex(V, tail(idxs), subidxs)...))
 
-# Slices simply pass their subindexes straight through
+# Slices simply pass their subindices straight through
 reindex(V, idxs::Tuple{Slice, Vararg{Any}}, subidxs::Tuple{Any, Vararg{Any}}) =
     (@_propagate_inbounds_meta; (subidxs[1], reindex(V, tail(idxs), tail(subidxs))...))
 
@@ -222,35 +222,35 @@ SlowSubArray{T,N,P,I<:Union{Tuple{}, Tuple{ScalarIndex}, Tuple{Any,Any,Vararg{An
 function getindex(V::SlowSubArray{<:Any,N}, I::Vararg{Int,N}) where {N}
     @_inline_meta
     @boundscheck checkbounds(V, I...)
-    @inbounds r = V.parent[reindex(V, V.indexes, I)...]
+    @inbounds r = V.parent[reindex(V, V.indices, I)...]
     r
 end
 
-OneIndexSubArray{T,N,P,I<:Tuple{AbstractArray}} = SubArray{T,N,P,I}
+OneIndexSubArray{T,N,P,I<:Tuple{<:AbstractArray}} = SubArray{T,N,P,I}
 function getindex(V::OneIndexSubArray, I::Int...)
     @_inline_meta
     @boundscheck checkbounds(V, I...)
-    @inbounds r = V.parent[V.indexes[1][I...]]
+    @inbounds r = V.parent[V.indices[1][I...]]
     r
 end
 
 function setindex!(V::SlowSubArray{<:Any,N}, x, I::Vararg{Int,N}) where {N}
     @_inline_meta
     @boundscheck checkbounds(V, I...)
-    @inbounds V.parent[reindex(V, V.indexes, I)...] = x
+    @inbounds V.parent[reindex(V, V.indices, I)...] = x
     V
 end
 function setindex!(V::OneIndexSubArray, x, I::Int...)
     @_inline_meta
     @boundscheck checkbounds(V, I...)
-    @inbounds V.parent[V.indexes[1][I...]] = x
+    @inbounds V.parent[V.indices[1][I...]] = x
     V
 end
 
 IndexStyle(::Type{<:SubArray{<:Any,<:Any,<:Any,<:Tuple{I}}}) where {I<:AbstractArray} = IndexStyle(I)
 IndexStyle(::Type{<:SubArray}) = IndexCartesian()
 
-strides(V::SubArray) = substrides(V.parent, V.indexes)
+strides(V::SubArray) = substrides(V.parent, V.indices)
 
 substrides(parent, I::Tuple) = substrides(1, parent, 1, I)
 substrides(s, parent, dim, ::Tuple{}) = ()
@@ -276,14 +276,14 @@ iscontiguous(::Type{<:SubArray{<:Any,<:Any,<:Any,<:Tuple{I}}}) where {I} = _isco
 _iscontiguousindex(::Type{<:AbstractUnitRange}) = true
 _iscontiguousindex(::Type) = false
 
-first_index(V::SubArray) = (@_inline_meta; first_index(V.parent, V.indexes))
+first_index(V::SubArray) = (@_inline_meta; first_index(V.parent, V.indices))
 first_index(parent::AbstractArray, I::Tuple{Any}) = (@_inline_meta; first(I[1]))
 first_index(parent::AbstractArray, I::Tuple) = (@_inline_meta; sub2ind(parent, map(first, I)...))
 
 unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
 
-pointer(V::OneIndexSubArray, i::Int) = pointer(V.parent, V.indexes[1][i])
+pointer(V::OneIndexSubArray, i::Int) = pointer(V.parent, V.indices[1][i])
 pointer(V::SubArray, i::Int) = _pointer(V, i)
 _pointer(V::SubArray{<:Any,1}, i::Int) = pointer(V, (i,))
 _pointer(V::SubArray, i::Int) = pointer(V, ind2sub(indices(V), i))

@@ -118,7 +118,7 @@ function test_linear(@nospecialize(A), @nospecialize(B))
     end
     if !isgood
         @show A
-        @show A.indexes
+        @show A.indices
         @show B
         error("Mismatch")
     end
@@ -188,8 +188,8 @@ function runsubarraytests(A::Array, I...)
     ld = min(single_stride_dim(C), dim_break_linindex(I))
     S = view(A, I...)
     if Base.iscontiguous(S)
-        @test length(S.indexes) == 1
-        @test step(S.indexes[1]) == 1
+        @test length(S.indices) == 1
+        @test step(S.indices[1]) == 1
     end
     test_linear(S, C)
     test_cartesian(S, C)
@@ -213,9 +213,9 @@ function runsubarraytests(@nospecialize(A), I...)
     C = Agen_nodrop(AA, I...)
     Cld = ld = min(single_stride_dim(C), dim_break_linindex(I))
     Cdim = AIindex = 0
-    while Cdim <= Cld && AIindex < length(A.indexes)
+    while Cdim <= Cld && AIindex < length(A.indices)
         AIindex += 1
-        if isa(A.indexes[AIindex], Real)
+        if isa(A.indices[AIindex], Real)
             ld += 1
         else
             Cdim += 1
@@ -226,7 +226,7 @@ function runsubarraytests(@nospecialize(A), I...)
         S = view(A, I...)
     catch err
         @show typeof(A)
-        @show A.indexes
+        @show A.indices
         @show I
         rethrow(err)
     end
@@ -421,7 +421,7 @@ sA = view(A, 1:2:3, 3, 1:2:8)
 @test size(sA) == (2,4)
 @test indices(sA) === (Base.OneTo(2), Base.OneTo(4))
 @test strides(sA) == (2,30)
-@test sA[:] == A[sA.indexes...][:]
+@test sA[:] == A[sA.indices...][:]
 test_bounds(sA)
 
 let a = [5:8;]
