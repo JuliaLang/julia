@@ -173,8 +173,8 @@ struct double_pair randmatstat(int t) {
                     4*n, 4*n, 4*n, 1.0, PtP1, 4*n, PtP1, 4*n, 0.0, PtP2, 4*n);
         cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
                     4*n, 4*n, 4*n, 1.0, PtP2, 4*n, PtP2, 4*n, 0.0, PtP1, 4*n);
-        for (int j=0; j < n; j++) {
-            v[i] += PtP1[(n+1)*j];
+        for (int j=0; j < 4*n; j++) {
+            v[i] += PtP1[(4*n+1)*j];
         }
         cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
                     2*n, 2*n, 2*n, 1.0, Q, 2*n, Q, 2*n, 0.0, QtQ1, 2*n);
