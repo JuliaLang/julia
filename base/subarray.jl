@@ -280,7 +280,7 @@ first_index(V::SubArray) = (@_inline_meta; first_index(V.parent, V.indices))
 first_index(parent::AbstractArray, I::Tuple{Any}) = (@_inline_meta; first(I[1]))
 first_index(parent::AbstractArray, I::Tuple) = (@_inline_meta; sub2ind(parent, map(first, I)...))
 
-unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P} =
+unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{AbstractRange}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
 
 pointer(V::OneIndexSubArray, i::Int) = pointer(V.parent, V.indices[1][i])
