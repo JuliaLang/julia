@@ -31,7 +31,7 @@ aimg  = randn(n,n)/2
         @test sort(real(f[:values])) ≈ sort(real(d))
         @test sort(imag(f[:values])) ≈ sort(imag(d))
         @test istriu(f[:Schur]) || eltype(a)<:Real
-        @test AbstractArray(f) ≈ a
+        @test convert(Array, f) ≈ a
         @test_throws KeyError f[:A]
 
         sch, vecs, vals = schur(UpperTriangular(triu(a)))
