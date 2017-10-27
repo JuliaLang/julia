@@ -8,6 +8,11 @@ const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
 
 const KEY_DIR = joinpath(@__DIR__, "libgit2")
 const HOME = Sys.iswindows() ? "USERPROFILE" : "HOME"  # Environment variable name for home
+const GIT_INSTALLED = try
+    success(`git --version`)
+catch
+    false
+end
 
 function get_global_dir()
     buf = Ref(LibGit2.Buffer())
@@ -352,6 +357,21 @@ end
         cred = read!(IOBuffer(str), LibGit2.GitCredential())
         @test cred == LibGit2.GitCredential("https", "example.com", nothing, "alice", "*****")
         @test sprint(write, cred) == str
+    end
+
+    @testset "use http path" begin
+        cred = LibGit2.GitCredential("https", "example.com", "dir/file", "alice", "*****")
+        expected = """
+            protocol=https
+            host=example.com
+            username=alice
+            password=*****
+            """
+        @test cred.use_http_path
+        cred.use_http_path = false
+
+        @test get(cred.path, "") == "dir/file"
+        @test sprint(write, cred) == expected
     end
 
     @testset "URL input/output" begin
@@ -1536,7 +1556,7 @@ mktempdir() do dir
         @test cred.pass != "password"
     end
 
-    @testset "Git Credential Username" begin
+    @testset "Git credential username" begin
         @testset "fill username" begin
             config_path = joinpath(dir, config_file)
             isfile(config_path) && rm(config_path)
@@ -1603,6 +1623,41 @@ mktempdir() do dir
         end
     end
 
+    @testset "Git helpers useHttpPath" begin
+        @testset "use_http_path" begin
+            config_path = joinpath(dir, config_file)
+            isfile(config_path) && rm(config_path)
+
+            LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                # No credential settings should be set for these tests
+                @test isempty(collect(LibGit2.GitConfigIter(cfg, r"credential.*")))
+
+                # No credential settings in configuration.
+                cred = LibGit2.GitCredential("https", "github.com")
+                @test !LibGit2.use_http_path(cfg, cred)
+
+                # Add a credential setting for a specific for a URL
+                LibGit2.set!(cfg, "credential.https://github.com.useHttpPath", "true")
+
+                cred = LibGit2.GitCredential("https", "github.com")
+                @test LibGit2.use_http_path(cfg, cred)
+
+                cred = LibGit2.GitCredential("https", "mygithost")
+                @test !LibGit2.use_http_path(cfg, cred)
+
+                # Invert the current settings.
+                LibGit2.set!(cfg, "credential.useHttpPath", "true")
+                LibGit2.set!(cfg, "credential.https://github.com.useHttpPath", "false")
+
+                cred = LibGit2.GitCredential("https", "github.com")
+                @test !LibGit2.use_http_path(cfg, cred)
+
+                cred = LibGit2.GitCredential("https", "mygithost")
+                @test LibGit2.use_http_path(cfg, cred)
+            end
+        end
+    end
+
     @testset "GitCredentialHelper" begin
         GitCredentialHelper = LibGit2.GitCredentialHelper
         GitCredential = LibGit2.GitCredential
@@ -1644,24 +1699,18 @@ mktempdir() do dir
         @testset "approve/reject" begin
             # In order to use the "store" credential helper `git` needs to be installed and
             # on the path.
-            git_installed = try
-                success(`git --version`)
-            catch
-                false
-            end
-
-            if git_installed
+            if GIT_INSTALLED
                 config_path = joinpath(dir, config_file)
-                credential_file = joinpath(dir, ".git-credentials")
+                credential_path = joinpath(dir, ".git-credentials")
 
                 isfile(config_path) && rm(config_path)
+                isfile(credential_path) && rm(credential_path)
 
                 LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
-                    @test !isfile(credential_file)
                     @test isempty(LibGit2.get(cfg, "credential.helper", ""))
 
                     helper = parse(LibGit2.GitCredentialHelper, "store")  # Requires `git`
-                    LibGit2.set!(cfg, "credential.helper", "store")
+                    LibGit2.set!(cfg, "credential.helper", "store --file $credential_path")
 
                     # Set HOME to control where .git-credentials file is written.
                     withenv(HOME => dir) do
@@ -1675,6 +1724,61 @@ mktempdir() do dir
 
                         LibGit2.reject(helper, filled)
                         @test LibGit2.fill!(helper, deepcopy(query)) == query
+                    end
+                end
+            end
+        end
+
+        @testset "approve/reject with path" begin
+            # In order to use the "store" credential helper `git` needs to be installed and
+            # on the path.
+            if GIT_INSTALLED
+                config_path = joinpath(dir, config_file)
+                credential_path = joinpath(dir, ".git-credentials")
+
+                isfile(config_path) && rm(config_path)
+                isfile(credential_path) && rm(credential_path)
+
+                LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                    @test isempty(LibGit2.get(cfg, "credential.helper", ""))
+
+                    helper = parse(LibGit2.GitCredentialHelper, "store")  # Requires `git`
+                    LibGit2.set!(cfg, "credential.helper", "store --file $credential_path")
+                    LibGit2.set!(cfg, "credential.useHttpPath", "true")
+
+                    # Set HOME to control where .git-credentials file is written.
+                    withenv(HOME => dir) do
+                        query = LibGit2.GitCredential("https", "mygithost")
+                        query_a = LibGit2.GitCredential("https", "mygithost", "a")
+                        query_b = LibGit2.GitCredential("https", "mygithost", "b")
+
+                        filled_a = LibGit2.GitCredential("https", "mygithost", "a", "alice", "1234")
+                        filled_b = LibGit2.GitCredential("https", "mygithost", "b", "bob", "s3cre7")
+
+                        function without_path(cred)
+                            c = deepcopy(cred)
+                            c.path = Nullable()
+                            c
+                        end
+
+                        @test LibGit2.fill!(helper, deepcopy(query)) == query
+                        @test LibGit2.fill!(helper, deepcopy(query_a)) == query_a
+                        @test LibGit2.fill!(helper, deepcopy(query_b)) == query_b
+
+                        LibGit2.approve(helper, filled_a)
+                        @test LibGit2.fill!(helper, deepcopy(query)) == without_path(filled_a)
+                        @test LibGit2.fill!(helper, deepcopy(query_a)) == filled_a
+                        @test LibGit2.fill!(helper, deepcopy(query_b)) == query_b
+
+                        LibGit2.approve(helper, filled_b)
+                        @test LibGit2.fill!(helper, deepcopy(query)) == without_path(filled_b)
+                        @test LibGit2.fill!(helper, deepcopy(query_a)) == filled_a
+                        @test LibGit2.fill!(helper, deepcopy(query_b)) == filled_b
+
+                        LibGit2.reject(helper, filled_b)
+                        @test LibGit2.fill!(helper, deepcopy(query)) == without_path(filled_a)
+                        @test LibGit2.fill!(helper, deepcopy(query_a)) == filled_a
+                        @test LibGit2.fill!(helper, deepcopy(query_b)) == query_b
                     end
                 end
             end
