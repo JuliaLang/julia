@@ -78,6 +78,29 @@ ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
+function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::AbstractRange{<:Integer}) where {T}
+    if length(n) == length(m) && step(n) == step(m)
+        k = start(n) - start(m)
+        v = collect(Iterators.repeated(x.λ, length(n) - abs(k)))
+        if k == 0
+            return Diagonal(v)
+        elseif k == -1
+            return Tridiagonal(v, zeros(T, length(n)), zeros(T, length(n)-1))
+        elseif k == 1
+            return Tridiagonal(zeros(T, length(n)-1), zeros(T, length(n)), v)
+        elseif length(v) > 0
+            return diagm(k => v)
+        else
+            return zeros(T, length(n), length(m))
+        end
+    end
+    A = Array{T}(length(n), length(m))
+    @inbounds for (j,jj) in enumerate(m), (i,ii) in enumerate(n)
+        A[i,j] = x[ii,jj]
+    end
+    return A
+end
+
 function show(io::IO, ::MIME"text/plain", J::UniformScaling)
     s = "$(J.λ)"
     if occursin(r"\w+\s*[\+\-]\s*\w+", s)
