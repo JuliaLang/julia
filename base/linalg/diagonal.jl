@@ -328,9 +328,13 @@ end
 eye(::Type{Diagonal{T}}, n::Int) where {T} = Diagonal(ones(T,n))
 
 # Matrix functions
-exp(D::Diagonal) = Diagonal(exp.(D.diag))
-log(D::Diagonal) = Diagonal(log.(D.diag))
-sqrt(D::Diagonal) = Diagonal(sqrt.(D.diag))
+for f in (:exp, :log, :sqrt,
+          :cos, :sin, :tan, :csc, :sec, :cot,
+          :cosh, :sinh, :tanh, :csch, :sech, :coth,
+          :acos, :asin, :atan, :acsc, :asec, :acot,
+          :acosh, :asinh, :atanh, :acsch, :asech, :acoth)
+    @eval $f(D::Diagonal) = Diagonal($f.(D.diag))
+end
 
 #Linear solver
 function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
