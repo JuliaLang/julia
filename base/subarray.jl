@@ -290,8 +290,8 @@ _pointer(V::SubArray, i::Int) = pointer(V, ind2sub(indices(V), i))
 
 # Most of the time, reshape needs to add a full layer of indirection. But when
 # there's only one index then we just need to reshape that index
-reshape(V::OneIndexSubArray, dims::Dims) =
-    SubArray(V.parent, (reshape(V.indices[1], dims),))
+# reshape(V::OneIndexSubArray, dims::Dims) =
+#     SubArray(V.parent, (reshape(V.indices[1], dims),))
 
 """
     replace_ref_end!(ex)
