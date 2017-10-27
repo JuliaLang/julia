@@ -9,8 +9,6 @@ Functions are grouped by topic below.
 
 Some general notes:
 
-  * Except for functions in built-in modules (`Pkg`, `Collections`, `Test`
-    and `Profile`), all functions documented here are directly available for use in programs.
   * To use module functions, use `import Module` to import the module, and `Module.fn(x)` to use the
     functions.
   * Alternatively, `using Module` will import all exported `Module` functions into the current namespace.
@@ -103,7 +101,6 @@ Base.LinAlg
 Base.Markdown
 Base.Meta
 Base.Pkg
-Base.Profile
 Base.Serializer
 Base.SparseArrays
 Base.StackTraces

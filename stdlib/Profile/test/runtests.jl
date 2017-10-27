@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test, Profile
+
 function busywait(t, n_tries)
     iter = 0
     while iter < n_tries && Profile.len_data() == 0
@@ -42,4 +44,17 @@ let iobuf = IOBuffer()
     @test !isempty(String(take!(iobuf)))
     Profile.clear()
     @test isempty(Profile.fetch())
+end
+
+# issue #13229
+module I13229
+using Test, Profile
+global z = 0
+@timed @profile for i = 1:5
+    function f(x)
+        return x + i
+    end
+    global z = f(i)
+end
+@test z == 10
 end

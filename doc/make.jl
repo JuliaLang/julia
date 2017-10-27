@@ -25,11 +25,13 @@ if Sys.iswindows()
     cp_q("../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
     cp_q("../stdlib/Mmap/docs/src/index.md", "src/stdlib/mmap.md")
     cp_q("../stdlib/SharedArrays/docs/src/index.md", "src/stdlib/sharedarrays.md")
+    cp_q("../stdlib/Profile/docs/src/index.md", "src/stdlib/profile.md")
 else
     symlink_q("../../../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
     symlink_q("../../../stdlib/Test/docs/src/index.md", "src/stdlib/test.md")
     symlink_q("../../../stdlib/Mmap/docs/src/index.md", "src/stdlib/mmap.md")
     symlink_q("../../../stdlib/SharedArrays/docs/src/index.md", "src/stdlib/sharedarrays.md")
+    symlink_q("../../../stdlib/Profile/docs/src/index.md", "src/stdlib/profile.md")
 end
 
 const PAGES = [
@@ -133,11 +135,11 @@ const PAGES = [
     ],
 ]
 
-using DelimitedFiles, Test, Mmap, SharedArrays
+using DelimitedFiles, Test, Mmap, SharedArrays, Profile
 
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays],
+    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,

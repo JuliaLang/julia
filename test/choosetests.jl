@@ -43,7 +43,7 @@ function choosetests(choices = [])
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
         "replutil", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
-        "nullable", "meta", "stacktraces", "profile", "libgit2", "docs",
+        "nullable", "meta", "stacktraces", "libgit2", "docs",
         "markdown", "base64", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "bitset", "floatfuncs", "compile", "distributed", "inline",
@@ -51,13 +51,6 @@ function choosetests(choices = [])
         "channels", "iostream", "specificity", "codegen", "codevalidation",
         "reinterpretarray"
     ]
-    profile_skipped = false
-    if startswith(string(Sys.ARCH), "arm")
-        # Remove profile from default tests on ARM since it currently segfaults
-        # Allow explicitly adding it for testing
-        filter!(x -> (x != "profile"), testnames)
-        profile_skipped = true
-    end
 
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
         push!(testnames, "examples")
@@ -83,9 +76,6 @@ function choosetests(choices = [])
 
     if tests == ["all"] || isempty(tests)
         tests = testnames
-        if profile_skipped
-            warn("profile test skipped")
-        end
     end
 
     datestests = ["dates/accessors", "dates/adjusters", "dates/query",

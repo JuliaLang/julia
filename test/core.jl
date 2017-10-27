@@ -3861,23 +3861,6 @@ let grphtest = ((1, [2]),)
     end
 end
 
-# issue #13229
-module I13229
-using Test
-if !startswith(string(Sys.ARCH), "arm")
-    global z = 0
-    @timed @profile for i = 1:5
-        function f(x)
-            return x + i
-        end
-        global z = f(i)
-    end
-    @test z == 10
-else
-    warn("@profile test skipped")
-end
-end
-
 # issue #15186
 let ex = quote
              $(if true; :(test); end)

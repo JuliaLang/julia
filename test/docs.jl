@@ -655,6 +655,7 @@ end
 # Simple tests for apropos:
 @test contains(sprint(apropos, "pearson"), "cor")
 @test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")
+using Profile
 @test contains(sprint(apropos, "print"), "Profile.print")
 
 # Issue #13068.
