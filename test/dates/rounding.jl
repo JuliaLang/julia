@@ -173,7 +173,7 @@ end
 end
 @testset "Rounding for periods that should not need rounding" begin
     for x in [Dates.Week(3), Dates.Day(14), Dates.Microsecond(604800000000)]
-        local dt
+        local x
         for p in [Dates.Week, Dates.Day, Dates.Hour, Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond]
             local p
             @test floor(x, p) == p(x)

@@ -8,7 +8,7 @@ const DATETIMEEPOCH = value(DateTime(0))
 const WEEKEPOCH = value(Date(0, 1, 3))
 
 const ConvertiblePeriod = Union{TimePeriod, Week, Day}
-const TimeTypePeriod = Union{TimeType, ConvertiblePeriod}
+const TimeTypeOrPeriod = Union{TimeType, ConvertiblePeriod}
 
 """
     epochdays2date(days) -> Date
@@ -264,21 +264,21 @@ function Base.round(x::ConvertiblePeriod, precision::ConvertiblePeriod, r::Round
     return (Nanosecond(x) - Nanosecond(f)) < (Nanosecond(c) - Nanosecond(x)) ? f : c
 end
 
-Base.round(x::TimeTypePeriod, p::Period, r::RoundingMode{:Down}) = Base.floor(x, p)
-Base.round(x::TimeTypePeriod, p::Period, r::RoundingMode{:Up}) = Base.ceil(x, p)
+Base.round(x::TimeTypeOrPeriod, p::Period, r::RoundingMode{:Down}) = Base.floor(x, p)
+Base.round(x::TimeTypeOrPeriod, p::Period, r::RoundingMode{:Up}) = Base.ceil(x, p)
 
 # No implementation of other `RoundingMode`s: rounding to nearest "even" is skipped because
 # "even" is not defined for Period; rounding toward/away from zero is skipped because ISO
 # 8601's year 0000 is not really "zero".
-Base.round(::TimeTypePeriod, p::Period, ::RoundingMode) = throw(DomainError(p))
+Base.round(::TimeTypeOrPeriod, p::Period, ::RoundingMode) = throw(DomainError(p))
 
 # Default to RoundNearestTiesUp.
-Base.round(x::TimeTypePeriod, p::Period) = Base.round(x, p, RoundNearestTiesUp)
+Base.round(x::TimeTypeOrPeriod, p::Period) = Base.round(x, p, RoundNearestTiesUp)
 
 # Make rounding functions callable using Period types in addition to values.
-Base.floor(x::TimeTypePeriod, p::Type{<:Period}) = Base.floor(x, p(1))
-Base.ceil(x::TimeTypePeriod, p::Type{<:Period}) = Base.ceil(x, p(1))
+Base.floor(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.floor(x, oneunit(P))
+Base.ceil(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.ceil(x, oneunit(P))
 
-function Base.round(x::TimeTypePeriod,p::Type{<:Period},r::RoundingMode=RoundNearestTiesUp)
-    return Base.round(x, p(1), r)
+function Base.round(x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period
+     return Base.round(x, oneunit(P), r)
 end
