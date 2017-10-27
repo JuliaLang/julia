@@ -11,8 +11,6 @@ using .Main.Quaternions
 Random.seed!(123)
 
 @testset "basic functions" begin
-    @test I[1,1] == 1 # getindex
-    @test I[1,2] == 0 # getindex
     @test I === I' # transpose
     @test ndims(I) == 2
     @test one(UniformScaling{Float32}) == UniformScaling(one(Float32))
@@ -25,6 +23,16 @@ Random.seed!(123)
     @test sparse(3I,4,5) == sparse(1:4, 1:4, 3, 4, 5)
     @test sparse(3I,5,4) == sparse(1:4, 1:4, 3, 5, 4)
     @test opnorm(UniformScaling(1+im)) ≈ sqrt(2)
+end
+
+@testset "getindex" begin
+    @test I[1,1] == 1
+    @test I[1,2] == 0
+    @test I[1:2,1:2] == Diagonal([1, 1])
+    @test I[1:2:3,1:2:3] == Diagonal([1, 1])
+    @test I[1:2,2:3] == [0 0; 1 0]
+    @test I[2:3,1:2] == [0 1; 0 0]
+    @test I[2:-1:1,1:2] == [0 1; 1 0]
 end
 
 @testset "sqrt, exp, log, and trigonometric functions" begin
