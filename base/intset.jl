@@ -21,7 +21,7 @@ sizehint!(s::IntSet, n::Integer) = (_resize0!(s.bits, max(n, length(s.bits))); s
 @inline function _setint!(s::IntSet, idx::Integer, b::Bool)
     if idx > length(s.bits)
         b || return s # setting a bit to zero outside the set's bits is a no-op
-        newlen = idx + idx>>1 # This operation may overflow; we want saturation
+        newlen = Int(idx) + Int(idx)>>1 # This operation may overflow; we want saturation
         _resize0!(s.bits, ifelse(newlen<0, typemax(Int), newlen))
     end
     @inbounds s.bits[idx] = b
