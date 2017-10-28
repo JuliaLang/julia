@@ -1553,6 +1553,7 @@ end
 
 sparse(S::UniformScaling, m::Integer, n::Integer=m) = speye_scaled(S.λ, m, n)
 
+Base.iszero(A::SparseMatrixCSC) = iszero(view(A.nzval, 1:(A.colptr[size(A, 2) + 1] - 1)))
 
 function Base.isone(A::SparseMatrixCSC)
     m, n = size(A)
