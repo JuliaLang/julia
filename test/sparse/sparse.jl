@@ -5,6 +5,14 @@
     @test !issparse(ones(5,5))
 end
 
+@testset "isone specialization for SparseMatrixCSC" begin
+    @test isone(sparse(I, 3, 3))    # test success
+    @test !isone(sparse(I, 3, 4))   # test failure for non-square matrix
+    @test !isone(spzeros(3, 3))     # test failure for too few stored entries
+    @test !isone(sparse(2I, 3, 3))  # test failure for non-one diagonal entries
+    @test !isone(sparse(Bidiagonal(fill(1, 3), fill(1, 2), :U))) # test failure for non-zero off-diag entries
+end
+
 @testset "indtype" begin
     @test Base.SparseArrays.indtype(sparse(ones(Int8,2),ones(Int8,2),rand(2))) == Int8
 end
