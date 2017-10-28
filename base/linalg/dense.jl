@@ -115,35 +115,35 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
 """
     stride1(A) -> Int
 
-Returns the distance in memory between adjacent elements
-in one dimension.
+Returns the distance between successive array elements
+in units of element size.
 If the argument type is `Array`, the return value of `stride1` is always `1`.
 
 # Examples
 ```jldoctest
-julia> A = rand(10)
-10-element Array{Float64,1}:
- 0.480507
- 0.942921
- 0.268623
- 0.398083
- 0.576353
- 0.238704
- 0.588925
- 0.0247238
- 0.520636
- 0.49424
+julia> A = [1,2,3,4,5,6,7,8,9,10]
+10-element Array{Int64,1}:
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
 
 julia> Base.LinAlg.stride1(A)
 1
 
 julia> B = view(A,2:2:10)
-5-element SubArray{Float64,1,Array{Float64,1},Tuple{StepRange{Int64,Int64}},true}:
- 0.942921
- 0.398083
- 0.238704
- 0.0247238
- 0.49424
+5-element SubArray{Int64,1,Array{Int64,1},Tuple{StepRange{Int64,Int64}},true}:
+  2
+  4
+  6
+  8
+ 10
 
 julia> Base.LinAlg.stride1(B)
 2
