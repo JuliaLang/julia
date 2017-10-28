@@ -1501,18 +1501,60 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
 end
 
 
+const DUMP_DEFAULT_MAXDEPTH = 8
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-dump(io::IO, x::DataType; maxdepth=8) = ((x.abstract ? dumptype : dump)(io, x, maxdepth, ""); println(io))
+dump(io::IO, x::DataType; maxdepth=DUMP_DEFAULT_MAXDEPTH) = ((x.abstract ? dumptype : dump)(io, x, maxdepth, ""); println(io))
 
-dump(io::IO, arg; maxdepth=8) = (dump(io, arg, maxdepth, ""); println(io))
+dump(io::IO, arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = (dump(io, arg, maxdepth, ""); println(io))
 
 """
-    dump(x)
+    dump(x; maxdepth=$DUMP_DEFAULT_MAXDEPTH)
 
 Show every part of the representation of a value.
+```jldoctest
+julia> struct MyStruct
+           x
+           y
+       end
+
+julia> x = MyStruct(1, (2,3));
+
+julia> dump(x)
+MyStruct
+  x: Int64 1
+  y: Tuple{Int64,Int64}
+    1: Int64 2
+    2: Int64 3
+```
+Nested data structures are truncated at `maxdepth`.
+```jldoctest
+julia> struct DeeplyNested
+           xs::Vector{DeeplyNested}
+       end;
+
+julia> x = DeeplyNested([]);
+
+julia> push!(x.xs, x);
+
+julia> dump(x)
+DeeplyNested
+  xs: Array{DeeplyNested}((1,))
+    1: DeeplyNested
+      xs: Array{DeeplyNested}((1,))
+        1: DeeplyNested
+          xs: Array{DeeplyNested}((1,))
+            1: DeeplyNested
+              xs: Array{DeeplyNested}((1,))
+                1: DeeplyNested
+
+julia> dump(x, maxdepth=2)
+DeeplyNested
+  xs: Array{DeeplyNested}((1,))
+    1: DeeplyNested
+```
 """
-dump(arg; maxdepth=8) = dump(IOContext(STDOUT::IO, :limit => true), arg; maxdepth=maxdepth)
+dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH) = dump(IOContext(STDOUT::IO, :limit => true), arg; maxdepth=maxdepth)
 
 
 """
