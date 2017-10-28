@@ -21,6 +21,7 @@ julia> SubString("abc", 1:2)
 
 julia> SubString("abc", 2)
 "bc"
+```
 """
 struct SubString{T<:AbstractString} <: AbstractString
     string::T
