@@ -565,7 +565,7 @@ function f15280(x) end
 
 # bug found in #16850, Base.url with backslashes on Windows
 function module_depth(from::Module, to::Module)
-    if from === to
+    if from === to || module_parent(to) === to
         return 0
     else
         return 1 + module_depth(from, module_parent(to))

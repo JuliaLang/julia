@@ -122,8 +122,8 @@ that binary data is base64-encoded as an ASCII string.
 """
 stringmime(m::MIME, x) = istextmime(m) ? reprmime(m, x) : _binstringmime(m, x)
 
-_binstringmime(m::MIME, x) = base64encode(verbose_show, m, x)
-_binstringmime(m::MIME, x::Vector{UInt8}) = base64encode(write, x)
+_binstringmime(m::MIME, x) = Base64.base64encode(verbose_show, m, x)
+_binstringmime(m::MIME, x::Vector{UInt8}) = Base64.base64encode(write, x)
 
 """
     istextmime(m::MIME)
