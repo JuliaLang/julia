@@ -99,21 +99,23 @@ keypress(m::AbstractMenu, i::UInt32) = false
 Display the menu and enter interactive mode. Returns `m.selected` which
 varies based on menu type.
 """
-function request(m::AbstractMenu)
+request(m::AbstractMenu) = request(terminal, m)
+
+function request(term::Base.Terminals.TTYTerminal, m::AbstractMenu)
     cursor = 1
 
     menu_header = header(m)
     if !CONFIG[:supress_output] && menu_header != ""
-        println(menu_header)
+        println(term.out_stream, menu_header)
     end
 
-    printMenu(m, cursor, init=true)
+    printMenu(term.out_stream, m, cursor, init=true)
 
-    raw_mode_enabled = enableRawMode()
-    raw_mode_enabled && print("\x1b[?25l") # hide the cursor
+    raw_mode_enabled = enableRawMode(term)
+    raw_mode_enabled && print(term.out_stream, "\x1b[?25l") # hide the cursor
     try
         while true
-            c = readKey()
+            c = readKey(term.in_stream)
 
             if c == Int(ARROW_UP)
 
@@ -178,17 +180,17 @@ function request(m::AbstractMenu)
                 keypress(m, c) && break
             end
 
-            printMenu(m, cursor)
+            printMenu(term.out_stream, m, cursor)
         end
     finally
         # always disable raw mode even even if there is an
         #  exception in the above loop
         if raw_mode_enabled
-            print("\x1b[?25h") # unhide cursor
-            disableRawMode()
+            print(term.out_stream, "\x1b[?25h") # unhide cursor
+            disableRawMode(term)
         end
     end
-    println()
+    println(term.out_stream)
 
     return m.selected
 end
@@ -196,13 +198,17 @@ end
 
 """
 
-    request(msg::AbstractString, m::AbstractMenu)
+    request([term,] msg::AbstractString, m::AbstractMenu)
 
 Shorthand for `println(msg); request(m)`.
 """
-function request(msg::AbstractString, m::AbstractMenu)
-    println(msg)
-    request(m)
+request(msg::AbstractString, m::AbstractMenu) =
+    request(terminal, msg, m)
+
+function request(term::Base.Terminals.TTYTerminal,
+                 msg::AbstractString, m::AbstractMenu)
+    println(term.out_stream, msg)
+    request(term, m)
 end
 
 
@@ -211,7 +217,7 @@ end
 #   menu to the screen. Menus must implement `writeLine` and `options`
 #   and have fields `pagesize::Int` and `pageoffset::Int` as part of
 #   their type definition
-function printMenu(m::AbstractMenu, cursor::Int; init::Bool=false)
+function printMenu(out, m::AbstractMenu, cursor::Int; init::Bool=false)
     CONFIG[:supress_output] && return
 
     buf = IOBuffer()
@@ -245,5 +251,5 @@ function printMenu(m::AbstractMenu, cursor::Int; init::Bool=false)
         i != (m.pagesize+m.pageoffset) && print(buf, "\r\n")
     end
 
-    print(String(take!(buf)))
+    print(out, String(take!(buf)))
 end
