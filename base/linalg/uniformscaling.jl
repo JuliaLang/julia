@@ -211,6 +211,24 @@ broadcast(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
 
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 
+## equality comparison with UniformScaling
+==(J::UniformScaling, A::AbstractMatrix) = A == J
+function ==(A::AbstractMatrix, J::UniformScaling)
+    size(A, 1) == size(A, 2) || return false
+    iszero(J.λ) && return iszero(A)
+    isone(J.λ) && return isone(A)
+    return A == J.λ*one(A)
+end
+function ==(A::StridedMatrix, J::UniformScaling)
+    size(A, 1) == size(A, 2) || return false
+    iszero(J.λ) && return iszero(A)
+    isone(J.λ) && return isone(A)
+    for j in indices(A, 2), i in indices(A, 1)
+        ifelse(i == j, A[i, j] == J.λ, iszero(A[i, j])) || return false
+    end
+    return true
+end
+
 function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
             atol::Real=0, rtol::Real=Base.rtoldefault(T,S,atol), nans::Bool=false) where {T<:Number,S<:Number}
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
