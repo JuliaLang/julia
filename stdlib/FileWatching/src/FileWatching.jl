@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# filesystem operations
+"""
+Utilities for monitoring files and file descriptors for events.
+"""
+module FileWatching
 
 export
     watch_file,
@@ -11,8 +14,9 @@ export
     FDWatcher
 
 import Base: @handle_as, wait, close, uvfinalize, eventloop, notify_error, stream_wait,
-    _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close,
+    _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close, uv_error, UVError,
     associate_julia_struct, disassociate_julia_struct, isreadable, iswritable, |
+import Base.Filesystem.StatStruct
 if Sys.iswindows()
     import Base.WindowsRawSocket
 end
@@ -562,4 +566,10 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
     finally
         close(pfw)
     end
+end
+
+# deprecations
+
+stop_watching(stream::_FDWatcher) = Base.depwarn("stop_watching(::_FDWatcher) should not be used", :stop_watching)
+
 end

@@ -32,8 +32,7 @@ Block the current task until some event occurs, depending on the type of the arg
   can be used to determine success or failure.
 * [`Task`](@ref): Wait for a `Task` to finish, returning its result value. If the task fails
   with an exception, the exception is propagated (re-thrown in the task that called `wait`).
-* `RawFD`: Wait for changes on a file descriptor (see [`poll_fd`](@ref) for keyword
-  arguments and return code)
+* `RawFD`: Wait for changes on a file descriptor (see the `FileWatching` package).
 
 If no argument is passed, the task blocks for an undefined period. A task can only be
 restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).

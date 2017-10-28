@@ -473,8 +473,6 @@ end
 @deprecate den denominator
 @deprecate num numerator
 
-Filesystem.stop_watching(stream::Filesystem._FDWatcher) = depwarn("stop_watching(::_FDWatcher) should not be used", :stop_watching)
-
 # #19088
 @deprecate takebuf_array take!
 @deprecate takebuf_string(b) String(take!(b))
@@ -1360,6 +1358,12 @@ export conv, conv2, deconv, filt, filt!, xcorr
 @deprecate_moved base64decode "Base64" true true
 @deprecate_moved Base64EncodePipe "Base64" true true
 @deprecate_moved Base64DecodePipe "Base64" true true
+
+@deprecate_moved poll_fd "FileWatching" true true
+@deprecate_moved poll_file "FileWatching" true true
+@deprecate_moved PollingFileWatcher "FileWatching" true true
+@deprecate_moved watch_file "FileWatching" true true
+@deprecate_moved FileMonitor "FileWatching" true true
 
 # PR #21709
 @deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)

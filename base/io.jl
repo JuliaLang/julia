@@ -36,7 +36,7 @@ buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
 Determine whether an object - such as a stream, timer, or mmap -- is not yet closed. Once an
 object is closed, it will never produce a new event. However, a closed stream may still have
 data to read in its buffer, use [`eof`](@ref) to check for the ability to read data.
-Use [`poll_fd`](@ref) to be notified when a stream might be writable or readable.
+Use the `FileWatching` package to be notified when a stream might be writable or readable.
 """
 function isopen end
 

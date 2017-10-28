@@ -149,9 +149,6 @@ Base.IPv6
 Base.nb_available
 Base.accept
 Base.listenany
-Base.Filesystem.poll_fd
-Base.Filesystem.poll_file
-Base.Filesystem.watch_file
 Base.bind
 Base.send
 Base.recv
