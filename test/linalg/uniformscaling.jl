@@ -35,6 +35,7 @@ end
     @test 4.3*eye(2) ≈ UniformScaling(4.32) rtol=0.1 atol=0.01
     @test [4.3201 0.002;0.001 4.32009] ≈ UniformScaling(4.32) rtol=0.1 atol=0.
     @test UniformScaling(4.32) ≉ 4.3*ones(2,2) rtol=0.1 atol=0.01
+    @test UniformScaling(4.32) ≈ 4.32*eye(2)
 end
 
 @testset "arithmetic with Number" begin
