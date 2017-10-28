@@ -11,23 +11,30 @@ end
 SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr} = SVD{T,Tr,typeof(U)}(U, S, Vt)
 
 """
-    svdfact!(A, thin::Bool=true) -> SVD
+    svdfact!(A; full::Bool = false) -> SVD
 
 `svdfact!` is the same as [`svdfact`](@ref), but saves space by
 overwriting the input `A`, instead of creating a copy.
 """
-function svdfact!(A::StridedMatrix{T}; thin::Bool=true) where T<:BlasFloat
+function svdfact!(A::StridedMatrix{T}; full::Bool = false, thin::Union{Bool,Void} = nothing) where T<:BlasFloat
+    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
+    if thin != nothing
+        Base.depwarn(string("the `thin` keyword argument in `svdfact!(A; thin = $(thin))` has ",
+            "been deprecated in favor of `full`, which has the opposite meaning, ",
+            "e.g. `svdfact!(A; full = $(!thin))`."), :svdfact!)
+        full::Bool = !thin
+    end
     m,n = size(A)
     if m == 0 || n == 0
-        u,s,vt = (eye(T, m, thin ? n : m), real(zeros(T,0)), eye(T,n,n))
+        u,s,vt = (eye(T, m, full ? m : n), real(zeros(T,0)), eye(T,n,n))
     else
-        u,s,vt = LAPACK.gesdd!(thin ? 'S' : 'A', A)
+        u,s,vt = LAPACK.gesdd!(full ? 'A' : 'S', A)
     end
     SVD(u,s,vt)
 end
 
 """
-    svdfact(A; thin::Bool=true) -> SVD
+    svdfact(A; full::Bool = false) -> SVD
 
 Compute the singular value decomposition (SVD) of `A` and return an `SVD` object.
 
@@ -36,9 +43,9 @@ Compute the singular value decomposition (SVD) of `A` and return an `SVD` object
 The algorithm produces `Vt` and hence `Vt` is more efficient to extract than `V`.
 The singular values in `S` are sorted in descending order.
 
-If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
-`A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
-``M \\times \\min(M, N)`` for a thin SVD.
+If `full = false` (default), a "thin" SVD is returned. For a
+``M \\times N`` matrix `A`, `U` is ``M \\times M`` for a "full" SVD (`full = true`) and
+``M \\times \\min(M, N)`` for a "thin" SVD.
 
 # Examples
 ```jldoctest
@@ -59,22 +66,47 @@ julia> F[:U] * Diagonal(F[:S]) * F[:Vt]
  0.0  2.0  0.0  0.0  0.0
 ```
 """
-function svdfact(A::StridedVecOrMat{T}; thin::Bool = true) where T
+function svdfact(A::StridedVecOrMat{T}; full::Bool = false, thin::Union{Bool,Void} = nothing) where T
+    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
+    if thin != nothing
+        Base.depwarn(string("the `thin` keyword argument in `svdfact(A; thin = $(thin))` has ",
+            "been deprecated in favor of `full`, which has the opposite meaning, ",
+            "e.g. `svdfact(A; full = $(!thin))`."), :svdfact)
+        full::Bool = !thin
+    end
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
-    svdfact!(copy_oftype(A, S), thin = thin)
+    svdfact!(copy_oftype(A, S), full = full)
 end
-svdfact(x::Number; thin::Bool=true) = SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
-svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin=thin)
+function svdfact(x::Number; full::Bool = false, thin::Union{Bool,Void} = nothing)
+    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
+    if thin != nothing
+        Base.depwarn(string("the `thin` keyword argument in `svdfact(A; thin = $(thin))` has ",
+            "been deprecated in favor of `full`, which has the opposite meaning, ",
+            "e.g. `svdfact(A; full = $(!thin))`."), :svdfact)
+        full::Bool = !thin
+    end
+    return SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
+end
+function svdfact(x::Integer; full::Bool = false, thin::Union{Bool,Void} = nothing)
+    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
+    if thin != nothing
+        Base.depwarn(string("the `thin` keyword argument in `svdfact(A; thin = $(thin))` has ",
+            "been deprecated in favor of `full`, which has the opposite meaning, ",
+            "e.g. `svdfact(A; full = $(!thin))`."), :svdfact)
+        full::Bool = !thin
+    end
+    return svdfact(float(x), full = full)
+end
 
 """
-    svd(A; thin::Bool=true) -> U, S, V
+    svd(A; full::Bool = false) -> U, S, V
 
 Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
 `A == U * Diagonal(S) * V'`. The singular values in `S` are sorted in descending order.
 
-If `thin = true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
-`A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
-``M \\times \\min(M, N)`` for a thin SVD.
+If `full = false` (default), a "thin" SVD is returned. For a ``M \\times N`` matrix
+`A`, `U` is ``M \\times M`` for a "full" SVD (`full = true`) and
+``M \\times \\min(M, N)`` for a "thin" SVD.
 
 `svd` is a wrapper around [`svdfact`](@ref), extracting all parts
 of the `SVD` factorization to a tuple. Direct use of `svdfact` is therefore more
@@ -99,11 +131,27 @@ julia> U * Diagonal(S) * V'
  0.0  2.0  0.0  0.0  0.0
 ```
 """
-function svd(A::AbstractArray; thin::Bool=true)
-    F = svdfact(A, thin=thin)
+function svd(A::AbstractArray; full::Bool = false, thin::Union{Bool,Void} = nothing)
+    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
+    if thin != nothing
+        Base.depwarn(string("the `thin` keyword argument in `svd(A; thin = $(thin))` has ",
+            "been deprecated in favor of `full`, which has the opposite meaning, ",
+            "e.g `svd(A; full = $(!thin))`."), :svd)
+        full::Bool = !thin
+    end
+    F = svdfact(A, full = full)
     F.U, F.S, F.Vt'
 end
-svd(x::Number; thin::Bool=true) = first.(svd(fill(x, 1, 1)))
+function svd(x::Number; full::Bool = false, thin::Union{Bool,Void} = nothing)
+    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
+    if thin != nothing
+        Base.depwarn(string("the `thin` keyword argument in `svd(A; thin = $(thin))` has ",
+            "been deprecated in favor of `full`, which has the opposite meaning, ",
+            "e.g. `svd(A; full = $(!thin))`."), :svd)
+        full::Bool = !thin
+    end
+    return first.(svd(fill(x, 1, 1)))
+end
 
 function getindex(F::SVD, d::Symbol)
     if d == :U

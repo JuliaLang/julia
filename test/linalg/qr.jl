@@ -21,7 +21,7 @@ bimg  = randn(n,2)/2
 
 # helper functions to unambiguously recover explicit forms of an implicit QR Q
 squareQ(Q::LinAlg.AbstractQ) = A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))
-truncatedQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
+rectangularQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
 
 @testset for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     raw_a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
@@ -75,9 +75,9 @@ truncatedQ(Q::LinAlg.AbstractQ) = convert(Array, Q)
                 q,r   = qra[:Q], qra[:R]
                 @test_throws KeyError qra[:Z]
                 @test q'*squareQ(q) ≈ eye(a_1)
-                @test q'*truncatedQ(q) ≈ eye(a_1, n1)
+                @test q'*rectangularQ(q) ≈ eye(a_1, n1)
                 @test q*r ≈ a[:, 1:n1]
-                @test q*b[1:n1] ≈ truncatedQ(q)*b[1:n1] atol=100ε
+                @test q*b[1:n1] ≈ rectangularQ(q)*b[1:n1] atol=100ε
                 @test q*b ≈ squareQ(q)*b atol=100ε
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch b[1:n1 + 1]*q'
@@ -163,7 +163,7 @@ end
 
 @testset "Issue 7304" begin
     A = [-√.5 -√.5; -√.5 √.5]
-    Q = truncatedQ(qrfact(A)[:Q])
+    Q = rectangularQ(qrfact(A)[:Q])
     @test vecnorm(A-Q) < eps()
 end
 

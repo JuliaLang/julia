@@ -381,6 +381,10 @@ Deprecated or removed
   * The `cholfact`/`cholfact!` methods that accepted an `uplo` symbol have been deprecated
     in favor of using `Hermitian` (or `Symmetric`) views ([#22187], [#22188]).
 
+  * The `thin` keyword argument for orthogonal decomposition methods has
+    been deprecated in favor of `full`, which has the opposite meaning:
+    `thin == true` if and only if `full == false` ([#24279]).
+
   * `isposdef(A::AbstractMatrix, UL::Symbol)` and `isposdef!(A::AbstractMatrix, UL::Symbol)`
     have been deprecated in favor of `isposdef(Hermitian(A, UL))` and `isposdef!(Hermitian(A, UL))`
     respectively ([#22245]).

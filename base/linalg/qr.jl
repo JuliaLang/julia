@@ -265,7 +265,7 @@ The following functions are available for the `QR` objects: [`inv`](@ref), [`siz
 and [`\\`](@ref). When `A` is rectangular, `\\` will return a least squares
 solution and if the solution is not unique, the one with smallest norm is returned.
 
-Multiplication with respect to either thin or full `Q` is allowed, i.e. both `F[:Q]*F[:R]`
+Multiplication with respect to either full/square or non-full/square `Q` is allowed, i.e. both `F[:Q]*F[:R]`
 and `F[:Q]*A` are supported. A `Q` matrix can be converted into a regular matrix with
 [`Matrix`](@ref).
 
@@ -305,24 +305,33 @@ end
 qrfact(x::Number) = qrfact(fill(x,1,1))
 
 """
-    qr(A, pivot=Val(false); thin::Bool=true) -> Q, R, [p]
+    qr(A, pivot=Val(false); full::Bool = false) -> Q, R, [p]
 
 Compute the (pivoted) QR factorization of `A` such that either `A = Q*R` or `A[:,p] = Q*R`.
 Also see [`qrfact`](@ref).
-The default is to compute a thin factorization. Note that `R` is not
-extended with zeros when the full `Q` is requested.
+The default is to compute a "thin" factorization. Note that `R` is not
+extended with zeros when a full/square orthogonal factor `Q` is requested (via `full = true`).
 """
-qr(A::Union{Number, AbstractMatrix}, pivot::Union{Val{false}, Val{true}}=Val(false); thin::Bool=true) =
-    _qr(A, pivot, thin=thin)
-function _qr(A::Union{Number, AbstractMatrix}, ::Val{false}; thin::Bool=true)
+function qr(A::Union{Number,AbstractMatrix}, pivot::Union{Val{false},Val{true}} = Val(false);
+            full::Bool = false, thin::Union{Bool,Void} = nothing)
+    # DEPRECATION TODO: remove deprecated thin argument and associated logic after 0.7
+    if thin != nothing
+        Base.depwarn(string("the `thin` keyword argument in `qr(A, pivot; thin = $(thin))` has ",
+            "been deprecated in favor of `full`, which has the opposite meaning, ",
+            "e.g. `qr(A, pivot; full = $(!thin))`."), :qr)
+        full::Bool = !thin
+    end
+    return _qr(A, pivot, full = full)
+end
+function _qr(A::Union{Number,AbstractMatrix}, ::Val{false}; full::Bool = false)
     F = qrfact(A, Val(false))
     Q, R = getq(F), F[:R]::Matrix{eltype(F)}
-    return (thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))), R
+    return (!full ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))), R
 end
-function _qr(A::Union{Number, AbstractMatrix}, ::Val{true}; thin::Bool=true)
+function _qr(A::Union{Number, AbstractMatrix}, ::Val{true}; full::Bool = false)
     F = qrfact(A, Val(true))
     Q, R, p = getq(F), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
-    return (thin ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))), R, p
+    return (!full ? Array(Q) : A_mul_B!(Q, eye(eltype(Q), size(Q.factors, 1)))), R, p
 end
 
 """
