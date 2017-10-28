@@ -218,7 +218,8 @@ second argument is zero.
 
 ## Floating-Point Numbers
 
-Literal floating-point numbers are represented in the standard formats:
+Literal floating-point numbers are represented in the standard formats, using
+[E-notation](https://en.wikipedia.org/wiki/Scientific_notation#E-notation) when necessary:
 
 ```jldoctest
 julia> 1.0
@@ -267,7 +268,8 @@ julia> typeof(ans)
 Float32
 ```
 
-Hexadecimal floating-point literals are also valid, but only as [`Float64`](@ref) values:
+Hexadecimal floating-point literals are also valid, but only as [`Float64`](@ref) values,
+with `p` preceding the base-2 exponent:
 
 ```jldoctest
 julia> 0x1p0
