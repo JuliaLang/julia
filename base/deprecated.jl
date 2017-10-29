@@ -1261,6 +1261,40 @@ export conv, conv2, deconv, filt, filt!, xcorr
 @deprecate_moved watch_file "FileWatching" true true
 @deprecate_moved FileMonitor "FileWatching" true true
 
+@eval @deprecate_moved $(Symbol("@spawn")) "Distributed" true true
+@eval @deprecate_moved $(Symbol("@spawnat")) "Distributed" true true
+@eval @deprecate_moved $(Symbol("@fetch")) "Distributed" true true
+@eval @deprecate_moved $(Symbol("@fetchfrom")) "Distributed" true true
+@eval @deprecate_moved $(Symbol("@everywhere")) "Distributed" true true
+@eval @deprecate_moved $(Symbol("@parallel")) "Distributed" true true
+
+@deprecate_moved addprocs "Distributed" true true
+@deprecate_moved CachingPool "Distributed" true true
+@deprecate_moved clear! "Distributed" true true
+@deprecate_moved ClusterManager "Distributed" true true
+@deprecate_moved default_worker_pool "Distributed" true true
+@deprecate_moved init_worker "Distributed" true true
+@deprecate_moved interrupt "Distributed" true true
+@deprecate_moved launch "Distributed" true true
+@deprecate_moved manage "Distributed" true true
+@deprecate_moved nworkers "Distributed" true true
+@deprecate_moved pmap "Distributed" true true
+@deprecate_moved procs "Distributed" true true
+@deprecate_moved remote "Distributed" true true
+@deprecate_moved remotecall "Distributed" true true
+@deprecate_moved remotecall_fetch "Distributed" true true
+@deprecate_moved remotecall_wait "Distributed" true true
+@deprecate_moved remote_do "Distributed" true true
+@deprecate_moved rmprocs "Distributed" true true
+@deprecate_moved workers "Distributed" true true
+@deprecate_moved WorkerPool "Distributed" true true
+@deprecate_moved RemoteChannel "Distributed" true true
+@deprecate_moved Future "Distributed" true true
+@deprecate_moved WorkerConfig "Distributed" true true
+@deprecate_moved RemoteException "Distributed" true true
+@deprecate_moved ProcessExitedException "Distributed" true true
+
+
 @deprecate_moved crc32c "CRC32c" true true
 
 @deprecate_moved DateTime "Dates" true true

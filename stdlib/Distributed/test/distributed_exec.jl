@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
-include("testenv.jl")
+using Test, Distributed
+import Distributed: launch, manage
+
+include(joinpath(JULIA_HOME, "..", "share", "julia", "test", "testenv.jl"))
 
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
@@ -20,7 +22,7 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 
 # Test remote()
 let
-    pool = Base.default_worker_pool()
+    pool = default_worker_pool()
 
     count = 0
     count_condition = Condition()
@@ -98,25 +100,25 @@ testf(id_other)
 # Distributed GC tests for Futures
 function test_futures_dgc(id)
     f = remotecall(myid, id)
-    fid = Base.remoteref_id(f)
+    fid = remoteref_id(f)
 
     # remote value should be deleted after a fetch
-    @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, fid) == true
+    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == true
     @test isnull(f.v) == true
     @test fetch(f) == id
     @test isnull(f.v) == false
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, fid) == false
+    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
 
 
     # if unfetched, it should be deleted after a finalize
     f = remotecall(myid, id)
-    fid = Base.remoteref_id(f)
-    @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, fid) == true
+    fid = remoteref_id(f)
+    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == true
     @test isnull(f.v) == true
     finalize(f)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, fid) == false
+    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
 end
 
 test_futures_dgc(id_me)
@@ -126,40 +128,40 @@ test_futures_dgc(id_other)
 wid1 = workers()[1]
 wid2 = workers()[2]
 f = remotecall(myid, wid1)
-fid = Base.remoteref_id(f)
+fid = remoteref_id(f)
 
 fstore = RemoteChannel(wid2)
 put!(fstore, f)
 
 @test fetch(f) == wid1
-@test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, fid) == true
+@test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == true
 remotecall_fetch(r->(fetch(fetch(r)); yield()), wid2, fstore)
 sleep(0.5) # to ensure that wid2 gc messages have been executed on wid1
-@test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, fid) == false
+@test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == false
 
 # put! should release remote reference since it would have been cached locally
 f = Future(wid1)
-fid = Base.remoteref_id(f)
+fid = remoteref_id(f)
 
 # should not be created remotely till accessed
-@test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, fid) == false
+@test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == false
 # create it remotely
 isready(f)
 
-@test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, fid) == true
+@test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == true
 put!(f, :OK)
-@test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, fid) == false
+@test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == false
 @test fetch(f) == :OK
 
 # RemoteException should be thrown on a put! when another process has set the value
 f = Future(wid1)
-fid = Base.remoteref_id(f)
+fid = remoteref_id(f)
 
 fstore = RemoteChannel(wid2)
 put!(fstore, f) # send f to wid2
 put!(f, :OK) # set value from master
 
-@test remotecall_fetch(k->haskey(Base.Distributed.PGRP.refs, k), wid1, fid) == true
+@test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == true
 
 testval = remotecall_fetch(wid2, fstore) do x
     try
@@ -179,15 +181,15 @@ end
 function test_remoteref_dgc(id)
     rr = RemoteChannel(id)
     put!(rr, :OK)
-    rrid = Base.remoteref_id(rr)
+    rrid = remoteref_id(rr)
 
     # remote value should be deleted after finalizing the ref
-    @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, rrid) == true
+    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == true
     @test fetch(rr) == :OK
-    @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, rrid) == true
+    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == true
     finalize(rr)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Base.Distributed.PGRP.refs, k)), id, rrid) == false
+    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == false
 end
 test_remoteref_dgc(id_me)
 test_remoteref_dgc(id_other)
@@ -196,17 +198,17 @@ test_remoteref_dgc(id_other)
 let wid1 = workers()[1],
     wid2 = workers()[2],
     rr = RemoteChannel(wid1),
-    rrid = Base.remoteref_id(rr),
+    rrid = remoteref_id(rr),
     fstore = RemoteChannel(wid2)
 
     put!(fstore, rr)
-    @test remotecall_fetch(k -> haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == true
+    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
     finalize(rr) # finalize locally
     yield() # flush gc msgs
-    @test remotecall_fetch(k -> haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == true
+    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
     remotecall_fetch(r -> (finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
     sleep(0.5) # to ensure that wid2 messages have been executed on wid1
-    @test remotecall_fetch(k -> haskey(Base.Distributed.PGRP.refs, k), wid1, rrid) == false
+    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == false
 end
 
 # Tests for issue #23109 - should not hang.
@@ -249,7 +251,7 @@ test_indexing(RemoteChannel())
 test_indexing(RemoteChannel(id_other))
 
 # Test ser/deser to non-ClusterSerializer objects.
-function test_regular_io_ser(ref::Base.Distributed.AbstractRemoteRef)
+function test_regular_io_ser(ref::Distributed.AbstractRemoteRef)
     io = IOBuffer()
     serialize(io, ref)
     seekstart(io)
@@ -522,6 +524,17 @@ end
 # Start test for various kw arg combinations
 walk_args(1)
 
+include(joinpath(JULIA_HOME, "..", "share", "julia", "test", "generic_map_tests.jl"))
+empty_pool = WorkerPool([myid()])
+pmap_fallback = (f, c...) -> pmap(empty_pool, f, c...)
+generic_map_tests(pmap_fallback)
+
+# pmap with various types. Test for equivalence with map
+run_map_equivalence_tests(pmap)
+using Base.Unicode: uppercase
+@test pmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
+
+
 # Simple test for pmap throws error
 let error_thrown = false
     try
@@ -540,102 +553,13 @@ end
 n = 10
 as = [rand(4,4) for i in 1:n]
 bs = deepcopy(as)
-cs = collect(Base.Distributed.pgenerate(x->(sleep(rand()*0.1); svdfact(x)), bs))
+cs = collect(Distributed.pgenerate(x->(sleep(rand()*0.1); svdfact(x)), bs))
 svdas = map(svdfact, as)
 for i in 1:n
     @test cs[i][:U] ≈ svdas[i][:U]
     @test cs[i][:S] ≈ svdas[i][:S]
     @test cs[i][:V] ≈ svdas[i][:V]
 end
-
-# Test asyncmap
-@test allunique(asyncmap(x->(sleep(1.0);object_id(current_task())), 1:10))
-
-# num tasks
-@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:20; ntasks=5))) == 5
-
-# default num tasks
-@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:200))) == 100
-
-# ntasks as a function
-let nt=0
-    global nt_func
-    nt_func() = (v=div(nt, 25); nt+=1; v)  # increment number of tasks by 1 for every 25th call.
-                                           # nt_func() will be called initally once and then for every
-                                           # iteration
-end
-@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:200; ntasks=nt_func))) == 7
-
-# batch mode tests
-let ctr=0
-    global next_ctr
-    next_ctr() = (ctr+=1; ctr)
-end
-resp = asyncmap(x->(v=next_ctr(); map(_->v, x)), 1:22; ntasks=5, batch_size=5)
-@test length(resp) == 22
-@test length(unique(resp)) == 5
-
-input = rand(1:1000, 100)
-@test asyncmap(x->map(args->identity(args...), x), input; ntasks=5, batch_size=5) == input
-
-# check whether shape is retained
-a=rand(2,2)
-b=asyncmap(identity, a)
-@test a == b
-@test size(a) == size(b)
-
-# check with an iterator that does not implement size()
-c=Channel(32); foreach(i->put!(c,i), 1:10); close(c)
-b=asyncmap(identity, c)
-@test Int[1:10...] == b
-@test size(b) == (10,)
-
-# check with an iterator that has only implements length()
-len_only_iterable = (1,2,3,4,5)
-@test Base.iteratorsize(len_only_iterable) == Base.HasLength()
-@test asyncmap(identity, len_only_iterable) == map(identity, len_only_iterable)
-
-# Error conditions
-@test_throws ArgumentError asyncmap(identity, 1:10; batch_size=0)
-@test_throws ArgumentError asyncmap(identity, 1:10; batch_size="10")
-@test_throws ArgumentError asyncmap(identity, 1:10; ntasks="10")
-
-# asyncmap and pmap with various types. Test for equivalence with map
-function testmap_equivalence(f, c...)
-    x1 = asyncmap(f,c...)
-    x2 = pmap(f,c...)
-    x3 = map(f,c...)
-
-    if Base.iteratorsize == Base.HasShape()
-        @test size(x1) == size(x3)
-        @test size(x2) == size(x3)
-    else
-        @test length(x1) == length(x3)
-        @test length(x2) == length(x3)
-    end
-
-    @test eltype(x1) == eltype(x3)
-    @test eltype(x2) == eltype(x3)
-
-    for (v1,v2) in zip(x1,x3)
-        @test v1==v2
-    end
-    for (v1,v2) in zip(x2,x3)
-        @test v1==v2
-    end
-end
-
-testmap_equivalence(identity, (1,2,3,4))
-testmap_equivalence(x->x>0 ? 1.0 : 0.0, sparse(1.0I, 5, 5))
-testmap_equivalence((x,y,z)->x+y+z, 1,2,3)
-testmap_equivalence(x->x ? false : true, BitMatrix(uninitialized, 10,10))
-testmap_equivalence(x->"foobar", BitMatrix(uninitialized, 10,10))
-testmap_equivalence((x,y,z)->string(x,y,z), BitVector(uninitialized, 10), ones(10), "1234567890")
-
-using Base.Unicode: uppercase
-@test asyncmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
-@test pmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
-
 
 # Test that the default worker pool cycles through all workers
 pmap(_->myid(), 1:nworkers())  # priming run
@@ -678,8 +602,8 @@ if DoFullTest
     all_w = workers()
     # Test sending fake data to workers. The worker processes will print an
     # error message but should not terminate.
-    for w in Base.Distributed.PGRP.workers
-        if isa(w, Base.Distributed.Worker)
+    for w in Distributed.PGRP.workers
+        if isa(w, Distributed.Worker)
             local s = connect(get(w.config.host), get(w.config.port))
             write(s, randstring(32))
         end
@@ -824,7 +748,7 @@ function test_f_args(result, args...; kwargs...)
     remote_do(args...; kwargs...)
 end
 
-for tid in [id_other, id_me, Base.default_worker_pool()]
+for tid in [id_other, id_me, default_worker_pool()]
     test_f_args(1, f_args, tid, 1)
     test_f_args(3, f_args, tid, 1, 2)
     test_f_args(5, f_args, tid, 1; kw1=4)
@@ -936,6 +860,7 @@ end
 
 # Test calling @everywhere from a module not defined on the workers
 module LocalBar
+    using Distributed
     bar() = @everywhere new_bar()=myid()
 end
 LocalBar.bar()
@@ -1016,7 +941,7 @@ function get_remote_num_threads(processes_added)
 end
 
 function test_blas_config(pid, expected)
-    for worker in Base.Distributed.PGRP.workers
+    for worker in Distributed.PGRP.workers
         if worker.id == pid
             @test get(worker.config.enable_threaded_blas) == expected
             return
@@ -1118,7 +1043,7 @@ struct ErrorSimulator <: ClusterManager
     mode
 end
 
-function Base.launch(manager::ErrorSimulator, params::Dict, launched::Array, c::Condition)
+function launch(manager::ErrorSimulator, params::Dict, launched::Array, c::Condition)
     exename = params[:exename]
     dir = params[:dir]
 
@@ -1200,9 +1125,9 @@ global v4 = v3
 
 # Global references to Types and Modules should work if they are locally defined
 global v5 = Int
-global v6 = Base.Distributed
+global v6 = Distributed
 @test remotecall_fetch(()->v5, id_other) === Int
-@test remotecall_fetch(()->v6, id_other) === Base.Distributed
+@test remotecall_fetch(()->v6, id_other) === Distributed
 
 struct FooStructLocal end
 module FooModLocal end
@@ -1311,7 +1236,7 @@ wrapped_var_ser_tests()
 global ids_cleanup = ones(6)
 global ids_func = ()->ids_cleanup
 
-clust_ser = (Base.Distributed.worker_from_id(id_other)).w_serializer
+clust_ser = (Distributed.worker_from_id(id_other)).w_serializer
 @test remotecall_fetch(ids_func, id_other) == ids_cleanup
 
 @test haskey(clust_ser.glbs_sent, object_id(ids_cleanup))
@@ -1437,7 +1362,7 @@ end
     # creates a new worker in the same folder and tries to include file
     tmp_file, temp_file_stream = mktemp()
     close(temp_file_stream)
-    tmp_file = relpath(tmp_file)
+    tmp_file = relpath(tmp_file, @__DIR__)
     try
         proc = addprocs_with_testenv(1)
         include(tmp_file)
@@ -1463,11 +1388,11 @@ let
         mkdir(tmp_dir2)
         write(tmp_file, "23.32 + 32 + myid() + include(\"testfile2\")")
         write(tmp_file2, "myid() * 2")
-        @test_throws(ErrorException("could not open file $(abspath("testfile"))"),
+        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile"))"),
                      include("testfile"))
-        @test_throws(ErrorException("could not open file $(abspath("testfile2"))"),
+        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile2"))"),
                      include("testfile2"))
-        @test_throws(ErrorException("could not open file $(abspath("2", "testfile"))"),
+        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "2", "testfile"))"),
                      include(joinpath("2", "testfile")))
         @test include(tmp_file) == 58.32
         @test remotecall_fetch(include, proc[1], joinpath("2", "testfile")) == 55.32 + proc[1] * 3
@@ -1485,15 +1410,15 @@ struct WorkerArgTester <: ClusterManager
     write_cookie
 end
 
-function Base.launch(manager::WorkerArgTester, params::Dict, launched::Array, c::Condition)
+function launch(manager::WorkerArgTester, params::Dict, launched::Array, c::Condition)
     dir = params[:dir]
     exename = params[:exename]
     exeflags = params[:exeflags]
 
-    cmd = `$exename $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) $(manager.worker_opt)`
+    cmd = `$exename $exeflags --bind-to $(Distributed.LPROC.bind_addr) $(manager.worker_opt)`
     cmd = pipeline(detach(setenv(cmd, dir=dir)))
     io = open(cmd, "r+")
-    manager.write_cookie && Base.Distributed.write_cookie(io)
+    manager.write_cookie && Distributed.write_cookie(io)
 
     wconfig = WorkerConfig()
     wconfig.process = io
@@ -1502,7 +1427,7 @@ function Base.launch(manager::WorkerArgTester, params::Dict, launched::Array, c:
 
     notify(c)
 end
-Base.manage(::WorkerArgTester, ::Integer, ::WorkerConfig, ::Symbol) = nothing
+manage(::WorkerArgTester, ::Integer, ::WorkerConfig, ::Symbol) = nothing
 
 nprocs()>1 && rmprocs(workers())
 
@@ -1510,12 +1435,12 @@ npids = addprocs_with_testenv(WorkerArgTester(`--worker`, true))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
 rmprocs(npids)
 
-Base.cluster_cookie("")  # An empty string is a valid cookie
+cluster_cookie("")  # An empty string is a valid cookie
 npids = addprocs_with_testenv(WorkerArgTester(`--worker=`, false))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
 rmprocs(npids)
 
-Base.cluster_cookie("foobar") # custom cookie
+cluster_cookie("foobar") # custom cookie
 npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
 
@@ -1532,7 +1457,7 @@ function reuseport_tests()
         remotecall_fetch(p) do
             ports_lower = []        # ports of pids lower than myid()
             ports_higher = []       # ports of pids higher than myid()
-            for w in Base.Distributed.PGRP.workers
+            for w in Distributed.PGRP.workers
                 w.id == myid() && continue
                 port = Base._sockname(w.r_stream, true)[2]
                 if (w.id == 1)
@@ -1573,3 +1498,4 @@ end
 # cluster at any time only supports a single topology.
 rmprocs(workers())
 include("topology.jl")
+

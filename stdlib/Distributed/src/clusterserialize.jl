@@ -20,7 +20,7 @@ mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     anonfunc_id::UInt64
 
     function ClusterSerializer{I}(io::I) where I<:IO
-        new(io, 0, ObjectIdDict(), Int[], Base.worker_id_from_socket(io),
+        new(io, 0, ObjectIdDict(), Int[], worker_id_from_socket(io),
             Set{UInt64}(), Dict{UInt64, UInt64}(), Dict{UInt64, Vector{Symbol}}(), 0)
     end
 end

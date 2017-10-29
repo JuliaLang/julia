@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test
+using Test, Distributed
 
 import Base: root_module
 
@@ -220,7 +220,7 @@ try
                                Dict(s => Base.module_uuid(Base.root_module(s)) for s in
                                     [:Base64, :CRC32c, :Dates, :DelimitedFiles, :FileWatching,
                                      :IterativeEigenSolvers, :Mmap, :Profile, :SharedArrays,
-                                     :SuiteSparse, :Test, :Unicode]))
+                                     :SuiteSparse, :Test, :Unicode, :Distributed]))
         @test discard_module.(deps) == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -604,7 +604,7 @@ let
             @eval using $ModuleB
             uuid = Base.module_uuid(root_module(ModuleB))
             for wid in test_workers
-                @test Base.Distributed.remotecall_eval(Main, wid, :( Base.module_uuid(Base.root_module($(QuoteNode(ModuleB)))) )) == uuid
+                @test Distributed.remotecall_eval(Main, wid, :( Base.module_uuid(Base.root_module($(QuoteNode(ModuleB)))) )) == uuid
                 if wid != myid() # avoid world-age errors on the local proc
                     @test remotecall_fetch(g, wid) == wid
                 end

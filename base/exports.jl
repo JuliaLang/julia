@@ -17,7 +17,6 @@ export
     Markdown,
     Threads,
     Iterators,
-    Distributed,
     Broadcast,
 
 # Types
@@ -1243,38 +1242,7 @@ export
     nzrange,
     nnz,
 
-# Distributed module re-exports
-    @spawn,
-    @spawnat,
-    @fetch,
-    @fetchfrom,
-    @everywhere,
-    @parallel,
-
-    addprocs,
-    CachingPool,
-    clear!,
-    ClusterManager,
-    default_worker_pool,
-    init_worker,
-    interrupt,
-    launch,
-    manage,
+# Minimal set of Distributed exports - useful for a program to check if running
+# in distributed mode or not.
     myid,
-    nprocs,
-    nworkers,
-    pmap,
-    procs,
-    remote,
-    remotecall,
-    remotecall_fetch,
-    remotecall_wait,
-    remote_do,
-    rmprocs,
-    workers,
-    WorkerPool,
-    RemoteChannel,
-    Future,
-    WorkerConfig,
-    RemoteException,
-    ProcessExitedException
+    nprocs

@@ -2,9 +2,10 @@
 
 # Run the distributed test outside of the main driver since it needs its own
 # set of dedicated workers.
+include(joinpath(JULIA_HOME, "..", "share", "julia", "test", "testenv.jl"))
+disttestfile = joinpath(@__DIR__, "distributed_exec.jl")
 
-include("testenv.jl")
-cmd = `$test_exename $test_exeflags distributed_exec.jl`
+cmd = `$test_exename $test_exeflags $disttestfile`
 
 if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR)) && ccall(:jl_running_on_valgrind,Cint,()) == 0
     error("Distributed test failed, cmd : $cmd")

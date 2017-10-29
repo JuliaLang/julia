@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+using Distributed
+
 include("choosetests.jl")
 include("testenv.jl")
 
@@ -39,7 +41,7 @@ move_to_node1("SharedArrays")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
-max_worker_rss != typemax(Csize_t) && move_to_node1("distributed")
+max_worker_rss != typemax(Csize_t) && move_to_node1("Distributed")
 
 cd(dirname(@__FILE__)) do
     n = 1

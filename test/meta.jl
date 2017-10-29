@@ -128,7 +128,8 @@ show_sexpr(ioB,:(1+1))
 
 show_sexpr(ioB,QuoteNode(1),1)
 
-@test Base.Distributed.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
+using Distributed
+@test Distributed.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
       [:Foo, :Bar, :Baz]
 
 # test base/expr.jl

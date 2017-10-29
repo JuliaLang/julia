@@ -84,6 +84,7 @@ let s, c = Channel(32)
 end
 
 # Tests for channels bound to tasks.
+using Distributed
 for N in [0,10]
     # Normal exit of task
     c=Channel(N)

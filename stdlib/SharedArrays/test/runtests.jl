@@ -1,12 +1,7 @@
-using Test, SharedArrays
-include(joinpath(JULIA_HOME, "..", "share", "julia", "test", "testenv.jl"))
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Test a few "remote" invocations when no workers are present
-@test remote(myid)() == 1
-@test pmap(identity, 1:100) == [1:100...]
-@test 100 == @parallel (+) for i in 1:100
-        1
-    end
+using Test, Distributed, SharedArrays
+include(joinpath(JULIA_HOME, "..", "share", "julia", "test", "testenv.jl"))
 
 addprocs_with_testenv(4)
 @test nprocs() == 5
