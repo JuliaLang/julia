@@ -1919,7 +1919,7 @@ test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
 # issue #6142
 import Base: +
 mutable struct A6142 <: AbstractMatrix{Float64}; end
-+(x::A6142, y::UniformScaling{TJ}) where {TJ} = "UniformScaling method called"
++(x::A6142, y::UniformScaling) = "UniformScaling method called"
 +(x::A6142, y::AbstractArray) = "AbstractArray method called"
 @test A6142() + I == "UniformScaling method called"
 +(x::A6142, y::AbstractRange) = "AbstractRange method called" #16324 ambiguity

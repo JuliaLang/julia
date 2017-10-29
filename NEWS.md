@@ -255,6 +255,9 @@ This section lists changes that do not have deprecation warnings.
   * All command line arguments passed via `-e`, `-E`, and `-L` will be executed in the order
     given on the command line ([#23665]).
 
+  * `I` now yields `UniformScaling{Bool}(true)` rather than `UniformScaling{Int64}(1)`
+    to better preserve types in operations involving `I` ([#24396]).
+
   * The return type of `reinterpret` has changed to `ReinterpretArray`. `reinterpret` on sparse
     arrays has been discontinued.
 
