@@ -4481,7 +4481,8 @@ end
 B14878(ng) = B14878()
 function trigger14878()
     w = A14878()
-    w.ext[:14878] = B14878(junk)  # junk not defined!
+    # w.ext[:14878] = B14878(junk)  # junk not defined!
+    w.ext[:14878] = B14878(otherjunk)  # junk got defined!
     return w
 end
 @test_throws UndefVarError trigger14878()
