@@ -80,7 +80,7 @@ getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ)
 
 function getindex(x::UniformScaling{T}, n::AbstractRange{<:Integer}, m::AbstractRange{<:Integer}) where {T}
     if length(n) == length(m) && step(n) == step(m)
-        k = start(n) - start(m)
+        k = first(n) - first(m)
         v = fill(x.λ, length(n) - abs(k))
         if length(v) > 0
             return spdiagm(k => v)
