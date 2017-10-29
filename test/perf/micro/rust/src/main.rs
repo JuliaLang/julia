@@ -1,51 +1,52 @@
-//! This is a Rust implementation of the Julia micro benchmark.
-//! 
-//! This program is based on the C implementation, but it's still mostly
-//! idiomatic Rust, and does not have unsafe code blocks.
-//! 
-//! This project requires a **nightly** version of the Rust compiler and
-//! its package manager, Cargo. When using `rustup`, installing the
-//! nightly toolchain and executing `rustup override set nightly` on
-//! this directory is sufficient.
 #![feature(test)]
 #![deny(unsafe_code)]
 
-extern crate blas;
-extern crate test;
+extern crate itertools;
+extern crate mersenne_twister;
 extern crate num;
 extern crate rand;
-extern crate mersenne_twister;
+extern crate test;
+
+// Use BLAS directly
+#[cfg(feature = "direct_blas")]
+extern crate blas;
+
+// Use ndarray (with BLAS implementation)
+#[cfg(not(feature = "direct_blas"))]
+#[macro_use(s)]
+extern crate ndarray;
 
 use std::time::{Duration, Instant};
 use std::u32;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 
-use blas::c::{dgemm, Layout, Transpose};
 use test::black_box;
 use num::complex::Complex64;
-use rand::{SeedableRng, Rng};
-use mersenne_twister::MT19937_64;
+use rand::Rng;
 
-type MTRng = MT19937_64;
+mod util;
+use util::{gen_rng, myrand};
 
-#[inline]
-fn gen_rng(seed: u64) -> MTRng {
-    MTRng::from_seed(seed)
-}
+#[cfg(feature = "direct_blas")]
+mod direct_blas;
+#[cfg(feature = "direct_blas")]
+use direct_blas::{randmatstat, randmatmul, check_randmatmul};
+
+#[cfg(not(feature = "direct_blas"))]
+use ndarray::Array2;
+#[cfg(not(feature = "direct_blas"))]
+use util::fill_rand;
+#[cfg(not(feature = "direct_blas"))]
+use num::Zero;
 
 const NITER: u32 = 5;
 
-fn fill_rand<R: Rng>(a: &mut [f64], rng: &mut R) {
-    for v in a {
-        *v = rng.gen();
-    }
-}
-
-fn myrand<R: Rng>(n: usize, rng: &mut R) -> Vec<f64> {
-    let mut d: Vec<f64> = vec![0.; n];
-    fill_rand(&mut d, rng);
-    d
+#[cfg(not(feature = "direct_blas"))]
+fn nrand<R: Rng>(shape: (usize, usize), rng: &mut R) -> Array2<f64> {
+    let mut m = Array2::zeros(shape);
+    fill_rand(&mut m, rng);
+    m
 }
 
 fn fib(n: i32) -> i32 {
@@ -56,17 +57,18 @@ fn fib(n: i32) -> i32 {
     }
 }
 
-fn mandel(mut z: Complex64) -> u32 {
-    let maxiter = 80;
-    let c = z.clone();
-    for n in 0..maxiter {
-        if z.norm() > 2.0 {
-            return n;
-        }
-        z = z * z + c;
-    }
+fn mandel(z: Complex64) -> u32 {
+    use std::iter;
 
-    maxiter
+    iter::repeat(z)
+        .scan(z, |z, c| {
+            let current = *z;
+            *z = current * current + c;
+            Some(current)
+        })
+        .take(80)
+        .take_while(|z| z.norm() <= 2.0)
+        .count() as u32
 }
 
 fn mandelperf() -> Vec<u32> {
@@ -96,6 +98,7 @@ fn pisum() -> f64 {
     sum
 }
 
+#[cfg(not(feature = "direct_blas"))]
 fn randmatstat(t: usize) -> (f64, f64) {
     let mut rng = gen_rng(1234u64);
 
@@ -104,83 +107,51 @@ fn randmatstat(t: usize) -> (f64, f64) {
     let mut v = vec![0.; t];
     let mut w = vec![0.; t];
 
-    {
-        let mut a = vec![0.; n * n];
-        let mut b = vec![0.; n * n];
-        let mut c = vec![0.; n * n];
-        let mut d = vec![0.; n * n];
-        let mut p = vec![0.; n * 4 * n];
-        let mut q = vec![0.; 2 * n * 2 * n];
+    for (ve, we) in v.iter_mut().zip(w.iter_mut()) {
+        let a = nrand((n, n), &mut rng);
+        let b = nrand((n, n), &mut rng);
+        let c = nrand((n, n), &mut rng);
+        let d = nrand((n, n), &mut rng);
+        let p = { // P = [a b c d]
+            let mut p = Array2::<f64>::zeros((n, 4 * n));
+            let n = n as isize;
+            p.slice_mut(s![.., 0..n]).assign(&a);
+            p.slice_mut(s![.., n..2*n]).assign(&b);
+            p.slice_mut(s![.., 2*n..3*n]).assign(&c);
+            p.slice_mut(s![.., 3*n..4*n]).assign(&d);
+            p
+        };
+        let q = { // Q = [a b ; c d]
+            let mut q = Array2::<f64>::zeros((2 * n, 2 * n));
+            let n = n as isize;
+            q.slice_mut(s![0..n, 0..n]).assign(&a);
+            q.slice_mut(s![0..n, n..2*n]).assign(&b);
+            q.slice_mut(s![n..2*n, 0..n]).assign(&c);
+            q.slice_mut(s![n..2*n, n..2*n]).assign(&d);
+            q
+        };
 
-        let mut pt_p1 = vec![0.; 4 * n * 4 * n];
-        let mut pt_p2 = vec![0.; 4 * n * 4 * n];
-        let mut qt_q1 = vec![0.; 2 * n * 2 * n];
-        let mut qt_q2 = vec![0.; 2 * n * 2 * n];
+        let pt = p.t();
+        let ptp = pt.dot(&p);
+        let ptp2 = ptp.dot(&ptp);
+        let ptp4 = ptp2.dot(&ptp2);
+        *ve = trace_arr(&ptp4);
 
-        for (ve, we) in v.iter_mut().zip(w.iter_mut()) {
-            fill_rand(&mut a, &mut rng);
-            fill_rand(&mut b, &mut rng);
-            fill_rand(&mut c, &mut rng);
-            fill_rand(&mut d, &mut rng);
-
-            p[0 .. n * n].copy_from_slice(&a);
-            p[n * n .. 2 * n * n].copy_from_slice(&b);
-            p[2 * n * n .. 3 * n * n].copy_from_slice(&c);
-            p[3 * n * n .. 4 * n * n].copy_from_slice(&d);
-
-            for j in 0..n {
-                for k in 0..n {
-                    q[2 * n * j + k] = a[k];
-                    q[2 * n * j + n + k] = b[k];
-                    q[2 * n * (n + j) + k] = c[k];
-                    q[2 * n * (n + j) + n + k] = d[k];
-                }
-            }
-
-            {
-                let n = n as i32;
-
-                dgemm(Layout::ColumnMajor, Transpose::Ordinary, Transpose::None,
-                    n , n, 4 * n, 1., &p, 4 * n, &p, 4 * n, 0.,
-                    &mut pt_p1, 4 * n);
-                dgemm(Layout::ColumnMajor, Transpose::None, Transpose::None,
-                    4 * n, 4 * n, 4 * n, 1., &pt_p1, 4 * n, &pt_p1, 4 * n, 0.,
-                    &mut pt_p2, 4 * n);
-                dgemm(Layout::ColumnMajor, Transpose::None, Transpose::None,
-                    4 * n, 4 * n, 4 * n, 1., &pt_p2, 4 * n, &pt_p2, 4 * n, 0.,
-                    &mut pt_p1, 4 * n);
-            }
-
-            for j in 0..n {
-                *ve += pt_p1[(n + 1) * j];
-            }
-
-            {
-                let n = n as i32;
-
-                dgemm(Layout::ColumnMajor, Transpose::Ordinary, Transpose::None,
-                    2 * n, 2 * n, 2 * n, 1., &q, 2 * n, &q, 2 * n, 0.,
-                    &mut qt_q1, 2 * n);
-                dgemm(Layout::ColumnMajor, Transpose::None, Transpose::None,
-                    2 * n, 2 * n, 2 * n, 1., &qt_q1, 2 * n, &qt_q1, 2 * n, 0.,
-                    &mut qt_q2, 2 * n);
-                dgemm(Layout::ColumnMajor, Transpose::None, Transpose::None,
-                    2 * n, 2 * n, 2 * n, 1., &qt_q2, 2 * n, &qt_q2, 2 * n, 0.,
-                    &mut qt_q1, 2 * n);
-            }
-
-            for j in 0..n {
-                *we += qt_q1[(2 * n + 1) * j];
-            }
-        }
+        let qt = q.t();
+        let ptq = qt.dot(&q);
+        let ptq2 = ptq.dot(&ptq);
+        let ptq4 = ptq2.dot(&ptq2);
+        *we = trace_arr(&ptq4);
     }
 
-    let (mut v1, mut v2, mut w1, mut w2) = (0., 0., 0., 0.);
-
-    for (ve, we) in v.iter().zip(w.iter()) {
-        v1 += *ve; v2 += ve * ve;
-        w1 += *we; w2 += we * we;
-    }
+    let (v1, v2, w1, w2) = v.iter()
+        .zip(w.iter())
+        .fold((0., 0., 0., 0.), |(v1, v2, w1, w2), (ve, we)| (
+            v1 + *ve,
+            v2 + ve * ve,
+            w1 + *we,
+            w2 + we * we
+        ));
 
     let t = t as f64;
 
@@ -190,16 +161,28 @@ fn randmatstat(t: usize) -> (f64, f64) {
     )
 }
 
-fn randmatmul<R: Rng>(n: usize, mut rng: R) -> Vec<f64> {
-    let a = myrand(n * n, &mut rng);
-    let b = myrand(n * n, &mut rng);
-    let mut c = vec![0.; n * n];
+/// Calculate the trace of a square matrix
+#[cfg(not(feature = "direct_blas"))]
+#[inline]
+fn trace_arr<'a, T: 'a>(m: &'a Array2<T>) -> T
+where
+    T: Zero + Clone
+{
+    m.diag().scalar_sum()
+}
 
-    let n = n as i32;
-    dgemm(Layout::ColumnMajor, Transpose::None, Transpose::None,
-        n, n, n, 1., &a, n, &b, n, 0., &mut c, n);
+#[cfg(not(feature = "direct_blas"))]
+fn randmatmul<R: Rng>(n: usize, mut rng: R) -> Array2<f64> {
+    let a = nrand((n, n), &mut rng);
+    let b = nrand((n, n), &mut rng);
 
-    c
+    a.dot(&b)
+}
+
+#[cfg(not(feature = "direct_blas"))]
+#[inline]
+fn check_randmatmul(m: Array2<f64>) {
+    assert!(0. <= m[[0, 0]]);
 }
 
 #[test]
@@ -213,7 +196,7 @@ fn test_quicksort() {
     assert_eq!(a, [1., 2., 3., 4., 5., 6., 7., 8., 9., 10.]);
 }
 
-fn quicksort(mut a: &mut [f64], mut lo: usize) {
+fn quicksort(a: &mut [f64], mut lo: usize) {
     let hi = a.len() as usize - 1;
     let mut i: usize = lo;
     // j is isize because it can be -1
@@ -294,7 +277,7 @@ fn main() {
         for _ in 0..1000 * 100 {
             let n: u32 = rng.gen();
             let s = format!("{:x}", n);
-            let m: u32 = u32::from_str_radix(&s, 16).unwrap();
+            let m = u32::from_str_radix(&s, 16).unwrap();
             assert_eq!(m, n);
         }
     });
@@ -340,7 +323,7 @@ fn main() {
     // rand mat mul
     let tmin = measure_best(NITER, || {
         let c = randmatmul(1000, &mut rng);
-        assert!(0. <= c[0]);
+        check_randmatmul(c);
     });
     print_perf("rand_mat_mul", to_float(tmin));
 
