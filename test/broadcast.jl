@@ -91,22 +91,22 @@ n3 = 17
 rb = 1:5
 
 for arr in (identity, as_sub)
-    @test broadcast(+, arr(eye(2)), arr([1, 4])) == [2 1; 4 5]
-    @test broadcast(+, arr(eye(2)), arr([1  4])) == [2 4; 1 5]
+    @test broadcast(+, arr([1 0; 0 1]), arr([1, 4])) == [2 1; 4 5]
+    @test broadcast(+, arr([1 0; 0 1]), arr([1  4])) == [2 4; 1 5]
     @test broadcast(+, arr([1  0]), arr([1, 4])) == [2 1; 5 4]
     @test broadcast(+, arr([1, 0]), arr([1  4])) == [2 5; 1 4]
     @test broadcast(+, arr([1, 0]), arr([1, 4])) == [2, 4]
     @test broadcast(+, arr([1, 0]), 2) == [3, 2]
 
-    @test @inferred(broadcast(+, arr(eye(2)), arr([1, 4]))) == arr([2 1; 4 5])
-    @test arr(eye(2)) .+ arr([1  4]) == arr([2 4; 1 5])
+    @test @inferred(broadcast(+, arr([1 0; 0 1]), arr([1, 4]))) == arr([2 1; 4 5])
+    @test arr([1 0; 0 1]) .+ arr([1  4]) == arr([2 4; 1 5])
     @test arr([1  0]) .+ arr([1, 4]) == arr([2 1; 5 4])
     @test arr([1, 0]) .+ arr([1  4]) == arr([2 5; 1 4])
     @test arr([1, 0]) .+ arr([1, 4]) == arr([2, 4])
     @test arr([1]) .+ arr([]) == arr([])
 
-    A = arr(eye(2)); @test broadcast!(+, A, A, arr([1, 4])) == arr([2 1; 4 5])
-    A = arr(eye(2)); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4; 1 5])
+    A = arr([1 0; 0 1]); @test broadcast!(+, A, A, arr([1, 4])) == arr([2 1; 4 5])
+    A = arr([1 0; 0 1]); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4; 1 5])
     A = arr([1  0]); @test_throws DimensionMismatch broadcast!(+, A, A, arr([1, 4]))
     A = arr([1  0]); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4])
     A = arr([1  0]); @test broadcast!(+, A, A, 2) == arr([3 2])
@@ -121,13 +121,13 @@ for arr in (identity, as_sub)
     @test arr(BitArray([true false])) .^ arr([0, 3]) == [true true; true false]
 
     M = arr([11 12; 21 22])
-    @test broadcast_getindex(M, eye(Int, 2).+1,arr([1, 2])) == [21 11; 12 22]
-    @test_throws BoundsError broadcast_getindex(M, eye(Int, 2).+1,arr([1, -1]))
-    @test_throws BoundsError broadcast_getindex(M, eye(Int, 2).+1,arr([1, 2]), [2])
-    @test broadcast_getindex(M, eye(Int, 2).+1,arr([2, 1]), [1]) == [22 12; 11 21]
+    @test broadcast_getindex(M, [2 1; 1 2], arr([1, 2])) == [21 11; 12 22]
+    @test_throws BoundsError broadcast_getindex(M, [2 1; 1 2], arr([1, -1]))
+    @test_throws BoundsError broadcast_getindex(M, [2 1; 1 2], arr([1, 2]), [2])
+    @test broadcast_getindex(M, [2 1; 1 2],arr([2, 1]), [1]) == [22 12; 11 21]
 
     A = arr(zeros(2,2))
-    broadcast_setindex!(A, arr([21 11; 12 22]), eye(Int, 2).+1,arr([1, 2]))
+    broadcast_setindex!(A, arr([21 11; 12 22]), [2 1; 1 2], arr([1, 2]))
     @test A == M
     broadcast_setindex!(A, 5, [1,2], [2 2])
     @test A == [11 5; 21 5]
@@ -139,8 +139,8 @@ for arr in (identity, as_sub)
     @test_throws BoundsError broadcast_setindex!(A, 7, [1,-1], [1 2])
 
     for f in ((==), (<) , (!=), (<=))
-        bittest(f, arr(eye(2)), arr([1, 4]))
-        bittest(f, arr(eye(2)), arr([1  4]))
+        bittest(f, arr([1 0; 0 1]), arr([1, 4]))
+        bittest(f, arr([1 0; 0 1]), arr([1  4]))
         bittest(f, arr([0, 1]), arr([1  4]))
         bittest(f, arr([0  1]), arr([1, 4]))
         bittest(f, arr([1, 0]), arr([1, 4]))
