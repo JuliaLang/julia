@@ -2202,6 +2202,25 @@ end
     test_zeros(oarr.parent, Matrix{UInt16}, (3, 2))
 end
 
+@testset "Array construction from $(iterfn)" for (iterfn, val) in ((zeros, 0), (ones, 1))
+    m, n, k = 3, 4, 5
+    @test Array(iterfn, m)::Vector{Float64} == fill(val, m)
+    @test Array(iterfn, m, n)::Matrix{Float64} == fill(val, m, n)
+    @test Array(iterfn, m, n, k)::Array{Float64,3} == fill(val, m, n, k)
+    @test Array{Float32}(iterfn, m)::Vector{Float32} == fill(val, m)
+    @test Array{Float32}(iterfn, m, n)::Matrix{Float32} == fill(val, m, n)
+    @test Array{Float32}(iterfn, m, n, k)::Array{Float32,3} == fill(val, m, n, k)
+    @test Array{Real}(iterfn, m)::Vector{Real} == fill(val, m)
+    @test Array{Real}(iterfn, m, n)::Matrix{Real} == fill(val, m, n)
+    @test Array{Real}(iterfn, m, n, k)::Array{Real,3} == fill(val, m, n, k)
+    @test Array{Float32,1}(iterfn, m)::Vector{Float32} == fill(val, m)
+    @test Array{Float32,2}(iterfn, m, n)::Matrix{Float32} == fill(val, m, n)
+    @test Array{Float32,3}(iterfn, m, n, k)::Array{Float32,3} == fill(val, m, n, k)
+    @test Array{Real,1}(iterfn, m)::Vector{Real} == fill(val, m)
+    @test Array{Real,2}(iterfn, m, n)::Matrix{Real} == fill(val, m, n)
+    @test Array{Real,3}(iterfn, m, n, k)::Array{Real,3} == fill(val, m, n, k)
+end
+
 # issue #11053
 mutable struct T11053
     a::Float64
