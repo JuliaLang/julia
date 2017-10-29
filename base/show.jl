@@ -1589,7 +1589,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
                 if length(ind) > 10
                     if ii == ind[4] && all(d->idxs[d]==first(tailinds[d]),1:i-1)
                         for j=i+1:nd
-                            szj = size(a,j+2)
+                            szj = length(indices(a, j+2))
                             indj = tailinds[j]
                             if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
                                 @goto skip
