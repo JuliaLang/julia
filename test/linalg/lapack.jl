@@ -376,6 +376,14 @@ end
         b,A = LAPACK.sysv_rook!('U',A,b)
         @test b ≈ c
         @test_throws DimensionMismatch LAPACK.sysv_rook!('U',A,rand(elty,11))
+
+        # syconvf_rook error handling
+        # way argument is wrong
+        @test_throws ArgumentError LAPACK.syconvf_rook!('U', 'U', A, rand(BlasInt, 10))
+        # ipiv has wrong length
+        @test_throws ArgumentError LAPACK.syconvf_rook!('U', 'R', A, rand(BlasInt, 9))
+        # e has wrong length
+        @test_throws ArgumentError LAPACK.syconvf_rook!('U', 'R', A, rand(BlasInt, 10), rand(elty, 9))
     end
 end
 
