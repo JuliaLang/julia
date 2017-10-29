@@ -34,9 +34,6 @@ srand(1)
             @test_throws ArgumentError Bidiagonal(x, y, :R)
             @test_throws DimensionMismatch Bidiagonal(x, x, :U)
             @test_throws MethodError Bidiagonal(x, y)
-            # from matrix
-            @test Bidiagonal(ubd, :U) == Bidiagonal(Matrix(ubd), :U) == ubd
-            @test Bidiagonal(lbd, :L) == Bidiagonal(Matrix(lbd), :L) == lbd
         end
         # enable when deprecations for 0.7 are dropped
         # @test_throws MethodError Bidiagonal(dv, GenericArray(ev), :U)
@@ -101,7 +98,6 @@ srand(1)
             @test size(T, 1) == size(T, 2) == n
             @test size(T) == (n, n)
             @test Array(T) == diagm(0 => dv, (uplo == :U ? 1 : -1) => ev)
-            @test Bidiagonal(Array(T), uplo) == T
             @test big.(T) == T
             @test Array(abs.(T)) == abs.(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
             @test Array(real(T)) == real(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
@@ -337,14 +333,14 @@ import Base.LinAlg: fillslots!, UnitLowerTriangular
         end
         let # fill!(small, x)
             val = randn()
-            b = Bidiagonal(randn(1,1), :U)
-            st = SymTridiagonal(randn(1,1))
+            b = Bidiagonal(randn(1), randn(0), :U)
+            st = SymTridiagonal(randn(1), randn(0))
             for x in (b, st)
                 @test Array(fill!(x, val)) == fill!(Array(x), val)
             end
-            b = Bidiagonal(randn(2,2), :U)
+            b = Bidiagonal(randn(2), randn(1), :U)
             st = SymTridiagonal(randn(3), randn(2))
-            t = Tridiagonal(randn(3,3))
+            t = Tridiagonal(randn(2), randn(3), randn(2))
             for x in (b, t, st)
                 @test_throws ArgumentError fill!(x, val)
                 @test Array(fill!(x, 0)) == fill!(Array(x), 0)

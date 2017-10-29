@@ -59,40 +59,6 @@ function Bidiagonal(dv::V, ev::V, uplo::Symbol) where {T,V<:AbstractVector{T}}
     Bidiagonal{T}(dv, ev, char_uplo(uplo))
 end
 
-"""
-    Bidiagonal(A, uplo::Symbol)
-
-Construct a `Bidiagonal` matrix from the main diagonal of `A` and
-its first super- (if `uplo=:U`) or sub-diagonal (if `uplo=:L`).
-
-# Examples
-```jldoctest
-julia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]
-4×4 Array{Int64,2}:
- 1  1  1  1
- 2  2  2  2
- 3  3  3  3
- 4  4  4  4
-
-julia> Bidiagonal(A, :U) # contains the main diagonal and first superdiagonal of A
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
- 1  1  ⋅  ⋅
- ⋅  2  2  ⋅
- ⋅  ⋅  3  3
- ⋅  ⋅  ⋅  4
-
-julia> Bidiagonal(A, :L) # contains the main diagonal and first subdiagonal of A
-4×4 Bidiagonal{Int64,Array{Int64,1}}:
- 1  ⋅  ⋅  ⋅
- 2  2  ⋅  ⋅
- ⋅  3  3  ⋅
- ⋅  ⋅  4  4
-```
-"""
-function Bidiagonal(A::AbstractMatrix, uplo::Symbol)
-    Bidiagonal(diag(A, 0), diag(A, uplo == :U ? 1 : -1), uplo)
-end
-
 function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
         throw(BoundsError(A,(i,j)))

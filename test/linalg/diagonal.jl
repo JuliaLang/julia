@@ -406,8 +406,8 @@ end
 
 @testset "multiplication of transposes of Diagonal (#22428)" begin
     for T in (Float64, Complex{Float64})
-        D = Diagonal(randn(T, 5, 5))
-        B = Diagonal(randn(T, 5, 5))
+        D = Diagonal(randn(T, 5))
+        B = Diagonal(randn(T, 5))
         DD = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
         BB = Diagonal([randn(T, 2, 2), rand(T, 2, 2)])
         fullDD = copy!(Matrix{Matrix{T}}(2, 2), DD)
@@ -417,8 +417,4 @@ end
             @test f(DD, BB)::typeof(DD) == f(fullDD, fullBB)
         end
     end
-end
-
-@testset "Diagonal of a RowVector (#23649)" begin
-    @test Diagonal([1,2,3].') == Diagonal([1 2 3])
 end

@@ -1158,7 +1158,7 @@ function factorize(A::StridedMatrix{T}) where T
             end
             if ltri
                 if utri
-                    return Diagonal(A)
+                    return Diagonal(diag(A))
                 end
                 if utri1
                     return Bidiagonal(diag(A), diag(A, -1), :L)

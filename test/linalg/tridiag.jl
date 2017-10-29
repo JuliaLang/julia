@@ -14,7 +14,7 @@ function test_approx_eq_vecs(a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, error
     end
 end
 
-guardsrand(123) do
+guardsrand(1234) do
     n = 12 #Size of matrix problem to test
     @testset for elty in (Float32, Float64, Complex64, Complex128, Int)
         if elty == Int
@@ -43,7 +43,6 @@ guardsrand(123) do
             end
         end
         @test_throws DimensionMismatch SymTridiagonal(dl, ones(elty, n + 1))
-        @test_throws ArgumentError SymTridiagonal(rand(n, n))
         @test_throws ArgumentError Tridiagonal(dl, dl, dl)
         @test_throws ArgumentError convert(SymTridiagonal{elty}, Tridiagonal(dl, d, du))
 
@@ -77,8 +76,8 @@ guardsrand(123) do
             @test SymTridiagonal(d, dl) == Tridiagonal(dl, d, dl)
             @test Tridiagonal(dl, d, du) + Tridiagonal(du, d, dl) == SymTridiagonal(2d, dl+du)
             @test SymTridiagonal(d, dl) + Tridiagonal(dl, d, du) == Tridiagonal(dl + dl, d+d, dl+du)
-            @test convert(SymTridiagonal,Tridiagonal(SymTridiagonal(d, dl))) == SymTridiagonal(d, dl)
-            @test Array(convert(SymTridiagonal{Complex64},Tridiagonal(SymTridiagonal(d, dl)))) == convert(Matrix{Complex64}, SymTridiagonal(d, dl))
+            @test convert(SymTridiagonal,Tridiagonal(dl, d, dl)) == SymTridiagonal(d, dl)
+            @test Array(convert(SymTridiagonal{Complex64},Tridiagonal(dl, d, dl))) == convert(Matrix{Complex64}, SymTridiagonal(d, dl))
         end
         @testset "tril/triu" begin
             @test_throws ArgumentError tril!(SymTridiagonal(d, dl), -n - 2)
@@ -330,11 +329,6 @@ end
 @testset "convert for SymTridiagonal" begin
     @test convert(SymTridiagonal{Float64},SymTridiagonal(ones(Float32,5),ones(Float32,4))) == SymTridiagonal(ones(Float64,5),ones(Float64,4))
     @test convert(AbstractMatrix{Float64},SymTridiagonal(ones(Float32,5),ones(Float32,4))) == SymTridiagonal(ones(Float64,5),ones(Float64,4))
-end
-
-@testset "constructors from matrix" begin
-    @test SymTridiagonal([1 2 3; 2 5 6; 0 6 9]) == [1 2 0; 2 5 6; 0 6 9]
-    @test Tridiagonal([1 2 3; 4 5 6; 7 8 9]) == [1 2 0; 4 5 6; 0 8 9]
 end
 
 @testset "constructors with range and other abstract vectors" begin

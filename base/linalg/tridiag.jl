@@ -47,35 +47,6 @@ julia> SymTridiagonal(dv, ev)
 """
 SymTridiagonal(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
 
-"""
-    SymTridiagonal(A::AbstractMatrix)
-
-Construct a symmetric tridiagonal matrix from the diagonal and
-first sub/super-diagonal, of the symmetric matrix `A`.
-
-# Examples
-```jldoctest
-julia> A = [1 2 3; 2 4 5; 3 5 6]
-3×3 Array{Int64,2}:
- 1  2  3
- 2  4  5
- 3  5  6
-
-julia> SymTridiagonal(A)
-3×3 SymTridiagonal{Int64,Array{Int64,1}}:
- 1  2  ⋅
- 2  4  5
- ⋅  5  6
-```
-"""
-function SymTridiagonal(A::AbstractMatrix)
-    if diag(A,1) == diag(A,-1)
-        SymTridiagonal(diag(A,0), diag(A,1))
-    else
-        throw(ArgumentError("matrix is not symmetric; cannot convert to SymTridiagonal"))
-    end
-end
-
 convert(::Type{SymTridiagonal{T}}, S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(AbstractVector{T}, S.dv), convert(AbstractVector{T}, S.ev))
 convert(::Type{AbstractMatrix{T}}, S::SymTridiagonal) where {T} =
@@ -454,31 +425,6 @@ julia> Tridiagonal(dl, d, du)
 """
 Tridiagonal(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T}(dl, d, du)
 
-"""
-    Tridiagonal(A)
-
-Construct a tridiagonal matrix from the first sub-diagonal,
-diagonal and first super-diagonal of the matrix `A`.
-
-# Examples
-```jldoctest
-julia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]
-4×4 Array{Int64,2}:
- 1  2  3  4
- 1  2  3  4
- 1  2  3  4
- 1  2  3  4
-
-julia> Tridiagonal(A)
-4×4 Tridiagonal{Int64,Array{Int64,1}}:
- 1  2  ⋅  ⋅
- 1  2  3  ⋅
- ⋅  2  3  4
- ⋅  ⋅  3  4
-```
-"""
-Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
-
 size(M::Tridiagonal) = (length(M.d), length(M.d))
 function size(M::Tridiagonal, d::Integer)
     if d < 1
@@ -649,7 +595,7 @@ det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 convert(::Type{Tridiagonal{T}},M::Tridiagonal) where {T} =
     Tridiagonal(convert(AbstractVector{T}, M.dl), convert(AbstractVector{T}, M.d), convert(AbstractVector{T}, M.du))
 convert(::Type{AbstractMatrix{T}},M::Tridiagonal) where {T} = convert(Tridiagonal{T}, M)
-convert(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
+convert(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) where {T} = Tridiagonal(M.ev, M.dv, M.ev)
 function convert(::Type{SymTridiagonal{T}}, M::Tridiagonal) where T
     if M.dl == M.du
         return SymTridiagonal{T}(convert(AbstractVector{T},M.d), convert(AbstractVector{T},M.dl))

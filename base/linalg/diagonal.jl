@@ -5,27 +5,6 @@
 struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     diag::V
 end
-"""
-    Diagonal(A::AbstractMatrix)
-
-Construct a matrix from the diagonal of `A`.
-
-# Examples
-```jldoctest
-julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
- 7  8  9
-
-julia> Diagonal(A)
-3×3 Diagonal{Int64,Array{Int64,1}}:
- 1  ⋅  ⋅
- ⋅  5  ⋅
- ⋅  ⋅  9
-```
-"""
-Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
 
 """
     Diagonal(V::AbstractVector)

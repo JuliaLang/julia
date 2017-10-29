@@ -2066,6 +2066,12 @@ end
 @deprecate float(x::AbstractString) parse(Float64, x)
 @deprecate float(a::AbstractArray{<:AbstractString}) parse.(Float64, a)
 
+# PR #TBD
+@deprecate Diagonal(A::AbstractMatrix) Diagonal(diag(A))
+@deprecate Bidiagonal(A::AbstractMatrix, uplo::Symbol) Bidiagonal(diag(A, 0), diag(A, ifelse(uplo == :U, 1, -1)), uplo)
+@deprecate SymTridiagonal(A::AbstractMatrix) SymTridiagonal(diag(A,0), diag(A,1))
+@deprecate Tridiagonal(A::AbstractMatrix) Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
+
 # deprecate bits to bitstring (#24263, #24281)
 @deprecate bits bitstring
 

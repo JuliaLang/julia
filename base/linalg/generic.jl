@@ -864,7 +864,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
     if m == n
         if istril(A)
             if istriu(A)
-                return Diagonal(A) \ B
+                return Diagonal(diag(A)) \ B
             else
                 return LowerTriangular(A) \ B
             end
