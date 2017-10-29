@@ -1149,3 +1149,8 @@ end
               Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
               Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64,
               Int64,Float64,Int64,Float64,Int64,Float64,Int64,Float64} <: (Tuple{Vararg{T}} where T<:Number))
+
+# PR #24399
+let (t, e) = intersection_env(Tuple{Union{Int,Int8}}, Tuple{T} where T)
+    @test e[1] isa TypeVar
+end
