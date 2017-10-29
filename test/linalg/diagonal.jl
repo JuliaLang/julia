@@ -71,13 +71,15 @@ srand(1)
             @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
         end
         if relty <: BlasFloat
-            for func in (exp,)
+            for func in (exp, sinh, cosh, tanh, sech, csch, coth)
                 @test func(D) ≈ func(DM) atol=n^3*eps(relty)
             end
             @test log(Diagonal(abs.(D.diag))) ≈ log(abs.(DM)) atol=n^3*eps(relty)
         end
         if elty <: BlasComplex
-            for func in (logdet, sqrt)
+            for func in (logdet, sqrt, sin, cos, tan, sec, csc, cot,
+                         asin, acos, atan, asec, acsc, acot,
+                         asinh, acosh, atanh, asech, acsch, acoth)
                 @test func(D) ≈ func(DM) atol=n^2*eps(relty)*2
             end
         end
