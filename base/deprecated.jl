@@ -1786,6 +1786,8 @@ end
     @deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)
 end
 
+@deprecate eye(::Type{Diagonal{T}}, n::Int) where {T} Diagonal{T}(I, n)
+
 export tic, toq, toc
 function tic()
     depwarn("tic() is deprecated, use @time, @elapsed, or calls to time_ns() instead.", :tic)

@@ -341,8 +341,6 @@ function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
     z = sum(log, D.diag)
     complex(real(z), rem2pi(imag(z), RoundNearest))
 end
-# identity matrices via eye(Diagonal{type},n)
-eye(::Type{Diagonal{T}}, n::Int) where {T} = Diagonal(ones(T,n))
 
 # Matrix functions
 for f in (:exp, :log, :sqrt,

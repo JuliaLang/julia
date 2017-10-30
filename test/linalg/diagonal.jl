@@ -29,7 +29,6 @@ srand(1)
     end
 
     @testset "Basic properties" begin
-        @test eye(Diagonal{elty},n) == Diagonal(ones(elty,n))
         @test_throws ArgumentError size(D,0)
         @test typeof(convert(Diagonal{Complex64},D)) <: Diagonal{Complex64}
         @test typeof(convert(AbstractMatrix{Complex64},D)) <: Diagonal{Complex64}
