@@ -1482,7 +1482,7 @@ precompile(Tuple{typeof(Base.rehash!), Base.Dict{Tuple{String, Float64}, Nothing
 precompile(Tuple{typeof(Base.remove_linenums!), Module})
 precompile(Tuple{typeof(Base._require_from_serialized), Symbol, String, Vector{Pair{Symbol, UInt64}}})
 precompile(Tuple{typeof(Base._require_search_from_serialized), Symbol, String})
-precompile(Tuple{typeof(Base.require), Symbol})
+precompile(Tuple{typeof(Base.require), Module, Symbol})
 precompile(Tuple{typeof(Base.resize!), Array{Base.Condition, 1}, Int64})
 precompile(Tuple{typeof(Base.resize!), Array{Tuple{String, Float64}, 1}, Int64})
 precompile(Tuple{typeof(Base.resize!), Array{UInt8, 1}, Int32})
