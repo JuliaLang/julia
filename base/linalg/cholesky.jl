@@ -406,7 +406,7 @@ function show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix})
         println(io, "$(typeof(C)) with factor:")
         show(io, C[:UL])
     else
-        print("Failed factorization of type $(typeof(C))")
+        print(io, "Failed factorization of type $(typeof(C))")
     end
 end
 

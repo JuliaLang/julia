@@ -13,7 +13,7 @@ function unary_ops_tests(a, ca, tol; n=size(a, 1))
     @test isposdef(ca)
     @test_throws KeyError ca[:Z]
     @test size(ca) == size(a)
-    @test Matrix(copy(ca)) ≈ a
+    @test Array(copy(ca)) ≈ a
 end
 
 function factor_recreation_tests(a_U, a_L)
@@ -21,7 +21,7 @@ function factor_recreation_tests(a_U, a_L)
     c_L = cholfact(a_L)
     cl  = chol(a_L)
     ls = c_L[:L]
-    @test Matrix(c_U) ≈ Matrix(c_L) ≈ a_U
+    @test Array(c_U) ≈ Array(c_L) ≈ a_U
     @test ls*ls' ≈ a_U
     @test triu(c_U.factors) ≈ c_U[:U]
     @test tril(c_L.factors) ≈ c_L[:L]
@@ -180,6 +180,8 @@ end
                 C = cholfact(A)
                 @test !isposdef(C)
                 @test !LinAlg.issuccess(C)
+                Cstr = sprint(show, C)
+                @test Cstr == "Failed factorization of type $(typeof(C))"
                 @test_throws PosDefException C\B
                 @test_throws PosDefException det(C)
                 @test_throws PosDefException logdet(C)
