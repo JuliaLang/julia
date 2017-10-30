@@ -39,6 +39,7 @@ LogLevel(level::LogLevel) = level
 Base.isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
 Base.:+(level::LogLevel, inc) = LogLevel(level.level+inc)
 Base.:-(level::LogLevel, inc) = LogLevel(level.level-inc)
+Base.convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
 
 const BelowMinLevel = LogLevel(typemin(Int32))
 const Debug         = LogLevel(-1000)
@@ -149,37 +150,12 @@ function logmsg_code(_module, file, line, level, message, exs...)
             elseif k == :_group
                 group = esc(v)
             else
-                v = esc(v)
                 # Copy across key value pairs for structured log records
-                push!(kwargs, Expr(:kw, k, v))
+                push!(kwargs, Expr(:kw, k, esc(v)))
             end
-        #=
-        # FIXME - decide whether this special syntax is a good idea.
-        # It's probably only a good idea if we decide to pass these as keyword
-        # arguments to shouldlog()
-        elseif ex.head == :vect
-            # Match "log control" keyword argument syntax, eg
-            # @info "Foo" [once=true]
-            for keyval in ex.args
-                if !isa(keyval, Expr) || keyval.head != :(=) || !isa(keyval.args[1], Symbol)
-                    throw(ArgumentError("Expected key value pair inside log control, got $keyval"))
-                end
-                k,v = keyval.args
-                if k == :max_log
-                    max_log = v
-                elseif k == :id
-                    if !isa(v, Symbol)
-                        throw(ArgumentError("id should be a symbol"))
-                    end
-                    id = Expr(:quote, v)
-                elseif k == :progress
-                    progress = v
-                    push!(kwargs, Expr(:kw, k, v))
-                else
-                    throw(ArgumentError("Unknown log control $k"))
-                end
-            end
-        =#
+        elseif isexpr(ex, :...)
+            # Keyword splatting
+            push!(kwargs, esc(ex))
         else
             # Positional arguments - will be converted to key value pairs
             # automatically.
@@ -240,29 +216,39 @@ the standard severity levels `Debug`, `Info`, `Warn` and `Error`.  `@logmsg`
 allows `level` to be set programmatically to any `LogLevel` or custom log level
 types.
 
-`message` can be any type.  You should generally ensure that `string(message)`
-gives useful information, but custom logger backends may serialize the message
-in a more useful way in general.
+`message` should be an expression which evaluates to a string which is a human
+readable description of the log event.  By convention, this string will be
+formatted as markdown when presented.
 
 The optional list of `key=value` pairs supports arbitrary user defined
 metadata which will be passed through to the logging backend as part of the
-log record.  If only a `value` expression is supplied, a key will be generated
-using `Symbol`. For example, `x` becomes `x=x`, and `foo(10)` becomes
-`Symbol("foo(10)")=foo(10)`.
+log record.  If only a `value` expression is supplied, a key representing the
+expression will be generated using `Symbol`. For example, `x` becomes `x=x`,
+and `foo(10)` becomes `Symbol("foo(10)")=foo(10)`.  For splatting a list of
+key value pairs, use the normal splatting syntax, `@info "blah" kws...`.
 
-By convention, there are some keys and values which will be interpreted in a
-special way:
+There are some keys which allow automatically generated log data to be
+overridden:
+
+  * `_module=mod` can be used to specify a different originating module from
+    the source location of the message.
+  * `_group=symbol` can be used to override the message group (this is
+    normally derived from the base name of the source file).
+  * `_id=symbol` can be used to override the automatically generated unique
+    message identifier.  This is useful if you need to very closely associate
+    messages generated on different source lines.
+  * `_file=string` and `_line=integer` can be used to override the apparent
+    source location of a log message.
+
+There's also some key value pairs which have conventional meaning:
 
   * `progress=fraction` should be used to indicate progress through an
     algorithmic step named by `message`, it should be a value in the interval
     [0,1], and would generally be used to drive a progress bar or meter.
   * `max_log=integer` should be used as a hint to the backend that the message
     should be displayed no more than `max_log` times.
-  * `id=:symbol` can be used to override the unique message identifier.  This
-    is useful if you need to very closely associate messages generated in
-    different invocations of `@logmsg`.
-  * `file=string` and `line=integer` can be used to override the apparent
-    source location of a log message.  Generally, this is not encouraged.
+  * `exception=ex` should be used to accompany a log message with an exception,
+    as an indication that something went wrong.
 
 
 # Examples
@@ -273,6 +259,9 @@ special way:
 @warn  "Something was odd.  You should pay attention"
 @error "A non fatal error occurred"
 
+x = 10
+@info "Some variables attached to the message" x a=42.0
+
 @debug begin
     sA = sum(A)
     "sum(A) = \$sA is an expensive operation, evaluated only when `shouldlog` returns true"
@@ -282,10 +271,6 @@ for i=1:10000
     @info "With the default backend, you will only see (i = \$i) ten times"  max_log=10
     @debug "Algorithm1" i progress=i/10000
 end
-
-level = Info
-a = 100
-@logmsg level "Some message with attached values" a foo(2)
 ```
 """
 
