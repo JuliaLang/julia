@@ -467,8 +467,8 @@ unshift!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 Base.init_load_path(ccall(:jl_get_julia_home, Any, ()))
 
 # load some stdlib packages but don't put their names in Main
-Base.require(:DelimitedFiles)
-Base.require(:Test)
+Base.require(Base, :DelimitedFiles)
+Base.require(Base, :Test)
 
 empty!(LOAD_PATH)
 
