@@ -20,7 +20,6 @@ export
     Threads,
     Iterators,
     Distributed,
-    Logging,
 
 # Types
     AbstractChannel,
@@ -804,9 +803,14 @@ export
     warn,
 
 # logging
-    AbstractLogger,
+    AbstractLogger, LogLevel,
     @debug, @info, @warn, @error, @logmsg,
-    with_logger, disable_logging, configure_logging,
+    with_logger, current_logger, global_logger,
+    disable_logging, configure_logging,
+    # Logger methods
+    handle_message, shouldlog, min_enabled_level,
+    # Loggers
+    NullLogger, SimpleLogger,
 
 # random numbers
     AbstractRNG,

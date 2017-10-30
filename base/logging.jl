@@ -1,20 +1,3 @@
-module Logging
-
-import Base.Meta: isexpr
-
-export
-    # Frontend
-    @debug, @info, @warn, @error, @logmsg,
-    # Log control
-    with_logger, current_logger, global_logger,
-    disable_logging, configure_logging,
-    # Logger type
-    AbstractLogger,
-    # Logger methods
-    handle_message, shouldlog, min_enabled_level,
-    # Loggers
-    NullLogger, SimpleLogger
-
 """
 A logger controls how log records are filtered and dispatched.  When a log
 record is generated, the logger is the first piece of user configurable code
@@ -126,7 +109,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
     group = Expr(:quote, Symbol(splitext(basename(file))[1]))
     kwargs = Any[]
     for ex in exs
-        if isexpr(ex, :(=)) && isa(ex.args[1], Symbol)
+        if ex isa Expr && ex.head === :(=) && ex.args[1] isa Symbol
             k,v = ex.args
             if !(k isa Symbol)
                 throw(ArgumentError("Expected symbol for key in key value pair `$ex`"))
@@ -153,7 +136,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 # Copy across key value pairs for structured log records
                 push!(kwargs, Expr(:kw, k, esc(v)))
             end
-        elseif isexpr(ex, :...)
+        elseif ex isa Expr && ex.head === :...
             # Keyword splatting
             push!(kwargs, esc(ex))
         else
@@ -483,9 +466,4 @@ end
 disable_logging(level) = disable_logging(parse_level(level))
 
 
-function __init__()
-    # Need to set this in __init__, as it refers to STDERR
-    global_logger(SimpleLogger(STDERR))
-end
-
-end
+init_logging() = global_logger(SimpleLogger(STDERR))
