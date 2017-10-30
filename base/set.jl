@@ -4,6 +4,7 @@ mutable struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Void}
 
     Set{T}() where {T} = new(Dict{T,Void}())
+    Set{T}(s::Set{T}) where {T} = new(Dict{T,Void}(s.dict))
     Set{T}(itr) where {T} = union!(new(Dict{T,Void}()), itr)
 end
 Set() = Set{Any}()
@@ -54,7 +55,7 @@ end
 
 delete!(s::Set, x) = (delete!(s.dict, x); s)
 
-copy(s::Set) = union!(similar(s), s)
+copy(s::Set{T}) where T = Set{T}(s)
 
 sizehint!(s::Set, newsz) = (sizehint!(s.dict, newsz); s)
 empty!(s::Set) = (empty!(s.dict); s)
