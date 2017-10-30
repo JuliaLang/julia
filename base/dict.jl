@@ -43,7 +43,7 @@ function show(io::IO, t::Associative{K,V}) where V where K
         if !show_circular(io, t)
             first = true
             n = 0
-            for pair in t
+            for pair in pairs(t)
                 first || print(io, ',')
                 first = false
                 show(recur_io, pair)
@@ -195,7 +195,7 @@ similar(d::Dict, ::Type{Pair{K,V}}) where {K,V} = Dict{K,V}()
 # conversion between Dict types
 function convert(::Type{Dict{K,V}},d::Associative) where V where K
     h = Dict{K,V}()
-    for (k,v) in d
+    for (k,v) in pairs(d)
         ck = convert(K,k)
         if !haskey(h,ck)
             h[ck] = convert(V,v)
@@ -656,10 +656,18 @@ end
 function pop!(h::Dict)
     isempty(h) && throw(ArgumentError("dict must be non-empty"))
     idx = start(h)
-    @inbounds key = h.keys[idx]
     @inbounds val = h.vals[idx]
     _delete!(h, idx)
-    key => val
+    return val
+end
+
+function pop!(h::PairIterator{<:Dict})
+    isempty(h.dict) && throw(ArgumentError("dict must be non-empty"))
+    idx = start(h.dict)
+    @inbounds key = h.dict.keys[idx]
+    @inbounds val = h.dict.vals[idx]
+    _delete!(h.dict, idx)
+    return key => val
 end
 
 function _delete!(h::Dict, index)
@@ -714,7 +722,19 @@ function start(t::Dict)
 end
 done(t::Dict, i) = i > length(t.vals)
 @propagate_inbounds function next(t::Dict{K,V}, i) where {K,V}
-    return (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1))
+    return (t.vals[i], skip_deleted(t,i+1))
+end
+
+start(d::KeyIterator{<:Dict}) = start(d.dict)
+done(d::KeyIterator{<:Dict}, i) = done(d.dict)
+@propagate_inbounds function next(d::KeyIterator{<:Dict}, i)
+    return (d.dict.keys[i], skip_deleted(d.dict,i+1))
+end
+
+start(d::PairIterator{<:Dict}) = start(d.dict)
+done(d::PairIterator{<:Dict}, i) = done(d.dict)
+@propagate_inbounds function next(d::PairIterator{<:Dict}, i)
+    return (Pair{K,V}(d.dict.keys[i],d.dict.vals[i]), skip_deleted(d.dict,i+1))
 end
 
 isempty(t::Dict) = (t.count == 0)

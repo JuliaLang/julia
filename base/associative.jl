@@ -14,21 +14,8 @@ end
 
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
-haskey(d::Associative, k) = in(k,keys(d))
+haskey(d::Associative, k) = in(k, keys(d))
 
-function in(p::Pair, a::Associative, valcmp=(==))
-    v = get(a,p[1],secret_table_token)
-    if v !== secret_table_token
-        valcmp(v, p[2]) && return true
-    end
-    return false
-end
-
-function in(p, a::Associative)
-    error("""Associative collections only contain Pairs;
-             Either look for e.g. A=>B instead, or use the `keys` or `values`
-             function if you are looking for a key or value respectively.""")
-end
 
 function summary(t::Associative)
     n = length(t)
@@ -38,31 +25,31 @@ end
 struct KeyIterator{T<:Associative}
     dict::T
 end
-struct ValueIterator{T<:Associative}
+struct PairIterator{T<:Associative}
     dict::T
 end
 
-summary(iter::T) where {T<:Union{KeyIterator,ValueIterator}} =
+summary(iter::T) where {T<:Union{KeyIterator,PairIterator}} =
     string(T.name, " for a ", summary(iter.dict))
 
-show(io::IO, iter::Union{KeyIterator,ValueIterator}) = show(io, collect(iter))
+show(io::IO, iter::Union{KeyIterator,PairIterator}) = show(io, collect(iter))
 
-length(v::Union{KeyIterator,ValueIterator}) = length(v.dict)
-isempty(v::Union{KeyIterator,ValueIterator}) = isempty(v.dict)
+length(v::Union{KeyIterator,PairIterator}) = length(v.dict)
+isempty(v::Union{KeyIterator,PairIterator}) = isempty(v.dict)
 _tt1(::Type{Pair{A,B}}) where {A,B} = A
 _tt2(::Type{Pair{A,B}}) where {A,B} = B
-eltype(::Type{KeyIterator{D}}) where {D} = _tt1(eltype(D))
-eltype(::Type{ValueIterator{D}}) where {D} = _tt2(eltype(D))
+eltype(::Type{KeyIterator{<:Associative{K}}}) where {K} = K
+eltype(::Type{PairIterator{<:Associative{K, D}}}) where {K, D} = Pair{K, D}
 
-start(v::Union{KeyIterator,ValueIterator}) = start(v.dict)
-done(v::Union{KeyIterator,ValueIterator}, state) = done(v.dict, state)
+start(v::Union{KeyIterator,PairIterator}) = start(v.dict)
+done(v::Union{KeyIterator,PairIterator}, state) = done(v.dict, state)
 
 function next(v::KeyIterator, state)
-    n = next(v.dict, state)
+    key, state = next(v.dict, state)
     n[1][1], n[2]
 end
 
-function next(v::ValueIterator, state)
+function next(v::PairIterator, state)
     n = next(v.dict, state)
     n[1][2], n[2]
 end
@@ -103,38 +90,13 @@ julia> collect(keys(a))
 keys(a::Associative) = KeyIterator(a)
 
 """
-    values(a::Associative)
-
-Return an iterator over all values in a collection.
-`collect(values(a))` returns an array of values.
-Since the values are stored internally in a hash table,
-the order in which they are returned may vary.
-But `keys(a)` and `values(a)` both iterate `a` and
-return the elements in the same order.
-
-# Examples
-```jldoctest
-julia> a = Dict('a'=>2, 'b'=>3)
-Dict{Char,Int64} with 2 entries:
-  'b' => 3
-  'a' => 2
-
-julia> collect(values(a))
-2-element Array{Int64,1}:
- 3
- 2
-```
-"""
-values(a::Associative) = ValueIterator(a)
-
-"""
     pairs(collection)
 
 Return an iterator over `key => value` pairs for any
 collection that maps a set of keys to a set of values.
 This includes arrays, where the keys are the array indices.
 """
-pairs(collection) = Generator(=>, keys(collection), values(collection))
+pairs(collection) = Generator(=>, keys(collection), collection)
 
 function copy(a::Associative)
     b = similar(a)
@@ -222,6 +184,8 @@ function copy!(dest::Union{Associative,AbstractSet}, src)
     return dest
 end
 
+eltype(::Type{<:Associative{<:Any, V}}) where {V} = V
+
 """
     keytype(type)
 
@@ -238,19 +202,19 @@ keytype(a::Associative) = keytype(typeof(a))
 keytype(::Type{A}) where {A<:Associative} = keytype(supertype(A))
 
 """
-    valtype(type)
+    pairtype(type)
 
-Get the value type of an associative collection type. Behaves similarly to [`eltype`](@ref).
+Get the key-value `Pair` type of an associative collection type. Behaves similarly to
+[`eltype`](@ref).
 
 # Examples
 ```jldoctest
-julia> valtype(Dict(Int32(1) => "foo"))
-String
+julia> pairtype(Dict(Int32(1) => "foo"))
+Pair{Int32,String}
 ```
 """
-valtype(::Type{Associative{K,V}}) where {K,V} = V
-valtype(::Type{A}) where {A<:Associative} = valtype(supertype(A))
-valtype(a::Associative) = valtype(typeof(a))
+pairtype(::Type{<:Associative{K,V}}) where {K,V} = Pair{K, V}
+pairtype(a::Associative) = pairtype(typeof(a))
 
 """
     merge(d::Associative, others::Associative...)
@@ -321,10 +285,10 @@ merge(combine::Function, d::Associative, others::Associative...) =
 promoteK(K) = K
 promoteV(V) = V
 promoteK(K, d, ds...) = promoteK(promote_type(K, keytype(d)), ds...)
-promoteV(V, d, ds...) = promoteV(promote_type(V, valtype(d)), ds...)
+promoteV(V, d, ds...) = promoteV(promote_type(V, eltype(d)), ds...)
 function _typeddict(d::Associative, others::Associative...)
     K = promoteK(keytype(d), others...)
-    V = promoteV(valtype(d), others...)
+    V = promoteV(eltype(d), others...)
     Dict{K,V}(d)
 end
 
@@ -350,35 +314,13 @@ Dict{Int64,String} with 2 entries:
 """
 function filter!(f, d::Associative)
     badkeys = Vector{keytype(d)}(0)
-    try
-        for (k,v) in d
-            # don't delete!(d, k) here, since associative types
-            # may not support mutation during iteration
-            f(k => v) || push!(badkeys, k)
-        end
-    catch e
-        return filter!_dict_deprecation(e, f, d)
+    for (k, v) in pairs(d)
+        # don't delete!(d, k) here, since associative types
+        # may not support mutation during iteration
+        f(v) || push!(badkeys, k)
     end
     for k in badkeys
         delete!(d, k)
-    end
-    return d
-end
-
-function filter!_dict_deprecation(e, f, d::Associative)
-    if isa(e, MethodError) && e.f === f
-        depwarn("In `filter!(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter!)
-        badkeys = Vector{keytype(d)}(0)
-        for (k,v) in d
-            # don't delete!(d, k) here, since associative types
-            # may not support mutation during iteration
-            f(k, v) || push!(badkeys, k)
-        end
-        for k in badkeys
-            delete!(d, k)
-        end
-    else
-        rethrow(e)
     end
     return d
 end
@@ -404,28 +346,14 @@ Dict{Int64,String} with 1 entry:
 function filter(f, d::Associative)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
     df = similar(d)
-    try
-        for (k, v) in d
-            if f(k => v)
-                df[k] = v
-            end
-        end
-    catch e
-        if isa(e, MethodError) && e.f === f
-            depwarn("In `filter(f, dict)`, `f` is now passed a single pair instead of two arguments.", :filter)
-            for (k, v) in d
-                if f(k, v)
-                    df[k] = v
-                end
-            end
-        else
-            rethrow(e)
+    for (k, v) in pairs(d)
+        if f(v)
+            df[k] = v
         end
     end
     return df
 end
 
-eltype(::Type{Associative{K,V}}) where {K,V} = Pair{K,V}
 
 function isequal(l::Associative, r::Associative)
     l === r && return true
@@ -433,8 +361,8 @@ function isequal(l::Associative, r::Associative)
         return false
     end
     if length(l) != length(r) return false end
-    for pair in l
-        if !in(pair, r, isequal)
+    for pair in pairs(l)
+        if !in(pair, pairs(r), isequal)
             return false
         end
     end
@@ -447,8 +375,8 @@ function ==(l::Associative, r::Associative)
         return false
     end
     if length(l) != length(r) return false end
-    for pair in l
-        if !in(pair, r, ==)
+    for pair in pairs(l)
+        if !in(pair, pairs(r), ==)
             return false
         end
     end
@@ -488,7 +416,7 @@ push!(t::Associative, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q
 
 `ObjectIdDict()` constructs a hash table where the keys are (always)
 object identities.  Unlike `Dict` it is not parameterized on its key
-and value type and thus its `eltype` is always `Pair{Any,Any}`.
+and value type and thus its `eltype` and `keytype` is always `Any`.
 
 See [`Dict`](@ref) for further help.
 """
@@ -567,14 +495,22 @@ end
 
 _oidd_nextind(a, i) = reinterpret(Int,ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
 
-start(t::ObjectIdDict) = _oidd_nextind(t.ht, 0)
-done(t::ObjectIdDict, i) = (i == -1)
-next(t::ObjectIdDict, i) = (Pair{Any,Any}(t.ht[i+1],t.ht[i+2]), _oidd_nextind(t.ht, i+2))
+start(d::ObjectIdDict) = _oidd_nextind(d.ht, 0)
+done(d::ObjectIdDict, i) = (i == -1)
+next(d::ObjectIdDict, i) = (d.ht[i+2], _oidd_nextind(d.ht, i+2))
+
+start(d::KeyIterator{ObjectIdDict}) = _oidd_nextind(d.dict.ht, 0)
+done(d::KeyIterator{ObjectIdDict}, i) = (i == -1)
+next(d::KeyIterator{ObjectIdDict}, i) = (d.dict.ht[i+1], _oidd_nextind(d.dict.ht, i+2))
+
+start(d::PairIterator{ObjectIdDict}) = _oidd_nextind(d.dict.ht, 0)
+done(d::PairIterator{ObjectIdDict}, i) = (i == -1)
+next(d::PairIterator{ObjectIdDict}, i) = (Pair{Any,Any}(d.dict.ht[i+1],d.dict.ht[i+2]), _oidd_nextind(d.dict.ht, i+2))
 
 function length(d::ObjectIdDict)
     n = 0
-    for pair in d
-        n+=1
+    for x in d
+        n += 1
     end
     n
 end
