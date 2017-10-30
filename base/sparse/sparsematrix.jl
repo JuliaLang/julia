@@ -1553,6 +1553,19 @@ end
 
 sparse(S::UniformScaling, m::Integer, n::Integer=m) = speye_scaled(S.λ, m, n)
 
+Base.iszero(A::SparseMatrixCSC) = iszero(view(A.nzval, 1:(A.colptr[size(A, 2) + 1] - 1)))
+
+function Base.isone(A::SparseMatrixCSC)
+    m, n = size(A)
+    m == n && A.colptr[n+1] >= n+1 || return false
+    for j in 1:n, k in A.colptr[j]:(A.colptr[j+1] - 1)
+        i, x = A.rowval[k], A.nzval[k]
+        ifelse(i == j, isone(x), iszero(x)) || return false
+    end
+    return true
+end
+
+
 # TODO: More appropriate location?
 conj!(A::SparseMatrixCSC) = (@inbounds broadcast!(conj, A.nzval, A.nzval); A)
 (-)(A::SparseMatrixCSC) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), map(-, A.nzval))
