@@ -104,8 +104,8 @@ inconsistent length.
 """
 function Base.floor(x::ConvertiblePeriod, precision::T) where T <: ConvertiblePeriod
     value(precision) < 1 && throw(DomainError(precision))
-    x, precision = promote(x, precision)
-    return T(x - mod(x, precision))
+    _x, _precision = promote(x, precision)
+    return T(_x - mod(_x, _precision))
 end
 
 """
@@ -261,8 +261,8 @@ inconsistent length.
 """
 function Base.round(x::ConvertiblePeriod, precision::ConvertiblePeriod, r::RoundingMode{:NearestTiesUp})
     f, c = floorceil(x, precision)
-    common_x, common_f, common_c = promote(x, f, c)
-    return (common_x - common_f) < (common_c - common_x) ? f : c
+    _x, _f, _c = promote(x, f, c)
+    return (_x - _f) < (_c - _x) ? f : c
 end
 
 Base.round(x::TimeTypeOrPeriod, p::Period, r::RoundingMode{:Down}) = Base.floor(x, p)
@@ -281,5 +281,5 @@ Base.floor(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.floor(x, one
 Base.ceil(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.ceil(x, oneunit(P))
 
 function Base.round(x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period
-     return Base.round(x, oneunit(P), r)
+    return Base.round(x, oneunit(P), r)
 end
