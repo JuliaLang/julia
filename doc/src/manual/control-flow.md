@@ -712,6 +712,18 @@ Stacktrace:
 
 ### The `try/catch` statement
 
+A simple `try/catch` example below shows an `Exception` being raised. For example, calling an array a[] at index 0 would raise a BoundsError() `Exception` since Julia indexes from 1 not 0:
+
+```jldoctest
+julia> f(x) = 
+       a = Int64[]
+       try
+           a[0]
+       catch e
+           println(e)
+       end
+```
+
 The `try/catch` statement allows for `Exception`s to be tested for. For example, a customized
 square root function can be written to automatically call either the real or complex square root
 method on demand using `Exception`s :
