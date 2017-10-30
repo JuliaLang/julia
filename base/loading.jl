@@ -638,7 +638,7 @@ function compilecache(name::String)
         end
     end
     # run the expression and cache the result
-    level = isinteractive() ? Logging.Info : Logging.Debug
+    level = isinteractive() ? Info : Debug
     if isfile(cachefile)
         @logmsg level "Recompiling stale cache file $cachefile for module $name."
     else
