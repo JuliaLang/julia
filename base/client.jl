@@ -188,7 +188,7 @@ end
 function without_syntax_deprecations(f::Function)
     # Turn off all logging
     # TODO: Disable only depwarns, but in a clean way.
-    with_logger(f, Logging.NullLogger())
+    with_logger(f, NullLogger())
 end
 
 function parse_input_line(s::String; filename::String="none")

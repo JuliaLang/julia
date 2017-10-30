@@ -70,7 +70,7 @@ function depwarn(msg, funcsym)
     if depwarn_should_throw(opts)
         throw(ErrorException(msg))
     end
-    deplevel = Logging.LogLevel(opts.depwarn)
+    deplevel = LogLevel(opts.depwarn)
     @logmsg(
         deplevel,
         msg,
@@ -98,7 +98,7 @@ function syntax_depwarn(msg, file, line)
     if depwarn_should_throw(opts)
         return 2 # Will throw error on parser side to simplify marshalling
     end
-    deplevel = Logging.LogLevel(opts.depwarn)
+    deplevel = LogLevel(opts.depwarn)
     @logmsg deplevel msg _file=file _line=line _group=:depwarn
     return 0
 end
