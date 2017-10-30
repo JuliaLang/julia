@@ -34,9 +34,6 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         # full!
         @test full!(copy(A1)) == A1
 
-        # fill!
-        @test full!(fill!(copy(A1), 1)) == t1(ones(size(A1)...))
-
         # similar
         @test isa(similar(A1), t1)
         @test eltype(similar(A1)) == elty1

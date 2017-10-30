@@ -1886,6 +1886,10 @@ end
 # After deprecation is removed, enable the @testset "indexing by Bool values" in test/arrayops.jl
 # Also un-comment the new definition in base/indices.jl
 
+# deprecate odd fill! methods
+@deprecate fill!(D::Diagonal, x)                       fillslots!(D, x)
+@deprecate fill!(A::Base.LinAlg.AbstractTriangular, x) fillslots!(A, x)
+
 function diagm(v::BitVector)
     depwarn(string("diagm(v::BitVector) is deprecated, use diagm(0 => v) or ",
         "BitMatrix(Diagonal(v)) instead"), :diagm)
