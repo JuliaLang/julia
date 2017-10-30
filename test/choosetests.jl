@@ -38,7 +38,7 @@ function choosetests(choices = [])
         "operators", "path", "ccall", "parse", "loading", "bigint",
         "bigfloat", "sorting", "statistics", "spawn", "backtrace",
         "file", "read", "version", "resolve",
-        "pollfd", "mpfr", "broadcast", "complex", "socket",
+        "mpfr", "broadcast", "complex", "socket",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",

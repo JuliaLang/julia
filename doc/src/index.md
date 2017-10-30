@@ -53,6 +53,7 @@
   * [Linear Algebra](@ref)
   * [Constants](@ref lib-constants)
   * [Filesystem](@ref)
+  * [Delimited Files](@ref)
   * [I/O and Network](@ref)
   * [Punctuation](@ref)
   * [Sorting and Related Functions](@ref)
@@ -63,9 +64,13 @@
   * [C Interface](@ref)
   * [C Standard Library](@ref)
   * [Dynamic Linker](@ref)
-  * [Profiling](@ref lib-profiling)
   * [StackTraces](@ref)
   * [SIMD Support](@ref)
+  * [Profiling](@ref lib-profiling)
+  * [Memory-mapped I/O](@ref)
+  * [Shared Arrays](@ref)
+  * [Base64](@ref)
+  * [File Events](@ref lib-filewatching)
 
 ## Developer Documentation
 

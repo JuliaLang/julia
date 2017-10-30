@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test, FileWatching
+
 # This script does the following
 # Sets up n unix pipes
 # For the odd pipes, a byte is written to the write end at intervals specified in intvls
@@ -145,3 +147,142 @@ let a = Ref(0)
     gc()
     @test a[] == 1
 end
+
+for f in (watch_file, poll_file)
+    local f
+    @test_throws ArgumentError f("adir\0bad")
+end
+
+#issue #12992
+function test_12992()
+    pfw = PollingFileWatcher(@__FILE__, 0.01)
+    close(pfw)
+    pfw = PollingFileWatcher(@__FILE__, 0.01)
+    close(pfw)
+    pfw = PollingFileWatcher(@__FILE__, 0.01)
+    close(pfw)
+    gc()
+    gc()
+end
+
+# Make sure multiple close is fine
+function test2_12992()
+    pfw = PollingFileWatcher(@__FILE__, 0.01)
+    close(pfw)
+    close(pfw)
+    pfw = PollingFileWatcher(@__FILE__, 0.01)
+    close(pfw)
+    close(pfw)
+    pfw = PollingFileWatcher(@__FILE__, 0.01)
+    close(pfw)
+    close(pfw)
+    gc()
+    gc()
+end
+
+test_12992()
+test_12992()
+test_12992()
+
+test2_12992()
+test2_12992()
+test2_12992()
+
+#######################################################################
+# This section tests file watchers.                                   #
+#######################################################################
+dir = mktempdir()
+file = joinpath(dir, "afile.txt")
+# like touch, but lets the operating system update the timestamp
+# for greater precision on some platforms (windows)
+@test close(open(file,"w")) === nothing
+
+function test_file_poll(channel,interval,timeout_s)
+    rc = poll_file(file, interval, timeout_s)
+    put!(channel,rc)
+end
+
+function test_timeout(tval)
+    t_elapsed = @elapsed begin
+        channel = Channel(1)
+        @async test_file_poll(channel, 10, tval)
+        tr = take!(channel)
+    end
+    @test tr[1] === Base.Filesystem.StatStruct() && tr[2] === EOFError()
+    @test tval <= t_elapsed
+end
+
+function test_touch(slval)
+    tval = slval*1.1
+    channel = Channel(1)
+    @async test_file_poll(channel, tval/3, tval)
+    sleep(tval/3)  # one poll period
+    f = open(file,"a")
+    write(f,"Hello World\n")
+    close(f)
+    tr = take!(channel)
+    @test ispath(tr[1]) && ispath(tr[2])
+end
+
+function test_watch_file_timeout(tval)
+    watch = @async watch_file(file, tval)
+    @test wait(watch) == FileWatching.FileEvent(false, false, true)
+end
+
+function test_watch_file_change(tval)
+    watch = @async watch_file(file, tval)
+    sleep(tval/3)
+    open(file, "a") do f
+        write(f, "small change\n")
+    end
+    @test wait(watch) == FileWatching.FileEvent(false, true, false)
+end
+
+function test_monitor_wait(tval)
+    fm = FileMonitor(file)
+    @async begin
+        sleep(tval)
+        f = open(file,"a")
+        write(f,"Hello World\n")
+        close(f)
+    end
+    fname, events = wait(fm)
+    close(fm)
+    if Sys.islinux() || Sys.iswindows() || Sys.isapple()
+        @test fname == basename(file)
+    else
+        @test fname == ""  # platforms where F_GETPATH is not available
+    end
+    @test events.changed
+end
+
+function test_monitor_wait_poll()
+    pfw = PollingFileWatcher(file, 5.007)
+    @async begin
+        sleep(2.5)
+        f = open(file,"a")
+        write(f,"Hello World\n")
+        close(f)
+    end
+    (old, new) = wait(pfw)
+    close(pfw)
+    @test new.mtime - old.mtime > 2.5 - 1.5 # mtime may only have second-level accuracy (plus add some hysteresis)
+end
+
+test_timeout(0.1)
+test_timeout(1)
+test_touch(6)
+test_monitor_wait(0.1)
+test_monitor_wait(0.1)
+test_monitor_wait_poll()
+test_monitor_wait_poll()
+test_watch_file_timeout(0.1)
+test_watch_file_change(6)
+
+@test_throws Base.UVError watch_file("____nonexistent_file", 10)
+@test(@elapsed(
+    @test(poll_file("____nonexistent_file", 1, 3.1) ===
+          (Base.Filesystem.StatStruct(), EOFError()))) > 3)
+
+rm(file)
+rm(dir)
