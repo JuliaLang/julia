@@ -24,6 +24,17 @@ jobs:
               sudo ln -s /usr/bin/$prog-4.8 /usr/local/bin/$prog;
             done
       - checkout # circle ci code checkout step
+      - run:
+          name: Check for a request to skip CI
+          command: |
+            msg="$(git rev-list --format=%B --max-count=1 $CIRCLE_SHA1)"
+            # [ci skip] was recognized in Circle 1.0 but not in 2.0
+            # Here we're also adding [circle skip], which is non-standard
+            if [[ $msg == *"[ci skip]"* ]] || [[ $msg == *"[skip ci]"* ]] || \
+               [[ $msg == *"[circle skip]"* ]] || [[ $msg == *"[skip circle]"* ]]; then
+              echo "User requested to skip CI, failing early"
+              exit 1
+            fi
 # (FIXME: need to unset url."ssh://git@github.com".insteadOf or libgit2 tests fail)
       - run:
           name: Checkout merge commit, set versioning info and Make.user variables
