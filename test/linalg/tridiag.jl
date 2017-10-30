@@ -206,10 +206,10 @@ guardsrand(123) do
                 @test Array(A/α) ≈ Array(A)/α
 
                 @testset "Matmul with Triangular types" begin
-                    @test A*Base.LinAlg.UnitUpperTriangular(eye(n)) ≈ fA*eye(n)
-                    @test A*Base.LinAlg.UnitLowerTriangular(eye(n)) ≈ fA*eye(n)
-                    @test A*UpperTriangular(eye(n)) ≈ fA*eye(n)
-                    @test A*LowerTriangular(eye(n)) ≈ fA*eye(n)
+                    @test A*Base.LinAlg.UnitUpperTriangular(eye(n)) ≈ fA
+                    @test A*Base.LinAlg.UnitLowerTriangular(eye(n)) ≈ fA
+                    @test A*UpperTriangular(eye(n)) ≈ fA
+                    @test A*LowerTriangular(eye(n)) ≈ fA
                 end
                 @testset "A_mul_B! errors" begin
                     @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(zeros(fA),A,ones(elty,n,n+1))

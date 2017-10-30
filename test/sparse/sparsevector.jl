@@ -908,9 +908,9 @@ end
         sparsecomplexmat = speye(m) + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex.(sprmat.nzval, sprmat.nzval)/(4m))
         sparseintmat = speye(Int, m)*10m + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round.(Int, sprmat.nzval*10))
 
-        denseintmat = eye(Int, m)*10m + rand(1:m, m, m)
-        densefloatmat = eye(m) + randn(m, m)/(2m)
-        densecomplexmat = eye(m) + complex.(randn(m, m), randn(m, m))/(4m)
+        denseintmat = I*10m + rand(1:m, m, m)
+        densefloatmat = I + randn(m, m)/(2m)
+        densecomplexmat = I + randn(Complex{Float64}, m, m)/(4m)
 
         inttypes = (Int32, Int64, BigInt)
         floattypes = (Float32, Float64, BigFloat)
