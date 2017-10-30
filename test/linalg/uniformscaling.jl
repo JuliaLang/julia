@@ -201,6 +201,13 @@ end
     @test Matrix{Float64}(2I, 3, 3)::Matrix{Float64} == 2*eye(3)
 end
 
+@testset "Diagonal construction from UniformScaling" begin
+    @test Diagonal(2I, 3)::Diagonal{Int} == 2*eye(3)
+    @test Diagonal(2.0I, 3)::Diagonal{Float64} == 2*eye(3)
+    @test Diagonal{Real}(2I, 3)::Diagonal{Real} == 2*eye(3)
+    @test Diagonal{Float64}(2I, 3)::Diagonal{Float64} == 2*eye(3)
+end
+
 @testset "equality comparison of matrices with UniformScaling" begin
     # AbstractMatrix methods
     diagI = Diagonal(fill(1, 3))

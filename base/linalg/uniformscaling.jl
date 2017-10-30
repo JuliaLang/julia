@@ -381,3 +381,7 @@ Matrix(s::UniformScaling, dims::Dims{2}) = Matrix{eltype(s)}(s, dims)
 # convenience variations that accept a single integer to specify dims
 Matrix{T}(s::UniformScaling, m::Integer) where {T} = Matrix{T}(s, m, m)
 Matrix(s::UniformScaling, m::Integer) = Matrix(s, m, m)
+
+## Diagonal construction from UniformScaling
+Diagonal{T}(s::UniformScaling, m::Integer) where {T} = Diagonal{T}(fill(T(s.λ), m))
+Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
