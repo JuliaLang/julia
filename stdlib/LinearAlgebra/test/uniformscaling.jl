@@ -28,11 +28,12 @@ end
 @testset "getindex" begin
     @test I[1,1] == 1
     @test I[1,2] == 0
-    @test I[1:2,1:2] == Diagonal([1, 1])
-    @test I[1:2:3,1:2:3] == Diagonal([1, 1])
-    @test I[1:2,2:3] == [0 0; 1 0]
-    @test I[2:3,1:2] == [0 1; 0 0]
-    @test I[2:-1:1,1:2] == [0 1; 1 0]
+    @test I[1:2,1:2] == eye(2,2)[1:2,1:2]
+    @test I[1:2:3,1:2:3] == eye(3,3)[1:2:3,1:2:3]
+    @test I[1:2:8,2:2:9] == eye(10,10)[1:2:8,2:2:9]
+    @test I[1:2,2:3] == eye(3,3)[1:2,2:3]
+    @test I[2:3,1:2] == eye(3,3)[2:3,1:2]
+    @test I[2:-1:1,1:2] == eye(2,2)[2:-1:1,1:2]
 end
 
 @testset "sqrt, exp, log, and trigonometric functions" begin
