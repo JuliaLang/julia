@@ -1555,6 +1555,10 @@ function SparseMatrixCSC{Tv,Ti}(s::UniformScaling, dims::Dims{2}) where {Tv,Ti}
     for i in (k + 2):(n + 1) colptr[i] = (k + 1) end
     SparseMatrixCSC{Tv,Ti}(dims..., colptr, rowval, nzval)
 end
+# convenience variations that accept a single integer to specify dims
+SparseMatrixCSC{Tv,Ti}(s::UniformScaling, m::Integer) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(s, m, m)
+SparseMatrixCSC{Tv}(s::UniformScaling, m::Integer) where {Tv} = SparseMatrixCSC{Tv}(s, m, m)
+SparseMatrixCSC(s::UniformScaling, m::Integer) = SparseMatrixCSC(s, m, m)
 
 
 Base.iszero(A::SparseMatrixCSC) = iszero(view(A.nzval, 1:(A.colptr[size(A, 2) + 1] - 1)))
