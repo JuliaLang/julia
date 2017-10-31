@@ -65,4 +65,18 @@ See also [`code_lowered`](@ref).
 """
 lower(m::Module, @nospecialize(x)) = ccall(:jl_expand, Any, (Any, Any), x, m)
 
+"""
+    @lower [m] x
+
+Return lowered form of the expression `x` in module `m`.
+By default `m` is the module in which the macro is called.
+See also [`lower`](@ref).
+"""
+macro lower(code)
+    return :(lower($__module__, $(QuoteNode(code))))
+end
+macro lower(mod, code)
+    return :(lower($(esc(mod)), $(QuoteNode(code))))
+end
+
 end # module
