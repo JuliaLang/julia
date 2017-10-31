@@ -261,6 +261,7 @@ srand(1)
         @testset "Binary operations" begin
             @test -T == Bidiagonal(-T.dv,-T.ev,T.uplo)
             @test convert(elty,-1.0) * T == Bidiagonal(-T.dv,-T.ev,T.uplo)
+            @test T / convert(elty,-1.0) == Bidiagonal(-T.dv,-T.ev,T.uplo)
             @test T * convert(elty,-1.0) == Bidiagonal(-T.dv,-T.ev,T.uplo)
             @testset for uplo2 in (:U, :L)
                 dv = convert(Vector{elty}, relty <: AbstractFloat ? randn(n) : rand(1:10, n))
