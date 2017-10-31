@@ -198,10 +198,24 @@ end
     @test lcfirst("")==""
     @test lcfirst("*")=="*"
 end
+
+# test next for invalid UTF-8 AbstractStrings
+@testset "next for invalid UTF-8" begin
+    srand(1)
+    let s = "1"*String(rand(0x00:0xff, 2^16)), i = 1, j = 1
+        while !done(s, i)
+            c, i = next(s, i)
+            j = nextind(s, j)
+            @test i == j
+        end
+    end
+end
+
 # test AbstractString functions at beginning of string.jl
 struct tstStringType <: AbstractString
     data::Array{UInt8,1}
 end
+
 @testset "AbstractString functions" begin
     tstr = tstStringType(Vector{UInt8}("12"))
     @test_throws ErrorException endof(tstr)
