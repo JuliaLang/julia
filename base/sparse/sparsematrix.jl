@@ -1529,7 +1529,8 @@ if not specified.
 `sparse(α*I, m, n)` can be used to efficiently create a sparse
 multiple `α` of the identity matrix.
 """
-speye(::Type{T}, m::Integer, n::Integer) where {T} = speye_scaled(T, oneunit(T), m, n)
+speye(::Type{T}, m::Integer, n::Integer) where {T} = SparseMatrixCSC{T}(UniformScaling(one(T)), Dims((m, n)))
+sparse(s::UniformScaling, m::Integer, n::Integer=m) = SparseMatrixCSC(s, Dims((m, n)))
 
 function one(S::SparseMatrixCSC{T}) where T
     m,n = size(S)
@@ -1537,21 +1538,28 @@ function one(S::SparseMatrixCSC{T}) where T
     speye(T, m)
 end
 
-speye_scaled(diag, m::Integer, n::Integer) = speye_scaled(typeof(diag), diag, m, n)
-
-function speye_scaled(::Type{T}, diag, m::Integer, n::Integer) where T
-    ((m < 0) || (n < 0)) && throw(ArgumentError("invalid array dimensions"))
-    if iszero(diag)
-        return SparseMatrixCSC(m, n, ones(Int, n+1), Vector{Int}(0), Vector{T}(0))
-    end
-    nnz = min(m,n)
-    colptr = Vector{Int}(1+n)
-    colptr[1:nnz+1] = 1:nnz+1
-    colptr[nnz+2:end] = nnz+1
-    SparseMatrixCSC(Int(m), Int(n), colptr, Vector{Int}(1:nnz), fill!(Vector{T}(nnz), diag))
+## SparseMatrixCSC construction from UniformScaling
+SparseMatrixCSC{Tv,Ti}(s::UniformScaling, m::Integer, n::Integer) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(s, Dims((m, n)))
+SparseMatrixCSC{Tv}(s::UniformScaling, m::Integer, n::Integer) where {Tv} = SparseMatrixCSC{Tv}(s, Dims((m, n)))
+SparseMatrixCSC(s::UniformScaling, m::Integer, n::Integer) = SparseMatrixCSC(s, Dims((m, n)))
+SparseMatrixCSC{Tv}(s::UniformScaling, dims::Dims{2}) where {Tv} = SparseMatrixCSC{Tv,Int}(s, dims)
+SparseMatrixCSC(s::UniformScaling, dims::Dims{2}) = SparseMatrixCSC{eltype(s)}(s, dims)
+function SparseMatrixCSC{Tv,Ti}(s::UniformScaling, dims::Dims{2}) where {Tv,Ti}
+    @boundscheck first(dims) < 0 && throw(ArgumentError("first dimension invalid ($(first(dims)) < 0)"))
+    @boundscheck last(dims) < 0 && throw(ArgumentError("second dimension invalid ($(last(dims)) < 0)"))
+    iszero(s.λ) && return spzeros(Tv, Ti, dims...)
+    m, n, k = dims..., min(dims...)
+    nzval = fill!(Vector{Tv}(k), Tv(s.λ))
+    rowval = copy!(Vector{Ti}(k), 1:k)
+    colptr = copy!(Vector{Ti}(n + 1), 1:(k + 1))
+    for i in (k + 2):(n + 1) colptr[i] = (k + 1) end
+    SparseMatrixCSC{Tv,Ti}(dims..., colptr, rowval, nzval)
 end
+# convenience variations that accept a single integer to specify dims
+SparseMatrixCSC{Tv,Ti}(s::UniformScaling, m::Integer) where {Tv,Ti} = SparseMatrixCSC{Tv,Ti}(s, m, m)
+SparseMatrixCSC{Tv}(s::UniformScaling, m::Integer) where {Tv} = SparseMatrixCSC{Tv}(s, m, m)
+SparseMatrixCSC(s::UniformScaling, m::Integer) = SparseMatrixCSC(s, m, m)
 
-sparse(S::UniformScaling, m::Integer, n::Integer=m) = speye_scaled(S.λ, m, n)
 
 Base.iszero(A::SparseMatrixCSC) = iszero(view(A.nzval, 1:(A.colptr[size(A, 2) + 1] - 1)))
 
