@@ -191,11 +191,21 @@ union jl_typemap_t {
     struct _jl_value_t *unknown; // nothing
 };
 
+// calling conventions for externally-callable julia entry points.
+// this is used to set jlcall_api fields
+typedef enum {
+    JL_API_NOT_SET = 0,
+    JL_API_GENERIC = 1,         // (function, args ptr, arg count)
+    JL_API_CONST = 2,           // result is a constant value, no function pointer
+    JL_API_WITH_PARAMETERS = 3, // (svec of static parameter values, function, args ptr, arg count)
+    JL_API_INTERPRETED = 4,     // jl_interpret_call(method_instance, func and args ptr, arg count + 1, svec of sparam_vals)
+} jl_callingconv_t;
+
 // "jlcall" calling convention signatures.
 // This defines the default ABI used by compiled julia functions.
-typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
-typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t);
-typedef jl_value_t *(*jl_fptr_linfo_t)(struct _jl_method_instance_t*, jl_value_t**, uint32_t, jl_svec_t*);
+typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t); // JL_API_GENERIC
+typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t); // JL_API_WITH_PARAMETERS
+typedef jl_value_t *(*jl_fptr_linfo_t)(struct _jl_method_instance_t*, jl_value_t**, uint32_t, jl_svec_t*); // JL_API_INTERPRETED
 
 JL_EXTENSION typedef struct {
     union {
@@ -280,15 +290,15 @@ typedef struct _jl_method_instance_t {
     jl_value_t *rettype; // return type for fptr
     jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sparam_syms
     jl_array_t *backedges;
-    jl_value_t *inferred;  // inferred jl_code_info_t, or value of the function if jlcall_api == 2, or null
+    jl_value_t *inferred;  // inferred jl_code_info_t, or value of the function if jlcall_api == JL_API_CONST, or null
     jl_value_t *inferred_const; // inferred constant return value, or null
     size_t min_world;
     size_t max_world;
     uint8_t inInference; // flags to tell if inference is running on this function
-    uint8_t jlcall_api; // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t, 2 = constval
+    uint8_t jlcall_api;
     uint8_t compile_traced; // if set will notify callback if this linfo is compiled
     jl_fptr_t fptr; // jlcall entry point with api specified by jlcall_api
-    jl_fptr_t unspecialized_ducttape; // if template can't be compiled due to intrinsics, an un-inferred fptr may get stored here, jlcall_api = 1
+    jl_fptr_t unspecialized_ducttape; // if template can't be compiled due to intrinsics, an un-inferred fptr may get stored here, jlcall_api = JL_API_GENERIC
 
     // names of declarations in the JIT,
     // suitable for referencing in LLVM IR

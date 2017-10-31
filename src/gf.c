@@ -208,7 +208,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr)
     }
     jl_method_instance_t *li = jl_new_method_instance_uninit();
     li->fptr = fptr;
-    li->jlcall_api = 1;
+    li->jlcall_api = JL_API_GENERIC;
     li->specTypes = (jl_value_t*)jl_anytuple_type;
     li->min_world = 1;
     li->max_world = ~(size_t)0;
@@ -412,7 +412,7 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
     jl_gc_wb(li, inferred);
     if (const_flags & 1) {
         assert(const_flags & 2);
-        li->jlcall_api = 2;
+        li->jlcall_api = JL_API_CONST;
     }
     if (const_flags & 2) {
         li->inferred_const = inferred_const;
@@ -1653,14 +1653,14 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
 jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t world)
 {
     jl_method_instance_t *li = *pli;
-    if (li->jlcall_api == 2)
+    if (li->jlcall_api == JL_API_CONST)
         return li->functionObjectsDecls;
     if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF ||
         jl_options.compile_enabled == JL_OPTIONS_COMPILE_MIN) {
         // copy fptr from the template method definition
         jl_method_t *def = li->def.method;
         if (jl_is_method(def) && def->unspecialized) {
-            if (def->unspecialized->jlcall_api == 2) {
+            if (def->unspecialized->jlcall_api == JL_API_CONST) {
                 li->functionObjectsDecls.functionObject = NULL;
                 li->functionObjectsDecls.specFunctionObject = NULL;
                 li->inferred = def->unspecialized->inferred;
@@ -1668,7 +1668,7 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
                 li->inferred_const = def->unspecialized->inferred_const;
                 if (li->inferred_const)
                     jl_gc_wb(li, li->inferred_const);
-                li->jlcall_api = 2;
+                li->jlcall_api = JL_API_CONST;
                 return li->functionObjectsDecls;
             }
             if (def->unspecialized->fptr) {
@@ -1686,7 +1686,7 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
         }
     }
     jl_llvm_functions_t decls = li->functionObjectsDecls;
-    if (decls.functionObject != NULL || li->jlcall_api == 2)
+    if (decls.functionObject != NULL || li->jlcall_api == JL_API_CONST)
         return decls;
 
     jl_code_info_t *src = NULL;
@@ -1699,7 +1699,7 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
     }
     // check again, because jl_type_infer may have changed li or compiled it
     decls = li->functionObjectsDecls;
-    if (decls.functionObject != NULL || li->jlcall_api == 2)
+    if (decls.functionObject != NULL || li->jlcall_api == JL_API_CONST)
         return decls;
     return jl_compile_linfo(&li, src, world, &jl_default_cgparams);
 }
@@ -1764,7 +1764,7 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
     jl_code_info_t *src = NULL;
     if (!jl_is_rettype_inferred(li))
         src = jl_type_infer(&li, world, 0);
-    if (li->jlcall_api != 2) {
+    if (li->jlcall_api != JL_API_CONST) {
         if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc) {
             // If we are saving LLVM or native code, generate the LLVM IR so that it'll
             // be included in the saved LLVM module.

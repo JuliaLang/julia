@@ -720,7 +720,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 backedges = NULL;
         }
         jl_serialize_value(s, (jl_value_t*)backedges);
-        write_uint8(s->s, li->jlcall_api == 2 ? 2 : 0);
+        write_uint8(s->s, li->jlcall_api == JL_API_CONST ? JL_API_CONST : 0);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);

@@ -384,7 +384,7 @@ public:
                 const char *F = linfo->functionObjectsDecls.functionObject;
                 if (!linfo->fptr && F && sName.equals(F)) {
                     int jlcall_api = jl_jlcall_api(F);
-                    if (linfo->inferred || jlcall_api != 1) {
+                    if (linfo->inferred || jlcall_api != JL_API_GENERIC) {
                         linfo->jlcall_api = jlcall_api;
                         linfo->fptr = (jl_fptr_t)(uintptr_t)Addr;
                     }

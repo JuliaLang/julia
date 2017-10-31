@@ -243,7 +243,7 @@ static void _compile_all_deq(jl_array_t *found)
             jl_gc_wb(m, linfo);
         }
 
-        if (linfo->jlcall_api == 2)
+        if (linfo->jlcall_api == JL_API_CONST)
             continue;
         src = m->source;
         // TODO: the `unspecialized` field is not yet world-aware, so we can't store
@@ -251,7 +251,7 @@ static void _compile_all_deq(jl_array_t *found)
         //src = jl_type_infer(&linfo, jl_world_counter, 1);
         //m->unspecialized = linfo;
         //jl_gc_wb(m, linfo);
-        //if (linfo->jlcall_api == 2)
+        //if (linfo->jlcall_api == JL_API_CONST)
         //    continue;
 
         // first try to create leaf signatures from the signature declaration and compile those
@@ -272,7 +272,7 @@ static int compile_all_enq__(jl_typemap_entry_t *ml, void *env)
     if (m->source &&
         (!m->unspecialized ||
          (m->unspecialized->functionObjectsDecls.functionObject == NULL &&
-          m->unspecialized->jlcall_api != 2 &&
+          m->unspecialized->jlcall_api != JL_API_CONST &&
           m->unspecialized->fptr == NULL))) {
         // found a lambda that still needs to be compiled
         jl_array_ptr_1d_push(found, (jl_value_t*)ml);
@@ -309,7 +309,7 @@ static int precompile_enq_specialization_(jl_typemap_entry_t *l, void *closure)
 {
     if (jl_is_method_instance(l->func.value) &&
             l->func.linfo->functionObjectsDecls.functionObject == NULL &&
-            l->func.linfo->jlcall_api != 2)
+            l->func.linfo->jlcall_api != JL_API_CONST)
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->sig);
     return 1;
 }
