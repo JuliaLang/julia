@@ -124,18 +124,12 @@ julia [switches] -- [programfile] [args...]
  --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings ("error" turns warnings into errors)
  --warn-overwrite={yes|no} Enable or disable method overwrite warnings
 
- --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive compilation
  -C, --cpu-target <target> Limit usage of cpu features up to <target>; set to "help" to see the available options
  -O, --optimize={0,1,2,3}  Set the optimization level (default level is 2 if unspecified or 3 if used without a level)
  -g, -g <level>            Enable / Set the level of debug info generation (default level is 1 if unspecified or 2 if used without a level)
  --inline={yes|no}         Control whether inlining is permitted, including overriding @inline declarations
  --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)
  --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)
-
- --output-o name           Generate an object file (including system image data)
- --output-ji name          Generate a system image data file (.ji)
- --output-bc name          Generate LLVM bitcode (.bc)
- --output-incremental=no   Generate an incremental output file (rather than complete)
 
  --code-coverage={none|user|all}, --code-coverage
                            Count executions of source lines (omitting setting is equivalent to "user")

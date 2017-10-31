@@ -93,6 +93,7 @@ private:
     Function *lifetime_start;
     Function *lifetime_end;
     Function *gc_preserve_begin;
+    Function *typeof_func;
 
     Type *T_int8;
     Type *T_int32;
@@ -155,7 +156,8 @@ private:
     bool runOnFunction(Function &F) override;
     bool checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruction*> &uses,
                    std::set<CallInst*> &preserves, bool &ignore_tag);
-    void replaceUsesWith(Instruction *orig_i, Instruction *new_i, ReplaceUsesStack &stack);
+    void replaceUsesWith(Instruction *orig_i, Instruction *new_i, ReplaceUsesStack &stack,
+                         Value *tag);
     void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID, Instruction *orig_i,
                                  Instruction *new_i);
     bool isSafepoint(Instruction *inst);
@@ -374,6 +376,7 @@ bool AllocOpt::doInitialization(Module &M)
 
     ptr_from_objref = M.getFunction("julia.pointer_from_objref");
     gc_preserve_begin = M.getFunction("llvm.julia.gc_preserve_begin");
+    typeof_func = M.getFunction("julia.typeof");
 
     T_prjlvalue = alloc_obj->getReturnType();
     T_pjlvalue = PointerType::get(cast<PointerType>(T_prjlvalue)->getElementType(), 0);
@@ -438,6 +441,8 @@ bool AllocOpt::checkInst(Instruction *I, CheckInstStack &stack, std::set<Instruc
                 }
             }
             if (ptr_from_objref && ptr_from_objref == callee)
+                return true;
+            if (typeof_func && typeof_func == callee)
                 return true;
             auto opno = use->getOperandNo();
             // Uses in `jl_roots` operand bundle are not counted as escaping, everything else is.
@@ -548,7 +553,7 @@ void AllocOpt::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
 void AllocOpt::replaceUsesWith(Instruction *orig_inst, Instruction *new_inst,
-                               ReplaceUsesStack &stack)
+                               ReplaceUsesStack &stack, Value *tag)
 {
     auto simple_replace = [&] (Instruction *orig_i, Instruction *new_i) {
         if (orig_i->user_empty()) {
@@ -593,6 +598,11 @@ void AllocOpt::replaceUsesWith(Instruction *orig_inst, Instruction *new_inst,
         else if (auto call = dyn_cast<CallInst>(user)) {
             if (ptr_from_objref && ptr_from_objref == call->getCalledFunction()) {
                 call->replaceAllUsesWith(new_i);
+                call->eraseFromParent();
+                return;
+            }
+            if (typeof_func && typeof_func == call->getCalledFunction()) {
+                call->replaceAllUsesWith(tag);
                 call->eraseFromParent();
                 return;
             }
@@ -695,6 +705,7 @@ bool AllocOpt::runOnFunction(Function &F)
     std::set<CallInst*> preserves;
     LifetimeMarker lifetime(*this);
     for (auto &it: allocs) {
+        // TODO, this should not be needed anymore now that we've hide the tag access completely.
         bool ignore_tag = true;
         auto orig = it.first;
         size_t &sz = it.second;
@@ -730,6 +741,7 @@ bool AllocOpt::runOnFunction(Function &F)
             ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, T_pint8));
         }
         lifetime.insert(F, ptr, ConstantInt::get(T_int64, sz), orig, alloc_uses, preserves);
+        auto tag = orig->getArgOperand(2);
         // Someone might be reading the tag, initialize it.
         if (!ignore_tag) {
             ptr = cast<Instruction>(prolog_builder.CreateConstGEP1_32(T_int8, ptr, align));
@@ -737,13 +749,13 @@ bool AllocOpt::runOnFunction(Function &F)
             auto tagaddr = prolog_builder.CreateGEP(T_prjlvalue, casti,
                                                     ConstantInt::get(T_size, -1));
             // Store should be created at the callsite and not in the prolog
-            auto store = new StoreInst(orig->getArgOperand(2), tagaddr, orig);
+            auto store = new StoreInst(tag, tagaddr, orig);
             store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
             store->setDebugLoc(orig->getDebugLoc());
         }
         auto casti = cast<Instruction>(prolog_builder.CreateBitCast(ptr, T_pjlvalue));
         casti->takeName(orig);
-        replaceUsesWith(orig, cast<Instruction>(casti), replace_stack);
+        replaceUsesWith(orig, cast<Instruction>(casti), replace_stack, tag);
     }
     for (auto it: allocs) {
         if (it.second == UINT32_MAX)

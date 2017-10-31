@@ -342,6 +342,7 @@ Base.@functionloc
 Base.gc
 Base.gc_enable
 Meta.lower
+Meta.@lower
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1
