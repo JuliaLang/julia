@@ -131,7 +131,7 @@ julia> Base.LinAlg.stride1(A)
 1
 
 julia> B = view(A, 2:2:4)
-2-element SubArray{Int64,1,Array{Int64,1},Tuple{StepRange{Int64,Int64}},true}:
+2-element view(::Array{Int64,1}, 2:2:4) with eltype Int64:
  2
  4
 
