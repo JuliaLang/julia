@@ -11,6 +11,7 @@ end
 
 # sin_kernel and cos_kernel functions are only valid for |x| < pi/4 = 0.7854
 # translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c.
+# atan functions are based on openlibm code: s_atan.c, s_atanf.c.
 # acos functions are based on openlibm code: e_acos.c, e_acosf.c.
 # asin functions are based on openlibm code: e_asin.c, e_asinf.c. The above
 # functions are made available under the following licence:
