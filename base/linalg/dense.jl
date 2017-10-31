@@ -112,6 +112,33 @@ true
 isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact(Hermitian(A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
+"""
+    stride1(A) -> Int
+
+Returns the distance between successive array elements
+in dimension 1 in units of element size.
+
+# Examples
+```jldoctest
+julia> A = [1,2,3,4]
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+
+julia> Base.LinAlg.stride1(A)
+1
+
+julia> B = view(A, 2:2:4)
+2-element view(::Array{Int64,1}, 2:2:4) with eltype Int64:
+ 2
+ 4
+
+julia> Base.LinAlg.stride1(B)
+2
+```
+"""
 stride1(x::Array) = 1
 stride1(x::StridedVector) = stride(x, 1)::Int
 

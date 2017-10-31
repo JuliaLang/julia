@@ -140,6 +140,7 @@ Base.LinAlg.eigs(::Any)
 Base.LinAlg.eigs(::Any, ::Any)
 Base.LinAlg.svds
 Base.LinAlg.peakflops
+Base.LinAlg.stride1
 ```
 
 ## Low-level matrix operations
